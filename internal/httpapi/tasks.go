@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	taskstore "papergo/internal/dal/tasks"
 	"papergo/internal/dms"
 	"papergo/internal/model"
 	"papergo/internal/tasks"
@@ -29,7 +30,7 @@ func (a *API) tasks() *tasks.Service { return &tasks.Service{DMS: a.DMS} }
 
 func taskFilter(r *http.Request) tasks.Filter {
 	q := r.URL.Query()
-	f := tasks.Filter{Status: q.Get("status"), Kind: q.Get("kind"), Key: q.Get("key"), WorkspaceID: q.Get("workspace_id"), ItemID: q.Get("item_id"), Waiting: q.Get("waiting") == "true", After: q.Get("$skiptoken")}
+	f := tasks.Filter{Status: taskstore.Status(q.Get("status")), Kind: taskstore.Kind(q.Get("kind")), Key: q.Get("key"), WorkspaceID: q.Get("workspace_id"), ItemID: q.Get("item_id"), Waiting: q.Get("waiting") == "true", After: q.Get("$skiptoken")}
 	if n, err := strconv.Atoi(q.Get("$top")); err == nil {
 		f.Limit = n
 	}
@@ -61,18 +62,18 @@ func (a *API) itemTasks(w http.ResponseWriter, r *http.Request) {
 
 // taskCreate is a standalone task as POST /v1/workspaces/{id}/tasks takes it.
 type taskCreate struct {
-	ItemID      string              `json:"item_id"`
-	Kind        string              `json:"kind"`
-	Key         string              `json:"key"`
-	Title       string              `json:"title"`
-	Description string              `json:"description"`
-	Assignees   []string            `json:"assignees"`
-	Completion  string              `json:"completion"`
-	Outcomes    []model.TaskOutcome `json:"outcomes"`
-	InputSchema map[string]any      `json:"input_schema"`
-	Values      map[string]any      `json:"values"`
-	Priority    string              `json:"priority"`
-	DueAt       *time.Time          `json:"due_at"`
+	ItemID      string               `json:"item_id"`
+	Kind        taskstore.Kind       `json:"kind"`
+	Key         string               `json:"key"`
+	Title       string               `json:"title"`
+	Description string               `json:"description"`
+	Assignees   []string             `json:"assignees"`
+	Completion  taskstore.Completion `json:"completion"`
+	Outcomes    []model.TaskOutcome  `json:"outcomes"`
+	InputSchema map[string]any       `json:"input_schema"`
+	Values      map[string]any       `json:"values"`
+	Priority    taskstore.Priority   `json:"priority"`
+	DueAt       *time.Time           `json:"due_at"`
 }
 
 func (a *API) createTask(w http.ResponseWriter, r *http.Request) {
@@ -159,7 +160,7 @@ func (a *API) getStagedFile(w http.ResponseWriter, r *http.Request) {
 		a.failure(w, r, err)
 		return
 	}
-	fresh, err := a.DMS.StagedFresh(r.Context(), f)
+	fresh, err := a.DMS.StagedFresh(r.Context(), f.ID)
 	if err != nil {
 		a.failure(w, r, err)
 		return

@@ -79,7 +79,7 @@ func TestRelationshipPatchRetainsRequiredFieldsAndRollsBackInvalidRemoval(t *tes
 	if _, err = s.UpdateRelationship(testContext, "alice", a.ID, edge.ID, updated.Version, UpdateRelationship{Metadata: map[string]any{"required": nil}}); !errors.As(err, &validation) {
 		t.Fatal("required removal accepted", err)
 	}
-	kept, err := s.Client.Relationship.Get(testContext, edge.ID)
+	kept, err := s.DAL.Relationships().Find(testContext, edge.ID)
 	if err != nil || kept.Version != updated.Version || kept.Metadata["required"] != "keep" {
 		t.Fatal("invalid patch committed", kept, err)
 	}

@@ -3,7 +3,7 @@ package dms
 import (
 	"context"
 	"fmt"
-	"papergo/internal/testutil"
+	"papergo/internal/dal/daltest"
 	"testing"
 )
 
@@ -27,7 +27,7 @@ func TestSmartFolderCollectionBudgetDoesNotTruncate(t *testing.T) {
 }
 
 func BenchmarkSmartFolderQuery100Collections(b *testing.B) {
-	db := testutil.Database(b)
+	db := daltest.Database(b)
 	s := NewService(db.SQL)
 	ctx := context.Background()
 	w, err := s.Create(ctx, "alice", "", CreateResource{Kind: "workspace", Name: "Performance"})

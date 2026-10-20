@@ -2,10 +2,12 @@ package dms
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/portable"
+	"papergo/internal/dal/refs"
+	"papergo/internal/dal/resources"
 	"papergo/internal/model"
 	"reflect"
 	"regexp"
@@ -14,13 +16,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"papergo/internal/dal/catalog"
 	"papergo/internal/identity"
 )
 
 // UUID tokens can also occur inside query expressions and workflow bindings.
 var packageUUID = regexp.MustCompile(`(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`)
-
-var packageDataTables = []string{"blobs", "blob_texts", "blob_previews", "item_revisions", "integration_revision_data", "integration_items", "item_histories", "publications", "item_surfaces", "business_keys", "relationships"}
 
 func packageIDs(table packageTable) []string {
 	ids := make([]string, 0, len(table.Rows))
@@ -63,7 +64,7 @@ func packageReferences(value any, visit func(string), fieldTypes map[string]stri
 			if slices.Contains([]string{"name", "label", "title", "description", "choices", "search"}, key) || (key == "value" && literalPackageFilter(v, fieldTypes) && !personPackageFilter(v, fieldTypes)) {
 				continue
 			}
-			if key == "options" && !portableDependencyType(fmt.Sprint(v["type"])) {
+			if key == "options" && !portableDependencyType(catalog.FieldType(fmt.Sprint(v["type"]))) {
 				if options, ok := child.(map[string]any); ok {
 					for option, value := range options {
 						if option != "default_value" {
@@ -84,15 +85,15 @@ func packageReferences(value any, visit func(string), fieldTypes map[string]stri
 }
 
 func selectWorkspacePackage(p *corePackage) error {
-	resources := map[string]map[string]any{}
+	byID := map[string]map[string]any{}
 	selected := map[string]map[string]bool{}
-	for _, table := range packageTables {
+	for _, table := range portable.Tables {
 		selected[table] = map[string]bool{}
 	}
 	for _, row := range packageMaps(p.Tables["resources"]) {
-		resources[fmt.Sprint(row["id"])] = row
+		byID[fmt.Sprint(row["id"])] = row
 	}
-	root := resources[p.WorkspaceID]
+	root := byID[p.WorkspaceID]
 	if root == nil || root["kind"] != "workspace" || root["personal_owner_id"] != nil || root["deleted_at"] != nil {
 		return invalid("workspace packages require one live, non-personal workspace")
 	}
@@ -108,7 +109,7 @@ func selectWorkspacePackage(p *corePackage) error {
 			queue = append(queue, record{table, row})
 		}
 	}
-	for _, row := range resources {
+	for _, row := range byID {
 		if row["workspace_id"] == p.WorkspaceID && (p.IncludeData || row["kind"] == "workspace" || row["kind"] == "list" || row["kind"] == "library") {
 			add("resources", row)
 		}
@@ -148,11 +149,9 @@ func selectWorkspacePackage(p *corePackage) error {
 			hashes[row["sha256"]] = true
 		}
 	}
-	for _, table := range []string{"blob_texts", "blob_previews"} {
-		for _, row := range packageMaps(p.Tables[table]) {
-			if hashes[row["sha256"]] {
-				add(table, row)
-			}
+	for _, row := range packageMaps(p.Tables["blob_previews"]) {
+		if hashes[row["sha256"]] {
+			add("blob_previews", row)
 		}
 	}
 	dependencies := map[string][]record{}
@@ -174,7 +173,7 @@ func selectWorkspacePackage(p *corePackage) error {
 		entry := queue[at]
 		var outside string
 		workspaceRowReferences(entry.table, entry.row, valueGraph, func(id string) {
-			if resource := resources[id]; resource != nil && !selected["resources"][id] {
+			if resource := byID[id]; resource != nil && !selected["resources"][id] {
 				outside = fmt.Sprint(resource["name"])
 			}
 			for _, dependency := range dependencies[id] {
@@ -210,7 +209,7 @@ func selectWorkspacePackage(p *corePackage) error {
 			}
 		}
 	}
-	for _, table := range packageTables {
+	for _, table := range portable.Tables {
 		filterPackageTable(p, table, func(row map[string]any) bool { return selected[table][fmt.Sprint(row["id"])] })
 	}
 	integrations := p.Integrations[:0]
@@ -266,7 +265,7 @@ func validateWorkspacePackage(p corePackage) error {
 		}
 	}
 	if !p.IncludeData {
-		for _, table := range packageDataTables {
+		for _, table := range portable.DataTables {
 			if len(p.Tables[table].Rows) != 0 {
 				return invalid("configuration package contains content")
 			}
@@ -303,7 +302,7 @@ func remapPackageJSON(value any, ids map[string]string, fieldTypes map[string]st
 				out[key] = child
 				continue
 			}
-			if key == "options" && !portableReferenceType(fmt.Sprint(v["type"])) {
+			if key == "options" && !portableReferenceType(catalog.FieldType(fmt.Sprint(v["type"]))) {
 				mapped := remapPackageJSON(child, ids, fieldTypes)
 				if options, ok := child.(map[string]any); ok {
 					if target, ok := mapped.(map[string]any); ok {
@@ -338,7 +337,7 @@ func remapPackageRow(table string, row map[string]any, ids map[string]string, js
 				return nil, invalid("invalid package JSON in " + key)
 			}
 			mapped := remapPackageJSON(node, ids, fieldTypes)
-			if table == "field_definitions" && key == "options" && !portableReferenceType(fmt.Sprint(row["type"])) {
+			if table == "field_definitions" && key == "options" && !portableReferenceType(catalog.FieldType(fmt.Sprint(row["type"]))) {
 				if options, ok := node.(map[string]any); ok {
 					if target, ok := mapped.(map[string]any); ok {
 						if value, exists := options["default_value"]; exists {
@@ -365,23 +364,17 @@ func remapPackageRow(table string, row map[string]any, ids map[string]string, js
 	return out, nil
 }
 
+// packageJSONColumns marks the JSON columns of a table.
 func (s *Service) packageJSONColumns(ctx context.Context, table string) (map[string]bool, error) {
-	rows, err := s.tx.QueryContext(ctx, "PRAGMA table_info("+quotePackageColumn(table)+")")
+	cols, err := s.DAL.Portable().Columns(ctx, table)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 	out := map[string]bool{}
-	for rows.Next() {
-		var cid, notnull, pk int
-		var name, kind string
-		var defaults any
-		if err = rows.Scan(&cid, &name, &kind, &notnull, &defaults, &pk); err != nil {
-			return nil, err
-		}
-		out[name] = strings.EqualFold(kind, "json")
+	for _, c := range cols {
+		out[c.Name] = c.Kind == portable.JSON
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // Existing directory subjects retain their target account status and profile.
@@ -396,7 +389,7 @@ func (s *Service) prepareWorkspacePackage(ctx context.Context, p corePackage, na
 	reused := map[string]map[string]bool{}
 	jsonColumns := map[string]map[string]bool{}
 	rows := map[string][]map[string]any{}
-	for _, table := range packageTables {
+	for _, table := range portable.Tables {
 		reused[table] = map[string]bool{}
 		var err error
 		jsonColumns[table], err = s.packageJSONColumns(ctx, table)
@@ -425,43 +418,40 @@ func (s *Service) prepareWorkspacePackage(ctx context.Context, p corePackage, na
 	if err := validateContainerMetadata(name, ""); err != nil {
 		return p, warnings, err
 	}
-	var exists bool
-	if err := s.tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM resources WHERE kind='workspace' AND name=? COLLATE NOCASE AND deleted_at IS NULL)", name).Scan(&exists); err != nil {
+	exists, err := s.DAL.Resources().Exists(ctx, resources.Filter{Kinds: []refs.ResourceKind{refs.KindWorkspace}, FoldedName: nameKey(name), State: resources.Live})
+	if err != nil {
 		return p, warnings, err
 	}
 	if exists {
 		return p, warnings, invalid("a workspace named " + name + " already exists; choose workspace_name for a separate copy")
 	}
 	// These natural identities are unique in the destination.
-	for _, table := range []string{"identity_users", "identity_groups", "term_groups", "term_sets", "content_types", "blob_texts", "blob_previews"} {
+	for _, table := range []string{"identity_users", "identity_groups", "term_groups", "term_sets", "content_types", "blob_previews"} {
 		for _, row := range rows[table] {
-			var query string
-			var args []any
+			var match portable.Row
 			switch table {
 			case "identity_users":
-				query, args = "id=?", []any{row["id"]}
+				match = portable.Row{"id": row["id"]}
 			case "identity_groups", "term_groups":
-				query, args = "name=?", []any{row["name"]}
+				match = portable.Row{"name": row["name"]}
 			case "term_sets":
-				query, args = "key=?", []any{row["key"]}
+				match = portable.Row{"key": row["key"]}
 			case "content_types":
 				if row["template_key"] == nil {
 					continue
 				}
-				query, args = "template_key=?", []any{row["template_key"]}
+				match = portable.Row{"template_key": row["template_key"]}
 			case "blob_previews":
-				query, args = "sha256=?", []any{row["sha256"]}
-			case "blob_texts":
-				query, args = "sha256=? AND settings=?", []any{row["sha256"], row["settings"]}
+				match = portable.Row{"sha256": row["sha256"]}
 			}
-			var id string
-			err := s.tx.QueryRowContext(ctx, "SELECT id FROM "+quotePackageColumn(table)+" WHERE "+query, args...).Scan(&id)
-			if errors.Is(err, sql.ErrNoRows) {
+			existing, err := s.DAL.Portable().Find(ctx, table, match)
+			if dberr.IsNotFound(err) {
 				continue
 			}
 			if err != nil {
 				return p, warnings, err
 			}
+			id := fmt.Sprint(existing["id"])
 			reused[table][fmt.Sprint(row["id"])] = true
 			if table != "identity_users" {
 				ids[fmt.Sprint(row["id"])] = id
@@ -471,14 +461,10 @@ func (s *Service) prepareWorkspacePackage(ctx context.Context, p corePackage, na
 			}
 			if table == "content_types" {
 				var sourceFields, targetFields []string
-				var targetJSON string
 				if err = json.Unmarshal([]byte(fmt.Sprint(row["field_ids"])), &sourceFields); err != nil {
 					return p, warnings, err
 				}
-				if err = s.tx.QueryRowContext(ctx, "SELECT field_ids FROM content_types WHERE id=?", id).Scan(&targetJSON); err != nil {
-					return p, warnings, err
-				}
-				if err = json.Unmarshal([]byte(targetJSON), &targetFields); err != nil {
+				if err = json.Unmarshal([]byte(fmt.Sprint(existing["field_ids"])), &targetFields); err != nil {
 					return p, warnings, err
 				}
 				for _, sourceID := range sourceFields {
@@ -487,11 +473,11 @@ func (s *Service) prepareWorkspacePackage(ctx context.Context, p corePackage, na
 							continue
 						}
 						for _, targetID := range targetFields {
-							var key string
-							if err = s.tx.QueryRowContext(ctx, "SELECT key FROM field_definitions WHERE id=?", targetID).Scan(&key); err != nil {
+							target, err := s.DAL.Portable().Find(ctx, "field_definitions", portable.Row{"id": targetID})
+							if err != nil {
 								return p, warnings, err
 							}
-							if key == field["key"] {
+							if target["key"] == field["key"] {
 								ids[sourceID], reused["field_definitions"][sourceID] = targetID, true
 							}
 						}
@@ -514,22 +500,21 @@ func (s *Service) prepareWorkspacePackage(ctx context.Context, p corePackage, na
 		if parent != nil {
 			parent = ids[fmt.Sprint(parent)]
 		}
-		var id string
-		err = s.tx.QueryRowContext(ctx, "SELECT id FROM terms WHERE term_set_id=? AND parent_id IS ? AND normalized_name=? AND merged_into_id IS NULL", ids[fmt.Sprint(row["term_set_id"])], parent, row["normalized_name"]).Scan(&id)
-		if errors.Is(err, sql.ErrNoRows) {
+		term, err := s.DAL.Portable().Find(ctx, "terms", portable.Row{"term_set_id": ids[fmt.Sprint(row["term_set_id"])], "parent_id": parent, "normalized_name": row["normalized_name"], "merged_into_id": nil})
+		if dberr.IsNotFound(err) {
 			continue
 		}
 		if err != nil {
 			return p, warnings, err
 		}
-		ids[fmt.Sprint(row["id"])], reused["terms"][fmt.Sprint(row["id"])] = id, true
+		ids[fmt.Sprint(row["id"])], reused["terms"][fmt.Sprint(row["id"])] = fmt.Sprint(term["id"]), true
 	}
 	for _, row := range rows["relationship_types"] {
-		var exists bool
-		if err = s.tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM relationship_types WHERE id=?)", ids[fmt.Sprint(row["id"])]).Scan(&exists); err != nil {
+		n, err := s.DAL.Portable().Count(ctx, "relationship_types", portable.Row{"id": ids[fmt.Sprint(row["id"])]})
+		if err != nil {
 			return p, warnings, err
 		}
-		reused["relationship_types"][fmt.Sprint(row["id"])] = exists
+		reused["relationship_types"][fmt.Sprint(row["id"])] = n > 0
 	}
 	for source, exists := range reused["identity_groups"] {
 		if !exists {
@@ -541,8 +526,8 @@ func (s *Service) prepareWorkspacePackage(ctx context.Context, p corePackage, na
 				expected++
 			}
 		}
-		var actual int
-		if err = s.tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM identity_memberships WHERE group_id=?", ids[source]).Scan(&actual); err != nil {
+		actual, err := s.DAL.Portable().Count(ctx, "identity_memberships", portable.Row{"group_id": ids[source]})
+		if err != nil {
 			return p, warnings, err
 		}
 		if expected != actual {
@@ -550,7 +535,7 @@ func (s *Service) prepareWorkspacePackage(ctx context.Context, p corePackage, na
 		}
 	}
 
-	for _, table := range packageTables {
+	for _, table := range portable.Tables {
 		output := p.Tables[table]
 		output.Rows = [][]any{}
 		for _, row := range rows[table] {
@@ -562,7 +547,7 @@ func (s *Service) prepareWorkspacePackage(ctx context.Context, p corePackage, na
 			if err = preserveWorkspaceValues(table, row, mapped, graph, ids); err != nil {
 				return p, warnings, err
 			}
-			if table == "relationships" && fmt.Sprint(mapped["directed"]) != "1" && fmt.Sprint(mapped["directed"]) != "true" && fmt.Sprint(mapped["source_id"]) > fmt.Sprint(mapped["target_id"]) {
+			if table == "relationships" && mapped["directed"] != true && fmt.Sprint(mapped["source_id"]) > fmt.Sprint(mapped["target_id"]) {
 				mapped["source_id"], mapped["target_id"] = mapped["target_id"], mapped["source_id"]
 			}
 			if table == "resources" && sourceID == p.WorkspaceID {
@@ -582,21 +567,21 @@ func (s *Service) prepareWorkspacePackage(ctx context.Context, p corePackage, na
 				continue
 			}
 			if table == "identity_memberships" && reused["identity_groups"][fmt.Sprint(row["group_id"])] {
-				var exists bool
-				if err = s.tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM identity_memberships WHERE group_id=? AND principal_type=? AND principal_id=?)", mapped["group_id"], mapped["principal_type"], mapped["principal_id"]).Scan(&exists); err != nil {
+				n, err := s.DAL.Portable().Count(ctx, "identity_memberships", portable.Row{"group_id": mapped["group_id"], "principal_type": mapped["principal_type"], "principal_id": mapped["principal_id"]})
+				if err != nil {
 					return p, warnings, err
 				}
-				if !exists {
+				if n == 0 {
 					return p, warnings, invalid("existing group membership conflicts with workspace package")
 				}
 				continue
 			}
 			if table == "group_inboxes" {
-				var exists bool
-				if err = s.tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM group_inboxes WHERE group_id=?)", mapped["group_id"]).Scan(&exists); err != nil {
+				n, err := s.DAL.Portable().Count(ctx, "group_inboxes", portable.Row{"group_id": mapped["group_id"]})
+				if err != nil {
 					return p, warnings, err
 				}
-				if exists {
+				if n > 0 {
 					return p, warnings, invalid("an imported group's inbox is already bound to another library")
 				}
 			}
@@ -633,29 +618,22 @@ func (s *Service) prepareWorkspacePackage(ctx context.Context, p corePackage, na
 }
 
 func (s *Service) compareWorkspaceDependency(ctx context.Context, table string, row map[string]any, jsonColumns map[string]bool) error {
-	columns, expressions, err := s.packageColumns(ctx, table)
+	existing, err := s.DAL.Portable().Find(ctx, table, portable.Row{"id": row["id"]})
 	if err != nil {
 		return err
 	}
-	values := make([]any, len(columns))
-	args := make([]any, len(columns))
-	for i := range values {
-		args[i] = &values[i]
-	}
-	if err = s.tx.QueryRowContext(ctx, "SELECT "+strings.Join(expressions, ",")+" FROM "+quotePackageColumn(table)+" WHERE id=?", row["id"]).Scan(args...); err != nil {
+	columns, err := s.packageColumns(ctx, table)
+	if err != nil {
 		return err
 	}
-	for i, column := range columns {
-		if (table == "blob_texts" || table == "blob_previews") && column == "object_key" {
+	for _, column := range columns {
+		if table == "blob_previews" && column == "object_key" {
 			continue
 		}
 		if slices.Contains([]string{"id", "created_at", "updated_at", "version", "index_status"}, column) {
 			continue
 		}
-		if bytes, ok := values[i].([]byte); ok {
-			values[i] = string(bytes)
-		}
-		left, right := values[i], row[column]
+		left, right := existing[column], row[column]
 		if jsonColumns[column] {
 			var a, b any
 			da, db := json.NewDecoder(strings.NewReader(fmt.Sprint(left))), json.NewDecoder(strings.NewReader(fmt.Sprint(right)))
@@ -732,7 +710,7 @@ func preserveWorkspaceValues(table string, source, mapped map[string]any, graph 
 		schema = graph.schemas[fmt.Sprint(revision["schema_revision_id"])]
 	}
 	for _, field := range schema.Fields {
-		if field.Type == "lookup" || field.Type == "term" || field.Type == "keywords" {
+		if field.Type == catalog.FieldLookup || field.Type == catalog.FieldTerm || field.Type == catalog.FieldKeywords {
 			if value, ok := payload[field.ID]; ok {
 				payload[field.ID] = remapPackageJSON(value, ids, nil)
 			}
@@ -862,8 +840,7 @@ func rebuildWorkspaceTriggers(p *corePackage, now time.Time) error {
 	table := p.Tables["workflow_triggers"]
 	table.Rows = [][]any{}
 	for _, row := range packageMaps(p.Tables["workflows"]) {
-		enabled := fmt.Sprint(row["automatic_enabled"])
-		if enabled != "1" && enabled != "true" || row["deleted_at"] != nil || row["state"] != "published" || row["role"] != nil && row["collection_id"] != nil && fmt.Sprint(row["automatic_provider"]) != "true" && fmt.Sprint(row["automatic_provider"]) != "1" {
+		if row["automatic_enabled"] != true || row["deleted_at"] != nil || row["state"] != "published" || row["role"] != nil && row["collection_id"] != nil && row["automatic_provider"] != true {
 			continue
 		}
 		if row["role"] != nil && row["collection_id"] == nil {
@@ -918,10 +895,12 @@ func rebuildWorkspaceTriggers(p *corePackage, now time.Time) error {
 	return nil
 }
 
-func portableDependencyType(kind string) bool { return portableReferenceType(kind) || kind == "person" }
+func portableDependencyType(kind catalog.FieldType) bool {
+	return portableReferenceType(catalog.FieldType(kind)) || kind == catalog.FieldPerson
+}
 
-func portableReferenceType(kind string) bool {
-	return kind == "lookup" || kind == "term" || kind == "keywords"
+func portableReferenceType(kind catalog.FieldType) bool {
+	return kind == catalog.FieldLookup || kind.Terms()
 }
 
 func validateWorkspaceValues(p corePackage) error {
@@ -933,12 +912,12 @@ func validateWorkspaceValues(p corePackage) error {
 	if err != nil {
 		return err
 	}
-	resources, terms, users := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	knownResources, terms, users := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	for _, row := range rows["identity_users"] {
 		users[fmt.Sprint(row["id"])] = true
 	}
 	for _, row := range rows["resources"] {
-		resources[fmt.Sprint(row["id"])] = true
+		knownResources[fmt.Sprint(row["id"])] = true
 	}
 	for _, row := range rows["terms"] {
 		terms[fmt.Sprint(row["id"])] = true
@@ -968,11 +947,11 @@ func validateWorkspaceValues(p corePackage) error {
 			return nil
 		}
 		known := terms
-		if field.Type == "person" {
+		if field.Type == catalog.FieldPerson {
 			known = users
 		}
-		if field.Type == "lookup" {
-			known = resources
+		if field.Type == catalog.FieldLookup {
+			known = knownResources
 		}
 		return check(value, known)
 	}
@@ -1070,13 +1049,13 @@ func workspaceRowReferences(table string, row map[string]any, graph workspaceVal
 				schema = graph.schemas[fmt.Sprint(revision["schema_revision_id"])]
 			}
 			for _, field := range schema.Fields {
-				if portableReferenceType(field.Type) || field.Type == "person" {
+				if portableReferenceType(field.Type) || field.Type == catalog.FieldPerson {
 					packageReferences(payload[field.ID], visit, fieldTypes)
 				}
 			}
 			continue
 		}
-		if table == "field_definitions" && column == "options" && !portableDependencyType(fmt.Sprint(row["type"])) {
+		if table == "field_definitions" && column == "options" && !portableDependencyType(catalog.FieldType(fmt.Sprint(row["type"]))) {
 			if options, ok := node.(map[string]any); ok {
 				delete(options, "default_value")
 			}
@@ -1087,64 +1066,6 @@ func workspaceRowReferences(table string, row map[string]any, graph workspaceVal
 
 // Scope owned tables in SQL: exporting a small workspace must not materialize
 // every other workspace's item history and files just to discard them later.
-func packageExportFilter(table string, options ExportOptions) (string, []any) {
-	data := options.IncludeData == nil || *options.IncludeData
-	if !data && slices.Contains(packageDataTables, table) {
-		return " WHERE 0", nil
-	}
-	ws := options.WorkspaceID
-	if ws == "" {
-		if table == "resources" && !data {
-			return " WHERE kind IN ('workspace','list','library')", nil
-		}
-		if table == "grants" && !data {
-			return " WHERE resource_id IN (SELECT id FROM resources WHERE kind IN ('workspace','list','library'))", nil
-		}
-		if table == "schema_revisions" && !data {
-			return " WHERE id IN (SELECT schema_head_id FROM resources)", nil
-		}
-		return "", nil
-	}
-	if slices.Contains([]string{"identity_roles", "identity_assignments", "identity_preferences"}, table) {
-		return " WHERE 0", nil
-	}
-	scope := "SELECT id FROM resources WHERE workspace_id=?"
-	if !data {
-		scope += " AND kind IN ('workspace','list','library')"
-	}
-	switch table {
-	case "resources":
-		where := " WHERE workspace_id=?"
-		if !data {
-			where += " AND kind IN ('workspace','list','library')"
-		}
-		return where, []any{ws}
-	case "collection_types", "schema_revisions", "list_views":
-		where := " WHERE container_id IN (" + scope + ")"
-		if table == "schema_revisions" && !data {
-			where += " AND id IN (SELECT schema_head_id FROM resources)"
-		}
-		return where, []any{ws}
-	case "schema_templates", "smart_folders", "workflows", "workflow_triggers":
-		return " WHERE workspace_id=?", []any{ws}
-	case "blobs", "item_revisions", "integration_items", "item_histories", "publications", "item_surfaces", "business_keys":
-		return " WHERE item_id IN (" + scope + ")", []any{ws}
-	case "grants":
-		return " WHERE resource_id IN (" + scope + ")", []any{ws}
-	case "group_inboxes":
-		return " WHERE library_id IN (" + scope + ")", []any{ws}
-	case "workflow_versions":
-		return " WHERE workflow_id IN (SELECT id FROM workflows WHERE workspace_id=?)", []any{ws}
-	case "integration_revision_data":
-		return " WHERE revision_id IN (SELECT r.id FROM item_revisions r JOIN resources c ON c.id=r.container_id WHERE c.workspace_id=?)", []any{ws}
-	case "blob_texts", "blob_previews":
-		return " WHERE sha256 IN (SELECT b.sha256 FROM blobs b JOIN resources r ON r.id=b.item_id WHERE r.workspace_id=?)", []any{ws}
-	case "relationships":
-		return " WHERE source_id IN (" + scope + ") OR target_id IN (" + scope + ")", []any{ws, ws}
-	}
-	return "", nil
-}
-
 func (s *Service) validateWorkspaceSourceReferences(ctx context.Context, p corePackage) error {
 	known := map[string]bool{}
 	rows := map[string][]map[string]any{}
@@ -1172,12 +1093,11 @@ func (s *Service) validateWorkspaceSourceReferences(ctx context.Context, p coreP
 		}
 	}
 	for id := range candidates {
-		var name string
-		err := s.tx.QueryRowContext(ctx, "SELECT name FROM resources WHERE id=?", id).Scan(&name)
+		r, err := s.DAL.Resources().Resource(ctx, id)
 		if err == nil {
-			return invalid("workspace configuration references excluded resource " + name + "; include its data or use an organization package")
+			return invalid("workspace configuration references excluded resource " + r.Name + "; include its data or use an organization package")
 		}
-		if !errors.Is(err, sql.ErrNoRows) {
+		if !dberr.IsNotFound(err) {
 			return err
 		}
 	}
@@ -1191,7 +1111,7 @@ func (g workspaceValueGraph) filterTypes(container any) map[string]string {
 	}
 	types := map[string]string{}
 	for _, field := range schema.Fields {
-		types[field.ID] = field.Type
+		types[field.ID] = string(field.Type)
 	}
 	return types
 }
@@ -1205,7 +1125,7 @@ func literalPackageFilter(node map[string]any, types map[string]string) bool {
 		return !slices.Contains([]string{"$id", "$keywords", "$parent_id", "$container_id", "$workspace_id", "$content_type_id"}, field)
 	}
 	kind := types[field]
-	return kind != "" && kind != "mixed" && !portableReferenceType(kind)
+	return kind != "" && kind != "mixed" && !portableReferenceType(catalog.FieldType(kind))
 }
 
 func personPackageFilter(node map[string]any, types map[string]string) bool {

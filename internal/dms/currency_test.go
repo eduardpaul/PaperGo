@@ -126,7 +126,7 @@ func TestCurrencyExactQueriesBoundsDefaultsHistoryAndUniqueness(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defs, _, err := typedDefinitions(old.Edges.SchemaRevision.Definition, old.ContentTypeID)
+	defs, _, err := typedDefinitions(old.SchemaRevision.Definition, old.ContentTypeID)
 	if err != nil || definitionMap(defs)["price"].Options.CurrencyCode != "EUR" {
 		t.Fatal("history currency changed", defs, err)
 	}

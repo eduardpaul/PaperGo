@@ -2,10 +2,11 @@ package dms
 
 import (
 	"errors"
+	"papergo/internal/dal/refs"
+	"papergo/internal/dal/resources"
+	"papergo/internal/dal/surfaces"
 	"strings"
 	"testing"
-
-	"papergo/ent/resource"
 )
 
 func TestCollectionMetadataFolderPolicyAndPermissions(t *testing.T) {
@@ -46,8 +47,8 @@ func TestCollectionMetadataFolderPolicyAndPermissions(t *testing.T) {
 		if _, err = s.Create(testContext, "bob", folder.ID, CreateResource{Kind: "item", Name: "Existing folder item"}); err != nil {
 			t.Fatal("existing folders must remain usable", err)
 		}
-		if _, err = s.Client.Resource.Create().SetWorkspaceID(workspace.ID).SetParentID(collection.ID).SetContainerID(collection.ID).SetKind(resource.KindFolder).SetName("Raw bypass").Save(testContext); err == nil {
-			t.Fatal("database bypassed folder policy")
+		if _, err = s.DAL.Resources().Create(testContext, resources.New{WorkspaceID: workspace.ID, ParentID: collection.ID, ContainerID: collection.ID, Kind: refs.KindFolder, Name: "Raw bypass"}); err == nil {
+			t.Fatal("storage bypassed folder policy")
 		}
 	}
 	if _, err := s.Create(testContext, "alice", workspace.ID, CreateResource{Kind: "list", Name: strings.Repeat("🙂", 101)}); err == nil {
@@ -92,16 +93,16 @@ func TestCollectionDeletionRemovesLiveContentAndRetainsHistory(t *testing.T) {
 			t.Fatal("deleted resource visible", id, err)
 		}
 	}
-	if _, err = s.Client.Relationship.Get(testContext, edge.ID); err != nil {
+	if _, err = s.DAL.Relationships().Find(testContext, edge.ID); err != nil {
 		t.Fatal("recovery edge lost", err)
 	}
-	if n, err := s.Client.ItemRevision.Query().Count(testContext); err != nil || n != 3 {
+	if n, err := countRevisions(s, ""); err != nil || n != 3 {
 		t.Fatal("revision history lost", n, err)
 	}
-	if n, err := s.Client.ItemHistory.Query().Count(testContext); err != nil || n != 2 {
+	if n, err := countHistory(s); err != nil || n != 2 {
 		t.Fatal("folder snapshots must not create visible history", n, err)
 	}
-	if n, err := s.Client.ItemSurface.Query().Count(testContext); err != nil || n != 0 {
+	if n, err := countSurfaces(s, surfaces.Filter{}); err != nil || n != 0 {
 		t.Fatal("derived content survived", n, err)
 	}
 }

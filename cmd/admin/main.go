@@ -15,7 +15,7 @@ import (
 
 	"papergo/internal/backup"
 	"papergo/internal/buildinfo"
-	"papergo/internal/database"
+	"papergo/internal/dal/database"
 )
 
 func main() {
@@ -68,17 +68,19 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 			path = "data/papergo.db"
 		}
 		flags.StringVar(&path, "database", path, "SQLite database path")
-		schema := flags.String("schema", "migrations", "Current Atlas schema directory")
 		if err := flags.Parse(args[1:]); err != nil {
 			return err
 		}
 		if flags.NArg() != 0 {
 			return errors.New("initialize accepts no positional arguments")
 		}
-		return database.Initialize(ctx, path, *schema)
+		return database.Initialize(ctx, path)
 	}
 	if len(args) == 0 || args[0] != "backup" && args[0] != "restore" {
 		return errors.New("usage: papergo-admin initialize|health|backup|restore|search; each command accepts --help")
+	}
+	if os.Getenv("DATABASE_URL") != "" {
+		return errors.New(args[0] + " archives the SQLite database; DATABASE_URL selects PostgreSQL, which its own tools back up")
 	}
 	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	flags.SetOutput(out)

@@ -9,9 +9,9 @@ import (
 	"testing"
 
 	"papergo/internal/auth"
+	"papergo/internal/dal/daltest"
 	"papergo/internal/dms"
 	"papergo/internal/storage"
-	"papergo/internal/testutil"
 )
 
 func TestNextLinksPreserveFiltersAndTerminate(t *testing.T) {
@@ -178,7 +178,7 @@ func TestPageSizeContract(t *testing.T) {
 // Behind a TLS-terminating proxy the request is plain HTTP on an internal
 // host; next links must still use the address clients know.
 func TestNextLinksUsePublicURL(t *testing.T) {
-	db := testutil.Database(t)
+	db := daltest.Database(t)
 	store, err := storage.NewLocal(t.TempDir())
 	if err != nil {
 		t.Fatal(err)

@@ -2,7 +2,9 @@ package httpapi
 
 import (
 	"net/http"
-	"papergo/ent"
+	"papergo/internal/dal/catalog"
+	"papergo/internal/dal/resources"
+	viewstore "papergo/internal/dal/views"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
 )
@@ -49,31 +51,31 @@ func entityETag(w http.ResponseWriter, v any) {
 		etag(w, x.Version)
 	case identity.Role:
 		etag(w, x.Version)
-	case *ent.Resource:
+	case *resources.Resource:
 		etag(w, x.Version)
-	case *ent.SchemaTemplate:
+	case *catalog.Template:
 		etag(w, x.Version)
-	case *ent.FieldDefinition:
+	case *catalog.FieldDefinition:
 		etag(w, x.Version)
-	case *ent.ContentType:
+	case *catalog.ContentType:
 		etag(w, x.Version)
-	case *ent.SmartFolder:
+	case *viewstore.SmartFolder:
 		etag(w, x.Version)
 	case dms.SmartFolderImportResult:
 		etag(w, x.WorkspaceVersion)
-	case *ent.TermSet:
+	case dms.TermSetView:
 		etag(w, x.Version)
-	case *ent.TermGroup:
+	case dms.TermGroupView:
 		etag(w, x.Version)
 	case dms.TermView:
 		etag(w, x.Version)
-	case *ent.ListView:
+	case *viewstore.ListView:
 		etag(w, x.Version)
-	case *ent.ListIntegration:
+	case *dms.IntegrationView:
 		etag(w, x.Version)
 	case dms.RelationshipTypeView:
 		etag(w, x.Version)
-	case *ent.Relationship:
+	case dms.RelationshipRecord:
 		etag(w, x.Version)
 	case dms.RelationshipView:
 		etag(w, x.Version)

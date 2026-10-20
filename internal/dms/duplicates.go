@@ -3,8 +3,8 @@ package dms
 import (
 	"context"
 	"errors"
-	"papergo/ent"
-	"papergo/ent/resource"
+	"papergo/internal/dal/blobs"
+	"papergo/internal/dal/resources"
 )
 
 type DuplicateDocument struct {
@@ -20,7 +20,7 @@ func (e *DuplicateError) Error() string { return "the library does not accept du
 func (e *DuplicateError) Unwrap() error { return ErrConflict }
 
 type BlobUpload struct {
-	*ent.Blob
+	*blobs.Blob
 	Duplicates []DuplicateDocument `json:"duplicates"`
 }
 
@@ -43,30 +43,9 @@ func (s *Service) duplicateDocuments(ctx context.Context, subject, hash, exceptI
 	out := []DuplicateDocument{}
 	after := ""
 	for len(out) < 20 {
-		rows, err := s.Client.QueryContext(ctx, `SELECT DISTINCT r.id FROM blobs b
-JOIN item_revisions v ON v.blob_id=b.id JOIN resources r ON r.id=v.item_id
-WHERE b.sha256=? AND r.deleted_at IS NULL AND r.id<>? AND r.id>?
-AND (v.id=r.head_revision_id OR v.id=r.published_revision_id) ORDER BY r.id LIMIT 100`, hash, exceptItem, after)
+		ids, err := s.DAL.Content().CurrentFiles(ctx, hash, exceptItem, after, 100)
 		if err != nil {
 			return nil, err
-		}
-		ids := []string{}
-		for rows.Next() {
-			var id string
-			if err = rows.Scan(&id); err != nil {
-				break
-			}
-			ids = append(ids, id)
-		}
-		if err == nil {
-			err = rows.Err()
-		}
-		closeErr := rows.Close()
-		if err != nil {
-			return nil, err
-		}
-		if closeErr != nil {
-			return nil, closeErr
 		}
 		for _, id := range ids {
 			after = id
@@ -97,25 +76,25 @@ AND (v.id=r.head_revision_id OR v.id=r.published_revision_id) ORDER BY r.id LIMI
 }
 
 func (s *Service) checkDuplicatePolicy(ctx context.Context, subject, itemID, hash string) ([]DuplicateDocument, error) {
-	item, err := s.Client.Resource.Get(ctx, itemID)
+	item, err := s.DAL.Resources().Resource(ctx, itemID)
 	if err != nil {
 		return nil, err
 	}
 	if item.ContainerID == nil {
 		return nil, invalid("file requires a library")
 	}
-	collection, err := s.Client.Resource.Get(ctx, *item.ContainerID)
+	collection, err := s.DAL.Resources().Resource(ctx, *item.ContainerID)
 	if err != nil {
 		return nil, err
 	}
-	if collection.DuplicatePolicy == resource.DuplicatePolicyAllow {
+	if collection.DuplicatePolicy == resources.DuplicateAllow {
 		return []DuplicateDocument{}, nil
 	}
 	matches, err := s.duplicateDocuments(ctx, subject, hash, itemID)
 	if err != nil {
 		return nil, err
 	}
-	if collection.DuplicatePolicy == resource.DuplicatePolicyBlock && len(matches) > 0 {
+	if collection.DuplicatePolicy == resources.DuplicateBlock && len(matches) > 0 {
 		return nil, &DuplicateError{matches}
 	}
 	return matches, nil

@@ -5,26 +5,19 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"papergo/ent"
-	"papergo/ent/term"
-	"papergo/ent/termgroup"
-	"papergo/ent/termset"
 	"regexp"
 	"strings"
+	"time"
 	"unicode/utf8"
 
-	entsql "entgo.io/ent/dialect/sql"
-	"github.com/google/uuid"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/taxonomy"
 )
 
 // The organization term store is shared by all workspaces. Open sets accept
 // contributions with taxonomy.read; curation requires taxonomy.manage.
 
-const (
-	SystemTermGroupName = "System"
-	KeywordsTermSetKey  = "keywords"
-	maxTermSearch       = 255
-)
+const maxTermSearch = 255
 
 var termColor = regexp.MustCompile(`^#[0-9a-f]{6}$`)
 
@@ -47,65 +40,106 @@ func (in *TermGroupInput) validate() error {
 	}
 	return validateDescription(in.Description)
 }
-func (s *Service) CreateTermGroup(ctx context.Context, subject string, in TermGroupInput) (out *ent.TermGroup, err error) {
+
+// TermGroupView is a term group as the API returns it.
+type TermGroupView struct {
+	ID          string    `json:"id"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	Version     int       `json:"version"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	IsSystem    bool      `json:"is_system"`
+}
+
+func viewTermGroup(g taxonomy.Group) TermGroupView {
+	return TermGroupView{ID: g.ID, CreatedAt: g.CreatedAt, UpdatedAt: g.UpdatedAt, Version: g.Version, Name: g.Name, Description: g.Description, IsSystem: g.System}
+}
+
+// TermSetView is a term set as the API returns it.
+type TermSetView struct {
+	ID          string    `json:"id"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	Version     int       `json:"version"`
+	GroupID     string    `json:"group_id"`
+	Key         string    `json:"key"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	IsOpen      bool      `json:"is_open"`
+	IsKeywords  bool      `json:"is_keywords"`
+}
+
+func viewTermSet(set taxonomy.Set) TermSetView {
+	return TermSetView{ID: set.ID, CreatedAt: set.CreatedAt, UpdatedAt: set.UpdatedAt, Version: set.Version, GroupID: set.GroupID, Key: set.Key,
+		Name: set.Name, Description: set.Description, IsOpen: set.Open, IsKeywords: set.Keywords}
+}
+
+// taxonomyError maps term store rules to service errors.
+func taxonomyError(err error) error {
+	switch {
+	case taxonomy.IsViolation(err):
+		return invalid(err.Error())
+	case errors.Is(err, dberr.ErrConcurrentUpdate):
+		return ErrPreconditionFailed
+	case dberr.IsNotFound(err):
+		return ErrNotFound
+	}
+	return err
+}
+
+func (s *Service) CreateTermGroup(ctx context.Context, subject string, in TermGroupInput) (out TermGroupView, err error) {
 	if e := in.validate(); e != nil {
-		return nil, e
+		return out, e
 	}
 	err = s.write(ctx, func(t *Service) error {
 		if e := t.requireTaxonomy(ctx, subject, "manage"); e != nil {
 			return e
 		}
-		var e error
-		if out, e = t.Client.TermGroup.Create().SetName(in.Name).SetDescription(in.Description).Save(ctx); e != nil {
-			return e
-		}
-		return t.auditTaxonomy(ctx, subject, "term_group.create", map[string]any{"term_group_id": out.ID})
-	})
-	return
-}
-func (s *Service) TermGroups(ctx context.Context, subject, after string, limit int) (Page[*ent.TermGroup], error) {
-	return read(ctx, s, func(t *Service) (Page[*ent.TermGroup], error) {
-		if e := t.requireTaxonomy(ctx, subject, "read"); e != nil {
-			return Page[*ent.TermGroup]{}, e
-		}
-		rows, e := t.Client.TermGroup.Query().Where(termgroup.IDGT(after)).Order(ent.Asc(termgroup.FieldID)).Limit(pageSize(limit) + 1).All(ctx)
-		return entityPage(rows, limit, func(v *ent.TermGroup) string { return v.ID }), e
-	})
-}
-func (s *Service) TermGroup(ctx context.Context, subject, id string) (*ent.TermGroup, error) {
-	return read(ctx, s, func(t *Service) (*ent.TermGroup, error) {
-		g, e := t.termGroup(ctx, subject, id, "read")
-		return g, e
-	})
-}
-func (s *Service) termGroup(ctx context.Context, subject, id, action string) (*ent.TermGroup, error) {
-	g, e := s.Client.TermGroup.Get(ctx, id)
-	if ent.IsNotFound(e) {
-		return nil, ErrNotFound
-	}
-	if e != nil {
-		return nil, e
-	}
-	return g, s.requireTaxonomy(ctx, subject, action)
-}
-func (s *Service) UpdateTermGroup(ctx context.Context, subject, id string, version int, in TermGroupInput) (out *ent.TermGroup, err error) {
-	if e := in.validate(); e != nil {
-		return nil, e
-	}
-	err = s.write(ctx, func(t *Service) error {
-		g, e := t.termGroup(ctx, subject, id, "manage")
+		g, e := t.DAL.Taxonomy().CreateGroup(ctx, taxonomy.Group{Name: in.Name, Description: in.Description})
 		if e != nil {
 			return e
 		}
-		if g.Version != version {
-			return ErrPreconditionFailed
+		out = viewTermGroup(g)
+		return t.auditTaxonomy(ctx, subject, "term_group.create", map[string]any{"term_group_id": g.ID})
+	})
+	return
+}
+func (s *Service) TermGroups(ctx context.Context, subject, after string, limit int) (Page[TermGroupView], error) {
+	return read(ctx, s, func(t *Service) (Page[TermGroupView], error) {
+		if e := t.requireTaxonomy(ctx, subject, "read"); e != nil {
+			return Page[TermGroupView]{}, e
 		}
-		if g.IsSystem {
-			return invalid("the system term group is managed by PaperGo")
-		}
-		if out, e = t.Client.TermGroup.UpdateOne(g).SetName(in.Name).SetDescription(in.Description).AddVersion(1).Save(ctx); e != nil {
+		rows, e := t.DAL.Taxonomy().Groups(ctx, taxonomy.GroupFilter{AfterID: after, Limit: pageSize(limit) + 1})
+		return entityPage(views(rows, viewTermGroup), limit, func(v TermGroupView) string { return v.ID }), e
+	})
+}
+func (s *Service) TermGroup(ctx context.Context, subject, id string) (TermGroupView, error) {
+	return read(ctx, s, func(t *Service) (TermGroupView, error) {
+		g, e := t.termGroup(ctx, subject, id, "read")
+		return viewTermGroup(g), e
+	})
+}
+func (s *Service) termGroup(ctx context.Context, subject, id, action string) (taxonomy.Group, error) {
+	g, e := s.DAL.Taxonomy().Group(ctx, id)
+	if e != nil {
+		return g, taxonomyError(e)
+	}
+	return g, s.requireTaxonomy(ctx, subject, action)
+}
+func (s *Service) UpdateTermGroup(ctx context.Context, subject, id string, version int, in TermGroupInput) (out TermGroupView, err error) {
+	if e := in.validate(); e != nil {
+		return out, e
+	}
+	err = s.write(ctx, func(t *Service) error {
+		if _, e := t.termGroup(ctx, subject, id, "manage"); e != nil {
 			return e
 		}
+		g, e := t.DAL.Taxonomy().SaveGroup(ctx, taxonomy.Group{ID: id, Name: in.Name, Description: in.Description}, version)
+		if e != nil {
+			return taxonomyError(e)
+		}
+		out = viewTermGroup(g)
 		return t.auditTaxonomy(ctx, subject, "term_group.update", map[string]any{"term_group_id": id})
 	})
 	return
@@ -114,25 +148,11 @@ func (s *Service) UpdateTermGroup(ctx context.Context, subject, id string, versi
 // DeleteTermGroup deletes an empty group other than the system group.
 func (s *Service) DeleteTermGroup(ctx context.Context, subject, id string, version int) error {
 	return s.write(ctx, func(t *Service) error {
-		g, e := t.termGroup(ctx, subject, id, "manage")
-		if e != nil {
+		if _, e := t.termGroup(ctx, subject, id, "manage"); e != nil {
 			return e
 		}
-		if g.Version != version {
-			return ErrPreconditionFailed
-		}
-		if g.IsSystem {
-			return invalid("the system term group cannot be deleted")
-		}
-		used, e := t.Client.TermSet.Query().Where(termset.GroupIDEQ(id)).Exist(ctx)
-		if e != nil {
-			return e
-		}
-		if used {
-			return invalid("delete or empty the group's term sets first")
-		}
-		if e = t.Client.TermGroup.DeleteOne(g).Exec(ctx); e != nil {
-			return e
+		if e := t.DAL.Taxonomy().DeleteGroup(ctx, id, version); e != nil {
+			return taxonomyError(e)
 		}
 		return t.auditTaxonomy(ctx, subject, "term_group.delete", map[string]any{"term_group_id": id})
 	})
@@ -155,84 +175,61 @@ func (in *TermSetInput) validate() error {
 	}
 	return validateDescription(in.Description)
 }
-func (s *Service) CreateTermSet(ctx context.Context, subject string, in TermSetInput) (out *ent.TermSet, err error) {
+func (s *Service) CreateTermSet(ctx context.Context, subject string, in TermSetInput) (out TermSetView, err error) {
 	if !fieldKey.MatchString(in.Key) {
-		return nil, invalid("invalid term set key")
+		return out, invalid("invalid term set key")
 	}
 	if e := in.validate(); e != nil {
-		return nil, e
+		return out, e
 	}
 	err = s.write(ctx, func(t *Service) error {
 		if e := t.requireTaxonomy(ctx, subject, "manage"); e != nil {
 			return e
 		}
-		g, e := t.Client.TermGroup.Get(ctx, in.GroupID)
-		if ent.IsNotFound(e) {
-			return invalid("group_id must identify an organization term group")
-		}
+		set, e := t.DAL.Taxonomy().CreateSet(ctx, taxonomy.Set{GroupID: in.GroupID, Key: in.Key, Name: in.Name, Description: in.Description, Open: in.IsOpen})
 		if e != nil {
-			return e
+			return taxonomyError(e)
 		}
-		if g.IsSystem {
-			return invalid("the system term group holds only the keywords set")
-		}
-		if out, e = t.Client.TermSet.Create().SetGroupID(g.ID).SetKey(in.Key).SetName(in.Name).SetDescription(in.Description).SetIsOpen(in.IsOpen).Save(ctx); e != nil {
-			return e
-		}
-		return t.auditTaxonomy(ctx, subject, "term_set.create", map[string]any{"term_set_id": out.ID})
+		out = viewTermSet(set)
+		return t.auditTaxonomy(ctx, subject, "term_set.create", map[string]any{"term_set_id": set.ID})
 	})
 	return
 }
-func (s *Service) TermSets(ctx context.Context, subject, groupID, after string, limit int) (Page[*ent.TermSet], error) {
-	return read(ctx, s, func(t *Service) (Page[*ent.TermSet], error) {
+func (s *Service) TermSets(ctx context.Context, subject, groupID, after string, limit int) (Page[TermSetView], error) {
+	return read(ctx, s, func(t *Service) (Page[TermSetView], error) {
 		if e := t.requireTaxonomy(ctx, subject, "read"); e != nil {
-			return Page[*ent.TermSet]{}, e
+			return Page[TermSetView]{}, e
 		}
-		q := t.Client.TermSet.Query().Where(termset.IDGT(after))
-		if groupID != "" {
-			q.Where(termset.GroupIDEQ(groupID))
-		}
-		rows, e := q.Order(ent.Asc(termset.FieldID)).Limit(pageSize(limit) + 1).All(ctx)
-		return entityPage(rows, limit, func(v *ent.TermSet) string { return v.ID }), e
+		rows, e := t.DAL.Taxonomy().Sets(ctx, taxonomy.SetFilter{GroupID: groupID, AfterID: after, Limit: pageSize(limit) + 1})
+		return entityPage(views(rows, viewTermSet), limit, func(v TermSetView) string { return v.ID }), e
 	})
 }
-func (s *Service) TermSet(ctx context.Context, subject, id string) (*ent.TermSet, error) {
-	return read(ctx, s, func(t *Service) (*ent.TermSet, error) {
+func (s *Service) TermSet(ctx context.Context, subject, id string) (TermSetView, error) {
+	return read(ctx, s, func(t *Service) (TermSetView, error) {
 		set, e := t.termSet(ctx, subject, id, "read")
-		return set, e
+		return viewTermSet(set), e
 	})
 }
-func (s *Service) termSet(ctx context.Context, subject, id, action string) (*ent.TermSet, error) {
-	set, e := s.Client.TermSet.Get(ctx, id)
-	if ent.IsNotFound(e) {
-		return nil, ErrNotFound
-	}
+func (s *Service) termSet(ctx context.Context, subject, id, action string) (taxonomy.Set, error) {
+	set, e := s.DAL.Taxonomy().Set(ctx, id)
 	if e != nil {
-		return nil, e
+		return set, taxonomyError(e)
 	}
 	return set, s.requireTaxonomy(ctx, subject, action)
 }
-func (s *Service) UpdateTermSet(ctx context.Context, subject, setID string, version int, in TermSetInput) (out *ent.TermSet, err error) {
+func (s *Service) UpdateTermSet(ctx context.Context, subject, setID string, version int, in TermSetInput) (out TermSetView, err error) {
 	if e := in.validate(); e != nil {
-		return nil, e
+		return out, e
 	}
 	err = s.write(ctx, func(t *Service) error {
-		set, e := t.termSet(ctx, subject, setID, "manage")
+		if _, e := t.termSet(ctx, subject, setID, "manage"); e != nil {
+			return e
+		}
+		set, e := t.DAL.Taxonomy().SaveSet(ctx, taxonomy.Set{ID: setID, GroupID: in.GroupID, Key: in.Key, Name: in.Name, Description: in.Description, Open: in.IsOpen}, version)
 		if e != nil {
-			return e
+			return taxonomyError(e)
 		}
-		if set.Version != version {
-			return ErrPreconditionFailed
-		}
-		if in.Key != "" && in.Key != set.Key || in.GroupID != "" && in.GroupID != set.GroupID {
-			return invalid("term set key and group are immutable")
-		}
-		if set.IsKeywords && !in.IsOpen {
-			return invalid("the keywords set stays open")
-		}
-		if out, e = t.Client.TermSet.UpdateOne(set).SetName(in.Name).SetDescription(in.Description).SetIsOpen(in.IsOpen).AddVersion(1).Save(ctx); e != nil {
-			return e
-		}
+		out = viewTermSet(set)
 		return t.auditTaxonomy(ctx, subject, "term_set.update", map[string]any{"term_set_id": setID})
 	})
 	return
@@ -242,65 +239,74 @@ func (s *Service) UpdateTermSet(ctx context.Context, subject, setID string, vers
 // retained, so a set that ever had terms stays.
 func (s *Service) DeleteTermSet(ctx context.Context, subject, id string, version int) error {
 	return s.write(ctx, func(t *Service) error {
-		set, e := t.termSet(ctx, subject, id, "manage")
-		if e != nil {
+		if _, e := t.termSet(ctx, subject, id, "manage"); e != nil {
 			return e
 		}
-		if set.Version != version {
-			return ErrPreconditionFailed
-		}
-		if set.IsKeywords {
-			return invalid("the keywords set cannot be deleted")
-		}
-		used, e := t.Client.Term.Query().Where(term.TermSetIDEQ(id)).Exist(ctx)
-		if e != nil {
-			return e
-		}
-		if used {
-			return invalid("term sets with terms cannot be deleted")
-		}
-		rows, e := t.Client.QueryContext(ctx, `SELECT 1 FROM field_definitions WHERE type='term' AND json_extract(options,'$.term_set_id')=? LIMIT 1`, id)
-		if e != nil {
-			return e
-		}
-		used = rows.Next()
-		rows.Close()
-		if used {
-			return invalid("the term set is used by fields")
-		}
-		if e = t.Client.TermSet.DeleteOne(set).Exec(ctx); e != nil {
-			return e
+		if e := t.DAL.Taxonomy().DeleteSet(ctx, id, version); e != nil {
+			return taxonomyError(e)
 		}
 		return t.auditTaxonomy(ctx, subject, "term_set.delete", map[string]any{"term_set_id": id})
 	})
 }
 
-// TermView is a term with whether it has children, for tree browsing.
+// TermView is a term as the API returns it, with whether it has children
+// for tree browsing.
 type TermView struct {
-	*ent.Term
-	HasChildren bool `json:"has_children"`
+	ID                 string            `json:"id"`
+	CreatedAt          time.Time         `json:"created_at"`
+	UpdatedAt          time.Time         `json:"updated_at"`
+	Version            int               `json:"version"`
+	TermSetID          string            `json:"term_set_id"`
+	ParentID           *string           `json:"parent_id"`
+	Name               string            `json:"name"`
+	NormalizedName     string            `json:"normalized_name"`
+	Description        string            `json:"description"`
+	Color              *string           `json:"color"`
+	SortOrder          int               `json:"sort_order"`
+	Path               string            `json:"path"`
+	Labels             map[string]string `json:"labels"`
+	Synonyms           []string          `json:"synonyms"`
+	MergedIntoID       *string           `json:"merged_into_id"`
+	AvailableAsKeyword bool              `json:"available_as_keyword"`
+	Deprecated         bool              `json:"deprecated"`
+	HasChildren        bool              `json:"has_children"`
 }
 
-func (s *Service) termViews(ctx context.Context, rows []*ent.Term) ([]TermView, error) {
-	out := make([]TermView, len(rows))
-	if len(rows) == 0 {
-		return out, nil
+func viewTerm(v taxonomy.Term) TermView {
+	return TermView{ID: v.ID, CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt, Version: v.Version, TermSetID: v.SetID, ParentID: optional(v.ParentID),
+		Name: v.Name, NormalizedName: v.NormalizedName, Description: v.Description, Color: optional(v.Color), SortOrder: v.SortOrder, Path: v.Path,
+		Labels: v.Labels, Synonyms: v.Synonyms, MergedIntoID: optional(v.MergedIntoID), AvailableAsKeyword: v.AvailableAsKeyword, Deprecated: v.Deprecated}
+}
+
+// optional is nil for an empty string.
+func optional(v string) *string {
+	if v == "" {
+		return nil
 	}
+	return &v
+}
+
+func views[T, V any](rows []T, view func(T) V) []V {
+	out := make([]V, len(rows))
+	for i, row := range rows {
+		out[i] = view(row)
+	}
+	return out
+}
+
+func (s *Service) termViews(ctx context.Context, rows []taxonomy.Term) ([]TermView, error) {
 	ids := make([]string, len(rows))
 	for i, v := range rows {
 		ids[i] = v.ID
 	}
-	var parents []string
-	if e := s.Client.Term.Query().Where(term.ParentIDIn(ids...), term.MergedIntoIDIsNil()).Unique(true).Select(term.FieldParentID).Scan(ctx, &parents); e != nil {
+	has, e := s.DAL.Taxonomy().Parents(ctx, ids)
+	if e != nil {
 		return nil, e
 	}
-	has := map[string]bool{}
-	for _, p := range parents {
-		has[p] = true
-	}
+	out := make([]TermView, len(rows))
 	for i, v := range rows {
-		v.Edges = ent.TermEdges{}
-		out[i] = TermView{Term: v, HasChildren: has[v.ID]}
+		out[i] = viewTerm(v)
+		out[i].HasChildren = has[v.ID]
 	}
 	return out, nil
 }
@@ -312,7 +318,7 @@ func (s *Service) termNames(ctx context.Context, subject string, ids []string) (
 	if len(ids) == 0 {
 		return out, nil
 	}
-	rows, e := s.Client.Term.Query().Where(term.IDIn(ids...)).WithTermSet().WithMergedInto().All(ctx)
+	rows, e := s.DAL.Taxonomy().Terms(ctx, taxonomy.TermFilter{IDs: ids})
 	if e != nil {
 		return nil, e
 	}
@@ -322,10 +328,27 @@ func (s *Service) termNames(ctx context.Context, subject string, ids []string) (
 		}
 		return nil, e
 	}
+	merged := []string{}
 	for _, v := range rows {
 		out[v.ID] = v.Name
-		if v.Edges.MergedInto != nil {
-			out[v.ID] = v.Edges.MergedInto.Name
+		if v.Merged() {
+			merged = append(merged, v.MergedIntoID)
+		}
+	}
+	if len(merged) == 0 {
+		return out, nil
+	}
+	targets, e := s.DAL.Taxonomy().Terms(ctx, taxonomy.TermFilter{IDs: merged})
+	if e != nil {
+		return nil, e
+	}
+	names := map[string]string{}
+	for _, v := range targets {
+		names[v.ID] = v.Name
+	}
+	for _, v := range rows {
+		if v.Merged() {
+			out[v.ID] = names[v.MergedIntoID]
 		}
 	}
 	return out, nil
@@ -392,44 +415,30 @@ func normalizeTerm(in *TermInput) error {
 	return nil
 }
 
-// termLevels is how deep a term with path sits: 1 for a root term.
-func termLevels(path string) int { return strings.Count(path, "/") - 1 }
-
-// subtree bounds the paths strictly below path: every descendant's path
-// starts with path, and '0' is the byte after '/'.
-func subtree(path string) (lo, hi string) { return path, path[:len(path)-1] + "0" }
-func underPath(path string) func(*entsql.Selector) {
-	lo, hi := subtree(path)
-	return func(sel *entsql.Selector) {
-		sel.Where(entsql.And(entsql.GT(sel.C(term.FieldPath), lo), entsql.LT(sel.C(term.FieldPath), hi)))
+// termRecord is the term in carries, for the term store.
+func termRecord(in TermInput) taxonomy.Term {
+	t := taxonomy.Term{Name: in.Name, Description: in.Description, SortOrder: in.SortOrder, Labels: in.Labels, Synonyms: in.Synonyms,
+		Deprecated: in.Deprecated, AvailableAsKeyword: in.AvailableAsKeyword}
+	if in.ParentID != nil {
+		t.ParentID = *in.ParentID
 	}
+	if in.Color != nil {
+		t.Color = *in.Color
+	}
+	return t
 }
 
-// insertTerm adds a term under parent (nil for a root) without access checks.
-func (s *Service) insertTerm(ctx context.Context, set *ent.TermSet, parent *ent.Term, in TermInput) (*ent.Term, error) {
-	id := uuid.NewString()
-	path := "/" + id + "/"
-	var parentID *string
-	if parent != nil {
-		if parent.TermSetID != set.ID || parent.Deprecated {
-			return nil, invalid("parent must be active and in the same term set")
-		}
-		path, parentID = parent.Path+id+"/", &parent.ID
-	}
-	if termLevels(path) > MaxTaxonomyDepth {
-		return nil, invalid("term hierarchy depth exceeded")
-	}
-	if in.AvailableAsKeyword && set.IsKeywords {
-		return nil, invalid("keywords are always available as keywords")
-	}
-	return s.Client.Term.Create().SetID(id).SetTermSetID(set.ID).SetNillableParentID(parentID).SetPath(path).SetName(in.Name).SetNormalizedName(strings.ToLower(in.Name)).
-		SetDescription(in.Description).SetNillableColor(in.Color).SetSortOrder(in.SortOrder).SetLabels(in.Labels).SetSynonyms(in.Synonyms).
-		SetDeprecated(in.Deprecated).SetAvailableAsKeyword(in.AvailableAsKeyword).Save(ctx)
+// insertTerm adds a term to set without access checks.
+func (s *Service) insertTerm(ctx context.Context, setID string, in TermInput) (taxonomy.Term, error) {
+	t := termRecord(in)
+	t.SetID = setID
+	created, err := s.DAL.Taxonomy().AddTerm(ctx, t)
+	return created, taxonomyError(err)
 }
 
 // termAction is the taxonomy scope needed to add terms to set.
-func termAction(set *ent.TermSet) string {
-	if set.IsOpen {
+func termAction(set taxonomy.Set) string {
+	if set.Open {
 		return "read"
 	}
 	return "manage"
@@ -442,12 +451,9 @@ func (s *Service) CreateTerm(ctx context.Context, subject, setID string, in Term
 		if e := t.requireTaxonomy(ctx, subject, "read"); e != nil {
 			return e
 		}
-		set, e := t.Client.TermSet.Get(ctx, setID)
-		if ent.IsNotFound(e) {
-			return ErrNotFound
-		}
+		set, e := t.DAL.Taxonomy().Set(ctx, setID)
 		if e != nil {
-			return e
+			return taxonomyError(e)
 		}
 		action := termAction(set)
 		if in.Deprecated || in.AvailableAsKeyword {
@@ -456,19 +462,11 @@ func (s *Service) CreateTerm(ctx context.Context, subject, setID string, in Term
 		if e := t.requireTaxonomy(ctx, subject, action); e != nil {
 			return e
 		}
-		var parent *ent.Term
-		if in.ParentID != nil {
-			if parent, e = t.Client.Term.Get(ctx, *in.ParentID); ent.IsNotFound(e) {
-				return invalid("unknown parent term")
-			} else if e != nil {
-				return e
-			}
-		}
-		created, e := t.insertTerm(ctx, set, parent, in)
+		created, e := t.insertTerm(ctx, setID, in)
 		if e != nil {
 			return e
 		}
-		out = TermView{Term: created}
+		out = viewTerm(created)
 		return t.auditTaxonomy(ctx, subject, "term.create", map[string]any{"term_id": created.ID, "term_set_id": setID})
 	})
 	return
@@ -476,23 +474,20 @@ func (s *Service) CreateTerm(ctx context.Context, subject, setID string, in Term
 
 // termForChange loads a term that a manager changes; merged terms are
 // read-only.
-func (s *Service) termForChange(ctx context.Context, subject, id string, version int) (*ent.Term, *ent.TermSet, error) {
-	v, e := s.Client.Term.Get(ctx, id)
-	if ent.IsNotFound(e) {
-		return nil, nil, ErrNotFound
-	}
+func (s *Service) termForChange(ctx context.Context, subject, id string, version int) (taxonomy.Term, taxonomy.Set, error) {
+	v, e := s.DAL.Taxonomy().Term(ctx, id)
 	if e != nil {
-		return nil, nil, e
+		return v, taxonomy.Set{}, taxonomyError(e)
 	}
-	set, e := s.termSet(ctx, subject, v.TermSetID, "manage")
+	set, e := s.termSet(ctx, subject, v.SetID, "manage")
 	if e != nil {
-		return nil, nil, e
+		return v, set, e
 	}
 	if v.Version != version {
-		return nil, nil, ErrPreconditionFailed
+		return v, set, ErrPreconditionFailed
 	}
-	if v.MergedIntoID != nil {
-		return nil, nil, invalid("the term was merged into " + *v.MergedIntoID)
+	if v.Merged() {
+		return v, set, invalid("the term was merged into " + v.MergedIntoID)
 	}
 	return v, set, nil
 }
@@ -501,28 +496,20 @@ func (s *Service) UpdateTerm(ctx context.Context, subject, termID string, versio
 		return out, e
 	}
 	err = s.write(ctx, func(t *Service) error {
-		old, set, e := t.termForChange(ctx, subject, termID, version)
+		old, _, e := t.termForChange(ctx, subject, termID, version)
 		if e != nil {
 			return e
 		}
-		if in.ParentID != nil && (old.ParentID == nil || *in.ParentID != *old.ParentID) {
+		if in.ParentID != nil && *in.ParentID != old.ParentID {
 			return invalid("move terms with POST /v1/terms/{id}/move")
 		}
-		if in.AvailableAsKeyword && set.IsKeywords {
-			return invalid("keywords are always available as keywords")
-		}
-		u := t.Client.Term.UpdateOne(old).SetName(in.Name).SetNormalizedName(strings.ToLower(in.Name)).SetDescription(in.Description).
-			SetSortOrder(in.SortOrder).SetLabels(in.Labels).SetSynonyms(in.Synonyms).SetDeprecated(in.Deprecated).SetAvailableAsKeyword(in.AvailableAsKeyword).AddVersion(1)
-		if in.Color == nil {
-			u.ClearColor()
-		} else {
-			u.SetColor(*in.Color)
-		}
-		updated, e := u.Save(ctx)
+		change := termRecord(in)
+		change.ID = termID
+		updated, e := t.DAL.Taxonomy().SaveTerm(ctx, change, version)
 		if e != nil {
-			return e
+			return taxonomyError(e)
 		}
-		views, e := t.termViews(ctx, []*ent.Term{updated})
+		views, e := t.termViews(ctx, []taxonomy.Term{updated})
 		if e != nil {
 			return e
 		}
@@ -536,17 +523,14 @@ func (s *Service) UpdateTerm(ctx context.Context, subject, termID string, versio
 }
 func (s *Service) Term(ctx context.Context, subject, id string) (TermView, error) {
 	return read(ctx, s, func(t *Service) (TermView, error) {
-		v, e := t.Client.Term.Get(ctx, id)
-		if ent.IsNotFound(e) {
-			return TermView{}, ErrNotFound
-		}
+		v, e := t.DAL.Taxonomy().Term(ctx, id)
 		if e != nil {
+			return TermView{}, taxonomyError(e)
+		}
+		if _, e = t.termSet(ctx, subject, v.SetID, "read"); e != nil {
 			return TermView{}, e
 		}
-		if _, e = t.termSet(ctx, subject, v.TermSetID, "read"); e != nil {
-			return TermView{}, e
-		}
-		views, e := t.termViews(ctx, []*ent.Term{v})
+		views, e := t.termViews(ctx, []taxonomy.Term{v})
 		if e != nil {
 			return TermView{}, e
 		}
@@ -562,20 +546,20 @@ func (s *Service) TermsByID(ctx context.Context, subject string, ids []string) (
 		return nil, invalid("ask for 1 to 200 term ids")
 	}
 	return read(ctx, s, func(t *Service) ([]TermView, error) {
-		rows, e := t.Client.Term.Query().Where(term.IDIn(ids...)).WithTermSet().All(ctx)
+		rows, e := t.DAL.Taxonomy().Terms(ctx, taxonomy.TermFilter{IDs: ids})
 		if e != nil {
 			return nil, e
 		}
 		if e := t.requireTaxonomy(ctx, subject, "read"); e != nil {
 			return nil, e
 		}
-		byID := map[string]*ent.Term{}
+		byID := map[string]taxonomy.Term{}
 		for _, v := range rows {
 			byID[v.ID] = v
 		}
-		ordered := []*ent.Term{}
+		ordered := []taxonomy.Term{}
 		for _, id := range ids {
-			if v := byID[id]; v != nil {
+			if v, ok := byID[id]; ok {
 				ordered = append(ordered, v)
 				delete(byID, id)
 			}
@@ -606,59 +590,47 @@ func (s *Service) Terms(ctx context.Context, subject, setID string, in TermsQuer
 	if len(in.Search) > maxTermSearch {
 		return Page[TermView]{}, invalid("term search exceeds 255 bytes")
 	}
-	var after *termCursor
+	f := taxonomy.TermFilter{SetID: setID, Unmerged: true, Current: !in.IncludeDeprecated, Limit: pageSize(in.Limit) + 1}
 	if in.After != "" {
 		raw, e := base64.RawURLEncoding.DecodeString(in.After)
-		after = &termCursor{}
-		if e != nil || json.Unmarshal(raw, after) != nil {
+		var after termCursor
+		if e != nil || json.Unmarshal(raw, &after) != nil {
 			return Page[TermView]{}, invalid("invalid cursor")
 		}
+		f.After = &taxonomy.Cursor{SortOrder: after.SortOrder, Name: after.Name, ID: after.ID}
 	}
 	return read(ctx, s, func(t *Service) (Page[TermView], error) {
 		if _, e := t.termSet(ctx, subject, setID, "read"); e != nil {
 			return Page[TermView]{}, e
 		}
-		q := t.Client.Term.Query().Where(term.TermSetIDEQ(setID), term.MergedIntoIDIsNil())
-		if !in.IncludeDeprecated {
-			q.Where(term.DeprecatedEQ(false))
-		}
-		var parent *ent.Term
+		var parent *taxonomy.Term
 		if in.ParentID != "" {
-			p, e := t.Client.Term.Query().Where(term.IDEQ(in.ParentID), term.TermSetIDEQ(setID)).Only(ctx)
-			if ent.IsNotFound(e) {
+			p, e := t.DAL.Taxonomy().Term(ctx, in.ParentID)
+			if dberr.IsNotFound(e) || e == nil && p.SetID != setID {
 				return Page[TermView]{}, invalid("parent_id must identify a term of the set")
 			}
 			if e != nil {
 				return Page[TermView]{}, e
 			}
-			parent = p
+			parent = &p
 		}
-		if in.Search != "" {
-			needle := strings.ToLower(in.Search)
-			q.Where(func(sel *entsql.Selector) {
-				// unicode_lower is registered by internal/database; SQLite's lower() folds ASCII only.
-				sel.Where(entsql.ExprP("(instr(normalized_name,?)>0 OR EXISTS(SELECT 1 FROM json_each(synonyms) WHERE instr(unicode_lower(value),?)>0) OR EXISTS(SELECT 1 FROM json_each(labels) WHERE instr(unicode_lower(value),?)>0))", needle, needle, needle))
-			})
+		switch {
+		case in.Search != "":
+			f.Search = strings.ToLower(in.Search)
 			if parent != nil {
-				q.Where(underPath(parent.Path))
+				f.Under = parent.Path
 			}
-		} else if parent != nil {
-			q.Where(term.ParentIDEQ(parent.ID))
-		} else {
-			q.Where(term.ParentIDIsNil())
+		case parent != nil:
+			f.ParentID = parent.ID
+		default:
+			f.Roots = true
 		}
-		if after != nil {
-			q.Where(func(sel *entsql.Selector) {
-				sel.Where(entsql.ExprP("(sort_order,normalized_name,id)>(?,?,?)", after.SortOrder, after.Name, after.ID))
-			})
-		}
-		size := pageSize(in.Limit)
-		rows, e := q.Order(ent.Asc(term.FieldSortOrder), ent.Asc(term.FieldNormalizedName), ent.Asc(term.FieldID)).Limit(size + 1).All(ctx)
+		rows, e := t.DAL.Taxonomy().Terms(ctx, f)
 		if e != nil {
 			return Page[TermView]{}, e
 		}
 		out := Page[TermView]{}
-		if len(rows) > size {
+		if size := pageSize(in.Limit); len(rows) > size {
 			last := rows[size-1]
 			raw, _ := json.Marshal(termCursor{last.SortOrder, last.NormalizedName, last.ID})
 			out.NextCursor = base64.RawURLEncoding.EncodeToString(raw)

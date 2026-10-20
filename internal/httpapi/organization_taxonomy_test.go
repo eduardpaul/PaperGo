@@ -3,8 +3,8 @@ package httpapi
 import (
 	"encoding/json"
 	"log/slog"
-	"papergo/ent"
 	"papergo/internal/auth"
+	"papergo/internal/dal/directory"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
 	"testing"
@@ -26,7 +26,7 @@ func TestOrganizationTaxonomyHTTPScopesAndGroupRevocation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = d.SetAssignment(ctx, "alice", identity.MemberRole, identity.Principal{Type: "user", ID: "bob"}, true); err != nil {
+	if err = d.SetAssignment(ctx, "alice", identity.MemberRole, identity.Principal{Type: directory.PrincipalUser, ID: "bob"}, true); err != nil {
 		t.Fatal(err)
 	}
 	readers, err := d.SaveGroup(ctx, "alice", "", 0, identity.GroupInput{Name: "Taxonomy contributors"})
@@ -37,10 +37,10 @@ func TestOrganizationTaxonomyHTTPScopesAndGroupRevocation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = d.SetAssignment(ctx, "alice", role.ID, identity.Principal{Type: "group", ID: readers.ID}, false); err != nil {
+	if err = d.SetAssignment(ctx, "alice", role.ID, identity.Principal{Type: directory.PrincipalGroup, ID: readers.ID}, false); err != nil {
 		t.Fatal(err)
 	}
-	if err = d.SetMember(ctx, "alice", readers.ID, identity.Principal{Type: "user", ID: "bob"}, false); err != nil {
+	if err = d.SetMember(ctx, "alice", readers.ID, identity.Principal{Type: directory.PrincipalUser, ID: "bob"}, false); err != nil {
 		t.Fatal(err)
 	}
 	bob := (&API{DMS: s, Auth: auth.Development{Token: testToken, Subject: "bob"}, Logger: slog.Default()}).Handler()
@@ -65,7 +65,9 @@ func TestOrganizationTaxonomyHTTPScopesAndGroupRevocation(t *testing.T) {
 	if res.Code != 201 {
 		t.Fatal(res.Code, res.Body.String())
 	}
-	var term ent.Term
+	var term struct {
+		ID string `json:"id"`
+	}
 	if err = json.Unmarshal(res.Body.Bytes(), &term); err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +88,7 @@ func TestOrganizationTaxonomyHTTPScopesAndGroupRevocation(t *testing.T) {
 		t.Fatal(res.Code, res.Body.String())
 	}
 	var audit struct {
-		Data []ent.AuditEvent `json:"value"`
+		Data []dms.AuditEvent `json:"value"`
 	}
 	if err = json.Unmarshal(res.Body.Bytes(), &audit); err != nil || len(audit.Data) < 5 {
 		t.Fatal(audit, err)
@@ -96,7 +98,7 @@ func TestOrganizationTaxonomyHTTPScopesAndGroupRevocation(t *testing.T) {
 			t.Fatal(e)
 		}
 	}
-	if err = d.SetMember(ctx, "alice", readers.ID, identity.Principal{Type: "user", ID: "bob"}, true); err != nil {
+	if err = d.SetMember(ctx, "alice", readers.ID, identity.Principal{Type: directory.PrincipalUser, ID: "bob"}, true); err != nil {
 		t.Fatal(err)
 	}
 	for _, path := range []string{"/v1/term-groups", "/v1/term-sets", "/v1/terms?ids=" + term.ID, "/v1/keywords", "/v1/taxonomy/export"} {

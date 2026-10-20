@@ -5,6 +5,10 @@ import (
 	"database/sql"
 	"errors"
 	"net/mail"
+	"papergo/internal/dal"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/directory"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -38,12 +42,15 @@ type MeProfile struct {
 var ErrCannotDeleteSelf = errors.New("you cannot delete your own account")
 var ErrLastWorkspaceOwner = errors.New("a workspace needs at least one active owner")
 
-func RequireActive(ctx context.Context, q Querier, subject string) error {
-	var active bool
-	if err := q.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM identity_users WHERE id=? AND active=1 AND deleted_at IS NULL)", subject).Scan(&active); err != nil {
+func RequireActive(ctx context.Context, store *dal.Store, subject string) error {
+	user, err := store.Directory().User(ctx, subject)
+	if dberr.IsNotFound(err) {
+		return ErrForbidden
+	}
+	if err != nil {
 		return err
 	}
-	if !active {
+	if !user.Live() {
 		return ErrForbidden
 	}
 	return nil
@@ -61,62 +68,60 @@ func validateProfile(name, email string) error {
 	}
 	return nil
 }
-func userProfile(ctx context.Context, q Querier, subject string) (UserProfile, error) {
-	out := UserProfile{Subject: subject}
-	var deleted sql.NullTime
-	err := q.QueryRowContext(ctx, "SELECT display_name,email,active,created_at,deleted_at FROM identity_users WHERE id=?", subject).Scan(&out.DisplayName, &out.Email, &out.Active, &out.CreatedAt, &deleted)
-	if errors.Is(err, sql.ErrNoRows) {
-		return out, ErrNotFound
+func profileRecord(u directory.User) UserProfile {
+	name := u.DisplayName
+	if name == "" {
+		name = u.ID
 	}
-	if deleted.Valid {
-		out.DeletedAt = &deleted.Time
-	}
-	if out.DisplayName == "" {
-		out.DisplayName = subject
-	}
-	return out, err
+	return UserProfile{Subject: u.ID, DisplayName: name, Email: u.Email, Active: u.Active, CreatedAt: u.CreatedAt, DeletedAt: u.DeletedAt}
+}
+func userProfile(ctx context.Context, store *dal.Store, subject string) (UserProfile, error) {
+	u, err := store.Directory().User(ctx, subject)
+	return profileRecord(u), identityError(err)
 }
 func (d Directory) User(ctx context.Context, actor, subject string) (UserProfile, error) {
-	if err := RequireScope(ctx, d.DB, actor, "user.read"); err != nil {
+	if err := RequireScope(ctx, dal.NewStore(d.DB), actor, "user.read"); err != nil {
 		return UserProfile{}, err
 	}
-	return userProfile(ctx, d.DB, subject)
+	return userProfile(ctx, dal.NewStore(d.DB), subject)
 }
 func (d Directory) Me(ctx context.Context, subject string) (MeProfile, error) {
 	var out MeProfile
 	err := d.transaction(ctx, func(tx *sql.Tx) error {
 		var err error
-		out.UserProfile, err = userProfile(ctx, tx, subject)
+		out.UserProfile, err = userProfile(ctx, d.store(tx), subject)
 		if err != nil {
 			return err
 		}
 		if !out.Active || out.DeletedAt != nil {
 			return ErrForbidden
 		}
-		org, err := organization(ctx, tx)
+		org, err := organization(ctx, d.store(tx))
 		if err != nil {
 			return err
 		}
 		out.OrganizationID = org.ID
 		out.OrganizationIdentifier = org.Identifier
-		out.Scopes, err = EffectiveScopes(ctx, tx, subject)
+		out.Scopes, err = EffectiveScopes(ctx, d.store(tx), subject)
 		if err != nil {
 			return err
 		}
-		rows, err := tx.QueryContext(ctx, "SELECT g.name FROM identity_groups g JOIN identity_memberships m ON g.id=m.group_id WHERE m.principal_type='user' AND m.principal_id=? ORDER BY g.name", subject)
+		memberships, err := d.store(tx).Directory().Memberships(ctx, directory.MembershipFilter{Principal: &Principal{Type: directory.PrincipalUser, ID: subject}})
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
 		out.Groups = []string{}
-		for rows.Next() {
-			var name string
-			if err := rows.Scan(&name); err != nil {
-				return err
+		for _, m := range memberships {
+			if m.Principal.Type == directory.PrincipalUser && m.Principal.ID == subject {
+				g, e := d.store(tx).Directory().Group(ctx, m.GroupID)
+				if e != nil {
+					return e
+				}
+				out.Groups = append(out.Groups, g.Name)
 			}
-			out.Groups = append(out.Groups, name)
 		}
-		return rows.Err()
+		sort.Strings(out.Groups)
+		return nil
 	})
 	return out, err
 }
@@ -129,16 +134,20 @@ func (d Directory) UpdateMe(ctx context.Context, subject string, name *string) (
 		return MeProfile{}, err
 	}
 	err := d.transaction(ctx, func(tx *sql.Tx) error {
-		return auditedIdentity(ctx, tx, subject, "user.update", "user", subject, func() error {
-			out, err := userProfile(ctx, tx, subject)
+		return auditedIdentity(ctx, d.store(tx), subject, directory.EntityUser, directory.ChangeUpdate, subject, func() error {
+			out, err := userProfile(ctx, d.store(tx), subject)
 			if err != nil {
 				return err
 			}
 			if !out.Active || out.DeletedAt != nil {
 				return ErrForbidden
 			}
-			_, err = tx.ExecContext(ctx, "UPDATE identity_users SET display_name=? WHERE id=?", nameValue, subject)
-			return err
+			user, err := d.store(tx).Directory().User(ctx, subject)
+			if err != nil {
+				return err
+			}
+			user.DisplayName = nameValue
+			return d.store(tx).Directory().SaveUser(ctx, user)
 		})
 	})
 	if err != nil {
@@ -149,8 +158,8 @@ func (d Directory) UpdateMe(ctx context.Context, subject string, name *string) (
 func (d Directory) UpdateUser(ctx context.Context, actor, subject string, in UserUpdate) (UserProfile, error) {
 	var out UserProfile
 	err := d.write(ctx, actor, "user.manage", func(tx *sql.Tx) error {
-		return auditedIdentity(ctx, tx, actor, "user.update", "user", subject, func() error {
-			current, err := userProfile(ctx, tx, subject)
+		return auditedIdentity(ctx, d.store(tx), actor, directory.EntityUser, directory.ChangeUpdate, subject, func() error {
+			current, err := userProfile(ctx, d.store(tx), subject)
 			if err != nil {
 				return err
 			}
@@ -166,10 +175,16 @@ func (d Directory) UpdateUser(ctx context.Context, actor, subject string, in Use
 			if err = validateProfile(current.DisplayName, current.Email); err != nil {
 				return err
 			}
-			if _, err = tx.ExecContext(ctx, "UPDATE identity_users SET display_name=?,email=? WHERE id=?", current.DisplayName, current.Email, subject); err != nil {
+			user, err := d.store(tx).Directory().User(ctx, subject)
+			if err != nil {
 				return err
 			}
-			out, err = userProfile(ctx, tx, subject)
+			user.DisplayName = current.DisplayName
+			user.Email = current.Email
+			if err = d.store(tx).Directory().SaveUser(ctx, user); err != nil {
+				return err
+			}
+			out, err = userProfile(ctx, d.store(tx), subject)
 			return err
 		})
 	})
@@ -178,23 +193,27 @@ func (d Directory) UpdateUser(ctx context.Context, actor, subject string, in Use
 
 // DeleteUserInTx participates in the content service transaction so Home cleanup
 // and account anonymization commit together. purgeHome must be supplied by it.
-func DeleteUserInTx(ctx context.Context, tx *sql.Tx, actor, subject string, purgeHome func() error) error {
-	if err := RequireScope(ctx, tx, actor, "user.manage"); err != nil {
+func DeleteUserInTx(ctx context.Context, store *dal.Store, actor, subject string, purgeHome func() error) error {
+	if err := store.Directory().Lock(ctx); err != nil {
 		return err
 	}
-	err := auditedIdentity(ctx, tx, actor, "user.delete", "user", subject, func() error {
+
+	if err := RequireScope(ctx, store, actor, "user.manage"); err != nil {
+		return err
+	}
+	err := auditedIdentity(ctx, store, actor, directory.EntityUser, directory.ChangeDelete, subject, func() error {
 		if actor == subject {
 			return ErrCannotDeleteSelf
 		}
-		current, err := userProfile(ctx, tx, subject)
+		current, err := userProfile(ctx, store, subject)
 		if err != nil {
 			return err
 		}
 		if current.DeletedAt != nil {
 			return ErrNotFound
 		}
-		var lastOwner bool
-		if err = tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM grants g JOIN resources w ON w.id=g.resource_id WHERE w.kind='workspace' AND w.personal_owner_id IS NULL AND w.deleted_at IS NULL AND g.principal_type='user' AND g.principal_id=? AND g.action='manage' AND NOT EXISTS(SELECT 1 FROM grants other JOIN identity_users u ON u.id=other.principal_id WHERE other.resource_id=w.id AND other.principal_type='user' AND other.action='manage' AND other.principal_id<>? AND u.active=1))", subject, subject).Scan(&lastOwner); err != nil {
+		lastOwner, err := store.Directory().LastWorkspaceOwner(ctx, subject)
+		if err != nil {
 			return err
 		}
 		if lastOwner {
@@ -203,28 +222,10 @@ func DeleteUserInTx(ctx context.Context, tx *sql.Tx, actor, subject string, purg
 		if err = purgeHome(); err != nil {
 			return err
 		}
-		for _, query := range []string{
-			"DELETE FROM identity_memberships WHERE principal_type='user' AND principal_id=?",
-			"DELETE FROM identity_assignments WHERE principal_type='user' AND principal_id=?",
-			"DELETE FROM identity_preferences WHERE owner_type='user' AND owner_id=?",
-			"DELETE FROM smart_folders WHERE owner_id=?",
-			"DELETE FROM grants WHERE principal_type='user' AND principal_id=?",
-			"DELETE FROM webdav_credentials WHERE subject=?",
-			"DELETE FROM identity_rest_tokens WHERE subject=?",
-			"DELETE FROM identity_sessions WHERE subject=?",
-			"DELETE FROM sync_tokens WHERE view_id IN (SELECT id FROM sync_views WHERE subject=?)",
-			"DELETE FROM sync_states WHERE view_id IN (SELECT id FROM sync_views WHERE subject=?)",
-			"DELETE FROM sync_views WHERE subject=?",
-		} {
-			if _, err = tx.ExecContext(ctx, query, subject); err != nil {
-				return err
-			}
-		}
-		_, err = tx.ExecContext(ctx, "UPDATE identity_users SET active=0,display_name='Deleted user',email='',password_hash='',deleted_at=? WHERE id=?", time.Now().UTC(), subject)
-		return err
+		return store.Directory().DeleteUser(ctx, subject)
 	})
 	if err != nil {
 		return err
 	}
-	return checkAdministrator(ctx, tx)
+	return checkAdministrator(ctx, store)
 }

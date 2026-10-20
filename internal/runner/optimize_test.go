@@ -7,11 +7,11 @@ import (
 	"image"
 	"image/png"
 	"io"
+	"papergo/internal/dal/blobs"
 	"strings"
 	"testing"
 	"time"
 
-	"papergo/ent"
 	"papergo/internal/dms"
 	"papergo/internal/imaging"
 	"papergo/internal/ocr"
@@ -88,7 +88,7 @@ func (f *fixture) approvalOf(t *testing.T, runID string) tasks.View {
 	return tasks.View{}
 }
 
-func (f *fixture) current(t *testing.T, itemID string) *ent.Blob {
+func (f *fixture) current(t *testing.T, itemID string) *blobs.Blob {
 	t.Helper()
 	b, err := f.dms.CurrentFile(ctx, "alice", itemID)
 	if err != nil {

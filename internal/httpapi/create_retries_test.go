@@ -3,10 +3,10 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"papergo/internal/dal/resources"
 	"testing"
 
 	"github.com/google/uuid"
-	"papergo/ent"
 	"papergo/internal/dms"
 )
 
@@ -29,7 +29,7 @@ func TestCreateRetryHTTPStatusesAndETags(t *testing.T) {
 		t.Fatal(r.Code, r.Body.String())
 	}
 	r = request(h, "POST", path, `{"id":"`+id+`","kind":"item","name":"Different"}`, testToken, "", "application/json")
-	var out ent.Resource
+	var out resources.Resource
 	if r.Code != 200 || r.Header().Get("ETag") != `"1"` || json.Unmarshal(r.Body.Bytes(), &out) != nil || out.Name != "Original" {
 		t.Fatal(r.Code, r.Body.String())
 	}

@@ -2,9 +2,10 @@ package dms
 
 import (
 	"context"
+	"papergo/internal/dal/refs"
+	"papergo/internal/dal/resources"
 
-	"papergo/ent"
-	"papergo/ent/resource"
+	"papergo/internal/dal/catalog"
 )
 
 // batchCache keeps what cannot change between the operations of one batch:
@@ -14,20 +15,20 @@ import (
 // every item.
 type batchCache struct {
 	subject     string
-	writable    map[string]*ent.Resource
-	collections map[string]*ent.Resource
-	defs        map[string][]*ent.FieldDefinition
+	writable    map[string]*resources.Resource
+	collections map[string]*resources.Resource
+	defs        map[string][]*catalog.FieldDefinition
 	// Schema revisions never change once written.
-	schemas map[string]*ent.SchemaRevision
+	schemas map[string]*catalog.SchemaRevision
 }
 
 func newBatchCache(subject string) *batchCache {
-	return &batchCache{subject: subject, writable: map[string]*ent.Resource{}, collections: map[string]*ent.Resource{}, defs: map[string][]*ent.FieldDefinition{}, schemas: map[string]*ent.SchemaRevision{}}
+	return &batchCache{subject: subject, writable: map[string]*resources.Resource{}, collections: map[string]*resources.Resource{}, defs: map[string][]*catalog.FieldDefinition{}, schemas: map[string]*catalog.SchemaRevision{}}
 }
 
 // authorizeWrite authorizes a write to id, deciding a collection once per batch.
 // Folders are checked every time: an earlier operation may have deleted one.
-func (s *Service) authorizeWrite(ctx context.Context, subject, id string) (*ent.Resource, error) {
+func (s *Service) authorizeWrite(ctx context.Context, subject, id string) (*resources.Resource, error) {
 	cache := s.batch
 	if cache != nil && cache.subject == subject {
 		if r, ok := cache.writable[id]; ok {
@@ -36,7 +37,7 @@ func (s *Service) authorizeWrite(ctx context.Context, subject, id string) (*ent.
 		}
 	}
 	r, err := s.authorize(ctx, subject, id, "write")
-	if err == nil && cache != nil && cache.subject == subject && (r.Kind == resource.KindList || r.Kind == resource.KindLibrary) {
+	if err == nil && cache != nil && cache.subject == subject && (r.Kind == refs.KindList || r.Kind == refs.KindLibrary) {
 		copied := *r
 		cache.writable[id] = &copied
 	}
@@ -44,29 +45,29 @@ func (s *Service) authorizeWrite(ctx context.Context, subject, id string) (*ent.
 }
 
 // collectionDefinitions returns a collection's field definitions, loaded once per batch.
-func (s *Service) collectionDefinitions(ctx context.Context, collection string) ([]*ent.FieldDefinition, error) {
+func (s *Service) collectionDefinitions(ctx context.Context, collection string) ([]*catalog.FieldDefinition, error) {
 	if s.batch != nil {
 		if defs, ok := s.batch.defs[collection]; ok {
-			return append([]*ent.FieldDefinition(nil), defs...), nil
+			return append([]*catalog.FieldDefinition(nil), defs...), nil
 		}
 	}
-	defs, err := s.Client.FieldDefinition.Query().Where(collectionFieldPredicate(collection)).All(ctx)
+	defs, err := s.DAL.Catalog().Fields(ctx, catalog.FieldFilter{CollectionID: collection})
 	if err == nil && s.batch != nil {
 		s.batch.defs[collection] = defs
 	}
-	return append([]*ent.FieldDefinition(nil), defs...), err
+	return append([]*catalog.FieldDefinition(nil), defs...), err
 }
 
 // batchCollection reads a collection, once per batch. Items' writes do not
 // change the collection row a batch reads: its schema head and settings.
-func (s *Service) batchCollection(ctx context.Context, id string) (*ent.Resource, error) {
+func (s *Service) batchCollection(ctx context.Context, id string) (*resources.Resource, error) {
 	if s.batch != nil {
 		if c, ok := s.batch.collections[id]; ok {
 			copied := *c
 			return &copied, nil
 		}
 	}
-	c, err := s.Client.Resource.Get(ctx, id)
+	c, err := s.DAL.Resources().Resource(ctx, id)
 	if err == nil && s.batch != nil {
 		copied := *c
 		s.batch.collections[id] = &copied
@@ -75,13 +76,13 @@ func (s *Service) batchCollection(ctx context.Context, id string) (*ent.Resource
 }
 
 // schemaRevision reads an immutable schema revision, once per batch.
-func (s *Service) schemaRevision(ctx context.Context, id string) (*ent.SchemaRevision, error) {
+func (s *Service) schemaRevision(ctx context.Context, id string) (*catalog.SchemaRevision, error) {
 	if s.batch != nil {
 		if schema, ok := s.batch.schemas[id]; ok {
 			return schema, nil
 		}
 	}
-	schema, err := s.Client.SchemaRevision.Get(ctx, id)
+	schema, err := s.DAL.Catalog().Schema(ctx, id)
 	if err == nil && s.batch != nil {
 		s.batch.schemas[id] = schema
 	}

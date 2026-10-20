@@ -48,7 +48,7 @@ func TestTaskRoutes(t *testing.T) {
 	runStatus := func(want string) {
 		t.Helper()
 		var run runner.Run
-		for deadline := time.Now().Add(20 * time.Second); run.Status != want; time.Sleep(20 * time.Millisecond) {
+		for deadline := time.Now().Add(20 * time.Second); string(run.Status) != want; time.Sleep(20 * time.Millisecond) {
 			if time.Now().After(deadline) {
 				t.Fatalf("run is %+v, want %s", run, want)
 			}

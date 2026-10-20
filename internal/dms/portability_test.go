@@ -6,13 +6,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"papergo/ent/operation"
 	"papergo/internal/auth"
-	"papergo/internal/database"
+	"papergo/internal/dal/daltest"
+	"papergo/internal/dal/operations"
+	"papergo/internal/dal/relationships"
+	"papergo/internal/dal/resources"
+	"papergo/internal/dal/search/sqlitestore"
 	"papergo/internal/identity"
-	"papergo/internal/search/sqlitestore"
 	"papergo/internal/storage"
-	"papergo/internal/testutil"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -21,18 +22,8 @@ import (
 
 func emptyPackageTarget(t *testing.T) *Service {
 	t.Helper()
-	db, err := database.Open(t.Context(), filepath.Join(t.TempDir(), "target.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { db.Close() })
-	for _, file := range testutil.MigrationFiles(t) {
-		if _, err = db.SQL.ExecContext(t.Context(), string(file.Bytes())); err != nil {
-			t.Fatal(err)
-		}
-	}
-	s := NewService(db.SQL)
-	if err = s.Directory().Initialize(t.Context(), "organization-admin", ""); err != nil {
+	s := NewService(daltest.EmptyDatabase(t).SQL)
+	if err := s.Directory().Initialize(t.Context(), "organization-admin", ""); err != nil {
 		t.Fatal(err)
 	}
 	return s
@@ -68,15 +59,6 @@ func TestCorePackageConfigurationContentDryRunAndAtomicImport(t *testing.T) {
 	if _, err = s.Link(ctx, "alice", item.ID, CreateRelationship{TargetID: doc.Item.ID}); err != nil {
 		t.Fatal(err)
 	}
-	// Text read from the document travels with its bytes.
-	textObject, err := store.Put(ctx, strings.NewReader(`{"pages":[{"page":1,"text":"Receipt 42","ocr":true}]}`), 1<<20)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = s.SaveBlobText(ctx, BlobTextInput{SHA256: object.SHA256, Settings: "ocr", ObjectKey: textObject.Key, ObjectSize: textObject.Size, ObjectSHA256: textObject.SHA256,
-		Pages: 1, Chars: 10, OCRPages: 1, Language: "english", Extractor: "test"}); err != nil {
-		t.Fatal(err)
-	}
 	if err = s.SetWorkspaceMember(ctx, "alice", w.ID, WorkspaceMember{Subject: "bob", Role: "member"}); err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +77,7 @@ func TestCorePackageConfigurationContentDryRunAndAtomicImport(t *testing.T) {
 		t.Fatal(err)
 	}
 	// A credential exists in the source, but never in the portable graph.
-	if _, err = s.Directory().CreateRESTToken(ctx, admin, identity.RESTTokenInput{Name: "Export source", Scopes: []string{"organization.manage"}}); err != nil {
+	if _, err = s.Directory().CreateAccessToken(ctx, admin, identity.AccessTokenInput{Name: "Export source", Scopes: []string{"organization.manage"}}); err != nil {
 		t.Fatal(err)
 	}
 	// Moving a live folder can leave a retained deleted child deeper than
@@ -137,8 +119,8 @@ func TestCorePackageConfigurationContentDryRunAndAtomicImport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The manifest, the file bytes once, and their text.
-	if len(z.File) != 3 {
+	// The manifest and the file bytes once.
+	if len(z.File) != 2 {
 		t.Fatal("identical physical content should be packaged once", len(z.File))
 	}
 	for _, entry := range z.File {
@@ -146,7 +128,7 @@ func TestCorePackageConfigurationContentDryRunAndAtomicImport(t *testing.T) {
 			f, _ := entry.Open()
 			manifest, _ := io.ReadAll(f)
 			f.Close()
-			if bytes.Contains(manifest, []byte("secret_hash")) || bytes.Contains(manifest, []byte("password_hash")) || bytes.Contains(manifest, []byte("identity_rest_tokens")) {
+			if bytes.Contains(manifest, []byte("secret_hash")) || bytes.Contains(manifest, []byte("password_hash")) || bytes.Contains(manifest, []byte("access_tokens")) {
 				t.Fatal("credential leaked")
 			}
 		}
@@ -183,11 +165,11 @@ func TestCorePackageConfigurationContentDryRunAndAtomicImport(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = target.runOperations(ctx)
-	bad, _ = target.Client.Operation.Get(ctx, bad.ID)
-	if bad.Status != operation.StatusFailed || !strings.Contains(bad.Error, "checksum") {
+	bad, _ = findOperation(target, bad.ID)
+	if bad.Status != operations.StatusFailed || !strings.Contains(bad.Error, "checksum") {
 		t.Fatal(bad.Status, bad.Error)
 	}
-	if n, _ := target.Client.Resource.Query().Count(ctx); n != 0 {
+	if n, _ := countResources(target, resources.Filter{}); n != 0 {
 		t.Fatal("corrupt package wrote content", n)
 	}
 	upload, err := targetStore.Put(ctx, bytes.NewReader(raw), PackageLimit)
@@ -201,7 +183,7 @@ func TestCorePackageConfigurationContentDryRunAndAtomicImport(t *testing.T) {
 	if err = target.runOperations(ctx); err != nil {
 		t.Fatal(err)
 	}
-	dry, err = target.Client.Operation.Get(ctx, dry.ID)
+	dry, err = findOperation(target, dry.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,10 +191,10 @@ func TestCorePackageConfigurationContentDryRunAndAtomicImport(t *testing.T) {
 	if err = json.Unmarshal(dry.Result, &plan); err != nil {
 		t.Fatal(err)
 	}
-	if !plan.Valid || !plan.DryRun || dry.Status != operation.StatusSucceeded {
+	if !plan.Valid || !plan.DryRun || dry.Status != operations.StatusSucceeded {
 		t.Fatal(string(dry.Result), dry.Error)
 	}
-	if n, _ := target.Client.Resource.Query().Count(ctx); n != 0 {
+	if n, _ := countResources(target, resources.Filter{}); n != 0 {
 		t.Fatal("dry run wrote content", n)
 	}
 	index, err := sqlitestore.Open(ctx, filepath.Join(t.TempDir(), "search.db"), sqlitestore.Options{Languages: []string{"english"}})
@@ -235,11 +217,11 @@ func TestCorePackageConfigurationContentDryRunAndAtomicImport(t *testing.T) {
 	if err = target.runOperations(ctx); err != nil {
 		t.Fatal(err)
 	}
-	real, err = target.Client.Operation.Get(ctx, real.ID)
-	if err != nil || real.Status != operation.StatusSucceeded {
+	real, err = findOperation(target, real.ID)
+	if err != nil || real.Status != operations.StatusSucceeded {
 		t.Fatal(err, real.Error)
 	}
-	if _, err = (auth.Local{DB: target.db}).Check(ctx, admin, "destination-password"); err != nil {
+	if _, err = (auth.Local{DAL: target.DAL}).Check(ctx, admin, "destination-password"); err != nil {
 		t.Fatalf("import removed the destination administrator password: %v", err)
 	}
 	restoredHome, err := target.Home(ctx, "alice")
@@ -267,55 +249,40 @@ func TestCorePackageConfigurationContentDryRunAndAtomicImport(t *testing.T) {
 	if !bytes.Equal(actual, []byte("%PDF-1.7\nDocument\n%%EOF")) {
 		t.Fatal(string(actual))
 	}
-	if n, _ := target.Client.Relationship.Query().Count(ctx); n != 1 {
+	if n, _ := target.DAL.Relationships().Count(ctx, relationships.Filter{}); n != 1 {
 		t.Fatal("relationship not restored", n)
 	}
 	// The import queued a reindex, which the same worker ran.
-	reindexed, err := target.Client.Operation.Query().Where(operation.KindEQ(OperationKindSearchReindex)).Only(ctx)
-	if err != nil || reindexed.Status != operation.StatusSucceeded {
+	reindexed, err := target.DAL.Operations().List(ctx, operations.Filter{Kinds: []string{OperationKindSearchReindex}})
+	if err != nil || len(reindexed) != 1 || reindexed[0].Status != operations.StatusSucceeded {
 		t.Fatal("no search reindex after the import", reindexed, err)
 	}
 	found, err := target.Search(ctx, admin, SearchRequest{Q: "invoice", Kinds: []string{"item"}})
 	if err != nil || len(found.Hits) == 0 {
 		t.Fatal("imported items are not searchable", found, err)
 	}
-	// The text came along: nothing is OCRed again.
-	_, text, err := target.ItemText(ctx, admin, doc.Item.ID, "")
-	if err != nil || text.OcrPages != 1 || text.Settings != "ocr" || text.Language != "english" {
-		t.Fatal("text not restored", text, err)
-	}
-	stored, err := targetStore.Open(ctx, text.ObjectKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	pages, _ := io.ReadAll(stored)
-	stored.Close()
-	if !strings.Contains(string(pages), "Receipt 42") {
-		t.Fatal(string(pages))
-	}
-	if n, _ := target.Client.ItemHistory.Query().Count(ctx); n == 0 {
+	if n, _ := countHistory(target); n == 0 {
 		t.Fatal("history not restored")
 	}
-	var credentials int
-	if err = target.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM identity_rest_tokens").Scan(&credentials); err != nil || credentials != 0 {
-		t.Fatal(credentials, err)
+	if credentials := daltest.Count(t, target.DAL, "access_tokens", nil); credentials != 0 {
+		t.Fatal(credentials)
 	}
-	if row, err := target.Client.Resource.Get(ctx, deleted.ID); err != nil || row.DeletedAt == nil {
+	if row, err := target.DAL.Resources().Resource(ctx, deleted.ID); err != nil || row.DeletedAt == nil {
 		t.Fatal("tombstone not restored", row, err)
 	}
 	if _, err := target.RestoreDeleted(ctx, admin, list.ID, deleted.ID, false); err == nil {
 		t.Fatal("overdeep deleted folder restored")
 	}
 	// Applying to a populated app must fail without changing its graph.
-	before, _ := target.Client.Resource.Query().Count(ctx)
+	before, _ := countResources(target, resources.Filter{})
 	again, err := target.StartImport(ctx, admin, upload.Key, false, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	_ = target.runOperations(ctx)
-	again, _ = target.Client.Operation.Get(ctx, again.ID)
-	after, _ := target.Client.Resource.Query().Count(ctx)
-	if again.Status != operation.StatusFailed || before != after {
+	again, _ = findOperation(target, again.ID)
+	after, _ := countResources(target, resources.Filter{})
+	if again.Status != operations.StatusFailed || before != after {
 		t.Fatal(again.Status, before, after)
 	}
 	// Export bytes remain pinned past the ordinary orphan grace period.

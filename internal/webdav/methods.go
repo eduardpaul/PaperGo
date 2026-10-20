@@ -8,6 +8,7 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
+	"papergo/internal/dal/blobs"
 	"papergo/internal/dms"
 	"papergo/internal/storage"
 	"papergo/internal/transfer"
@@ -26,7 +27,7 @@ func (h *Handler) get(w http.ResponseWriter, r *request) error {
 		return nil
 	}
 	var content io.ReadSeeker = bytes.NewReader(nil)
-	if f.Blob != nil && f.Blob.Availability == "reclaimed" {
+	if f.Blob != nil && f.Blob.Availability == blobs.AvailabilityReclaimed {
 		return dms.ErrContentUnavailable
 	}
 	if f.Blob != nil {

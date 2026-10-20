@@ -6,8 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
-	"papergo/ent/itemrevision"
-	"papergo/ent/resource"
+	auditstore "papergo/internal/dal/audit"
+	"papergo/internal/dal/refs"
+	"papergo/internal/dal/relationships"
+	"papergo/internal/dal/resources"
+	"papergo/internal/dal/surfaces"
 	"strings"
 	"sync"
 	"testing"
@@ -83,7 +86,7 @@ func TestBulkItemLifecycle(t *testing.T) {
 	if _, err = s.Get(testContext, "alice", created[1].ID); !errors.Is(err, ErrNotFound) {
 		t.Fatal("deleted item visible", err)
 	}
-	revisions, err := s.Client.ItemRevision.Query().Where(itemrevision.ItemIDEQ(created[1].ID)).Count(testContext)
+	revisions, err := countRevisions(s, created[1].ID)
 	if err != nil || revisions != 1 {
 		t.Fatal("delete changed history", revisions, err)
 	}
@@ -93,8 +96,8 @@ func TestBulkRollbackEveryDerivedEffect(t *testing.T) {
 	s, _, list := fixture(t)
 	first := create(t, s, list.ID, "item", "Original", nil)
 	second := create(t, s, list.ID, "item", "Second", nil)
-	beforeAudit, _ := s.Client.AuditEvent.Query().Count(testContext)
-	beforeRevisions, _ := s.Client.ItemRevision.Query().Count(testContext)
+	beforeAudit, _ := s.DAL.Audit().Count(testContext, auditstore.Filter{})
+	beforeRevisions, _ := countRevisions(s, "")
 	name := "Rolled back"
 	bulkFails(t, s, "alice", list.ID, 2, ErrPreconditionFailed,
 		BulkOperation{Action: "update", ID: first.ID, Version: 1, Update: &BulkUpdate{Name: &name}},
@@ -105,9 +108,9 @@ func TestBulkRollbackEveryDerivedEffect(t *testing.T) {
 	if err != nil || got.Name != first.Name || got.Version != first.Version {
 		t.Fatal("update survived rollback", got, err)
 	}
-	count, _ := s.Client.Resource.Query().Where(resource.ContainerIDEQ(list.ID), resource.KindEQ(resource.KindItem)).Count(testContext)
-	audit, _ := s.Client.AuditEvent.Query().Count(testContext)
-	revisions, _ := s.Client.ItemRevision.Query().Count(testContext)
+	count, _ := countResources(s, resources.Filter{ContainerID: list.ID, Kinds: []refs.ResourceKind{refs.KindItem}})
+	audit, _ := s.DAL.Audit().Count(testContext, auditstore.Filter{})
+	revisions, _ := countRevisions(s, "")
 	if count != 2 || audit != beforeAudit || revisions != beforeRevisions {
 		t.Fatal("transaction effects survived", count, audit, revisions)
 	}
@@ -116,7 +119,7 @@ func TestBulkRollbackEveryDerivedEffect(t *testing.T) {
 		BulkOperation{Action: "delete", ID: second.ID, Version: 99},
 	)
 	got, _ = s.Get(testContext, "alice", first.ID)
-	publications, _ := s.Client.Publication.Query().Count(testContext)
+	publications, _ := countPublications(s, "")
 	if got.PublishedRevisionID != nil || got.Version != 1 || publications != 0 {
 		t.Fatal("publication survived rollback", got, publications)
 	}
@@ -211,7 +214,7 @@ func TestBulkLibraryConflictsAndPublication(t *testing.T) {
 		BulkOperation{Action: "create", Create: &BulkCreate{Name: "Case.txt"}},
 		BulkOperation{Action: "create", Create: &BulkCreate{Name: "CASE.TXT"}},
 	)
-	count, err := s.Client.Resource.Query().Where(resource.ContainerIDEQ(library.ID)).Count(testContext)
+	count, err := countResources(s, resources.Filter{ContainerID: library.ID})
 	if err != nil || count != 0 {
 		t.Fatal("colliding create survived", count, err)
 	}
@@ -277,7 +280,7 @@ func TestBulkDeleteRollbackRestoresRelationshipsAndSurfaces(t *testing.T) {
 		if err != nil || len(page.Data) != 1 || page.Data[0].ID != first.ID || page.Data[0].Version != 3 {
 			t.Fatalf("%s lost published FTS surface: %+v %v", action, page, err)
 		}
-		if _, err := s.Client.Relationship.Get(testContext, link.ID); err != nil {
+		if _, err := s.DAL.Relationships().Find(testContext, link.ID); err != nil {
 			t.Fatal("relationship lost on rollback", err)
 		}
 	}
@@ -285,9 +288,9 @@ func TestBulkDeleteRollbackRestoresRelationshipsAndSurfaces(t *testing.T) {
 		BulkOperation{Action: "delete", ID: first.ID, Version: 3},
 		BulkOperation{Action: "delete", ID: second.ID, Version: 3},
 	)
-	links, _ := s.Client.Relationship.Query().Count(testContext)
-	surfaces, _ := s.Client.ItemSurface.Query().Count(testContext)
-	revisions, _ := s.Client.ItemRevision.Query().Count(testContext)
+	links, _ := s.DAL.Relationships().Count(testContext, relationships.Filter{})
+	surfaces, _ := countSurfaces(s, surfaces.Filter{})
+	revisions, _ := countRevisions(s, "")
 	if links != 1 || surfaces != 0 || revisions != 2 {
 		t.Fatal("delete effects", links, surfaces, revisions)
 	}
@@ -347,9 +350,9 @@ func TestBulkPublisherAndCancelledWriter(t *testing.T) {
 	bulkFails(t, s, "publisher", list.ID, 0, ErrForbidden, BulkOperation{Action: "delete", ID: item.ID, Version: 2})
 	ctx, cancel := context.WithCancel(testContext)
 	cancel()
-	s.writeMu <- struct{}{}
+	_ = s.writer.acquire(testContext)
 	out, err := s.Bulk(ctx, "alice", list.ID, BulkRequest{Operations: []BulkOperation{{Action: "delete", ID: item.ID, Version: 2}}})
-	<-s.writeMu
+	s.writer.release()
 	if !errors.Is(err, context.Canceled) || len(out.Data) != 0 {
 		t.Fatal("cancelled batch", out, err)
 	}

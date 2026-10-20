@@ -7,8 +7,8 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
-	"papergo/ent"
 	"papergo/internal/auth"
+	"papergo/internal/dal/resources"
 	"papergo/internal/dms"
 	"papergo/internal/storage"
 	"strconv"
@@ -32,7 +32,7 @@ func TestPortabilityHTTPExportDownloadAndAuthorization(t *testing.T) {
 	if response.Code != 202 || !strings.HasPrefix(response.Header().Get("Location"), "/v1/operations/") {
 		t.Fatal(response.Code, response.Body.String())
 	}
-	var op ent.Operation
+	var op dms.OperationView
 	if err = json.Unmarshal(response.Body.Bytes(), &op); err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +104,7 @@ func TestPortabilityHTTPWorkspaceConfigurationCopy(t *testing.T) {
 	if response.Code != 202 {
 		t.Fatal(response.Code, response.Body.String())
 	}
-	var queued ent.Operation
+	var queued dms.OperationView
 	if err = json.Unmarshal(response.Body.Bytes(), &queued); err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +147,7 @@ func TestPortabilityHTTPWorkspaceConfigurationCopy(t *testing.T) {
 		if !dry {
 			expected = 3
 		}
-		if count, _ := target.Client.Resource.Query().Count(ctx); count != expected {
+		if count, _ := target.DAL.Resources().Count(ctx, resources.Filter{}); count != expected {
 			t.Fatal("unexpected resources", count, expected)
 		}
 	}
@@ -162,7 +162,7 @@ func TestPortabilityHTTPWorkspaceConfigurationCopy(t *testing.T) {
 	}
 }
 
-func waitPackageHTTPTest(t *testing.T, s *dms.Service, id string) *ent.Operation {
+func waitPackageHTTPTest(t *testing.T, s *dms.Service, id string) *dms.OperationView {
 	t.Helper()
 	for i := 0; i < 250; i++ {
 		op, err := s.Operation(t.Context(), "organization-admin", id)

@@ -2,11 +2,11 @@ package dms
 
 import (
 	"context"
-	"papergo/ent"
-	"papergo/ent/term"
-	"papergo/ent/termgroup"
-	"papergo/ent/termset"
+	"slices"
 	"strings"
+
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/taxonomy"
 )
 
 // A taxonomy package carries the organization's term groups, sets and terms by
@@ -60,38 +60,47 @@ func (s *Service) ExportTaxonomy(ctx context.Context, subject string) (TaxonomyP
 		if e := t.requireTaxonomy(ctx, subject, "read"); e != nil {
 			return TaxonomyPackage{}, e
 		}
-		groups, e := t.Client.TermGroup.Query().Order(ent.Desc(termgroup.FieldIsSystem), ent.Asc(termgroup.FieldName)).
-			WithTermSets(func(q *ent.TermSetQuery) { q.Order(ent.Asc(termset.FieldKey)) }).All(ctx)
+		store := t.DAL.Taxonomy()
+		groups, e := store.Groups(ctx, taxonomy.GroupFilter{})
 		if e != nil {
 			return TaxonomyPackage{}, e
 		}
+		slices.SortFunc(groups, func(a, b taxonomy.Group) int {
+			switch {
+			case a.System && !b.System:
+				return -1
+			case b.System && !a.System:
+				return 1
+			}
+			return strings.Compare(a.Name, b.Name)
+		})
 		out := TaxonomyPackage{Groups: []PortableTermGroup{}}
 		for _, g := range groups {
-			pg := PortableTermGroup{Name: g.Name, Description: g.Description, System: g.IsSystem, Sets: []PortableTermSet{}}
-			for _, set := range g.Edges.TermSets {
-				terms, e := t.Client.Term.Query().Where(term.TermSetIDEQ(set.ID), term.MergedIntoIDIsNil()).
-					Order(ent.Asc(term.FieldSortOrder), ent.Asc(term.FieldNormalizedName), ent.Asc(term.FieldID)).All(ctx)
+			pg := PortableTermGroup{Name: g.Name, Description: g.Description, System: g.System, Sets: []PortableTermSet{}}
+			sets, e := store.Sets(ctx, taxonomy.SetFilter{GroupID: g.ID})
+			if e != nil {
+				return TaxonomyPackage{}, e
+			}
+			slices.SortFunc(sets, func(a, b taxonomy.Set) int { return strings.Compare(a.Key, b.Key) })
+			for _, set := range sets {
+				terms, e := store.Terms(ctx, taxonomy.TermFilter{SetID: set.ID, Unmerged: true})
 				if e != nil {
 					return TaxonomyPackage{}, e
 				}
-				children := map[string][]*ent.Term{}
+				children := map[string][]taxonomy.Term{}
 				for _, v := range terms {
-					parent := ""
-					if v.ParentID != nil {
-						parent = *v.ParentID
-					}
-					children[parent] = append(children[parent], v)
+					children[v.ParentID] = append(children[v.ParentID], v)
 				}
 				var tree func(parent string) []PortableTerm
 				tree = func(parent string) []PortableTerm {
 					var nodes []PortableTerm
 					for _, v := range children[parent] {
-						nodes = append(nodes, PortableTerm{Name: v.Name, Description: v.Description, Color: v.Color, SortOrder: v.SortOrder, Labels: v.Labels,
+						nodes = append(nodes, PortableTerm{Name: v.Name, Description: v.Description, Color: optional(v.Color), SortOrder: v.SortOrder, Labels: v.Labels,
 							Synonyms: v.Synonyms, Deprecated: v.Deprecated, AvailableAsKeyword: v.AvailableAsKeyword, Children: tree(v.ID)})
 					}
 					return nodes
 				}
-				pg.Sets = append(pg.Sets, PortableTermSet{Key: set.Key, Name: set.Name, Description: set.Description, IsOpen: set.IsOpen, Terms: tree("")})
+				pg.Sets = append(pg.Sets, PortableTermSet{Key: set.Key, Name: set.Name, Description: set.Description, IsOpen: set.Open, Terms: tree("")})
 			}
 			out.Groups = append(out.Groups, pg)
 		}
@@ -114,14 +123,14 @@ func (s *Service) ImportTaxonomy(ctx context.Context, subject string, pkg Taxono
 				return e
 			}
 			for _, ps := range pg.Sets {
-				set, e := t.Client.TermSet.Query().Where(termset.KeyEQ(ps.Key)).Only(ctx)
+				set, e := t.DAL.Taxonomy().SetByKey(ctx, ps.Key)
 				switch {
-				case ent.IsNotFound(e):
-					if g.IsSystem {
+				case dberr.IsNotFound(e):
+					if g.System {
 						return invalid("set " + ps.Key + ": the system group holds only the keywords set")
 					}
-					if set, e = t.Client.TermSet.Create().SetGroupID(g.ID).SetKey(ps.Key).SetName(ps.Name).SetDescription(ps.Description).SetIsOpen(ps.IsOpen).Save(ctx); e != nil {
-						return e
+					if set, e = t.DAL.Taxonomy().CreateSet(ctx, taxonomy.Set{GroupID: g.ID, Key: ps.Key, Name: ps.Name, Description: ps.Description, Open: ps.IsOpen}); e != nil {
+						return taxonomyError(e)
 					}
 					out.SetsCreated++
 				case e != nil:
@@ -129,11 +138,11 @@ func (s *Service) ImportTaxonomy(ctx context.Context, subject string, pkg Taxono
 				case set.GroupID != g.ID:
 					return invalid("set " + ps.Key + " belongs to another group here")
 				}
-				existing, e := t.Client.Term.Query().Where(term.TermSetIDEQ(set.ID), term.MergedIntoIDIsNil()).All(ctx)
+				existing, e := t.DAL.Taxonomy().Terms(ctx, taxonomy.TermFilter{SetID: set.ID, Unmerged: true})
 				if e != nil {
 					return e
 				}
-				children := map[string]*ent.Term{}
+				children := map[string]taxonomy.Term{}
 				for _, v := range existing {
 					children[termChildKey(v.ParentID, v.NormalizedName)] = v
 				}
@@ -146,46 +155,49 @@ func (s *Service) ImportTaxonomy(ctx context.Context, subject string, pkg Taxono
 	})
 	return
 }
-func (s *Service) importGroup(ctx context.Context, pg PortableTermGroup, out *TaxonomyImportResult) (*ent.TermGroup, error) {
-	q := s.Client.TermGroup.Query()
+func (s *Service) importGroup(ctx context.Context, pg PortableTermGroup, out *TaxonomyImportResult) (taxonomy.Group, error) {
+	store := s.DAL.Taxonomy()
 	if pg.System {
-		return q.Where(termgroup.IsSystemEQ(true)).Only(ctx)
+		return store.Group(ctx, taxonomy.SystemGroupID)
 	}
-	g, e := q.Where(termgroup.NameEQ(pg.Name)).Only(ctx)
-	if e == nil && g.IsSystem {
-		return nil, invalid("group " + pg.Name + " is the system group here")
+	groups, e := store.Groups(ctx, taxonomy.GroupFilter{Name: pg.Name, Limit: 1})
+	if e != nil {
+		return taxonomy.Group{}, e
 	}
-	if !ent.IsNotFound(e) {
-		return g, e
+	if len(groups) > 0 {
+		if groups[0].System {
+			return taxonomy.Group{}, invalid("group " + pg.Name + " is the system group here")
+		}
+		return groups[0], nil
 	}
 	out.GroupsCreated++
-	return s.Client.TermGroup.Create().SetName(pg.Name).SetDescription(pg.Description).Save(ctx)
+	return store.CreateGroup(ctx, taxonomy.Group{Name: pg.Name, Description: pg.Description})
 }
-func (s *Service) importTerms(ctx context.Context, set *ent.TermSet, parent *ent.Term, nodes []PortableTerm, children map[string]*ent.Term, out *TaxonomyImportResult) error {
-	var parentID *string
+func (s *Service) importTerms(ctx context.Context, set taxonomy.Set, parent *taxonomy.Term, nodes []PortableTerm, children map[string]taxonomy.Term, out *TaxonomyImportResult) error {
+	parentID := ""
 	if parent != nil {
-		parentID = &parent.ID
+		parentID = parent.ID
 	}
 	for _, n := range nodes {
 		key := termChildKey(parentID, strings.ToLower(n.Name))
-		v := children[key]
-		if v == nil {
+		v, ok := children[key]
+		if !ok {
 			if parent != nil && parent.Deprecated {
 				return invalid("cannot add " + n.Name + " below the deprecated term " + parent.Name)
 			}
 			var e error
-			in := TermInput{Name: n.Name, Description: n.Description, Color: n.Color, SortOrder: n.SortOrder, Labels: n.Labels, Synonyms: n.Synonyms,
-				Deprecated: n.Deprecated, AvailableAsKeyword: n.AvailableAsKeyword && !set.IsKeywords}
+			in := TermInput{Name: n.Name, ParentID: optional(parentID), Description: n.Description, Color: n.Color, SortOrder: n.SortOrder, Labels: n.Labels, Synonyms: n.Synonyms,
+				Deprecated: n.Deprecated, AvailableAsKeyword: n.AvailableAsKeyword && !set.Keywords}
 			if e = normalizeTerm(&in); e != nil {
 				return invalid(n.Name + ": " + e.Error())
 			}
-			if v, e = s.insertTerm(ctx, set, parent, in); e != nil {
+			if v, e = s.insertTerm(ctx, set.ID, in); e != nil {
 				return e
 			}
 			children[key] = v
 			out.TermsCreated++
 		}
-		if e := s.importTerms(ctx, set, v, n.Children, children, out); e != nil {
+		if e := s.importTerms(ctx, set, &v, n.Children, children, out); e != nil {
 			return e
 		}
 	}
@@ -201,7 +213,7 @@ func (p TaxonomyPackage) validate() error {
 	keys := map[string]bool{}
 	var count func([]PortableTerm, int) error
 	count = func(nodes []PortableTerm, depth int) error {
-		if depth > MaxTaxonomyDepth && len(nodes) > 0 {
+		if depth > taxonomy.MaxDepth && len(nodes) > 0 {
 			return invalid("term hierarchy depth exceeded")
 		}
 		names := map[string]bool{}

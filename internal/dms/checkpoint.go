@@ -2,14 +2,15 @@ package dms
 
 import (
 	"context"
-	"database/sql"
 	"time"
 
-	"papergo/ent/cachedresult"
-	"papergo/ent/domainevent"
-	"papergo/ent/livechange"
-	"papergo/ent/operation"
-	"papergo/internal/database"
+	"papergo/internal/dal"
+	"papergo/internal/dal/activitystore"
+	auditstore "papergo/internal/dal/audit"
+	"papergo/internal/dal/database"
+	eventstore "papergo/internal/dal/events"
+	"papergo/internal/dal/operations"
+	"papergo/internal/dal/resultcache"
 )
 
 // storageStatusRunRetention is the default RUN_RETENTION. The status count of
@@ -46,22 +47,21 @@ type StorageRetained struct {
 // object names, not document text, file bytes, or credentials.
 type StorageStatus struct {
 	database.Checkpoint
-	DatabaseBytes     int64                      `json:"database_bytes"`
-	PageSize          int                        `json:"page_size"`
-	PageCount         int                        `json:"page_count"`
-	FreelistCount     int                        `json:"freelist_count"`
-	FreelistBytes     int64                      `json:"freelist_bytes"`
-	UnusedBytes       int64                      `json:"unused_bytes"`
-	AccountedBytes    int64                      `json:"accounted_bytes"`
-	Tables            []database.TableAllocation `json:"tables"`
-	SearchStore       string                     `json:"search_store"`
-	SearchBytes       int64                      `json:"search_bytes"`
-	SearchDocuments   int64                      `json:"search_documents"`
-	BlobBytes         int64                      `json:"blob_bytes"`
-	OrphanStepResults int64                      `json:"orphan_step_results"`
-	Runs              []StorageRunCount          `json:"runs"`
-	Expired           StorageExpired             `json:"expired"`
-	Retained          StorageRetained            `json:"retained"`
+	DatabaseBytes   int64                      `json:"database_bytes"`
+	PageSize        int                        `json:"page_size"`
+	PageCount       int                        `json:"page_count"`
+	FreelistCount   int                        `json:"freelist_count"`
+	FreelistBytes   int64                      `json:"freelist_bytes"`
+	UnusedBytes     int64                      `json:"unused_bytes"`
+	AccountedBytes  int64                      `json:"accounted_bytes"`
+	Tables          []database.TableAllocation `json:"tables"`
+	SearchStore     string                     `json:"search_store"`
+	SearchBytes     int64                      `json:"search_bytes"`
+	SearchDocuments int64                      `json:"search_documents"`
+	BlobBytes       int64                      `json:"blob_bytes"`
+	Runs            []StorageRunCount          `json:"runs"`
+	Expired         StorageExpired             `json:"expired"`
+	Retained        StorageRetained            `json:"retained"`
 }
 
 // StorageStatus reports allocation and a passive checkpoint for an organization
@@ -98,59 +98,45 @@ func (s *Service) StorageStatus(ctx context.Context, subject string) (StorageSta
 		out.SearchBytes = stats.Bytes
 		out.SearchDocuments = stats.Documents
 	}
-	if err = s.db.QueryRowContext(ctx, `SELECT COALESCE(SUM(size), 0) FROM (SELECT sha256, MAX(size) AS size FROM blobs WHERE availability='available' GROUP BY sha256)`).Scan(&out.BlobBytes); err != nil {
-		return StorageStatus{}, err
-	}
-	if err = s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM runner_step_results WHERE run_id NOT IN (SELECT id FROM workflow_runs)`).Scan(&out.OrphanStepResults); err != nil {
+	if out.BlobBytes, err = s.DAL.Blobs().StoredBytes(ctx); err != nil {
 		return StorageStatus{}, err
 	}
 	now := time.Now().UTC()
-	if out.Expired.CachedResults, err = s.Client.CachedResult.Query().Where(cachedresult.ExpiresAtLTE(now)).Count(ctx); err != nil {
+	if out.Expired.CachedResults, err = count(resultcache.New(s.db).CountExpired(ctx, now)); err != nil {
 		return StorageStatus{}, err
 	}
-	if err = s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM activity_records WHERE expires_at<=? AND NOT EXISTS(SELECT 1 FROM activity_references WHERE record_id=activity_records.id) AND (lease_until IS NULL OR lease_until<=?)`, now, now).Scan(&out.Expired.ActivityRecords); err != nil {
+	if out.Expired.ActivityRecords, err = activitystore.New(s.db).CountExpired(ctx, now); err != nil {
 		return StorageStatus{}, err
 	}
-	if out.Expired.LiveChanges, err = s.Client.LiveChange.Query().Where(livechange.CreatedAtLTE(now.Add(-LiveRetention))).Count(ctx); err != nil {
+	if out.Expired.LiveChanges, err = count(s.DAL.LiveChanges().CountExpired(ctx, now.Add(-LiveRetention))); err != nil {
 		return StorageStatus{}, err
 	}
-	if out.Expired.Operations, err = s.Client.Operation.Query().Where(operation.StatusNEQ(operation.StatusPending), operation.UpdatedAtLTE(now.Add(-OperationRetention))).Count(ctx); err != nil {
+	expired := now.Add(-OperationRetention)
+	if out.Expired.Operations, err = count(s.DAL.Operations().Count(ctx, operations.Filter{Finished: true, UpdatedThrough: &expired})); err != nil {
 		return StorageStatus{}, err
 	}
-	if out.Expired.DispatchedEvents, err = s.Client.DomainEvent.Query().Where(domainevent.DispatchedAtNotNil(), domainevent.DispatchedAtLTE(now.Add(-storageStatusRunRetention))).Count(ctx); err != nil {
+	dispatched := now.Add(-storageStatusRunRetention)
+	if out.Expired.DispatchedEvents, err = count(s.DAL.Events().Count(ctx, eventstore.Filter{DispatchedThrough: &dispatched})); err != nil {
 		return StorageStatus{}, err
 	}
-	if out.Retained.AuditEvents, err = s.Client.AuditEvent.Query().Count(ctx); err != nil {
+	if out.Retained.AuditEvents, err = count(s.DAL.Audit().Count(ctx, auditstore.Filter{})); err != nil {
 		return StorageStatus{}, err
 	}
-	if out.Retained.Publications, err = s.Client.Publication.Query().Count(ctx); err != nil {
+	if out.Retained.Publications, err = s.DAL.Revisions().CountPublications(ctx); err != nil {
 		return StorageStatus{}, err
 	}
-	out.Runs, err = storageRuns(ctx, s.db)
+	out.Runs, err = storageRuns(ctx, s)
 	return out, err
 }
 
-func storageRuns(ctx context.Context, db *sql.DB) ([]StorageRunCount, error) {
-	var present int
-	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='workflow_status'`).Scan(&present); err != nil {
-		return nil, err
+func storageRuns(ctx context.Context, s *Service) ([]StorageRunCount, error) {
+	counts, err := dal.NewDurableStore(s.db, s.DAL.Dialect(), "dbos").RunCounts(ctx)
+	out := make([]StorageRunCount, len(counts))
+	for i, c := range counts {
+		out[i] = StorageRunCount{Name: c.Name, Status: c.Status, Count: c.Count}
 	}
-	query := `SELECT event_type, live_status, COUNT(*) FROM workflow_runs GROUP BY event_type, live_status ORDER BY event_type, live_status`
-	if present > 0 {
-		query = `SELECT name, status, COUNT(*) FROM workflow_status GROUP BY name, status ORDER BY name, status`
-	}
-	rows, err := db.QueryContext(ctx, query)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []StorageRunCount{}
-	for rows.Next() {
-		var row StorageRunCount
-		if err = rows.Scan(&row.Name, &row.Status, &row.Count); err != nil {
-			return nil, err
-		}
-		out = append(out, row)
-	}
-	return out, rows.Err()
+	return out, err
 }
+
+// count converts a repository count to a status counter.
+func count(n int64, err error) (int, error) { return int(n), err }

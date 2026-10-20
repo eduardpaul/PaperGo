@@ -2,9 +2,8 @@ package dms
 
 import (
 	"context"
-	"database/sql"
-	"encoding/json"
-	"time"
+	"papergo/internal/dal"
+	eventstore "papergo/internal/dal/events"
 
 	"github.com/google/uuid"
 )
@@ -68,29 +67,12 @@ type Event struct {
 // recordEvents appends events to the domain event log in the write's
 // transaction: they exist exactly when the change committed. An event ID
 // that is already logged (a schedule occurrence raised twice) is kept once.
-func recordEvents(ctx context.Context, tx *sql.Tx, events []Event) error {
-	now := time.Now().UTC()
-	for _, e := range events {
-		if e.Data == nil {
-			e.Data = map[string]any{}
-		}
-		data, err := json.Marshal(e.Data)
-		if err != nil {
-			return err
-		}
-		if _, err = tx.ExecContext(ctx, `INSERT INTO domain_events (id, created_at, type, workspace_id, collection_id, resource_id, actor, data, depth, cause_run_id) VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING`,
-			e.ID, now, e.Type, e.WorkspaceID, nullable(e.CollectionID), nullable(e.ResourceID), e.Actor, string(data), e.Depth, nullable(e.CauseRunID)); err != nil {
-			return err
-		}
+func recordEvents(ctx context.Context, store *dal.Store, events []Event) error {
+	records := make([]eventstore.Event, len(events))
+	for i, event := range events {
+		records[i] = eventstore.Event{ID: event.ID, Type: event.Type, WorkspaceID: event.WorkspaceID, CollectionID: event.CollectionID, ResourceID: event.ResourceID, Actor: event.Actor, CauseRunID: event.CauseRunID, Data: event.Data, Depth: event.Depth}
 	}
-	return nil
-}
-
-func nullable(s string) any {
-	if s == "" {
-		return nil
-	}
-	return s
+	return store.Events().Append(ctx, records)
 }
 
 // NewEventID returns a time-ordered event ID.

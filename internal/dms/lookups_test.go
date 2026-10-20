@@ -3,7 +3,7 @@ package dms
 import (
 	"encoding/json"
 	"errors"
-	"papergo/ent"
+	"papergo/internal/dal/resources"
 	"papergo/internal/model"
 	"testing"
 )
@@ -36,7 +36,7 @@ func TestCrossWorkspaceLookupDefaultsSharingAndTargetValidation(t *testing.T) {
 		t.Fatal(e)
 	}
 	for _, c := range []struct {
-		collection *ent.Resource
+		collection *resources.Resource
 		actor      string
 	}{{source, "alice"}, {target, "bob"}} {
 		if _, e = s.AttachContentType(testContext, c.actor, c.collection.ID, c.collection.Version, AttachContentTypeInput{ContentTypeID: typ.ID, IsDefault: true}); e != nil {
@@ -139,7 +139,7 @@ func TestCrossWorkspaceLookupExplicitMultipleAssignmentRevalidatesEveryTarget(t 
 	}
 }
 
-func latestForActor(t *testing.T, s *Service, actor, id string) *ent.Resource {
+func latestForActor(t *testing.T, s *Service, actor, id string) *resources.Resource {
 	t.Helper()
 	r, e := s.Get(testContext, actor, id)
 	if e != nil {

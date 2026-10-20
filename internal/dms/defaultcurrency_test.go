@@ -2,6 +2,7 @@ package dms
 
 import (
 	"errors"
+	"papergo/internal/dal/resources"
 	"testing"
 )
 
@@ -25,8 +26,8 @@ func TestWorkspaceDefaultCurrencyIsManagedAndValidated(t *testing.T) {
 	if _, err = s.Update(testContext, "alice", list.ID, list.Version, UpdateResource{DefaultCurrency: ptr("JPY")}); err == nil {
 		t.Fatal("list accepted workspace setting")
 	}
-	if _, err = s.Client.Resource.UpdateOneID(list.ID).SetDefaultCurrency("JPY").Save(testContext); err == nil {
-		t.Fatal("database accepted default currency on list")
+	if err = s.DAL.Resources().Change(testContext, list.ID, latest(t, s, list.ID).Version, "alice", resources.Changes{DefaultCurrency: ptr("JPY")}); err == nil {
+		t.Fatal("storage accepted default currency on list")
 	}
 	updated, err = s.Update(testContext, "alice", workspace.ID, updated.Version, UpdateResource{DefaultCurrency: ptr("")})
 	if err != nil || updated.DefaultCurrency != "" {

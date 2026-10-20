@@ -5,15 +5,16 @@ import (
 	"strings"
 	"testing"
 
+	"papergo/internal/dal/catalog"
 	"papergo/internal/model"
 )
 
 func TestStringLimitsDefaultsCeilingsAndUTF16(t *testing.T) {
 	for _, tc := range []struct {
-		typ                   string
+		typ                   catalog.FieldType
 		defaultLimit, ceiling int
-	}{{"text", 255, 4000}, {"email", 255, 4000}, {"url", 2048, 4000}, {"note", 100000, 1000000}} {
-		t.Run(tc.typ, func(t *testing.T) {
+	}{{catalog.FieldText, 255, 4000}, {catalog.FieldEmail, 255, 4000}, {catalog.FieldURL, 2048, 4000}, {catalog.FieldNote, 100000, 1000000}} {
+		t.Run(string(tc.typ), func(t *testing.T) {
 			field := fieldFromInput(CreateField{Key: "value", Label: "Value", Type: tc.typ})
 			for _, value := range []string{strings.Repeat("a", tc.defaultLimit), strings.Repeat("😀", tc.defaultLimit/2) + strings.Repeat("a", tc.defaultLimit%2)} {
 				if _, err := normalizeString(field, value); err != nil {

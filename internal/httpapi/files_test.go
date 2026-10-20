@@ -104,32 +104,3 @@ func TestDeleteListFolderWithNestedFolder(t *testing.T) {
 		t.Fatal(response.Code, response.Body.String())
 	}
 }
-
-func TestWebDAVCredentialEndpoints(t *testing.T) {
-	h, _, _ := setup(t)
-	response := request(h, "POST", "/v1/webdav-credentials", `{"label":"Laptop"}`, testToken, "", "application/json")
-	var created struct {
-		ID         string `json:"id"`
-		Password   string `json:"password"`
-		SecretHash string `json:"secret_hash"`
-	}
-	if err := json.Unmarshal(response.Body.Bytes(), &created); response.Code != 201 || err != nil || created.Password == "" || created.SecretHash != "" {
-		t.Fatal(response.Code, response.Body.String())
-	}
-	response = request(h, "GET", "/v1/webdav-credentials", "", testToken, "", "")
-	var list struct {
-		Data []map[string]any `json:"value"`
-	}
-	if err := json.Unmarshal(response.Body.Bytes(), &list); err != nil || len(list.Data) != 1 || list.Data[0]["password"] != nil || list.Data[0]["label"] != "Laptop" {
-		t.Fatal(response.Body.String())
-	}
-	if response = request(h, "POST", "/v1/webdav-credentials", `{"label":" "}`, testToken, "", "application/json"); response.Code != 422 {
-		t.Fatal(response.Code)
-	}
-	if response = request(h, "DELETE", "/v1/webdav-credentials/"+created.ID, "", testToken, "", ""); response.Code != 204 {
-		t.Fatal(response.Code)
-	}
-	if response = request(h, "DELETE", "/v1/webdav-credentials/"+created.ID, "", testToken, "", ""); response.Code != 404 {
-		t.Fatal(response.Code)
-	}
-}

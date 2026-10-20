@@ -15,14 +15,13 @@ import type {
   Preferences,
   Relationship,
   Resource,
-  RestToken,
+  AccessToken,
   Revision,
   Scope,
   SmartFolder,
   StagedFile,
   Term,
   UserProfile,
-  WebDAVCredential,
   Workflow,
   WorkflowRun,
   WorkspaceMember,
@@ -222,11 +221,7 @@ export async function scopeCatalog() {
 }
 
 export async function tokens() {
-  return listOf((await api<Page<RestToken> | RestToken[]>('/v1/identity/me/tokens')).data);
-}
-
-export async function webdavCredentials() {
-  return listOf((await api<Page<WebDAVCredential>>('/v1/webdav-credentials')).data);
+  return listOf((await api<Page<AccessToken> | AccessToken[]>('/v1/identity/me/tokens')).data);
 }
 
 export async function smartFolder(id: string) {

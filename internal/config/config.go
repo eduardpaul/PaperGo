@@ -21,7 +21,12 @@ type Config struct {
 	Env          string
 	Address      string
 	DatabasePath string
-	BlobPath     string
+	// DatabaseURL is a PostgreSQL connection URL (DATABASE_URL). When set,
+	// PaperGo and the workflow runner keep their tables in that database
+	// instead of the SQLite file at DatabasePath, which then only anchors
+	// the default locations of local files beside it.
+	DatabaseURL string
+	BlobPath    string
 	// SearchPath is the search store's SQLite file (SEARCH_DATABASE_PATH),
 	// by default search.db next to the database.
 	SearchPath string
@@ -155,6 +160,12 @@ func loadFrom(getenv func(string) string, yamlText, directory string) (Config, e
 		return fallback
 	}
 	c := Config{Env: value("APP_ENV", "development"), Address: value("HTTP_ADDR", "127.0.0.1:8080"), DatabasePath: value("DATABASE_PATH", "data/papergo.db"), BlobPath: value("BLOB_PATH", "data/blobs"), AuthMode: value("AUTH_MODE", "local"), DevToken: lookup("DEV_TOKEN"), DevSubject: value("DEV_SUBJECT", "local-admin"), Issuer: lookup("OIDC_ISSUER"), Audience: lookup("OIDC_AUDIENCE"), MaxUpload: 64 * 1024 * 1024, MaxInFlight: 32, RequestTimeout: 30 * time.Second, NodeID: value("NODE_ID", "local"), RunRetention: 30 * 24 * time.Hour, SystemRunRetention: 24 * time.Hour, ResultCacheTTL: 30 * 24 * time.Hour}
+	c.DatabaseURL = lookup("DATABASE_URL")
+	if c.DatabaseURL != "" {
+		if u, err := url.Parse(c.DatabaseURL); err != nil || u.Scheme != "postgres" && u.Scheme != "postgresql" {
+			return c, fmt.Errorf("DATABASE_URL must be a postgres:// URL")
+		}
+	}
 	c.SearchPath = value("SEARCH_DATABASE_PATH", filepath.Join(filepath.Dir(c.DatabasePath), "search.db"))
 	c.SearchStore = value("SEARCH_STORE", "zvec")
 	if c.SearchStore != "sqlite" && c.SearchStore != "zvec" {

@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"papergo/ent/blobtext"
 	"papergo/internal/dms"
 	"papergo/internal/doctext/doctexttest"
 	"papergo/internal/pdf"
@@ -108,7 +107,7 @@ func TestReadTextOfPDFsScansAndPhotos(t *testing.T) {
 	if again, _ := f.text(t, copyOf.ID); again != before {
 		t.Fatalf("identical bytes read again: %s, %s", again, before)
 	}
-	if n, err := f.db.Client.BlobText.Query().Where(blobtext.Sha256EQ(copyOf.Blob.Sha256)).Count(ctx); err != nil || n != 1 {
+	if n, err := f.dms.DAL.Blobs().TextCount(ctx, copyOf.Blob.Sha256); err != nil || n != 1 {
 		t.Fatalf("texts of identical bytes: %d %v", n, err)
 	}
 }

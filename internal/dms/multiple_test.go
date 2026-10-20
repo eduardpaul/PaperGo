@@ -2,26 +2,25 @@ package dms
 
 import (
 	"encoding/json"
-	"papergo/ent"
-	"papergo/ent/fielddefinition"
+	"papergo/internal/dal/catalog"
 	"papergo/internal/identity"
 	"papergo/internal/model"
 	"testing"
 )
 
 func TestMultipleFieldTypeMatrix(t *testing.T) {
-	supported := map[string]bool{"choice": true, "person": true, "lookup": true, "term": true, "keywords": true}
-	for _, typ := range FieldTypes() {
-		t.Run(typ, func(t *testing.T) {
-			d := &ent.FieldDefinition{Key: "values", Label: "Values", Type: fielddefinition.Type(typ), Indexed: true, Options: model.FieldOptions{Multiple: true}}
+	supported := map[catalog.FieldType]bool{catalog.FieldChoice: true, catalog.FieldPerson: true, catalog.FieldLookup: true, catalog.FieldTerm: true, catalog.FieldKeywords: true}
+	for _, typ := range catalog.FieldTypes {
+		t.Run(string(typ), func(t *testing.T) {
+			d := &catalog.FieldDefinition{Key: "values", Label: "Values", Type: typ, Indexed: true, Options: model.FieldOptions{Multiple: true}}
 			switch typ {
-			case "choice":
+			case catalog.FieldChoice:
 				d.Choices = []string{"one", "two"}
-			case "lookup":
+			case catalog.FieldLookup:
 				d.Options.LookupContainerID = "collection"
-			case "term":
+			case catalog.FieldTerm:
 				d.Options.TermSetID = "terms"
-			case "currency":
+			case catalog.FieldCurrency:
 				d.Options.CurrencyCode = "USD"
 			}
 			err := validateFieldDefinition(d)
@@ -34,8 +33,8 @@ func TestMultipleFieldTypeMatrix(t *testing.T) {
 
 func TestMultipleScalarDefinitionsRejectedEveryProvisioningPath(t *testing.T) {
 	s, w, c := fixture(t)
-	for _, typ := range []string{"text", "email", "url"} {
-		in := CreateField{Key: typ, Label: typ, Type: typ, Options: model.FieldOptions{Multiple: true}}
+	for _, typ := range []catalog.FieldType{catalog.FieldText, catalog.FieldEmail, catalog.FieldURL} {
+		in := CreateField{Key: string(typ), Label: string(typ), Type: typ, Options: model.FieldOptions{Multiple: true}}
 		version := latest(t, s, c.ID).Version
 		if _, err := s.CreateField(testContext, "alice", c.ID, in); err == nil {
 			t.Fatal("collection field accepted", typ)
@@ -43,10 +42,10 @@ func TestMultipleScalarDefinitionsRejectedEveryProvisioningPath(t *testing.T) {
 		if _, err := s.CreateCatalogField(testContext, "alice", in); err == nil {
 			t.Fatal("catalog field accepted", typ)
 		}
-		if _, err := s.CreateTemplate(testContext, "alice", w.ID, TemplateInput{Key: typ, Name: typ, Fields: []CreateField{in}}); err == nil {
+		if _, err := s.CreateTemplate(testContext, "alice", w.ID, TemplateInput{Key: string(typ), Name: string(typ), Fields: []CreateField{in}}); err == nil {
 			t.Fatal("schema template accepted", typ)
 		}
-		if err := s.RegisterCollectionTemplate(CollectionTemplate{Key: typ, Name: typ, Kind: "list", ContentTypes: []TemplateInput{{Key: typ, Name: typ, Fields: []CreateField{in}}}}); err == nil {
+		if err := s.RegisterCollectionTemplate(CollectionTemplate{Key: string(typ), Name: string(typ), Kind: "list", ContentTypes: []TemplateInput{{Key: string(typ), Name: string(typ), Fields: []CreateField{in}}}}); err == nil {
 			t.Fatal("collection template accepted", typ)
 		}
 		if latest(t, s, c.ID).Version != version {

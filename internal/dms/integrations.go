@@ -2,19 +2,21 @@ package dms
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
+	"papergo/internal/dal/refs"
+	"papergo/internal/dal/resources"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
-	"papergo/ent"
-	"papergo/ent/contenttype"
-	"papergo/ent/integrationitem"
-	"papergo/ent/listintegration"
-	"papergo/ent/resource"
+	"papergo/internal/dal"
+	"papergo/internal/dal/catalog"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/integrations"
+	"papergo/internal/dal/operations"
+	"papergo/internal/dal/workflows"
 	"papergo/internal/identity"
 	"papergo/internal/integration"
 )
@@ -26,7 +28,7 @@ const integrationLease = 2 * time.Minute
 var ErrIntegrationBusy = errors.New("integration is refreshing; try again after it finishes")
 
 type integrationRuntime struct {
-	activate func(context.Context, *Service, string, *ent.Resource) error
+	activate func(context.Context, *Service, string, string) error
 	secrets  *integration.Secrets
 	ical     *iCalendarRuntime
 }
@@ -36,7 +38,7 @@ func (s *Service) ConfigureIntegrations(secrets *integration.Secrets) {
 	s.integrations = &integrationRuntime{secrets: secrets, ical: newICalendarRuntime()}
 }
 
-func (s *Service) OnIntegrationCreated(f func(context.Context, *Service, string, *ent.Resource) error) {
+func (s *Service) OnIntegrationCreated(f func(context.Context, *Service, string, string) error) {
 	if s.integrations != nil {
 		s.integrations.activate = f
 	}
@@ -61,7 +63,7 @@ func integrationName(name string) (string, error) {
 	}
 	return name, nil
 }
-func (s *Service) integrationList(ctx context.Context, subject, id, action string) (*ent.Resource, error) {
+func (s *Service) integrationList(ctx context.Context, subject, id, action string) (*resources.Resource, error) {
 	if err := s.RequireScope(ctx, subject, "list.read"); err != nil {
 		return nil, err
 	}
@@ -74,34 +76,69 @@ func (s *Service) integrationList(ctx context.Context, subject, id, action strin
 	if err != nil {
 		return nil, err
 	}
-	if c.Kind != resource.KindList {
+	if c.Kind != refs.KindList {
 		return nil, invalid("integrations belong to ordinary lists")
 	}
 	return c, nil
 }
-func (s *Service) integration(ctx context.Context, subject, list, id, action string) (*ent.ListIntegration, error) {
+func (s *Service) integration(ctx context.Context, subject, list, id, action string) (*integrations.Integration, error) {
 	if _, err := s.integrationList(ctx, subject, list, action); err != nil {
 		return nil, err
 	}
-	row, err := s.Client.ListIntegration.Query().Where(listintegration.IDEQ(id), listintegration.ContainerIDEQ(list)).Only(ctx)
-	if ent.IsNotFound(err) {
+	row, err := s.DAL.Integrations().Find(ctx, id)
+	if dberr.IsNotFound(err) || err == nil && row.ContainerID != list {
 		return nil, ErrNotFound
 	}
-	return row, err
+	if err != nil {
+		return nil, err
+	}
+	return &row, nil
 }
-func (s *Service) ListIntegrations(ctx context.Context, subject, list string) ([]*ent.ListIntegration, error) {
-	return read(ctx, s, func(t *Service) ([]*ent.ListIntegration, error) {
+func (s *Service) ListIntegrations(ctx context.Context, subject, list string) ([]*IntegrationView, error) {
+	return read(ctx, s, func(t *Service) ([]*IntegrationView, error) {
 		if _, err := t.integrationList(ctx, subject, list, "read"); err != nil {
 			return nil, err
 		}
-		return t.Client.ListIntegration.Query().Where(listintegration.ContainerIDEQ(list)).Order(ent.Asc(listintegration.FieldCreatedAt), ent.Asc(listintegration.FieldID)).All(ctx)
+		rows, err := t.DAL.Integrations().List(ctx, integrations.Filter{ContainerID: list})
+		if err != nil {
+			return nil, err
+		}
+		out := make([]*IntegrationView, len(rows))
+		for i, row := range rows {
+			out[i] = viewIntegration(row)
+		}
+		return out, nil
 	})
+}
+
+// IntegrationView is a list integration as the API shows it. Its
+// configuration, credential, refresh state and lease stay private.
+type IntegrationView struct {
+	ID            string     `json:"id"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+	ContainerID   string     `json:"container_id"`
+	Kind          string     `json:"kind"`
+	Name          string     `json:"name"`
+	Paused        bool       `json:"paused"`
+	Version       int        `json:"version"`
+	ItemCount     int        `json:"item_count,omitempty"`
+	LastAttemptAt *time.Time `json:"last_attempt_at,omitempty"`
+	LastSuccessAt *time.Time `json:"last_success_at,omitempty"`
+	Error         string     `json:"error,omitempty"`
+}
+
+func viewIntegration(i integrations.Integration) *IntegrationView {
+	return &IntegrationView{
+		ID: i.ID, CreatedAt: i.CreatedAt, UpdatedAt: i.UpdatedAt, ContainerID: i.ContainerID, Kind: i.Kind, Name: i.Name, Paused: i.Paused,
+		Version: i.Version, ItemCount: i.ItemCount, LastAttemptAt: i.LastAttemptAt, LastSuccessAt: i.LastSuccessAt, Error: i.Error,
+	}
 }
 func (s *Service) validateIntegrationURL(ctx context.Context, subject, list, raw string) (string, error) {
 	if s.integrations == nil {
 		return "", invalid("list integrations are not configured")
 	}
-	if _, err := read(ctx, s, func(t *Service) (*ent.Resource, error) { return t.integrationList(ctx, subject, list, "manage") }); err != nil {
+	if _, err := read(ctx, s, func(t *Service) (*resources.Resource, error) { return t.integrationList(ctx, subject, list, "manage") }); err != nil {
 		return "", err
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -112,14 +149,16 @@ func (s *Service) validateIntegrationURL(ctx context.Context, subject, list, raw
 	}
 	return u, nil
 }
-func integrationCredentials(ctx context.Context, subject string, b *ent.ListIntegrationCreate) *ent.ListIntegrationCreate {
-	b.SetConfiguredBy(subject)
-	if token, limited := identity.RESTTokenContext(ctx); limited {
-		b.SetCredentialID(token.ID).SetCredentialScopes(token.Scopes)
+
+// configuredBy records who configures an integration, limited to the caller's
+// access token when one authenticated the request.
+func configuredBy(ctx context.Context, subject string, i *integrations.Integration) {
+	i.ConfiguredBy, i.CredentialID, i.CredentialScopes = subject, "", []string{}
+	if token, limited := identity.AccessTokenContext(ctx); limited {
+		i.CredentialID, i.CredentialScopes = token.ID, token.Scopes
 	}
-	return b
 }
-func (s *Service) CreateIntegration(ctx context.Context, subject, list string, in IntegrationInput) (out *ent.ListIntegration, err error) {
+func (s *Service) CreateIntegration(ctx context.Context, subject, list string, in IntegrationInput) (out *IntegrationView, err error) {
 	if in.Kind != IntegrationKindICalendar {
 		return nil, invalid("integration kind must be ical_https")
 	}
@@ -144,7 +183,7 @@ func (s *Service) CreateIntegration(ctx context.Context, subject, list string, i
 		if e != nil {
 			return e
 		}
-		count, e := t.Client.ListIntegration.Query().Where(listintegration.ContainerIDEQ(list)).Count(ctx)
+		count, e := t.DAL.Integrations().Count(ctx, integrations.Filter{ContainerID: list})
 		if e != nil {
 			return e
 		}
@@ -154,16 +193,18 @@ func (s *Service) CreateIntegration(ctx context.Context, subject, list string, i
 		if _, e = t.ensureEventType(ctx, subject, c); e != nil {
 			return e
 		}
-		b := t.Client.ListIntegration.Create().SetContainerID(list).SetKind(IntegrationKindICalendar).SetName(name).SetGeneration(uuid.NewString()).SetConfigCiphertext(cipher).SetConfigHash(t.integrations.secrets.Hash(raw))
-		out, e = integrationCredentials(ctx, subject, b).Save(ctx)
+		source := integrations.Integration{ContainerID: list, Kind: IntegrationKindICalendar, Name: name, Generation: uuid.NewString(), ConfigCiphertext: cipher, ConfigHash: t.integrations.secrets.Hash(raw)}
+		configuredBy(ctx, subject, &source)
+		created, e := t.DAL.Integrations().Create(ctx, source)
 		if e != nil {
 			return e
 		}
-		if _, e = t.enqueueIntegrationRefresh(ctx, subject, out); e != nil {
+		out = viewIntegration(created)
+		if _, e = t.enqueueIntegrationRefresh(ctx, subject, &created); e != nil {
 			return e
 		}
 		if t.integrations.activate != nil {
-			if e = t.integrations.activate(ctx, t, subject, c); e != nil {
+			if e = t.integrations.activate(ctx, t, subject, c.ID); e != nil {
 				return e
 			}
 		}
@@ -171,13 +212,13 @@ func (s *Service) CreateIntegration(ctx context.Context, subject, list string, i
 	})
 	return
 }
-func (s *Service) checkIntegrationLease(row *ent.ListIntegration) error {
-	if row.LeaseUntil != nil && row.LeaseUntil.After(time.Now().UTC()) {
+func (s *Service) checkIntegrationLease(row *integrations.Integration) error {
+	if row.Leased(time.Now().UTC()) {
 		return ErrIntegrationBusy
 	}
 	return nil
 }
-func (s *Service) UpdateIntegration(ctx context.Context, subject, list, id string, version int, in UpdateIntegration) (out *ent.ListIntegration, err error) {
+func (s *Service) UpdateIntegration(ctx context.Context, subject, list, id string, version int, in UpdateIntegration) (out *IntegrationView, err error) {
 	if in.Name == nil && in.Paused == nil && in.Configuration == nil {
 		return nil, invalid("at least one integration change is required")
 	}
@@ -218,34 +259,38 @@ func (s *Service) UpdateIntegration(ctx context.Context, subject, list, id strin
 		if e = t.checkIntegrationLease(row); e != nil {
 			return e
 		}
-		b := t.Client.ListIntegration.UpdateOne(row).SetNillableName(in.Name).SetNillablePaused(in.Paused).AddVersion(1).SetConfiguredBy(subject).SetCredentialID("").SetCredentialScopes([]string{})
-		if token, limited := identity.RESTTokenContext(ctx); limited {
-			b.SetCredentialID(token.ID).SetCredentialScopes(token.Scopes)
+		if in.Name != nil {
+			row.Name = *in.Name
 		}
+		if in.Paused != nil {
+			row.Paused = *in.Paused
+		}
+		row.Version++
+		configuredBy(ctx, subject, row)
 		if in.Configuration != nil {
-			b.SetConfigCiphertext(cipher).SetConfigHash(t.integrations.secrets.Hash(raw)).SetState(json.RawMessage(`{}`)).SetError("")
+			row.ConfigCiphertext, row.ConfigHash, row.State, row.Error = cipher, t.integrations.secrets.Hash(raw), json.RawMessage(`{}`), ""
 			if in.Reset {
-				if _, e = t.Client.IntegrationItem.Update().Where(integrationitem.IntegrationIDEQ(id)).ClearIntegrationID().Save(ctx); e != nil {
+				if e = t.DAL.Integrations().Detach(ctx, id); e != nil {
 					return e
 				}
-				b.SetGeneration(uuid.NewString()).SetItemCount(0).ClearLastSuccessAt()
+				row.Generation, row.ItemCount, row.LastSuccessAt = uuid.NewString(), 0, nil
 			}
 		}
-		out, e = b.Save(ctx)
-		if e != nil {
+		if e = t.DAL.Integrations().Save(ctx, row); e != nil {
 			return e
 		}
+		out = viewIntegration(*row)
 		// Supersede queued work when its configuration changes. A new operation is
 		// authorized with the configuring credential, without carrying the URL.
 		if e = t.supersedeIntegrationRefreshes(ctx, id); e != nil {
 			return e
 		}
 		if !out.Paused && (in.Configuration != nil || in.Paused != nil) {
-			if _, e = t.enqueueIntegrationRefresh(ctx, subject, out); e != nil {
+			if _, e = t.enqueueIntegrationRefresh(ctx, subject, row); e != nil {
 				return e
 			}
 		}
-		c, e := t.Client.Resource.Get(ctx, list)
+		c, e := t.DAL.Resources().Resource(ctx, list)
 		if e != nil {
 			return e
 		}
@@ -268,13 +313,10 @@ func (s *Service) RemoveIntegration(ctx context.Context, subject, list, id strin
 		if e = t.supersedeIntegrationRefreshes(ctx, id); e != nil {
 			return e
 		}
-		if _, e = t.Client.IntegrationItem.Update().Where(integrationitem.IntegrationIDEQ(id)).ClearIntegrationID().Save(ctx); e != nil {
+		if e = t.DAL.Integrations().Remove(ctx, id); e != nil {
 			return e
 		}
-		if e = t.Client.ListIntegration.DeleteOne(row).Exec(ctx); e != nil {
-			return e
-		}
-		c, e := t.Client.Resource.Get(ctx, list)
+		c, e := t.DAL.Resources().Resource(ctx, list)
 		if e != nil {
 			return e
 		}
@@ -282,8 +324,7 @@ func (s *Service) RemoveIntegration(ctx context.Context, subject, list, id strin
 	})
 }
 func (s *Service) supersedeIntegrationRefreshes(ctx context.Context, id string) error {
-	_, err := s.Client.ExecContext(ctx, `UPDATE operations SET status='superseded',completed_at=?,updated_at=? WHERE kind=? AND status='pending' AND json_extract(payload,'$.integration_id')=?`, time.Now().UTC(), time.Now().UTC(), OperationKindIntegrationRefresh, id)
-	return err
+	return s.DAL.Operations().Supersede(ctx, operations.Filter{Kinds: []string{OperationKindIntegrationRefresh}, PayloadField: "integration_id", PayloadValue: id})
 }
 
 type integrationRefreshPayload struct {
@@ -297,21 +338,20 @@ func decodeIntegrationRefresh(raw json.RawMessage) (string, error) {
 	}
 	return p.IntegrationID, nil
 }
-func (s *Service) enqueueIntegrationRefresh(ctx context.Context, subject string, row *ent.ListIntegration) (*ent.Operation, error) {
-	var pendingID string
-	err := s.tx.QueryRowContext(ctx, `SELECT id FROM operations WHERE kind=? AND status='pending' AND json_extract(payload,'$.integration_id')=? AND created_by=? LIMIT 1`, OperationKindIntegrationRefresh, row.ID, subject).Scan(&pendingID)
-	if err == nil {
-		return s.Client.Operation.Get(ctx, pendingID)
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
+func (s *Service) enqueueIntegrationRefresh(ctx context.Context, subject string, row *integrations.Integration) (*OperationView, error) {
+	pending, err := s.DAL.Operations().List(ctx, operations.Filter{Kinds: []string{OperationKindIntegrationRefresh}, Statuses: []operations.Status{operations.StatusPending}, PayloadField: "integration_id", PayloadValue: row.ID, CreatedBy: subject, Limit: 1})
+	if err != nil {
 		return nil, err
+	}
+	if len(pending) > 0 {
+		return viewOperation(pending[0]), nil
 	}
 	// Validate and enqueue through the operation registry for the caller's live
 	// scopes and collection ACL. Deduplication never reveals another actor's job.
 	payload, _ := json.Marshal(integrationRefreshPayload{row.ID})
 	return s.EnqueueOperation(ctx, subject, row.ContainerID, OperationKindIntegrationRefresh, payload)
 }
-func (s *Service) RefreshIntegration(ctx context.Context, subject, list, id string) (out *ent.Operation, err error) {
+func (s *Service) RefreshIntegration(ctx context.Context, subject, list, id string) (out *OperationView, err error) {
 	err = s.write(ctx, func(t *Service) error {
 		row, e := t.integration(ctx, subject, list, id, "manage")
 		if e != nil {
@@ -343,15 +383,15 @@ func validateIntegrationRefresh(ctx context.Context, t *Service, subject, list s
 	return nil
 }
 func integrationOperationHandler() OperationHandler {
-	return OperationHandler{Scope: "list.write", Validate: validateIntegrationRefresh, ExternalStep: func(ctx context.Context, s *Service, op *ent.Operation) error {
+	return OperationHandler{Scope: "list.write", Validate: validateIntegrationRefresh, ExternalStep: func(ctx context.Context, s *Service, op *operations.Operation) error {
 		return s.refreshIntegrationOperation(ctx, op)
-	}, Failed: func(ctx context.Context, t *Service, op *ent.Operation, cause error) error {
+	}, Failed: func(ctx context.Context, t *Service, op *operations.Operation, cause error) error {
 		id, err := decodeIntegrationRefresh(op.Payload)
 		if err != nil {
 			return nil
 		}
-		row, err := t.Client.ListIntegration.Get(ctx, id)
-		if ent.IsNotFound(err) {
+		row, err := t.DAL.Integrations().Find(ctx, id)
+		if dberr.IsNotFound(err) {
 			return nil
 		}
 		if err != nil {
@@ -359,7 +399,8 @@ func integrationOperationHandler() OperationHandler {
 		}
 		// The lease owner releases on both success and failure. An unrelated worker
 		// must not clear a live lease when its duplicate job is superseded.
-		return t.Client.ListIntegration.UpdateOne(row).SetError("Calendar refresh failed; existing events were retained. Check the feed and list schema.").Exec(ctx)
+		row.Error = "Calendar refresh failed; existing events were retained. Check the feed and list schema."
+		return t.DAL.Integrations().Save(ctx, &row)
 	}}
 }
 
@@ -370,11 +411,11 @@ func (s *Service) QueueIntegrationRefreshes(ctx context.Context, subject, worksp
 	return s.queueIntegrationRefreshes(ctx, subject, workspace, id, false)
 }
 func (s *Service) QueueScheduledIntegrationRefreshes(ctx context.Context, workflowID string) (int, error) {
-	w, err := s.Client.Workflow.Get(ctx, workflowID)
+	w, err := s.DAL.Workflows().Find(ctx, workflowID)
 	if err != nil {
 		return 0, err
 	}
-	if w.BuiltinKey == nil || *w.BuiltinKey != "integrations.refresh" || !w.AutomaticEnabled || w.State != "published" || w.DeletedAt != nil {
+	if w.BuiltinKey != "integrations.refresh" || !w.AutomaticEnabled || w.State != workflows.StatePublished || w.Deleted() {
 		return 0, ErrForbidden
 	}
 	return s.queueIntegrationRefreshes(ctx, w.CreatedBy, w.WorkspaceID, "", true)
@@ -387,15 +428,16 @@ func (s *Service) queueIntegrationRefreshes(ctx context.Context, subject, worksp
 				return err
 			}
 		}
-		rows, err := t.Client.ListIntegration.Query().Where(listintegration.PausedEQ(false)).All(ctx)
+		rows, err := t.DAL.Integrations().List(ctx, integrations.Filter{Unpaused: true})
 		if err != nil {
 			return err
 		}
-		for _, row := range rows {
+		for i := range rows {
+			row := &rows[i]
 			if id != "" && row.ID != id {
 				continue
 			}
-			c, err := t.Client.Resource.Get(ctx, row.ContainerID)
+			c, err := t.DAL.Resources().Resource(ctx, row.ContainerID)
 			if err != nil {
 				return err
 			}
@@ -410,8 +452,8 @@ func (s *Service) queueIntegrationRefreshes(ctx context.Context, subject, worksp
 			actor := row.ConfiguredBy
 			credentialCtx := ctx
 			if row.CredentialID != "" {
-				credentialCtx = identity.WithRESTToken(ctx, identity.RESTTokenIdentity{Subject: actor, ID: row.CredentialID, Scopes: row.CredentialScopes})
-				if identity.RequireCredential(credentialCtx, t.tx, actor) != nil {
+				credentialCtx = identity.WithAccessToken(ctx, identity.AccessTokenIdentity{Subject: actor, ID: row.CredentialID, Scopes: row.CredentialScopes})
+				if identity.RequireCredential(credentialCtx, dal.NewStore(t.db).WithTx(t.tx), actor) != nil {
 					continue
 				}
 			}
@@ -427,9 +469,9 @@ func (s *Service) queueIntegrationRefreshes(ctx context.Context, subject, worksp
 	})
 	return n, err
 }
-func (s *Service) eventType(ctx context.Context, list string) (*ent.ContentType, error) {
-	typ, err := s.Client.ContentType.Query().Where(contenttype.TemplateKeyEQ("event")).Only(ctx)
-	if ent.IsNotFound(err) {
+func (s *Service) eventType(ctx context.Context, list string) (*catalog.ContentType, error) {
+	typ, err := s.DAL.Catalog().OneContentType(ctx, catalog.ContentTypeFilter{TemplateKey: "event"})
+	if dberr.IsNotFound(err) {
 		return nil, invalid("the list needs the Event content type")
 	}
 	if err != nil {

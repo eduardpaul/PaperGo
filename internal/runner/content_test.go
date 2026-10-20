@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	directorydomain "papergo/internal/dal/directory"
 	"strings"
 	"testing"
 	"time"
@@ -200,7 +201,7 @@ func (f *fixture) organizationManager(t *testing.T, subject string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = directory.SetAssignment(ctx, "alice", role.ID, identity.Principal{Type: "user", ID: subject}, false); err != nil {
+	if err = directory.SetAssignment(ctx, "alice", role.ID, identity.Principal{Type: directorydomain.PrincipalUser, ID: subject}, false); err != nil {
 		t.Fatal(err)
 	}
 }

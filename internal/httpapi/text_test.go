@@ -5,23 +5,23 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"papergo/internal/dal/blobs"
 	"strings"
 	"testing"
 
-	"papergo/ent"
 	"papergo/internal/auth"
 	"papergo/internal/dms"
 	"papergo/internal/storage"
 )
 
 // saveText stores page texts for a file's bytes, as document.read_text does.
-func saveText(t *testing.T, s *dms.Service, store storage.Store, sha string, pages string) *ent.BlobText {
+func saveText(t *testing.T, s *dms.Service, store storage.Store, sha string, pages string) *blobs.Text {
 	t.Helper()
 	obj, err := store.Put(context.Background(), bytes.NewReader([]byte(pages)), 1<<20)
 	if err != nil {
 		t.Fatal(err)
 	}
-	row, err := s.SaveBlobText(context.Background(), dms.BlobTextInput{SHA256: sha, Settings: "test", ObjectKey: obj.Key, ObjectSize: obj.Size, ObjectSHA256: obj.SHA256,
+	row, err := s.DAL.Blobs().SaveText(context.Background(), blobs.TextInput{SHA256: sha, Settings: "test", ObjectKey: obj.Key, ObjectSize: obj.Size, ObjectSHA256: obj.SHA256,
 		Pages: 1, Chars: 13, Language: "english", Extractor: "test"})
 	if err != nil {
 		t.Fatal(err)
@@ -51,14 +51,14 @@ func TestItemTextAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	res := request(h, "PUT", "/v1/items/"+item.ID+"/content", "%PDF-letter bytes", testToken, `"1"`, "application/pdf")
-	var blob ent.Blob
+	var blob blobs.Blob
 	if res.Code != 201 || json.Unmarshal(res.Body.Bytes(), &blob) != nil {
 		t.Fatal(res.Code, res.Body.String())
 	}
 	if res = request(h, "GET", "/v1/items/"+item.ID+"/text", "", testToken, "", ""); res.Code != 404 || !strings.Contains(res.Body.String(), "text_not_read") {
 		t.Fatal(res.Code, res.Body.String())
 	}
-	if _, err = s.SaveBlobText(ctx, dms.BlobTextInput{SHA256: strings.Repeat("0", 64), Settings: "test", ObjectKey: "k", Extractor: "test"}); err == nil {
+	if _, err = s.DAL.Blobs().SaveText(ctx, blobs.TextInput{SHA256: strings.Repeat("0", 64), Settings: "test", ObjectKey: "k", Extractor: "test"}); err == nil {
 		t.Fatal("text for bytes no file holds")
 	}
 	row := saveText(t, s, store, blob.Sha256, `{"pages":[{"page":1,"text":"Dear customer"}]}`)
@@ -98,7 +98,7 @@ func TestItemTextAPI(t *testing.T) {
 	if err = s.CleanupPurgedBlobs(ctx, store); err != nil {
 		t.Fatal(err)
 	}
-	if n, err := s.Client.BlobText.Query().Count(ctx); err != nil || n != 0 {
+	if n, err := s.DAL.Blobs().TextCount(ctx, ""); err != nil || n != 0 {
 		t.Fatalf("texts left: %d %v", n, err)
 	}
 	if _, err = store.Open(ctx, row.ObjectKey); err == nil {

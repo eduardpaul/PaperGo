@@ -2,14 +2,17 @@ package dms
 
 import (
 	"context"
+	"errors"
+	"papergo/internal/dal"
+	"papergo/internal/dal/directory"
+	"papergo/internal/dal/refs"
+	"papergo/internal/dal/resources"
 	"strings"
 	"unicode/utf16"
 	"unicode/utf8"
 
-	"papergo/ent"
-	"papergo/ent/grant"
-	"papergo/ent/identityuser"
-	"papergo/ent/resource"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/grants"
 	"papergo/internal/identity"
 )
 
@@ -31,23 +34,23 @@ func validateContainerMetadata(name, description string) error {
 	return validateName(name)
 }
 
-func workspaceRole(action grant.Action) string {
+func workspaceRole(action grants.Action) string {
 	switch action {
-	case grant.ActionManage:
+	case grants.ActionManage:
 		return "owner"
-	case grant.ActionWrite:
+	case grants.ActionWrite:
 		return "member"
 	default:
 		return "visitor"
 	}
 }
 
-func (s *Service) workspace(ctx context.Context, subject, id, action string) (*ent.Resource, error) {
+func (s *Service) workspace(ctx context.Context, subject, id, action string) (*resources.Resource, error) {
 	r, err := s.authorize(ctx, subject, id, action)
 	if err != nil {
 		return nil, err
 	}
-	if r.Kind != resource.KindWorkspace {
+	if r.Kind != refs.KindWorkspace {
 		return nil, ErrNotFound
 	}
 	return r, nil
@@ -58,12 +61,12 @@ func (s *Service) WorkspaceMembers(ctx context.Context, subject, id string) ([]W
 		if _, err := t.workspace(ctx, subject, id, "read"); err != nil {
 			return nil, err
 		}
-		grants, err := t.Client.Grant.Query().Where(grant.ResourceIDEQ(id)).Order(ent.Asc(grant.FieldPrincipalID)).All(ctx)
+		rows, err := t.DAL.Grants().List(ctx, grants.Filter{ResourceID: id, ByPrincipal: true})
 		if err != nil {
 			return nil, err
 		}
-		members := make([]WorkspaceMember, 0, len(grants))
-		for _, g := range grants {
+		members := make([]WorkspaceMember, 0, len(rows))
+		for _, g := range rows {
 			members = append(members, WorkspaceMember{Subject: g.PrincipalID, Role: workspaceRole(g.Action)})
 		}
 		return members, nil
@@ -73,13 +76,12 @@ func (s *Service) WorkspaceMembers(ctx context.Context, subject, id string) ([]W
 // WorkspaceManagers returns the users granted manage access on the
 // workspace itself, inside the caller's transaction.
 func (s *Service) WorkspaceManagers(ctx context.Context, id string) ([]string, error) {
-	grants, err := s.Client.Grant.Query().Where(grant.ResourceIDEQ(id), grant.ActionEQ(grant.ActionManage), grant.PrincipalTypeEQ(grant.PrincipalTypeUser)).
-		Order(ent.Asc(grant.FieldPrincipalID)).All(ctx)
+	rows, err := s.DAL.Grants().List(ctx, grants.Filter{ResourceID: id, Action: grants.ActionManage, PrincipalType: grants.PrincipalUser, ByPrincipal: true})
 	if err != nil {
 		return nil, err
 	}
-	out := make([]string, len(grants))
-	for i, g := range grants {
+	out := make([]string, len(rows))
+	for i, g := range rows {
 		out[i] = g.PrincipalID
 	}
 	return out, nil
@@ -94,12 +96,12 @@ func (s *Service) SetWorkspaceMember(ctx context.Context, subject, id string, in
 	if in.Role == "" {
 		in.Role = "member"
 	}
-	action := grant.ActionRead
+	action := grants.ActionRead
 	switch in.Role {
 	case "owner":
-		action = grant.ActionManage
+		action = grants.ActionManage
 	case "member":
-		action = grant.ActionWrite
+		action = grants.ActionWrite
 	case "visitor":
 	default:
 		return invalid("workspace role must be owner, member or visitor")
@@ -112,51 +114,45 @@ func (s *Service) SetWorkspaceMember(ctx context.Context, subject, id string, in
 		if w.PersonalOwnerID != nil {
 			return ErrProtectedHome
 		}
-		if err = identity.ValidatePrincipal(ctx, t.tx, identity.Principal{Type: "user", ID: in.Subject}); err != nil {
+		if err = identity.ValidatePrincipal(ctx, dal.NewStore(t.db).WithTx(t.tx), identity.Principal{Type: directory.PrincipalUser, ID: in.Subject}); err != nil {
 			return invalid(err.Error())
 		}
-		active, err := t.Client.IdentityUser.Query().Where(identityuser.IDEQ(in.Subject), identityuser.ActiveEQ(true)).Exist(ctx)
+		active, err := t.DAL.Directory().ActiveUser(ctx, in.Subject)
 		if err != nil {
 			return err
 		}
 		if !active {
 			return invalid("workspace members must be active users of the organization")
 		}
-		old, err := t.Client.Grant.Query().Where(grant.ResourceIDEQ(id), grant.PrincipalIDEQ(in.Subject), grant.PrincipalTypeEQ(grant.PrincipalTypeUser)).Only(ctx)
-		if ent.IsNotFound(err) {
-			_, err = t.Client.Grant.Create().SetResourceID(id).SetPrincipalType(grant.PrincipalTypeUser).SetPrincipalID(in.Subject).SetAction(action).Save(ctx)
-		} else if err == nil {
-			if old.Action == action {
-				return nil
-			}
-			if old.Action == grant.ActionManage && action != grant.ActionManage {
-				if err = t.checkOtherOwner(ctx, id, in.Subject); err != nil {
-					return err
-				}
-			}
-			_, err = t.Client.Grant.UpdateOne(old).SetAction(action).Save(ctx)
-		}
+		existing, err := t.DAL.Grants().List(ctx, grants.Filter{ResourceID: id, PrincipalID: in.Subject, PrincipalType: grants.PrincipalUser})
 		if err != nil {
 			return err
 		}
 		previousRole := ""
-		if old != nil {
+		if len(existing) == 0 {
+			_, err = t.DAL.Grants().Create(ctx, grants.Grant{ResourceID: id, PrincipalType: grants.PrincipalUser, PrincipalID: in.Subject, Action: action})
+		} else {
+			old := existing[0]
+			if old.Action == action {
+				return nil
+			}
 			previousRole = workspaceRole(old.Action)
+			_, err = t.DAL.Grants().ChangeAction(ctx, old.ID, action)
+		}
+		if err != nil {
+			return lastOwner(err)
 		}
 		t.emitPermissionsChanged(ctx, subject, w, map[string]any{"action": "member.set", "member_subject": in.Subject, "previous_role": previousRole, "role": in.Role})
 		return t.audit(ctx, subject, "workspace.member.set", w, map[string]any{"subject": in.Subject, "role": in.Role})
 	})
 }
 
-func (s *Service) checkOtherOwner(ctx context.Context, id, member string) error {
-	other, err := s.Client.Grant.Query().Where(grant.ResourceIDEQ(id), grant.PrincipalIDNEQ(member), grant.ActionEQ(grant.ActionManage)).Exist(ctx)
-	if err != nil {
-		return err
-	}
-	if !other {
+// lastOwner reports removing a workspace's last active owner as ErrLastOwner.
+func lastOwner(err error) error {
+	if errors.Is(err, dberr.ErrLastWorkspaceOwner) {
 		return ErrLastOwner
 	}
-	return nil
+	return err
 }
 
 func (s *Service) RemoveWorkspaceMember(ctx context.Context, subject, id, member string) error {
@@ -168,20 +164,16 @@ func (s *Service) RemoveWorkspaceMember(ctx context.Context, subject, id, member
 		if w.PersonalOwnerID != nil {
 			return ErrProtectedHome
 		}
-		g, err := t.Client.Grant.Query().Where(grant.ResourceIDEQ(id), grant.PrincipalIDEQ(member), grant.PrincipalTypeEQ(grant.PrincipalTypeUser)).Only(ctx)
-		if ent.IsNotFound(err) {
-			return ErrNotFound
-		}
+		existing, err := t.DAL.Grants().List(ctx, grants.Filter{ResourceID: id, PrincipalID: member, PrincipalType: grants.PrincipalUser})
 		if err != nil {
 			return err
 		}
-		if g.Action == grant.ActionManage {
-			if err = t.checkOtherOwner(ctx, id, member); err != nil {
-				return err
-			}
+		if len(existing) == 0 {
+			return ErrNotFound
 		}
-		if err = t.Client.Grant.DeleteOne(g).Exec(ctx); err != nil {
-			return err
+		g := existing[0]
+		if err = t.DAL.Grants().Revoke(ctx, g.ID); err != nil {
+			return lastOwner(err)
 		}
 		t.emitPermissionsChanged(ctx, subject, w, map[string]any{"action": "member.remove", "member_subject": member, "previous_role": workspaceRole(g.Action), "role": ""})
 		return t.audit(ctx, subject, "workspace.member.remove", w, map[string]any{"subject": member})

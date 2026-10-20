@@ -2,24 +2,25 @@ package dms
 
 import (
 	"context"
-	entsql "entgo.io/ent/dialect/sql"
-	"papergo/ent"
-	"papergo/ent/relationship"
-	"papergo/ent/resource"
+	"papergo/internal/dal/content"
+	"papergo/internal/dal/refs"
+	"papergo/internal/dal/resources"
+
+	"papergo/internal/dal/relationships"
 )
 
 type LocatedItem struct {
-	*ent.Resource
+	*resources.Resource
 	WorkspaceName  string `json:"workspace_name"`
 	CollectionID   string `json:"collection_id"`
 	CollectionName string `json:"collection_name"`
 }
 type RelationshipView struct {
-	*ent.Relationship
+	RelationshipRecord
 	RelatedItem LocatedItem `json:"related_item"`
 }
 type WorkspaceRelationshipView struct {
-	*ent.Relationship
+	RelationshipRecord
 	SourceItem LocatedItem `json:"source_item"`
 	TargetItem LocatedItem `json:"target_item"`
 }
@@ -29,26 +30,22 @@ func (s *Service) locateRelationshipItem(ctx context.Context, subject, id string
 	if err != nil {
 		return LocatedItem{}, err
 	}
-	workspace, err := s.Client.Resource.Get(ctx, item.WorkspaceID)
+	workspace, err := s.DAL.Resources().Resource(ctx, item.WorkspaceID)
 	if err != nil {
 		return LocatedItem{}, err
 	}
 	if item.ContainerID == nil {
 		return LocatedItem{}, ErrNotFound
 	}
-	collection, err := s.Client.Resource.Get(ctx, *item.ContainerID)
+	collection, err := s.DAL.Resources().Resource(ctx, *item.ContainerID)
 	if err != nil {
 		return LocatedItem{}, err
 	}
 	return LocatedItem{item, workspace.Name, collection.ID, collection.Name}, nil
 }
-func (s *Service) relationshipView(ctx context.Context, subject, itemID string, edge *ent.Relationship) (RelationshipView, error) {
-	peer := edge.TargetID
-	if peer == itemID {
-		peer = edge.SourceID
-	}
-	located, err := s.locateRelationshipItem(ctx, subject, peer)
-	return RelationshipView{edge, located}, err
+func (s *Service) relationshipView(ctx context.Context, subject, itemID string, edge relationships.Relationship) (RelationshipView, error) {
+	located, err := s.locateRelationshipItem(ctx, subject, edge.Peer(itemID))
+	return RelationshipView{viewRelationship(edge), located}, err
 }
 func (s *Service) Relationship(ctx context.Context, subject, itemID, edgeID string) (RelationshipView, error) {
 	return read(ctx, s, func(t *Service) (RelationshipView, error) {
@@ -62,16 +59,6 @@ func (s *Service) Relationship(ctx context.Context, subject, itemID, edgeID stri
 		return t.relationshipView(ctx, subject, itemID, edge)
 	})
 }
-func relationshipVisibility(ctx context.Context, subject string) func(*entsql.Selector) {
-	return func(sel *entsql.Selector) {
-		for _, field := range []string{relationship.FieldSourceID, relationship.FieldTargetID} {
-			id := sel.C(field)
-			acl, args := permissionSQL(ctx, id, subject, "read")
-			visible, visibleArgs := visibleSQL(ctx, id, subject, "auto")
-			sel.Where(entsql.ExprP(acl+" AND "+visible, append(args, visibleArgs...)...))
-		}
-	}
-}
 func (s *Service) WorkspaceRelationships(ctx context.Context, subject, workspaceID, typeValue string, directed *bool, filter, after string, limit int) (Page[WorkspaceRelationshipView], error) {
 	return read(ctx, s, func(t *Service) (Page[WorkspaceRelationshipView], error) {
 		out := Page[WorkspaceRelationshipView]{Data: []WorkspaceRelationshipView{}}
@@ -82,41 +69,29 @@ func (s *Service) WorkspaceRelationships(ctx context.Context, subject, workspace
 		if err != nil {
 			return out, err
 		}
-		if w.Kind != resource.KindWorkspace {
+		if w.Kind != refs.KindWorkspace {
 			return out, invalid("workspace_id must reference a workspace")
 		}
-		q := t.Client.Relationship.Query().Where(relationshipVisibility(ctx, subject))
-		q.Where(func(sel *entsql.Selector) {
-			sel.Where(entsql.ExprP("EXISTS(SELECT 1 FROM resources peer WHERE peer.workspace_id=? AND peer.id IN ("+sel.C(relationship.FieldSourceID)+","+sel.C(relationship.FieldTargetID)+"))", workspaceID))
-		})
+		query := content.Links{Reader: principal(ctx, subject), WorkspaceID: workspaceID, Directed: directed, AfterID: after}
 		if typeValue != "" {
-			predicate, err := t.resolveRelationshipTerm(ctx, subject, typeValue, false)
+			predicate, found, err := t.resolveRelationshipTerm(ctx, subject, typeValue, false)
 			if err != nil {
 				return out, err
 			}
-			if predicate == nil {
+			if !found {
 				return out, nil
 			}
-			q.Where(relationship.TypeIDEQ(predicate.ID))
-		}
-		if directed != nil {
-			q.Where(relationship.DirectedEQ(*directed))
+			query.TypeID = predicate.ID
 		}
 		if filter != "" {
-			predicate, args, err := relationshipFilter(filter)
-			if err != nil {
+			if query.Filter, err = relationshipFilter(filter); err != nil {
 				return out, err
 			}
-			q.Where(func(sel *entsql.Selector) { sel.Where(entsql.ExprP(predicate, args...)) })
 		}
-		if after != "" {
-			q.Where(relationship.IDGT(after))
-		}
-		rows, err := q.Order(ent.Asc(relationship.FieldID)).Limit(pageSize(limit) + 1).All(ctx)
+		page, err := t.visibleRelationships(ctx, query, limit)
 		if err != nil {
 			return out, err
 		}
-		page := entityPage(rows, limit, func(edge *ent.Relationship) string { return edge.ID })
 		out.NextCursor = page.NextCursor
 		for _, edge := range page.Data {
 			source, err := t.locateRelationshipItem(ctx, subject, edge.SourceID)
@@ -127,7 +102,7 @@ func (s *Service) WorkspaceRelationships(ctx context.Context, subject, workspace
 			if err != nil {
 				return out, err
 			}
-			out.Data = append(out.Data, WorkspaceRelationshipView{edge, source, target})
+			out.Data = append(out.Data, WorkspaceRelationshipView{viewRelationship(edge), source, target})
 		}
 		return out, nil
 	})

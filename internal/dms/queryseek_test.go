@@ -114,7 +114,7 @@ func pageAll(t *testing.T, s *Service, subject, collection, surface string, spec
 				return QueryResult{}, err
 			}
 			if !seek {
-				q.seek = nil
+				q.q = q.q.Sorted()
 			}
 			return tx.queryCompiled(testContext, subject, in, q, nil)
 		})

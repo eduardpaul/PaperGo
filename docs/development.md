@@ -1,11 +1,9 @@
 # Development environment
 
 PaperGo's [devcontainer](../.devcontainer/devcontainer.json) provides Go 1.27.2,
-Node.js 24.15.0 with npm, Atlas Community 1.3.0, Python 3, SQLite's CLI, sqlite3def 3.11.26 and a C
+Node.js 24.15.0 with npm, Python 3, SQLite's CLI, sqlite3def 3.11.26 and a C
 compiler, pkg-config and CMake 3.31.10. Go matches CI and the application Docker build; Node uses the same
-major version. Atlas is built from checksum-verified Community source with
-`sqlite_fts5` enabled so it can apply PaperGo's full-text search tables; the
-published Atlas 1.3.0 images do not enable this SQLite feature.
+major version.
 The image also pins gopls 0.23.0, Delve 1.27.2, the CI Staticcheck revision
 and govulncheck 1.9.0. It supports Linux amd64 and arm64 through the upstream
 multi-platform images. The source checkout stays on the host; dependencies and
@@ -29,7 +27,8 @@ creates a random development token in `.cache/development.env` with mode 0600.
 The editor waits for setup because Go packages need the native SDK headers and embed `web/dist` at compile time. The Go extension and debugger use `.tools/native/native.env`; direct shell commands require `source .tools/native/env.sh` (PowerShell: `. .tools/native/env.ps1`).
 Setup can be rerun with **PaperGo: setup** or `bash scripts/setup-dev.sh`, including
 after dependency changes. The shell scripts also work with native Go, Node/npm,
-Python 3.11+, a C compiler, CMake 3.26+, pkg-config and Atlas installations; native Atlas must likewise enable SQLite FTS5.
+Python 3.11+, a C compiler, CMake 3.26+ and pkg-config installations. Docker
+runs the PostgreSQL server and model generation.
 `.cache/development.env` is generated development
 configuration; it is distinct from the optional `.env.example` file, which the
 application does not load.
@@ -73,7 +72,26 @@ The **PaperGo: API** and **PaperGo: Vite** tasks run those commands. To debug,
 stop any running API, select **PaperGo API** in Run and Debug, and press F5. The
 debug configuration rebuilds the frontend and reads the native build environment plus `.cache/development.env`.
 Run Vite alongside it for frontend work. Read the token file to sign in when
-starting through the debugger.
+starting through the debugger. **PaperGo: API and Vite** starts both.
+
+### PostgreSQL
+
+`scripts/postgres.sh` runs a disposable PostgreSQL 17 server in Docker on
+`localhost:55432`; its data lives in the container until `remove`:
+
+```sh
+bash scripts/postgres.sh start         # create or start the server and wait for it
+bash scripts/postgres.sh psql          # psql on the papergo_dev database
+bash scripts/postgres.sh stop          # stop it, keeping its data
+bash scripts/postgres.sh remove        # delete it and its data
+```
+
+`bash scripts/dev.sh --postgres` (**PaperGo: API on PostgreSQL**) runs the API on
+the `papergo_dev` database, which it creates when missing; its files, search
+index and integration key live in `data/postgres`. To start over, run
+`bash scripts/postgres.sh drop papergo_dev` and delete `data/postgres`. The
+**PaperGo API (PostgreSQL)** debug configuration does the same under the
+debugger.
 
 ## Check changes
 
@@ -93,6 +111,25 @@ bash scripts/check.sh --packages ./internal/dms --run '^TestSeekPagesMatchSorted
 bash scripts/check.sh --web
 ```
 
+`--postgres` runs the suites that open databases on PostgreSQL 17 instead of
+SQLite: the DAL packages, which test both engines, and the application suites.
+It uses the server `PAPERGO_TEST_POSTGRES_DSN` names, or starts the one of
+`scripts/postgres.sh`. Combine it with `--packages` to choose the packages.
+Tests create and drop their own databases; `bash scripts/postgres.sh clean`
+drops the ones an interrupted run left behind.
+
+```sh
+bash scripts/check.sh --postgres
+bash scripts/check.sh --postgres --packages ./internal/dms --run '^TestReceipts'
+```
+
+`bash scripts/release-rehearsal.sh` packages and runs the release executables as
+the release workflow does: it generates the embedded database history, builds the
+executables, shared assets and platform ZIP into `bin/` and `dist/`, and runs the
+packaged executables. `--image` also builds the container image and runs its
+smoke test. It needs the model presets in `.tools`, sqlite3def and, for the
+image, Docker, and restores the release history placeholder afterwards.
+
 Package selection is explicit: include affected callers when changing shared
 code. There is no automatic reverse-dependency selection. An unscoped check runs
 all Go packages. `--web` runs typechecking, lint and all frontend tests without
@@ -108,7 +145,7 @@ trigger a rebuild. Reports live in `.cache/checks`: raw Go JSON events, structur
 package/test timings and a Markdown summary.
 
 Use `bash scripts/check.sh --full` for frontend build/lint/tests, Python tests,
-module verification, Ent generation/drift check, Go formatting, vet, Staticcheck,
+module verification, Bob generation/drift check, Go formatting, vet, Staticcheck,
 uncached ordinary Go tests and the application build. Staticcheck must be
 installed, as it is in the devcontainer. `--race` runs the entire Go suite with
 race detection and forced execution. `--native` requires `DECISION_MODELS_PATH`
@@ -148,22 +185,21 @@ npx --yes @devcontainers/cli@0.89.0 exec --workspace-folder . bash .devcontainer
 
 ## Schema and generated files
 
-Edit the single `migrations/20261007000100_schema.sql` in place, keep
-`ent/schema` aligned, and run:
-
-```sh
-go generate ./ent
-atlas migrate hash --dir file://migrations
-```
+Edit `internal/dal/schema/sqlite.sql` and `internal/dal/schema/postgres.sql`
+directly, then regenerate both drivers' Bob models with
+`bash scripts/generate-models.sh` (**PaperGo: generate Bob models**); the
+PostgreSQL ones are generated in a temporary container, so Docker must be
+available.
 
 Release planning uses sqlite3def 3.11.26, installed in the development container.
-Outside the container, install the pinned executable on `PATH` or set `SQLITE3DEF`.
+Outside the container, `bash scripts/sqlite3def.sh` installs the pinned executable
+into `.tools/bin`, where checks find it; setup runs it when sqlite3def is missing.
 The release planner tests execute the real CLI against the full PaperGo schema.
 See [release history and validation](releases.md#release-only-database-history).
 
 Stop the API or debugger before resetting local data. Local databases and blobs
 are disposable: delete `data/`, recreate the directory with `mkdir -p data/blobs`,
-then run `atlas migrate apply --env local`. Do not add migration files or backfills.
+then run `go run ./cmd/admin initialize --database data/papergo.db`. Do not add migration files or backfills.
 
 Go/npm caches and `web/node_modules` survive container rebuilds. `npm ci` replaces
 the installed dependency tree with the lockfile contents. To clear a stale build
@@ -178,8 +214,7 @@ The configuration follows the official [Development Container specification](htt
 for lifecycle readiness, users, init and forwarded ports; VS Code's
 [non-root user guidance](https://code.visualstudio.com/remote/advancedcontainers/add-nonroot-user)
 for Linux bind-mount ownership; and its [disk performance guidance](https://code.visualstudio.com/remote/advancedcontainers/improve-performance)
-for dependency volumes. [Atlas Community](https://atlasgo.io/community-edition)
-provides the local versioned migration commands without an account.
+for dependency volumes.
 The [reference CLI](https://code.visualstudio.com/docs/devcontainers/devcontainer-cli)
 and official [devcontainers/ci action](https://github.com/devcontainers/ci)
 exercise the environment independently of an interactive editor session.

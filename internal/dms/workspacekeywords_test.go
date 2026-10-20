@@ -2,7 +2,8 @@ package dms
 
 import (
 	"encoding/json"
-	"papergo/ent/resource"
+	"papergo/internal/dal/refs"
+	"papergo/internal/dal/resources"
 	"papergo/internal/model"
 	"papergo/internal/storage"
 	"strings"
@@ -83,7 +84,7 @@ func TestSharedKeywordFolksonomyAcrossIntrinsicAndCustomFields(t *testing.T) {
 	if custom.Values["topics"].([]any)[0] != finance {
 		t.Fatal("keyword controls must share a term ID", custom.Values, intrinsic.Keywords)
 	}
-	set, err := s.keywordsSet(testContext)
+	set, err := s.DAL.Taxonomy().KeywordsSet(testContext)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +148,7 @@ func TestWorkspaceKeywordReferencesArePortable(t *testing.T) {
 	if err != nil || !result.Valid {
 		t.Fatal(result, err)
 	}
-	copied, err := target.Client.Resource.Query().Where(resource.WorkspaceIDEQ(result.WorkspaceID), resource.KindEQ(resource.KindItem)).Only(testContext)
+	copied, err := target.DAL.Resources().One(testContext, resources.Filter{WorkspaceID: result.WorkspaceID, Kinds: []refs.ResourceKind{refs.KindItem}})
 	if err != nil || len(copied.Keywords) != 1 || copied.Keywords[0] == item.Keywords[0] || copied.Values["topics"].([]any)[0] != copied.Keywords[0] {
 		t.Fatal("keyword references must be remapped together", copied, err)
 	}
@@ -209,7 +210,7 @@ func TestKeywordFieldDefaultsUseTheSharedVocabulary(t *testing.T) {
 		t.Fatal(keyword, err)
 	}
 	item := create(t, s, list.ID, "item", "Invoice", nil)
-	if !smartEqual(item.Values["topics"], []any{keyword.ID}) {
+	if !sameJSON(item.Values["topics"], []any{keyword.ID}) {
 		t.Fatal(item.Values)
 	}
 	options := field.Options

@@ -3,15 +3,17 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"papergo/internal/auth"
+	"papergo/internal/dal"
+	"papergo/internal/dal/daltest"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
+	"reflect"
 	"testing"
 )
 
-func TestRESTTokenPreservesOIDCProfileAndMemberships(t *testing.T) {
+func TestAccessTokenPreservesOIDCProfileAndMemberships(t *testing.T) {
 	h, s, _ := setup(t)
 	ctx := t.Context()
 	d := s.Directory()
@@ -19,14 +21,11 @@ func TestRESTTokenPreservesOIDCProfileAndMemberships(t *testing.T) {
 	if err := d.SyncUser(ctx, u); err != nil {
 		t.Fatal(err)
 	}
-	credential, err := d.CreateRESTToken(ctx, "bob", identity.RESTTokenInput{Name: "Reader", Scopes: []string{"list.read"}})
+	credential, err := d.CreateAccessToken(ctx, "bob", identity.AccessTokenInput{Name: "Reader", Scopes: []string{"list.read"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	var hashBefore string
-	if err := d.DB.QueryRowContext(ctx, "SELECT sync_hash FROM identity_users WHERE id='bob'").Scan(&hashBefore); err != nil {
-		t.Fatal(err)
-	}
+	hashBefore := daltest.Values(t, dal.NewStore(d.DB), "identity_users", "sync_hash", daltest.Row{"id": "bob"})
 	for range 2 {
 		r := request(h, "GET", "/v1/identity/me", "", credential.Secret, "", "")
 		if r.Code != 200 {
@@ -40,11 +39,7 @@ func TestRESTTokenPreservesOIDCProfileAndMemberships(t *testing.T) {
 			t.Fatalf("personal token changed OIDC identity: %+v", me)
 		}
 	}
-	var hashAfter string
-	if err := d.DB.QueryRowContext(ctx, "SELECT sync_hash FROM identity_users WHERE id='bob'").Scan(&hashAfter); err != nil {
-		t.Fatal(err)
-	}
-	if hashAfter != hashBefore {
+	if hashAfter := daltest.Values(t, dal.NewStore(d.DB), "identity_users", "sync_hash", daltest.Row{"id": "bob"}); !reflect.DeepEqual(hashAfter, hashBefore) {
 		t.Fatal("personal token invalidated the OIDC sync hash")
 	}
 }
@@ -68,7 +63,7 @@ func TestRESTProfilesAndAccountDeletion(t *testing.T) {
 	if r.Code != 200 {
 		t.Fatal(r.Code, r.Body.String())
 	}
-	credential, err := s.Directory().CreateRESTToken(ctx, "profile-api", identity.RESTTokenInput{Name: "Account", Scopes: []string{"list.read"}})
+	credential, err := s.Directory().CreateAccessToken(ctx, "profile-api", identity.AccessTokenInput{Name: "Account", Scopes: []string{"list.read"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,8 +102,7 @@ func TestRESTProfilesAndAccountDeletion(t *testing.T) {
 	if r.Code != 403 {
 		t.Fatal("deleted bearer still admitted", r.Code, r.Body.String())
 	}
-	var count int
-	if err = s.Directory().DB.QueryRowContext(ctx, "SELECT count(*) FROM grants WHERE principal_type='user' AND principal_id=?", user.Subject).Scan(&count); err != nil || count != 0 {
-		t.Fatal(fmt.Sprint(count), err)
+	if count := daltest.Count(t, s.DAL, "grants", daltest.Row{"principal_type": "user", "principal_id": user.Subject}); count != 0 {
+		t.Fatal(count)
 	}
 }

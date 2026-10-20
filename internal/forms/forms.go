@@ -5,19 +5,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/refs"
+	"papergo/internal/dal/resources"
+	"papergo/internal/dal/taxonomy"
+	"papergo/internal/dms"
 	"reflect"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"unicode/utf8"
-
-	"papergo/ent"
-	"papergo/ent/resource"
-	"papergo/ent/term"
-	"papergo/ent/termgroup"
-	"papergo/ent/termset"
-	"papergo/internal/dms"
 )
 
 // Package forms is PaperGo's form system. Forms are JSON Schema (a draft-07
@@ -618,7 +616,7 @@ func CheckConfig(ctx context.Context, t *dms.Service, subject, workspaceID strin
 			}
 		}
 		if id, _ := f.opts["collection_id"].(string); id != "" {
-			ok, err := t.Client.Resource.Query().Where(resource.IDEQ(id), resource.WorkspaceIDEQ(workspaceID), resource.KindIn(resource.KindList, resource.KindLibrary), resource.DeletedAtIsNil()).Exist(ctx)
+			ok, err := t.DAL.Resources().Exists(ctx, resources.Filter{IDs: []string{id}, WorkspaceID: workspaceID, Kinds: []refs.ResourceKind{refs.KindList, refs.KindLibrary}, State: resources.Live})
 			if err != nil {
 				return err
 			}
@@ -627,7 +625,7 @@ func CheckConfig(ctx context.Context, t *dms.Service, subject, workspaceID strin
 			}
 		}
 		if id, _ := f.opts["relationship_type_id"].(string); id != "" {
-			ok, err := t.Client.Term.Query().Where(term.IDEQ(id), term.DeprecatedEQ(false), term.HasTermSetWith(termset.KeyEQ(dms.RelationshipTypesTermSetKey))).Exist(ctx)
+			ok, err := t.DAL.Taxonomy().IsRelationshipType(ctx, id)
 			if err != nil {
 				return err
 			}
@@ -637,7 +635,7 @@ func CheckConfig(ctx context.Context, t *dms.Service, subject, workspaceID strin
 		}
 		group, _ := f.opts["group_id"].(string)
 		if group != "" {
-			ok, err := t.Client.TermGroup.Query().Where(termgroup.IDEQ(group)).Exist(ctx)
+			ok, err := t.DAL.Taxonomy().GroupExists(ctx, group)
 			if err != nil {
 				return err
 			}
@@ -647,7 +645,7 @@ func CheckConfig(ctx context.Context, t *dms.Service, subject, workspaceID strin
 		}
 		set, _ := f.opts["term_set_id"].(string)
 		if set != "" {
-			ok, err := t.Client.TermSet.Query().Where(termset.IDEQ(set)).Exist(ctx)
+			ok, err := t.DAL.Taxonomy().SetExists(ctx, set)
 			if err != nil {
 				return err
 			}
@@ -667,17 +665,21 @@ func CheckConfig(ctx context.Context, t *dms.Service, subject, workspaceID strin
 }
 
 func checkTerm(ctx context.Context, t *dms.Service, group, set string, allowed []any, id string) error {
-	tm, err := t.Client.Term.Query().Where(term.IDEQ(id)).WithTermSet().Only(ctx)
-	if ent.IsNotFound(err) {
+	tm, err := t.DAL.Taxonomy().Term(ctx, id)
+	if dberr.IsNotFound(err) {
 		return fmt.Errorf("term %s does not exist", id)
 	}
 	if err != nil {
 		return err
 	}
-	if tm.Edges.TermSet == nil || set != "" && tm.TermSetID != set || group != "" && tm.Edges.TermSet.GroupID != group {
+	termSet, err := t.DAL.Taxonomy().Set(ctx, tm.SetID)
+	if err != nil {
+		return err
+	}
+	if set != "" && tm.SetID != set || group != "" && termSet.GroupID != group {
 		return fmt.Errorf("term %s is outside the allowed term set", id)
 	}
-	if tm.Deprecated || tm.MergedIntoID != nil {
+	if tm.Deprecated || tm.Merged() {
 		return fmt.Errorf("term %s is deprecated", id)
 	}
 	if allowed != nil {
@@ -721,7 +723,7 @@ func checkPick(ctx context.Context, t *dms.Service, subject, workspaceID string,
 	switch f.kind {
 	case "item", "relationship":
 		r, err := t.Authorize(ctx, subject, id, "read")
-		if err != nil || r.Kind != resource.KindItem || r.WorkspaceID != workspaceID {
+		if err != nil || string(r.Kind) != "item" || r.WorkspaceID != workspaceID {
 			return fmt.Errorf("item %s is not a readable item of the workspace", id)
 		}
 		if c, _ := f.opts["collection_id"].(string); c != "" && (r.ContainerID == nil || *r.ContainerID != c) {
@@ -729,7 +731,7 @@ func checkPick(ctx context.Context, t *dms.Service, subject, workspaceID string,
 		}
 	case "collection":
 		r, err := t.Authorize(ctx, subject, id, "read")
-		if err != nil || r.WorkspaceID != workspaceID || r.Kind != resource.KindList && r.Kind != resource.KindLibrary {
+		if err != nil || r.WorkspaceID != workspaceID || string(r.Kind) != "list" && string(r.Kind) != "library" {
 			return fmt.Errorf("%s is not a readable list or library of the workspace", id)
 		}
 	case "terms":
@@ -748,17 +750,17 @@ func checkPick(ctx context.Context, t *dms.Service, subject, workspaceID string,
 		allowed, _ := f.opts["term_ids"].([]any)
 		return checkTerm(ctx, t, group, set, allowed, id)
 	case "keywords":
-		tm, err := t.Client.Term.Query().Where(term.IDEQ(id)).WithTermSet().Only(ctx)
-		if ent.IsNotFound(err) {
+		tm, err := t.DAL.Taxonomy().Term(ctx, id)
+		if dberr.IsNotFound(err) {
 			return fmt.Errorf("keyword %s does not exist", id)
 		}
 		if err != nil {
 			return err
 		}
-		if !tm.Edges.TermSet.IsKeywords && !tm.AvailableAsKeyword {
+		if tm.SetID != taxonomy.KeywordsSetID && !tm.AvailableAsKeyword {
 			return fmt.Errorf("term %s is not an organization keyword", id)
 		}
-		if tm.Deprecated || tm.MergedIntoID != nil {
+		if tm.Deprecated || tm.Merged() {
 			return fmt.Errorf("keyword %s is deprecated", id)
 		}
 	case "people":

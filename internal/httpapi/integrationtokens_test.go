@@ -6,6 +6,9 @@ import (
 	"log/slog"
 	"net/http"
 	"net/netip"
+	"papergo/internal/dal"
+	"papergo/internal/dal/daltest"
+	"papergo/internal/dal/directory"
 	"strings"
 	"testing"
 	"time"
@@ -22,11 +25,11 @@ func TestAdminIntegrationTokensHaveServiceIdentityScopedAccessAndRevocation(t *t
 	if got := request(h, "POST", "/v1/identity/tokens", body, testToken, "", "application/json"); got.Code != 403 {
 		t.Fatal(got.Code, got.Body.String())
 	}
-	if err := s.Directory().SetAssignment(ctx, "organization-admin", identity.AdministratorRole, identity.Principal{Type: "user", ID: "alice"}, false); err != nil {
+	if err := s.Directory().SetAssignment(ctx, "organization-admin", identity.AdministratorRole, identity.Principal{Type: directory.PrincipalUser, ID: "alice"}, false); err != nil {
 		t.Fatal(err)
 	}
 	got := request(h, "POST", "/v1/identity/tokens", body, testToken, "", "application/json")
-	var created identity.CreatedRESTToken
+	var created identity.CreatedAccessToken
 	if got.Code != 201 || json.Unmarshal(got.Body.Bytes(), &created) != nil || !created.Token.Integration || created.Token.Subject == "alice" || created.Token.ExpiresAt != nil || !strings.HasPrefix(created.Secret, "pgo_") {
 		t.Fatal(got.Code, got.Body.String())
 	}
@@ -69,21 +72,21 @@ func TestAdminIntegrationTokensHaveServiceIdentityScopedAccessAndRevocation(t *t
 		t.Fatal("non-admin listed organization tokens", got.Code)
 	}
 	got = request(h, "GET", "/v1/identity/tokens", "", testToken, "", "")
-	var listed []identity.RESTToken
+	var listed []identity.AccessToken
 	if got.Code != 200 || json.Unmarshal(got.Body.Bytes(), &listed) != nil || len(listed) != 1 || listed[0].LastUsedAt == nil || strings.Contains(got.Body.String(), created.Secret) || strings.Contains(got.Body.String(), "secret_hash") {
 		t.Fatal(got.Code, got.Body.String())
 	}
 	// Persisted operations restore an ID and cap, without trusting a cached kind flag.
-	credential := identity.RESTTokenIdentity{ID: created.Token.ID, Subject: created.Token.Subject, Scopes: created.Token.Scopes}
-	queued := identity.WithRESTToken(ctx, credential)
-	if err = identity.RequireScope(queued, s.Directory().DB, created.Token.Subject, "list.read"); err != nil {
+	credential := identity.AccessTokenIdentity{ID: created.Token.ID, Subject: created.Token.Subject, Scopes: created.Token.Scopes}
+	queued := identity.WithAccessToken(ctx, credential)
+	if err = identity.RequireScope(queued, dal.NewStore(s.Directory().DB), created.Token.Subject, "list.read"); err != nil {
 		t.Fatal("queued credential lost integration grant", err)
 	}
 	got = request(h, "DELETE", "/v1/identity/tokens/"+created.Token.ID, "", testToken, "", "")
 	if got.Code != 204 {
 		t.Fatal(got.Code, got.Body.String())
 	}
-	if err = identity.RequireCredential(queued, s.Directory().DB, created.Token.Subject); err != identity.ErrInvalidRESTToken {
+	if err = identity.RequireCredential(queued, dal.NewStore(s.Directory().DB), created.Token.Subject); err != identity.ErrInvalidAccessToken {
 		t.Fatal("queued credential not revoked", err)
 	}
 	got = request(h, "GET", "/v1/identity/me", "", created.Secret, "", "")
@@ -99,14 +102,14 @@ func TestAdminIntegrationTokensHaveServiceIdentityScopedAccessAndRevocation(t *t
 func TestProxyAcceptsIntegrationBearerAndRejectsPersonalBearer(t *testing.T) {
 	_, s, _ := setup(t)
 	ctx := context.Background()
-	if err := s.Directory().SetAssignment(ctx, "organization-admin", identity.AdministratorRole, identity.Principal{Type: "user", ID: "alice"}, false); err != nil {
+	if err := s.Directory().SetAssignment(ctx, "organization-admin", identity.AdministratorRole, identity.Principal{Type: directory.PrincipalUser, ID: "alice"}, false); err != nil {
 		t.Fatal(err)
 	}
-	integration, err := s.Directory().CreateIntegrationToken(ctx, "alice", identity.RESTTokenInput{Name: "Service", Scopes: []string{"list.read"}})
+	integration, err := s.Directory().CreateIntegrationToken(ctx, "alice", identity.AccessTokenInput{Name: "Service", Scopes: []string{"list.read"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	personal, err := s.Directory().CreateRESTToken(ctx, "alice", identity.RESTTokenInput{Name: "Personal", Scopes: []string{"list.read"}})
+	personal, err := s.Directory().CreateAccessToken(ctx, "alice", identity.AccessTokenInput{Name: "Personal", Scopes: []string{"list.read"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,17 +132,17 @@ func TestProxyAcceptsIntegrationBearerAndRejectsPersonalBearer(t *testing.T) {
 func TestIntegrationTokenExpiryAndDisabledIdentityAreRevalidated(t *testing.T) {
 	h, s, _ := setup(t)
 	ctx := context.Background()
-	if err := s.Directory().SetAssignment(ctx, "organization-admin", identity.AdministratorRole, identity.Principal{Type: "user", ID: "alice"}, false); err != nil {
+	if err := s.Directory().SetAssignment(ctx, "organization-admin", identity.AdministratorRole, identity.Principal{Type: directory.PrincipalUser, ID: "alice"}, false); err != nil {
 		t.Fatal(err)
 	}
 	for _, mode := range []string{"expired", "disabled"} {
-		token, err := s.Directory().CreateIntegrationToken(ctx, "alice", identity.RESTTokenInput{Name: mode, Scopes: []string{"list.read"}})
+		token, err := s.Directory().CreateIntegrationToken(ctx, "alice", identity.AccessTokenInput{Name: mode, Scopes: []string{"list.read"}})
 		if err != nil {
 			t.Fatal(err)
 		}
-		queued := identity.WithRESTToken(ctx, identity.RESTTokenIdentity{ID: token.Token.ID, Subject: token.Token.Subject, Scopes: token.Token.Scopes})
+		queued := identity.WithAccessToken(ctx, identity.AccessTokenIdentity{ID: token.Token.ID, Subject: token.Token.Subject, Scopes: token.Token.Scopes})
 		if mode == "expired" {
-			_, err = s.Directory().DB.ExecContext(ctx, "UPDATE identity_rest_tokens SET expires_at=? WHERE id=?", time.Now().UTC().Add(-time.Hour), token.Token.ID)
+			_, err = daltest.TryUpdate(s.DAL, "access_tokens", daltest.Row{"expires_at": time.Now().UTC().Add(-time.Hour)}, daltest.Row{"id": token.Token.ID})
 		} else {
 			_, err = s.Directory().SetUserActive(ctx, "alice", token.Token.Subject, false)
 		}
@@ -150,7 +153,7 @@ func TestIntegrationTokenExpiryAndDisabledIdentityAreRevalidated(t *testing.T) {
 		if got.Code != 401 {
 			t.Fatal(mode, got.Code, got.Body.String())
 		}
-		if err = identity.RequireScope(queued, s.Directory().DB, token.Token.Subject, "list.read"); err == nil {
+		if err = identity.RequireScope(queued, dal.NewStore(s.Directory().DB), token.Token.Subject, "list.read"); err == nil {
 			t.Fatal(mode, "retained live scope")
 		}
 	}
@@ -159,10 +162,10 @@ func TestIntegrationTokenExpiryAndDisabledIdentityAreRevalidated(t *testing.T) {
 func TestOrganizationManagersCanReadTokenScopeCatalogWithoutRoleAdministration(t *testing.T) {
 	h, s, _ := setup(t)
 	ctx := t.Context()
-	if err := s.Directory().SetAssignment(ctx, "organization-admin", identity.AdministratorRole, identity.Principal{Type: "user", ID: "alice"}, false); err != nil {
+	if err := s.Directory().SetAssignment(ctx, "organization-admin", identity.AdministratorRole, identity.Principal{Type: directory.PrincipalUser, ID: "alice"}, false); err != nil {
 		t.Fatal(err)
 	}
-	limited, err := s.Directory().CreateRESTToken(ctx, "alice", identity.RESTTokenInput{Name: "Organization manager", Scopes: []string{"organization.manage", "list.read"}})
+	limited, err := s.Directory().CreateAccessToken(ctx, "alice", identity.AccessTokenInput{Name: "Organization manager", Scopes: []string{"organization.manage", "list.read"}})
 	if err != nil {
 		t.Fatal(err)
 	}

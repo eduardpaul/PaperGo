@@ -15,14 +15,16 @@ import (
 	"io"
 	"log/slog"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/dbos-inc/dbos-transact-golang/dbos"
 	_ "github.com/dbos-inc/dbos-transact-golang/dbos/driver/sqlite" // DBOS's SQLite system database
 	_ "time/tzdata"                                                 // schedule time zones in minimal images
 
-	"papergo/internal/activitystore"
-	"papergo/internal/database"
+	"papergo/internal/dal"
+	"papergo/internal/dal/activitystore"
+	"papergo/internal/dal/database"
 	"papergo/internal/dms"
 	"papergo/internal/workflow"
 )
@@ -56,6 +58,9 @@ const (
 type Config struct {
 	// DatabasePath is PaperGo's SQLite file; DBOS keeps its tables there.
 	DatabasePath string
+	// DatabaseURL is PaperGo's PostgreSQL database, used instead of
+	// DatabasePath when set; DBOS keeps its tables in its own schema there.
+	DatabaseURL string
 	// NodeID identifies this process; a restarted node recovers its runs.
 	NodeID string
 	// Retention is how long finished runs are kept.
@@ -79,6 +84,7 @@ type Config struct {
 
 // Runner executes workflow runs durably.
 type Runner struct {
+	durable      *dal.DurableStore
 	workSlots    chan struct{}
 	previewSlots chan struct{}
 	ctx          dbos.Context
@@ -91,6 +97,9 @@ type Runner struct {
 	wake         chan struct{}
 	stop         context.CancelFunc
 	stopped      chan struct{}
+	// starts holds when this node started each run it executes; it orders
+	// the runs' background writes, oldest first.
+	starts sync.Map
 }
 
 // New registers PaperGo's runner workflows with DBOS on its own handle to
@@ -118,42 +127,49 @@ func New(cfg Config, db *sql.DB, service *dms.Service, workflows *workflow.Servi
 	if cfg.Logger == nil {
 		cfg.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
-	abs, err := filepath.Abs(cfg.DatabasePath)
-	if err != nil {
-		return nil, err
-	}
-	// DBOS Shutdown closes the handle it is given, so it gets its own.
-	system, err := sql.Open("sqlite", database.DSN(abs, database.DefaultOptions))
-	if err != nil {
-		return nil, err
-	}
-	system.SetMaxOpenConns(8)
-	system.SetMaxIdleConns(8)
-	ctx, err := dbos.NewContext(context.Background(), dbos.Config{
+	config := dbos.Config{
 		AppName:            appName,
-		SQLiteSystemDB:     system,
 		ExecutorID:         cfg.NodeID,
 		ApplicationVersion: appVersion,
 		Logger:             cfg.Logger.With("component", "runner"),
-	})
+	}
+	system, closeSystem := db, func() {}
+	if cfg.DatabaseURL != "" {
+		config.DatabaseURL = cfg.DatabaseURL
+	} else {
+		abs, err := filepath.Abs(cfg.DatabasePath)
+		if err != nil {
+			return nil, err
+		}
+		// DBOS Shutdown closes the handle it is given, so it gets its own.
+		system, err = sql.Open("sqlite", database.DSN(abs, database.DefaultOptions))
+		if err != nil {
+			return nil, err
+		}
+		system.SetMaxOpenConns(8)
+		system.SetMaxIdleConns(8)
+		config.SQLiteSystemDB = system
+		closeSystem = func() { system.Close() }
+	}
+	ctx, err := dbos.NewContext(context.Background(), config)
 	if err != nil {
-		system.Close()
+		closeSystem()
 		return nil, fmt.Errorf("start the runner: %w", err)
 	}
 	if workflows.Tools.Records == nil {
 		workflows.Tools.Records = activitystore.New(db)
 	}
-	r := &Runner{workSlots: make(chan struct{}, cfg.Concurrency), previewSlots: make(chan struct{}, 1), ctx: ctx, db: db, system: system, dms: service, workflows: workflows, log: cfg.Logger, cfg: cfg, wake: make(chan struct{}, 1)}
+	r := &Runner{workSlots: make(chan struct{}, cfg.Concurrency), previewSlots: make(chan struct{}, 1), ctx: ctx, db: db, system: system, durable: dal.NewDurableStore(system, service.DAL.Dialect(), "dbos"), dms: service, workflows: workflows, log: cfg.Logger, cfg: cfg, wake: make(chan struct{}, 1)}
 	if _, err = dbos.RegisterQueue(ctx, serialQueue, dbos.WithPartitionConcurrency(1), dbos.WithQueueBasePollingInterval(cfg.PollInterval)); err != nil {
-		system.Close()
+		closeSystem()
 		return nil, err
 	}
 	if _, err = dbos.RegisterQueue(ctx, systemQueue, dbos.WithPartitionConcurrency(1), dbos.WithQueueBasePollingInterval(cfg.PollInterval)); err != nil {
-		system.Close()
+		closeSystem()
 		return nil, err
 	}
 	if _, err = dbos.RegisterQueue(ctx, runQueue, dbos.WithQueueBasePollingInterval(cfg.PollInterval)); err != nil {
-		system.Close()
+		closeSystem()
 		return nil, err
 	}
 	dbos.RegisterWorkflow(ctx, r.run, dbos.WithWorkflowName(runName))
@@ -175,7 +191,7 @@ func (r *Runner) Launch(ctx context.Context) error {
 	if err := r.protectRunPayloads(ctx); err != nil {
 		return err
 	}
-	r.dms.RegisterRunPurger(r.purgeHomeRunPayloads)
+	r.dms.RegisterRunPurger(r.purgeHomeRunPayloads, r.durable.SealPurgedRuns)
 	if err := dbos.ApplySchedules(r.ctx, []dbos.ScheduleSpec{
 		{ScheduleName: tickName, Schedule: r.cfg.TickSchedule, Workflow: r.tick},
 		{ScheduleName: purgeName, Schedule: retentionSchedule, Workflow: r.purge},
@@ -216,9 +232,11 @@ func (r *Runner) Ready(ctx context.Context) error {
 
 // run is the DBOS workflow of every PaperGo workflow run.
 func (r *Runner) run(ctx dbos.Context, in workflow.RunInput) (workflow.Result, error) {
+	r.starts.LoadOrStore(in.RunID, time.Now())
+	defer r.starts.Delete(in.RunID)
 	res, err := r.workflows.Execute(ctx, &durable{r: r, ctx: ctx}, in)
 	if ctx.Err() == nil {
-		if cleanup := r.dms.Write(context.Background(), func(t *dms.Service) error {
+		if cleanup := r.dms.Write(r.backgroundWrite(context.Background(), in.RunID), func(t *dms.Service) error {
 			if err := workflow.CloseRunWaits(context.Background(), t, in.RunID); err != nil {
 				return err
 			}
@@ -231,6 +249,17 @@ func (r *Runner) run(ctx dbos.Context, in workflow.RunInput) (workflow.Result, e
 		r.log.Warn("workflow run failed", "run_id", in.RunID, "workflow_id", in.WorkflowID, "error", err)
 	}
 	return res, err
+}
+
+// backgroundWrite marks writes made with ctx as background work of the
+// run, ordered by when this node started it, so a backlog of runs finishes
+// run by run.
+func (r *Runner) backgroundWrite(ctx context.Context, runID string) context.Context {
+	since := time.Now()
+	if started, ok := r.starts.Load(runID); ok {
+		since = started.(time.Time)
+	}
+	return dms.BackgroundWrite(ctx, since)
 }
 
 // sweepEmbeddings embeds file content that search.embed deferred or that

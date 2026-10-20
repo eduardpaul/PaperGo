@@ -3,15 +3,17 @@ package identity_test
 import (
 	"context"
 	"errors"
+	"papergo/internal/dal"
+	"papergo/internal/dal/daltest"
+	"papergo/internal/dal/directory"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
-	"papergo/internal/testutil"
 	"strings"
 	"testing"
 )
 
 func TestUserProfilesAndAccountAnonymization(t *testing.T) {
-	db := testutil.Database(t)
+	db := daltest.Database(t)
 	s := dms.NewService(db.SQL)
 	d := s.Directory()
 	ctx := context.Background()
@@ -44,14 +46,14 @@ func TestUserProfilesAndAccountAnonymization(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = d.SetMember(ctx, admin, group.ID, identity.Principal{Type: "user", ID: u.Subject}, false); err != nil {
+	if err = d.SetMember(ctx, admin, group.ID, identity.Principal{Type: directory.PrincipalUser, ID: u.Subject}, false); err != nil {
 		t.Fatal(err)
 	}
 	theme := "dark"
 	if _, err = d.PatchPreferences(ctx, u.Subject, false, 0, map[string]*string{"theme": &theme}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = db.SQL.ExecContext(ctx, "INSERT INTO webdav_credentials(id,created_at,subject,label,secret_hash) VALUES('profile-credential',CURRENT_TIMESTAMP,?,'Test',?)", u.Subject, strings.Repeat("a", 64)); err != nil {
+	if _, err = d.CreateAccessToken(ctx, u.Subject, identity.AccessTokenInput{Name: "Test", Scopes: []string{"workspace.read"}}); err != nil {
 		t.Fatal(err)
 	}
 	if err = s.DeleteUser(ctx, u.Subject, u.Subject); !errors.Is(err, identity.ErrForbidden) {
@@ -73,16 +75,15 @@ func TestUserProfilesAndAccountAnonymization(t *testing.T) {
 	if err = d.EnsureUser(ctx, u.Subject); err != nil {
 		t.Fatal(err)
 	}
-	if err = identity.RequireActive(ctx, db.SQL, u.Subject); !errors.Is(err, identity.ErrForbidden) {
+	if err = identity.RequireActive(ctx, dal.NewStore(db.SQL), u.Subject); !errors.Is(err, identity.ErrForbidden) {
 		t.Fatal("deleted account admitted", err)
 	}
 	if _, err = d.SetUserActive(ctx, admin, u.Subject, true); !errors.Is(err, identity.ErrNotFound) {
 		t.Fatal("deleted account reactivated", err)
 	}
-	for _, query := range []string{"SELECT count(*) FROM identity_memberships WHERE principal_id=?", "SELECT count(*) FROM identity_assignments WHERE principal_id=?", "SELECT count(*) FROM identity_preferences WHERE owner_id=?", "SELECT count(*) FROM webdav_credentials WHERE subject=?"} {
-		var count int
-		if err = db.SQL.QueryRowContext(ctx, query, u.Subject).Scan(&count); err != nil || count != 0 {
-			t.Fatal(query, count, err)
+	for table, column := range map[string]string{"identity_memberships": "principal_id", "identity_assignments": "principal_id", "identity_preferences": "owner_id", "access_tokens": "subject"} {
+		if count := daltest.Count(t, db.DAL, table, daltest.Row{column: u.Subject}); count != 0 {
+			t.Fatal(table, count)
 		}
 	}
 	if _, err = d.Me(ctx, u.Subject); !errors.Is(err, identity.ErrForbidden) {
@@ -93,24 +94,20 @@ func TestUserProfilesAndAccountAnonymization(t *testing.T) {
 func TestMePropagatesGroupReadErrors(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
-		breakRead []string
+		breakRead func(testing.TB, *dal.Store, string, string)
 	}{
-		{"query", []string{"ALTER TABLE identity_groups RENAME COLUMN name TO unavailable_name"}},
-		{"scan", []string{"ALTER TABLE identity_groups RENAME TO stored_groups", "CREATE VIEW identity_groups AS SELECT id,NULL AS name FROM stored_groups"}},
+		{"query", daltest.HideColumn},
+		{"scan", daltest.NullColumn},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			db := testutil.Database(t)
+			db := daltest.Database(t)
 			d := identity.Directory{DB: db.SQL}
 			ctx := t.Context()
 			if err := d.SyncUser(ctx, identity.UserIdentity{Subject: "me-read-error", Groups: []string{"me-error-group"}, SyncGroups: true}); err != nil {
 				t.Fatal(err)
 			}
 			// Inject a broken database read without changing the application schema.
-			for _, statement := range tc.breakRead {
-				if _, err := db.SQL.ExecContext(ctx, statement); err != nil {
-					t.Fatal(err)
-				}
-			}
+			tc.breakRead(t, db.DAL, "identity_groups", "name")
 			if _, err := d.Me(ctx, "me-read-error"); err == nil {
 				t.Fatal("Me returned success for a failed group read")
 			}

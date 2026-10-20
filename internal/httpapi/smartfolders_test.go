@@ -4,7 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"papergo/ent"
+	"papergo/internal/dal/resources"
+	viewstore "papergo/internal/dal/views"
 	"papergo/internal/dms"
 	"testing"
 )
@@ -29,7 +30,7 @@ func TestSmartFolderRESTDefinitionsQueriesAndActions(t *testing.T) {
 	if response.Code != 201 || response.Header().Get("ETag") != `"1"` {
 		t.Fatal(response.Code, response.Body.String())
 	}
-	var f ent.SmartFolder
+	var f viewstore.SmartFolder
 	if err = json.Unmarshal(response.Body.Bytes(), &f); err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +52,7 @@ func TestSmartFolderRESTDefinitionsQueriesAndActions(t *testing.T) {
 	if response.Code != 201 || response.Header().Get("ETag") != `"1"` {
 		t.Fatal(response.Code, response.Body.String())
 	}
-	var item ent.Resource
+	var item resources.Resource
 	if err = json.Unmarshal(response.Body.Bytes(), &item); err != nil {
 		t.Fatal(err)
 	}

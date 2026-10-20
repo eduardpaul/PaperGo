@@ -19,6 +19,9 @@ type yamlConfig struct {
 		DataDir   *string `yaml:"data_dir"`
 		PublicURL string  `yaml:"public_url"`
 	} `yaml:"server"`
+	Database struct {
+		URL string `yaml:"url"`
+	} `yaml:"database"`
 	Auth struct {
 		Mode              string    `yaml:"mode"`
 		AdminUser         string    `yaml:"admin_user"`
@@ -83,7 +86,7 @@ func parseYAML(text string) (yamlFile, error) {
 		return file, fmt.Errorf("config.yaml must contain one YAML document")
 	}
 	file.values = map[string]string{
-		"PUBLIC_URL": in.Server.PublicURL, "AUTH_MODE": in.Auth.Mode,
+		"PUBLIC_URL": in.Server.PublicURL, "DATABASE_URL": in.Database.URL, "AUTH_MODE": in.Auth.Mode,
 		"ADMIN_SUBJECT": in.Auth.AdminUser, "ADMIN_GROUP": in.Auth.AdminGroup,
 		"PROXY_SECRET_FILE": in.Auth.ProxySecretFile, "PROXY_TRUSTED_CIDRS": strings.Join(in.Auth.ProxyTrustedCIDRs, ","),
 		"SEARCH_STORE": in.Search.Store, "SEARCH_ZVEC_PATH": in.Search.ZvecPath, "BLOB_PATH": in.Storage.BlobPath,

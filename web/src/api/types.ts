@@ -376,7 +376,7 @@ export interface WorkflowRun {
   actor?: string;
 }
 
-export interface RestToken {
+export interface AccessToken {
   subject: string;
   integration: boolean;
   created_by: string;
@@ -390,17 +390,9 @@ export interface RestToken {
   last_used_at?: string;
 }
 
-export interface CreatedRestToken {
-  token: RestToken;
+export interface CreatedAccessToken {
+  token: AccessToken;
   secret: string;
-}
-
-export interface WebDAVCredential {
-  id: string;
-  label: string;
-  created_at: string;
-  expires_at?: string;
-  password?: string;
 }
 
 export interface FileVersion {

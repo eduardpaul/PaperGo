@@ -8,7 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
-	_ "papergo/internal/workflowai"
+	"papergo/internal/dal/resources"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -16,20 +16,20 @@ import (
 	"testing"
 	"time"
 
-	"papergo/ent"
-	"papergo/ent/domainevent"
-	"papergo/ent/workflowrun"
-	"papergo/ent/workflowtrigger"
-	"papergo/internal/database"
+	"papergo/internal/dal/daltest"
+	"papergo/internal/dal/database"
+	eventstore "papergo/internal/dal/events"
+	"papergo/internal/dal/resultcache"
+	runstore "papergo/internal/dal/runs"
+	"papergo/internal/dal/workflows"
 	"papergo/internal/dms"
 	"papergo/internal/doctext/pdfium"
 	"papergo/internal/model"
-	"papergo/internal/resultcache"
 	"papergo/internal/storage"
 	"papergo/internal/tasks"
-	"papergo/internal/testutil"
 	"papergo/internal/testutil/searchstore"
 	"papergo/internal/workflow"
+	_ "papergo/internal/workflowai"
 )
 
 type fixture struct {
@@ -38,8 +38,8 @@ type fixture struct {
 	dms  *dms.Service
 	wf   *workflow.Service
 	r    *Runner
-	ws   *ent.Resource
-	list *ent.Resource
+	ws   *resources.Resource
+	list *resources.Resource
 	// store holds file content; workflows read and write it.
 	store storage.Store
 	// logs records what the runner logs.
@@ -73,15 +73,7 @@ var pdfReader = pdfium.New()
 // creating the schema when the file is new; configure changes the tools.
 func open(t testing.TB, path, node string, configure ...func(*workflow.Tools)) *fixture {
 	t.Helper()
-	var db *database.Database
-	if _, err := os.Stat(path); err == nil {
-		if db, err = database.Open(ctx, path); err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() { db.Close() })
-	} else {
-		db = testutil.DatabaseAt(t, path)
-	}
+	db := daltest.Open(t, path)
 	f := &fixture{path: path, db: db, dms: dms.NewService(db.SQL), logs: &logBuffer{}}
 	var err error
 	if f.store, err = storage.NewLocal(filepath.Join(filepath.Dir(path), "blobs")); err != nil {
@@ -95,7 +87,7 @@ func open(t testing.TB, path, node string, configure ...func(*workflow.Tools)) *
 	}
 	f.dms.SetEmbeddings(tools.Embeddings)
 	f.wf = &workflow.Service{DMS: f.dms, Tools: tools}
-	f.r, err = New(Config{Concurrency: 1, DatabasePath: path, NodeID: node, PollInterval: 20 * time.Millisecond, TickSchedule: "0 0 0 1 1 *", Logger: slog.New(slog.NewTextHandler(f.logs, nil))}, db.SQL, f.dms, f.wf)
+	f.r, err = New(Config{Concurrency: 1, DatabasePath: path, DatabaseURL: db.URL, NodeID: node, PollInterval: 20 * time.Millisecond, TickSchedule: "0 0 0 1 1 *", Logger: slog.New(slog.NewTextHandler(f.logs, nil))}, db.SQL, f.dms, f.wf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +184,7 @@ func (f *fixture) searchOff(t testing.TB) {
 
 }
 
-func (f *fixture) item(t testing.TB, subject, name string, values map[string]any) *ent.Resource {
+func (f *fixture) item(t testing.TB, subject, name string, values map[string]any) *resources.Resource {
 	t.Helper()
 	r, err := f.dms.Create(ctx, subject, f.list.ID, dms.CreateResource{Kind: "item", Name: name, Values: values})
 	if err != nil {
@@ -227,7 +219,7 @@ func (f *fixture) runs(t testing.TB, workflowID string, want int) []Run {
 	}
 }
 
-func (f *fixture) head(t testing.TB, id string) *ent.Resource {
+func (f *fixture) head(t testing.TB, id string) *resources.Resource {
 	t.Helper()
 	r, err := f.dms.GetSurface(ctx, "alice", id, "head")
 	if err != nil {
@@ -287,12 +279,12 @@ func TestItemTriggerConditionAndChainedWorkflow(t *testing.T) {
 	if !errors.Is(err, abandon) {
 		t.Fatalf("write did not return the rollback error: %v", err)
 	}
-	n, err := f.db.Client.WorkflowRun.Query().Where(workflowrun.WorkflowIDEQ(mark.ID)).Count(ctx)
-	if err != nil || n != 1 {
-		t.Fatalf("rolled back write started runs: %d %v", n, err)
+	started, err := f.db.DAL.Runs().List(ctx, runstore.Filter{WorkflowID: mark.ID})
+	if err != nil || len(started) != 1 {
+		t.Fatalf("rolled back write started runs: %d %v", len(started), err)
 	}
-	if n, err = f.db.Client.DomainEvent.Query().Where(domainevent.ResourceIDEQ(rolledBackID)).Count(ctx); err != nil || n != 0 {
-		t.Fatalf("rolled back write logged %d events for %s: %v", n, rolledBackID, err)
+	if logged, err := f.db.DAL.Events().Count(ctx, eventstore.Filter{ResourceID: rolledBackID}); err != nil || logged != 0 {
+		t.Fatalf("rolled back write logged %d events for %s: %v", logged, rolledBackID, err)
 	}
 	// Runs are for workspace managers.
 	if _, err = f.r.Runs(ctx, "bob", f.ws.ID, RunFilter{}); !errors.Is(err, dms.ErrNotFound) {
@@ -399,7 +391,7 @@ func TestBuiltInExpiryOnSchedule(t *testing.T) {
 	old := f.item(t, "alice", "Old", map[string]any{"expires": "2020-01-01"})
 	current := f.item(t, "alice", "Current", map[string]any{"expires": "2999-01-01"})
 	draft := f.item(t, "alice", "Draft", map[string]any{"expires": "2020-01-01"})
-	for _, r := range []*ent.Resource{old, current} {
+	for _, r := range []*resources.Resource{old, current} {
 		if _, err := f.dms.Publish(ctx, "alice", r.ID, r.Version); err != nil {
 			t.Fatal(err)
 		}
@@ -415,8 +407,14 @@ func TestBuiltInExpiryOnSchedule(t *testing.T) {
 		t.Fatal("built-in definition was edited in place")
 	}
 	// Make the schedule due and tick.
-	if _, err = f.db.Client.WorkflowTrigger.Update().Where(workflowtrigger.WorkflowIDEQ(w.ID)).SetNextAt(time.Now().UTC().Add(-time.Minute)).Save(ctx); err != nil {
+	triggers, err := f.db.DAL.Workflows().Triggers(ctx, workflows.TriggerFilter{WorkflowID: w.ID})
+	if err != nil {
 		t.Fatal(err)
+	}
+	for _, trigger := range triggers {
+		if err = f.db.DAL.Workflows().AdvanceTrigger(ctx, trigger.ID, time.Now().UTC().Add(-time.Minute)); err != nil {
+			t.Fatal(err)
+		}
 	}
 	raised, err := f.r.Tick(ctx)
 	if err != nil || raised != 1 {
@@ -525,9 +523,7 @@ func TestFailedRunRetriesFromFailedStep(t *testing.T) {
 		t.Fatalf("note %v", note)
 	}
 	// A fork owns its reused step bodies; inspecting it does not need the source.
-	if _, err = f.db.SQL.Exec(`DELETE FROM runner_step_results WHERE run_id=?`, runs[0].ID); err != nil {
-		t.Fatal(err)
-	}
+	daltest.Delete(t, f.db.DAL, "runner_step_results", daltest.Row{"run_id": runs[0].ID})
 	retried, err = f.r.Run(ctx, "alice", retried.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -552,13 +548,12 @@ func TestCrashChild(t *testing.T) {
 	}
 	parts := strings.Split(spec, "|")
 	f := open(t, parts[0], "node-a")
-	f.list = &ent.Resource{ID: parts[1]}
-	f.ws = &ent.Resource{ID: parts[2]}
+	f.list = &resources.Resource{ID: parts[1]}
+	f.ws = &resources.Resource{ID: parts[2]}
 	f.item(t, "alice", "Crash", nil)
 	// Die once the first node committed, while the run sleeps.
 	for deadline := time.Now().Add(20 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
-		var n int
-		if err := f.db.SQL.QueryRow(`SELECT count(*) FROM runner_step_results WHERE step='stamp'`).Scan(&n); err == nil && n == 1 {
+		if daltest.Count(t, f.db.DAL, "runner_step_results", daltest.Row{"step": "stamp"}) == 1 {
 			os.Exit(3)
 		}
 	}
@@ -625,7 +620,7 @@ func TestCrashRecovery(t *testing.T) {
 // and a runner that launches later dispatches it and runs the workflow.
 func TestEventsLoggedWithoutRunnerStartLater(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "papergo.db")
-	db := testutil.DatabaseAt(t, path)
+	db := daltest.Open(t, path)
 	writer := dms.NewService(db.SQL)
 	wf := &workflow.Service{DMS: writer}
 	ws, err := writer.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Docs"})
@@ -647,7 +642,7 @@ func TestEventsLoggedWithoutRunnerStartLater(t *testing.T) {
 		t.Fatal(err)
 	}
 	// item.created, and item.published: the list publishes automatically.
-	if n, err := db.Client.DomainEvent.Query().Where(domainevent.DispatchedAtIsNil()).Count(ctx); err != nil || n != 2 {
+	if n, err := db.DAL.Events().Count(ctx, eventstore.Filter{Undispatched: true}); err != nil || n != 2 {
 		t.Fatalf("logged events: %d %v", n, err)
 	}
 	f := open(t, path, "worker")

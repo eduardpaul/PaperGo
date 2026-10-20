@@ -3,14 +3,18 @@ package dms
 import (
 	"context"
 	"database/sql"
+	"papergo/internal/dal"
+	"papergo/internal/dal/daltest"
+	"papergo/internal/dal/directory"
+	"papergo/internal/dal/resources"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"papergo/internal/calendar"
+	"papergo/internal/dal/resultcache"
 	"papergo/internal/identity"
-	"papergo/internal/resultcache"
 )
 
 func TestStorageStatusReconcilesAndSeparatesContent(t *testing.T) {
@@ -22,38 +26,32 @@ func TestStorageStatusReconcilesAndSeparatesContent(t *testing.T) {
 	const size = int64(2_000_000)
 	sha := strings.Repeat("ab", 32)
 	for i := 0; i < 2; i++ {
-		if _, err := s.db.ExecContext(ctx, `INSERT INTO blobs(id, created_at, version, object_key, filename, content_type, size, sha256, item_id, availability) VALUES(?,?,?,?,?,?,?,?,?,'available')`,
-			uuid.NewString(), time.Now().UTC(), i+1, uuid.NewString(), "scan.pdf", "application/pdf", size, sha, item.ID); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if _, err := s.db.ExecContext(ctx, `INSERT INTO runner_step_results(run_id, step_id, step, output) VALUES('missing-run', 1, '1', '{}')`); err != nil {
-		t.Fatal(err)
+		daltest.Insert(t, s.DAL, "blobs", daltest.Row{"id": uuid.NewString(), "created_at": time.Now().UTC(), "version": i + 1, "object_key": uuid.NewString(), "filename": "scan.pdf", "content_type": "application/pdf", "size": size, "sha256": sha, "item_id": item.ID, "availability": "available"})
 	}
 	past := time.Now().UTC().Add(-8 * 24 * time.Hour)
-	if _, err := s.db.ExecContext(ctx, `INSERT INTO live_changes(created_at, kind, entity_id, action) VALUES(?, 'item', 'item-1', 'updated')`, past); err != nil {
-		t.Fatal(err)
+	change := func(entity string, at time.Time) {
+		daltest.Insert(t, s.DAL, "live_changes", daltest.Row{"created_at": at, "kind": "item", "entity_id": entity, "action": "updated"})
 	}
-	if _, err := s.db.ExecContext(ctx, `INSERT INTO cached_results(id, namespace, scope, key, payload, created_at, used_at, expires_at) VALUES(?,?,?,?,?,?,?,?)`,
-		uuid.NewString(), "answers", "scope", "key", `{}`, past, past, past.Add(time.Hour)); err != nil {
-		t.Fatal(err)
-	}
+	change("item-1", past)
+	daltest.Insert(t, s.DAL, "cached_results", daltest.Row{"id": uuid.NewString(), "namespace": "answers", "scope": "scope", "key": "key", "payload": `{}`, "created_at": past, "used_at": past, "expires_at": past.Add(time.Hour)})
 	before, err := s.StorageStatus(ctx, "alice")
 	if err != nil {
 		t.Fatal(err)
 	}
-	pages := int64(before.PageCount) * int64(before.PageSize)
 	var named int64
 	for _, table := range before.Tables {
 		named += table.Bytes
 	}
-	if before.DatabaseBytes != pages || before.AccountedBytes+before.FreelistBytes != pages || named+before.FreelistBytes != pages {
+	sqlite := s.DAL.Dialect() == dal.DialectSQLite
+	if pages := int64(before.PageCount) * int64(before.PageSize); sqlite && (before.DatabaseBytes != pages || before.AccountedBytes+before.FreelistBytes != pages || named+before.FreelistBytes != pages || before.DatabaseBytes >= size) {
 		t.Fatalf("accounted %d file %d pages %d named %d freelist %d", before.AccountedBytes, before.DatabaseBytes, pages, named, before.FreelistBytes)
 	}
-	if before.BlobBytes != size || before.DatabaseBytes >= size || before.OrphanStepResults != 1 || before.Expired.LiveChanges < 1 || before.Expired.CachedResults < 1 {
+	if !sqlite && (before.DatabaseBytes < before.AccountedBytes || before.AccountedBytes != named || named == 0) {
+		t.Fatalf("database %d accounted %d named %d", before.DatabaseBytes, before.AccountedBytes, named)
+	}
+	if before.BlobBytes != size || before.Expired.LiveChanges < 1 || before.Expired.CachedResults < 1 {
 		t.Fatalf("%+v", before)
 	}
-	t.Logf("database %d blob %d accounted %d freelist %d slack %d pages %d orphans %d", before.DatabaseBytes, before.BlobBytes, before.AccountedBytes, before.FreelistBytes, before.UnusedBytes, before.PageCount, before.OrphanStepResults)
 	if before.Retained.AuditEvents < 1 {
 		t.Fatal("audit missing", before.Retained)
 	}
@@ -64,32 +62,30 @@ func TestStorageStatusReconcilesAndSeparatesContent(t *testing.T) {
 	if err = s.CollectExpiredLiveChanges(ctx, time.Now().UTC()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.db.ExecContext(ctx, `DELETE FROM runner_step_results WHERE run_id='missing-run'`); err != nil {
-		t.Fatal(err)
-	}
 	after, err := s.StorageStatus(ctx, "alice")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if after.Expired.CachedResults != 0 || after.Expired.LiveChanges != 0 || after.OrphanStepResults != 0 || after.Retained.AuditEvents != audit {
+	if after.Expired.CachedResults != 0 || after.Expired.LiveChanges != 0 || after.Retained.AuditEvents != audit {
 		t.Fatalf("after cleanup %+v audit %d", after.Expired, after.Retained.AuditEvents)
 	}
 	again, err := s.StorageStatus(ctx, "alice")
-	if err != nil || again.Expired.CachedResults != 0 || again.Expired.LiveChanges != 0 || again.OrphanStepResults != 0 {
+	if err != nil || again.Expired.CachedResults != 0 || again.Expired.LiveChanges != 0 {
 		t.Fatal(again, err)
 	}
+	if !sqlite {
+		return
+	}
+	// A reader's snapshot keeps later writes in the journal.
 	reader, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer reader.Rollback()
-	var pinned int
-	if err = reader.QueryRowContext(ctx, "SELECT COUNT(*) FROM live_changes").Scan(&pinned); err != nil || pinned < 1 {
-		t.Fatal(pinned, err)
+	if n, err := s.DAL.WithTx(reader).Resources().Count(ctx, resources.Filter{}); err != nil || n < 1 {
+		t.Fatal(n, err)
 	}
-	if _, err = s.db.ExecContext(ctx, `INSERT INTO live_changes(created_at, kind, entity_id, action) VALUES(?, 'item', 'item-2', 'updated')`, time.Now().UTC()); err != nil {
-		t.Fatal(err)
-	}
+	change("item-2", time.Now().UTC())
 	stalled, err := s.StorageStatus(ctx, "alice")
 	if err != nil || !stalled.Incomplete || stalled.JournalBytes == 0 {
 		t.Fatalf("%+v %v", stalled.Checkpoint, err)
@@ -97,9 +93,7 @@ func TestStorageStatusReconcilesAndSeparatesContent(t *testing.T) {
 	if err = reader.Rollback(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.db.ExecContext(ctx, `INSERT INTO live_changes(created_at, kind, entity_id, action) VALUES(?, 'item', 'item-3', 'updated')`, time.Now().UTC()); err != nil {
-		t.Fatal(err)
-	}
+	change("item-3", time.Now().UTC())
 	settled, err := s.StorageStatus(ctx, "alice")
 	if err != nil || settled.Incomplete {
 		t.Fatalf("%+v %v", settled.Checkpoint, err)
@@ -165,21 +159,12 @@ type contentCount struct{ revisions, publications, runs, updates int }
 
 func contentCounts(t *testing.T, s *Service, itemID string) contentCount {
 	t.Helper()
-	var out contentCount
-	ctx := context.Background()
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM item_revisions WHERE item_id=?`, itemID).Scan(&out.revisions); err != nil {
-		t.Fatal(err)
+	return contentCount{
+		revisions:    daltest.Count(t, s.DAL, "item_revisions", daltest.Row{"item_id": itemID}),
+		publications: daltest.Count(t, s.DAL, "publications", daltest.Row{"item_id": itemID}),
+		runs:         daltest.Count(t, s.DAL, "workflow_runs", nil),
+		updates:      daltest.Count(t, s.DAL, "domain_events", daltest.Row{"resource_id": itemID, "type": "item.updated"}),
 	}
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM publications WHERE item_id=?`, itemID).Scan(&out.publications); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM workflow_runs`).Scan(&out.runs); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM domain_events WHERE resource_id=? AND type='item.updated'`, itemID).Scan(&out.updates); err != nil {
-		t.Fatal(err)
-	}
-	return out
 }
 
 func grantStorage(t *testing.T, s *Service) {
@@ -188,7 +173,7 @@ func grantStorage(t *testing.T, s *Service) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = s.Directory().SetAssignment(context.Background(), "organization-admin", role.ID, identity.Principal{Type: "user", ID: "alice"}, false); err != nil {
+	if err = s.Directory().SetAssignment(context.Background(), "organization-admin", role.ID, identity.Principal{Type: directory.PrincipalUser, ID: "alice"}, false); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -3,8 +3,9 @@ package dms
 import (
 	"context"
 	"errors"
-	"papergo/ent/relationship"
-	"papergo/ent/term"
+	"papergo/internal/dal/directory"
+	"papergo/internal/dal/relationships"
+	"papergo/internal/dal/taxonomy"
 	"papergo/internal/identity"
 	"testing"
 )
@@ -63,9 +64,9 @@ func TestRelationshipLabelsShareTaxonomyIdentity(t *testing.T) {
 	if e != nil || otherEdge.TypeID != predicate.ID {
 		t.Fatal(otherEdge, e)
 	}
-	count, e := s.Client.Term.Query().Where(term.TermSetIDEQ(predicate.TermSetID)).Count(ctx)
-	if e != nil || count != 1 {
-		t.Fatal(count, e)
+	terms, e := s.DAL.Taxonomy().Terms(ctx, taxonomy.TermFilter{SetID: predicate.TermSetID})
+	if e != nil || len(terms) != 1 {
+		t.Fatal(terms, e)
 	}
 	if _, e = s.Link(ctx, "bob", a.ID, CreateRelationship{Type: predicate.ID, TargetID: b.ID, Directed: ptr(true)}); !isValidation(e) {
 		t.Fatal("direction mismatch", e)
@@ -102,7 +103,7 @@ func TestRelationshipTermMergePreservesEdgesAndRejectsLimits(t *testing.T) {
 	if _, e = s.MergeTerm(ctx, "alice", source.ID, source.Version, MergeTermInput{TargetTermID: target.ID}); e != nil {
 		t.Fatal(e)
 	}
-	edge, e := s.Client.Relationship.Get(ctx, first.ID)
+	edge, e := s.DAL.Relationships().Find(ctx, first.ID)
 	if e != nil || edge.TypeID != target.ID || edge.Version != first.Version+1 {
 		t.Fatal(edge, e)
 	}
@@ -132,7 +133,7 @@ func TestRelationshipTermMergePreservesEdgesAndRejectsLimits(t *testing.T) {
 	if e != nil || tm.Deprecated {
 		t.Fatal("failed merge leaked", tm, e)
 	}
-	n, e := s.Client.Relationship.Query().Where(relationship.TypeIDEQ(limited.ID)).Count(ctx)
+	n, e := s.DAL.Relationships().Count(ctx, relationships.Filter{TypeIDs: []string{limited.ID}})
 	if e != nil || n != 1 {
 		t.Fatal(n, e)
 	}
@@ -144,7 +145,7 @@ func TestRelationshipTermMergePreservesEdgesAndRejectsLimits(t *testing.T) {
 	if _, e = s.Link(ctx, "alice", a.ID, CreateRelationship{Type: kw.ID, TargetID: b.ID}); !isValidation(e) {
 		t.Fatal("foreign vocabulary accepted", e)
 	}
-	if e = s.Directory().SetAssignment(ctx, "alice", identity.MemberRole, identity.Principal{Type: "user", ID: "visitor"}, true); e != nil {
+	if e = s.Directory().SetAssignment(ctx, "alice", identity.MemberRole, identity.Principal{Type: directory.PrincipalUser, ID: "visitor"}, true); e != nil {
 		t.Fatal(e)
 	}
 	if _, e = s.CreateRelationshipType(ctx, "visitor", RelationshipTypeInput{Name: "Denied"}); !errors.Is(e, ErrForbidden) {

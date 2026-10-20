@@ -2,11 +2,11 @@ package dms
 
 import (
 	"encoding/json"
+	"papergo/internal/dal/refs"
+	"papergo/internal/dal/resources"
+	"papergo/internal/dal/surfaces"
 	"slices"
 	"testing"
-
-	"papergo/ent"
-	"papergo/ent/itemsurface"
 )
 
 // Collections without publishing keep one surface per item and folder, the
@@ -23,9 +23,9 @@ func TestCollectionsWithoutPublishingKeepOneSurface(t *testing.T) {
 	}
 	item := create(t, s, list.ID, "item", "Alpha report", map[string]any{"stage": "todo"})
 	folder := create(t, s, list.ID, "folder", "Archive", nil)
-	surfaces := func(id string) []string {
+	surfaceNames := func(id string) []string {
 		t.Helper()
-		rows, err := s.Client.ItemSurface.Query().Where(itemsurface.ItemIDEQ(id)).All(testContext)
+		rows, err := s.DAL.Surfaces().Surfaces(testContext, surfaces.Filter{ItemID: id})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -37,13 +37,13 @@ func TestCollectionsWithoutPublishingKeepOneSurface(t *testing.T) {
 		return out
 	}
 	one := []string{"published"}
-	if got := surfaces(item.ID); !slices.Equal(got, one) {
+	if got := surfaceNames(item.ID); !slices.Equal(got, one) {
 		t.Fatal("item surfaces", got)
 	}
-	if got := surfaces(folder.ID); !slices.Equal(got, one) {
+	if got := surfaceNames(folder.ID); !slices.Equal(got, one) {
 		t.Fatal("folder surfaces", got)
 	}
-	stage := func(subject, surface, value string) []*ent.Resource {
+	stage := func(subject, surface, value string) []*resources.Resource {
 		t.Helper()
 		q, err := s.Query(testContext, subject, list.ID, QueryRequest{Surface: surface, IncludeTotal: true, Query: QuerySpec{Filter: &FilterExpr{Field: "stage", Value: json.RawMessage(`"` + value + `"`)}}})
 		if err != nil {
@@ -78,7 +78,7 @@ func TestCollectionsWithoutPublishingKeepOneSurface(t *testing.T) {
 	if _, err = s.Update(testContext, "alice", item.ID, latest(t, s, item.ID).Version, UpdateResource{Values: &patch}); err != nil {
 		t.Fatal(err)
 	}
-	if len(stage("reader", "auto", "todo")) != 0 || len(stage("reader", "auto", "done")) != 1 || !slices.Equal(surfaces(item.ID), one) {
+	if len(stage("reader", "auto", "todo")) != 0 || len(stage("reader", "auto", "done")) != 1 || !slices.Equal(surfaceNames(item.ID), one) {
 		t.Fatal("update")
 	}
 
@@ -89,8 +89,8 @@ func TestCollectionsWithoutPublishingKeepOneSurface(t *testing.T) {
 		t.Fatal(err)
 	}
 	both := []string{"head", "published"}
-	if !slices.Equal(surfaces(item.ID), both) || !slices.Equal(surfaces(folder.ID), both) {
-		t.Fatal("publishing surfaces", surfaces(item.ID), surfaces(folder.ID))
+	if !slices.Equal(surfaceNames(item.ID), both) || !slices.Equal(surfaceNames(folder.ID), both) {
+		t.Fatal("publishing surfaces", surfaceNames(item.ID), surfaceNames(folder.ID))
 	}
 	patch = map[string]any{"stage": "draft"}
 	if _, err = s.Update(testContext, "alice", item.ID, latest(t, s, item.ID).Version, UpdateResource{Values: &patch}); err != nil {
@@ -105,11 +105,10 @@ func TestCollectionsWithoutPublishingKeepOneSurface(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(surfaces(item.ID), one) || !slices.Equal(surfaces(folder.ID), one) || len(stage("reader", "auto", "draft")) != 1 {
-		t.Fatal("unpublishing collection", surfaces(item.ID))
+	if !slices.Equal(surfaceNames(item.ID), one) || !slices.Equal(surfaceNames(folder.ID), one) || len(stage("reader", "auto", "draft")) != 1 {
+		t.Fatal("unpublishing collection", surfaceNames(item.ID))
 	}
-	var heads int
-	if err = s.scan(testContext, []any{&heads}, "SELECT count(*) FROM field_values WHERE container_id=? AND surface='head'", list.ID); err != nil || heads != 0 {
+	if heads, err := countFieldValues(s, surfaces.ValueFilter{ContainerID: list.ID, Surface: refs.SurfaceHead}); err != nil || heads != 0 {
 		t.Fatal("head field values left", heads, err)
 	}
 
@@ -120,8 +119,8 @@ func TestCollectionsWithoutPublishingKeepOneSurface(t *testing.T) {
 	if _, err = s.RestoreDeleted(testContext, "alice", list.ID, item.ID, false); err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(surfaces(item.ID), one) || len(stage("reader", "auto", "draft")) != 1 {
-		t.Fatal("restore", surfaces(item.ID))
+	if !slices.Equal(surfaceNames(item.ID), one) || len(stage("reader", "auto", "draft")) != 1 {
+		t.Fatal("restore", surfaceNames(item.ID))
 	}
 	op, err := s.StartBulkUpdate(testContext, "alice", list.ID, FilteredBulkUpdate{Query: QuerySpec{Filter: &FilterExpr{Field: "stage", Value: json.RawMessage(`"draft"`)}}, Values: map[string]any{"stage": "final"}})
 	if err != nil {
@@ -130,7 +129,7 @@ func TestCollectionsWithoutPublishingKeepOneSurface(t *testing.T) {
 	if err = s.runOperations(testContext); err != nil {
 		t.Fatal(err)
 	}
-	if got := bulkStatus(t, s, op.ID); got.Updated != 1 || len(stage("reader", "auto", "final")) != 1 || !slices.Equal(surfaces(item.ID), one) {
+	if got := bulkStatus(t, s, op.ID); got.Updated != 1 || len(stage("reader", "auto", "final")) != 1 || !slices.Equal(surfaceNames(item.ID), one) {
 		t.Fatal("bulk update", got)
 	}
 }
@@ -145,7 +144,7 @@ func TestMovesFollowTheDestinationSurfaces(t *testing.T) {
 		t.Fatal(err)
 	}
 	count := func() int {
-		n, err := s.Client.ItemSurface.Query().Where(itemsurface.ItemIDEQ(item.ID)).Count(testContext)
+		n, err := countSurfaces(s, surfaces.Filter{ItemID: item.ID})
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"github.com/google/uuid"
+	"papergo/internal/dal/integrations"
 	"papergo/internal/dms"
 	"papergo/internal/integration"
 	"strings"
@@ -31,8 +32,12 @@ func TestIntegrationAPISecrecyPreconditionsAndManagedFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	source, err := s.Client.ListIntegration.Create().SetContainerID(list.ID).SetKind("ical_https").SetName("Feed").SetGeneration(uuid.NewString()).SetConfiguredBy("alice").SetConfigCiphertext(encrypted).SetConfigHash("private-config-hash").SetState(json.RawMessage(`{"etag":"private-http-validator"}`)).Save(ctx)
+	source, err := s.DAL.Integrations().Create(ctx, integrations.Integration{ContainerID: list.ID, Kind: "ical_https", Name: "Feed", Generation: uuid.NewString(), ConfiguredBy: "alice", ConfigCiphertext: encrypted, ConfigHash: "private-config-hash"})
 	if err != nil {
+		t.Fatal(err)
+	}
+	source.State = json.RawMessage(`{"etag":"private-http-validator"}`)
+	if err = s.DAL.Integrations().Save(ctx, &source); err != nil {
 		t.Fatal(err)
 	}
 	path := "/v1/resources/" + list.ID + "/integrations"
@@ -57,7 +62,13 @@ func TestIntegrationAPISecrecyPreconditionsAndManagedFields(t *testing.T) {
 	if response.Code != 412 {
 		t.Fatal(response.Code, response.Body.String())
 	}
-	if err = s.Client.ListIntegration.UpdateOneID(source.ID).SetLeaseUntil(time.Now().Add(time.Minute)).Exec(ctx); err != nil {
+	leased, err := s.DAL.Integrations().Find(ctx, source.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	until := time.Now().Add(time.Minute)
+	leased.LeaseUntil = &until
+	if err = s.DAL.Integrations().Save(ctx, &leased); err != nil {
 		t.Fatal(err)
 	}
 	response = request(h, "DELETE", path+"/"+source.ID, "", testToken, `"2"`, "")
@@ -68,7 +79,7 @@ func TestIntegrationAPISecrecyPreconditionsAndManagedFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = s.Client.IntegrationItem.Create().SetItemID(item.ID).SetIntegrationID(source.ID).SetProviderKind("ical_https").SetExternalID("external").SetManagedFields([]string{"$name"}).Exec(ctx); err != nil {
+	if _, err = s.DAL.Integrations().AddItem(ctx, integrations.Item{ItemID: item.ID, IntegrationID: source.ID, ProviderKind: "ical_https", ExternalID: "external", ManagedFields: []string{"$name"}}); err != nil {
 		t.Fatal(err)
 	}
 	response = request(h, "GET", "/v1/items/"+item.ID+"/integration", "", testToken, "", "")

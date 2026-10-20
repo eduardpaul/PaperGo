@@ -4,7 +4,7 @@ import { authenticationMode } from '@/api/auth';
 import { useState } from 'react';
 import { api } from '@/api/http';
 import { scopeCatalog, scopes, tokens } from '@/api/queries';
-import type { CreatedRestToken } from '@/api/types';
+import type { CreatedAccessToken } from '@/api/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { CopyField, SettingRow, SettingsSection } from '@/features/settings/section';
@@ -27,7 +27,7 @@ function TokensPage() {
   const [days, setDays] = useState('30');
   const [chosen, setChosen] = useState<string[]>([]);
   const [custom, setCustom] = useState('');
-  const [created, setCreated] = useState<CreatedRestToken | null>(null);
+  const [created, setCreated] = useState<CreatedAccessToken | null>(null);
 
   const issue = useMutation({
     mutationFn: () => {
@@ -38,7 +38,7 @@ function TokensPage() {
         .filter(Boolean);
       const selected = [...new Set([...fromCatalog, ...extra])];
       const expires = Number(days);
-      return api<CreatedRestToken>('/v1/identity/me/tokens', {
+      return api<CreatedAccessToken>('/v1/identity/me/tokens', {
         method: 'POST',
         body: { name: name.trim(), scopes: selected, expires_in_days: Number.isInteger(expires) ? expires : undefined },
       }).then((result) => result.data);

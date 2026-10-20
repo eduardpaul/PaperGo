@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"testing"
 
+	"papergo/internal/dal/daltest"
+	"papergo/internal/dal/workflows"
 	"papergo/internal/dms"
 	"papergo/internal/workflow"
 )
@@ -17,6 +19,13 @@ func TestWorkflowWaitRoutes(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err = s.Write(ctx, func(tx *dms.Service) error {
+		wf, err := tx.DAL.Workflows().Create(ctx, workflows.CreateInput{WorkspaceID: ws.ID, Key: "wait-review", Name: "Wait review", CreatedBy: "alice"})
+		if err != nil {
+			return err
+		}
+		if err = daltest.WorkflowRun(ctx, tx.DAL, "run-1", wf.ID, ws.ID, "alice", 1); err != nil {
+			return err
+		}
 		return workflow.PutWait(ctx, tx, workflow.Wait{
 			Kind: "review", Key: "one", WorkspaceID: ws.ID, RunID: "run-1", Node: "park", ExecutionID: "exec-1",
 			Data: json.RawMessage(`{"n":0}`),

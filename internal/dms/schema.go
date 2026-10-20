@@ -2,13 +2,11 @@ package dms
 
 import (
 	"context"
-	"papergo/ent"
-	"papergo/ent/fielddefinition"
-	"papergo/ent/fieldvalue"
-	"papergo/ent/itemrevision"
-	"papergo/ent/itemsurface"
-	"papergo/ent/resource"
-	"papergo/ent/schemarevision"
+	"papergo/internal/dal/catalog"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/resources"
+	"papergo/internal/dal/revisions"
+	"papergo/internal/dal/surfaces"
 	"papergo/internal/model"
 )
 
@@ -22,7 +20,7 @@ type UpdateField struct {
 	Indexed  *bool               `json:"indexed,omitempty"`
 }
 
-func (s *Service) UpdateField(ctx context.Context, subject, containerID, fieldID string, version int, in UpdateField) (out *ent.FieldDefinition, err error) {
+func (s *Service) UpdateField(ctx context.Context, subject, containerID, fieldID string, version int, in UpdateField) (out *catalog.FieldDefinition, err error) {
 	err = s.write(ctx, func(t *Service) error {
 		c, e := t.contentTypeResource(ctx, subject, containerID, "manage")
 		if e != nil {
@@ -31,8 +29,8 @@ func (s *Service) UpdateField(ctx context.Context, subject, containerID, fieldID
 		if c.Version != version {
 			return ErrPreconditionFailed
 		}
-		d, e := t.Client.FieldDefinition.Query().Where(collectionFieldPredicate(c.ID), fielddefinition.IDEQ(fieldID)).Only(ctx)
-		if ent.IsNotFound(e) {
+		d, e := t.DAL.Catalog().OneField(ctx, catalog.FieldFilter{CollectionID: c.ID, IDs: []string{fieldID}})
+		if dberr.IsNotFound(e) {
 			return ErrNotFound
 		}
 		if e != nil {
@@ -43,13 +41,13 @@ func (s *Service) UpdateField(ctx context.Context, subject, containerID, fieldID
 	})
 	return
 }
-func (s *Service) UpdateCatalogField(ctx context.Context, subject, id string, version int, in UpdateField) (out *ent.FieldDefinition, err error) {
+func (s *Service) UpdateCatalogField(ctx context.Context, subject, id string, version int, in UpdateField) (out *catalog.FieldDefinition, err error) {
 	err = s.write(ctx, func(t *Service) error {
 		if e := t.RequireScope(ctx, subject, "contentType.manage"); e != nil {
 			return e
 		}
-		d, e := t.Client.FieldDefinition.Get(ctx, id)
-		if ent.IsNotFound(e) {
+		d, e := t.DAL.Catalog().Field(ctx, id)
+		if dberr.IsNotFound(e) {
 			return ErrNotFound
 		}
 		if e != nil {
@@ -63,7 +61,7 @@ func (s *Service) UpdateCatalogField(ctx context.Context, subject, id string, ve
 	})
 	return
 }
-func (s *Service) updateCatalogField(ctx context.Context, subject string, d *ent.FieldDefinition, in UpdateField) (out *ent.FieldDefinition, err error) {
+func (s *Service) updateCatalogField(ctx context.Context, subject string, d *catalog.FieldDefinition, in UpdateField) (out *catalog.FieldDefinition, err error) {
 	if in.Label == nil && in.Required == nil && in.Choices == nil && in.Indexed == nil && in.Options == nil {
 		return nil, invalid("at least one field change is required")
 	}
@@ -82,7 +80,7 @@ func (s *Service) updateCatalogField(ctx context.Context, subject string, d *ent
 	}
 
 	var e error
-	if in.Choices != nil && d.Type != fielddefinition.TypeChoice {
+	if in.Choices != nil && d.Type != catalog.FieldChoice {
 		return nil, invalid("choices belong to choice fields")
 	}
 	candidate := *d
@@ -127,20 +125,7 @@ func (s *Service) updateCatalogField(ctx context.Context, subject string, d *ent
 		}
 	}
 	reindex := in.Indexed != nil && *in.Indexed != d.Indexed
-	b := s.Client.FieldDefinition.UpdateOne(d).AddVersion(1).SetOptions(candidate.Options)
-	if in.Label != nil {
-		b.SetLabel(*in.Label)
-	}
-	if in.Required != nil {
-		b.SetRequired(*in.Required)
-	}
-	if in.Choices != nil {
-		b.SetChoices(*in.Choices)
-	}
-	if in.Indexed != nil {
-		b.SetIndexed(*in.Indexed)
-	}
-	out, e = b.Save(ctx)
+	out, e = s.reviseFieldDefinition(ctx, d, &candidate)
 	if e != nil {
 		return nil, e
 	}
@@ -158,7 +143,7 @@ func (s *Service) updateCatalogField(ctx context.Context, subject string, d *ent
 		if e = s.enqueueFieldIndex(ctx, subject, out); e != nil {
 			return nil, e
 		}
-		if out, e = s.Client.FieldDefinition.Get(ctx, d.ID); e != nil {
+		if out, e = s.DAL.Catalog().Field(ctx, d.ID); e != nil {
 			return nil, e
 		}
 	}
@@ -169,7 +154,7 @@ func (s *Service) updateCatalogField(ctx context.Context, subject string, d *ent
 
 // newlyRequired reports whether a change makes a field required without a default,
 // which, like a new required field, needs every existing item to hold a value.
-func newlyRequired(old, d *ent.FieldDefinition) bool {
+func newlyRequired(old, d *catalog.FieldDefinition) bool {
 	return d.Required && !old.Required && len(d.Options.DefaultValue) == 0
 }
 
@@ -178,7 +163,7 @@ func (s *Service) checkRequiredFilled(ctx context.Context, containerID string, k
 	if len(keys) == 0 {
 		return nil
 	}
-	types, err := s.Client.ContentType.Query().Where(collectionTypePredicate(containerID)).All(ctx)
+	types, err := s.DAL.Catalog().ContentTypes(ctx, catalog.ContentTypeFilter{CollectionID: containerID})
 	if err != nil {
 		return err
 	}
@@ -186,7 +171,7 @@ func (s *Service) checkRequiredFilled(ctx context.Context, containerID string, k
 	if err != nil {
 		return err
 	}
-	c, err := s.Client.Resource.Get(ctx, containerID)
+	c, err := s.DAL.Resources().Resource(ctx, containerID)
 	if err != nil {
 		return err
 	}
@@ -198,7 +183,7 @@ func (s *Service) checkRequiredFilled(ctx context.Context, containerID string, k
 		}
 	}
 	for after := ""; ; {
-		heads, e := s.Client.ItemSurface.Query().Where(itemsurface.ContainerIDEQ(containerID), itemsurface.SurfaceEQ(headSurface(c)), itemsurface.ItemIDGT(after)).Order(ent.Asc(itemsurface.FieldItemID)).Limit(surfaceBatch).Select(itemsurface.FieldItemID, itemsurface.FieldPayload).All(ctx)
+		heads, e := s.DAL.Surfaces().Surfaces(ctx, surfaces.Filter{ContainerID: containerID, Surface: headSurface(c), AfterItemID: after, Limit: surfaceBatch})
 		if e != nil {
 			return e
 		}
@@ -206,7 +191,7 @@ func (s *Service) checkRequiredFilled(ctx context.Context, containerID string, k
 		for _, head := range heads {
 			ids = append(ids, head.ItemID)
 		}
-		items, e := s.Client.Resource.Query().Where(resource.IDIn(ids...)).Select(resource.FieldID, resource.FieldContentTypeID).All(ctx)
+		items, e := s.DAL.Resources().Resources(ctx, resources.Filter{IDs: ids})
 		if e != nil {
 			return e
 		}
@@ -244,19 +229,19 @@ var surfaceBatch = 500
 // reindexBatch replaces field d's field_values on a batch of surfaces with one
 // delete and a few bulk inserts; an unindexed d just loses its rows. indexed
 // caches d's per-schema-revision definitions across the batch.
-func (s *Service) reindexBatch(ctx context.Context, projections []*ent.ItemSurface, d *ent.FieldDefinition, indexed map[string][]*ent.FieldDefinition) error {
-	current := []*ent.FieldDefinition{d}
+func (s *Service) reindexBatch(ctx context.Context, projections []surfaces.Surface, d *catalog.FieldDefinition, indexed map[string][]*catalog.FieldDefinition) error {
+	current := []*catalog.FieldDefinition{d}
 	revisionIDs := make([]string, 0, len(projections))
 	for _, p := range projections {
 		revisionIDs = append(revisionIDs, p.RevisionID)
 	}
-	revisions, e := s.Client.ItemRevision.Query().Where(itemrevision.IDIn(revisionIDs...)).Select(itemrevision.FieldID, itemrevision.FieldSchemaRevisionID).All(ctx)
+	revs, e := s.DAL.Revisions().Revisions(ctx, revisions.Filter{IDs: revisionIDs})
 	if e != nil {
 		return e
 	}
 	schemaOf := map[string]string{}
 	missing := map[string]bool{}
-	for _, rev := range revisions {
+	for _, rev := range revs {
 		schemaOf[rev.ID] = rev.SchemaRevisionID
 		if _, ok := indexed[rev.SchemaRevisionID]; !ok {
 			missing[rev.SchemaRevisionID] = true
@@ -267,7 +252,7 @@ func (s *Service) reindexBatch(ctx context.Context, projections []*ent.ItemSurfa
 		for id := range missing {
 			schemaIDs = append(schemaIDs, id)
 		}
-		schemas, e := s.Client.SchemaRevision.Query().Where(schemarevision.IDIn(schemaIDs...)).All(ctx)
+		schemas, e := s.DAL.Catalog().Schemas(ctx, catalog.SchemaFilter{IDs: schemaIDs})
 		if e != nil {
 			return e
 		}
@@ -279,22 +264,18 @@ func (s *Service) reindexBatch(ctx context.Context, projections []*ent.ItemSurfa
 			indexed[schema.ID] = indexedDefinitions(current, defs)
 		}
 	}
-	surfaceIDs := make([]string, 0, len(projections))
-	rows := []*ent.FieldValueCreate{}
 	for _, p := range projections {
 		defs, ok := indexed[schemaOf[p.RevisionID]]
 		if !ok {
 			return ErrNotFound
 		}
-		built, e := s.fieldValueRows(p, defs)
-		if e != nil {
-			return e
+		built, err := fieldValueRows(p.Payload, defs)
+		if err != nil {
+			return err
 		}
-		surfaceIDs = append(surfaceIDs, p.ID)
-		rows = append(rows, built...)
+		if err := s.DAL.Surfaces().Reindex(ctx, p.ID, []string{d.Key}, built); err != nil {
+			return err
+		}
 	}
-	if _, e = s.Client.FieldValue.Delete().Where(fieldvalue.SurfaceIDIn(surfaceIDs...), fieldvalue.FieldKeyEQ(d.Key)).Exec(ctx); e != nil {
-		return e
-	}
-	return s.insertFieldValues(ctx, rows)
+	return nil
 }

@@ -3,10 +3,13 @@ package dms
 import (
 	"context"
 	"errors"
-	"papergo/ent"
-	"papergo/ent/groupinbox"
-	"papergo/ent/resource"
+	"papergo/internal/dal"
+	auditstore "papergo/internal/dal/audit"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/refs"
+	"papergo/internal/dal/resources"
 	"papergo/internal/identity"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -32,8 +35,8 @@ type Inbox struct {
 
 func (s *Service) groupInbox(ctx context.Context, subject, groupID string) (GroupInbox, error) {
 	var out GroupInbox
-	binding, err := s.Client.GroupInbox.Query().Where(groupinbox.GroupIDEQ(groupID)).Only(ctx)
-	if ent.IsNotFound(err) {
+	binding, err := s.DAL.Directory().Inbox(ctx, groupID)
+	if dberr.IsNotFound(err) {
 		return out, ErrNotFound
 	}
 	if err != nil {
@@ -46,8 +49,8 @@ func (s *Service) groupInbox(ctx context.Context, subject, groupID string) (Grou
 	if err != nil {
 		return out, err
 	}
-	group, err := s.Client.IdentityGroup.Get(ctx, groupID)
-	if ent.IsNotFound(err) {
+	group, err := s.DAL.Directory().Group(ctx, groupID)
+	if dberr.IsNotFound(err) {
 		return out, ErrNotFound
 	}
 	if err != nil {
@@ -64,8 +67,8 @@ func (s *Service) GroupInbox(ctx context.Context, subject, groupID string) (Grou
 	})
 }
 func (s *Service) manageInboxLibrary(ctx context.Context, subject, libraryID string) error {
-	lib, err := s.Client.Resource.Get(ctx, libraryID)
-	if ent.IsNotFound(err) {
+	lib, err := s.DAL.Resources().Resource(ctx, libraryID)
+	if dberr.IsNotFound(err) {
 		return nil
 	}
 	if err != nil {
@@ -77,8 +80,12 @@ func (s *Service) manageInboxLibrary(ctx context.Context, subject, libraryID str
 	_, err = s.authorize(ctx, subject, libraryID, "manage")
 	return err
 }
-func (s *Service) auditInbox(ctx context.Context, subject, action, groupID string, lib *ent.Resource) error {
-	return s.Client.AuditEvent.Create().SetSubject(subject).SetAction(action).SetEntityType("group_inbox").SetEntityID(groupID).SetWorkspaceID(lib.WorkspaceID).SetResourceID(lib.ID).SetProperties([]string{"library_id"}).SetTraceID(s.traceID).SetDetails(map[string]any{"group_id": groupID, "library_id": lib.ID}).Exec(ctx)
+func (s *Service) auditInbox(ctx context.Context, subject, action, groupID string, lib *resources.Resource) error {
+	_, err := s.DAL.Audit().Append(ctx, auditstore.Event{
+		WorkspaceID: lib.WorkspaceID, ResourceID: lib.ID, Subject: subject, Action: action, EntityType: "group_inbox", EntityID: groupID,
+		TraceID: s.traceID, Properties: []string{"library_id"}, Details: map[string]any{"group_id": groupID, "library_id": lib.ID},
+	})
+	return err
 }
 func (s *Service) SetGroupInbox(ctx context.Context, subject, groupID string, in GroupInboxInput) (out GroupInbox, err error) {
 	if in.LibraryID == "" {
@@ -88,8 +95,8 @@ func (s *Service) SetGroupInbox(ctx context.Context, subject, groupID string, in
 		if err := t.RequireScope(ctx, subject, "document.write"); err != nil {
 			return err
 		}
-		group, err := t.Client.IdentityGroup.Get(ctx, groupID)
-		if ent.IsNotFound(err) {
+		group, err := t.DAL.Directory().Group(ctx, groupID)
+		if dberr.IsNotFound(err) {
 			return ErrNotFound
 		}
 		if err != nil {
@@ -99,29 +106,24 @@ func (s *Service) SetGroupInbox(ctx context.Context, subject, groupID string, in
 		if err != nil {
 			return err
 		}
-		if lib.Kind != resource.KindLibrary {
+		if lib.Kind != refs.KindLibrary {
 			return invalid("Inbox must identify a library")
 		}
-		binding, err := t.Client.GroupInbox.Query().Where(groupinbox.GroupIDEQ(groupID)).Only(ctx)
-		if err != nil && !ent.IsNotFound(err) {
+		binding, err := t.DAL.Directory().Inbox(ctx, groupID)
+		if err != nil && !dberr.IsNotFound(err) {
 			return err
 		}
-		if binding != nil {
+		if err == nil {
 			if err = t.manageInboxLibrary(ctx, subject, binding.LibraryID); err != nil {
 				return err
 			}
-			if binding.LibraryID != lib.ID {
-				if err = t.Client.GroupInbox.UpdateOne(binding).SetLibraryID(lib.ID).Exec(ctx); err != nil {
-					return err
-				}
-			}
-		} else {
-			if err = t.Client.GroupInbox.Create().SetGroupID(groupID).SetLibraryID(lib.ID).Exec(ctx); err != nil {
-				return err
-			}
+		}
+		changed, err := t.DAL.Directory().BindInbox(ctx, groupID, lib.ID)
+		if err != nil {
+			return err
 		}
 		out = GroupInbox{group.ID, group.Name, lib.WorkspaceID, lib.ID, lib.Name}
-		if binding != nil && binding.LibraryID == lib.ID {
+		if !changed {
 			return nil
 		}
 		return t.auditInbox(ctx, subject, "group_inbox.set", groupID, lib)
@@ -133,8 +135,8 @@ func (s *Service) RemoveGroupInbox(ctx context.Context, subject, groupID string)
 		if err := t.RequireScope(ctx, subject, "document.write"); err != nil {
 			return err
 		}
-		binding, err := t.Client.GroupInbox.Query().Where(groupinbox.GroupIDEQ(groupID)).Only(ctx)
-		if ent.IsNotFound(err) {
+		binding, err := t.DAL.Directory().Inbox(ctx, groupID)
+		if dberr.IsNotFound(err) {
 			return ErrNotFound
 		}
 		if err != nil {
@@ -143,11 +145,11 @@ func (s *Service) RemoveGroupInbox(ctx context.Context, subject, groupID string)
 		if err = t.manageInboxLibrary(ctx, subject, binding.LibraryID); err != nil {
 			return err
 		}
-		lib, err := t.Client.Resource.Get(ctx, binding.LibraryID)
+		lib, err := t.DAL.Resources().Resource(ctx, binding.LibraryID)
 		if err != nil {
 			return err
 		}
-		if err = t.Client.GroupInbox.DeleteOne(binding).Exec(ctx); err != nil {
+		if err = t.DAL.Directory().UnbindInbox(ctx, groupID); err != nil {
 			return err
 		}
 		return t.auditInbox(ctx, subject, "group_inbox.delete", groupID, lib)
@@ -162,26 +164,12 @@ func (s *Service) Inboxes(ctx context.Context, subject string) (out []Inbox, err
 		if err != nil {
 			return err
 		}
-		lib, err := t.Client.Resource.Get(ctx, home.InboxLibraryID)
+		lib, err := t.DAL.Resources().Resource(ctx, home.InboxLibraryID)
 		if err != nil {
 			return err
 		}
 		out = []Inbox{{Kind: "personal", WorkspaceID: home.WorkspaceID, LibraryID: lib.ID, LibraryName: lib.Name}}
-		groups, err := t.tx.QueryContext(ctx, identity.GroupIDsSQL, subject)
-		if err != nil {
-			return err
-		}
-		var ids []string
-		for groups.Next() {
-			var id string
-			if err = groups.Scan(&id); err != nil {
-				groups.Close()
-				return err
-			}
-			ids = append(ids, id)
-		}
-		err = groups.Err()
-		groups.Close()
+		ids, err := t.DAL.Directory().EffectiveGroups(ctx, subject)
 		if err != nil {
 			return err
 		}
@@ -212,8 +200,8 @@ func (s *Service) Inboxes(ctx context.Context, subject string) (out []Inbox, err
 
 // inboxUploadDestination runs both before streaming and in the commit transaction.
 func (s *Service) inboxUploadDestination(ctx context.Context, subject, groupID string) (string, error) {
-	if err := identity.RequireCredential(ctx, s.tx, subject); err != nil {
-		if errors.Is(err, identity.ErrInvalidRESTToken) {
+	if err := identity.RequireCredential(ctx, dal.NewStore(s.db).WithTx(s.tx), subject); err != nil {
+		if errors.Is(err, identity.ErrInvalidAccessToken) {
 			return "", ErrForbidden
 		}
 		return "", err
@@ -227,15 +215,15 @@ func (s *Service) inboxUploadDestination(ctx context.Context, subject, groupID s
 		home, err := s.ensureHome(ctx, subject)
 		return home.InboxLibraryID, err
 	}
-	var member bool
-	if err := s.scan(ctx, []any{&member}, "SELECT EXISTS(SELECT 1 FROM ("+identity.GroupIDsSQL+") WHERE id=?)", subject, groupID); err != nil {
+	groups, err := s.DAL.Directory().EffectiveGroups(ctx, subject)
+	if err != nil {
 		return "", err
 	}
-	if !member {
+	if !slices.Contains(groups, groupID) {
 		return "", ErrNotFound
 	}
-	binding, err := s.Client.GroupInbox.Query().Where(groupinbox.GroupIDEQ(groupID)).Only(ctx)
-	if ent.IsNotFound(err) {
+	binding, err := s.DAL.Directory().Inbox(ctx, groupID)
+	if dberr.IsNotFound(err) {
 		return "", ErrNotFound
 	}
 	if err != nil {

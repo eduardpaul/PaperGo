@@ -6,8 +6,9 @@ import (
 	"encoding/json"
 	"io"
 	"os"
-	"papergo/ent/workflow"
-	"papergo/ent/workflowversion"
+	"papergo/internal/dal/directory"
+	"papergo/internal/dal/resources"
+	"papergo/internal/dal/workflows"
 	"papergo/internal/storage"
 	"strings"
 	"testing"
@@ -77,27 +78,27 @@ func TestWorkspaceTemplateBindsOnlyIdentityPositions(t *testing.T) {
 	}
 	p.Tables["resources"] = table
 	obj := storeTemplateForTest(t, store, p)
-	before, _ := s.Client.IdentityUser.Get(t.Context(), "organization-admin")
-	resources, _ := s.Client.Resource.Query().Count(t.Context())
-	users, _ := s.Client.IdentityUser.Query().Count(t.Context())
+	before, _ := s.DAL.Directory().User(t.Context(), "organization-admin")
+	resourceCount, _ := countResources(s, resources.Filter{})
+	users := userCount(t, s)
 	result, err := importWorkspaceForTest(t, s, store, obj, true, "")
 	if err != nil || !result.Valid {
 		t.Fatal(result, err)
 	}
-	if count, _ := s.Client.Resource.Query().Count(t.Context()); count != resources {
+	if count, _ := countResources(s, resources.Filter{}); count != resourceCount {
 		t.Fatal("dry run wrote resources")
 	}
-	if count, _ := s.Client.IdentityUser.Query().Count(t.Context()); count != users {
+	if count := userCount(t, s); count != users {
 		t.Fatal("dry run wrote users")
 	}
 	result, err = importWorkspaceForTest(t, s, store, obj, false, "")
 	if err != nil || !result.Valid {
 		t.Fatal(result, err)
 	}
-	if count, _ := s.Client.IdentityUser.Query().Count(t.Context()); count != users {
+	if count := userCount(t, s); count != users {
 		t.Fatal("template created users")
 	}
-	after, _ := s.Client.IdentityUser.Get(t.Context(), "organization-admin")
+	after, _ := s.DAL.Directory().User(t.Context(), "organization-admin")
 	a, _ := json.Marshal(before)
 	b, _ := json.Marshal(after)
 	if !bytes.Equal(a, b) {
@@ -107,13 +108,13 @@ func TestWorkspaceTemplateBindsOnlyIdentityPositions(t *testing.T) {
 	if err != nil || ws.CreatedBy != "organization-admin" || ws.Description != source {
 		t.Fatal(ws, err)
 	}
-	f, err := s.Client.Workflow.Query().Where(workflow.WorkspaceIDEQ(result.WorkspaceID), workflow.NameEQ("Read receipts")).Only(t.Context())
-	if err != nil || f.CreatedBy != "organization-admin" || f.UpdatedBy != "organization-admin" {
-		t.Fatal(f, err)
+	flows, err := s.DAL.Workflows().List(t.Context(), workflows.Filter{WorkspaceID: result.WorkspaceID, Name: "Read receipts"})
+	if err != nil || len(flows) != 1 || flows[0].CreatedBy != "organization-admin" || flows[0].UpdatedBy != "organization-admin" {
+		t.Fatal(flows, err)
 	}
-	version, err := s.Client.WorkflowVersion.Query().Where(workflowversion.WorkflowIDEQ(f.ID)).Only(t.Context())
-	if err != nil || version.CreatedBy != "organization-admin" {
-		t.Fatal(version, err)
+	versions, err := s.DAL.Workflows().Versions(t.Context(), flows[0].ID)
+	if err != nil || len(versions) != 1 || versions[0].CreatedBy != "organization-admin" {
+		t.Fatal(versions, err)
 	}
 	if _, err := s.Authorize(t.Context(), "organization-admin", result.WorkspaceID, "manage"); err != nil {
 		t.Fatal(err)
@@ -169,7 +170,7 @@ func TestWorkspaceTemplateRejectsUnboundIdentitiesAndInvalidScopes(t *testing.T)
 			if result, err := importWorkspaceForTest(t, s, store, obj, false, ""); err == nil || result.Valid {
 				t.Fatal("accepted invalid template", result, err)
 			}
-			if n, _ := s.Client.Resource.Query().Count(t.Context()); n != 0 {
+			if n, _ := countResources(s, resources.Filter{}); n != 0 {
 				t.Fatal("invalid template left resources", n)
 			}
 		})
@@ -203,4 +204,14 @@ func TestSampleTemplateArchiveHasOnlyManifest(t *testing.T) {
 			}
 		}
 	}
+}
+
+// userCount counts the enrolled users.
+func userCount(t *testing.T, s *Service) int {
+	t.Helper()
+	users, err := s.DAL.Directory().Users(t.Context(), directory.UserFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return len(users)
 }

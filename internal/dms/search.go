@@ -2,21 +2,19 @@ package dms
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"maps"
+	"papergo/internal/dal/content"
+	"papergo/internal/dal/refs"
+	"papergo/internal/dal/resources"
+	"papergo/internal/dal/surfaces"
 	"slices"
 	"strings"
 	"time"
 
-	"papergo/ent"
-	"papergo/ent/itemrevision"
-	"papergo/ent/itemsurface"
-	"papergo/ent/resource"
-	"papergo/ent/schemarevision"
-	"papergo/ent/term"
 	"papergo/internal/ai"
+	"papergo/internal/dal/catalog"
+	"papergo/internal/dal/taxonomy"
 	"papergo/internal/search"
 )
 
@@ -42,33 +40,8 @@ func (s *Service) SearchStore() search.Store { return s.search }
 // scope, as in collection queries.
 func (s *Service) SearchScopes(ctx context.Context, subject string) (search.Access, error) {
 	return read(ctx, s, func(t *Service) (search.Access, error) {
-		draftSQL, draftArgs := permissionSQL(ctx, "reps.rep", subject, "read_draft")
-		readSQL, readArgs := permissionSQL(ctx, "reps.rep", subject, "read")
-		live := `SELECT r.id FROM resources r WHERE r.kind IN ('item','folder') AND r.deleted_at IS NULL AND r.scope_id`
-		rows, err := t.Client.QueryContext(ctx, `WITH RECURSIVE scopes(id) AS (
- SELECT min(scope_id) FROM resources
- UNION ALL SELECT (SELECT min(scope_id) FROM resources WHERE scope_id>scopes.id) FROM scopes WHERE scopes.id IS NOT NULL),
-reps AS (SELECT s.id AS scope, (`+live+`=s.id LIMIT 1) AS rep FROM scopes s WHERE s.id IS NOT NULL
- UNION ALL SELECT NULL, (`+live+` IS NULL LIMIT 1))
-SELECT coalesce(scope,''), `+draftSQL+`, `+readSQL+` FROM reps WHERE rep IS NOT NULL`, append(draftArgs, readArgs...)...)
-		if err != nil {
-			return search.Access{}, err
-		}
-		access := search.Access{Draft: []string{}, Read: []string{}}
-		for rows.Next() {
-			var scope string
-			var draft, readable bool
-			if err = rows.Scan(&scope, &draft, &readable); err != nil {
-				break
-			}
-			if draft {
-				access.Draft = append(access.Draft, scope)
-			}
-			if draft || readable {
-				access.Read = append(access.Read, scope)
-			}
-		}
-		return access, errors.Join(err, rows.Err(), rows.Close())
+		draft, readable, err := t.DAL.Content().SearchScopes(ctx, principal(ctx, subject))
+		return search.Access{Draft: draft, Read: readable}, err
 	})
 }
 
@@ -82,26 +55,8 @@ func (s *Service) SearchVisible(ctx context.Context, subject, surface string, ke
 		for _, k := range keys {
 			ids = append(ids, k.ResourceID)
 		}
-		draftSQL, draftArgs := permissionSQL(ctx, "r.id", subject, "read_draft")
-		readSQL, readArgs := permissionSQL(ctx, "r.id", subject, "read")
-		rows, err := t.Client.QueryContext(ctx, `SELECT r.id, c.publishing_enabled,
- EXISTS(SELECT 1 FROM item_surfaces p WHERE p.item_id=r.id AND p.surface='head'),
- EXISTS(SELECT 1 FROM item_surfaces p WHERE p.item_id=r.id AND p.surface='published'), `+draftSQL+`, `+readSQL+` FROM resources r JOIN resources c ON c.id=r.container_id
- WHERE r.id IN (SELECT value FROM json_each(?)) AND r.kind IN ('item','folder') AND r.deleted_at IS NULL`, append(append(draftArgs, readArgs...), jsonIDs(ids))...)
+		states, err := t.DAL.Content().SearchStates(ctx, principal(ctx, subject), ids)
 		if err != nil {
-			return nil, err
-		}
-		type state struct{ publishes, head, published, draft, read bool }
-		states := map[string]state{}
-		for rows.Next() {
-			var id string
-			var st state
-			if err = rows.Scan(&id, &st.publishes, &st.head, &st.published, &st.draft, &st.read); err != nil {
-				break
-			}
-			states[id] = st
-		}
-		if err = errors.Join(err, rows.Err(), rows.Close()); err != nil {
 			return nil, err
 		}
 		for _, k := range keys {
@@ -110,29 +65,21 @@ func (s *Service) SearchVisible(ctx context.Context, subject, surface string, ke
 				continue
 			}
 			head := k.Surface == search.SurfaceHead
-			if head && !st.head || !head && !st.published {
+			if head && !st.Head || !head && !st.Published {
 				continue
 			}
 			switch surface {
 			case search.SurfaceHead:
 				// Without publishing the published surface holds the head.
-				out[k] = st.draft && head == st.publishes
+				out[k] = st.Draft && head == st.Publishes
 			case search.SurfacePublished:
-				out[k] = !head && (st.read || st.draft)
+				out[k] = !head && (st.Read || st.Draft)
 			default:
-				out[k] = st.draft && head == st.publishes || !st.draft && st.read && !head
+				out[k] = st.Draft && head == st.Publishes || !st.Draft && st.Read && !head
 			}
 		}
 		return out, nil
 	})
-}
-
-func jsonIDs(ids []string) string {
-	if ids == nil {
-		ids = []string{}
-	}
-	raw, _ := json.Marshal(ids)
-	return string(raw)
 }
 
 // SearchDocuments reads the current surfaces of items and folders as search
@@ -144,11 +91,11 @@ func (s *Service) SearchDocuments(ctx context.Context, ids []string) (docs []sea
 		return nil, nil, nil
 	}
 	err = func() error {
-		entries, err := s.Client.Resource.Query().Where(resource.IDIn(ids...), resource.KindIn(resource.KindItem, resource.KindFolder), resource.DeletedAtIsNil()).All(ctx)
+		entries, err := s.DAL.Resources().Resources(ctx, resources.Filter{IDs: ids, Kinds: contentKinds, State: resources.Live})
 		if err != nil {
 			return err
 		}
-		live := map[string]*ent.Resource{}
+		live := map[string]*resources.Resource{}
 		collections := map[string]bool{}
 		for _, r := range entries {
 			if r.ContainerID != nil {
@@ -164,39 +111,35 @@ func (s *Service) SearchDocuments(ctx context.Context, ids []string) (docs []sea
 		if len(live) == 0 {
 			return nil
 		}
-		cs, err := s.Client.Resource.Query().Where(resource.IDIn(slices.Collect(maps.Keys(collections))...)).Select(resource.FieldID, resource.FieldPublishingEnabled).All(ctx)
+		cs, err := s.DAL.Resources().Resources(ctx, resources.Filter{IDs: slices.Collect(maps.Keys(collections))})
 		if err != nil {
 			return err
 		}
 		for _, c := range cs {
 			collections[c.ID] = c.PublishingEnabled
 		}
-		surfaces, err := s.Client.ItemSurface.Query().Where(itemsurface.ItemIDIn(slices.Collect(maps.Keys(live))...)).Order(ent.Asc(itemsurface.FieldItemID), ent.Asc(itemsurface.FieldSurface)).All(ctx)
+		projections, err := s.DAL.Surfaces().Surfaces(ctx, surfaces.Filter{ItemIDs: slices.Collect(maps.Keys(live))})
 		if err != nil {
 			return err
 		}
-		revisionIDs := make([]string, 0, len(surfaces))
-		for _, p := range surfaces {
+		revisionIDs := make([]string, 0, len(projections))
+		for _, p := range projections {
 			revisionIDs = append(revisionIDs, p.RevisionID)
 		}
-		revisions, err := s.Client.ItemRevision.Query().Where(itemrevision.IDIn(revisionIDs...)).All(ctx)
+		byID, err := s.revisionsByID(ctx, revisionIDs)
 		if err != nil {
 			return err
 		}
-		byID := map[string]*ent.ItemRevision{}
-		for _, rev := range revisions {
-			byID[rev.ID] = rev
-		}
-		defs := map[[2]string][]*ent.FieldDefinition{}
+		defs := map[[2]string][]*catalog.FieldDefinition{}
 		weights := map[string]map[string]string{}
-		for _, p := range surfaces {
+		for _, p := range projections {
 			r, rev := live[p.ItemID], byID[p.RevisionID]
 			if rev == nil {
 				continue
 			}
 			key := [2]string{rev.SchemaRevisionID, rev.ContentTypeID}
 			if _, ok := defs[key]; !ok {
-				schema, err := s.Client.SchemaRevision.Query().Where(schemarevision.IDEQ(rev.SchemaRevisionID)).Only(ctx)
+				schema, err := s.DAL.Catalog().Schema(ctx, rev.SchemaRevisionID)
 				if err != nil {
 					return err
 				}
@@ -215,31 +158,26 @@ func (s *Service) SearchDocuments(ctx context.Context, ids []string) (docs []sea
 			}
 			keywordIDs := append([]string{}, p.Keywords...)
 			for _, field := range content.fields {
-				if field.Type == "keywords" {
+				if catalog.FieldType(field.Type) == catalog.FieldKeywords {
 					for _, value := range field.Values {
 						keywordIDs = append(keywordIDs, value.Text)
 					}
 				}
 			}
 			if len(keywordIDs) > 0 {
-				raw, _ := json.Marshal(keywordIDs)
-				rows, err := s.Client.QueryContext(ctx, "SELECT DISTINCT coalesce(merged_into_id,id) FROM terms WHERE id IN (SELECT value FROM json_each(?)) ORDER BY 1", string(raw))
+				terms, err := s.DAL.Taxonomy().Terms(ctx, taxonomy.TermFilter{IDs: keywordIDs})
 				if err != nil {
 					return err
 				}
-				keywordIDs = []string{}
-				for rows.Next() {
-					var id string
-					if err = rows.Scan(&id); err != nil {
-						rows.Close()
-						return err
+				canonical := map[string]bool{}
+				for _, term := range terms {
+					if term.MergedIntoID != "" {
+						canonical[term.MergedIntoID] = true
+					} else {
+						canonical[term.ID] = true
 					}
-					keywordIDs = append(keywordIDs, id)
 				}
-				err = errors.Join(rows.Err(), rows.Close())
-				if err != nil {
-					return err
-				}
+				keywordIDs = slices.Sorted(maps.Keys(canonical))
 			}
 			content.terms = append(content.terms, p.Keywords...)
 			content.wordTerms = append(content.wordTerms, p.Keywords...)
@@ -249,7 +187,7 @@ func (s *Service) SearchDocuments(ctx context.Context, ids []string) (docs []sea
 			}
 			views := search.ViewPublished
 			switch {
-			case p.Surface == itemsurface.SurfaceHead:
+			case p.Surface == refs.SurfaceHead:
 				views = search.ViewHead
 			case !collections[*r.ContainerID]:
 				// Without publishing the published surface is the head too.
@@ -269,8 +207,7 @@ func (s *Service) SearchDocuments(ctx context.Context, ids []string) (docs []sea
 			if rev.BlobID != nil {
 				d.BlobID = *rev.BlobID
 			}
-			d.CreatedAt, _ = time.Parse(time.RFC3339Nano, p.ItemCreatedAt)
-			d.ModifiedAt, _ = time.Parse(time.RFC3339Nano, p.ModifiedAt)
+			d.CreatedAt, d.ModifiedAt = p.ItemCreatedAt, p.ModifiedAt
 			docs = append(docs, d)
 		}
 		return nil
@@ -292,7 +229,7 @@ type searchContent struct {
 // References are IDs, so they are filters, not text; term names come from
 // the term store when the document is built. Notes are text only; dates
 // and booleans filters only.
-func searchValues(payload []byte, defs []*ent.FieldDefinition, weights map[string]string) (searchContent, error) {
+func searchValues(payload []byte, defs []*catalog.FieldDefinition, weights map[string]string) (searchContent, error) {
 	var out searchContent
 	values, err := decodeValues(payload)
 	if err != nil {
@@ -310,7 +247,7 @@ func searchValues(payload []byte, defs []*ent.FieldDefinition, weights map[strin
 		weight := weights[d.Key]
 		field := search.Field{Key: d.Key, Type: string(d.Type), Scale: d.Scale}
 		for _, x := range list {
-			if d.Type != "note" {
+			if d.Type != catalog.FieldNote {
 				value, err := searchFieldValue(d, x)
 				if err != nil {
 					return out, err
@@ -318,14 +255,14 @@ func searchValues(payload []byte, defs []*ent.FieldDefinition, weights map[strin
 				field.Values = append(field.Values, value)
 			}
 			switch d.Type {
-			case "term", "keywords":
+			case catalog.FieldTerm, catalog.FieldKeywords:
 				if id, ok := x.(string); ok {
 					out.terms = append(out.terms, id)
 					if weight != "none" {
 						out.wordTerms = append(out.wordTerms, id)
 					}
 				}
-			case "lookup", "person", "date", "datetime", "boolean":
+			case catalog.FieldLookup, catalog.FieldPerson, catalog.FieldDate, catalog.FieldDatetime, catalog.FieldBoolean:
 			default:
 				text := fmt.Sprint(x)
 				switch {
@@ -346,23 +283,23 @@ func searchValues(payload []byte, defs []*ent.FieldDefinition, weights map[strin
 
 // searchFieldValue encodes a stored value as the field index does, so
 // search filters compare exactly as collection queries do.
-func searchFieldValue(d *ent.FieldDefinition, v any) (search.FieldValue, error) {
+func searchFieldValue(d *catalog.FieldDefinition, v any) (search.FieldValue, error) {
 	switch d.Type {
-	case "integer":
+	case catalog.FieldInteger:
 		n, err := integer(v)
 		return search.FieldValue{Int: n}, err
-	case "decimal":
+	case catalog.FieldDecimal:
 		_, n, err := decimal(v, d.Scale)
 		return search.FieldValue{Int: n}, err
-	case "boolean":
+	case catalog.FieldBoolean:
 		if b, _ := v.(bool); b {
 			return search.FieldValue{Int: 1}, nil
 		}
 		return search.FieldValue{}, nil
-	case "number", "currency":
+	case catalog.FieldNumber, catalog.FieldCurrency:
 		key, err := numberKey(v)
 		return search.FieldValue{Text: key}, err
-	case "datetime":
+	case catalog.FieldDatetime:
 		t, err := time.Parse(time.RFC3339Nano, fmt.Sprint(v))
 		return search.FieldValue{Text: t.UTC().Format("2006-01-02T15:04:05.000000000Z")}, err
 	default:
@@ -390,20 +327,24 @@ func (s *Service) termWords(ctx context.Context, ids []string) (string, error) {
 	if len(ids) == 0 {
 		return "", nil
 	}
-	rows, err := s.Client.Term.Query().Where(term.IDIn(ids...)).WithMergedInto().All(ctx)
+	rows, err := s.DAL.Taxonomy().Terms(ctx, taxonomy.TermFilter{IDs: ids})
 	if err != nil {
 		return "", err
 	}
 	words := []string{}
-	add := func(t *ent.Term) {
+	add := func(t taxonomy.Term) {
 		words = append(words, t.Name)
 		words = append(words, slices.Sorted(maps.Values(t.Labels))...)
 		words = append(words, t.Synonyms...)
 	}
 	for _, t := range rows {
 		add(t)
-		if t.Edges.MergedInto != nil {
-			add(t.Edges.MergedInto)
+		if t.Merged() {
+			target, err := s.DAL.Taxonomy().Term(ctx, t.MergedIntoID)
+			if err != nil {
+				return "", err
+			}
+			add(target)
 		}
 	}
 	return strings.Join(words, " "), nil
@@ -413,20 +354,7 @@ func (s *Service) termWords(ctx context.Context, ids []string) (string, error) {
 // merged into any of them, as under does in collection queries.
 func (s *Service) SearchTerms(ctx context.Context, id string) ([]string, error) {
 	return read(ctx, s, func(t *Service) ([]string, error) {
-		subtree := "terms r JOIN terms t ON t.path>=r.path AND t.path<substr(r.path,1,length(r.path)-1)||'0' WHERE r.id=?"
-		rows, err := t.Client.QueryContext(ctx, "SELECT t.id FROM "+subtree+" UNION SELECT m.id FROM terms m WHERE m.merged_into_id IN (SELECT t.id FROM "+subtree+")", id, id)
-		if err != nil {
-			return nil, err
-		}
-		out := []string{}
-		for rows.Next() {
-			var v string
-			if err = rows.Scan(&v); err != nil {
-				break
-			}
-			out = append(out, v)
-		}
-		return out, errors.Join(err, rows.Err(), rows.Close())
+		return t.DAL.Taxonomy().Family(ctx, id)
 	})
 }
 
@@ -437,31 +365,5 @@ func (s *Service) EntriesWithTerms(ctx context.Context, workspaceID, collectionI
 	if len(termIDs) == 0 {
 		return nil, nil
 	}
-	conds := []string{"p.workspace_id=?", "p.item_id>?"}
-	args := []any{workspaceID, after}
-	if collectionID != "" {
-		conds, args = append(conds, "p.container_id=?"), append(args, collectionID)
-	}
-	if len(skip) > 0 {
-		conds, args = append(conds, "p.container_id NOT IN (SELECT value FROM json_each(?))"), append(args, jsonIDs(skip))
-	}
-	held := make([]string, len(termIDs))
-	for i, id := range termIDs {
-		held[i] = "instr(p.payload, ?) > 0"
-		args = append(args, `"`+id+`"`)
-	}
-	conds = append(conds, "("+strings.Join(held, " OR ")+")")
-	rows, err := s.Client.QueryContext(ctx, `SELECT DISTINCT p.item_id FROM item_surfaces p WHERE `+strings.Join(conds, " AND ")+` ORDER BY p.item_id LIMIT ?`, append(args, limit)...)
-	if err != nil {
-		return nil, err
-	}
-	var out []string
-	for rows.Next() {
-		var id string
-		if err = rows.Scan(&id); err != nil {
-			break
-		}
-		out = append(out, id)
-	}
-	return out, errors.Join(err, rows.Err(), rows.Close())
+	return s.DAL.Content().TermHolders(ctx, content.TermHolders{WorkspaceID: workspaceID, CollectionID: collectionID, Skip: skip, TermIDs: termIDs, AfterID: after, Limit: limit})
 }

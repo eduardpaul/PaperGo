@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"papergo/internal/activitystore"
 	"papergo/internal/ai"
-	"papergo/internal/testutil"
+	"papergo/internal/dal/activitystore"
+	"papergo/internal/dal/daltest"
 	"papergo/internal/workflow"
 )
 
@@ -50,7 +50,7 @@ func (*racingBatch) Get(context.Context, string) (ai.Batch, error) {
 func (*racingBatch) Download(context.Context, string) ([]byte, error) { panic("not terminal") }
 
 func TestConcurrentSubmissionReplaysCreateOnlyOnce(t *testing.T) {
-	db := testutil.Database(t)
+	db := daltest.Database(t)
 	tools := workflow.Tools{Records: activitystore.New(db.SQL)}
 	batch := &racingBatch{ready: make(chan struct{})}
 	Configure(&tools, Runtime{Batch: batch})
@@ -79,7 +79,7 @@ func TestConcurrentSubmissionReplaysCreateOnlyOnce(t *testing.T) {
 }
 
 func TestLateResponseWithoutAConsumerCanExpire(t *testing.T) {
-	db := testutil.Database(t)
+	db := daltest.Database(t)
 	tools := workflow.Tools{Records: activitystore.New(db.SQL)}
 	ctx := context.Background()
 	if err := saveResponse(ctx, tools, "collected-request", "late-result", cachedAnswer{Text: "late"}); err != nil {
@@ -88,8 +88,7 @@ func TestLateResponseWithoutAConsumerCanExpire(t *testing.T) {
 	if err := tools.Records.Purge(ctx, time.Now().Add(7*24*time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	var count int
-	if err := db.SQL.QueryRow(`SELECT COUNT(*) FROM activity_records`).Scan(&count); err != nil || count != 0 {
-		t.Fatalf("late response was retained without a consumer: %d %v", count, err)
+	if count := daltest.Count(t, db.DAL, "activity_records", nil); count != 0 {
+		t.Fatalf("late response was retained without a consumer: %d", count)
 	}
 }

@@ -3,10 +3,10 @@ package httpapi
 import (
 	"encoding/json"
 	"log/slog"
+	"papergo/internal/dal/resources"
 	"strconv"
 	"testing"
 
-	"papergo/ent"
 	"papergo/internal/auth"
 	"papergo/internal/dms"
 )
@@ -43,7 +43,7 @@ func TestNumberedRevisionReadAndRestoreAPI(t *testing.T) {
 		t.Fatal(response.Code, response.Body.String())
 	}
 	response = request(h, "POST", path+"/1/restore", "", testToken, `"2"`, "")
-	var restored ent.Resource
+	var restored resources.Resource
 	if err = json.Unmarshal(response.Body.Bytes(), &restored); err != nil || response.Code != 200 || restored.Name != "Original" || restored.Version != 3 || response.Header().Get("ETag") != `"3"` {
 		t.Fatal(response.Code, response.Body.String(), err)
 	}
@@ -90,7 +90,7 @@ func TestOrdinaryReaderHistoryAPI(t *testing.T) {
 	}
 	res = request(h, "GET", path+"/2", "", testToken, "", "")
 	var revision dms.RevisionView
-	if res.Code != 200 || json.Unmarshal(res.Body.Bytes(), &revision) != nil || revision.Name != name || !revision.IsCurrent || revision.Edges.SchemaRevision == nil {
+	if res.Code != 200 || json.Unmarshal(res.Body.Bytes(), &revision) != nil || revision.Name != name || !revision.IsCurrent || revision.SchemaRevision == nil {
 		t.Fatal(res.Code, res.Body.String())
 	}
 	res = request(h, "GET", "/v1/resources/"+item.ID+"?surface=head", "", testToken, "", "")

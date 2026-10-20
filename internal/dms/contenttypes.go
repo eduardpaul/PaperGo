@@ -3,13 +3,12 @@ package dms
 import (
 	"context"
 	"encoding/json"
-	entsql "entgo.io/ent/dialect/sql"
-	"papergo/ent"
-	"papergo/ent/collectiontype"
-	"papergo/ent/contenttype"
-	"papergo/ent/fielddefinition"
-	"papergo/ent/itemsurface"
-	"papergo/ent/resource"
+	"errors"
+	"papergo/internal/dal/catalog"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/refs"
+	"papergo/internal/dal/resources"
+	"papergo/internal/dal/surfaces"
 	"papergo/internal/model"
 	"slices"
 )
@@ -26,28 +25,18 @@ type AttachContentTypeInput struct {
 	IsDefault     bool   `json:"is_default"`
 }
 type CollectionContentType struct {
-	*ent.ContentType
+	*catalog.ContentType
 	IsDefault bool `json:"is_default"`
 }
 
-func collectionFieldPredicate(collection string) func(*entsql.Selector) {
-	return func(q *entsql.Selector) {
-		q.Where(entsql.ExprP(q.C(fielddefinition.FieldID)+" IN (SELECT f.value FROM collection_types a JOIN content_types t ON t.id=a.content_type_id, json_each(t.field_ids) f WHERE a.container_id=?)", collection))
-	}
+func (s *Service) collectionFields(ctx context.Context, collection string) ([]*catalog.FieldDefinition, error) {
+	return s.DAL.Catalog().Fields(ctx, catalog.FieldFilter{CollectionID: collection})
 }
-func collectionTypePredicate(collection string) func(*entsql.Selector) {
-	return func(q *entsql.Selector) {
-		q.Where(entsql.ExprP(q.C(contenttype.FieldID)+" IN (SELECT content_type_id FROM collection_types WHERE container_id=?)", collection))
-	}
+func (s *Service) collectionTypes(ctx context.Context, collection string) ([]*catalog.ContentType, error) {
+	return s.DAL.Catalog().ContentTypes(ctx, catalog.ContentTypeFilter{CollectionID: collection})
 }
-func (s *Service) collectionFields(ctx context.Context, collection string) ([]*ent.FieldDefinition, error) {
-	return s.Client.FieldDefinition.Query().Where(collectionFieldPredicate(collection)).Order(ent.Asc(fielddefinition.FieldKey), ent.Asc(fielddefinition.FieldID)).All(ctx)
-}
-func (s *Service) collectionTypes(ctx context.Context, collection string) ([]*ent.ContentType, error) {
-	return s.Client.ContentType.Query().Where(collectionTypePredicate(collection)).Order(ent.Asc(contenttype.FieldKey)).All(ctx)
-}
-func selectTypeDefinitions(defs []*ent.FieldDefinition, typ *ent.ContentType) []*ent.FieldDefinition {
-	out := []*ent.FieldDefinition{}
+func selectTypeDefinitions(defs []*catalog.FieldDefinition, typ *catalog.ContentType) []*catalog.FieldDefinition {
+	out := []*catalog.FieldDefinition{}
 	for _, d := range defs {
 		if slices.Contains(typ.FieldIds, d.ID) {
 			out = append(out, d)
@@ -55,31 +44,22 @@ func selectTypeDefinitions(defs []*ent.FieldDefinition, typ *ent.ContentType) []
 	}
 	return out
 }
-func fieldKeys(defs []*ent.FieldDefinition) []string {
+func fieldKeys(defs []*catalog.FieldDefinition) []string {
 	out := []string{}
 	for _, d := range defs {
 		out = append(out, d.Key)
 	}
 	return out
 }
-func (s *Service) typeDefinitions(ctx context.Context, typ *ent.ContentType) ([]*ent.FieldDefinition, error) {
-	return s.Client.FieldDefinition.Query().Where(fielddefinition.IDIn(typ.FieldIds...)).Order(ent.Asc(fielddefinition.FieldKey)).All(ctx)
+func (s *Service) typeDefinitions(ctx context.Context, typ *catalog.ContentType) ([]*catalog.FieldDefinition, error) {
+	return s.DAL.Catalog().Fields(ctx, catalog.FieldFilter{IDs: append([]string{}, typ.FieldIds...)})
 }
-func (s *Service) contentType(ctx context.Context, collection, id string) (*ent.ContentType, error) {
-	q := s.Client.CollectionType.Query().Where(collectiontype.ContainerIDEQ(collection))
-	if id == "" {
-		q.Where(collectiontype.IsDefaultEQ(true))
-	} else {
-		q.Where(collectiontype.ContentTypeIDEQ(id))
-	}
-	a, err := q.Only(ctx)
-	if ent.IsNotFound(err) {
+func (s *Service) contentType(ctx context.Context, collection, id string) (*catalog.ContentType, error) {
+	out, err := s.DAL.Catalog().CollectionContentType(ctx, collection, id)
+	if dberr.IsNotFound(err) {
 		return nil, ErrNotFound
 	}
-	if err != nil {
-		return nil, err
-	}
-	return s.Client.ContentType.Get(ctx, a.ContentTypeID)
+	return out, err
 }
 func (s *Service) validateContentType(ctx context.Context, in *ContentTypeInput) error {
 	if !fieldKey.MatchString(in.Key) {
@@ -91,7 +71,7 @@ func (s *Service) validateContentType(ctx context.Context, in *ContentTypeInput)
 	if len(in.FieldIds) > 200 {
 		return invalid("at most 200 fields per content type")
 	}
-	defs, err := s.Client.FieldDefinition.Query().Where(fielddefinition.IDIn(in.FieldIds...)).All(ctx)
+	defs, err := s.DAL.Catalog().Fields(ctx, catalog.FieldFilter{IDs: append([]string{}, in.FieldIds...)})
 	if err != nil {
 		return err
 	}
@@ -113,7 +93,7 @@ func (s *Service) validateContentType(ctx context.Context, in *ContentTypeInput)
 	}
 	return validateRules(defs, in.Rules)
 }
-func (s *Service) CreateContentType(ctx context.Context, subject string, in ContentTypeInput) (out *ent.ContentType, err error) {
+func (s *Service) CreateContentType(ctx context.Context, subject string, in ContentTypeInput) (out *catalog.ContentType, err error) {
 	err = s.write(ctx, func(t *Service) error {
 		if e := t.RequireScope(ctx, subject, "contentType.manage"); e != nil {
 			return e
@@ -122,7 +102,7 @@ func (s *Service) CreateContentType(ctx context.Context, subject string, in Cont
 			return e
 		}
 		var e error
-		out, e = t.Client.ContentType.Create().SetKey(in.Key).SetName(in.Name).SetFieldIds(in.FieldIds).SetRules(in.Rules).Save(ctx)
+		out, e = t.persistContentType(ctx, in, "")
 		if e != nil {
 			return e
 		}
@@ -130,16 +110,16 @@ func (s *Service) CreateContentType(ctx context.Context, subject string, in Cont
 	})
 	return
 }
-func (s *Service) CatalogContentTypes(ctx context.Context, subject string) ([]*ent.ContentType, error) {
-	return read(ctx, s, func(t *Service) ([]*ent.ContentType, error) {
+func (s *Service) CatalogContentTypes(ctx context.Context, subject string) ([]*catalog.ContentType, error) {
+	return read(ctx, s, func(t *Service) ([]*catalog.ContentType, error) {
 		if e := t.RequireScope(ctx, subject, "contentType.read"); e != nil {
 			return nil, e
 		}
-		return t.Client.ContentType.Query().Order(ent.Asc(contenttype.FieldKey), ent.Asc(contenttype.FieldID)).All(ctx)
+		return t.DAL.Catalog().ContentTypes(ctx, catalog.ContentTypeFilter{})
 	})
 }
-func (s *Service) ContentTypes(ctx context.Context, subject, collection string) ([]*ent.ContentType, error) {
-	return read(ctx, s, func(t *Service) ([]*ent.ContentType, error) {
+func (s *Service) ContentTypes(ctx context.Context, subject, collection string) ([]*catalog.ContentType, error) {
+	return read(ctx, s, func(t *Service) ([]*catalog.ContentType, error) {
 		if _, e := t.contentTypeResource(ctx, subject, collection, "read"); e != nil {
 			return nil, e
 		}
@@ -152,50 +132,66 @@ func (s *Service) CollectionContentTypes(ctx context.Context, subject, collectio
 		if e != nil {
 			return nil, e
 		}
-		a, e := t.Client.CollectionType.Query().Where(collectiontype.ContainerIDEQ(collection), collectiontype.IsDefaultEQ(true)).Only(ctx)
+		defaultType, e := t.defaultContentType(ctx, collection)
 		if e != nil {
 			return nil, e
 		}
 		out := []CollectionContentType{}
 		for _, typ := range types {
-			out = append(out, CollectionContentType{typ, typ.ID == a.ContentTypeID})
+			out = append(out, CollectionContentType{typ, typ.ID == defaultType})
 		}
 		return out, nil
 	})
 }
-func (s *Service) GetContentType(ctx context.Context, subject, id string) (*ent.ContentType, error) {
-	return read(ctx, s, func(t *Service) (*ent.ContentType, error) {
+
+// defaultContentType is the id of the content type a collection's new
+// items get.
+func (s *Service) defaultContentType(ctx context.Context, collection string) (string, error) {
+	attachments, err := s.DAL.Catalog().Attachments(ctx, collection)
+	if err != nil {
+		return "", err
+	}
+	for _, a := range attachments {
+		if a.IsDefault {
+			return a.ContentTypeID, nil
+		}
+	}
+	return "", ErrNotFound
+}
+func (s *Service) GetContentType(ctx context.Context, subject, id string) (*catalog.ContentType, error) {
+	return read(ctx, s, func(t *Service) (*catalog.ContentType, error) {
 		if e := t.RequireScope(ctx, subject, "contentType.read"); e != nil {
 			return nil, e
 		}
-		typ, e := t.Client.ContentType.Get(ctx, id)
-		if ent.IsNotFound(e) {
+		typ, e := t.DAL.Catalog().ContentType(ctx, id)
+		if dberr.IsNotFound(e) {
 			return nil, ErrNotFound
 		}
 		return typ, e
 	})
 }
-func (s *Service) auditCatalog(ctx context.Context, subject, action string, details map[string]any) error {
-	typ, id := auditEntity(action, nil, details)
-	return s.Client.AuditEvent.Create().SetSubject(subject).SetAction(action).SetEntityType(typ).SetEntityID(id).SetProperties(s.changedProperties(id, action)).SetTraceID(s.traceID).SetDetails(details).Exec(ctx)
-}
-func (s *Service) attachedCollections(ctx context.Context, ids []string) ([]*ent.Resource, error) {
-	return s.Client.Resource.Query().Where(resource.DeletedAtIsNil(), func(q *entsql.Selector) {
-		b := entsql.Select("container_id").From(entsql.Table("collection_types")).Where(entsql.In("content_type_id", stringArgs(ids)...))
-		q.Where(entsql.In(q.C(resource.FieldID), b))
-	}).Order(ent.Asc(resource.FieldID)).All(ctx)
-}
-func stringArgs(ids []string) []any {
-	out := make([]any, len(ids))
-	for i, id := range ids {
-		out[i] = id
+
+// catalogError maps catalog rules to service errors.
+func catalogError(err error) error {
+	var v catalog.Violation
+	if errors.As(err, &v) {
+		return invalid(err.Error())
 	}
-	return out
+	return err
 }
-func (s *Service) fieldCollections(ctx context.Context, id string) ([]*ent.Resource, error) {
-	types, e := s.Client.ContentType.Query().Where(func(q *entsql.Selector) {
-		q.Where(entsql.ExprP("EXISTS(SELECT 1 FROM json_each("+q.C(contenttype.FieldFieldIds)+") WHERE value=?)", id))
-	}).All(ctx)
+
+func (s *Service) auditCatalog(ctx context.Context, subject, action string, details map[string]any) error {
+	return s.RecordEntity(ctx, subject, action, AuditTarget{}, details)
+}
+func (s *Service) attachedCollections(ctx context.Context, ids []string) ([]*resources.Resource, error) {
+	collections, err := s.DAL.Catalog().AttachedCollections(ctx, ids)
+	if err != nil || len(collections) == 0 {
+		return nil, err
+	}
+	return s.DAL.Resources().Resources(ctx, resources.Filter{IDs: collections, State: resources.Live})
+}
+func (s *Service) fieldCollections(ctx context.Context, id string) ([]*resources.Resource, error) {
+	types, e := s.DAL.Catalog().ContentTypes(ctx, catalog.ContentTypeFilter{FieldID: id})
 	if e != nil {
 		return nil, e
 	}
@@ -208,7 +204,7 @@ func (s *Service) fieldCollections(ctx context.Context, id string) ([]*ent.Resou
 
 // Every attached schema advances in the writer transaction. No collection can
 // adopt a partial catalog update, including collections the curator cannot read.
-func (s *Service) refreshCollections(ctx context.Context, subject string, collections []*ent.Resource) error {
+func (s *Service) refreshCollections(ctx context.Context, subject string, collections []*resources.Resource) error {
 	for _, c := range collections {
 		if e := s.validateIntegrationSchema(ctx, c); e != nil {
 			return e
@@ -251,13 +247,13 @@ func (s *Service) refreshCollections(ctx context.Context, subject string, collec
 	}
 	return nil
 }
-func (s *Service) UpdateContentType(ctx context.Context, subject, id string, version int, in ContentTypeInput) (out *ent.ContentType, err error) {
+func (s *Service) UpdateContentType(ctx context.Context, subject, id string, version int, in ContentTypeInput) (out *catalog.ContentType, err error) {
 	err = s.write(ctx, func(t *Service) error {
 		if e := t.RequireScope(ctx, subject, "contentType.manage"); e != nil {
 			return e
 		}
-		old, e := t.Client.ContentType.Get(ctx, id)
-		if ent.IsNotFound(e) {
+		old, e := t.DAL.Catalog().ContentType(ctx, id)
+		if dberr.IsNotFound(e) {
 			return ErrNotFound
 		}
 		if e != nil {
@@ -279,7 +275,7 @@ func (s *Service) UpdateContentType(ctx context.Context, subject, id string, ver
 		if e != nil {
 			return e
 		}
-		out, e = t.Client.ContentType.UpdateOne(old).SetName(in.Name).SetFieldIds(in.FieldIds).SetRules(in.Rules).AddVersion(1).Save(ctx)
+		out, e = t.reviseContentType(ctx, old, in.Name, in.FieldIds, in.Rules)
 		if e != nil {
 			return e
 		}
@@ -290,7 +286,7 @@ func (s *Service) UpdateContentType(ctx context.Context, subject, id string, ver
 	})
 	return
 }
-func (s *Service) AttachContentType(ctx context.Context, subject, collection string, version int, in AttachContentTypeInput) (out *ent.Resource, err error) {
+func (s *Service) AttachContentType(ctx context.Context, subject, collection string, version int, in AttachContentTypeInput) (out *resources.Resource, err error) {
 	err = s.write(ctx, func(t *Service) error {
 		if e := t.RequireScope(ctx, subject, "contentType.read"); e != nil {
 			return e
@@ -305,7 +301,7 @@ func (s *Service) AttachContentType(ctx context.Context, subject, collection str
 // attachContentType also serves automatic provisioning of a fixed type. It
 // enforces list Manage; choosing a catalog type through the public API requires
 // contentType.read as well.
-func (s *Service) attachContentType(ctx context.Context, subject, collection string, version int, in AttachContentTypeInput) (out *ent.Resource, err error) {
+func (s *Service) attachContentType(ctx context.Context, subject, collection string, version int, in AttachContentTypeInput) (out *resources.Resource, err error) {
 	err = s.write(ctx, func(t *Service) error {
 		if e := t.RequireScope(ctx, subject, "list.read"); e != nil {
 			return e
@@ -320,44 +316,24 @@ func (s *Service) attachContentType(ctx context.Context, subject, collection str
 		if c.Version != version {
 			return ErrPreconditionFailed
 		}
-		if _, e = t.Client.ContentType.Get(ctx, in.ContentTypeID); ent.IsNotFound(e) {
+		changed, e := t.DAL.Catalog().Attach(ctx, c.ID, in.ContentTypeID, in.IsDefault)
+		if dberr.IsNotFound(e) {
 			return ErrNotFound
-		} else if e != nil {
-			return e
 		}
-		count, e := t.Client.CollectionType.Query().Where(collectiontype.ContainerIDEQ(c.ID)).Count(ctx)
+		if errors.Is(e, dberr.ErrUniqueViolation) {
+			return ErrConflict
+		}
 		if e != nil {
-			return e
+			return catalogError(e)
 		}
-		a, e := t.Client.CollectionType.Query().Where(collectiontype.ContainerIDEQ(c.ID), collectiontype.ContentTypeIDEQ(in.ContentTypeID)).Only(ctx)
-		if e != nil && !ent.IsNotFound(e) {
-			return e
-		}
-		if a != nil && (!in.IsDefault || a.IsDefault) {
+		if !changed {
 			out = c
 			return nil
 		}
-		if in.IsDefault {
-			if _, e = t.Client.CollectionType.Update().Where(collectiontype.ContainerIDEQ(c.ID), collectiontype.IsDefaultEQ(true)).SetIsDefault(false).Save(ctx); e != nil {
-				return e
-			}
-		}
-		if a == nil {
-			if count >= 32 {
-				return invalid("at most 32 content types per collection")
-			}
-			if _, e = t.Client.CollectionType.Create().SetContainerID(c.ID).SetContentTypeID(in.ContentTypeID).SetIsDefault(in.IsDefault).Save(ctx); e != nil {
-				return e
-			}
-		} else if in.IsDefault {
-			if e = t.Client.CollectionType.UpdateOne(a).SetIsDefault(true).Exec(ctx); e != nil {
-				return e
-			}
-		}
-		if e = t.refreshCollections(ctx, subject, []*ent.Resource{c}); e != nil {
+		if e = t.refreshCollections(ctx, subject, []*resources.Resource{c}); e != nil {
 			return e
 		}
-		out, e = t.Client.Resource.Get(ctx, c.ID)
+		out, e = t.DAL.Resources().Resource(ctx, c.ID)
 		if e != nil {
 			return e
 		}
@@ -377,7 +353,7 @@ type SchemaContentType struct {
 
 // DetachContentType removes only this collection's attachment. Frozen revision
 // schemas and the shared organization catalog remain available.
-func (s *Service) DetachContentType(ctx context.Context, subject, collection, typeID string, version int) (out *ent.Resource, err error) {
+func (s *Service) DetachContentType(ctx context.Context, subject, collection, typeID string, version int) (out *resources.Resource, err error) {
 	err = s.write(ctx, func(t *Service) error {
 		c, e := t.contentTypeResource(ctx, subject, collection, "manage")
 		if e != nil {
@@ -386,39 +362,19 @@ func (s *Service) DetachContentType(ctx context.Context, subject, collection, ty
 		if c.Version != version {
 			return ErrPreconditionFailed
 		}
-		a, e := t.Client.CollectionType.Query().Where(collectiontype.ContainerIDEQ(collection), collectiontype.ContentTypeIDEQ(typeID)).Only(ctx)
-		if ent.IsNotFound(e) {
+		e = t.DAL.Catalog().Detach(ctx, collection, typeID)
+		switch {
+		case dberr.IsNotFound(e):
 			return ErrNotFound
-		}
-		if e != nil {
-			return e
-		}
-		remaining, e := t.Client.CollectionType.Query().Where(collectiontype.ContainerIDEQ(collection), collectiontype.IDNEQ(a.ID)).Order(ent.Asc(collectiontype.FieldContentTypeID)).All(ctx)
-		if e != nil {
-			return e
-		}
-		if len(remaining) == 0 {
+		case errors.Is(e, catalog.ErrLastContentType), errors.Is(e, catalog.ErrContentTypeInUse):
 			return ErrConflict
-		}
-		inUse, e := t.Client.Resource.Query().Where(resource.ContainerIDEQ(collection), resource.ContentTypeIDEQ(typeID), resource.DeletedAtIsNil()).Exist(ctx)
-		if e != nil {
+		case e != nil:
 			return e
 		}
-		if inUse {
-			return ErrConflict
-		}
-		if e = t.Client.CollectionType.DeleteOne(a).Exec(ctx); e != nil {
+		if e = t.refreshCollections(ctx, subject, []*resources.Resource{c}); e != nil {
 			return e
 		}
-		if a.IsDefault {
-			if e = t.Client.CollectionType.UpdateOne(remaining[0]).SetIsDefault(true).Exec(ctx); e != nil {
-				return e
-			}
-		}
-		if e = t.refreshCollections(ctx, subject, []*ent.Resource{c}); e != nil {
-			return e
-		}
-		out, e = t.Client.Resource.Get(ctx, collection)
+		out, e = t.DAL.Resources().Resource(ctx, collection)
 		if e != nil {
 			return e
 		}
@@ -427,12 +383,12 @@ func (s *Service) DetachContentType(ctx context.Context, subject, collection, ty
 	return
 }
 
-func selectDefinitions(defs []*ent.FieldDefinition, keys []string) []*ent.FieldDefinition {
+func selectDefinitions(defs []*catalog.FieldDefinition, keys []string) []*catalog.FieldDefinition {
 	wanted := map[string]bool{}
 	for _, key := range keys {
 		wanted[key] = true
 	}
-	out := []*ent.FieldDefinition{}
+	out := []*catalog.FieldDefinition{}
 	for _, d := range defs {
 		if wanted[d.Key] {
 			out = append(out, d)
@@ -441,7 +397,7 @@ func selectDefinitions(defs []*ent.FieldDefinition, keys []string) []*ent.FieldD
 	return out
 }
 
-func typedDefinitions(raw json.RawMessage, id string) ([]*ent.FieldDefinition, []model.ValidationRule, error) {
+func typedDefinitions(raw json.RawMessage, id string) ([]*catalog.FieldDefinition, []model.ValidationRule, error) {
 	var schema SchemaDefinition
 	if err := json.Unmarshal(raw, &schema); err != nil {
 		return nil, nil, err
@@ -458,14 +414,14 @@ func typedDefinitions(raw json.RawMessage, id string) ([]*ent.FieldDefinition, [
 	return nil, nil, invalid("content type is missing from the effective schema")
 }
 
-func (s *Service) checkTypeHeads(ctx context.Context, subject string, c *ent.Resource, typeID string, keys []string, rules []model.ValidationRule) error {
+func (s *Service) checkTypeHeads(ctx context.Context, subject string, c *resources.Resource, typeID string, keys []string, rules []model.ValidationRule) error {
 	defs, err := s.collectionFields(ctx, c.ID)
 	if err != nil {
 		return err
 	}
 	defs = selectDefinitions(defs, keys)
 	for after := ""; ; {
-		items, err := s.Client.Resource.Query().Where(resource.ContainerIDEQ(c.ID), resource.ContentTypeIDEQ(typeID), resource.DeletedAtIsNil(), resource.IDGT(after)).Order(ent.Asc(resource.FieldID)).Limit(surfaceBatch).Select(resource.FieldID, resource.FieldKind).All(ctx)
+		items, err := s.DAL.Resources().Resources(ctx, resources.Filter{ContainerID: c.ID, ContentTypeID: typeID, State: resources.Live, AfterID: after, Limit: surfaceBatch})
 		if err != nil {
 			return err
 		}
@@ -476,11 +432,11 @@ func (s *Service) checkTypeHeads(ctx context.Context, subject string, c *ent.Res
 		if len(ids) == 0 {
 			return nil
 		}
-		heads, err := s.Client.ItemSurface.Query().Where(itemsurface.ItemIDIn(ids...), itemsurface.SurfaceEQ(headSurface(c))).All(ctx)
+		heads, err := s.DAL.Surfaces().Surfaces(ctx, surfaces.Filter{ItemIDs: ids, Surface: headSurface(c)})
 		if err != nil {
 			return err
 		}
-		kinds := map[string]resource.Kind{}
+		kinds := map[string]refs.ResourceKind{}
 		for _, item := range items {
 			kinds[item.ID] = item.Kind
 		}
@@ -515,4 +471,30 @@ func (s *Service) checkTypeHeads(ctx context.Context, subject string, c *ent.Res
 		}
 		after = items[len(items)-1].ID
 	}
+}
+
+func (s *Service) persistContentType(ctx context.Context, in ContentTypeInput, templateKey string) (*catalog.ContentType, error) {
+	t := catalog.ContentType{Key: in.Key, Name: in.Name, FieldIds: in.FieldIds, Rules: in.Rules}
+	if templateKey != "" {
+		t.TemplateKey = &templateKey
+	}
+	return s.DAL.Catalog().CreateContentType(ctx, t)
+}
+
+func (s *Service) reviseContentType(ctx context.Context, prior *catalog.ContentType, name string, fields []string, rules []model.ValidationRule) (*catalog.ContentType, error) {
+	before, err := json.Marshal(prior)
+	if err != nil {
+		return nil, err
+	}
+	updated, err := s.DAL.Catalog().SaveContentType(ctx, catalog.ContentType{ID: prior.ID, Name: name, FieldIds: fields, Rules: rules}, prior.Version)
+	if errors.Is(err, dberr.ErrConcurrentUpdate) {
+		return nil, ErrPreconditionFailed
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := s.trackAuditProperties(prior.ID, before, updated, "name", "field_ids", "rules"); err != nil {
+		return nil, err
+	}
+	return updated, nil
 }

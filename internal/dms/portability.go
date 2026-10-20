@@ -5,45 +5,37 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-	"papergo/ent"
-	"papergo/ent/fielddefinition"
-	"papergo/ent/itemsurface"
-	"papergo/ent/operation"
-	"papergo/internal/identity"
-	"papergo/internal/storage"
+	"papergo/internal/dal/portable"
+	"papergo/internal/dal/resources"
+	"papergo/internal/dal/surfaces"
 	"reflect"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"papergo/internal/dal/catalog"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/directory"
+	"papergo/internal/dal/integrations"
+	"papergo/internal/dal/operations"
+	"papergo/internal/identity"
+	"papergo/internal/storage"
 )
 
 const PackageLimit int64 = 4 << 30
 const PackageManifestLimit int64 = 64 << 20
+
+// PackageRecordLimit bounds the rows a package carries.
+const PackageRecordLimit = 100000
 const PackageRetention = 7 * 24 * time.Hour
 const OperationKindExport = "portability.export"
 const OperationKindImport = "portability.import"
-
-// This catalog is the portable application graph. Keyword projections are rebuilt
-// by database triggers and the search index by a reindex after the import.
-// Text read from files travels with their bytes: reading it again can mean
-// OCR. Credentials, audit, cursors and execution state belong to this
-// installation and are deliberately absent.
-var packageTables = []string{
-	"identity_users", "identity_groups", "identity_roles", "identity_memberships", "identity_assignments", "identity_preferences",
-	"term_groups", "term_sets", "terms", "relationship_types", "field_definitions", "content_types",
-	"resources", "collection_types", "schema_revisions", "schema_templates", "list_views", "smart_folders",
-	"blobs", "blob_texts", "blob_previews", "item_revisions", "integration_revision_data", "integration_items", "item_histories", "publications", "item_surfaces", "business_keys", "grants", "relationships",
-	"workflows", "workflow_versions", "workflow_triggers", "group_inboxes",
-}
 
 type packageTable struct {
 	Columns []string `json:"columns"`
@@ -127,7 +119,7 @@ func (s *Service) RegisterPortability(store storage.Store) error {
 		}
 		return nil
 	}
-	if err := s.RegisterOperationHandler(OperationKindExport, OperationHandler{Scope: "organization.manage", Validate: validate, Step: func(ctx context.Context, t *Service, op *ent.Operation) error {
+	if err := s.RegisterOperationHandler(OperationKindExport, OperationHandler{Scope: "organization.manage", Validate: validate, Step: func(ctx context.Context, t *Service, op *operations.Operation) error {
 		var in packagePayload
 		if err := json.Unmarshal(op.Payload, &in); err != nil {
 			return err
@@ -145,7 +137,7 @@ func (s *Service) RegisterPortability(store storage.Store) error {
 	}}); err != nil {
 		return err
 	}
-	return s.RegisterOperationHandler(OperationKindImport, OperationHandler{Scope: "organization.manage", Validate: validate, Step: func(ctx context.Context, t *Service, op *ent.Operation) error {
+	return s.RegisterOperationHandler(OperationKindImport, OperationHandler{Scope: "organization.manage", Validate: validate, Step: func(ctx context.Context, t *Service, op *operations.Operation) error {
 		var in packagePayload
 		if err := json.Unmarshal(op.Payload, &in); err != nil {
 			return err
@@ -157,111 +149,77 @@ func (s *Service) RegisterPortability(store storage.Store) error {
 		return t.finishPackage(ctx, op, result)
 	}})
 }
-func (s *Service) finishPackage(ctx context.Context, op *ent.Operation, result PackageResult) error {
+func (s *Service) finishPackage(ctx context.Context, op *operations.Operation, result PackageResult) error {
 	raw, err := json.Marshal(result)
 	if err != nil {
 		return err
 	}
-	return s.Client.Operation.UpdateOne(op).SetResult(raw).SetStatus(operation.StatusSucceeded).SetProgress(100).SetCompletedAt(time.Now().UTC()).Exec(ctx)
+	completed := time.Now().UTC()
+	op.Result, op.Status, op.Progress, op.CompletedAt = raw, operations.StatusSucceeded, 100, &completed
+	return s.DAL.Operations().Save(ctx, op)
 }
-func (s *Service) StartExport(ctx context.Context, subject string, options ExportOptions) (*ent.Operation, error) {
+func (s *Service) StartExport(ctx context.Context, subject string, options ExportOptions) (*OperationView, error) {
 	raw, err := json.Marshal(packagePayload{ExportOptions: options})
 	if err != nil {
 		return nil, err
 	}
 	return s.EnqueueOperation(ctx, subject, "", OperationKindExport, raw)
 }
-func (s *Service) StartImport(ctx context.Context, subject, objectKey string, dryRun bool, workspaceName string) (*ent.Operation, error) {
+func (s *Service) StartImport(ctx context.Context, subject, objectKey string, dryRun bool, workspaceName string) (*OperationView, error) {
 	raw, _ := json.Marshal(packagePayload{ObjectKey: objectKey, DryRun: dryRun, WorkspaceName: workspaceName})
 	return s.EnqueueOperation(ctx, subject, "", OperationKindImport, raw)
 }
 
-func quotePackageColumn(name string) string { return `"` + strings.ReplaceAll(name, `"`, `""`) + `"` }
-func (s *Service) packageColumns(ctx context.Context, table string) ([]string, []string, error) {
-	rows, err := s.tx.QueryContext(ctx, "PRAGMA table_info("+quotePackageColumn(table)+")")
+// packageColumns lists the names of the columns a package carries of a table.
+func (s *Service) packageColumns(ctx context.Context, table string) ([]string, error) {
+	cols, err := s.DAL.Portable().Columns(ctx, table)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	defer rows.Close()
-	var columns, expressions []string
-	for rows.Next() {
-		var cid, notnull, pk int
-		var name, kind string
-		var defaults any
-		if err = rows.Scan(&cid, &name, &kind, &notnull, &defaults, &pk); err != nil {
-			return nil, nil, err
-		}
-		if name == "password_hash" {
-			continue
-		}
-		columns = append(columns, name)
-		expression := quotePackageColumn(name)
-		if strings.Contains(strings.ToUpper(kind), "DATE") {
-			expression = "CAST(" + expression + " AS TEXT)"
-		}
-		expressions = append(expressions, expression)
+	names := make([]string, len(cols))
+	for i, c := range cols {
+		names[i] = c.Name
 	}
-	return columns, expressions, rows.Err()
+	return names, nil
 }
 func (s *Service) exportCorePackage(ctx context.Context, store storage.Store, options ExportOptions) (storage.Object, error) {
 	p := corePackage{Scope: "organization", IncludeData: options.IncludeData == nil || *options.IncludeData, Format: "papergo-core", Tables: map[string]packageTable{}, Objects: []packageObject{}, Organization: map[string]any{}}
-	var identifier, name, description string
-	if err := s.tx.QueryRowContext(ctx, "SELECT identifier,display_name,description FROM identity_organizations WHERE singleton=1").Scan(&identifier, &name, &description); err != nil {
+	org, err := s.DAL.Directory().Organization(ctx)
+	if err != nil {
 		return storage.Object{}, err
 	}
-	p.Organization = map[string]any{"identifier": identifier, "display_name": name, "description": description}
-	sources, err := s.Client.ListIntegration.Query().All(ctx)
+	p.Organization = map[string]any{"identifier": org.Identifier, "display_name": org.DisplayName, "description": org.Description}
+	sources, err := s.DAL.Integrations().List(ctx, integrations.Filter{})
 	if err != nil {
 		return storage.Object{}, err
 	}
 	for _, source := range sources {
 		p.Integrations = append(p.Integrations, portableIntegration{source.ContainerID, source.Kind, source.Name})
 	}
+	scope := portable.Scope{WorkspaceID: options.WorkspaceID, Data: p.IncludeData}
 	scanned := 0
-	for _, table := range packageTables {
-		columns, expressions, err := s.packageColumns(ctx, table)
+	for _, table := range portable.Tables {
+		// A workspace package counts its rows once it has selected them.
+		limit := 0
+		if options.WorkspaceID == "" {
+			limit = PackageRecordLimit - scanned + 1
+		}
+		cols, rows, err := s.DAL.Portable().Export(ctx, table, scope, limit)
 		if err != nil {
 			return storage.Object{}, err
 		}
-		if table == "integration_items" {
-			for i, column := range columns {
-				if column == "integration_id" {
-					expressions[i] = "NULL"
+		data := packageTable{Columns: make([]string, len(cols)), Rows: rows}
+		for i, c := range cols {
+			data.Columns[i] = c.Name
+			if table == "integration_items" && c.Name == "integration_id" {
+				for _, row := range rows {
+					row[i] = nil
 				}
 			}
 		}
-		where, args := packageExportFilter(table, options)
-		rows, err := s.tx.QueryContext(ctx, "SELECT "+strings.Join(expressions, ",")+" FROM "+quotePackageColumn(table)+where+" ORDER BY id", args...)
-		if err != nil {
-			return storage.Object{}, err
-		}
-		data := packageTable{Columns: columns, Rows: [][]any{}}
-		for rows.Next() {
-			values := make([]any, len(columns))
-			args := make([]any, len(columns))
-			for i := range values {
-				args[i] = &values[i]
-			}
-			if err = rows.Scan(args...); err != nil {
-				rows.Close()
-				return storage.Object{}, err
-			}
-			for i, v := range values {
-				if b, ok := v.([]byte); ok {
-					values[i] = string(b)
-				}
-			}
-			data.Rows = append(data.Rows, values)
-			scanned++
-			if options.WorkspaceID == "" && scanned > 100000 {
-				rows.Close()
-				return storage.Object{}, invalid("package exceeds 100000 core records")
-			}
-		}
-		err = rows.Err()
-		rows.Close()
-		if err != nil {
-			return storage.Object{}, err
+		scanned += len(rows)
+		if options.WorkspaceID == "" && scanned > PackageRecordLimit {
+			return storage.Object{}, invalid(fmt.Sprintf("package exceeds %d core records", PackageRecordLimit))
 		}
 		p.Tables[table] = data
 	}
@@ -289,10 +247,10 @@ func (s *Service) exportCorePackage(ctx context.Context, store storage.Store, op
 	for _, table := range p.Tables {
 		count += len(table.Rows)
 	}
-	if count > 100000 {
-		return storage.Object{}, invalid("package exceeds 100000 core records")
+	if count > PackageRecordLimit {
+		return storage.Object{}, invalid(fmt.Sprintf("package exceeds %d core records", PackageRecordLimit))
 	}
-	p.Objects = packageObjects(packageMaps(p.Tables["blobs"]), packageMaps(p.Tables["blob_texts"]), packageMaps(p.Tables["blob_previews"]))
+	p.Objects = packageObjects(packageMaps(p.Tables["blobs"]), packageMaps(p.Tables["blob_previews"]))
 	raw, err := json.Marshal(p)
 	if err != nil {
 		return storage.Object{}, err
@@ -492,7 +450,7 @@ func (s *Service) importCorePackage(ctx context.Context, store storage.Store, su
 		err = invalid("unexpected data after package manifest")
 	}
 	reader.Close()
-	if err != nil || p.Format != "papergo-core" || (p.Scope != "organization" && p.Scope != "workspace") || len(p.Tables) != len(packageTables) {
+	if err != nil || p.Format != "papergo-core" || (p.Scope != "organization" && p.Scope != "workspace") || len(p.Tables) != len(portable.Tables) {
 		return result, invalid("invalid core package manifest")
 	}
 	if p.Scope == "organization" && p.WorkspaceID != "" {
@@ -505,7 +463,7 @@ func (s *Service) importCorePackage(ctx context.Context, store storage.Store, su
 		if len(p.Objects) != 0 {
 			return result, invalid("configuration package contains file objects")
 		}
-		for _, table := range packageDataTables {
+		for _, table := range portable.DataTables {
 			if len(p.Tables[table].Rows) != 0 {
 				return result, invalid("configuration package contains content")
 			}
@@ -549,21 +507,21 @@ func (s *Service) importCorePackage(ctx context.Context, store storage.Store, su
 			return result, invalid("package object checksum mismatch")
 		}
 	}
-	for _, table := range packageTables {
+	for _, table := range portable.Tables {
 		data, ok := p.Tables[table]
 		if !ok {
 			return result, invalid("package table missing")
 		}
-		columns, _, err := s.packageColumns(ctx, table)
+		columns, err := s.DAL.Portable().Columns(ctx, table)
 		if err != nil {
 			return result, err
 		}
-		if !slices.Equal(columns, data.Columns) {
+		if !slices.EqualFunc(columns, data.Columns, func(c portable.Column, name string) bool { return c.Name == name }) {
 			return result, invalid("package columns do not match the core contract")
 		}
 		result.Rows += len(data.Rows)
-		if result.Rows > 100000 {
-			return result, invalid("package exceeds 100000 core records")
+		if result.Rows > PackageRecordLimit {
+			return result, invalid(fmt.Sprintf("package exceeds %d core records", PackageRecordLimit))
 		}
 		for i, row := range data.Rows {
 			if len(row) != len(columns) {
@@ -575,13 +533,16 @@ func (s *Service) importCorePackage(ctx context.Context, store storage.Store, su
 					if err != nil {
 						return result, invalid("package integers must be exact")
 					}
-					data.Rows[i][j] = value
+					v = value
 				} else {
 					switch v.(type) {
 					case nil, string, bool:
 					default:
 						return result, invalid("package records must contain scalar values")
 					}
+				}
+				if data.Rows[i][j], err = portable.Normalize(columns[j], v); err != nil {
+					return result, invalid("invalid package record value in " + table + "." + columns[j].Name)
 				}
 			}
 		}
@@ -607,13 +568,6 @@ func (s *Service) importCorePackage(ctx context.Context, store storage.Store, su
 	for _, blob := range packageMaps(p.Tables["blobs"]) {
 		fileHashes[blob["sha256"]] = true
 	}
-	for _, text := range packageMaps(p.Tables["blob_texts"]) {
-		key, _ := text["object_key"].(string)
-		obj, ok := objects[key]
-		if !ok || text["object_size"] != obj.Size || text["object_sha256"] != obj.SHA256 || !fileHashes[text["sha256"]] {
-			return result, invalid("file text does not match its packaged object or file")
-		}
-	}
 	for _, preview := range packageMaps(p.Tables["blob_previews"]) {
 		if !fileHashes[preview["sha256"]] {
 			return result, invalid("preview has no packaged source file")
@@ -633,104 +587,81 @@ func (s *Service) importCorePackage(ctx context.Context, store storage.Store, su
 	result.Objects = len(p.Objects)
 	// Use the actual core constraints for the plan and application. A savepoint
 	// rolls back a dry run, including identities, indexes and live notifications.
-	if _, err = s.tx.ExecContext(ctx, "SAVEPOINT core_package"); err != nil {
-		return result, err
-	}
-	defer func() {
-		_, _ = s.tx.ExecContext(ctx, "ROLLBACK TO core_package")
-		_, _ = s.tx.ExecContext(ctx, "RELEASE core_package")
-	}()
-	var populated bool
-	if err = s.tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM resources)").Scan(&populated); err != nil {
-		return result, err
-	}
-	if populated && p.Scope == "organization" {
-		return result, invalid("organization packages require an instance without resources")
-	}
-	if p.Scope == "organization" && in.WorkspaceName != "" {
-		return result, invalid("workspace_name requires a workspace package")
-	}
-	if p.Scope == "workspace" {
-		if err = validateWorkspacePackage(p); err != nil {
-			return result, err
-		}
-		if err = s.bindWorkspaceTemplate(ctx, &p, subject); err != nil {
-			return result, err
-		}
-		var warnings []string
-		p, warnings, err = s.prepareWorkspacePackage(ctx, p, in.WorkspaceName)
+	err = s.DAL.Savepoint(ctx, "core_package", func() (bool, error) {
+		populated, err := s.DAL.Resources().Exists(ctx, resources.Filter{})
 		if err != nil {
-			return result, err
+			return false, err
 		}
-		result.Warnings = append(result.Warnings, warnings...)
-		result.WorkspaceID = p.WorkspaceID
-		for _, row := range packageMaps(p.Tables["resources"]) {
-			if row["id"] == p.WorkspaceID {
-				result.WorkspaceName, _ = row["name"].(string)
+		if populated && p.Scope == "organization" {
+			return false, invalid("organization packages require an instance without resources")
+		}
+		if p.Scope == "organization" && in.WorkspaceName != "" {
+			return false, invalid("workspace_name requires a workspace package")
+		}
+		if p.Scope == "workspace" {
+			if err = validateWorkspacePackage(p); err != nil {
+				return false, err
 			}
-		}
-	}
-	for _, integration := range p.Integrations {
-		result.Warnings = append(result.Warnings, "Reconfigure "+integration.Name+" on list "+integration.ContainerID+": integration secrets are omitted from portable packages.")
-	}
-	if !in.DryRun {
-		for _, obj := range p.Objects {
-			reader, err := entries["objects/"+obj.Key].Open()
+			if err = s.bindWorkspaceTemplate(ctx, &p, subject); err != nil {
+				return false, err
+			}
+			var warnings []string
+			p, warnings, err = s.prepareWorkspacePackage(ctx, p, in.WorkspaceName)
 			if err != nil {
-				return result, err
+				return false, err
 			}
-			stored, err := store.Put(ctx, reader, PackageLimit)
-			reader.Close()
-			if err != nil {
-				return result, err
+			result.Warnings = append(result.Warnings, warnings...)
+			result.WorkspaceID = p.WorkspaceID
+			for _, row := range packageMaps(p.Tables["resources"]) {
+				if row["id"] == p.WorkspaceID {
+					result.WorkspaceName, _ = row["name"].(string)
+				}
 			}
-			objectKeys[obj.Key] = stored.Key
 		}
-	}
-	err = s.applyCorePackage(ctx, subject, p, objectKeys)
-	if err != nil {
-		if in.DryRun {
-			result.Errors = []string{err.Error()}
-			return result, nil
+		for _, integration := range p.Integrations {
+			result.Warnings = append(result.Warnings, "Reconfigure "+integration.Name+" on list "+integration.ContainerID+": integration secrets are omitted from portable packages.")
 		}
-		return result, err
-	}
-	if err = identity.RequireScope(ctx, s.tx, subject, "organization.manage"); err != nil {
-		return result, invalid("package must retain the importing administrator")
-	}
-	result.Valid = true
-	if in.DryRun {
-		return result, nil
-	}
-	if _, err = s.tx.ExecContext(ctx, "RELEASE core_package"); err != nil {
+		if !in.DryRun {
+			for _, obj := range p.Objects {
+				reader, err := entries["objects/"+obj.Key].Open()
+				if err != nil {
+					return false, err
+				}
+				stored, err := store.Put(ctx, reader, PackageLimit)
+				reader.Close()
+				if err != nil {
+					return false, err
+				}
+				objectKeys[obj.Key] = stored.Key
+			}
+		}
+		if err = s.applyCorePackage(ctx, subject, p, objectKeys); err != nil {
+			if in.DryRun {
+				result.Errors = []string{err.Error()}
+				return true, nil
+			}
+			return false, err
+		}
+		if err = identity.RequireScope(ctx, s.DAL, subject, "organization.manage"); err != nil {
+			return false, invalid("package must retain the importing administrator")
+		}
+		result.Valid = true
+		return in.DryRun, nil
+	})
+	if err != nil || in.DryRun {
 		return result, err
 	}
 	// Imported entries raised no change events: rebuild the search index,
 	// file content included (the imported text is reused, not read again).
 	if s.search != nil {
 		raw, _ := json.Marshal(searchReindexPayload{Stamp: time.Now().UnixNano(), Content: true})
-		if _, err = s.Client.Operation.Create().SetKind(OperationKindSearchReindex).SetCreatedBy(systemSubject).SetPayload(raw).SetTraceID(s.traceID).Save(ctx); err != nil {
+		if _, err = s.DAL.Operations().Enqueue(ctx, operations.Operation{Kind: OperationKindSearchReindex, CreatedBy: systemSubject, Payload: raw, TraceID: s.traceID}); err != nil {
 			return result, err
 		}
 	}
 	return result, s.auditCatalog(ctx, subject, "portability.import", map[string]any{"rows": result.Rows, "objects": result.Objects})
 }
 
-func (s *Service) packageInsert(ctx context.Context, table string, row map[string]any) error {
-	columns, _, err := s.packageColumns(ctx, table)
-	if err != nil {
-		return err
-	}
-	values := make([]any, len(columns))
-	marks := make([]string, len(columns))
-	for i, key := range columns {
-		values[i] = row[key]
-		columns[i] = quotePackageColumn(key)
-		marks[i] = "?"
-	}
-	_, err = s.tx.ExecContext(ctx, "INSERT INTO "+quotePackageColumn(table)+" ("+strings.Join(columns, ",")+") VALUES ("+strings.Join(marks, ",")+")", values...)
-	return err
-}
 func orderPackageParents(rows []map[string]any) ([]map[string]any, error) {
 	var ordered []map[string]any
 	done := map[any]bool{}
@@ -754,17 +685,17 @@ func orderPackageParents(rows []map[string]any) ([]map[string]any, error) {
 }
 
 func (s *Service) applyCorePackage(ctx context.Context, subject string, p corePackage, objects map[string]string) error {
-	if _, err := s.tx.ExecContext(ctx, "PRAGMA defer_foreign_keys=ON"); err != nil {
+	if err := s.DAL.Portable().DeferReferences(ctx); err != nil {
 		return err
 	}
-	resources, err := orderPackageParents(packageMaps(p.Tables["resources"]))
+	packageResources, err := orderPackageParents(packageMaps(p.Tables["resources"]))
 	if err != nil {
 		return err
 	}
 	scopes := map[any]any{}
-	for _, row := range resources {
+	for _, row := range packageResources {
 		scope := row["id"]
-		if fmt.Sprint(row["inherit_permissions"]) == "1" || fmt.Sprint(row["inherit_permissions"]) == "true" {
+		if row["inherit_permissions"] == true {
 			scope = scopes[row["parent_id"]]
 		}
 		if scope == nil || row["scope_id"] != scope {
@@ -773,7 +704,7 @@ func (s *Service) applyCorePackage(ctx context.Context, subject string, p corePa
 		scopes[row["id"]] = scope
 	}
 	folderDepths := map[any]int{}
-	for _, row := range resources {
+	for _, row := range packageResources {
 		kind, name := fmt.Sprint(row["kind"]), fmt.Sprint(row["name"])
 		if err = validateResourceName(kind, name); err != nil {
 			return err
@@ -793,7 +724,7 @@ func (s *Service) applyCorePackage(ctx context.Context, subject string, p corePa
 		folderDepths[row["id"]] = depth
 	}
 
-	for _, table := range packageTables {
+	for _, table := range portable.Tables {
 		if table == "resources" {
 			continue
 		}
@@ -820,7 +751,7 @@ func (s *Service) applyCorePackage(ctx context.Context, subject string, p corePa
 		// Collections must exist before their schema and attachments; item
 		// initial state deliberately has no revision pointers or tombstone.
 		if table == "collection_types" {
-			for _, row := range resources {
+			for _, row := range packageResources {
 				if row["kind"] == "workspace" || row["kind"] == "list" || row["kind"] == "library" {
 					if err = s.insertPackageResource(ctx, row); err != nil {
 						return err
@@ -829,7 +760,7 @@ func (s *Service) applyCorePackage(ctx context.Context, subject string, p corePa
 			}
 		}
 		if table == "blobs" {
-			for _, row := range resources {
+			for _, row := range packageResources {
 				if row["kind"] == "item" || row["kind"] == "folder" {
 					if err = s.insertPackageResource(ctx, row); err != nil {
 						return err
@@ -841,20 +772,18 @@ func (s *Service) applyCorePackage(ctx context.Context, subject string, p corePa
 			if table == "identity_users" {
 				// Stage inactive memberships atomically, then restore account status.
 				if row["deleted_at"] == nil {
-					row["active"] = int64(1)
+					row["active"] = true
 				}
 				id, ok := row["id"].(string)
 				if !ok || identity.ValidateSubject(id) != nil {
 					return invalid("invalid package user")
 				}
-				var exists bool
-				if err = s.tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM identity_users WHERE id=?)", id).Scan(&exists); err != nil {
+				n, err := s.DAL.Portable().Count(ctx, "identity_users", portable.Row{"id": id})
+				if err != nil {
 					return err
 				}
-				if exists {
-					// Credentials belong to the destination installation. Only an
-					// imported account deletion clears its existing password.
-					if _, err = s.tx.ExecContext(ctx, "UPDATE identity_users SET active=?,display_name=?,email=?,password_hash=CASE WHEN ? IS NULL THEN password_hash ELSE '' END,deleted_at=? WHERE id=?", row["active"], row["display_name"], row["email"], row["deleted_at"], row["deleted_at"], id); err != nil {
+				if n > 0 {
+					if err = s.DAL.Portable().MergeUser(ctx, row); err != nil {
 						return err
 					}
 					continue
@@ -869,25 +798,29 @@ func (s *Service) applyCorePackage(ctx context.Context, subject string, p corePa
 					continue
 				}
 			}
-			if table == "blobs" || table == "blob_texts" || table == "blob_previews" {
+			if table == "blobs" || table == "blob_previews" {
 				if key, ok := objects[fmt.Sprint(row["object_key"])]; ok {
 					row["object_key"] = key
 				}
 			}
-			if err = s.packageInsert(ctx, table, row); err != nil {
+			if err = s.DAL.Portable().Insert(ctx, table, row); err != nil {
 				return fmt.Errorf("package %s: %w", table, err)
 			}
 		}
 	}
 	// Restore pointers, counters, tombstones and exact permission scopes only
 	// after their dependencies exist. Scope triggers are re-run by inheritance.
-	for _, row := range resources {
-		if _, err = s.tx.ExecContext(ctx, "UPDATE resources SET head_revision_id=?,published_revision_id=?,schema_head_id=?,next_revision_number=?,scope_id=?,deleted_at=?,deleted_by=?,name_key=? WHERE id=?", row["head_revision_id"], row["published_revision_id"], row["schema_head_id"], row["next_revision_number"], row["scope_id"], row["deleted_at"], row["deleted_by"], row["name_key"], row["id"]); err != nil {
+	for _, row := range packageResources {
+		restored := portable.Row{}
+		for _, column := range []string{"head_revision_id", "published_revision_id", "schema_head_id", "next_revision_number", "scope_id", "deleted_at", "deleted_by", "name_key"} {
+			restored[column] = row[column]
+		}
+		if err = s.DAL.Portable().Update(ctx, "resources", portable.Row{"id": row["id"]}, restored); err != nil {
 			return err
 		}
 	}
 	for _, user := range packageMaps(p.Tables["identity_users"]) {
-		if _, err = s.tx.ExecContext(ctx, "UPDATE identity_users SET active=? WHERE id=?", user["active"], user["id"]); err != nil {
+		if err = s.DAL.Portable().Update(ctx, "identity_users", portable.Row{"id": user["id"]}, portable.Row{"active": user["active"]}); err != nil {
 			return err
 		}
 	}
@@ -895,28 +828,39 @@ func (s *Service) applyCorePackage(ctx context.Context, subject string, p corePa
 		if len(p.Organization) != 3 {
 			return invalid("invalid package organization profile")
 		}
-		if _, err = s.tx.ExecContext(ctx, "UPDATE identity_organizations SET identifier=?,display_name=?,description=?,version=version+1 WHERE singleton=1", p.Organization["identifier"], p.Organization["display_name"], p.Organization["description"]); err != nil {
+		org, err := s.DAL.Directory().Organization(ctx)
+		if err != nil {
+			return err
+		}
+		var ok [3]bool
+		org.Identifier, ok[0] = p.Organization["identifier"].(string)
+		org.DisplayName, ok[1] = p.Organization["display_name"].(string)
+		org.Description, ok[2] = p.Organization["description"].(string)
+		if ok != [3]bool{true, true, true} {
+			return invalid("invalid package organization profile")
+		}
+		if err = s.DAL.Directory().SaveOrganization(ctx, org, org.Version); err != nil {
 			return err
 		}
 	}
 	// Rebuild typed indexes from retained surfaces, including fields whose
 	// source index operation was unfinished. Execution records do not transfer.
 	var collections []string
-	for _, row := range resources {
+	for _, row := range packageResources {
 		if row["kind"] == "list" || row["kind"] == "library" {
 			collections = append(collections, fmt.Sprint(row["id"]))
 		}
 	}
-	projections, err := s.Client.ItemSurface.Query().Where(itemsurface.ContainerIDIn(collections...)).All(ctx)
+	projections, err := s.DAL.Surfaces().Surfaces(ctx, surfaces.Filter{ContainerIDs: collections})
 	if err != nil {
 		return err
 	}
 	for _, projection := range projections {
-		revision, err := s.Client.ItemRevision.Get(ctx, projection.RevisionID)
+		revision, err := s.revision(ctx, projection.RevisionID)
 		if err != nil {
 			return err
 		}
-		schema, err := s.Client.SchemaRevision.Get(ctx, revision.SchemaRevisionID)
+		schema, err := s.DAL.Catalog().Schema(ctx, revision.SchemaRevisionID)
 		if err != nil {
 			return err
 		}
@@ -924,7 +868,7 @@ func (s *Service) applyCorePackage(ctx context.Context, subject string, p corePa
 		if err != nil {
 			return err
 		}
-		current, err := s.Client.FieldDefinition.Query().Where(collectionFieldPredicate(projection.ContainerID)).All(ctx)
+		current, err := s.DAL.Catalog().Fields(ctx, catalog.FieldFilter{CollectionID: projection.ContainerID})
 		if err != nil {
 			return err
 		}
@@ -932,11 +876,11 @@ func (s *Service) applyCorePackage(ctx context.Context, subject string, p corePa
 			return err
 		}
 	}
-	if _, err = s.Client.FieldDefinition.Update().Where(fielddefinition.IDIn(packageIDs(p.Tables["field_definitions"])...)).SetIndexStatus(fielddefinition.IndexStatusReady).Save(ctx); err != nil {
+	if err = s.DAL.Catalog().SetIndexStatus(ctx, packageIDs(p.Tables["field_definitions"]), "ready"); err != nil {
 		return err
 	}
-	var invalidHome bool
-	if err = s.tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM resources w WHERE w.personal_owner_id IS NOT NULL AND (w.deleted_at IS NOT NULL OR NOT EXISTS(SELECT 1 FROM identity_users u WHERE u.id=w.personal_owner_id AND u.deleted_at IS NULL) OR NOT EXISTS(SELECT 1 FROM grants g WHERE g.resource_id=w.id AND g.principal_type='user' AND g.principal_id=w.personal_owner_id AND g.action='manage' AND g.effect='allow') OR NOT EXISTS(SELECT 1 FROM resources l WHERE l.workspace_id=w.id AND l.system_key='home.documents' AND l.deleted_at IS NULL) OR NOT EXISTS(SELECT 1 FROM resources l WHERE l.workspace_id=w.id AND l.system_key='home.inbox' AND l.deleted_at IS NULL)))").Scan(&invalidHome); err != nil {
+	invalidHome, err := s.DAL.Portable().IncompleteHomes(ctx)
+	if err != nil {
 		return err
 	}
 	if invalidHome {
@@ -944,15 +888,14 @@ func (s *Service) applyCorePackage(ctx context.Context, subject string, p corePa
 	}
 	// Deferral permits cycles such as resource->revision->resource; explicitly
 	// check before a dry run reports success (its savepoint never commits).
-	rows, err := s.tx.QueryContext(ctx, "PRAGMA foreign_key_check")
+	unresolved, err := s.DAL.Portable().Unresolved(ctx)
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
-	if rows.Next() {
+	if unresolved {
 		return invalid("package contains unresolved references")
 	}
-	return rows.Err()
+	return nil
 }
 func (s *Service) insertPackageResource(ctx context.Context, source map[string]any) error {
 	row := map[string]any{}
@@ -965,40 +908,26 @@ func (s *Service) insertPackageResource(ctx context.Context, source map[string]a
 	row["next_revision_number"] = int64(1)
 	row["deleted_at"] = nil
 	row["deleted_by"] = nil
-	return s.packageInsert(ctx, "resources", row)
+	return s.DAL.Portable().Insert(ctx, "resources", portable.Row(row))
 }
 func (s *Service) packageExisting(ctx context.Context, table string, row map[string]any) (bool, error) {
 	// Built-ins and the installation's initial administrator may already exist.
-	query := "id=?"
-	args := []any{row["id"]}
+	match := portable.Row{"id": row["id"]}
 	if table == "identity_assignments" {
-		query = "role_id=? AND principal_type=? AND principal_id=?"
-		args = []any{row["role_id"], row["principal_type"], row["principal_id"]}
+		match = portable.Row{"role_id": row["role_id"], "principal_type": row["principal_type"], "principal_id": row["principal_id"]}
 	}
-	columns, expressions, err := s.packageColumns(ctx, table)
-	if err != nil {
-		return false, err
-	}
-	values := make([]any, len(columns))
-	dest := make([]any, len(columns))
-	for i := range values {
-		dest[i] = &values[i]
-	}
-	err = s.tx.QueryRowContext(ctx, "SELECT "+strings.Join(expressions, ",")+" FROM "+quotePackageColumn(table)+" WHERE "+query, args...).Scan(dest...)
-	if errors.Is(err, sql.ErrNoRows) {
+	existing, err := s.DAL.Portable().Find(ctx, table, match)
+	if dberr.IsNotFound(err) {
 		return false, nil
 	}
 	if err != nil {
 		return false, err
 	}
-	for i, key := range columns {
+	for key, value := range existing {
 		if key == "created_at" || key == "updated_at" || key == "id" || key == "version" {
 			continue
 		}
-		if b, ok := values[i].([]byte); ok {
-			values[i] = string(b)
-		}
-		if !reflect.DeepEqual(values[i], row[key]) && fmt.Sprint(values[i]) != fmt.Sprint(row[key]) {
+		if !reflect.DeepEqual(value, row[key]) {
 			return false, ErrConflict
 		}
 	}
@@ -1011,14 +940,14 @@ func (s *Service) ExportPackage(ctx context.Context, subject, id string) (Packag
 		if err := t.RequireScope(ctx, subject, "organization.manage"); err != nil {
 			return result, err
 		}
-		op, err := t.Client.Operation.Get(ctx, id)
-		if ent.IsNotFound(err) {
+		op, err := t.DAL.Operations().Find(ctx, id)
+		if dberr.IsNotFound(err) {
 			return result, ErrNotFound
 		}
 		if err != nil {
 			return result, err
 		}
-		if op.Kind != OperationKindExport || op.CreatedBy != subject || op.Status != operation.StatusSucceeded {
+		if op.Kind != OperationKindExport || op.CreatedBy != subject || op.Status != operations.StatusSucceeded {
 			return result, ErrNotFound
 		}
 		if err = json.Unmarshal(op.Result, &result); err != nil {
@@ -1059,7 +988,7 @@ func validatePackageGroups(p corePackage) error {
 	}
 	var visit func(string, map[string]bool, int) error
 	visit = func(id string, path map[string]bool, depth int) error {
-		if path[id] || depth > identity.MaxGroupDepth {
+		if path[id] || depth > directory.MaxGroupDepth {
 			return invalid("package group membership is cyclic or exceeds the group depth limit")
 		}
 		path[id] = true

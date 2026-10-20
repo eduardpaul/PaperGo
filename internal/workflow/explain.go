@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"context"
+	"papergo/internal/dal/workflows"
 	"papergo/internal/dms"
 )
 
@@ -36,10 +37,10 @@ func (s *Service) Explain(ctx context.Context, subject, id string, in ExplainInp
 		if in.EventType != dms.EventFileAdded && in.EventType != dms.EventFileUpdated && in.EventType != dms.EventItemUpdated {
 			return Explanation{}, dms.Invalid("Check file.added, file.updated or item.updated.")
 		}
-		if w.State != "published" || !w.AutomaticEnabled {
+		if w.State != workflows.StatePublished || !w.AutomaticEnabled {
 			return Explanation{Code: "automatic_off", Reason: "Automatic runs are off. Manual use is independent."}, nil
 		}
-		if w.Role != nil && (w.CollectionID == nil || *w.CollectionID != *item.ContainerID || !w.AutomaticProvider) {
+		if w.Role != "" && (w.CollectionID == "" || w.CollectionID != *item.ContainerID || !w.AutomaticProvider) {
 			return Explanation{Code: "other_scope", Reason: "This workflow is not the automatic provider for this library."}, nil
 		}
 		v, err := current(ctx, t, w)

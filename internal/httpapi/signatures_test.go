@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"papergo/internal/dal/resources"
 	"papergo/internal/dms"
 	"strings"
 	"testing"
@@ -47,7 +48,7 @@ func TestUploadUsesSignatureAndRejectsUnsupportedBytes(t *testing.T) {
 	if response.Code != 415 {
 		t.Fatal(response.Code, response.Body.String())
 	}
-	if count, _ := s.Client.Resource.Query().Count(ctx); count != 3 {
+	if count, _ := s.DAL.Resources().Count(ctx, resources.Filter{}); count != 3 {
 		t.Fatal("unsupported creation wrote metadata", count)
 	}
 	if !transferRequest(httptest.NewRequest(http.MethodPut, endpoint, nil)) {

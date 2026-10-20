@@ -2,9 +2,9 @@ package httpapi
 
 import (
 	"encoding/json"
+	"papergo/internal/dal/resources"
 	"testing"
 
-	"papergo/ent"
 	"papergo/internal/dms"
 	"papergo/internal/workflow"
 )
@@ -19,7 +19,7 @@ func TestCollectionSettingsAndDeleteAPI(t *testing.T) {
 	if created.Code != 201 {
 		t.Fatal(created.Code, created.Body.String())
 	}
-	var collection ent.Resource
+	var collection resources.Resource
 	if err = json.Unmarshal(created.Body.Bytes(), &collection); err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func TestCollectionSettingsAndDeleteAPI(t *testing.T) {
 	if deleted.Code != 204 {
 		t.Fatal(deleted.Code, deleted.Body.String())
 	}
-	if stored, err := s.Client.Workflow.Get(t.Context(), bound.ID); err != nil || stored.AutomaticEnabled || stored.DeletedAt == nil {
+	if stored, err := s.DAL.Workflows().Find(t.Context(), bound.ID); err != nil || stored.AutomaticEnabled || stored.DeletedAt == nil {
 		t.Fatal("bound workflow survived", stored, err)
 	}
 	if gone := request(h, "GET", path, "", testToken, "", ""); gone.Code != 404 {

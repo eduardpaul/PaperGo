@@ -3,14 +3,14 @@ package workflow
 import (
 	"testing"
 
-	"papergo/ent/workflow"
+	"papergo/internal/dal/daltest"
+	"papergo/internal/dal/workflows"
 	"papergo/internal/dms"
-	"papergo/internal/testutil"
 )
 
 func TestIntegrationWorkflowNeedsOnlyListManageAndRespectsDisable(t *testing.T) {
 	ctx := t.Context()
-	service := dms.NewService(testutil.Database(t).SQL)
+	service := dms.NewService(daltest.Database(t).SQL)
 	ws, err := service.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Workspace"})
 	if err != nil {
 		t.Fatal(err)
@@ -26,14 +26,15 @@ func TestIntegrationWorkflowNeedsOnlyListManageAndRespectsDisable(t *testing.T) 
 		t.Fatal(err)
 	}
 	flows := &Service{DMS: service}
-	if err = service.Write(ctx, func(t *dms.Service) error { return flows.EnsureIntegrationWorkflow(ctx, t, "bob", list) }); err != nil {
+	if err = service.Write(ctx, func(t *dms.Service) error { return flows.EnsureIntegrationWorkflow(ctx, t, "bob", list.ID) }); err != nil {
 		t.Fatal(err)
 	}
-	row, err := service.Client.Workflow.Query().Where(workflow.BuiltinKeyEQ(IntegrationRefreshBuiltIn)).Only(ctx)
-	if err != nil || !row.AutomaticEnabled {
-		t.Fatal(row, err)
+	found, err := service.DAL.Workflows().List(ctx, workflows.Filter{BuiltinKey: IntegrationRefreshBuiltIn})
+	if err != nil || len(found) != 1 || !found[0].AutomaticEnabled {
+		t.Fatal(found, err)
 	}
-	version, err := current(ctx, service, row)
+	row := found[0]
+	version, err := service.DAL.Workflows().Version(ctx, row.ID, int64(row.CurrentVersion))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,13 +48,13 @@ func TestIntegrationWorkflowNeedsOnlyListManageAndRespectsDisable(t *testing.T) 
 	if len(def.Triggers) != 1 || def.Triggers[0].Cron != "*/15 * * * *" {
 		t.Fatal(def)
 	}
-	if err = service.Client.Workflow.UpdateOne(row).SetAutomaticEnabled(false).Exec(ctx); err != nil {
+	if _, _, err = service.DAL.Workflows().Revise(ctx, row.ID, row.Version, row.UpdatedBy, version.Definition, workflows.Changes{AutomaticEnabled: new(false)}); err != nil {
 		t.Fatal(err)
 	}
-	if err = service.Write(ctx, func(t *dms.Service) error { return flows.EnsureIntegrationWorkflow(ctx, t, "bob", list) }); err != nil {
+	if err = service.Write(ctx, func(t *dms.Service) error { return flows.EnsureIntegrationWorkflow(ctx, t, "bob", list.ID) }); err != nil {
 		t.Fatal(err)
 	}
-	rows, err := service.Client.Workflow.Query().Where(workflow.BuiltinKeyEQ(IntegrationRefreshBuiltIn)).All(ctx)
+	rows, err := service.DAL.Workflows().List(ctx, workflows.Filter{BuiltinKey: IntegrationRefreshBuiltIn})
 	if err != nil || len(rows) != 1 || rows[0].AutomaticEnabled {
 		t.Fatal(rows, err)
 	}

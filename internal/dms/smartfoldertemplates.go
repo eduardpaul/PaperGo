@@ -2,10 +2,10 @@ package dms
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
-	"papergo/ent"
-	"papergo/ent/smartfolder"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/taxonomy"
+	viewstore "papergo/internal/dal/views"
 	"slices"
 	"strings"
 )
@@ -35,10 +35,10 @@ type SmartFolderPackage struct {
 	Folders []PortableSmartFolder `json:"folders"`
 }
 type SmartFolderImportResult struct {
-	Created          int                `json:"created"`
-	Updated          int                `json:"updated"`
-	WorkspaceVersion int                `json:"workspace_version"`
-	Data             []*ent.SmartFolder `json:"data"`
+	Created          int                      `json:"created"`
+	Updated          int                      `json:"updated"`
+	WorkspaceVersion int                      `json:"workspace_version"`
+	Data             []*viewstore.SmartFolder `json:"data"`
 }
 
 func (s *Service) smartTermPaths(ctx context.Context, ids []string) (map[string]SmartFolderTermRef, error) {
@@ -46,26 +46,32 @@ func (s *Service) smartTermPaths(ctx context.Context, ids []string) (map[string]
 	if len(ids) == 0 {
 		return out, nil
 	}
-	raw, _ := json.Marshal(ids)
-	rows, err := s.Client.QueryContext(ctx, `WITH RECURSIVE ancestors(id) AS (SELECT value FROM json_each(?) UNION SELECT t.parent_id FROM terms t JOIN ancestors a ON t.id=a.id WHERE t.parent_id IS NOT NULL) SELECT t.id,t.parent_id,t.name,ts.key FROM ancestors a JOIN terms t ON t.id=a.id JOIN term_sets ts ON ts.id=t.term_set_id`, string(raw))
-	if err != nil {
-		return nil, err
-	}
 	type node struct{ parent, name, set string }
 	nodes := map[string]node{}
-	for rows.Next() {
-		var id, name, set string
-		var parent sql.NullString
-		if err = rows.Scan(&id, &parent, &name, &set); err != nil {
-			rows.Close()
+	setKeys := map[string]string{}
+	for pending := ids; len(pending) > 0; {
+		terms, err := s.DAL.Taxonomy().Terms(ctx, taxonomy.TermFilter{IDs: pending})
+		if err != nil {
 			return nil, err
 		}
-		nodes[id] = node{parent.String, name, set}
-	}
-	err = rows.Err()
-	rows.Close()
-	if err != nil {
-		return nil, err
+		pending = nil
+		for _, t := range terms {
+			key, ok := setKeys[t.SetID]
+			if !ok {
+				set, err := s.DAL.Taxonomy().Set(ctx, t.SetID)
+				if err != nil {
+					return nil, err
+				}
+				key, setKeys[t.SetID] = set.Key, set.Key
+			}
+			nodes[t.ID] = node{t.ParentID, t.Name, key}
+			if _, seen := nodes[t.ParentID]; t.ParentID != "" && !seen && !slices.Contains(pending, t.ParentID) {
+				pending = append(pending, t.ParentID)
+			}
+		}
+		if len(nodes) > 32*len(ids) {
+			return nil, invalid("term hierarchy exceeds 32 levels")
+		}
 	}
 	for _, id := range ids {
 		n, ok := nodes[id]
@@ -100,7 +106,7 @@ func (s *Service) ExportSmartFolders(ctx context.Context, subject, workspace str
 		if e != nil {
 			return result{}, e
 		}
-		folders, e := t.Client.SmartFolder.Query().Where(smartfolder.WorkspaceIDEQ(workspace), smartfolder.OwnerIDIsNil()).Order(ent.Asc(smartfolder.FieldName)).Limit(MaxSharedSmartFolders + 1).All(ctx)
+		folders, e := t.DAL.Views().SmartFolders(ctx, viewstore.FolderFilter{WorkspaceID: workspace, Shared: true, Order: viewstore.FoldersByName, Limit: MaxSharedSmartFolders + 1})
 		if e != nil {
 			return result{}, e
 		}
@@ -110,7 +116,7 @@ func (s *Service) ExportSmartFolders(ctx context.Context, subject, workspace str
 		defs := make([]SmartFolderDefinition, len(folders))
 		ids := []string{}
 		for i, f := range folders {
-			defs[i], e = smartDefinition(f)
+			defs[i], e = smartDefinition(&f)
 			if e != nil {
 				return result{}, e
 			}
@@ -180,24 +186,22 @@ func (s *Service) resolveSmartPackageTerms(ctx context.Context, pkg SmartFolderP
 	if len(leaves) == 0 {
 		return out, nil
 	}
-	raw, _ := json.Marshal(leaves)
-	rows, err := s.Client.QueryContext(ctx, `SELECT t.id FROM json_each(?) j JOIN term_sets ts ON ts.key=json_extract(j.value,'$.set') JOIN terms t ON t.term_set_id=ts.id AND t.normalized_name=json_extract(j.value,'$.name') AND t.merged_into_id IS NULL`, string(raw))
-	if err != nil {
-		return nil, err
-	}
 	ids := []string{}
-	for rows.Next() {
-		var id string
-		if err = rows.Scan(&id); err != nil {
-			rows.Close()
+	for _, l := range leaves {
+		set, err := s.DAL.Taxonomy().SetByKey(ctx, l.Set)
+		if dberr.IsNotFound(err) {
+			continue
+		}
+		if err != nil {
 			return nil, err
 		}
-		ids = append(ids, id)
-	}
-	err = rows.Err()
-	rows.Close()
-	if err != nil {
-		return nil, err
+		terms, err := s.DAL.Taxonomy().Terms(ctx, taxonomy.TermFilter{SetID: set.ID, Unmerged: true, Match: l.Name, In: taxonomy.MatchName})
+		if err != nil {
+			return nil, err
+		}
+		for _, t := range terms {
+			ids = append(ids, t.ID)
+		}
 	}
 	paths, err := s.smartTermPaths(ctx, ids)
 	if err != nil {
@@ -228,20 +232,20 @@ func (s *Service) ImportSmartFolders(ctx context.Context, subject, workspace str
 		if w.Version != version {
 			return ErrPreconditionFailed
 		}
-		existing, e := t.Client.SmartFolder.Query().Where(smartfolder.WorkspaceIDEQ(workspace), smartfolder.OwnerIDIsNil()).All(ctx)
+		existing, e := t.DAL.Views().SmartFolders(ctx, viewstore.FolderFilter{WorkspaceID: workspace, Shared: true})
 		if e != nil {
 			return e
 		}
-		byName := map[string]*ent.SmartFolder{}
-		for _, f := range existing {
-			byName[f.Name] = f
+		byName := map[string]*viewstore.SmartFolder{}
+		for i := range existing {
+			byName[existing[i].Name] = &existing[i]
 		}
 		seen := map[string]bool{}
 		refs, e := t.resolveSmartPackageTerms(ctx, pkg)
 		if e != nil {
 			return e
 		}
-		out = SmartFolderImportResult{Data: []*ent.SmartFolder{}}
+		out = SmartFolderImportResult{Data: []*viewstore.SmartFolder{}}
 		for _, portable := range pkg.Folders {
 			if seen[portable.Name] {
 				return invalid("package folder names must be unique")
@@ -261,7 +265,7 @@ func (s *Service) ImportSmartFolders(ctx context.Context, subject, workspace str
 				return e
 			}
 			old := byName[in.Name]
-			var f *ent.SmartFolder
+			var f *viewstore.SmartFolder
 			if old == nil {
 				f, e = t.createSmartFolder(ctx, subject, in)
 				if e != nil {
@@ -273,7 +277,7 @@ func (s *Service) ImportSmartFolders(ctx context.Context, subject, workspace str
 				if e != nil {
 					return e
 				}
-				if old.Description == in.Description && smartEqual(json.RawMessage(old.Definition), json.RawMessage(raw)) {
+				if old.Description == in.Description && sameJSON(json.RawMessage(old.Definition), json.RawMessage(raw)) {
 					f = old
 				} else {
 					f, e = t.updateSmartFolder(ctx, subject, old, in)
@@ -285,7 +289,7 @@ func (s *Service) ImportSmartFolders(ctx context.Context, subject, workspace str
 			}
 			out.Data = append(out.Data, f)
 		}
-		current, e := t.Client.Resource.Get(ctx, w.ID)
+		current, e := t.DAL.Resources().Resource(ctx, w.ID)
 		if e != nil {
 			return e
 		}

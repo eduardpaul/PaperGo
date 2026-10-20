@@ -3,27 +3,32 @@ package dms
 import (
 	"context"
 	"database/sql"
-	"entgo.io/ent/dialect"
-	entsql "entgo.io/ent/dialect/sql"
+	"encoding/json"
+	"errors"
 	"github.com/google/uuid"
-	"papergo/ent"
-	"papergo/ent/fielddefinition"
-	"papergo/ent/grant"
-	"papergo/ent/resource"
 	"papergo/internal/ai"
+	"papergo/internal/dal"
+	"papergo/internal/dal/access"
+	"papergo/internal/dal/blobs"
+	"papergo/internal/dal/catalog"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/directory"
+	"papergo/internal/dal/grants"
+	"papergo/internal/dal/refs"
+	"papergo/internal/dal/relationships"
+	"papergo/internal/dal/resources"
 	"papergo/internal/identity"
 	"papergo/internal/model"
 	"papergo/internal/requestmeta"
 	"papergo/internal/search"
 	"strings"
 	"sync/atomic"
-	"time"
 )
 
 type Service struct {
-	Client      *ent.Client
+	DAL         *dal.Store
 	db          *sql.DB
-	writeMu     chan struct{}
+	writer      *writerSlot
 	transaction bool
 	// Set only while provisioning the caller's fixed Home resources.
 	homeProvisioning bool
@@ -40,6 +45,7 @@ type Service struct {
 	integrationWrite       bool
 	pendingIntegrationData *IntegrationData
 	runPurger              func(context.Context, *sql.Tx, string) error
+	runSealer              func(context.Context, []string) error
 	// batch is set while one request applies many operations in a transaction.
 	batch *batchCache
 	// search is the search store, set with SetSearch.
@@ -54,49 +60,40 @@ type Service struct {
 
 // NewService serves the PaperGo database db.
 func NewService(db *sql.DB) *Service {
-	return &Service{Client: ent.NewClient(ent.Driver(entsql.OpenDB(dialect.SQLite, db))), db: db, writeMu: make(chan struct{}, 1), operations: make(chan struct{}, 1), collectionTemplates: builtInCollectionTemplates(), operationHandlers: builtInOperationHandlers(), searchRebuild: &atomic.Bool{}}
+	return &Service{DAL: dal.NewStore(db), db: db, writer: newWriterSlot(), operations: make(chan struct{}, 1), collectionTemplates: builtInCollectionTemplates(), operationHandlers: builtInOperationHandlers(), searchRebuild: &atomic.Bool{}}
 }
 
 // OnCommit calls f after each committed write that recorded domain events,
 // so a dispatcher can pick them up at once. Call it before the service is used.
 func (s *Service) OnCommit(f func()) { s.onCommit = f }
 
-// txDriver runs Ent on a transaction the service does not own. Ent opens its
-// own transaction for multi-statement saves; here those join tx instead.
-type txDriver struct{ *entsql.Driver }
-
-func (d txDriver) Tx(context.Context) (dialect.Tx, error) { return dialect.NopTx(d.Driver), nil }
-
-func entClient(tx *sql.Tx) *ent.Client {
-	return ent.NewClient(ent.Driver(txDriver{entsql.NewDriver(dialect.SQLite, entsql.Conn{ExecQuerier: tx})}))
-}
-
 // Mutations include authorization, version checks, audit records and the
 // domain event log in one transaction. SQLite WAL allows concurrent readers; one writer
-// per process keeps PaperGo writes in order, and immediate transactions make
-// other writers (the runner) wait for the lock instead of failing.
-// Waiting for the writer slot honors ctx, so a timed-out request leaves the queue.
+// per process keeps PaperGo writes in order and takes the slot before a
+// connection, so waiting writers never hold the connections readers need.
+// Background writes (workflow steps) yield the slot to other writes. Waiting
+// for the slot honors ctx, so a timed-out request leaves the queue.
 func (s *Service) write(ctx context.Context, fn func(*Service) error) error {
 	if s.transaction {
 		return fn(s)
 	}
-	select {
-	case s.writeMu <- struct{}{}:
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-	defer func() { <-s.writeMu }()
-	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
-	if err != nil {
+	if err := s.writer.acquire(ctx); err != nil {
 		return err
 	}
-	recorded, err := s.inTx(ctx, tx, fn)
-	if err != nil {
-		_ = tx.Rollback()
-	} else {
-		err = tx.Commit()
-	}
-	if ent.IsConstraintError(err) {
+	defer s.writer.release()
+	var recorded int
+	err := dal.Retry(ctx, func() error {
+		tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+		if err != nil {
+			return err
+		}
+		if recorded, err = s.inTx(ctx, tx, fn); err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+		return tx.Commit()
+	})
+	if dberr.IsConstraintError(err) {
 		return ErrConflict
 	}
 	if err == nil && recorded > 0 && s.onCommit != nil {
@@ -111,14 +108,14 @@ func (s *Service) write(ctx context.Context, fn func(*Service) error) error {
 func (s *Service) inTx(ctx context.Context, tx *sql.Tx, fn func(*Service) error) (int, error) {
 	ctx = requestmeta.EnsureTrace(ctx)
 	var pending []Event
-	t := &Service{Client: entClient(tx), db: s.db, writeMu: s.writeMu, transaction: true, operations: s.operations, tx: tx, pending: &pending, collectionTemplates: s.collectionTemplates, operationHandlers: s.operationHandlers, runPurger: s.runPurger, search: s.search, embeddings: s.embeddings, searchRebuild: s.searchRebuild}
+	t := &Service{DAL: s.DAL.WithTx(tx), db: s.db, writer: s.writer, transaction: true, operations: s.operations, tx: tx, pending: &pending, collectionTemplates: s.collectionTemplates, operationHandlers: s.operationHandlers, runPurger: s.runPurger, search: s.search, embeddings: s.embeddings, searchRebuild: s.searchRebuild}
 	t.integrations = s.integrations
 	t.traceID = requestmeta.Trace(ctx)
-	t.captureAuditProperties()
+	t.auditProperties = map[string]map[string]bool{}
 	if err := fn(t); err != nil {
 		return 0, err
 	}
-	if err := recordEvents(ctx, tx, pending); err != nil {
+	if err := recordEvents(ctx, t.DAL, pending); err != nil {
 		return 0, err
 	}
 	seen := map[string]bool{}
@@ -133,36 +130,28 @@ func (s *Service) inTx(ctx context.Context, tx *sql.Tx, fn func(*Service) error)
 	return len(pending), nil
 }
 
-// WriteTx runs fn as one write inside tx, which the caller owns and commits.
-// The runner uses it so a workflow step's writes, their events and the step's
-// completion marker commit together; it wakes the dispatcher itself.
-func (s *Service) WriteTx(ctx context.Context, tx *sql.Tx, fn func(*Service) error) error {
-	_, err := s.inTx(ctx, tx, fn)
-	return err
-}
-
 // A consistent snapshot binds authorization, surface selection and hydration.
 func read[T any](ctx context.Context, s *Service, fn func(*Service) (T, error)) (out T, err error) {
 	if s.transaction {
 		return fn(s)
 	}
-	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable, ReadOnly: true})
-	if err != nil {
-		return out, err
-	}
-	defer tx.Rollback()
-	out, err = fn(&Service{Client: entClient(tx), db: s.db, writeMu: s.writeMu, transaction: true, operations: s.operations, tx: tx, collectionTemplates: s.collectionTemplates, operationHandlers: s.operationHandlers, integrations: s.integrations, search: s.search, embeddings: s.embeddings, searchRebuild: s.searchRebuild})
-	if err != nil {
-		return out, err
-	}
-	err = tx.Commit()
+	err = dal.Retry(ctx, func() error {
+		tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable, ReadOnly: true})
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+		if out, err = fn(&Service{DAL: s.DAL.WithTx(tx), db: s.db, writer: s.writer, transaction: true, operations: s.operations, tx: tx, collectionTemplates: s.collectionTemplates, operationHandlers: s.operationHandlers, integrations: s.integrations, search: s.search, embeddings: s.embeddings, searchRebuild: s.searchRebuild}); err != nil {
+			return err
+		}
+		return tx.Commit()
+	})
 	return out, err
 }
-func (s *Service) audit(ctx context.Context, subject, action string, r *ent.Resource, details map[string]any) error {
-	typ, id := auditEntity(action, r, details)
-	return s.Client.AuditEvent.Create().SetWorkspaceID(r.WorkspaceID).SetResourceID(r.ID).SetSubject(subject).SetAction(action).SetEntityType(typ).SetEntityID(id).SetProperties(s.changedProperties(id, action)).SetTraceID(s.traceID).SetDetails(details).Exec(ctx)
+func (s *Service) audit(ctx context.Context, subject, action string, r *resources.Resource, details map[string]any) error {
+	return s.RecordEntity(ctx, subject, action, AuditTarget{WorkspaceID: r.WorkspaceID, ResourceID: r.ID, Kind: string(r.Kind)}, details)
 }
-func (s *Service) Get(ctx context.Context, subject, id string) (*ent.Resource, error) {
+func (s *Service) Get(ctx context.Context, subject, id string) (*resources.Resource, error) {
 	return s.GetSurface(ctx, subject, id, "auto")
 }
 
@@ -184,14 +173,14 @@ type CreateResource struct {
 	WebDAVEnabled     bool           `json:"webdav_enabled"`
 }
 
-func (s *Service) Create(ctx context.Context, subject, parentID string, in CreateResource) (out *ent.Resource, err error) {
+func (s *Service) Create(ctx context.Context, subject, parentID string, in CreateResource) (out *resources.Resource, err error) {
 	out, _, err = s.CreateWithStatus(ctx, subject, parentID, in)
 	return
 }
 
 // create inserts a resource inside a write transaction. A library item may be
 // created with its first blob, so its first revision already carries content.
-func (s *Service) create(ctx context.Context, subject, parentID string, in CreateResource, content *BlobInput) (*ent.Resource, error) {
+func (s *Service) create(ctx context.Context, subject, parentID string, in CreateResource, content *BlobInput) (*resources.Resource, error) {
 	var template *CollectionTemplate
 	if in.TemplateKey != "" {
 		tpl, ok := s.collectionTemplates[in.TemplateKey]
@@ -290,7 +279,7 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 		id = *in.ID
 	}
 	workspaceID := id
-	var parent *ent.Resource
+	var parent *resources.Resource
 	var containerID *string
 	if parentID != "" {
 		var e error
@@ -328,7 +317,7 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 		}
 	}
 	if in.Kind == "folder" && containerID != nil {
-		c, err := s.Client.Resource.Get(ctx, *containerID)
+		c, err := s.DAL.Resources().Resource(ctx, *containerID)
 		if err != nil {
 			return nil, err
 		}
@@ -336,7 +325,7 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 			return nil, invalid("this collection does not allow new folders")
 		}
 	}
-	key, e := s.fileNameKey(ctx, resource.Kind(in.Kind), containerID, in.Name)
+	key, e := s.fileNameKey(ctx, refs.ResourceKind(in.Kind), containerID, in.Name)
 	if e != nil {
 		return nil, e
 	}
@@ -354,14 +343,36 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 			return nil, e
 		}
 		typeID = &typ.ID
-		selected, _ := resourceDefinitions(resource.Kind(in.Kind), selectTypeDefinitions(defs, typ), nil)
+		selected, _ := resourceDefinitions(refs.ResourceKind(in.Kind), selectTypeDefinitions(defs, typ), nil)
 		if e = normalizeRevisionValues(selected, in.Values, nil, in.Kind == "item"); e != nil {
 			return nil, e
 		}
 	} else if len(in.Values) > 0 {
 		return nil, invalid("custom values are supported on items and folders only")
 	}
-	builder := s.Client.Resource.Create().SetID(id).SetWorkspaceID(workspaceID).SetKind(resource.Kind(in.Kind)).SetName(in.Name).SetKeywords(in.Keywords).SetValues(in.Values).SetNillableContainerID(containerID).SetPublishingEnabled(in.PublishingEnabled).SetWebdavEnabled(in.WebDAVEnabled).SetNillableNameKey(key)
+	rawValues, e := json.Marshal(in.Values)
+	if e != nil {
+		return nil, e
+	}
+	input := resources.New{ID: id, WorkspaceID: workspaceID, Kind: refs.ResourceKind(in.Kind), Name: in.Name, Description: in.Description, AllowFolders: in.AllowFolders, Keywords: in.Keywords, Values: rawValues, PublishingEnabled: in.PublishingEnabled, WebdavEnabled: in.WebDAVEnabled, Versioning: resources.Versioning(versioning), CreatedBy: subject}
+	if containerID != nil {
+		input.ContainerID = *containerID
+	}
+	if key != nil {
+		input.NameKey = *key
+	}
+	if typeID != nil {
+		input.ContentTypeID = *typeID
+	}
+	if parent != nil {
+		input.ParentID = parent.ID
+	}
+	if in.MaxVersions != nil {
+		input.MaxVersions = *in.MaxVersions
+	}
+	if in.DuplicatePolicy != nil {
+		input.DuplicatePolicy = resources.DuplicatePolicy(*in.DuplicatePolicy)
+	}
 	if template != nil {
 		if e = s.RequireScope(ctx, subject, "contentType.read"); e != nil {
 			return nil, e
@@ -370,45 +381,34 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 		if e != nil {
 			return nil, e
 		}
-		builder.SetTemplateKeys([]string{template.Key})
+		input.TemplateKeys = []string{template.Key}
 	}
 	if s.homeProvisioning {
 		if in.Kind == "workspace" {
-			builder.SetPersonalOwnerID(subject)
+			input.PersonalOwnerID = subject
 		}
 		if collection {
-			builder.SetSystemKey("home." + strings.ToLower(in.Name))
+			input.SystemKey = resources.SystemKey("home." + strings.ToLower(in.Name))
 		}
 	}
-	builder.SetCreatedBy(subject).SetUpdatedBy(subject)
-	builder.SetVersioning(resource.Versioning(versioning)).SetNillableMaxVersions(in.MaxVersions)
-	if in.DuplicatePolicy != nil {
-		builder.SetDuplicatePolicy(resource.DuplicatePolicy(*in.DuplicatePolicy))
-	}
-	builder.SetDescription(in.Description)
-	if in.AllowFolders != nil {
-		builder.SetAllowFolders(*in.AllowFolders)
-	}
-	builder.SetNillableContentTypeID(typeID)
-	if parent != nil {
-		builder.SetParentID(parent.ID)
-	} else {
-		builder.SetInheritPermissions(false)
-	}
-	out, e := builder.Save(ctx)
+	created, e := s.DAL.Resources().Create(ctx, input)
 	if e != nil {
 		return nil, e
 	}
 	if parent == nil {
-		_, e = s.Client.Grant.Create().SetResourceID(out.ID).SetPrincipalType(grant.PrincipalTypeUser).SetPrincipalID(subject).SetAction(grant.ActionManage).SetEffect(grant.EffectAllow).Save(ctx)
-		if e != nil {
+		if _, e = s.DAL.Grants().Create(ctx, grants.Grant{ResourceID: created.ID, PrincipalType: grants.PrincipalUser, PrincipalID: subject, Action: grants.ActionManage}); e != nil {
 			return nil, e
 		}
 	}
-	if out.Kind == resource.KindList || out.Kind == resource.KindLibrary {
+	// Create returns the stored row; preserve exact input numbers until
+	// revision validation.
+	out := created
+	out.Values = in.Values
+
+	if out.Kind == refs.KindList || out.Kind == refs.KindLibrary {
 		ids := in.ContentTypeIDs
 		if len(ids) == 0 {
-			typ, e := s.Client.ContentType.Create().SetKey("item").SetName("Item").Save(ctx)
+			typ, e := s.persistContentType(ctx, ContentTypeInput{Key: "item", Name: "Item"}, "")
 			if e != nil {
 				return nil, e
 			}
@@ -417,16 +417,16 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 			return nil, e
 		}
 		for i, id := range ids {
-			if _, e = s.Client.ContentType.Get(ctx, id); ent.IsNotFound(e) {
+			if _, e = s.DAL.Catalog().ContentType(ctx, id); dberr.IsNotFound(e) {
 				return nil, ErrNotFound
 			} else if e != nil {
 				return nil, e
 			}
-			if e = s.Client.CollectionType.Create().SetContainerID(out.ID).SetContentTypeID(id).SetIsDefault(i == 0).Exec(ctx); e != nil {
+			if _, e = s.DAL.Catalog().Attach(ctx, out.ID, id, i == 0); e != nil {
 				return nil, e
 			}
 		}
-		if e = s.refreshCollections(ctx, subject, []*ent.Resource{out}); e != nil {
+		if e = s.refreshCollections(ctx, subject, []*resources.Resource{out}); e != nil {
 			return nil, e
 		}
 	}
@@ -439,7 +439,7 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 	}
 	details := map[string]any{"kind": in.Kind}
 	if contentKind(out.Kind) {
-		var file *ent.Blob
+		var file *blobs.Blob
 		var blobID *string
 		if content != nil {
 			if file, e = s.createBlob(ctx, subject, out.ID, *content, true); e != nil {
@@ -456,7 +456,7 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 			s.emitFileChange(ctx, subject, out, file, rev, content.Source, nil)
 		}
 	}
-	out, e = s.Client.Resource.Get(ctx, out.ID)
+	out, e = s.DAL.Resources().Resource(ctx, out.ID)
 	if e != nil {
 		return nil, e
 	}
@@ -469,18 +469,18 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 }
 
 // depth counts r and its ancestors.
-func (s *Service) depth(ctx context.Context, r *ent.Resource) (int, error) {
+func (s *Service) depth(ctx context.Context, r *resources.Resource) (int, error) {
 	depth := 1
 	for ; r.ParentID != nil; depth++ {
 		if depth > MaxResourceDepth {
 			return depth, invalid("invalid hierarchy depth")
 		}
 		// Lists and libraries always sit directly in a workspace.
-		if r.Kind == resource.KindList || r.Kind == resource.KindLibrary {
+		if r.Kind == refs.KindList || r.Kind == refs.KindLibrary {
 			return depth + 1, nil
 		}
 		var err error
-		if r, err = s.Client.Resource.Get(ctx, *r.ParentID); err != nil {
+		if r, err = s.DAL.Resources().Resource(ctx, *r.ParentID); err != nil {
 			return depth, err
 		}
 	}
@@ -504,7 +504,7 @@ type UpdateResource struct {
 	ParentID *string `json:"parent_id,omitempty"`
 }
 
-func (s *Service) Update(ctx context.Context, subject, id string, version int, in UpdateResource) (out *ent.Resource, err error) {
+func (s *Service) Update(ctx context.Context, subject, id string, version int, in UpdateResource) (out *resources.Resource, err error) {
 	err = s.write(ctx, func(t *Service) error {
 		var e error
 		out, e = t.update(ctx, subject, id, version, in)
@@ -512,7 +512,7 @@ func (s *Service) Update(ctx context.Context, subject, id string, version int, i
 	})
 	return
 }
-func (s *Service) update(ctx context.Context, subject, id string, version int, in UpdateResource) (*ent.Resource, error) {
+func (s *Service) update(ctx context.Context, subject, id string, version int, in UpdateResource) (*resources.Resource, error) {
 	content := in.Name != nil || in.Description != nil || in.Keywords != nil || in.Values != nil || in.ContentTypeID != nil
 	if !content && in.DefaultCurrency == nil && in.DuplicatePolicy == nil && in.PublishingEnabled == nil && in.WebDAVEnabled == nil && in.AllowFolders == nil && in.ParentID == nil && in.Versioning == nil && in.MaxVersions == nil {
 		return nil, invalid("at least one change is required")
@@ -549,11 +549,11 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 	if err := validateDuplicatePolicy(string(r.Kind), in.DuplicatePolicy); err != nil {
 		return nil, err
 	}
-	collection := r.Kind == resource.KindList || r.Kind == resource.KindLibrary
+	collection := r.Kind == refs.KindList || r.Kind == refs.KindLibrary
 	if err := validateHistorySettings(collection, in.Versioning, in.MaxVersions); err != nil {
 		return nil, err
 	}
-	if r.Kind == resource.KindWorkspace || collection {
+	if r.Kind == refs.KindWorkspace || collection {
 		if _, e = s.authorize(ctx, subject, id, "manage"); e != nil {
 			return nil, e
 		}
@@ -571,7 +571,7 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 	} else if in.Description != nil {
 		return nil, invalid("description belongs to workspaces, lists and libraries")
 	}
-	if in.DefaultCurrency != nil && (r.Kind != resource.KindWorkspace || (*in.DefaultCurrency != "" && !model.ValidCurrencyCode(*in.DefaultCurrency))) {
+	if in.DefaultCurrency != nil && (r.Kind != refs.KindWorkspace || (*in.DefaultCurrency != "" && !model.ValidCurrencyCode(*in.DefaultCurrency))) {
 		return nil, invalid("default_currency requires a workspace and an uppercase three-letter currency code, or empty to inherit")
 	}
 	if in.AllowFolders != nil && !collection {
@@ -581,10 +581,10 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 		return nil, ErrPreconditionFailed
 	}
 	if in.PublishingEnabled != nil || in.WebDAVEnabled != nil {
-		if in.PublishingEnabled != nil && r.Kind != resource.KindList && r.Kind != resource.KindLibrary {
+		if in.PublishingEnabled != nil && r.Kind != refs.KindList && r.Kind != refs.KindLibrary {
 			return nil, invalid("publishing_enabled belongs to lists and libraries")
 		}
-		if in.WebDAVEnabled != nil && r.Kind != resource.KindLibrary {
+		if in.WebDAVEnabled != nil && r.Kind != refs.KindLibrary {
 			return nil, invalid("webdav_enabled belongs to libraries")
 		}
 		if _, e = s.authorize(ctx, subject, id, "manage"); e != nil {
@@ -596,6 +596,10 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 			return nil, e
 		}
 	}
+	beforeAudit, e := json.Marshal(r)
+	if e != nil {
+		return nil, e
+	}
 	if e = s.protectIntegrationFields(ctx, r, in); e != nil {
 		return nil, e
 	}
@@ -606,35 +610,35 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 		return nil, invalid("content_type_id requires an attached content type")
 	}
 	moved := in.ParentID != nil && (r.ParentID == nil || *in.ParentID != *r.ParentID)
-	b := s.Client.Resource.Update().Where(resource.IDEQ(id), resource.VersionEQ(version)).AddVersion(1).SetUpdatedAt(time.Now().UTC())
-	b.SetUpdatedBy(subject)
-	if in.Description != nil {
-		b.SetDescription(*in.Description)
+	changes := resources.Changes{Name: in.Name, Description: in.Description, ParentID: in.ParentID, ContentTypeID: in.ContentTypeID, AllowFolders: in.AllowFolders, DefaultCurrency: in.DefaultCurrency, MaxVersions: in.MaxVersions, PublishingEnabled: in.PublishingEnabled, WebdavEnabled: in.WebDAVEnabled, Keywords: in.Keywords}
+	if in.Versioning != nil {
+		versioning := resources.Versioning(*in.Versioning)
+		changes.Versioning = &versioning
 	}
-	if in.AllowFolders != nil {
-		b.SetAllowFolders(*in.AllowFolders)
+	if in.DuplicatePolicy != nil {
+		policy := resources.DuplicatePolicy(*in.DuplicatePolicy)
+		changes.DuplicatePolicy = &policy
 	}
 	if moved {
 		if e = s.checkMove(ctx, subject, r, *in.ParentID); e != nil {
 			return nil, e
 		}
-		b.SetParentID(*in.ParentID)
 	}
 	if in.Name != nil {
 		key, e := s.fileNameKey(ctx, r.Kind, r.ContainerID, *in.Name)
 		if e != nil {
 			return nil, e
 		}
-		b.SetName(*in.Name).SetNillableNameKey(key)
+		changes.NameKey = key
 	}
 	// Item values are validated and normalized once, by recordRevision below.
 	if contentKind(r.Kind) {
 		if in.ContentTypeID != nil && *in.ContentTypeID != *r.ContentTypeID {
-			c, err := s.Client.Resource.Get(ctx, *r.ContainerID)
+			c, err := s.DAL.Resources().Resource(ctx, *r.ContainerID)
 			if err != nil {
 				return nil, err
 			}
-			schema, err := s.Client.SchemaRevision.Get(ctx, *c.SchemaHeadID)
+			schema, err := s.DAL.Catalog().Schema(ctx, *c.SchemaHeadID)
 			if err != nil {
 				return nil, err
 			}
@@ -649,7 +653,6 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 				}
 			}
 			r.ContentTypeID = in.ContentTypeID
-			b.SetContentTypeID(*in.ContentTypeID)
 		}
 		if in.Name != nil {
 			r.Name = *in.Name
@@ -659,11 +662,11 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 		}
 		if in.Values != nil {
 			// Prune fields removed from the live schema before applying this patch.
-			c, err := s.Client.Resource.Get(ctx, *r.ContainerID)
+			c, err := s.DAL.Resources().Resource(ctx, *r.ContainerID)
 			if err != nil {
 				return nil, err
 			}
-			schema, err := s.Client.SchemaRevision.Get(ctx, *c.SchemaHeadID)
+			schema, err := s.DAL.Catalog().Schema(ctx, *c.SchemaHeadID)
 			if err != nil {
 				return nil, err
 			}
@@ -678,9 +681,9 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 				}
 				// An explicit lookup/person assignment validates every supplied target,
 				// even a retained ID. Omitted references survive unrelated edits.
-				if d := known[key]; (d.Type == fielddefinition.TypeLookup || d.Type == fielddefinition.TypePerson) && (*in.Values)[key] != nil {
+				if d := known[key]; (d.Type == catalog.FieldLookup || d.Type == catalog.FieldPerson) && (*in.Values)[key] != nil {
 					assigned := map[string]any{key: (*in.Values)[key]}
-					if err = s.normalizeItemValues(ctx, subject, []*ent.FieldDefinition{d}, assigned, nil, true); err != nil {
+					if err = s.normalizeItemValues(ctx, subject, []*catalog.FieldDefinition{d}, assigned, nil, true); err != nil {
 						return nil, err
 					}
 					(*in.Values)[key] = assigned[key]
@@ -694,37 +697,19 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 			}
 			r.Values = patchValues(current, *in.Values)
 		}
-		b.SetValues(r.Values)
+		raw, err := json.Marshal(r.Values)
+		if err != nil {
+			return nil, err
+		}
+		changes.Values = raw
 	}
-	if in.Keywords != nil {
-		b.SetKeywords(*in.Keywords)
-	}
-	if in.Versioning != nil {
-		b.SetVersioning(resource.Versioning(*in.Versioning))
-	}
-	if in.DefaultCurrency != nil {
-		b.SetDefaultCurrency(*in.DefaultCurrency)
-	}
-	if in.DuplicatePolicy != nil {
-		b.SetDuplicatePolicy(resource.DuplicatePolicy(*in.DuplicatePolicy))
-	}
-	if in.MaxVersions != nil {
-		b.SetMaxVersions(*in.MaxVersions)
-	}
-	if in.PublishingEnabled != nil {
-		b.SetPublishingEnabled(*in.PublishingEnabled)
-	}
-	if in.WebDAVEnabled != nil {
-		b.SetWebdavEnabled(*in.WebDAVEnabled)
-	}
-	n, e := b.Save(ctx)
-	if e != nil {
+	if e = s.DAL.Resources().Change(ctx, id, version, subject, changes); e != nil {
+		if errors.Is(e, dberr.ErrConcurrentUpdate) {
+			return nil, ErrPreconditionFailed
+		}
 		return nil, e
 	}
-	if n != 1 {
-		return nil, ErrPreconditionFailed
-	}
-	out, e := s.Client.Resource.Get(ctx, id)
+	out, e := s.DAL.Resources().Resource(ctx, id)
 	if e != nil {
 		return nil, e
 	}
@@ -735,7 +720,7 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 			if _, e = s.recordRevision(ctx, subject, out, nil, in.Values == nil); e != nil {
 				return nil, e
 			}
-			if out, e = s.Client.Resource.Get(ctx, id); e != nil {
+			if out, e = s.DAL.Resources().Resource(ctx, id); e != nil {
 				return nil, e
 			}
 		}
@@ -763,26 +748,29 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 		details["parent_id"] = *in.ParentID
 		// A folder's move without a content change records no revision, so
 		// it raises its own event.
-		if out.Kind == resource.KindFolder && !content {
+		if out.Kind == refs.KindFolder && !content {
 			s.emit(ctx, EventFolderUpdated, subject, out.WorkspaceID, out.ContainerID, out.ID, map[string]any{"from_parent_id": *r.ParentID, "parent_id": *in.ParentID})
 		}
 		s.emitScopeMoved(ctx, subject, r, out)
+	}
+	if e = s.trackAuditProperties(id, beforeAudit, out, resourceAuditProperties...); e != nil {
+		return nil, e
 	}
 	return out, s.audit(ctx, subject, "resource.update", out, details)
 }
 
 // checkMove validates moving r below parentID: both ends need write access,
 // the parent must belong to r's collection, and the subtree must stay within
-// MaxFolderDepth without entering itself. Triggers repeat the containment rules.
-func (s *Service) checkMove(ctx context.Context, subject string, r *ent.Resource, parentID string) error {
-	if r.Kind != resource.KindFolder && r.Kind != resource.KindItem {
+// MaxFolderDepth without entering itself. DAL enforces containment during the write.
+func (s *Service) checkMove(ctx context.Context, subject string, r *resources.Resource, parentID string) error {
+	if r.Kind != refs.KindFolder && r.Kind != refs.KindItem {
 		return invalid("only folders and items can move")
 	}
 	p, err := s.authorize(ctx, subject, parentID, "write")
 	if err != nil {
 		return err
 	}
-	if r.ContainerID == nil || (p.ID != *r.ContainerID && (p.Kind != resource.KindFolder || p.ContainerID == nil || *p.ContainerID != *r.ContainerID)) {
+	if r.ContainerID == nil || (p.ID != *r.ContainerID && (p.Kind != refs.KindFolder || p.ContainerID == nil || *p.ContainerID != *r.ContainerID)) {
 		return invalid("folders and items move only within their collection")
 	}
 	// One walk up from the new parent both rejects entering r and counts depth.
@@ -794,7 +782,7 @@ func (s *Service) checkMove(ctx context.Context, subject string, r *ent.Resource
 		if depth > MaxResourceDepth {
 			return invalid("invalid hierarchy depth")
 		}
-		if a, err = s.Client.Resource.Get(ctx, *a.ParentID); err != nil {
+		if a, err = s.DAL.Resources().Resource(ctx, *a.ParentID); err != nil {
 			return err
 		}
 	}
@@ -810,28 +798,7 @@ func (s *Service) checkMove(ctx context.Context, subject string, r *ent.Resource
 
 // subtreeFolderHeight counts folder levels, excluding a terminal item.
 func (s *Service) subtreeFolderHeight(ctx context.Context, id string) (int, error) {
-	var height int
-	err := s.scan(ctx, []any{&height}, `WITH RECURSIVE sub(id,kind,depth) AS (SELECT id,kind,1 FROM resources WHERE id=? UNION ALL SELECT c.id,c.kind,sub.depth+1 FROM resources c JOIN sub ON c.parent_id=sub.id WHERE c.deleted_at IS NULL AND sub.depth<=?) SELECT max(CASE WHEN kind='folder' THEN depth ELSE depth-1 END) FROM sub`, id, MaxFolderDepth+1)
-	return height, err
-}
-
-// scan reads the single row of an aggregate query.
-func (s *Service) scan(ctx context.Context, dest []any, query string, args ...any) error {
-	rows, err := s.Client.QueryContext(ctx, query, args...)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-	if !rows.Next() {
-		if err = rows.Err(); err == nil {
-			err = sql.ErrNoRows
-		}
-		return err
-	}
-	if err = rows.Scan(dest...); err != nil {
-		return err
-	}
-	return rows.Close()
+	return s.DAL.Resources().FolderHeight(ctx, id, MaxFolderDepth+1)
 }
 
 type DeleteOptions struct {
@@ -853,8 +820,8 @@ func (s *Service) delete(ctx context.Context, subject, id string, version int, r
 	if r.PersonalOwnerID != nil || r.SystemKey != nil {
 		return ErrProtectedHome
 	}
-	collection := r.Kind == resource.KindList || r.Kind == resource.KindLibrary
-	if r.Kind == resource.KindWorkspace || collection {
+	collection := r.Kind == refs.KindList || r.Kind == refs.KindLibrary
+	if r.Kind == refs.KindWorkspace || collection {
 		if _, err = s.authorize(ctx, subject, id, "manage"); err != nil {
 			return err
 		}
@@ -862,8 +829,8 @@ func (s *Service) delete(ctx context.Context, subject, id string, version int, r
 	if r.Version != version {
 		return ErrPreconditionFailed
 	}
-	if r.Kind == resource.KindFolder && !recursive {
-		populated, err := s.Client.Resource.Query().Where(resource.ParentIDEQ(id), resource.DeletedAtIsNil()).Exist(ctx)
+	if r.Kind == refs.KindFolder && !recursive {
+		populated, err := s.DAL.Resources().Exists(ctx, resources.Filter{ParentID: id, State: resources.Live})
 		if err != nil {
 			return err
 		}
@@ -871,73 +838,61 @@ func (s *Service) delete(ctx context.Context, subject, id string, version int, r
 			return ErrFolderNotEmpty
 		}
 	}
-	subtree := `WITH RECURSIVE sub(id) AS (SELECT ? UNION ALL SELECT c.id FROM resources c JOIN sub ON c.parent_id=sub.id WHERE c.deleted_at IS NULL) SELECT id FROM sub`
-	writable, args := permissionSQL(ctx, "r.id", subject, "write")
-	var total, allowed int
-	if err = s.scan(ctx, []any{&total, &allowed}, `SELECT count(*), coalesce(sum(CASE WHEN `+writable+` THEN 1 ELSE 0 END),0) FROM resources r WHERE r.id IN (`+subtree+`)`, append(args, id)...); err != nil {
+	subtree, err := s.DAL.Resources().SubtreeIDs(ctx, id, resources.TreeFilter{State: resources.Live})
+	if err != nil {
 		return err
 	}
+	writable, err := s.DAL.Resources().Count(ctx, resources.Filter{IDs: subtree, State: resources.Live, Reader: &resources.Reader{Principal: principal(ctx, subject), Action: access.Write}})
+	if err != nil {
+		return err
+	}
+	total := len(subtree)
 	// Explicit recursion authorizes every descendant before removing any content.
-	if !collection && allowed != total {
+	if !collection && writable != total {
 		return ErrForbidden
 	}
-	for _, statement := range []string{
-		`DELETE FROM field_values WHERE item_id IN (` + subtree + `)`,
-		`DELETE FROM business_keys WHERE item_id IN (` + subtree + `)`,
-		`DELETE FROM item_surfaces WHERE item_id IN (` + subtree + `)`,
-	} {
-		if _, err = s.Client.ExecContext(ctx, statement, id); err != nil {
-			return err
-		}
+	links, err := s.DAL.Relationships().Count(ctx, relationships.Filter{Endpoints: subtree})
+	if err != nil {
+		return err
 	}
-	var links int
-	if err = s.scan(ctx, []any{&links}, `SELECT count(*) FROM relationships WHERE source_id IN (`+subtree+`) OR target_id IN (`+subtree+`)`, id, id); err != nil {
+	switch {
+	case r.Kind == refs.KindWorkspace:
+		// Schedules and event dispatch only select enabled, live workflows.
+		err = s.DAL.Workflows().Retire(ctx, id, "", subject)
+	case collection:
+		err = s.DAL.Workflows().Retire(ctx, "", id, subject)
+	}
+	if err != nil {
+		return err
+	}
+	deleted, err := s.DAL.Resources().Delete(ctx, id, subject)
+	if err != nil {
 		return err
 	}
 	if s.pending != nil {
-		entries, err := s.Client.Resource.Query().Where(resource.KindIn(resource.KindItem, resource.KindFolder), resource.DeletedAtIsNil(), func(sel *entsql.Selector) {
-			sel.Where(entsql.ExprP(sel.C(resource.FieldID)+" IN ("+subtree+")", id))
-		}).Select(resource.FieldID, resource.FieldKind, resource.FieldWorkspaceID, resource.FieldContainerID).All(ctx)
-		if err != nil {
-			return err
-		}
-		for _, entry := range entries {
-			typ := EventItemDeleted
-			if entry.Kind == resource.KindFolder {
-				typ = EventFolderDeleted
+		for _, entry := range deleted {
+			switch entry.Kind {
+			case refs.KindItem:
+				s.emit(ctx, EventItemDeleted, subject, entry.WorkspaceID, entry.ContainerID, entry.ID, nil)
+			case refs.KindFolder:
+				s.emit(ctx, EventFolderDeleted, subject, entry.WorkspaceID, entry.ContainerID, entry.ID, nil)
 			}
-			s.emit(ctx, typ, subject, entry.WorkspaceID, entry.ContainerID, entry.ID, nil)
 		}
-	}
-	now := time.Now().UTC()
-	if r.Kind == resource.KindWorkspace {
-		// Schedules and event dispatch only select enabled, live workflows.
-		if _, err = s.Client.ExecContext(ctx, `UPDATE workflows SET automatic_enabled=0,manual_enabled=0, deleted_at=?, updated_at=?, updated_by=?, version=version+1 WHERE workspace_id=? AND deleted_at IS NULL`, now, now, subject, id); err != nil {
-			return err
-		}
-	}
-	if collection {
-		if _, err = s.Client.ExecContext(ctx, `UPDATE workflows SET automatic_enabled=0,manual_enabled=0, deleted_at=?, updated_at=?, updated_by=?, version=version+1 WHERE deleted_at IS NULL AND (collection_id=? OR id IN (SELECT v.workflow_id FROM workflow_versions v JOIN workflows w ON w.id=v.workflow_id AND w.current_version=v.number, json_each(v.definition, '$.triggers') tr WHERE json_extract(tr.value, '$.collection_id')=?))`, now, now, subject, id, id); err != nil {
-			return err
-		}
-	}
-	if _, err = s.Client.ExecContext(ctx, `UPDATE resources SET deleted_at=?, deleted_by=?, name_key=NULL, version=version+1, updated_at=?, updated_by=? WHERE id IN (`+subtree+`)`, now, subject, now, subject, id); err != nil {
-		return err
 	}
 	return s.audit(ctx, subject, "resource.delete", r, map[string]any{"version": version + 1, "descendants": total - 1, "relationships": links})
 }
 
 // fileNameKey is the unique, case-insensitive name of a library folder or item,
 // and nil for other resources. Library names must be usable as file names.
-func (s *Service) fileNameKey(ctx context.Context, kind resource.Kind, containerID *string, name string) (*string, error) {
-	if (kind != resource.KindFolder && kind != resource.KindItem) || containerID == nil {
+func (s *Service) fileNameKey(ctx context.Context, kind refs.ResourceKind, containerID *string, name string) (*string, error) {
+	if (kind != refs.KindFolder && kind != refs.KindItem) || containerID == nil {
 		return nil, nil
 	}
 	c, err := s.batchCollection(ctx, *containerID)
 	if err != nil {
 		return nil, err
 	}
-	if c.Kind != resource.KindLibrary {
+	if c.Kind != refs.KindLibrary {
 		return nil, nil
 	}
 	if !filenameValid(name) {
@@ -956,14 +911,14 @@ type CreateField struct {
 	Options       model.FieldOptions `json:"options,omitempty"`
 	Key           string             `json:"key"`
 	Label         string             `json:"label"`
-	Type          string             `json:"type"`
+	Type          catalog.FieldType  `json:"type"`
 	Required      bool               `json:"required"`
 	Choices       []string           `json:"choices"`
 	Indexed       bool               `json:"indexed"`
 	Scale         int                `json:"scale"`
 }
 
-func (s *Service) CreateField(ctx context.Context, subject, containerID string, in CreateField) (out *ent.FieldDefinition, err error) {
+func (s *Service) CreateField(ctx context.Context, subject, containerID string, in CreateField) (out *catalog.FieldDefinition, err error) {
 	err = s.write(ctx, func(t *Service) error {
 		c, e := t.contentTypeResource(ctx, subject, containerID, "manage")
 		if e != nil {
@@ -984,7 +939,7 @@ func (s *Service) CreateField(ctx context.Context, subject, containerID string, 
 	})
 	return
 }
-func (s *Service) createField(ctx context.Context, subject string, c *ent.Resource, in CreateField) (*ent.FieldDefinition, error) {
+func (s *Service) createField(ctx context.Context, subject string, c *resources.Resource, in CreateField) (*catalog.FieldDefinition, error) {
 	if c.Kind != "list" && c.Kind != "library" {
 		return nil, invalid("fields belong to collections")
 	}
@@ -992,11 +947,11 @@ func (s *Service) createField(ctx context.Context, subject string, c *ent.Resour
 	if e != nil {
 		return nil, e
 	}
-	var used bool
-	if e = s.scan(ctx, []any{&used}, "SELECT EXISTS(SELECT 1 FROM schema_revisions sr, json_each(sr.definition,'$.fields') f WHERE sr.container_id=? AND json_extract(f.value,'$.id')=?)", c.ID, in.Key); e != nil {
+	held, e := s.schemaFieldIDs(ctx, c.ID)
+	if e != nil {
 		return nil, e
 	}
-	if used {
+	if _, used := held[in.Key]; used {
 		return nil, invalid("field keys cannot be reused; use a new key")
 	}
 	d := fieldFromInput(in)
@@ -1014,7 +969,7 @@ func (s *Service) createField(ctx context.Context, subject string, c *ent.Resour
 			return nil, e
 		}
 	}
-	n, e := s.Client.FieldDefinition.Query().Where(collectionFieldPredicate(c.ID)).Count(ctx)
+	n, e := s.DAL.Catalog().CountFields(ctx, catalog.FieldFilter{CollectionID: c.ID})
 	if e != nil {
 		return nil, e
 	}
@@ -1022,7 +977,7 @@ func (s *Service) createField(ctx context.Context, subject string, c *ent.Resour
 		return nil, invalid("at most 200 fields per collection")
 	}
 	if d.Required && len(d.Options.DefaultValue) == 0 {
-		exists, e := s.Client.Resource.Query().Where(resource.ContainerIDEQ(c.ID), resource.ContentTypeIDEQ(typ.ID), resource.KindEQ(resource.KindItem), resource.DeletedAtIsNil()).Exist(ctx)
+		exists, e := s.DAL.Resources().Exists(ctx, resources.Filter{ContainerID: c.ID, ContentTypeID: typ.ID, Kinds: []refs.ResourceKind{refs.KindItem}, State: resources.Live})
 		if e != nil {
 			return nil, e
 		}
@@ -1030,23 +985,23 @@ func (s *Service) createField(ctx context.Context, subject string, c *ent.Resour
 			return nil, invalid("required fields on populated collections need a default")
 		}
 	}
-	out, e := s.Client.FieldDefinition.Create().SetKey(d.Key).SetLabel(d.Label).SetType(d.Type).SetRequired(d.Required).SetChoices(d.Choices).SetIndexed(d.Indexed).SetScale(d.Scale).SetOptions(d.Options).Save(ctx)
+	out, e := s.persistFieldDefinition(ctx, d)
 	if e != nil {
 		return nil, e
 	}
-	if e = s.Client.ContentType.UpdateOne(typ).SetFieldIds(append(append([]string{}, typ.FieldIds...), out.ID)).AddVersion(1).Exec(ctx); e != nil {
+	if _, e = s.reviseContentType(ctx, typ, typ.Name, append(append([]string{}, typ.FieldIds...), out.ID), typ.Rules); e != nil {
 		return nil, e
 	}
 	return out, nil
 }
-func (s *Service) Fields(ctx context.Context, subject, id string) ([]*ent.FieldDefinition, error) {
+func (s *Service) Fields(ctx context.Context, subject, id string) ([]*catalog.FieldDefinition, error) {
 	if !s.transaction {
-		return read(ctx, s, func(t *Service) ([]*ent.FieldDefinition, error) { return t.Fields(ctx, subject, id) })
+		return read(ctx, s, func(t *Service) ([]*catalog.FieldDefinition, error) { return t.Fields(ctx, subject, id) })
 	}
 	if _, err := s.authorize(ctx, subject, id, "read"); err != nil {
 		return nil, err
 	}
-	return s.Client.FieldDefinition.Query().Where(collectionFieldPredicate(id)).Order(ent.Asc(fielddefinition.FieldKey)).All(ctx)
+	return s.DAL.Catalog().Fields(ctx, catalog.FieldFilter{CollectionID: id})
 }
 
 type Permission struct {
@@ -1063,7 +1018,7 @@ type Permissions struct {
 	Grants          []Permission `json:"grants"`
 }
 
-func (s *Service) SetPermissions(ctx context.Context, subject, id string, version int, in Permissions) (out *ent.Resource, err error) {
+func (s *Service) SetPermissions(ctx context.Context, subject, id string, version int, in Permissions) (out *resources.Resource, err error) {
 	if in.Inherit && (len(in.Grants) > 0 || in.CopyInherited) {
 		return nil, invalid("inherited resources cannot have local grants; create an exclusive scope first")
 	}
@@ -1095,13 +1050,13 @@ func (s *Service) SetPermissions(ctx context.Context, subject, id string, versio
 		if r.Version != version {
 			return ErrPreconditionFailed
 		}
-		if r.Kind == resource.KindWorkspace {
+		if r.Kind == refs.KindWorkspace {
 			return invalid("workspace access is managed through members")
 		}
 		for _, g := range in.Grants {
 			switch g.PrincipalType {
 			case "user", "group":
-				if e = identity.ValidatePrincipal(ctx, t.tx, identity.Principal{Type: g.PrincipalType, ID: g.PrincipalID}); e != nil {
+				if e = identity.ValidatePrincipal(ctx, dal.NewStore(t.db).WithTx(t.tx), identity.Principal{Type: directory.PrincipalType(g.PrincipalType), ID: g.PrincipalID}); e != nil {
 					return invalid(e.Error())
 				}
 			case "workspace_visitor", "workspace_member", "workspace_owner":
@@ -1142,22 +1097,21 @@ func (s *Service) SetPermissions(ctx context.Context, subject, id string, versio
 		if e != nil {
 			return e
 		}
-		if _, e = t.Client.Grant.Delete().Where(grant.ResourceIDEQ(id)).Exec(ctx); e != nil {
+		if e = t.DAL.Grants().Clear(ctx, id); e != nil {
 			return e
 		}
-		n, e := t.Client.Resource.Update().Where(resource.IDEQ(id), resource.VersionEQ(version)).SetInheritPermissions(in.Inherit).AddVersion(1).Save(ctx)
-		if e != nil {
+		if e := t.DAL.Resources().SetInheritPermissions(ctx, id, version, in.Inherit); e != nil {
+			if errors.Is(e, dberr.ErrConcurrentUpdate) {
+				return ErrPreconditionFailed
+			}
 			return e
-		}
-		if n != 1 {
-			return ErrPreconditionFailed
 		}
 		for _, g := range in.Grants {
-			if _, e = t.Client.Grant.Create().SetResourceID(id).SetPrincipalType(grant.PrincipalType(g.PrincipalType)).SetPrincipalID(g.PrincipalID).SetAction(grant.Action(g.Action)).SetEffect(grant.EffectAllow).Save(ctx); e != nil {
+			if _, e = t.DAL.Grants().Create(ctx, grants.Grant{ResourceID: id, PrincipalType: grants.PrincipalType(g.PrincipalType), PrincipalID: g.PrincipalID, Action: grants.Action(g.Action)}); e != nil {
 				return e
 			}
 		}
-		out, e = t.Client.Resource.Get(ctx, id)
+		out, e = t.DAL.Resources().Resource(ctx, id)
 		if e != nil {
 			return e
 		}
@@ -1177,6 +1131,12 @@ func (s *Service) SetPermissions(ctx context.Context, subject, id string, versio
 			t.emitPermissionsChanged(ctx, subject, out, map[string]any{
 				"action": "replace", "previous": previous, "current": current,
 			})
+		}
+		if r.InheritPermissions != out.InheritPermissions {
+			if t.auditProperties[id] == nil {
+				t.auditProperties[id] = map[string]bool{}
+			}
+			t.auditProperties[id]["inherit_permissions"] = true
 		}
 		return t.audit(ctx, subject, "permissions.replace", out, map[string]any{"inherit": in.Inherit, "grant_count": len(in.Grants)})
 	})
@@ -1200,27 +1160,27 @@ func (s *Service) Permissions(ctx context.Context, subject, id string) (Permissi
 	}
 	return out, nil
 }
-func (s *Service) effectivePermissions(ctx context.Context, r *ent.Resource) (string, []Permission, error) {
+func (s *Service) effectivePermissions(ctx context.Context, r *resources.Resource) (string, []Permission, error) {
 	for depth := 0; r.InheritPermissions; depth++ {
 		if r.ParentID == nil || depth >= MaxResourceDepth {
 			return "", nil, invalid("invalid permission ancestry")
 		}
-		parent, e := s.Client.Resource.Get(ctx, *r.ParentID)
+		parent, e := s.DAL.Resources().Resource(ctx, *r.ParentID)
 		if e != nil {
 			return "", nil, e
 		}
 		r = parent
 	}
-	if r.Kind == resource.KindWorkspace {
+	if r.Kind == refs.KindWorkspace {
 		return r.ID, []Permission{{"workspace_visitor", r.ID, "read", "allow"}, {"workspace_member", r.ID, "write", "allow"}, {"workspace_owner", r.ID, "manage", "allow"}}, nil
 	}
-	rows, e := s.Client.Grant.Query().Where(grant.ResourceIDEQ(r.ID)).Order(ent.Asc(grant.FieldPrincipalType, grant.FieldPrincipalID, grant.FieldAction)).All(ctx)
+	rows, e := s.DAL.Grants().List(ctx, grants.Filter{ResourceID: r.ID})
 	if e != nil {
 		return "", nil, e
 	}
 	permissions := []Permission{}
 	for _, g := range rows {
-		permissions = append(permissions, Permission{string(g.PrincipalType), g.PrincipalID, string(g.Action), string(g.Effect)})
+		permissions = append(permissions, Permission{string(g.PrincipalType), g.PrincipalID, string(g.Action), "allow"})
 	}
 	return r.ID, permissions, nil
 }

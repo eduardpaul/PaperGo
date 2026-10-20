@@ -2,7 +2,7 @@ package dms
 
 import (
 	"context"
-	"strings"
+	"papergo/internal/dal/portable"
 )
 
 // A configuration template can bind its single source account to the importing
@@ -22,17 +22,17 @@ func (s *Service) bindWorkspaceTemplate(ctx context.Context, p *corePackage, sub
 			return invalid("workspace templates cannot include " + table)
 		}
 	}
-	columns, expressions, err := s.packageColumns(ctx, "identity_users")
+	user, err := s.DAL.Portable().Find(ctx, "identity_users", portable.Row{"id": subject})
+	if err != nil {
+		return err
+	}
+	columns, err := s.packageColumns(ctx, "identity_users")
 	if err != nil {
 		return err
 	}
 	account := make([]any, len(columns))
-	args := make([]any, len(account))
-	for i := range args {
-		args[i] = &account[i]
-	}
-	if err = s.tx.QueryRowContext(ctx, "SELECT "+strings.Join(expressions, ",")+" FROM identity_users WHERE id=?", subject).Scan(args...); err != nil {
-		return err
+	for i, column := range columns {
+		account[i] = user[column]
 	}
 	for table, data := range p.Tables {
 		if table == "identity_users" {

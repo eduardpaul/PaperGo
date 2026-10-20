@@ -101,7 +101,7 @@ def main():
         directory = Path(temp)
         dbpath = directory / 'papergo.db'
         env.update(DATABASE_PATH=str(dbpath), BLOB_PATH=str(directory / 'blobs'))
-        subprocess.run([str(admin), 'initialize', '--database', str(dbpath), '--schema', str(ROOT / 'migrations')],
+        subprocess.run([str(admin), 'initialize', '--database', str(dbpath)],
                        cwd=ROOT, env=env, check=True, stdout=subprocess.DEVNULL)
         with running(binary, env, directory) as server:
             stages = [snapshot(server, 'idle-empty', args.idle_seconds)]

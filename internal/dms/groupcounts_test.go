@@ -2,6 +2,7 @@ package dms
 
 import (
 	"fmt"
+	"papergo/internal/dal/refs"
 	"testing"
 )
 
@@ -91,9 +92,10 @@ func TestGroupCountsMatchRowCounts(t *testing.T) {
 			if err = s.runOperations(testContext); err != nil {
 				t.Fatal(err)
 			}
-			var left int
-			if err = s.scan(testContext, []any{&left}, "SELECT count(*) FROM group_counts WHERE container_id=? AND field_key='status'", list.ID); err != nil || left != 0 {
-				t.Fatal("counts of an unindexed field", left, err)
+			for _, surface := range []refs.Surface{refs.SurfaceHead, refs.SurfacePublished} {
+				if left, err := s.DAL.Surfaces().Counts(testContext, list.ID, surface, "status"); err != nil || len(left.Values) != 0 {
+					t.Fatal("counts of an unindexed field", left, err)
+				}
 			}
 		})
 	}

@@ -3,9 +3,9 @@ package dms
 import (
 	"context"
 	"errors"
-	"papergo/ent"
-	"papergo/ent/livechange"
 	"time"
+
+	"papergo/internal/dal/live"
 )
 
 var ErrLiveExpired = errors.New("live cursor expired; resynchronize and reconnect")
@@ -15,8 +15,8 @@ const LiveRetention = 7 * 24 * time.Hour
 // LivePosition validates a reconnect position on one consistent snapshot.
 func (s *Service) LivePosition(ctx context.Context, after *int64) (int64, error) {
 	return read(ctx, s, func(t *Service) (int64, error) {
-		var earliest, latest int64
-		if err := t.scan(ctx, []any{&earliest, &latest}, "SELECT coalesce((SELECT min(id) FROM live_changes),0),coalesce((SELECT seq FROM sqlite_sequence WHERE name='live_changes'),0)"); err != nil {
+		earliest, latest, err := t.DAL.LiveChanges().Bounds(ctx)
+		if err != nil {
 			return 0, err
 		}
 		if after == nil {
@@ -31,21 +31,16 @@ func (s *Service) LivePosition(ctx context.Context, after *int64) (int64, error)
 		return *after, nil
 	})
 }
-func (s *Service) LiveChanges(ctx context.Context, after int64) ([]*ent.LiveChange, error) {
-	return s.Client.LiveChange.Query().Where(livechange.IDGT(after)).Order(ent.Asc(livechange.FieldID)).Limit(500).All(ctx)
+func (s *Service) LiveChanges(ctx context.Context, after int64) ([]live.Change, error) {
+	return s.DAL.LiveChanges().After(ctx, after)
 }
 func (s *Service) CollectExpiredLiveChanges(ctx context.Context, now time.Time) error {
 	cutoff := now.UTC().Add(-LiveRetention)
 	for {
 		var n int64
 		err := s.write(ctx, func(t *Service) error {
-			ids, err := t.Client.LiveChange.Query().Where(livechange.CreatedAtLTE(cutoff)).Limit(livePurgePage).IDs(ctx)
-			if err != nil || len(ids) == 0 {
-				n = int64(len(ids))
-				return err
-			}
-			deleted, err := t.Client.LiveChange.Delete().Where(livechange.IDIn(ids...)).Exec(ctx)
-			n = int64(deleted)
+			var err error
+			n, err = t.DAL.LiveChanges().DeleteExpired(ctx, cutoff, livePurgePage)
 			return err
 		})
 		if err != nil || n < livePurgePage {

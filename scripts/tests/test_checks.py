@@ -95,6 +95,23 @@ class DevelopmentChecksTests(unittest.TestCase):
                 self.assertNotIn('-count=1', command)
                 self.assertEqual(list(command[-len(packages):]), packages)
 
+    def test_postgres_mode_runs_database_suites_on_the_configured_server(self):
+        dsn = 'postgres://user:secret@localhost:5432/papergo'
+        for args, packages in [(['--postgres'], checks.POSTGRES_PACKAGES), (['--postgres', '--packages', './internal/dms'], ['./internal/dms'])]:
+            with self.subTest(args=args), patch('sys.argv', ['check.py', *args]), \
+                    patch.dict('os.environ', {'PAPERGO_TEST_POSTGRES_DSN': dsn}, clear=True), \
+                    patch.object(checks, 'prepare_go'), patch.object(checks, 'prepare_frontend'), \
+                    patch.object(checks, 'check_formatting'), patch.object(checks, 'run') as run, \
+                    patch.object(checks.subprocess, 'run') as start:
+                checks.main()
+                start.assert_not_called()
+                self.assertEqual(os.environ['TEST_POSTGRES_DSN'], dsn)
+                self.assertEqual(list(run.call_args.args[-len(packages):]), packages)
+
+    def test_postgres_mode_rejects_other_modes(self):
+        with patch('sys.argv', ['check.py', '--postgres', '--web']), self.assertRaises(SystemExit):
+            checks.main()
+
     def test_native_mode_requires_assets_before_preparing_or_running_anything(self):
         with patch('sys.argv', ['check.py', '--native']), patch.dict('os.environ', {}, clear=True), \
                 patch.object(checks, 'prepare_go') as prepare:

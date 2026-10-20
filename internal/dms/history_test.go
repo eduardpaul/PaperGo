@@ -2,6 +2,7 @@ package dms
 
 import (
 	"errors"
+	"papergo/internal/dal/directory"
 	"papergo/internal/identity"
 	"slices"
 	"testing"
@@ -21,7 +22,7 @@ func TestRevisionHistoryChangesPaginationAndRestore(t *testing.T) {
 	if err != nil || len(history.Data) != 1 || !history.Data[0].IsCurrent || !slices.Equal(history.Data[0].ChangedFields, []string{"$keywords", "$name", "a", "b"}) {
 		t.Fatal(history, err)
 	}
-	if history.Data[0].Edges.SchemaRevision == nil {
+	if history.Data[0].SchemaRevision == nil {
 		t.Fatal("original schema missing")
 	}
 	if _, err = s.Revision(testContext, "alice", item.ID, 3); !errors.Is(err, ErrNotFound) {
@@ -75,7 +76,7 @@ func TestOrdinaryReaderHistorySnapshotsAndAuthorization(t *testing.T) {
 	if err != nil || len(rows.Data) != 1 || !rows.Data[0].IsCurrent || rows.Data[0].Name != "Unpublished" || rows.NextCursor != "2" || !slices.Equal(rows.Data[0].ChangedFields, []string{"$name", "note"}) {
 		t.Fatal(rows, err)
 	}
-	defs, _, err := typedDefinitions(rows.Data[0].Edges.SchemaRevision.Definition, rows.Data[0].ContentTypeID)
+	defs, _, err := typedDefinitions(rows.Data[0].SchemaRevision.Definition, rows.Data[0].ContentTypeID)
 	if err != nil || definitionMap(defs)["note"].Label != "Original label" {
 		t.Fatal("original schema lost", defs, err)
 	}
@@ -105,7 +106,7 @@ func TestOrdinaryReaderHistorySnapshotsAndAuthorization(t *testing.T) {
 			t.Fatal("private history exposed", e)
 		}
 	}
-	if err = s.Directory().SetAssignment(testContext, "alice", identity.MemberRole, identity.Principal{Type: "user", ID: "reader"}, true); err != nil {
+	if err = s.Directory().SetAssignment(testContext, "alice", identity.MemberRole, identity.Principal{Type: directory.PrincipalUser, ID: "reader"}, true); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = s.Revision(testContext, "reader", item.ID, 1); !errors.Is(err, ErrForbidden) {
@@ -114,7 +115,7 @@ func TestOrdinaryReaderHistorySnapshotsAndAuthorization(t *testing.T) {
 	if _, err = s.RevisionHistory(testContext, "reader", item.ID, 0, 10); !errors.Is(err, ErrForbidden) {
 		t.Fatal("history list bypassed module scope", err)
 	}
-	if err = s.Directory().SetAssignment(testContext, "alice", identity.MemberRole, identity.Principal{Type: "user", ID: "reader"}, false); err != nil {
+	if err = s.Directory().SetAssignment(testContext, "alice", identity.MemberRole, identity.Principal{Type: directory.PrincipalUser, ID: "reader"}, false); err != nil {
 		t.Fatal(err)
 	}
 	item, err = s.SetPermissions(testContext, "alice", item.ID, item.Version, Permissions{Grants: []Permission{{"user", "alice", "manage", "allow"}}})
@@ -148,7 +149,7 @@ func TestRestoreRevisionValidatesCurrentSchemaAndKeepsBlob(t *testing.T) {
 		t.Fatal(err)
 	}
 	// A later policy tightening rejects values restored from old history.
-	blob, err := s.AttachBlob(testContext, "alice", item.ID, item.Version, content("File.txt"))
+	blob, err := s.AttachBlob(testContext, "alice", item.ID, item.Version, pdfContent("File.txt"))
 	if err != nil {
 		t.Fatal(err)
 	}

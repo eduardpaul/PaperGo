@@ -3,9 +3,10 @@ package auth
 import (
 	"context"
 	"crypto/subtle"
-	"database/sql"
-	"errors"
 	"net/http"
+	"papergo/internal/dal"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/directory"
 	"strings"
 	"time"
 )
@@ -21,7 +22,7 @@ const SessionCookie = "papergo_session"
 // Local accepts an HTTP Basic password or a session cookie for accounts that
 // have a local password. It does not contact an identity provider.
 type Local struct {
-	DB *sql.DB
+	DAL *dal.Store
 }
 
 func (Local) Kind() Kind { return LocalMode }
@@ -43,23 +44,37 @@ func (l Local) Authenticate(r *http.Request) (Identity, error) {
 	return ident, nil
 }
 
+// account returns the local account of a subject when it may sign in: an
+// active, undeleted user who is not a service identity.
+func (l Local) account(ctx context.Context, subject string) (directory.User, bool, error) {
+	u, err := l.DAL.Directory().User(ctx, subject)
+	if dberr.IsNotFound(err) {
+		return directory.User{}, false, nil
+	}
+	if err != nil {
+		return directory.User{}, false, err
+	}
+	return u, u.Live() && !u.Service, nil
+}
+
+func identityOf(u directory.User) Identity {
+	name := u.DisplayName
+	if name == "" {
+		name = u.ID
+	}
+	return Identity{Subject: u.ID, Name: name, PreferredUsername: u.ID}
+}
+
 // Check verifies a username and password against the stored administrator.
 func (l Local) Check(ctx context.Context, username, password string) (Identity, error) {
-	username = strings.TrimSpace(username)
-	var hash, name string
-	var active bool
-	var deleted sql.NullTime
-	err := l.DB.QueryRowContext(ctx, "SELECT password_hash, display_name, active, deleted_at FROM identity_users WHERE id=? AND service=0", username).Scan(&hash, &name, &active, &deleted)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+	u, ok, err := l.account(ctx, strings.TrimSpace(username))
+	if err != nil {
 		return Identity{}, err
 	}
-	if err != nil || !active || deleted.Valid || !PasswordMatches(hash, password) {
+	if !ok || !PasswordMatches(u.PasswordHash, password) {
 		return Identity{}, ErrUnauthenticated
 	}
-	if name == "" {
-		name = username
-	}
-	return Identity{Subject: username, Name: name, PreferredUsername: username}, nil
+	return identityOf(u), nil
 }
 
 // Login checks the password and returns a new session cookie value.
@@ -76,7 +91,8 @@ func (l Local) Login(ctx context.Context, username, password string) (string, Id
 	if err != nil {
 		return "", Identity{}, err
 	}
-	if _, err = l.DB.ExecContext(ctx, "INSERT INTO identity_sessions(id,created_at,subject,secret_hash,expires_at) VALUES(?,CURRENT_TIMESTAMP,?,?,?)", id, ident.Subject, sha256Hex(secret), time.Now().UTC().Add(sessionTTL)); err != nil {
+	session := directory.Session{ID: id, Subject: ident.Subject, SecretHash: sha256Hex(secret), ExpiresAt: time.Now().Add(sessionTTL)}
+	if err = l.DAL.Directory().StartSession(ctx, session); err != nil {
 		return "", Identity{}, err
 	}
 	return id + "." + secret, ident, nil
@@ -88,16 +104,15 @@ func (l Local) Session(ctx context.Context, cookie string) (Identity, error) {
 	if !ok || id == "" || secret == "" {
 		return Identity{}, ErrUnauthenticated
 	}
-	var subject, hash, name string
-	var expires time.Time
-	err := l.DB.QueryRowContext(ctx, "SELECT s.subject, s.secret_hash, s.expires_at, u.display_name FROM identity_sessions s JOIN identity_users u ON u.id=s.subject WHERE s.id=? AND u.active=1 AND u.deleted_at IS NULL AND u.service=0", id).Scan(&subject, &hash, &expires, &name)
-	if err != nil || time.Now().After(expires) || subtle.ConstantTimeCompare([]byte(hash), []byte(sha256Hex(secret))) != 1 {
+	session, err := l.DAL.Directory().Session(ctx, id)
+	if err != nil || time.Now().After(session.ExpiresAt) || subtle.ConstantTimeCompare([]byte(session.SecretHash), []byte(sha256Hex(secret))) != 1 {
 		return Identity{}, ErrUnauthenticated
 	}
-	if name == "" {
-		name = subject
+	u, ok, err := l.account(ctx, session.Subject)
+	if err != nil || !ok {
+		return Identity{}, ErrUnauthenticated
 	}
-	return Identity{Subject: subject, Name: name, PreferredUsername: subject}, nil
+	return identityOf(u), nil
 }
 
 // Logout removes the session carried by the cookie value.
@@ -106,6 +121,5 @@ func (l Local) Logout(ctx context.Context, cookie string) error {
 	if !ok || id == "" {
 		return nil
 	}
-	_, err := l.DB.ExecContext(ctx, "DELETE FROM identity_sessions WHERE id=?", id)
-	return err
+	return l.DAL.Directory().EndSession(ctx, id)
 }

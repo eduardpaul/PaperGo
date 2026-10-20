@@ -8,7 +8,7 @@ A list can have up to 50 integrations. The same URL can be used in different lis
 
 Reading status requires list read access. Configuration and Refresh now require list Manage and `list.write`; no workspace-owner or external calendar-owner check is needed. Routine responses omit private configuration, provider state, credentials and feed URLs. Subscription URLs must use HTTPS on port 443. Every connection and redirect rejects private, loopback, link-local and other non-public destinations; HTTP redirects, proxies, unbounded responses and more than five redirects are refused.
 
-Configuring integrations with a REST token requires `list.read` and `list.write`. Automatically attaching the Event content type does not require `contentType.read`; choosing a catalog type directly through the content-type API still does.
+Configuring integrations with a access token requires `list.read` and `list.write`. Automatically attaching the Event content type does not require `contentType.read`; choosing a catalog type directly through the content-type API still does.
 
 ## Refresh and reconciliation
 

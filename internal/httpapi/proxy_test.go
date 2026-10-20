@@ -85,12 +85,12 @@ func TestProxyIdentityPreservesProfilesAndRejectsCredentialBypasses(t *testing.T
 	if r := do("GET", "/v1/identity/me", "", "proxy-member", ""); r.Code != 403 {
 		t.Fatal("proxy request reactivated a disabled user", r.Code)
 	}
-	for _, path := range []string{"/v1/identity/me/tokens", "/v1/webdav-credentials"} {
+	for _, path := range []string{"/v1/identity/me/tokens"} {
 		if r := do("GET", path, "", "bob", ""); r.Code != 404 {
 			t.Fatal(path, r.Code)
 		}
 	}
-	token, err := s.Directory().CreateRESTToken(ctx, "bob", identity.RESTTokenInput{Name: "Bypass", Scopes: []string{"list.read"}})
+	token, err := s.Directory().CreateAccessToken(ctx, "bob", identity.AccessTokenInput{Name: "Bypass", Scopes: []string{"list.read"}})
 	if err != nil {
 		t.Fatal(err)
 	}

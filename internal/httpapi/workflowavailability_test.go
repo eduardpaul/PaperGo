@@ -2,7 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
-	"papergo/ent/domainevent"
+	eventstore "papergo/internal/dal/events"
 	"papergo/internal/dms"
 	"papergo/internal/workflow"
 	"testing"
@@ -30,11 +30,11 @@ func TestWorkflowAvailabilityRoutesKeepManualAndAutomaticUseIndependent(t *testi
 	}
 	count := func() int {
 		t.Helper()
-		n, e := s.Client.DomainEvent.Query().Where(domainevent.TypeEQ("manual")).Count(ctx)
+		n, e := s.DAL.Events().Count(ctx, eventstore.Filter{Types: []string{"manual"}})
 		if e != nil {
 			t.Fatal(e)
 		}
-		return n
+		return int(n)
 	}
 	before := count()
 	body := `{"item_ids":["` + item + `"],"workflow_version":1}`

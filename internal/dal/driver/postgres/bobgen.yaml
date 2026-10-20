@@ -1,0 +1,281 @@
+# Generates this driver's models from the DAL schema master. Run from the
+# repository root:
+#   go tool bobgen-sql -c internal/dal/driver/postgres/bobgen.yaml
+
+sql:
+  dialect: "psql"
+  pattern: "internal/dal/schema/postgres.sql"
+  driver_image: "postgres:17-alpine"
+  # Tables of the domains that run through internal/dal/driver.
+  only:
+    tasks: []
+    task_responses: []
+    domain_events: []
+    audit_events: []
+    live_changes: []
+    workflow_waits: []
+    blob_previews: []
+    blob_deletions: []
+    sync_views: []
+    sync_states: []
+    sync_tokens: []
+    workflow_run_items: []
+    runner_step_results: []
+    workflow_triggers: []
+    operations: []
+    operation_items: []
+    list_integrations: []
+    integration_items: []
+    integration_revision_data: []
+    grants: []
+    group_inboxes: []
+    workflow_versions: []
+    blobs: []
+    blob_leases: []
+    resources: []
+    workflows: []
+    workflow_runs: []
+    identity_users: []
+    identity_groups: []
+    identity_organizations: []
+    identity_roles: []
+    identity_memberships: []
+    identity_assignments: []
+    identity_preferences: []
+    identity_sessions: []
+    access_tokens: []
+    term_groups: []
+    term_sets: []
+    terms: []
+    resource_keywords: []
+    relationship_types: []
+    relationships: []
+    field_definitions: []
+    content_types: []
+    collection_types: []
+    schema_revisions: []
+    schema_templates: []
+    staged_files: []
+    business_keys: []
+    item_revisions: []
+    item_histories: []
+    publications: []
+    item_surfaces: []
+    item_surface_keywords: []
+    field_values: []
+    group_counts: []
+    list_views: []
+    smart_folders: []
+
+plugins:
+  models:
+    destination: "internal/dal/driver/postgres/models"
+    pkgname: "models"
+  dbinfo:
+    disabled: true
+  dberrors:
+    disabled: true
+  factory:
+    disabled: true
+  loaders:
+    disabled: true
+  joins:
+    disabled: true
+  counts:
+    disabled: true
+
+no_tests: true
+no_back_referencing: true
+
+types:
+  "types.JSON[[]model.StagedSource]":
+    imports:
+      - '"github.com/stephenafamo/bob/types"'
+      - '"papergo/internal/model"'
+  "types.JSON[map[string]string]":
+    imports:
+      - '"github.com/stephenafamo/bob/types"'
+  "types.JSON[[]string]":
+    imports:
+      - '"github.com/stephenafamo/bob/types"'
+  "types.JSON[[]model.TaskOutcome]":
+    imports:
+      - '"github.com/stephenafamo/bob/types"'
+      - '"papergo/internal/model"'
+  "types.JSON[map[string]any]":
+    imports:
+      - '"github.com/stephenafamo/bob/types"'
+  "types.JSON[[]model.OperationFailure]":
+    imports:
+      - '"github.com/stephenafamo/bob/types"'
+      - '"papergo/internal/model"'
+  "types.JSON[model.JSONMap]":
+    imports:
+      - '"github.com/stephenafamo/bob/types"'
+      - '"papergo/internal/model"'
+  "types.JSON[json.RawMessage]":
+    imports:
+      - '"encoding/json"'
+      - '"github.com/stephenafamo/bob/types"'
+
+replacements:
+  - tables: ["tasks"]
+    match:
+      name: "assignees"
+    replace: "types.JSON[[]string]"
+  - tables: ["tasks"]
+    match:
+      name: "outcomes"
+    replace: "types.JSON[[]model.TaskOutcome]"
+  - tables: ["tasks"]
+    match:
+      name: "/^(input_schema|values|review)$/"
+    replace: "types.JSON[map[string]any]"
+  - tables: ["tasks", "task_responses"]
+    match:
+      name: "input"
+    replace: "types.JSON[json.RawMessage]"
+  - tables: ["domain_events"]
+    match:
+      name: "data"
+    replace: "types.JSON[model.JSONMap]"
+  - tables: ["audit_events"]
+    match:
+      name: "properties"
+    replace: "types.JSON[[]string]"
+  - tables: ["audit_events"]
+    match:
+      name: "details"
+    replace: "types.JSON[map[string]any]"
+  - tables: ["workflow_waits"]
+    match:
+      name: "/^(data|completion)$/"
+    replace: "types.JSON[json.RawMessage]"
+  - tables: ["sync_tokens"]
+    match:
+      name: "changes"
+    replace: "types.JSON[json.RawMessage]"
+  - tables: ["workflows"]
+    match:
+      name: "parameters"
+    replace: "types.JSON[model.JSONMap]"
+  - tables: ["workflow_versions"]
+    match:
+      name: "definition"
+    replace: "types.JSON[json.RawMessage]"
+  - tables: ["operations"]
+    match:
+      name: "credential_scopes"
+    replace: "types.JSON[[]string]"
+  - tables: ["operations"]
+    match:
+      name: "/^(payload|result)$/"
+    replace: "types.JSON[json.RawMessage]"
+  - tables: ["operations"]
+    match:
+      name: "failures"
+    replace: "types.JSON[[]model.OperationFailure]"
+  - tables: ["list_integrations"]
+    match:
+      name: "credential_scopes"
+    replace: "types.JSON[[]string]"
+  - tables: ["list_integrations"]
+    match:
+      name: "state"
+    replace: "types.JSON[json.RawMessage]"
+  - tables: ["integration_items"]
+    match:
+      name: "managed_fields"
+    replace: "types.JSON[[]string]"
+  - tables: ["integration_revision_data"]
+    match:
+      name: "data"
+    replace: "types.JSON[json.RawMessage]"
+  - tables: ["identity_roles", "access_tokens"]
+    match:
+      name: "scopes"
+    replace: "types.JSON[[]string]"
+  - tables: ["identity_preferences"]
+    match:
+      name: "values"
+    replace: "types.JSON[json.RawMessage]"
+  - tables: ["terms"]
+    match:
+      name: "labels"
+    replace: "types.JSON[map[string]string]"
+  - tables: ["terms"]
+    match:
+      name: "synonyms"
+    replace: "types.JSON[[]string]"
+  - tables: ["relationship_types"]
+    match:
+      name: "attributes"
+    replace: "types.JSON[json.RawMessage]"
+  - tables: ["relationships"]
+    match:
+      name: "metadata"
+    replace: "types.JSON[map[string]any]"
+  - tables: ["field_definitions"]
+    match:
+      name: "/^(choices|options)$/"
+    replace: "types.JSON[json.RawMessage]"
+  - tables: ["content_types"]
+    match:
+      name: "field_ids"
+    replace: "types.JSON[[]string]"
+  - tables: ["content_types"]
+    match:
+      name: "rules"
+    replace: "types.JSON[json.RawMessage]"
+  - tables: ["schema_revisions", "schema_templates"]
+    match:
+      name: "definition"
+    replace: "types.JSON[json.RawMessage]"
+  - tables: ["staged_files"]
+    match:
+      name: "sources"
+    replace: "types.JSON[[]model.StagedSource]"
+  - tables: ["staged_files"]
+    match:
+      name: "metrics"
+    replace: "types.JSON[json.RawMessage]"
+  - tables: ["item_revisions"]
+    match:
+      name: "keywords"
+    replace: "types.JSON[[]string]"
+  - tables: ["item_revisions"]
+    match:
+      name: "payload"
+    replace: "types.JSON[json.RawMessage]"
+  - tables: ["item_histories"]
+    match:
+      name: "changed_fields"
+    replace: "types.JSON[[]string]"
+  - tables: ["publications"]
+    match:
+      name: "snapshot"
+    replace: "types.JSON[json.RawMessage]"
+  - tables: ["item_surfaces", "list_views"]
+    match:
+      name: "/^(keywords|columns)$/"
+    replace: "types.JSON[[]string]"
+  - tables: ["item_surfaces"]
+    match:
+      name: "payload"
+    replace: "types.JSON[json.RawMessage]"
+  - tables: ["list_views"]
+    match:
+      name: "query"
+    replace: "types.JSON[json.RawMessage]"
+  - tables: ["smart_folders"]
+    match:
+      name: "definition"
+    replace: "types.JSON[json.RawMessage]"
+  - tables: ["resources"]
+    match:
+      name: "/^(keywords|template_keys)$/"
+    replace: "types.JSON[[]string]"
+  - tables: ["resources"]
+    match:
+      name: "values"
+    replace: "types.JSON[json.RawMessage]"

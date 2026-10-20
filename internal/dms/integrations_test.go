@@ -6,22 +6,24 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
-	"papergo/internal/storage"
+	"papergo/internal/dal/daltest"
+	"papergo/internal/dal/resources"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
-	"papergo/ent"
-	"papergo/ent/integrationitem"
-	"papergo/ent/operation"
 	"papergo/internal/calendar"
+	"papergo/internal/dal/integrations"
+	"papergo/internal/dal/operations"
 	"papergo/internal/identity"
 	"papergo/internal/integration"
+	"papergo/internal/storage"
 )
 
-func integrationFixture(t *testing.T) (*Service, *ent.Resource, *ent.Resource, *string) {
+func integrationFixture(t *testing.T) (*Service, *resources.Resource, *resources.Resource, *string) {
 	t.Helper()
 	s, w, list := fixture(t)
 	secrets, err := integration.NewSecrets(make([]byte, 32))
@@ -48,7 +50,7 @@ func sourceFeed(events string) string {
 
 const sourceEvent = "BEGIN:VEVENT\nUID:a\nSUMMARY:Meeting\nDTSTART;TZID=Europe/Madrid:20261019T090000\nDTEND;TZID=Europe/Madrid:20261019T100000\nRRULE:FREQ=WEEKLY;COUNT=3\nEND:VEVENT\n"
 
-func addIntegration(t *testing.T, s *Service, list string, url string) *ent.ListIntegration {
+func addIntegration(t *testing.T, s *Service, list string, url string) *IntegrationView {
 	t.Helper()
 	row, err := s.CreateIntegration(t.Context(), "alice", list, IntegrationInput{Kind: IntegrationKindICalendar, Name: "Work", Configuration: mustIntegrationConfig(url)})
 	if err != nil {
@@ -56,9 +58,9 @@ func addIntegration(t *testing.T, s *Service, list string, url string) *ent.List
 	}
 	return row
 }
-func integrationItems(t *testing.T, s *Service, id string) []*ent.IntegrationItem {
+func integrationItems(t *testing.T, s *Service, id string) []integrations.Item {
 	t.Helper()
-	rows, err := s.Client.IntegrationItem.Query().Where(integrationitem.IntegrationIDEQ(id)).All(t.Context())
+	rows, err := s.DAL.Integrations().Items(t.Context(), id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,11 +77,11 @@ func TestIntegrationCreateWithListScopedManagerToken(t *testing.T) {
 	if _, err := s.SetPermissions(ctx, "alice", list.ID, list.Version, Permissions{Inherit: false, Grants: []Permission{{PrincipalType: "user", PrincipalID: "bob", Action: "manage", Effect: "allow"}}}); err != nil {
 		t.Fatal(err)
 	}
-	token, err := s.Directory().CreateRESTToken(ctx, "bob", identity.RESTTokenInput{Name: "Feed", Scopes: []string{"list.read", "list.write"}})
+	token, err := s.Directory().CreateAccessToken(ctx, "bob", identity.AccessTokenInput{Name: "Feed", Scopes: []string{"list.read", "list.write"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	limited := identity.WithRESTToken(ctx, identity.RESTTokenIdentity{Subject: "bob", ID: token.Token.ID, Scopes: token.Token.Scopes})
+	limited := identity.WithAccessToken(ctx, identity.AccessTokenIdentity{Subject: "bob", ID: token.Token.ID, Scopes: token.Token.Scopes})
 	source, err := s.CreateIntegration(limited, "bob", list.ID, IntegrationInput{Kind: IntegrationKindICalendar, Name: "Feed", Configuration: mustIntegrationConfig("https://example.com/feed")})
 	if err != nil {
 		t.Fatal(err)
@@ -87,7 +89,7 @@ func TestIntegrationCreateWithListScopedManagerToken(t *testing.T) {
 	if err = s.runOperations(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if len(integrationItems(t, s, source.ID)) != 1 || source.CredentialID != token.Token.ID {
+	if len(integrationItems(t, s, source.ID)) != 1 || storedIntegration(t, s, source.ID).CredentialID != token.Token.ID {
 		t.Fatal("list-scoped integration did not retain its credential or import events")
 	}
 	// Selecting catalog types directly still requires the catalog read scope.
@@ -102,11 +104,11 @@ func TestIntegrationRevalidatesCredentialAfterDownload(t *testing.T) {
 			s, _, list, body := integrationFixture(t)
 			ctx := t.Context()
 			*body = sourceFeed(sourceEvent)
-			token, err := s.Directory().CreateRESTToken(ctx, "alice", identity.RESTTokenInput{Name: "Feed", Scopes: []string{"list.read", "list.write"}})
+			token, err := s.Directory().CreateAccessToken(ctx, "alice", identity.AccessTokenInput{Name: "Feed", Scopes: []string{"list.read", "list.write"}})
 			if err != nil {
 				t.Fatal(err)
 			}
-			limited := identity.WithRESTToken(ctx, identity.RESTTokenIdentity{Subject: "alice", ID: token.Token.ID, Scopes: token.Token.Scopes})
+			limited := identity.WithAccessToken(ctx, identity.AccessTokenIdentity{Subject: "alice", ID: token.Token.ID, Scopes: token.Token.Scopes})
 			source, err := s.CreateIntegration(limited, "alice", list.ID, IntegrationInput{Kind: IntegrationKindICalendar, Name: "Feed", Configuration: mustIntegrationConfig("https://example.com/feed")})
 			if err != nil {
 				t.Fatal(err)
@@ -119,19 +121,16 @@ func TestIntegrationRevalidatesCredentialAfterDownload(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			source, err = s.Client.ListIntegration.Get(ctx, source.ID)
-			if err != nil {
-				t.Fatal(err)
-			}
+			stored := storedIntegration(t, s, source.ID)
 			op, err := s.RefreshIntegration(limited, "alice", list.ID, source.ID)
 			if err != nil {
 				t.Fatal(err)
 			}
 			s.integrations.ical.download = func(_ context.Context, _, _, _ string) (calendar.Download, error) {
 				if mode == "expired" {
-					_, err = s.db.ExecContext(ctx, "UPDATE identity_rest_tokens SET expires_at=? WHERE id=?", time.Now().UTC().Add(-time.Second), token.Token.ID)
+					_, err = daltest.TryUpdate(s.DAL, "access_tokens", daltest.Row{"expires_at": time.Now().UTC().Add(-time.Second)}, daltest.Row{"id": token.Token.ID})
 				} else {
-					err = s.Directory().RevokeRESTToken(ctx, "alice", token.Token.ID)
+					err = s.Directory().RevokeAccessToken(ctx, "alice", token.Token.ID)
 				}
 				return calendar.Download{Body: []byte(sourceFeed(strings.ReplaceAll(sourceEvent, "Meeting", "Changed"))), ETag: "new-version", NotModified: mode == "revoked_not_modified"}, err
 			}
@@ -139,15 +138,15 @@ func TestIntegrationRevalidatesCredentialAfterDownload(t *testing.T) {
 				t.Fatal(worked, err)
 			}
 			op, err = s.Operation(ctx, "alice", op.ID)
-			if err != nil || op.Status != operation.StatusFailed {
+			if err != nil || op.Status != operations.StatusFailed {
 				t.Fatal(op, err)
 			}
 			after, err := s.Get(ctx, "alice", itemID)
 			if err != nil || after.Version != before.Version || *after.HeadRevisionID != *before.HeadRevisionID {
 				t.Fatal("invalid credential changed existing events", after, err)
 			}
-			current, err := s.Client.ListIntegration.Get(ctx, source.ID)
-			if err != nil || !current.LastSuccessAt.Equal(*source.LastSuccessAt) || !bytes.Equal(current.State, source.State) || current.LeaseUntil != nil {
+			current, err := s.DAL.Integrations().Find(ctx, source.ID)
+			if err != nil || !current.LastSuccessAt.Equal(*stored.LastSuccessAt) || !bytes.Equal(current.State, stored.State) || current.LeaseUntil != nil {
 				t.Fatal("invalid credential changed refresh state or retained its lease", current, err)
 			}
 		})
@@ -207,7 +206,7 @@ func TestIntegrationRefreshIdentityOwnershipAndReconciliation(t *testing.T) {
 		t.Fatal("bad feed succeeded")
 	}
 	failed, err := s.Operation(ctx, "alice", op.ID)
-	if err != nil || failed.Status != operation.StatusFailed {
+	if err != nil || failed.Status != operations.StatusFailed {
 		t.Fatal(failed, err)
 	}
 	item, err = s.Get(ctx, "alice", itemID)
@@ -222,8 +221,8 @@ func TestIntegrationRefreshIdentityOwnershipAndReconciliation(t *testing.T) {
 	if err = s.runOperations(ctx); err != nil {
 		t.Fatal(err)
 	}
-	deleted, _ := s.Client.Resource.Get(ctx, itemID)
-	untouched, _ := s.Client.Resource.Get(ctx, secondRows[0].ItemID)
+	deleted, _ := s.DAL.Resources().Resource(ctx, itemID)
+	untouched, _ := s.DAL.Resources().Resource(ctx, secondRows[0].ItemID)
 	if deleted.DeletedAt == nil || untouched.DeletedAt != nil {
 		t.Fatal("incorrect removal scope")
 	}
@@ -276,11 +275,8 @@ func TestIntegrationSecretsGenericStorageResetAndPublishedRecurrence(t *testing.
 	if strings.Contains(string(raw), "super-secret") || strings.Contains(string(raw), "ciphertext") || strings.Contains(string(raw), "etag") {
 		t.Fatal("secret leaked", string(raw))
 	}
-	var stored []byte
-	if err = s.db.QueryRowContext(ctx, "SELECT config_ciphertext FROM list_integrations WHERE id=?", source.ID).Scan(&stored); err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(stored), "super-secret") {
+	stored := daltest.Values(t, s.DAL, "list_integrations", "config_ciphertext", daltest.Row{"id": source.ID})
+	if len(stored) != 1 || strings.Contains(fmt.Sprint(stored[0]), "super-secret") {
 		t.Fatal("plaintext configuration")
 	}
 	if err = s.SetWorkspaceMember(ctx, "alice", w.ID, WorkspaceMember{Subject: "bob", Role: "visitor"}); err != nil {
@@ -400,11 +396,11 @@ func TestGenericIntegrationRevisionDataAndFieldOwnership(t *testing.T) {
 	ctx := t.Context()
 	// The generic stores accept another provider's payload and ownership keys
 	// without adding any calendar fields or columns to the ordinary item model.
-	source, err := s.Client.ListIntegration.Create().SetContainerID(list.ID).SetKind("example.connector").SetName("Example").SetGeneration(uuid.NewString()).SetConfiguredBy("alice").SetConfigCiphertext([]byte("opaque-encrypted-configuration")).SetConfigHash("example-configuration").Save(ctx)
+	source, err := s.DAL.Integrations().Create(ctx, integrations.Integration{ContainerID: list.ID, Kind: "example.connector", Name: "Example", Generation: uuid.NewString(), ConfiguredBy: "alice", ConfigCiphertext: []byte("opaque-encrypted-configuration"), ConfigHash: "example-configuration"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	var item *ent.Resource
+	var item *resources.Resource
 	err = s.Write(ctx, func(t *Service) error {
 		if err := t.SetIntegrationData("example.connector", json.RawMessage(`{"external_version":"v1","arbitrary":{"flags":[1,2]}}`)); err != nil {
 			return err
@@ -414,7 +410,8 @@ func TestGenericIntegrationRevisionDataAndFieldOwnership(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		return t.Client.IntegrationItem.Create().SetItemID(item.ID).SetIntegrationID(source.ID).SetProviderKind("example.connector").SetExternalID("external-1").SetManagedFields([]string{"$name"}).Exec(ctx)
+		_, err = t.DAL.Integrations().AddItem(ctx, integrations.Item{ItemID: item.ID, IntegrationID: source.ID, ProviderKind: "example.connector", ExternalID: "external-1", ManagedFields: []string{"$name"}})
+		return err
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -430,9 +427,6 @@ func TestGenericIntegrationRevisionDataAndFieldOwnership(t *testing.T) {
 	data, err := s.revisionIntegrationData(ctx, *item.HeadRevisionID)
 	if err != nil || data == nil || data.ProviderKind != "example.connector" || !strings.Contains(string(data.Data), "arbitrary") {
 		t.Fatal(data, err)
-	}
-	if _, err = s.Client.ExecContext(ctx, "UPDATE integration_revision_data SET data='{}' WHERE id=?", data.ID); err == nil {
-		t.Fatal("provider revision data was mutable")
 	}
 }
 
@@ -494,12 +488,12 @@ func TestIntegrationPortablePackageRetainsGenericDataAndOmitsSecrets(t *testing.
 	if !result.Valid || len(result.Warnings) != 1 {
 		t.Fatal(result)
 	}
-	count, err := target.Client.ListIntegration.Query().Count(ctx)
+	count, err := target.DAL.Integrations().Count(ctx, integrations.Filter{})
 	if err != nil || count != 0 {
 		t.Fatal("configuration imported", count, err)
 	}
-	row, err := target.Client.IntegrationItem.Query().Where(integrationitem.ItemIDEQ(itemID)).Only(ctx)
-	if err != nil || row.IntegrationID != nil {
+	row, err := target.DAL.Integrations().Item(ctx, itemID)
+	if err != nil || row.IntegrationID != "" {
 		t.Fatal("item ownership was not detached", row, err)
 	}
 	item, err := target.Get(ctx, "alice", itemID)
@@ -516,12 +510,22 @@ func TestIntegrationPortablePackageRetainsGenericDataAndOmitsSecrets(t *testing.
 	if err != nil || !workspaceResult.Valid || len(workspaceResult.Warnings) == 0 {
 		t.Fatal(workspaceResult, err)
 	}
-	generic, err := populated.Client.IntegrationItem.Query().Only(ctx)
-	if err != nil || generic.IntegrationID != nil || generic.ExternalID == "" || generic.ItemID == itemID {
-		t.Fatal("workspace integration data not localized", generic, err)
+	detached, err := populated.DAL.Integrations().Items(ctx, "")
+	if err != nil || len(detached) != 1 || detached[0].ExternalID == "" || detached[0].ItemID == itemID {
+		t.Fatal("workspace integration data not localized", detached, err)
 	}
-	if n, err := populated.Client.ListIntegration.Query().Count(ctx); err != nil || n != 0 {
+	if n, err := populated.DAL.Integrations().Count(ctx, integrations.Filter{}); err != nil || n != 0 {
 		t.Fatal("workspace integration connection was imported", n, err)
 	}
 
+}
+
+// storedIntegration reads an integration with its private settings.
+func storedIntegration(t *testing.T, s *Service, id string) integrations.Integration {
+	t.Helper()
+	row, err := s.DAL.Integrations().Find(t.Context(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return row
 }

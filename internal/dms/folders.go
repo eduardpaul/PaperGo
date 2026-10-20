@@ -1,22 +1,25 @@
 package dms
 
 import (
-	"papergo/ent"
-	"papergo/ent/resource"
+	"papergo/internal/dal/catalog"
+	"papergo/internal/dal/refs"
 	"papergo/internal/model"
 )
 
-func contentKind(kind resource.Kind) bool {
-	return kind == resource.KindItem || kind == resource.KindFolder
+func contentKind(kind refs.ResourceKind) bool {
+	return kind == refs.KindItem || kind == refs.KindFolder
 }
+
+// contentKinds selects folders and items.
+var contentKinds = []refs.ResourceKind{refs.KindItem, refs.KindFolder}
 
 // Folders use collection content types, but do not require item fields or
 // receive creation defaults. Other field constraints and comparison rules apply.
-func resourceDefinitions(kind resource.Kind, defs []*ent.FieldDefinition, rules []model.ValidationRule) ([]*ent.FieldDefinition, []model.ValidationRule) {
-	if kind != resource.KindFolder {
+func resourceDefinitions(kind refs.ResourceKind, defs []*catalog.FieldDefinition, rules []model.ValidationRule) ([]*catalog.FieldDefinition, []model.ValidationRule) {
+	if kind != refs.KindFolder {
 		return defs, rules
 	}
-	optional := make([]*ent.FieldDefinition, 0, len(defs))
+	optional := make([]*catalog.FieldDefinition, 0, len(defs))
 	for _, d := range defs {
 		copy := *d
 		copy.Required = false

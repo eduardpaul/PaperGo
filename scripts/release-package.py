@@ -48,7 +48,7 @@ def main():
     parser.add_argument('--os', required=True, choices=['linux', 'darwin', 'windows'])
     parser.add_argument('--arch', required=True, choices=['amd64', 'arm64'])
     parser.add_argument('--bin-dir', type=Path, default=ROOT / 'bin')
-    parser.add_argument('--release-database', type=Path, default=ROOT / 'migrations/release.json')
+    parser.add_argument('--release-database', type=Path, default=ROOT / 'internal/dal/migrations/release.json')
     args = parser.parse_args()
     print(package(args.version, args.os, args.arch, args.bin_dir, args.release_database, ROOT / 'dist'))
 

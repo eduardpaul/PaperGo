@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"encoding/json"
+	"papergo/internal/dal/workflows"
 	"papergo/internal/dms"
 	"slices"
 	"strings"
@@ -19,8 +20,8 @@ func automaticScope(def Definition) error {
 	return nil
 }
 
-func validState(state string) error {
-	if state != "draft" && state != "published" && state != "archived" {
+func validState(state workflows.State) error {
+	if !state.Valid() {
 		return dms.Invalid("state must be draft, published or archived")
 	}
 	return nil

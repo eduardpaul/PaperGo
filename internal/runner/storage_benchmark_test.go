@@ -3,6 +3,9 @@ package runner
 import (
 	"fmt"
 	"os"
+	"papergo/internal/dal/daltest"
+	"papergo/internal/dal/database"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +23,9 @@ func BenchmarkStorageEfficiency(b *testing.B) {
 				b.Fatal("run this fixed workload with -benchtime=1x")
 			}
 			b.StopTimer()
+			if daltest.PostgresDSN() != "" {
+				b.Skip("measures the SQLite file")
+			}
 			f := setup(b)
 			f.searchOff(b)
 			w := f.workflow(b, "Measured workflow", `{
@@ -29,11 +35,8 @@ func BenchmarkStorageEfficiency(b *testing.B) {
 					"clear":{"activity":"set_variable","inputs":{"name":"bulk","value":""},"next":{"done":"read"}},
 					"read":{"activity":"item.get","next":{"done":"stop"}},
 					"stop":{"activity":"end"}}}}`)
-			var initialPages, pageSize int64
-			if err := f.db.SQL.QueryRow(`PRAGMA page_count`).Scan(&initialPages); err != nil {
-				b.Fatal(err)
-			}
-			if err := f.db.SQL.QueryRow(`PRAGMA page_size`).Scan(&pageSize); err != nil {
+			initial, err := database.ReadAllocation(ctx, f.db.SQL)
+			if err != nil {
 				b.Fatal(err)
 			}
 			const items = 100
@@ -59,20 +62,26 @@ func BenchmarkStorageEfficiency(b *testing.B) {
 				}
 			}
 			b.ReportMetric(float64(time.Since(started).Nanoseconds())/items, "details-ns/run")
-			for _, probe := range []struct{ query, metric string }{
-				{`SELECT COALESCE(SUM(length(output)),0) FROM runner_step_results`, "marker-bytes"},
-				{`SELECT COALESCE(SUM(length(output)),0) FROM operation_outputs`, "dbos-step-bytes"},
-				{`SELECT COALESCE(SUM(pgsize),0) FROM dbstat WHERE name IN ('runner_step_results','sqlite_autoindex_runner_step_results_1','operation_outputs','sqlite_autoindex_operation_outputs_1')`, "step-allocation-bytes"},
-			} {
-				var value int64
-				if err := f.db.SQL.QueryRow(probe.query).Scan(&value); err != nil {
-					b.Fatal(err)
+			for _, probe := range []struct{ table, metric string }{{"runner_step_results", "marker-bytes"}, {"operation_outputs", "dbos-step-bytes"}} {
+				var value int
+				for _, output := range daltest.Values(b, f.db.DAL, probe.table, "output", nil) {
+					value += len(fmt.Sprint(output))
 				}
 				b.ReportMetric(float64(value), probe.metric)
 			}
-			var busy, log, checkpointed int
-			if err := f.db.SQL.QueryRow(`PRAGMA wal_checkpoint(PASSIVE)`).Scan(&busy, &log, &checkpointed); err != nil || busy != 0 || log != checkpointed {
-				b.Fatalf("checkpoint: %d/%d/%d %v", busy, log, checkpointed, err)
+			allocation, err := database.ReadAllocation(ctx, f.db.SQL)
+			if err != nil {
+				b.Fatal(err)
+			}
+			var steps int64
+			for _, table := range allocation.Tables {
+				if slices.Contains([]string{"runner_step_results", "sqlite_autoindex_runner_step_results_1", "operation_outputs", "sqlite_autoindex_operation_outputs_1"}, table.Name) {
+					steps += table.Bytes
+				}
+			}
+			b.ReportMetric(float64(steps), "step-allocation-bytes")
+			if checkpoint, err := database.ObserveCheckpoint(ctx, f.db.SQL); err != nil || checkpoint.Incomplete {
+				b.Fatalf("checkpoint: %+v %v", checkpoint, err)
 			}
 			for _, file := range []struct{ suffix, metric string }{{"", "database-bytes"}, {"-wal", "journal-bytes"}} {
 				info, err := os.Stat(f.path + file.suffix)
@@ -81,7 +90,7 @@ func BenchmarkStorageEfficiency(b *testing.B) {
 				}
 				b.ReportMetric(float64(info.Size()), file.metric)
 				if file.suffix == "" {
-					b.ReportMetric(float64(info.Size()-initialPages*pageSize), "database-growth-bytes")
+					b.ReportMetric(float64(info.Size()-int64(initial.PageCount)*int64(initial.PageSize)), "database-growth-bytes")
 				}
 			}
 
@@ -97,20 +106,15 @@ func BenchmarkStorageEfficiency(b *testing.B) {
 					b.Fatal(err)
 				}
 			}
-			if _, err := f.db.SQL.Exec(`UPDATE workflow_status SET completed_at=? WHERE name=?`, time.Now().Add(-3*time.Hour).UnixMilli(), tickName); err != nil {
-				b.Fatal(err)
-			}
+			daltest.Update(b, f.db.DAL, "workflow_status", daltest.Row{"completed_at": time.Now().Add(-3 * time.Hour).UnixMilli()}, daltest.Row{"name": tickName})
 			started = time.Now()
 			if _, err := f.r.Purge(ctx); err != nil {
 				b.Fatal(err)
 			}
 			b.ReportMetric(float64(time.Since(started).Nanoseconds()), "purge-ns")
-			var remaining, applications int
-			if err := f.db.SQL.QueryRow(`SELECT COUNT(*) FROM workflow_status WHERE name=?`, tickName).Scan(&remaining); err != nil {
-				b.Fatal(err)
-			}
-			if err := f.db.SQL.QueryRow(`SELECT COUNT(*) FROM workflow_runs WHERE workflow_id=?`, w.ID).Scan(&applications); err != nil || applications != items {
-				b.Fatalf("retained application runs: %d %v", applications, err)
+			remaining := daltest.Count(b, f.db.DAL, "workflow_status", daltest.Row{"name": tickName})
+			if applications := daltest.Count(b, f.db.DAL, "workflow_runs", daltest.Row{"workflow_id": w.ID}); applications != items {
+				b.Fatalf("retained application runs: %d", applications)
 			}
 			b.ReportMetric(float64(remaining), "maintenance-remaining")
 		})

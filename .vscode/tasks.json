@@ -12,10 +12,23 @@
       "problemMatcher": ["$go"], "options": { "cwd": "${workspaceFolder}" }
     },
     {
+      "label": "PaperGo: API on PostgreSQL",
+      "detail": "Runs the API on the papergo_dev database of the local PostgreSQL 17 container",
+      "type": "process", "command": "bash", "args": ["scripts/dev.sh", "--postgres"],
+      "problemMatcher": ["$go"], "options": { "cwd": "${workspaceFolder}" }
+    },
+    {
       "label": "PaperGo: Vite",
       "type": "process", "command": "npm",
       "args": ["--prefix", "web", "run", "dev", "--", "--host", "0.0.0.0", "--strictPort"],
       "problemMatcher": [], "options": { "cwd": "${workspaceFolder}" }
+    },
+    {
+      "label": "PaperGo: API and Vite",
+      "detail": "Starts the API and the Vite dev server side by side",
+      "dependsOn": ["PaperGo: API", "PaperGo: Vite"],
+      "dependsOrder": "parallel",
+      "problemMatcher": []
     },
     {
       "label": "PaperGo: build frontend",
@@ -34,14 +47,95 @@
       "problemMatcher": ["$go"], "options": { "cwd": "${workspaceFolder}" }
     },
     {
+      "label": "PaperGo: check Go test",
+      "detail": "Runs the tests of one package whose names match a pattern",
+      "type": "process", "command": "bash",
+      "args": ["scripts/check.sh", "--packages", "${input:papergoTestPackage}", "--run", "${input:papergoTestName}"],
+      "problemMatcher": ["$go"], "options": { "cwd": "${workspaceFolder}" }
+    },
+    {
+      "label": "PaperGo: check on PostgreSQL",
+      "detail": "Runs the DAL and application suites on PostgreSQL 17",
+      "type": "process", "command": "bash", "args": ["scripts/check.sh", "--postgres"],
+      "problemMatcher": ["$go"], "options": { "cwd": "${workspaceFolder}" }
+    },
+    {
+      "label": "PaperGo: check Go package on PostgreSQL",
+      "type": "process", "command": "bash",
+      "args": ["scripts/check.sh", "--postgres", "--packages", "${input:papergoTestPackage}"],
+      "problemMatcher": ["$go"], "options": { "cwd": "${workspaceFolder}" }
+    },
+    {
       "label": "PaperGo: check frontend",
       "type": "process", "command": "bash", "args": ["scripts/check.sh", "--web"],
       "problemMatcher": [], "options": { "cwd": "${workspaceFolder}" }
     },
     {
+      "label": "PaperGo: race check",
+      "type": "process", "command": "bash", "args": ["scripts/check.sh", "--race"],
+      "problemMatcher": ["$go"], "options": { "cwd": "${workspaceFolder}" }
+    },
+    {
       "label": "PaperGo: full check",
       "type": "process", "command": "bash", "args": ["scripts/check.sh", "--full"],
       "problemMatcher": ["$go"], "options": { "cwd": "${workspaceFolder}" }
+    },
+    {
+      "label": "PaperGo: start PostgreSQL",
+      "type": "process", "command": "bash", "args": ["scripts/postgres.sh", "start"],
+      "problemMatcher": [], "options": { "cwd": "${workspaceFolder}" }
+    },
+    {
+      "label": "PaperGo: stop PostgreSQL",
+      "type": "process", "command": "bash", "args": ["scripts/postgres.sh", "stop"],
+      "problemMatcher": [], "options": { "cwd": "${workspaceFolder}" }
+    },
+    {
+      "label": "PaperGo: PostgreSQL dev database",
+      "detail": "Creates the papergo_dev database when missing and prints its URL",
+      "type": "process", "command": "bash", "args": ["scripts/postgres.sh", "url", "papergo_dev"],
+      "problemMatcher": [], "options": { "cwd": "${workspaceFolder}" }
+    },
+    {
+      "label": "PaperGo: PostgreSQL shell",
+      "type": "process", "command": "bash", "args": ["scripts/postgres.sh", "psql", "${input:papergoDatabase}"],
+      "problemMatcher": [], "options": { "cwd": "${workspaceFolder}" },
+      "presentation": { "focus": true }
+    },
+    {
+      "label": "PaperGo: drop PostgreSQL test databases",
+      "detail": "Drops test databases interrupted runs left behind",
+      "type": "process", "command": "bash", "args": ["scripts/postgres.sh", "clean"],
+      "problemMatcher": [], "options": { "cwd": "${workspaceFolder}" }
+    },
+    {
+      "label": "PaperGo: generate Bob models",
+      "detail": "Regenerates both drivers' models from the DAL schema masters (needs Docker)",
+      "type": "process", "command": "bash", "args": ["scripts/generate-models.sh"],
+      "problemMatcher": [], "options": { "cwd": "${workspaceFolder}" }
+    },
+    {
+      "label": "PaperGo: install sqlite3def",
+      "type": "process", "command": "bash", "args": ["scripts/sqlite3def.sh"],
+      "problemMatcher": [], "options": { "cwd": "${workspaceFolder}" }
+    },
+    {
+      "label": "PaperGo: release rehearsal",
+      "detail": "Packages and smoke-tests the release executables as CI does",
+      "type": "process", "command": "bash", "args": ["scripts/release-rehearsal.sh"],
+      "problemMatcher": [], "options": { "cwd": "${workspaceFolder}" }
+    },
+    {
+      "label": "PaperGo: release rehearsal with image",
+      "detail": "Also builds the container image and runs its smoke test (needs Docker)",
+      "type": "process", "command": "bash", "args": ["scripts/release-rehearsal.sh", "--image"],
+      "problemMatcher": [], "options": { "cwd": "${workspaceFolder}" }
+    },
+    {
+      "label": "PaperGo: prepare API on PostgreSQL",
+      "dependsOn": ["PaperGo: build frontend", "PaperGo: PostgreSQL dev database"],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
     }
   ],
   "inputs": [
@@ -49,6 +143,16 @@
       "id": "papergoTestPackage", "type": "promptString",
       "description": "Go package or pattern to test (include affected callers for shared changes)",
       "default": "./internal/dms"
+    },
+    {
+      "id": "papergoTestName", "type": "promptString",
+      "description": "Go test name pattern (go test -run)",
+      "default": "^Test"
+    },
+    {
+      "id": "papergoDatabase", "type": "promptString",
+      "description": "PostgreSQL database to open",
+      "default": "papergo_dev"
     }
   ]
 }

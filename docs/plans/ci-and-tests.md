@@ -48,7 +48,7 @@ time. The separate dependency scan adds another job.
 | Race shard 2 | 10:07 | 9:25 in the race step; DMS 460s, runner 279s |
 | Race shard 3 | 5:05 | 4:31 in the race step; DMS 144s, runner 160s |
 | Development container | 5:55 | 5:49 building and exercising the environment |
-| Verification | 4:19 | Frontend build 19s, frontend checks 34s, Ent 28s, vet 70s, application build 70s |
+| Verification | 4:19 | Frontend build 19s, frontend checks 34s, model generation 28s, vet 70s, application build 70s |
 | Staticcheck | 2:44 | Frontend build 19s, tool installation 24s, analysis 92s |
 | Docker build and startup | 3:16 | 2:57 building and testing the image |
 
@@ -105,7 +105,7 @@ consumed 64.6 job minutes and took about 12 minutes, including a failed race sha
 | 2,000 × 768 zvec soak and timed fuzz campaigns on every PR | Move | Nightly/manual and relevant native changes; retain deterministic fuzz seeds on every PR. |
 | Devcontainer rebuild on every app change | Make conditional | Trigger on devcontainer/setup/toolchain/native inputs and scheduled runs. Retain its non-root, permissions, debugger and proxy assertions. |
 | Docker rebuild on unrelated edits | Make conditional | Trigger on application, frontend, native, schema and packaging inputs; skip prose-only and unrelated sample changes. Add persistent BuildKit cache. |
-| Previous-release schema upgrade planning and preservation tests | Delete with their feature code | Follow `AGENTS.md`: one current schema, fresh initialization, no upgrade paths. Remove `internal/releaseplan`, upgrade-specific portions of `internal/database/release*`, their callers and bundle-history machinery/docs in one coherent change. Retain fresh startup, schema validation, version/checksum and package tests. This is a policy correction, not the largest speed saving. |
+| Previous-release schema upgrade planning and preservation tests | Delete with their feature code | Follow `AGENTS.md`: one current schema, fresh initialization, no upgrade paths. Remove `internal/dal/releaseplan`, upgrade-specific portions of `internal/database/release*`, their callers and bundle-history machinery/docs in one coherent change. Retain fresh startup, schema validation, version/checksum and package tests. This is a policy correction, not the largest speed saving. |
 | Similar business cases at service, HTTP and runner layers | Review assertion by assertion | Keep exhaustive domain rules at their owning layer; HTTP tests own parsing/status/auth/ETags, runner tests own dispatch/durability. Remove only assertions proven redundant after mapping them. |
 
 Do not delete ACL isolation, exact numeric transport, transactional rollback,
@@ -131,8 +131,8 @@ Replace the current all-in-one default in `scripts/check.sh`, keep
 
 The default can select changed packages only after reverse-dependency handling
 is implemented. Until then, require an explicit scope or run the ordinary suite;
-do not quietly test just the edited directory. Shared `internal/model`, Ent,
-schema and module/native changes require broader validation. An unchanged
+do not quietly test just the edited directory. Shared `internal/model`, DAL schema,
+model generation and module/native changes require broader validation. An unchanged
 package whose dependency changed must still run.
 
 | Trigger | Required work |
@@ -163,7 +163,7 @@ visible and independently reported.
   upload it even on failure. Separate preparation, compilation/discovery and
   execution in the report. Record cache keys/hits, toolchain and native manifest.
 - Add explicit scoped checks, remove routine installs and forced reruns, and
-  avoid Ent generation unless its inputs changed locally. Keep generation drift
+  avoid Bob model generation unless its inputs changed locally. Keep generation drift
   validation in CI. A full check remains explicitly available.
 - Reuse assets based on their inputs, not just the existence of `dist/index.html`.
   Preserve the real embed contract; do not introduce placeholder frontend assets.

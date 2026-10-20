@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"papergo/internal/auth"
+	"papergo/internal/dal/directory"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
 	"strings"
@@ -42,7 +43,7 @@ func TestIdentityAPIUsesExplicitPrincipalsAndVersions(t *testing.T) {
 	if w.Code != 422 {
 		t.Fatal(w.Code, w.Body.String())
 	}
-	if err := s.Directory().SetAssignment(context.Background(), "organization-admin", identity.AdministratorRole, identity.Principal{Type: "user", ID: "organization-admin"}, true); err != identity.ErrLastAdministrator {
+	if err := s.Directory().SetAssignment(context.Background(), "organization-admin", identity.AdministratorRole, identity.Principal{Type: directory.PrincipalUser, ID: "organization-admin"}, true); err != identity.ErrLastAdministrator {
 		t.Fatal(err)
 	}
 }
@@ -63,7 +64,7 @@ func TestHTTPGroupPermissionsAndModuleScopeRevocation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = d.SetMember(ctx, "alice", g.ID, identity.Principal{Type: "user", ID: "bob"}, false); err != nil {
+	if err = d.SetMember(ctx, "alice", g.ID, identity.Principal{Type: directory.PrincipalUser, ID: "bob"}, false); err != nil {
 		t.Fatal(err)
 	}
 	body := `{"inherit":false,"grants":[{"principal_type":"group","principal_id":"` + g.ID + `","action":"write"}]}`
@@ -84,7 +85,7 @@ func TestHTTPGroupPermissionsAndModuleScopeRevocation(t *testing.T) {
 	if resp.Code != 403 {
 		t.Fatal(resp.Code, resp.Body.String())
 	}
-	if err = d.SetAssignment(ctx, "alice", identity.MemberRole, identity.Principal{Type: "user", ID: "bob"}, true); err != nil {
+	if err = d.SetAssignment(ctx, "alice", identity.MemberRole, identity.Principal{Type: directory.PrincipalUser, ID: "bob"}, true); err != nil {
 		t.Fatal(err)
 	}
 	resp = request(bob, "GET", "/v1/resources/"+item.ID, "", testToken, "", "")

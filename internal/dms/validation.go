@@ -1,10 +1,10 @@
 package dms
 
 import (
-	"bytes"
 	"encoding/json"
 	"math/big"
-	"papergo/ent"
+	"papergo/internal/dal/catalog"
+	"papergo/internal/jsonutil"
 	"papergo/internal/model"
 	"regexp"
 	"strconv"
@@ -126,15 +126,15 @@ func decimal(v any, scale int) (string, int64, error) {
 	}
 	return canonical, n.Int64(), nil
 }
-func normalizeValues(defs []*ent.FieldDefinition, values map[string]any) error {
+func normalizeValues(defs []*catalog.FieldDefinition, values map[string]any) error {
 	return normalizeRevisionValues(defs, values, nil, true)
 }
 
 // normalizeRevisionValues validates values for a new revision. Values carried over
 // unchanged from previous were valid under the schema they were written with, so
 // later tightening (fewer choices, new bounds, required) never blocks other edits.
-func normalizeRevisionValues(defs []*ent.FieldDefinition, values, previous map[string]any, applyDefaults bool) error {
-	known := make(map[string]*ent.FieldDefinition, len(defs))
+func normalizeRevisionValues(defs []*catalog.FieldDefinition, values, previous map[string]any, applyDefaults bool) error {
+	known := make(map[string]*catalog.FieldDefinition, len(defs))
 	for _, d := range defs {
 		known[d.Key] = d
 	}
@@ -179,11 +179,14 @@ func normalizeRevisionValues(defs []*ent.FieldDefinition, values, previous map[s
 	}
 	return nil
 }
+
+// sameJSON reports whether two values encode the same JSON value, whatever
+// the object order or number spelling the database returned.
 func sameJSON(a, b any) bool {
 	x, e := json.Marshal(a)
 	if e != nil {
 		return false
 	}
 	y, e := json.Marshal(b)
-	return e == nil && bytes.Equal(x, y)
+	return e == nil && jsonutil.Equal(x, y)
 }

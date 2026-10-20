@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '@/api/http';
 import { scopeCatalog, scopes } from '@/api/queries';
-import type { CreatedRestToken, RestToken } from '@/api/types';
+import type { CreatedAccessToken, AccessToken } from '@/api/types';
 import { FormDialog } from '@/components/form-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -19,18 +19,18 @@ export function AccessTokens() {
   const allowed = useHasScope('organization.manage');
   const client = useQueryClient();
   const format = useFormat();
-  const list = useQuery({ queryKey: ['organization-tokens'], enabled: allowed, queryFn: async () => (await api<RestToken[]>('/v1/identity/tokens')).data });
+  const list = useQuery({ queryKey: ['organization-tokens'], enabled: allowed, queryFn: async () => (await api<AccessToken[]>('/v1/identity/tokens')).data });
   const catalog = useQuery({ queryKey: ['scope-catalog'], queryFn: scopeCatalog, enabled: allowed });
   const mine = useQuery({ queryKey: ['my-scopes'], queryFn: scopes, enabled: allowed });
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
   const [days, setDays] = useState('90');
   const [chosen, setChosen] = useState<string[]>([]);
-  const [created, setCreated] = useState<CreatedRestToken>();
-  const [revoking, setRevoking] = useState<RestToken>();
+  const [created, setCreated] = useState<CreatedAccessToken>();
+  const [revoking, setRevoking] = useState<AccessToken>();
   const issue = useMutation({
     meta: { silent: true },
-    mutationFn: async () => (await api<CreatedRestToken>('/v1/identity/tokens', { method: 'POST', body: { name: name.trim(), scopes: chosen, expires_in_days: Number(days) } })).data,
+    mutationFn: async () => (await api<CreatedAccessToken>('/v1/identity/tokens', { method: 'POST', body: { name: name.trim(), scopes: chosen, expires_in_days: Number(days) } })).data,
     onSuccess: async result => { setCreating(false); setCreated(result); setName(''); setChosen([]); await client.invalidateQueries({ queryKey: ['organization-tokens'] }); },
   });
   const revoke = useMutation({

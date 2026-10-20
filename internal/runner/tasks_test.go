@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"papergo/internal/dal/directory"
 	"strings"
 	"testing"
 	"time"
 
+	taskstore "papergo/internal/dal/tasks"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
 	"papergo/internal/model"
@@ -21,7 +23,7 @@ func (f *fixture) status(t *testing.T, id, want string) Run {
 	deadline := time.Now().Add(20 * time.Second)
 	for {
 		run, err := f.r.Run(ctx, "alice", id)
-		if err == nil && run.Status == want {
+		if err == nil && string(run.Status) == want {
 			return run
 		}
 		if time.Now().After(deadline) {
@@ -362,7 +364,7 @@ func TestAllModeTaskWithGroupsAndDecisiveOutcome(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = f.dms.Directory().SetMember(ctx, "alice", group.ID, identity.Principal{Type: "user", ID: "carol"}, false); err != nil {
+	if err = f.dms.Directory().SetMember(ctx, "alice", group.ID, identity.Principal{Type: directory.PrincipalUser, ID: "carol"}, false); err != nil {
 		t.Fatal(err)
 	}
 	w := f.workflow(t, "Publish review", `{
@@ -434,10 +436,10 @@ func TestAnsweringForEachEntryOfAnAssignee(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = f.dms.Directory().SetMember(ctx, "alice", group.ID, identity.Principal{Type: "user", ID: "carol"}, false); err != nil {
+	if err = f.dms.Directory().SetMember(ctx, "alice", group.ID, identity.Principal{Type: directory.PrincipalUser, ID: "carol"}, false); err != nil {
 		t.Fatal(err)
 	}
-	tk, err := f.tasks().Create(ctx, "alice", tasks.Input{WorkspaceID: f.ws.ID, Title: "Sign off", Assignees: []string{"carol", "group:" + group.ID}, Completion: tasks.CompletionAll})
+	tk, err := f.tasks().Create(ctx, "alice", tasks.Input{WorkspaceID: f.ws.ID, Title: "Sign off", Assignees: []string{"carol", "group:" + group.ID}, Completion: taskstore.CompletionAll})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -463,7 +465,7 @@ func TestAllModeResultComesFromTheWinningAnswer(t *testing.T) {
 	if err := f.dms.SetWorkspaceMember(ctx, "alice", f.ws.ID, dms.WorkspaceMember{Subject: "carol", Role: "member"}); err != nil {
 		t.Fatal(err)
 	}
-	tk, err := f.tasks().Create(ctx, "alice", tasks.Input{WorkspaceID: f.ws.ID, Title: "Count", Assignees: []string{"alice", "bob", "carol"}, Completion: tasks.CompletionAll,
+	tk, err := f.tasks().Create(ctx, "alice", tasks.Input{WorkspaceID: f.ws.ID, Title: "Count", Assignees: []string{"alice", "bob", "carol"}, Completion: taskstore.CompletionAll,
 		Outcomes:    []model.TaskOutcome{{Key: "ok", Label: "OK", Comment: "optional"}, {Key: "fix", Label: "Fix", Comment: "optional"}},
 		InputSchema: map[string]any{"type": "object", "properties": map[string]any{"n": map[string]any{"type": "string"}}}})
 	if err != nil {
@@ -537,7 +539,7 @@ func TestWaitingTasksPageAfterAnsweredOnes(t *testing.T) {
 	f := setup(t)
 	var ids []string
 	for i := range 4 {
-		tk, err := f.tasks().Create(ctx, "alice", tasks.Input{WorkspaceID: f.ws.ID, Title: fmt.Sprintf("Task %d", i), Assignees: []string{"alice", "bob"}, Completion: tasks.CompletionAll})
+		tk, err := f.tasks().Create(ctx, "alice", tasks.Input{WorkspaceID: f.ws.ID, Title: fmt.Sprintf("Task %d", i), Assignees: []string{"alice", "bob"}, Completion: taskstore.CompletionAll})
 		if err != nil {
 			t.Fatal(err)
 		}

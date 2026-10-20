@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"papergo/ent"
 	"papergo/internal/dms"
 )
 
@@ -29,9 +28,9 @@ func TestTaxonomyRoutes(t *testing.T) {
 		}
 	}
 	_ = ws
-	var group ent.TermGroup
+	var group dms.TermGroupView
 	send("POST", "/v1/term-groups", `{"name":"Records"}`, "", json_, 201, &group)
-	var set ent.TermSet
+	var set dms.TermSetView
 	send("POST", "/v1/term-sets", `{"group_id":"`+group.ID+`","key":"topics","name":"Topics"}`, "", json_, 201, &set)
 	var finance, money dms.TermView
 	send("POST", "/v1/term-sets/"+set.ID+"/terms", `{"name":"Finance","color":"#336699"}`, "", json_, 201, &finance)
@@ -85,7 +84,7 @@ func TestTaxonomyRoutes(t *testing.T) {
 	if imported.SetsCreated != 1 || imported.TermsCreated != 2 {
 		t.Fatalf("import: %+v", imported)
 	}
-	var empty ent.TermSet
+	var empty dms.TermSetView
 	send("POST", "/v1/term-sets", `{"group_id":"`+group.ID+`","key":"empty","name":"Empty"}`, "", json_, 201, &empty)
 	send("DELETE", "/v1/term-sets/"+empty.ID, "", `"1"`, "", 204, nil)
 	send("DELETE", "/v1/term-groups/"+group.ID, "", `"1"`, "", 422, nil)
@@ -97,7 +96,7 @@ func TestTaxonomyRoutes(t *testing.T) {
 	if result != (dms.TaxonomyImportResult{}) {
 		t.Fatalf("taxonomy import: %+v", result)
 	}
-	var groups dms.Page[ent.TermGroup]
+	var groups dms.Page[dms.TermGroupView]
 	send("GET", "/v1/term-groups", "", "", "", 200, &groups)
 	if len(groups.Data) != 2 {
 		t.Fatalf("groups: %+v", groups)

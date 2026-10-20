@@ -1,6 +1,8 @@
 package runner
 
 import (
+	"papergo/internal/dal/daltest"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -23,14 +25,10 @@ func TestSystemRunRetentionFollowsConfigAndRunCeiling(t *testing.T) {
 
 func TestRetentionSchedulesAreHourly(t *testing.T) {
 	f := setup(t)
-	var retention, system string
-	if err := f.db.SQL.QueryRow(`SELECT schedule FROM workflow_schedules WHERE schedule_name=?`, purgeName).Scan(&retention); err != nil {
-		t.Fatal(err)
-	}
-	if err := f.db.SQL.QueryRow(`SELECT schedule FROM workflow_schedules WHERE schedule_name=?`, systemPurgeName).Scan(&system); err != nil {
-		t.Fatal(err)
-	}
-	if retention != retentionSchedule || system != systemRetentionSchedule {
+	schedules := daltest.DBOS(f.db.DAL, "workflow_schedules")
+	retention := daltest.Values(t, f.db.DAL, schedules, "schedule", daltest.Row{"schedule_name": purgeName})
+	system := daltest.Values(t, f.db.DAL, schedules, "schedule", daltest.Row{"schedule_name": systemPurgeName})
+	if !reflect.DeepEqual(retention, []any{retentionSchedule}) || !reflect.DeepEqual(system, []any{systemRetentionSchedule}) {
 		t.Fatalf("schedules retention %s system %s", retention, system)
 	}
 }
@@ -47,25 +45,17 @@ func TestDispatchedEventsDeleteInPages(t *testing.T) {
 	if _, err := f.r.Dispatch(ctx); err != nil {
 		t.Fatal(err)
 	}
-	var before int
-	if err := f.db.SQL.QueryRow(`SELECT count(*) FROM domain_events WHERE dispatched_at IS NOT NULL`).Scan(&before); err != nil {
-		t.Fatal(err)
-	}
+	dispatched := daltest.Row{"dispatched_at": daltest.NotNull}
+	before := daltest.Count(t, f.db.DAL, "domain_events", dispatched)
 	if before < 3 {
 		t.Fatalf("dispatched events %d", before)
 	}
-	if _, err := f.db.SQL.Exec(`UPDATE domain_events SET dispatched_at=? WHERE dispatched_at IS NOT NULL`, time.Now().Add(-48*time.Hour)); err != nil {
-		t.Fatal(err)
-	}
+	daltest.Update(t, f.db.DAL, "domain_events", daltest.Row{"dispatched_at": time.Now().Add(-48 * time.Hour)}, dispatched)
 	f.r.cfg.Retention = time.Hour
 	if _, err := f.r.Purge(ctx); err != nil {
 		t.Fatal(err)
 	}
-	var left int
-	if err := f.db.SQL.QueryRow(`SELECT count(*) FROM domain_events WHERE dispatched_at IS NOT NULL`).Scan(&left); err != nil {
-		t.Fatal(err)
-	}
-	if left != 0 {
+	if left := daltest.Count(t, f.db.DAL, "domain_events", dispatched); left != 0 {
 		t.Fatalf("dispatched events left %d of %d", left, before)
 	}
 }
@@ -77,22 +67,19 @@ func TestPurgeLeavesAuditAndPublications(t *testing.T) {
 	if _, err := f.dms.Publish(ctx, "alice", item.ID, item.Version); err != nil {
 		t.Fatal(err)
 	}
-	var audit, publications int
-	if err := f.db.SQL.QueryRow(`SELECT count(*) FROM audit_events`).Scan(&audit); err != nil || audit == 0 {
-		t.Fatal(audit, err)
-	}
-	if err := f.db.SQL.QueryRow(`SELECT count(*) FROM publications`).Scan(&publications); err != nil || publications == 0 {
-		t.Fatal(publications, err)
+	audit := daltest.Count(t, f.db.DAL, "audit_events", nil)
+	publications := daltest.Count(t, f.db.DAL, "publications", nil)
+	if audit == 0 || publications == 0 {
+		t.Fatal(audit, publications)
 	}
 	f.r.cfg.Retention = time.Hour
 	if _, err := f.r.Purge(ctx); err != nil {
 		t.Fatal(err)
 	}
-	var auditAfter, publicationsAfter int
-	if err := f.db.SQL.QueryRow(`SELECT count(*) FROM audit_events`).Scan(&auditAfter); err != nil || auditAfter != audit {
-		t.Fatalf("audit %d to %d (%v)", audit, auditAfter, err)
+	if auditAfter := daltest.Count(t, f.db.DAL, "audit_events", nil); auditAfter != audit {
+		t.Fatalf("audit %d to %d", audit, auditAfter)
 	}
-	if err := f.db.SQL.QueryRow(`SELECT count(*) FROM publications`).Scan(&publicationsAfter); err != nil || publicationsAfter != publications {
-		t.Fatalf("publications %d to %d (%v)", publications, publicationsAfter, err)
+	if publicationsAfter := daltest.Count(t, f.db.DAL, "publications", nil); publicationsAfter != publications {
+		t.Fatalf("publications %d to %d", publications, publicationsAfter)
 	}
 }

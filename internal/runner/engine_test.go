@@ -93,7 +93,7 @@ func TestConcurrencySkipAndReplace(t *testing.T) {
 	}
 	states := map[string]int{}
 	for _, run := range f.runs(t, replace.ID, 2) {
-		states[run.Status]++
+		states[string(run.Status)]++
 	}
 	if states["cancelled"] != 1 || states["completed"] != 1 {
 		t.Errorf("replace: %v", states)

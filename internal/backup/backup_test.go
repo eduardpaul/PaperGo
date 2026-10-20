@@ -10,22 +10,22 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
-	"papergo/internal/database"
+	"papergo/internal/dal/daltest"
+	"papergo/internal/dal/database"
 	"papergo/internal/dms"
 	"papergo/internal/storage"
-	"papergo/internal/testutil"
-	"papergo/migrations"
 )
 
 func fixture(t *testing.T) (Options, *database.Database, string, string) {
 	t.Helper()
 	root := t.TempDir()
 	in := Options{DatabasePath: filepath.Join(root, "papergo.db"), BlobPath: filepath.Join(root, "blobs"), ArchivePath: filepath.Join(root, "backup.tar.gz")}
-	db := testutil.DatabaseAt(t, in.DatabasePath)
-	if _, err := db.SQL.Exec(`CREATE TABLE atlas_schema_revisions(version TEXT,hash TEXT,applied INTEGER,total INTEGER,error TEXT); INSERT INTO atlas_schema_revisions VALUES('20261007000100',?,1,1,NULL); CREATE TABLE runner_checkpoint(id TEXT PRIMARY KEY,state TEXT); INSERT INTO runner_checkpoint VALUES('durable','waiting')`, migrations.SchemaHash()); err != nil {
-		t.Fatal(err)
-	}
+	db := daltest.DatabaseAt(t, in.DatabasePath)
+	// State outside content, such as a cached answer, travels with the file.
+	now := time.Now().UTC()
+	daltest.Insert(t, db.DAL, "cached_results", daltest.Row{"id": "durable", "namespace": "answers", "scope": "scope", "key": "key", "payload": `{"state":"waiting"}`, "created_at": now, "used_at": now, "expires_at": now.Add(time.Hour)})
 	s := dms.NewService(db.SQL)
 	ctx := context.Background()
 	w, err := s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Backup"})
@@ -77,12 +77,11 @@ func TestLiveBackupAndRestoreCompleteState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var name, state string
-	if err = restored.SQL.QueryRow("SELECT name FROM resources WHERE id=?", item).Scan(&name); err != nil || name != "Document" {
-		t.Fatal(name, err)
+	if r, err := restored.DAL.Resources().Resource(context.Background(), item); err != nil || r.Name != "Document" {
+		t.Fatal(r, err)
 	}
-	if err = restored.SQL.QueryRow("SELECT state FROM runner_checkpoint WHERE id='durable'").Scan(&state); err != nil || state != "waiting" {
-		t.Fatal(state, err)
+	if n := daltest.Count(t, restored.DAL, "cached_results", daltest.Row{"id": "durable"}); n != 1 {
+		t.Fatal("cached answer lost", n)
 	}
 	if err = restored.CheckSchema(context.Background()); err != nil {
 		t.Fatal(err)
@@ -139,9 +138,7 @@ func TestBackupRejectsMissingOrCorruptFilesAndSchema(t *testing.T) {
 	if err := Create(context.Background(), in); err == nil {
 		t.Fatal("missing file accepted")
 	}
-	if _, err := db.SQL.Exec("UPDATE atlas_schema_revisions SET hash='other'"); err != nil {
-		t.Fatal(err)
-	}
+	daltest.Update(t, db.DAL, "schema_metadata", daltest.Row{"hash": "other"}, nil)
 	if err := Create(context.Background(), in); err == nil || !strings.Contains(err.Error(), "schema") {
 		t.Fatal(err)
 	}

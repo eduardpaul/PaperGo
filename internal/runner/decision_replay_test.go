@@ -6,12 +6,12 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"papergo/internal/dal/resources"
 	"strings"
 	"testing"
 	"time"
 
-	"papergo/ent"
-	"papergo/internal/resultcache"
+	"papergo/internal/dal/resultcache"
 	"papergo/internal/tasks"
 	"papergo/internal/workflow"
 )
@@ -44,8 +44,8 @@ func TestDecisionCrashChild(t *testing.T) {
 			tools.Results = crashDecisionCache{tools.Results}
 		}
 	})
-	f.ws = &ent.Resource{ID: parts[2]}
-	f.list = &ent.Resource{ID: parts[3]}
+	f.ws = &resources.Resource{ID: parts[2]}
+	f.list = &resources.Resource{ID: parts[3]}
 	ids, err := f.wf.StartRuns(ctx, "alice", parts[4], workflow.Start{ItemIDs: []string{parts[5]}, Inputs: map[string]any{"amount": json.Number("9007199254740993")}})
 	if err != nil {
 		t.Fatal(err)

@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"fmt"
+	"papergo/internal/dal/directory"
 	"testing"
 
 	"papergo/internal/dms"
@@ -28,7 +29,7 @@ func TestMetadataEditorCannotReplaceFileWithoutDocumentWrite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	principal := identity.Principal{Type: "user", ID: "alice"}
+	principal := identity.Principal{Type: directory.PrincipalUser, ID: "alice"}
 	if err = d.SetAssignment(ctx, "organization-admin", role.ID, principal, false); err != nil {
 		t.Fatal(err)
 	}

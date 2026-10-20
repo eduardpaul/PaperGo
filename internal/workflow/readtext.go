@@ -6,17 +6,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"papergo/internal/dal/blobs"
 	"strconv"
 	"strings"
 
-	"papergo/ent"
-	"papergo/internal/dms"
 	"papergo/internal/doctext"
 	"papergo/internal/forms"
 )
 
 // document.read_text reads the text of an item's current file, page by
-// page, and keeps it once per file bytes and settings (dms.BlobText):
+// page, and keeps it once per file bytes and settings (blobs.Text):
 // identical files and later runs reuse it.
 
 const (
@@ -120,13 +119,13 @@ func runReadText(e *env, in map[string]any) (outcome, error) {
 		}
 	}
 	settings := e.tools.textSettings(o)
-	if row, err := e.t.FindBlobText(e.ctx, b.Sha256, settings); err != nil || row != nil {
+	if row, err := e.t.DAL.Blobs().FindText(e.ctx, b.Sha256, settings); err != nil || row != nil {
 		if err != nil {
 			return outcome{}, err
 		}
 		return textOutcome(itemID, b.ID, row, true), nil
 	}
-	job, err := json.Marshal(readTextJob{ItemID: itemID, BlobID: b.ID, SHA256: b.Sha256, ObjectKey: b.ObjectKey, ContentType: b.ContentType, Settings: settings, Options: o})
+	job, err := json.Marshal(readTextJob{ItemID: itemID, BlobID: b.ID, SHA256: b.Sha256, ObjectKey: b.ObjectKey, ContentType: string(b.ContentType), Settings: settings, Options: o})
 	if err != nil {
 		return outcome{}, err
 	}
@@ -153,7 +152,7 @@ func (t Tools) textSettings(o doctext.Options) string {
 	return hex.EncodeToString(h[:])
 }
 
-func textOutcome(itemID, blobID string, row *ent.BlobText, reused bool) outcome {
+func textOutcome(itemID, blobID string, row *blobs.Text, reused bool) outcome {
 	out := map[string]any{"text_id": row.ID, "item_id": itemID, "blob_id": blobID, "pages": row.Pages, "chars": row.Chars, "language": row.Language,
 		"ocr_pages": row.OcrPages, "skipped_pages": row.SkippedPages, "truncated": row.Truncated, "reused": reused}
 	port := "done"
@@ -222,15 +221,15 @@ func commitReadText(e *env, rawJob, rawResult json.RawMessage) (outcome, error) 
 	if res.Reason != "" {
 		return outcome{Port: portUnsupported, Output: map[string]any{"item_id": job.ItemID, "blob_id": job.BlobID, "reason": res.Reason}}, nil
 	}
-	row, err := e.t.SaveBlobText(e.ctx, dmsBlobText(job, res))
+	row, err := e.t.DAL.Blobs().SaveText(e.ctx, textInput(job, res))
 	if err != nil {
 		return outcome{}, err
 	}
 	return textOutcome(job.ItemID, job.BlobID, row, false), nil
 }
 
-func dmsBlobText(job readTextJob, res readTextResult) dms.BlobTextInput {
-	return dms.BlobTextInput{SHA256: job.SHA256, Settings: job.Settings, ObjectKey: res.ObjectKey, ObjectSize: res.ObjectSize, ObjectSHA256: res.ObjectSHA256,
+func textInput(job readTextJob, res readTextResult) blobs.TextInput {
+	return blobs.TextInput{SHA256: job.SHA256, Settings: job.Settings, ObjectKey: res.ObjectKey, ObjectSize: res.ObjectSize, ObjectSHA256: res.ObjectSHA256,
 		Pages: res.Pages, Chars: res.Chars, OCRPages: res.OCRPages, SkippedPages: res.SkippedPages, Truncated: res.Truncated, Language: res.Language,
 		Extractor: res.Extractor, Models: res.Models}
 }

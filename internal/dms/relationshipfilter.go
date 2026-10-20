@@ -1,16 +1,17 @@
 package dms
 
 import (
-	"encoding/json"
 	"github.com/google/uuid"
 	"math"
+	"papergo/internal/dal/content"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
 )
 
 // The edge query accepts a bounded subset of OData: scalar comparisons,
-// and/or/not and parentheses. Values and JSON paths are always SQL parameters.
+// and/or/not and parentheses.
 type edgeToken struct {
 	text   string
 	quoted bool
@@ -19,25 +20,21 @@ type edgeFilterParser struct {
 	tokens    []edgeToken
 	at, nodes int
 }
-type edgePredicate struct {
-	sql  string
-	args []any
-}
 
-func relationshipFilter(text string) (string, []any, error) {
+func relationshipFilter(text string) (*content.LinkFilter, error) {
 	if len(text) > 4096 {
-		return "", nil, invalid("relationship filters are limited to 4096 bytes")
+		return nil, invalid("relationship filters are limited to 4096 bytes")
 	}
 	tokens, err := edgeTokens(text)
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 	p := edgeFilterParser{tokens: tokens}
 	out, err := p.expression(0, 0)
 	if err == nil && p.at != len(tokens) {
 		err = invalid("unexpected relationship filter token")
 	}
-	return out.sql, out.args, err
+	return &out, err
 }
 func edgeTokens(text string) ([]edgeToken, error) {
 	out := []edgeToken{}
@@ -101,9 +98,9 @@ func edgePrecedence(token edgeToken) int {
 	}
 	return -1
 }
-func (p *edgeFilterParser) expression(min, depth int) (edgePredicate, error) {
+func (p *edgeFilterParser) expression(min, depth int) (content.LinkFilter, error) {
 	if depth > 6 {
-		return edgePredicate{}, invalid("filter depth exceeds 6")
+		return content.LinkFilter{}, invalid("filter depth exceeds 6")
 	}
 	left, err := p.primary(depth)
 	if err != nil {
@@ -114,26 +111,29 @@ func (p *edgeFilterParser) expression(min, depth int) (edgePredicate, error) {
 		if precedence < min {
 			break
 		}
-		op := strings.ToUpper(p.tokens[p.at].text)
+		op := p.tokens[p.at].text
 		p.at++
 		right, err := p.expression(precedence+1, depth+1)
 		if err != nil {
-			return edgePredicate{}, err
+			return content.LinkFilter{}, err
 		}
-		left = edgePredicate{"(" + left.sql + ") " + op + " (" + right.sql + ")", append(left.args, right.args...)}
+		if op == "or" {
+			left = content.LinkFilter{Or: []content.LinkFilter{left, right}}
+		} else {
+			left = content.LinkFilter{And: []content.LinkFilter{left, right}}
+		}
 	}
 	return left, nil
 }
-func (p *edgeFilterParser) primary(depth int) (edgePredicate, error) {
+func (p *edgeFilterParser) primary(depth int) (content.LinkFilter, error) {
 	p.nodes++
 	if p.nodes > 32 || depth > 6 {
-		return edgePredicate{}, invalid("filter is limited to 32 nodes and depth 6")
+		return content.LinkFilter{}, invalid("filter is limited to 32 nodes and depth 6")
 	}
 	if p.is("not") {
 		p.at++
 		v, err := p.primary(depth + 1)
-		v.sql = "NOT (" + v.sql + ")"
-		return v, err
+		return content.LinkFilter{Not: &v}, err
 	}
 	if p.is("(") {
 		p.at++
@@ -148,23 +148,20 @@ func (p *edgeFilterParser) primary(depth int) (edgePredicate, error) {
 		return v, nil
 	}
 	if p.at >= len(p.tokens) {
-		return edgePredicate{}, invalid("expected filter comparison")
+		return content.LinkFilter{}, invalid("expected filter comparison")
 	}
 	if (p.is("true") || p.is("false")) && (p.at+1 == len(p.tokens) || p.tokens[p.at+1].text == ")" || edgePrecedence(p.tokens[p.at+1]) >= 0) {
-		v := "0"
-		if p.is("true") {
-			v = "1"
-		}
+		v := p.is("true")
 		p.at++
-		return edgePredicate{sql: v}, nil
+		return content.LinkFilter{Const: &v}, nil
 	}
 	if p.at+2 >= len(p.tokens) {
-		return edgePredicate{}, invalid("expected property, operator and literal")
+		return content.LinkFilter{}, invalid("expected property, operator and literal")
 	}
 	left, op, right := p.tokens[p.at], p.tokens[p.at+1], p.tokens[p.at+2]
 	p.at += 3
 	if op.quoted {
-		return edgePredicate{}, invalid("invalid comparison operator")
+		return content.LinkFilter{}, invalid("invalid comparison operator")
 	}
 	if edgeProperty(right) && !edgeProperty(left) {
 		left, right = right, left
@@ -175,10 +172,9 @@ func (p *edgeFilterParser) primary(depth int) (edgePredicate, error) {
 func edgeProperty(t edgeToken) bool {
 	return !t.quoted && (t.text == "id" || t.text == "directed" || strings.HasPrefix(t.text, "attributes/"))
 }
-func edgeComparison(property edgeToken, op string, literal edgeToken) (edgePredicate, error) {
-	operator := map[string]string{"eq": "=", "ne": "<>", "gt": ">", "ge": ">=", "lt": "<", "le": "<="}[op]
-	if operator == "" || !edgeProperty(property) {
-		return edgePredicate{}, invalid("filter attributes/key, id or directed using scalar comparisons")
+func edgeComparison(property edgeToken, op string, literal edgeToken) (content.LinkFilter, error) {
+	if !slices.Contains([]string{"eq", "ne", "gt", "ge", "lt", "le"}, op) || !edgeProperty(property) {
+		return content.LinkFilter{}, invalid("filter attributes/key, id or directed using scalar comparisons")
 	}
 	var value any
 	kind := ""
@@ -198,49 +194,52 @@ func edgeComparison(property edgeToken, op string, literal edgeToken) (edgePredi
 		} else {
 			n, err := strconv.ParseFloat(literal.text, 64)
 			if err != nil || math.IsNaN(n) || math.IsInf(n, 0) {
-				return edgePredicate{}, invalid("expected string, number, boolean, UUID or null literal")
+				return content.LinkFilter{}, invalid("expected string, number, boolean, UUID or null literal")
 			}
 			value = n
 			kind = "number"
 		}
 	}
+	cmp := func(c content.LinkComparison) (content.LinkFilter, error) {
+		c.Op, c.Value = op, value
+		return content.LinkFilter{Cmp: &c}, nil
+	}
 	if property.text == "id" {
 		if kind != "uuid" || op != "eq" && op != "ne" {
-			return edgePredicate{}, invalid("id supports UUID equality")
+			return content.LinkFilter{}, invalid("id supports UUID equality")
 		}
-		return edgePredicate{"id" + operator + "?", []any{value}}, nil
+		return cmp(content.LinkComparison{Property: content.LinkID})
 	}
 	if property.text == "directed" {
 		if kind != "boolean" || op != "eq" && op != "ne" {
-			return edgePredicate{}, invalid("directed supports boolean equality")
+			return content.LinkFilter{}, invalid("directed supports boolean equality")
 		}
-		return edgePredicate{"directed" + operator + "?", []any{value}}, nil
+		return cmp(content.LinkComparison{Property: content.LinkDirected})
 	}
 	key := strings.TrimPrefix(property.text, "attributes/")
 	if key == "" || strings.ContainsAny(key, "/\"\\") || len(key) > 128 {
-		return edgePredicate{}, invalid("nested attributes are not supported")
+		return content.LinkFilter{}, invalid("nested attributes are not supported")
 	}
-	encoded, _ := json.Marshal(key)
-	path := "$." + string(encoded)
+	attribute := content.LinkComparison{Property: content.LinkAttribute, Key: key}
 	if kind == "null" {
-		text := "json_type(metadata,?) IS NULL"
-		if op == "ne" {
-			text = "json_type(metadata,?) IS NOT NULL"
-		} else if op != "eq" {
-			return edgePredicate{}, invalid("null supports eq/ne only")
+		if op != "eq" && op != "ne" {
+			return content.LinkFilter{}, invalid("null supports eq/ne only")
 		}
-		return edgePredicate{text, []any{path}}, nil
+		attribute.Kind = content.LiteralNull
+		return cmp(attribute)
 	}
 	if kind != "number" && op != "eq" && op != "ne" {
-		return edgePredicate{}, invalid("ordering requires numeric attributes")
+		return content.LinkFilter{}, invalid("ordering requires numeric attributes")
 	}
-	guard := "json_type(metadata,?)='text'"
-	if kind == "number" {
-		return edgePredicate{"((json_type(metadata,?) IN ('integer','real') OR (json_type(metadata,?)='text' AND CASE WHEN json_valid(json_extract(metadata,?)) THEN json_type(json_extract(metadata,?)) IN ('integer','real') ELSE 0 END)) AND CAST(json_extract(metadata,?) AS REAL)" + operator + "?)", []any{path, path, path, path, path, value}}, nil
-	} else if kind == "boolean" {
-		guard = "json_type(metadata,?) IN ('true','false')"
-	} else if kind == "uuid" {
-		return edgePredicate{}, invalid("attributes support strings, numbers and booleans")
+	switch kind {
+	case "number":
+		attribute.Kind = content.LiteralNumber
+	case "boolean":
+		attribute.Kind = content.LiteralBoolean
+	case "uuid":
+		return content.LinkFilter{}, invalid("attributes support strings, numbers and booleans")
+	default:
+		attribute.Kind = content.LiteralText
 	}
-	return edgePredicate{"(" + guard + " AND json_extract(metadata,?)" + operator + "?)", []any{path, path, value}}, nil
+	return cmp(attribute)
 }

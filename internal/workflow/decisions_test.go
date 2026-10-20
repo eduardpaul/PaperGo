@@ -4,19 +4,21 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"papergo/internal/dal/blobs"
+	directorydomain "papergo/internal/dal/directory"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"papergo/internal/dal/daltest"
+	"papergo/internal/dal/resultcache"
 	"papergo/internal/decision"
 	"papergo/internal/dms"
 	"papergo/internal/doctext/doctexttest"
 	"papergo/internal/identity"
-	"papergo/internal/resultcache"
 	"papergo/internal/storage"
-	"papergo/internal/testutil"
 )
 
 type testDecisionModel struct {
@@ -41,7 +43,7 @@ func (m *testDecisionModel) Decide(_ context.Context, r []decision.Request) ([]d
 func decisionEnv(t *testing.T) (*env, *workEnv, *testDecisionModel) {
 	t.Helper()
 	model := &testDecisionModel{}
-	tools := Tools{Decisions: model, Results: resultcache.New(testutil.Database(t).SQL), ResultTTL: time.Hour}
+	tools := Tools{Decisions: model, Results: resultcache.New(daltest.Database(t).SQL), ResultTTL: time.Hour}
 	ctx := context.Background()
 	return &env{ctx: ctx, scope: &scope{ctx: ctx, inputs: map[string]any{}}, workspaceID: "workspace-a", tools: tools}, &workEnv{ctx: ctx, tools: tools}, model
 }
@@ -163,7 +165,7 @@ func TestDecisionJobModelAndCacheWinnerValidation(t *testing.T) {
 
 func TestTaxonomyThresholdCacheAndSnapshotCommit(t *testing.T) {
 	e, w, model := decisionEnv(t)
-	service := dms.NewService(testutil.Database(t).SQL)
+	service := dms.NewService(daltest.Database(t).SQL)
 	e.t = service
 	e.author = "alice"
 	group, err := service.CreateTermGroup(e.ctx, "alice", dms.TermGroupInput{Name: "Topics"})
@@ -285,7 +287,7 @@ func TestDecisionConcurrentCacheCheckAfterGate(t *testing.T) {
 
 func TestTaxonomyCommitReauthorizesCachedResults(t *testing.T) {
 	e, w, _ := decisionEnv(t)
-	service := dms.NewService(testutil.Database(t).SQL)
+	service := dms.NewService(daltest.Database(t).SQL)
 	e.t = service
 	e.author = "bob"
 	group, err := service.CreateTermGroup(e.ctx, "alice", dms.TermGroupInput{Name: "Shared"})
@@ -311,7 +313,7 @@ func TestTaxonomyCommitReauthorizesCachedResults(t *testing.T) {
 		t.Fatal(err)
 	}
 	directory := service.Directory()
-	if err = directory.SetAssignment(e.ctx, "alice", identity.MemberRole, identity.Principal{Type: "user", ID: "bob"}, true); err != nil {
+	if err = directory.SetAssignment(e.ctx, "alice", identity.MemberRole, identity.Principal{Type: directorydomain.PrincipalUser, ID: "bob"}, true); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = commitDecision(e, prep.Job, cached); !errors.Is(err, dms.ErrForbidden) {
@@ -326,7 +328,7 @@ func TestDocumentDecisionSourceOwnershipAndStaleCache(t *testing.T) {
 		}
 		return []decision.Result{{Probabilities: []float64{.1, .9}}}, nil
 	}
-	service := dms.NewService(testutil.Database(t).SQL)
+	service := dms.NewService(daltest.Database(t).SQL)
 	e.t = service
 	e.author = "alice"
 	store, err := storage.NewLocal(t.TempDir())
@@ -365,7 +367,7 @@ func TestDocumentDecisionSourceOwnershipAndStaleCache(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	row, err := service.SaveBlobText(e.ctx, dms.BlobTextInput{SHA256: first.Blob.Sha256, Settings: "test", ObjectKey: object.Key, ObjectSize: object.Size, ObjectSHA256: object.SHA256, Pages: 1, Chars: 26, Extractor: "test"})
+	row, err := service.DAL.Blobs().SaveText(e.ctx, blobs.TextInput{SHA256: first.Blob.Sha256, Settings: "test", ObjectKey: object.Key, ObjectSize: object.Size, ObjectSHA256: object.SHA256, Pages: 1, Chars: 26, Extractor: "test"})
 	if err != nil {
 		t.Fatal(err)
 	}

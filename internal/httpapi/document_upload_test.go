@@ -11,13 +11,14 @@ import (
 	"net/http/httptest"
 	"net/textproto"
 	"os"
+	"papergo/internal/dal/daltest"
+	"papergo/internal/dal/resources"
 	"strings"
 	"testing"
 
-	"papergo/ent"
-	"papergo/ent/collectiontype"
-	"papergo/ent/itemrevision"
 	"papergo/internal/auth"
+	"papergo/internal/dal/blobs"
+	"papergo/internal/dal/revisions"
 	"papergo/internal/dms"
 )
 
@@ -76,28 +77,28 @@ func TestDocumentMultipartCreateAtomicMetadataAndContent(t *testing.T) {
 	if _, err = s.CreateField(ctx, "alice", lib.ID, dms.CreateField{Key: "amount", Label: "Amount", Type: "integer", Required: true}); err != nil {
 		t.Fatal(err)
 	}
-	typ, err := s.Client.CollectionType.Query().Where(collectiontype.ContainerIDEQ(lib.ID)).Only(ctx)
+	typ, err := s.DAL.Catalog().CollectionContentType(ctx, lib.ID, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	metadata := `{"name":"Invoice","folder_id":"` + folder.ID + `","content_type_id":"` + typ.ContentTypeID + `","keywords":["finance"],"values":{"amount":9223372036854775807},"languages":" eng+deu "}`
+	metadata := `{"name":"Invoice","folder_id":"` + folder.ID + `","content_type_id":"` + typ.ID + `","keywords":["finance"],"values":{"amount":9223372036854775807},"languages":" eng+deu "}`
 	endpoint := "/v1/resources/" + lib.ID + "/documents"
 	// Metadata may follow the file; no item is created until the full multipart
 	// body has been parsed and validated.
 	res := documentRequest(t, h, endpoint, documentPart{"file", `C:\inbox\invoice.txt`, "%PDF-invoice bytes"}, documentPart{"metadata", "", metadata})
 	var result struct {
-		Item       ent.Resource            `json:"item"`
-		File       ent.Blob                `json:"file"`
+		Item       resources.Resource      `json:"item"`
+		File       blobs.Blob              `json:"file"`
 		Duplicates []dms.DuplicateDocument `json:"duplicates"`
 	}
-	if res.Code != 201 || json.Unmarshal(res.Body.Bytes(), &result) != nil || result.Item.Name != "Invoice" || result.File.Filename != "invoice.txt" || result.File.Languages != "eng+deu" || *result.Item.ParentID != folder.ID || *result.Item.ContentTypeID != typ.ContentTypeID || result.Item.Version != 1 || result.File.Version != 1 || res.Header().Get("ETag") != `"1"` || !strings.Contains(res.Body.String(), "9223372036854775807") {
+	if res.Code != 201 || json.Unmarshal(res.Body.Bytes(), &result) != nil || result.Item.Name != "Invoice" || result.File.Filename != "invoice.txt" || result.File.Languages != "eng+deu" || *result.Item.ParentID != folder.ID || *result.Item.ContentTypeID != typ.ID || result.Item.Version != 1 || result.File.Version != 1 || res.Header().Get("ETag") != `"1"` || !strings.Contains(res.Body.String(), "9223372036854775807") {
 		t.Fatal(res.Code, res.Body.String())
 	}
 	if result.Item.PublishedRevisionID != nil || res.Header().Get("Location") != "/v1/resources/"+result.Item.ID {
 		t.Fatal("first upload publication", res.Body.String())
 	}
-	if n, err := s.Client.ItemRevision.Query().Where(itemrevision.ItemIDEQ(result.Item.ID)).Count(ctx); err != nil || n != 1 {
-		t.Fatal("metadata-only intermediate revision", n, err)
+	if revs, err := s.DAL.Revisions().Revisions(ctx, revisions.Filter{ItemID: result.Item.ID}); err != nil || len(revs) != 1 {
+		t.Fatal("metadata-only intermediate revision", revs, err)
 	}
 	res = request(h, "GET", "/v1/items/"+result.Item.ID+"/content", "", testToken, "", "")
 	if res.Code != 200 || res.Body.String() != "%PDF-invoice bytes" {
@@ -129,7 +130,7 @@ func TestDocumentMultipartFailuresLeaveNoItemOrBytes(t *testing.T) {
 	endpoint := "/v1/resources/" + lib.ID + "/documents"
 	file := documentPart{"file", "file.txt", "%PDF-bytes"}
 	valid := documentPart{"metadata", "", `{"values":{"required":"yes"}}`}
-	before, err := s.Client.Resource.Query().Count(ctx)
+	before, err := s.DAL.Resources().Count(ctx, resources.Filter{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +157,7 @@ func TestDocumentMultipartFailuresLeaveNoItemOrBytes(t *testing.T) {
 			if res.Code != test.status {
 				t.Fatal(res.Code, res.Body.String())
 			}
-			if n, err := s.Client.Resource.Query().Count(ctx); err != nil || n != before {
+			if n, err := s.DAL.Resources().Count(ctx, resources.Filter{}); err != nil || n != before {
 				t.Fatal("failure created item", n, err)
 			}
 			files, err := os.ReadDir(path)
@@ -174,7 +175,7 @@ func TestDocumentMultipartFailuresLeaveNoItemOrBytes(t *testing.T) {
 	if res.Code != 409 {
 		t.Fatal(res.Code, res.Body.String())
 	}
-	if n, err := s.Client.Resource.Query().Count(ctx); err != nil || n != before+1 {
+	if n, err := s.DAL.Resources().Count(ctx, resources.Filter{}); err != nil || n != before+1 {
 		t.Fatal("duplicate created item", n, err)
 	}
 	files, err := os.ReadDir(path)
@@ -225,21 +226,19 @@ func TestDocumentMultipartDatabaseFailureRollsBackAndCleansStorage(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	before, err := s.Client.Resource.Query().Count(ctx)
+	before, err := s.DAL.Resources().Count(ctx, resources.Filter{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.Client.ExecContext(ctx, `CREATE TRIGGER reject_document_blob BEFORE INSERT ON blobs BEGIN SELECT RAISE(ABORT,'injected blob failure'); END`); err != nil {
-		t.Fatal(err)
-	}
+	daltest.Reject(t, s.DAL, "blobs", daltest.OnInsert, nil)
 	res := documentRequest(t, h, "/v1/resources/"+lib.ID+"/documents", documentPart{"file", "doc.txt", "%PDF-bytes"})
 	if res.Code != 409 {
 		t.Fatal(res.Code, res.Body.String())
 	}
-	if n, err := s.Client.Resource.Query().Count(ctx); err != nil || n != before {
+	if n, err := s.DAL.Resources().Count(ctx, resources.Filter{}); err != nil || n != before {
 		t.Fatal("database failure left metadata", n, err)
 	}
-	if n, err := s.Client.Blob.Query().Count(ctx); err != nil || n != 0 {
+	if n, err := s.DAL.Blobs().Count(ctx, blobs.BlobFilter{}); err != nil || n != 0 {
 		t.Fatal("database failure left blob", n, err)
 	}
 	files, err := os.ReadDir(path)
@@ -262,7 +261,7 @@ func TestUploadNameConflictAndRenameDownload(t *testing.T) {
 	endpoint := "/v1/resources/" + lib.ID + "/documents"
 	first := documentRequest(t, h, endpoint, documentPart{"file", "original.pdf", "%PDF-first"})
 	var doc struct {
-		Item ent.Resource `json:"item"`
+		Item resources.Resource `json:"item"`
 	}
 	if first.Code != 201 || json.Unmarshal(first.Body.Bytes(), &doc) != nil {
 		t.Fatal(first.Code, first.Body.String())

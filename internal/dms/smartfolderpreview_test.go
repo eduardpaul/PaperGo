@@ -3,6 +3,8 @@ package dms
 import (
 	"encoding/json"
 	"fmt"
+	eventstore "papergo/internal/dal/events"
+	viewstore "papergo/internal/dal/views"
 	"strings"
 	"testing"
 )
@@ -15,7 +17,7 @@ func TestSmartFolderPreviewIsReadOnlyScopedAndBounded(t *testing.T) {
 		publishItem(t, s, item)
 	}
 	library := create(t, s, workspace.ID, "library", "Documents", nil)
-	file, err := s.CreateDocument(testContext, "alice", library.ID, DocumentMetadata{Name: "Excluded file"}, content("excluded.pdf"))
+	file, err := s.CreateDocument(testContext, "alice", library.ID, DocumentMetadata{Name: "Excluded file"}, pdfContent("excluded.pdf"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -25,8 +27,8 @@ func TestSmartFolderPreviewIsReadOnlyScopedAndBounded(t *testing.T) {
 	if _, err := s.SetPermissions(testContext, "alice", private.ID, latest(t, s, private.ID).Version, Permissions{Grants: []Permission{{"user", "alice", "manage", "allow"}}}); err != nil {
 		t.Fatal(err)
 	}
-	before, _ := s.Client.SmartFolder.Query().Count(testContext)
-	events, _ := s.Client.DomainEvent.Query().Count(testContext)
+	before, _ := s.DAL.Views().CountSmartFolders(testContext, viewstore.FolderFilter{})
+	events, _ := s.DAL.Events().Count(testContext, eventstore.Filter{})
 	input := SmartFolderPreview{WorkspaceID: &workspace.ID, Definition: SmartFolderDefinition{Mode: "query", CollectionKind: "list"}}
 	preview, err := s.PreviewSmartFolder(testContext, "reader", input)
 	if err != nil || len(preview.Data) != 5 || counted(preview.Total) != 7 || preview.NextCursor != "" {
@@ -37,8 +39,8 @@ func TestSmartFolderPreviewIsReadOnlyScopedAndBounded(t *testing.T) {
 			t.Fatal("wrong scope", entry)
 		}
 	}
-	after, _ := s.Client.SmartFolder.Query().Count(testContext)
-	afterEvents, _ := s.Client.DomainEvent.Query().Count(testContext)
+	after, _ := s.DAL.Views().CountSmartFolders(testContext, viewstore.FolderFilter{})
+	afterEvents, _ := s.DAL.Events().Count(testContext, eventstore.Filter{})
 	if before != after || events != afterEvents {
 		t.Fatal("preview wrote application state")
 	}

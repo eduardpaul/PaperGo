@@ -19,7 +19,7 @@ func (s *Service) Unlink(ctx context.Context, subject, itemID, linkID string) er
 				return e
 			}
 		}
-		if e = t.Client.Relationship.DeleteOne(link).Exec(ctx); e != nil {
+		if e = t.DAL.Relationships().Unlink(ctx, link.ID); e != nil {
 			return e
 		}
 		if e = t.touchRelationship(ctx, subject, link, "deleted"); e != nil {

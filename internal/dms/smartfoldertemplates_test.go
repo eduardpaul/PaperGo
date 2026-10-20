@@ -3,6 +3,7 @@ package dms
 import (
 	"encoding/json"
 	"errors"
+	auditstore "papergo/internal/dal/audit"
 	"strings"
 	"testing"
 )
@@ -35,7 +36,7 @@ func TestSmartFolderPackagesResolveTermsAndReapplyIdempotently(t *testing.T) {
 	if strings.Contains(string(raw), child.ID) || strings.Contains(string(raw), w.ID) {
 		t.Fatal("export contains source identifiers", string(raw))
 	}
-	current, _ := s.Client.Resource.Get(testContext, w.ID)
+	current, _ := s.DAL.Resources().Resource(testContext, w.ID)
 	if current.Version != sourceVersion {
 		t.Fatal(current.Version, sourceVersion)
 	}
@@ -50,9 +51,9 @@ func TestSmartFolderPackagesResolveTermsAndReapplyIdempotently(t *testing.T) {
 		t.Fatal(def, err)
 	}
 	first := result.Data[0]
-	audits, _ := s.Client.AuditEvent.Query().Count(testContext)
+	audits, _ := s.DAL.Audit().Count(testContext, auditstore.Filter{})
 	again, err := s.ImportSmartFolders(testContext, "alice", target.ID, result.WorkspaceVersion, pkg)
-	auditAfter, _ := s.Client.AuditEvent.Query().Count(testContext)
+	auditAfter, _ := s.DAL.Audit().Count(testContext, auditstore.Filter{})
 	if err != nil || again.Created != 0 || again.Updated != 0 || again.Data[0].ID != first.ID || again.Data[0].Version != first.Version || again.WorkspaceVersion != result.WorkspaceVersion || audits != auditAfter {
 		t.Fatal("non-idempotent import", again, err)
 	}
@@ -71,7 +72,7 @@ func TestSmartFolderPackagesResolveTermsAndReapplyIdempotently(t *testing.T) {
 	if _, _, err = s.ExportSmartFolders(testContext, "reader", target.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatal(err)
 	}
-	targetCurrent, _ := s.Client.Resource.Get(testContext, target.ID)
+	targetCurrent, _ := s.DAL.Resources().Resource(testContext, target.ID)
 	if _, err = s.ImportSmartFolders(testContext, "reader", target.ID, targetCurrent.Version, pkg); !errors.Is(err, ErrNotFound) {
 		t.Fatal(err)
 	}
@@ -80,7 +81,7 @@ func TestSmartFolderPackagesResolveTermsAndReapplyIdempotently(t *testing.T) {
 func TestSmartFolderPackageAtomicValidation(t *testing.T) {
 	s, w, _ := fixture(t)
 	pkg := SmartFolderPackage{Folders: []PortableSmartFolder{{Name: "Valid", Definition: PortableSmartFolderDefinition{Mode: "query"}}, {Name: "Bad term", Definition: PortableSmartFolderDefinition{Mode: "query", Terms: []SmartFolderTermRef{{TermSetKey: "missing", Path: []string{"Unknown"}}}}}}}
-	before, _ := s.Client.AuditEvent.Query().Count(testContext)
+	before, _ := s.DAL.Audit().Count(testContext, auditstore.Filter{})
 	_, err := s.ImportSmartFolders(testContext, "alice", w.ID, w.Version, pkg)
 	if !isValidation(err) {
 		t.Fatal(err)
@@ -89,8 +90,8 @@ func TestSmartFolderPackageAtomicValidation(t *testing.T) {
 	if err != nil || len(rows.Data) != 0 {
 		t.Fatal("partial import", rows, err)
 	}
-	current, _ := s.Client.Resource.Get(testContext, w.ID)
-	after, _ := s.Client.AuditEvent.Query().Count(testContext)
+	current, _ := s.DAL.Resources().Resource(testContext, w.ID)
+	after, _ := s.DAL.Audit().Count(testContext, auditstore.Filter{})
 	if current.Version != w.Version || before != after {
 		t.Fatal("failed import advanced workspace or audit")
 	}

@@ -2,6 +2,7 @@ package dms
 
 import (
 	"errors"
+	auditstore "papergo/internal/dal/audit"
 	"testing"
 )
 
@@ -20,7 +21,7 @@ func TestRelationshipsRequireWritableEndpointsAndCanMutateFromEitherEnd(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	before, err := s.Client.AuditEvent.Query().Count(testContext)
+	before, err := s.DAL.Audit().Count(testContext, auditstore.Filter{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,7 +29,7 @@ func TestRelationshipsRequireWritableEndpointsAndCanMutateFromEitherEnd(t *testi
 	if err != nil || retry.ID != edge.ID || retry.Version != edge.Version || retry.Metadata["note"] != "original" {
 		t.Fatal("retry at full cardinality mutated edge", retry, err)
 	}
-	if after, err := s.Client.AuditEvent.Query().Count(testContext); err != nil || after != before {
+	if after, err := s.DAL.Audit().Count(testContext, auditstore.Filter{}); err != nil || after != before {
 		t.Fatal("no-op retry audited a mutation", after, err)
 	}
 	// An inbound directed edge can be updated from its target by an authorized editor.

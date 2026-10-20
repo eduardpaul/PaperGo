@@ -6,11 +6,7 @@ import (
 	"time"
 
 	"github.com/dbos-inc/dbos-transact-golang/dbos"
-
-	"papergo/ent"
-	"papergo/ent/domainevent"
-	"papergo/ent/workflowrun"
-	"papergo/ent/workflowrunitem"
+	runstore "papergo/internal/dal/runs"
 	"papergo/internal/dms"
 	"papergo/internal/workflow"
 )
@@ -30,12 +26,21 @@ func (r *Runner) dispatchLoop(ctx context.Context) {
 	defer close(r.stopped)
 	ticker := time.NewTicker(r.cfg.DispatchInterval)
 	defer ticker.Stop()
+	var synced time.Time
+	active := 0
 	for {
 		if _, err := r.Dispatch(ctx); err != nil && ctx.Err() == nil {
 			r.log.Error("dispatch workflow events", "error", err)
 		}
-		if err := r.SyncLiveRuns(ctx); err != nil && ctx.Err() == nil {
-			r.log.Error("observe workflow statuses", "error", err)
+		// Statuses follow each commit, which lease takeover relies on. While
+		// a backlog drains, commits wake the loop many times a second and the
+		// sync reads every active run, so it then keeps the interval.
+		if active <= liveBatch || time.Since(synced) >= r.cfg.DispatchInterval {
+			synced = time.Now()
+			var err error
+			if active, err = r.SyncLiveRuns(ctx); err != nil && ctx.Err() == nil {
+				r.log.Error("observe workflow statuses", "error", err)
+			}
 		}
 		if err := r.SignalWaits(ctx); err != nil && ctx.Err() == nil {
 			r.log.Error("signal completed waits", "error", err)
@@ -77,24 +82,25 @@ func (r *Runner) Dispatch(ctx context.Context) (int, error) {
 }
 
 // activeRuns reports the runs DBOS still has queued or running, and parked
-// runs as waiting. It reads on DBOS's own connection, which sees committed
-// state only.
-func (r *Runner) activeRuns(ids []string) (map[string]string, error) {
-	statuses, err := dbos.ListWorkflows(r.ctx, dbos.WithFilterWorkflowIDs(ids...), dbos.WithFilterLoadInput(false), dbos.WithFilterLoadOutput(false))
+// runs as waiting. It reads in the dispatch transaction: on SQLite that
+// transaction holds the write lock, and the connections a read elsewhere
+// needs can all be held by writers waiting for that lock.
+func (r *Runner) activeRuns(ctx context.Context, t *dms.Service, ids []string) (map[string]runstore.Status, error) {
+	statuses, err := r.durable.Statuses(ctx, t.SQLTx(), ids)
 	if err != nil {
 		return nil, err
 	}
-	parked, err := parkedRuns(context.Background(), r.dms, ids)
+	parked, err := parkedRuns(ctx, t, ids)
 	if err != nil {
 		return nil, err
 	}
-	out := map[string]string{}
-	for _, s := range statuses {
-		switch state := status(s.Status); {
-		case (state == "running" || state == "queued") && parked[s.ID]:
-			out[s.ID] = "waiting"
-		case state == "queued" || state == "running":
-			out[s.ID] = state
+	out := map[string]runstore.Status{}
+	for id, s := range statuses {
+		switch state := status(dbos.WorkflowStatusType(s.Status)); {
+		case (state == runstore.StatusRunning || state == runstore.StatusQueued) && parked[id]:
+			out[id] = runstore.StatusWaiting
+		case state == runstore.StatusQueued || state == runstore.StatusRunning:
+			out[id] = state
 		}
 	}
 	return out, nil
@@ -105,7 +111,7 @@ func (r *Runner) cancelActive(id string) error {
 	if err := r.attach(runs, false); err != nil {
 		return err
 	}
-	if runs[0].Status != "queued" && runs[0].Status != "running" && runs[0].Status != "waiting" {
+	if runs[0].Status.Finished() {
 		return nil
 	}
 	r.log.Info("cancel run: its item was deleted, or a newer run replaced it", "run_id", id)
@@ -120,7 +126,7 @@ func (r *Runner) cancelActive(id string) error {
 func (r *Runner) dispatchBatch(ctx context.Context) (n int, more bool, cancel []string, err error) {
 	err = r.dms.Write(ctx, func(t *dms.Service) error {
 		more, cancel = false, nil
-		rows, err := t.Client.DomainEvent.Query().Where(domainevent.DispatchedAtIsNil()).Order(ent.Asc(domainevent.FieldCreatedAt), ent.Asc(domainevent.FieldID)).Limit(dispatchBatch).All(ctx)
+		rows, err := t.DAL.Events().Undispatched(ctx, dispatchBatch)
 		if err != nil || len(rows) == 0 {
 			return err
 		}
@@ -130,16 +136,7 @@ func (r *Runner) dispatchBatch(ctx context.Context) (n int, more bool, cancel []
 		// default creation along with the writes it rolled back.
 		ensured := map[string]bool{}
 		for _, row := range rows {
-			e := dms.Event{ID: row.ID, Type: row.Type, WorkspaceID: row.WorkspaceID, Actor: row.Actor, Data: row.Data, Depth: row.Depth}
-			if row.CollectionID != nil {
-				e.CollectionID = *row.CollectionID
-			}
-			if row.ResourceID != nil {
-				e.ResourceID = *row.ResourceID
-			}
-			if row.CauseRunID != nil {
-				e.CauseRunID = *row.CauseRunID
-			}
+			e := dms.Event{ID: row.ID, Type: row.Type, WorkspaceID: row.WorkspaceID, CollectionID: row.CollectionID, ResourceID: row.ResourceID, Actor: row.Actor, CauseRunID: row.CauseRunID, Data: row.Data, Depth: row.Depth}
 			// Default built-ins exist before the workspace's first event matches.
 			if !ensured[e.WorkspaceID] {
 				if err := workflow.EnsureDefaults(ctx, t, e.WorkspaceID); err != nil {
@@ -156,17 +153,13 @@ func (r *Runner) dispatchBatch(ctx context.Context) (n int, more bool, cancel []
 				return err
 			}
 			if listening {
-				after := ""
-				if row.FanoutCursor != nil {
-					after = *row.FanoutCursor
-				}
-				targets, err := t.PermissionTargets(ctx, e, after, workflow.PermissionBatch)
+				targets, err := t.PermissionTargets(ctx, e, row.FanoutCursor, workflow.PermissionBatch)
 				if err != nil {
 					return err
 				}
 				events = append(events, workflow.PermissionDeliveries(e, targets)...)
 				if len(targets) == workflow.PermissionBatch {
-					if err = t.Client.DomainEvent.UpdateOneID(row.ID).SetFanoutCursor(targets[len(targets)-1].ID).Exec(ctx); err != nil {
+					if err = t.DAL.Events().AdvanceFanout(ctx, row.ID, targets[len(targets)-1].ID); err != nil {
 						return err
 					}
 					more = true
@@ -188,7 +181,7 @@ func (r *Runner) dispatchBatch(ctx context.Context) (n int, more bool, cancel []
 			if (e.Type != dms.EventItemDeleted && e.Type != dms.EventItemPurged) || e.ResourceID == "" {
 				continue
 			}
-			memberships, err := t.Client.WorkflowRunItem.Query().Where(workflowrunitem.ItemIDEQ(e.ResourceID)).All(ctx)
+			memberships, err := t.DAL.Runs().Items(ctx, nil, e.ResourceID)
 			if err != nil {
 				return err
 			}
@@ -198,12 +191,12 @@ func (r *Runner) dispatchBatch(ctx context.Context) (n int, more bool, cancel []
 				}
 			}
 			// Runs on the item, except those its deletion started.
-			runs, err := t.Client.WorkflowRun.Query().Where(workflowrun.ItemIDEQ(e.ResourceID), workflowrun.LiveStatusIn("queued", "running", "waiting"),
-				workflowrun.EventTypeNotIn(dms.EventItemDeleted, dms.EventItemPurged)).IDs(ctx)
+			runs, err := t.DAL.Runs().List(ctx, runstore.Filter{ItemIDs: []string{e.ResourceID}, Statuses: runstore.Active, ExcludeEventTypes: []string{dms.EventItemDeleted, dms.EventItemPurged}})
 			if err != nil {
 				return err
 			}
-			for _, id := range runs {
+			for _, run := range runs {
+				id := run.ID
 				if id != e.CauseRunID && !started[id] {
 					cancel = append(cancel, id)
 				}
@@ -228,7 +221,7 @@ func (r *Runner) dispatchBatch(ctx context.Context) (n int, more bool, cancel []
 			}
 		}
 		if len(ids) > 0 {
-			if err = t.Client.DomainEvent.Update().Where(domainevent.IDIn(ids...)).SetDispatchedAt(time.Now().UTC()).Exec(ctx); err != nil {
+			if err = t.DAL.Events().Dispatch(ctx, ids, time.Now().UTC()); err != nil {
 				return err
 			}
 		}

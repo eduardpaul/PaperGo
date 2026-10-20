@@ -3,10 +3,10 @@ package dms
 import (
 	"context"
 	"encoding/json"
-	"papergo/ent"
-	"papergo/ent/contenttype"
-	"papergo/ent/fielddefinition"
-	"papergo/ent/schematemplate"
+	"errors"
+	"papergo/internal/dal/catalog"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/resources"
 	"papergo/internal/model"
 	"slices"
 )
@@ -73,7 +73,7 @@ func (s *Service) templateDefinition(ctx context.Context, subject, workspaceID s
 	}
 	return raw, nil
 }
-func (s *Service) CreateTemplate(ctx context.Context, subject, workspaceID string, in TemplateInput) (out *ent.SchemaTemplate, err error) {
+func (s *Service) CreateTemplate(ctx context.Context, subject, workspaceID string, in TemplateInput) (out *catalog.Template, err error) {
 	err = s.write(ctx, func(t *Service) error {
 		w, e := t.schemaWorkspace(ctx, subject, workspaceID, "manage")
 		if e != nil {
@@ -83,7 +83,7 @@ func (s *Service) CreateTemplate(ctx context.Context, subject, workspaceID strin
 		if e != nil {
 			return e
 		}
-		out, e = t.Client.SchemaTemplate.Create().SetWorkspaceID(w.ID).SetKey(in.Key).SetName(in.Name).SetDescription(in.Description).SetDefinition(raw).Save(ctx)
+		out, e = t.DAL.Catalog().CreateTemplate(ctx, catalog.Template{WorkspaceID: w.ID, Key: in.Key, Name: in.Name, Description: in.Description, Definition: raw})
 		if e != nil {
 			return e
 		}
@@ -91,10 +91,10 @@ func (s *Service) CreateTemplate(ctx context.Context, subject, workspaceID strin
 	})
 	return
 }
-func (s *Service) UpdateTemplate(ctx context.Context, subject, id string, version int, in TemplateInput) (out *ent.SchemaTemplate, err error) {
+func (s *Service) UpdateTemplate(ctx context.Context, subject, id string, version int, in TemplateInput) (out *catalog.Template, err error) {
 	err = s.write(ctx, func(t *Service) error {
-		old, e := t.Client.SchemaTemplate.Get(ctx, id)
-		if ent.IsNotFound(e) {
+		old, e := t.DAL.Catalog().Template(ctx, id)
+		if dberr.IsNotFound(e) {
 			return ErrNotFound
 		}
 		if e != nil {
@@ -117,7 +117,10 @@ func (s *Service) UpdateTemplate(ctx context.Context, subject, id string, versio
 		if e != nil {
 			return e
 		}
-		out, e = t.Client.SchemaTemplate.UpdateOne(old).SetName(in.Name).SetDescription(in.Description).SetDefinition(raw).AddVersion(1).Save(ctx)
+		out, e = t.DAL.Catalog().SaveTemplate(ctx, catalog.Template{ID: id, Name: in.Name, Description: in.Description, Definition: raw}, version)
+		if errors.Is(e, dberr.ErrConcurrentUpdate) {
+			return ErrPreconditionFailed
+		}
 		if e != nil {
 			return e
 		}
@@ -125,13 +128,13 @@ func (s *Service) UpdateTemplate(ctx context.Context, subject, id string, versio
 	})
 	return
 }
-func (s *Service) Templates(ctx context.Context, subject, workspaceID, after string, limit int) (Page[*ent.SchemaTemplate], error) {
-	return read(ctx, s, func(t *Service) (Page[*ent.SchemaTemplate], error) {
+func (s *Service) Templates(ctx context.Context, subject, workspaceID, after string, limit int) (Page[*catalog.Template], error) {
+	return read(ctx, s, func(t *Service) (Page[*catalog.Template], error) {
 		if _, e := t.schemaWorkspace(ctx, subject, workspaceID, "read"); e != nil {
-			return Page[*ent.SchemaTemplate]{}, e
+			return Page[*catalog.Template]{}, e
 		}
-		rows, e := t.Client.SchemaTemplate.Query().Where(schematemplate.WorkspaceIDEQ(workspaceID), schematemplate.IDGT(after)).Order(ent.Asc(schematemplate.FieldID)).Limit(pageSize(limit) + 1).All(ctx)
-		return entityPage(rows, limit, func(v *ent.SchemaTemplate) string { return v.ID }), e
+		rows, e := t.DAL.Catalog().Templates(ctx, catalog.TemplateFilter{WorkspaceID: workspaceID, AfterID: after, Limit: pageSize(limit) + 1})
+		return entityPage(rows, limit, func(v *catalog.Template) string { return v.ID }), e
 	})
 }
 
@@ -140,7 +143,7 @@ type ApplyTemplateInput struct {
 	ContentTypeID   string `json:"content_type_id,omitempty"`
 }
 
-func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templateID string, version, templateVersion int, typeID string) (out *ent.Resource, err error) {
+func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templateID string, version, templateVersion int, typeID string) (out *resources.Resource, err error) {
 	err = s.write(ctx, func(t *Service) error {
 		c, e := t.contentTypeResource(ctx, subject, containerID, "manage")
 		if e != nil {
@@ -156,8 +159,8 @@ func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templ
 		if e != nil {
 			return e
 		}
-		tpl, e := t.Client.SchemaTemplate.Get(ctx, templateID)
-		if ent.IsNotFound(e) {
+		tpl, e := t.DAL.Catalog().Template(ctx, templateID)
+		if dberr.IsNotFound(e) {
 			return ErrNotFound
 		}
 		if e != nil {
@@ -178,7 +181,7 @@ func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templ
 			return e
 		}
 		required := []string{}
-		reindex := []*ent.FieldDefinition{}
+		reindex := []*catalog.FieldDefinition{}
 		for _, d := range defs {
 			if e = validateFieldDefinition(d); e != nil {
 				return e
@@ -191,9 +194,9 @@ func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templ
 					return e
 				}
 			}
-			old, e := t.Client.FieldDefinition.Query().Where(collectionFieldPredicate(c.ID), fielddefinition.KeyEQ(d.Key)).Only(ctx)
-			if ent.IsNotFound(e) {
-				_, e = t.createField(ctx, subject, c, CreateField{ContentTypeID: typ.ID, Key: d.Key, Label: d.Label, Type: string(d.Type), Required: d.Required, Choices: d.Choices, Indexed: d.Indexed, Scale: d.Scale, Options: d.Options})
+			old, e := t.DAL.Catalog().OneField(ctx, catalog.FieldFilter{CollectionID: c.ID, Keys: []string{d.Key}})
+			if dberr.IsNotFound(e) {
+				_, e = t.createField(ctx, subject, c, CreateField{ContentTypeID: typ.ID, Key: d.Key, Label: d.Label, Type: d.Type, Required: d.Required, Choices: d.Choices, Indexed: d.Indexed, Scale: d.Scale, Options: d.Options})
 				if e != nil {
 					return e
 				}
@@ -208,7 +211,7 @@ func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templ
 			if newlyRequired(old, d) {
 				required = append(required, d.Key)
 			}
-			updated, e := t.Client.FieldDefinition.UpdateOne(old).AddVersion(1).SetLabel(d.Label).SetRequired(d.Required).SetChoices(d.Choices).SetIndexed(d.Indexed).SetOptions(d.Options).Save(ctx)
+			updated, e := t.reviseFieldDefinition(ctx, old, d)
 			if e != nil {
 				return e
 			}
@@ -219,13 +222,13 @@ func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templ
 		if e = t.checkRequiredFilled(ctx, c.ID, required); e != nil {
 			return e
 		}
-		typ, e = t.Client.ContentType.Get(ctx, typ.ID)
+		typ, e = t.DAL.Catalog().ContentType(ctx, typ.ID)
 		if e != nil {
 			return e
 		}
 		ids := slices.Clone(typ.FieldIds)
 		for _, d := range defs {
-			live, e := t.Client.FieldDefinition.Query().Where(collectionFieldPredicate(c.ID), fielddefinition.KeyEQ(d.Key)).Only(ctx)
+			live, e := t.DAL.Catalog().OneField(ctx, catalog.FieldFilter{CollectionID: c.ID, Keys: []string{d.Key}})
 			if e != nil {
 				return e
 			}
@@ -249,7 +252,7 @@ func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templ
 		if e = t.checkTypeHeads(ctx, subject, c, typ.ID, fieldKeys(defs), rules); e != nil {
 			return e
 		}
-		if _, e = t.Client.ContentType.Update().Where(contenttype.IDEQ(typ.ID)).SetFieldIds(ids).SetRules(candidate.Rules).AddVersion(1).Save(ctx); e != nil {
+		if _, e = t.reviseContentType(ctx, typ, typ.Name, ids, candidate.Rules); e != nil {
 			return e
 		}
 		affected, e := t.attachedCollections(ctx, []string{typ.ID})
@@ -261,7 +264,7 @@ func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templ
 			seen[a.ID] = true
 		}
 		for _, d := range defs {
-			live, e := t.Client.FieldDefinition.Query().Where(collectionFieldPredicate(c.ID), fielddefinition.KeyEQ(d.Key)).Only(ctx)
+			live, e := t.DAL.Catalog().OneField(ctx, catalog.FieldFilter{CollectionID: c.ID, Keys: []string{d.Key}})
 			if e != nil {
 				return e
 			}
@@ -294,11 +297,11 @@ func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templ
 			if len(c.TemplateKeys) >= 100 {
 				return invalid("at most 100 adopted template keys per collection")
 			}
-			if e = t.Client.Resource.UpdateOneID(c.ID).SetTemplateKeys(append(slices.Clone(c.TemplateKeys), tpl.Key)).Exec(ctx); e != nil {
+			if e = t.DAL.Resources().SetTemplateKeys(ctx, c.ID, append(slices.Clone(c.TemplateKeys), tpl.Key)); e != nil {
 				return e
 			}
 		}
-		out, e = t.Client.Resource.Get(ctx, c.ID)
+		out, e = t.DAL.Resources().Resource(ctx, c.ID)
 		if e != nil {
 			return e
 		}

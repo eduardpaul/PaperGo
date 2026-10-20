@@ -3,24 +3,23 @@ package dms
 import (
 	"context"
 	"encoding/json"
-	entsql "entgo.io/ent/dialect/sql"
-	"papergo/ent"
-	"papergo/ent/contenttype"
-	"papergo/ent/fielddefinition"
-	"papergo/ent/listview"
+	"errors"
+	"papergo/internal/dal/catalog"
+	"papergo/internal/dal/dberr"
+	viewstore "papergo/internal/dal/views"
 )
 
-func (s *Service) CatalogFields(ctx context.Context, subject string) ([]*ent.FieldDefinition, error) {
-	return read(ctx, s, func(t *Service) ([]*ent.FieldDefinition, error) {
+func (s *Service) CatalogFields(ctx context.Context, subject string) ([]*catalog.FieldDefinition, error) {
+	return read(ctx, s, func(t *Service) ([]*catalog.FieldDefinition, error) {
 		if e := t.RequireScope(ctx, subject, "contentType.read"); e != nil {
 			return nil, e
 		}
-		return t.Client.FieldDefinition.Query().Order(ent.Asc(fielddefinition.FieldKey), ent.Asc(fielddefinition.FieldID)).All(ctx)
+		return t.DAL.Catalog().Fields(ctx, catalog.FieldFilter{})
 	})
 }
 
 // CreateCatalogField creates an organization field that content types reference by ID.
-func (s *Service) CreateCatalogField(ctx context.Context, subject string, in CreateField) (out *ent.FieldDefinition, err error) {
+func (s *Service) CreateCatalogField(ctx context.Context, subject string, in CreateField) (out *catalog.FieldDefinition, err error) {
 	err = s.write(ctx, func(t *Service) error {
 		if e := t.RequireScope(ctx, subject, "contentType.manage"); e != nil {
 			return e
@@ -44,7 +43,7 @@ func (s *Service) CreateCatalogField(ctx context.Context, subject string, in Cre
 			}
 		}
 		var e error
-		out, e = t.Client.FieldDefinition.Create().SetKey(d.Key).SetLabel(d.Label).SetType(d.Type).SetRequired(d.Required).SetChoices(d.Choices).SetIndexed(d.Indexed).SetScale(d.Scale).SetOptions(d.Options).Save(ctx)
+		out, e = t.persistFieldDefinition(ctx, d)
 		if e != nil {
 			return e
 		}
@@ -53,22 +52,16 @@ func (s *Service) CreateCatalogField(ctx context.Context, subject string, in Cre
 	return
 }
 
-func fieldTypePredicate(id string) func(*entsql.Selector) {
-	return func(q *entsql.Selector) {
-		q.Where(entsql.ExprP("EXISTS(SELECT 1 FROM json_each("+q.C(contenttype.FieldFieldIds)+") WHERE value=?)", id))
-	}
-}
 func (s *Service) bumpFieldTypes(ctx context.Context, id string) error {
-	_, e := s.Client.ContentType.Update().Where(fieldTypePredicate(id)).AddVersion(1).Save(ctx)
-	return e
+	return s.DAL.Catalog().BumpContentTypesForField(ctx, id)
 }
 
-func (s *Service) validateSchemaViews(ctx context.Context, collection string, defs map[string]*ent.FieldDefinition) error {
-	views, e := s.Client.ListView.Query().Where(listview.ContainerIDEQ(collection)).All(ctx)
+func (s *Service) validateSchemaViews(ctx context.Context, collection string, defs map[string]*catalog.FieldDefinition) error {
+	saved, e := s.DAL.Views().ListViews(ctx, viewstore.ViewFilter{ContainerID: collection})
 	if e != nil {
 		return e
 	}
-	for _, v := range views {
+	for _, v := range saved {
 		var q QuerySpec
 		if e = json.Unmarshal(v.Query, &q); e != nil {
 			return e
@@ -98,7 +91,7 @@ func (s *Service) validateSchemaViews(ctx context.Context, collection string, de
 	}
 	return nil
 }
-func schemaFilterKnown(f *FilterExpr, defs map[string]*ent.FieldDefinition) bool {
+func schemaFilterKnown(f *FilterExpr, defs map[string]*catalog.FieldDefinition) bool {
 	if f == nil {
 		return true
 	}
@@ -121,4 +114,28 @@ func schemaFilterKnown(f *FilterExpr, defs map[string]*ent.FieldDefinition) bool
 	return true
 }
 
-func builtinColumn(key string) bool { _, d := systemField(key); return d != nil || key == "$keywords" }
+func builtinColumn(key string) bool { d := systemField(key); return d != nil || key == "$keywords" }
+
+func (s *Service) persistFieldDefinition(ctx context.Context, d *catalog.FieldDefinition) (*catalog.FieldDefinition, error) {
+	return s.DAL.Catalog().CreateField(ctx, *d)
+}
+
+func (s *Service) reviseFieldDefinition(ctx context.Context, prior, candidate *catalog.FieldDefinition) (*catalog.FieldDefinition, error) {
+	before, err := json.Marshal(prior)
+	if err != nil {
+		return nil, err
+	}
+	change := *candidate
+	change.ID = prior.ID
+	updated, err := s.DAL.Catalog().SaveField(ctx, change, prior.Version)
+	if errors.Is(err, dberr.ErrConcurrentUpdate) {
+		return nil, ErrPreconditionFailed
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := s.trackAuditProperties(prior.ID, before, updated, "label", "required", "choices", "indexed", "options"); err != nil {
+		return nil, err
+	}
+	return updated, nil
+}

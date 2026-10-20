@@ -1,10 +1,11 @@
 package dms
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"papergo/ent"
-	"papergo/ent/synctoken"
+	"papergo/internal/dal/resources"
+	"strings"
 	"testing"
 	"time"
 )
@@ -74,19 +75,20 @@ func TestDeltaDurableEditsDeletionAndAccess(t *testing.T) {
 	if err = s.CollectExpiredDeltas(testContext, time.Now().Add(6*time.Minute)); err != nil {
 		t.Fatal(err)
 	}
-	rows, err := s.Client.SyncToken.Query().All(testContext)
+	firstPage, err := base64.RawURLEncoding.DecodeString(first.NextToken)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, row := range rows {
-		if string(row.Changes) != "[]" {
-			t.Fatal("retained page metadata", row)
+	for _, id := range []string{strings.Split(string(firstPage), ".")[0], last.DeltaToken} {
+		row, err := s.DAL.Delta().Token(testContext, id)
+		if err != nil || string(row.Changes) != "[]" {
+			t.Fatal("retained page metadata", row, err)
 		}
 	}
 	if _, err = s.Delta(testContext, "alice", list.ID, "", first.NextToken, 10); !errors.Is(err, ErrDeltaExpired) {
 		t.Fatal("expired page", err)
 	}
-	if err = s.Client.SyncToken.Update().Where(synctoken.IDEQ(last.DeltaToken)).SetExpiresAt(time.Now().UTC().Add(-time.Second)).Exec(testContext); err != nil {
+	if err = s.DAL.Delta().Renew(testContext, last.DeltaToken, time.Now().UTC().Add(-time.Second)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = s.Delta(testContext, "alice", list.ID, last.DeltaToken, "", 10); !errors.Is(err, ErrDeltaExpired) {
@@ -95,7 +97,7 @@ func TestDeltaDurableEditsDeletionAndAccess(t *testing.T) {
 	if err = s.CollectExpiredDeltas(testContext, time.Now().Add(31*24*time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	if count, err := s.Client.SyncState.Query().Count(testContext); err != nil || count != 0 {
+	if count, err := s.DAL.Delta().CountStates(testContext); err != nil || count != 0 {
 		t.Fatal(count, err)
 	}
 }
@@ -104,7 +106,7 @@ func TestDeltaCachedPagesRecheckAccess(t *testing.T) {
 	s, w, list := fixture(t)
 	a := create(t, s, list.ID, "item", "A", nil)
 	b := create(t, s, list.ID, "item", "B", nil)
-	for _, item := range []*ent.Resource{a, b} {
+	for _, item := range []*resources.Resource{a, b} {
 		if _, err := s.Publish(testContext, "alice", item.ID, item.Version); err != nil {
 			t.Fatal(err)
 		}
@@ -121,7 +123,7 @@ func TestDeltaCachedPagesRecheckAccess(t *testing.T) {
 	if err = json.Unmarshal(raw, &entries); err != nil || entries[0].ID == "" || entries[0].Name == "" {
 		t.Fatal(entries, err)
 	}
-	for _, item := range []*ent.Resource{a, b} {
+	for _, item := range []*resources.Resource{a, b} {
 		if _, err = s.SetPermissions(testContext, "alice", item.ID, latest(t, s, item.ID).Version, Permissions{Inherit: false, Grants: []Permission{{"user", "alice", "manage", "allow"}}}); err != nil {
 			t.Fatal(err)
 		}

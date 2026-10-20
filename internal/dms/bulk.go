@@ -3,8 +3,8 @@ package dms
 import (
 	"context"
 	"fmt"
-	"papergo/ent"
-	"papergo/ent/resource"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/refs"
 )
 
 const MaxBulkOperations = 100
@@ -104,7 +104,7 @@ func (s *Service) Bulk(ctx context.Context, subject, collectionID string, in Bul
 		if err != nil {
 			return err
 		}
-		if c.Kind != resource.KindList && c.Kind != resource.KindLibrary {
+		if c.Kind != refs.KindList && c.Kind != refs.KindLibrary {
 			return invalid("bulk operations require a list or library")
 		}
 		for i, op := range in.Operations {
@@ -113,7 +113,7 @@ func (s *Service) Bulk(ctx context.Context, subject, collectionID string, in Bul
 			}
 			result, err := t.bulkOperation(ctx, subject, c.ID, op)
 			if err != nil {
-				if ent.IsConstraintError(err) {
+				if dberr.IsConstraintError(err) {
 					err = ErrConflict
 				}
 				return &BulkError{Index: i, Err: err}
@@ -139,7 +139,7 @@ func (s *Service) bulkOperation(ctx context.Context, subject, collectionID strin
 		if err != nil {
 			return result, err
 		}
-		if p.ID != collectionID && (p.Kind != resource.KindFolder || p.ContainerID == nil || *p.ContainerID != collectionID) {
+		if p.ID != collectionID && (p.Kind != refs.KindFolder || p.ContainerID == nil || *p.ContainerID != collectionID) {
 			return result, invalid("create parent must belong to this collection")
 		}
 		r, err := s.create(ctx, subject, parentID, CreateResource{Kind: "item", Name: op.Create.Name, Keywords: op.Create.Keywords, Values: op.Create.Values, ContentTypeID: op.Create.ContentTypeID}, nil)

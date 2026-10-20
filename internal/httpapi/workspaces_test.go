@@ -2,9 +2,9 @@ package httpapi
 
 import (
 	"encoding/json"
+	"papergo/internal/dal/resources"
 	"testing"
 
-	"papergo/ent"
 	"papergo/internal/dms"
 	"papergo/internal/workflow"
 )
@@ -25,15 +25,15 @@ func TestWorkspaceDeletionDisablesWorkflows(t *testing.T) {
 	if response.Code != 204 {
 		t.Fatal(response.Code, response.Body.String())
 	}
-	stored, err := s.Client.Workflow.Get(ctx, created.ID)
+	stored, err := s.DAL.Workflows().Find(ctx, created.ID)
 	if err != nil || stored.AutomaticEnabled || stored.DeletedAt == nil || stored.Version != created.Version+1 {
 		t.Fatal("workflow remained active", stored, err)
 	}
 	if _, err = wf.Get(ctx, "alice", created.ID); err == nil {
 		t.Fatal("deleted workflow visible")
 	}
-	versions, err := s.Client.WorkflowVersion.Query().Count(ctx)
-	if err != nil || versions != 1 {
+	versions, err := s.DAL.Workflows().Versions(ctx, created.ID)
+	if err != nil || len(versions) != 1 {
 		t.Fatal("immutable workflow history lost", versions, err)
 	}
 }
@@ -44,7 +44,7 @@ func TestWorkspaceMemberAPIAndMetadataLifecycle(t *testing.T) {
 	if created.Code != 201 {
 		t.Fatal(created.Code, created.Body.String())
 	}
-	var w ent.Resource
+	var w resources.Resource
 	if err := json.Unmarshal(created.Body.Bytes(), &w); err != nil {
 		t.Fatal(err)
 	}

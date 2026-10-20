@@ -7,9 +7,9 @@ import (
 	"os"
 	"testing"
 
+	"papergo/internal/dal/search/sqlitestore"
+	"papergo/internal/dal/search/zvecstore"
 	"papergo/internal/search"
-	"papergo/internal/search/sqlitestore"
-	"papergo/internal/search/zvecstore"
 )
 
 func Open(t testing.TB, path string, languages []string) search.Store {

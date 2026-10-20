@@ -8,12 +8,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"papergo/ent"
-	"papergo/ent/resource"
 	"papergo/internal/auth"
+	"papergo/internal/dal/blobs"
+	"papergo/internal/dal/daltest"
+	"papergo/internal/dal/refs"
+	"papergo/internal/dal/resources"
 	"papergo/internal/dms"
 	"papergo/internal/storage"
-	"papergo/internal/testutil"
 	"papergo/internal/testutil/searchstore"
 	"path/filepath"
 	"strings"
@@ -31,7 +32,7 @@ func (l testLog) Write(p []byte) (int, error) {
 
 func setup(t *testing.T) (http.Handler, *dms.Service, string) {
 	t.Helper()
-	db := testutil.Database(t)
+	db := daltest.Database(t)
 	path := t.TempDir()
 	store, err := storage.NewLocal(path)
 	if err != nil {
@@ -48,7 +49,7 @@ func setup(t *testing.T) (http.Handler, *dms.Service, string) {
 // folder, as the search.index workflow does in a running PaperGo.
 func indexSearch(t *testing.T, s *dms.Service) {
 	t.Helper()
-	ids, err := s.Client.Resource.Query().Where(resource.KindIn(resource.KindItem, resource.KindFolder), resource.DeletedAtIsNil()).IDs(context.Background())
+	ids, err := s.DAL.Resources().IDs(context.Background(), resources.Filter{Kinds: []refs.ResourceKind{refs.KindItem, refs.KindFolder}, State: resources.Live})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +125,7 @@ func TestBlobStreamingRevisionAndLimits(t *testing.T) {
 	if response.Code != 201 {
 		t.Fatal(response.Code, response.Body.String())
 	}
-	var blob ent.Blob
+	var blob blobs.Blob
 	if err = json.Unmarshal(response.Body.Bytes(), &blob); err != nil {
 		t.Fatal(err)
 	}

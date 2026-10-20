@@ -3,6 +3,7 @@ package dms
 import (
 	"encoding/json"
 	"errors"
+	auditstore "papergo/internal/dal/audit"
 	"papergo/internal/model"
 	"testing"
 )
@@ -69,15 +70,15 @@ func TestSmartFolderActionsRollBackAndRequireItemPermissions(t *testing.T) {
 	fieldOK(t, s, l.ID, CreateField{Key: "serial", Label: "Serial", Type: "text", Indexed: true, Options: model.FieldOptions{Unique: true}})
 	original := create(t, s, l.ID, "item", "Original", map[string]any{"status": "closed", "serial": "reserved"})
 	f := smartOK(t, s, SmartFolderInput{Name: "Open", WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Mode: "classification", Filter: &FilterExpr{And: []FilterExpr{{Field: "status", Value: json.RawMessage(`"open"`)}, {Field: "due", Op: "gte", Value: json.RawMessage(`"2026-10-01"`)}}}}})
-	before, _ := s.Client.ItemRevision.Query().Count(testContext)
-	audits, _ := s.Client.AuditEvent.Query().Count(testContext)
+	before, _ := countRevisions(s, "")
+	audits, _ := s.DAL.Audit().Count(testContext, auditstore.Filter{})
 	_, _, err := s.ClassifySmartFolder(testContext, "alice", f.ID, SmartFolderDrop{FolderVersion: f.Version, CollectionID: l.ID, ItemID: original.ID, Version: original.Version})
 	if !isValidation(err) {
 		t.Fatal(err)
 	}
 	retained, _ := s.Get(testContext, "alice", original.ID)
-	after, _ := s.Client.ItemRevision.Query().Count(testContext)
-	auditAfter, _ := s.Client.AuditEvent.Query().Count(testContext)
+	after, _ := countRevisions(s, "")
+	auditAfter, _ := s.DAL.Audit().Count(testContext, auditstore.Filter{})
 	if retained.Version != original.Version || retained.Values["status"] != "closed" || before != after || audits != auditAfter {
 		t.Fatal("failed classification leaked writes", retained, before, after, audits, auditAfter)
 	}

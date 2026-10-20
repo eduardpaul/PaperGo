@@ -12,6 +12,10 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parent.parent
+# Suites whose tests open databases through internal/dal/daltest, which run on
+# PostgreSQL with --postgres.
+POSTGRES_PACKAGES = ['./internal/dal/...', './internal/dms', './internal/httpapi', './internal/identity', './internal/runner',
+                     './internal/webdav', './internal/workflow', './internal/workflowai', './internal/backup']
 
 
 def run(*command):
@@ -82,11 +86,25 @@ def prepare_go():
     for line in (ROOT / '.tools/native/native.env').read_text().splitlines():
         key, value = line.split('=', 1)
         os.environ[key] = value
+    planner = ROOT / '.tools/bin/sqlite3def'
+    if planner.is_file() and not shutil.which('sqlite3def'):
+        os.environ.setdefault('SQLITE3DEF', str(planner))
+
+
+def prepare_postgres():
+    """Point DAL and application tests at a PostgreSQL server: the one the
+    environment names, or the disposable server of scripts/postgres.sh."""
+    dsn = os.environ.get('PAPERGO_TEST_POSTGRES_DSN') or os.environ.get('TEST_POSTGRES_DSN')
+    if not dsn:
+        dsn = subprocess.run(['bash', 'scripts/postgres.sh', 'dsn'], cwd=ROOT, check=True, capture_output=True, text=True).stdout.strip()
+    os.environ.setdefault('PAPERGO_TEST_POSTGRES_DSN', dsn)
+    os.environ.setdefault('TEST_POSTGRES_DSN', dsn)
+    print('+ PostgreSQL tests use ' + dsn.split('@')[-1], flush=True)
 
 
 def check_formatting():
     # Directory traversal also keeps this below Windows' command-line limit.
-    paths = ['cmd', 'internal', 'ent/schema', *[str(path.relative_to(ROOT)) for path in sorted((ROOT / 'web').glob('*.go'))]]
+    paths = ['cmd', 'internal', *[str(path.relative_to(ROOT)) for path in sorted((ROOT / 'web').glob('*.go'))]]
     result = subprocess.run(['gofmt', '-l', *paths], cwd=ROOT, check=True, capture_output=True, text=True)
     if result.stdout:
         raise ValueError('Run gofmt on:\n' + result.stdout)
@@ -101,12 +119,13 @@ def check_web(typecheck=True):
 
 
 def check_generated():
-    paths = [ROOT / 'go.mod', ROOT / 'go.sum', *sorted((ROOT / 'ent').rglob('*.go'))]
-    before = digest(paths, ROOT)
-    run('go', 'generate', './ent')
-    paths = [ROOT / 'go.mod', ROOT / 'go.sum', *sorted((ROOT / 'ent').rglob('*.go'))]
-    if before != digest(paths, ROOT):
-        raise ValueError('Ent generation updated files. Review the generated changes and rerun the checks.')
+    def generated():
+        models = [ROOT / 'internal/dal/driver' / engine / 'models' for engine in ('sqlite', 'postgres')]
+        return [ROOT / 'go.mod', ROOT / 'go.sum', *sorted(path for directory in models for path in directory.rglob('*.go'))]
+    before = digest(generated(), ROOT)
+    run('bash', 'scripts/generate-models.sh')
+    if before != digest(generated(), ROOT):
+        raise ValueError('Bob generation updated files. Review the generated changes and rerun the checks.')
 
 
 def main():
@@ -118,9 +137,12 @@ def main():
     modes.add_argument('--race', action='store_true', help='entire Go suite with race detection, uncached')
     modes.add_argument('--native', action='store_true', help='require real decision, embedding and OCR assets and test their integrations')
     parser.add_argument('--run', metavar='REGEXP', help='Go test name filter (only with --packages)')
+    parser.add_argument('--postgres', action='store_true', help='run the database suites on PostgreSQL 17 (PAPERGO_TEST_POSTGRES_DSN, or the server of scripts/postgres.sh); with --packages, those packages')
     args = parser.parse_args()
     if args.run is not None and not args.packages:
         parser.error('--run requires --packages')
+    if args.postgres and (args.web or args.full or args.native):
+        parser.error('--postgres combines with --packages or --race only')
     started = time.monotonic()
     os.chdir(ROOT)
     if args.full and not shutil.which('staticcheck'):
@@ -136,6 +158,9 @@ def main():
         prepare_frontend(force=args.full)
         check_formatting()
         packages = args.packages or ['./...']
+        if args.postgres:
+            prepare_postgres()
+            packages = args.packages or POSTGRES_PACKAGES
         flags = ['-timeout=15m']
         if args.full:
             check_web(typecheck=False)  # The production build already typechecked.

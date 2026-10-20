@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"papergo/internal/activitystore"
 	"papergo/internal/ai"
+	"papergo/internal/dal/activitystore"
 	"papergo/internal/forms"
 	"papergo/internal/search"
 	"papergo/internal/workflow"

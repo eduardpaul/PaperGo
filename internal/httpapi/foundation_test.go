@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"papergo/ent"
+	"papergo/internal/dal/resources"
 	"papergo/internal/dms"
 	"strings"
 	"testing"
@@ -30,7 +30,7 @@ func TestRESTExactValuesAndSchemaRoutes(t *testing.T) {
 	if response.Code != 201 || !strings.Contains(response.Body.String(), `"serial":9007199254740993`) || !strings.Contains(response.Body.String(), `"amount":"123.40"`) {
 		t.Fatal("precision lost in REST create", response.Code, response.Body.String())
 	}
-	var item ent.Resource
+	var item resources.Resource
 	if err = json.Unmarshal(response.Body.Bytes(), &item); err != nil {
 		t.Fatal(err)
 	}

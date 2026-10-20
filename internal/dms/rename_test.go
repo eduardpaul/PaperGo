@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"papergo/ent/domainevent"
+	eventstore "papergo/internal/dal/events"
 )
 
 func TestRenameFileFreezesDisplayNamesAndPreservesBytes(t *testing.T) {
@@ -16,7 +16,7 @@ func TestRenameFileFreezesDisplayNamesAndPreservesBytes(t *testing.T) {
 	if err = s.SetWorkspaceMember(testContext, "alice", ws.ID, WorkspaceMember{Subject: "reader", Role: "visitor"}); err != nil {
 		t.Fatal(err)
 	}
-	doc, err := s.CreateDocument(testContext, "alice", library.ID, DocumentMetadata{Name: "Original.pdf"}, content("original.pdf"))
+	doc, err := s.CreateDocument(testContext, "alice", library.ID, DocumentMetadata{Name: "Original.pdf"}, pdfContent("original.pdf"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +36,7 @@ func TestRenameFileFreezesDisplayNamesAndPreservesBytes(t *testing.T) {
 	if err != nil || published.Filename != "original.pdf" {
 		t.Fatal("draft rename changed publication", published, err)
 	}
-	stored, err := s.Client.Blob.Get(testContext, doc.File.ID)
+	stored, err := s.DAL.Blobs().Blob(testContext, doc.File.ID)
 	if err != nil || stored.Filename != "original.pdf" {
 		t.Fatal("rename mutated uploaded version", stored, err)
 	}
@@ -64,7 +64,7 @@ func TestRenameFileFreezesDisplayNamesAndPreservesBytes(t *testing.T) {
 	if revisionCount(t, s, item.ID) != before {
 		t.Fatal("failed rename recorded a revision")
 	}
-	if n, err := s.Client.DomainEvent.Query().Where(domainevent.ResourceIDEQ(item.ID), domainevent.TypeEQ(EventFileUpdated)).Count(testContext); err != nil || n != 0 {
+	if n, err := s.DAL.Events().Count(testContext, eventstore.Filter{ResourceID: item.ID, Types: []string{EventFileUpdated}}); err != nil || n != 0 {
 		t.Fatal("rename triggered file processing", n, err)
 	}
 }
@@ -75,14 +75,14 @@ func TestUploadConflictDisclosesOnlyWritableItems(t *testing.T) {
 	if err := s.SetWorkspaceMember(testContext, "alice", ws.ID, WorkspaceMember{Subject: "bob", Role: "member"}); err != nil {
 		t.Fatal(err)
 	}
-	doc, err := s.CreateDocument(testContext, "alice", lib.ID, DocumentMetadata{Name: "Private.pdf"}, content("private.pdf"))
+	doc, err := s.CreateDocument(testContext, "alice", lib.ID, DocumentMetadata{Name: "Private.pdf"}, pdfContent("private.pdf"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err = s.SetPermissions(testContext, "alice", doc.Item.ID, doc.Item.Version, Permissions{Grants: []Permission{{"user", "alice", "manage", "allow"}}}); err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.CreateDocument(testContext, "bob", lib.ID, DocumentMetadata{Name: "private.pdf"}, content("private.pdf"))
+	_, err = s.CreateDocument(testContext, "bob", lib.ID, DocumentMetadata{Name: "private.pdf"}, pdfContent("private.pdf"))
 	var disclosed *DocumentNameConflict
 	if !errors.Is(err, ErrConflict) || errors.As(err, &disclosed) {
 		t.Fatal("conflict disclosed a private replacement target", err)

@@ -21,7 +21,7 @@ function SettingsLayout() {
             </SubNavLink>
             {authenticationMode() === 'bearer' && (
               <SubNavLink to="/settings/tokens">
-                <KeyRound /> REST tokens
+                <KeyRound /> Access tokens
               </SubNavLink>
             )}
             <SubNavLink to="/settings/webdav">

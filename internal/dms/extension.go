@@ -3,19 +3,16 @@ package dms
 import (
 	"context"
 	"database/sql"
-
-	"papergo/ent"
-	"papergo/ent/resource"
-	"papergo/internal/identity"
+	"papergo/internal/dal/resources"
 )
 
 // Packages that build on the DMS (workflows) use these to keep its rules: one
 // authorization model, one writer, and audit records in the same transaction.
 
 // Authorize returns the live resource id when subject may perform action on it.
-func (s *Service) Authorize(ctx context.Context, subject, id, action string) (*ent.Resource, error) {
+func (s *Service) Authorize(ctx context.Context, subject, id, action string) (*resources.Resource, error) {
 	if !s.transaction {
-		return read(ctx, s, func(t *Service) (*ent.Resource, error) { return t.authorize(ctx, subject, id, action) })
+		return read(ctx, s, func(t *Service) (*resources.Resource, error) { return t.authorize(ctx, subject, id, action) })
 	}
 	return s.authorize(ctx, subject, id, action)
 }
@@ -30,7 +27,7 @@ func (s *Service) AuthorizeMany(ctx context.Context, subject, action string, ids
 	if len(ids) == 0 {
 		return map[string]bool{}, nil
 	}
-	rows, err := s.Client.Resource.Query().Where(resource.IDIn(ids...), resource.DeletedAtIsNil()).All(ctx)
+	rows, err := s.DAL.Resources().Resources(ctx, resources.Filter{IDs: ids, State: resources.Live})
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +55,7 @@ func Read[T any](ctx context.Context, s *Service, fn func(*Service) (T, error)) 
 }
 
 // Record adds action on r to the workspace's audit trail.
-func (s *Service) Record(ctx context.Context, subject, action string, r *ent.Resource, details map[string]any) error {
+func (s *Service) Record(ctx context.Context, subject, action string, r *resources.Resource, details map[string]any) error {
 	return s.audit(ctx, subject, action, r, details)
 }
 
@@ -83,20 +80,7 @@ func (s *Service) Raise(ctx context.Context, typ, actor, workspaceID string, col
 // GroupIDs returns the groups subject belongs to, nested groups included.
 func (s *Service) GroupIDs(ctx context.Context, subject string) ([]string, error) {
 	return read(ctx, s, func(t *Service) ([]string, error) {
-		rows, err := t.tx.QueryContext(ctx, identity.GroupIDsSQL, subject)
-		if err != nil {
-			return nil, err
-		}
-		defer rows.Close()
-		var ids []string
-		for rows.Next() {
-			var id string
-			if err = rows.Scan(&id); err != nil {
-				return nil, err
-			}
-			ids = append(ids, id)
-		}
-		return ids, rows.Err()
+		return t.DAL.Directory().EffectiveGroups(ctx, subject)
 	})
 }
 

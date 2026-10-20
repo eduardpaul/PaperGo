@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"papergo/internal/dal/blobs"
 	"strconv"
 	"strings"
 	"testing"
 
-	"papergo/ent"
 	"papergo/internal/dms"
 )
 
@@ -29,7 +29,7 @@ func TestRestoreFileVersionAPI(t *testing.T) {
 	}
 	endpoint := "/v1/items/" + item.ID + "/content"
 	res := request(h, "PUT", endpoint, "%PDF-old content", testToken, `"1"`, "text/plain")
-	var original ent.Blob
+	var original blobs.Blob
 	if res.Code != 201 || json.Unmarshal(res.Body.Bytes(), &original) != nil {
 		t.Fatal(res.Code, res.Body.String())
 	}
@@ -66,7 +66,7 @@ func TestRestoreFileVersionAPI(t *testing.T) {
 		t.Fatal(res.Code, res.Body.String())
 	}
 	res = request(h, "POST", restore, "", testToken, `"5"`, "")
-	var restored ent.Blob
+	var restored blobs.Blob
 	if res.Code != 200 || json.Unmarshal(res.Body.Bytes(), &restored) != nil || restored.Version != 3 || restored.ID == original.ID || restored.Sha256 != original.Sha256 || res.Header().Get("ETag") != `"6"` {
 		t.Fatal(res.Code, res.Body.String())
 	}

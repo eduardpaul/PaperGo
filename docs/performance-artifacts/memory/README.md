@@ -46,7 +46,7 @@ go build -trimpath -ldflags='-s -w' -o bin/papergo-admin ./cmd/admin
 python3 scripts/memory.py --search-store sqlite --idle-seconds 35 --output .cache/memory-sqlite.json
 python3 scripts/memory.py --search-store zvec --idle-seconds 35 --output .cache/memory-zvec.json
 python3 scripts/memory.py --search-store zvec --idle-seconds 1 --unload-seconds 335 --output .cache/memory-zvec-unload.json
-PAPERGO_ZVEC_SOAK=1 go test ./internal/search/zvecstore -run '^TestRealDimensionsSoak$' -count=1 -v
+PAPERGO_ZVEC_SOAK=1 go test ./internal/dal/search/zvecstore -run '^TestRealDimensionsSoak$' -count=1 -v
 ```
 
 Run measurements sequentially. `scripts/memory.py` initializes and removes its own temporary database, blobs and indexes. It never opens the configured application database. `--items` changes the fixture size; workflow completion can take longer with larger datasets.

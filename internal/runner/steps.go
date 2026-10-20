@@ -2,15 +2,13 @@ package runner
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/dbos-inc/dbos-transact-golang/dbos"
-
+	"papergo/internal/dal/dberr"
 	"papergo/internal/dms"
 )
 
@@ -28,14 +26,18 @@ func newStepPointer(stepID int) (json.RawMessage, error) {
 }
 
 // stepTx runs fn as one exactly-once step. DBOS RunAsTransaction cannot
-// carry Ent (its callback gets no *sql.Tx), so the step's writes, the events
-// they raise (and the runs those start) and a completion marker in
-// runner_step_results commit together in one PaperGo transaction. A step
-// retried or recovered after that commit finds the marker and returns the
-// stored output instead of writing again. Markers are keyed by the DBOS step
-// ID, which a replay assigns in the same order. DBOS records the pointer;
-// the body is read back from the marker so a first run and a replay see the
-// same value.
+// share the application transaction (its callback gets no *sql.Tx), so the
+// step's writes, the events they raise (and the runs those start) and a
+// completion marker in runner_step_results commit together in one PaperGo
+// write. A step retried or recovered after that commit finds the marker and
+// returns the stored output instead of writing again. Markers are keyed by
+// the DBOS step ID, which a replay assigns in the same order. DBOS records
+// the pointer; the body is read back from the marker so a first run and a
+// replay see the same value. The write takes the process's writer slot
+// before a connection, like every other write: on SQLite, steps waiting for
+// the write lock would otherwise hold every pooled connection and stall
+// readers. It is a background write, so a burst of runs does not queue in
+// front of requests or the dispatcher, and older runs' steps go first.
 func stepTx(ctx dbos.Context, r *Runner, name string, fn func(context.Context, *dms.Service, func(dms.Event)) (json.RawMessage, error)) (json.RawMessage, error) {
 	raw, err := dbos.RunAsStep(ctx, func(stepCtx context.Context) (json.RawMessage, error) {
 		dctx, ok := stepCtx.(dbos.Context)
@@ -50,50 +52,35 @@ func stepTx(ctx dbos.Context, r *Runner, name string, fn func(context.Context, *
 		if err != nil {
 			return nil, err
 		}
-		tx, err := r.db.BeginTx(stepCtx, nil)
+		err = r.dms.Write(r.backgroundWrite(stepCtx, runID), func(t *dms.Service) error {
+			purged, err := t.DAL.Runs().Purged(stepCtx, runID)
+			if err != nil {
+				return err
+			}
+			if purged {
+				return dms.ErrNotFound
+			}
+			switch storedName, _, err := t.DAL.Runs().StepResult(stepCtx, runID, stepID); {
+			case err == nil:
+				if storedName != name {
+					return fmt.Errorf("step %d of %s replayed as %q, recorded as %q", stepID, runID, name, storedName)
+				}
+				return nil
+			case !dberr.IsNotFound(err):
+				return err
+			}
+			out, err := fn(stepCtx, t, func(ev dms.Event) { t.Emit(stepCtx, ev) })
+			if err != nil {
+				return err
+			}
+			if len(out) == 0 {
+				out = json.RawMessage("null")
+			}
+			return t.DAL.Runs().SaveStepResult(stepCtx, runID, stepID, name, []byte(out))
+		})
 		if err != nil {
 			return nil, err
 		}
-		defer tx.Rollback()
-		var exists bool
-		if err = tx.QueryRowContext(stepCtx, "SELECT EXISTS(SELECT 1 FROM audit_events WHERE entity_type='workflow_run' AND entity_id=? AND action='run.purge')", runID).Scan(&exists); err != nil {
-			return nil, err
-		}
-		if exists {
-			return nil, dms.ErrNotFound
-		}
-		var (
-			stored     []byte
-			storedName string
-		)
-		switch err = tx.QueryRowContext(stepCtx, `SELECT step, output FROM runner_step_results WHERE run_id=? AND step_id=?`, runID, stepID).Scan(&storedName, &stored); {
-		case err == nil:
-			if storedName != name {
-				return nil, fmt.Errorf("step %d of %s replayed as %q, recorded as %q", stepID, runID, name, storedName)
-			}
-			return newStepPointer(stepID)
-		case !errors.Is(err, sql.ErrNoRows):
-			return nil, err
-		}
-		var out json.RawMessage
-		if err = r.dms.WriteTx(stepCtx, tx, func(t *dms.Service) error {
-			var e error
-			out, e = fn(stepCtx, t, func(ev dms.Event) { t.Emit(stepCtx, ev) })
-			return e
-		}); err != nil {
-			return nil, err
-		}
-		if len(out) == 0 {
-			out = json.RawMessage("null")
-		}
-		if _, err = tx.ExecContext(stepCtx, `INSERT INTO runner_step_results (run_id, step_id, step, output) VALUES (?,?,?,?)`, runID, stepID, name, []byte(out)); err != nil {
-			return nil, err
-		}
-		if err = tx.Commit(); err != nil {
-			return nil, err
-		}
-		// The step may have logged events (item changes, workflow events).
-		r.Wake()
 		return newStepPointer(stepID)
 	}, dbos.WithStepName(name), dbos.WithStepMaxRetries(3), dbos.WithStepBaseInterval(200*time.Millisecond), dbos.WithStepRetryPredicate(transient))
 	if err != nil {
@@ -112,7 +99,7 @@ func resolveStepPointer(ctx dbos.Context, r *Runner, raw json.RawMessage) (json.
 		return nil, err
 	}
 	var stored []byte
-	if err = r.db.QueryRowContext(ctx, `SELECT output FROM runner_step_results WHERE run_id=? AND step_id=?`, runID, *pointer.Step).Scan(&stored); err != nil {
+	if _, stored, err = r.dms.DAL.Runs().StepResult(ctx, runID, *pointer.Step); err != nil {
 		return nil, fmt.Errorf("resolve step %d of %s: %w", *pointer.Step, runID, err)
 	}
 	return json.RawMessage(stored), nil
@@ -120,7 +107,4 @@ func resolveStepPointer(ctx dbos.Context, r *Runner, raw json.RawMessage) (json.
 
 // transient errors are SQLite lock waits that outlived the busy timeout;
 // everything else is the node's own failure and follows its retry policy.
-func transient(err error) bool {
-	msg := err.Error()
-	return strings.Contains(msg, "SQLITE_BUSY") || strings.Contains(msg, "database is locked")
-}
+func transient(err error) bool { return dberr.IsRetryable(err) }

@@ -175,7 +175,7 @@ func TestManualSystemRunsAreVisiblePagedAndRetained(t *testing.T) {
 		f.status(t, queued[0], "completed")
 	}
 	// Run reads the engine directly; status filters use the observed status.
-	if err := f.r.SyncLiveRuns(ctx); err != nil {
+	if _, err := f.r.SyncLiveRuns(ctx); err != nil {
 		t.Fatal(err)
 	}
 	page, err := f.r.Runs(ctx, "alice", f.ws.ID, RunFilter{Origin: "manual", Status: "completed", Limit: 1})

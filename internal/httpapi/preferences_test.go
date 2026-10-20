@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	directorydomain "papergo/internal/dal/directory"
 	"sync"
 	"testing"
 
@@ -18,7 +19,7 @@ func TestPreferencesInheritanceAndIsolationAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = directory.SetAssignment(context.Background(), "organization-admin", role.ID, identity.Principal{Type: "user", ID: "alice"}, false); err != nil {
+	if err = directory.SetAssignment(context.Background(), "organization-admin", role.ID, identity.Principal{Type: directorydomain.PrincipalUser, ID: "alice"}, false); err != nil {
 		t.Fatal(err)
 	}
 	mine := "/v1/identity/me/preferences"

@@ -2,8 +2,6 @@ package dms
 
 import (
 	"errors"
-	"papergo/ent"
-	"papergo/ent/livechange"
 	"testing"
 	"time"
 )
@@ -40,16 +38,16 @@ func TestLivePositionsCommitRollbackAndExpiry(t *testing.T) {
 	if err = s.CollectExpiredLiveChanges(testContext, time.Now().Add(8*24*time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	if count, err := s.Client.LiveChange.Query().Count(testContext); err != nil || count != 0 {
-		t.Fatal(count, err)
+	if changes, err := s.LiveChanges(testContext, 0); err != nil || len(changes) != 0 {
+		t.Fatal(changes, err)
 	}
 	if _, err = s.LivePosition(testContext, &before); !errors.Is(err, ErrLiveExpired) {
 		t.Fatal(err)
 	}
 	// Autoincrement never reuses a position after collecting the whole journal.
 	create(t, s, list.ID, "item", "B", nil)
-	row, err := s.Client.LiveChange.Query().Order(ent.Desc(livechange.FieldID)).First(testContext)
-	if err != nil || row.ID <= head {
-		t.Fatal(row, head, err)
+	changes, err = s.LiveChanges(testContext, 0)
+	if err != nil || len(changes) == 0 || changes[len(changes)-1].ID <= head {
+		t.Fatal(changes, head, err)
 	}
 }

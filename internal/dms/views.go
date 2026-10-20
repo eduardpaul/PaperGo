@@ -3,16 +3,17 @@ package dms
 import (
 	"context"
 	"encoding/json"
-	"papergo/ent"
-	"papergo/ent/listview"
+	"papergo/internal/dal/catalog"
+	"papergo/internal/dal/dberr"
+	viewstore "papergo/internal/dal/views"
 )
 
 type ViewInput struct {
-	Name      string    `json:"name"`
-	Columns   []string  `json:"columns"`
-	Query     QuerySpec `json:"query"`
-	Layout    string    `json:"layout"`
-	IsDefault bool      `json:"is_default"`
+	Name      string           `json:"name"`
+	Columns   []string         `json:"columns"`
+	Query     QuerySpec        `json:"query"`
+	Layout    viewstore.Layout `json:"layout"`
+	IsDefault bool             `json:"is_default"`
 }
 
 func (s *Service) validateView(ctx context.Context, subject, containerID string, in *ViewInput) error {
@@ -20,9 +21,9 @@ func (s *Service) validateView(ctx context.Context, subject, containerID string,
 		return e
 	}
 	if in.Layout == "" {
-		in.Layout = "table"
+		in.Layout = viewstore.LayoutTable
 	}
-	if in.Layout != "table" && in.Layout != "board" && in.Layout != "calendar" && in.Layout != "gallery" {
+	if !in.Layout.Valid() {
 		return invalid("invalid view layout")
 	}
 	if len(in.Columns) > 50 {
@@ -31,7 +32,7 @@ func (s *Service) validateView(ctx context.Context, subject, containerID string,
 	if len(in.Columns) == 0 {
 		in.Columns = []string{"$name"}
 	}
-	defs, e := s.Client.FieldDefinition.Query().Where(collectionFieldPredicate(containerID)).All(ctx)
+	defs, e := s.DAL.Catalog().Fields(ctx, catalog.FieldFilter{CollectionID: containerID})
 	if e != nil {
 		return e
 	}
@@ -48,7 +49,7 @@ func (s *Service) validateView(ctx context.Context, subject, containerID string,
 	}
 	return s.validateQuery(ctx, subject, containerID, in.Query)
 }
-func (s *Service) CreateView(ctx context.Context, subject, containerID string, in ViewInput) (out *ent.ListView, err error) {
+func (s *Service) CreateView(ctx context.Context, subject, containerID string, in ViewInput) (out *viewstore.ListView, err error) {
 	err = s.write(ctx, func(t *Service) error {
 		c, e := t.authorize(ctx, subject, containerID, "manage")
 		if e != nil {
@@ -58,36 +59,29 @@ func (s *Service) CreateView(ctx context.Context, subject, containerID string, i
 			return e
 		}
 		raw, _ := json.Marshal(in.Query)
-		if in.IsDefault {
-			if _, e = t.Client.ListView.Update().Where(listview.ContainerIDEQ(containerID), listview.IsDefaultEQ(true)).SetIsDefault(false).AddVersion(1).Save(ctx); e != nil {
-				return e
-			}
-		}
-		out, e = t.Client.ListView.Create().SetContainerID(containerID).SetName(in.Name).SetColumns(in.Columns).SetQuery(raw).SetLayout(in.Layout).SetIsDefault(in.IsDefault).Save(ctx)
+		v, e := t.DAL.Views().CreateListView(ctx, viewstore.ListView{ContainerID: containerID, Name: in.Name, Columns: in.Columns, Query: raw, Layout: in.Layout, IsDefault: in.IsDefault})
 		if e != nil {
 			return e
 		}
+		out = &v
 		return t.audit(ctx, subject, "view.create", c, map[string]any{"view_id": out.ID})
 	})
 	return
 }
-func (s *Service) Views(ctx context.Context, subject, containerID, after string, limit int) (Page[*ent.ListView], error) {
-	return read(ctx, s, func(t *Service) (Page[*ent.ListView], error) {
+func (s *Service) Views(ctx context.Context, subject, containerID, after string, limit int) (Page[viewstore.ListView], error) {
+	return read(ctx, s, func(t *Service) (Page[viewstore.ListView], error) {
 		if _, e := t.authorize(ctx, subject, containerID, "read"); e != nil {
-			return Page[*ent.ListView]{}, e
+			return Page[viewstore.ListView]{}, e
 		}
-		rows, e := t.Client.ListView.Query().Where(listview.ContainerIDEQ(containerID), listview.IDGT(after)).Order(ent.Asc(listview.FieldID)).Limit(pageSize(limit) + 1).All(ctx)
-		return entityPage(rows, limit, func(v *ent.ListView) string { return v.ID }), e
+		rows, e := t.DAL.Views().ListViews(ctx, viewstore.ViewFilter{ContainerID: containerID, AfterID: after, Limit: pageSize(limit) + 1})
+		return entityPage(rows, limit, func(v viewstore.ListView) string { return v.ID }), e
 	})
 }
-func (s *Service) View(ctx context.Context, subject, id string) (*ent.ListView, error) {
+func (s *Service) View(ctx context.Context, subject, id string) (*viewstore.ListView, error) {
 	if !s.transaction {
-		return read(ctx, s, func(t *Service) (*ent.ListView, error) { return t.View(ctx, subject, id) })
+		return read(ctx, s, func(t *Service) (*viewstore.ListView, error) { return t.View(ctx, subject, id) })
 	}
-	v, e := s.Client.ListView.Get(ctx, id)
-	if ent.IsNotFound(e) {
-		return nil, ErrNotFound
-	}
+	v, e := s.listView(ctx, id)
 	if e != nil {
 		return nil, e
 	}
@@ -96,12 +90,21 @@ func (s *Service) View(ctx context.Context, subject, id string) (*ent.ListView, 
 	}
 	return v, nil
 }
-func (s *Service) UpdateView(ctx context.Context, subject, id string, version int, in ViewInput) (out *ent.ListView, err error) {
+
+func (s *Service) listView(ctx context.Context, id string) (*viewstore.ListView, error) {
+	v, e := s.DAL.Views().ListView(ctx, id)
+	if dberr.IsNotFound(e) {
+		return nil, ErrNotFound
+	}
+	if e != nil {
+		return nil, e
+	}
+	return &v, nil
+}
+
+func (s *Service) UpdateView(ctx context.Context, subject, id string, version int, in ViewInput) (out *viewstore.ListView, err error) {
 	err = s.write(ctx, func(t *Service) error {
-		v, e := t.Client.ListView.Get(ctx, id)
-		if ent.IsNotFound(e) {
-			return ErrNotFound
-		}
+		v, e := t.listView(ctx, id)
 		if e != nil {
 			return e
 		}
@@ -116,13 +119,16 @@ func (s *Service) UpdateView(ctx context.Context, subject, id string, version in
 			return e
 		}
 		raw, _ := json.Marshal(in.Query)
-		if in.IsDefault {
-			if _, e = t.Client.ListView.Update().Where(listview.ContainerIDEQ(v.ContainerID), listview.IsDefaultEQ(true), listview.IDNEQ(id)).SetIsDefault(false).AddVersion(1).Save(ctx); e != nil {
-				return e
-			}
-		}
-		out, e = t.Client.ListView.UpdateOne(v).SetName(in.Name).SetColumns(in.Columns).SetQuery(raw).SetLayout(in.Layout).SetIsDefault(in.IsDefault).AddVersion(1).Save(ctx)
+		before, e := json.Marshal(v)
 		if e != nil {
+			return e
+		}
+		updated, e := t.DAL.Views().UpdateListView(ctx, viewstore.ListView{ID: id, Name: in.Name, Columns: in.Columns, Query: raw, Layout: in.Layout, IsDefault: in.IsDefault}, version)
+		if e != nil {
+			return e
+		}
+		out = &updated
+		if e = t.trackAuditProperties(id, before, out, "name", "columns", "query", "layout", "is_default"); e != nil {
 			return e
 		}
 		return t.audit(ctx, subject, "view.update", c, map[string]any{"view_id": id})
@@ -131,10 +137,7 @@ func (s *Service) UpdateView(ctx context.Context, subject, id string, version in
 }
 func (s *Service) DeleteView(ctx context.Context, subject, id string, version int) error {
 	return s.write(ctx, func(t *Service) error {
-		v, e := t.Client.ListView.Get(ctx, id)
-		if ent.IsNotFound(e) {
-			return ErrNotFound
-		}
+		v, e := t.listView(ctx, id)
 		if e != nil {
 			return e
 		}
@@ -145,7 +148,7 @@ func (s *Service) DeleteView(ctx context.Context, subject, id string, version in
 		if v.Version != version {
 			return ErrPreconditionFailed
 		}
-		if e = t.Client.ListView.DeleteOne(v).Exec(ctx); e != nil {
+		if e = t.DAL.Views().DeleteListView(ctx, id, version); e != nil {
 			return e
 		}
 		return t.audit(ctx, subject, "view.delete", c, map[string]any{"view_id": id})

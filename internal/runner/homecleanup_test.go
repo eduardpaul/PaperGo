@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"papergo/internal/dal/daltest"
 	"papergo/internal/dms"
 	"path/filepath"
 	"testing"
@@ -29,26 +30,20 @@ func TestAccountDeletionPurgesRuntimeReplayPayloads(t *testing.T) {
 	if runs[0].Status != "completed" {
 		t.Fatal(runs)
 	}
-	var before int
-	if err = f.db.SQL.QueryRowContext(ctx, "SELECT count(*) FROM operation_outputs WHERE workflow_uuid=?", runs[0].ID).Scan(&before); err != nil || before == 0 {
-		t.Fatal("no replay output to purge", before, err)
+	if before := daltest.Count(t, f.db.DAL, daltest.DBOS(f.db.DAL, "operation_outputs"), daltest.Row{"workflow_uuid": runs[0].ID}); before == 0 {
+		t.Fatal("no replay output to purge")
 	}
 	if err = f.dms.DeleteUser(ctx, "organization-admin", "alice"); err != nil {
 		t.Fatal(err)
 	}
-	for _, table := range []string{"workflow_input", "workflow_output", "operation_outputs", "workflow_status"} {
-		var n int
-		if err = f.db.SQL.QueryRowContext(ctx, "SELECT count(*) FROM "+table+" WHERE workflow_uuid=?", runs[0].ID).Scan(&n); err != nil || n != 0 {
-			t.Fatal("runtime payload survived", table, n, err)
-		}
-	}
-	for _, statement := range []string{
-		"INSERT INTO workflow_input(workflow_uuid,inputs) VALUES(?,'private')",
-		"INSERT INTO workflow_output(workflow_uuid,output) VALUES(?,'private')",
-		"INSERT INTO operation_outputs(workflow_uuid,function_id,function_name,output) VALUES(?,999,'late','private')",
+	f.noPayloads(t, runs[0].ID)
+	for table, row := range map[string]daltest.Row{
+		"workflow_input":    {"workflow_uuid": runs[0].ID, "inputs": "private"},
+		"workflow_output":   {"workflow_uuid": runs[0].ID, "output": "private"},
+		"operation_outputs": {"workflow_uuid": runs[0].ID, "function_id": 999, "function_name": "late", "output": "private"},
 	} {
-		if _, err = f.db.SQL.ExecContext(ctx, statement, runs[0].ID); err == nil {
-			t.Fatal("purged run recreated payload", statement)
+		if err = daltest.TryInsert(f.db.DAL, daltest.DBOS(f.db.DAL, table), row); err == nil {
+			t.Fatal("purged run recreated payload", table)
 		}
 	}
 }
@@ -71,32 +66,40 @@ func TestDeletingHomeStopsInFlightRunPayloadWrites(t *testing.T) {
 	if _, err = f.dms.Create(ctx, "alice", home.InboxLibraryID, dms.CreateResource{Kind: "item", Name: "Private"}); err != nil {
 		t.Fatal(err)
 	}
-	var runID string
-	deadline := time.Now().Add(20 * time.Second)
-	for time.Now().Before(deadline) {
-		err = f.db.SQL.QueryRowContext(ctx, "SELECT r.id FROM workflow_runs r JOIN runner_step_results s ON s.run_id=r.id WHERE r.workflow_id=? AND s.step='wait'", wf.ID).Scan(&runID)
-		if err == nil {
-			break
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	if runID == "" {
-		t.Fatal("run never reached its delay", err)
-	}
+	runID := f.waitingRun(t, wf.ID)
 	if err = f.dms.DeleteUser(ctx, "organization-admin", "alice"); err != nil {
 		t.Fatal(err)
 	}
 	// Let the in-flight delay finish: subsequent steps and SDK output writes
 	// must still be unable to recreate private replay payloads.
 	time.Sleep(1500 * time.Millisecond)
+	f.noPayloads(t, runID)
+	if n := daltest.Count(t, f.db.DAL, "runner_step_results", daltest.Row{"run_id": runID}); n != 0 {
+		t.Fatal("late step marker survived", n)
+	}
+}
+
+// noPayloads checks that the engine keeps no inputs, outputs or status of a
+// run.
+func (f *fixture) noPayloads(t *testing.T, runID string) {
+	t.Helper()
 	for _, table := range []string{"workflow_input", "workflow_output", "operation_outputs", "workflow_status"} {
-		var n int
-		if err = f.db.SQL.QueryRowContext(ctx, "SELECT count(*) FROM "+table+" WHERE workflow_uuid=?", runID).Scan(&n); err != nil || n != 0 {
-			t.Fatal("late runtime payload survived", table, n, err)
+		if n := daltest.Count(t, f.db.DAL, daltest.DBOS(f.db.DAL, table), daltest.Row{"workflow_uuid": runID}); n != 0 {
+			t.Fatal("runtime payload survived", table, n)
 		}
 	}
-	var n int
-	if err = f.db.SQL.QueryRowContext(ctx, "SELECT count(*) FROM runner_step_results WHERE run_id=?", runID).Scan(&n); err != nil || n != 0 {
-		t.Fatal("late step marker survived", n, err)
+}
+
+// waitingRun waits for a run of the workflow to reach its step named wait.
+func (f *fixture) waitingRun(t *testing.T, workflowID string) string {
+	t.Helper()
+	for deadline := time.Now().Add(20 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+		for _, id := range daltest.Values(t, f.db.DAL, "workflow_runs", "id", daltest.Row{"workflow_id": workflowID}) {
+			if daltest.Count(t, f.db.DAL, "runner_step_results", daltest.Row{"run_id": id, "step": "wait"}) > 0 {
+				return id.(string)
+			}
+		}
 	}
+	t.Fatal("run never reached its wait")
+	return ""
 }

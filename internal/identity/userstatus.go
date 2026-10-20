@@ -3,7 +3,9 @@ package identity
 import (
 	"context"
 	"database/sql"
-	"errors"
+	"papergo/internal/dal"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/directory"
 )
 
 type UserStatus struct {
@@ -12,12 +14,14 @@ type UserStatus struct {
 }
 
 func (d Directory) UserStatus(ctx context.Context, actor, subject string) (UserStatus, error) {
-	if err := RequireScope(ctx, d.DB, actor, "user.read"); err != nil {
+	if err := RequireScope(ctx, dal.NewStore(d.DB), actor, "user.read"); err != nil {
 		return UserStatus{}, err
 	}
 	out := UserStatus{Subject: subject}
-	err := d.DB.QueryRowContext(ctx, "SELECT active FROM identity_users WHERE id=?", subject).Scan(&out.Active)
-	if errors.Is(err, sql.ErrNoRows) {
+	var err error
+	user, e := dal.NewStore(d.DB).Directory().User(ctx, subject)
+	out.Active, err = user.Active, e
+	if dberr.IsNotFound(err) {
 		err = ErrNotFound
 	}
 	return out, err
@@ -28,13 +32,9 @@ func (d Directory) SetUserActive(ctx context.Context, actor, subject string, act
 		return UserStatus{}, err
 	}
 	err := d.write(ctx, actor, "user.manage", func(tx *sql.Tx) error {
-		return auditedIdentity(ctx, tx, actor, "user.status", "user", subject, func() error {
-			result, err := tx.ExecContext(ctx, "UPDATE identity_users SET active=? WHERE id=? AND deleted_at IS NULL", active, subject)
-			if err != nil {
-				return err
-			}
-			count, err := result.RowsAffected()
-			if err == nil && count != 1 {
+		return auditedIdentity(ctx, d.store(tx), actor, directory.EntityUser, directory.ChangeStatus, subject, func() error {
+			err := d.store(tx).Directory().SetUserActive(ctx, subject, active)
+			if dberr.IsNotFound(err) {
 				return ErrNotFound
 			}
 			return err

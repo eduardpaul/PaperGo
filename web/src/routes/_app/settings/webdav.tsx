@@ -3,8 +3,8 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { api } from '@/api/http';
 import { authenticationMode } from '@/api/auth';
-import { meQuery, webdavCredentials } from '@/api/queries';
-import type { WebDAVCredential } from '@/api/types';
+import { meQuery, tokens } from '@/api/queries';
+import type { CreatedAccessToken } from '@/api/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { CopyField, SettingRow, SettingsSection } from '@/features/settings/section';
@@ -35,35 +35,39 @@ function ProxyWebDAV() {
 function BearerWebDAV() {
   const format = useFormat();
   const queryClient = useQueryClient();
-  const list = useQuery({ queryKey: ['webdav-credentials'], queryFn: webdavCredentials });
+  const list = useQuery({ queryKey: ['tokens'], queryFn: tokens });
   const [label, setLabel] = useState('');
   const [expires, setExpires] = useState('');
-  const [created, setCreated] = useState<WebDAVCredential | null>(null);
+  const [created, setCreated] = useState<CreatedAccessToken | null>(null);
   const issue = useMutation({
     mutationFn: () =>
-      api<WebDAVCredential>('/v1/webdav-credentials', {
+      api<CreatedAccessToken>('/v1/identity/me/tokens', {
         method: 'POST',
-        body: { label: label.trim(), expires_at: expires ? new Date(expires).toISOString() : undefined },
+        body: {
+          name: label.trim(),
+          scopes: ['webdav.access'],
+          expires_at: expires ? new Date(expires).toISOString() : undefined,
+        },
       }).then((result) => result.data),
     onSuccess: async (credential) => {
       setCreated(credential);
       setLabel('');
       setExpires('');
-      await queryClient.invalidateQueries({ queryKey: ['webdav-credentials'] });
+      await queryClient.invalidateQueries({ queryKey: ['tokens'] });
     },
   });
   const revoke = useMutation({
-    mutationFn: (id: string) => api(`/v1/webdav-credentials/${id}`, { method: 'DELETE' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['webdav-credentials'] }),
+    mutationFn: (id: string) => api(`/v1/identity/me/tokens/${id}`, { method: 'DELETE' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tokens'] }),
   });
   return (
     <div className="flex flex-col gap-5">
       <SettingsSection
-        title="New WebDAV password"
-        description="Use this password with your account subject to open a library in Explorer or Finder. It is shown once."
+        title="New WebDAV access token"
+        description="Use this token as the password with your account subject to open a library in Explorer or Finder. It is shown once."
         actions={
           <Button variant="primary" disabled={issue.isPending || !label.trim()} onClick={() => issue.mutate()}>
-            Create password
+            Create token
           </Button>
         }
       >
@@ -78,14 +82,14 @@ function BearerWebDAV() {
             onChange={(event) => setExpires(event.target.value)}
           />
         </SettingRow>
-        {created?.password && <CopyField label="Password" value={created.password} />}
+        {created?.secret && <CopyField label="Password" value={created.secret} />}
       </SettingsSection>
-      <SettingsSection title="Passwords">
+      <SettingsSection title="Access tokens">
         <ul className="flex flex-col gap-2">
           {(list.data ?? []).map((credential) => (
             <li key={credential.id} className="flex items-center gap-3 rounded-md border px-3 py-2">
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[13px] font-medium">{credential.label}</p>
+                <p className="truncate text-[13px] font-medium">{credential.name}</p>
                 <p className="text-xs text-muted">
                   Created {format.date(credential.created_at)}
                   {credential.expires_at ? ` · expires ${format.date(credential.expires_at)}` : ''}
@@ -102,7 +106,7 @@ function BearerWebDAV() {
             </li>
           ))}
           {list.isFetched && (list.data?.length ?? 0) === 0 && (
-            <li className="text-sm text-muted">No WebDAV passwords.</li>
+            <li className="text-sm text-muted">No access tokens.</li>
           )}
         </ul>
       </SettingsSection>

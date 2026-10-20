@@ -216,8 +216,11 @@ PaperGo serves the UI and API from one binary. Node.js is needed to build the
 frontend, and there is no separate database service at runtime. The workflow
 engine is embedded and maintains its state in the same SQLite file.
 
-SQLite provides concurrent WAL readers and one writer. Request writes queue
-through an in-process mutex; workflow writes also share the database writer.
+SQLite provides concurrent WAL readers and one writer. Request writes and
+workflow step writes queue through one in-process writer slot before they take
+a database connection, so waiting writers never hold the connections readers
+need. Step writes yield the slot to request writes, so under sustained load
+background workflow runs progress more slowly rather than delaying requests.
 `synchronous=FULL` preserves durability, making storage latency relevant to
 write-heavy hosting. More CPU cores can help parallel reads, but cannot create
 additional SQLite writers. Use local SSD-backed storage and measure the actual

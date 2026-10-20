@@ -3,12 +3,15 @@ package dms
 import (
 	"context"
 	"errors"
-	"papergo/internal/identity"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/refs"
+	"papergo/internal/dal/resources"
 	"regexp"
 	"strings"
 
-	"papergo/ent"
-	"papergo/ent/resource"
+	"papergo/internal/dal"
+	"papergo/internal/dal/blobs"
+	"papergo/internal/identity"
 )
 
 // DocumentMetadata describes the new item and optional per-upload processing hint.
@@ -22,8 +25,8 @@ type DocumentMetadata struct {
 }
 
 type DocumentUpload struct {
-	Item       *ent.Resource
-	File       *ent.Blob
+	Item       *resources.Resource
+	File       *blobs.Blob
 	Duplicates []DuplicateDocument
 }
 
@@ -36,7 +39,7 @@ func ValidateDocumentLanguages(languages string) error {
 	return nil
 }
 
-func (s *Service) documentParent(ctx context.Context, subject, libraryID, folderID string) (*ent.Resource, error) {
+func (s *Service) documentParent(ctx context.Context, subject, libraryID, folderID string) (*resources.Resource, error) {
 	if err := s.RequireScope(ctx, subject, "document.write"); err != nil {
 		return nil, err
 	}
@@ -44,7 +47,7 @@ func (s *Service) documentParent(ctx context.Context, subject, libraryID, folder
 	if err != nil {
 		return nil, err
 	}
-	if library.Kind != resource.KindLibrary {
+	if library.Kind != refs.KindLibrary {
 		return nil, invalid("documents belong to a library")
 	}
 	if folderID == "" {
@@ -54,7 +57,7 @@ func (s *Service) documentParent(ctx context.Context, subject, libraryID, folder
 	if err != nil {
 		return nil, err
 	}
-	if folder.Kind != resource.KindFolder || folder.ContainerID == nil || *folder.ContainerID != library.ID {
+	if folder.Kind != refs.KindFolder || folder.ContainerID == nil || *folder.ContainerID != library.ID {
 		return nil, invalid("folder_id must identify a folder in this library")
 	}
 	return folder, nil
@@ -65,14 +68,14 @@ func (s *Service) CanCreateDocument(ctx context.Context, subject, libraryID stri
 	if err := s.RequireScope(ctx, subject, "list.write"); err != nil {
 		return err
 	}
-	_, err := read(ctx, s, func(t *Service) (*ent.Resource, error) { return t.documentParent(ctx, subject, libraryID, "") })
+	_, err := read(ctx, s, func(t *Service) (*resources.Resource, error) { return t.documentParent(ctx, subject, libraryID, "") })
 	return err
 }
 
 func (s *Service) CreateDocument(ctx context.Context, subject, libraryID string, metadata DocumentMetadata, content BlobInput) (out *DocumentUpload, err error) {
 	err = s.write(ctx, func(t *Service) error {
-		if err := identity.RequireCredential(ctx, t.tx, subject); err != nil {
-			if errors.Is(err, identity.ErrInvalidRESTToken) {
+		if err := identity.RequireCredential(ctx, dal.NewStore(t.db).WithTx(t.tx), subject); err != nil {
+			if errors.Is(err, identity.ErrInvalidAccessToken) {
 				return ErrForbidden
 			}
 			return err
@@ -89,27 +92,27 @@ func (s *Service) CreateDocument(ctx context.Context, subject, libraryID string,
 		if name == "" {
 			name = content.Filename
 		}
-		existing, err := t.Client.Resource.Query().Where(resource.ParentIDEQ(parent.ID), resource.NameKeyEQ(nameKey(strings.TrimSpace(name))), resource.DeletedAtIsNil()).Only(ctx)
+		existing, err := t.DAL.Resources().One(ctx, resources.Filter{ParentID: parent.ID, NameKey: nameKey(strings.TrimSpace(name)), State: resources.Live})
 		if err == nil {
-			if existing.Kind == resource.KindItem {
+			if existing.Kind == refs.KindItem {
 				if _, access := t.authorize(ctx, subject, existing.ID, "write"); access == nil {
 					return &DocumentNameConflict{ItemID: existing.ID, Version: existing.Version}
 				}
 			}
 			return ErrConflict
 		}
-		if !ent.IsNotFound(err) {
+		if !dberr.IsNotFound(err) {
 			return err
 		}
 		item, err := t.create(ctx, subject, parent.ID, CreateResource{Kind: "item", Name: name, ContentTypeID: metadata.ContentTypeID, Keywords: metadata.Keywords, Values: metadata.Values}, &content)
 		if err != nil {
 			return err
 		}
-		revision, err := t.Client.ItemRevision.Get(ctx, *item.HeadRevisionID)
+		revision, err := t.revision(ctx, *item.HeadRevisionID)
 		if err != nil {
 			return err
 		}
-		file, err := t.Client.Blob.Get(ctx, *revision.BlobID)
+		file, err := t.blob(ctx, *revision.BlobID)
 		if err != nil {
 			return err
 		}

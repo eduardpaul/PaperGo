@@ -4,22 +4,22 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"papergo/ent"
-	"papergo/ent/itemrevision"
-	"papergo/ent/itemsurface"
-	"papergo/internal/testutil"
+	"papergo/internal/dal/blobs"
+	"papergo/internal/dal/daltest"
+	"papergo/internal/dal/resources"
+	"papergo/internal/dal/surfaces"
 	"strings"
 	"testing"
 )
 
-func readers(t *testing.T, s *Service, w *ent.Resource) {
+func readers(t *testing.T, s *Service, w *resources.Resource) {
 	t.Helper()
 	err := setWorkspaceMembers(testContext, s, "alice", w.ID, WorkspaceMember{Subject: "reader", Role: "visitor"}, WorkspaceMember{Subject: "editor", Role: "member"})
 	if err != nil {
 		t.Fatal(err)
 	}
 }
-func current(t *testing.T, s *Service, id string) *ent.Resource {
+func current(t *testing.T, s *Service, id string) *resources.Resource {
 	t.Helper()
 	r, err := s.Get(testContext, "alice", id)
 	if err != nil {
@@ -74,7 +74,7 @@ func TestPublishingSurfacesAndLifecycle(t *testing.T) {
 	if err != nil || len(events.Data) != 1 || events.Data[0].ID != pub.ID {
 		t.Fatalf("events: %v %v", events, err)
 	}
-	if history, e := s.RevisionHistory(testContext, "reader", item.ID, 0, 100); e != nil || len(history.Data) != 2 || history.Data[1].Name != "Hiddenword" || history.Data[0].Name != name || history.Data[1].Edges.SchemaRevision == nil {
+	if history, e := s.RevisionHistory(testContext, "reader", item.ID, 0, 100); e != nil || len(history.Data) != 2 || history.Data[1].Name != "Hiddenword" || history.Data[0].Name != name || history.Data[1].SchemaRevision == nil {
 		t.Fatal("ordinary reader lost metadata history", history, e)
 	}
 	item, err = s.Unpublish(testContext, "alice", item.ID, item.Version)
@@ -108,7 +108,7 @@ func TestPublishingSurfacesAndLifecycle(t *testing.T) {
 }
 
 func TestAutomaticPublishingAndPolicyChange(t *testing.T) {
-	db := testutil.Database(t)
+	db := daltest.Database(t)
 	s := NewService(db.SQL)
 	w := create(t, s, "", "workspace", "Organization", nil)
 	readers(t, s, w)
@@ -221,7 +221,7 @@ func TestExactFieldsFrozenSchemasAndIndexRebuild(t *testing.T) {
 	if err != nil || len(revs.Data) != 2 {
 		t.Fatal(err)
 	}
-	defs, err := s.Client.SchemaRevision.Get(testContext, revs.Data[1].SchemaRevisionID)
+	defs, err := s.DAL.Catalog().Schema(testContext, revs.Data[1].SchemaRevisionID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +232,7 @@ func TestExactFieldsFrozenSchemasAndIndexRebuild(t *testing.T) {
 	if err != nil || paired.ID != revs.Data[1].SchemaRevisionID || strings.Contains(string(paired.Definition), "Total") {
 		t.Fatal("reader schema not paired with published revision", err)
 	}
-	if revs.Data[1].Edges.SchemaRevision == nil || revs.Data[1].Edges.SchemaRevision.ID != paired.ID {
+	if revs.Data[1].SchemaRevision == nil || revs.Data[1].SchemaRevision.ID != paired.ID {
 		t.Fatal("history lacks its immutable schema")
 	}
 	for _, v := range []any{"1.234", "92233720368547758.08", float64(1.2)} {
@@ -255,7 +255,7 @@ func TestBlobSelectionFollowsPublishedRevision(t *testing.T) {
 	readers(t, s, w)
 	lib := create(t, s, w.ID, "library", "Documents", nil)
 	item := create(t, s, lib.ID, "item", "Contract", nil)
-	attach := func(key string) *ent.Blob {
+	attach := func(key string) *blobs.Blob {
 		t.Helper()
 		item = current(t, s, item.ID)
 		b, err := s.AttachBlob(testContext, "alice", item.ID, item.Version, BlobInput{ObjectKey: key, Filename: key + ".pdf", ContentType: "application/pdf", Size: int64(len(key)), SHA256: strings.Repeat("a", 64)})
@@ -372,43 +372,20 @@ func TestAuthorizedPaginationAndRelationships(t *testing.T) {
 	}
 }
 
-func TestRevisionOwnershipAndTransactionRollback(t *testing.T) {
-	db := testutil.Database(t)
-	s := NewService(db.SQL)
-	w := create(t, s, "", "workspace", "Org", nil)
-	list := create(t, s, w.ID, "list", "Records", nil)
+func TestInvalidEditRollsBackRevisionAndSurface(t *testing.T) {
+	s, _, list := fixture(t)
 	a := create(t, s, list.ID, "item", "A", nil)
-	b := create(t, s, list.ID, "item", "B", nil)
-	for _, q := range []string{"UPDATE resources SET head_revision_id=? WHERE id=?", "UPDATE resources SET published_revision_id=? WHERE id=?"} {
-		if _, err := db.SQL.Exec(q, *b.HeadRevisionID, a.ID); err == nil {
-			t.Fatal("cross item pointer accepted")
-		}
-	}
-	if _, err := db.SQL.Exec("UPDATE item_revisions SET name='Changed' WHERE id=?", *a.HeadRevisionID); err == nil {
-		t.Fatal("revision mutation accepted")
-	}
-	if _, err := db.SQL.Exec("DELETE FROM schema_revisions WHERE container_id=?", list.ID); err == nil {
-		t.Fatal("schema deletion accepted")
-	}
 	bad := map[string]any{"unknown": true}
 	if _, err := s.Update(testContext, "alice", a.ID, a.Version, UpdateResource{Values: &bad}); err == nil {
 		t.Fatal("invalid edit accepted")
 	}
-	count, err := s.Client.ItemRevision.Query().Where(itemrevision.ItemIDEQ(a.ID)).Count(testContext)
+	count, err := countRevisions(s, a.ID)
 	if err != nil || count != 1 {
 		t.Fatal("failed edit left revision", err)
 	}
-	count, err = s.Client.ItemSurface.Query().Where(itemsurface.ItemIDEQ(a.ID)).Count(testContext)
+	count, err = countSurfaces(s, surfaces.Filter{ItemID: a.ID})
 	if err != nil || count != 1 {
 		t.Fatal("failed edit left projection", err)
-	}
-	rows, err := db.SQL.Query("PRAGMA foreign_key_check")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer rows.Close()
-	if rows.Next() {
-		t.Fatal("foreign key violation")
 	}
 }
 

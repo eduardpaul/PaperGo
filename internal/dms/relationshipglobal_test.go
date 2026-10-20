@@ -3,6 +3,7 @@ package dms
 import (
 	"encoding/json"
 	"errors"
+	"papergo/internal/dal/daltest"
 	"testing"
 )
 
@@ -59,7 +60,7 @@ func TestUntypedCrossWorkspaceRelationships(t *testing.T) {
 		}
 	}
 	// The partial unique index enforces untyped identity at the database boundary.
-	if _, err = s.Client.Relationship.Create().SetSourceID(edge.SourceID).SetTargetID(edge.TargetID).SetDirected(false).Save(testContext); err == nil {
+	if err = daltest.TryInsert(s.DAL, "relationships", daltest.Row{"id": "duplicate", "source_id": edge.SourceID, "target_id": edge.TargetID, "directed": false}); err == nil {
 		t.Fatal("duplicate null type accepted")
 	}
 }

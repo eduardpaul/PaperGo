@@ -11,10 +11,10 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"papergo/internal/database"
+	"papergo/internal/dal/database"
+	"papergo/internal/dal/search/sqlitestore"
+	"papergo/internal/dal/search/zvecstore"
 	"papergo/internal/search"
-	"papergo/internal/search/sqlitestore"
-	"papergo/internal/search/zvecstore"
 )
 
 func searchCommand(ctx context.Context, args []string, out io.Writer) error {

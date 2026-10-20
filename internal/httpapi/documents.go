@@ -6,17 +6,17 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"papergo/internal/dal/blobs"
 	"path"
 	"strconv"
 	"strings"
 
-	"papergo/ent"
 	"papergo/internal/dms"
 	"papergo/internal/storage"
 	"papergo/internal/transfer"
 )
 
-func blobResponse(b *ent.Blob, resourceVersion int) map[string]any {
+func blobResponse(b *blobs.Blob, resourceVersion int) map[string]any {
 	return map[string]any{"id": b.ID, "item_id": b.ItemID, "version": b.Version, "resource_version": resourceVersion, "filename": b.Filename, "content_type": b.ContentType, "size": b.Size, "sha256": b.Sha256, "languages": b.Languages}
 }
 

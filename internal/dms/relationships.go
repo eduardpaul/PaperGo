@@ -2,11 +2,15 @@ package dms
 
 import (
 	"context"
-	"papergo/ent"
-	"papergo/ent/relationship"
-	"papergo/ent/resource"
+	"errors"
+	"papergo/internal/dal/content"
+	"papergo/internal/dal/refs"
 	"strings"
+	"time"
 	"unicode"
+
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/relationships"
 )
 
 // A typed relationship takes its direction, attributes and cardinality from its policy.
@@ -18,16 +22,34 @@ type CreateRelationship struct {
 	Metadata map[string]any `json:"metadata"`
 }
 
-func (s *Service) Link(ctx context.Context, subject, sourceID string, in CreateRelationship) (out *ent.Relationship, err error) {
+// RelationshipRecord is a link between items as the API returns it.
+// Untyped links have no type_id.
+type RelationshipRecord struct {
+	ID        string         `json:"id"`
+	CreatedAt time.Time      `json:"created_at"`
+	SourceID  string         `json:"source_id"`
+	TargetID  string         `json:"target_id"`
+	TypeID    string         `json:"type_id,omitempty"`
+	Directed  bool           `json:"directed"`
+	Version   int            `json:"version"`
+	Metadata  map[string]any `json:"metadata"`
+}
+
+func viewRelationship(r relationships.Relationship) RelationshipRecord {
+	return RelationshipRecord{ID: r.ID, CreatedAt: r.CreatedAt, SourceID: r.SourceID, TargetID: r.TargetID, TypeID: r.TypeID,
+		Directed: r.Directed, Version: r.Version, Metadata: r.Metadata}
+}
+
+func (s *Service) Link(ctx context.Context, subject, sourceID string, in CreateRelationship) (out RelationshipRecord, err error) {
 	if sourceID == in.TargetID {
-		return nil, invalid("self relationships are not supported")
+		return out, invalid("self relationships are not supported")
 	}
 	if in.Metadata == nil {
 		in.Metadata = map[string]any{}
 	}
 	in.Metadata = patchValues(map[string]any{}, in.Metadata)
 	if e := validateRelationshipAttributes(in.Metadata); e != nil {
-		return nil, e
+		return out, e
 	}
 	err = s.write(ctx, func(t *Service) error {
 		source, e := t.authorize(ctx, subject, sourceID, "write")
@@ -38,22 +60,21 @@ func (s *Service) Link(ctx context.Context, subject, sourceID string, in CreateR
 		if e != nil {
 			return e
 		}
-		if source.Kind != resource.KindItem || target.Kind != resource.KindItem {
+		if source.Kind != refs.KindItem || target.Kind != refs.KindItem {
 			return invalid("relationships connect items")
 		}
-		var typ *ent.RelationshipType
-		directed := false
+		link := relationships.Relationship{SourceID: sourceID, TargetID: in.TargetID, Metadata: in.Metadata}
 		if in.Directed != nil {
-			directed = *in.Directed
+			link.Directed = *in.Directed
 		}
 		if in.Type != "" {
-			predicate, e := t.resolveRelationshipTerm(ctx, subject, in.Type, true)
+			predicate, _, e := t.resolveRelationshipTerm(ctx, subject, in.Type, true)
 			if e != nil {
 				return e
 			}
-			typ, e = t.Client.RelationshipType.Get(ctx, predicate.ID)
-			if ent.IsNotFound(e) {
-				typ, e = t.ensureRelationshipPolicy(ctx, subject, RelationshipTypeInput{Name: predicate.ID, Directed: directed})
+			typ, e := t.DAL.Relationships().Type(ctx, predicate.ID)
+			if dberr.IsNotFound(e) {
+				typ, e = t.ensureRelationshipPolicy(ctx, subject, RelationshipTypeInput{Name: predicate.ID, Directed: link.Directed})
 			}
 			if e != nil {
 				return e
@@ -61,61 +82,32 @@ func (s *Service) Link(ctx context.Context, subject, sourceID string, in CreateR
 			if in.Directed != nil && *in.Directed != typ.Directed {
 				return invalid("direction differs from the relationship type")
 			}
-			directed = typ.Directed
-		}
-		sourceKey, targetKey := sourceID, in.TargetID
-		if !directed && sourceKey > targetKey {
-			sourceKey, targetKey = targetKey, sourceKey
-		}
-		q := t.Client.Relationship.Query().Where(relationship.SourceIDEQ(sourceKey), relationship.TargetIDEQ(targetKey), relationship.DirectedEQ(directed))
-		if typ == nil {
-			q.Where(relationship.TypeIDIsNil())
-		} else {
-			q.Where(relationship.TypeIDEQ(typ.ID))
-		}
-		existing, e := q.Only(ctx)
-		if e == nil {
-			out = existing
-			return nil
-		}
-		if !ent.IsNotFound(e) {
-			return e
-		}
-		if typ != nil {
-			if e = normalizeMetadata(typ.Attributes, in.Metadata, nil); e != nil {
+			link.TypeID, link.Directed = typ.ID, typ.Directed
+			// A retry returns the existing link unchanged, even when its
+			// metadata no longer validates.
+			if old, found, e := t.DAL.Relationships().Existing(ctx, link); e != nil || found {
+				out = viewRelationship(old)
 				return e
 			}
-			for i, max := range []*int{typ.MaxOutgoing, typ.MaxIncoming} {
-				if max == nil {
-					continue
-				}
-				q := t.Client.Relationship.Query().Where(relationship.TypeIDEQ(typ.ID))
-				if i == 0 {
-					q.Where(relationship.SourceIDEQ(sourceKey))
-				} else {
-					q.Where(relationship.TargetIDEQ(targetKey))
-				}
-				n, e := q.Count(ctx)
-				if e != nil {
-					return e
-				}
-				if n >= *max {
-					return ErrConflict
-				}
+			if e = normalizeMetadata(typ.Attributes, link.Metadata, nil); e != nil {
+				return e
 			}
 		}
-		builder := t.Client.Relationship.Create().SetSourceID(sourceKey).SetTargetID(targetKey).SetMetadata(in.Metadata).SetDirected(directed)
-		if typ != nil {
-			builder.SetTypeID(typ.ID)
+		created, linked, e := t.DAL.Relationships().Link(ctx, link)
+		if errors.Is(e, dberr.ErrCardinalityExceeded) {
+			return ErrConflict
 		}
-		out, e = builder.Save(ctx)
 		if e != nil {
 			return e
 		}
-		if e = t.touchRelationship(ctx, subject, out, "created"); e != nil {
+		out = viewRelationship(created)
+		if !linked {
+			return nil
+		}
+		if e = t.touchRelationship(ctx, subject, created, "created"); e != nil {
 			return e
 		}
-		return t.audit(ctx, subject, "relationship.create", source, map[string]any{"relationship_id": out.ID, "target_id": in.TargetID})
+		return t.audit(ctx, subject, "relationship.create", source, map[string]any{"relationship_id": created.ID, "target_id": in.TargetID})
 	})
 	return
 }
@@ -128,38 +120,28 @@ func (s *Service) Relationships(ctx context.Context, subject, itemID, direction,
 	if _, err := s.Get(ctx, subject, itemID); err != nil {
 		return Page[RelationshipView]{}, err
 	}
-	q := s.Client.Relationship.Query()
+	query := content.Links{Reader: principal(ctx, subject), Endpoint: itemID, Direction: direction, AfterID: after}
 	switch direction {
-	case "", "both":
-		q.Where(relationship.Or(relationship.SourceIDEQ(itemID), relationship.TargetIDEQ(itemID)))
-	case "outgoing":
-		q.Where(relationship.DirectedEQ(true), relationship.SourceIDEQ(itemID))
-	case "incoming":
-		q.Where(relationship.DirectedEQ(true), relationship.TargetIDEQ(itemID))
+	case "", "both", "outgoing", "incoming":
 	default:
 		return Page[RelationshipView]{}, invalid("direction must be both, outgoing or incoming")
 	}
 	if typeValue != "" {
-		predicate, err := s.resolveRelationshipTerm(ctx, subject, typeValue, false)
+		predicate, found, err := s.resolveRelationshipTerm(ctx, subject, typeValue, false)
 		if err != nil {
 			return Page[RelationshipView]{}, err
 		}
-		if predicate == nil {
+		if !found {
 			return Page[RelationshipView]{Data: []RelationshipView{}}, nil
 		}
-		q.Where(relationship.TypeIDEQ(predicate.ID))
+		query.TypeID = predicate.ID
 	}
-	if after != "" {
-		q.Where(relationship.IDGT(after))
-	}
-	q.Where(relationshipVisibility(ctx, subject))
-	rows, err := q.Order(ent.Asc(relationship.FieldID)).Limit(pageSize(limit) + 1).All(ctx)
+	edges, err := s.visibleRelationships(ctx, query, limit)
 	if err != nil {
 		return Page[RelationshipView]{}, err
 	}
-	page := entityPage(rows, limit, func(v *ent.Relationship) string { return v.ID })
-	out := Page[RelationshipView]{Data: []RelationshipView{}, NextCursor: page.NextCursor}
-	for _, edge := range page.Data {
+	out := Page[RelationshipView]{Data: []RelationshipView{}, NextCursor: edges.NextCursor}
+	for _, edge := range edges.Data {
 		view, err := s.relationshipView(ctx, subject, itemID, edge)
 		if err != nil {
 			return out, err
@@ -169,19 +151,28 @@ func (s *Service) Relationships(ctx context.Context, subject, itemID, direction,
 	return out, nil
 }
 
-// itemLink loads a relationship the item participates in at either endpoint.
-func (s *Service) itemLink(ctx context.Context, itemID, linkID string) (*ent.Relationship, error) {
-	link, err := s.Client.Relationship.Get(ctx, linkID)
-	if ent.IsNotFound(err) {
-		return nil, ErrNotFound
-	}
+// visibleRelationships reads a page of the links a query selects.
+func (s *Service) visibleRelationships(ctx context.Context, query content.Links, limit int) (Page[relationships.Relationship], error) {
+	query.Limit = pageSize(limit) + 1
+	ids, err := s.DAL.Content().LinkIDs(ctx, query)
 	if err != nil {
-		return nil, err
+		return Page[relationships.Relationship]{}, err
 	}
-	if link.SourceID != itemID && link.TargetID != itemID {
-		return nil, ErrNotFound
+	page := entityPage(ids, limit, func(id string) string { return id })
+	if len(page.Data) == 0 {
+		return Page[relationships.Relationship]{Data: []relationships.Relationship{}}, nil
 	}
-	return link, nil
+	rows, err := s.DAL.Relationships().List(ctx, relationships.Filter{IDs: page.Data})
+	return Page[relationships.Relationship]{Data: rows, NextCursor: page.NextCursor}, err
+}
+
+// itemLink loads a relationship the item participates in at either endpoint.
+func (s *Service) itemLink(ctx context.Context, itemID, linkID string) (relationships.Relationship, error) {
+	link, err := s.DAL.Relationships().Find(ctx, linkID)
+	if dberr.IsNotFound(err) || err == nil && link.SourceID != itemID && link.TargetID != itemID {
+		return link, ErrNotFound
+	}
+	return link, err
 }
 
 // filenameValid accepts names usable as file names: no path separators,

@@ -3,13 +3,13 @@ package dms
 import (
 	"encoding/json"
 	"fmt"
-	"papergo/ent"
+	"papergo/internal/dal/catalog"
 	"time"
 )
 
 // Resolving the typed tree bounds input before recursion, keeps literal strings
 // literal, and binds cursors to the actual caller/date values used by SQL.
-func resolveFilter(f *FilterExpr, subject string, now time.Time, defs map[string]*ent.FieldDefinition) (*FilterExpr, error) {
+func resolveFilter(f *FilterExpr, subject string, now time.Time, defs map[string]*catalog.FieldDefinition) (*FilterExpr, error) {
 	nodes := 0
 	var walk func(*FilterExpr, int) (*FilterExpr, error)
 	walk = func(f *FilterExpr, depth int) (*FilterExpr, error) {
@@ -66,7 +66,7 @@ func resolveFilter(f *FilterExpr, subject string, now time.Time, defs map[string
 			return &out, e
 		}
 		if !fieldKey.MatchString(f.Field) {
-			if _, d := systemField(f.Field); d == nil && f.Field != "$keywords" {
+			if d := systemField(f.Field); d == nil && f.Field != "$keywords" {
 				return nil, invalid("invalid filter field")
 			}
 		}
@@ -92,14 +92,14 @@ func resolveFilter(f *FilterExpr, subject string, now time.Time, defs map[string
 				return nil, e
 			}
 			d := defs[f.Field]
-			if _, builtin := systemField(f.Field); builtin != nil {
+			if builtin := systemField(f.Field); builtin != nil {
 				d = builtin
 			}
 			if f.ValueRef != "me" && d != nil {
-				if d.Type != "date" && d.Type != "datetime" {
+				if d.Type != catalog.FieldDate && d.Type != catalog.FieldDatetime {
 					return nil, invalid("date value_ref requires a date or datetime field")
 				}
-				if d.Type == "datetime" {
+				if d.Type == catalog.FieldDatetime {
 					value += "T00:00:00Z"
 				}
 			}

@@ -2,11 +2,11 @@ package dms
 
 import (
 	"context"
-	entsql "entgo.io/ent/dialect/sql"
 	"errors"
-	"papergo/ent"
-	"papergo/ent/blob"
-	"papergo/ent/resource"
+	"papergo/internal/dal/access"
+	"papergo/internal/dal/blobs"
+	"papergo/internal/dal/refs"
+	"papergo/internal/dal/resources"
 	"strconv"
 	"strings"
 )
@@ -27,12 +27,12 @@ const MaxFolderEntries = 10000
 const emptySHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
 type File struct {
-	*ent.Resource
+	*resources.Resource
 	// Blob is the content of the visible revision; nil for collections and empty items.
-	Blob *ent.Blob
+	Blob *blobs.Blob
 }
 
-func (f *File) Collection() bool { return f.Kind != resource.KindItem }
+func (f *File) Collection() bool { return f.Kind != refs.KindItem }
 func (f *File) Size() int64 {
 	if f.Blob == nil {
 		return 0
@@ -43,7 +43,7 @@ func (f *File) ContentType() string {
 	if f.Blob == nil {
 		return "application/octet-stream"
 	}
-	return f.Blob.ContentType
+	return string(f.Blob.ContentType)
 }
 
 // ETag is a strong validator: the content hash of a file, or the lock version of a collection.
@@ -99,7 +99,7 @@ func (s *Service) LibraryFolder(ctx context.Context, subject, libraryID string, 
 		if err != nil || !f.Collection() {
 			return listing{folder: f}, err
 		}
-		entries, err := t.visibleFiles(ctx, subject, t.Client.Resource.Query().Where(resource.ParentIDEQ(f.ID)))
+		entries, err := t.visibleFiles(ctx, subject, resources.Filter{ParentID: f.ID})
 		return listing{f, uniqueNames(entries)}, err
 	})
 	return out.folder, out.entries, err
@@ -291,12 +291,12 @@ func (s *Service) MoveFile(ctx context.Context, subject, libraryID string, from,
 }
 
 // resolveFile returns the library whenever it is accessible, even if the path is not.
-func (s *Service) resolveFile(ctx context.Context, subject, libraryID string, path []string) (*ent.Resource, *File, error) {
+func (s *Service) resolveFile(ctx context.Context, subject, libraryID string, path []string) (*resources.Resource, *File, error) {
 	lib, err := s.authorize(ctx, subject, libraryID, "read")
 	if err != nil {
 		return nil, nil, err
 	}
-	if lib.Kind != resource.KindLibrary || !lib.WebdavEnabled {
+	if lib.Kind != refs.KindLibrary || !lib.WebdavEnabled {
 		return nil, nil, ErrNotFound
 	}
 	if len(path) > MaxFolderDepth+1 {
@@ -315,7 +315,7 @@ func (s *Service) resolveFile(ctx context.Context, subject, libraryID string, pa
 }
 
 // resolveParent resolves the collection that holds the last path segment.
-func (s *Service) resolveParent(ctx context.Context, subject, libraryID string, path []string) (*ent.Resource, *File, string, error) {
+func (s *Service) resolveParent(ctx context.Context, subject, libraryID string, path []string) (*resources.Resource, *File, string, error) {
 	if len(path) == 0 {
 		return nil, nil, "", ErrForbidden
 	}
@@ -330,7 +330,7 @@ func (s *Service) resolveParent(ctx context.Context, subject, libraryID string, 
 }
 
 // target resolves the parent of path and the entry already at path, if any.
-func (s *Service) target(ctx context.Context, subject, libraryID string, path []string, cond FileConditions) (*ent.Resource, *File, *File, error) {
+func (s *Service) target(ctx context.Context, subject, libraryID string, path []string, cond FileConditions) (*resources.Resource, *File, *File, error) {
 	lib, parent, name, err := s.resolveParent(ctx, subject, libraryID, path)
 	if err != nil {
 		return nil, nil, nil, err
@@ -346,21 +346,14 @@ func (s *Service) target(ctx context.Context, subject, libraryID string, path []
 }
 
 // fileChild finds the visible entry named name directly below parentID.
-func (s *Service) fileChild(ctx context.Context, subject string, lib *ent.Resource, parentID, name string) (*File, error) {
+func (s *Service) fileChild(ctx context.Context, subject string, lib *resources.Resource, parentID, name string) (*File, error) {
 	key := nameKey(name)
-	q := s.Client.Resource.Query().Where(resource.ParentIDEQ(parentID))
+	f := resources.Filter{ParentID: parentID, NameKey: key}
 	if lib.PublishingEnabled {
 		// Readers may see a published name that differs from the indexed head name.
-		q.Where(func(sel *entsql.Selector) {
-			sel.Where(entsql.Or(
-				entsql.EQ(sel.C(resource.FieldNameKey), key),
-				entsql.ExprP(sel.C(resource.FieldID)+` IN (SELECT p.item_id FROM item_surfaces p JOIN resources c ON c.id=p.item_id WHERE c.parent_id=? AND p.surface='published' AND unicode_lower(p.name)=?)`, parentID, key),
-			))
-		})
-	} else {
-		q.Where(resource.NameKeyEQ(key))
+		f.NameKey, f.PublishedName = "", key
 	}
-	files, err := s.visibleFiles(ctx, subject, q)
+	files, err := s.visibleFiles(ctx, subject, f)
 	if err != nil {
 		return nil, err
 	}
@@ -372,7 +365,7 @@ func (s *Service) fileChild(ctx context.Context, subject string, lib *ent.Resour
 	return nil, ErrNotFound
 }
 func (s *Service) fileByID(ctx context.Context, subject, id string) (*File, error) {
-	files, err := s.visibleFiles(ctx, subject, s.Client.Resource.Query().Where(resource.IDEQ(id)))
+	files, err := s.visibleFiles(ctx, subject, resources.Filter{IDs: []string{id}})
 	if err != nil {
 		return nil, err
 	}
@@ -382,13 +375,12 @@ func (s *Service) fileByID(ctx context.Context, subject, id string) (*File, erro
 	return files[0], nil
 }
 
-// visibleFiles loads the live, readable, visible resources of q in ID order,
-// with each item's visible surface and the blob of its visible revision.
-func (s *Service) visibleFiles(ctx context.Context, subject string, q *ent.ResourceQuery) ([]*File, error) {
-	rows, err := q.Where(resource.DeletedAtIsNil(), permissionPredicate(ctx, subject, "read"), func(sel *entsql.Selector) {
-		text, args := visibleSQL(ctx, sel.C(resource.FieldID), subject, "auto")
-		sel.Where(entsql.ExprP(text, args...))
-	}).Order(ent.Asc(resource.FieldID)).Limit(MaxFolderEntries + 1).All(ctx)
+// visibleFiles loads the live, readable, visible resources f selects in ID
+// order, with each item's visible surface and the blob of its visible revision.
+func (s *Service) visibleFiles(ctx context.Context, subject string, f resources.Filter) ([]*File, error) {
+	f.State, f.Limit = resources.Live, MaxFolderEntries+1
+	f.Reader = &resources.Reader{Principal: principal(ctx, subject), Action: access.Read, Surface: "auto"}
+	rows, err := s.DAL.Resources().Resources(ctx, f)
 	if err != nil {
 		return nil, err
 	}
@@ -405,21 +397,19 @@ func (s *Service) visibleFiles(ctx context.Context, subject string, q *ent.Resou
 			blobIDs = append(blobIDs, *rev.BlobID)
 		}
 	}
-	blobs := map[string]*ent.Blob{}
-	if len(blobIDs) > 0 {
-		rows, err := s.Client.Blob.Query().Where(blob.IDIn(blobIDs...)).All(ctx)
-		if err != nil {
-			return nil, err
-		}
-		for _, b := range rows {
-			blobs[b.ID] = b
-		}
+	contents := map[string]*blobs.Blob{}
+	found, err := s.DAL.Blobs().Blobs(ctx, blobs.BlobFilter{IDs: blobIDs})
+	if err != nil {
+		return nil, err
+	}
+	for i, b := range found {
+		contents[b.ID] = &found[i]
 	}
 	out := make([]*File, 0, len(rows))
 	for _, r := range rows {
 		f := &File{Resource: r}
 		if rev := revisions[r.ID]; rev != nil && rev.BlobID != nil {
-			if file := blobs[*rev.BlobID]; file != nil {
+			if file := contents[*rev.BlobID]; file != nil {
 				copy := *file
 				copy.Filename = rev.Filename
 				f.Blob = &copy

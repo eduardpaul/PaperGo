@@ -3,9 +3,11 @@ package dms
 import (
 	"context"
 	"encoding/json"
-	"papergo/ent"
-	"papergo/ent/fielddefinition"
-	"papergo/ent/resource"
+	"papergo/internal/dal/catalog"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/refs"
+	"papergo/internal/dal/resources"
+	viewstore "papergo/internal/dal/views"
 	"slices"
 	"sort"
 	"strings"
@@ -24,12 +26,6 @@ type SmartFolderDrop struct {
 
 type SmartFolderUnclassify struct {
 	FolderVersion int `json:"folder_version"`
-}
-
-func smartEqual(a, b any) bool {
-	x, _ := json.Marshal(a)
-	y, _ := json.Marshal(b)
-	return string(x) == string(y)
 }
 
 // Only positive equality conditions joined by AND imply assignments. OR/NOT
@@ -65,7 +61,7 @@ func smartArray(v any) []any {
 	return []any{}
 }
 
-func (s *Service) smartActionCandidate(ctx context.Context, subject string, f *ent.SmartFolder, d SmartFolderDefinition, collection string) (smartCandidate, error) {
+func (s *Service) smartActionCandidate(ctx context.Context, subject string, f *viewstore.SmartFolder, d SmartFolderDefinition, collection string) (smartCandidate, error) {
 	candidates, err := s.smartCandidates(ctx, subject, f, d)
 	if err != nil {
 		return smartCandidate{}, err
@@ -78,22 +74,15 @@ func (s *Service) smartActionCandidate(ctx context.Context, subject string, f *e
 	return smartCandidate{}, invalid("collection is outside the smart folder selectors or is not readable")
 }
 
-func (s *Service) smartMember(ctx context.Context, subject string, f *ent.SmartFolder, d SmartFolderDefinition, path []*string, item string) (bool, error) {
+func (s *Service) smartMember(ctx context.Context, subject string, f *viewstore.SmartFolder, d SmartFolderDefinition, path []*string, item string) (bool, error) {
 	q, _, err := s.compileSmartFolder(ctx, subject, f, d, SmartFolderQueryRequest{Surface: "head", Path: path}, false)
 	if err != nil {
 		return false, err
 	}
-	args := append(append([]any{}, q.args...), item)
-	rows, err := s.Client.QueryContext(ctx, "WITH eligible AS ("+q.sql+") SELECT 1 FROM eligible WHERE id=? LIMIT 1", args...)
-	if err != nil {
-		return false, err
-	}
-	defer rows.Close()
-	match := rows.Next()
-	return match, rows.Err()
+	return s.DAL.Content().Contains(ctx, q.q, item)
 }
 
-func (s *Service) ClassifySmartFolder(ctx context.Context, subject, id string, in SmartFolderDrop) (out *ent.Resource, created bool, err error) {
+func (s *Service) ClassifySmartFolder(ctx context.Context, subject, id string, in SmartFolderDrop) (out *resources.Resource, created bool, err error) {
 	if in.FolderVersion < 1 || in.CollectionID == "" {
 		return nil, false, invalid("folder_version and collection_id are required")
 	}
@@ -122,7 +111,7 @@ func (s *Service) ClassifySmartFolder(ctx context.Context, subject, id string, i
 		if e != nil {
 			return e
 		}
-		var item *ent.Resource
+		var item *resources.Resource
 		typID := ""
 		name := ""
 		keywords := []string{}
@@ -139,7 +128,7 @@ func (s *Service) ClassifySmartFolder(ctx context.Context, subject, id string, i
 			if e != nil {
 				return e
 			}
-			if item.Kind != resource.KindItem || item.ContainerID == nil || *item.ContainerID != c.collection.ID {
+			if item.Kind != refs.KindItem || item.ContainerID == nil || *item.ContainerID != c.collection.ID {
 				return invalid("item must belong to the selected collection")
 			}
 			if item.Version != in.Version {
@@ -156,7 +145,7 @@ func (s *Service) ClassifySmartFolder(ctx context.Context, subject, id string, i
 		if e != nil {
 			return e
 		}
-		if !slices.ContainsFunc(c.types, func(v *ent.ContentType) bool { return v.ID == typ.ID }) {
+		if !slices.ContainsFunc(c.types, func(v *catalog.ContentType) bool { return v.ID == typ.ID }) {
 			return invalid("content type is outside the smart folder selectors")
 		}
 		defs := selectTypeDefinitions(c.defs, typ)
@@ -185,12 +174,12 @@ func (s *Service) ClassifySmartFolder(ctx context.Context, subject, id string, i
 			}
 			if fd.Options.Multiple && v != nil {
 				list := smartArray(values[key])
-				if !slices.ContainsFunc(list, func(x any) bool { return smartEqual(x, v) }) {
+				if !slices.ContainsFunc(list, func(x any) bool { return sameJSON(x, v) }) {
 					list = append(list, v)
 				}
 				values[key] = list
 			} else {
-				if old, ok := assigned[key]; ok && !smartEqual(old, v) {
+				if old, ok := assigned[key]; ok && !sameJSON(old, v) {
 					return invalid("conflicting classification values for " + key)
 				}
 				assigned[key] = v
@@ -208,7 +197,7 @@ func (s *Service) ClassifySmartFolder(ctx context.Context, subject, id string, i
 		}
 		if filter != nil {
 			compiler := queryCompiler{defs: definitionMap(c.defs)}
-			if _, _, e = compiler.filter(filter, 0); e != nil {
+			if _, e = compiler.filter(filter, 0); e != nil {
 				return e
 			}
 		}
@@ -247,14 +236,14 @@ func (s *Service) ClassifySmartFolder(ctx context.Context, subject, id string, i
 		}
 		sort.Slice(defs, func(i, j int) bool { return defs[i].Key < defs[j].Key })
 		for _, root := range roots {
-			var target *ent.FieldDefinition
+			var target *catalog.FieldDefinition
 			for _, fd := range defs {
 				if smartTermField(fd, root) {
 					target = fd
 					break
 				}
 			}
-			if target == nil && smartTermField(&ent.FieldDefinition{Type: "keywords", Indexed: true, IndexStatus: fielddefinition.IndexStatusReady}, root) {
+			if target == nil && smartTermField(&catalog.FieldDefinition{Type: "keywords", Indexed: true, IndexStatus: "ready"}, root) {
 				if !slices.Contains(keywords, root.ID) {
 					keywords = append(keywords, root.ID)
 				}
@@ -301,10 +290,10 @@ func (s *Service) ClassifySmartFolder(ctx context.Context, subject, id string, i
 				return invalid("navigation field is absent from this content type")
 			}
 			var v any = *value
-			if fd.Type == "integer" || fd.Type == "number" {
+			if fd.Type == catalog.FieldInteger || fd.Type == catalog.FieldNumber {
 				v = json.Number(*value)
 			}
-			if fd.Type == "boolean" {
+			if fd.Type == catalog.FieldBoolean {
 				if *value != "true" && *value != "false" {
 					return invalid("boolean paths use true or false")
 				}
@@ -323,7 +312,7 @@ func (s *Service) ClassifySmartFolder(ctx context.Context, subject, id string, i
 			if parentErr != nil {
 				return parentErr
 			}
-			if p.ID != c.collection.ID && (p.Kind != resource.KindFolder || p.ContainerID == nil || *p.ContainerID != c.collection.ID) {
+			if p.ID != c.collection.ID && (p.Kind != refs.KindFolder || p.ContainerID == nil || *p.ContainerID != c.collection.ID) {
 				return invalid("parent_id is outside the selected collection")
 			}
 			out, e = t.create(ctx, subject, parent, CreateResource{Kind: "item", Name: name, Keywords: keywords, Values: values, ContentTypeID: typ.ID}, nil)
@@ -352,13 +341,13 @@ func (s *Service) ClassifySmartFolder(ctx context.Context, subject, id string, i
 // Fetch only the IDs on this item's term and keywords fields that are in the
 // selected terms' subtrees or merged into them. Large taxonomies do not turn
 // into large SQL parameter lists or response payloads.
-func (s *Service) smartRemoveTerms(ctx context.Context, roots []string, values map[string]any, defs []*ent.FieldDefinition) error {
+func (s *Service) smartRemoveTerms(ctx context.Context, roots []string, values map[string]any, defs []*catalog.FieldDefinition) error {
 	if len(roots) == 0 {
 		return nil
 	}
 	ids := []any{}
 	for _, fd := range defs {
-		if fd.Type == "term" || fd.Type == "keywords" {
+		if fd.Type == catalog.FieldTerm || fd.Type == catalog.FieldKeywords {
 			if fd.Options.Multiple {
 				ids = append(ids, smartArray(values[fd.Key])...)
 			} else if v := values[fd.Key]; v != nil {
@@ -366,29 +355,31 @@ func (s *Service) smartRemoveTerms(ctx context.Context, roots []string, values m
 			}
 		}
 	}
-	rootJSON, _ := json.Marshal(roots)
-	idsJSON, _ := json.Marshal(ids)
-	rows, err := s.Client.QueryContext(ctx, `WITH sub AS (SELECT t.id FROM json_each(?) j JOIN terms r ON r.id=coalesce((SELECT merged_into_id FROM terms WHERE id=j.value),j.value) JOIN terms t ON t.path>=r.path AND t.path<substr(r.path,1,length(r.path)-1)||'0')
-SELECT id FROM sub WHERE id IN (SELECT value FROM json_each(?)) UNION SELECT m.id FROM sub JOIN terms m ON m.merged_into_id=sub.id WHERE m.id IN (SELECT value FROM json_each(?))`, string(rootJSON), string(idsJSON), string(idsJSON))
-	if err != nil {
-		return err
-	}
-	removed := map[string]bool{}
-	for rows.Next() {
-		var id string
-		if err = rows.Scan(&id); err != nil {
-			rows.Close()
+	family := map[string]bool{}
+	for _, root := range roots {
+		canonical, err := s.DAL.Taxonomy().Canonical(ctx, root)
+		if dberr.IsNotFound(err) {
+			continue
+		}
+		if err != nil {
 			return err
 		}
-		removed[id] = true
+		members, err := s.DAL.Taxonomy().Family(ctx, canonical.ID)
+		if err != nil {
+			return err
+		}
+		for _, id := range members {
+			family[id] = true
+		}
 	}
-	err = rows.Err()
-	rows.Close()
-	if err != nil {
-		return err
+	removed := map[string]bool{}
+	for _, v := range ids {
+		if id, ok := v.(string); ok && family[id] {
+			removed[id] = true
+		}
 	}
 	for _, fd := range defs {
-		if fd.Type != "term" && fd.Type != "keywords" {
+		if fd.Type != catalog.FieldTerm && fd.Type != catalog.FieldKeywords {
 			continue
 		}
 		if values[fd.Key] == nil {
@@ -403,7 +394,7 @@ SELECT id FROM sub WHERE id IN (SELECT value FROM json_each(?)) UNION SELECT m.i
 	return nil
 }
 
-func (s *Service) UnclassifySmartFolder(ctx context.Context, subject, id, itemID string, folderVersion, itemVersion int) (out *ent.Resource, err error) {
+func (s *Service) UnclassifySmartFolder(ctx context.Context, subject, id, itemID string, folderVersion, itemVersion int) (out *resources.Resource, err error) {
 	if folderVersion < 1 || itemVersion < 1 {
 		return nil, invalid("current folder and item versions are required")
 	}
@@ -426,7 +417,7 @@ func (s *Service) UnclassifySmartFolder(ctx context.Context, subject, id, itemID
 		if e != nil {
 			return e
 		}
-		if item.Kind != resource.KindItem || item.ContainerID == nil {
+		if item.Kind != refs.KindItem || item.ContainerID == nil {
 			return invalid("only items can be unclassified")
 		}
 		if item.Version != itemVersion {
@@ -473,7 +464,7 @@ func (s *Service) UnclassifySmartFolder(ctx context.Context, subject, id, itemID
 				return e
 			}
 			if cond.Field == "$keywords" {
-				keywords = slices.DeleteFunc(keywords, func(x string) bool { return smartEqual(x, v) })
+				keywords = slices.DeleteFunc(keywords, func(x string) bool { return sameJSON(x, v) })
 				if id, ok := v.(string); ok {
 					if err := t.smartRemoveTerms(ctx, []string{id}, values, defs); err != nil {
 						return err
@@ -490,8 +481,8 @@ func (s *Service) UnclassifySmartFolder(ctx context.Context, subject, id, itemID
 				return e
 			}
 			if fd.Options.Multiple {
-				values[fd.Key] = slices.DeleteFunc(smartArray(values[fd.Key]), func(x any) bool { return smartEqual(x, v) })
-			} else if smartEqual(values[fd.Key], v) {
+				values[fd.Key] = slices.DeleteFunc(smartArray(values[fd.Key]), func(x any) bool { return sameJSON(x, v) })
+			} else if sameJSON(values[fd.Key], v) {
 				values[fd.Key] = nil
 			}
 		}

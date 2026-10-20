@@ -1,7 +1,8 @@
 package runner
 
 import (
-	"database/sql"
+	"papergo/internal/dal"
+	"papergo/internal/dal/daltest"
 	"testing"
 	"time"
 
@@ -49,23 +50,15 @@ func TestMaintenanceRetentionKeepsActiveWorkAndApplicationRuns(t *testing.T) {
 	maintenanceRetention = time.Hour
 	t.Cleanup(func() { maintenanceRetention = savedRetention })
 	aged := time.Now().Add(-2 * time.Hour).UnixMilli()
+	s := f.db.DAL
+	status := daltest.DBOS(s, "workflow_status")
 	for _, id := range append(append([]string{}, ids[:5]...), ids[6:]...) {
-		if _, err := f.db.SQL.Exec(`UPDATE workflow_status SET completed_at=? WHERE workflow_uuid=?`, aged, id); err != nil {
-			t.Fatal(err)
-		}
+		daltest.Update(t, s, status, daltest.Row{"completed_at": aged}, daltest.Row{"workflow_uuid": id})
 	}
-	if _, err := f.db.SQL.Exec(`UPDATE workflow_status SET status=?, completed_at=NULL WHERE workflow_uuid=?`, dbos.WorkflowStatusPending, ids[3]); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := f.db.SQL.Exec(`UPDATE workflow_status SET status=? WHERE workflow_uuid=?`, dbos.WorkflowStatusError, ids[4]); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := f.db.SQL.Exec(`INSERT INTO notifications (message_uuid, destination_uuid, topic, message) VALUES (?,?,?,?)`, "maint-note", ids[0], "diag", "tick"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := f.db.SQL.Exec(`INSERT INTO workflow_events (workflow_uuid, key, value) VALUES (?,?,?)`, ids[0], "seen", "1"); err != nil {
-		t.Fatal(err)
-	}
+	daltest.Update(t, s, status, daltest.Row{"status": string(dbos.WorkflowStatusPending), "completed_at": nil}, daltest.Row{"workflow_uuid": ids[3]})
+	daltest.Update(t, s, status, daltest.Row{"status": string(dbos.WorkflowStatusError)}, daltest.Row{"workflow_uuid": ids[4]})
+	daltest.Insert(t, s, daltest.DBOS(s, "notifications"), daltest.Row{"message_uuid": "maint-note", "destination_uuid": ids[0], "topic": "diag", "message": "tick"})
+	daltest.Insert(t, s, daltest.DBOS(s, "workflow_events"), daltest.Row{"workflow_uuid": ids[0], "key": "seen", "value": "1"})
 
 	deleted, err := f.r.PurgeMaintenance(ctx)
 	if err != nil {
@@ -78,57 +71,44 @@ func TestMaintenanceRetentionKeepsActiveWorkAndApplicationRuns(t *testing.T) {
 		t.Fatalf("deleted %d maintenance executions, want 6", deleted)
 	}
 	for _, id := range append([]string{ids[0], ids[1], ids[2]}, ids[6:]...) {
-		if got := maintenanceCount(t, f.db.SQL, id); got != 0 {
+		if got := maintenanceCount(t, s, id); got != 0 {
 			t.Fatalf("aged execution %s still stored: %d rows", id, got)
 		}
 	}
 	for _, id := range []string{ids[3], ids[4], ids[5]} {
-		if got := maintenanceCount(t, f.db.SQL, id); got == 0 {
+		if got := maintenanceCount(t, s, id); got == 0 {
 			t.Fatalf("execution %s was collected", id)
 		}
 	}
 	f.runs(t, user.ID, 1)
-	var application int
-	if err = f.db.SQL.QueryRow(`SELECT count(*) FROM workflow_status WHERE name=?`, runName).Scan(&application); err != nil || application == 0 {
-		t.Fatal("application executions were collected", application, err)
+	if application := daltest.Count(t, s, status, daltest.Row{"name": runName}); application == 0 {
+		t.Fatal("application executions were collected")
 	}
 
 	if err = f.r.Shutdown(10 * time.Second); err != nil {
 		t.Fatal(err)
 	}
 	restarted := open(t, f.path, "node-b")
-	if got := maintenanceCount(t, restarted.db.SQL, ids[0]); got != 0 {
+	if got := maintenanceCount(t, restarted.db.DAL, ids[0]); got != 0 {
 		t.Fatalf("restart dispatched the collected tick again: %d rows", got)
 	}
-	if got := maintenanceCount(t, restarted.db.SQL, ids[5]); got == 0 {
+	if got := maintenanceCount(t, restarted.db.DAL, ids[5]); got == 0 {
 		t.Fatal("restart lost the retained schedule execution")
 	}
-	if got := maintenanceCount(t, restarted.db.SQL, ids[3]); got == 0 {
+	if got := maintenanceCount(t, restarted.db.DAL, ids[3]); got == 0 {
 		t.Fatal("restart lost the pending execution")
 	}
-	var runs int
-	if err = restarted.db.SQL.QueryRow(`SELECT count(*) FROM workflow_runs WHERE workflow_id=?`, user.ID).Scan(&runs); err != nil || runs != 1 {
-		t.Fatal("restart changed the application run", runs, err)
+	if runs := daltest.Count(t, restarted.db.DAL, "workflow_runs", daltest.Row{"workflow_id": user.ID}); runs != 1 {
+		t.Fatal("restart changed the application run", runs)
 	}
 }
 
-func maintenanceCount(t *testing.T, db *sql.DB, id string) int {
+// maintenanceCount counts the rows the engine keeps of an execution.
+func maintenanceCount(t *testing.T, s *dal.Store, id string) int {
 	t.Helper()
-	var status, inputs, outputs, steps, notes, events int
-	for _, probe := range []struct {
-		query string
-		dest  *int
-	}{
-		{`SELECT count(*) FROM workflow_status WHERE workflow_uuid=?`, &status},
-		{`SELECT count(*) FROM workflow_input WHERE workflow_uuid=?`, &inputs},
-		{`SELECT count(*) FROM workflow_output WHERE workflow_uuid=?`, &outputs},
-		{`SELECT count(*) FROM operation_outputs WHERE workflow_uuid=?`, &steps},
-		{`SELECT count(*) FROM notifications WHERE destination_uuid=?`, &notes},
-		{`SELECT count(*) FROM workflow_events WHERE workflow_uuid=?`, &events},
-	} {
-		if err := db.QueryRow(probe.query, id).Scan(probe.dest); err != nil {
-			t.Fatal(err)
-		}
+	n := daltest.Count(t, s, daltest.DBOS(s, "notifications"), daltest.Row{"destination_uuid": id})
+	for _, table := range []string{"workflow_status", "workflow_input", "workflow_output", "operation_outputs", "workflow_events"} {
+		n += daltest.Count(t, s, daltest.DBOS(s, table), daltest.Row{"workflow_uuid": id})
 	}
-	return status + inputs + outputs + steps + notes + events
+	return n
 }

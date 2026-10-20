@@ -17,6 +17,9 @@ import (
 	"net/http/httptest"
 	"net/textproto"
 	"net/url"
+	"papergo/internal/dal/directory"
+	"papergo/internal/dal/refs"
+	"papergo/internal/dal/resources"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -24,17 +27,16 @@ import (
 	"testing"
 	"time"
 
-	"papergo/ent/resource"
 	"papergo/internal/ai"
 	"papergo/internal/ai/aitest"
 	"papergo/internal/auth"
+	"papergo/internal/dal/daltest"
+	"papergo/internal/dal/resultcache"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
 	"papergo/internal/ocr"
-	"papergo/internal/resultcache"
 	"papergo/internal/runner"
 	"papergo/internal/storage"
-	"papergo/internal/testutil"
 	"papergo/internal/testutil/searchstore"
 	"papergo/internal/workflow"
 	"papergo/internal/workflowai"
@@ -509,7 +511,7 @@ func (h *receiptEnv) restart(t *testing.T) {
 func TestReceiptsPackage(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "papergo.db")
-	db := testutil.DatabaseAt(t, path)
+	db := daltest.DatabaseAt(t, path)
 	batch := aitest.NewBatchServer(t)
 	client, err := ai.NewBatch(ai.BatchConfig{Provider: ai.ProviderOpenAI, Endpoint: batch.Endpoint(), Model: "gpt-batch"}, batch.Client())
 	if err != nil {
@@ -524,7 +526,9 @@ func TestReceiptsPackage(t *testing.T) {
 	dmsService := dms.NewService(db.SQL)
 	index := searchstore.Open(t, filepath.Join(t.TempDir(), "search.db"), []string{"english"})
 	dmsService.SetSearch(index)
-	clock := &receiptClock{at: time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC)}
+	// Noon tomorrow: waits reach real deadlines, which are counted from the
+	// test clock, only after the test.
+	clock := &receiptClock{at: time.Now().UTC().Truncate(24 * time.Hour).Add(36 * time.Hour)}
 	wf := &workflow.Service{DMS: dmsService, Tools: workflow.Tools{
 		Storage: store, OCR: receiptTextEngine{}, Search: index,
 		Results: resultcache.New(db.SQL), ResultTTL: 30 * 24 * time.Hour,
@@ -559,16 +563,16 @@ func TestReceiptsPackage(t *testing.T) {
 	// The same ZIP a user selects in Export and import provisions the sample.
 	// Drop the temporary organization role before running it, so ACL tests still
 	// exercise the importing author's ordinary workspace permissions.
-	if err = dmsService.Directory().SetAssignment(ctx, "organization-admin", identity.AdministratorRole, identity.Principal{Type: "user", ID: "alice"}, false); err != nil {
+	if err = dmsService.Directory().SetAssignment(ctx, "organization-admin", identity.AdministratorRole, identity.Principal{Type: directory.PrincipalUser, ID: "alice"}, false); err != nil {
 		t.Fatal(err)
 	}
 	sampleOperations(t, dmsService, store)
 	result := importSampleHTTP(t, handler, dmsService, "alice", "../../samples/receipts-package/receipts.zip", "", false)
-	if err = dmsService.Directory().SetAssignment(ctx, "organization-admin", identity.AdministratorRole, identity.Principal{Type: "user", ID: "alice"}, true); err != nil {
+	if err = dmsService.Directory().SetAssignment(ctx, "organization-admin", identity.AdministratorRole, identity.Principal{Type: directory.PrincipalUser, ID: "alice"}, true); err != nil {
 		t.Fatal(err)
 	}
 	h.workspace = result.WorkspaceID
-	collections, err := dmsService.Client.Resource.Query().Where(resource.WorkspaceIDEQ(h.workspace), resource.KindIn(resource.KindLibrary, resource.KindList)).All(ctx)
+	collections, err := dmsService.DAL.Resources().Resources(ctx, resources.Filter{WorkspaceID: h.workspace, Kinds: []refs.ResourceKind{refs.KindLibrary, refs.KindList}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -977,7 +981,7 @@ func (h *receiptEnv) enableCoordinator(t *testing.T) {
 	rec := h.send(t, http.MethodPut, "/v1/workspaces/"+h.workspace+"/workflow-builtins/ai.batch", map[string]any{"automatic_enabled": true}, bobToken, strconv.Quote(strconv.Itoa(version)), 200)
 	var saved workflow.Workflow
 	decodeJSON(t, rec, &saved)
-	if !saved.AutomaticEnabled || saved.ID == "" {
+	if !saved.AutomaticEnabled || saved.ID == "" || saved.ExecutionAuthor != "bob" {
 		h.fail(t, "coordinator: %s", rec.Body.String())
 	}
 	if saved.Parameters["queue"] != "shared" || saved.Parameters["policy"] != "both" || saved.Parameters["flush_cron"] != "0 1 * * *" || saved.Parameters["time_zone"] != "Europe/Madrid" {

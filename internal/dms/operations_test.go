@@ -5,10 +5,8 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"papergo/ent/fielddefinition"
-	"papergo/ent/fieldvalue"
-	"papergo/ent/itemsurface"
-	"papergo/ent/operation"
+	"papergo/internal/dal/operations"
+	"papergo/internal/dal/surfaces"
 	"testing"
 	"time"
 )
@@ -36,11 +34,11 @@ func TestFieldIndexBuildsInBackgroundBatches(t *testing.T) {
 	}
 	indexed := true
 	field, err := s.UpdateField(testContext, "alice", list.ID, d.ID, latest(t, s, list.ID).Version, UpdateField{Indexed: &indexed})
-	if err != nil || field.IndexStatus != fielddefinition.IndexStatusBuilding {
+	if err != nil || field.IndexStatus != "building" {
 		t.Fatalf("toggle: %+v %v", field, err)
 	}
 	ops, err := s.Operations(testContext, "alice", list.ID, "", 0)
-	if err != nil || len(ops.Data) != 1 || ops.Data[0].Status != operation.StatusPending {
+	if err != nil || len(ops.Data) != 1 || ops.Data[0].Status != operations.StatusPending {
 		t.Fatalf("queued operation: %+v %v", ops, err)
 	}
 	if worked, err := s.operationStep(testContext); !worked || err != nil {
@@ -62,15 +60,15 @@ func TestFieldIndexBuildsInBackgroundBatches(t *testing.T) {
 		t.Fatal(err)
 	}
 	op, err := s.Operation(testContext, "alice", ops.Data[0].ID)
-	if err != nil || op.Status != operation.StatusSucceeded || op.Processed == 0 {
+	if err != nil || op.Status != operations.StatusSucceeded || op.Processed == 0 {
 		t.Fatalf("finished operation: %+v %v", op, err)
 	}
-	surfaces, err := s.Client.ItemSurface.Query().Where(itemsurface.ContainerIDEQ(list.ID)).Count(testContext)
+	surfaceCount, err := countSurfaces(s, surfaces.Filter{ContainerID: list.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rows, err := s.Client.FieldValue.Query().Where(fieldvalue.FieldKeyEQ("n")).Count(testContext); err != nil || rows != surfaces {
-		t.Fatalf("index rows %d for %d surfaces: %v", rows, surfaces, err)
+	if rows, err := countFieldValues(s, surfaces.ValueFilter{FieldKey: "n"}); err != nil || rows != surfaceCount {
+		t.Fatalf("index rows %d for %d surfaces: %v", rows, surfaceCount, err)
 	}
 	for value, want := range map[string]int{"0": 0, "100": 1, "107": 1, "200": 1, "3": 1} {
 		page, err := s.Query(testContext, "alice", list.ID, QueryRequest{Surface: "head", Query: QuerySpec{Filter: &FilterExpr{Field: "n", Value: []byte(value)}}})
@@ -87,14 +85,14 @@ func TestFieldIndexBuildsInBackgroundBatches(t *testing.T) {
 	if err = s.runOperations(testContext); err != nil {
 		t.Fatal(err)
 	}
-	superseded, err := s.Client.Operation.Query().Where(operation.StatusEQ(operation.StatusSuperseded)).Count(testContext)
+	superseded, err := s.DAL.Operations().Count(testContext, operations.Filter{Statuses: []operations.Status{operations.StatusSuperseded}})
 	if err != nil || superseded != 2 {
 		t.Fatalf("superseded: %d %v", superseded, err)
 	}
-	if rows, err := s.Client.FieldValue.Query().Where(fieldvalue.FieldKeyEQ("n")).Count(testContext); err != nil || rows != 0 {
+	if rows, err := countFieldValues(s, surfaces.ValueFilter{FieldKey: "n"}); err != nil || rows != 0 {
 		t.Fatalf("rows after unindexing: %d %v", rows, err)
 	}
-	if got, err := s.Client.FieldDefinition.Get(testContext, d.ID); err != nil || got.IndexStatus != fielddefinition.IndexStatusReady {
+	if got, err := s.DAL.Catalog().Field(testContext, d.ID); err != nil || got.IndexStatus != "ready" {
 		t.Fatalf("final status: %+v %v", got, err)
 	}
 	if _, err = s.Operation(testContext, "stranger", op.ID); err == nil {
@@ -111,10 +109,10 @@ func TestEmptyCollectionIndexIsReadyAtOnce(t *testing.T) {
 	}
 	indexed := true
 	field, err := s.UpdateField(testContext, "alice", list.ID, d.ID, latest(t, s, list.ID).Version, UpdateField{Indexed: &indexed})
-	if err != nil || field.IndexStatus != fielddefinition.IndexStatusReady {
+	if err != nil || field.IndexStatus != "ready" {
 		t.Fatalf("%+v %v", field, err)
 	}
-	if n, err := s.Client.Operation.Query().Count(testContext); err != nil || n != 0 {
+	if n, err := s.DAL.Operations().Count(testContext, operations.Filter{}); err != nil || n != 0 {
 		t.Fatal("operation queued for an empty collection", n, err)
 	}
 }
@@ -139,11 +137,11 @@ func TestRunOperationsBuildsQueuedIndexes(t *testing.T) {
 	}
 	deadline := time.Now().Add(10 * time.Second)
 	for {
-		got, err := s.Client.FieldDefinition.Get(testContext, d.ID)
+		got, err := s.DAL.Catalog().Field(testContext, d.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got.IndexStatus == fielddefinition.IndexStatusReady {
+		if got.IndexStatus == "ready" {
 			break
 		}
 		if time.Now().After(deadline) {
@@ -157,4 +155,13 @@ func TestRunOperationsBuildsQueuedIndexes(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("runner ignored cancellation")
 	}
+}
+
+// findOperation reads an operation as the API shows it.
+func findOperation(s *Service, id string) (*OperationView, error) {
+	op, err := s.DAL.Operations().Find(testContext, id)
+	if err != nil {
+		return nil, err
+	}
+	return viewOperation(op), nil
 }

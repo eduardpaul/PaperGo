@@ -2,88 +2,44 @@ package identity
 
 import (
 	"context"
-	"database/sql"
-	"encoding/json"
-	"errors"
 	"github.com/google/uuid"
+	"papergo/internal/dal"
+	"papergo/internal/dal/audit"
+	"papergo/internal/dal/directory"
 	"papergo/internal/requestmeta"
 	"reflect"
 	"sort"
-	"strings"
-	"time"
 )
 
-func recordIdentityAudit(ctx context.Context, tx *sql.Tx, actor, action, entityType, id string, properties ...string) error {
+func recordIdentityAudit(ctx context.Context, store *dal.Store, actor string, kind directory.EntityKind, change directory.Change, id string, properties ...string) error {
 	ctx = requestmeta.EnsureTrace(ctx)
 	if properties == nil {
 		properties = []string{}
 	}
-	raw, err := json.Marshal(properties)
-	if err != nil {
-		return err
-	}
-	_, err = tx.ExecContext(ctx, "INSERT INTO audit_events(id,created_at,subject,action,entity_type,entity_id,properties,trace_id,details) VALUES(?,?,?,?,?,?,?,?, '{}')", uuid.Must(uuid.NewV7()).String(), time.Now().UTC(), actor, action, "identity."+entityType, id, string(raw), requestmeta.Trace(ctx))
+	_, err := store.Audit().Append(ctx, audit.Event{
+		ID: uuid.Must(uuid.NewV7()).String(), Subject: actor, Action: kind.AuditAction(change), EntityType: kind.AuditType(), EntityID: id,
+		TraceID: requestmeta.Trace(ctx), Properties: properties,
+	})
 	return err
 }
 
-// Only the affected directory entity is read. Credentials omit secrets and
-// last-use stamps; group membership and role assignment changes are named.
-func identityAuditState(ctx context.Context, tx *sql.Tx, typ, id string) (map[string]any, error) {
-	queries := map[string]string{
-		"user":         "SELECT display_name,email,active,deleted_at FROM identity_users WHERE id=?",
-		"group":        "SELECT name,description,(SELECT group_concat(principal_type||':'||principal_id) FROM (SELECT principal_type,principal_id FROM identity_memberships WHERE group_id=identity_groups.id ORDER BY principal_type,principal_id)) AS members FROM identity_groups WHERE id=?",
-		"role":         "SELECT name,description,scopes,(SELECT group_concat(principal_type||':'||principal_id) FROM (SELECT principal_type,principal_id FROM identity_assignments WHERE role_id=identity_roles.id ORDER BY principal_type,principal_id)) AS assignments FROM identity_roles WHERE id=?",
-		"organization": "SELECT identifier,display_name,description FROM identity_organizations WHERE id=?",
-		"rest_token":   "SELECT name,scopes,expires_at,revoked_at,subject,integration,created_by FROM identity_rest_tokens WHERE id=?",
-	}
-	query := queries[typ]
-	if query == "" {
-		return nil, errors.New("unknown audit entity")
-	}
-	rows, err := tx.QueryContext(ctx, query, id)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	if !rows.Next() {
-		return nil, rows.Err()
-	}
-	names, err := rows.Columns()
-	if err != nil {
-		return nil, err
-	}
-	values := make([]any, len(names))
-	dest := make([]any, len(names))
-	for i := range values {
-		dest[i] = &values[i]
-	}
-	if err = rows.Scan(dest...); err != nil {
-		return nil, err
-	}
-	out := map[string]any{}
-	for i, name := range names {
-		out[name] = values[i]
-	}
-	return out, nil
-}
-
-func auditedIdentity(ctx context.Context, tx *sql.Tx, actor, action, typ, id string, fn func() error) error {
+func auditedIdentity(ctx context.Context, store *dal.Store, actor string, typ directory.EntityKind, change directory.Change, id string, fn func() error) error {
 	// The organization's stable ID is loaded inside its transaction.
-	if typ == "organization" && id == "" {
-		org, err := organization(ctx, tx)
+	if typ == directory.EntityOrganization && id == "" {
+		orgID, err := store.Directory().Organization(ctx)
 		if err != nil {
 			return err
 		}
-		id = org.ID
+		id = orgID.ID
 	}
-	before, err := identityAuditState(ctx, tx, typ, id)
+	before, err := store.Directory().AuditState(ctx, typ, id)
 	if err != nil {
 		return err
 	}
 	if err = fn(); err != nil {
 		return err
 	}
-	after, err := identityAuditState(ctx, tx, typ, id)
+	after, err := store.Directory().AuditState(ctx, typ, id)
 	if err != nil {
 		return err
 	}
@@ -92,9 +48,9 @@ func auditedIdentity(ctx context.Context, tx *sql.Tx, actor, action, typ, id str
 	}
 	properties := []string{}
 	if before == nil {
-		action = strings.Split(action, ".")[0] + ".create"
+		change = directory.ChangeCreate
 	} else if after == nil {
-		action = strings.Split(action, ".")[0] + ".delete"
+		change = directory.ChangeDelete
 	} else {
 		for name, value := range after {
 			if !reflect.DeepEqual(before[name], value) {
@@ -103,5 +59,5 @@ func auditedIdentity(ctx context.Context, tx *sql.Tx, actor, action, typ, id str
 		}
 		sort.Strings(properties)
 	}
-	return recordIdentityAudit(ctx, tx, actor, action, typ, id, properties...)
+	return recordIdentityAudit(ctx, store, actor, typ, change, id, properties...)
 }

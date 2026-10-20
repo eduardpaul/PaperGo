@@ -10,9 +10,8 @@ import (
 	"sort"
 	"strings"
 
-	"papergo/ent"
-	"papergo/ent/predicate"
-	"papergo/ent/term"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/taxonomy"
 )
 
 // DecisionScope is normalized independently of prompts and description overrides.
@@ -65,57 +64,59 @@ func (s *Service) decisionCandidates(ctx context.Context, subject, setID string,
 	if len(scope.TermIDs) > limit || len(overrides) > limit {
 		return out, invalid("explicit taxonomy selections exceed candidate limit")
 	}
-	set, err := s.Client.TermSet.Get(ctx, setID)
-	if ent.IsNotFound(err) {
+	store := s.DAL.Taxonomy()
+	set, err := store.Set(ctx, setID)
+	if dberr.IsNotFound(err) {
 		return out, invalid("term_set_id must identify an organization term set")
 	}
 	if err != nil {
 		return out, err
 	}
 
-	query := s.Client.Term.Query().Where(term.TermSetIDEQ(setID))
-	ancestorIDs := []string{}
+	filter := taxonomy.TermFilter{SetID: setID, Limit: 10001}
 	if scope.RootTermID != "" || len(scope.TermIDs) > 0 {
 		ids := scope.TermIDs
 		if scope.RootTermID != "" {
 			ids = []string{scope.RootTermID}
 		}
-		explicit, err := s.Client.Term.Query().Where(term.TermSetIDEQ(setID), term.IDIn(ids...)).All(ctx)
+		explicit, err := store.Terms(ctx, taxonomy.TermFilter{SetID: setID, IDs: ids})
 		if err != nil {
 			return out, err
 		}
 		if len(explicit) != len(ids) {
 			return out, invalid("explicit terms must exist in the selected set and be unique")
 		}
+		within := &taxonomy.Scope{}
 		for _, r := range explicit {
-			ancestorIDs = append(ancestorIDs, strings.Split(strings.Trim(r.Path, "/"), "/")...)
+			within.IDs = append(within.IDs, r.Lineage()...)
 		}
 		if scope.RootTermID != "" {
-			query.Where(term.Or(term.PathHasPrefix(explicit[0].Path), term.IDIn(ancestorIDs...)))
-		} else {
-			conditions := []predicate.Term{term.IDIn(ancestorIDs...)}
-			if scope.LeafOnly {
-				conditions = append(conditions, term.And(term.ParentIDIn(ids...), term.DeprecatedEQ(false), term.MergedIntoIDIsNil()))
-			}
-			query.Where(term.Or(conditions...))
+			within.Path = explicit[0].Path
+		} else if scope.LeafOnly {
+			within.ParentIDs = ids
 		}
+		filter.Scope = within
 	}
 	// Bound the complete scope; explicit subsets read their ancestors and, for
 	// leaf checks, active children instead of scanning unrelated set membership.
-	rows, err := query.Order(ent.Asc(term.FieldSortOrder, term.FieldNormalizedName, term.FieldID)).Limit(10001).All(ctx)
+	found, err := store.Terms(ctx, filter)
 	if err != nil {
 		return out, err
 	}
-	if len(rows) > 10000 {
+	if len(found) > 10000 {
 		return out, invalid("decision scope exceeds the 10000-term snapshot budget; choose a subset or smaller subtree")
 	}
+	rows := make([]*taxonomy.Term, len(found))
+	for i := range found {
+		rows[i] = &found[i]
+	}
 
-	byID := map[string]*ent.Term{}
+	byID := map[string]*taxonomy.Term{}
 	for _, r := range rows {
 		byID[r.ID] = r
 	}
-	ancestors := func(r *ent.Term) ([]*ent.Term, error) {
-		chain := []*ent.Term{}
+	ancestors := func(r *taxonomy.Term) ([]*taxonomy.Term, error) {
+		chain := []*taxonomy.Term{}
 		seen := map[string]bool{}
 		for r != nil {
 			if seen[r.ID] {
@@ -123,10 +124,10 @@ func (s *Service) decisionCandidates(ctx context.Context, subject, setID string,
 			}
 			seen[r.ID] = true
 			chain = append(chain, r)
-			if r.ParentID == nil {
+			if r.ParentID == "" {
 				break
 			}
-			r = byID[*r.ParentID]
+			r = byID[r.ParentID]
 			if r == nil {
 				return nil, invalid("taxonomy contains a missing ancestor")
 			}
@@ -136,7 +137,7 @@ func (s *Service) decisionCandidates(ctx context.Context, subject, setID string,
 	}
 	eligible := map[string]bool{}
 	paths := map[string]string{}
-	chains := map[string][]*ent.Term{}
+	chains := map[string][]*taxonomy.Term{}
 	for _, r := range rows {
 		chain, err := ancestors(r)
 		if err != nil {
@@ -147,7 +148,7 @@ func (s *Service) decisionCandidates(ctx context.Context, subject, setID string,
 		names := []string{}
 		for _, a := range chain {
 			names = append(names, a.Name)
-			if a.Deprecated || a.MergedIntoID != nil {
+			if a.Deprecated || a.Merged() {
 				active = false
 			}
 		}
@@ -194,8 +195,8 @@ func (s *Service) decisionCandidates(ctx context.Context, subject, setID string,
 			}
 		}
 	}
-	candidates := []*ent.Term{}
-	relevant := map[string]*ent.Term{}
+	candidates := []*taxonomy.Term{}
+	relevant := map[string]*taxonomy.Term{}
 	for _, r := range rows {
 		if !universe[r.ID] || (len(subset) > 0 && !subset[r.ID]) {
 			continue
@@ -252,10 +253,10 @@ func (s *Service) decisionCandidates(ctx context.Context, subject, setID string,
 	}
 	// Candidate order and complete versioned ancestry capture membership, ordering,
 	// eligibility and conservative invalidation on label/description changes.
-	orderedAncestors := []*ent.Term{}
+	orderedAncestors := []TermView{}
 	for _, r := range rows {
 		if relevant[r.ID] != nil {
-			orderedAncestors = append(orderedAncestors, r)
+			orderedAncestors = append(orderedAncestors, viewTerm(*r))
 		}
 	}
 	candidateIDs := []string{}
@@ -263,11 +264,11 @@ func (s *Service) decisionCandidates(ctx context.Context, subject, setID string,
 		candidateIDs = append(candidateIDs, r.ID)
 	}
 	raw, err := json.Marshal(struct {
-		Set        *ent.TermSet
+		Set        TermSetView
 		Scope      DecisionScope
 		Candidates []string
-		Ancestry   []*ent.Term
-	}{set, scope, candidateIDs, orderedAncestors})
+		Ancestry   []TermView
+	}{viewTermSet(set), scope, candidateIDs, orderedAncestors})
 	if err != nil {
 		return out, err
 	}

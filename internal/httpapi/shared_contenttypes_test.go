@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"papergo/ent"
 	"papergo/internal/auth"
+	"papergo/internal/dal/catalog"
+	"papergo/internal/dal/directory"
+	"papergo/internal/dal/resources"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
 	"strings"
@@ -20,20 +22,20 @@ func TestOrganizationContentTypeAPISharingAndScopeRevocation(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if e = s.Directory().SetAssignment(ctx, "alice", identity.MemberRole, identity.Principal{Type: "user", ID: "carol"}, true); e != nil {
+	if e = s.Directory().SetAssignment(ctx, "alice", identity.MemberRole, identity.Principal{Type: directory.PrincipalUser, ID: "carol"}, true); e != nil {
 		t.Fatal(e)
 	}
-	if e = s.Directory().SetAssignment(ctx, "alice", role.ID, identity.Principal{Type: "user", ID: "carol"}, false); e != nil {
+	if e = s.Directory().SetAssignment(ctx, "alice", role.ID, identity.Principal{Type: directory.PrincipalUser, ID: "carol"}, false); e != nil {
 		t.Fatal(e)
 	}
 	curator := (&API{DMS: s, Auth: auth.Development{Token: testToken, Subject: "carol"}, Logger: slog.Default()}).Handler()
 	res := request(curator, "POST", "/v1/fields", `{"key":"code","label":"Code","type":"text"}`, testToken, "", "application/json")
-	var field ent.FieldDefinition
+	var field catalog.FieldDefinition
 	if res.Code != 201 || json.Unmarshal(res.Body.Bytes(), &field) != nil || res.Header().Get("ETag") != `"1"` {
 		t.Fatal(res.Code, res.Body.String())
 	}
 	res = request(curator, "POST", "/v1/content-types", fmt.Sprintf(`{"key":"invoice","name":"Invoice","field_ids":[%q]}`, field.ID), testToken, "", "application/json")
-	var typ ent.ContentType
+	var typ catalog.ContentType
 	if res.Code != 201 || json.Unmarshal(res.Body.Bytes(), &typ) != nil {
 		t.Fatal(res.Code, res.Body.String())
 	}
@@ -72,8 +74,8 @@ func TestOrganizationContentTypeAPISharingAndScopeRevocation(t *testing.T) {
 	if res.Code != 412 {
 		t.Fatal(res.Code, res.Body.String())
 	}
-	for _, c := range []*ent.Resource{a, b} {
-		live, e := s.Client.Resource.Get(ctx, c.ID)
+	for _, c := range []*resources.Resource{a, b} {
+		live, e := s.DAL.Resources().Resource(ctx, c.ID)
 		if e != nil || live.Version != c.Version+1 {
 			t.Fatal(live, e)
 		}
@@ -91,7 +93,7 @@ func TestOrganizationContentTypeAPISharingAndScopeRevocation(t *testing.T) {
 		t.Fatal("organization feed missing catalog events", res.Code, res.Body.String())
 	}
 	// Current role assignments are checked on every request, including catalog reads.
-	if e = s.Directory().SetAssignment(ctx, "alice", role.ID, identity.Principal{Type: "user", ID: "carol"}, true); e != nil {
+	if e = s.Directory().SetAssignment(ctx, "alice", role.ID, identity.Principal{Type: directory.PrincipalUser, ID: "carol"}, true); e != nil {
 		t.Fatal(e)
 	}
 	for _, path := range []string{"/v1/content-types", "/v1/fields", "/v1/content-types/" + typ.ID, "/v1/audit"} {

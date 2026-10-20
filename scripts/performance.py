@@ -184,7 +184,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="papergo-performance-") as temp:
         directory = Path(temp)
         dbpath = directory / "papergo.db"
-        subprocess.run([str(args.admin), "initialize", "--database", str(dbpath), "--schema", str(ROOT / "migrations")],
+        subprocess.run([str(args.admin), "initialize", "--database", str(dbpath)],
                        cwd=ROOT, env=env, check=True, stdout=subprocess.DEVNULL)
         with socket.socket() as listener:
             listener.bind(("127.0.0.1", 0))

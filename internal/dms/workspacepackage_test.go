@@ -6,16 +6,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"papergo/ent/workflowtrigger"
+	"papergo/internal/dal/refs"
+	"papergo/internal/dal/resources"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
-	"papergo/ent"
-	"papergo/ent/identityuser"
-	"papergo/ent/resource"
-	"papergo/ent/workflow"
-	"papergo/ent/workflowversion"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/directory"
+	"papergo/internal/dal/revisions"
+	"papergo/internal/dal/workflows"
 	"papergo/internal/identity"
 	"papergo/internal/model"
 	"papergo/internal/storage"
@@ -115,13 +116,6 @@ func TestWorkspacePackageRoundTripIntoPopulatedInstance(t *testing.T) {
 	if _, err = s.AttachBlob(ctx, "alice", doc.Item.ID, latest(t, s, doc.Item.ID).Version, BlobInput{ObjectKey: second.Key, Filename: "receipt-v2.pdf", ContentType: "application/pdf", Size: second.Size, SHA256: second.SHA256}); err != nil {
 		t.Fatal(err)
 	}
-	textObject, err := store.Put(ctx, strings.NewReader(`{"pages":[{"page":1,"text":"Receipt version 2","ocr":true}]}`), 1<<20)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = s.SaveBlobText(ctx, BlobTextInput{SHA256: second.SHA256, Settings: "ocr", ObjectKey: textObject.Key, ObjectSize: textObject.Size, ObjectSHA256: textObject.SHA256, Pages: 1, Chars: 17, OCRPages: 1, Language: "english", Extractor: "test"}); err != nil {
-		t.Fatal(err)
-	}
 	if _, err = s.Link(ctx, "alice", item.ID, CreateRelationship{TargetID: doc.Item.ID}); err != nil {
 		t.Fatal(err)
 	}
@@ -138,28 +132,24 @@ func TestWorkspacePackageRoundTripIntoPopulatedInstance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = s.Directory().SetMember(ctx, "organization-admin", staff.ID, identity.Principal{Type: "user", ID: "bob"}, false); err != nil {
+	if err = s.Directory().SetMember(ctx, "organization-admin", staff.ID, identity.Principal{Type: directory.PrincipalUser, ID: "bob"}, false); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = s.SetPermissions(ctx, "alice", invoices.ID, latest(t, s, invoices.ID).Version, Permissions{Grants: []Permission{{"user", "alice", "manage", "allow"}, {"group", staff.ID, "write", "allow"}}}); err != nil {
 		t.Fatal(err)
 	}
 	// A workflow references a collection, a term, and a group inside JSON.
-	var flow *ent.Workflow
+	var flow workflows.Workflow
 	if err = s.Write(ctx, func(tx *Service) error {
+		definition, _ := json.Marshal(map[string]any{"triggers": []any{map[string]any{"type": "item.created", "collection_id": invoices.ID, "terms": []string{term.ID}}, map[string]any{"type": "schedule", "collection_id": invoices.ID, "cron": "0 12 * * *", "time_zone": "Europe/Madrid"}}, "flow": map[string]any{"start": "done", "nodes": map[string]any{"done": map[string]any{"activity": "end"}}}, "variables": map[string]any{"assignee": "group:" + staff.ID}})
+		parameters, _ := json.Marshal(map[string]any{"list": invoices.ID})
 		var err error
-		flow, err = tx.Client.Workflow.Create().SetAutomaticEnabled(true).SetWorkspaceID(ws.ID).SetKey("copy-test").SetName("Copy test").SetCurrentVersion(1).SetCreatedBy("alice").SetUpdatedBy("alice").SetParameters(map[string]any{"list": invoices.ID}).Save(ctx)
+		flow, err = tx.DAL.Workflows().Create(ctx, workflows.CreateInput{AutomaticEnabled: true, WorkspaceID: ws.ID, Key: "copy-test", Name: "Copy test", CreatedBy: "alice", Parameters: parameters, Definition: definition})
 		if err != nil {
 			return err
 		}
-		definition, _ := json.Marshal(map[string]any{"triggers": []any{map[string]any{"type": "item.created", "collection_id": invoices.ID, "terms": []string{term.ID}}, map[string]any{"type": "schedule", "collection_id": invoices.ID, "cron": "0 12 * * *", "time_zone": "Europe/Madrid"}}, "flow": map[string]any{"start": "done", "nodes": map[string]any{"done": map[string]any{"activity": "end"}}}, "variables": map[string]any{"assignee": "group:" + staff.ID}})
-		if err = tx.Client.WorkflowVersion.Create().SetWorkflowID(flow.ID).SetNumber(1).SetDefinition(definition).SetCreatedBy("alice").Exec(ctx); err != nil {
-			return err
-		}
-		if err = tx.Client.WorkflowTrigger.Create().SetWorkflowID(flow.ID).SetWorkspaceID(ws.ID).SetCollectionID(invoices.ID).SetType("item.created").SetPosition(0).Exec(ctx); err != nil {
-			return err
-		}
-		return tx.Client.WorkflowTrigger.Create().SetWorkflowID(flow.ID).SetWorkspaceID(ws.ID).SetCollectionID(invoices.ID).SetType("schedule").SetPosition(1).SetNextAt(time.Now().UTC().Add(-24 * time.Hour)).Exec(ctx)
+		due := time.Now().UTC().Add(-24 * time.Hour)
+		return tx.DAL.Workflows().ReplaceTriggers(ctx, flow.ID, []workflows.TriggerInput{{CollectionID: invoices.ID, Type: "item.created", Position: 0}, {CollectionID: invoices.ID, Type: "schedule", Position: 1, NextAt: &due}})
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +170,7 @@ func TestWorkspacePackageRoundTripIntoPopulatedInstance(t *testing.T) {
 			}
 			object, manifest := exportWorkspaceForTest(t, s, store, ExportOptions{WorkspaceID: ws.ID, IncludeData: &include})
 			raw, _ := json.Marshal(manifest)
-			for _, excluded := range []string{"Unrelated secret", "Personal excluded", "identity_rest_tokens"} {
+			for _, excluded := range []string{"Unrelated secret", "Personal excluded", "access_tokens"} {
 				if bytes.Contains(raw, []byte(excluded)) {
 					t.Fatal("unrelated state in workspace package", excluded)
 				}
@@ -196,16 +186,16 @@ func TestWorkspacePackageRoundTripIntoPopulatedInstance(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			var org string
-			if err = target.db.QueryRowContext(ctx, "SELECT display_name FROM identity_organizations").Scan(&org); err != nil {
+			org, err := target.DAL.Directory().Organization(ctx)
+			if err != nil {
 				t.Fatal(err)
 			}
-			before, _ := target.Client.Resource.Query().Count(ctx)
+			before, _ := countResources(target, resources.Filter{})
 			plan, err := importWorkspaceForTest(t, target, store, object, true, "Copied Finance")
 			if err != nil || !plan.Valid || !plan.DryRun {
 				t.Fatal("dry run", plan, err)
 			}
-			after, _ := target.Client.Resource.Query().Count(ctx)
+			after, _ := countResources(target, resources.Filter{})
 			if after != before {
 				t.Fatal("dry run wrote resources")
 			}
@@ -217,11 +207,10 @@ func TestWorkspacePackageRoundTripIntoPopulatedInstance(t *testing.T) {
 			if err != nil || current.Version != original.Version || current.Name != original.Name {
 				t.Fatal("changed target workspace", current, err)
 			}
-			var targetOrg string
-			if err = target.db.QueryRowContext(ctx, "SELECT display_name FROM identity_organizations").Scan(&targetOrg); err != nil || org != targetOrg {
+			if targetOrg, err := target.DAL.Directory().Organization(ctx); err != nil || org.DisplayName != targetOrg.DisplayName {
 				t.Fatal("changed target organization", err)
 			}
-			collections, err := target.Client.Resource.Query().Where(resource.WorkspaceIDEQ(result.WorkspaceID), resource.KindIn(resource.KindList, resource.KindLibrary)).All(ctx)
+			collections, err := target.DAL.Resources().Resources(ctx, resources.Filter{WorkspaceID: result.WorkspaceID, Kinds: []refs.ResourceKind{refs.KindList, refs.KindLibrary}})
 			if err != nil || len(collections) != 3 {
 				t.Fatal(collections, err)
 			}
@@ -243,27 +232,29 @@ func TestWorkspacePackageRoundTripIntoPopulatedInstance(t *testing.T) {
 					t.Fatal("lookup container not remapped", def)
 				}
 			}
-			copiedFlow, err := target.Client.Workflow.Query().Where(workflow.WorkspaceIDEQ(result.WorkspaceID), workflow.KeyEQ("copy-test")).Only(ctx)
-			if err != nil {
-				t.Fatal(err)
+			copied, err := target.DAL.Workflows().List(ctx, workflows.Filter{WorkspaceID: result.WorkspaceID, Key: "copy-test"})
+			if err != nil || len(copied) != 1 {
+				t.Fatal(copied, err)
 			}
-			version, err := target.Client.WorkflowVersion.Query().Where(workflowversion.WorkflowIDEQ(copiedFlow.ID)).Only(ctx)
-			if err != nil {
-				t.Fatal(err)
+			copiedFlow := copied[0]
+			versions, err := target.DAL.Workflows().Versions(ctx, copiedFlow.ID)
+			if err != nil || len(versions) != 1 {
+				t.Fatal(versions, err)
 			}
+			version := versions[0]
 			if bytes.Contains(version.Definition, []byte(invoices.ID)) || bytes.Contains(version.Definition, []byte(term.ID)) || bytes.Contains(version.Definition, []byte(staff.ID)) || !bytes.Contains(version.Definition, []byte(copiedInvoices)) {
 				t.Fatal("workflow references not remapped", string(version.Definition))
 			}
-			scheduled, err := target.Client.WorkflowTrigger.Query().Where(workflowtrigger.WorkflowIDEQ(copiedFlow.ID), workflowtrigger.TypeEQ("schedule")).Only(ctx)
-			if err != nil || scheduled.NextAt == nil || !scheduled.NextAt.After(time.Now().UTC()) {
+			scheduled, err := target.DAL.Workflows().Triggers(ctx, workflows.TriggerFilter{WorkflowID: copiedFlow.ID, Type: "schedule"})
+			if err != nil || len(scheduled) != 1 || scheduled[0].NextAt == nil || !scheduled[0].NextAt.After(time.Now().UTC()) {
 				t.Fatal("schedule cursor not rebuilt", scheduled, err)
 			}
-			count, err := target.Client.Resource.Query().Where(resource.WorkspaceIDEQ(result.WorkspaceID), resource.KindEQ(resource.KindItem)).Count(ctx)
+			count, err := countResources(target, resources.Filter{WorkspaceID: result.WorkspaceID, Kinds: []refs.ResourceKind{refs.KindItem}})
 			if err != nil || (include && count != 3) || (!include && count != 0) {
 				t.Fatal("content selection", count, err)
 			}
 			if include {
-				invoice, err := target.Client.Resource.Query().Where(resource.WorkspaceIDEQ(result.WorkspaceID), resource.NameEQ("Invoice")).Only(ctx)
+				invoice, err := target.DAL.Resources().One(ctx, resources.Filter{WorkspaceID: result.WorkspaceID, Name: "Invoice"})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -295,7 +286,7 @@ func TestWorkspacePackageRoundTripIntoPopulatedInstance(t *testing.T) {
 				if _, err = target.Get(ctx, "alice", vendorID); err != nil {
 					t.Fatal("lookup does not resolve", err)
 				}
-				receipt, err := target.Client.Resource.Query().Where(resource.WorkspaceIDEQ(result.WorkspaceID), resource.NameEQ("Receipt")).Only(ctx)
+				receipt, err := target.DAL.Resources().One(ctx, resources.Filter{WorkspaceID: result.WorkspaceID, Name: "Receipt"})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -318,11 +309,11 @@ func TestWorkspacePackageRoundTripIntoPopulatedInstance(t *testing.T) {
 				}
 			}
 			// Repeating without a new name cannot duplicate a workspace.
-			before, _ = target.Client.Resource.Query().Count(ctx)
+			before, _ = countResources(target, resources.Filter{})
 			if _, err = importWorkspaceForTest(t, target, store, object, false, "Copied Finance"); err == nil {
 				t.Fatal("duplicate workspace accepted")
 			}
-			after, _ = target.Client.Resource.Query().Count(ctx)
+			after, _ = countResources(target, resources.Filter{})
 			if before != after {
 				t.Fatal("failed import changed resources")
 			}
@@ -379,7 +370,7 @@ func TestWorkspacePackageAccountsConflictsAndUntrustedManifest(t *testing.T) {
 	if err = s.Directory().EnsureUser(ctx, "source-admin"); err != nil {
 		t.Fatal(err)
 	}
-	if err = s.Directory().SetAssignment(ctx, "organization-admin", identity.AdministratorRole, identity.Principal{Type: "user", ID: "source-admin"}, false); err != nil {
+	if err = s.Directory().SetAssignment(ctx, "organization-admin", identity.AdministratorRole, identity.Principal{Type: directory.PrincipalUser, ID: "source-admin"}, false); err != nil {
 		t.Fatal(err)
 	}
 	if err = s.SetWorkspaceMember(ctx, "alice", ws.ID, WorkspaceMember{Subject: "source-admin", Role: "owner"}); err != nil {
@@ -439,15 +430,15 @@ func TestWorkspacePackageAccountsConflictsAndUntrustedManifest(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, dry := range []bool{true, false} {
-			before, _ := target.Client.Resource.Query().Count(ctx)
+			before, _ := countResources(target, resources.Filter{})
 			if _, err = importWorkspaceForTest(t, target, store, object, dry, "Copied"); err == nil || !strings.Contains(err.Error(), "conflicts") {
 				t.Fatal("conflict accepted", err)
 			}
-			after, _ := target.Client.Resource.Query().Count(ctx)
+			after, _ := countResources(target, resources.Filter{})
 			if after != before {
 				t.Fatal("conflict changed resources")
 			}
-			if exists, _ := target.Client.IdentityUser.Query().Where(identityuser.IDEQ("source-admin")).Exist(ctx); exists {
+			if _, err := target.DAL.Directory().User(ctx, "source-admin"); err == nil {
 				t.Fatal("failed import created a user")
 			}
 		}
@@ -496,7 +487,7 @@ func TestWorkspacePackageAccountsConflictsAndUntrustedManifest(t *testing.T) {
 			if _, err = importWorkspaceForTest(t, target, store, bad, false, ""); err == nil {
 				t.Fatal("untrusted graph accepted")
 			}
-			if count, _ := target.Client.Resource.Query().Count(ctx); count != 0 {
+			if count, _ := countResources(target, resources.Filter{}); count != 0 {
 				t.Fatal("invalid graph wrote resources")
 			}
 		})
@@ -551,13 +542,13 @@ func TestWorkspacePackageTemplateTypesAndLiteralDefaults(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			before, _ := target.Client.Resource.Query().Count(ctx)
+			before, _ := countResources(target, resources.Filter{})
 			result, err := importWorkspaceForTest(t, target, store, object, false, "Copy")
 			if conflict {
 				if err == nil || !strings.Contains(err.Error(), "conflicts") {
 					t.Fatal("customized target overwritten", err)
 				}
-				after, _ := target.Client.Resource.Query().Count(ctx)
+				after, _ := countResources(target, resources.Filter{})
 				if before != after {
 					t.Fatal("conflict partially imported")
 				}
@@ -566,7 +557,7 @@ func TestWorkspacePackageTemplateTypesAndLiteralDefaults(t *testing.T) {
 			if err != nil || !result.Valid {
 				t.Fatal(result, err)
 			}
-			copied, err := target.Client.Resource.Query().Where(resource.WorkspaceIDEQ(result.WorkspaceID), resource.NameEQ("Contacts")).Only(ctx)
+			copied, err := target.DAL.Resources().One(ctx, resources.Filter{WorkspaceID: result.WorkspaceID, Name: "Contacts"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -594,7 +585,7 @@ func TestWorkspacePackageTemplateTypesAndLiteralDefaults(t *testing.T) {
 	if err != nil || !result.Valid {
 		t.Fatal(result, err)
 	}
-	copied, err := target.Client.Resource.Query().Where(resource.WorkspaceIDEQ(result.WorkspaceID), resource.NameEQ("Contacts")).Only(ctx)
+	copied, err := target.DAL.Resources().One(ctx, resources.Filter{WorkspaceID: result.WorkspaceID, Name: "Contacts"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -614,7 +605,7 @@ func TestWorkspacePackageTemplateTypesAndLiteralDefaults(t *testing.T) {
 	if !found {
 		t.Fatal("literal field missing")
 	}
-	if _, err := target.Client.IdentityUser.Get(ctx, "default-person-only"); err != nil {
+	if _, err := target.DAL.Directory().User(ctx, "default-person-only"); err != nil {
 		t.Fatal("person default dependency was not copied", err)
 	}
 }
@@ -637,7 +628,7 @@ func TestConfigurationPackageScopeAndContentConsistency(t *testing.T) {
 	if err != nil || !result.Valid {
 		t.Fatal(result, err)
 	}
-	if count, _ := target.Client.Resource.Query().Count(ctx); count != 2 {
+	if count, _ := countResources(target, resources.Filter{}); count != 2 {
 		t.Fatal("configuration not imported", count)
 	}
 	defaultValue, _ := json.Marshal(item.ID)
@@ -691,31 +682,38 @@ func TestWorkspacePackageCollectedPublicationRevision(t *testing.T) {
 			if _, err = s.Update(ctx, "alice", library.ID, latest(t, s, library.ID).Version, UpdateResource{PublishingEnabled: ptr(false)}); err != nil {
 				t.Fatal(err)
 			}
-			if err = s.Client.DomainEvent.Update().SetDispatchedAt(time.Now().UTC()).Exec(ctx); err != nil {
+			if err = dispatchAll(ctx, s.DAL); err != nil {
 				t.Fatal(err)
 			}
 			if err = s.CollectRevisions(ctx); err != nil {
 				t.Fatal(err)
 			}
-			if _, err = s.Client.ItemRevision.Get(ctx, *published.RevisionID); !ent.IsNotFound(err) {
+			if _, err = s.revision(ctx, *published.RevisionID); !dberr.IsNotFound(err) {
 				t.Fatal("published revision was not collected", err)
+			}
+			source := findPublication(t, s, published.ID)
+			if source.RevisionID != nil || !sameDocument(t, source.Snapshot, published.Snapshot) {
+				t.Fatal("collection did not detach the publication while preserving its snapshot", source)
 			}
 			object, manifest := exportWorkspaceForTest(t, s, store, ExportOptions{WorkspaceID: ws.ID})
 			found := false
 			for _, row := range packageMaps(manifest.Tables["publications"]) {
 				if row["id"] == published.ID {
 					found = true
-					if row["revision_id"] != nil || row["snapshot"] != string(published.Snapshot) {
-						t.Fatal("export did not detach the collected revision while preserving the snapshot", row)
+					var snapshot, want any
+					if err = json.Unmarshal([]byte(fmt.Sprint(row["snapshot"])), &snapshot); err != nil {
+						t.Fatal(err)
+					}
+					if err = json.Unmarshal(published.Snapshot, &want); err != nil {
+						t.Fatal(err)
+					}
+					if row["revision_id"] != nil || !reflect.DeepEqual(snapshot, want) {
+						t.Fatal("export did not carry the detached publication's snapshot", row)
 					}
 				}
 			}
 			if !found {
 				t.Fatal("publication missing from package")
-			}
-			source, err := s.Client.Publication.Get(ctx, published.ID)
-			if err != nil || source.RevisionID == nil || *source.RevisionID != *published.RevisionID || !bytes.Equal(source.Snapshot, published.Snapshot) {
-				t.Fatal("export changed the source publication", source, err)
 			}
 			target, _, _ := fixture(t)
 			for _, dry := range []bool{true, false} {
@@ -724,7 +722,7 @@ func TestWorkspacePackageCollectedPublicationRevision(t *testing.T) {
 					t.Fatal("import", result, err)
 				}
 			}
-			publications, err := target.Client.Publication.Query().All(ctx)
+			publications, err := target.DAL.Revisions().Publications(ctx, revisions.PublicationFilter{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -739,7 +737,7 @@ func TestWorkspacePackageCollectedPublicationRevision(t *testing.T) {
 				}
 				found = true
 				values := snapshot["values"].(map[string]any)
-				copiedVendor, e := target.Client.Resource.Get(ctx, fmt.Sprint(values["vendor"]))
+				copiedVendor, e := target.DAL.Resources().Resource(ctx, fmt.Sprint(values["vendor"]))
 				if e != nil || copiedVendor.Name != vendor.Name || copiedVendor.ID == vendor.ID || values["memo"] != vendor.ID || event.RevisionID != nil {
 					t.Fatal("snapshot references or literal values were not preserved", event, snapshot, copiedVendor, e)
 				}

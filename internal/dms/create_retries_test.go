@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"papergo/ent/auditevent"
-	"papergo/ent/domainevent"
+	auditstore "papergo/internal/dal/audit"
+	eventstore "papergo/internal/dal/events"
 )
 
 func TestCreateRetryReturnsCurrentItemWithoutMutation(t *testing.T) {
@@ -33,10 +33,10 @@ func TestCreateRetryReturnsCurrentItemWithoutMutation(t *testing.T) {
 	if revisionCount(t, s, id) != before {
 		t.Fatal("retry appended revision")
 	}
-	if n, err := s.Client.AuditEvent.Query().Where(auditevent.ResourceIDEQ(id), auditevent.ActionEQ("resource.create")).Count(testContext); err != nil || n != 1 {
+	if n, err := s.DAL.Audit().Count(testContext, auditstore.Filter{ResourceID: id, Action: "resource.create"}); err != nil || n != 1 {
 		t.Fatal("duplicate audit", n, err)
 	}
-	if n, err := s.Client.DomainEvent.Query().Where(domainevent.ResourceIDEQ(id), domainevent.TypeEQ(EventItemCreated)).Count(testContext); err != nil || n != 1 {
+	if n, err := s.DAL.Events().Count(testContext, eventstore.Filter{ResourceID: id, Types: []string{EventItemCreated}}); err != nil || n != 1 {
 		t.Fatal("duplicate event", n, err)
 	}
 }

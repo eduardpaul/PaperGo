@@ -4,15 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"papergo/ent"
-	"papergo/ent/fielddefinition"
-	"papergo/ent/operation"
+	auditstore "papergo/internal/dal/audit"
+	"papergo/internal/dal/catalog"
+	"papergo/internal/dal/operations"
+	"papergo/internal/dal/resources"
 	"papergo/internal/model"
 	"sync"
 	"testing"
 )
 
-func sharedTypeFixture(t *testing.T) (*Service, *ent.Resource, *ent.Resource, *ent.ContentType, *ent.FieldDefinition) {
+func sharedTypeFixture(t *testing.T) (*Service, *resources.Resource, *resources.Resource, *catalog.ContentType, *catalog.FieldDefinition) {
 	t.Helper()
 	s, _, a := fixture(t)
 	ctx := context.Background()
@@ -33,7 +34,7 @@ func sharedTypeFixture(t *testing.T) (*Service, *ent.Resource, *ent.Resource, *e
 		t.Fatal(e)
 	}
 	for _, v := range []struct {
-		r           *ent.Resource
+		r           *resources.Resource
 		subject     string
 		defaultType bool
 	}{{a, "alice", true}, {b, "bob", false}} {
@@ -65,14 +66,14 @@ func TestSharedContentTypeAttachmentConflictsAndDefaultIsolation(t *testing.T) {
 	if live, e := s.GetContentType(ctx, "bob", typ.ID); e != nil || live.Version != typ.Version {
 		t.Fatal("default changed catalog definition", live, e)
 	}
-	count, e := s.Client.AuditEvent.Query().Count(ctx)
+	count, e := s.DAL.Audit().Count(ctx, auditstore.Filter{})
 	if e != nil {
 		t.Fatal(e)
 	}
 	if same, e := s.AttachContentType(ctx, "bob", b.ID, changed.Version, AttachContentTypeInput{ContentTypeID: typ.ID, IsDefault: true}); e != nil || same.Version != changed.Version {
 		t.Fatal("attachment retry changed schema", same, e)
 	}
-	if n, e := s.Client.AuditEvent.Query().Count(ctx); e != nil || n != count {
+	if n, e := s.DAL.Audit().Count(ctx, auditstore.Filter{}); e != nil || n != count {
 		t.Fatal("attachment retry wrote audit", n, e)
 	}
 	other, e := s.CreateCatalogField(ctx, "alice", CreateField{Key: d.Key, Label: "Different code", Type: "integer"})
@@ -104,7 +105,7 @@ func TestSharedFieldRemovalChecksRemoteViewsAndRetainsHistory(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	rev, e := s.Client.ItemRevision.Get(ctx, *r.HeadRevisionID)
+	rev, e := s.revision(ctx, *r.HeadRevisionID)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -123,8 +124,8 @@ func TestSharedFieldRemovalChecksRemoteViewsAndRetainsHistory(t *testing.T) {
 	if _, e = s.UpdateContentType(ctx, "alice", typ.ID, typ.Version, ContentTypeInput{Name: typ.Name, FieldIds: []string{}}); !isValidation(e) {
 		t.Fatal("membership removal ignored remote view", e)
 	}
-	for _, before := range []*ent.Resource{beforeA, beforeB} {
-		after, e := s.Client.Resource.Get(ctx, before.ID)
+	for _, before := range []*resources.Resource{beforeA, beforeB} {
+		after, e := s.DAL.Resources().Resource(ctx, before.ID)
 		if e != nil || after.Version != before.Version {
 			t.Fatal("failed removal changed collection", after, e)
 		}
@@ -135,13 +136,13 @@ func TestSharedFieldRemovalChecksRemoteViewsAndRetainsHistory(t *testing.T) {
 	if e = s.DeleteCatalogField(ctx, "alice", d.ID, d.Version); e != nil {
 		t.Fatal(e)
 	}
-	for _, c := range []*ent.Resource{a, b} {
+	for _, c := range []*resources.Resource{a, b} {
 		defs, e := s.collectionFields(ctx, c.ID)
 		if e != nil || len(defs) != 0 {
 			t.Fatal("removed field remains live", defs, e)
 		}
 	}
-	history, e := s.Client.SchemaRevision.Get(ctx, rev.SchemaRevisionID)
+	history, e := s.DAL.Catalog().Schema(ctx, rev.SchemaRevisionID)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -202,12 +203,12 @@ func TestConcurrentSharedContentTypeUpdatesHaveOneAtomicWinner(t *testing.T) {
 	if e != nil || current.Version != typ.Version+1 {
 		t.Fatal(current, e)
 	}
-	for _, before := range []*ent.Resource{beforeA, beforeB} {
-		after, e := s.Client.Resource.Get(ctx, before.ID)
+	for _, before := range []*resources.Resource{beforeA, beforeB} {
+		after, e := s.DAL.Resources().Resource(ctx, before.ID)
 		if e != nil || after.Version != before.Version+1 {
 			t.Fatal("fan-out was not atomic", after, e)
 		}
-		schema, e := s.Client.SchemaRevision.Get(ctx, *after.SchemaHeadID)
+		schema, e := s.DAL.Catalog().Schema(ctx, *after.SchemaHeadID)
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -239,7 +240,7 @@ func TestTemplateAdoptionUpdatesSharedFieldsAndRollsBackRemoteRequirements(t *te
 	if _, e = s.ApplyTemplate(ctx, "alice", a.ID, tpl.ID, latest(t, s, a.ID).Version, tpl.Version, typ.ID); e != nil {
 		t.Fatal(e)
 	}
-	for _, c := range []*ent.Resource{a, b} {
+	for _, c := range []*resources.Resource{a, b} {
 		defs, e := s.collectionFields(ctx, c.ID)
 		if e != nil || len(defs) != 1 || defs[0].ID != d.ID || defs[0].Label != "Shared code" {
 			t.Fatal("template forked the shared field", defs, e)
@@ -250,7 +251,7 @@ func TestTemplateAdoptionUpdatesSharedFieldsAndRollsBackRemoteRequirements(t *te
 	if e != nil {
 		t.Fatal(e)
 	}
-	d, e = s.Client.FieldDefinition.Get(ctx, d.ID)
+	d, e = s.DAL.Catalog().Field(ctx, d.ID)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -261,12 +262,12 @@ func TestTemplateAdoptionUpdatesSharedFieldsAndRollsBackRemoteRequirements(t *te
 	if _, e = s.ApplyTemplate(ctx, "alice", a.ID, strict.ID, beforeA.Version, strict.Version, typ.ID); !isValidation(e) {
 		t.Fatal("template ignored remote missing value", e)
 	}
-	live, e := s.Client.FieldDefinition.Get(ctx, d.ID)
+	live, e := s.DAL.Catalog().Field(ctx, d.ID)
 	if e != nil || live.Version != d.Version || live.Required || live.Label != d.Label {
 		t.Fatal("template definition escaped rollback", live, e)
 	}
-	for _, before := range []*ent.Resource{beforeA, beforeB} {
-		after, e := s.Client.Resource.Get(ctx, before.ID)
+	for _, before := range []*resources.Resource{beforeA, beforeB} {
+		after, e := s.DAL.Resources().Resource(ctx, before.ID)
 		if e != nil || after.Version != before.Version || *after.SchemaHeadID != *before.SchemaHeadID {
 			t.Fatal("template schema escaped rollback", after, e)
 		}
@@ -277,7 +278,7 @@ func TestSharedFieldUniquenessRollsBackAllCollectionClaims(t *testing.T) {
 	s, a, b, typ, d := sharedTypeFixture(t)
 	ctx := context.Background()
 	for _, v := range []struct {
-		c             *ent.Resource
+		c             *resources.Resource
 		subject, name string
 	}{{a, "alice", "One"}, {b, "bob", "Two"}, {b, "bob", "Duplicate"}} {
 		if _, e := s.Create(ctx, v.subject, v.c.ID, CreateResource{Kind: "item", Name: v.name, ContentTypeID: typ.ID, Values: map[string]any{"code": "A"}}); e != nil {
@@ -295,17 +296,17 @@ func TestSharedFieldUniquenessRollsBackAllCollectionClaims(t *testing.T) {
 	if _, e = s.UpdateCatalogField(ctx, "alice", d.ID, d.Version, UpdateField{Indexed: &indexed, Options: &opts}); !errors.Is(e, ErrConflict) {
 		t.Fatal("remote duplicate was accepted", e)
 	}
-	if claims, e := s.Client.BusinessKey.Query().Count(ctx); e != nil || claims != 0 {
+	if claims, e := keyCount(s, catalog.KeyFilter{}); e != nil || claims != 0 {
 		t.Fatal("key claims escaped rollback", claims, e)
 	}
-	if ops, e := s.Client.Operation.Query().Count(ctx); e != nil || ops != 0 {
+	if ops, e := s.DAL.Operations().Count(ctx, operations.Filter{}); e != nil || ops != 0 {
 		t.Fatal("index operations escaped rollback", ops, e)
 	}
-	if live, e := s.Client.FieldDefinition.Get(ctx, d.ID); e != nil || live.Version != d.Version || live.Options.Unique || live.Indexed {
+	if live, e := s.DAL.Catalog().Field(ctx, d.ID); e != nil || live.Version != d.Version || live.Options.Unique || live.Indexed {
 		t.Fatal("field definition escaped rollback", live, e)
 	}
-	for _, before := range []*ent.Resource{beforeA, beforeB} {
-		after, e := s.Client.Resource.Get(ctx, before.ID)
+	for _, before := range []*resources.Resource{beforeA, beforeB} {
+		after, e := s.DAL.Resources().Resource(ctx, before.ID)
 		if e != nil || after.Version != before.Version {
 			t.Fatal("schema escaped rollback", after, e)
 		}
@@ -326,7 +327,7 @@ func TestSharedContentTypeSurvivesOriginWorkspaceDeletion(t *testing.T) {
 	if current, e := s.GetContentType(ctx, "bob", typ.ID); e != nil || current.ID != typ.ID {
 		t.Fatal("catalog was owned by deleted workspace", current, e)
 	}
-	deleted, e := s.Client.Resource.Get(ctx, a.ID)
+	deleted, e := s.DAL.Resources().Resource(ctx, a.ID)
 	if e != nil || deleted.DeletedAt == nil {
 		t.Fatal(deleted, e)
 	}
@@ -338,7 +339,7 @@ func TestSharedContentTypeSurvivesOriginWorkspaceDeletion(t *testing.T) {
 	if e != nil || live.Version != beforeB.Version+1 {
 		t.Fatal("remaining attachment stopped receiving edits", live, e)
 	}
-	if after, e := s.Client.Resource.Get(ctx, a.ID); e != nil || after.Version != deleted.Version || *after.SchemaHeadID != *deleted.SchemaHeadID {
+	if after, e := s.DAL.Resources().Resource(ctx, a.ID); e != nil || after.Version != deleted.Version || *after.SchemaHeadID != *deleted.SchemaHeadID {
 		t.Fatal("deleted collection schema changed", after, e)
 	}
 	defs, e := s.Fields(ctx, "bob", b.ID)
@@ -350,9 +351,9 @@ func TestSharedContentTypeSurvivesOriginWorkspaceDeletion(t *testing.T) {
 func TestSharedContentTypesLiveFieldsDefaultsAndFrozenHistory(t *testing.T) {
 	s, a, b, typ, d := sharedTypeFixture(t)
 	ctx := context.Background()
-	var items []*ent.Resource
+	var items []*resources.Resource
 	for i, v := range []struct {
-		r       *ent.Resource
+		r       *resources.Resource
 		subject string
 	}{{a, "alice"}, {b, "bob"}} {
 		r, e := s.Create(ctx, v.subject, v.r.ID, CreateResource{Kind: "item", Name: "Invoice", ContentTypeID: typ.ID, Values: map[string]any{"code": "A"}})
@@ -375,11 +376,11 @@ func TestSharedContentTypesLiveFieldsDefaultsAndFrozenHistory(t *testing.T) {
 	if e != nil || *plain.ContentTypeID == typ.ID {
 		t.Fatal("default leaked between collections", plain, e)
 	}
-	old, e := s.Client.ItemRevision.Get(ctx, *items[1].PublishedRevisionID)
+	old, e := s.revision(ctx, *items[1].PublishedRevisionID)
 	if e != nil {
 		t.Fatal(e)
 	}
-	frozen, e := s.Client.SchemaRevision.Get(ctx, old.SchemaRevisionID)
+	frozen, e := s.DAL.Catalog().Schema(ctx, old.SchemaRevisionID)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -392,11 +393,11 @@ func TestSharedContentTypesLiveFieldsDefaultsAndFrozenHistory(t *testing.T) {
 	label := "Invoice code"
 	indexed := true
 	d, e = s.UpdateCatalogField(ctx, "alice", d.ID, d.Version, UpdateField{Label: &label, Indexed: &indexed})
-	if e != nil || d.IndexStatus != fielddefinition.IndexStatusBuilding {
+	if e != nil || d.IndexStatus != "building" {
 		t.Fatal(d, e)
 	}
 	for _, v := range []struct {
-		r       *ent.Resource
+		r       *resources.Resource
 		subject string
 		version int
 	}{{a, "alice", beforeA.Version}, {b, "bob", beforeB.Version}} {
@@ -417,13 +418,13 @@ func TestSharedContentTypesLiveFieldsDefaultsAndFrozenHistory(t *testing.T) {
 		if _, e = s.operationStep(ctx); e != nil {
 			t.Fatal(e)
 		}
-		finished, e := s.Client.Operation.Query().Where(operation.FieldIDEQ(d.ID), operation.StatusEQ(operation.StatusSucceeded)).Count(ctx)
+		finished, e := s.DAL.Operations().Count(ctx, operations.Filter{FieldID: d.ID, Statuses: []operations.Status{operations.StatusSucceeded}})
 		if e != nil {
 			t.Fatal(e)
 		}
 		if finished == 1 {
-			live, e := s.Client.FieldDefinition.Get(ctx, d.ID)
-			if e != nil || live.IndexStatus != fielddefinition.IndexStatusBuilding {
+			live, e := s.DAL.Catalog().Field(ctx, d.ID)
+			if e != nil || live.IndexStatus != "building" {
 				t.Fatal("ready before every collection completed", live, e)
 			}
 			break
@@ -436,7 +437,7 @@ func TestSharedContentTypesLiveFieldsDefaultsAndFrozenHistory(t *testing.T) {
 		t.Fatal(e)
 	}
 	for _, v := range []struct {
-		r       *ent.Resource
+		r       *resources.Resource
 		subject string
 	}{{a, "alice"}, {b, "bob"}} {
 		q, e := s.Query(ctx, v.subject, v.r.ID, QueryRequest{Query: QuerySpec{ContentTypeID: typ.ID, Filter: &FilterExpr{Field: "code", Value: json.RawMessage(`"A"`)}}})
@@ -444,7 +445,7 @@ func TestSharedContentTypesLiveFieldsDefaultsAndFrozenHistory(t *testing.T) {
 			t.Fatal(q, e)
 		}
 	}
-	frozen, e = s.Client.SchemaRevision.Get(ctx, old.SchemaRevisionID)
+	frozen, e = s.DAL.Catalog().Schema(ctx, old.SchemaRevisionID)
 	if e != nil || string(frozen.Definition) != saved {
 		t.Fatal("published schema was reinterpreted", e)
 	}
@@ -482,7 +483,7 @@ func TestSharedContentTypeValidationRollsBackEveryAttachment(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	count, e := s.Client.AuditEvent.Query().Count(ctx)
+	count, e := s.DAL.Audit().Count(ctx, auditstore.Filter{})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -490,17 +491,17 @@ func TestSharedContentTypeValidationRollsBackEveryAttachment(t *testing.T) {
 	if _, e = s.UpdateCatalogField(ctx, "alice", d.ID, d.Version, UpdateField{Required: &required}); !isValidation(e) {
 		t.Fatal("invalid remote head accepted", e)
 	}
-	live, e := s.Client.FieldDefinition.Get(ctx, d.ID)
+	live, e := s.DAL.Catalog().Field(ctx, d.ID)
 	if e != nil || live.Required || live.Version != d.Version {
 		t.Fatal("field change leaked", live, e)
 	}
-	for _, before := range []*ent.Resource{beforeA, beforeB} {
-		after, e := s.Client.Resource.Get(ctx, before.ID)
+	for _, before := range []*resources.Resource{beforeA, beforeB} {
+		after, e := s.DAL.Resources().Resource(ctx, before.ID)
 		if e != nil || after.Version != before.Version || *after.SchemaHeadID != *before.SchemaHeadID {
 			t.Fatal("schema change leaked", after, e)
 		}
 	}
-	if after, e := s.Client.AuditEvent.Query().Count(ctx); e != nil || after != count {
+	if after, e := s.DAL.Audit().Count(ctx, auditstore.Filter{}); e != nil || after != count {
 		t.Fatal("audit escaped rollback", after, e)
 	}
 	rules := []model.ValidationRule{{Key: "different", Field: "code", Op: "ne", OtherField: "code", Message: "Codes must differ"}}

@@ -4,9 +4,8 @@ import (
 	"context"
 	"time"
 
-	"papergo/ent"
-	"papergo/ent/blob"
-	"papergo/ent/itemrevision"
+	"papergo/internal/dal/blobs"
+	"papergo/internal/dal/dberr"
 	"papergo/internal/storage"
 )
 
@@ -28,14 +27,14 @@ func (s *Service) ReclaimBlob(ctx context.Context, subject, itemID, blobID strin
 		if _, e := t.canWriteFile(ctx, subject, itemID); e != nil {
 			return e
 		}
-		row, e := t.Client.Blob.Query().Where(blob.ItemIDEQ(itemID), blob.IDEQ(blobID)).Only(ctx)
-		if ent.IsNotFound(e) {
+		row, e := t.DAL.Blobs().ItemBlob(ctx, itemID, blobID)
+		if dberr.IsNotFound(e) {
 			return ErrNotFound
 		}
 		if e != nil {
 			return e
 		}
-		out, e = t.reclaimBlob(ctx, row)
+		out, e = t.reclaimBlob(ctx, &row)
 		return e
 	})
 	return out, err
@@ -43,30 +42,30 @@ func (s *Service) ReclaimBlob(ctx context.Context, subject, itemID, blobID strin
 
 // reclaimBlob shares the grace period and protection rules between explicit
 // reclamation and file replacement with collection versioning disabled.
-func (s *Service) reclaimBlob(ctx context.Context, row *ent.Blob) (ReclaimResult, error) {
-	if row.Availability == blob.AvailabilityReclaimed {
-		return ReclaimResult{BlobID: row.ID, Availability: string(blob.AvailabilityReclaimed)}, nil
+func (s *Service) reclaimBlob(ctx context.Context, row *blobs.Blob) (ReclaimResult, error) {
+	if row.Availability == blobs.AvailabilityReclaimed {
+		return ReclaimResult{BlobID: row.ID, Availability: string(blobs.AvailabilityReclaimed)}, nil
 	}
 	protected, reason, err := s.blobProtected(ctx, row)
 	if err != nil {
 		return ReclaimResult{}, err
 	}
 	if protected {
-		err = s.Client.Blob.UpdateOneID(row.ID).SetAvailability(blob.AvailabilityPending).ClearReclaimAfter().Exec(ctx)
-		return ReclaimResult{BlobID: row.ID, Availability: string(blob.AvailabilityPending), Deferred: true, Reason: reason}, err
+		_, err = s.DAL.Blobs().SetAvailability(ctx, row.ID, blobs.AvailabilityPending, nil)
+		return ReclaimResult{BlobID: row.ID, Availability: string(blobs.AvailabilityPending), Deferred: true, Reason: reason}, err
 	}
-	if row.Availability == blob.AvailabilityPending && row.ReclaimAfter != nil {
-		return ReclaimResult{BlobID: row.ID, Availability: string(blob.AvailabilityPending), ReclaimAfter: row.ReclaimAfter}, nil
+	if row.Availability == blobs.AvailabilityPending && row.ReclaimAfter != nil {
+		return ReclaimResult{BlobID: row.ID, Availability: string(blobs.AvailabilityPending), ReclaimAfter: row.ReclaimAfter}, nil
 	}
 	due := time.Now().UTC().Add(ObjectGracePeriod)
-	err = s.Client.Blob.UpdateOneID(row.ID).SetAvailability(blob.AvailabilityPending).SetReclaimAfter(due).Exec(ctx)
-	return ReclaimResult{BlobID: row.ID, Availability: string(blob.AvailabilityPending), ReclaimAfter: &due}, err
+	_, err = s.DAL.Blobs().SetAvailability(ctx, row.ID, blobs.AvailabilityPending, &due)
+	return ReclaimResult{BlobID: row.ID, Availability: string(blobs.AvailabilityPending), ReclaimAfter: &due}, err
 }
 
 // blobProtected reports why a file version's bytes must stay. The caller is
 // inside a transaction.
-func (s *Service) blobProtected(ctx context.Context, row *ent.Blob) (bool, string, error) {
-	item, err := s.Client.Resource.Get(ctx, row.ItemID)
+func (s *Service) blobProtected(ctx context.Context, row *blobs.Blob) (bool, string, error) {
+	item, err := s.DAL.Resources().Resource(ctx, row.ItemID)
 	if err != nil {
 		return false, "", err
 	}
@@ -80,8 +79,8 @@ func (s *Service) blobProtected(ctx context.Context, row *ent.Blob) (bool, strin
 		if check.id == nil {
 			continue
 		}
-		rev, err := s.Client.ItemRevision.Query().Where(itemrevision.IDEQ(*check.id)).Only(ctx)
-		if ent.IsNotFound(err) {
+		rev, err := s.DAL.Revisions().Revision(ctx, *check.id)
+		if dberr.IsNotFound(err) {
 			continue
 		}
 		if err != nil {
@@ -91,19 +90,11 @@ func (s *Service) blobProtected(ctx context.Context, row *ent.Blob) (bool, strin
 			return true, check.reason, nil
 		}
 	}
-	var staged bool
-	if err = s.scan(ctx, []any{&staged}, `SELECT EXISTS(SELECT 1 FROM staged_files WHERE state='pending' AND (object_key=? OR EXISTS (SELECT 1 FROM json_each(sources) WHERE json_extract(value, '$.blob_id')=?)))`, row.ObjectKey, row.ID); err != nil {
-		return false, "", err
+	if staged, err := s.DAL.Blobs().Staged(ctx, *row); err != nil || staged {
+		return staged, "staged", err
 	}
-	if staged {
-		return true, "staged", nil
-	}
-	var waiting bool
-	if err = s.scan(ctx, []any{&waiting}, `SELECT EXISTS(SELECT 1 FROM blob_leases WHERE blob_id=?)`, row.ID); err != nil {
-		return false, "", err
-	}
-	if waiting {
-		return true, "in use", nil
+	if leased, err := s.DAL.Blobs().Leased(ctx, row.ID); err != nil || leased {
+		return leased, "in use", err
 	}
 	return false, "", nil
 }
@@ -113,10 +104,7 @@ func (s *Service) blobProtected(ctx context.Context, row *ent.Blob) (bool, strin
 func (s *Service) SweepReclaims(ctx context.Context, store storage.Store, now time.Time) error {
 	after := ""
 	for {
-		rows, err := s.Client.Blob.Query().Where(
-			blob.IDGT(after), blob.AvailabilityEQ(blob.AvailabilityPending),
-			blob.Or(blob.ReclaimAfterIsNil(), blob.ReclaimAfterLTE(now)),
-		).Order(ent.Asc(blob.FieldID)).Limit(100).All(ctx)
+		rows, err := s.DAL.Blobs().Blobs(ctx, blobs.BlobFilter{AfterID: after, DueBy: &now, Limit: 100})
 		if err != nil {
 			return err
 		}
@@ -126,27 +114,31 @@ func (s *Service) SweepReclaims(ctx context.Context, store storage.Store, now ti
 		for _, row := range rows {
 			after = row.ID
 			if err = s.write(ctx, func(t *Service) error {
-				current, err := t.Client.Blob.Get(ctx, row.ID)
-				if ent.IsNotFound(err) {
+				files := t.DAL.Blobs()
+				current, err := files.Blob(ctx, row.ID)
+				if dberr.IsNotFound(err) {
 					return nil
 				}
 				if err != nil {
 					return err
 				}
-				if current.Availability != blob.AvailabilityPending || current.ReclaimAfter != nil && current.ReclaimAfter.After(now) {
+				if current.Availability != blobs.AvailabilityPending || current.ReclaimAfter != nil && current.ReclaimAfter.After(now) {
 					return nil
 				}
-				protected, _, err := t.blobProtected(ctx, current)
+				protected, _, err := t.blobProtected(ctx, &current)
 				if err != nil {
 					return err
 				}
 				if protected {
-					return t.Client.Blob.UpdateOneID(current.ID).ClearReclaimAfter().Exec(ctx)
+					_, err = files.SetAvailability(ctx, current.ID, blobs.AvailabilityPending, nil)
+					return err
 				}
 				if current.ReclaimAfter == nil {
-					return t.Client.Blob.UpdateOneID(current.ID).SetReclaimAfter(now.Add(ObjectGracePeriod)).Exec(ctx)
+					due := now.Add(ObjectGracePeriod)
+					_, err = files.SetAvailability(ctx, current.ID, blobs.AvailabilityPending, &due)
+					return err
 				}
-				if err = t.Client.Blob.UpdateOneID(current.ID).SetAvailability(blob.AvailabilityReclaimed).ClearReclaimAfter().Exec(ctx); err != nil {
+				if _, err = files.SetAvailability(ctx, current.ID, blobs.AvailabilityReclaimed, nil); err != nil {
 					return err
 				}
 				return t.deleteUnreferencedObject(ctx, store, current.ObjectKey)

@@ -17,14 +17,10 @@ import (
 	"time"
 	"unicode/utf8"
 
-	entsql "entgo.io/ent/dialect/sql"
-
-	"papergo/ent"
-	"papergo/ent/grant"
-	"papergo/ent/identitygroup"
-	"papergo/ent/identityuser"
-	"papergo/ent/task"
-	"papergo/ent/taskresponse"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/directory"
+	grantstore "papergo/internal/dal/grants"
+	taskstore "papergo/internal/dal/tasks"
 	"papergo/internal/dms"
 	"papergo/internal/forms"
 	"papergo/internal/model"
@@ -40,14 +36,8 @@ const (
 // Events lists the task events workflows can be triggered by.
 var Events = []string{EventCreated, EventCompleted, EventCancelled}
 
-// Kinds, completion modes and outcome settings.
+// Outcome settings.
 const (
-	KindTask     = "task"
-	KindApproval = "approval"
-
-	CompletionAny = "any"
-	CompletionAll = "all"
-
 	// Approved and Rejected are an approval's outcomes.
 	Approved = "approved"
 	Rejected = "rejected"
@@ -91,18 +81,18 @@ func ApprovalOutcomes() []model.TaskOutcome {
 type Input struct {
 	WorkspaceID string
 	ItemID      string
-	Kind        string
+	Kind        taskstore.Kind
 	Key         string
 	Title       string
 	Description string
 	Assignees   []string
-	Completion  string
+	Completion  taskstore.Completion
 	Outcomes    []model.TaskOutcome
 	// InputSchema is the form answers fill in; Values prefill it.
 	InputSchema map[string]any
 	Values      map[string]any
 	Review      map[string]any
-	Priority    string
+	Priority    taskstore.Priority
 	DueAt       *time.Time
 	// Workflow is set for a workflow's task; Wait when its run waits.
 	Workflow *Source
@@ -122,16 +112,16 @@ type Source struct {
 
 // Create creates a task as subject inside t's write transaction, after
 // checking its settings, its creator's access and every assignee's.
-func Create(ctx context.Context, t *dms.Service, subject string, in Input) (*ent.Task, error) {
+func Create(ctx context.Context, t *dms.Service, subject string, in Input) (taskstore.Task, error) {
 	if err := in.normalize(); err != nil {
-		return nil, err
+		return taskstore.Task{}, err
 	}
 	ws, err := t.Authorize(ctx, subject, in.WorkspaceID, "read")
 	if err != nil {
-		return nil, err
+		return taskstore.Task{}, err
 	}
 	if ws.Kind != "workspace" {
-		return nil, dms.Invalid("workspace_id is not a workspace")
+		return taskstore.Task{}, dms.Invalid("workspace_id is not a workspace")
 	}
 	var collection *string
 	if in.ItemID != "" {
@@ -141,16 +131,16 @@ func Create(ctx context.Context, t *dms.Service, subject string, in Input) (*ent
 		}
 		item, err := t.Authorize(ctx, subject, in.ItemID, action)
 		if err != nil {
-			return nil, err
+			return taskstore.Task{}, err
 		}
 		if item.Kind != "item" || item.WorkspaceID != in.WorkspaceID {
-			return nil, dms.Invalid("item_id must be an item of the task's workspace")
+			return taskstore.Task{}, dms.Invalid("item_id must be an item of the task's workspace")
 		}
 		collection = item.ContainerID
 	}
 	assignees, err := Resolve(ctx, t, subject, in.Assignees, in.WorkspaceID, in.ItemID, in.Actor)
 	if err != nil {
-		return nil, err
+		return taskstore.Task{}, err
 	}
 	for _, a := range assignees {
 		if strings.HasPrefix(a, "group:") {
@@ -158,53 +148,44 @@ func Create(ctx context.Context, t *dms.Service, subject string, in Input) (*ent
 			continue
 		}
 		if err = CanReview(ctx, t, a, in.WorkspaceID, in.ItemID); err != nil {
-			return nil, err
+			return taskstore.Task{}, err
 		}
 	}
 	if in.InputSchema != nil {
 		// Pickers point at this workspace; prefilled picks are valid answers.
 		if err = forms.CheckConfig(ctx, t, subject, in.WorkspaceID, in.InputSchema, "input_schema"); err != nil {
-			return nil, err
+			return taskstore.Task{}, err
 		}
 		if err = forms.CheckValues(ctx, t, subject, in.WorkspaceID, in.InputSchema, in.Values, "values"); err != nil {
-			return nil, err
+			return taskstore.Task{}, err
 		}
 	}
 	if in.Review != nil {
 		if err = checkReview(ctx, t, subject, in); err != nil {
-			return nil, err
+			return taskstore.Task{}, err
 		}
 	}
-	c := t.Client.Task.Create().SetWorkspaceID(in.WorkspaceID).SetKind(task.Kind(in.Kind)).SetKey(in.Key).SetTitle(in.Title).SetDescription(in.Description).
-		SetAssignees(assignees).SetCompletion(task.Completion(in.Completion)).SetOutcomes(in.Outcomes).SetPriority(task.Priority(in.Priority)).
-		SetNillableDueAt(in.DueAt).SetWait(in.Wait).SetCreatedBy(subject)
-	switch {
-	case in.Workflow != nil:
-		c.SetSource(task.SourceWorkflow).SetWorkflowID(in.Workflow.WorkflowID).SetRunID(in.Workflow.RunID).SetNode(in.Workflow.Node)
-	case in.System:
-		c.SetSource(task.SourceSystem)
-	default:
-		c.SetSource(task.SourceUser)
+	input := taskstore.CreateInput{
+		WorkspaceID: in.WorkspaceID, ItemID: in.ItemID, Kind: in.Kind, Key: in.Key, Title: in.Title, Description: in.Description,
+		Assignees: assignees, Completion: in.Completion, Outcomes: in.Outcomes, InputSchema: in.InputSchema, Values: in.Values, Review: in.Review,
+		Priority: in.Priority, DueAt: in.DueAt, Wait: in.Wait, CreatedBy: subject, Source: taskstore.SourceUser,
 	}
-	if in.ItemID != "" {
-		c.SetItemID(in.ItemID)
+	if in.Workflow != nil {
+		input.Source = taskstore.SourceWorkflow
+		input.WorkflowID = in.Workflow.WorkflowID
+		input.RunID = in.Workflow.RunID
+		input.Node = in.Workflow.Node
+	} else if in.System {
+		input.Source = taskstore.SourceSystem
 	}
-	if in.InputSchema != nil {
-		c.SetInputSchema(in.InputSchema)
-	}
-	if in.Values != nil {
-		c.SetValues(in.Values)
-	}
-	if in.Review != nil {
-		c.SetReview(in.Review)
-	}
-	tk, err := c.Save(ctx)
+	tk, err := t.DAL.Tasks().Create(ctx, input)
 	if err != nil {
-		return nil, err
+		return taskstore.Task{}, taskError(err)
 	}
+
 	t.Raise(ctx, EventCreated, subject, in.WorkspaceID, collection, in.ItemID, eventData(tk))
-	if err = t.Record(ctx, subject, "task.create", ws, map[string]any{"task_id": tk.ID, "kind": in.Kind, "key": in.Key, "assignees": assignees}); err != nil {
-		return nil, err
+	if err = t.Record(ctx, subject, "task.create", ws, map[string]any{"task_id": tk.ID, "kind": string(in.Kind), "key": in.Key, "assignees": assignees}); err != nil {
+		return taskstore.Task{}, err
 	}
 	return tk, nil
 }
@@ -221,29 +202,29 @@ func (in *Input) normalize() error {
 		return dms.Invalid("workspace_id is required")
 	}
 	if in.Kind == "" {
-		in.Kind = KindTask
+		in.Kind = taskstore.KindTask
 	}
-	if in.Kind != KindTask && in.Kind != KindApproval {
+	if !in.Kind.Valid() {
 		return dms.Invalid("kind is task or approval")
 	}
 	if in.Key != "" && !keyPattern.MatchString(in.Key) {
 		return dms.Invalid("key is a lowercase name such as legal_review")
 	}
 	if in.Completion == "" {
-		in.Completion = CompletionAny
+		in.Completion = taskstore.CompletionAny
 	}
-	if in.Completion != CompletionAny && in.Completion != CompletionAll {
+	if !in.Completion.Valid() {
 		return dms.Invalid("completion is any or all")
 	}
 	if in.Priority == "" {
-		in.Priority = "normal"
+		in.Priority = taskstore.PriorityNormal
 	}
-	if in.Priority != "low" && in.Priority != "normal" && in.Priority != "high" {
+	if !in.Priority.Valid() {
 		return dms.Invalid("priority is low, normal or high")
 	}
 	if len(in.Outcomes) == 0 {
 		in.Outcomes = DefaultOutcomes()
-		if in.Kind == KindApproval {
+		if in.Kind == taskstore.KindApproval {
 			in.Outcomes = ApprovalOutcomes()
 		}
 	}
@@ -369,17 +350,19 @@ func checkReview(ctx context.Context, t *dms.Service, subject string, in Input) 
 func Resolve(ctx context.Context, t *dms.Service, subject string, entries []string, workspaceID, itemID, actor string) ([]string, error) {
 	var out []string
 	var unknown []string
-	var item *ent.Resource
+	var itemLoaded bool
+	var creator string
+	var itemValues map[string]any
 	loadItem := func(entry string) error {
 		if itemID == "" {
 			return dms.Invalid(entry + " needs a task about an item")
 		}
-		if item == nil {
+		if !itemLoaded {
 			r, err := t.GetSurface(ctx, subject, itemID, "auto")
 			if err != nil {
 				return err
 			}
-			item = r
+			creator, itemValues, itemLoaded = r.CreatedBy, r.Values, true
 		}
 		return nil
 	}
@@ -397,18 +380,18 @@ func Resolve(ctx context.Context, t *dms.Service, subject string, entries []stri
 			}
 			out = append(out, owners...)
 		case entry == "role:members":
-			grants, err := t.Client.Grant.Query().Where(grant.ResourceIDEQ(workspaceID), grant.PrincipalTypeEQ(grant.PrincipalTypeUser)).All(ctx)
+			members, err := t.DAL.Grants().List(ctx, grantstore.Filter{ResourceID: workspaceID, PrincipalType: grantstore.PrincipalUser})
 			if err != nil {
 				return nil, err
 			}
-			for _, g := range grants {
+			for _, g := range members {
 				out = append(out, g.PrincipalID)
 			}
 		case entry == "creator":
 			if err := loadItem(entry); err != nil {
 				return nil, err
 			}
-			out = append(out, item.CreatedBy)
+			out = append(out, creator)
 		case entry == "actor":
 			if actor == "" {
 				return nil, dms.Invalid("actor needs a run caused by a person")
@@ -418,7 +401,7 @@ func Resolve(ctx context.Context, t *dms.Service, subject string, entries []stri
 			if err := loadItem(entry); err != nil {
 				return nil, err
 			}
-			switch v := item.Values[strings.TrimPrefix(entry, "field:")].(type) {
+			switch v := itemValues[strings.TrimPrefix(entry, "field:")].(type) {
 			case string:
 				out = append(out, v)
 			case []any:
@@ -429,7 +412,7 @@ func Resolve(ctx context.Context, t *dms.Service, subject string, entries []stri
 				}
 			}
 		case strings.HasPrefix(entry, "group:"):
-			ok, err := t.Client.IdentityGroup.Query().Where(identitygroup.IDEQ(strings.TrimPrefix(entry, "group:"))).Exist(ctx)
+			ok, err := t.DAL.Directory().GroupExists(ctx, strings.TrimPrefix(entry, "group:"))
 			if err != nil {
 				return nil, err
 			}
@@ -453,7 +436,7 @@ func Resolve(ctx context.Context, t *dms.Service, subject string, entries []stri
 		}
 	}
 	if len(users) > 0 {
-		rows, err := t.Client.IdentityUser.Query().Where(identityuser.IDIn(users...)).All(ctx)
+		rows, err := t.DAL.Directory().Users(ctx, directory.UserFilter{IDs: users})
 		if err != nil {
 			return nil, err
 		}
@@ -504,7 +487,7 @@ func CanReview(ctx context.Context, t *dms.Service, subject, workspaceID, itemID
 // entriesOf returns the assignee entries subject answers a task for, in the
 // task's order: their own and their groups'. groups are subject's groups.
 // A person holding several entries answers once for each.
-func entriesOf(tk *ent.Task, subject string, groups []string) []string {
+func entriesOf(tk taskstore.Task, subject string, groups []string) []string {
 	var out []string
 	for _, a := range tk.Assignees {
 		if g, ok := strings.CutPrefix(a, "group:"); a == subject || ok && slices.Contains(groups, g) {
@@ -520,23 +503,21 @@ func unanswered(ctx context.Context, t *dms.Service, taskID string, entries []st
 	if len(entries) == 0 {
 		return "", false, nil
 	}
-	done, err := t.Client.TaskResponse.Query().Where(taskresponse.TaskIDEQ(taskID), taskresponse.AssigneeIn(entries...)).Select(taskresponse.FieldAssignee).Strings(ctx)
+	rows, err := t.DAL.Tasks().Responses(ctx, []string{taskID}, entries)
 	if err != nil {
 		return "", false, err
 	}
+	done := make([]string, len(rows))
+	for i, row := range rows {
+		done[i] = row.Assignee
+	}
+
 	for _, e := range entries {
 		if !slices.Contains(done, e) {
 			return e, len(done) > 0, nil
 		}
 	}
 	return "", len(done) > 0, nil
-}
-
-func deref(s *string) string {
-	if s == nil {
-		return ""
-	}
-	return *s
 }
 
 // Response is an assignee's answer.
@@ -552,34 +533,34 @@ var ErrStaleReview = fmt.Errorf("%w: a file changed after this review was reques
 
 // Respond records subject's answer inside t's write transaction and
 // completes the task when its completion mode says so.
-func Respond(ctx context.Context, t *dms.Service, subject, id string, r Response) (*ent.Task, error) {
-	tk, err := t.Client.Task.Get(ctx, id)
-	if ent.IsNotFound(err) {
-		return nil, dms.ErrNotFound
+func Respond(ctx context.Context, t *dms.Service, subject, id string, r Response) (taskstore.Task, error) {
+	tk, err := t.DAL.Tasks().Find(ctx, id)
+	if dberr.IsNotFound(err) {
+		return taskstore.Task{}, dms.ErrNotFound
 	}
 	if err != nil {
-		return nil, err
+		return taskstore.Task{}, err
 	}
 	groups, err := t.GroupIDs(ctx, subject)
 	if err != nil {
-		return nil, err
+		return taskstore.Task{}, err
 	}
 	entries := entriesOf(tk, subject, groups)
-	if len(entries) == 0 || CanReview(ctx, t, subject, tk.WorkspaceID, deref(tk.ItemID)) != nil {
+	if len(entries) == 0 || CanReview(ctx, t, subject, tk.WorkspaceID, tk.ItemID) != nil {
 		if visibleTo(ctx, t, tk, subject, groups) {
-			return nil, dms.ErrForbidden
+			return taskstore.Task{}, dms.ErrForbidden
 		}
-		return nil, dms.ErrNotFound
+		return taskstore.Task{}, dms.ErrNotFound
 	}
-	if tk.Status != task.StatusOpen {
-		return nil, fmt.Errorf("%w: the task is %s", dms.ErrConflict, tk.Status)
+	if tk.Status != taskstore.StatusOpen {
+		return taskstore.Task{}, fmt.Errorf("%w: the task is %s", dms.ErrConflict, tk.Status)
 	}
 	entry, _, err := unanswered(ctx, t, id, entries)
 	if err != nil {
-		return nil, err
+		return taskstore.Task{}, err
 	}
 	if entry == "" {
-		return nil, fmt.Errorf("%w: you already answered this task", dms.ErrConflict)
+		return taskstore.Task{}, fmt.Errorf("%w: you already answered this task", dms.ErrConflict)
 	}
 	i := slices.IndexFunc(tk.Outcomes, func(o model.TaskOutcome) bool { return o.Key == r.Outcome })
 	if i < 0 {
@@ -587,224 +568,152 @@ func Respond(ctx context.Context, t *dms.Service, subject, id string, r Response
 		for j, o := range tk.Outcomes {
 			keys[j] = o.Key
 		}
-		return nil, dms.Invalid("outcome is one of " + strings.Join(keys, ", "))
+		return taskstore.Task{}, dms.Invalid("outcome is one of " + strings.Join(keys, ", "))
 	}
 	o := tk.Outcomes[i]
 	r.Comment = strings.TrimSpace(r.Comment)
 	switch {
 	case utf8.RuneCountInString(r.Comment) > 4000:
-		return nil, dms.Invalid("the comment is limited to 4000 characters")
+		return taskstore.Task{}, dms.Invalid("the comment is limited to 4000 characters")
 	case o.Comment == "required" && r.Comment == "":
-		return nil, dms.Invalid(o.Label + " needs a comment")
+		return taskstore.Task{}, dms.Invalid(o.Label + " needs a comment")
 	case o.Comment == "none" && r.Comment != "":
-		return nil, dms.Invalid(o.Label + " takes no comment")
+		return taskstore.Task{}, dms.Invalid(o.Label + " takes no comment")
 	}
 	var input json.RawMessage
 	switch {
 	case tk.InputSchema != nil && !o.SkipForm:
 		values, err := forms.Values(tk.InputSchema, r.Input, "input")
 		if err != nil {
-			return nil, dms.Invalid(err.Error())
+			return taskstore.Task{}, dms.Invalid(err.Error())
 		}
 		if err = forms.CheckValues(ctx, t, subject, tk.WorkspaceID, tk.InputSchema, values, "input"); err != nil {
-			return nil, dms.Invalid(err.Error())
+			return taskstore.Task{}, dms.Invalid(err.Error())
 		}
 		if input, err = json.Marshal(values); err != nil {
-			return nil, err
+			return taskstore.Task{}, err
 		}
 	case len(r.Input) > 0 && tk.InputSchema == nil:
-		return nil, dms.Invalid("this task has no form")
+		return taskstore.Task{}, dms.Invalid("this task has no form")
 	case len(r.Input) > 0:
-		return nil, dms.Invalid(o.Label + " takes no form values")
+		return taskstore.Task{}, dms.Invalid(o.Label + " takes no form values")
 	}
 	if !o.AllowStale {
 		if sid, _ := tk.Review["staged_file_id"].(string); sid != "" {
-			f, err := t.Client.StagedFile.Get(ctx, sid)
+			fresh, err := t.StagedFresh(ctx, sid)
 			if err != nil {
-				return nil, err
-			}
-			fresh, err := t.StagedFresh(ctx, f)
-			if err != nil {
-				return nil, err
+				return taskstore.Task{}, err
 			}
 			if !fresh {
-				return nil, ErrStaleReview
+				return taskstore.Task{}, ErrStaleReview
 			}
 		}
 	}
-	c := t.Client.TaskResponse.Create().SetTaskID(id).SetSubject(subject).SetAssignee(entry).SetOutcome(o.Key).SetComment(r.Comment)
-	if input != nil {
-		c.SetInput(input)
-	}
-	completing, err := c.Save(ctx)
+	tk, err = t.DAL.Tasks().Respond(ctx, id, tk.Version, taskstore.ResponseInput{Subject: subject, Assignee: entry, Outcome: o.Key, Comment: r.Comment, Input: input})
 	if err != nil {
-		return nil, err
+		return taskstore.Task{}, taskError(err)
 	}
-	if tk.Completion == task.CompletionAll && !o.Decisive {
-		if completing, err = settled(ctx, t, tk); err != nil {
-			return nil, err
-		}
-	}
-	u := t.Client.Task.UpdateOne(tk).AddVersion(1)
-	if completing != nil {
-		completeWith(u, completing)
-	}
-	if tk, err = u.Save(ctx); err != nil {
-		return nil, err
-	}
-	ws, err := t.Client.Resource.Get(ctx, tk.WorkspaceID)
+
+	ws, err := t.Authorize(ctx, subject, tk.WorkspaceID, "read")
 	if err != nil {
-		return nil, err
+		return taskstore.Task{}, err
 	}
 	if err = t.Record(ctx, subject, "task.respond", ws, map[string]any{"task_id": id, "outcome": o.Key, "assignee": entry}); err != nil {
-		return nil, err
+		return taskstore.Task{}, err
 	}
-	if completing != nil {
+	if tk.Status == taskstore.StatusCompleted {
 		if err = raise(ctx, t, tk, EventCompleted, subject); err != nil {
-			return nil, err
+			return taskstore.Task{}, err
 		}
 	}
 	return tk, nil
-}
-
-// settled returns the answer that completes a task with completion all once
-// every assignee entry has answered: the latest answer with the outcome
-// chosen most often. Answers of entries no longer assigned do not count.
-func settled(ctx context.Context, t *dms.Service, tk *ent.Task) (*ent.TaskResponse, error) {
-	rows, err := t.Client.TaskResponse.Query().Where(taskresponse.TaskIDEQ(tk.ID), taskresponse.AssigneeIn(tk.Assignees...)).
-		Order(ent.Asc(taskresponse.FieldCreatedAt), ent.Asc(taskresponse.FieldID)).All(ctx)
-	if err != nil || len(rows) < len(tk.Assignees) {
-		return nil, err
-	}
-	outcome := mostChosen(tk.Outcomes, rows)
-	for _, r := range slices.Backward(rows) {
-		if r.Outcome == outcome {
-			return r, nil
-		}
-	}
-	return nil, nil
-}
-
-// completeWith completes a task with an answer as its result.
-func completeWith(u *ent.TaskUpdateOne, r *ent.TaskResponse) {
-	u.SetStatus(task.StatusCompleted).SetOutcome(r.Outcome).SetCompletedBy(r.Subject).SetCompletedAt(time.Now().UTC()).SetComment(r.Comment)
-	if len(r.Input) > 0 {
-		u.SetInput(r.Input)
-	}
 }
 
 // Reassign replaces an open task's assignees, as an owner of its workspace
 // or the creator of a person's task does when someone can no longer answer.
 // Answers of entries that stay assigned count; a task with completion all
 // completes when every entry left has answered.
-func Reassign(ctx context.Context, t *dms.Service, subject, id string, entries []string) (*ent.Task, error) {
-	tk, err := t.Client.Task.Get(ctx, id)
-	if ent.IsNotFound(err) {
-		return nil, dms.ErrNotFound
+func Reassign(ctx context.Context, t *dms.Service, subject, id string, entries []string) (taskstore.Task, error) {
+	tk, err := t.DAL.Tasks().Find(ctx, id)
+	if dberr.IsNotFound(err) {
+		return taskstore.Task{}, dms.ErrNotFound
 	}
 	if err != nil {
-		return nil, err
+		return taskstore.Task{}, err
 	}
 	groups, err := t.GroupIDs(ctx, subject)
 	if err != nil {
-		return nil, err
+		return taskstore.Task{}, err
 	}
 	if !visibleTo(ctx, t, tk, subject, groups) {
-		return nil, dms.ErrNotFound
+		return taskstore.Task{}, dms.ErrNotFound
 	}
-	if !manages(ctx, t, subject, tk.WorkspaceID) && (tk.CreatedBy != subject || tk.Source == task.SourceWorkflow) {
-		return nil, dms.ErrForbidden
+	if !manages(ctx, t, subject, tk.WorkspaceID) && (tk.CreatedBy != subject || tk.Source == taskstore.SourceWorkflow) {
+		return taskstore.Task{}, dms.ErrForbidden
 	}
-	if tk.Status != task.StatusOpen {
-		return nil, fmt.Errorf("%w: the task is %s", dms.ErrConflict, tk.Status)
+	if tk.Status != taskstore.StatusOpen {
+		return taskstore.Task{}, fmt.Errorf("%w: the task is %s", dms.ErrConflict, tk.Status)
 	}
-	assignees, err := Resolve(ctx, t, subject, entries, tk.WorkspaceID, deref(tk.ItemID), "")
+	assignees, err := Resolve(ctx, t, subject, entries, tk.WorkspaceID, tk.ItemID, "")
 	if err != nil {
-		return nil, err
+		return taskstore.Task{}, err
 	}
 	for _, a := range assignees {
 		if !strings.HasPrefix(a, "group:") {
-			if err = CanReview(ctx, t, a, tk.WorkspaceID, deref(tk.ItemID)); err != nil {
-				return nil, err
+			if err = CanReview(ctx, t, a, tk.WorkspaceID, tk.ItemID); err != nil {
+				return taskstore.Task{}, err
 			}
 		}
 	}
-	if tk, err = t.Client.Task.UpdateOne(tk).SetAssignees(assignees).AddVersion(1).Save(ctx); err != nil {
-		return nil, err
-	}
-	var completing *ent.TaskResponse
-	if tk.Completion == task.CompletionAll {
-		if completing, err = settled(ctx, t, tk); err != nil {
-			return nil, err
-		}
-	}
-	if completing != nil {
-		u := t.Client.Task.UpdateOne(tk).AddVersion(1)
-		completeWith(u, completing)
-		if tk, err = u.Save(ctx); err != nil {
-			return nil, err
-		}
-	}
-	ws, err := t.Client.Resource.Get(ctx, tk.WorkspaceID)
+	tk, err = t.DAL.Tasks().Reassign(ctx, id, tk.Version, assignees)
 	if err != nil {
-		return nil, err
+		return taskstore.Task{}, taskError(err)
+	}
+
+	ws, err := t.Authorize(ctx, subject, tk.WorkspaceID, "read")
+	if err != nil {
+		return taskstore.Task{}, err
 	}
 	if err = t.Record(ctx, subject, "task.reassign", ws, map[string]any{"task_id": id, "assignees": assignees}); err != nil {
-		return nil, err
+		return taskstore.Task{}, err
 	}
-	if completing != nil {
+	if tk.Status == taskstore.StatusCompleted {
 		if err = raise(ctx, t, tk, EventCompleted, subject); err != nil {
-			return nil, err
+			return taskstore.Task{}, err
 		}
 	}
 	return tk, nil
 }
 
-// mostChosen is the outcome chosen most often, ties going to the one
-// listed first.
-func mostChosen(outcomes []model.TaskOutcome, responses []*ent.TaskResponse) string {
-	counts := map[string]int{}
-	for _, r := range responses {
-		counts[r.Outcome]++
-	}
-	best, most := "", 0
-	for _, o := range outcomes {
-		if counts[o.Key] > most {
-			best, most = o.Key, counts[o.Key]
-		}
-	}
-	return best
-}
-
-func eventData(tk *ent.Task) map[string]any {
+func eventData(tk taskstore.Task) map[string]any {
 	data := map[string]any{"task_id": tk.ID, "kind": string(tk.Kind), "key": tk.Key, "assignees": tk.Assignees, "source": string(tk.Source)}
-	if tk.ItemID != nil {
-		data["item_id"] = *tk.ItemID
+	if tk.ItemID != "" {
+		data["item_id"] = tk.ItemID
 	}
-	if tk.Outcome != nil {
-		data["outcome"] = *tk.Outcome
+	if tk.Outcome != "" {
+		data["outcome"] = tk.Outcome
 	}
-	if tk.CompletedBy != nil {
-		data["completed_by"] = *tk.CompletedBy
+	if tk.CompletedBy != "" {
+		data["completed_by"] = tk.CompletedBy
 	}
-	if tk.RunID != nil {
-		data["run_id"] = *tk.RunID
+	if tk.RunID != "" {
+		data["run_id"] = tk.RunID
 	}
 	return data
 }
 
-func raise(ctx context.Context, t *dms.Service, tk *ent.Task, typ, actor string) error {
+func raise(ctx context.Context, t *dms.Service, tk taskstore.Task, typ, actor string) error {
 	var collection *string
-	if tk.ItemID != nil {
-		item, err := t.Client.Resource.Get(ctx, *tk.ItemID)
-		if err != nil && !ent.IsNotFound(err) {
+	if tk.ItemID != "" {
+		item, err := t.DAL.Resources().Resource(ctx, tk.ItemID)
+		if err != nil && !dberr.IsNotFound(err) {
 			return err
 		}
 		if item != nil {
 			collection = item.ContainerID
 		}
 	}
-	t.Raise(ctx, typ, actor, tk.WorkspaceID, collection, deref(tk.ItemID), eventData(tk))
+	t.Raise(ctx, typ, actor, tk.WorkspaceID, collection, tk.ItemID, eventData(tk))
 	return nil
 }
 
@@ -814,29 +723,29 @@ var ErrCancelled = errors.New("the task was cancelled")
 // Cancel cancels an open task inside t's write transaction. Its creator and
 // the workspace's owners may cancel a person's or the system's task; a
 // workflow's task belongs to its run, so cancel the run.
-func Cancel(ctx context.Context, t *dms.Service, subject, id string) (*ent.Task, error) {
-	tk, err := t.Client.Task.Get(ctx, id)
-	if ent.IsNotFound(err) {
-		return nil, dms.ErrNotFound
+func Cancel(ctx context.Context, t *dms.Service, subject, id string) (taskstore.Task, error) {
+	tk, err := t.DAL.Tasks().Find(ctx, id)
+	if dberr.IsNotFound(err) {
+		return taskstore.Task{}, dms.ErrNotFound
 	}
 	if err != nil {
-		return nil, err
+		return taskstore.Task{}, err
 	}
 	groups, err := t.GroupIDs(ctx, subject)
 	if err != nil {
-		return nil, err
+		return taskstore.Task{}, err
 	}
 	if !visibleTo(ctx, t, tk, subject, groups) {
-		return nil, dms.ErrNotFound
+		return taskstore.Task{}, dms.ErrNotFound
 	}
 	if tk.CreatedBy != subject && !manages(ctx, t, subject, tk.WorkspaceID) {
-		return nil, dms.ErrForbidden
+		return taskstore.Task{}, dms.ErrForbidden
 	}
-	if tk.Source == task.SourceWorkflow {
-		return nil, dms.Invalid("a workflow's task ends with its run: cancel the run")
+	if tk.Source == taskstore.SourceWorkflow {
+		return taskstore.Task{}, dms.Invalid("a workflow's task ends with its run: cancel the run")
 	}
-	if tk.Status != task.StatusOpen {
-		return nil, fmt.Errorf("%w: the task is %s", dms.ErrConflict, tk.Status)
+	if tk.Status != taskstore.StatusOpen {
+		return taskstore.Task{}, fmt.Errorf("%w: the task is %s", dms.ErrConflict, tk.Status)
 	}
 	return cancel(ctx, t, tk, subject)
 }
@@ -844,40 +753,40 @@ func Cancel(ctx context.Context, t *dms.Service, subject, id string) (*ent.Task,
 // CancelByWorkflow cancels a task as a workflow's task.cancel node does: an
 // open task of the workflow's workspace that no run waits for. A task a run
 // waits for ends with its run.
-func CancelByWorkflow(ctx context.Context, t *dms.Service, author, workspaceID, id string) (*ent.Task, error) {
-	tk, err := t.Client.Task.Get(ctx, id)
-	if ent.IsNotFound(err) {
-		return nil, dms.ErrNotFound
+func CancelByWorkflow(ctx context.Context, t *dms.Service, author, workspaceID, id string) (taskstore.Task, error) {
+	tk, err := t.DAL.Tasks().Find(ctx, id)
+	if dberr.IsNotFound(err) {
+		return taskstore.Task{}, dms.ErrNotFound
 	}
 	if err != nil {
-		return nil, err
+		return taskstore.Task{}, err
 	}
 	if tk.WorkspaceID != workspaceID {
-		return nil, dms.ErrNotFound
+		return taskstore.Task{}, dms.ErrNotFound
 	}
-	if tk.Status != task.StatusOpen {
+	if tk.Status != taskstore.StatusOpen {
 		return tk, nil
 	}
 	if tk.Wait {
-		return nil, dms.Invalid("a run waits for this task: cancel the run instead")
+		return taskstore.Task{}, dms.Invalid("a run waits for this task: cancel the run instead")
 	}
 	return cancel(ctx, t, tk, author)
 }
 
-func cancel(ctx context.Context, t *dms.Service, tk *ent.Task, actor string) (*ent.Task, error) {
-	tk, err := t.Client.Task.UpdateOne(tk).SetStatus(task.StatusCancelled).SetCompletedAt(time.Now().UTC()).AddVersion(1).Save(ctx)
+func cancel(ctx context.Context, t *dms.Service, tk taskstore.Task, actor string) (taskstore.Task, error) {
+	tk, err := t.DAL.Tasks().Cancel(ctx, tk.ID, tk.Version)
 	if err != nil {
-		return nil, err
+		return taskstore.Task{}, taskError(err)
 	}
 	if err = raise(ctx, t, tk, EventCancelled, actor); err != nil {
-		return nil, err
+		return taskstore.Task{}, err
 	}
 	return tk, nil
 }
 
 // CancelRun cancels open tasks whose owning run was cancelled.
 func CancelRun(ctx context.Context, t *dms.Service, runID string) (bool, error) {
-	rows, err := t.Client.Task.Query().Where(task.RunIDEQ(runID), task.StatusEQ(task.StatusOpen), task.Wait(true)).All(ctx)
+	rows, err := t.DAL.Tasks().List(ctx, taskstore.Filter{RunID: runID, Status: taskstore.StatusOpen, WaitOnly: true})
 	if err != nil {
 		return false, err
 	}
@@ -896,8 +805,8 @@ func manages(ctx context.Context, t *dms.Service, subject, workspaceID string) b
 
 // visibleTo reports whether subject may see a task: an assignee who may
 // review it, its creator, or an owner of its workspace.
-func visibleTo(ctx context.Context, t *dms.Service, tk *ent.Task, subject string, groups []string) bool {
-	if len(entriesOf(tk, subject, groups)) > 0 && CanReview(ctx, t, subject, tk.WorkspaceID, deref(tk.ItemID)) == nil {
+func visibleTo(ctx context.Context, t *dms.Service, tk taskstore.Task, subject string, groups []string) bool {
+	if len(entriesOf(tk, subject, groups)) > 0 && CanReview(ctx, t, subject, tk.WorkspaceID, tk.ItemID) == nil {
 		return true
 	}
 	if tk.CreatedBy == subject {
@@ -908,28 +817,15 @@ func visibleTo(ctx context.Context, t *dms.Service, tk *ent.Task, subject string
 	return manages(ctx, t, subject, tk.WorkspaceID)
 }
 
-// waitingFor selects the tasks with an entry of subject or one of groups
-// that has not answered.
-func waitingFor(subject string, groups []string) func(*entsql.Selector) {
-	return func(s *entsql.Selector) {
-		entries := []any{subject}
-		for _, g := range groups {
-			entries = append(entries, "group:"+g)
-		}
-		marks := strings.TrimSuffix(strings.Repeat("?,", len(entries)), ",")
-		s.Where(entsql.ExprP("EXISTS (SELECT 1 FROM json_each("+s.C(task.FieldAssignees)+") j WHERE j.value IN ("+marks+") AND NOT EXISTS (SELECT 1 FROM "+taskresponse.Table+
-			" r WHERE r."+taskresponse.FieldTaskID+" = "+s.C(task.FieldID)+" AND r."+taskresponse.FieldAssignee+" = j.value))", entries...))
+func taskError(err error) error {
+	if dberr.IsNotFound(err) {
+		return dms.ErrNotFound
 	}
-}
-
-// assignedTo selects the tasks assigned to subject or one of groups.
-func assignedTo(subject string, groups []string) func(*entsql.Selector) {
-	return func(s *entsql.Selector) {
-		entries := []any{subject}
-		for _, g := range groups {
-			entries = append(entries, "group:"+g)
-		}
-		marks := strings.TrimSuffix(strings.Repeat("?,", len(entries)), ",")
-		s.Where(entsql.ExprP("EXISTS (SELECT 1 FROM json_each("+s.C(task.FieldAssignees)+") WHERE value IN ("+marks+"))", entries...))
+	if errors.Is(err, dberr.ErrConcurrentUpdate) || errors.Is(err, dberr.ErrInvalidStateTransition) || errors.Is(err, dberr.ErrUniqueViolation) {
+		return fmt.Errorf("%w: %v", dms.ErrConflict, err)
 	}
+	if errors.Is(err, dberr.ErrInvalidReference) || errors.Is(err, dberr.ErrInvalidContainment) {
+		return dms.Invalid(err.Error())
+	}
+	return err
 }

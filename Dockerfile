@@ -79,7 +79,6 @@ LABEL org.opencontainers.image.title="PaperGo" \
 WORKDIR /opt/papergo
 COPY --from=model-assets /assets/ /opt/papergo/assets/
 COPY --from=build /out/bin/ /opt/papergo/
-COPY migrations /schema
 COPY --from=build --chown=65532:65532 /state /data
 USER 65532:65532
 ENV HTTP_ADDR=0.0.0.0:8080 DATABASE_PATH=/data/papergo.db BLOB_PATH=/data/blobs APP_ENV=production

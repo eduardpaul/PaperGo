@@ -5,16 +5,15 @@ import (
 	"strconv"
 	"testing"
 
-	"papergo/ent"
-	"papergo/ent/domainevent"
+	eventstore "papergo/internal/dal/events"
 )
 
 func TestFileChangeEventsNameTheirSource(t *testing.T) {
 	s, w, _ := fixture(t)
 	lib := davLibrary(t, s, w, false)
-	events := func(id string) []*ent.DomainEvent {
+	events := func(id string) []eventstore.Event {
 		t.Helper()
-		rows, err := s.Client.DomainEvent.Query().Where(domainevent.TypeIn(EventFileAdded, EventFileUpdated), domainevent.ResourceIDEQ(id)).Order(ent.Asc(domainevent.FieldID)).All(testContext)
+		rows, err := s.DAL.Events().List(testContext, eventstore.Filter{Types: []string{EventFileAdded, EventFileUpdated}, ResourceID: id})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -68,7 +67,7 @@ func TestFileChangeEventsNameTheirSource(t *testing.T) {
 		if e.Data["source"] != want[i].source || e.Data["file_version"] != json.Number(strconv.Itoa(want[i].version)) || e.Data["revision_id"] == "" || e.Data["blob_id"] == "" || e.Data["content_type"] != "application/pdf" {
 			t.Errorf("event %d data %v, want source %s version %d", i, e.Data, want[i].source, want[i].version)
 		}
-		if e.CollectionID == nil || *e.CollectionID != lib.ID || e.Actor != "alice" {
+		if e.CollectionID != lib.ID || e.Actor != "alice" {
 			t.Errorf("event %d raised for %v by %s", i, e.CollectionID, e.Actor)
 		}
 	}

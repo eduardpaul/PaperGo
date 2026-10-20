@@ -2,10 +2,9 @@ package dms
 
 import (
 	"context"
-	"errors"
-
-	"papergo/ent"
-	"papergo/ent/resource"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/refs"
+	"papergo/internal/dal/resources"
 )
 
 // samePermissions compares local ACL state; order and an omitted allow effect
@@ -29,9 +28,9 @@ func samePermissions(a, b Permissions) bool {
 }
 
 // One event names the edited scope, rather than every inheriting descendant.
-func (s *Service) emitPermissionsChanged(ctx context.Context, actor string, r *ent.Resource, data map[string]any) {
+func (s *Service) emitPermissionsChanged(ctx context.Context, actor string, r *resources.Resource, data map[string]any) {
 	collectionID := r.ContainerID
-	if r.Kind == resource.KindList || r.Kind == resource.KindLibrary {
+	if r.Kind == refs.KindList || r.Kind == refs.KindLibrary {
 		collectionID = &r.ID
 	}
 	data["resource_kind"] = string(r.Kind)
@@ -41,7 +40,7 @@ func (s *Service) emitPermissionsChanged(ctx context.Context, actor string, r *e
 // emitScopeMoved raises permissions.changed with action move when moving r
 // gave it another permission scope: its inheriting entries now read through
 // another scope.
-func (s *Service) emitScopeMoved(ctx context.Context, actor string, before, after *ent.Resource) {
+func (s *Service) emitScopeMoved(ctx context.Context, actor string, before, after *resources.Resource) {
 	if sameScope(before.ScopeID, after.ScopeID) {
 		return
 	}
@@ -77,46 +76,46 @@ type PermissionTarget struct {
 // The rows are read as they are now, so later changes are reflected.
 func (s *Service) PermissionTargets(ctx context.Context, e Event, after string, limit int) ([]PermissionTarget, error) {
 	action, _ := e.Data["action"].(string)
-	var where string
-	var args []any
+	f := resources.Filter{Kinds: contentKinds, State: resources.Live, AfterID: after, Limit: limit}
 	switch {
 	case action == "member.set" || action == "member.remove":
-		where, args = "r.workspace_id=?", []any{e.WorkspaceID}
+		f.WorkspaceID = e.WorkspaceID
 	default:
-		root, err := s.Client.Resource.Get(ctx, e.ResourceID)
-		if ent.IsNotFound(err) {
+		root, err := s.DAL.Resources().Resource(ctx, e.ResourceID)
+		if dberr.IsNotFound(err) {
 			return nil, nil
 		}
 		if err != nil {
 			return nil, err
 		}
+		scope := ""
+		if root.ScopeID != nil {
+			scope = *root.ScopeID
+		}
 		switch {
 		case root.ScopeID != nil && *root.ScopeID == root.ID:
 			// An exclusive scope: what inherits from it carries its ID.
-			where, args = "r.scope_id=?", []any{root.ID}
-		case root.Kind == resource.KindWorkspace:
-			where, args = "r.workspace_id=? AND r.scope_id IS ?", []any{root.ID, root.ScopeID}
-		case root.Kind == resource.KindList || root.Kind == resource.KindLibrary:
-			where, args = "r.container_id=? AND r.scope_id IS ?", []any{root.ID, root.ScopeID}
+			f.ScopeID = &root.ID
+		case root.Kind == refs.KindWorkspace:
+			f.WorkspaceID, f.ScopeID = root.ID, &scope
+		case root.Kind == refs.KindList || root.Kind == refs.KindLibrary:
+			f.ContainerID, f.ScopeID = root.ID, &scope
 		default:
 			// It inherits again: the entries below it that inherit share the
 			// scope of its parent with entries elsewhere, so walk its subtree.
-			where = "r.id IN (WITH RECURSIVE subtree(id) AS (SELECT ? UNION ALL SELECT c.id FROM resources c JOIN subtree ON c.parent_id=subtree.id) SELECT id FROM subtree) AND r.scope_id IS ?"
-			args = []any{root.ID, root.ScopeID}
+			f.Below, f.ScopeID = root.ID, &scope
 		}
 	}
-	rows, err := s.Client.QueryContext(ctx, `SELECT r.id, r.kind, coalesce(r.container_id,'') FROM resources r WHERE `+where+
-		` AND r.kind IN ('item','folder') AND r.deleted_at IS NULL AND r.id>? ORDER BY r.id LIMIT ?`, append(args, after, limit)...)
+	rows, err := s.DAL.Resources().Resources(ctx, f)
 	if err != nil {
 		return nil, err
 	}
-	var out []PermissionTarget
-	for rows.Next() {
-		var t PermissionTarget
-		if err = rows.Scan(&t.ID, &t.Kind, &t.CollectionID); err != nil {
-			break
+	out := make([]PermissionTarget, len(rows))
+	for i, r := range rows {
+		out[i] = PermissionTarget{ID: r.ID, Kind: string(r.Kind)}
+		if r.ContainerID != nil {
+			out[i].CollectionID = *r.ContainerID
 		}
-		out = append(out, t)
 	}
-	return out, errors.Join(err, rows.Err(), rows.Close())
+	return out, nil
 }

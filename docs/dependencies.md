@@ -4,8 +4,12 @@ Direct Go modules and the licences they ship under. Add a row when a change adds
 
 | Module | Used for | Licence |
 | --- | --- | --- |
-| `ariga.io/atlas` | development schema validation/checksums and release-result verification | Apache-2.0 |
-| `entgo.io/ent` | data access and generated models | Apache-2.0 |
+| `ariga.io/atlas` | release-result verification: inspects the upgraded schema against the target | Apache-2.0 |
+| `github.com/stephenafamo/bob` | DAL query building and generated models (`internal/dal` only) | MIT |
+| `github.com/stephenafamo/scan` | scanning DAL query rows (`internal/dal` only) | MIT |
+| `github.com/aarondl/opt` | optional and nullable columns of generated models | MIT |
+| `github.com/shopspring/decimal` | exact numeric field values | MIT |
+| `github.com/jackc/pgx/v5` | PostgreSQL driver | MIT |
 | `github.com/blevesearch/snowballstem` | word stems for search in the `SEARCH_LANGUAGES` (`internal/search` only): the Snowball project's generated stemmers | BSD-3-Clause |
 | `github.com/coreos/go-oidc/v3` | OIDC bearer token verification | Apache-2.0 |
 | `github.com/dbos-inc/dbos-transact-golang` | the embedded workflow runner (`internal/runner` only) | MIT |
@@ -21,7 +25,7 @@ Direct Go modules and the licences they ship under. Add a row when a change adds
 | `github.com/robfig/cron/v3` | parsing workflow schedule triggers | MIT |
 | `modernc.org/sqlite` | SQLite driver shared with DBOS | BSD-3-Clause |
 
-The runner also links, through DBOS: `github.com/jackc/pgx/v5`, `puddle/v2`, `pgpassfile`, `pgservicefile` and `pgerrcode` (MIT), and `github.com/gorilla/websocket` (BSD-2-Clause; DBOS's optional Conductor client, not used).
+The runner also links, through DBOS: `puddle/v2`, `pgpassfile`, `pgservicefile` and `pgerrcode` (MIT), and `github.com/gorilla/websocket` (BSD-2-Clause; DBOS's optional Conductor client, not used).
 
 The native SDK installer (`scripts/native.py`, checksums in `scripts/native.json`) provisions these libraries:
 

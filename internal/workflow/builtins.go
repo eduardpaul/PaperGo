@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"papergo/internal/dal/refs"
+	"papergo/internal/dal/resources"
+	"papergo/internal/jsonutil"
 	"regexp"
 	"sort"
 
-	"papergo/ent"
-	"papergo/ent/resource"
-	"papergo/ent/workflow"
+	"papergo/internal/dal/blobs"
+	"papergo/internal/dal/workflows"
 	"papergo/internal/dms"
 	"papergo/internal/forms"
 )
@@ -36,10 +38,10 @@ type BuiltIn struct {
 	// system queue, so they never delay people's workflows. Successful automatic
 	// runs follow SYSTEM_RUN_RETENTION; manual runs use ordinary retention, and their release definitions may read taxonomy
 	// events whatever their author's scopes.
-	System            bool      `json:"system,omitempty"`
-	AutomaticTriggers []Trigger `json:"automatic_triggers"`
-	ManualMode        string    `json:"manual_mode"`
-	ManualMediaTypes  []string  `json:"manual_media_types,omitempty"`
+	System            bool              `json:"system,omitempty"`
+	AutomaticTriggers []Trigger         `json:"automatic_triggers"`
+	ManualMode        string            `json:"manual_mode"`
+	ManualMediaTypes  []blobs.MediaType `json:"manual_media_types,omitempty"`
 	// ParametersSchema is the form of the built-in's parameters.
 	ParametersSchema map[string]any `json:"parameters_schema"`
 	// Definition is the release definition, with {param:x} placeholders.
@@ -75,9 +77,9 @@ func RegisterBuiltIn(b *BuiltIn) {
 	builtins[b.Key] = b
 }
 
-// systemWorkflow reports whether w is a system built-in.
-func systemWorkflow(w *ent.Workflow) bool {
-	return w.BuiltinKey != nil && builtins[*w.BuiltinKey] != nil && builtins[*w.BuiltinKey].System
+// systemWorkflow reports whether the built-in key identifies a system workflow.
+func systemWorkflow(key string) bool {
+	return builtins[key] != nil && builtins[key].System
 }
 
 // BuiltIns returns the release catalog, sorted by key.
@@ -112,7 +114,7 @@ func init() {
 func init() {
 	RegisterBuiltIn(&BuiltIn{
 		Key:              "documents.optimize",
-		ManualMediaTypes: []string{"image/jpeg", "image/png", "image/webp"},
+		ManualMediaTypes: []blobs.MediaType{blobs.MediaJPEG, blobs.MediaPNG, blobs.MediaWebP},
 		Name:             "Optimize image storage",
 		Description:      "When an image is added, proposes a smaller WebP copy whose smallest text keeps a readable height, and asks the owners (or the approvers) to compare both before it replaces the file. A newer file cancels the waiting review. Also runs on demand.",
 		PerCollection:    true,
@@ -146,7 +148,7 @@ func init() {
 func init() {
 	RegisterBuiltIn(&BuiltIn{
 		Key:              "documents.photos_to_pdf",
-		ManualMediaTypes: []string{"image/jpeg", "image/png", "image/webp"},
+		ManualMediaTypes: []blobs.MediaType{blobs.MediaJPEG, blobs.MediaPNG, blobs.MediaWebP},
 		Name:             "Photos to PDF",
 		Description:      "Combines selected photos, in the chosen order, into one searchable PDF. After the owners (or the approvers) review it, the primary item gets the PDF as its new file, keeping its metadata and file history, and the other photos go to the recycle bin. Started on a selection.",
 		PerCollection:    true,
@@ -231,43 +233,40 @@ type SetBuiltIn struct {
 	Version int `json:"-"`
 }
 
-func (s *Service) builtInRow(ctx context.Context, t *dms.Service, workspaceID string, b *BuiltIn, collectionID string) (*ent.Workflow, error) {
-	q := t.Client.Workflow.Query().Where(workflow.WorkspaceIDEQ(workspaceID), workflow.BuiltinKeyEQ(b.Key), workflow.DeletedAtIsNil())
-	if collectionID != "" {
-		q.Where(workflow.CollectionIDEQ(collectionID))
-	} else {
-		q.Where(workflow.CollectionIDIsNil())
-	}
-	w, err := q.Only(ctx)
-	if ent.IsNotFound(err) {
-		return nil, nil
-	}
-	return w, err
-}
-
-func (s *Service) builtInScope(ctx context.Context, t *dms.Service, subject, workspaceID string, b *BuiltIn, collectionID string) (*ent.Resource, error) {
-	if err := workspace(ctx, t, subject, workspaceID, "manage"); err != nil {
-		return nil, err
-	}
-	switch {
-	case collectionID == "" && b.PerCollection:
-		return nil, dms.Invalid("this built-in is turned on per list or library; give collection_id")
-	case collectionID == "":
-		return nil, nil
-	case !b.PerCollection && b.Role == "":
-		return nil, dms.Invalid("this built-in belongs to the workspace; omit collection_id")
-	}
-	c, err := t.Authorize(ctx, subject, collectionID, "manage")
+func (s *Service) builtInRow(ctx context.Context, t *dms.Service, workspaceID string, b *BuiltIn, collectionID string) (*workflows.Workflow, error) {
+	rows, err := listWorkflows(ctx, t, workflows.Filter{WorkspaceID: workspaceID, BuiltinKey: b.Key, CollectionID: collectionID, CollectionAbsent: collectionID == "", LiveOnly: true})
 	if err != nil {
 		return nil, err
 	}
-	if (b.Key == "documents.optimize" || b.Key == "documents.photos_to_pdf") && c.Kind != resource.KindLibrary {
-		return nil, dms.Invalid("Choose a library for this file feature.")
+	if len(rows) == 0 {
+		return nil, nil
 	}
-	if c.WorkspaceID != workspaceID || (c.Kind != resource.KindList && c.Kind != resource.KindLibrary) {
-		return nil, dms.Invalid("collection_id must be a list or library of the workspace")
+	return rows[0], nil
+}
+
+func (s *Service) builtInScope(ctx context.Context, t *dms.Service, subject, workspaceID string, b *BuiltIn, collectionID string) error {
+	if err := workspace(ctx, t, subject, workspaceID, "manage"); err != nil {
+		return err
 	}
-	return c, nil
+	switch {
+	case collectionID == "" && b.PerCollection:
+		return dms.Invalid("this built-in is turned on per list or library; give collection_id")
+	case collectionID == "":
+		return nil
+	case !b.PerCollection && b.Role == "":
+		return dms.Invalid("this built-in belongs to the workspace; omit collection_id")
+	}
+	c, err := t.Authorize(ctx, subject, collectionID, "manage")
+	if err != nil {
+		return err
+	}
+	if (b.Key == "documents.optimize" || b.Key == "documents.photos_to_pdf") && c.Kind != "library" {
+		return dms.Invalid("Choose a library for this file feature.")
+	}
+	if c.WorkspaceID != workspaceID || (c.Kind != "list" && c.Kind != "library") {
+		return dms.Invalid("collection_id must be a list or library of the workspace")
+	}
+	return nil
 }
 
 // storedParams are the parameters kept with a built-in's workflow: the
@@ -285,11 +284,7 @@ func storedParams(params map[string]any) map[string]any {
 // createBuiltIn creates the workflow of a built-in in a workspace, or for
 // collection c, with its filled release definition, and indexes its
 // triggers.
-func createBuiltIn(ctx context.Context, t *dms.Service, subject, workspaceID string, b *BuiltIn, c *ent.Resource, enabled bool, values map[string]any, options ...SetBuiltIn) (*ent.Workflow, *ent.WorkflowVersion, error) {
-	collection := ""
-	if c != nil {
-		collection = c.ID
-	}
+func createBuiltIn(ctx context.Context, t *dms.Service, subject, workspaceID string, b *BuiltIn, collection string, enabled bool, values map[string]any, options ...SetBuiltIn) (*workflows.Workflow, *workflows.Version, error) {
 	params, err := b.params(values, collection)
 	if err != nil {
 		return nil, nil, err
@@ -314,16 +309,24 @@ func createBuiltIn(ctx context.Context, t *dms.Service, subject, workspaceID str
 		}
 	}
 	name, wkey := b.Name, keyFromName(b.Key)
-	if c != nil {
+	if collection != "" {
+		c, err := t.DAL.Resources().Resource(ctx, collection)
+		if err != nil {
+			return nil, nil, err
+		}
 		name = fmt.Sprintf("%s (%s)", b.Name, c.Name)
-		wkey = keyFromName(b.Key + "-" + c.ID[:8])
+		suffix := c.ID
+		if len(suffix) > 8 {
+			suffix = suffix[:8]
+		}
+		wkey = keyFromName(b.Key + "-" + suffix)
 	}
 	if wkey, err = freeKey(ctx, t, workspaceID, wkey); err != nil {
 		return nil, nil, err
 	}
 	baseName := name
 	for n := 2; ; n++ {
-		exists, e := t.Client.Workflow.Query().Where(workflow.WorkspaceIDEQ(workspaceID), workflow.NameEQ(name), workflow.DeletedAtIsNil()).Exist(ctx)
+		exists, e := t.DAL.Workflows().Exists(ctx, workflows.Filter{WorkspaceID: workspaceID, Name: name, LiveOnly: true})
 		if e != nil {
 			return nil, nil, e
 		}
@@ -332,34 +335,28 @@ func createBuiltIn(ctx context.Context, t *dms.Service, subject, workspaceID str
 		}
 		name = fmt.Sprintf("%s (%d)", baseName, n)
 	}
-	create := t.Client.Workflow.Create().SetWorkspaceID(workspaceID).SetKey(wkey).SetName(name).SetDescription(b.Description).SetAutomaticEnabled(enabled).SetBuiltinKey(b.Key).SetParameters(storedParams(params)).SetCurrentVersion(1).SetCreatedBy(subject).SetUpdatedBy(subject)
+	in := workflows.CreateInput{WorkspaceID: workspaceID, Key: wkey, Name: name, Description: b.Description, AutomaticEnabled: enabled, ManualEnabled: true, BuiltinKey: b.Key, Role: b.Role, CollectionID: collection, AutomaticProvider: b.Role != "" && collection != "", CreatedBy: subject, Definition: raw}
 	if len(options) > 0 {
-		if options[0].State != "" {
-			if err := validState(options[0].State); err != nil {
+		option := options[0]
+		if option.State != "" {
+			if err := validState(workflows.State(option.State)); err != nil {
 				return nil, nil, err
 			}
+			in.State = workflows.State(option.State)
 		}
-		if c != nil && b.Role != "" {
-			create.SetAutomaticProvider(true)
-		}
-		if options[0].ManualEnabled != nil {
-			create.SetManualEnabled(*options[0].ManualEnabled)
-		}
-		if options[0].State != "" {
-			create.SetState(options[0].State)
+		if option.ManualEnabled != nil {
+			in.ManualEnabled = *option.ManualEnabled
 		}
 	}
-	if c != nil {
-		create.SetCollectionID(c.ID)
-	}
-	if b.Role != "" {
-		create.SetRole(b.Role).SetAutomaticProvider(c != nil)
-	}
-	w, err := create.Save(ctx)
+	in.Parameters, err = json.Marshal(storedParams(params))
 	if err != nil {
 		return nil, nil, err
 	}
-	v, err := t.Client.WorkflowVersion.Create().SetWorkflowID(w.ID).SetNumber(1).SetDefinition(raw).SetCreatedBy(subject).Save(ctx)
+	w, err := createWorkflow(ctx, t, in)
+	if err != nil {
+		return nil, nil, err
+	}
+	v, err := current(ctx, t, w)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -374,11 +371,11 @@ func (s *Service) UpdateBuiltIn(ctx context.Context, subject, workspaceID, key s
 	}
 	err = s.DMS.Write(ctx, func(t *dms.Service) error {
 		if in.State != "" {
-			if err := validState(in.State); err != nil {
+			if err := validState(workflows.State(in.State)); err != nil {
 				return err
 			}
 		}
-		c, err := s.builtInScope(ctx, t, subject, workspaceID, b, in.CollectionID)
+		err := s.builtInScope(ctx, t, subject, workspaceID, b, in.CollectionID)
 		if err != nil {
 			return err
 		}
@@ -401,12 +398,12 @@ func (s *Service) UpdateBuiltIn(ctx context.Context, subject, workspaceID, key s
 		if err != nil {
 			return err
 		}
-		var v *ent.WorkflowVersion
+		var v *workflows.Version
 		if w == nil {
 			if in.Version != 0 {
 				return dms.ErrPreconditionFailed
 			}
-			if w, v, err = createBuiltIn(ctx, t, subject, workspaceID, b, c, in.AutomaticEnabled, in.Parameters, in); err != nil {
+			if w, v, err = createBuiltIn(ctx, t, subject, workspaceID, b, in.CollectionID, in.AutomaticEnabled, in.Parameters, in); err != nil {
 				return err
 			}
 		} else {
@@ -425,16 +422,21 @@ func (s *Service) UpdateBuiltIn(ctx context.Context, subject, workspaceID, key s
 			if err != nil {
 				return err
 			}
-			if w, v, err = revise(ctx, t, subject, w, raw, func(u *ent.WorkflowUpdateOne) {
-				u.SetAutomaticEnabled(in.AutomaticEnabled).SetParameters(storedParams(params))
+			if w, v, err = revise(ctx, t, subject, w, raw, func(u *workflows.Changes) {
+				// Whoever configures a built-in becomes its runs' author.
+				u.Author = true
+				u.AutomaticEnabled = &in.AutomaticEnabled
+				values := storedParams(params)
+				u.Parameters = &values
 				if b.Role != "" && in.CollectionID != "" {
-					u.SetAutomaticProvider(true)
+					u.AutomaticProvider = boolPtr(true)
 				}
 				if in.ManualEnabled != nil {
-					u.SetManualEnabled(*in.ManualEnabled)
+					u.ManualEnabled = in.ManualEnabled
 				}
 				if in.State != "" {
-					u.SetState(in.State)
+					state := workflows.State(in.State)
+					u.State = &state
 				}
 			}); err != nil {
 				return err
@@ -468,7 +470,7 @@ func (s *Service) CopyBuiltIn(ctx context.Context, subject, workspaceID, key str
 		return out, dms.ErrNotFound
 	}
 	err = s.DMS.Write(ctx, func(t *dms.Service) error {
-		if _, err := s.builtInScope(ctx, t, subject, workspaceID, b, in.CollectionID); err != nil {
+		if err := s.builtInScope(ctx, t, subject, workspaceID, b, in.CollectionID); err != nil {
 			return err
 		}
 		params, err := b.params(in.Parameters, in.CollectionID)
@@ -487,7 +489,7 @@ func (s *Service) CopyBuiltIn(ctx context.Context, subject, workspaceID, key str
 	return
 }
 
-func mustCurrent(ctx context.Context, t *dms.Service, w *ent.Workflow) json.RawMessage {
+func mustCurrent(ctx context.Context, t *dms.Service, w *workflows.Workflow) json.RawMessage {
 	v, err := current(ctx, t, w)
 	if err != nil {
 		return nil
@@ -536,18 +538,18 @@ func (s *Service) ListBuiltIns(ctx context.Context, subject, workspaceID string)
 // when it launches.
 func (s *Service) SyncBuiltIns(ctx context.Context) error {
 	return s.DMS.Write(ctx, func(t *dms.Service) error {
-		rows, err := t.Client.Workflow.Query().Where(workflow.BuiltinKeyNotNil(), workflow.DeletedAtIsNil()).All(ctx)
+		rows, err := listWorkflows(ctx, t, workflows.Filter{OnlyBuiltins: true, LiveOnly: true})
 		if err != nil {
 			return err
 		}
 		for _, w := range rows {
-			b := builtins[*w.BuiltinKey]
+			b := builtins[w.BuiltinKey]
 			var raw json.RawMessage
 			var def Definition
 			if b != nil {
 				collection := ""
-				if w.CollectionID != nil {
-					collection = *w.CollectionID
+				if w.CollectionID != "" {
+					collection = w.CollectionID
 				}
 				params, err := b.params(w.Parameters, collection)
 				if err == nil {
@@ -579,22 +581,22 @@ func (s *Service) SyncBuiltIns(ctx context.Context) error {
 			}
 			if v, err := current(ctx, t, w); err != nil {
 				return err
-			} else if string(v.Definition) == string(raw) && enabled == w.AutomaticEnabled {
+			} else if jsonutil.Equal(v.Definition, raw) && enabled == w.AutomaticEnabled {
 				continue
 			}
-			if w, _, err = revise(ctx, t, w.UpdatedBy, w, raw, func(u *ent.WorkflowUpdateOne) { u.SetAutomaticEnabled(enabled) }); err != nil {
+			if w, _, err = revise(ctx, t, w.UpdatedBy, w, raw, func(u *workflows.Changes) { u.AutomaticEnabled = &enabled }); err != nil {
 				return err
 			}
 			if err = index(ctx, t, w, def); err != nil {
 				return err
 			}
 		}
-		workspaces, err := t.Client.Resource.Query().Where(resource.KindEQ(resource.KindWorkspace), resource.DeletedAtIsNil()).IDs(ctx)
+		workspaces, err := t.DAL.Resources().Resources(ctx, resources.Filter{Kinds: []refs.ResourceKind{refs.KindWorkspace}, State: resources.Live})
 		if err != nil {
 			return err
 		}
-		for _, id := range workspaces {
-			if err = EnsureDefaults(ctx, t, id); err != nil {
+		for _, ws := range workspaces {
+			if err = EnsureDefaults(ctx, t, ws.ID); err != nil {
 				return err
 			}
 		}

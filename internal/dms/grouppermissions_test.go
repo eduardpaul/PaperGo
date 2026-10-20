@@ -3,6 +3,7 @@ package dms
 import (
 	"context"
 	"errors"
+	"papergo/internal/dal/directory"
 	"papergo/internal/identity"
 	"testing"
 )
@@ -19,10 +20,10 @@ func TestGroupACLInheritanceCopyResetAndNamespace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = d.SetMember(ctx, "alice", parent.ID, identity.Principal{Type: "group", ID: child.ID}, false); err != nil {
+	if err = d.SetMember(ctx, "alice", parent.ID, identity.Principal{Type: directory.PrincipalGroup, ID: child.ID}, false); err != nil {
 		t.Fatal(err)
 	}
-	if err = d.SetMember(ctx, "alice", child.ID, identity.Principal{Type: "user", ID: "bob"}, false); err != nil {
+	if err = d.SetMember(ctx, "alice", child.ID, identity.Principal{Type: directory.PrincipalUser, ID: "bob"}, false); err != nil {
 		t.Fatal(err)
 	}
 	if err = s.SetWorkspaceMember(ctx, "alice", w.ID, WorkspaceMember{Subject: "bob", Role: "visitor"}); err != nil {
@@ -65,13 +66,13 @@ func TestGroupACLInheritanceCopyResetAndNamespace(t *testing.T) {
 	if _, err = s.Get(ctx, parent.ID, item.ID); !errors.Is(err, ErrForbidden) {
 		t.Fatal("principal namespaces collided", err)
 	}
-	if err = d.SetMember(ctx, "alice", child.ID, identity.Principal{Type: "user", ID: "bob"}, true); err != nil {
+	if err = d.SetMember(ctx, "alice", child.ID, identity.Principal{Type: directory.PrincipalUser, ID: "bob"}, true); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = s.Get(ctx, "bob", item.ID); !errors.Is(err, ErrForbidden) {
 		t.Fatal("copied group did not revoke", err)
 	}
-	if err = d.SetMember(ctx, "alice", child.ID, identity.Principal{Type: "user", ID: "bob"}, false); err != nil {
+	if err = d.SetMember(ctx, "alice", child.ID, identity.Principal{Type: directory.PrincipalUser, ID: "bob"}, false); err != nil {
 		t.Fatal(err)
 	}
 	// Replacing the parent scope does not alter an exclusive copy below it.
@@ -108,14 +109,14 @@ func TestModuleRolesRestrictOwnersAndResolveGroupAssignments(t *testing.T) {
 		t.Fatal(err)
 	}
 	item := create(t, s, list.ID, "item", "Owned", nil)
-	if err := d.SetAssignment(ctx, "alice", identity.MemberRole, identity.Principal{Type: "user", ID: "bob"}, true); err != nil {
+	if err := d.SetAssignment(ctx, "alice", identity.MemberRole, identity.Principal{Type: directory.PrincipalUser, ID: "bob"}, true); err != nil {
 		t.Fatal(err)
 	}
 	role, err := d.SaveRole(ctx, "alice", "", 0, identity.RoleInput{Name: "Lists reader", Scopes: []string{"workspace.read", "list.read"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = d.SetAssignment(ctx, "alice", role.ID, identity.Principal{Type: "user", ID: "bob"}, false); err != nil {
+	if err = d.SetAssignment(ctx, "alice", role.ID, identity.Principal{Type: directory.PrincipalUser, ID: "bob"}, false); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = s.Get(ctx, "bob", item.ID); err != nil {
@@ -145,17 +146,17 @@ func TestModuleRolesRestrictOwnersAndResolveGroupAssignments(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = d.SetAssignment(ctx, "alice", writeRole.ID, identity.Principal{Type: "group", ID: group.ID}, false); err != nil {
+	if err = d.SetAssignment(ctx, "alice", writeRole.ID, identity.Principal{Type: directory.PrincipalGroup, ID: group.ID}, false); err != nil {
 		t.Fatal(err)
 	}
-	if err = d.SetMember(ctx, "alice", group.ID, identity.Principal{Type: "user", ID: "bob"}, false); err != nil {
+	if err = d.SetMember(ctx, "alice", group.ID, identity.Principal{Type: directory.PrincipalUser, ID: "bob"}, false); err != nil {
 		t.Fatal(err)
 	}
 	updated, err := s.Update(ctx, "bob", item.ID, item.Version, UpdateResource{Name: &name})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = d.SetMember(ctx, "alice", group.ID, identity.Principal{Type: "user", ID: "bob"}, true); err != nil {
+	if err = d.SetMember(ctx, "alice", group.ID, identity.Principal{Type: directory.PrincipalUser, ID: "bob"}, true); err != nil {
 		t.Fatal(err)
 	}
 	// Workflow mutations use the same transactional service and persisted roles.
@@ -165,7 +166,7 @@ func TestModuleRolesRestrictOwnersAndResolveGroupAssignments(t *testing.T) {
 	}); !errors.Is(err, ErrForbidden) {
 		t.Fatal("transaction ignored role revocation", err)
 	}
-	if err = d.SetAssignment(ctx, "alice", role.ID, identity.Principal{Type: "user", ID: "bob"}, true); err != nil {
+	if err = d.SetAssignment(ctx, "alice", role.ID, identity.Principal{Type: directory.PrincipalUser, ID: "bob"}, true); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = s.Browse(ctx, "bob", Browse{WorkspaceID: w.ID}); !errors.Is(err, ErrForbidden) {
@@ -185,7 +186,7 @@ func TestWorkspaceManageRoleOverridesExclusiveScopes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = d.SetAssignment(ctx, "alice", role.ID, identity.Principal{Type: "user", ID: "bob"}, false); err != nil {
+	if err = d.SetAssignment(ctx, "alice", role.ID, identity.Principal{Type: directory.PrincipalUser, ID: "bob"}, false); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = s.Get(ctx, "bob", item.ID); err != nil {
@@ -195,7 +196,7 @@ func TestWorkspaceManageRoleOverridesExclusiveScopes(t *testing.T) {
 	if err != nil || len(page.Data) != 1 || page.Data[0].WorkspaceID != w.ID {
 		t.Fatalf("administrator query: %+v %v", page, err)
 	}
-	if err = d.SetAssignment(ctx, "alice", role.ID, identity.Principal{Type: "user", ID: "bob"}, true); err != nil {
+	if err = d.SetAssignment(ctx, "alice", role.ID, identity.Principal{Type: directory.PrincipalUser, ID: "bob"}, true); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = s.Get(ctx, "bob", item.ID); !errors.Is(err, ErrForbidden) {

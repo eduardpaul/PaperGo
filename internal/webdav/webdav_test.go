@@ -10,11 +10,12 @@ import (
 	"net/http/httptest"
 	"os"
 	"papergo/internal/auth"
+	"papergo/internal/dal/daltest"
 	"papergo/internal/dms"
 	"papergo/internal/httpapi"
+	"papergo/internal/identity"
 	"papergo/internal/model"
 	"papergo/internal/storage"
-	"papergo/internal/testutil"
 	"papergo/internal/webdav"
 	"regexp"
 	"strings"
@@ -63,7 +64,7 @@ func setup(t *testing.T) *env {
 // setupWith lets a test adjust the API before it serves requests.
 func setupWith(t *testing.T, configure func(*httpapi.API)) *env {
 	t.Helper()
-	db := testutil.Database(t)
+	db := daltest.Database(t)
 	blobs := t.TempDir()
 	store, err := storage.NewLocal(blobs)
 	if err != nil {
@@ -132,21 +133,21 @@ func TestDiscoveryAndAuthentication(t *testing.T) {
 	}
 	e.expect(e.do("PROPFIND", e.root+"/", "wrong", "", "Depth", "0"), 401)
 
-	// Windows Explorer authenticates with an app password and any user name.
-	c, err := e.s.CreateWebDAVCredential(ctx, "alice", dms.WebDAVCredentialInput{Label: "Explorer"})
+	// Windows Explorer authenticates with an access token secret and any user name.
+	c, err := e.s.Directory().CreateAccessToken(ctx, "alice", identity.AccessTokenInput{Name: "Explorer", Scopes: []string{"list.read", "document.read"}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	r := httptest.NewRequest("PROPFIND", e.root, nil)
 	r.Header.Set("Depth", "0")
-	r.SetBasicAuth("alice@example.com", c.Password)
+	r.SetBasicAuth("alice@example.com", c.Secret)
 	rec := httptest.NewRecorder()
 	e.h.ServeHTTP(rec, r)
 	e.expect(rec, 207)
 	if !strings.Contains(rec.Body.String(), "<D:href>"+e.root+"/</D:href>") || !strings.Contains(rec.Body.String(), "<D:collection/>") {
 		t.Fatal("library root is not a collection", rec.Body.String())
 	}
-	r.SetBasicAuth("alice", c.Password+"x")
+	r.SetBasicAuth("alice", c.Secret+"x")
 	rec = httptest.NewRecorder()
 	e.h.ServeHTTP(rec, r)
 	e.expect(rec, 401)

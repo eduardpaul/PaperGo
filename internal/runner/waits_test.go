@@ -3,6 +3,7 @@ package runner
 import (
 	"encoding/json"
 	"errors"
+	"papergo/internal/jsonutil"
 	"sync"
 	"testing"
 	"time"
@@ -134,7 +135,7 @@ func TestWaitCompletesBeforeTheRunParks(t *testing.T) {
 		t.Fatalf("note %v", got)
 	}
 	row := f.waitRow(t, "test.wait", "early")
-	if row.Status != "completed" || row.Parking || string(row.Completion) != `{"output":{"ready":true}}` {
+	if row.Status != "completed" || row.Parking || !jsonutil.Equal(row.Completion, []byte(`{"output":{"ready":true}}`)) {
 		t.Fatalf("wait %+v", row)
 	}
 }
@@ -319,7 +320,7 @@ func TestConcurrentClaimsTakeEachWaitOnce(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if row := f.waitRow(t, "test.wait", keys[0]); string(row.Data) != `{"n":1}` {
+	if row := f.waitRow(t, "test.wait", keys[0]); !jsonutil.Equal(row.Data, []byte(`{"n":1}`)) {
 		t.Fatalf("data %s", row.Data)
 	}
 	if err = f.wf.UpdateWait(ctx, "bob", f.ws.ID, workflow.WaitUpdate{

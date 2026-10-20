@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"papergo/ent"
+	"papergo/internal/dal/catalog"
 	"papergo/internal/dms"
 	"strings"
 	"testing"
@@ -23,7 +23,7 @@ func TestRESTContentTypesBulkValidationAndRemoval(t *testing.T) {
 	}
 	path := "/v1/resources/" + l.ID + "/content-types"
 	res := request(h, "POST", "/v1/content-types", `{"key":"invoice","name":"Invoice","field_ids":[]}`, testToken, "", "application/json")
-	var typ ent.ContentType
+	var typ catalog.ContentType
 	if res.Code != 201 || json.Unmarshal(res.Body.Bytes(), &typ) != nil || res.Header().Get("ETag") != `"1"` {
 		t.Fatal(res.Code, res.Body.String())
 	}
@@ -47,7 +47,7 @@ func TestRESTContentTypesBulkValidationAndRemoval(t *testing.T) {
 	}
 	fieldBody := fmt.Sprintf(`{"content_type_id":%q,"key":"code","label":"Code","type":"text","indexed":true,"options":{"unique":true}}`, typ.ID)
 	res = request(h, "POST", "/v1/resources/"+l.ID+"/fields", fieldBody, testToken, "", "application/json")
-	var field ent.FieldDefinition
+	var field catalog.FieldDefinition
 	if res.Code != 201 || json.Unmarshal(res.Body.Bytes(), &field) != nil {
 		t.Fatal(res.Code, res.Body.String())
 	}

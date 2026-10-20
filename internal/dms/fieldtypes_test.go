@@ -2,21 +2,20 @@ package dms
 
 import (
 	"encoding/json"
-	"papergo/ent"
-	"papergo/ent/fielddefinition"
+	"papergo/internal/dal/catalog"
 	"papergo/internal/model"
 	"testing"
 )
 
 func TestExactNumericBoundsDoNotExpandScientificExponents(t *testing.T) {
-	d := &ent.FieldDefinition{Key: "estimate", Label: "Estimate", Type: fielddefinition.TypeNumber, Options: model.FieldOptions{Minimum: ptr("1e-999999999"), Maximum: ptr("1")}}
+	d := &catalog.FieldDefinition{Key: "estimate", Label: "Estimate", Type: "number", Options: model.FieldOptions{Minimum: ptr("1e-999999999"), Maximum: ptr("1")}}
 	if e := validateFieldDefinition(d); e != nil {
 		t.Fatal(e)
 	}
-	if e := normalizeValues([]*ent.FieldDefinition{d}, map[string]any{"estimate": json.Number("0.5")}); e != nil {
+	if e := normalizeValues([]*catalog.FieldDefinition{d}, map[string]any{"estimate": json.Number("0.5")}); e != nil {
 		t.Fatal(e)
 	}
-	if e := normalizeValues([]*ent.FieldDefinition{d}, map[string]any{"estimate": json.Number("1.5")}); e == nil {
+	if e := normalizeValues([]*catalog.FieldDefinition{d}, map[string]any{"estimate": json.Number("1.5")}); e == nil {
 		t.Fatal("maximum ignored")
 	}
 	d.Options.Minimum = ptr("2")

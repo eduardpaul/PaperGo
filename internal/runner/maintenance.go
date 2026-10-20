@@ -2,7 +2,6 @@ package runner
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"github.com/dbos-inc/dbos-transact-golang/dbos"
@@ -88,21 +87,8 @@ func (r *Runner) purgeMaintenance(ctx context.Context, name string, status []dbo
 // the status row, and a crash before that leaves the execution visible to
 // the next pass. Application runs never reach this function.
 func (r *Runner) deleteMaintenance(ctx context.Context, ids []string) error {
-	args := make([]any, len(ids))
-	marks := make([]string, len(ids))
-	for i, id := range ids {
-		args[i], marks[i] = id, "?"
-	}
-	in := strings.Join(marks, ",")
-	for _, table := range []struct{ name, column string }{
-		{"notifications", "destination_uuid"},
-		{"workflow_events", "workflow_uuid"},
-		{"workflow_events_history", "workflow_uuid"},
-		{"streams", "workflow_uuid"},
-	} {
-		if _, err := r.system.ExecContext(ctx, `DELETE FROM `+table.name+` WHERE `+table.column+` IN (`+in+`)`, args...); err != nil {
-			return err
-		}
+	if err := r.durable.DeleteMaintenanceRecords(ctx, ids); err != nil {
+		return err
 	}
 	return dbos.DeleteWorkflows(r.ctx, ids)
 }

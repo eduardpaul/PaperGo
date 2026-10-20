@@ -7,46 +7,44 @@ import (
 	"strconv"
 	"time"
 
-	entsql "entgo.io/ent/dialect/sql"
+	"papergo/internal/dal/dberr"
+	taskstore "papergo/internal/dal/tasks"
 
-	"papergo/ent"
-	"papergo/ent/task"
-	"papergo/ent/taskresponse"
 	"papergo/internal/dms"
 	"papergo/internal/model"
 )
 
 // View is a task as the API shows it.
 type View struct {
-	ID          string              `json:"id"`
-	WorkspaceID string              `json:"workspace_id"`
-	ItemID      *string             `json:"item_id,omitempty"`
-	Kind        string              `json:"kind"`
-	Key         string              `json:"key,omitempty"`
-	Title       string              `json:"title"`
-	Description string              `json:"description,omitempty"`
-	Assignees   []string            `json:"assignees"`
-	Completion  string              `json:"completion"`
-	Outcomes    []model.TaskOutcome `json:"outcomes"`
-	InputSchema map[string]any      `json:"input_schema,omitempty"`
-	Values      map[string]any      `json:"values,omitempty"`
-	Review      map[string]any      `json:"review,omitempty"`
-	Priority    string              `json:"priority"`
-	DueAt       *time.Time          `json:"due_at,omitempty"`
-	Source      string              `json:"source"`
-	WorkflowID  *string             `json:"workflow_id,omitempty"`
-	RunID       *string             `json:"run_id,omitempty"`
-	Node        *string             `json:"node,omitempty"`
-	Status      string              `json:"status"`
-	Outcome     *string             `json:"outcome,omitempty"`
-	CompletedBy *string             `json:"completed_by,omitempty"`
-	CompletedAt *time.Time          `json:"completed_at,omitempty"`
-	Comment     string              `json:"comment,omitempty"`
-	Input       json.RawMessage     `json:"input,omitempty"`
-	CreatedBy   string              `json:"created_by"`
-	CreatedAt   time.Time           `json:"created_at"`
-	UpdatedAt   time.Time           `json:"updated_at"`
-	Version     int                 `json:"version"`
+	ID          string               `json:"id"`
+	WorkspaceID string               `json:"workspace_id"`
+	ItemID      *string              `json:"item_id,omitempty"`
+	Kind        taskstore.Kind       `json:"kind"`
+	Key         string               `json:"key,omitempty"`
+	Title       string               `json:"title"`
+	Description string               `json:"description,omitempty"`
+	Assignees   []string             `json:"assignees"`
+	Completion  taskstore.Completion `json:"completion"`
+	Outcomes    []model.TaskOutcome  `json:"outcomes"`
+	InputSchema map[string]any       `json:"input_schema,omitempty"`
+	Values      map[string]any       `json:"values,omitempty"`
+	Review      map[string]any       `json:"review,omitempty"`
+	Priority    taskstore.Priority   `json:"priority"`
+	DueAt       *time.Time           `json:"due_at,omitempty"`
+	Source      taskstore.Source     `json:"source"`
+	WorkflowID  *string              `json:"workflow_id,omitempty"`
+	RunID       *string              `json:"run_id,omitempty"`
+	Node        *string              `json:"node,omitempty"`
+	Status      taskstore.Status     `json:"status"`
+	Outcome     *string              `json:"outcome,omitempty"`
+	CompletedBy *string              `json:"completed_by,omitempty"`
+	CompletedAt *time.Time           `json:"completed_at,omitempty"`
+	Comment     string               `json:"comment,omitempty"`
+	Input       json.RawMessage      `json:"input,omitempty"`
+	CreatedBy   string               `json:"created_by"`
+	CreatedAt   time.Time            `json:"created_at"`
+	UpdatedAt   time.Time            `json:"updated_at"`
+	Version     int                  `json:"version"`
 	// Responses are the answers so far, oldest first; only in single reads.
 	Responses []ResponseView `json:"responses,omitempty"`
 	// Answered tells the reader that they, or their group, already answered;
@@ -69,19 +67,26 @@ type ResponseView struct {
 	CreatedAt time.Time       `json:"created_at"`
 }
 
-func toView(tk *ent.Task) View {
-	return View{ID: tk.ID, WorkspaceID: tk.WorkspaceID, ItemID: tk.ItemID, Kind: string(tk.Kind), Key: tk.Key, Title: tk.Title, Description: tk.Description,
-		Assignees: tk.Assignees, Completion: string(tk.Completion), Outcomes: tk.Outcomes, InputSchema: tk.InputSchema, Values: tk.Values, Review: tk.Review,
-		Priority: string(tk.Priority), DueAt: tk.DueAt, Source: string(tk.Source), WorkflowID: tk.WorkflowID, RunID: tk.RunID, Node: tk.Node,
-		Status: string(tk.Status), Outcome: tk.Outcome, CompletedBy: tk.CompletedBy, CompletedAt: tk.CompletedAt, Comment: tk.Comment, Input: tk.Input,
-		CreatedBy: tk.CreatedBy, CreatedAt: tk.CreatedAt, UpdatedAt: tk.UpdatedAt, Version: tk.Version}
+func toView(tk taskstore.Task) View {
+	return View{ID: tk.ID, WorkspaceID: tk.WorkspaceID, ItemID: ptr(tk.ItemID), Kind: tk.Kind, Key: tk.Key, Title: tk.Title, Description: tk.Description,
+		Assignees: tk.Assignees, Completion: tk.Completion, Outcomes: tk.Outcomes, InputSchema: tk.InputSchema, Values: tk.Values, Review: tk.Review,
+		Priority: tk.Priority, DueAt: tk.DueAt, Source: tk.Source, WorkflowID: ptr(tk.WorkflowID), RunID: ptr(tk.RunID), Node: ptr(tk.Node), Status: tk.Status, Outcome: ptr(tk.Outcome), CompletedBy: ptr(tk.CompletedBy), CompletedAt: tk.CompletedAt, Comment: tk.Comment, Input: tk.Input,
+		CreatedBy: tk.CreatedBy, CreatedAt: tk.CreatedAt, UpdatedAt: tk.UpdatedAt, Version: int(tk.Version)}
+}
+
+// ptr shows an optional identifier, empty when the task has none.
+func ptr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
 
 // Filter selects tasks.
 type Filter struct {
 	// Status is open, completed, cancelled or expired; empty is all.
-	Status      string
-	Kind        string
+	Status      taskstore.Status
+	Kind        taskstore.Kind
 	Key         string
 	WorkspaceID string
 	ItemID      string
@@ -96,43 +101,25 @@ type Filter struct {
 // a page cut short still links to the next.
 const maxScans = 10
 
-func (f Filter) apply(q *ent.TaskQuery, subject string, groups []string) (*ent.TaskQuery, error) {
+func (f Filter) apply(in taskstore.Filter, subject string, groups []string) (taskstore.Filter, error) {
 	if f.Waiting {
-		f.Status = string(task.StatusOpen)
-		q.Where(waitingFor(subject, groups))
+		f.Status = taskstore.StatusOpen
 	}
-	if f.Status != "" {
-		if task.StatusValidator(task.Status(f.Status)) != nil {
-			return nil, dms.Invalid("status is open, completed, cancelled or expired")
-		}
-		q.Where(task.StatusEQ(task.Status(f.Status)))
+	if f.Status != "" && !f.Status.Valid() {
+		return taskstore.Filter{}, dms.Invalid("status is open, completed, cancelled or expired")
 	}
-	if f.Kind != "" {
-		if task.KindValidator(task.Kind(f.Kind)) != nil {
-			return nil, dms.Invalid("kind is task or approval")
-		}
-		q.Where(task.KindEQ(task.Kind(f.Kind)))
+	if f.Kind != "" && !f.Kind.Valid() {
+		return taskstore.Filter{}, dms.Invalid("kind is task or approval")
 	}
-	if f.Key != "" {
-		q.Where(task.KeyEQ(f.Key))
-	}
-	if f.WorkspaceID != "" {
-		q.Where(task.WorkspaceIDEQ(f.WorkspaceID))
-	}
-	if f.ItemID != "" {
-		q.Where(task.ItemIDEQ(f.ItemID))
-	}
-	if f.Status == string(task.StatusOpen) {
-		// Open tasks by due time, those without one last, then oldest first.
-		return q.Order(task.ByDueAt(entsql.OrderNullsLast()), task.ByCreatedAt(), task.ByID()), nil
-	}
-	return q.Order(ent.Desc(task.FieldCreatedAt), ent.Desc(task.FieldID)), nil
+	in.Status, in.Kind, in.Key, in.WorkspaceID, in.ItemID = f.Status, f.Kind, f.Key, f.WorkspaceID, f.ItemID
+	in.Subject, in.Groups, in.Waiting = subject, groups, f.Waiting
+	return in, nil
 }
 
 // page reads a page of the tasks q selects, keeping those visible says the
 // reader may see (all when visible is nil). The cursor counts the rows read.
-func page(ctx context.Context, t *dms.Service, q *ent.TaskQuery, f Filter, subject string, groups []string,
-	visible func([]*ent.Task) (map[string]bool, error)) (dms.Page[View], error) {
+func page(ctx context.Context, t *dms.Service, q taskstore.Filter, f Filter, subject string, groups []string,
+	visible func([]taskstore.Task) (map[string]bool, error)) (dms.Page[View], error) {
 	limit := f.Limit
 	if limit <= 0 || limit > 200 {
 		limit = 100
@@ -147,7 +134,9 @@ func page(ctx context.Context, t *dms.Service, q *ent.TaskQuery, f Filter, subje
 	}
 	out := dms.Page[View]{Data: []View{}}
 	for scans := 1; ; scans++ {
-		rows, err := q.Clone().Offset(offset).Limit(limit + 1).All(ctx)
+		query := q
+		query.Offset, query.Limit = offset, limit+1
+		rows, err := t.DAL.Tasks().List(ctx, query)
 		if err != nil {
 			return out, err
 		}
@@ -187,7 +176,7 @@ func page(ctx context.Context, t *dms.Service, q *ent.TaskQuery, f Filter, subje
 }
 
 // answersOf returns the entries that answered each task.
-func answersOf(ctx context.Context, t *dms.Service, rows []*ent.Task) (map[string][]string, error) {
+func answersOf(ctx context.Context, t *dms.Service, rows []taskstore.Task) (map[string][]string, error) {
 	out := map[string][]string{}
 	if len(rows) == 0 {
 		return out, nil
@@ -196,13 +185,11 @@ func answersOf(ctx context.Context, t *dms.Service, rows []*ent.Task) (map[strin
 	for i, tk := range rows {
 		ids[i] = tk.ID
 	}
-	var answers []struct {
-		TaskID   string `json:"task_id"`
-		Assignee string `json:"assignee"`
-	}
-	if err := t.Client.TaskResponse.Query().Where(taskresponse.TaskIDIn(ids...)).Select(taskresponse.FieldTaskID, taskresponse.FieldAssignee).Scan(ctx, &answers); err != nil {
+	answers, err := t.DAL.Tasks().Responses(ctx, ids, nil)
+	if err != nil {
 		return nil, err
 	}
+
 	for _, a := range answers {
 		out[a.TaskID] = append(out[a.TaskID], a.Assignee)
 	}
@@ -211,12 +198,12 @@ func answersOf(ctx context.Context, t *dms.Service, rows []*ent.Task) (map[strin
 
 // reviewable reports which tasks subject may still review, as CanReview
 // does for each, in two queries.
-func reviewable(ctx context.Context, t *dms.Service, subject string, rows []*ent.Task) (map[string]bool, error) {
+func reviewable(ctx context.Context, t *dms.Service, subject string, rows []taskstore.Task) (map[string]bool, error) {
 	var workspaces, items []string
 	for _, tk := range rows {
 		workspaces = append(workspaces, tk.WorkspaceID)
-		if tk.ItemID != nil {
-			items = append(items, *tk.ItemID)
+		if tk.ItemID != "" {
+			items = append(items, tk.ItemID)
 		}
 	}
 	readable, err := t.AuthorizeMany(ctx, subject, "read", workspaces)
@@ -229,7 +216,7 @@ func reviewable(ctx context.Context, t *dms.Service, subject string, rows []*ent
 	}
 	out := map[string]bool{}
 	for _, tk := range rows {
-		out[tk.ID] = readable[tk.WorkspaceID] && (tk.ItemID == nil || drafts[*tk.ItemID])
+		out[tk.ID] = readable[tk.WorkspaceID] && (tk.ItemID == "" || drafts[tk.ItemID])
 	}
 	return out, nil
 }
@@ -248,11 +235,11 @@ func (s *Service) Mine(ctx context.Context, subject string, f Filter) (dms.Page[
 		if err != nil {
 			return dms.Page[View]{}, err
 		}
-		q, err := f.apply(t.Client.Task.Query().Where(assignedTo(subject, groups)), subject, groups)
+		q, err := f.apply(taskstore.Filter{AssignedOnly: true}, subject, groups)
 		if err != nil {
 			return dms.Page[View]{}, err
 		}
-		return page(ctx, t, q, f, subject, groups, func(rows []*ent.Task) (map[string]bool, error) { return reviewable(ctx, t, subject, rows) })
+		return page(ctx, t, q, f, subject, groups, func(rows []taskstore.Task) (map[string]bool, error) { return reviewable(ctx, t, subject, rows) })
 	})
 }
 
@@ -270,7 +257,7 @@ func (s *Service) Workspace(ctx context.Context, subject, workspaceID string, f 
 			return dms.Page[View]{}, err
 		}
 		f.WorkspaceID = workspaceID
-		q, err := f.apply(t.Client.Task.Query(), subject, groups)
+		q, err := f.apply(taskstore.Filter{}, subject, groups)
 		if err != nil {
 			return dms.Page[View]{}, err
 		}
@@ -291,14 +278,14 @@ func (s *Service) Item(ctx context.Context, subject, itemID string, f Filter) (d
 			return dms.Page[View]{}, err
 		}
 		f.ItemID = itemID
-		q, err := f.apply(t.Client.Task.Query(), subject, groups)
+		q, err := f.apply(taskstore.Filter{}, subject, groups)
 		if err != nil {
 			return dms.Page[View]{}, err
 		}
 		owner := manages(ctx, t, subject, item.WorkspaceID)
 		_, err = t.Authorize(ctx, subject, item.WorkspaceID, "read")
 		member := err == nil
-		return page(ctx, t, q, f, subject, groups, func(rows []*ent.Task) (map[string]bool, error) {
+		return page(ctx, t, q, f, subject, groups, func(rows []taskstore.Task) (map[string]bool, error) {
 			out := map[string]bool{}
 			for _, tk := range rows {
 				out[tk.ID] = owner || member && (tk.CreatedBy == subject || len(entriesOf(tk, subject, groups)) > 0)
@@ -311,8 +298,8 @@ func (s *Service) Item(ctx context.Context, subject, itemID string, f Filter) (d
 // Get returns a task with its responses to whoever may see it.
 func (s *Service) Get(ctx context.Context, subject, id string) (View, error) {
 	return dms.Read(ctx, s.DMS, func(t *dms.Service) (View, error) {
-		tk, err := t.Client.Task.Get(ctx, id)
-		if ent.IsNotFound(err) {
+		tk, err := t.DAL.Tasks().Find(ctx, id)
+		if dberr.IsNotFound(err) {
 			return View{}, dms.ErrNotFound
 		}
 		if err != nil {
@@ -330,12 +317,12 @@ func (s *Service) Get(ctx context.Context, subject, id string) (View, error) {
 }
 
 // viewOf shows a task to subject, given the entries that answered it.
-func viewOf(tk *ent.Task, subject string, groups []string, answered []string) View {
+func viewOf(tk taskstore.Task, subject string, groups []string, answered []string) View {
 	v := toView(tk)
 	for _, e := range entriesOf(tk, subject, groups) {
 		if slices.Contains(answered, e) {
 			v.Answered = true
-		} else if tk.Status == task.StatusOpen {
+		} else if tk.Status == taskstore.StatusOpen {
 			v.CanRespond = true
 		}
 	}
@@ -343,8 +330,8 @@ func viewOf(tk *ent.Task, subject string, groups []string, answered []string) Vi
 }
 
 // view shows one task to subject with its responses.
-func view(ctx context.Context, t *dms.Service, tk *ent.Task, subject string, groups []string) (View, error) {
-	rows, err := t.Client.TaskResponse.Query().Where(taskresponse.TaskIDEQ(tk.ID)).Order(ent.Asc(taskresponse.FieldCreatedAt), ent.Asc(taskresponse.FieldID)).All(ctx)
+func view(ctx context.Context, t *dms.Service, tk taskstore.Task, subject string, groups []string) (View, error) {
+	rows, err := t.DAL.Tasks().Responses(ctx, []string{tk.ID}, nil)
 	if err != nil {
 		return View{}, err
 	}
@@ -353,7 +340,7 @@ func view(ctx context.Context, t *dms.Service, tk *ent.Task, subject string, gro
 		answered[i] = r.Assignee
 	}
 	v := viewOf(tk, subject, groups, answered)
-	v.CanReassign = tk.Status == task.StatusOpen && (tk.CreatedBy == subject && tk.Source != task.SourceWorkflow || manages(ctx, t, subject, tk.WorkspaceID))
+	v.CanReassign = tk.Status == taskstore.StatusOpen && (tk.CreatedBy == subject && tk.Source != taskstore.SourceWorkflow || manages(ctx, t, subject, tk.WorkspaceID))
 	v.Responses = make([]ResponseView, len(rows))
 	for i, r := range rows {
 		v.Responses[i] = ResponseView{Subject: r.Subject, Assignee: r.Assignee, Outcome: r.Outcome, Comment: r.Comment, Input: r.Input, CreatedAt: r.CreatedAt}
@@ -425,19 +412,19 @@ func (s *Service) Cancel(ctx context.Context, subject, id string) (View, error) 
 // Result reads a task a run waits for: the node's output once the task is
 // completed, or nil while it is open. A cancelled task is ErrCancelled.
 func Result(ctx context.Context, t *dms.Service, id string) (map[string]any, error) {
-	tk, err := t.Client.Task.Get(ctx, id)
+	tk, err := t.DAL.Tasks().Find(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 	switch tk.Status {
-	case task.StatusOpen:
+	case taskstore.StatusOpen:
 		return nil, nil
-	case task.StatusCancelled:
+	case taskstore.StatusCancelled:
 		return nil, ErrCancelled
 	}
-	out := map[string]any{"task_id": tk.ID, "outcome": deref(tk.Outcome), "comment": tk.Comment, "status": string(tk.Status)}
-	if tk.CompletedBy != nil {
-		out["completed_by"] = *tk.CompletedBy
+	out := map[string]any{"task_id": tk.ID, "outcome": tk.Outcome, "comment": tk.Comment, "status": string(tk.Status)}
+	if tk.CompletedBy != "" {
+		out["completed_by"] = tk.CompletedBy
 	}
 	if len(tk.Input) > 0 {
 		var input any
@@ -445,7 +432,7 @@ func Result(ctx context.Context, t *dms.Service, id string) (map[string]any, err
 			out["input"] = input
 		}
 	}
-	rows, err := t.Client.TaskResponse.Query().Where(taskresponse.TaskIDEQ(tk.ID)).Order(ent.Asc(taskresponse.FieldCreatedAt), ent.Asc(taskresponse.FieldID)).All(ctx)
+	rows, err := t.DAL.Tasks().Responses(ctx, []string{tk.ID}, nil)
 	if err != nil {
 		return nil, err
 	}

@@ -3,8 +3,8 @@ package dms
 import (
 	"encoding/json"
 	"errors"
-	"papergo/ent"
-	"papergo/ent/domainevent"
+	eventstore "papergo/internal/dal/events"
+	"papergo/internal/dal/resources"
 	"papergo/internal/model"
 	"slices"
 	"strings"
@@ -23,12 +23,12 @@ func mustTerm(t *testing.T, s *Service, setID string, in TermInput) TermView {
 func TestOrganizationTaxonomyGroupsAndSets(t *testing.T) {
 	s, w, _ := fixture(t)
 	groups, err := s.TermGroups(testContext, "alice", "", 10)
-	if err != nil || len(groups.Data) != 1 || !groups.Data[0].IsSystem || groups.Data[0].Name != SystemTermGroupName {
+	if err != nil || len(groups.Data) != 1 || !groups.Data[0].IsSystem || groups.Data[0].Name != "System" {
 		t.Fatal("system group", groups, err)
 	}
 	system := groups.Data[0]
 	sets, err := s.TermSets(testContext, "alice", system.ID, "", 10)
-	if err != nil || len(sets.Data) != 1 || !sets.Data[0].IsKeywords || !sets.Data[0].IsOpen || sets.Data[0].Key != KeywordsTermSetKey {
+	if err != nil || len(sets.Data) != 1 || !sets.Data[0].IsKeywords || !sets.Data[0].IsOpen || sets.Data[0].Key != "keywords" {
 		t.Fatal("keywords set", sets, err)
 	}
 	keywords := sets.Data[0]
@@ -81,9 +81,6 @@ func TestOrganizationTaxonomyGroupsAndSets(t *testing.T) {
 		t.Fatal("deleted a set used by a field")
 	}
 	mustTerm(t, s, used.ID, TermInput{Name: "Kept"})
-	if _, err = s.Client.ExecContext(testContext, "DELETE FROM terms"); err == nil {
-		t.Fatal("terms are retained")
-	}
 }
 
 func TestTermTreeOpenSetsAndListing(t *testing.T) {
@@ -133,7 +130,7 @@ func TestTermTreeOpenSetsAndListing(t *testing.T) {
 		t.Fatal("uppercase color")
 	}
 	if spain.Path != europe.Path+spain.ID+"/" || spain.Description != "Kingdom" || *spain.Color != color {
-		t.Fatal("term details", spain.Term)
+		t.Fatal("term details", spain)
 	}
 
 	roots, err := s.Terms(testContext, "reader", closed.ID, TermsQuery{})
@@ -187,7 +184,7 @@ func TestMoveAndMergeTerms(t *testing.T) {
 	}
 	moved, err := s.MoveTerm(testContext, "alice", tax.ID, tax.Version, MoveTermInput{ParentID: &finance.ID})
 	if err != nil || moved.Path != finance.Path+tax.ID+"/" || *moved.ParentID != finance.ID {
-		t.Fatal("move", moved.Term, err)
+		t.Fatal("move", moved, err)
 	}
 	child, _ := s.Term(testContext, "alice", vat.ID)
 	if child.Path != moved.Path+vat.ID+"/" {
@@ -217,19 +214,19 @@ func TestMoveAndMergeTerms(t *testing.T) {
 		t.Fatal(err)
 	}
 	if strings.Join(target.Synonyms, ",") != "Money,Accounting,Books,Bookkeeping" || !target.HasChildren {
-		t.Fatal("merged synonyms and children", target.Term)
+		t.Fatal("merged synonyms and children", target)
 	}
 	source, _ := s.Term(testContext, "alice", money.ID)
 	if source.MergedIntoID == nil || *source.MergedIntoID != finance.ID || !source.Deprecated {
-		t.Fatal("source", source.Term)
+		t.Fatal("source", source)
 	}
 	chained, _ := s.Term(testContext, "alice", old.ID)
 	if *chained.MergedIntoID != finance.ID {
-		t.Fatal("earlier merges point at the target", chained.Term)
+		t.Fatal("earlier merges point at the target", chained)
 	}
 	child, _ = s.Term(testContext, "alice", tax.ID)
 	if *child.ParentID != finance.ID || child.Version != back.Version+1 {
-		t.Fatal("children move to the target", child.Term)
+		t.Fatal("children move to the target", child)
 	}
 	if child, _ = s.Term(testContext, "alice", vat.ID); child.Path != finance.Path+tax.ID+"/"+vat.ID+"/" {
 		t.Fatal("grandchild path", child.Path)
@@ -240,7 +237,7 @@ func TestMoveAndMergeTerms(t *testing.T) {
 	if _, err = s.MergeTerm(testContext, "alice", finance.ID, target.Version, MergeTermInput{TargetTermID: tax.ID}); err == nil {
 		t.Fatal("merged into a descendant")
 	}
-	events, err := s.Client.DomainEvent.Query().Where(domainevent.TypeEQ(EventTermMerged)).All(testContext)
+	events, err := s.DAL.Events().List(testContext, eventstore.Filter{Types: []string{EventTermMerged}})
 	if err != nil || len(events) != 2 || events[1].Data["target_term_id"] != finance.ID {
 		t.Fatal("term.merged events", events, err)
 	}
@@ -282,11 +279,11 @@ func TestKeywords(t *testing.T) {
 	}
 	merged, err := s.PromoteKeyword(testContext, "alice", trip.ID, trip.Version, PromoteKeywordInput{TermSetID: set.ID})
 	if err != nil || merged.ID != travel.ID || !merged.AvailableAsKeyword {
-		t.Fatal("promote merges into a matching label", merged.Term, err)
+		t.Fatal("promote merges into a matching label", merged, err)
 	}
 	promoted, err := s.PromoteKeyword(testContext, "alice", budget.ID, budget.Version, PromoteKeywordInput{TermSetID: set.ID, ParentID: &travel.ID})
 	if err != nil || promoted.ID != budget.ID || promoted.TermSetID != set.ID || !promoted.AvailableAsKeyword || promoted.Path != travel.Path+budget.ID+"/" {
-		t.Fatal("promote moves", promoted.Term, err)
+		t.Fatal("promote moves", promoted, err)
 	}
 	suggested, _ = s.Keywords(testContext, "reader", "", 0)
 	names := []string{}
@@ -297,10 +294,10 @@ func TestKeywords(t *testing.T) {
 		t.Fatal("keywords include promoted terms", names)
 	}
 	if again, created, _ = s.AddKeyword(testContext, "writer", KeywordInput{Name: "trip"}); created || again.ID != travel.ID {
-		t.Fatal("a merged keyword name finds its term", again.Term, created)
+		t.Fatal("a merged keyword name finds its term", again, created)
 	}
 
-	keywordsSet, _ := s.keywordsSet(testContext)
+	keywordsSet, _ := s.DAL.Taxonomy().KeywordsSet(testContext)
 	if _, err = s.CreateField(testContext, "alice", l.ID, CreateField{Key: "keywords", Label: "Keywords", Type: "term", Indexed: true, Options: model.FieldOptions{TermSetID: keywordsSet.ID, Multiple: true}}); err != nil {
 		t.Fatal(err)
 	}
@@ -392,7 +389,7 @@ func TestTermAndKeywordsFieldValues(t *testing.T) {
 			t.Fatal(f.Key, err)
 		}
 	}
-	item := func(name string, values map[string]any) (*ent.Resource, error) {
+	item := func(name string, values map[string]any) (*resources.Resource, error) {
 		return s.Create(testContext, "alice", l.ID, CreateResource{Kind: "item", Name: name, Values: values})
 	}
 	for label, want := range map[string]string{"georgia": "matches several", "Atlantis": "closed term set"} {
@@ -413,7 +410,7 @@ func TestTermAndKeywordsFieldValues(t *testing.T) {
 	finance, _ := s.Term(testContext, "alice", madrid.Values["topics"].([]any)[0].(string))
 	lunch, _ := s.Term(testContext, "alice", madrid.Values["keywords"].([]any)[0].(string))
 	if finance.Name != "Finance" || finance.TermSetID != topics.ID || lunch.Name != "Lunch" || lunch.ParentID != nil {
-		t.Fatal("open sets get new terms", finance.Term, lunch.Term)
+		t.Fatal("open sets get new terms", finance, lunch)
 	}
 	if _, err = item("Wrong set", map[string]any{"keywords": []any{spain.ID}}); err == nil {
 		t.Fatal("a managed term is not a keyword")

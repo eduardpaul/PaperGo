@@ -3,9 +3,10 @@ package dms
 import (
 	"encoding/json"
 	"errors"
-	"papergo/ent"
-	"papergo/ent/fieldvalue"
-	"papergo/ent/relationship"
+	"papergo/internal/dal/grants"
+	"papergo/internal/dal/relationships"
+	"papergo/internal/dal/resources"
+	"papergo/internal/dal/surfaces"
 	"papergo/internal/model"
 	"strings"
 	"sync"
@@ -13,7 +14,7 @@ import (
 )
 
 func ptr[T any](v T) *T { return &v }
-func latest(t *testing.T, s *Service, id string) *ent.Resource {
+func latest(t *testing.T, s *Service, id string) *resources.Resource {
 	t.Helper()
 	r, e := s.Get(testContext, "alice", id)
 	if e != nil {
@@ -21,14 +22,14 @@ func latest(t *testing.T, s *Service, id string) *ent.Resource {
 	}
 	return r
 }
-func grantReader(t *testing.T, s *Service, w *ent.Resource) {
+func grantReader(t *testing.T, s *Service, w *resources.Resource) {
 	t.Helper()
 	e := setWorkspaceMembers(testContext, s, "alice", w.ID, WorkspaceMember{Subject: "reader", Role: "visitor"})
 	if e != nil {
 		t.Fatal(e)
 	}
 }
-func publishItem(t *testing.T, s *Service, r *ent.Resource) {
+func publishItem(t *testing.T, s *Service, r *resources.Resource) {
 	t.Helper()
 	if _, e := s.Publish(testContext, "alice", r.ID, latest(t, s, r.ID).Version); e != nil {
 		t.Fatal(e)
@@ -201,7 +202,7 @@ func TestQueriesViewsAndCountsUseVisibleContentBeforePagination(t *testing.T) {
 	missing := create(t, s, l.ID, "item", "No number", nil)
 	hidden := create(t, s, l.ID, "item", "Hidden", map[string]any{"serial": json.Number("1")})
 	draft := create(t, s, l.ID, "item", "Never published", map[string]any{"serial": json.Number("2")})
-	for _, r := range []*ent.Resource{a, b, c, missing, hidden} {
+	for _, r := range []*resources.Resource{a, b, c, missing, hidden} {
 		publishItem(t, s, r)
 	}
 	if _, e := s.SetPermissions(testContext, "alice", hidden.ID, latest(t, s, hidden.ID).Version, Permissions{Grants: []Permission{{"user", "alice", "manage", "allow"}}}); e != nil {
@@ -356,8 +357,8 @@ func TestExclusiveScopesInheritanceCopyAndReset(t *testing.T) {
 		t.Fatal("copied workspace roles must track current membership", e)
 	}
 	inherited := create(t, s, l.ID, "folder", "Inherited", nil)
-	if _, e = s.Client.Grant.Create().SetResourceID(inherited.ID).SetPrincipalType("user").SetPrincipalID("reader").SetAction("read").SetEffect("allow").Save(testContext); e == nil {
-		t.Fatal("database accepted a grant on an inherited resource")
+	if _, e = s.DAL.Grants().Create(testContext, grants.Grant{ResourceID: inherited.ID, PrincipalType: grants.PrincipalUser, PrincipalID: "reader", Action: grants.ActionRead}); e == nil {
+		t.Fatal("repository accepted a grant on an inherited resource")
 	}
 }
 func TestTypedRelationshipsConcurrencySymmetryAndCardinality(t *testing.T) {
@@ -445,7 +446,7 @@ func TestTypedRelationshipsConcurrencySymmetryAndCardinality(t *testing.T) {
 	if success != 1 {
 		t.Fatal("concurrent cardinality", success)
 	}
-	n, e := s.Client.Relationship.Query().Where(relationship.TypeIDEQ(single.ID)).Count(testContext)
+	n, e := s.DAL.Relationships().Count(testContext, relationships.Filter{TypeIDs: []string{single.ID}})
 	if e != nil || n != 1 {
 		t.Fatal("cardinality persisted", n, e)
 	}
@@ -476,7 +477,7 @@ func TestExpandedFieldIndexesSurviveIndexRebuild(t *testing.T) {
 	}
 	r := create(t, s, l.ID, "item", "Multi", map[string]any{"labels": []any{"one", "two"}})
 	publishItem(t, s, r)
-	n, e := s.Client.FieldValue.Query().Where(fieldvalue.ItemIDEQ(r.ID)).Count(testContext)
+	n, e := countFieldValues(s, surfaces.ValueFilter{ItemID: r.ID})
 	if e != nil || n != 4 {
 		t.Fatal("multi-value index rows", n, e)
 	}
@@ -487,7 +488,7 @@ func TestExpandedFieldIndexesSurviveIndexRebuild(t *testing.T) {
 		if e = s.runOperations(testContext); e != nil {
 			t.Fatal(e)
 		}
-		n, e = s.Client.FieldValue.Query().Where(fieldvalue.ItemIDEQ(r.ID)).Count(testContext)
+		n, e = countFieldValues(s, surfaces.ValueFilter{ItemID: r.ID})
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -514,7 +515,9 @@ func TestExpandedFieldIndexesSurviveIndexRebuild(t *testing.T) {
 	if after.Version != before.Version {
 		t.Fatal("invalid definition changed schema")
 	}
-	if _, e = s.Client.FieldDefinition.UpdateOne(d).SetOptions(model.FieldOptions{}).Save(testContext); e == nil {
+	change := *d
+	change.Options = model.FieldOptions{}
+	if _, e = s.DAL.Catalog().SaveField(testContext, change, d.Version); e == nil {
 		t.Fatal("database changed multiple field identity")
 	}
 }

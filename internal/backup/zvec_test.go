@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"papergo/internal/database"
+	"papergo/internal/dal/database"
+	"papergo/internal/dal/search/zvecstore"
 	"papergo/internal/search"
-	"papergo/internal/search/zvecstore"
 )
 
 func TestOfflineNativeSearchBackup(t *testing.T) {

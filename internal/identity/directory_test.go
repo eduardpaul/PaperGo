@@ -4,16 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"papergo/internal/database"
+	"papergo/internal/dal"
+	"papergo/internal/dal/daltest"
+	"papergo/internal/dal/database"
+	"papergo/internal/dal/directory"
 	"papergo/internal/identity"
-	"papergo/internal/testutil"
 	"path/filepath"
 	"testing"
 )
 
 func TestNestedGroupsRolesAndRevocation(t *testing.T) {
 	ctx := context.Background()
-	db := testutil.Database(t)
+	db := daltest.Database(t)
 	d := identity.Directory{DB: db.SQL}
 	admin := "organization-admin"
 	if err := d.EnsureUser(ctx, "identity-reader"); err != nil {
@@ -27,8 +29,8 @@ func TestNestedGroupsRolesAndRevocation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	user := identity.Principal{Type: "user", ID: "identity-reader"}
-	nested := identity.Principal{Type: "group", ID: child.ID}
+	user := identity.Principal{Type: directory.PrincipalUser, ID: "identity-reader"}
+	nested := identity.Principal{Type: directory.PrincipalGroup, ID: child.ID}
 	if err = d.SetMember(ctx, admin, child.ID, user, false); err != nil {
 		t.Fatal(err)
 	}
@@ -39,13 +41,13 @@ func TestNestedGroupsRolesAndRevocation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = d.SetAssignment(ctx, admin, role.ID, identity.Principal{Type: "group", ID: parent.ID}, false); err != nil {
+	if err = d.SetAssignment(ctx, admin, role.ID, identity.Principal{Type: directory.PrincipalGroup, ID: parent.ID}, false); err != nil {
 		t.Fatal(err)
 	}
-	if err = identity.RequireScope(ctx, db.SQL, user.ID, "taxonomy.manage"); err != nil {
+	if err = identity.RequireScope(ctx, dal.NewStore(db.SQL), user.ID, "taxonomy.manage"); err != nil {
 		t.Fatal(err)
 	}
-	if err = d.SetMember(ctx, admin, child.ID, identity.Principal{Type: "group", ID: parent.ID}, false); err == nil {
+	if err = d.SetMember(ctx, admin, child.ID, identity.Principal{Type: directory.PrincipalGroup, ID: parent.ID}, false); err == nil {
 		t.Fatal("cycle accepted")
 	}
 	if err = d.SetMember(ctx, user.ID, parent.ID, user, false); !errors.Is(err, identity.ErrForbidden) {
@@ -57,33 +59,33 @@ func TestNestedGroupsRolesAndRevocation(t *testing.T) {
 	if err = d.SetMember(ctx, admin, child.ID, user, true); err != nil {
 		t.Fatal(err)
 	}
-	if err = identity.RequireScope(ctx, db.SQL, user.ID, "taxonomy.manage"); !errors.Is(err, identity.ErrForbidden) {
+	if err = identity.RequireScope(ctx, dal.NewStore(db.SQL), user.ID, "taxonomy.manage"); !errors.Is(err, identity.ErrForbidden) {
 		t.Fatalf("revocation: %v", err)
 	}
 	if _, err = d.SaveRole(ctx, admin, "", 0, identity.RoleInput{Name: "Unknown", Scopes: []string{"list.admin"}}); err == nil {
 		t.Fatal("unknown scope accepted")
 	}
-	if err = d.SetAssignment(ctx, admin, identity.AdministratorRole, identity.Principal{Type: "user", ID: admin}, true); !errors.Is(err, identity.ErrLastAdministrator) {
+	if err = d.SetAssignment(ctx, admin, identity.AdministratorRole, identity.Principal{Type: directory.PrincipalUser, ID: admin}, true); !errors.Is(err, identity.ErrLastAdministrator) {
 		t.Fatalf("last administrator: %v", err)
 	}
 }
 
 func TestGroupAdministratorCannotManageUsersOrRoles(t *testing.T) {
 	ctx := t.Context()
-	db := testutil.Database(t)
+	db := daltest.Database(t)
 	d := identity.Directory{DB: db.SQL}
 	role, err := d.SaveRole(ctx, "organization-admin", "", 0, identity.RoleInput{Name: "Group administrator", Scopes: []string{"group.read", "group.manage"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = d.SetAssignment(ctx, "organization-admin", role.ID, identity.Principal{Type: "user", ID: "bob"}, false); err != nil {
+	if err = d.SetAssignment(ctx, "organization-admin", role.ID, identity.Principal{Type: directory.PrincipalUser, ID: "bob"}, false); err != nil {
 		t.Fatal(err)
 	}
 	group, err := d.SaveGroup(ctx, "bob", "", 0, identity.GroupInput{Name: "Delegated group"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = d.SetMember(ctx, "bob", group.ID, identity.Principal{Type: "user", ID: "carol"}, false); err != nil {
+	if err = d.SetMember(ctx, "bob", group.ID, identity.Principal{Type: directory.PrincipalUser, ID: "carol"}, false); err != nil {
 		t.Fatal(err)
 	}
 	for _, action := range []func() error{
@@ -94,7 +96,7 @@ func TestGroupAdministratorCannotManageUsersOrRoles(t *testing.T) {
 			return err
 		},
 		func() error {
-			return d.SetAssignment(ctx, "bob", identity.AdministratorRole, identity.Principal{Type: "user", ID: "bob"}, false)
+			return d.SetAssignment(ctx, "bob", identity.AdministratorRole, identity.Principal{Type: directory.PrincipalUser, ID: "bob"}, false)
 		},
 	} {
 		if err = action(); !errors.Is(err, identity.ErrForbidden) {
@@ -105,43 +107,43 @@ func TestGroupAdministratorCannotManageUsersOrRoles(t *testing.T) {
 
 func TestEnrollmentAndBootstrapDoNotRestoreRemovedRoles(t *testing.T) {
 	ctx := context.Background()
-	db := testutil.Database(t)
+	db := daltest.Database(t)
 	d := identity.Directory{DB: db.SQL}
 	user := "limited-user"
 	if err := d.EnsureUser(ctx, user); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.SetAssignment(ctx, "organization-admin", identity.MemberRole, identity.Principal{Type: "user", ID: user}, true); err != nil {
+	if err := d.SetAssignment(ctx, "organization-admin", identity.MemberRole, identity.Principal{Type: directory.PrincipalUser, ID: user}, true); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.EnsureUser(ctx, user); err != nil {
 		t.Fatal(err)
 	}
-	if err := identity.RequireScope(ctx, db.SQL, user, "list.read"); !errors.Is(err, identity.ErrForbidden) {
+	if err := identity.RequireScope(ctx, dal.NewStore(db.SQL), user, "list.read"); !errors.Is(err, identity.ErrForbidden) {
 		t.Fatalf("enrollment restored removed role: %v", err)
 	}
 	if err := d.Initialize(ctx, user, ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := identity.RequireScope(ctx, db.SQL, user, "role.manage"); !errors.Is(err, identity.ErrForbidden) {
+	if err := identity.RequireScope(ctx, dal.NewStore(db.SQL), user, "role.manage"); !errors.Is(err, identity.ErrForbidden) {
 		t.Fatalf("bootstrap promoted another user: %v", err)
 	}
 }
 
 func TestNestedAdministratorProtectionAndGroupDepth(t *testing.T) {
 	ctx := context.Background()
-	db := testutil.Database(t)
+	db := daltest.Database(t)
 	d := identity.Directory{DB: db.SQL}
 	actor := "alice"
 	var parent, leaf identity.Group
-	for i := 0; i < identity.MaxGroupDepth; i++ {
+	for i := 0; i < directory.MaxGroupDepth; i++ {
 		g, err := d.SaveGroup(ctx, actor, "", 0, identity.GroupInput{Name: fmt.Sprintf("Level %d", i)})
 		if err != nil {
 			t.Fatal(err)
 		}
 		if i == 0 {
 			parent = g
-		} else if err = d.SetMember(ctx, actor, leaf.ID, identity.Principal{Type: "group", ID: g.ID}, false); err != nil {
+		} else if err = d.SetMember(ctx, actor, leaf.ID, identity.Principal{Type: directory.PrincipalGroup, ID: g.ID}, false); err != nil {
 			t.Fatal(err)
 		}
 		leaf = g
@@ -150,32 +152,32 @@ func TestNestedAdministratorProtectionAndGroupDepth(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = d.SetMember(ctx, actor, leaf.ID, identity.Principal{Type: "group", ID: extra.ID}, false); err == nil {
+	if err = d.SetMember(ctx, actor, leaf.ID, identity.Principal{Type: directory.PrincipalGroup, ID: extra.ID}, false); err == nil {
 		t.Fatal("excessive group depth accepted")
 	}
-	if err = d.SetMember(ctx, actor, leaf.ID, identity.Principal{Type: "user", ID: "bob"}, false); err != nil {
+	if err = d.SetMember(ctx, actor, leaf.ID, identity.Principal{Type: directory.PrincipalUser, ID: "bob"}, false); err != nil {
 		t.Fatal(err)
 	}
-	if err = d.SetAssignment(ctx, actor, identity.AdministratorRole, identity.Principal{Type: "group", ID: parent.ID}, false); err != nil {
+	if err = d.SetAssignment(ctx, actor, identity.AdministratorRole, identity.Principal{Type: directory.PrincipalGroup, ID: parent.ID}, false); err != nil {
 		t.Fatal(err)
 	}
-	if err = d.SetAssignment(ctx, actor, identity.AdministratorRole, identity.Principal{Type: "user", ID: "organization-admin"}, true); err != nil {
+	if err = d.SetAssignment(ctx, actor, identity.AdministratorRole, identity.Principal{Type: directory.PrincipalUser, ID: "organization-admin"}, true); err != nil {
 		t.Fatal(err)
 	}
-	if err = d.SetMember(ctx, actor, leaf.ID, identity.Principal{Type: "user", ID: "bob"}, true); !errors.Is(err, identity.ErrLastAdministrator) {
+	if err = d.SetMember(ctx, actor, leaf.ID, identity.Principal{Type: directory.PrincipalUser, ID: "bob"}, true); !errors.Is(err, identity.ErrLastAdministrator) {
 		t.Fatal("last nested administrator removed", err)
 	}
 	if err = d.DeleteGroup(ctx, actor, parent.ID, parent.Version); !errors.Is(err, identity.ErrLastAdministrator) {
 		t.Fatal("last administrator group deleted", err)
 	}
-	if err = identity.RequireScope(ctx, db.SQL, "bob", "role.manage"); err != nil {
+	if err = identity.RequireScope(ctx, dal.NewStore(db.SQL), "bob", "role.manage"); err != nil {
 		t.Fatal("failed change did not roll back", err)
 	}
 }
 
 func TestOIDCGroupSyncAndLocalIsolation(t *testing.T) {
 	ctx := context.Background()
-	db := testutil.Database(t)
+	db := daltest.Database(t)
 	d := identity.Directory{DB: db.SQL}
 	admin := "organization-admin"
 
@@ -187,7 +189,7 @@ func TestOIDCGroupSyncAndLocalIsolation(t *testing.T) {
 	if accounting.Source != "local" {
 		t.Fatalf("expected local source, got %s", accounting.Source)
 	}
-	if err = d.SetMember(ctx, admin, accounting.ID, identity.Principal{Type: "user", ID: "alice"}, false); err != nil {
+	if err = d.SetMember(ctx, admin, accounting.ID, identity.Principal{Type: directory.PrincipalUser, ID: "alice"}, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -225,11 +227,11 @@ func TestOIDCGroupSyncAndLocalIsolation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	groupSources := map[string]string{}
+	groupSources := map[string]directory.GroupSource{}
 	for _, g := range groups {
 		groupSources[g.Name] = g.Source
 	}
-	if groupSources["devs"] != "oidc" || groupSources["qa"] != "oidc" || groupSources["Accounting"] != "local" {
+	if groupSources["devs"] != directory.SourceOIDC || groupSources["qa"] != directory.SourceOIDC || groupSources["Accounting"] != directory.SourceLocal {
 		t.Fatalf("unexpected group sources: %+v", groupSources)
 	}
 
@@ -298,7 +300,7 @@ func TestOIDCGroupSyncAndLocalIsolation(t *testing.T) {
 
 func TestOIDCGroupReadOnlyMemberAPIAndNesting(t *testing.T) {
 	ctx := context.Background()
-	db := testutil.Database(t)
+	db := daltest.Database(t)
 	d := identity.Directory{DB: db.SQL}
 	admin := "organization-admin"
 
@@ -327,13 +329,13 @@ func TestOIDCGroupReadOnlyMemberAPIAndNesting(t *testing.T) {
 	}
 
 	// Direct member addition to OIDC group must fail with ErrGroupManagedByIdentityProvider
-	err = d.SetMember(ctx, admin, engineersGroup.ID, identity.Principal{Type: "user", ID: "charlie"}, false)
+	err = d.SetMember(ctx, admin, engineersGroup.ID, identity.Principal{Type: directory.PrincipalUser, ID: "charlie"}, false)
 	if !errors.Is(err, identity.ErrGroupManagedByIdentityProvider) {
 		t.Fatalf("expected ErrGroupManagedByIdentityProvider, got %v", err)
 	}
 
 	// Direct member deletion from OIDC group must fail
-	err = d.SetMember(ctx, admin, engineersGroup.ID, identity.Principal{Type: "user", ID: "bob"}, true)
+	err = d.SetMember(ctx, admin, engineersGroup.ID, identity.Principal{Type: directory.PrincipalUser, ID: "bob"}, true)
 	if !errors.Is(err, identity.ErrGroupManagedByIdentityProvider) {
 		t.Fatalf("expected ErrGroupManagedByIdentityProvider, got %v", err)
 	}
@@ -343,7 +345,7 @@ func TestOIDCGroupReadOnlyMemberAPIAndNesting(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = d.SetMember(ctx, admin, localGrp.ID, identity.Principal{Type: "group", ID: engineersGroup.ID}, false)
+	err = d.SetMember(ctx, admin, localGrp.ID, identity.Principal{Type: directory.PrincipalGroup, ID: engineersGroup.ID}, false)
 	if err != nil {
 		t.Fatalf("failed to nest OIDC group in local group: %v", err)
 	}
@@ -356,17 +358,17 @@ func TestOIDCGroupReadOnlyMemberAPIAndNesting(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = d.SetAssignment(ctx, admin, role.ID, identity.Principal{Type: "group", ID: localGrp.ID}, false); err != nil {
+	if err = d.SetAssignment(ctx, admin, role.ID, identity.Principal{Type: directory.PrincipalGroup, ID: localGrp.ID}, false); err != nil {
 		t.Fatal(err)
 	}
-	if err = identity.RequireScope(ctx, db.SQL, "bob", "workspace.read"); err != nil {
+	if err = identity.RequireScope(ctx, dal.NewStore(db.SQL), "bob", "workspace.read"); err != nil {
 		t.Fatalf("bob failed to inherit scope through nested OIDC group: %v", err)
 	}
 }
 
 func TestOIDCGroupSyncLastAdministratorProtection(t *testing.T) {
 	ctx := context.Background()
-	db := testutil.Database(t)
+	db := daltest.Database(t)
 	d := identity.Directory{DB: db.SQL}
 
 	// First sync alice to create oidc group cloud-admins
@@ -394,23 +396,19 @@ func TestOIDCGroupSyncLastAdministratorProtection(t *testing.T) {
 	}
 
 	// Assign Administrator role to cloud-admins
-	if err := d.SetAssignment(ctx, "organization-admin", identity.AdministratorRole, identity.Principal{Type: "group", ID: cloudAdminsID}, false); err != nil {
+	if err := d.SetAssignment(ctx, "organization-admin", identity.AdministratorRole, identity.Principal{Type: directory.PrincipalGroup, ID: cloudAdminsID}, false); err != nil {
 		t.Fatal(err)
 	}
 
 	// Remove default organization-admin so alice is the sole administrator
-	if err := d.SetAssignment(ctx, "alice", identity.AdministratorRole, identity.Principal{Type: "user", ID: "organization-admin"}, true); err != nil {
+	if err := d.SetAssignment(ctx, "alice", identity.AdministratorRole, identity.Principal{Type: directory.PrincipalUser, ID: "organization-admin"}, true); err != nil {
 		t.Fatal(err)
 	}
 
 	// Alice tries to sync with empty groups (removed from cloud-admins at IdP)
 	memberAudits := func() int {
 		t.Helper()
-		var count int
-		if err := db.SQL.QueryRowContext(ctx, "SELECT count(*) FROM audit_events WHERE action='group.member' AND entity_id=?", cloudAdminsID).Scan(&count); err != nil {
-			t.Fatal(err)
-		}
-		return count
+		return daltest.Count(t, db.DAL, "audit_events", daltest.Row{"action": "group.member", "entity_id": cloudAdminsID})
 	}
 	beforeRemoval := memberAudits()
 	if err := d.SyncUser(ctx, identity.UserIdentity{
@@ -422,7 +420,7 @@ func TestOIDCGroupSyncLastAdministratorProtection(t *testing.T) {
 	}
 
 	// Alice must STILL be in cloud-admins and have administrator scope (protected)
-	if err := identity.RequireScope(ctx, db.SQL, "alice", "group.manage"); err != nil {
+	if err := identity.RequireScope(ctx, dal.NewStore(db.SQL), "alice", "group.manage"); err != nil {
 		t.Fatalf("last administrator was removed by group sync: %v", err)
 	}
 	if memberAudits() != beforeRemoval {
@@ -430,13 +428,13 @@ func TestOIDCGroupSyncLastAdministratorProtection(t *testing.T) {
 	}
 
 	// Once another administrator is assigned, identical claims must retry removal.
-	if err := d.SetAssignment(ctx, "alice", identity.AdministratorRole, identity.Principal{Type: "user", ID: "carol"}, false); err != nil {
+	if err := d.SetAssignment(ctx, "alice", identity.AdministratorRole, identity.Principal{Type: directory.PrincipalUser, ID: "carol"}, false); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.SyncUser(ctx, identity.UserIdentity{Subject: "alice", Groups: []string{}, SyncGroups: true}); err != nil {
 		t.Fatal(err)
 	}
-	if err := identity.RequireScope(ctx, db.SQL, "alice", "workspace.manage"); !errors.Is(err, identity.ErrForbidden) {
+	if err := identity.RequireScope(ctx, dal.NewStore(db.SQL), "alice", "workspace.manage"); !errors.Is(err, identity.ErrForbidden) {
 		t.Fatalf("removed IdP member retained administrator access: %v", err)
 	}
 	members, err := d.Members(ctx, "carol", cloudAdminsID)
@@ -458,10 +456,8 @@ func TestAdminGroupBootstrap(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
-	for _, f := range testutil.MigrationFiles(t) {
-		if _, err = db.SQL.ExecContext(ctx, string(f.Bytes())); err != nil {
-			t.Fatal(err)
-		}
+	if err := db.DAL.Migrate(ctx); err != nil {
+		t.Fatal(err)
 	}
 
 	d := identity.Directory{DB: db.SQL}
@@ -470,17 +466,15 @@ func TestAdminGroupBootstrap(t *testing.T) {
 	}
 
 	// Verify platform-admins group exists as oidc group
-	var groupID, source string
-	err = db.SQL.QueryRowContext(ctx, "SELECT id, source FROM identity_groups WHERE name='platform-admins'").Scan(&groupID, &source)
-	if err != nil || source != "oidc" {
-		t.Fatalf("expected platform-admins oidc group: %v, source: %s", err, source)
+	group, err := db.DAL.Directory().GroupByName(ctx, "platform-admins")
+	if err != nil || group.Source != directory.SourceOIDC {
+		t.Fatalf("expected platform-admins oidc group: %v, source: %s", err, group.Source)
 	}
+	groupID := group.ID
 
 	// Verify Administrator role is assigned to platform-admins group
-	var assignmentCount int
-	err = db.SQL.QueryRowContext(ctx, "SELECT COUNT(*) FROM identity_assignments WHERE role_id='administrator' AND principal_type='group' AND principal_id=?", groupID).Scan(&assignmentCount)
-	if err != nil || assignmentCount != 1 {
-		t.Fatalf("expected assignment to platform-admins group: %v, count: %d", err, assignmentCount)
+	if n := daltest.Count(t, db.DAL, "identity_assignments", daltest.Row{"role_id": "administrator", "principal_type": "group", "principal_id": groupID}); n != 1 {
+		t.Fatalf("expected assignment to platform-admins group, count: %d", n)
 	}
 
 	// User superuser signs in with platform-admins group
@@ -493,14 +487,14 @@ func TestAdminGroupBootstrap(t *testing.T) {
 	}
 
 	// superuser now has group.manage scope!
-	if err := identity.RequireScope(ctx, db.SQL, "superuser", "group.manage"); err != nil {
+	if err := identity.RequireScope(ctx, dal.NewStore(db.SQL), "superuser", "group.manage"); err != nil {
 		t.Fatalf("superuser failed to inherit group.manage: %v", err)
 	}
 }
 
 func TestOIDCGroupSyncHashShortCircuit(t *testing.T) {
 	ctx := context.Background()
-	db := testutil.Database(t)
+	db := daltest.Database(t)
 	d := identity.Directory{DB: db.SQL}
 
 	u := identity.UserIdentity{
@@ -535,7 +529,7 @@ func TestOIDCGroupSyncHashShortCircuit(t *testing.T) {
 
 func TestOIDCGroupSyncLimitsAndValidation(t *testing.T) {
 	ctx := context.Background()
-	db := testutil.Database(t)
+	db := daltest.Database(t)
 	d := identity.Directory{DB: db.SQL}
 
 	// 110 group names plus invalid empty string and too long name

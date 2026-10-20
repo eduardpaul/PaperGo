@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"papergo/ent/itemsurface"
+	"papergo/internal/dal/content"
+	"papergo/internal/dal/refs"
+	"papergo/internal/dal/surfaces"
 	"reflect"
 	"strconv"
 	"testing"
@@ -39,9 +41,9 @@ func TestCollectionPassesSpanBatches(t *testing.T) {
 		}
 		items = append(items, r.ID)
 	}
-	surfaces, err := s.Client.ItemSurface.Query().Where(itemsurface.ContainerIDEQ(list.ID)).Count(testContext)
-	if err != nil || surfaces != 15 {
-		t.Fatalf("surfaces: %d %v", surfaces, err)
+	surfaceCount, err := countSurfaces(s, surfaces.Filter{ContainerID: list.ID})
+	if err != nil || surfaceCount != 15 {
+		t.Fatalf("surfaces: %d %v", surfaceCount, err)
 	}
 	indexed := true
 	if _, err = s.UpdateField(testContext, "alice", list.ID, n.ID, latest(t, s, list.ID).Version, UpdateField{Indexed: &indexed}); err != nil {
@@ -50,8 +52,8 @@ func TestCollectionPassesSpanBatches(t *testing.T) {
 	if err = s.runOperations(testContext); err != nil {
 		t.Fatal(err)
 	}
-	if rows, err := s.Client.FieldValue.Query().Count(testContext); err != nil || rows != surfaces {
-		t.Fatalf("rebuild indexed %d of %d surfaces: %v", rows, surfaces, err)
+	if rows, err := countFieldValues(s, surfaces.ValueFilter{}); err != nil || rows != surfaceCount {
+		t.Fatalf("rebuild indexed %d of %d surfaces: %v", rows, surfaceCount, err)
 	}
 	page, err := s.Browse(testContext, "alice", Browse{ParentID: list.ID, FilterField: "n", FilterOp: "eq", FilterValue: "7"})
 	if err != nil || len(page.Data) != 1 || page.Data[0].ID != items[7] {
@@ -64,7 +66,7 @@ func TestCollectionPassesSpanBatches(t *testing.T) {
 	if err = s.runOperations(testContext); err != nil {
 		t.Fatal(err)
 	}
-	if rows, err := s.Client.FieldValue.Query().Count(testContext); err != nil || rows != 0 {
+	if rows, err := countFieldValues(s, surfaces.ValueFilter{}); err != nil || rows != 0 {
 		t.Fatalf("rows left after unindexing: %d %v", rows, err)
 	}
 	required := true
@@ -81,7 +83,7 @@ func TestCollectionPassesSpanBatches(t *testing.T) {
 			t.Fatalf("automatic publishing skipped %s", id)
 		}
 	}
-	if published, err := s.Client.ItemSurface.Query().Where(itemsurface.ContainerIDEQ(list.ID), itemsurface.SurfaceEQ(itemsurface.SurfacePublished)).Count(testContext); err != nil || published != len(items) {
+	if published, err := countSurfaces(s, surfaces.Filter{ContainerID: list.ID, Surface: refs.SurfacePublished}); err != nil || published != len(items) {
 		t.Fatalf("published surfaces: %d %v", published, err)
 	}
 }
@@ -130,9 +132,9 @@ func TestBrowseCandidateAndScanPathsAgree(t *testing.T) {
 		{ParentID: list.ID, FilterField: "n", FilterOp: "lt", FilterValue: "9", Search: "alpha"},
 	}
 	run := func(limit int, subject string, in Browse) string {
-		previous := candidateDriveLimit
-		candidateDriveLimit = limit
-		defer func() { candidateDriveLimit = previous }()
+		previous := content.CandidateDriveLimit
+		content.CandidateDriveLimit = limit
+		defer func() { content.CandidateDriveLimit = previous }()
 		out := ""
 		for {
 			page, err := s.Browse(testContext, subject, in)
@@ -173,13 +175,13 @@ func num(i int) json.Number { return json.Number(strconv.Itoa(i)) }
 
 func TestWriterQueueHonorsCancellation(t *testing.T) {
 	s, w, _ := fixture(t)
-	s.writeMu <- struct{}{} // another writer holds the slot
+	_ = s.writer.acquire(testContext) // another writer holds the slot
 	ctx, cancel := context.WithTimeout(testContext, 50*time.Millisecond)
 	defer cancel()
 	if _, err := s.Create(ctx, "alice", w.ID, CreateResource{Kind: "list", Name: "Queued"}); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatal("queued writer ignored its deadline", err)
 	}
-	<-s.writeMu
+	s.writer.release()
 	if _, err := s.Create(testContext, "alice", w.ID, CreateResource{Kind: "list", Name: "Next"}); err != nil {
 		t.Fatal("writer slot not usable after a cancelled wait", err)
 	}

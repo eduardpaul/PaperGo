@@ -3,8 +3,7 @@ package dms
 import (
 	"testing"
 
-	"papergo/ent"
-	"papergo/ent/domainevent"
+	eventstore "papergo/internal/dal/events"
 )
 
 func TestRelationshipChangesTouchAndEmitForBothEndpoints(t *testing.T) {
@@ -22,7 +21,7 @@ func TestRelationshipChangesTouchAndEmitForBothEndpoints(t *testing.T) {
 			if current.Version != version || current.UpdatedBy != "alice" || !current.UpdatedAt.After(a.UpdatedAt) {
 				t.Fatal("endpoint modification was not visible", current)
 			}
-			rows, e := s.Client.DomainEvent.Query().Where(domainevent.TypeEQ(EventItemUpdated), domainevent.ResourceIDEQ(item)).Order(ent.Asc(domainevent.FieldID)).All(testContext)
+			rows, e := s.DAL.Events().List(testContext, eventstore.Filter{Types: []string{EventItemUpdated}, ResourceID: item})
 			if e != nil || len(rows) != version-1 || rows[len(rows)-1].Data["relationship_action"] != action {
 				t.Fatal("missing endpoint events", rows, e)
 			}

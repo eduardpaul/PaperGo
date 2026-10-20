@@ -3,7 +3,10 @@ package httpapi
 import (
 	"encoding/json"
 	"fmt"
-	"papergo/ent"
+	"papergo/internal/dal/catalog"
+	"papergo/internal/dal/resources"
+	viewstore "papergo/internal/dal/views"
+	"papergo/internal/dms"
 	"strings"
 	"testing"
 )
@@ -23,25 +26,25 @@ func TestRESTPlatformCatalogQueriesAndPreconditions(t *testing.T) {
 		return res.Body.Bytes()
 	}
 	wbody := send("POST", "/v1/workspaces", `{"name":"Platform"}`, "", 201)
-	var w ent.Resource
+	var w resources.Resource
 	if e := json.Unmarshal(wbody, &w); e != nil {
 		t.Fatal(e)
 	}
 	lbody := send("POST", "/v1/resources/"+w.ID+"/children", `{"kind":"list","name":"Records"}`, "", 201)
-	var l ent.Resource
+	var l resources.Resource
 	json.Unmarshal(lbody, &l)
 	base := "/v1/workspaces/" + w.ID
 	groupBody := send("POST", "/v1/term-groups", `{"name":"Subjects"}`, "", 201)
-	var group ent.TermGroup
+	var group dms.TermGroupView
 	json.Unmarshal(groupBody, &group)
 	setBody := send("POST", "/v1/term-sets", fmt.Sprintf(`{"group_id":%q,"key":"topics","name":"Topics"}`, group.ID), "", 201)
-	var set ent.TermSet
+	var set dms.TermSetView
 	json.Unmarshal(setBody, &set)
 	termBody := send("POST", "/v1/term-sets/"+set.ID+"/terms", `{"name":"Finance","labels":{"es":"Finanzas"},"synonyms":["Money"]}`, "", 201)
-	var term ent.Term
+	var term dms.TermView
 	json.Unmarshal(termBody, &term)
 	tplBody := send("POST", base+"/templates", fmt.Sprintf(`{"key":"record","name":"Record","fields":[{"key":"serial","label":"Serial","type":"integer","indexed":true,"options":{"default_value":9007199254740993}},{"key":"topic","label":"Topic","type":"term","options":{"term_set_id":%q}}]}`, set.ID), "", 201)
-	var tpl ent.SchemaTemplate
+	var tpl catalog.Template
 	json.Unmarshal(tplBody, &tpl)
 	send("GET", "/v1/templates/"+tpl.ID, "", "", 200)
 	send("POST", "/v1/resources/"+l.ID+"/templates/"+tpl.ID+"/apply", `{"template_version":1}`, "", 428)
@@ -50,13 +53,13 @@ func TestRESTPlatformCatalogQueriesAndPreconditions(t *testing.T) {
 		t.Fatal("collection ETag/version")
 	}
 	itemBody := send("POST", "/v1/resources/"+l.ID+"/children", fmt.Sprintf(`{"kind":"item","name":"A","values":{"topic":%q}}`, term.ID), "", 201)
-	var item ent.Resource
+	var item resources.Resource
 	json.Unmarshal(itemBody, &item)
 	if !strings.Contains(string(itemBody), "9007199254740993") {
 		t.Fatal("default precision lost")
 	}
 	otherBody := send("POST", "/v1/resources/"+l.ID+"/children", `{"kind":"item","name":"B"}`, "", 201)
-	var other ent.Resource
+	var other resources.Resource
 	json.Unmarshal(otherBody, &other)
 	query := `{"query":{"filter":{"field":"serial","op":"eq","value":9007199254740993},"sort":[{"field":"serial"}],"group_by":"serial"}}`
 	first := send("POST", "/v1/resources/"+l.ID+"/query?$top=1", query, "", 200)
@@ -72,7 +75,7 @@ func TestRESTPlatformCatalogQueriesAndPreconditions(t *testing.T) {
 		t.Fatal("group precision", string(groups))
 	}
 	viewBody := send("POST", "/v1/resources/"+l.ID+"/views", `{"name":"All","columns":["$name","serial"],"query":{},"is_default":true}`, "", 201)
-	var view ent.ListView
+	var view viewstore.ListView
 	json.Unmarshal(viewBody, &view)
 	send("POST", "/v1/views/"+view.ID+"/query", `{}`, "", 200)
 	send("PUT", "/v1/views/"+view.ID, `{"name":"All v2","columns":["serial"],"query":{}}`, `"1"`, 200)
@@ -80,10 +83,10 @@ func TestRESTPlatformCatalogQueriesAndPreconditions(t *testing.T) {
 	send("DELETE", "/v1/views/"+view.ID, "", `"1"`, 412)
 	send("DELETE", "/v1/views/"+view.ID, "", `"2"`, 204)
 	typeBody := send("POST", "/v1/relationship-types", `{"name":"Links","directed":true,"max_outgoing":1,"attributes":[{"key":"note","label":"Note","type":"text","options":{"max_length":20}}]}`, "", 201)
-	var typ ent.RelationshipType
+	var typ dms.RelationshipTypeView
 	json.Unmarshal(typeBody, &typ)
 	linkBody := send("POST", "/v1/items/"+item.ID+"/relationships", fmt.Sprintf(`{"type":%q,"target_id":%q,"metadata":{"note":"Original"}}`, typ.ID, other.ID), "", 201)
-	var edge ent.Relationship
+	var edge dms.RelationshipRecord
 	json.Unmarshal(linkBody, &edge)
 	path := "/v1/items/" + item.ID + "/relationships/" + edge.ID
 	send("PATCH", path, `{"metadata":{"note":"Changed"}}`, "", 428)
@@ -103,10 +106,10 @@ func TestRESTPlatformCatalogQueriesAndPreconditions(t *testing.T) {
 	}
 	// Indexing a populated field queues a tracked background build.
 	var fields struct {
-		Data []ent.FieldDefinition `json:"value"`
+		Data []catalog.FieldDefinition `json:"value"`
 	}
 	json.Unmarshal(send("GET", "/v1/resources/"+l.ID+"/fields", "", "", 200), &fields)
-	var collection ent.Resource
+	var collection resources.Resource
 	json.Unmarshal(send("GET", "/v1/resources/"+l.ID, "", "", 200), &collection)
 	for _, f := range fields.Data {
 		if f.Key == "topic" {
@@ -117,7 +120,7 @@ func TestRESTPlatformCatalogQueriesAndPreconditions(t *testing.T) {
 		}
 	}
 	var operations struct {
-		Data []ent.Operation `json:"value"`
+		Data []dms.OperationView `json:"value"`
 	}
 	json.Unmarshal(send("GET", "/v1/resources/"+l.ID+"/operations", "", "", 200), &operations)
 	if len(operations.Data) != 1 || operations.Data[0].Status != "pending" {

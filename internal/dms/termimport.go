@@ -6,12 +6,11 @@ import (
 	"encoding/csv"
 	"errors"
 	"io"
-	"papergo/ent"
-	"papergo/ent/term"
-	"papergo/ent/termset"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"papergo/internal/dal/taxonomy"
 )
 
 // Term set import reads the SharePoint term set CSV format: the columns
@@ -30,9 +29,9 @@ const (
 )
 
 type TermImportResult struct {
-	TermSets     []*ent.TermSet `json:"term_sets"`
-	SetsCreated  int            `json:"sets_created"`
-	TermsCreated int            `json:"terms_created"`
+	TermSets     []TermSetView `json:"term_sets"`
+	SetsCreated  int           `json:"sets_created"`
+	TermsCreated int           `json:"terms_created"`
 }
 
 var nonKey = regexp.MustCompile(`[^a-z0-9]+`)
@@ -43,12 +42,12 @@ func (s *Service) ImportTerms(ctx context.Context, subject, groupID string, body
 		return out, err
 	}
 	err = s.write(ctx, func(t *Service) error {
-		out = TermImportResult{TermSets: []*ent.TermSet{}}
+		out = TermImportResult{TermSets: []TermSetView{}}
 		g, e := t.termGroup(ctx, subject, groupID, "manage")
 		if e != nil {
 			return e
 		}
-		if g.IsSystem {
+		if g.System {
 			return invalid("the system term group holds only the keywords set")
 		}
 		head := map[string]int{}
@@ -67,9 +66,9 @@ func (s *Service) ImportTerms(ctx context.Context, subject, groupID string, body
 		if _, ok := head["level 1 term"]; !ok {
 			return invalid("the CSV needs a Level 1 Term column")
 		}
-		var set *ent.TermSet
+		var set *taxonomy.Set
 		// children maps a set's active terms by parent id and normalized name.
-		var children map[string]*ent.Term
+		var children map[string]taxonomy.Term
 		seen := map[string]bool{}
 		for n, row := range records[1:] {
 			line := "row " + strconv.Itoa(n+2) + ": "
@@ -77,27 +76,28 @@ func (s *Service) ImportTerms(ctx context.Context, subject, groupID string, body
 				if e = validateName(name); e != nil {
 					return invalid(line + e.Error())
 				}
-				created := false
-				if set, created, e = t.importSet(ctx, g, name, column(row, "term set description")); e != nil {
+				imported, created, e := t.importSet(ctx, g, name, column(row, "term set description"))
+				if e != nil {
 					return e
 				}
+				set = &imported
 				if created {
 					out.SetsCreated++
 				}
 				if !seen[set.ID] {
 					seen[set.ID] = true
-					out.TermSets = append(out.TermSets, set)
+					out.TermSets = append(out.TermSets, viewTermSet(imported))
 				}
-				terms, e := t.Client.Term.Query().Where(term.TermSetIDEQ(set.ID), term.MergedIntoIDIsNil()).All(ctx)
+				terms, e := t.DAL.Taxonomy().Terms(ctx, taxonomy.TermFilter{SetID: set.ID, Unmerged: true})
 				if e != nil {
 					return e
 				}
-				children = map[string]*ent.Term{}
+				children = map[string]taxonomy.Term{}
 				for _, v := range terms {
 					children[termChildKey(v.ParentID, v.NormalizedName)] = v
 				}
 			}
-			var parent *ent.Term
+			var parent *taxonomy.Term
 			for level := 1; level <= termImportLevels; level++ {
 				name := column(row, "level "+strconv.Itoa(level)+" term")
 				if name == "" {
@@ -114,14 +114,14 @@ func (s *Service) ImportTerms(ctx context.Context, subject, groupID string, body
 				if e = validateName(name); e != nil {
 					return invalid(line + e.Error())
 				}
-				var parentID *string
+				parentID := ""
 				if parent != nil {
-					parentID = &parent.ID
+					parentID = parent.ID
 				}
 				key := termChildKey(parentID, strings.ToLower(name))
-				v := children[key]
-				if v == nil {
-					in := TermInput{Name: name, Labels: map[string]string{}, Synonyms: []string{}}
+				v, ok := children[key]
+				if !ok {
+					in := TermInput{Name: name, ParentID: optional(parentID), Labels: map[string]string{}, Synonyms: []string{}}
 					if last := level == termImportLevels || column(row, "level "+strconv.Itoa(level+1)+" term") == ""; last {
 						in.Description = column(row, "term description")
 						in.Deprecated = strings.EqualFold(column(row, "available for tagging"), "false")
@@ -132,25 +132,20 @@ func (s *Service) ImportTerms(ctx context.Context, subject, groupID string, body
 					if parent != nil && parent.Deprecated {
 						return invalid(line + "cannot add terms below the deprecated term " + parent.Name)
 					}
-					if v, e = t.insertTerm(ctx, set, parent, in); e != nil {
+					if v, e = t.insertTerm(ctx, set.ID, in); e != nil {
 						return e
 					}
 					children[key] = v
 					out.TermsCreated++
 				}
-				parent = v
+				parent = &v
 			}
 		}
 		return t.auditTaxonomy(ctx, subject, "term.import", map[string]any{"term_group_id": groupID, "sets_created": out.SetsCreated, "terms_created": out.TermsCreated})
 	})
 	return
 }
-func termChildKey(parentID *string, name string) string {
-	if parentID == nil {
-		return "\x00" + name
-	}
-	return *parentID + "\x00" + name
-}
+func termChildKey(parentID, name string) string { return parentID + "\x00" + name }
 func readTermCSV(body io.Reader) ([][]string, error) {
 	raw, err := io.ReadAll(io.LimitReader(body, MaxTermImportBytes+1))
 	if err != nil {
@@ -184,13 +179,17 @@ func readTermCSV(body io.Reader) ([][]string, error) {
 
 // importSet finds the group's set called name or creates it closed, with a
 // key derived from the name.
-func (s *Service) importSet(ctx context.Context, g *ent.TermGroup, name, description string) (*ent.TermSet, bool, error) {
-	set, e := s.Client.TermSet.Query().Where(termset.GroupIDEQ(g.ID), termset.NameEQ(name)).Only(ctx)
-	if e == nil || !ent.IsNotFound(e) {
-		return set, false, e
+func (s *Service) importSet(ctx context.Context, g taxonomy.Group, name, description string) (taxonomy.Set, bool, error) {
+	store := s.DAL.Taxonomy()
+	sets, e := store.Sets(ctx, taxonomy.SetFilter{GroupID: g.ID, Name: name, Limit: 1})
+	if e != nil {
+		return taxonomy.Set{}, false, e
+	}
+	if len(sets) > 0 {
+		return sets[0], false, nil
 	}
 	if e = validateDescription(description); e != nil {
-		return nil, false, e
+		return taxonomy.Set{}, false, e
 	}
 	base := strings.Trim(nonKey.ReplaceAllString(strings.ToLower(name), "_"), "_")
 	if base == "" || base[0] < 'a' || base[0] > 'z' {
@@ -201,15 +200,15 @@ func (s *Service) importSet(ctx context.Context, g *ent.TermGroup, name, descrip
 	}
 	key := base
 	for i := 2; ; i++ {
-		taken, e := s.Client.TermSet.Query().Where(termset.KeyEQ(key)).Exist(ctx)
+		taken, e := store.Sets(ctx, taxonomy.SetFilter{Key: key, Limit: 1})
 		if e != nil {
-			return nil, false, e
+			return taxonomy.Set{}, false, e
 		}
-		if !taken {
+		if len(taken) == 0 {
 			break
 		}
 		key = base + "_" + strconv.Itoa(i)
 	}
-	set, e = s.Client.TermSet.Create().SetGroupID(g.ID).SetKey(key).SetName(name).SetDescription(description).Save(ctx)
-	return set, e == nil, e
+	set, e := store.CreateSet(ctx, taxonomy.Set{GroupID: g.ID, Key: key, Name: name, Description: description})
+	return set, e == nil, taxonomyError(e)
 }

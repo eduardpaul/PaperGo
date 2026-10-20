@@ -300,7 +300,7 @@ func Send(ctx context.Context, t *dms.Service, m notify.Message, to []string) (n
 
 ## Phases
 
-Each phase ships with its tests, OpenAPI contract, docs and web screens, and edits `migrations/20261007000100_schema.sql` in place.
+Each phase ships with its tests, OpenAPI contract, docs and web screens, and edits `internal/dal/schema/sqlite.sql` in place.
 
 1. **Tasks core.**
    - Replace `approval_requests` with `tasks` and `task_responses`; `internal/tasks` with recipients, access checks and `any`/`all` completion.

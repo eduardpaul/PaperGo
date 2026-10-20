@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
-	"papergo/ent"
 	"papergo/internal/auth"
 	"papergo/internal/dms"
 	"strings"
@@ -50,7 +49,7 @@ func TestRESTFilteredBulkUpdateProgressFailuresAndStrictInput(t *testing.T) {
 		}
 	}
 	res := request(h, "POST", path, body, testToken, "", "application/json")
-	var op ent.Operation
+	var op dms.OperationView
 	if res.Code != 202 || json.Unmarshal(res.Body.Bytes(), &op) != nil || op.Status != "pending" || res.Header().Get("Location") != "/v1/operations/"+op.ID {
 		t.Fatal(res.Code, res.Body.String())
 	}
@@ -61,12 +60,12 @@ func TestRESTFilteredBulkUpdateProgressFailuresAndStrictInput(t *testing.T) {
 	stopped := make(chan struct{})
 	go func() { s.RunOperations(workerCtx, slog.New(slog.NewTextHandler(io.Discard, nil))); close(stopped) }()
 	t.Cleanup(func() { cancel(); <-stopped })
-	wait := func(id string) ent.Operation {
+	wait := func(id string) dms.OperationView {
 		t.Helper()
 		deadline := time.Now().Add(10 * time.Second)
 		for {
 			res := request(h, "GET", "/v1/operations/"+id, "", testToken, "", "")
-			var got ent.Operation
+			var got dms.OperationView
 			if res.Code != 200 || json.Unmarshal(res.Body.Bytes(), &got) != nil {
 				t.Fatal(res.Code, res.Body.String())
 			}

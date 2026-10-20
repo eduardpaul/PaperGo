@@ -2,20 +2,20 @@ package dms
 
 import (
 	"cmp"
-	"papergo/ent"
+	"papergo/internal/dal/catalog"
 	"papergo/internal/model"
 	"strings"
 )
 
-func definitionMap(defs []*ent.FieldDefinition) map[string]*ent.FieldDefinition {
-	out := make(map[string]*ent.FieldDefinition, len(defs))
+func definitionMap(defs []*catalog.FieldDefinition) map[string]*catalog.FieldDefinition {
+	out := make(map[string]*catalog.FieldDefinition, len(defs))
 	for _, d := range defs {
 		out[d.Key] = d
 	}
 	return out
 }
 
-func validateRules(defs []*ent.FieldDefinition, rules []model.ValidationRule) error {
+func validateRules(defs []*catalog.FieldDefinition, rules []model.ValidationRule) error {
 	if len(rules) > 32 {
 		return invalid("at most 32 cross-field rules per content type")
 	}
@@ -47,7 +47,7 @@ func validateRules(defs []*ent.FieldDefinition, rules []model.ValidationRule) er
 			switch r.Op {
 			case "eq", "ne":
 			case "gt", "gte", "lt", "lte":
-				if left.Type == "boolean" || left.Type == "lookup" || left.Type == "person" || left.Type == "term" || left.Type == "keywords" || left.Type == "choice" {
+				if left.Type == catalog.FieldBoolean || left.Type == catalog.FieldLookup || left.Type == catalog.FieldPerson || left.Type == catalog.FieldTerm || left.Type == catalog.FieldKeywords || left.Type == catalog.FieldChoice {
 					return invalid("this field type supports only eq/ne rules")
 				}
 			default:
@@ -58,7 +58,7 @@ func validateRules(defs []*ent.FieldDefinition, rules []model.ValidationRule) er
 	return nil
 }
 
-func compareValues(d *ent.FieldDefinition, a, b any) (int, error) {
+func compareValues(d *catalog.FieldDefinition, a, b any) (int, error) {
 	x, err := queryValue(d, a)
 	if err != nil {
 		return 0, err
@@ -87,7 +87,7 @@ func compareValues(d *ent.FieldDefinition, a, b any) (int, error) {
 	}
 }
 
-func evaluateRules(defs []*ent.FieldDefinition, rules []model.ValidationRule, values map[string]any) error {
+func evaluateRules(defs []*catalog.FieldDefinition, rules []model.ValidationRule, values map[string]any) error {
 	fields := definitionMap(defs)
 	for _, r := range rules {
 		pass := true

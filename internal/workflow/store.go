@@ -7,23 +7,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"papergo/internal/dal/resources"
 	"regexp"
 	"slices"
 	"sort"
 	"strings"
 	"time"
 
-	entsql "entgo.io/ent/dialect/sql"
-
-	"papergo/ent"
-	"papergo/ent/collectiontype"
-	"papergo/ent/resource"
-	"papergo/ent/term"
-	"papergo/ent/workflow"
-	"papergo/ent/workflowrun"
-	"papergo/ent/workflowrunitem"
-	"papergo/ent/workflowtrigger"
-	"papergo/ent/workflowversion"
+	"papergo/internal/dal/dberr"
+	runstore "papergo/internal/dal/runs"
+	"papergo/internal/dal/workflows"
 	"papergo/internal/dms"
 	"papergo/internal/forms"
 )
@@ -106,27 +99,27 @@ func validName(name string) error {
 	return nil
 }
 
-func toWorkflow(w *ent.Workflow, v *ent.WorkflowVersion) (Workflow, error) {
+func toWorkflow(w *workflows.Workflow, v *workflows.Version) (Workflow, error) {
 	def, err := ParseDefinition(v.Definition)
 	if err != nil {
 		return Workflow{}, err
 	}
-	out := Workflow{ExecutionAuthor: v.CreatedBy, ID: w.ID, WorkspaceID: w.WorkspaceID, Key: w.Key, Name: w.Name, Description: w.Description, AutomaticEnabled: w.AutomaticEnabled, ManualEnabled: w.ManualEnabled, State: w.State, AutomaticProvider: w.AutomaticProvider, BuiltInKey: w.BuiltinKey, Role: w.Role, CollectionID: w.CollectionID,
+	out := Workflow{ExecutionAuthor: v.CreatedBy, ID: w.ID, WorkspaceID: w.WorkspaceID, Key: w.Key, Name: w.Name, Description: w.Description, AutomaticEnabled: w.AutomaticEnabled, ManualEnabled: w.ManualEnabled, State: string(w.State), AutomaticProvider: w.AutomaticProvider, BuiltInKey: optional(w.BuiltinKey), Role: optional(w.Role), CollectionID: optional(w.CollectionID),
 		CurrentVersion: w.CurrentVersion, Definition: def, CreatedBy: w.CreatedBy, UpdatedBy: w.UpdatedBy, CreatedAt: w.CreatedAt, UpdatedAt: w.UpdatedAt, Version: w.Version}
-	if w.BuiltinKey != nil {
+	if w.BuiltinKey != "" {
 		out.Parameters = w.Parameters
 	}
 	return out, nil
 }
 
-func current(ctx context.Context, t *dms.Service, w *ent.Workflow) (*ent.WorkflowVersion, error) {
-	return t.Client.WorkflowVersion.Query().Where(workflowversion.WorkflowIDEQ(w.ID), workflowversion.NumberEQ(w.CurrentVersion)).Only(ctx)
+func current(ctx context.Context, t *dms.Service, w *workflows.Workflow) (*workflows.Version, error) {
+	return findVersion(ctx, t, w.ID, int64(w.CurrentVersion))
 }
 
 // live loads a workflow that is not deleted.
-func live(ctx context.Context, t *dms.Service, id string) (*ent.Workflow, error) {
-	w, err := t.Client.Workflow.Get(ctx, id)
-	if ent.IsNotFound(err) || err == nil && w.DeletedAt != nil {
+func live(ctx context.Context, t *dms.Service, id string) (*workflows.Workflow, error) {
+	w, err := findWorkflow(ctx, t, id)
+	if dberr.IsNotFound(err) || err == nil && w.DeletedAt != nil {
 		return nil, dms.ErrNotFound
 	}
 	return w, err
@@ -138,7 +131,7 @@ func (s *Service) List(ctx context.Context, subject, workspaceID string) ([]Work
 		if err := workspace(ctx, t, subject, workspaceID, "read"); err != nil {
 			return nil, err
 		}
-		rows, err := t.Client.Workflow.Query().Where(workflow.WorkspaceIDEQ(workspaceID), workflow.DeletedAtIsNil()).Order(ent.Asc(workflow.FieldName)).All(ctx)
+		rows, err := listWorkflows(ctx, t, workflows.Filter{WorkspaceID: workspaceID, LiveOnly: true, Order: "name"})
 		if err != nil {
 			return nil, err
 		}
@@ -186,7 +179,7 @@ func (s *Service) Versions(ctx context.Context, subject, id string) ([]Version, 
 		if err = workspace(ctx, t, subject, w.WorkspaceID, "manage"); err != nil {
 			return nil, err
 		}
-		rows, err := t.Client.WorkflowVersion.Query().Where(workflowversion.WorkflowIDEQ(id)).Order(ent.Desc(workflowversion.FieldNumber)).All(ctx)
+		rows, err := t.DAL.Workflows().Versions(ctx, id)
 		if err != nil {
 			return nil, err
 		}
@@ -207,7 +200,7 @@ func workspace(ctx context.Context, t *dms.Service, subject, id, action string) 
 	if err != nil {
 		return err
 	}
-	if r.Kind != resource.KindWorkspace {
+	if r.Kind != "workspace" {
 		return dms.Invalid("workflows belong to a workspace")
 	}
 	return nil
@@ -245,14 +238,14 @@ func (s *Service) create(ctx context.Context, t *dms.Service, subject, workspace
 		} else if key, err = freeKey(ctx, t, workspaceID, keyFromName(in.Name)); err != nil {
 			return err
 		}
-		state := in.State
+		state := workflows.State(in.State)
 		if state == "" {
-			state = "published"
+			state = workflows.StatePublished
 		}
 		if err = validState(state); err != nil {
 			return err
 		}
-		if state == "published" && in.AutomaticEnabled != nil && *in.AutomaticEnabled {
+		if state == workflows.StatePublished && in.AutomaticEnabled != nil && *in.AutomaticEnabled {
 			if in.Role != "" && in.CollectionID == "" {
 				return dms.Invalid("An automatic role provider requires a specific list or library.")
 			}
@@ -261,18 +254,11 @@ func (s *Service) create(ctx context.Context, t *dms.Service, subject, workspace
 			}
 		}
 
-		create := t.Client.Workflow.Create().SetWorkspaceID(workspaceID).SetKey(key).SetName(in.Name).SetDescription(in.Description).SetAutomaticEnabled(in.AutomaticEnabled != nil && *in.AutomaticEnabled).SetManualEnabled(in.ManualEnabled == nil || *in.ManualEnabled).SetState(state).SetCurrentVersion(1).SetCreatedBy(subject).SetUpdatedBy(subject)
-		if in.Role != "" {
-			create.SetRole(in.Role).SetAutomaticProvider(in.AutomaticEnabled != nil && *in.AutomaticEnabled && state == "published")
-		}
-		if in.CollectionID != "" {
-			create.SetCollectionID(in.CollectionID)
-		}
-		w, err := create.Save(ctx)
+		w, err := createWorkflow(ctx, t, workflows.CreateInput{WorkspaceID: workspaceID, Key: key, Name: in.Name, Description: in.Description, AutomaticEnabled: in.AutomaticEnabled != nil && *in.AutomaticEnabled, ManualEnabled: in.ManualEnabled == nil || *in.ManualEnabled, State: state, Role: in.Role, CollectionID: in.CollectionID, AutomaticProvider: in.Role != "" && in.AutomaticEnabled != nil && *in.AutomaticEnabled && state == workflows.StatePublished, Definition: raw, CreatedBy: subject})
 		if err != nil {
 			return err
 		}
-		v, err := t.Client.WorkflowVersion.Create().SetWorkflowID(w.ID).SetNumber(1).SetDefinition(raw).SetCreatedBy(subject).Save(ctx)
+		v, err := current(ctx, t, w)
 		if err != nil {
 			return err
 		}
@@ -293,7 +279,7 @@ func (s *Service) create(ctx context.Context, t *dms.Service, subject, workspace
 func freeKey(ctx context.Context, t *dms.Service, workspaceID, base string) (string, error) {
 	key := base
 	for n := 2; ; n++ {
-		taken, err := t.Client.Workflow.Query().Where(workflow.WorkspaceIDEQ(workspaceID), workflow.KeyEQ(key), workflow.DeletedAtIsNil()).Exist(ctx)
+		taken, err := t.DAL.Workflows().Exists(ctx, workflows.Filter{WorkspaceID: workspaceID, Key: key, LiveOnly: true})
 		if err != nil || !taken {
 			return key, err
 		}
@@ -301,12 +287,8 @@ func freeKey(ctx context.Context, t *dms.Service, workspaceID, base string) (str
 	}
 }
 
-func audit(ctx context.Context, t *dms.Service, subject, action string, w *ent.Workflow, details map[string]any) error {
-	r, err := t.Client.Resource.Get(ctx, w.WorkspaceID)
-	if err != nil {
-		return err
-	}
-	return t.Record(ctx, subject, action, r, details)
+func audit(ctx context.Context, t *dms.Service, subject, action string, w *workflows.Workflow, details map[string]any) error {
+	return t.RecordEntity(ctx, subject, action, dms.AuditTarget{WorkspaceID: w.WorkspaceID, ResourceID: w.WorkspaceID, Kind: "workspace"}, details)
 }
 
 // check validates a definition, including the collections, content types
@@ -335,7 +317,7 @@ func checkDefinition(ctx context.Context, t *dms.Service, subject, workspaceID s
 			if err != nil {
 				return def, nil, dms.Invalid(at + "collection_id must be a readable list or library")
 			}
-			if c.WorkspaceID != workspaceID || (c.Kind != resource.KindList && c.Kind != resource.KindLibrary) {
+			if c.WorkspaceID != workspaceID || (c.Kind != "list" && c.Kind != "library") {
 				return def, nil, dms.Invalid(at + "collection_id must be a list or library of the workflow's workspace")
 			}
 			if def.Condition != nil {
@@ -347,7 +329,7 @@ func checkDefinition(ctx context.Context, t *dms.Service, subject, workspaceID s
 			checked[tr.CollectionID] = true
 		}
 		if tr.ContentTypeID != "" {
-			ok, err := t.Client.CollectionType.Query().Where(collectiontype.ContentTypeIDEQ(tr.ContentTypeID), collectiontype.ContainerIDEQ(tr.CollectionID)).Exist(ctx)
+			ok, err := t.DAL.Catalog().Accepts(ctx, tr.CollectionID, tr.ContentTypeID)
 			if err != nil {
 				return def, nil, err
 			}
@@ -356,7 +338,7 @@ func checkDefinition(ctx context.Context, t *dms.Service, subject, workspaceID s
 			}
 		}
 		for _, id := range tr.Terms {
-			ok, err := t.Client.Term.Query().Where(term.IDEQ(id)).Exist(ctx)
+			ok, err := t.DAL.Taxonomy().TermExists(ctx, id)
 			if err != nil {
 				return def, nil, err
 			}
@@ -406,13 +388,13 @@ func (s *Service) Update(ctx context.Context, subject, id string, version int, i
 		if w.Version != version {
 			return dms.ErrPreconditionFailed
 		}
-		if w.BuiltinKey != nil {
+		if w.BuiltinKey != "" {
 			return dms.Invalid("built-in workflows change through their parameters; copy one to edit its definition")
 		}
 		if in.Key != "" && in.Key != w.Key {
 			return dms.Invalid("key is immutable")
 		}
-		if in.Role != "" && (w.Role == nil || in.Role != *w.Role) || in.CollectionID != "" && (w.CollectionID == nil || in.CollectionID != *w.CollectionID) {
+		if in.Role != "" && (w.Role == "" || in.Role != w.Role) || in.CollectionID != "" && (w.CollectionID == "" || in.CollectionID != w.CollectionID) {
 			return dms.Invalid("role and collection_id are set when a workflow is created")
 		}
 		if err = validName(in.Name); err != nil {
@@ -422,8 +404,8 @@ func (s *Service) Update(ctx context.Context, subject, id string, version int, i
 		if err != nil {
 			return err
 		}
-		if w.Role != nil {
-			if err = roles[*w.Role].fills(def); err != nil {
+		if w.Role != "" {
+			if err = roles[w.Role].fills(def); err != nil {
 				return err
 			}
 		}
@@ -433,29 +415,31 @@ func (s *Service) Update(ctx context.Context, subject, id string, version int, i
 		}
 		nextState := w.State
 		if in.State != "" {
-			nextState = in.State
+			nextState = workflows.State(in.State)
 		}
 		if err = validState(nextState); err != nil {
 			return err
 		}
 		if enabled && nextState == "published" {
-			if w.Role != nil && w.CollectionID == nil {
+			if w.Role != "" && w.CollectionID == "" {
 				return dms.Invalid("An automatic role provider requires a specific list or library.")
 			}
 			if err := automaticScope(def); err != nil {
 				return err
 			}
 		}
-		w, v, err := revise(ctx, t, subject, w, raw, func(u *ent.WorkflowUpdateOne) {
-			u.SetName(in.Name).SetDescription(in.Description).SetAutomaticEnabled(enabled)
-			if enabled && nextState == "published" && w.Role != nil {
-				u.SetAutomaticProvider(true)
+		w, v, err := revise(ctx, t, subject, w, raw, func(u *workflows.Changes) {
+			u.Name, u.Description, u.AutomaticEnabled = &in.Name, &in.Description, &enabled
+			if enabled && nextState == "published" && w.Role != "" {
+				yes := true
+				u.AutomaticProvider = &yes
 			}
 			if in.ManualEnabled != nil {
-				u.SetManualEnabled(*in.ManualEnabled)
+				u.ManualEnabled = in.ManualEnabled
 			}
 			if in.State != "" {
-				u.SetState(in.State)
+				state := workflows.State(in.State)
+				u.State = &state
 			}
 		})
 		if err != nil {
@@ -477,24 +461,17 @@ func (s *Service) Update(ctx context.Context, subject, id string, version int, i
 
 // revise applies change to w and adds a version when raw differs from the
 // current definition.
-func revise(ctx context.Context, t *dms.Service, subject string, w *ent.Workflow, raw json.RawMessage, change func(*ent.WorkflowUpdateOne)) (*ent.Workflow, *ent.WorkflowVersion, error) {
-	v, err := current(ctx, t, w)
+func revise(ctx context.Context, t *dms.Service, subject string, w *workflows.Workflow, raw json.RawMessage, change func(*workflows.Changes)) (*workflows.Workflow, *workflows.Version, error) {
+	changes := workflows.Changes{}
+	change(&changes)
+	out, version, err := t.DAL.Workflows().Revise(ctx, w.ID, w.Version, subject, raw, changes)
+	if errors.Is(err, dberr.ErrConcurrentUpdate) {
+		return nil, nil, dms.ErrPreconditionFailed
+	}
 	if err != nil {
 		return nil, nil, err
 	}
-	u := t.Client.Workflow.UpdateOne(w).Where(workflow.VersionEQ(w.Version)).AddVersion(1).SetUpdatedBy(subject).SetUpdatedAt(time.Now().UTC())
-	change(u)
-	if string(v.Definition) != string(raw) {
-		if v, err = t.Client.WorkflowVersion.Create().SetWorkflowID(w.ID).SetNumber(w.CurrentVersion + 1).SetDefinition(raw).SetCreatedBy(subject).Save(ctx); err != nil {
-			return nil, nil, err
-		}
-		u.SetCurrentVersion(v.Number)
-	}
-	w, err = u.Save(ctx)
-	if ent.IsNotFound(err) {
-		return nil, nil, dms.ErrPreconditionFailed
-	}
-	return w, v, err
+	return &out, &version, nil
 }
 
 // Delete removes a workflow; its versions and runs stay for history, and it
@@ -511,14 +488,10 @@ func (s *Service) Delete(ctx context.Context, subject, id string, version int) e
 		if w.Version != version {
 			return dms.ErrPreconditionFailed
 		}
-		n, err := t.Client.Workflow.Update().Where(workflow.IDEQ(id), workflow.VersionEQ(version)).SetDeletedAt(time.Now().UTC()).AddVersion(1).SetUpdatedBy(subject).Save(ctx)
-		if err != nil {
-			return err
-		}
-		if n != 1 {
-			return dms.ErrPreconditionFailed
-		}
-		if _, err = t.Client.WorkflowTrigger.Delete().Where(workflowtrigger.WorkflowIDEQ(id)).Exec(ctx); err != nil {
+		if err := t.DAL.Workflows().Delete(ctx, id, version, subject); err != nil {
+			if errors.Is(err, dberr.ErrConcurrentUpdate) {
+				return dms.ErrPreconditionFailed
+			}
 			return err
 		}
 		return audit(ctx, t, subject, "workflow.delete", w, map[string]any{"workflow_id": id})
@@ -528,34 +501,27 @@ func (s *Service) Delete(ctx context.Context, subject, id string, version int) e
 // index replaces the trigger index rows of w: one per trigger of its current
 // definition while it is enabled. A schedule's next occurrence counts from
 // now, so a change never starts runs for times already past.
-func index(ctx context.Context, t *dms.Service, w *ent.Workflow, def Definition) error {
-	if _, err := t.Client.WorkflowTrigger.Delete().Where(workflowtrigger.WorkflowIDEQ(w.ID)).Exec(ctx); err != nil {
-		return err
-	}
-	if !w.AutomaticEnabled || w.State != "published" || w.DeletedAt != nil || w.Role != nil && w.CollectionID != nil && !w.AutomaticProvider {
-		return nil
-	}
-	now := time.Now().UTC()
-	for i, tr := range def.Triggers {
-		if tr.Type == TriggerManual || tr.Disabled {
-			continue
-		}
-		c := t.Client.WorkflowTrigger.Create().SetWorkflowID(w.ID).SetWorkspaceID(w.WorkspaceID).SetType(tr.Type).SetPosition(i)
-		if tr.CollectionID != "" {
-			c.SetCollectionID(tr.CollectionID)
-		}
-		if tr.Type == TriggerSchedule {
-			sched, err := tr.schedule()
-			if err != nil {
-				return err
+func index(ctx context.Context, t *dms.Service, w *workflows.Workflow, def Definition) error {
+	var inputs []workflows.TriggerInput
+	if w.AutomaticEnabled && w.State == workflows.StatePublished && w.DeletedAt == nil && !(w.Role != "" && w.CollectionID != "" && !w.AutomaticProvider) {
+		now := time.Now().UTC()
+		for i, tr := range def.Triggers {
+			if tr.Type == TriggerManual || tr.Disabled {
+				continue
 			}
-			c.SetNextAt(sched.Next(now).UTC())
-		}
-		if _, err := c.Save(ctx); err != nil {
-			return err
+			entry := workflows.TriggerInput{CollectionID: tr.CollectionID, Type: tr.Type, Position: i}
+			if tr.Type == TriggerSchedule {
+				sched, err := tr.schedule()
+				if err != nil {
+					return err
+				}
+				next := sched.Next(now).UTC()
+				entry.NextAt = &next
+			}
+			inputs = append(inputs, entry)
 		}
 	}
-	return nil
+	return t.DAL.Workflows().ReplaceTriggers(ctx, w.ID, inputs)
 }
 
 // RunID is the runner's ID of the run of workflowID for eventID.
@@ -606,7 +572,7 @@ func (s *Service) planStart(ctx context.Context, t *dms.Service, subject, id str
 		if err = t.RequireScope(ctx, subject, "list.write"); err != nil {
 			return err
 		}
-		if !w.ManualEnabled || w.State != "published" {
+		if !w.ManualEnabled || w.State != workflows.StatePublished {
 			return dms.Invalid("manual use requires a published workflow with manual runs allowed")
 		}
 		v, err := current(ctx, t, w)
@@ -686,7 +652,7 @@ func (s *Service) planStart(ctx context.Context, t *dms.Service, subject, id str
 			if err != nil {
 				return err
 			}
-			if r.Kind != resource.KindItem || r.WorkspaceID != w.WorkspaceID {
+			if r.Kind != "item" || r.WorkspaceID != w.WorkspaceID {
 				return issue("wrong_workspace", "Choose items from this workflow's workspace.")
 			}
 			if manual.CollectionID != "" && (r.ContainerID == nil || *r.ContainerID != manual.CollectionID) {
@@ -747,7 +713,7 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event, active Activ
 	started := map[string][]startedRun{}
 	versions := map[string]*matchable{}
 	// A bulk write raises many events of few kinds; look each kind up once.
-	lookups := map[[3]string][]*ent.Workflow{}
+	lookups := map[[3]string][]*workflows.Workflow{}
 	for _, e := range events {
 		if e.Depth >= MaxDepth {
 			continue
@@ -756,7 +722,7 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event, active Activ
 		// block dispatch or start actions against an item that no longer exists.
 		if e.ResourceID != "" && (e.Type == dms.EventItemCreated || e.Type == dms.EventItemUpdated || e.Type == dms.EventItemPublished || e.Type == dms.EventItemUnpublished || e.Type == dms.EventItemRestored || e.Type == dms.EventFileAdded || e.Type == dms.EventFileUpdated || e.Type == dms.EventPermissionsChanged ||
 			e.Type == dms.EventFolderCreated || e.Type == dms.EventFolderUpdated || e.Type == dms.EventFolderRestored) {
-			exists, err := t.Client.Resource.Query().Where(resource.IDEQ(e.ResourceID)).Exist(ctx)
+			exists, err := t.DAL.Resources().Exists(ctx, resources.Filter{IDs: []string{e.ResourceID}})
 			if err != nil {
 				return nil, nil, err
 			}
@@ -764,23 +730,22 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event, active Activ
 				continue
 			}
 		}
-		var candidates []*ent.Workflow
+		var candidates []*workflows.Workflow
 		switch e.Type {
 		case TriggerManual, TriggerSchedule:
 			id, _ := e.Data["workflow_id"].(string)
-			w, err := t.Client.Workflow.Get(ctx, id)
+			w, err := findWorkflow(ctx, t, id)
 			if err != nil {
 				return nil, nil, err
 			}
-			candidates = []*ent.Workflow{w}
+			candidates = []*workflows.Workflow{w}
 		default:
 			key := [3]string{e.Type, e.WorkspaceID, e.CollectionID}
 			if cached, ok := lookups[key]; ok {
 				candidates = cached
 				break
 			}
-			rows, err := t.Client.WorkflowTrigger.Query().Where(workflowtrigger.TypeEQ(e.Type), workflowtrigger.WorkspaceIDEQ(e.WorkspaceID),
-				workflowtrigger.Or(workflowtrigger.CollectionIDIsNil(), workflowtrigger.CollectionIDEQ(e.CollectionID))).All(ctx)
+			rows, err := t.DAL.Workflows().Triggers(ctx, workflows.TriggerFilter{Type: e.Type, WorkspaceID: e.WorkspaceID, CollectionID: e.CollectionID, MatchCollection: true})
 			if err != nil {
 				return nil, nil, err
 			}
@@ -794,14 +759,14 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event, active Activ
 					list = append(list, id)
 				}
 				sort.Strings(list)
-				if candidates, err = t.Client.Workflow.Query().Where(workflow.IDIn(list...), workflow.AutomaticEnabledEQ(true), workflow.StateEQ("published"), workflow.DeletedAtIsNil()).Order(ent.Asc(workflow.FieldID)).All(ctx); err != nil {
+				if candidates, err = listWorkflows(ctx, t, workflows.Filter{IDs: list, AutomaticEnabled: boolPtr(true), State: workflows.StatePublished, LiveOnly: true}); err != nil {
 					return nil, nil, err
 				}
 			}
 			lookups[key] = candidates
 		}
 		for _, w := range candidates {
-			if e.Type != TriggerManual && w.Role != nil && (w.CollectionID == nil || e.CollectionID != "" && *w.CollectionID != e.CollectionID || !w.AutomaticProvider) {
+			if e.Type != TriggerManual && w.Role != "" && (w.CollectionID == "" || e.CollectionID != "" && w.CollectionID != e.CollectionID || !w.AutomaticProvider) {
 				continue
 			}
 			versionKey := w.ID
@@ -816,7 +781,7 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event, active Activ
 					if !ok {
 						return nil, nil, dms.Invalid("manual event requires its accepted workflow version")
 					}
-					v, err = t.Client.WorkflowVersion.Query().Where(workflowversion.WorkflowIDEQ(w.ID), workflowversion.NumberEQ(int(number))).Only(ctx)
+					v, err = findVersion(ctx, t, w.ID, int64(number))
 				}
 				if err != nil {
 					return nil, nil, err
@@ -835,7 +800,7 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event, active Activ
 			if !ok {
 				continue
 			}
-			if e.Type == dms.EventTermChanged && !systemWorkflow(w) {
+			if e.Type == dms.EventTermChanged && !systemWorkflow(w.BuiltinKey) {
 				if err := t.RequireScope(ctx, m.v.CreatedBy, "taxonomy.read"); errors.Is(err, dms.ErrForbidden) {
 					continue
 				} else if err != nil {
@@ -872,7 +837,7 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event, active Activ
 				// Runs this batch starts are not in the runner's statuses yet.
 				for _, earlier := range started[w.ID] {
 					if overlaps(earlier.members, members) {
-						busy[earlier.id] = "queued"
+						busy[earlier.id] = runstore.StatusQueued
 					}
 				}
 				switch c {
@@ -894,7 +859,7 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event, active Activ
 					// A queued run will read the item as it is when it starts.
 					queued := false
 					for _, state := range busy {
-						queued = queued || state == "queued"
+						queued = queued || state == runstore.StatusQueued
 					}
 					if queued && e.Type != TriggerManual {
 						continue
@@ -903,21 +868,17 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event, active Activ
 			}
 			runID := RunID(w.ID, e.ID)
 			started[w.ID] = append(started[w.ID], startedRun{id: runID, members: members})
-			exists, err := t.Client.WorkflowRun.Query().Where(workflowrun.WorkflowIDEQ(w.ID), workflowrun.EventIDEQ(e.ID)).Exist(ctx)
+			exists, err := t.DAL.Runs().Exists(ctx, w.ID, e.ID)
 			if err != nil {
 				return nil, nil, err
 			}
 			if exists {
 				continue
 			}
-			c := t.Client.WorkflowRun.Create().SetID(runID).SetWorkflowID(w.ID).SetWorkflowVersion(m.v.Number).SetWorkspaceID(w.WorkspaceID).SetEventID(e.ID).SetEventType(e.Type).SetDepth(e.Depth).SetActor(e.Actor)
-			if itemID := eventItemID(e); itemID != "" {
-				c.SetItemID(itemID)
-			}
-			if _, err = c.Save(ctx); err != nil {
+			if _, err = t.DAL.Runs().Create(ctx, runstore.CreateInput{ID: runID, WorkflowID: w.ID, WorkflowVersion: m.v.Number, WorkspaceID: w.WorkspaceID, EventID: e.ID, EventType: e.Type, Depth: e.Depth, Actor: e.Actor, ItemID: eventItemID(e)}); err != nil {
 				return nil, nil, err
 			}
-			in := RunInput{RunID: runID, WorkflowID: w.ID, Version: m.v.Number, WorkspaceID: w.WorkspaceID, ItemID: eventItemID(e), Event: e, StartError: startError, System: systemWorkflow(w)}
+			in := RunInput{RunID: runID, WorkflowID: w.ID, Version: m.v.Number, WorkspaceID: w.WorkspaceID, ItemID: eventItemID(e), Event: e, StartError: startError, System: systemWorkflow(w.BuiltinKey)}
 			if m.def.Concurrency == ConcurrencyCoalesce && len(members) > 0 {
 				in.Partition = w.ID + ":" + members[0]
 			}
@@ -929,7 +890,7 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event, active Activ
 				for position, m := range members {
 					itemID, _ := m.(string)
 					in.Items = append(in.Items, itemID)
-					if err = t.Client.WorkflowRunItem.Create().SetID(fmt.Sprintf("%s:%d", runID, position)).SetRunID(runID).SetItemID(itemID).SetPosition(position).Exec(ctx); err != nil {
+					if err = t.DAL.Runs().AddItem(ctx, runID, itemID, position); err != nil {
 						return nil, nil, err
 					}
 				}
@@ -941,8 +902,9 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event, active Activ
 }
 
 // ActiveFunc reports the status of the given runs that are still active:
-// queued, running or waiting. Runs that are not active are left out.
-type ActiveFunc func(runIDs []string) (map[string]string, error)
+// queued, running or waiting. Runs that are not active are left out. It
+// reads in t's transaction.
+type ActiveFunc func(ctx context.Context, t *dms.Service, runIDs []string) (map[string]runstore.Status, error)
 
 // eventMembers are the items a run started by e works on.
 func eventMembers(e dms.Event) []string {
@@ -982,18 +944,15 @@ func overlaps(a, b []string) bool {
 // activeRuns returns the queued, running or waiting runs of a workflow that
 // work on any of items, as primary item or selection member. Recorded
 // statuses lag behind the runner, so active confirms them.
-func activeRuns(ctx context.Context, t *dms.Service, workflowID string, items []string, active ActiveFunc) (map[string]string, error) {
-	rows, err := t.Client.WorkflowRun.Query().Where(workflowrun.WorkflowIDEQ(workflowID), workflowrun.LiveStatusIn("queued", "running", "waiting"),
-		workflowrun.Or(workflowrun.ItemIDIn(items...), func(s *entsql.Selector) {
-			s.Where(entsql.In(s.C(workflowrun.FieldID), entsql.Select(workflowrunitem.FieldRunID).From(entsql.Table(workflowrunitem.Table)).Where(entsql.In(workflowrunitem.FieldItemID, anyStrings(items)...))))
-		})).All(ctx)
-	out := map[string]string{}
+func activeRuns(ctx context.Context, t *dms.Service, workflowID string, items []string, active ActiveFunc) (map[string]runstore.Status, error) {
+	rows, err := t.DAL.Runs().List(ctx, runstore.Filter{WorkflowID: workflowID, Statuses: runstore.Active, ItemIDs: items})
+	out := map[string]runstore.Status{}
 	if err != nil || len(rows) == 0 {
 		return out, err
 	}
 	if active == nil {
 		for _, row := range rows {
-			out[row.ID] = row.LiveStatus
+			out[row.ID] = row.Status
 		}
 		return out, nil
 	}
@@ -1001,7 +960,7 @@ func activeRuns(ctx context.Context, t *dms.Service, workflowID string, items []
 	for i, row := range rows {
 		ids[i] = row.ID
 	}
-	return active(ids)
+	return active(ctx, t, ids)
 }
 
 func anyStrings(v []string) []any {
@@ -1013,8 +972,8 @@ func anyStrings(v []string) []any {
 }
 
 type matchable struct {
-	w   *ent.Workflow
-	v   *ent.WorkflowVersion
+	w   *workflows.Workflow
+	v   *workflows.Version
 	def Definition
 }
 
@@ -1049,7 +1008,7 @@ func (m *matchable) accepts(ctx context.Context, t *dms.Service, e dms.Event) (b
 		if tr.ContentTypeID != "" {
 			typ, _ := e.Data["content_type_id"].(string)
 			if typ == "" && e.ResourceID != "" {
-				r, err := t.Client.Resource.Get(ctx, e.ResourceID)
+				r, err := t.DAL.Resources().Resource(ctx, e.ResourceID)
 				if err != nil {
 					return false, err
 				}
@@ -1117,7 +1076,7 @@ func termsChanged(ctx context.Context, t *dms.Service, tr Trigger, e dms.Event) 
 // still moves on, so it never holds up the others; such errors come back
 // as skipped for the runner to log, while err is a failure of the tick.
 func Tick(ctx context.Context, t *dms.Service, now time.Time) (raised int, skipped, err error) {
-	due, err := t.Client.WorkflowTrigger.Query().Where(workflowtrigger.NextAtNotNil(), workflowtrigger.NextAtLTE(now)).Order(ent.Asc(workflowtrigger.FieldNextAt)).Limit(100).All(ctx)
+	due, err := t.DAL.Workflows().Triggers(ctx, workflows.TriggerFilter{DueAt: &now, Limit: 100})
 	if err != nil {
 		return 0, nil, err
 	}
@@ -1131,7 +1090,7 @@ func Tick(ctx context.Context, t *dms.Service, now time.Time) (raised int, skipp
 			t.Emit(ctx, e)
 		}
 		raised += len(events)
-		if err = t.Client.WorkflowTrigger.UpdateOne(row).SetNextAt(next).Exec(ctx); err != nil {
+		if err = t.DAL.Workflows().AdvanceTrigger(ctx, row.ID, next); err != nil {
 			return raised, nil, err
 		}
 	}
@@ -1140,7 +1099,7 @@ func Tick(ctx context.Context, t *dms.Service, now time.Time) (raised int, skipp
 
 // occurrence computes the events of one due schedule trigger and its next
 // occurrence after now. On error it returns no events.
-func occurrence(ctx context.Context, t *dms.Service, row *ent.WorkflowTrigger, now time.Time) ([]dms.Event, time.Time, error) {
+func occurrence(ctx context.Context, t *dms.Service, row workflows.Trigger, now time.Time) ([]dms.Event, time.Time, error) {
 	retry := now.Add(time.Hour).UTC()
 	w, err := live(ctx, t, row.WorkflowID)
 	if err != nil {
@@ -1207,12 +1166,7 @@ func Listens(ctx context.Context, t *dms.Service, root dms.Event) (bool, error) 
 	if root.Depth >= MaxDepth {
 		return false, nil
 	}
-	q := t.Client.WorkflowTrigger.Query().Where(workflowtrigger.TypeEQ(dms.EventPermissionsChanged), workflowtrigger.WorkspaceIDEQ(root.WorkspaceID))
-	if root.CollectionID != "" {
-		// A change inside one collection reaches only that collection.
-		q.Where(workflowtrigger.Or(workflowtrigger.CollectionIDIsNil(), workflowtrigger.CollectionIDEQ(root.CollectionID)))
-	}
-	rows, err := q.All(ctx)
+	rows, err := t.DAL.Workflows().Triggers(ctx, workflows.TriggerFilter{Type: dms.EventPermissionsChanged, WorkspaceID: root.WorkspaceID, CollectionID: root.CollectionID, MatchCollection: root.CollectionID != ""})
 	if err != nil || len(rows) == 0 {
 		return false, err
 	}
@@ -1220,7 +1174,7 @@ func Listens(ctx context.Context, t *dms.Service, root dms.Event) (bool, error) 
 	for i, r := range rows {
 		list[i] = r.WorkflowID
 	}
-	ids, err := t.Client.Workflow.Query().Where(workflow.IDIn(list...), workflow.AutomaticEnabledEQ(true), workflow.StateEQ("published"), workflow.DeletedAtIsNil()).All(ctx)
+	ids, err := listWorkflows(ctx, t, workflows.Filter{IDs: list, AutomaticEnabled: boolPtr(true), State: workflows.StatePublished, LiveOnly: true})
 	if err != nil {
 		return false, err
 	}
@@ -1277,4 +1231,46 @@ func PermissionDeliveries(root dms.Event, targets []dms.PermissionTarget) []dms.
 			Actor: root.Actor, Data: d, Depth: root.Depth, CauseRunID: root.CauseRunID}
 	}
 	return out
+}
+
+func boolPtr(value bool) *bool { return &value }
+
+// findWorkflow loads a workflow, deleted or not.
+func findWorkflow(ctx context.Context, t *dms.Service, id string) (*workflows.Workflow, error) {
+	w, err := t.DAL.Workflows().Find(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return &w, nil
+}
+
+// findVersion loads a version of a workflow.
+func findVersion(ctx context.Context, t *dms.Service, id string, number int64) (*workflows.Version, error) {
+	v, err := t.DAL.Workflows().Version(ctx, id, number)
+	if err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+// listWorkflows loads the workflows a filter selects.
+func listWorkflows(ctx context.Context, t *dms.Service, f workflows.Filter) ([]*workflows.Workflow, error) {
+	rows, err := t.DAL.Workflows().List(ctx, f)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*workflows.Workflow, len(rows))
+	for i := range rows {
+		out[i] = &rows[i]
+	}
+	return out, nil
+}
+
+// createWorkflow records a workflow with its first version.
+func createWorkflow(ctx context.Context, t *dms.Service, in workflows.CreateInput) (*workflows.Workflow, error) {
+	w, err := t.DAL.Workflows().Create(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return &w, nil
 }

@@ -134,5 +134,5 @@ The permission and promoted-column details come from [the scale architecture dec
 
 The next implementation slice should combine richer field validation, reusable template provisioning, and saved views over a bounded query specification. These improve many DMS/CMS applications while retaining our existing content model. The next infrastructure slice should add a transactional outbox and operation tracking, making document extraction and notifications reliable. Typed relationships, controlled taxonomy, and deduplicated document storage can then be introduced independently.
 
-No .NET implementation details require changing our choice of Go, Ent, Atlas, or SQLite.
+No .NET implementation details require changing our choice of Go, Bob, SQLite, or PostgreSQL.
 

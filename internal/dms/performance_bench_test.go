@@ -6,8 +6,9 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"papergo/internal/database"
-	"papergo/internal/testutil"
+	"papergo/internal/dal/daltest"
+	"papergo/internal/dal/database"
+	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
@@ -17,13 +18,22 @@ import (
 // indexed integer n, an indexed status (absent on every tenth item), every
 // other item published, and every fiftieth item under its own ACL scope that
 // lets "reader" see drafts, so auto-surface reads merge both surfaces.
-func benchCollection(b *testing.B) (*Service, *database.Database, string, string) {
+// benchCollection returns the service, its SQLite file (empty on
+// PostgreSQL), a collection and its field.
+func benchCollection(b *testing.B) (*Service, string, string, string) {
 	n := 2000
 	if v, err := strconv.Atoi(os.Getenv("PAPERGO_BENCH_ITEMS")); err == nil && v > 0 {
 		n = v
 	}
 	ctx := context.Background()
-	db := testutil.Database(b)
+	var db *database.Database
+	path := ""
+	if daltest.PostgresDSN() != "" {
+		db = daltest.Database(b)
+	} else {
+		path = filepath.Join(b.TempDir(), "bench.db")
+		db = daltest.DatabaseAt(b, path)
+	}
 	s := NewService(db.SQL)
 	w, err := s.Create(ctx, "alice", "", CreateResource{Kind: "workspace", Name: "Benchmark"})
 	if err != nil {
@@ -77,7 +87,7 @@ func benchCollection(b *testing.B) (*Service, *database.Database, string, string
 			}
 		}
 	}
-	return s, db, l.ID, field
+	return s, path, l.ID, field
 }
 
 // BenchmarkCollectionQuery reads 50-row pages of typed queries: system and
@@ -143,7 +153,7 @@ func BenchmarkWriteDuringIndexBuild(b *testing.B) {
 }
 
 func benchWrites(b *testing.B, building bool) {
-	s, db, list, field := benchCollection(b)
+	s, path, list, field := benchCollection(b)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go s.RunOperations(ctx, slog.New(slog.NewTextHandler(io.Discard, nil)))
@@ -182,12 +192,7 @@ func benchWrites(b *testing.B, building bool) {
 	b.StopTimer()
 	b.ReportMetric(float64(worst.Microseconds())/1000, "max-write-ms")
 	b.ReportMetric(float64(total.Microseconds())/1000/float64(b.N), "mean-write-ms")
-	var seq int
-	var name, file string
-	if err = db.SQL.QueryRow("PRAGMA database_list").Scan(&seq, &name, &file); err != nil {
-		b.Fatal(err)
-	}
-	if info, err := os.Stat(file + "-wal"); err == nil {
+	if info, err := os.Stat(path + "-wal"); path != "" && err == nil {
 		b.ReportMetric(float64(info.Size())/(1<<20), "wal-MiB")
 	}
 }

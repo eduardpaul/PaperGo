@@ -8,8 +8,8 @@ PaperGo runs at the root of one public host behind a TLS-terminating reverse pro
 | --- | --- |
 | Provider bearer tokens | OIDC verifies signature, issuer, expiry and audience. `OIDC_TOKEN_TYPE` optionally checks the JWT header type. |
 | Web sign-in | With `OIDC_CLIENT_ID`, the web app signs in at the provider with the authorization code flow and PKCE, renews access with refresh tokens and signs out at the provider. Without it, people paste a token. |
-| Integration REST tokens | Admin-issued service credentials authenticate with scoped Bearer tokens in either mode. Forward Authorization on an API ingress for these clients; PaperGo enforces token scopes and resource ACLs. |
-| Personal REST tokens | Bearer-authenticated deployments accept scoped personal credentials. These requests preserve the stored profile and group memberships. |
+| Integration access tokens | Admin-issued service credentials authenticate with scoped Bearer tokens in either mode. Forward Authorization on an API ingress for these clients; PaperGo enforces token scopes and resource ACLs. |
+| Personal access tokens | Bearer-authenticated deployments accept scoped personal credentials. These requests preserve the stored profile and group memberships. |
 | Users | Verified subjects enroll with the Member role on first use. OIDC profile claims supply a display name and email; proxy profiles are locally managed. |
 | Groups | Local groups are administered in PaperGo. OIDC groups synchronize from provider claims; their direct memberships are managed by the provider. |
 | Roles and ACLs | Both group sources use the same persisted role assignments, nested-group expansion and content grants. |
@@ -29,7 +29,7 @@ NPM validates Basic credentials and overwrites `X-Papergo-Subject` with `$remote
 
 NPM Access List usernames are the stable PaperGo subjects. NPM management accounts administer the proxy; they do not become application users. Groups, profiles and roles are managed in PaperGo. Removing access-list credentials blocks subsequent requests; disabling the PaperGo account also revokes active application access. Rename usernames by explicitly creating a different identity rather than transferring another user's permissions.
 
-In this mode REST, WebDAV and browser clients use their NPM Basic credentials over HTTPS. The frontend reads the public `/auth/config` capability endpoint and loads `/v1/identity/me` without requiring a stored bearer token. Protect the UI, `/auth/config`, frontend assets and API routes with the same NPM Access List. The UI hides personal-token creation and shows proxy WebDAV instructions. Sign-in state belongs to the proxy and browser; PaperGo has no proxy logout endpoint. PaperGo personal REST-token and WebDAV app-password endpoints are unavailable (404), and OIDC settings and `ADMIN_GROUP` are rejected. The sample provisions a dedicated backend network, static trusted proxy address, shared secret, TLS, persistent volumes and health checks.
+In this mode REST, WebDAV and browser clients use their NPM Basic credentials over HTTPS. The frontend reads the public `/auth/config` capability endpoint and loads `/v1/identity/me` without requiring a stored bearer token. Protect the UI, `/auth/config`, frontend assets and API routes with the same NPM Access List. The UI hides personal-token creation and shows proxy WebDAV instructions. Sign-in state belongs to the proxy and browser; PaperGo has no proxy logout endpoint. PaperGo personal access-token and WebDAV app-password endpoints are unavailable (404), and OIDC settings and `ADMIN_GROUP` are rejected. The sample provisions a dedicated backend network, static trusted proxy address, shared secret, TLS, persistent volumes and health checks.
 
 ## Public origin
 
@@ -71,7 +71,7 @@ With `OIDC_GROUPS_FROM_USERINFO=true`, a token lacking the groups claim queries 
 
 ## Web sign-in
 
-Set `OIDC_CLIENT_ID` to a client registered at the provider for the web app. `/auth/config` then publishes the issuer, the client ID and the scopes (`OIDC_CLIENT_SCOPES`, default `openid profile email offline_access`), and the sign-in page offers **Sign in with single sign-on** next to pasting a personal REST token. Register the client as follows:
+Set `OIDC_CLIENT_ID` to a client registered at the provider for the web app. `/auth/config` then publishes the issuer, the client ID and the scopes (`OIDC_CLIENT_SCOPES`, default `openid profile email offline_access`), and the sign-in page offers **Sign in with single sign-on** next to pasting a personal access token. Register the client as follows:
 
 - **Public client** (no secret) with the authorization code grant, PKCE (`S256`) and refresh tokens. The browser cannot keep a secret.
 - **Redirect URI** `<PUBLIC_URL>/login/callback`, matched exactly, and **post-logout redirect URI** `<PUBLIC_URL>/login`.
@@ -199,9 +199,9 @@ For any IdP: decode a real access token (`jwt.io`-style, locally) and check `iss
 
 ## WebDAV through a proxy
 
-- Clients use **app passwords** (`POST /v1/webdav-credentials`) with Basic auth. The proxy must pass `Authorization` (rule 1). In OIDC mode, people create them with their bearer token. In proxy mode, clients use NPM Access List credentials instead.
+- Clients use **access tokens** (`POST /v1/identity/me/tokens` with `webdav.access` scope) with Basic or Bearer auth. The proxy must pass `Authorization` (rule 1). In OIDC mode, people create them with their bearer token. In proxy mode, clients use NPM Access List credentials instead.
 - Windows' WebClient sends Basic credentials only over HTTPS (default `BasicAuthLevel=1`), which the proxy provides, and limits downloads to 50 MB by default (`FileSizeLimitInBytes`).
-- Group sync does not run on app-password requests: they carry no token. Their memberships are whatever the user's last token set.
+- Group sync does not run on access-token requests: they carry no OIDC token. Their memberships are whatever the user's last token set.
 
 ## Verification
 

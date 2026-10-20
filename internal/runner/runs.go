@@ -6,21 +6,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
-	entsql "entgo.io/ent/dialect/sql"
 	"github.com/dbos-inc/dbos-transact-golang/dbos"
 	"github.com/google/uuid"
-
-	"papergo/ent"
-	"papergo/ent/domainevent"
-	entworkflow "papergo/ent/workflow"
-	"papergo/ent/workflowrun"
-	"papergo/ent/workflowrunitem"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/resultcache"
+	runstore "papergo/internal/dal/runs"
 	"papergo/internal/dms"
-	"papergo/internal/resultcache"
 	"papergo/internal/tasks"
 	"papergo/internal/workflow"
 )
@@ -34,16 +28,16 @@ type Run struct {
 	WorkspaceID     string  `json:"workspace_id"`
 	ItemID          *string `json:"item_id,omitempty"`
 	// Items is a selection run's ordered membership; ItemID is its primary.
-	Items     []string   `json:"items,omitempty"`
-	EventID   string     `json:"event_id"`
-	EventType string     `json:"event_type"`
-	Depth     int        `json:"depth"`
-	Actor     string     `json:"actor"`
-	RetryOf   *string    `json:"retry_of,omitempty"`
-	Status    string     `json:"status"`
-	Error     string     `json:"error,omitempty"`
-	CreatedAt time.Time  `json:"created_at"`
-	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+	Items     []string        `json:"items,omitempty"`
+	EventID   string          `json:"event_id"`
+	EventType string          `json:"event_type"`
+	Depth     int             `json:"depth"`
+	Actor     string          `json:"actor"`
+	RetryOf   *string         `json:"retry_of,omitempty"`
+	Status    runstore.Status `json:"status"`
+	Error     string          `json:"error,omitempty"`
+	CreatedAt time.Time       `json:"created_at"`
+	UpdatedAt *time.Time      `json:"updated_at,omitempty"`
 	// Inputs are the launch form's values of a manual run, defaults applied.
 	Inputs map[string]any `json:"inputs,omitempty"`
 	Result any            `json:"result,omitempty"`
@@ -84,23 +78,31 @@ func (p RunPage) APIPage() (map[string]any, string) {
 	return map[string]any{"value": p.Data}, p.NextCursor
 }
 
-func status(s dbos.WorkflowStatusType) string {
+func status(s dbos.WorkflowStatusType) runstore.Status {
 	switch s {
 	case dbos.WorkflowStatusEnqueued, dbos.WorkflowStatusDelayed:
-		return "queued"
+		return runstore.StatusQueued
 	case dbos.WorkflowStatusPending:
-		return "running"
+		return runstore.StatusRunning
 	case dbos.WorkflowStatusSuccess:
-		return "completed"
+		return runstore.StatusCompleted
 	case dbos.WorkflowStatusCancelled:
-		return "cancelled"
+		return runstore.StatusCancelled
 	}
-	return "failed"
+	return runstore.StatusFailed
 }
 
-func toRun(row *ent.WorkflowRun) Run {
-	return Run{ID: row.ID, WorkflowID: row.WorkflowID, WorkflowVersion: row.WorkflowVersion, WorkspaceID: row.WorkspaceID, ItemID: row.ItemID, EventID: row.EventID, EventType: row.EventType,
-		Depth: row.Depth, Actor: row.Actor, RetryOf: row.RetryOf, Status: "queued", CreatedAt: row.CreatedAt}
+func toRun(row runstore.Run) Run {
+	return Run{ID: row.ID, WorkflowID: row.WorkflowID, WorkflowVersion: row.WorkflowVersion, WorkspaceID: row.WorkspaceID, ItemID: optional(row.ItemID), EventID: row.EventID, EventType: row.EventType,
+		Depth: row.Depth, Actor: row.Actor, RetryOf: optional(row.RetryOf), Status: runstore.StatusQueued, CreatedAt: row.CreatedAt}
+}
+
+// optional returns nil for an empty string.
+func optional(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
 
 func (r *Runner) attach(runs []Run, output bool) error {
@@ -131,7 +133,7 @@ func (r *Runner) attach(runs []Run, output bool) error {
 		}
 		runs[i].Status = status(s.Status)
 		if parked[runs[i].ID] && (s.Status == dbos.WorkflowStatusPending || s.Status == dbos.WorkflowStatusEnqueued) {
-			runs[i].Status = "waiting"
+			runs[i].Status = runstore.StatusWaiting
 			runs[i].Error = ""
 			s.Error = nil
 		}
@@ -183,49 +185,30 @@ func (r *Runner) Runs(ctx context.Context, subject, workspaceID string, f RunFil
 			}
 			restricted = true
 		}
-		q := t.Client.WorkflowRun.Query().Where(workflowrun.WorkspaceIDEQ(workspaceID))
-		if f.Origin == "manual" || f.Origin == "schedule" {
-			q.Where(workflowrun.EventTypeEQ(f.Origin))
-		} else if f.Origin == "automatic" {
-			q.Where(workflowrun.EventTypeNotIn("manual", "schedule"))
-		} else if f.Origin != "" {
+		filter := runstore.Filter{WorkspaceID: workspaceID, WorkflowID: f.WorkflowID, Origin: f.Origin, Limit: f.Limit + 1}
+		if f.Origin != "" && f.Origin != "manual" && f.Origin != "schedule" && f.Origin != "automatic" {
 			return RunPage{}, dms.Invalid("origin must be manual, schedule or automatic")
 		}
 		if f.Status != "" {
-			if !slices.Contains([]string{"queued", "running", "waiting", "completed", "failed", "cancelled"}, f.Status) {
+			if !runstore.Status(f.Status).Valid() {
 				return RunPage{}, dms.Invalid("invalid run status")
 			}
-			q.Where(workflowrun.LiveStatusEQ(f.Status))
+			filter.Statuses = []runstore.Status{runstore.Status(f.Status)}
 		}
-
-		if f.WorkflowID != "" {
-			q.Where(workflowrun.WorkflowIDEQ(f.WorkflowID))
-		} else if keys := workflow.SystemBuiltIns(); len(keys) > 0 && f.ItemID == "" && !f.IncludeSystem {
-			// Hide high-volume system automation while retaining explicit manual runs.
-			system, err := t.Client.Workflow.Query().Where(entworkflow.WorkspaceIDEQ(workspaceID), entworkflow.BuiltinKeyIn(keys...)).IDs(ctx)
-			if err != nil {
-				return RunPage{}, err
-			}
-			if len(system) > 0 {
-				q.Where(workflowrun.Or(workflowrun.WorkflowIDNotIn(system...), workflowrun.EventTypeEQ("manual")))
-			}
+		if f.WorkflowID == "" && f.ItemID == "" && !f.IncludeSystem {
+			filter.SystemKeys, filter.HideSystem = workflow.SystemBuiltIns(), true
 		}
 		if f.ItemID != "" {
-			// Selection runs count for every member, not only their primary item.
-			q.Where(workflowrun.Or(workflowrun.ItemIDEQ(f.ItemID), func(s *entsql.Selector) {
-				s.Where(entsql.In(s.C(workflowrun.FieldID), entsql.Select(workflowrunitem.FieldRunID).From(entsql.Table(workflowrunitem.Table)).Where(entsql.EQ(workflowrunitem.FieldItemID, f.ItemID))))
-			}))
+			filter.ItemIDs = []string{f.ItemID}
 		}
 		if f.After != "" {
 			at, id, err := decodeCursor(f.After)
 			if err != nil {
 				return RunPage{}, err
 			}
-			q.Where(func(s *entsql.Selector) {
-				s.Where(entsql.Or(entsql.LT(s.C(workflowrun.FieldCreatedAt), at), entsql.And(entsql.EQ(s.C(workflowrun.FieldCreatedAt), at), entsql.LT(s.C(workflowrun.FieldID), id))))
-			})
+			filter.BeforeCreatedAt, filter.BeforeID = &at, id
 		}
-		rows, err := q.Order(ent.Desc(workflowrun.FieldCreatedAt), ent.Desc(workflowrun.FieldID)).Limit(f.Limit + 1).All(ctx)
+		rows, err := t.DAL.Runs().List(ctx, filter)
 		if err != nil {
 			return RunPage{}, err
 		}
@@ -271,7 +254,7 @@ func members(ctx context.Context, t *dms.Service, runs []Run) error {
 	for i, run := range runs {
 		ids[i], at[run.ID] = run.ID, i
 	}
-	rows, err := t.Client.WorkflowRunItem.Query().Where(workflowrunitem.RunIDIn(ids...)).Order(ent.Asc(workflowrunitem.FieldRunID), ent.Asc(workflowrunitem.FieldPosition)).All(ctx)
+	rows, err := t.DAL.Runs().Items(ctx, ids, "")
 	if err != nil {
 		return err
 	}
@@ -302,14 +285,14 @@ func decodeCursor(c string) (time.Time, string, error) {
 	return t, id, nil
 }
 
-func (r *Runner) row(ctx context.Context, subject, id string) (*ent.WorkflowRun, error) {
-	return dms.Read(ctx, r.dms, func(t *dms.Service) (*ent.WorkflowRun, error) {
-		row, err := t.Client.WorkflowRun.Get(ctx, id)
-		if ent.IsNotFound(err) {
-			return nil, dms.ErrNotFound
+func (r *Runner) row(ctx context.Context, subject, id string) (runstore.Run, error) {
+	return dms.Read(ctx, r.dms, func(t *dms.Service) (runstore.Run, error) {
+		row, err := t.DAL.Runs().Find(ctx, id)
+		if dberr.IsNotFound(err) {
+			return runstore.Run{}, dms.ErrNotFound
 		}
 		if err != nil {
-			return nil, err
+			return runstore.Run{}, err
 		}
 		return row, manage(ctx, t, subject, row.WorkspaceID)
 	})
@@ -327,8 +310,8 @@ func (r *Runner) pending(ctx context.Context, subject, id string) (Run, error) {
 		if !ok || !ok2 {
 			return Run{}, dms.ErrNotFound
 		}
-		e, err := t.Client.DomainEvent.Get(ctx, eventID)
-		if ent.IsNotFound(err) || err == nil && e.Data["workflow_id"] != workflowID {
+		e, err := t.DAL.Events().Find(ctx, eventID)
+		if dberr.IsNotFound(err) || err == nil && e.Data["workflow_id"] != workflowID {
 			return Run{}, dms.ErrNotFound
 		}
 		if err == nil && e.DispatchedAt != nil {
@@ -340,7 +323,11 @@ func (r *Runner) pending(ctx context.Context, subject, id string) (Run, error) {
 		if err = manage(ctx, t, subject, e.WorkspaceID); err != nil {
 			return Run{}, err
 		}
-		return Run{ID: id, WorkflowID: workflowID, WorkspaceID: e.WorkspaceID, ItemID: e.ResourceID, EventID: e.ID, EventType: e.Type, Depth: e.Depth, Actor: e.Actor, Status: "queued", CreatedAt: e.CreatedAt}, nil
+		run := Run{ID: id, WorkflowID: workflowID, WorkspaceID: e.WorkspaceID, EventID: e.ID, EventType: e.Type, Depth: e.Depth, Actor: e.Actor, Status: runstore.StatusQueued, CreatedAt: e.CreatedAt}
+		if e.ResourceID != "" {
+			run.ItemID = &e.ResourceID
+		}
+		return run, nil
 	})
 }
 
@@ -398,21 +385,7 @@ func (r *Runner) Run(ctx context.Context, subject, id string) (Run, error) {
 // stepBodies loads transactional outputs in one query. Work steps and DBOS
 // waits keep their outputs in DBOS; transactional steps keep only pointers there.
 func (r *Runner) stepBodies(ctx context.Context, runID string) (map[int]json.RawMessage, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT step_id, output FROM runner_step_results WHERE run_id=?`, runID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := make(map[int]json.RawMessage)
-	for rows.Next() {
-		var id int
-		var body json.RawMessage
-		if err := rows.Scan(&id, &body); err != nil {
-			return nil, err
-		}
-		out[id] = body
-	}
-	return out, rows.Err()
+	return r.dms.DAL.Runs().StepBodies(ctx, runID)
 }
 
 // decodeOutput shows a step's recorded JSON as JSON, not as a string.
@@ -460,7 +433,7 @@ func (r *Runner) Retry(ctx context.Context, subject, id string) (Run, error) {
 	if err = r.attach(current, false); err != nil {
 		return Run{}, err
 	}
-	if current[0].Status != "failed" {
+	if current[0].Status != runstore.StatusFailed {
 		return Run{}, dms.Invalid("only failed runs can be retried")
 	}
 	steps, err := dbos.GetWorkflowSteps(r.ctx, id, dbos.WithStepsLoadOutput(false))
@@ -477,53 +450,35 @@ func (r *Runner) Retry(ctx context.Context, subject, id string) (Run, error) {
 		return Run{}, errors.New("the failed run has no failed step")
 	}
 	retryID := "retry:" + uuid.NewString()
-	// The step reference names a step number and is resolved against whichever
-	// workflow is running. Copy the reused bodies onto the new run before the
-	// fork exists, so a worker cannot replay a reference with no row. DBOS
-	// writes the fork on its own connection and must not run inside a PaperGo
-	// write transaction, which holds the SQLite write lock.
-	if _, err = r.db.ExecContext(ctx, `INSERT INTO runner_step_results (run_id, step_id, step, output)
-		SELECT ?, step_id, step, output FROM runner_step_results WHERE run_id=? AND step_id<?`, retryID, id, start); err != nil {
-		return Run{}, fmt.Errorf("retry run %s: %w", id, err)
-	}
-	if _, err = dbos.ForkWorkflow[any](r.ctx, dbos.ForkWorkflowInput{OriginalWorkflowID: id, ForkedWorkflowID: retryID, StartStep: uint(start), QueueName: runQueue}); err != nil {
-		r.discardStepResults(ctx, retryID)
-		return Run{}, fmt.Errorf("retry run %s: %w", id, err)
-	}
+	// Persist the retry and reused step bodies together before DBOS can run it.
+	// Every step body references a real application run in both schema masters.
+
 	err = r.dms.Write(ctx, func(t *dms.Service) error {
-		c := t.Client.WorkflowRun.Create().SetID(retryID).SetWorkflowID(row.WorkflowID).SetWorkflowVersion(row.WorkflowVersion).SetWorkspaceID(row.WorkspaceID).
-			SetEventID(retryID).SetEventType(row.EventType).SetDepth(row.Depth).SetActor(subject).SetRetryOf(row.ID)
-		if row.ItemID != nil {
-			c.SetItemID(*row.ItemID)
-		}
-		if _, err := c.Save(ctx); err != nil {
+		if _, err := t.DAL.Runs().Create(ctx, runstore.CreateInput{ID: retryID, WorkflowID: row.WorkflowID, WorkflowVersion: row.WorkflowVersion, WorkspaceID: row.WorkspaceID, EventID: retryID, EventType: row.EventType, Depth: row.Depth, Actor: subject, RetryOf: row.ID, ItemID: row.ItemID}); err != nil {
 			return err
 		}
-		// A retried selection keeps its members, in order.
-		original, err := t.Client.WorkflowRunItem.Query().Where(workflowrunitem.RunIDEQ(row.ID)).All(ctx)
+		original, err := t.DAL.Runs().Items(ctx, []string{row.ID}, "")
 		if err != nil {
 			return err
 		}
-		for _, m := range original {
-			if err = t.Client.WorkflowRunItem.Create().SetID(fmt.Sprintf("%s:%d", retryID, m.Position)).SetRunID(retryID).SetItemID(m.ItemID).SetPosition(m.Position).Exec(ctx); err != nil {
+		for _, member := range original {
+			if err := t.DAL.Runs().AddItem(ctx, retryID, member.ItemID, member.Position); err != nil {
 				return err
 			}
 		}
-		return nil
+
+		return t.DAL.Runs().ForkSteps(ctx, retryID, id, int(start))
 	})
 	if err != nil {
-		_ = dbos.CancelWorkflow(r.ctx, retryID)
-		r.discardStepResults(ctx, retryID)
 		return Run{}, fmt.Errorf("retry run %s: %w", id, err)
 	}
+	if _, err = dbos.ForkWorkflow[any](r.ctx, dbos.ForkWorkflowInput{OriginalWorkflowID: id, ForkedWorkflowID: retryID, StartStep: uint(start), QueueName: runQueue}); err != nil {
+		cleanupErr := r.dms.Write(context.WithoutCancel(ctx), func(t *dms.Service) error {
+			return t.DAL.Runs().Delete(context.WithoutCancel(ctx), []string{retryID})
+		})
+		return Run{}, fmt.Errorf("retry run %s: %w", id, errors.Join(err, cleanupErr))
+	}
 	return r.Run(ctx, subject, retryID)
-}
-
-// discardStepResults removes a run's step bodies. Retry calls it when the
-// fork or the run row does not stick, so a copied body cannot outlive that
-// attempt.
-func (r *Runner) discardStepResults(ctx context.Context, runID string) {
-	_, _ = r.db.ExecContext(ctx, `DELETE FROM runner_step_results WHERE run_id=?`, runID)
 }
 
 // purge deletes runs that finished more than the retention ago, with their
@@ -587,13 +542,8 @@ func (r *Runner) deleteDispatchedEvents(ctx context.Context, cutoff time.Time) e
 	for {
 		var n int64
 		err := r.dms.Write(ctx, func(t *dms.Service) error {
-			ids, err := t.Client.DomainEvent.Query().Where(domainevent.DispatchedAtLT(cutoff)).Limit(purgePage).IDs(ctx)
-			if err != nil || len(ids) == 0 {
-				n = int64(len(ids))
-				return err
-			}
-			deleted, err := t.Client.DomainEvent.Delete().Where(domainevent.IDIn(ids...)).Exec(ctx)
-			n = int64(deleted)
+			var err error
+			n, err = t.DAL.Events().DeleteDispatched(ctx, cutoff, purgePage)
 			return err
 		})
 		if err != nil || n < int64(purgePage) {
@@ -644,13 +594,11 @@ func (r *Runner) PurgeSystemRuns(ctx context.Context) (int, error) {
 	for {
 		var ids []string
 		err := r.dms.Write(ctx, func(t *dms.Service) error {
-			var err error
-			system, err := t.Client.Workflow.Query().Where(entworkflow.BuiltinKeyIn(keys...)).IDs(ctx)
-			if err != nil || len(system) == 0 {
-				return err
+			rows, err := t.DAL.Runs().List(ctx, runstore.Filter{AfterID: after, CreatedBefore: &cutoff, SystemKeys: keys, SystemOnly: true, Order: "id", Limit: purgePage})
+			ids = make([]string, len(rows))
+			for i, row := range rows {
+				ids[i] = row.ID
 			}
-			ids, err = t.Client.WorkflowRun.Query().Where(workflowrun.IDGT(after), workflowrun.CreatedAtLT(cutoff), workflowrun.WorkflowIDIn(system...), workflowrun.EventTypeNEQ("manual")).
-				Order(ent.Asc(workflowrun.FieldID)).Limit(purgePage).IDs(ctx)
 			return err
 		})
 		if err != nil || len(ids) == 0 {
@@ -680,12 +628,7 @@ func (r *Runner) PurgeSystemRuns(ctx context.Context) (int, error) {
 // tasks they wait for, their rows and DBOS's records.
 func (r *Runner) deleteRuns(ctx context.Context, ids []string) error {
 	if err := r.dms.Write(ctx, func(t *dms.Service) error {
-		args := make([]any, len(ids))
-		marks := make([]string, len(ids))
-		for i, id := range ids {
-			args[i], marks[i] = id, "?"
-		}
-		if _, err := t.Client.ExecContext(ctx, `DELETE FROM runner_step_results WHERE run_id IN (`+strings.Join(marks, ",")+`)`, args...); err != nil {
+		if err := t.DAL.Runs().DeleteSteps(ctx, ids); err != nil {
 			return err
 		}
 
@@ -706,8 +649,7 @@ func (r *Runner) deleteRuns(ctx context.Context, ids []string) error {
 				return err
 			}
 		}
-		_, err := t.Client.WorkflowRun.Delete().Where(workflowrun.IDIn(ids...)).Exec(ctx)
-		return err
+		return t.DAL.Runs().Delete(ctx, ids)
 	}); err != nil {
 		return err
 	}

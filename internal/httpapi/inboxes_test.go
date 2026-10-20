@@ -7,7 +7,9 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
-	"papergo/ent"
+	"papergo/internal/dal/blobs"
+	"papergo/internal/dal/directory"
+	"papergo/internal/dal/resources"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
 	"strings"
@@ -44,16 +46,16 @@ func TestInboxUploadRechecksChangesDuringStreaming(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err = s.Directory().SetMember(ctx, "organization-admin", group.ID, identity.Principal{Type: "user", ID: "alice"}, false); err != nil {
+			if err = s.Directory().SetMember(ctx, "organization-admin", group.ID, identity.Principal{Type: directory.PrincipalUser, ID: "alice"}, false); err != nil {
 				t.Fatal(err)
 			}
 			if _, err = s.SetGroupInbox(ctx, "alice", group.ID, dms.GroupInboxInput{LibraryID: home.InboxLibraryID}); err != nil {
 				t.Fatal(err)
 			}
 			authToken := testToken
-			var token identity.CreatedRESTToken
+			var token identity.CreatedAccessToken
 			if scenario.name == "credential" {
-				token, err = s.Directory().CreateRESTToken(ctx, "alice", identity.RESTTokenInput{Name: "Upload", Scopes: []string{"document.write", "list.read", "list.write"}})
+				token, err = s.Directory().CreateAccessToken(ctx, "alice", identity.AccessTokenInput{Name: "Upload", Scopes: []string{"document.write", "list.read", "list.write"}})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -71,13 +73,13 @@ func TestInboxUploadRechecksChangesDuringStreaming(t *testing.T) {
 				var err error
 				switch scenario.name {
 				case "membership":
-					err = s.Directory().SetMember(ctx, "organization-admin", group.ID, identity.Principal{Type: "user", ID: "alice"}, true)
+					err = s.Directory().SetMember(ctx, "organization-admin", group.ID, identity.Principal{Type: directory.PrincipalUser, ID: "alice"}, true)
 				case "binding":
 					_, err = s.SetGroupInbox(ctx, "alice", group.ID, dms.GroupInboxInput{LibraryID: home.DocumentsLibraryID})
 				case "active":
 					_, err = s.Directory().SetUserActive(ctx, "organization-admin", "alice", false)
 				case "credential":
-					err = s.Directory().RevokeRESTToken(ctx, "alice", token.Token.ID)
+					err = s.Directory().RevokeAccessToken(ctx, "alice", token.Token.ID)
 				}
 				if err != nil {
 					t.Fatal(err)
@@ -91,7 +93,7 @@ func TestInboxUploadRechecksChangesDuringStreaming(t *testing.T) {
 			if res.Code != scenario.status {
 				t.Fatal(res.Code, res.Body.String())
 			}
-			if n, err := s.Client.Blob.Query().Count(ctx); err != nil || n != 0 {
+			if n, err := s.DAL.Blobs().Count(ctx, blobs.BlobFilter{}); err != nil || n != 0 {
 				t.Fatal("failed upload attached bytes", n, err)
 			}
 		})
@@ -112,8 +114,8 @@ func TestHomeAndInboxHTTPContracts(t *testing.T) {
 	}
 	res = documentRequest(t, h, "/v1/identity/me/inbox/documents", documentPart{"file", "upload.pdf", "%PDF-personal"}, documentPart{"metadata", "", `{"name":"Incoming","values":{"description":"Triage"},"languages":"eng"}`})
 	var upload struct {
-		Item ent.Resource `json:"item"`
-		File ent.Blob     `json:"file"`
+		Item resources.Resource `json:"item"`
+		File blobs.Blob         `json:"file"`
 	}
 	if res.Code != 201 || json.Unmarshal(res.Body.Bytes(), &upload) != nil || upload.Item.ContainerID == nil || *upload.Item.ContainerID != home.InboxLibraryID || upload.File.Languages != "eng" || res.Header().Get("ETag") == "" || res.Header().Get("Location") == "" {
 		t.Fatal(res.Code, res.Body.String())
@@ -147,7 +149,7 @@ func TestHomeAndInboxHTTPContracts(t *testing.T) {
 	if res.Code != 404 {
 		t.Fatal("nonmember upload", res.Code, res.Body.String())
 	}
-	if err = s.Directory().SetMember(ctx, "organization-admin", group.ID, identity.Principal{Type: "user", ID: "alice"}, false); err != nil {
+	if err = s.Directory().SetMember(ctx, "organization-admin", group.ID, identity.Principal{Type: directory.PrincipalUser, ID: "alice"}, false); err != nil {
 		t.Fatal(err)
 	}
 	res = documentRequest(t, h, path+"/documents", documentPart{"file", "group.pdf", "%PDF-group"})
@@ -172,7 +174,7 @@ func TestHomeAndInboxHTTPContracts(t *testing.T) {
 func TestInboxUploadRejectsMissingScopeBeforeReadingBody(t *testing.T) {
 	h, s, _ := setup(t)
 	ctx := t.Context()
-	token, err := s.Directory().CreateRESTToken(ctx, "alice", identity.RESTTokenInput{Name: "File only", Scopes: []string{"document.write", "list.read"}})
+	token, err := s.Directory().CreateAccessToken(ctx, "alice", identity.AccessTokenInput{Name: "File only", Scopes: []string{"document.write", "list.read"}})
 	if err != nil {
 		t.Fatal(err)
 	}

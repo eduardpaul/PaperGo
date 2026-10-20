@@ -4,13 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"papergo/internal/dal/refs"
+	"papergo/internal/dal/resources"
 	"slices"
 	"time"
 
-	"papergo/ent"
-	"papergo/ent/operation"
-	"papergo/ent/resource"
-	"papergo/ent/workflow"
+	"papergo/internal/dal/operations"
+	"papergo/internal/dal/workflows"
 	"papergo/internal/search"
 )
 
@@ -30,17 +30,19 @@ const searchRole = "search.index"
 // Before defaults have been prepared, indexing is treated as on. Explicitly
 // paused, archived or deleted providers keep collection search off.
 func (s *Service) searchOff(ctx context.Context, collectionID string) (bool, error) {
-	c, err := s.Client.Resource.Query().Where(resource.IDEQ(collectionID)).Select(resource.FieldWorkspaceID).Only(ctx)
+	c, err := s.DAL.Resources().Resource(ctx, collectionID)
 	if err != nil {
 		return false, err
 	}
-	own, err := s.Client.Workflow.Query().Where(workflow.WorkspaceIDEQ(c.WorkspaceID), workflow.RoleEQ(searchRole), workflow.AutomaticProviderEQ(true), workflow.CollectionIDEQ(collectionID)).
-		Select(workflow.FieldAutomaticEnabled, workflow.FieldState, workflow.FieldDeletedAt).All(ctx)
+	provider := true
+	own, err := s.DAL.Workflows().List(ctx, workflows.Filter{WorkspaceID: c.WorkspaceID, Role: searchRole, AutomaticProvider: &provider, CollectionID: collectionID})
 	if err != nil {
 		return false, err
 	}
 	if len(own) > 0 {
-		return !slices.ContainsFunc(own, func(w *ent.Workflow) bool { return w.DeletedAt == nil && w.AutomaticEnabled && w.State == "published" }), nil
+		return !slices.ContainsFunc(own, func(w workflows.Workflow) bool {
+			return !w.Deleted() && w.AutomaticEnabled && w.State == workflows.StatePublished
+		}), nil
 	}
 	return false, nil
 }
@@ -141,13 +143,13 @@ const systemSubject = "papergo"
 // queued. Search answers ErrSearchUnavailable until it completes.
 func (s *Service) RebuildSearch(ctx context.Context) error {
 	return s.write(ctx, func(t *Service) error {
-		pending, err := t.Client.Operation.Query().Where(operation.KindEQ(OperationKindSearchReindex), operation.StatusEQ(operation.StatusPending), operation.CreatedByEQ(systemSubject)).Exist(ctx)
+		pending, err := t.DAL.Operations().Exists(ctx, operations.Filter{Kinds: []string{OperationKindSearchReindex}, Statuses: []operations.Status{operations.StatusPending}, CreatedBy: systemSubject})
 		if err != nil || pending {
 			s.searchRebuild.Store(pending)
 			return err
 		}
 		raw, _ := json.Marshal(searchReindexPayload{Stamp: time.Now().UnixNano(), Rebuild: true, Content: true})
-		if _, err = t.Client.Operation.Create().SetKind(OperationKindSearchReindex).SetCreatedBy(systemSubject).SetPayload(raw).SetTraceID(t.traceID).Save(ctx); err != nil {
+		if _, err = t.DAL.Operations().Enqueue(ctx, operations.Operation{Kind: OperationKindSearchReindex, CreatedBy: systemSubject, Payload: raw, TraceID: t.traceID}); err != nil {
 			return err
 		}
 		s.searchRebuild.Store(true)
@@ -158,7 +160,7 @@ func (s *Service) RebuildSearch(ctx context.Context) error {
 // ResumeSearchRebuild marks search unavailable while a rebuild queued before
 // a restart is still pending.
 func (s *Service) ResumeSearchRebuild(ctx context.Context) error {
-	pending, err := s.Client.Operation.Query().Where(operation.KindEQ(OperationKindSearchReindex), operation.StatusEQ(operation.StatusPending), operation.CreatedByEQ(systemSubject)).Exist(ctx)
+	pending, err := s.DAL.Operations().Exists(ctx, operations.Filter{Kinds: []string{OperationKindSearchReindex}, Statuses: []operations.Status{operations.StatusPending}, CreatedBy: systemSubject})
 	if err == nil {
 		s.searchRebuild.Store(pending)
 	}
@@ -176,14 +178,16 @@ func searchReindexHandler() OperationHandler {
 			}
 			return nil
 		},
-		Step: func(ctx context.Context, s *Service, op *ent.Operation) error { return s.searchReindexStep(ctx, op) },
-		Failed: func(context.Context, *Service, *ent.Operation, error) error {
+		Step: func(ctx context.Context, s *Service, op *operations.Operation) error {
+			return s.searchReindexStep(ctx, op)
+		},
+		Failed: func(context.Context, *Service, *operations.Operation, error) error {
 			return nil
 		}}
 }
 
 // StartSearchReindex queues the reindex operation.
-func (s *Service) StartSearchReindex(ctx context.Context, subject string, in SearchReindex) (*ent.Operation, error) {
+func (s *Service) StartSearchReindex(ctx context.Context, subject string, in SearchReindex) (*OperationView, error) {
 	if in.Force && !in.Content {
 		return nil, invalid("force applies to a content reindex")
 	}
@@ -193,7 +197,7 @@ func (s *Service) StartSearchReindex(ctx context.Context, subject string, in Sea
 
 // searchReindexStep writes the documents of one batch of entries, by ID,
 // with the operation's stamp; the last step removes what it did not write.
-func (s *Service) searchReindexStep(ctx context.Context, op *ent.Operation) error {
+func (s *Service) searchReindexStep(ctx context.Context, op *operations.Operation) error {
 	if s.search == nil {
 		return ErrSearchUnavailable
 	}
@@ -201,8 +205,7 @@ func (s *Service) searchReindexStep(ctx context.Context, op *ent.Operation) erro
 	if err := json.Unmarshal(op.Payload, &p); err != nil {
 		return err
 	}
-	ids, err := s.Client.Resource.Query().Where(resource.KindIn(resource.KindItem, resource.KindFolder), resource.DeletedAtIsNil(), resource.IDGT(op.AfterItemID)).
-		Order(ent.Asc(resource.FieldID)).Limit(searchReindexBatch).IDs(ctx)
+	ids, err := s.DAL.Resources().IDs(ctx, resources.Filter{Kinds: contentKinds, State: resources.Live, AfterID: op.AfterItemID, Limit: searchReindexBatch})
 	if err != nil {
 		return err
 	}
@@ -218,14 +221,16 @@ func (s *Service) searchReindexStep(ctx context.Context, op *ent.Operation) erro
 			return err
 		}
 	}
-	b := s.Client.Operation.UpdateOne(op).AddProcessed(len(ids))
+	op.Processed += len(ids)
 	if len(ids) == searchReindexBatch {
-		return b.SetAfterItemID(ids[len(ids)-1]).Exec(ctx)
+		op.AfterItemID = ids[len(ids)-1]
+		return s.DAL.Operations().Save(ctx, op)
 	}
 	if err = s.search.DeleteDocuments(ctx, search.Selection{Before: p.Stamp}); err != nil {
 		return err
 	}
-	if err = b.SetStatus(operation.StatusSucceeded).SetProgress(100).Exec(ctx); err != nil {
+	op.Status, op.Progress = operations.StatusSucceeded, 100
+	if err = s.DAL.Operations().Save(ctx, op); err != nil {
 		return err
 	}
 	if p.Rebuild {
@@ -237,12 +242,12 @@ func (s *Service) searchReindexStep(ctx context.Context, op *ent.Operation) erro
 // reindexContent raises file.added (source reindex) for the current file of
 // the items without content in the store, or of all of them with force.
 func (s *Service) reindexContent(ctx context.Context, actor string, ids []string, force bool) error {
-	rows, err := s.Client.Resource.Query().Where(resource.IDIn(ids...), resource.KindEQ(resource.KindItem), resource.HeadRevisionIDNotNil()).All(ctx)
+	rows, err := s.DAL.Resources().Resources(ctx, resources.Filter{IDs: ids, Kinds: []refs.ResourceKind{refs.KindItem}, WithHead: true})
 	if err != nil {
 		return err
 	}
 	for _, r := range rows {
-		rev, err := s.Client.ItemRevision.Get(ctx, *r.HeadRevisionID)
+		rev, err := s.revision(ctx, *r.HeadRevisionID)
 		if err != nil {
 			return err
 		}
@@ -258,7 +263,7 @@ func (s *Service) reindexContent(ctx context.Context, actor string, ids []string
 				continue
 			}
 		}
-		b, err := s.Client.Blob.Get(ctx, *rev.BlobID)
+		b, err := s.blob(ctx, *rev.BlobID)
 		if err != nil {
 			return err
 		}
@@ -275,35 +280,35 @@ var searchMatchLimit = 10_000
 // text matches as a literal phrase whose last word is a prefix, as people
 // type. It returns the IDs matching on each surface as JSON lists, for the
 // query's SQL, which authorizes, filters, sorts and pages.
-func (s *Service) searchMatches(ctx context.Context, subject, collectionID, workspaceID, text string) (head, published string, capped bool, err error) {
+func (s *Service) searchMatches(ctx context.Context, subject, collectionID, workspaceID, text string) (head, published []string, capped bool, err error) {
 	if s.search == nil || s.searchRebuild.Load() {
-		return "", "", false, ErrSearchUnavailable
+		return nil, nil, false, ErrSearchUnavailable
 	}
 	if collectionID != "" {
 		off, err := s.searchOff(ctx, collectionID)
 		if err != nil {
-			return "", "", false, err
+			return nil, nil, false, err
 		}
 		if off {
-			return "", "", false, ErrSearchOff
+			return nil, nil, false, ErrSearchOff
 		}
 	}
 	q := search.Literal(text)
 	if q == nil {
-		return "[]", "[]", false, nil
+		return []string{}, []string{}, false, nil
 	}
 	content, err := s.searchContentAllowed(ctx, subject)
 	if err != nil {
-		return "", "", false, err
+		return nil, nil, false, err
 	}
 	m, err := s.search.Match(ctx, search.MatchQuery{CollectionID: collectionID, WorkspaceID: workspaceID, Text: q, Content: content, Limit: searchMatchLimit})
 	if errors.Is(err, search.ErrUnavailable) {
-		return "", "", false, ErrSearchUnavailable
+		return nil, nil, false, ErrSearchUnavailable
 	}
 	if err != nil {
-		return "", "", false, err
+		return nil, nil, false, err
 	}
-	return jsonIDs(m.Head), jsonIDs(m.Published), m.Capped, nil
+	return m.Head, m.Published, m.Capped, nil
 }
 
 // Metadata remains searchable when the caller cannot read file contents.

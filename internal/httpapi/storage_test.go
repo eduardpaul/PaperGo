@@ -3,9 +3,11 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"papergo/internal/dal"
+	"papergo/internal/dal/directory"
 	"testing"
 
-	"papergo/internal/database"
+	"papergo/internal/dal/database"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
 )
@@ -23,7 +25,7 @@ func TestStorageStatusRequiresOrganizationManage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = s.Directory().SetAssignment(ctx, "organization-admin", role.ID, identity.Principal{Type: "user", ID: "alice"}, false); err != nil {
+	if err = s.Directory().SetAssignment(ctx, "organization-admin", role.ID, identity.Principal{Type: directory.PrincipalUser, ID: "alice"}, false); err != nil {
 		t.Fatal(err)
 	}
 	res := request(h, "GET", "/v1/storage/status", "", testToken, "", "")
@@ -31,8 +33,11 @@ func TestStorageStatusRequiresOrganizationManage(t *testing.T) {
 	if res.Code != 200 || json.Unmarshal(res.Body.Bytes(), &got) != nil {
 		t.Fatal(res.Code, res.Body.String())
 	}
+	if got.Tables == nil || got.Runs == nil || got.SearchStore != "sqlite" || got.DatabaseBytes == 0 {
+		t.Fatalf("%+v", got)
+	}
 	pages := int64(got.PageCount) * int64(got.PageSize)
-	if got.JournalMode != "wal" || got.Synchronous != "FULL" || got.AutoCheckpoint != database.WALAutoCheckpointPages || got.JournalLimit != database.JournalSizeLimitBytes || got.DatabaseBytes != pages || got.AccountedBytes+got.FreelistBytes != pages || got.Tables == nil || got.Runs == nil || got.SearchStore != "sqlite" {
+	if s.DAL.Dialect() == dal.DialectSQLite && (got.JournalMode != "wal" || got.Synchronous != "FULL" || got.AutoCheckpoint != database.WALAutoCheckpointPages || got.JournalLimit != database.JournalSizeLimitBytes || got.DatabaseBytes != pages || got.AccountedBytes+got.FreelistBytes != pages) {
 		t.Fatalf("%+v", got)
 	}
 	direct, err := database.ObserveCheckpoint(ctx, s.Directory().DB)

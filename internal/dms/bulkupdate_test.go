@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"papergo/ent"
-	"papergo/ent/auditevent"
-	"papergo/ent/domainevent"
-	"papergo/ent/itemrevision"
-	"papergo/ent/operation"
-	"papergo/ent/operationitem"
+	auditstore "papergo/internal/dal/audit"
+	"papergo/internal/dal/daltest"
+	"papergo/internal/dal/directory"
+	eventstore "papergo/internal/dal/events"
+	"papergo/internal/dal/operations"
+	"papergo/internal/dal/resources"
 	"papergo/internal/identity"
 	"papergo/internal/model"
 	"testing"
@@ -23,7 +23,7 @@ func bulkStep(t *testing.T, s *Service) {
 		t.Fatal("operation step", worked, e)
 	}
 }
-func bulkStatus(t *testing.T, s *Service, id string) *ent.Operation {
+func bulkStatus(t *testing.T, s *Service, id string) *OperationView {
 	t.Helper()
 	op, e := s.Operation(testContext, "alice", id)
 	if e != nil {
@@ -59,7 +59,7 @@ func TestFilteredBulkUpdateFreezesSelectionResumesAndMerges(t *testing.T) {
 	}
 	late := create(t, s, l.ID, "item", "Late", map[string]any{"stage": "todo"})
 	bulkStep(t, s)
-	if got := bulkStatus(t, s, op.ID); got.Processed != 1 || got.Updated != 1 || got.Progress != 50 || got.Status != operation.StatusPending {
+	if got := bulkStatus(t, s, op.ID); got.Processed != 1 || got.Updated != 1 || got.Progress != 50 || got.Status != operations.StatusPending {
 		t.Fatal(got)
 	}
 	// A new service resumes persisted selection and completion markers.
@@ -68,16 +68,16 @@ func TestFilteredBulkUpdateFreezesSelectionResumesAndMerges(t *testing.T) {
 		t.Fatal(e)
 	}
 	got := bulkStatus(t, resumed, op.ID)
-	if got.Status != operation.StatusSucceeded || got.Matched != 2 || got.Updated != 2 || got.Failed != 0 || got.Progress != 100 {
+	if got.Status != operations.StatusSucceeded || got.Matched != 2 || got.Updated != 2 || got.Failed != 0 || got.Progress != 100 {
 		t.Fatal(got)
 	}
-	for _, r := range []*ent.Resource{a, b} {
+	for _, r := range []*resources.Resource{a, b} {
 		live := latest(t, s, r.ID)
 		if live.Values["stage"] != "done" || live.Values["keep"] != r.Name || fmt.Sprint(live.Values["amount"]) != "9007199254740993" {
 			t.Fatal("merge/precision", live.Values)
 		}
 	}
-	for _, r := range []*ent.Resource{c, late} {
+	for _, r := range []*resources.Resource{c, late} {
 		if latest(t, s, r.ID).Version != r.Version {
 			t.Fatal("unselected item edited", r.ID)
 		}
@@ -86,7 +86,7 @@ func TestFilteredBulkUpdateFreezesSelectionResumesAndMerges(t *testing.T) {
 	if e != nil || pub.Values["stage"] != "todo" {
 		t.Fatal("published content edited", pub, e)
 	}
-	if n, e := s.Client.OperationItem.Query().Where(operationitem.OperationIDEQ(op.ID)).Count(testContext); e != nil || n != 0 {
+	if n, e := s.DAL.Operations().CountItems(testContext, op.ID); e != nil || n != 0 {
 		t.Fatal("completed selection retained", n, e)
 	}
 	if worked, e := resumed.operationStep(testContext); worked || e != nil {
@@ -99,7 +99,7 @@ func TestFilteredBulkUpdatePartialFailuresRollbackEveryItemSideEffect(t *testing
 	if _, e := s.CreateField(testContext, "alice", l.ID, CreateField{Key: "code", Label: "Code", Type: "text", Indexed: true, Options: model.FieldOptions{Unique: true}}); e != nil {
 		t.Fatal(e)
 	}
-	items := []*ent.Resource{}
+	items := []*resources.Resource{}
 	for i := 0; i < 3; i++ {
 		items = append(items, create(t, s, l.ID, "item", fmt.Sprintf("Item %d", i), map[string]any{"code": fmt.Sprint(i)}))
 	}
@@ -111,7 +111,7 @@ func TestFilteredBulkUpdatePartialFailuresRollbackEveryItemSideEffect(t *testing
 		t.Fatal(e)
 	}
 	got := bulkStatus(t, s, op.ID)
-	if got.Status != operation.StatusSucceeded || got.Updated != 1 || got.Failed != 2 || got.Processed != 3 || len(got.Failures) != 2 || got.Progress != 100 {
+	if got.Status != operations.StatusSucceeded || got.Updated != 1 || got.Failed != 2 || got.Processed != 3 || len(got.Failures) != 2 || got.Progress != 100 {
 		t.Fatal(got)
 	}
 	for _, r := range items {
@@ -123,20 +123,18 @@ func TestFilteredBulkUpdatePartialFailuresRollbackEveryItemSideEffect(t *testing
 		if live.Version != want {
 			t.Fatal("failed edit consumed version", live)
 		}
-		if n, e := s.Client.ItemRevision.Query().Where(itemrevision.ItemIDEQ(r.ID)).Count(testContext); e != nil || n != want {
+		if n, e := countRevisions(s, r.ID); e != nil || n != want {
 			t.Fatal("failed edit retained revision", n, e)
 		}
-		audits, e := s.Client.AuditEvent.Query().Where(auditevent.ResourceIDEQ(r.ID), auditevent.ActionEQ("resource.update")).Count(testContext)
-		if e != nil || audits != want-1 {
+		audits, e := s.DAL.Audit().Count(testContext, auditstore.Filter{ResourceID: r.ID, Action: "resource.update"})
+		if e != nil || audits != int64(want-1) {
 			t.Fatal("failed edit retained audit", audits, e)
 		}
 	}
 	// A database failure after revision creation stops the operation, rolls back
 	// the current item and retains earlier operations' successful edits.
-	if _, e = s.Client.ExecContext(testContext, `CREATE TRIGGER reject_bulk_audit BEFORE INSERT ON audit_events WHEN new.action='resource.update' BEGIN SELECT RAISE(ABORT,'injected failure'); END`); e != nil {
-		t.Fatal(e)
-	}
-	before, e := s.Client.DomainEvent.Query().Where(domainevent.TypeEQ(EventItemUpdated)).Count(testContext)
+	daltest.Reject(t, s.DAL, "audit_events", daltest.OnInsert, daltest.Row{"action": "resource.update"})
+	before, e := s.DAL.Events().Count(testContext, eventstore.Filter{Types: []string{EventItemUpdated}})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -148,10 +146,10 @@ func TestFilteredBulkUpdatePartialFailuresRollbackEveryItemSideEffect(t *testing
 		t.Fatal("database failure did not stop the operation")
 	}
 	got = bulkStatus(t, s, op.ID)
-	if got.Status != operation.StatusFailed || got.Failed != 0 || got.Updated != 0 || got.Processed != 0 {
+	if got.Status != operations.StatusFailed || got.Failed != 0 || got.Updated != 0 || got.Processed != 0 {
 		t.Fatal(got)
 	}
-	if after, e := s.Client.DomainEvent.Query().Where(domainevent.TypeEQ(EventItemUpdated)).Count(testContext); e != nil || after != before {
+	if after, e := s.DAL.Events().Count(testContext, eventstore.Filter{Types: []string{EventItemUpdated}}); e != nil || after != before {
 		t.Fatal("failed item emitted events", before, after, e)
 	}
 	for _, r := range items {
@@ -163,7 +161,7 @@ func TestFilteredBulkUpdatePartialFailuresRollbackEveryItemSideEffect(t *testing
 		if live.Version != want || live.Values["code"] == nil {
 			t.Fatal("database failure retained item changes", live)
 		}
-		if n, e := s.Client.ItemRevision.Query().Where(itemrevision.ItemIDEQ(r.ID)).Count(testContext); e != nil || n != want {
+		if n, e := countRevisions(s, r.ID); e != nil || n != want {
 			t.Fatal("database failure retained revisions", n, e)
 		}
 	}
@@ -177,7 +175,7 @@ func TestFilteredBulkUpdateRevocationDeletionValidationAndPrivacy(t *testing.T) 
 	if _, e := s.StartBulkUpdate(testContext, "alice", l.ID, FilteredBulkUpdate{Query: QuerySpec{Filter: &FilterExpr{Field: "unknown", Value: json.RawMessage(`1`)}}, Values: map[string]any{"bad": true}}); e == nil {
 		t.Fatal("invalid query")
 	}
-	if n, e := s.Client.Operation.Query().Count(testContext); e != nil || n != 0 {
+	if n, e := s.DAL.Operations().Count(testContext, operations.Filter{}); e != nil || n != 0 {
 		t.Fatal("invalid request queued", n, e)
 	}
 	a := create(t, s, l.ID, "item", "A", nil)
@@ -213,17 +211,17 @@ func TestFilteredBulkUpdateRevocationDeletionValidationAndPrivacy(t *testing.T) 
 		t.Fatal(e)
 	}
 	bulkStep(t, s)
-	if e = s.Directory().SetAssignment(testContext, "alice", identity.MemberRole, identity.Principal{Type: "user", ID: "alice"}, true); e != nil {
+	if e = s.Directory().SetAssignment(testContext, "alice", identity.MemberRole, identity.Principal{Type: directory.PrincipalUser, ID: "alice"}, true); e != nil {
 		t.Fatal(e)
 	}
 	if worked, e := s.operationStep(testContext); !worked || !errors.Is(e, ErrForbidden) {
 		t.Fatal("role revocation ignored", worked, e)
 	}
-	got, e = s.Client.Operation.Get(testContext, op.ID)
-	if e != nil || got.Status != operation.StatusFailed || got.Processed != 0 {
+	got, e = findOperation(s, op.ID)
+	if e != nil || got.Status != operations.StatusFailed || got.Processed != 0 {
 		t.Fatal(got, e)
 	}
-	if n, e := s.Client.OperationItem.Query().Where(operationitem.OperationIDEQ(op.ID)).Count(testContext); e != nil || n != 0 {
+	if n, e := s.DAL.Operations().CountItems(testContext, op.ID); e != nil || n != 0 {
 		t.Fatal("failed operation kept selection", n, e)
 	}
 }
@@ -250,7 +248,7 @@ func TestFilteredBulkUpdateFailureCapProgressAndCancellation(t *testing.T) {
 	if _, e = s.operationStep(ctx); !errors.Is(e, context.Canceled) {
 		t.Fatal(e)
 	}
-	if got := bulkStatus(t, s, op.ID); got.Processed != 0 || got.Status != operation.StatusPending {
+	if got := bulkStatus(t, s, op.ID); got.Processed != 0 || got.Status != operations.StatusPending {
 		t.Fatal("cancellation consumed selection", got)
 	}
 	if e = s.runOperations(testContext); e != nil {
@@ -266,7 +264,7 @@ func TestFilteredBulkUpdateFailureCapProgressAndCancellation(t *testing.T) {
 	}
 	bulkStep(t, s)
 	got = bulkStatus(t, s, op.ID)
-	if got.Matched != 0 || got.Progress != 100 || got.Status != operation.StatusSucceeded {
+	if got.Matched != 0 || got.Progress != 100 || got.Status != operations.StatusSucceeded {
 		t.Fatal(got)
 	}
 }
@@ -279,7 +277,7 @@ func TestFilteredBulkUpdateItemACLsAndNullRemoval(t *testing.T) {
 	if _, e := s.CreateField(testContext, "alice", l.ID, CreateField{Key: "memo", Label: "Memo", Type: "text", Options: model.FieldOptions{DefaultValue: json.RawMessage(`"default"`)}}); e != nil {
 		t.Fatal(e)
 	}
-	items := map[string]*ent.Resource{}
+	items := map[string]*resources.Resource{}
 	for _, name := range []string{"hidden", "draft reader", "revoked", "editable"} {
 		items[name] = create(t, s, l.ID, "item", name, map[string]any{"memo": "keep"})
 	}
@@ -347,11 +345,11 @@ func TestBulkUpdateEditsABatchOfItemsPerStep(t *testing.T) {
 	if got := bulkStatus(t, s, op.ID); got.Processed != 31 {
 		t.Fatal("one item per step", got.Processed)
 	}
-	for bulkStatus(t, s, op.ID).Status == operation.StatusPending {
+	for bulkStatus(t, s, op.ID).Status == operations.StatusPending {
 		bulkStep(t, s)
 	}
 	got := bulkStatus(t, s, op.ID)
-	if got.Status != operation.StatusSucceeded || got.Matched != 31 || got.Processed != 31 || got.Updated != 30 || got.Failed != 1 || len(got.Failures) != 1 || got.Failures[0].ItemID != gone.ID {
+	if got.Status != operations.StatusSucceeded || got.Matched != 31 || got.Processed != 31 || got.Updated != 30 || got.Failed != 1 || len(got.Failures) != 1 || got.Failures[0].ItemID != gone.ID {
 		t.Fatal("bulk result", got)
 	}
 	for id := range ids {

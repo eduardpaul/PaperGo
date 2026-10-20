@@ -11,10 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"papergo/ent/bloblease"
-	"papergo/ent/workflowversion"
-	"papergo/internal/activitystore"
 	"papergo/internal/ai"
+	"papergo/internal/dal/activitystore"
+	waitstore "papergo/internal/dal/waits"
 	"papergo/internal/dms"
 	"papergo/internal/forms"
 	"papergo/internal/workflow"
@@ -309,33 +308,22 @@ func listRequests(step workflow.Step, queue string) ([]queuedRequest, error) {
 // an installation coordinator has broader permissions.
 func authorizeRequest(step workflow.Step, wait workflow.Wait) error {
 	t, ctx := step.DMS(), step.Context()
-	run, err := t.Client.WorkflowRun.Get(ctx, wait.RunID)
+	authority, err := t.DAL.Waits().Authority(ctx, wait.ID)
 	if err != nil {
 		return err
 	}
-	version, err := t.Client.WorkflowVersion.Query().Where(workflowversion.WorkflowIDEQ(run.WorkflowID), workflowversion.NumberEQ(run.WorkflowVersion)).Only(ctx)
-	if err != nil {
+	if _, err = t.Authorize(ctx, authority.Author, authority.WorkspaceID, "read"); err != nil {
 		return err
 	}
-	if _, err = t.Authorize(ctx, version.CreatedBy, wait.WorkspaceID, "read"); err != nil {
-		return err
-	}
-	leases, err := t.Client.BlobLease.Query().Where(bloblease.OwnerIDEQ(wait.ID)).All(ctx)
-	if err != nil {
-		return err
-	}
-	for _, lease := range leases {
-		source, err := t.Client.Blob.Get(ctx, lease.BlobID)
-		if err != nil {
-			return err
-		}
-		if _, err = t.GetBlob(ctx, version.CreatedBy, source.ItemID, source.ID); err != nil {
+	for _, source := range authority.Sources {
+		if _, err = t.GetBlob(ctx, authority.Author, source.ItemID, source.BlobID); err != nil {
 			return err
 		}
 	}
-	if run.ItemID != nil {
-		_, err = t.GetSurface(ctx, version.CreatedBy, *run.ItemID, "auto")
+	if authority.ItemID != "" {
+		_, err = t.GetSurface(ctx, authority.Author, authority.ItemID, "auto")
 	}
+
 	return err
 }
 
@@ -948,14 +936,14 @@ func resolveJoins(step workflow.Step, tools workflow.Tools, queue string) error 
 				continue
 			}
 			wait, err := workflow.GetWait(step.Context(), step.DMS(), kindRequest, chunk.WaitKey)
-			if notFound(err) || err == nil && wait.Status == "closed" {
+			if notFound(err) || err == nil && wait.Status == waitstore.StatusClosed {
 				failed = "the enrichment request was closed"
 				continue
 			}
 			if err != nil {
 				return err
 			}
-			if wait.Status == "open" {
+			if wait.Status == waitstore.StatusOpen {
 				pending++
 				continue
 			}

@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"papergo/internal/dms"
 	"strings"
 	"time"
 
+	taskstore "papergo/internal/dal/tasks"
+	"papergo/internal/dms"
 	"papergo/internal/forms"
 	"papergo/internal/model"
 	"papergo/internal/tasks"
@@ -127,8 +128,10 @@ func validateTask(a *Activity, in map[string]any) error {
 			}
 		}
 	}
-	if c, ok := in["completion"]; ok && c != tasks.CompletionAny && c != tasks.CompletionAll {
-		return errors.New("completion is any or all")
+	if c, ok := in["completion"]; ok {
+		if s, _ := c.(string); !taskstore.Completion(s).Valid() {
+			return errors.New("completion is any or all")
+		}
 	}
 	var schema map[string]any
 	if s, ok := in["input_schema"]; ok {
@@ -164,28 +167,30 @@ func runTask(e *env, in map[string]any) (outcome, error) {
 	if w, ok := in["wait"].(bool); ok {
 		wait = w
 	}
-	return e.createTask(in, tasks.KindTask, outcomes, wait)
+	return e.createTask(in, taskstore.KindTask, outcomes, wait)
 }
 
 func runApproval(e *env, in map[string]any) (outcome, error) {
-	return e.createTask(in, tasks.KindApproval, tasks.ApprovalOutcomes(), true)
+	return e.createTask(in, taskstore.KindApproval, tasks.ApprovalOutcomes(), true)
 }
 
 // createTask creates a task node's task as the workflow's author.
-func (e *env) createTask(in map[string]any, kind string, outcomes []model.TaskOutcome, wait bool) (outcome, error) {
+func (e *env) createTask(in map[string]any, kind taskstore.Kind, outcomes []model.TaskOutcome, wait bool) (outcome, error) {
 	ti := tasks.Input{WorkspaceID: e.workspaceID, Kind: kind, Outcomes: outcomes, Wait: wait,
 		Workflow: &tasks.Source{WorkflowID: e.workflowID, RunID: e.runID, Node: e.node}}
 	var err error
 	if ti.Title, err = e.scope.text(in["title"]); err != nil {
 		return outcome{}, err
 	}
-	for name, field := range map[string]*string{"description": &ti.Description, "key": &ti.Key, "completion": &ti.Completion, "priority": &ti.Priority} {
+	var completion, priority string
+	for name, field := range map[string]*string{"description": &ti.Description, "key": &ti.Key, "completion": &completion, "priority": &priority} {
 		if v, ok := in[name]; ok {
 			if *field, err = e.scope.text(v); err != nil {
 				return outcome{}, err
 			}
 		}
 	}
+	ti.Completion, ti.Priority = taskstore.Completion(completion), taskstore.Priority(priority)
 	if v, ok := in["assignees"]; ok {
 		if ti.Assignees, err = e.strings("assignees", v); err != nil {
 			return outcome{}, err

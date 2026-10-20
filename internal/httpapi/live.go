@@ -5,7 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"papergo/ent/livechange"
+	"papergo/internal/dal"
+	"papergo/internal/dal/live"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
 	"strconv"
@@ -91,7 +92,7 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 	defer end.Stop()
 	known := map[string]bool{}
 	for {
-		if err = identity.RequireCredential(r.Context(), a.DMS.Directory().DB, subject(r)); err != nil {
+		if err = identity.RequireCredential(r.Context(), dal.NewStore(a.DMS.Directory().DB), subject(r)); err != nil {
 			_ = frame("reauthenticate", position, map[string]any{})
 			return
 		}
@@ -100,8 +101,8 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		last := map[string]int{}
-		key := func(changeKind livechange.Kind, id string) string {
-			if changeKind == livechange.KindAccess {
+		key := func(changeKind live.Kind, id string) string {
+			if changeKind == live.KindAccess {
 				return "access"
 			}
 			return string(changeKind) + ":" + id
@@ -110,7 +111,7 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 			last[key(change.Kind, change.EntityID)] = i
 		}
 		for i, change := range changes {
-			if err = identity.RequireCredential(r.Context(), a.DMS.Directory().DB, subject(r)); err != nil {
+			if err = identity.RequireCredential(r.Context(), dal.NewStore(a.DMS.Directory().DB), subject(r)); err != nil {
 				_ = frame("reauthenticate", position, map[string]any{})
 				return
 			}
@@ -119,11 +120,11 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			switch change.Kind {
-			case livechange.KindAccess:
+			case live.KindAccess:
 				if err = frame("resync", position, map[string]any{}); err != nil {
 					return
 				}
-			case livechange.KindItem:
+			case live.KindItem:
 				item, e := a.DMS.Get(r.Context(), subject(r), change.EntityID)
 				if e == nil {
 					known[item.ID] = true
@@ -133,7 +134,7 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 				} else if errors.Is(e, dms.ErrForbidden) || errors.Is(e, dms.ErrNotFound) {
 					if known[change.EntityID] {
 						reason := "changed"
-						if change.Action == "deleted" {
+						if change.Action == live.ActionDeleted {
 							reason = "deleted"
 						}
 						delete(known, change.EntityID)
@@ -144,7 +145,7 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 				} else {
 					return
 				}
-			case livechange.KindOperation:
+			case live.KindOperation:
 				op, e := a.DMS.Operation(r.Context(), subject(r), change.EntityID)
 				if e == nil {
 					if err = frame("operation", position, op); err != nil {
@@ -153,7 +154,7 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 				} else if !errors.Is(e, dms.ErrForbidden) && !errors.Is(e, dms.ErrNotFound) {
 					return
 				}
-			case livechange.KindRun:
+			case live.KindRun:
 				if a.Runner == nil {
 					continue
 				}

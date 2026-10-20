@@ -15,7 +15,6 @@ test -s web/dist/index.html
 test "$(stat -c %a .cache/development.env)" = 600
 go version
 node --version
-atlas version
 sqlite3def --version
 gopls version
 dlv version
@@ -40,8 +39,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-atlas migrate validate --env local
-atlas migrate apply --env local --var "database_url=sqlite://$smoke_dir/papergo.db?_fk=1" > "$smoke_dir/atlas.log"
+go run ./cmd/admin initialize --database "$smoke_dir/papergo.db"
 go build -o "$smoke_dir/papergo" ./cmd/api
 smoke_token=$(python3 -c 'import secrets; print(secrets.token_hex(32))')
 
@@ -79,5 +77,5 @@ python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); assert r["id"] and 
 curl --fail --silent -H "Authorization: Bearer $smoke_token" \
     http://127.0.0.1:15173/v1/workspaces > "$smoke_dir/workspaces.json"
 python3 -c 'import json,sys; assert len(json.load(open(sys.argv[1]))["value"]) == 1' "$smoke_dir/workspaces.json"
-go test -race -count=1 -timeout=5m ./internal/database ./web
+go test -race -count=1 -timeout=5m ./internal/dal/database ./web
 printf '\nDevcontainer smoke test passed: tools, permissions, SQLite, debugger, embedded UI and Vite proxy.\n'

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"papergo/internal/dal/blobs"
 	"papergo/internal/transfer"
 )
 
@@ -18,7 +19,7 @@ func (a *API) preview(w http.ResponseWriter, r *http.Request) {
 		respond(w, r, 202, map[string]any{"status": "pending", "blob_id": file.ID})
 		return
 	}
-	if preview.Status != "ready" {
+	if preview.Status != blobs.PreviewReady {
 		respond(w, r, 200, map[string]any{"status": "unavailable", "blob_id": file.ID})
 		return
 	}
@@ -30,7 +31,7 @@ func (a *API) preview(w http.ResponseWriter, r *http.Request) {
 	defer data.Close()
 	w.Header().Set("Content-Type", "image/webp")
 	w.Header().Set("Content-Disposition", `inline; filename="preview.webp"`)
-	w.Header().Set("ETag", strconv.Quote(preview.ObjectSha256))
+	w.Header().Set("ETag", strconv.Quote(preview.ObjectSHA256))
 	w.Header().Set("X-Preview-Blob-ID", file.ID)
 	http.ServeContent(transfer.Writer(w), r, "preview.webp", preview.CreatedAt, data)
 }

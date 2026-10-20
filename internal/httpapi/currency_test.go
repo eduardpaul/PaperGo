@@ -2,11 +2,10 @@ package httpapi
 
 import (
 	"encoding/json"
+	"papergo/internal/dal/catalog"
+	"papergo/internal/dms"
 	"strings"
 	"testing"
-
-	"papergo/ent"
-	"papergo/internal/dms"
 )
 
 func TestCurrencyAPIExactPayloadAndMetadata(t *testing.T) {
@@ -21,7 +20,7 @@ func TestCurrencyAPIExactPayloadAndMetadata(t *testing.T) {
 	}
 	fieldPath := "/v1/resources/" + l.ID + "/fields"
 	res := request(h, "POST", fieldPath, `{"key":"price","label":"Price","type":"currency","indexed":true,"options":{"currency_code":"EUR","minimum":"0"}}`, testToken, "", "application/json")
-	var field ent.FieldDefinition
+	var field catalog.FieldDefinition
 	if res.Code != 201 || json.Unmarshal(res.Body.Bytes(), &field) != nil || field.Options.CurrencyCode != "EUR" {
 		t.Fatal(res.Code, res.Body.String())
 	}

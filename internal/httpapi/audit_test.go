@@ -3,7 +3,6 @@ package httpapi
 import (
 	"encoding/json"
 	"net/url"
-	"papergo/ent"
 	"papergo/internal/dms"
 	"testing"
 )
@@ -21,7 +20,7 @@ func TestRESTOrganizationAuditTraceAndContinuation(t *testing.T) {
 	trace := r.Header().Get("X-Request-ID")
 	r = request(h, "GET", "/v1/audit?entity_id="+w.ID+"&$top=1", "", testToken, "", "")
 	var page struct {
-		Data []ent.AuditEvent `json:"value"`
+		Data []dms.AuditEvent `json:"value"`
 		Next string           `json:"@odata.nextLink"`
 	}
 	if err = json.Unmarshal(r.Body.Bytes(), &page); err != nil || r.Code != 200 || len(page.Data) != 1 || page.Next == "" {

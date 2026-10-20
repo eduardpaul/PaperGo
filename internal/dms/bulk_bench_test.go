@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"papergo/internal/testutil"
+	"papergo/internal/dal/daltest"
 	"testing"
 )
 
@@ -20,7 +20,7 @@ func BenchmarkItemUpdates(b *testing.B) {
 			}
 			b.Run(fmt.Sprintf("%s/%d", mode, size), func(b *testing.B) {
 				ctx := context.Background()
-				s := NewService(testutil.Database(b).SQL)
+				s := NewService(daltest.Database(b).SQL)
 				w, err := s.Create(ctx, "writer", "", CreateResource{Kind: "workspace", Name: "Benchmark"})
 				if err != nil {
 					b.Fatal(err)
@@ -73,7 +73,7 @@ func BenchmarkItemUpdates(b *testing.B) {
 // Run with -cpuprofile to see where ingest time goes.
 func BenchmarkBulkCreate(b *testing.B) {
 	ctx := context.Background()
-	s := NewService(testutil.Database(b).SQL)
+	s := NewService(daltest.Database(b).SQL)
 	w, err := s.Create(ctx, "writer", "", CreateResource{Kind: "workspace", Name: "Benchmark"})
 	if err != nil {
 		b.Fatal(err)

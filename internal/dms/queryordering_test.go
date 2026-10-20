@@ -3,7 +3,7 @@ package dms
 import (
 	"encoding/base64"
 	"encoding/json"
-	"papergo/ent"
+	"papergo/internal/dal/resources"
 	"reflect"
 	"sort"
 	"strings"
@@ -17,7 +17,7 @@ func TestMultiSortExactRanksMissingValuesProjectionAndPublication(t *testing.T) 
 		fieldOK(t, s, l.ID, f)
 	}
 	inputs := []struct{ name, bucket, serial string }{{"Zulu", "A", "9007199254740993"}, {"Bravo", "A", "9007199254740994"}, {"Alpha", "A", "9007199254740993"}, {"Charlie", "A", ""}, {"Echo", "B", "9007199254740994"}, {"Foxtrot", "", "9007199254740994"}, {"Golf", "", ""}, {"Alpha", "A", "9007199254740993"}}
-	items := []*ent.Resource{}
+	items := []*resources.Resource{}
 	for _, in := range inputs {
 		values := map[string]any{"notes": strings.Repeat("x", 16384)}
 		if in.bucket != "" {

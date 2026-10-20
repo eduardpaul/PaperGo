@@ -78,7 +78,7 @@ jobs:
           if [[ -n "$PREVIOUS_TAG" ]]; then args+=(--previous previous/release-database.json); fi
           go run ./cmd/release --version "$RELEASE_TAG" "${args[@]}"
           mkdir -p release-assets
-          cp migrations/release.json release-assets/release-database.json
+          cp internal/dal/migrations/release.json release-assets/release-database.json
       - name: Verify the published database bundle for image-only retries
         if: steps.metadata.outputs.state == 'complete'
         env:
@@ -206,7 +206,7 @@ jobs:
           GOARCH: ${{ matrix.arch }}
           CGO_ENABLED: '1'
         run: |
-          cp release-assets/release-database.json migrations/release.json
+          cp release-assets/release-database.json internal/dal/migrations/release.json
           npm ci --prefix web
           npm --prefix web run build
           flags="-s -w -X papergo/internal/buildinfo.Version=$RELEASE_TAG -X papergo/internal/buildinfo.Commit=$RELEASE_COMMIT -X papergo/internal/buildinfo.Date=$RELEASE_DATE"
@@ -262,7 +262,7 @@ jobs:
           path: container-assets
       - name: Embed the same database bundle as the release binaries
         run: |
-          cp release-assets/release-database.json migrations/release.json
+          cp release-assets/release-database.json internal/dal/migrations/release.json
           find container-assets -exec touch -h -d @0 {} +
       - uses: docker/setup-buildx-action@v4.4.1
         with:

@@ -2,13 +2,13 @@ package dms
 
 import (
 	"errors"
+	"papergo/internal/dal/resources"
+	"papergo/internal/dal/surfaces"
 	"strings"
 	"sync"
 	"testing"
 
-	"papergo/ent/grant"
-	"papergo/ent/itemsurface"
-	"papergo/ent/resource"
+	"papergo/internal/dal/grants"
 )
 
 func TestWorkspaceDescriptionsMembershipAndOwnerControl(t *testing.T) {
@@ -105,24 +105,25 @@ func TestWorkspaceUnicodeMetadataLimits(t *testing.T) {
 }
 
 func TestWorkspaceLastOwnerIsProtectedAndTransferable(t *testing.T) {
-	s, w, list := fixture(t)
+	s, w, _ := fixture(t)
 	if err := s.RemoveWorkspaceMember(testContext, "alice", w.ID, "alice"); !errors.Is(err, ErrLastOwner) {
 		t.Fatal("last owner removed", err)
 	}
 	if err := s.SetWorkspaceMember(testContext, "alice", w.ID, WorkspaceMember{"alice", "visitor"}); !errors.Is(err, ErrLastOwner) {
 		t.Fatal("last owner demoted", err)
 	}
-	if _, err := s.Client.Grant.Delete().Where(grant.ResourceIDEQ(w.ID), grant.PrincipalIDEQ("alice")).Exec(testContext); err == nil {
-		t.Fatal("database allowed last owner deletion")
+	owner, err := s.DAL.Grants().List(testContext, grants.Filter{ResourceID: w.ID, PrincipalID: "alice"})
+	if err != nil || len(owner) != 1 {
+		t.Fatal(owner, err)
 	}
-	if _, err := s.Client.Grant.Update().Where(grant.ResourceIDEQ(w.ID), grant.PrincipalIDEQ("alice")).SetAction(grant.ActionRead).Save(testContext); err == nil {
-		t.Fatal("database allowed last owner demotion")
+	if err := s.DAL.Grants().Revoke(testContext, owner[0].ID); err == nil {
+		t.Fatal("repository allowed last owner deletion")
 	}
-	if _, err := s.Client.ExecContext(testContext, `UPDATE grants SET resource_id=? WHERE resource_id=? AND subject='alice'`, list.ID, w.ID); err == nil {
-		t.Fatal("database allowed moving the workspace owner grant")
+	if _, err := s.DAL.Grants().ChangeAction(testContext, owner[0].ID, grants.ActionRead); err == nil {
+		t.Fatal("repository allowed last owner demotion")
 	}
-	if _, err := s.Client.Grant.Create().SetResourceID(w.ID).SetPrincipalType("user").SetPrincipalID("alice").SetAction(grant.ActionRead).Save(testContext); err == nil {
-		t.Fatal("database allowed two roles for the same workspace member")
+	if _, err := s.DAL.Grants().Create(testContext, grants.Grant{ResourceID: w.ID, PrincipalType: grants.PrincipalUser, PrincipalID: "alice", Action: grants.ActionRead}); err == nil {
+		t.Fatal("repository allowed two roles for the same workspace member")
 	}
 	if err := s.SetWorkspaceMember(testContext, "alice", w.ID, WorkspaceMember{"bob", "owner"}); err != nil {
 		t.Fatal(err)
@@ -133,9 +134,9 @@ func TestWorkspaceLastOwnerIsProtectedAndTransferable(t *testing.T) {
 		go func(member string) { defer wg.Done(); _ = s.RemoveWorkspaceMember(testContext, "alice", w.ID, member) }(member)
 	}
 	wg.Wait()
-	n, err := s.Client.Grant.Query().Where(grant.ResourceIDEQ(w.ID), grant.ActionEQ(grant.ActionManage)).Count(testContext)
-	if err != nil || n != 1 {
-		t.Fatal("concurrent removal lost the owner", n, err)
+	owners, err := s.DAL.Grants().List(testContext, grants.Filter{ResourceID: w.ID, Action: grants.ActionManage})
+	if err != nil || len(owners) != 1 {
+		t.Fatal("concurrent removal lost the owner", owners, err)
 	}
 }
 
@@ -164,11 +165,11 @@ func TestWorkspaceValidationAndDeletionCoversExclusiveDescendants(t *testing.T) 
 			t.Fatal("deleted workspace content visible", id, err)
 		}
 	}
-	n, err := s.Client.Resource.Query().Where(resource.WorkspaceIDEQ(w.ID), resource.DeletedAtIsNil()).Count(testContext)
+	n, err := countResources(s, resources.Filter{WorkspaceID: w.ID, State: resources.Live})
 	if err != nil || n != 0 {
 		t.Fatal("live workspace descendants", n, err)
 	}
-	n, err = s.Client.ItemSurface.Query().Where(itemsurface.WorkspaceIDEQ(w.ID)).Count(testContext)
+	n, err = countSurfaces(s, surfaces.Filter{WorkspaceID: w.ID})
 	if err != nil || n != 0 {
 		t.Fatal("workspace search projections retained", n, err)
 	}

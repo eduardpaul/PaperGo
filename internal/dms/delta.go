@@ -6,14 +6,13 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	entsql "entgo.io/ent/dialect/sql"
 	"errors"
 	"github.com/google/uuid"
-	"papergo/ent"
-	"papergo/ent/resource"
-	"papergo/ent/syncstate"
-	"papergo/ent/synctoken"
-	"papergo/ent/syncview"
+	"papergo/internal/dal/access"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/delta"
+	"papergo/internal/dal/refs"
+	"papergo/internal/dal/resources"
 	"sort"
 	"strconv"
 	"strings"
@@ -22,11 +21,18 @@ import (
 
 var ErrDeltaExpired = errors.New("delta token has expired; synchronize without a token")
 
+const (
+	// deltaPageTTL is how long a token keeps the page of changes it returned.
+	deltaPageTTL = 5 * time.Minute
+	// deltaTokenTTL is how long an unused token names its snapshot.
+	deltaTokenTTL = 30 * 24 * time.Hour
+)
+
 type DeltaRemoved struct {
 	Reason string `json:"reason"`
 }
 type DeltaEntry struct {
-	*ent.Resource
+	*resources.Resource
 	ID      string        `json:"id"`
 	Removed *DeltaRemoved `json:"@removed,omitempty"`
 }
@@ -36,7 +42,7 @@ type DeltaResult struct {
 	DeltaToken string
 }
 type visibleDeltaItem struct {
-	item        *ent.Resource
+	item        *resources.Resource
 	fingerprint string
 }
 
@@ -83,17 +89,19 @@ func (s *Service) Delta(ctx context.Context, subject, collectionID, deltaToken, 
 			out, err = t.deltaPage(ctx, subject, token, entries, offset, limit)
 			return err
 		}
-		var anchor *ent.SyncToken
-		var view *ent.SyncView
-		var err error
+		var anchor *delta.Token
+		var view *delta.View
 		if deltaToken != "" {
-			anchor, view, err = t.deltaAnchor(ctx, subject, collectionID, deltaToken, now)
+			token, v, err := t.deltaAnchor(ctx, subject, collectionID, deltaToken, now)
 			if err != nil {
 				return err
 			}
+			anchor, view = &token, &v
 		} else {
-			view, err = t.Client.SyncView.Query().Where(syncview.SubjectEQ(subject), syncview.ContainerIDEQ(collectionID)).Only(ctx)
-			if err != nil && !ent.IsNotFound(err) {
+			v, err := t.DAL.Delta().View(ctx, subject, collectionID)
+			if err == nil {
+				view = &v
+			} else if !dberr.IsNotFound(err) {
 				return err
 			}
 		}
@@ -105,10 +113,11 @@ func (s *Service) Delta(ctx context.Context, subject, collectionID, deltaToken, 
 			current = map[string]visibleDeltaItem{}
 		}
 		if view == nil {
-			view, err = t.Client.SyncView.Create().SetSubject(subject).SetContainerID(collectionID).Save(ctx)
+			v, err := t.DAL.Delta().CreateView(ctx, subject, collectionID)
 			if err != nil {
 				return err
 			}
+			view = &v
 		}
 		latest, err := t.deltaState(ctx, view.ID, view.Sequence)
 		if err != nil {
@@ -125,25 +134,23 @@ func (s *Service) Delta(ctx context.Context, subject, collectionID, deltaToken, 
 			changed = true
 		}
 		if changed || view.Sequence == 0 {
-			next := view.Sequence + 1
+			var ended []string
 			for id, fingerprint := range latest {
 				if item, exists := current[id]; !exists || item.fingerprint != fingerprint {
-					if err = t.Client.SyncState.Update().Where(syncstate.ViewIDEQ(view.ID), syncstate.ItemIDEQ(id), syncstate.ToSequenceIsNil()).SetToSequence(next).Exec(ctx); err != nil {
-						return err
-					}
+					ended = append(ended, id)
 				}
 			}
+			started := map[string]string{}
 			for id, item := range current {
 				if latest[id] != item.fingerprint {
-					if err = t.Client.SyncState.Create().SetViewID(view.ID).SetItemID(id).SetFromSequence(next).SetFingerprint(item.fingerprint).Exec(ctx); err != nil {
-						return err
-					}
+					started[id] = item.fingerprint
 				}
 			}
-			view, err = t.Client.SyncView.UpdateOne(view).SetSequence(next).Save(ctx)
+			next, err := t.DAL.Delta().Advance(ctx, *view, ended, started)
 			if err != nil {
 				return err
 			}
+			view = &next
 		}
 		baseline := map[string]string{}
 		if anchor != nil {
@@ -163,8 +170,8 @@ func (s *Service) Delta(ctx context.Context, subject, collectionID, deltaToken, 
 				continue
 			}
 			reason := "changed"
-			row, e := t.Client.Resource.Get(ctx, id)
-			if ent.IsNotFound(e) || e == nil && row.DeletedAt != nil {
+			row, e := t.DAL.Resources().Resource(ctx, id)
+			if dberr.IsNotFound(e) || e == nil && row.DeletedAt != nil {
 				reason = "deleted"
 			} else if e != nil {
 				return e
@@ -173,7 +180,7 @@ func (s *Service) Delta(ctx context.Context, subject, collectionID, deltaToken, 
 		}
 		sortDelta(entries)
 		if anchor != nil && len(entries) == 0 && anchor.Sequence == view.Sequence {
-			if err = t.Client.SyncToken.UpdateOne(anchor).SetExpiresAt(now.Add(30 * 24 * time.Hour)).Exec(ctx); err != nil {
+			if err = t.DAL.Delta().Renew(ctx, anchor.ID, now.Add(deltaTokenTTL)); err != nil {
 				return err
 			}
 			out = DeltaResult{Data: []DeltaEntry{}, DeltaToken: anchor.ID}
@@ -183,45 +190,37 @@ func (s *Service) Delta(ctx context.Context, subject, collectionID, deltaToken, 
 		if err != nil {
 			return err
 		}
-		anchor, err = t.Client.SyncToken.Create().SetViewID(view.ID).SetSequence(view.Sequence).SetChanges(payload).SetPageExpiresAt(now.Add(5 * time.Minute)).SetExpiresAt(now.Add(30 * 24 * time.Hour)).Save(ctx)
+		token, err := t.DAL.Delta().CreateToken(ctx, *view, payload, deltaPageTTL, deltaTokenTTL)
 		if err != nil {
 			return err
 		}
-		out, err = t.deltaPage(ctx, subject, anchor, entries, 0, limit)
+		out, err = t.deltaPage(ctx, subject, token, entries, 0, limit)
 		return err
 	})
 	return out, err
 }
-func (s *Service) deltaAnchor(ctx context.Context, subject, collectionID, id string, now time.Time) (*ent.SyncToken, *ent.SyncView, error) {
+func (s *Service) deltaAnchor(ctx context.Context, subject, collectionID, id string, now time.Time) (delta.Token, delta.View, error) {
 	if _, err := uuid.Parse(id); err != nil {
-		return nil, nil, invalid("invalid delta token")
+		return delta.Token{}, delta.View{}, invalid("invalid delta token")
 	}
-	token, err := s.Client.SyncToken.Get(ctx, id)
-	if ent.IsNotFound(err) || err == nil && !token.ExpiresAt.After(now) {
-		return nil, nil, ErrDeltaExpired
+	token, err := s.DAL.Delta().Token(ctx, id)
+	if dberr.IsNotFound(err) || err == nil && !token.ExpiresAt.After(now) {
+		return delta.Token{}, delta.View{}, ErrDeltaExpired
 	}
 	if err != nil {
-		return nil, nil, err
+		return delta.Token{}, delta.View{}, err
 	}
-	view, err := s.Client.SyncView.Get(ctx, token.ViewID)
+	view, err := s.DAL.Delta().ViewByID(ctx, token.ViewID)
 	if err != nil {
-		return nil, nil, err
+		return delta.Token{}, delta.View{}, err
 	}
 	if view.Subject != subject || view.ContainerID != collectionID {
-		return nil, nil, ErrDeltaExpired
+		return delta.Token{}, delta.View{}, ErrDeltaExpired
 	}
 	return token, view, nil
 }
 func (s *Service) deltaState(ctx context.Context, viewID string, sequence int64) (map[string]string, error) {
-	rows, err := s.Client.SyncState.Query().Where(syncstate.ViewIDEQ(viewID), syncstate.FromSequenceLTE(sequence), syncstate.Or(syncstate.ToSequenceIsNil(), syncstate.ToSequenceGT(sequence))).All(ctx)
-	if err != nil {
-		return nil, err
-	}
-	out := map[string]string{}
-	for _, row := range rows {
-		out[row.ItemID] = row.Fingerprint
-	}
-	return out, nil
+	return s.DAL.Delta().States(ctx, viewID, sequence)
 }
 func (s *Service) deltaVisible(ctx context.Context, subject, collectionID string) (map[string]visibleDeltaItem, error) {
 	if err := s.RequireScope(ctx, subject, "list.read"); err != nil {
@@ -231,16 +230,14 @@ func (s *Service) deltaVisible(ctx context.Context, subject, collectionID string
 	if err != nil {
 		return nil, err
 	}
-	if c.Kind != resource.KindList && c.Kind != resource.KindLibrary {
+	if c.Kind != refs.KindList && c.Kind != refs.KindLibrary {
 		return nil, invalid("delta requires a list or library")
 	}
 	out := map[string]visibleDeltaItem{}
 	after := ""
 	for {
-		rows, err := s.Client.Resource.Query().Where(resource.ContainerIDEQ(collectionID), resource.KindIn(resource.KindItem, resource.KindFolder), resource.DeletedAtIsNil(), resource.IDGT(after), permissionPredicate(ctx, subject, "read"), func(sel *entsql.Selector) {
-			visible, args := visibleSQL(ctx, sel.C(resource.FieldID), subject, "auto")
-			sel.Where(entsql.ExprP(visible, args...))
-		}).Order(ent.Asc(resource.FieldID)).Limit(500).All(ctx)
+		rows, err := s.DAL.Resources().Resources(ctx, resources.Filter{ContainerID: collectionID, Kinds: contentKinds, State: resources.Live, AfterID: after,
+			Reader: &resources.Reader{Principal: principal(ctx, subject), Action: access.Read, Surface: "auto"}, Limit: 500})
 		if err != nil {
 			return nil, err
 		}
@@ -262,7 +259,7 @@ func (s *Service) deltaVisible(ctx context.Context, subject, collectionID string
 	}
 	return out, nil
 }
-func (s *Service) deltaPage(ctx context.Context, subject string, token *ent.SyncToken, entries []DeltaEntry, offset, limit int) (DeltaResult, error) {
+func (s *Service) deltaPage(ctx context.Context, subject string, token delta.Token, entries []DeltaEntry, offset, limit int) (DeltaResult, error) {
 	end := offset + pageSize(limit)
 	if end > len(entries) {
 		end = len(entries)
@@ -289,24 +286,7 @@ func (s *Service) deltaPage(ctx context.Context, subject string, token *ent.Sync
 }
 
 func (s *Service) CollectExpiredDeltas(ctx context.Context, now time.Time) error {
-	now = now.UTC()
-	return s.write(ctx, func(t *Service) error {
-		if _, err := t.Client.SyncToken.Delete().Where(synctoken.ExpiresAtLTE(now)).Exec(ctx); err != nil {
-			return err
-		}
-		if err := t.Client.SyncToken.Update().Where(synctoken.PageExpiresAtLTE(now)).SetChanges(json.RawMessage(`[]`)).Exec(ctx); err != nil {
-			return err
-		}
-		// A closed range is retained only while an unexpired token can name it.
-		if _, err := t.Client.ExecContext(ctx, "DELETE FROM sync_states WHERE to_sequence IS NOT NULL AND NOT EXISTS(SELECT 1 FROM sync_tokens t WHERE t.view_id=sync_states.view_id AND t.sequence>=sync_states.from_sequence AND t.sequence<sync_states.to_sequence)"); err != nil {
-			return err
-		}
-		if _, err := t.Client.ExecContext(ctx, "DELETE FROM sync_states WHERE view_id IN (SELECT v.id FROM sync_views v WHERE NOT EXISTS(SELECT 1 FROM sync_tokens t WHERE t.view_id=v.id))"); err != nil {
-			return err
-		}
-		_, err := t.Client.ExecContext(ctx, "DELETE FROM sync_views WHERE NOT EXISTS(SELECT 1 FROM sync_tokens t WHERE t.view_id=sync_views.id)")
-		return err
-	})
+	return s.write(ctx, func(t *Service) error { return t.DAL.Delta().CollectExpired(ctx, now) })
 }
 
 func sortDelta(entries []DeltaEntry) {

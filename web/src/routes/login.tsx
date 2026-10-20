@@ -110,7 +110,7 @@ function ProviderLogin() {
           {pending ? 'Redirecting…' : 'Sign in with single sign-on'}
         </Button>
         <Button variant="ghost" className="mt-2 w-full" onClick={() => setTokenForm(true)}>
-          Use a personal REST token
+          Use a personal access token
         </Button>
       </div>
     </main>
@@ -176,8 +176,8 @@ function BearerLogin() {
         <h1 className="mt-6 text-lg font-semibold">Sign in</h1>
         <p className="mt-1 text-[13px] text-muted">
           {oidcSignIn()
-            ? 'Paste a personal REST token. PaperGo does not keep passwords in this app.'
-            : 'Paste a development bearer token or a personal REST token. PaperGo does not keep passwords in this app.'}
+            ? 'Paste a personal access token. PaperGo does not keep passwords in this app.'
+            : 'Paste a development bearer token or a personal access token. PaperGo does not keep passwords in this app.'}
         </p>
         <Label htmlFor="token" className="mt-5 block">
           Bearer token

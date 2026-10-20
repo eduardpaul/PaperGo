@@ -1,9 +1,9 @@
 # Releases and database upgrades
 
-Development keeps one editable schema: `migrations/20261007000100_schema.sql`.
-Keep Ent in sync, regenerate its code and rehash Atlas as described in the README.
-Do not create development migrations or preserve disposable development databases.
-The source `migrations/release.json` is an empty build-input placeholder (`{}`).
+Development edits the DAL schema masters, `internal/dal/schema/sqlite.sql` and
+`internal/dal/schema/postgres.sql`, and regenerates Bob models from PostgreSQL.
+Do not create development migrations or preserve disposable databases.
+The source `internal/dal/migrations/release.json` is an empty build-input placeholder (`{}`).
 Tag CI generates the cumulative bundle and commits the exact bytes to the
 `release-migrations` branch before any binary or image build starts. Feature
 branches keep the placeholder; they contain no sequential development migrations.
@@ -129,7 +129,7 @@ history against Git. To reproduce generation locally:
 go run ./cmd/release --version vX.Y.Z --previous /path/to/release-database.json
 ```
 
-Omit `--previous` for the first release. This writes `migrations/release.json`;
+Omit `--previous` for the first release. This writes `internal/dal/migrations/release.json`;
 restore the `{}` placeholder after local builds. The release workflow persists
 it automatically before building; developers do not commit it to feature branches.
 

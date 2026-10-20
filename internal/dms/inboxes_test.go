@@ -2,7 +2,8 @@ package dms
 
 import (
 	"errors"
-	"papergo/ent/groupinbox"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/directory"
 	"papergo/internal/identity"
 	"testing"
 )
@@ -22,10 +23,10 @@ func TestGroupInboxPermissionsNestedDiscoveryAndCommitChecks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = d.SetMember(ctx, admin, parent.ID, identity.Principal{Type: "group", ID: child.ID}, false); err != nil {
+	if err = d.SetMember(ctx, admin, parent.ID, identity.Principal{Type: directory.PrincipalGroup, ID: child.ID}, false); err != nil {
 		t.Fatal(err)
 	}
-	if err = d.SetMember(ctx, admin, child.ID, identity.Principal{Type: "user", ID: "bob"}, false); err != nil {
+	if err = d.SetMember(ctx, admin, child.ID, identity.Principal{Type: directory.PrincipalUser, ID: "bob"}, false); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = s.SetGroupInbox(ctx, "alice", child.ID, GroupInboxInput{LibraryID: lib.ID}); err != nil {
@@ -35,7 +36,7 @@ func TestGroupInboxPermissionsNestedDiscoveryAndCommitChecks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = d.SetMember(ctx, admin, hidden.ID, identity.Principal{Type: "user", ID: "bob"}, false); err != nil {
+	if err = d.SetMember(ctx, admin, hidden.ID, identity.Principal{Type: directory.PrincipalUser, ID: "bob"}, false); err != nil {
 		t.Fatal(err)
 	}
 	personal, err := s.Home(ctx, "alice")
@@ -81,7 +82,7 @@ func TestGroupInboxPermissionsNestedDiscoveryAndCommitChecks(t *testing.T) {
 	if _, err = s.CreateInboxDocument(ctx, "bob", parent.ID, destination, DocumentMetadata{Name: "Wrong destination"}, BlobInput{}); !errors.Is(err, ErrConflict) {
 		t.Fatal("rebinding not detected", err)
 	}
-	if err = d.SetMember(ctx, admin, child.ID, identity.Principal{Type: "user", ID: "bob"}, true); err != nil {
+	if err = d.SetMember(ctx, admin, child.ID, identity.Principal{Type: directory.PrincipalUser, ID: "bob"}, true); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = s.CreateInboxDocument(ctx, "bob", parent.ID, other.ID, DocumentMetadata{Name: "Revoked member"}, BlobInput{}); !errors.Is(err, ErrNotFound) {
@@ -99,7 +100,7 @@ func TestGroupInboxPermissionsNestedDiscoveryAndCommitChecks(t *testing.T) {
 	if err = s.RemoveGroupInbox(ctx, "alice", parent.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.Client.Resource.Get(ctx, lib.ID); err != nil {
+	if _, err = s.DAL.Resources().Resource(ctx, lib.ID); err != nil {
 		t.Fatal("unbinding deleted library", err)
 	}
 	if _, err = s.SetGroupInbox(ctx, "alice", parent.ID, GroupInboxInput{LibraryID: lib.ID}); err != nil {
@@ -108,8 +109,8 @@ func TestGroupInboxPermissionsNestedDiscoveryAndCommitChecks(t *testing.T) {
 	if err = d.DeleteGroup(ctx, admin, parent.ID, parent.Version); err != nil {
 		t.Fatal(err)
 	}
-	if n, err := s.Client.GroupInbox.Query().Where(groupinbox.GroupIDEQ(parent.ID)).Count(ctx); err != nil || n != 0 {
-		t.Fatal("group binding survived deletion", n, err)
+	if _, err := s.DAL.Directory().Inbox(ctx, parent.ID); !dberr.IsNotFound(err) {
+		t.Fatal("group binding survived deletion", err)
 	}
 }
 

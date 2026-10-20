@@ -10,17 +10,17 @@ import (
 	"time"
 
 	"papergo/internal/auth"
+	"papergo/internal/dal/daltest"
 	"papergo/internal/dms"
 	"papergo/internal/runner"
 	"papergo/internal/storage"
-	"papergo/internal/testutil"
 	"papergo/internal/workflow"
 )
 
 func setupWorkflows(t *testing.T) (http.Handler, *dms.Service) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "test.db")
-	db := testutil.DatabaseAt(t, path)
+	db := daltest.DatabaseAt(t, path)
 	store, err := storage.NewLocal(t.TempDir())
 	if err != nil {
 		t.Fatal(err)

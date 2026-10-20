@@ -7,7 +7,6 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -21,9 +20,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"modernc.org/sqlite"
-	"papergo/internal/database"
-	"papergo/migrations"
+	"papergo/internal/dal/database"
+	"papergo/internal/dal/integrations"
+	"papergo/internal/dal/migrations"
 )
 
 const format = "papergo-backup/1"
@@ -175,17 +174,14 @@ func Create(ctx context.Context, in Options) (err error) {
 		return err
 	}
 	defer db.Close()
-	lock, err := db.SQL.Conn(ctx)
+	lock, err := db.FreezeBackupReferences(ctx)
 	if err != nil {
 		return err
 	}
 	defer lock.Close()
-	if _, err = lock.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
-		return fmt.Errorf("freeze backup references: %w", err)
-	}
-	defer lock.ExecContext(context.Background(), "ROLLBACK")
+
 	snapshot := filepath.Join(work, "database.sqlite")
-	if err = snapshotDatabase(ctx, db.SQL, snapshot); err != nil {
+	if err = db.Snapshot(ctx, snapshot); err != nil {
 		return err
 	}
 	blobs, err := inspectDatabase(ctx, snapshot)
@@ -211,7 +207,7 @@ func Create(ctx context.Context, in Options) (err error) {
 		return e
 	} else {
 		var configured bool
-		if e = db.SQL.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM list_integrations)").Scan(&configured); e != nil {
+		if configured, e = db.DAL.Integrations().Exists(ctx, integrations.Filter{}); e != nil {
 			return e
 		}
 		if configured {
@@ -283,39 +279,6 @@ func Create(ctx context.Context, in Options) (err error) {
 	return nil
 }
 
-func snapshotDatabase(ctx context.Context, db *sql.DB, path string) error {
-	conn, err := db.Conn(ctx)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-	return conn.Raw(func(raw any) (err error) {
-		backup, err := raw.(interface {
-			NewBackup(string) (*sqlite.Backup, error)
-		}).NewBackup(path)
-		if err != nil {
-			return err
-		}
-		defer func() {
-			if e := backup.Finish(); err == nil {
-				err = e
-			}
-		}()
-		for {
-			if err = ctx.Err(); err != nil {
-				return err
-			}
-			more, e := backup.Step(256)
-			if e != nil {
-				return e
-			}
-			if !more {
-				return nil
-			}
-		}
-	})
-}
-
 func inspectDatabase(ctx context.Context, path string) ([]fileEntry, error) {
 	db, err := database.Open(ctx, path)
 	if err != nil {
@@ -325,38 +288,17 @@ func inspectDatabase(ctx context.Context, path string) ([]fileEntry, error) {
 	if err = db.CheckSchema(ctx); err != nil {
 		return nil, err
 	}
-	var hash, integrity string
-	if err = db.SQL.QueryRowContext(ctx, "SELECT hash FROM atlas_schema_revisions WHERE version='20261007000100'").Scan(&hash); err != nil || hash != migrations.SchemaHash() {
-		return nil, errors.New("database does not match this build's schema")
+	if err = db.CheckIntegrity(ctx); err != nil {
+		return nil, err
 	}
-	if err = db.SQL.QueryRowContext(ctx, "PRAGMA integrity_check").Scan(&integrity); err != nil || integrity != "ok" {
-		return nil, fmt.Errorf("database integrity check failed: %s %v", integrity, err)
-	}
-	fk, err := db.SQL.QueryContext(ctx, "PRAGMA foreign_key_check")
+	objects, err := db.DAL.Blobs().StoredObjects(ctx)
 	if err != nil {
 		return nil, err
 	}
-	bad := fk.Next()
-	err = fk.Err()
-	fk.Close()
-	if err != nil {
-		return nil, err
-	}
-	if bad {
-		return nil, errors.New("database foreign key check failed")
-	}
-	rows, err := db.SQL.QueryContext(ctx, "SELECT DISTINCT object_key,size,sha256 FROM blobs UNION SELECT object_key,object_size,object_sha256 FROM blob_texts UNION SELECT object_key,object_size,object_sha256 FROM blob_previews WHERE status='ready' ORDER BY object_key")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
 	entries := []fileEntry{}
-	for rows.Next() {
-		var key string
-		var entry fileEntry
-		if err = rows.Scan(&key, &entry.Size, &entry.SHA256); err != nil {
-			return nil, err
-		}
+	for _, object := range objects {
+		key := object.Key
+		entry := fileEntry{Size: object.Size, SHA256: object.SHA256}
 		id, e := uuid.Parse(key)
 		if e != nil || key != id.String() || !validDigest(entry.SHA256) || entry.Size < 0 {
 			return nil, errors.New("invalid stored file metadata")
@@ -367,7 +309,7 @@ func inspectDatabase(ctx context.Context, path string) ([]fileEntry, error) {
 		}
 		entries = append(entries, entry)
 	}
-	return entries, rows.Err()
+	return entries, nil
 }
 
 func validDigest(value string) bool {

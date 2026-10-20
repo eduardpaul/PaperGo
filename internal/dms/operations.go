@@ -2,13 +2,15 @@ package dms
 
 import (
 	"context"
-	"entgo.io/ent/dialect/sql"
+	"encoding/json"
 	"errors"
 	"log/slog"
-	"papergo/ent"
-	"papergo/ent/fielddefinition"
-	"papergo/ent/itemsurface"
-	"papergo/ent/operation"
+	"papergo/internal/dal/catalog"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/operations"
+	"papergo/internal/dal/refs"
+	"papergo/internal/dal/surfaces"
+	"papergo/internal/model"
 	"time"
 )
 
@@ -21,8 +23,8 @@ import (
 
 // enqueueFieldIndex supersedes the field's earlier operation and queues one
 // that converges its index rows. A collection without items needs no rows.
-func (s *Service) enqueueFieldIndex(ctx context.Context, subject string, d *ent.FieldDefinition) error {
-	if _, err := s.Client.Operation.Update().Where(operation.FieldIDEQ(d.ID), operation.StatusEQ(operation.StatusPending)).SetStatus(operation.StatusSuperseded).SetCompletedAt(time.Now().UTC()).Save(ctx); err != nil {
+func (s *Service) enqueueFieldIndex(ctx context.Context, subject string, d *catalog.FieldDefinition) error {
+	if err := s.DAL.Operations().Supersede(ctx, operations.Filter{FieldID: d.ID}); err != nil {
 		return err
 	}
 	collections, err := s.fieldCollections(ctx, d.ID)
@@ -31,23 +33,23 @@ func (s *Service) enqueueFieldIndex(ctx context.Context, subject string, d *ent.
 	}
 	queued := false
 	for _, c := range collections {
-		populated, e := s.Client.ItemSurface.Query().Where(itemsurface.ContainerIDEQ(c.ID)).Exist(ctx)
+		populated, e := s.DAL.Surfaces().Exists(ctx, surfaces.Filter{ContainerID: c.ID})
 		if e != nil {
 			return e
 		}
 		if !populated {
 			continue
 		}
-		if e = s.Client.Operation.Create().SetContainerID(c.ID).SetFieldID(d.ID).SetKind(OperationKindFieldIndex).SetCreatedBy(subject).SetTraceID(s.traceID).Exec(ctx); e != nil {
+		if _, e = s.DAL.Operations().Enqueue(ctx, operations.Operation{ContainerID: c.ID, FieldID: d.ID, Kind: OperationKindFieldIndex, CreatedBy: subject, TraceID: s.traceID}); e != nil {
 			return e
 		}
 		queued = true
 	}
-	status := fielddefinition.IndexStatusReady
+	status := catalog.IndexReady
 	if queued {
-		status = fielddefinition.IndexStatusBuilding
+		status = catalog.IndexBuilding
 	}
-	if err = s.Client.FieldDefinition.UpdateOneID(d.ID).SetIndexStatus(status).Exec(ctx); err != nil {
+	if err = s.DAL.Catalog().SetIndexStatus(ctx, []string{d.ID}, status); err != nil {
 		return err
 	}
 	// The runner's batch waits for this transaction's writer slot, so it
@@ -114,18 +116,18 @@ func (s *Service) runOperations(ctx context.Context) error {
 // operationStep advances the oldest pending operation by one index batch or
 // bulk item. An operation error fails it; item errors are bulk results.
 func (s *Service) operationStep(ctx context.Context) (bool, error) {
-	var op *ent.Operation
-	var external func(context.Context, *Service, *ent.Operation) error
+	var op *operations.Operation
+	var external func(context.Context, *Service, *operations.Operation) error
 	err := s.write(ctx, func(t *Service) error {
-		var e error
-		op, e = t.Client.Operation.Query().Where(operation.StatusEQ(operation.StatusPending)).Order(ent.Asc(operation.FieldCreatedAt), ent.Asc(operation.FieldID)).First(ctx)
-		if ent.IsNotFound(e) {
+		next, e := t.DAL.Operations().Next(ctx)
+		if dberr.IsNotFound(e) {
 			op = nil
 			return nil
 		}
 		if e != nil {
 			return e
 		}
+		op = &next
 		handler, exists := t.operationHandlers[op.Kind]
 		if !exists {
 			return errUnknownOperation
@@ -142,8 +144,9 @@ func (s *Service) operationStep(ctx context.Context) (bool, error) {
 			}
 		}
 		if op.StartedAt == nil {
-			op, e = t.Client.Operation.UpdateOne(op).SetStartedAt(time.Now().UTC()).Save(ctx)
-			if e != nil {
+			started := time.Now().UTC()
+			op.StartedAt = &started
+			if e = t.DAL.Operations().Save(ctx, op); e != nil {
 				return e
 			}
 		}
@@ -155,18 +158,19 @@ func (s *Service) operationStep(ctx context.Context) (bool, error) {
 		if e = executeOperation(ctx, t, handler, op); e != nil {
 			return e
 		}
-		current, e := t.Client.Operation.Get(ctx, op.ID)
+		current, e := t.DAL.Operations().Find(ctx, op.ID)
 		if e != nil {
 			return e
 		}
-		if current.Status != operation.StatusPending {
-			b := t.Client.Operation.UpdateOne(current).SetCompletedAt(time.Now().UTC())
-			if current.Status == operation.StatusSucceeded {
-				b.SetProgress(100)
+		if current.Status != operations.StatusPending {
+			completed := time.Now().UTC()
+			current.CompletedAt = &completed
+			if current.Status == operations.StatusSucceeded {
+				current.Progress = 100
 			}
-			return b.Exec(ctx)
+			return t.DAL.Operations().Save(ctx, &current)
 		}
-		if operationCheckpoint(current) == previousState {
+		if operationCheckpoint(&current) == previousState {
 			return invalid("operation handler did not persist progress")
 		}
 		return nil
@@ -192,61 +196,67 @@ var operationBatch = 100
 
 // fieldIndexBatch converges the field's rows on the next operationBatch surfaces
 // and records the resume point, finishing after the published surfaces.
-func (s *Service) fieldIndexBatch(ctx context.Context, op *ent.Operation) error {
-	d, err := s.Client.FieldDefinition.Get(ctx, op.FieldID)
-	if ent.IsNotFound(err) {
-		return s.Client.Operation.UpdateOne(op).SetStatus(operation.StatusSuperseded).Exec(ctx)
+func (s *Service) fieldIndexBatch(ctx context.Context, op *operations.Operation) error {
+	d, err := s.DAL.Catalog().Field(ctx, op.FieldID)
+	if dberr.IsNotFound(err) {
+		op.Status = operations.StatusSuperseded
+		return s.DAL.Operations().Save(ctx, op)
 	}
 	if err != nil {
 		return err
 	}
-	projections, err := s.Client.ItemSurface.Query().Where(itemsurface.ContainerIDEQ(op.ContainerID), itemsurface.SurfaceEQ(itemsurface.Surface(op.Surface)), itemsurface.ItemIDGT(op.AfterItemID)).Order(ent.Asc(itemsurface.FieldItemID)).Limit(operationBatch).All(ctx)
+	projections, err := s.DAL.Surfaces().Surfaces(ctx, surfaces.Filter{ContainerID: op.ContainerID, Surface: op.Surface, AfterItemID: op.AfterItemID, Limit: operationBatch})
 	if err != nil {
 		return err
 	}
 	if len(projections) > 0 {
-		if err = s.reindexBatch(ctx, projections, d, map[string][]*ent.FieldDefinition{}); err != nil {
+		if err = s.reindexBatch(ctx, projections, d, map[string][]*catalog.FieldDefinition{}); err != nil {
 			return err
 		}
 	}
-	b := s.Client.Operation.UpdateOne(op).AddProcessed(len(projections))
+	op.Processed += len(projections)
 	switch {
 	case len(projections) == operationBatch:
-		return b.SetAfterItemID(projections[len(projections)-1].ItemID).Exec(ctx)
-	case op.Surface == operation.SurfaceHead:
-		return b.SetSurface(operation.SurfacePublished).SetAfterItemID("").Exec(ctx)
+		op.AfterItemID = projections[len(projections)-1].ItemID
+		return s.DAL.Operations().Save(ctx, op)
+	case op.Surface == refs.SurfaceHead:
+		op.Surface, op.AfterItemID = refs.SurfacePublished, ""
+		return s.DAL.Operations().Save(ctx, op)
 	}
-	if err = b.SetStatus(operation.StatusSucceeded).Exec(ctx); err != nil {
+	op.Status = operations.StatusSucceeded
+	if err = s.DAL.Operations().Save(ctx, op); err != nil {
 		return err
 	}
-	pending, err := s.Client.Operation.Query().Where(operation.FieldIDEQ(d.ID), operation.StatusIn(operation.StatusPending, operation.StatusFailed)).Exist(ctx)
+	pending, err := s.DAL.Operations().Exists(ctx, operations.Filter{FieldID: d.ID, Statuses: []operations.Status{operations.StatusPending, operations.StatusFailed}})
 	if err != nil {
 		return err
 	}
 	if pending {
 		return nil
 	}
-	return s.Client.FieldDefinition.UpdateOne(d).SetIndexStatus(fielddefinition.IndexStatusReady).Exec(ctx)
+	return s.DAL.Catalog().SetIndexStatus(ctx, []string{d.ID}, catalog.IndexReady)
 }
 
 // Operations lists index maintenance and the caller's own bulk operations.
-func (s *Service) Operations(ctx context.Context, subject, containerID, after string, limit int) (Page[*ent.Operation], error) {
-	return read(ctx, s, func(t *Service) (Page[*ent.Operation], error) {
+func (s *Service) Operations(ctx context.Context, subject, containerID, after string, limit int) (Page[*OperationView], error) {
+	return read(ctx, s, func(t *Service) (Page[*OperationView], error) {
 		if _, e := t.authorize(ctx, subject, containerID, "read"); e != nil {
-			return Page[*ent.Operation]{}, e
+			return Page[*OperationView]{}, e
 		}
-		rows, e := t.Client.Operation.Query().Where(operation.ContainerIDEQ(containerID), operation.IDGT(after), func(q *sql.Selector) {
-			q.Where(sql.Or(sql.EQ(q.C(operation.FieldKind), OperationKindFieldIndex), sql.EQ(q.C(operation.FieldCreatedBy), subject)))
-		}).Order(ent.Asc(operation.FieldID)).Limit(pageSize(limit) + 1).All(ctx)
-		return entityPage(rows, limit, func(v *ent.Operation) string { return v.ID }), e
+		rows, e := t.DAL.Operations().List(ctx, operations.Filter{ContainerID: containerID, AfterID: after, OwnedBy: subject, SharedKinds: []string{OperationKindFieldIndex}, Limit: pageSize(limit) + 1})
+		views := make([]*OperationView, len(rows))
+		for i, row := range rows {
+			views[i] = viewOperation(row)
+		}
+		return entityPage(views, limit, func(v *OperationView) string { return v.ID }), e
 	})
 }
 
 // Operation requires collection read access; bulk results also require ownership.
-func (s *Service) Operation(ctx context.Context, subject, id string) (*ent.Operation, error) {
-	return read(ctx, s, func(t *Service) (*ent.Operation, error) {
-		op, e := t.Client.Operation.Get(ctx, id)
-		if ent.IsNotFound(e) {
+func (s *Service) Operation(ctx context.Context, subject, id string) (*OperationView, error) {
+	return read(ctx, s, func(t *Service) (*OperationView, error) {
+		op, e := t.DAL.Operations().Find(ctx, id)
+		if dberr.IsNotFound(e) {
 			return nil, ErrNotFound
 		}
 		if e != nil {
@@ -259,24 +269,57 @@ func (s *Service) Operation(ctx context.Context, subject, id string) (*ent.Opera
 			if e = t.RequireScope(ctx, subject, "organization.manage"); e != nil {
 				return nil, e
 			}
-			return op, nil
+			return viewOperation(op), nil
 		}
 		if _, e = t.authorize(ctx, subject, op.ContainerID, "read"); e != nil {
 			return nil, e
 		}
-		return op, nil
+		return viewOperation(op), nil
 	})
 }
 
 // queryable reports whether queries may filter, sort or group by a field.
-func queryable(d *ent.FieldDefinition) bool {
-	return d.Indexed && d.IndexStatus == fielddefinition.IndexStatusReady
+func queryable(d *catalog.FieldDefinition) bool {
+	return d.Indexed && d.IndexStatus == catalog.IndexReady
 }
 
 // unqueryable explains why a custom field cannot be queried.
-func unqueryable(key string, d *ent.FieldDefinition) error {
+func unqueryable(key string, d *catalog.FieldDefinition) error {
 	if d != nil && d.Indexed {
 		return invalid("field index is " + string(d.IndexStatus) + ": " + key)
 	}
 	return invalid("query fields must exist and be indexed: " + key)
+}
+
+// OperationView is an operation as the API shows it. Payloads, credential
+// constraints and resume points stay private.
+type OperationView struct {
+	ID          string                   `json:"id"`
+	CreatedAt   time.Time                `json:"created_at"`
+	UpdatedAt   time.Time                `json:"updated_at"`
+	ContainerID string                   `json:"container_id,omitempty"`
+	FieldID     string                   `json:"field_id"`
+	Kind        string                   `json:"kind"`
+	TraceID     string                   `json:"trace_id,omitempty"`
+	Status      operations.Status        `json:"status"`
+	Result      json.RawMessage          `json:"result,omitempty"`
+	StartedAt   *time.Time               `json:"started_at,omitempty"`
+	CompletedAt *time.Time               `json:"completed_at,omitempty"`
+	Processed   int                      `json:"processed,omitempty"`
+	Matched     int                      `json:"matched,omitempty"`
+	Updated     int                      `json:"updated,omitempty"`
+	Failed      int                      `json:"failed,omitempty"`
+	Progress    int                      `json:"progress,omitempty"`
+	Failures    []model.OperationFailure `json:"failures,omitempty"`
+	Error       string                   `json:"error,omitempty"`
+	CreatedBy   string                   `json:"created_by,omitempty"`
+}
+
+func viewOperation(op operations.Operation) *OperationView {
+	return &OperationView{
+		ID: op.ID, CreatedAt: op.CreatedAt, UpdatedAt: op.UpdatedAt, ContainerID: op.ContainerID, FieldID: op.FieldID, Kind: op.Kind,
+		TraceID: op.TraceID, Status: op.Status, Result: op.Result, StartedAt: op.StartedAt, CompletedAt: op.CompletedAt,
+		Processed: op.Processed, Matched: op.Matched, Updated: op.Updated, Failed: op.Failed, Progress: op.Progress,
+		Failures: op.Failures, Error: op.Error, CreatedBy: op.CreatedBy,
+	}
 }

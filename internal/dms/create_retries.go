@@ -3,15 +3,16 @@ package dms
 import (
 	"context"
 	"errors"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/refs"
+	"papergo/internal/dal/resources"
 
 	"github.com/google/uuid"
-	"papergo/ent"
-	"papergo/ent/resource"
 )
 
 // CreateWithStatus reports whether this request inserted a resource. A caller
 // ID makes a repeated item/folder create an unchanged read of the original.
-func (s *Service) CreateWithStatus(ctx context.Context, subject, parentID string, in CreateResource) (out *ent.Resource, created bool, err error) {
+func (s *Service) CreateWithStatus(ctx context.Context, subject, parentID string, in CreateResource) (out *resources.Resource, created bool, err error) {
 	err = s.write(ctx, func(t *Service) error {
 		if in.ID != nil {
 			if in.Kind != "item" && in.Kind != "folder" {
@@ -26,25 +27,25 @@ func (s *Service) CreateWithStatus(ctx context.Context, subject, parentID string
 			if e = t.RequireScope(ctx, subject, "list.write"); e != nil {
 				return e
 			}
-			existing, e := t.Client.Resource.Get(ctx, canonical)
-			if e != nil && !ent.IsNotFound(e) {
+			existing, e := t.DAL.Resources().Resource(ctx, canonical)
+			if e != nil && !dberr.IsNotFound(e) {
 				return e
 			}
 			if existing != nil {
-				parent, e := t.Client.Resource.Get(ctx, parentID)
+				parent, e := t.DAL.Resources().Resource(ctx, parentID)
 				if e != nil || parent.DeletedAt != nil {
-					if e != nil && !ent.IsNotFound(e) {
+					if e != nil && !dberr.IsNotFound(e) {
 						return e
 					}
 					return ErrConflict
 				}
 				collection := parent.ID
-				if parent.Kind == resource.KindFolder && parent.ContainerID != nil {
+				if parent.Kind == refs.KindFolder && parent.ContainerID != nil {
 					collection = *parent.ContainerID
-				} else if parent.Kind != resource.KindList && parent.Kind != resource.KindLibrary {
+				} else if parent.Kind != refs.KindList && parent.Kind != refs.KindLibrary {
 					return ErrConflict
 				}
-				if existing.DeletedAt != nil || existing.ContainerID == nil || *existing.ContainerID != collection || (existing.Kind != resource.KindItem && existing.Kind != resource.KindFolder) {
+				if existing.DeletedAt != nil || existing.ContainerID == nil || *existing.ContainerID != collection || (existing.Kind != refs.KindItem && existing.Kind != refs.KindFolder) {
 					return ErrConflict
 				}
 				out, e = t.Get(ctx, subject, existing.ID)

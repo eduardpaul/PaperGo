@@ -3,6 +3,10 @@ package identity
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"papergo/internal/dal"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/directory"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -23,25 +27,28 @@ type OrganizationUpdate struct {
 
 var organizationIdentifier = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,127}$`)
 
-func organization(ctx context.Context, q Querier) (Organization, error) {
-	var out Organization
-	err := q.QueryRowContext(ctx, "SELECT id,identifier,display_name,description,version FROM identity_organizations WHERE singleton=1").Scan(&out.ID, &out.Identifier, &out.DisplayName, &out.Description, &out.Version)
-	return out, err
-}
-func (d Directory) Organization(ctx context.Context, subject string) (Organization, error) {
-	if err := RequireActive(ctx, d.DB, subject); err != nil {
+func organization(ctx context.Context, store *dal.Store) (Organization, error) {
+	row, err := store.Directory().Organization(ctx)
+	if err != nil {
 		return Organization{}, err
 	}
-	return organization(ctx, d.DB)
+	return Organization{ID: row.ID, Identifier: row.Identifier, DisplayName: row.DisplayName, Description: row.Description, Version: int(row.Version)}, nil
+}
+
+func (d Directory) Organization(ctx context.Context, subject string) (Organization, error) {
+	if err := RequireActive(ctx, dal.NewStore(d.DB), subject); err != nil {
+		return Organization{}, err
+	}
+	return organization(ctx, dal.NewStore(d.DB))
 }
 func (d Directory) UpdateOrganization(ctx context.Context, subject string, version int, in OrganizationUpdate) (Organization, error) {
 	var out Organization
 	err := d.transaction(ctx, func(tx *sql.Tx) error {
-		return auditedIdentity(ctx, tx, subject, "organization.update", "organization", "", func() error {
-			if err := RequireScope(ctx, tx, subject, "organization.manage"); err != nil {
+		return auditedIdentity(ctx, d.store(tx), subject, directory.EntityOrganization, directory.ChangeUpdate, "", func() error {
+			if err := RequireScope(ctx, d.store(tx), subject, "organization.manage"); err != nil {
 				return err
 			}
-			current, err := organization(ctx, tx)
+			current, err := organization(ctx, d.store(tx))
 			if err != nil {
 				return err
 			}
@@ -63,10 +70,14 @@ func (d Directory) UpdateOrganization(ctx context.Context, subject string, versi
 			if err = validateProfile(current.DisplayName, ""); err != nil {
 				return err
 			}
-			if _, err = tx.ExecContext(ctx, "UPDATE identity_organizations SET identifier=?,display_name=?,description=?,version=version+1 WHERE id=?", current.Identifier, current.DisplayName, current.Description, current.ID); err != nil {
+			if err = d.store(tx).Directory().SaveOrganization(ctx, directory.Organization{ID: current.ID, Identifier: current.Identifier, DisplayName: current.DisplayName, Description: current.Description}, int64(version)); err != nil {
+				if errors.Is(err, dberr.ErrConcurrentUpdate) {
+					return ErrPreconditionFailed
+				}
 				return err
 			}
-			out, err = organization(ctx, tx)
+
+			out, err = organization(ctx, d.store(tx))
 			return err
 		})
 	})

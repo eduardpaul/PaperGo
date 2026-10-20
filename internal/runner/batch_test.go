@@ -5,14 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"papergo/internal/dal/daltest"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"papergo/internal/activitystore"
 	"papergo/internal/ai"
 	"papergo/internal/ai/aitest"
+	"papergo/internal/dal/activitystore"
 	"papergo/internal/dms"
 	"papergo/internal/workflow"
 	"papergo/internal/workflowai"
@@ -26,9 +27,7 @@ func TestBatchIdenticalPendingImagesAndQueueIsolation(t *testing.T) {
 	coord := f.enableBatch(t, map[string]any{"policy": "threshold", "batch_size": 1})
 	firstPass := f.coordinate(t, coord.ID)
 	// A failed or finished coordinator must never monopolize its queue.
-	if _, err := f.db.SQL.Exec(`UPDATE activity_records SET lease_owner=?,lease_token='stale',lease_until=? WHERE namespace='ai.batch.state'`, firstPass.ID, time.Now().UTC().Add(time.Hour)); err != nil {
-		t.Fatal(err)
-	}
+	daltest.Update(t, f.db.DAL, "activity_records", daltest.Row{"lease_owner": firstPass.ID, "lease_token": "stale", "lease_until": time.Now().UTC().Add(time.Hour)}, daltest.Row{"namespace": "ai.batch.state"})
 	lib, err := f.dms.Create(ctx, "alice", f.ws.ID, dms.CreateResource{Kind: "library", Name: "Tickets", WebDAVEnabled: true})
 	if err != nil {
 		t.Fatal(err)
@@ -84,9 +83,7 @@ func TestBatchIdenticalPendingImagesAndQueueIsolation(t *testing.T) {
 	}
 	// Evicting the reuse cache admits a fresh submission rather than
 	// resurrecting a historical provider batch with the same membership.
-	if _, err = f.db.SQL.Exec(`DELETE FROM cached_results`); err != nil {
-		t.Fatal(err)
-	}
+	daltest.Delete(t, f.db.DAL, "cached_results", nil)
 	file := f.upload(t, lib.ID, "fresh.png", "image/png", png)
 	fresh, err := f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: []string{file.ID}, Inputs: map[string]any{"image": file.Blob.ID}})
 	if err != nil {
@@ -100,17 +97,17 @@ func TestBatchIdenticalPendingImagesAndQueueIsolation(t *testing.T) {
 	if server.Creates() != 2 {
 		t.Fatalf("expired cache reused a historical provider batch: %d", server.Creates())
 	}
-	var openFlights int
-	if err = f.db.SQL.QueryRow(`SELECT COUNT(*) FROM workflow_waits WHERE kind IN ('ai.batch.flight','ai.batch.state')`).Scan(&openFlights); err != nil || openFlights != 0 {
-		t.Fatalf("synthetic wait owners: %d %v", openFlights, err)
+	if openFlights := daltest.Count(t, f.db.DAL, "workflow_waits", daltest.Row{"kind": "ai.batch.flight"}) + daltest.Count(t, f.db.DAL, "workflow_waits", daltest.Row{"kind": "ai.batch.state"}); openFlights != 0 {
+		t.Fatalf("synthetic wait owners: %d", openFlights)
 	}
 }
 
 // batchClock is the clock batch admission reads. Tests move it; activities
 // call it from the runner's goroutines.
 type batchClock struct {
-	mu sync.Mutex
-	at time.Time
+	mu    sync.Mutex
+	at    time.Time
+	start time.Time
 }
 
 func (c *batchClock) now() time.Time {
@@ -138,7 +135,10 @@ func batchTools(t *testing.T, azure bool) (*aitest.BatchServer, *batchClock, fun
 	if err != nil {
 		t.Fatal(err)
 	}
-	clock := &batchClock{at: time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC)}
+	// Noon UTC tomorrow: batch deadlines count from this clock, while waits
+	// expire on real time, so it must not lie in the past.
+	start := time.Now().UTC().Truncate(24 * time.Hour).Add(36 * time.Hour)
+	clock := &batchClock{at: start, start: start}
 	return server, clock, func(tools *workflow.Tools) {
 		workflowai.Configure(tools, workflowai.Runtime{Batch: client, BatchDeadline: 72 * time.Hour})
 		tools.Now = clock.now
@@ -433,7 +433,8 @@ func TestBatchDailyFlushSendsAPartialAndKeepsWorkspacesApart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := time.Date(2026, 10, 17, 1, 0, 0, 0, loc).UTC()
+	y, m, d := clock.start.In(loc).AddDate(0, 0, 1).Date()
+	want := time.Date(y, m, d, 1, 0, 0, 0, loc).UTC()
 	if !due.Equal(want) {
 		t.Fatalf("next flush %s, Madrid 01:00 is %s", due, want)
 	}

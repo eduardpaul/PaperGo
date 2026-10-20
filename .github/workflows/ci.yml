@@ -43,6 +43,82 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 7
+  dal:
+    name: DAL (SQLite and PostgreSQL 17)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: papergo
+          POSTGRES_PASSWORD: papergo-test
+          POSTGRES_DB: papergo
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U papergo -d papergo"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.2'
+          cache: true
+      - name: Verify generated Bob models
+        env:
+          TESTCONTAINERS_RYUK_DISABLED: 'true'
+        run: |
+          go tool bobgen-sql -c internal/dal/driver/sqlite/bobgen.yaml
+          go tool bobgen-sql -c internal/dal/driver/postgres/bobgen.yaml
+          git add -N internal/dal/driver/sqlite/models internal/dal/driver/postgres/models
+          git diff --exit-code -- internal/dal/driver/sqlite/models internal/dal/driver/postgres/models
+      - name: Verify both database engines
+        env:
+          TEST_POSTGRES_DSN: postgres://papergo:papergo-test@localhost:5432/papergo?sslmode=disable
+        run: go test -race $(go list ./internal/dal/... | grep -v -e /search/ -e /releaseplan) -count=1 -timeout 10m
+
+  postgres:
+    needs: frontend
+    name: Application on PostgreSQL 17
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: papergo
+          POSTGRES_PASSWORD: papergo-test
+          POSTGRES_DB: papergo
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U papergo -d papergo"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.2'
+          cache: true
+      - uses: ./.github/actions/native
+      - uses: actions/download-artifact@v4
+        with:
+          name: embedded-frontend
+          path: web/dist
+      - name: Test the application on PostgreSQL
+        env:
+          PAPERGO_TEST_POSTGRES_DSN: postgres://papergo:papergo-test@localhost:5432/papergo?sslmode=disable
+        run: go test ./internal/dms ./internal/httpapi ./internal/identity ./internal/runner ./internal/webdav ./internal/workflow ./internal/workflowai -count=1 -timeout 40m
+
   frontend:
     name: Build embedded frontend
     runs-on: ubuntu-latest
@@ -155,12 +231,8 @@ jobs:
         run: python3 -m unittest discover -s samples/authentik -p 'test_*.py' -v
       - name: Verify module checksums
         run: go mod verify
-      - name: Verify generated Ent code
-        run: |
-          go generate ./ent
-          git diff --exit-code -- ent go.mod go.sum
       - name: Verify formatting
-        run: test -z "$(gofmt -l cmd internal ent/schema web/*.go)"
+        run: test -z "$(gofmt -l cmd internal web/*.go)"
       - name: Vet
         run: go vet ./...
       - uses: actions/download-artifact@v4
@@ -257,7 +329,7 @@ jobs:
           name: embedded-frontend
           path: web/dist
       - name: Native conformance, lifecycle, backup and offline copy
-        run: go test -race ./internal/search/zvecstore ./internal/backup ./cmd/admin
+        run: go test -race ./internal/dal/search/zvecstore ./internal/backup ./cmd/admin
       - name: Service, HTTP and workflow parity
         env:
           PAPERGO_TEST_SEARCH_STORE: zvec
@@ -265,11 +337,11 @@ jobs:
       - name: Real dimensions soak
         env:
           PAPERGO_ZVEC_SOAK: '1'
-        run: go test ./internal/search/zvecstore -run '^TestRealDimensionsSoak$' -count=1 -v
+        run: go test ./internal/dal/search/zvecstore -run '^TestRealDimensionsSoak$' -count=1 -v
       - name: Fuzz native query builders
         run: |
-          go test ./internal/search/zvecstore -run '^$' -fuzz '^FuzzNativeFilter$' -fuzztime=10s -parallel=2
-          go test ./internal/search/zvecstore -run '^$' -fuzz '^FuzzNativeText$' -fuzztime=10s -parallel=2
+          go test ./internal/dal/search/zvecstore -run '^$' -fuzz '^FuzzNativeFilter$' -fuzztime=10s -parallel=2
+          go test ./internal/dal/search/zvecstore -run '^$' -fuzz '^FuzzNativeText$' -fuzztime=10s -parallel=2
       - uses: actions/upload-artifact@v4
         with:
           name: zvec-${{ runner.os }}-${{ runner.arch }}
@@ -306,7 +378,7 @@ jobs:
           go build ./cmd/api ./cmd/admin ./cmd/embed ./cmd/ocr
       - name: Exercise native search, PDFs, images and OCR
         shell: bash
-        run: go test ./internal/onnx ./internal/ocr/paddle ./internal/imaging ./internal/doctext/pdfium ./internal/search/zvecstore -run 'TestNativeABI|TestReadAndRender|TestRecognize$|TestDecode|TestWebPRoundTripAndResize|TestIdle|TestConcurrentIdle'
+        run: go test ./internal/onnx ./internal/ocr/paddle ./internal/imaging ./internal/doctext/pdfium ./internal/dal/search/zvecstore -run 'TestNativeABI|TestReadAndRender|TestRecognize$|TestDecode|TestWebPRoundTripAndResize|TestIdle|TestConcurrentIdle'
       - uses: actions/download-artifact@v4
         with:
           name: model-presets

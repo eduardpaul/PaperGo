@@ -3,11 +3,11 @@ package dms
 import (
 	"context"
 	"encoding/json"
-	entsql "entgo.io/ent/dialect/sql"
 	"errors"
-	"papergo/ent"
-	"papergo/ent/smartfolder"
-	"papergo/ent/term"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/resources"
+	"papergo/internal/dal/taxonomy"
+	viewstore "papergo/internal/dal/views"
 	"strings"
 	"time"
 )
@@ -52,7 +52,7 @@ type SmartFolderQueryRequest struct {
 	IncludeTotal bool      `json:"include_total,omitempty"`
 }
 
-func smartDefinition(f *ent.SmartFolder) (SmartFolderDefinition, error) {
+func smartDefinition(f *viewstore.SmartFolder) (SmartFolderDefinition, error) {
 	var def SmartFolderDefinition
 	err := json.Unmarshal(f.Definition, &def)
 	return def, err
@@ -110,7 +110,7 @@ func (s *Service) validateSmartFolder(ctx context.Context, subject string, in Sm
 			}
 			seen[id] = true
 		}
-		terms, err := s.Client.Term.Query().Where(term.IDIn(d.Terms...)).WithTermSet().All(ctx)
+		terms, err := s.DAL.Taxonomy().Terms(ctx, taxonomy.TermFilter{IDs: d.Terms})
 		if err != nil {
 			return err
 		}
@@ -130,7 +130,7 @@ func (s *Service) validateSmartFolder(ctx context.Context, subject string, in Sm
 	seen = map[string]bool{}
 	for _, g := range d.GroupBy {
 		if !fieldKey.MatchString(g.Field) {
-			if _, builtin := systemField(g.Field); builtin == nil {
+			if builtin := systemField(g.Field); builtin == nil {
 				return invalid("invalid grouping field")
 			}
 		}
@@ -145,7 +145,7 @@ func (s *Service) validateSmartFolder(ctx context.Context, subject string, in Sm
 	return nil
 }
 
-func (s *Service) smartFolder(ctx context.Context, subject, id string, manage bool) (*ent.SmartFolder, error) {
+func (s *Service) smartFolder(ctx context.Context, subject, id string, manage bool) (*viewstore.SmartFolder, error) {
 	scope := "list.read"
 	if manage {
 		scope = "list.write"
@@ -153,13 +153,14 @@ func (s *Service) smartFolder(ctx context.Context, subject, id string, manage bo
 	if err := s.RequireScope(ctx, subject, scope); err != nil {
 		return nil, err
 	}
-	f, err := s.Client.SmartFolder.Get(ctx, id)
-	if ent.IsNotFound(err) {
+	row, err := s.DAL.Views().SmartFolder(ctx, id)
+	if dberr.IsNotFound(err) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, err
 	}
+	f := &row
 	if f.OwnerID != nil {
 		if *f.OwnerID != subject {
 			return nil, ErrNotFound
@@ -179,17 +180,17 @@ func (s *Service) smartFolder(ctx context.Context, subject, id string, manage bo
 	return f, nil
 }
 
-func (s *Service) auditSmartFolder(ctx context.Context, subject, action string, f *ent.SmartFolder) error {
+func (s *Service) auditSmartFolder(ctx context.Context, subject, action string, f *viewstore.SmartFolder) error {
 	if f.WorkspaceID == nil || f.OwnerID != nil {
 		return s.auditCatalog(ctx, subject, action, map[string]any{"smart_folder_id": f.ID})
 	}
-	if err := s.Client.Resource.UpdateOneID(*f.WorkspaceID).SetUpdatedBy(subject).AddVersion(1).Exec(ctx); err != nil {
+	if err := s.DAL.Resources().Touch(ctx, *f.WorkspaceID, 0, subject); err != nil {
 		return err
 	}
-	return s.audit(ctx, subject, action, &ent.Resource{ID: *f.WorkspaceID, WorkspaceID: *f.WorkspaceID}, map[string]any{"smart_folder_id": f.ID, "version": f.Version, "personal": f.OwnerID != nil})
+	return s.audit(ctx, subject, action, &resources.Resource{ID: *f.WorkspaceID, WorkspaceID: *f.WorkspaceID}, map[string]any{"smart_folder_id": f.ID, "version": f.Version, "personal": f.OwnerID != nil})
 }
 
-func (s *Service) createSmartFolder(ctx context.Context, subject string, in SmartFolderInput) (*ent.SmartFolder, error) {
+func (s *Service) createSmartFolder(ctx context.Context, subject string, in SmartFolderInput) (*viewstore.SmartFolder, error) {
 	if err := s.RequireScope(ctx, subject, "list.write"); err != nil {
 		return nil, err
 	}
@@ -203,7 +204,7 @@ func (s *Service) createSmartFolder(ctx context.Context, subject string, in Smar
 		if _, err := s.workspace(ctx, subject, *in.WorkspaceID, "manage"); err != nil {
 			return nil, err
 		}
-		count, err := s.Client.SmartFolder.Query().Where(smartfolder.WorkspaceIDEQ(*in.WorkspaceID), smartfolder.OwnerIDIsNil()).Count(ctx)
+		count, err := s.DAL.Views().CountSmartFolders(ctx, viewstore.FolderFilter{WorkspaceID: *in.WorkspaceID, Shared: true})
 		if err != nil {
 			return nil, err
 		}
@@ -215,44 +216,38 @@ func (s *Service) createSmartFolder(ctx context.Context, subject string, in Smar
 	if err != nil {
 		return nil, err
 	}
-	b := s.Client.SmartFolder.Create().SetName(in.Name).SetDescription(in.Description).SetNillableWorkspaceID(in.WorkspaceID).SetDefinition(raw).SetCreatedBy(subject).SetUpdatedBy(subject)
+	f := viewstore.SmartFolder{Name: in.Name, Description: in.Description, WorkspaceID: in.WorkspaceID, Definition: raw, CreatedBy: subject}
 	if in.Personal {
-		b.SetOwnerID(subject)
+		f.OwnerID = &subject
 	}
-	f, err := b.Save(ctx)
+	f, err = s.DAL.Views().CreateSmartFolder(ctx, f)
 	if err != nil {
 		return nil, err
 	}
-	return f, s.auditSmartFolder(ctx, subject, "smart_folder.create", f)
+	return &f, s.auditSmartFolder(ctx, subject, "smart_folder.create", &f)
 }
 
-func (s *Service) CreateSmartFolder(ctx context.Context, subject string, in SmartFolderInput) (out *ent.SmartFolder, err error) {
+func (s *Service) CreateSmartFolder(ctx context.Context, subject string, in SmartFolderInput) (out *viewstore.SmartFolder, err error) {
 	err = s.write(ctx, func(t *Service) error { var e error; out, e = t.createSmartFolder(ctx, subject, in); return e })
 	return
 }
 
-func (s *Service) SmartFolder(ctx context.Context, subject, id string) (*ent.SmartFolder, error) {
-	return read(ctx, s, func(t *Service) (*ent.SmartFolder, error) { return t.smartFolder(ctx, subject, id, false) })
+func (s *Service) SmartFolder(ctx context.Context, subject, id string) (*viewstore.SmartFolder, error) {
+	return read(ctx, s, func(t *Service) (*viewstore.SmartFolder, error) { return t.smartFolder(ctx, subject, id, false) })
 }
 
-func (s *Service) SmartFolders(ctx context.Context, subject, workspace, after string, limit int) (Page[*ent.SmartFolder], error) {
-	return read(ctx, s, func(t *Service) (Page[*ent.SmartFolder], error) {
+func (s *Service) SmartFolders(ctx context.Context, subject, workspace, after string, limit int) (Page[viewstore.SmartFolder], error) {
+	return read(ctx, s, func(t *Service) (Page[viewstore.SmartFolder], error) {
 		if err := t.RequireScope(ctx, subject, "list.read"); err != nil {
-			return Page[*ent.SmartFolder]{}, err
+			return Page[viewstore.SmartFolder]{}, err
 		}
-		acl, args := permissionSQL(ctx, "smart_folders.workspace_id", subject, "read")
-		q := t.Client.SmartFolder.Query().Where(smartfolder.IDGT(after), func(sel *entsql.Selector) {
-			sel.Where(entsql.ExprP("(owner_id=? OR (owner_id IS NULL AND "+acl+"))", append([]any{subject}, args...)...))
-		})
-		if workspace != "" {
-			q.Where(smartfolder.WorkspaceIDEQ(workspace))
-		}
-		rows, err := q.Order(ent.Asc(smartfolder.FieldID)).Limit(pageSize(limit) + 1).All(ctx)
-		return entityPage(rows, limit, func(f *ent.SmartFolder) string { return f.ID }), err
+		reader := principal(ctx, subject)
+		rows, err := t.DAL.Views().SmartFolders(ctx, viewstore.FolderFilter{WorkspaceID: workspace, Reader: &reader, AfterID: after, Limit: pageSize(limit) + 1})
+		return entityPage(rows, limit, func(f viewstore.SmartFolder) string { return f.ID }), err
 	})
 }
 
-func (s *Service) UpdateSmartFolder(ctx context.Context, subject, id string, version int, in SmartFolderInput) (out *ent.SmartFolder, err error) {
+func (s *Service) UpdateSmartFolder(ctx context.Context, subject, id string, version int, in SmartFolderInput) (out *viewstore.SmartFolder, err error) {
 	err = s.write(ctx, func(t *Service) error {
 		old, e := t.smartFolder(ctx, subject, id, true)
 		if e != nil {
@@ -267,7 +262,7 @@ func (s *Service) UpdateSmartFolder(ctx context.Context, subject, id string, ver
 	return
 }
 
-func (s *Service) updateSmartFolder(ctx context.Context, subject string, old *ent.SmartFolder, in SmartFolderInput) (*ent.SmartFolder, error) {
+func (s *Service) updateSmartFolder(ctx context.Context, subject string, old *viewstore.SmartFolder, in SmartFolderInput) (*viewstore.SmartFolder, error) {
 	if (old.OwnerID != nil) != in.Personal || (old.WorkspaceID == nil) != (in.WorkspaceID == nil) || (old.WorkspaceID != nil && *old.WorkspaceID != *in.WorkspaceID) {
 		return nil, invalid("smart folder ownership and workspace are immutable")
 	}
@@ -278,11 +273,18 @@ func (s *Service) updateSmartFolder(ctx context.Context, subject string, old *en
 	if err != nil {
 		return nil, err
 	}
-	out, err := s.Client.SmartFolder.UpdateOne(old).SetName(in.Name).SetDescription(in.Description).SetDefinition(raw).SetUpdatedBy(subject).AddVersion(1).Save(ctx)
+	before, err := json.Marshal(old)
 	if err != nil {
 		return nil, err
 	}
-	return out, s.auditSmartFolder(ctx, subject, "smart_folder.update", out)
+	out, err := s.DAL.Views().UpdateSmartFolder(ctx, viewstore.SmartFolder{ID: old.ID, Name: in.Name, Description: in.Description, Definition: raw, UpdatedBy: subject}, old.Version)
+	if err != nil {
+		return nil, err
+	}
+	if err = s.trackAuditProperties(out.ID, before, out, "name", "description", "definition"); err != nil {
+		return nil, err
+	}
+	return &out, s.auditSmartFolder(ctx, subject, "smart_folder.update", &out)
 }
 
 func (s *Service) DeleteSmartFolder(ctx context.Context, subject, id string, version int) error {
@@ -294,7 +296,7 @@ func (s *Service) DeleteSmartFolder(ctx context.Context, subject, id string, ver
 		if f.Version != version {
 			return ErrPreconditionFailed
 		}
-		if err = t.Client.SmartFolder.DeleteOne(f).Exec(ctx); err != nil {
+		if err = t.DAL.Views().DeleteSmartFolder(ctx, f.ID, version); err != nil {
 			return err
 		}
 		return t.auditSmartFolder(ctx, subject, "smart_folder.delete", f)

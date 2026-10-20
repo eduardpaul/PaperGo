@@ -194,7 +194,7 @@ func prepareDecisionSource(e *env, in map[string]any, job *decisionJob) error {
 	if b.ID != blobID {
 		return dms.ErrPreconditionFailed
 	}
-	row, err := e.t.BlobText(e.ctx, textID)
+	row, err := e.t.DAL.Blobs().Text(e.ctx, textID)
 	if err != nil {
 		return err
 	}

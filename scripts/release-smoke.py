@@ -189,7 +189,7 @@ def exercise(binary, admin, directory, expected_version=None, model='embeddingge
                        cwd=directory, env=env, check=True)
     with closing(sqlite3.connect(directory / "papergo.db")) as db:
         if expected_version:
-            assert db.execute("SELECT hash FROM atlas_schema_revisions").fetchone()[0] == expected_version
+            assert db.execute("SELECT hash FROM schema_metadata").fetchone()[0] == expected_version
         assert db.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
         assert not db.execute("PRAGMA foreign_key_check").fetchall()
 

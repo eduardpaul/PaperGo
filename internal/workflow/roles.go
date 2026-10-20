@@ -3,12 +3,13 @@ package workflow
 import (
 	"context"
 	"fmt"
+	"papergo/internal/dal/refs"
+	"papergo/internal/dal/resources"
 	"slices"
 	"sort"
 
-	"papergo/ent"
-	"papergo/ent/resource"
-	"papergo/ent/workflow"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/workflows"
 	"papergo/internal/dms"
 )
 
@@ -68,22 +69,21 @@ func (r *Role) fills(def Definition) error {
 // claimRole makes w the only enabled filler of its role in its scope: other
 // enabled fillers of the role in the same workspace and collection are
 // turned off.
-func claimRole(ctx context.Context, t *dms.Service, subject string, w *ent.Workflow) error {
-	if w.Role == nil || !w.AutomaticEnabled || w.State != "published" || !w.AutomaticProvider {
+func claimRole(ctx context.Context, t *dms.Service, subject string, w *workflows.Workflow) error {
+	if w.Role == "" || !w.AutomaticEnabled || w.State != workflows.StatePublished || !w.AutomaticProvider {
 		return nil
 	}
-	q := t.Client.Workflow.Query().Where(workflow.WorkspaceIDEQ(w.WorkspaceID), workflow.RoleEQ(*w.Role), workflow.AutomaticEnabledEQ(true), workflow.StateEQ("published"), workflow.DeletedAtIsNil(), workflow.IDNEQ(w.ID))
-	if w.CollectionID != nil {
-		q.Where(workflow.CollectionIDEQ(*w.CollectionID))
-	} else {
-		q.Where(workflow.CollectionIDIsNil())
-	}
-	others, err := q.All(ctx)
+	others, err := listWorkflows(ctx, t, workflows.Filter{WorkspaceID: w.WorkspaceID, Role: w.Role, AutomaticEnabled: boolPtr(true), State: workflows.StatePublished, LiveOnly: true, ExcludeID: w.ID, CollectionID: func() string {
+		if w.CollectionID != "" {
+			return w.CollectionID
+		}
+		return ""
+	}(), CollectionAbsent: w.CollectionID == ""})
 	if err != nil {
 		return err
 	}
 	for _, other := range others {
-		other, _, err = revise(ctx, t, subject, other, mustCurrent(ctx, t, other), func(u *ent.WorkflowUpdateOne) { u.SetAutomaticEnabled(false) })
+		other, _, err = revise(ctx, t, subject, other, mustCurrent(ctx, t, other), func(u *workflows.Changes) { u.AutomaticEnabled = boolPtr(false) })
 		if err != nil {
 			return err
 		}
@@ -105,14 +105,14 @@ func claimRole(ctx context.Context, t *dms.Service, subject string, w *ent.Workf
 // EnsureDefaults prepares manual catalog entries and collection-specific default
 // providers. Explicit settings, including paused or deleted providers, are preserved.
 func EnsureDefaults(ctx context.Context, t *dms.Service, workspaceID string) error {
-	ws, err := t.Client.Resource.Query().Where(resource.IDEQ(workspaceID), resource.KindEQ(resource.KindWorkspace), resource.DeletedAtIsNil()).Only(ctx)
-	if ent.IsNotFound(err) {
+	ws, err := t.DAL.Resources().Resource(ctx, workspaceID)
+	if dberr.IsNotFound(err) || err == nil && (ws.Kind != refs.KindWorkspace || ws.DeletedAt != nil) {
 		return nil
 	}
 	if err != nil {
 		return err
 	}
-	collections, err := t.Client.Resource.Query().Where(resource.WorkspaceIDEQ(workspaceID), resource.KindIn(resource.KindList, resource.KindLibrary), resource.DeletedAtIsNil()).All(ctx)
+	collections, err := t.DAL.Resources().Resources(ctx, resources.Filter{WorkspaceID: workspaceID, Kinds: []refs.ResourceKind{refs.KindList, refs.KindLibrary}, State: resources.Live})
 	if err != nil {
 		return err
 	}
@@ -121,22 +121,22 @@ func EnsureDefaults(ctx context.Context, t *dms.Service, workspaceID string) err
 			continue
 		}
 		// Workspace entries expose manual use; automatic processing belongs to collections.
-		had, err := t.Client.Workflow.Query().Where(workflow.WorkspaceIDEQ(workspaceID), workflow.BuiltinKeyEQ(b.Key), workflow.CollectionIDIsNil()).Exist(ctx)
+		had, err := t.DAL.Workflows().Exists(ctx, workflows.Filter{WorkspaceID: workspaceID, BuiltinKey: b.Key, CollectionAbsent: true})
 		if err != nil {
 			return err
 		}
 		if !had && b.ManualMode != "none" {
-			if _, _, err = createBuiltIn(ctx, t, ws.CreatedBy, workspaceID, b, nil, false, map[string]any{}); err != nil {
+			if _, _, err = createBuiltIn(ctx, t, ws.CreatedBy, workspaceID, b, "", false, map[string]any{}); err != nil {
 				return err
 			}
 		}
 		for _, collection := range collections {
-			had, err := t.Client.Workflow.Query().Where(workflow.WorkspaceIDEQ(workspaceID), workflow.CollectionIDEQ(collection.ID), workflow.Or(workflow.BuiltinKeyEQ(b.Key), workflow.And(workflow.RoleEQ(b.Role), workflow.AutomaticProviderEQ(true)))).Exist(ctx)
+			had, err := t.DAL.Workflows().HasProvider(ctx, workspaceID, collection.ID, b.Key, b.Role)
 			if err != nil {
 				return err
 			}
 			if !had {
-				if _, _, err = createBuiltIn(ctx, t, ws.CreatedBy, workspaceID, b, collection, true, map[string]any{}); err != nil {
+				if _, _, err = createBuiltIn(ctx, t, ws.CreatedBy, workspaceID, b, collection.ID, true, map[string]any{}); err != nil {
 					return err
 				}
 			}
@@ -164,7 +164,7 @@ func (s *Service) CollectionRoles(ctx context.Context, subject, collectionID str
 		if err != nil {
 			return nil, err
 		}
-		if c.Kind != resource.KindList && c.Kind != resource.KindLibrary {
+		if c.Kind != "list" && c.Kind != "library" {
 			return nil, dms.Invalid("roles belong to lists and libraries")
 		}
 		if err = workspace(ctx, t, subject, c.WorkspaceID, "read"); err != nil {
@@ -172,14 +172,14 @@ func (s *Service) CollectionRoles(ctx context.Context, subject, collectionID str
 		}
 		for _, r := range Roles() {
 			st := RoleState{Role: r}
-			rows, err := t.Client.Workflow.Query().Where(workflow.WorkspaceIDEQ(c.WorkspaceID), workflow.RoleEQ(r.Key), workflow.CollectionIDEQ(c.ID), workflow.AutomaticProviderEQ(true), workflow.DeletedAtIsNil()).Order(ent.Desc(workflow.FieldAutomaticEnabled), ent.Asc(workflow.FieldID)).All(ctx)
+			rows, err := listWorkflows(ctx, t, workflows.Filter{WorkspaceID: c.WorkspaceID, Role: r.Key, CollectionID: c.ID, AutomaticProvider: boolPtr(true), LiveOnly: true, Order: "provider"})
 			if err != nil {
 				return nil, err
 			}
 			if len(rows) > 0 {
 				selected := rows[0]
 				for _, candidate := range rows {
-					if candidate.AutomaticEnabled && candidate.State == "published" {
+					if candidate.AutomaticEnabled && candidate.State == workflows.StatePublished {
 						selected = candidate
 						break
 					}
@@ -192,7 +192,7 @@ func (s *Service) CollectionRoles(ctx context.Context, subject, collectionID str
 				if err != nil {
 					return nil, err
 				}
-				st.Scope, st.AutomaticEnabled, st.Workflow = "collection", selected.AutomaticEnabled && selected.State == "published", &w
+				st.Scope, st.AutomaticEnabled, st.Workflow = "collection", selected.AutomaticEnabled && selected.State == workflows.StatePublished, &w
 			}
 			out = append(out, st)
 		}
@@ -223,7 +223,7 @@ func checkRole(ctx context.Context, t *dms.Service, subject, workspaceID, role, 
 	if err != nil {
 		return err
 	}
-	if c.WorkspaceID != workspaceID || c.Kind != resource.KindList && c.Kind != resource.KindLibrary {
+	if c.WorkspaceID != workspaceID || c.Kind != "list" && c.Kind != "library" {
 		return dms.Invalid("collection_id must be a list or library of the workspace")
 	}
 	return nil

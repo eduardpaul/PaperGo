@@ -2,8 +2,7 @@ package workflow
 
 import (
 	"context"
-	"encoding/json"
-	"papergo/ent"
+	"papergo/internal/dal/workflows"
 	"papergo/internal/dms"
 	"papergo/internal/forms"
 )
@@ -23,12 +22,12 @@ func init() {
 					return outcome{}, err
 				}
 			}
-			w, err := e.t.Client.Workflow.Get(e.ctx, e.workflowID)
+			w, err := findWorkflow(e.ctx, e.t, e.workflowID)
 			if err != nil {
 				return outcome{}, err
 			}
 			var n int
-			if w.BuiltinKey != nil && *w.BuiltinKey == IntegrationRefreshBuiltIn {
+			if w.BuiltinKey != "" && w.BuiltinKey == IntegrationRefreshBuiltIn {
 				n, err = e.t.QueueScheduledIntegrationRefreshes(e.ctx, w.ID)
 			} else {
 				n, err = e.t.QueueIntegrationRefreshes(e.ctx, e.author, e.workspaceID, id)
@@ -43,8 +42,9 @@ func init() {
 // EnsureIntegrationWorkflow activates the workspace schedule once, atomically
 // with adding a list integration. List Manage is sufficient; an existing
 // disabled workflow is respected, and is never silently enabled again.
-func (s *Service) EnsureIntegrationWorkflow(ctx context.Context, t *dms.Service, subject string, list *ent.Resource) error {
-	if _, err := t.Authorize(ctx, subject, list.ID, "manage"); err != nil {
+func (s *Service) EnsureIntegrationWorkflow(ctx context.Context, t *dms.Service, subject, listID string) error {
+	list, err := t.Authorize(ctx, subject, listID, "manage")
+	if err != nil {
 		return err
 	}
 	b := builtins[IntegrationRefreshBuiltIn]
@@ -64,11 +64,8 @@ func (s *Service) EnsureIntegrationWorkflow(ctx context.Context, t *dms.Service,
 	if err != nil {
 		return err
 	}
-	w, err := t.Client.Workflow.Create().SetWorkspaceID(list.WorkspaceID).SetKey(key).SetName(b.Name).SetDescription(b.Description).SetAutomaticEnabled(true).SetBuiltinKey(b.Key).SetParameters(map[string]any{}).SetCurrentVersion(1).SetCreatedBy(subject).SetUpdatedBy(subject).Save(ctx)
+	w, err := createWorkflow(ctx, t, workflows.CreateInput{WorkspaceID: list.WorkspaceID, Key: key, Name: b.Name, Description: b.Description, AutomaticEnabled: true, ManualEnabled: true, BuiltinKey: b.Key, Definition: raw, CreatedBy: subject})
 	if err != nil {
-		return err
-	}
-	if err = t.Client.WorkflowVersion.Create().SetWorkflowID(w.ID).SetNumber(1).SetDefinition(json.RawMessage(raw)).SetCreatedBy(subject).Exec(ctx); err != nil {
 		return err
 	}
 	if err = index(ctx, t, w, def); err != nil {

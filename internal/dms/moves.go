@@ -3,12 +3,8 @@ package dms
 import (
 	"context"
 	"encoding/json"
-	"time"
-
-	"papergo/ent"
-	"papergo/ent/grant"
-	"papergo/ent/itemsurface"
-	"papergo/ent/resource"
+	"papergo/internal/dal/refs"
+	"papergo/internal/dal/resources"
 )
 
 type MoveItem struct {
@@ -17,13 +13,13 @@ type MoveItem struct {
 	ParentID string `json:"parent_id,omitempty"`
 }
 
-func (s *Service) MoveItem(ctx context.Context, subject, id string, version int, in MoveItem) (out *ent.Resource, err error) {
+func (s *Service) MoveItem(ctx context.Context, subject, id string, version int, in MoveItem) (out *resources.Resource, err error) {
 	err = s.write(ctx, func(t *Service) error {
 		r, e := t.authorize(ctx, subject, id, "write")
 		if e != nil {
 			return e
 		}
-		if r.ContainerID == nil || (r.Kind != resource.KindItem && r.Kind != resource.KindFolder) {
+		if r.ContainerID == nil || (r.Kind != refs.KindItem && r.Kind != refs.KindFolder) {
 			return invalid("only items and folders can move")
 		}
 		if r.Version != version {
@@ -33,7 +29,7 @@ func (s *Service) MoveItem(ctx context.Context, subject, id string, version int,
 		if e != nil {
 			return e
 		}
-		if dest.Kind != resource.KindList && dest.Kind != resource.KindLibrary {
+		if dest.Kind != refs.KindList && dest.Kind != refs.KindLibrary {
 			return invalid("destination must be a collection")
 		}
 		parent := in.ParentID
@@ -49,10 +45,10 @@ func (s *Service) MoveItem(ctx context.Context, subject, id string, version int,
 		} else if managed {
 			return invalid("remove the list integration before moving its item to another list")
 		}
-		if r.Kind != resource.KindItem {
+		if r.Kind != refs.KindItem {
 			return invalid("cross-collection moves support content items only")
 		}
-		source, e := t.Client.Resource.Get(ctx, *r.ContainerID)
+		source, e := t.DAL.Resources().Resource(ctx, *r.ContainerID)
 		if e != nil {
 			return e
 		}
@@ -62,7 +58,7 @@ func (s *Service) MoveItem(ctx context.Context, subject, id string, version int,
 		if e = t.overlayHead(ctx, r); e != nil {
 			return e
 		}
-		schema, e := t.Client.SchemaRevision.Get(ctx, *dest.SchemaHeadID)
+		schema, e := t.DAL.Catalog().Schema(ctx, *dest.SchemaHeadID)
 		if e != nil {
 			return e
 		}
@@ -95,15 +91,11 @@ func (s *Service) MoveItem(ctx context.Context, subject, id string, version int,
 		if e != nil {
 			return e
 		}
-		for _, statement := range []string{`DELETE FROM field_values WHERE item_id=?`, `DELETE FROM business_keys WHERE item_id=?`, `DELETE FROM item_surfaces WHERE item_id=?`} {
-			if _, e = t.Client.ExecContext(ctx, statement, id); e != nil {
-				return e
-			}
+		name := ""
+		if key != nil {
+			name = *key
 		}
-		if _, e = t.Client.Grant.Delete().Where(grant.ResourceIDEQ(id)).Exec(ctx); e != nil {
-			return e
-		}
-		out, e = t.Client.Resource.UpdateOneID(id).SetWorkspaceID(dest.WorkspaceID).SetContainerID(dest.ID).SetParentID(parent).SetInheritPermissions(true).SetNillableNameKey(key).SetValues(r.Values).AddVersion(1).SetUpdatedAt(time.Now().UTC()).SetUpdatedBy(subject).Save(ctx)
+		out, e = t.DAL.Resources().Transfer(ctx, id, dest.ID, parent, name, after, subject)
 		if e != nil {
 			return e
 		}
@@ -112,12 +104,12 @@ func (s *Service) MoveItem(ctx context.Context, subject, id string, version int,
 				return e
 			}
 		} else {
-			rev, e := t.Client.ItemRevision.Get(ctx, *out.HeadRevisionID)
+			rev, e := t.revision(ctx, *out.HeadRevisionID)
 			if e != nil {
 				return e
 			}
 			if dest.PublishingEnabled {
-				if e = t.replaceSurface(ctx, out, rev, itemsurface.SurfaceHead, defs); e != nil {
+				if e = t.replaceSurface(ctx, out, rev, refs.SurfaceHead, defs); e != nil {
 					return e
 				}
 			}
@@ -128,17 +120,17 @@ func (s *Service) MoveItem(ctx context.Context, subject, id string, version int,
 			}
 		}
 		// Explicit publications retain their frozen content and schema.
-		out, e = t.Client.Resource.Get(ctx, id)
+		out, e = t.DAL.Resources().Resource(ctx, id)
 		if e != nil {
 			return e
 		}
 		t.emitScopeMoved(ctx, subject, r, out)
 		if out.PublishedRevisionID != nil {
-			rev, e := t.Client.ItemRevision.Get(ctx, *out.PublishedRevisionID)
+			rev, e := t.revision(ctx, *out.PublishedRevisionID)
 			if e != nil {
 				return e
 			}
-			frozen, e := t.Client.SchemaRevision.Get(ctx, rev.SchemaRevisionID)
+			frozen, e := t.DAL.Catalog().Schema(ctx, rev.SchemaRevisionID)
 			if e != nil {
 				return e
 			}
@@ -146,17 +138,14 @@ func (s *Service) MoveItem(ctx context.Context, subject, id string, version int,
 			if e != nil {
 				return e
 			}
-			if e = t.replaceSurface(ctx, out, rev, itemsurface.SurfacePublished, publishedDefs); e != nil {
+			if e = t.replaceSurface(ctx, out, rev, refs.SurfacePublished, publishedDefs); e != nil {
 				return e
 			}
-		}
-		if _, e = t.Client.ExecContext(ctx, `UPDATE workflow_runs SET workspace_id=? WHERE item_id=?`, dest.WorkspaceID, id); e != nil {
-			return e
 		}
 		details := map[string]any{"from_workspace_id": oldWorkspace, "from_collection_id": oldContainer, "from_parent_id": oldParent, "collection_id": dest.ID, "parent_id": parent}
 		if string(before) == string(after) {
 			details["revision_id"] = *out.HeadRevisionID
-			rev, e := t.Client.ItemRevision.Get(ctx, *out.HeadRevisionID)
+			rev, e := t.revision(ctx, *out.HeadRevisionID)
 			if e != nil {
 				return e
 			}

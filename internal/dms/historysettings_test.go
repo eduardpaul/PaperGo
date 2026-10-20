@@ -4,9 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"papergo/ent"
-	"papergo/ent/blob"
-	"papergo/ent/resource"
+	"papergo/internal/dal/blobs"
+	"papergo/internal/dal/resources"
 	"papergo/internal/storage"
 	"slices"
 	"strings"
@@ -18,7 +17,7 @@ func TestHistoryDefaultsAndPolicyValidation(t *testing.T) {
 	s, w, _ := fixture(t)
 	for _, kind := range []string{"list", "library"} {
 		c, err := s.Create(testContext, "alice", w.ID, CreateResource{Kind: kind, Name: kind})
-		if err != nil || c.Versioning != resource.VersioningOff || c.MaxVersions != 50 {
+		if err != nil || c.Versioning != resources.VersioningOff || c.MaxVersions != 50 {
 			t.Fatal(c, err)
 		}
 		item := create(t, s, c.ID, "item", "Item", nil)
@@ -54,7 +53,7 @@ func TestHistoryDefaultsAndPolicyValidation(t *testing.T) {
 		}
 	}
 	c, err := s.Create(testContext, "alice", w.ID, CreateResource{TemplateKey: "documents", Name: "With history", Versioning: ptr("major"), MaxVersions: ptr(500)})
-	if err != nil || c.Versioning != resource.VersioningMajor || c.MaxVersions != 500 {
+	if err != nil || c.Versioning != resources.VersioningMajor || c.MaxVersions != 500 {
 		t.Fatal(c, err)
 	}
 }
@@ -81,7 +80,7 @@ func TestSnapshotCollectionKeepsHistorySurfacesAndQueuedEvents(t *testing.T) {
 		t.Fatal("queued event snapshots were removed", err)
 	}
 	// The dispatcher consumes term-change snapshots before releasing them.
-	if err = s.Client.DomainEvent.Update().SetDispatchedAt(time.Now().UTC()).Exec(testContext); err != nil {
+	if err = dispatchAll(testContext, s.DAL); err != nil {
 		t.Fatal(err)
 	}
 	if err = s.CollectRevisions(testContext); err != nil || revisionCount(t, s, item.ID) != 3 {
@@ -93,18 +92,17 @@ func TestSnapshotCollectionKeepsHistorySurfacesAndQueuedEvents(t *testing.T) {
 	if _, err = s.Unpublish(testContext, "alice", item.ID, item.Version); err != nil {
 		t.Fatal(err)
 	}
-	if err = s.Client.DomainEvent.Update().SetDispatchedAt(time.Now().UTC()).Exec(testContext); err != nil {
+	if err = dispatchAll(testContext, s.DAL); err != nil {
 		t.Fatal(err)
 	}
 	if err = s.CollectRevisions(testContext); err != nil || revisionCount(t, s, item.ID) != 2 {
 		t.Fatal("unpublished snapshot was retained", err)
 	}
-	if recorded, e := s.Client.Publication.Get(testContext, publication.ID); e != nil || string(recorded.Snapshot) != string(publication.Snapshot) {
-		t.Fatal("publication audit snapshot changed", recorded, e)
+	if recorded := findPublication(t, s, publication.ID); !sameDocument(t, recorded.Snapshot, publication.Snapshot) {
+		t.Fatal("publication audit snapshot changed", recorded)
 	}
-	// Foreign keys still prevent collecting the live head directly.
-	if err = s.Client.ItemRevision.DeleteOneID(*item.HeadRevisionID).Exec(testContext); err == nil {
-		t.Fatal("live head was deleted")
+	if _, err = s.revision(testContext, *latest(t, s, item.ID).HeadRevisionID); err != nil {
+		t.Fatal("live head was collected", err)
 	}
 }
 
@@ -121,7 +119,7 @@ func TestHistoryOffSnapshotsDoNotAccumulateAfterDispatch(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err = s.Client.DomainEvent.Update().SetDispatchedAt(time.Now().UTC()).Exec(testContext); err != nil {
+		if err = dispatchAll(testContext, s.DAL); err != nil {
 			t.Fatal(err)
 		}
 		if err = s.CollectRevisions(testContext); err != nil || revisionCount(t, s, item.ID) != 1 {
@@ -240,14 +238,14 @@ func TestItemSnapshotCollectionTouchesOnlyTheGivenItems(t *testing.T) {
 	}
 	first := create(t, s, c.ID, "item", "First", nil)
 	second := create(t, s, c.ID, "item", "Second", nil)
-	for _, item := range []*ent.Resource{first, second} {
+	for _, item := range []*resources.Resource{first, second} {
 		for _, name := range []string{"Edited", "Edited again"} {
 			if item, err = s.Update(testContext, "alice", item.ID, item.Version, UpdateResource{Name: &name}); err != nil {
 				t.Fatal(err)
 			}
 		}
 	}
-	if err = s.Client.DomainEvent.Update().SetDispatchedAt(time.Now().UTC()).Exec(testContext); err != nil {
+	if err = dispatchAll(testContext, s.DAL); err != nil {
 		t.Fatal(err)
 	}
 	before := revisionCount(t, s, second.ID)
@@ -303,7 +301,7 @@ func TestLibraryReplacementReclaimsBytesOnlyWhenVersioningOff(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				old, err := s.Client.Blob.Get(ctx, document.File.ID)
+				old, err := s.DAL.Blobs().Blob(ctx, document.File.ID)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -312,10 +310,10 @@ func TestLibraryReplacementReclaimsBytesOnlyWhenVersioningOff(t *testing.T) {
 					t.Fatal(err)
 				}
 				if mode == "major" {
-					if old.Availability != blob.AvailabilityAvailable || len(history.Data) != 2 {
+					if old.Availability != blobs.AvailabilityAvailable || len(history.Data) != 2 {
 						t.Fatal("explicit history did not retain versions", old, history)
 					}
-				} else if old.Availability != blob.AvailabilityPending || len(history.Data) != 0 || publishing != (old.ReclaimAfter == nil) {
+				} else if old.Availability != blobs.AvailabilityPending || len(history.Data) != 0 || publishing != (old.ReclaimAfter == nil) {
 					t.Fatal("history-off replacement was not queued with publication protection", old, history)
 				}
 				if err = s.SweepReclaims(ctx, store, time.Now().UTC()); err != nil {
@@ -360,7 +358,7 @@ func TestLibraryReplacementReclaimsBytesOnlyWhenVersioningOff(t *testing.T) {
 					t.Fatal("replaced bytes were not reclaimed", err)
 				}
 				current, err := s.GetBlob(ctx, "alice", item.ID, "")
-				if err != nil || current.ID != second.ID || current.Availability != blob.AvailabilityAvailable {
+				if err != nil || current.ID != second.ID || current.Availability != blobs.AvailabilityAvailable {
 					t.Fatal("replacement is not current and available", current, err)
 				}
 				f, err = store.Open(ctx, second.ObjectKey)

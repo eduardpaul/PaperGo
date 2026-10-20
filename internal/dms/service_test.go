@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"papergo/ent"
-	"papergo/ent/itemrevision"
-	"papergo/ent/itemsurface"
-	"papergo/internal/testutil"
+	"papergo/internal/dal/daltest"
+	"papergo/internal/dal/resources"
+	"papergo/internal/dal/surfaces"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -24,14 +24,14 @@ func setWorkspaceMembers(ctx context.Context, s *Service, actor, workspaceID str
 	return nil
 }
 
-func fixture(t *testing.T) (*Service, *ent.Resource, *ent.Resource) {
+func fixture(t *testing.T) (*Service, *resources.Resource, *resources.Resource) {
 	t.Helper()
-	s := NewService(testutil.Database(t).SQL)
+	s := NewService(daltest.Database(t).SQL)
 	w := create(t, s, "", "workspace", "Finance", nil)
 	list := create(t, s, w.ID, "list", "Invoices", nil)
 	return s, w, list
 }
-func create(t *testing.T, s *Service, parent, kind, name string, values map[string]any) *ent.Resource {
+func create(t *testing.T, s *Service, parent, kind, name string, values map[string]any) *resources.Resource {
 	t.Helper()
 	var versioning *string
 	if kind == "list" || kind == "library" {
@@ -215,11 +215,11 @@ func TestConcurrentUpdatesHaveOneWinner(t *testing.T) {
 	if err != nil || current.Version != 2 {
 		t.Fatalf("version: %+v %v", current, err)
 	}
-	count, err := s.Client.ItemRevision.Query().Where(itemrevision.ItemIDEQ(item.ID)).Count(testContext)
+	count, err := countRevisions(s, item.ID)
 	if err != nil || count != 2 {
 		t.Fatalf("concurrent writers left revisions: %d %v", count, err)
 	}
-	count, err = s.Client.ItemSurface.Query().Where(itemsurface.ItemIDEQ(item.ID)).Count(testContext)
+	count, err = countSurfaces(s, surfaces.Filter{ItemID: item.ID})
 	if err != nil || count != 1 {
 		t.Fatalf("concurrent writers left projections: %d %v", count, err)
 	}
@@ -239,4 +239,18 @@ func referencesType(t *testing.T, s *Service, workspaceID string) RelationshipTy
 		t.Fatal(err)
 	}
 	return typ
+}
+
+// sameDocument reports whether two JSON documents hold the same value; the
+// database may store a document in another layout.
+func sameDocument(t *testing.T, a, b []byte) bool {
+	t.Helper()
+	var x, y any
+	if err := json.Unmarshal(a, &x); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(b, &y); err != nil {
+		t.Fatal(err)
+	}
+	return reflect.DeepEqual(x, y)
 }

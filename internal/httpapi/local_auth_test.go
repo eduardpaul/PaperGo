@@ -6,12 +6,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"papergo/internal/dal"
+	"papergo/internal/dal/daltest"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"papergo/internal/auth"
-	"papergo/internal/database"
+	"papergo/internal/dal/database"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
 	"papergo/internal/testutil/searchstore"
@@ -56,14 +58,13 @@ func TestLocalAdminBasicAndSession(t *testing.T) {
 	if err = directory.SetInitialPasswordHash(ctx, "admin", other); err != nil {
 		t.Fatal(err)
 	}
-	var stored string
-	if err = db.SQL.QueryRowContext(ctx, "SELECT password_hash FROM identity_users WHERE id='admin'").Scan(&stored); err != nil || stored != hash {
-		t.Fatal("second start reset the password", stored, err)
+	if stored := daltest.Values(t, db.DAL, "identity_users", "password_hash", daltest.Row{"id": "admin"}); len(stored) != 1 || stored[0] != hash {
+		t.Fatal("second start reset the password", stored)
 	}
 	service := dms.NewService(db.SQL)
 	index := searchstore.Open(t, filepath.Join(t.TempDir(), "search.db"), []string{"english"})
 	service.SetSearch(index)
-	handler := (&API{DMS: service, Auth: auth.Local{DB: db.SQL}, Logger: slog.Default(), Ready: db.SQL.PingContext}).Handler()
+	handler := (&API{DMS: service, Auth: auth.Local{DAL: db.DAL}, Logger: slog.Default(), Ready: db.SQL.PingContext}).Handler()
 	config := request(handler, "GET", "/auth/config", "", "", "", "")
 	if config.Code != 200 || strings.TrimSpace(config.Body.String()) != `{"mode":"local"}` {
 		t.Fatal(config.Code, config.Body.String())
@@ -119,7 +120,7 @@ func TestLocalAuthenticationPreservesManagedProfile(t *testing.T) {
 	if err = directory.SetInitialPasswordHash(ctx, "alice", hash); err != nil {
 		t.Fatal(err)
 	}
-	local := auth.Local{DB: directory.DB}
+	local := auth.Local{DAL: dal.NewStore(directory.DB)}
 	handler := (&API{DMS: service, Auth: local, Logger: slog.Default()}).Handler()
 	getMe := func(cookie string) {
 		t.Helper()
@@ -163,7 +164,7 @@ func TestLocalSessionCookieSecurityAndLogout(t *testing.T) {
 	if err = directory.SetInitialPasswordHash(t.Context(), "alice", hash); err != nil {
 		t.Fatal(err)
 	}
-	local := auth.Local{DB: directory.DB}
+	local := auth.Local{DAL: dal.NewStore(directory.DB)}
 	for _, test := range []struct {
 		name, origin, publicURL string
 		secure                  bool

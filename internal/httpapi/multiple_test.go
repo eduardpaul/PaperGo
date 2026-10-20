@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"papergo/ent"
 	"papergo/internal/auth"
+	"papergo/internal/dal/resources"
 	"papergo/internal/dms"
 	"papergo/internal/model"
 	"strings"
@@ -45,8 +45,10 @@ func TestChoiceCardinalityIsImmutableAPI(t *testing.T) {
 			if response.Code != 422 || !strings.Contains(response.Body.String(), "cardinality and reference scope are immutable") {
 				t.Fatal(response.Code, response.Body.String())
 			}
-			if _, err = s.Client.FieldDefinition.UpdateOne(field).SetOptions(model.FieldOptions{Multiple: !multiple}).Save(ctx); err == nil {
-				t.Fatal("database allowed a cardinality change")
+			change := *field
+			change.Options = model.FieldOptions{Multiple: !multiple}
+			if _, err = s.DAL.Catalog().SaveField(ctx, change, field.Version); err == nil {
+				t.Fatal("DAL allowed a cardinality change")
 			}
 			current, err := s.Get(ctx, "alice", list.ID)
 			if err != nil || current.Version != list.Version || *current.SchemaHeadID != *list.SchemaHeadID {
@@ -84,7 +86,7 @@ func TestMultipleFieldsAndPersonActivationAPI(t *testing.T) {
 		t.Fatal(res.Code, res.Body.String())
 	}
 	res = request(h, "POST", "/v1/resources/"+c.ID+"/children", `{"kind":"item","name":"Review","values":{"reviewers":["bob","carol","bob"]}}`, testToken, "", "application/json")
-	var item ent.Resource
+	var item resources.Resource
 	if res.Code != 201 || json.Unmarshal(res.Body.Bytes(), &item) != nil || len(item.Values["reviewers"].([]any)) != 2 {
 		t.Fatal(res.Code, res.Body.String())
 	}

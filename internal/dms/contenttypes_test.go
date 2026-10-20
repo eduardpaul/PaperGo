@@ -4,9 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"papergo/ent"
-	"papergo/ent/businesskey"
-	"papergo/ent/fieldvalue"
+	"papergo/internal/dal/catalog"
+	"papergo/internal/dal/surfaces"
 	"papergo/internal/model"
 	"sync"
 	"testing"
@@ -17,7 +16,7 @@ func isValidation(err error) bool {
 	return errors.As(err, &v)
 }
 
-func typeOK(t *testing.T, s *Service, collection string, in ContentTypeInput, defaults ...bool) *ent.ContentType {
+func typeOK(t *testing.T, s *Service, collection string, in ContentTypeInput, defaults ...bool) *catalog.ContentType {
 	t.Helper()
 	typ, err := s.CreateContentType(testContext, "alice", in)
 	if err != nil {
@@ -29,7 +28,7 @@ func typeOK(t *testing.T, s *Service, collection string, in ContentTypeInput, de
 	return typ
 }
 
-func fieldOK(t *testing.T, s *Service, collection string, in CreateField) *ent.FieldDefinition {
+func fieldOK(t *testing.T, s *Service, collection string, in CreateField) *catalog.FieldDefinition {
 	t.Helper()
 	d, err := s.CreateField(testContext, "alice", collection, in)
 	if err != nil {
@@ -66,11 +65,11 @@ func TestBulkContentTypesAndFrozenRules(t *testing.T) {
 	if item.ContentTypeID == nil || *item.ContentTypeID != typ.ID {
 		t.Fatal("default type", item)
 	}
-	rev, err := s.Client.ItemRevision.Get(testContext, *item.HeadRevisionID)
+	rev, err := s.revision(testContext, *item.HeadRevisionID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	snapshot, err := s.Client.SchemaRevision.Get(testContext, rev.SchemaRevisionID)
+	snapshot, err := s.DAL.Catalog().Schema(testContext, rev.SchemaRevisionID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +81,7 @@ func TestBulkContentTypesAndFrozenRules(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var simple *ent.ContentType
+	var simple *catalog.ContentType
 	for _, v := range oldTypes {
 		if v.Key == "item" {
 			simple = v
@@ -130,7 +129,7 @@ func TestUniqueKeysReserveBothSurfacesAndRollbackBulk(t *testing.T) {
 	for _, code := range []string{"9007199254740993", "9007199254740994"} {
 		bulkFails(t, s, "alice", l.ID, 1, ErrConflict, BulkOperation{Action: "create", Create: &BulkCreate{Name: "Rollback", Values: map[string]any{"code": json.Number("7")}}}, BulkOperation{Action: "create", Create: &BulkCreate{Name: "Duplicate", Values: map[string]any{"code": json.Number(code)}}})
 	}
-	count, err := s.Client.BusinessKey.Query().Where(businesskey.ContainerIDEQ(l.ID)).Count(testContext)
+	count, err := keyCount(s, catalog.KeyFilter{CollectionID: l.ID})
 	if err != nil || count != 2 {
 		t.Fatal("claims leaked", count, err)
 	}
@@ -158,7 +157,7 @@ func TestEnablingUniqueRejectsExistingDuplicatesAtomically(t *testing.T) {
 	if _, err := s.UpdateField(testContext, "alice", l.ID, d.ID, version, UpdateField{Options: &options}); !errors.Is(err, ErrConflict) {
 		t.Fatal(err)
 	}
-	got, err := s.Client.FieldDefinition.Get(testContext, d.ID)
+	got, err := s.DAL.Catalog().Field(testContext, d.ID)
 	if err != nil || got.Options.Unique || latest(t, s, l.ID).Version != version {
 		t.Fatal("partial schema", got, err)
 	}
@@ -214,7 +213,7 @@ func TestRequiredIfAndRemovalKeepHistory(t *testing.T) {
 	if _, exists := item.Values["code"]; exists {
 		t.Fatal("removed field carried", item.Values)
 	}
-	old, err := s.Client.ItemRevision.Get(testContext, revID)
+	old, err := s.revision(testContext, revID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,7 +221,7 @@ func TestRequiredIfAndRemovalKeepHistory(t *testing.T) {
 	if err != nil || oldValues["code"] != "A" {
 		t.Fatal("history rewritten", old, err)
 	}
-	oldSchema, err := s.Client.SchemaRevision.Get(testContext, old.SchemaRevisionID)
+	oldSchema, err := s.DAL.Catalog().Schema(testContext, old.SchemaRevisionID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,11 +234,11 @@ func TestRequiredIfAndRemovalKeepHistory(t *testing.T) {
 	}
 	values := map[string]any{"code": "B"}
 	bulkFails(t, s, "alice", l.ID, 0, nil, BulkOperation{Action: "update", ID: item.ID, Version: item.Version, Update: &BulkUpdate{Values: &values}})
-	count, err := s.Client.FieldValue.Query().Where(fieldvalue.ContainerIDEQ(l.ID), fieldvalue.FieldKeyEQ("code")).Count(testContext)
+	count, err := countFieldValues(s, surfaces.ValueFilter{ContainerID: l.ID, FieldKey: "code"})
 	if err != nil || count != 0 {
 		t.Fatal(count, err)
 	}
-	count, err = s.Client.BusinessKey.Query().Where(businesskey.ContainerIDEQ(l.ID)).Count(testContext)
+	count, err = keyCount(s, catalog.KeyFilter{CollectionID: l.ID})
 	if err != nil || count != 0 {
 		t.Fatal(count, err)
 	}
@@ -291,7 +290,7 @@ func TestConcurrentBulkUniqueKeysHaveOneWholeBatchWinner(t *testing.T) {
 			}
 		}
 	}
-	count, err := s.Client.BusinessKey.Query().Where(businesskey.ContainerIDEQ(l.ID)).Count(testContext)
+	count, err := keyCount(s, catalog.KeyFilter{CollectionID: l.ID})
 	if err != nil || count != 2 || winners != 1 {
 		t.Fatal("partial batch claims", count, winners, err)
 	}
@@ -303,7 +302,7 @@ func TestConcurrentBulkUniqueKeysHaveOneWholeBatchWinner(t *testing.T) {
 
 func TestUniqueKeyRebuildAcrossBatchesAndInsertChunks(t *testing.T) {
 	s, _, l := fixture(t)
-	fields := []*ent.FieldDefinition{}
+	fields := []*catalog.FieldDefinition{}
 	for i := 0; i < 6; i++ {
 		key := fmt.Sprintf("key_%d", i)
 		fields = append(fields, fieldOK(t, s, l.ID, CreateField{Key: key, Label: key, Type: "text", Indexed: true, Options: model.FieldOptions{Unique: i != 0}}))
@@ -330,7 +329,7 @@ func TestUniqueKeyRebuildAcrossBatchesAndInsertChunks(t *testing.T) {
 	if _, err := s.UpdateField(testContext, "alice", l.ID, fields[0].ID, latest(t, s, l.ID).Version, UpdateField{Options: &options}); err != nil {
 		t.Fatal(err)
 	}
-	count, err := s.Client.BusinessKey.Query().Where(businesskey.ContainerIDEQ(l.ID)).Count(testContext)
+	count, err := keyCount(s, catalog.KeyFilter{CollectionID: l.ID})
 	if err != nil || count != 600 {
 		t.Fatal("rebuild/dedup", count, err)
 	}
@@ -338,7 +337,7 @@ func TestUniqueKeyRebuildAcrossBatchesAndInsertChunks(t *testing.T) {
 	if _, err = s.UpdateField(testContext, "alice", l.ID, fields[0].ID, latest(t, s, l.ID).Version, UpdateField{Options: &options}); err != nil {
 		t.Fatal(err)
 	}
-	count, err = s.Client.BusinessKey.Query().Where(businesskey.ContainerIDEQ(l.ID)).Count(testContext)
+	count, err = keyCount(s, catalog.KeyFilter{CollectionID: l.ID})
 	if err != nil || count != 500 {
 		t.Fatal("cleared claim policy", count, err)
 	}
@@ -359,4 +358,10 @@ func fixtureFieldIds(t *testing.T, s *Service, collection string, keys []string)
 		out = append(out, d.ID)
 	}
 	return out
+}
+
+// keyCount counts the business keys f selects.
+func keyCount(s *Service, f catalog.KeyFilter) (int, error) {
+	keys, err := s.DAL.Catalog().Keys(testContext, f)
+	return len(keys), err
 }

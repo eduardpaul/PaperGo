@@ -3,8 +3,8 @@ package dms
 import (
 	"context"
 	"errors"
-	"papergo/ent/contenttype"
-	"papergo/ent/resource"
+	"papergo/internal/dal/catalog"
+	"papergo/internal/dal/resources"
 	"papergo/internal/model"
 	"testing"
 )
@@ -68,15 +68,15 @@ func TestCollectionTemplateAtomicFailureAndAccess(t *testing.T) {
 	if err := s.RegisterCollectionTemplate(recipe); err != nil {
 		t.Fatal(err)
 	}
-	before, _ := s.Client.FieldDefinition.Query().Count(ctx)
+	before, _ := s.DAL.Catalog().CountFields(ctx, catalog.FieldFilter{})
 	if _, err := s.Create(ctx, "alice", w.ID, CreateResource{Name: "Failed", TemplateKey: "module"}); err == nil {
 		t.Fatal("invalid view accepted")
 	}
-	after, _ := s.Client.FieldDefinition.Query().Count(ctx)
-	exists, _ := s.Client.ContentType.Query().Where(contenttype.TemplateKeyEQ("module_type")).Exist(ctx)
-	resources, _ := s.Client.Resource.Query().Where(resource.NameEQ("Failed")).Count(ctx)
-	if before != after || exists || resources != 0 {
-		t.Fatal("provisioning leaked", before, after, exists, resources)
+	after, _ := s.DAL.Catalog().CountFields(ctx, catalog.FieldFilter{})
+	exists, _ := s.DAL.Catalog().ContentTypeExists(ctx, catalog.ContentTypeFilter{TemplateKey: "module_type"})
+	leaked, _ := countResources(s, resources.Filter{Name: "Failed"})
+	if before != after || exists || leaked != 0 {
+		t.Fatal("provisioning leaked", before, after, exists, leaked)
 	}
 	if _, err := s.Create(ctx, "bob", w.ID, CreateResource{Name: "Denied", TemplateKey: "contacts"}); !errors.Is(err, ErrNotFound) {
 		t.Fatal(err)

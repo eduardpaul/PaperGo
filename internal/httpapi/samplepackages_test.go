@@ -10,19 +10,19 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"papergo/internal/dal/refs"
+	"papergo/internal/dal/resources"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"papergo/ent/resource"
-	"papergo/ent/termset"
 	"papergo/internal/auth"
-	"papergo/internal/database"
+	"papergo/internal/dal/daltest"
+	"papergo/internal/dal/database"
 	"papergo/internal/dms"
 	"papergo/internal/model"
 	"papergo/internal/storage"
-	"papergo/internal/testutil"
 	"papergo/internal/workflow"
 	"papergo/internal/workflowai"
 )
@@ -120,7 +120,7 @@ func sampleWorkflow(t *testing.T, s *workflow.Service, workspace, file string, b
 
 func checkImportedSampleSource(t *testing.T, s *dms.Service, w workflow.Workflow) {
 	t.Helper()
-	collections, err := s.Client.Resource.Query().Where(resource.WorkspaceIDEQ(w.WorkspaceID), resource.KindIn(resource.KindLibrary, resource.KindList)).All(t.Context())
+	collections, err := s.DAL.Resources().Resources(t.Context(), resources.Filter{WorkspaceID: w.WorkspaceID, Kinds: []refs.ResourceKind{refs.KindLibrary, refs.KindList}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +156,7 @@ func checkImportedSampleSource(t *testing.T, s *dms.Service, w workflow.Workflow
 	case "Index contracts":
 		source = sampleWorkflowSource(t, "workflows/contracts.json", "$LIBRARY", ids["Contracts"])
 	case "Taxonomy review":
-		set, err := s.Client.TermSet.Query().Where(termset.KeyEQ("sample_document_topics")).Only(t.Context())
+		set, err := s.DAL.Taxonomy().SetByKey(t.Context(), "sample_document_topics")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -192,10 +192,8 @@ func buildSamplePackage(t *testing.T, receipt bool, path string) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
-	for _, migration := range testutil.MigrationFiles(t) {
-		if _, err := db.SQL.ExecContext(t.Context(), string(migration.Bytes())); err != nil {
-			t.Fatal(err)
-		}
+	if err := db.DAL.Migrate(t.Context()); err != nil {
+		t.Fatal(err)
 	}
 	s := dms.NewService(db.SQL)
 	if err := s.Directory().Initialize(t.Context(), "organization-admin", ""); err != nil {
@@ -392,7 +390,7 @@ func TestSampleWorkspacePackages(t *testing.T) {
 			if *updateSamplePackages {
 				buildSamplePackage(t, sample.Receipt, path)
 			}
-			s := dms.NewService(testutil.Database(t).SQL)
+			s := dms.NewService(daltest.Database(t).SQL)
 			store, err := storage.NewLocal(t.TempDir())
 			if err != nil {
 				t.Fatal(err)
@@ -404,9 +402,9 @@ func TestSampleWorkspacePackages(t *testing.T) {
 			}
 			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 			handler := (&API{DMS: s, Storage: store, Auth: auth.Development{Token: testToken, Subject: "organization-admin"}, Logger: logger}).Handler()
-			before, _ := s.Client.Resource.Query().Count(t.Context())
+			before, _ := s.DAL.Resources().Count(t.Context(), resources.Filter{})
 			importSampleHTTP(t, handler, s, "organization-admin", path, "", true)
-			after, _ := s.Client.Resource.Query().Count(t.Context())
+			after, _ := s.DAL.Resources().Count(t.Context(), resources.Filter{})
 			if after != before {
 				t.Fatal("dry run wrote resources")
 			}
@@ -440,14 +438,14 @@ func TestSampleWorkspacePackages(t *testing.T) {
 						}
 					}
 				}
-				if count, err := s.Client.Resource.Query().Where(resource.WorkspaceIDEQ(result.WorkspaceID), resource.KindIn(resource.KindItem, resource.KindFolder)).Count(t.Context()); err != nil || count != 0 {
+				if count, err := s.DAL.Resources().Count(t.Context(), resources.Filter{WorkspaceID: result.WorkspaceID, Kinds: []refs.ResourceKind{refs.KindItem, refs.KindFolder}}); err != nil || count != 0 {
 					t.Fatal("sample included content", count, err)
 				}
 			}
 			if _, err := s.Get(t.Context(), "alice", existing.ID); err != nil {
 				t.Fatal("import changed other workspace", err)
 			}
-			if present, err := s.Client.IdentityUser.Get(t.Context(), sampleSubject); err == nil {
+			if present, err := s.DAL.Directory().User(t.Context(), sampleSubject); err == nil {
 				t.Fatal("template created dummy account", present)
 			}
 		})

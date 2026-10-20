@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"time"
 
-	"papergo/ent/workflowversion"
 	"papergo/internal/dms"
 	"papergo/internal/forms"
 )
@@ -107,11 +106,11 @@ type loadedRef struct {
 // reference, and the definition is read from that version afterwards.
 func (s *Service) Execute(ctx context.Context, x Exec, in RunInput) (Result, error) {
 	raw, err := x.Step("load", func(ctx context.Context, t *dms.Service, _ func(dms.Event)) (json.RawMessage, error) {
-		w, err := t.Client.Workflow.Get(ctx, in.WorkflowID)
+		w, err := findWorkflow(ctx, t, in.WorkflowID)
 		if err != nil {
 			return nil, err
 		}
-		v, err := t.Client.WorkflowVersion.Query().Where(workflowversion.WorkflowIDEQ(in.WorkflowID), workflowversion.NumberEQ(in.Version)).Only(ctx)
+		v, err := findVersion(ctx, t, in.WorkflowID, int64(in.Version))
 		if err != nil {
 			return nil, err
 		}
@@ -121,10 +120,13 @@ func (s *Service) Execute(ctx context.Context, x Exec, in RunInput) (Result, err
 		if in.StartError != "" {
 			return nil, errors.New(in.StartError)
 		}
-		ref := loadedRef{Key: w.Key, Author: v.CreatedBy, System: systemWorkflow(w), WorkflowID: in.WorkflowID, Version: in.Version}
-		if w.Role != nil {
-			ref.Role = *w.Role
-		}
+		ref := loadedRef{Key: w.Key, Author: v.CreatedBy, System: systemWorkflow(w.BuiltinKey), WorkflowID: in.WorkflowID, Version: in.Version}
+		ref.Role = func() string {
+			if w.Role != "" {
+				return w.Role
+			}
+			return ""
+		}()
 		return json.Marshal(ref)
 	})
 	if err != nil {
@@ -153,7 +155,7 @@ func (s *Service) versionDefinition(ctx context.Context, ref loadedRef) (Definit
 	if ref.WorkflowID == "" || ref.Version < 1 {
 		return Definition{}, errors.New("workflow version reference is invalid")
 	}
-	v, err := s.DMS.Client.WorkflowVersion.Query().Where(workflowversion.WorkflowIDEQ(ref.WorkflowID), workflowversion.NumberEQ(ref.Version)).Only(ctx)
+	v, err := findVersion(ctx, s.DMS, ref.WorkflowID, int64(ref.Version))
 	if err != nil {
 		return Definition{}, fmt.Errorf("resolve workflow %s version %d: %w", ref.WorkflowID, ref.Version, err)
 	}

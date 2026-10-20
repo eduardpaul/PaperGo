@@ -3,7 +3,7 @@ package workflow
 import (
 	"context"
 	"errors"
-	"papergo/ent"
+	"papergo/internal/dal/workflows"
 	"papergo/internal/dms"
 	"slices"
 )
@@ -76,7 +76,7 @@ func (s *Service) CheckStart(ctx context.Context, subject, id string, in Start, 
 				a.Code = "permission_required"
 				a.Reason = "You or the workflow's execution author need permission for this run."
 			}
-			if w.State != "published" {
+			if w.State != workflows.StatePublished {
 				a.Code = "not_published"
 				a.Reason = "Publish this workflow before running it."
 			}
@@ -140,9 +140,9 @@ func (s *Service) Actions(ctx context.Context, subject, workspaceID string, in S
 	return out, nil
 }
 
-func (s *Service) manualReadiness(ctx context.Context, t *dms.Service, w *ent.Workflow, author string, def Definition, items []string) error {
-	if w.BuiltinKey != nil {
-		if b := builtins[*w.BuiltinKey]; b != nil && len(b.ManualMediaTypes) > 0 {
+func (s *Service) manualReadiness(ctx context.Context, t *dms.Service, w *workflows.Workflow, author string, def Definition, items []string) error {
+	if w.BuiltinKey != "" {
+		if b := builtins[w.BuiltinKey]; b != nil && len(b.ManualMediaTypes) > 0 {
 			for _, id := range items {
 				file, err := t.CurrentFile(ctx, author, id)
 				if err != nil {

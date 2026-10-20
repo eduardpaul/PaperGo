@@ -2,9 +2,8 @@ package dms
 
 import (
 	"context"
-	"papergo/ent"
-	"papergo/ent/itemhistory"
-	"papergo/ent/resource"
+	"papergo/internal/dal/resources"
+	"papergo/internal/dal/revisions"
 )
 
 func validateHistorySettings(collection bool, mode *string, count *int) error {
@@ -23,21 +22,13 @@ func validateHistorySettings(collection bool, mode *string, count *int) error {
 	return nil
 }
 
-func (s *Service) retainHistory(ctx context.Context, collection *ent.Resource, revision, previous *ent.ItemRevision) error {
-	if collection.Versioning == resource.VersioningMajor {
+func (s *Service) retainHistory(ctx context.Context, collection *resources.Resource, revision, previous *revisions.Revision) error {
+	if collection.Versioning == resources.VersioningMajor {
 		changed, err := revisionChanges(revision, previous)
 		if err != nil {
 			return err
 		}
-		last, err := s.currentHistoryNumber(ctx, revision.ItemID)
-		if err != nil {
-			return err
-		}
-		if err = s.Client.ItemHistory.Create().SetRevisionID(revision.ID).SetItemID(revision.ItemID).SetNumber(last + 1).SetChangedFields(changed).Exec(ctx); err != nil {
-			return err
-		}
-		_, err = s.Client.ItemHistory.Delete().Where(itemhistory.ItemIDEQ(revision.ItemID), itemhistory.NumberLT(last+2-collection.MaxVersions)).Exec(ctx)
-		if err != nil {
+		if err = s.DAL.Revisions().Retain(ctx, *revision, changed, collection.MaxVersions); err != nil {
 			return err
 		}
 	}
@@ -70,22 +61,8 @@ func (s *Service) CollectItemRevisions(ctx context.Context, itemIDs []string) er
 	})
 }
 
-// collectRevisions deletes unreferenced snapshots of one item, or of every item
-// when itemID is empty. The item filter is its own statement so SQLite seeks
-// the item's revisions instead of scanning them all on every write.
+// collectRevisions deletes unreferenced snapshots of one item, or of every
+// item when itemID is empty.
 func (s *Service) collectRevisions(ctx context.Context, itemID string) error {
-	scope, args := "1=1", []any{}
-	if itemID != "" {
-		scope, args = "v.item_id=?", []any{itemID}
-	}
-	_, err := s.Client.ExecContext(ctx, `DELETE FROM item_revisions AS v
-WHERE `+scope+`
-AND NOT EXISTS (SELECT 1 FROM resources r WHERE r.head_revision_id=v.id OR r.published_revision_id=v.id)
-AND NOT EXISTS (SELECT 1 FROM item_surfaces p WHERE p.revision_id=v.id)
-AND NOT EXISTS (SELECT 1 FROM item_histories h WHERE h.revision_id=v.id)
-AND NOT EXISTS (SELECT 1 FROM domain_events e JOIN item_revisions event_revision
- ON event_revision.id=json_extract(e.data,'$.revision_id')
- WHERE e.dispatched_at IS NULL AND event_revision.item_id=v.item_id
- AND (event_revision.id=v.id OR event_revision.revision_number=v.revision_number+1))`, args...)
-	return err
+	return s.DAL.Revisions().Collect(ctx, itemID)
 }

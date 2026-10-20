@@ -9,18 +9,18 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"papergo/internal/dal/blobs"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"papergo/ent"
-	"papergo/ent/operation"
-	"papergo/internal/database"
+	"papergo/internal/dal/daltest"
+	"papergo/internal/dal/operations"
+	"papergo/internal/dal/workflows"
 	"papergo/internal/dms"
 	"papergo/internal/model"
 	"papergo/internal/storage"
-	"papergo/internal/testutil"
 	"papergo/internal/workflow"
 )
 
@@ -52,7 +52,7 @@ func (f *fixture) runReclaim(t *testing.T, w workflow.Workflow, itemID, blobID s
 	var status string
 	for _, run := range finished {
 		if run.ID == ids[0] {
-			status = run.Status
+			status = string(run.Status)
 		}
 	}
 	detail, err := f.r.Run(ctx, "alice", ids[0])
@@ -70,13 +70,13 @@ func (f *fixture) runReclaim(t *testing.T, w workflow.Workflow, itemID, blobID s
 	return outputs
 }
 
-func (f *fixture) blobRow(t *testing.T, id string) *ent.Blob {
+func (f *fixture) blobRow(t *testing.T, id string) *blobs.Blob {
 	t.Helper()
-	row, err := f.dms.Client.Blob.Get(ctx, id)
+	row, err := f.dms.DAL.Blobs().Blob(ctx, id)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return row
+	return &row
 }
 
 func (f *fixture) fileVersion(t *testing.T, itemID, blobID string) dms.FileVersion {
@@ -228,6 +228,15 @@ func TestFileReclaimDefersProtectedAndSharedBytes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err = f.dms.Write(ctx, func(tx *dms.Service) error {
+		stager, err := tx.DAL.Workflows().Create(ctx, workflows.CreateInput{WorkspaceID: f.ws.ID, Key: "stager", Name: "Stager", CreatedBy: "alice"})
+		if err != nil {
+			return err
+		}
+		return daltest.WorkflowRun(ctx, tx.DAL, "run-stage", stager.ID, f.ws.ID, "alice", 1)
+	}); err != nil {
+		t.Fatal(err)
+	}
 	staged, err := f.dms.StageFile(ctx, "alice", dms.StageInput{
 		ItemID: stagedItem.ID, RunID: "run-stage",
 		Sources:   []model.StagedSource{{ItemID: stagedItem.ID, BlobID: stagedItem.Blob.ID}},
@@ -251,6 +260,13 @@ func TestFileReclaimDefersProtectedAndSharedBytes(t *testing.T) {
 	pinned := f.upload(t, lib.ID, "pinned.png", "image/png", bytes.Repeat([]byte("h"), 80))
 	f.upload(t, lib.ID, "pinned.png", "image/png", bytes.Repeat([]byte("i"), 86))
 	if err = f.dms.Write(ctx, func(tx *dms.Service) error {
+		pinWorkflow, err := tx.DAL.Workflows().Create(ctx, workflows.CreateInput{WorkspaceID: f.ws.ID, Key: "pin-consumer", Name: "Pin consumer", CreatedBy: "alice"})
+		if err != nil {
+			return err
+		}
+		if err := daltest.WorkflowRun(ctx, tx.DAL, "run-pin", pinWorkflow.ID, f.ws.ID, "alice", 1); err != nil {
+			return err
+		}
 		return workflow.PutWait(ctx, tx, workflow.Wait{
 			BlobIDs: []string{pinned.Blob.ID}, Kind: "file.pin", Key: "one", WorkspaceID: f.ws.ID, RunID: "run-pin", Node: "hold", ExecutionID: "1",
 			Data: json.RawMessage(fmt.Sprintf(`{"blobs":[{"item_id":%q,"blob_id":%q}]}`, pinned.ID, pinned.Blob.ID)),
@@ -346,7 +362,7 @@ func TestReclaimedContentIsOmittedFromPortabilityPackages(t *testing.T) {
 			break
 		}
 		if time.Now().After(deadline) {
-			op, _ := f.dms.Client.Operation.Get(ctx, export.ID)
+			op, _ := f.dms.DAL.Operations().Find(ctx, export.ID)
 			t.Fatalf("export: %v (%s %s)", err, op.Status, op.Error)
 		}
 		time.Sleep(20 * time.Millisecond)
@@ -436,14 +452,14 @@ func TestReclaimedContentIsOmittedFromPortabilityPackages(t *testing.T) {
 	}
 	deadline = time.Now().Add(60 * time.Second)
 	for {
-		op, err := target.Client.Operation.Get(ctx, imp.ID)
+		op, err := target.DAL.Operations().Find(ctx, imp.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if op.Status == operation.StatusSucceeded {
+		if op.Status == operations.StatusSucceeded {
 			break
 		}
-		if op.Status == operation.StatusFailed || time.Now().After(deadline) {
+		if op.Status == operations.StatusFailed || time.Now().After(deadline) {
 			t.Fatalf("import %s: %s", op.Status, op.Error)
 		}
 		time.Sleep(20 * time.Millisecond)
@@ -484,18 +500,8 @@ func TestReclaimedContentIsOmittedFromPortabilityPackages(t *testing.T) {
 func packageTarget(t *testing.T) (*dms.Service, storage.Store) {
 	t.Helper()
 	dir := t.TempDir()
-	db, err := database.Open(ctx, filepath.Join(dir, "target.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { db.Close() })
-	for _, file := range testutil.MigrationFiles(t) {
-		if _, err = db.SQL.ExecContext(ctx, string(file.Bytes())); err != nil {
-			t.Fatal(err)
-		}
-	}
-	service := dms.NewService(db.SQL)
-	if err = service.Directory().Initialize(ctx, "organization-admin", ""); err != nil {
+	service := dms.NewService(daltest.EmptyDatabase(t).SQL)
+	if err := service.Directory().Initialize(ctx, "organization-admin", ""); err != nil {
 		t.Fatal(err)
 	}
 	store, err := storage.NewLocal(filepath.Join(dir, "blobs"))

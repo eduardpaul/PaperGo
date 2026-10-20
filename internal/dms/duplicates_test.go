@@ -2,12 +2,13 @@ package dms
 
 import (
 	"errors"
+	"papergo/internal/dal/blobs"
+	"papergo/internal/dal/resources"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/google/uuid"
-	"papergo/ent/blob"
 )
 
 func TestDuplicatePolicyAcrossWorkspacesAndVisibility(t *testing.T) {
@@ -38,7 +39,7 @@ func TestDuplicatePolicyAcrossWorkspacesAndVisibility(t *testing.T) {
 	if !errors.As(err, &duplicate) || len(duplicate.Documents) != 2 {
 		t.Fatal("duplicate accepted", err)
 	}
-	if n, e := s.Client.Blob.Query().Where(blob.ItemIDEQ(c.ID)).Count(testContext); e != nil || n != 0 || latest(t, s, c.ID).Version != c.Version {
+	if n, e := s.DAL.Blobs().Count(testContext, blobs.BlobFilter{ItemID: c.ID}); e != nil || n != 0 || latest(t, s, c.ID).Version != c.Version {
 		t.Fatal("blocked upload mutated item", n, e)
 	}
 	// An editor in a different workspace cannot discover or be blocked by
@@ -112,14 +113,14 @@ func TestDuplicatePolicyPublishedVisibilityAndWebDAV(t *testing.T) {
 	}
 	// WebDAV creation uses the same transactional policy and rolls back the
 	// newly inserted metadata when the bytes duplicate a visible file.
-	before, err := s.Client.Resource.Query().Count(testContext)
+	before, err := countResources(s, resources.Filter{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err = s.PutFile(testContext, "bob", lib.ID, []string{"copy.txt"}, PutFile{Blob: file("b")}); !errors.As(err, &duplicate) {
 		t.Fatal("WebDAV bypassed blocking", err)
 	}
-	if n, err := s.Client.Resource.Query().Count(testContext); err != nil || n != before {
+	if n, err := countResources(s, resources.Filter{}); err != nil || n != before {
 		t.Fatal("WebDAV duplicate left metadata", n, err)
 	}
 	if err = s.Delete(testContext, "alice", item.ID, 4, DeleteOptions{}); err != nil {

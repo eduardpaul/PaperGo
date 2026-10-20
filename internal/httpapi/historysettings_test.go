@@ -2,7 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
-	"papergo/ent"
+	"papergo/internal/dal/resources"
 	"papergo/internal/dms"
 	"strconv"
 	"testing"
@@ -15,7 +15,7 @@ func TestCollectionHistorySettingsAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	res := request(h, "POST", "/v1/resources/"+w.ID+"/children", `{"kind":"list","name":"Records","versioning":"major","max_versions":1}`, testToken, "", "application/json")
-	var c ent.Resource
+	var c resources.Resource
 	if res.Code != 201 || json.Unmarshal(res.Body.Bytes(), &c) != nil || c.MaxVersions != 1 || string(c.Versioning) != "major" {
 		t.Fatal(res.Code, res.Body.String())
 	}

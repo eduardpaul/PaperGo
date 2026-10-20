@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/dbos-inc/dbos-transact-golang/dbos"
-	"papergo/ent/workflowrun"
+	runstore "papergo/internal/dal/runs"
 	"papergo/internal/dms"
 	"papergo/internal/tasks"
 	"papergo/internal/workflow"
@@ -74,7 +74,7 @@ func (r *Runner) SignalWaits(ctx context.Context) error {
 			if err = dbos.Send(r.ctx, w.RunID, w.ID, waitTopic(w.Kind, w.Key), dbos.WithSendTransaction(t.SQLTx()), dbos.WithIdempotencyKey(w.ID)); err != nil {
 				return err
 			}
-			if err = t.Client.WorkflowWait.UpdateOneID(w.ID).SetNotifiedAt(time.Now().UTC()).Exec(ctx); err != nil {
+			if err = t.DAL.Waits().MarkNotified(ctx, w.ID, time.Now().UTC()); err != nil {
 				return err
 			}
 		}
@@ -95,8 +95,7 @@ func (r *Runner) cancelRun(ctx context.Context, id string) error {
 		if err := t.DiscardRunStagedFiles(ctx, id); err != nil {
 			return err
 		}
-		_, err := t.Client.WorkflowRun.Update().Where(workflowrun.IDEQ(id)).SetLiveStatus("cancelled").Save(ctx)
-		return err
+		return t.DAL.Runs().Observe(ctx, id, runstore.StatusCancelled, time.Now().UTC(), false)
 	}); err != nil {
 		return err
 	}

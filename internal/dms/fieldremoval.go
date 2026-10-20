@@ -2,10 +2,8 @@ package dms
 
 import (
 	"context"
-	"papergo/ent"
-	"papergo/ent/businesskey"
-	"papergo/ent/fielddefinition"
-	"papergo/ent/fieldvalue"
+	"papergo/internal/dal/catalog"
+	"papergo/internal/dal/dberr"
 	"slices"
 )
 
@@ -18,14 +16,14 @@ func (s *Service) DeleteField(ctx context.Context, subject, collection, id strin
 		if c.Version != version {
 			return ErrPreconditionFailed
 		}
-		d, err := t.Client.FieldDefinition.Get(ctx, id)
-		if ent.IsNotFound(err) {
+		d, err := t.DAL.Catalog().Field(ctx, id)
+		if dberr.IsNotFound(err) {
 			return ErrNotFound
 		}
 		if err != nil {
 			return err
 		}
-		if found, e := t.Client.FieldDefinition.Query().Where(collectionFieldPredicate(c.ID), fielddefinition.IDEQ(d.ID)).Exist(ctx); e != nil {
+		if found, e := t.DAL.Catalog().FieldExists(ctx, catalog.FieldFilter{CollectionID: c.ID, IDs: []string{d.ID}}); e != nil {
 			return e
 		} else if !found {
 			return ErrNotFound
@@ -38,8 +36,8 @@ func (s *Service) DeleteCatalogField(ctx context.Context, subject, id string, ve
 		if e := t.RequireScope(ctx, subject, "contentType.manage"); e != nil {
 			return e
 		}
-		d, e := t.Client.FieldDefinition.Get(ctx, id)
-		if ent.IsNotFound(e) {
+		d, e := t.DAL.Catalog().Field(ctx, id)
+		if dberr.IsNotFound(e) {
 			return ErrNotFound
 		}
 		if e != nil {
@@ -51,8 +49,8 @@ func (s *Service) DeleteCatalogField(ctx context.Context, subject, id string, ve
 		return t.deleteCatalogField(ctx, subject, d)
 	})
 }
-func (s *Service) deleteCatalogField(ctx context.Context, subject string, d *ent.FieldDefinition) error {
-	types, err := s.Client.ContentType.Query().Where(fieldTypePredicate(d.ID)).All(ctx)
+func (s *Service) deleteCatalogField(ctx context.Context, subject string, d *catalog.FieldDefinition) error {
+	types, err := s.DAL.Catalog().ContentTypes(ctx, catalog.ContentTypeFilter{FieldID: d.ID})
 	if err != nil {
 		return err
 	}
@@ -81,19 +79,19 @@ func (s *Service) deleteCatalogField(ctx context.Context, subject string, d *ent
 	for _, typ := range types {
 		if slices.Contains(typ.FieldIds, d.ID) {
 			ids := slices.DeleteFunc(slices.Clone(typ.FieldIds), func(id string) bool { return id == d.ID })
-			if err := s.Client.ContentType.UpdateOne(typ).SetFieldIds(ids).AddVersion(1).Exec(ctx); err != nil {
+			if _, err := s.reviseContentType(ctx, typ, typ.Name, ids, typ.Rules); err != nil {
 				return err
 			}
 		}
 	}
-	if err := s.Client.FieldDefinition.DeleteOne(d).Exec(ctx); err != nil {
+	if err := s.DAL.Catalog().DeleteField(ctx, d.ID); err != nil {
 		return err
 	}
 	for _, c := range collections {
-		if _, e := s.Client.FieldValue.Delete().Where(fieldvalue.ContainerIDEQ(c.ID), fieldvalue.FieldKeyEQ(d.Key)).Exec(ctx); e != nil {
+		if e := s.DAL.Surfaces().RemoveField(ctx, c.ID, d.Key); e != nil {
 			return e
 		}
-		if _, e := s.Client.BusinessKey.Delete().Where(businesskey.ContainerIDEQ(c.ID), businesskey.FieldKeyEQ(d.Key)).Exec(ctx); e != nil {
+		if e := s.DAL.Catalog().ReleaseKeys(ctx, catalog.KeyFilter{CollectionID: c.ID, FieldKey: d.Key}); e != nil {
 			return e
 		}
 	}

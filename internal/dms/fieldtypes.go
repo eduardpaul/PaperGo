@@ -7,41 +7,33 @@ import (
 	"math/big"
 	"net/mail"
 	"net/url"
-	"papergo/ent"
-	"papergo/ent/fielddefinition"
+	"papergo/internal/dal/catalog"
+	"papergo/internal/dal/dberr"
 	"papergo/internal/model"
-	"sort"
 	"strings"
 	"time"
 	"unicode/utf16"
 	"unicode/utf8"
 )
 
-type fieldNormalizer func(*ent.FieldDefinition, any) (any, error)
+type fieldNormalizer func(*catalog.FieldDefinition, any) (any, error)
 
 // The registry owns canonical payload representations; query encoders use those
 // same representations. It is immutable after process initialization.
-var fieldTypes = map[string]fieldNormalizer{
-	"text": normalizeString, "note": normalizeString, "choice": normalizeChoice,
-	"email": normalizeEmail, "url": normalizeURL, "date": normalizeDate,
-	"datetime": normalizeDateTime, "person": normalizePersonRef, "lookup": normalizeIdentifier, "term": normalizeTermRef, "keywords": normalizeTermRef,
-	"integer": normalizeInteger, "decimal": normalizeDecimal, "number": normalizeNumber, "currency": normalizeNumber, "boolean": normalizeBoolean,
+var fieldTypes = map[catalog.FieldType]fieldNormalizer{
+	catalog.FieldText: normalizeString, catalog.FieldNote: normalizeString, catalog.FieldChoice: normalizeChoice,
+	catalog.FieldEmail: normalizeEmail, catalog.FieldURL: normalizeURL, catalog.FieldDate: normalizeDate,
+	catalog.FieldDatetime: normalizeDateTime, catalog.FieldPerson: normalizePersonRef, catalog.FieldLookup: normalizeIdentifier,
+	catalog.FieldTerm: normalizeTermRef, catalog.FieldKeywords: normalizeTermRef, catalog.FieldInteger: normalizeInteger,
+	catalog.FieldDecimal: normalizeDecimal, catalog.FieldNumber: normalizeNumber, catalog.FieldCurrency: normalizeNumber, catalog.FieldBoolean: normalizeBoolean,
 }
 
-func FieldTypes() []string {
-	out := make([]string, 0, len(fieldTypes))
-	for name := range fieldTypes {
-		out = append(out, name)
-	}
-	sort.Strings(out)
-	return out
-}
-func normalizeString(d *ent.FieldDefinition, v any) (any, error) {
+func normalizeString(d *catalog.FieldDefinition, v any) (any, error) {
 	x, ok := v.(string)
 	if !ok || !utf8.ValidString(x) {
 		return nil, invalid("expected text")
 	}
-	limit, _ := stringLimits(string(d.Type))
+	limit, _ := stringLimits(d.Type)
 	if d.Options.MaxLength != nil {
 		limit = *d.Options.MaxLength
 	}
@@ -59,19 +51,19 @@ func utf16Length(text string) int {
 	return length
 }
 
-func stringLimits(typ string) (defaultLimit, ceiling int) {
+func stringLimits(typ catalog.FieldType) (defaultLimit, ceiling int) {
 	switch typ {
-	case "text", "email":
+	case catalog.FieldText, catalog.FieldEmail:
 		return 255, 4000
-	case "url":
+	case catalog.FieldURL:
 		return 2048, 4000
-	case "note":
+	case catalog.FieldNote:
 		return 100000, 1000000
 	default:
 		return 0, 0
 	}
 }
-func normalizeChoice(d *ent.FieldDefinition, v any) (any, error) {
+func normalizeChoice(d *catalog.FieldDefinition, v any) (any, error) {
 	x, e := normalizeString(d, v)
 	if e != nil {
 		return nil, e
@@ -83,7 +75,7 @@ func normalizeChoice(d *ent.FieldDefinition, v any) (any, error) {
 	}
 	return nil, invalid("unknown choice")
 }
-func normalizeEmail(d *ent.FieldDefinition, v any) (any, error) {
+func normalizeEmail(d *catalog.FieldDefinition, v any) (any, error) {
 	x, e := normalizeString(d, v)
 	if e != nil {
 		return nil, e
@@ -94,7 +86,7 @@ func normalizeEmail(d *ent.FieldDefinition, v any) (any, error) {
 	}
 	return x, nil
 }
-func normalizeURL(d *ent.FieldDefinition, v any) (any, error) {
+func normalizeURL(d *catalog.FieldDefinition, v any) (any, error) {
 	x, e := normalizeString(d, v)
 	if e != nil {
 		return nil, e
@@ -105,7 +97,7 @@ func normalizeURL(d *ent.FieldDefinition, v any) (any, error) {
 	}
 	return x, nil
 }
-func normalizeDate(d *ent.FieldDefinition, v any) (any, error) {
+func normalizeDate(d *catalog.FieldDefinition, v any) (any, error) {
 	x, ok := v.(string)
 	if !ok {
 		return nil, invalid("expected date")
@@ -116,7 +108,7 @@ func normalizeDate(d *ent.FieldDefinition, v any) (any, error) {
 	}
 	return t.Format("2006-01-02"), nil
 }
-func normalizeDateTime(d *ent.FieldDefinition, v any) (any, error) {
+func normalizeDateTime(d *catalog.FieldDefinition, v any) (any, error) {
 	x, ok := v.(string)
 	if !ok {
 		return nil, invalid("expected datetime")
@@ -127,7 +119,7 @@ func normalizeDateTime(d *ent.FieldDefinition, v any) (any, error) {
 	}
 	return t.UTC().Format(time.RFC3339Nano), nil
 }
-func normalizeIdentifier(d *ent.FieldDefinition, v any) (any, error) {
+func normalizeIdentifier(d *catalog.FieldDefinition, v any) (any, error) {
 	x, ok := v.(string)
 	if !ok || strings.TrimSpace(x) != x || x == "" || len(x) > 36 {
 		return nil, invalid("expected reference ID")
@@ -137,7 +129,7 @@ func normalizeIdentifier(d *ent.FieldDefinition, v any) (any, error) {
 
 // normalizeTermRef accepts a term ID or a term label; normalizeItemValues
 // resolves labels to IDs.
-func normalizeTermRef(d *ent.FieldDefinition, v any) (any, error) {
+func normalizeTermRef(d *catalog.FieldDefinition, v any) (any, error) {
 	x, ok := v.(string)
 	if ok {
 		x = strings.TrimSpace(x)
@@ -147,29 +139,29 @@ func normalizeTermRef(d *ent.FieldDefinition, v any) (any, error) {
 	}
 	return x, nil
 }
-func normalizeInteger(d *ent.FieldDefinition, v any) (any, error) {
+func normalizeInteger(d *catalog.FieldDefinition, v any) (any, error) {
 	i, e := integer(v)
 	if e != nil {
 		return nil, e
 	}
 	return json.Number(new(big.Int).SetInt64(i).String()), nil
 }
-func normalizeDecimal(d *ent.FieldDefinition, v any) (any, error) {
+func normalizeDecimal(d *catalog.FieldDefinition, v any) (any, error) {
 	c, _, e := decimal(v, d.Scale)
 	return c, e
 }
-func normalizeNumber(d *ent.FieldDefinition, v any) (any, error) {
+func normalizeNumber(d *catalog.FieldDefinition, v any) (any, error) {
 	return number(v)
 }
-func normalizeBoolean(d *ent.FieldDefinition, v any) (any, error) {
+func normalizeBoolean(d *catalog.FieldDefinition, v any) (any, error) {
 	x, ok := v.(bool)
 	if !ok {
 		return nil, invalid("expected boolean")
 	}
 	return x, nil
 }
-func scalarValue(d *ent.FieldDefinition, v any) (any, error) {
-	fn := fieldTypes[string(d.Type)]
+func scalarValue(d *catalog.FieldDefinition, v any) (any, error) {
+	fn := fieldTypes[d.Type]
 	if fn == nil {
 		return nil, invalid("unknown field type")
 	}
@@ -192,8 +184,8 @@ func scalarValue(d *ent.FieldDefinition, v any) (any, error) {
 	}
 	return out, nil
 }
-func compareNumeric(d *ent.FieldDefinition, value any, bound string) (int, error) {
-	if d.Type == "number" || d.Type == "currency" {
+func compareNumeric(d *catalog.FieldDefinition, value any, bound string) (int, error) {
+	if d.Type == catalog.FieldNumber || d.Type == catalog.FieldCurrency {
 		a, e := number(value)
 		if e != nil {
 			return 0, e
@@ -233,7 +225,7 @@ func decodeValue(raw json.RawMessage) (any, error) {
 	e := d.Decode(&v)
 	return v, e
 }
-func normalizeField(d *ent.FieldDefinition, v any) (any, error) {
+func normalizeField(d *catalog.FieldDefinition, v any) (any, error) {
 	if v == nil {
 		return nil, nil
 	}
@@ -274,21 +266,21 @@ func emptyValue(v any) bool {
 	}
 	return false
 }
-func validateFieldDefinition(d *ent.FieldDefinition) error {
+func validateFieldDefinition(d *catalog.FieldDefinition) error {
 	if !fieldKey.MatchString(d.Key) {
 		return invalid("invalid field key")
 	}
 	if e := validateName(d.Label); e != nil {
 		return e
 	}
-	typ := string(d.Type)
+	typ := d.Type
 	if fieldTypes[typ] == nil {
 		return invalid("invalid field type")
 	}
-	if d.Scale < 0 || d.Scale > 9 || (typ != "decimal" && d.Scale != 0) {
+	if d.Scale < 0 || d.Scale > 9 || (typ != catalog.FieldDecimal && d.Scale != 0) {
 		return invalid("scale belongs to decimal fields and must be 0..9")
 	}
-	if typ == "choice" {
+	if typ == catalog.FieldChoice {
 		if len(d.Choices) == 0 {
 			return invalid("choice field requires choices")
 		}
@@ -314,7 +306,7 @@ func validateFieldDefinition(d *ent.FieldDefinition) error {
 	default:
 		return invalid("search_weight must be none, normal or high")
 	}
-	if typ == "currency" {
+	if typ == catalog.FieldCurrency {
 		if !model.ValidCurrencyCode(o.CurrencyCode) {
 			return invalid("currency_code requires three uppercase letters")
 		}
@@ -327,7 +319,7 @@ func validateFieldDefinition(d *ent.FieldDefinition) error {
 			return invalid("max_length exceeds the field type's UTF-16 length range")
 		}
 	}
-	if o.Multiple && !(typ == "choice" || typ == "term" || typ == "keywords" || typ == "lookup" || typ == "person") {
+	if o.Multiple && !typ.Multivalued() {
 		return invalid("multiple requires choice, person, lookup, term or keywords")
 	}
 	if (typ == "lookup") != (o.LookupContainerID != "") || (typ == "term") != (o.TermSetID != "") {
@@ -383,17 +375,17 @@ func validateFieldDefinition(d *ent.FieldDefinition) error {
 	}
 	return nil
 }
-func fieldFromInput(in CreateField) *ent.FieldDefinition {
-	return &ent.FieldDefinition{Key: in.Key, Label: in.Label, Type: fielddefinition.Type(in.Type), Required: in.Required, Choices: in.Choices, Indexed: in.Indexed, Scale: in.Scale, Options: in.Options}
+func fieldFromInput(in CreateField) *catalog.FieldDefinition {
+	return &catalog.FieldDefinition{Key: in.Key, Label: in.Label, Type: in.Type, Required: in.Required, Choices: in.Choices, Indexed: in.Indexed, Scale: in.Scale, Options: in.Options}
 }
 func optionsIdentityEqual(a, b model.FieldOptions) bool {
 	return a.Multiple == b.Multiple && a.LookupContainerID == b.LookupContainerID && a.TermSetID == b.TermSetID
 }
 
-func (s *Service) validateReferenceScopes(ctx context.Context, subject string, d *ent.FieldDefinition) error {
-	if d.Type == "lookup" {
-		r, e := s.Client.Resource.Get(ctx, d.Options.LookupContainerID)
-		if ent.IsNotFound(e) {
+func (s *Service) validateReferenceScopes(ctx context.Context, subject string, d *catalog.FieldDefinition) error {
+	if d.Type == catalog.FieldLookup {
+		r, e := s.DAL.Resources().Resource(ctx, d.Options.LookupContainerID)
+		if dberr.IsNotFound(e) {
 			return invalid("unknown lookup collection")
 		}
 		if e != nil {
@@ -403,13 +395,13 @@ func (s *Service) validateReferenceScopes(ctx context.Context, subject string, d
 			return invalid("lookup must target a live collection")
 		}
 	}
-	if d.Type == "term" {
-		_, e := s.Client.TermSet.Get(ctx, d.Options.TermSetID)
-		if ent.IsNotFound(e) {
-			return invalid("unknown term set")
-		}
+	if d.Type == catalog.FieldTerm {
+		exists, e := s.DAL.Taxonomy().SetExists(ctx, d.Options.TermSetID)
 		if e != nil {
 			return e
+		}
+		if !exists {
+			return invalid("unknown term set")
 		}
 		if e = s.requireTaxonomy(ctx, subject, "read"); e != nil {
 			return e
@@ -417,12 +409,12 @@ func (s *Service) validateReferenceScopes(ctx context.Context, subject string, d
 	}
 	return nil
 }
-func (s *Service) normalizeItemValues(ctx context.Context, subject string, defs []*ent.FieldDefinition, values, previous map[string]any, applyDefaults bool) error {
+func (s *Service) normalizeItemValues(ctx context.Context, subject string, defs []*catalog.FieldDefinition, values, previous map[string]any, applyDefaults bool) error {
 	if e := normalizeRevisionValues(defs, values, previous, applyDefaults); e != nil {
 		return e
 	}
 	for _, d := range defs {
-		if d.Type != "term" && d.Type != "keywords" && d.Type != "lookup" && d.Type != "person" {
+		if d.Type != catalog.FieldTerm && d.Type != catalog.FieldKeywords && d.Type != catalog.FieldLookup && d.Type != catalog.FieldPerson {
 			continue
 		}
 		if values[d.Key] == nil {
@@ -446,13 +438,13 @@ func (s *Service) normalizeItemValues(ctx context.Context, subject string, defs 
 				}
 			}
 		}
-		if d.Type == "person" {
+		if d.Type == catalog.FieldPerson {
 			if e := s.validatePersonValues(ctx, current, old); e != nil {
 				return e
 			}
 			continue
 		}
-		if d.Type != "lookup" {
+		if d.Type != catalog.FieldLookup {
 			resolved, e := s.resolveTermValues(ctx, subject, d, current, old)
 			if e != nil {
 				return e
@@ -470,8 +462,8 @@ func (s *Service) normalizeItemValues(ctx context.Context, subject string, defs 
 				continue
 			}
 			// Reference validation does not grant read access to the target.
-			r, e := s.Client.Resource.Get(ctx, id)
-			if ent.IsNotFound(e) {
+			r, e := s.DAL.Resources().Resource(ctx, id)
+			if dberr.IsNotFound(e) {
 				return invalid("unknown lookup item")
 			}
 			if e != nil {

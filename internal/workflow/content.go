@@ -217,7 +217,7 @@ func runSearchChunk(e *env, in map[string]any) (outcome, error) {
 	case textID != "" && job.Text != "":
 		return outcome{}, errors.New("give text_id or text, not both")
 	case textID != "":
-		text, err := e.t.BlobText(e.ctx, textID)
+		text, err := e.t.DAL.Blobs().Text(e.ctx, textID)
 		if err != nil {
 			return outcome{}, err
 		}

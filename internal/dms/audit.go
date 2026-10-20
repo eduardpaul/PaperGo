@@ -5,10 +5,24 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"github.com/google/uuid"
-	"papergo/ent"
-	"papergo/ent/auditevent"
+	auditstore "papergo/internal/dal/audit"
 	"time"
 )
+
+// AuditEvent is the API representation of an immutable audit record.
+type AuditEvent struct {
+	ID          string         `json:"id,omitempty"`
+	CreatedAt   time.Time      `json:"created_at,omitempty"`
+	WorkspaceID string         `json:"workspace_id,omitempty"`
+	ResourceID  string         `json:"resource_id,omitempty"`
+	Subject     string         `json:"subject,omitempty"`
+	Action      string         `json:"action,omitempty"`
+	EntityType  string         `json:"entity_type,omitempty"`
+	EntityID    string         `json:"entity_id,omitempty"`
+	Properties  []string       `json:"properties,omitempty"`
+	TraceID     string         `json:"trace_id,omitempty"`
+	Details     map[string]any `json:"details,omitempty"`
+}
 
 type AuditQuery struct {
 	Actor, EntityType, EntityID, WorkspaceID, After string
@@ -20,51 +34,58 @@ type auditCursor struct {
 	ID string
 }
 
-func (s *Service) OrganizationAudit(ctx context.Context, subject string, in AuditQuery) (Page[*ent.AuditEvent], error) {
-	return read(ctx, s, func(t *Service) (Page[*ent.AuditEvent], error) {
+func (s *Service) OrganizationAudit(ctx context.Context, subject string, in AuditQuery) (Page[*AuditEvent], error) {
+	return read(ctx, s, func(t *Service) (Page[*AuditEvent], error) {
 		if err := t.RequireScope(ctx, subject, "audit.read"); err != nil {
-			return Page[*ent.AuditEvent]{}, err
+			return Page[*AuditEvent]{}, err
 		}
 		if in.From != nil && in.To != nil && !in.From.Before(*in.To) {
-			return Page[*ent.AuditEvent]{}, invalid("from must precede to")
+			return Page[*AuditEvent]{}, invalid("from must precede to")
 		}
-		q := t.Client.AuditEvent.Query()
-		if in.Actor != "" {
-			q.Where(auditevent.SubjectEQ(in.Actor))
-		}
-		if in.EntityType != "" {
-			q.Where(auditevent.EntityTypeEQ(in.EntityType))
-		}
-		if in.EntityID != "" {
-			q.Where(auditevent.EntityIDEQ(in.EntityID))
-		}
-		if in.WorkspaceID != "" {
-			q.Where(auditevent.WorkspaceIDEQ(in.WorkspaceID))
-		}
-		if in.From != nil {
-			q.Where(auditevent.CreatedAtGTE(in.From.UTC()))
-		}
-		if in.To != nil {
-			q.Where(auditevent.CreatedAtLT(in.To.UTC()))
-		}
+		filter := auditstore.Filter{Actor: in.Actor, EntityType: in.EntityType, EntityID: in.EntityID, WorkspaceID: in.WorkspaceID, From: in.From, To: in.To, Limit: pageSize(in.Limit) + 1}
 		if in.After != "" {
 			var cursor auditCursor
 			raw, err := base64.RawURLEncoding.DecodeString(in.After)
 			if err != nil || len(raw) > 256 || json.Unmarshal(raw, &cursor) != nil || cursor.At.IsZero() {
-				return Page[*ent.AuditEvent]{}, invalid("invalid audit continuation")
+				return Page[*AuditEvent]{}, invalid("invalid audit continuation")
 			}
 			if _, err = uuid.Parse(cursor.ID); err != nil {
-				return Page[*ent.AuditEvent]{}, invalid("invalid audit continuation")
+				return Page[*AuditEvent]{}, invalid("invalid audit continuation")
 			}
-			q.Where(auditevent.Or(auditevent.CreatedAtLT(cursor.At.UTC()), auditevent.And(auditevent.CreatedAtEQ(cursor.At.UTC()), auditevent.IDLT(cursor.ID))))
+			filter.AfterAt, filter.AfterID = &cursor.At, cursor.ID
 		}
-		rows, err := q.Order(ent.Desc(auditevent.FieldCreatedAt), ent.Desc(auditevent.FieldID)).Limit(pageSize(in.Limit) + 1).All(ctx)
+		records, err := t.DAL.Audit().List(ctx, filter)
 		if err != nil {
-			return Page[*ent.AuditEvent]{}, err
+			return Page[*AuditEvent]{}, err
 		}
-		return entityPage(rows, in.Limit, func(v *ent.AuditEvent) string {
+		rows := make([]*AuditEvent, 0, len(records))
+		for _, record := range records {
+			event := &AuditEvent{
+				ID: record.ID, CreatedAt: record.CreatedAt, WorkspaceID: record.WorkspaceID, ResourceID: record.ResourceID,
+				Subject: record.Subject, Action: record.Action, EntityType: record.EntityType, EntityID: record.EntityID, TraceID: record.TraceID,
+				Properties: record.Properties, Details: record.Details,
+			}
+			rows = append(rows, event)
+		}
+		return entityPage(rows, in.Limit, func(v *AuditEvent) string {
 			raw, _ := json.Marshal(auditCursor{At: v.CreatedAt.UTC(), ID: v.ID})
 			return base64.RawURLEncoding.EncodeToString(raw)
 		}), nil
 	})
+}
+
+// AuditTarget identifies the resource containing an already authorized action.
+type AuditTarget struct {
+	WorkspaceID, ResourceID, Kind string
+}
+
+// RecordEntity records an action in the current transaction. Callers authorize
+// the action's scope before recording it; an audit write requires no extra grant.
+func (s *Service) RecordEntity(ctx context.Context, subject, action string, target AuditTarget, details map[string]any) error {
+	typ, id := auditEntity(action, target.Kind, target.ResourceID, details)
+	_, err := s.DAL.Audit().Append(ctx, auditstore.Event{
+		WorkspaceID: target.WorkspaceID, ResourceID: target.ResourceID, Subject: subject, Action: action,
+		EntityType: typ, EntityID: id, TraceID: s.traceID, Properties: s.changedProperties(id, action), Details: details,
+	})
+	return err
 }

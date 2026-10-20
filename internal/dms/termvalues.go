@@ -2,15 +2,11 @@ package dms
 
 import (
 	"context"
-	"encoding/json"
-	"papergo/ent"
-	"papergo/ent/fielddefinition"
-	"papergo/ent/itemrevision"
-	"papergo/ent/term"
-	"papergo/ent/termset"
-	"strings"
 
-	entsql "entgo.io/ent/dialect/sql"
+	"papergo/internal/dal/catalog"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/revisions"
+	"papergo/internal/dal/taxonomy"
 )
 
 // Term and keywords fields store term IDs. Writers may give a term's ID or
@@ -27,14 +23,12 @@ import (
 // An ID of a merged term stands for the term it was merged into. Deprecated
 // terms are rejected unless the value was already there.
 
-func (s *Service) resolveTermValues(ctx context.Context, subject string, d *ent.FieldDefinition, values []any, old map[string]bool) ([]any, error) {
-	var set *ent.TermSet
-	var e error
-	if d.Type == "keywords" {
-		set, e = s.keywordsSet(ctx)
-	} else {
-		set, e = s.Client.TermSet.Get(ctx, d.Options.TermSetID)
+func (s *Service) resolveTermValues(ctx context.Context, subject string, d *catalog.FieldDefinition, values []any, old map[string]bool) ([]any, error) {
+	setID := taxonomy.KeywordsSetID
+	if d.Type != catalog.FieldKeywords {
+		setID = d.Options.TermSetID
 	}
+	set, e := s.DAL.Taxonomy().Set(ctx, setID)
 	if e != nil {
 		return nil, e
 	}
@@ -53,21 +47,11 @@ func (s *Service) resolveTermValues(ctx context.Context, subject string, d *ent.
 	}
 	return out, nil
 }
-func (s *Service) resolveTermID(ctx context.Context, subject string, d *ent.FieldDefinition, set *ent.TermSet, raw string, kept bool) (string, error) {
-	t, e := s.Client.Term.Get(ctx, raw)
-	if e != nil && !ent.IsNotFound(e) {
-		return "", e
-	}
-	if t != nil {
-		for hops := 0; t.MergedIntoID != nil && hops < MaxTaxonomyDepth; hops++ {
-			if t, e = s.Client.Term.Get(ctx, *t.MergedIntoID); e != nil {
-				return "", e
-			}
-		}
-		in, e := s.termInScope(ctx, d, set, t)
-		if e != nil {
-			return "", e
-		}
+func (s *Service) resolveTermID(ctx context.Context, subject string, d *catalog.FieldDefinition, set taxonomy.Set, raw string, kept bool) (string, error) {
+	terms := s.DAL.Taxonomy()
+	t, e := terms.Canonical(ctx, raw)
+	if e == nil {
+		in := t.SetID == set.ID || d.Type == catalog.FieldKeywords && t.AvailableAsKeyword
 		if in && !t.Deprecated {
 			return t.ID, nil
 		}
@@ -79,66 +63,43 @@ func (s *Service) resolveTermID(ctx context.Context, subject string, d *ent.Fiel
 		}
 		return "", invalid("term " + raw + " of " + d.Key + " is deprecated")
 	}
-	if d.Type == "keywords" {
-		kw, _, e := s.keyword(ctx, raw)
-		if e != nil || kw != nil {
-			return idOf(kw), e
+	if !dberr.IsNotFound(e) {
+		return "", e
+	}
+	if d.Type == catalog.FieldKeywords {
+		kw, _, found, e := terms.Keyword(ctx, raw)
+		if e != nil || found {
+			return kw.ID, e
 		}
 	} else {
-		key := strings.ToLower(raw)
-		for _, match := range []string{
-			"normalized_name=?",
-			"EXISTS(SELECT 1 FROM json_each(labels) WHERE unicode_lower(value)=?)",
-			"EXISTS(SELECT 1 FROM json_each(synonyms) WHERE unicode_lower(value)=?)",
-		} {
-			found, e := s.Client.Term.Query().Where(term.TermSetIDEQ(set.ID), term.DeprecatedEQ(false), func(sel *entsql.Selector) {
-				sel.Where(entsql.ExprP(match, key))
-			}).Limit(2).IDs(ctx)
-			if e != nil {
-				return "", e
-			}
-			if len(found) > 1 {
-				return "", invalid("label " + raw + " of " + d.Key + " matches several terms; give the term ID")
-			}
-			if len(found) == 1 {
-				return found[0], nil
-			}
+		found, e := terms.Lookup(ctx, set.ID, raw)
+		if e != nil {
+			return "", e
 		}
-		if !set.IsOpen {
+		if len(found) > 1 {
+			return "", invalid("label " + raw + " of " + d.Key + " matches several terms; give the term ID")
+		}
+		if len(found) == 1 {
+			return found[0].ID, nil
+		}
+		if !set.Open {
 			return "", invalid("label " + raw + " of " + d.Key + " is not a term of its closed term set")
 		}
 	}
 	if e := s.requireTaxonomy(ctx, subject, "read"); e != nil {
 		return "", e
 	}
-	created, e := s.insertTerm(ctx, set, nil, TermInput{Name: raw, Labels: map[string]string{}, Synonyms: []string{}})
+	created, e := s.insertTerm(ctx, set.ID, TermInput{Name: raw, Labels: map[string]string{}, Synonyms: []string{}})
 	if e != nil {
 		return "", e
 	}
 	return created.ID, nil
 }
-func idOf(t *ent.Term) string {
-	if t == nil {
-		return ""
-	}
-	return t.ID
-}
-
-// termInScope reports whether t may be a value of d.
-func (s *Service) termInScope(ctx context.Context, d *ent.FieldDefinition, set *ent.TermSet, t *ent.Term) (bool, error) {
-	if t.TermSetID == set.ID {
-		return true, nil
-	}
-	if d.Type != "keywords" || !t.AvailableAsKeyword {
-		return false, nil
-	}
-	return s.Client.TermSet.Query().Where(termset.IDEQ(t.TermSetID)).Exist(ctx)
-}
 
 // ItemTerms returns the term IDs that values hold in the term and keywords
 // fields of a collection.
 func (s *Service) ItemTerms(ctx context.Context, collectionID string, values map[string]any) ([]string, error) {
-	defs, e := s.Client.FieldDefinition.Query().Where(collectionFieldPredicate(collectionID), fielddefinition.TypeIn("term", "keywords")).All(ctx)
+	defs, e := s.DAL.Catalog().Fields(ctx, catalog.FieldFilter{CollectionID: collectionID, Types: []catalog.FieldType{catalog.FieldTerm, catalog.FieldKeywords}})
 	if e != nil {
 		return nil, e
 	}
@@ -160,22 +121,22 @@ func (s *Service) ItemTerms(ctx context.Context, collectionID string, values map
 // RevisionTerms returns the term IDs an item revision holds, and those of
 // the item's revision before it (none for a first revision).
 func (s *Service) RevisionTerms(ctx context.Context, revisionID string) (current, previous []string, err error) {
-	rev, err := s.Client.ItemRevision.Get(ctx, revisionID)
+	rev, err := s.revision(ctx, revisionID)
 	if err != nil {
 		return nil, nil, err
 	}
-	revisions := []*ent.ItemRevision{rev}
+	revs := []*revisions.Revision{rev}
 	if rev.RevisionNumber > 1 {
-		before, err := s.Client.ItemRevision.Query().Where(itemrevision.ItemIDEQ(rev.ItemID), itemrevision.RevisionNumberEQ(rev.RevisionNumber-1)).Only(ctx)
-		if err != nil && !ent.IsNotFound(err) {
+		before, err := s.DAL.Revisions().Numbered(ctx, rev.ItemID, rev.RevisionNumber-1)
+		if err != nil && !dberr.IsNotFound(err) {
 			return nil, nil, err
 		}
-		if before != nil {
-			revisions = append(revisions, before)
+		if err == nil {
+			revs = append(revs, &before)
 		}
 	}
 	out := [2][]string{{}, {}}
-	for i, r := range revisions {
+	for i, r := range revs {
 		values, err := decodeValues(r.Payload)
 		if err != nil {
 			return nil, nil, err
@@ -192,26 +153,5 @@ func (s *Service) RevisionTerms(ctx context.Context, revisionID string) (current
 // descendants, or a term merged into one of those. A merged term in terms
 // stands for the term it was merged into.
 func (s *Service) MatchTerms(ctx context.Context, terms, values []string) (map[string]bool, error) {
-	out := map[string]bool{}
-	if len(terms) == 0 || len(values) == 0 {
-		return out, nil
-	}
-	rootsJSON, _ := json.Marshal(terms)
-	valuesJSON, _ := json.Marshal(values)
-	rows, e := s.Client.QueryContext(ctx, `SELECT DISTINCT j.value FROM json_each(?) j
-JOIN terms r ON r.id=coalesce((SELECT merged_into_id FROM terms WHERE id=j.value),j.value)
-JOIN json_each(?) v JOIN terms t ON t.id=coalesce((SELECT merged_into_id FROM terms WHERE id=v.value),v.value)
-WHERE t.path>=r.path AND t.path<substr(r.path,1,length(r.path)-1)||'0'`, string(rootsJSON), string(valuesJSON))
-	if e != nil {
-		return nil, e
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var id string
-		if e = rows.Scan(&id); e != nil {
-			return nil, e
-		}
-		out[id] = true
-	}
-	return out, rows.Err()
+	return s.DAL.Taxonomy().Match(ctx, terms, values)
 }

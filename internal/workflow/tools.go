@@ -7,12 +7,12 @@ import (
 	"io"
 	"time"
 
-	"papergo/internal/activitystore"
 	"papergo/internal/ai"
+	"papergo/internal/dal/activitystore"
+	"papergo/internal/dal/resultcache"
 	"papergo/internal/decision"
 	"papergo/internal/doctext"
 	"papergo/internal/ocr"
-	"papergo/internal/resultcache"
 	"papergo/internal/search"
 	"papergo/internal/storage"
 )

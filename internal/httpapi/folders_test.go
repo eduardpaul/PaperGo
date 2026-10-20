@@ -3,7 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
-	"papergo/ent"
+	"papergo/internal/dal/resources"
 	"papergo/internal/dms"
 	"testing"
 )
@@ -23,7 +23,7 @@ func TestFolderMetadataAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := request(h, "POST", "/v1/resources/"+c.ID+"/children", `{"kind":"folder","name":"Folder","values":{"notes":"archival"}}`, testToken, "", "application/json")
-	var f ent.Resource
+	var f resources.Resource
 	if r.Code != 201 || json.Unmarshal(r.Body.Bytes(), &f) != nil || f.ContentTypeID == nil || f.Values["notes"] != "archival" {
 		t.Fatal(r.Code, r.Body.String())
 	}
@@ -41,7 +41,7 @@ func TestFolderMetadataAPI(t *testing.T) {
 		t.Fatal(r.Code, r.Body.String())
 	}
 	r = request(h, "PATCH", "/v1/resources/"+f.ID, `{"values":{"notes":null}}`, testToken, `"2"`, "application/json")
-	f = ent.Resource{}
+	f = resources.Resource{}
 	if r.Code != 200 || json.Unmarshal(r.Body.Bytes(), &f) != nil || len(f.Values) != 0 {
 		t.Fatal(r.Code, r.Body.String())
 	}

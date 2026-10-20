@@ -4,18 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"papergo/ent"
-	"papergo/ent/blob"
-	"papergo/ent/fieldvalue"
-	"papergo/ent/itemrevision"
-	"papergo/ent/itemsurface"
-	"papergo/ent/publication"
-	"papergo/ent/resource"
+	"papergo/internal/dal/blobs"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/refs"
+	"papergo/internal/dal/resources"
+	"papergo/internal/dal/revisions"
 	"papergo/internal/storage"
 	"time"
 )
 
-func (s *Service) Publish(ctx context.Context, subject, id string, version int) (out *ent.Publication, err error) {
+func (s *Service) Publish(ctx context.Context, subject, id string, version int) (out *revisions.Publication, err error) {
 	err = s.write(ctx, func(t *Service) error {
 		var e error
 		out, e = t.publish(ctx, subject, id, version)
@@ -25,29 +23,29 @@ func (s *Service) Publish(ctx context.Context, subject, id string, version int) 
 }
 
 // publish applies the transition inside the caller's write transaction.
-func (s *Service) publish(ctx context.Context, subject, id string, version int) (*ent.Publication, error) {
+func (s *Service) publish(ctx context.Context, subject, id string, version int) (*revisions.Publication, error) {
 	r, e := s.authorize(ctx, subject, id, "publish")
 	if e != nil {
 		return nil, e
 	}
-	if r.Kind != resource.KindItem || r.ContainerID == nil || r.HeadRevisionID == nil {
+	if r.Kind != refs.KindItem || r.ContainerID == nil || r.HeadRevisionID == nil {
 		return nil, invalid("only items can be published")
 	}
 	if r.Version != version {
 		return nil, ErrPreconditionFailed
 	}
-	c, e := s.Client.Resource.Get(ctx, *r.ContainerID)
+	c, e := s.DAL.Resources().Resource(ctx, *r.ContainerID)
 	if e != nil {
 		return nil, e
 	}
 	if !c.PublishingEnabled {
 		return nil, invalid("publishing is automatic for this container")
 	}
-	rev, e := s.Client.ItemRevision.Get(ctx, *r.HeadRevisionID)
+	rev, e := s.revision(ctx, *r.HeadRevisionID)
 	if e != nil {
 		return nil, e
 	}
-	if c.Kind == resource.KindLibrary && rev.BlobID == nil {
+	if c.Kind == refs.KindLibrary && rev.BlobID == nil {
 		return nil, invalid("library items need a blob before explicit publishing")
 	}
 	out, e := s.publishRevision(ctx, subject, r, rev, true, nil)
@@ -56,7 +54,7 @@ func (s *Service) publish(ctx context.Context, subject, id string, version int) 
 	}
 	return out, s.audit(ctx, subject, "item.publish", r, map[string]any{"revision_id": rev.ID, "publication_id": out.ID})
 }
-func (s *Service) Unpublish(ctx context.Context, subject, id string, version int) (out *ent.Resource, err error) {
+func (s *Service) Unpublish(ctx context.Context, subject, id string, version int) (out *resources.Resource, err error) {
 	err = s.write(ctx, func(t *Service) error {
 		var e error
 		out, e = t.unpublish(ctx, subject, id, version)
@@ -66,12 +64,12 @@ func (s *Service) Unpublish(ctx context.Context, subject, id string, version int
 }
 
 // unpublish applies the transition inside the caller's write transaction.
-func (s *Service) unpublish(ctx context.Context, subject, id string, version int) (*ent.Resource, error) {
+func (s *Service) unpublish(ctx context.Context, subject, id string, version int) (*resources.Resource, error) {
 	r, e := s.authorize(ctx, subject, id, "publish")
 	if e != nil {
 		return nil, e
 	}
-	if r.Kind != resource.KindItem || r.ContainerID == nil {
+	if r.Kind != refs.KindItem || r.ContainerID == nil {
 		return nil, invalid("only items can be unpublished")
 	}
 	if r.Version != version {
@@ -80,14 +78,14 @@ func (s *Service) unpublish(ctx context.Context, subject, id string, version int
 	if r.PublishedRevisionID == nil {
 		return nil, ErrConflict
 	}
-	c, e := s.Client.Resource.Get(ctx, *r.ContainerID)
+	c, e := s.DAL.Resources().Resource(ctx, *r.ContainerID)
 	if e != nil {
 		return nil, e
 	}
 	if !c.PublishingEnabled {
 		return nil, invalid("enable publishing before unpublishing items")
 	}
-	rev, e := s.Client.ItemRevision.Get(ctx, *r.PublishedRevisionID)
+	rev, e := s.revision(ctx, *r.PublishedRevisionID)
 	if e != nil {
 		return nil, e
 	}
@@ -95,27 +93,20 @@ func (s *Service) unpublish(ctx context.Context, subject, id string, version int
 	if e != nil {
 		return nil, e
 	}
-	if _, e = s.Client.Publication.Create().SetItemID(id).SetRevisionID(rev.ID).SetVersion(version).SetAction(publication.ActionUnpublish).SetPublishedBy(subject).SetSnapshot(raw).Save(ctx); e != nil {
+	if _, e = s.DAL.Revisions().Publish(ctx, revisions.Publication{ItemID: id, RevisionID: &rev.ID, Version: version, Action: revisions.ActionUnpublish, PublishedBy: subject, Snapshot: raw}); e != nil {
 		return nil, e
 	}
-	ids, e := s.Client.ItemSurface.Query().Where(itemsurface.ItemIDEQ(id), itemsurface.SurfaceEQ(itemsurface.SurfacePublished)).IDs(ctx)
+	if e = s.DAL.Surfaces().Remove(ctx, id, refs.SurfacePublished); e != nil {
+		return nil, e
+	}
+	e = s.DAL.Resources().Unpublish(ctx, id, version)
+	if e != nil && !errors.Is(e, dberr.ErrConcurrentUpdate) {
+		return nil, e
+	}
 	if e != nil {
-		return nil, e
-	}
-	if _, e = s.Client.FieldValue.Delete().Where(fieldvalue.SurfaceIDIn(ids...)).Exec(ctx); e != nil {
-		return nil, e
-	}
-	if _, e = s.Client.ItemSurface.Delete().Where(itemsurface.IDIn(ids...)).Exec(ctx); e != nil {
-		return nil, e
-	}
-	n, e := s.Client.Resource.Update().Where(resource.IDEQ(id), resource.VersionEQ(version)).ClearPublishedRevisionID().AddVersion(1).Save(ctx)
-	if e != nil {
-		return nil, e
-	}
-	if n != 1 {
 		return nil, ErrPreconditionFailed
 	}
-	out, e := s.Client.Resource.Get(ctx, id)
+	out, e := s.DAL.Resources().Resource(ctx, id)
 	if e != nil {
 		return nil, e
 	}
@@ -128,32 +119,36 @@ func (s *Service) unpublish(ctx context.Context, subject, id string, version int
 	s.emit(ctx, EventItemUnpublished, subject, out.WorkspaceID, out.ContainerID, out.ID, map[string]any{"revision_id": rev.ID})
 	return out, s.audit(ctx, subject, "item.unpublish", out, map[string]any{"revision_id": rev.ID})
 }
-func (s *Service) Publications(ctx context.Context, subject, id string, after, limit int) (Page[*ent.Publication], error) {
+func (s *Service) Publications(ctx context.Context, subject, id string, after, limit int) (Page[*revisions.Publication], error) {
 	if !s.transaction {
-		return read(ctx, s, func(t *Service) (Page[*ent.Publication], error) {
+		return read(ctx, s, func(t *Service) (Page[*revisions.Publication], error) {
 			return t.Publications(ctx, subject, id, after, limit)
 		})
 	}
 	r, err := s.Get(ctx, subject, id)
 	if err != nil {
-		return Page[*ent.Publication]{}, err
+		return Page[*revisions.Publication]{}, err
 	}
-	q := s.Client.Publication.Query().Where(publication.ItemIDEQ(id), publication.VersionGT(after))
-	draft, err := s.allowedMany(ctx, subject, "read_draft", []*ent.Resource{r})
+	f := revisions.PublicationFilter{ItemID: id, AfterVersion: after, Limit: pageSize(limit) + 1}
+	draft, err := s.allowedMany(ctx, subject, "read_draft", []*resources.Resource{r})
 	if err != nil {
-		return Page[*ent.Publication]{}, err
+		return Page[*revisions.Publication]{}, err
 	}
 	if !draft[id] {
 		if r.PublishedRevisionID == nil {
-			return Page[*ent.Publication]{Data: []*ent.Publication{}}, nil
+			return Page[*revisions.Publication]{Data: []*revisions.Publication{}}, nil
 		}
-		q.Where(publication.RevisionIDEQ(*r.PublishedRevisionID), publication.ActionEQ(publication.ActionPublish))
+		f.RevisionID, f.Action = *r.PublishedRevisionID, revisions.ActionPublish
 	}
-	rows, err := q.Order(ent.Asc(publication.FieldVersion)).Limit(pageSize(limit) + 1).All(ctx)
+	found, err := s.DAL.Revisions().Publications(ctx, f)
 	if err != nil {
-		return Page[*ent.Publication]{}, err
+		return Page[*revisions.Publication]{}, err
 	}
-	return numberedPage(rows, limit, func(v *ent.Publication) int { return v.Version }), nil
+	rows := make([]*revisions.Publication, len(found))
+	for i := range found {
+		rows[i] = &found[i]
+	}
+	return numberedPage(rows, limit, func(v *revisions.Publication) int { return v.Version }), nil
 }
 
 type BlobInput struct {
@@ -169,7 +164,7 @@ type BlobInput struct {
 }
 
 // emitFileChange distinguishes first attachments from replacement and reindex events.
-func (s *Service) emitFileChange(ctx context.Context, actor string, r *ent.Resource, b *ent.Blob, rev *ent.ItemRevision, source string, previousBlobID *string) {
+func (s *Service) emitFileChange(ctx context.Context, actor string, r *resources.Resource, b *blobs.Blob, rev *revisions.Revision, source string, previousBlobID *string) {
 	if source == "" {
 		source = FileUpload
 	}
@@ -197,7 +192,7 @@ func (s *Service) CanUpload(ctx context.Context, subject, id string, version int
 }
 
 // canWriteFile checks that subject may change the file of library item id.
-func (s *Service) canWriteFile(ctx context.Context, subject, id string) (*ent.Resource, error) {
+func (s *Service) canWriteFile(ctx context.Context, subject, id string) (*resources.Resource, error) {
 	if err := s.RequireScope(ctx, subject, "document.write"); err != nil {
 		return nil, err
 	}
@@ -205,14 +200,14 @@ func (s *Service) canWriteFile(ctx context.Context, subject, id string) (*ent.Re
 	if err != nil {
 		return nil, err
 	}
-	if r.Kind != resource.KindItem || r.ContainerID == nil {
+	if r.Kind != refs.KindItem || r.ContainerID == nil {
 		return nil, invalid("blob must belong to a library item")
 	}
-	c, err := s.Client.Resource.Get(ctx, *r.ContainerID)
+	c, err := s.DAL.Resources().Resource(ctx, *r.ContainerID)
 	if err != nil {
 		return nil, err
 	}
-	if c.Kind != resource.KindLibrary {
+	if c.Kind != refs.KindLibrary {
 		return nil, invalid("only library items accept blobs")
 	}
 	return r, nil
@@ -231,26 +226,26 @@ func (s *Service) AttachBlob(ctx context.Context, subject, id string, version in
 }
 
 // attachBlob records a new content revision pinning the blob, inside a write transaction.
-func (s *Service) attachBlob(ctx context.Context, subject, id string, version int, in BlobInput) (*ent.Blob, error) {
+func (s *Service) attachBlob(ctx context.Context, subject, id string, version int, in BlobInput) (*blobs.Blob, error) {
 	return s.writeBlob(ctx, subject, id, version, in, "blob.attach", nil)
 }
 
-func (s *Service) writeBlob(ctx context.Context, subject, id string, version int, in BlobInput, action string, sourceVersion *int) (*ent.Blob, error) {
+func (s *Service) writeBlob(ctx context.Context, subject, id string, version int, in BlobInput, action string, sourceVersion *int) (*blobs.Blob, error) {
 	if e := s.CanUpload(ctx, subject, id, version); e != nil {
 		return nil, e
 	}
-	r, e := s.Client.Resource.Get(ctx, id)
+	r, e := s.DAL.Resources().Resource(ctx, id)
 	if e != nil {
 		return nil, e
 	}
 	if e = s.overlayHead(ctx, r); e != nil {
 		return nil, e
 	}
-	n, e := s.Client.Resource.Update().Where(resource.IDEQ(id), resource.VersionEQ(version)).AddVersion(1).SetUpdatedAt(time.Now().UTC()).Save(ctx)
-	if e != nil {
+	e = s.DAL.Resources().Touch(ctx, id, version, "")
+	if e != nil && !errors.Is(e, dberr.ErrConcurrentUpdate) {
 		return nil, e
 	}
-	if n != 1 {
+	if e != nil {
 		return nil, ErrPreconditionFailed
 	}
 	r.Version++
@@ -260,7 +255,7 @@ func (s *Service) writeBlob(ctx context.Context, subject, id string, version int
 	}
 	var previousBlobID *string
 	if r.HeadRevisionID != nil {
-		previous, err := s.Client.ItemRevision.Get(ctx, *r.HeadRevisionID)
+		previous, err := s.revision(ctx, *r.HeadRevisionID)
 		if err != nil {
 			return nil, err
 		}
@@ -280,29 +275,38 @@ func (s *Service) writeBlob(ctx context.Context, subject, id string, version int
 
 // RestoreBlob creates a new file version from immutable earlier content, keeping
 // the current metadata and applying the collection's publication rules.
-func (s *Service) RestoreBlob(ctx context.Context, subject, id string, number, version int) (out *ent.Blob, err error) {
+func (s *Service) RestoreBlob(ctx context.Context, subject, id string, number, version int) (out *blobs.Blob, err error) {
 	err = s.write(ctx, func(t *Service) error {
 		if e := t.CanUpload(ctx, subject, id, version); e != nil {
 			return e
 		}
-		source, e := t.Client.Blob.Query().Where(blob.ItemIDEQ(id), blob.VersionEQ(number)).Only(ctx)
-		if ent.IsNotFound(e) {
+		source, e := t.DAL.Blobs().ItemVersion(ctx, id, number)
+		if dberr.IsNotFound(e) {
 			return ErrNotFound
 		}
 		if e != nil {
 			return e
 		}
-		if source.Availability == blob.AvailabilityReclaimed {
+		if source.Availability == blobs.AvailabilityReclaimed {
 			return ErrContentUnavailable
 		}
-		out, e = t.writeBlob(ctx, subject, id, version, BlobInput{ObjectKey: source.ObjectKey, Filename: source.Filename, ContentType: source.ContentType, Size: source.Size, SHA256: source.Sha256, Source: FileRestore}, "blob.restore", &number)
+		out, e = t.writeBlob(ctx, subject, id, version, BlobInput{ObjectKey: source.ObjectKey, Filename: source.Filename, ContentType: string(source.ContentType), Size: source.Size, SHA256: source.Sha256, Source: FileRestore}, "blob.restore", &number)
 		return e
 	})
 	return
 }
 
+// blob returns a file version.
+func (s *Service) blob(ctx context.Context, id string) (*blobs.Blob, error) {
+	b, err := s.DAL.Blobs().Blob(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return &b, nil
+}
+
 // createBlob stores the metadata of the item's next blob version.
-func (s *Service) createBlob(ctx context.Context, subject, itemID string, in BlobInput, checkDuplicates bool) (*ent.Blob, error) {
+func (s *Service) createBlob(ctx context.Context, subject, itemID string, in BlobInput, checkDuplicates bool) (*blobs.Blob, error) {
 	if err := s.RequireScope(ctx, subject, "document.write"); err != nil {
 		return nil, err
 	}
@@ -322,27 +326,16 @@ func (s *Service) createBlob(ctx context.Context, subject, itemID string, in Blo
 	}
 	// Physical bytes are shared across the organization; filenames, media types,
 	// language hints and file-version permissions remain specific to each item.
-	stored, err := s.Client.Blob.Query().Where(blob.Sha256EQ(in.SHA256), blob.SizeEQ(in.Size), blob.AvailabilityNEQ(blob.AvailabilityReclaimed)).Order(ent.Asc(blob.FieldID)).First(ctx)
-	if err == nil && stored.ObjectKey != in.ObjectKey {
-		if _, err = s.Client.BlobDeletion.Create().SetObjectKey(in.ObjectKey).Save(ctx); err != nil {
-			return nil, err
-		}
-		in.ObjectKey = stored.ObjectKey
-	} else if err != nil && !ent.IsNotFound(err) {
+	b, err := s.DAL.Blobs().AddBlob(ctx, blobs.Blob{ItemID: itemID, ObjectKey: in.ObjectKey, Filename: in.Filename, ContentType: blobs.MediaType(in.ContentType),
+		Languages: in.Languages, Size: in.Size, Sha256: in.SHA256})
+	if err != nil {
 		return nil, err
 	}
-	version := 1
-	last, err := s.Client.Blob.Query().Where(blob.ItemIDEQ(itemID)).Order(ent.Desc(blob.FieldVersion)).First(ctx)
-	if err == nil {
-		version = last.Version + 1
-	} else if !ent.IsNotFound(err) {
-		return nil, err
-	}
-	return s.Client.Blob.Create().SetItemID(itemID).SetVersion(version).SetObjectKey(in.ObjectKey).SetFilename(in.Filename).SetContentType(in.ContentType).SetLanguages(in.Languages).SetSize(in.Size).SetSha256(in.SHA256).Save(ctx)
+	return &b, nil
 }
-func (s *Service) GetBlob(ctx context.Context, subject, id, blobID string) (*ent.Blob, error) {
+func (s *Service) GetBlob(ctx context.Context, subject, id, blobID string) (*blobs.Blob, error) {
 	if !s.transaction {
-		return read(ctx, s, func(t *Service) (*ent.Blob, error) { return t.GetBlob(ctx, subject, id, blobID) })
+		return read(ctx, s, func(t *Service) (*blobs.Blob, error) { return t.GetBlob(ctx, subject, id, blobID) })
 	}
 	if err := s.RequireScope(ctx, subject, "document.read"); err != nil {
 		return nil, err
@@ -351,10 +344,10 @@ func (s *Service) GetBlob(ctx context.Context, subject, id, blobID string) (*ent
 	if err != nil {
 		return nil, err
 	}
-	if r.Kind != resource.KindItem {
+	if r.Kind != refs.KindItem {
 		return nil, ErrNotFound
 	}
-	draft, err := s.allowedMany(ctx, subject, "read_draft", []*ent.Resource{r})
+	draft, err := s.allowedMany(ctx, subject, "read_draft", []*resources.Resource{r})
 	if err != nil {
 		return nil, err
 	}
@@ -365,7 +358,7 @@ func (s *Service) GetBlob(ctx context.Context, subject, id, blobID string) (*ent
 	if selected == nil {
 		return nil, ErrNotFound
 	}
-	rev, err := s.Client.ItemRevision.Get(ctx, *selected)
+	rev, err := s.revision(ctx, *selected)
 	if err != nil {
 		return nil, err
 	}
@@ -377,20 +370,20 @@ func (s *Service) GetBlob(ctx context.Context, subject, id, blobID string) (*ent
 	} else if !draft[id] && (rev.BlobID == nil || blobID != *rev.BlobID) {
 		return nil, ErrNotFound
 	}
-	b, err := s.Client.Blob.Query().Where(blob.ItemIDEQ(id), blob.IDEQ(blobID)).Only(ctx)
-	if ent.IsNotFound(err) {
+	b, err := s.DAL.Blobs().ItemBlob(ctx, id, blobID)
+	if dberr.IsNotFound(err) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, err
 	}
-	if b.Availability == blob.AvailabilityReclaimed {
+	if b.Availability == blobs.AvailabilityReclaimed {
 		return nil, ErrContentUnavailable
 	}
 	if rev.BlobID != nil && *rev.BlobID == b.ID {
 		b.Filename = rev.Filename
 	}
-	return b, nil
+	return &b, nil
 }
 
 // FileVersion is one retained file of a library item.
@@ -431,22 +424,19 @@ func (s *Service) FileVersions(ctx context.Context, subject, id string, after, l
 	if err != nil {
 		return Page[FileVersion]{}, err
 	}
-	r, err := s.Client.Resource.Get(ctx, id)
+	r, err := s.DAL.Resources().Resource(ctx, id)
 	if err != nil {
 		return Page[FileVersion]{}, err
 	}
-	draft, err := s.allowedMany(ctx, subject, "read_draft", []*ent.Resource{r})
+	draft, err := s.allowedMany(ctx, subject, "read_draft", []*resources.Resource{r})
 	if err != nil {
 		return Page[FileVersion]{}, err
 	}
-	q := s.Client.Blob.Query().Where(blob.ItemIDEQ(id))
+	f := blobs.BlobFilter{ItemID: id, BeforeVersion: after, Order: blobs.NewestFirst, Limit: pageSize(limit) + 1}
 	if !draft[id] {
-		q.Where(blob.IDEQ(current.ID))
+		f.IDs = []string{current.ID}
 	}
-	if after > 0 {
-		q.Where(blob.VersionLT(after))
-	}
-	rows, err := q.Order(ent.Desc(blob.FieldVersion)).Limit(pageSize(limit) + 1).All(ctx)
+	rows, err := s.DAL.Blobs().Blobs(ctx, f)
 	if err != nil {
 		return Page[FileVersion]{}, err
 	}
@@ -455,12 +445,12 @@ func (s *Service) FileVersions(ctx context.Context, subject, id string, after, l
 		ids[i] = b.ID
 	}
 	// The first revision that pinned a file records who uploaded or restored it.
-	revisions, err := s.Client.ItemRevision.Query().Where(itemrevision.ItemIDEQ(id), itemrevision.BlobIDIn(ids...)).Order(ent.Asc(itemrevision.FieldRevisionNumber)).All(ctx)
+	pinned, err := s.DAL.Revisions().Revisions(ctx, revisions.Filter{ItemID: id, BlobIDs: ids})
 	if err != nil {
 		return Page[FileVersion]{}, err
 	}
 	authors := map[string]string{}
-	for _, rev := range revisions {
+	for _, rev := range pinned {
 		if _, ok := authors[*rev.BlobID]; !ok {
 			authors[*rev.BlobID] = rev.CreatedBy
 		}
@@ -470,7 +460,7 @@ func (s *Service) FileVersions(ctx context.Context, subject, id string, after, l
 		if b.ID == current.ID {
 			b.Filename = current.Filename
 		}
-		out[i] = FileVersion{ID: b.ID, Version: b.Version, Filename: b.Filename, ContentType: b.ContentType, Size: b.Size, SHA256: b.Sha256, CreatedAt: b.CreatedAt, CreatedBy: authors[b.ID], IsCurrent: b.ID == current.ID, Availability: string(b.Availability)}
+		out[i] = FileVersion{ID: b.ID, Version: b.Version, Filename: b.Filename, ContentType: string(b.ContentType), Size: b.Size, SHA256: b.Sha256, CreatedAt: b.CreatedAt, CreatedBy: authors[b.ID], IsCurrent: b.ID == current.ID, Availability: string(b.Availability)}
 	}
 	return numberedPage(out, limit, func(v FileVersion) int { return v.Version }), nil
 }

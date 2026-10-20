@@ -2,19 +2,19 @@ package workflow
 
 import (
 	"encoding/json"
-	"papergo/ent"
-	"papergo/ent/workflowtrigger"
+	"papergo/internal/dal/daltest"
+	"papergo/internal/dal/resources"
+	"papergo/internal/dal/workflows"
 	"papergo/internal/dms"
-	"papergo/internal/testutil"
 	"strings"
 	"testing"
 )
 
-func policyFixture(t *testing.T) (*Service, *ent.Resource, *ent.Resource, *ent.Resource, *ent.Resource) {
+func policyFixture(t *testing.T) (*Service, *resources.Resource, *resources.Resource, *resources.Resource, *resources.Resource) {
 	t.Helper()
-	ds := dms.NewService(testutil.Database(t).SQL)
+	ds := dms.NewService(daltest.Database(t).SQL)
 	ctx := t.Context()
-	create := func(parent string, in dms.CreateResource) *ent.Resource {
+	create := func(parent string, in dms.CreateResource) *resources.Resource {
 		t.Helper()
 		r, e := ds.Create(ctx, "alice", parent, in)
 		if e != nil {
@@ -48,8 +48,8 @@ func TestManualUseIndependentOfAutomationAndPinsAcceptedVersion(t *testing.T) {
 	if err != nil || len(ids) != 1 {
 		t.Fatal(ids, err)
 	}
-	if n, e := s.DMS.Client.WorkflowTrigger.Query().Where(workflowtrigger.WorkflowIDEQ(w.ID)).Count(ctx); e != nil || n != 0 {
-		t.Fatal("manual use must not subscribe to events", n, e)
+	if rows, e := s.DMS.DAL.Workflows().Triggers(ctx, workflows.TriggerFilter{WorkflowID: w.ID}); e != nil || len(rows) != 0 {
+		t.Fatal("manual use must not subscribe to events", rows, e)
 	}
 	changed := json.RawMessage(strings.Replace(string(raw), `"flow":`, `"variables":{"new_version":true},"flow":`, 1))
 	_, err = s.Update(ctx, "alice", w.ID, w.Version, Save{Name: w.Name, State: "archived", Definition: changed})
@@ -57,7 +57,7 @@ func TestManualUseIndependentOfAutomationAndPinsAcceptedVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventID := strings.TrimPrefix(ids[0], "wf:"+w.ID+":")
-	event, err := s.DMS.Client.DomainEvent.Get(ctx, eventID)
+	event, err := s.DMS.DAL.Events().Find(ctx, eventID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +114,7 @@ func TestManualSystemFeatureDoesNotConsultAutomaticProvider(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	event, err := s.DMS.Client.DomainEvent.Get(ctx, strings.TrimPrefix(ids[0], "wf:"+root.ID+":"))
+	event, err := s.DMS.DAL.Events().Find(ctx, strings.TrimPrefix(ids[0], "wf:"+root.ID+":"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +169,7 @@ func TestBuiltInRuleChoicesSurviveReleaseSync(t *testing.T) {
 	if got := disabledTriggerTypes(raw); len(got) != 1 || got[0] != "file.updated" {
 		t.Fatal(got)
 	}
-	rows, err := s.DMS.Client.WorkflowTrigger.Query().Where(workflowtrigger.WorkflowIDEQ(w.ID)).All(t.Context())
+	rows, err := s.DMS.DAL.Workflows().Triggers(t.Context(), workflows.TriggerFilter{WorkflowID: w.ID})
 	if err != nil || len(rows) != 1 || rows[0].Type != "file.added" {
 		t.Fatal(rows, err)
 	}

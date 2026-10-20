@@ -5,12 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"time"
+	"slices"
 
-	"papergo/ent"
-	"papergo/ent/blob"
-	"papergo/ent/resource"
-	"papergo/ent/stagedfile"
+	"papergo/internal/dal/blobs"
+	"papergo/internal/dal/dberr"
 	"papergo/internal/model"
 	"papergo/internal/storage"
 )
@@ -39,9 +37,9 @@ type StageInput struct {
 
 // CurrentFile returns the file version of the item's head revision, which a
 // workflow acting as subject (with write access) works on.
-func (s *Service) CurrentFile(ctx context.Context, subject, itemID string) (*ent.Blob, error) {
+func (s *Service) CurrentFile(ctx context.Context, subject, itemID string) (*blobs.Blob, error) {
 	if !s.transaction {
-		return read(ctx, s, func(t *Service) (*ent.Blob, error) { return t.CurrentFile(ctx, subject, itemID) })
+		return read(ctx, s, func(t *Service) (*blobs.Blob, error) { return t.CurrentFile(ctx, subject, itemID) })
 	}
 	if err := s.RequireScope(ctx, subject, "document.read"); err != nil {
 		return nil, err
@@ -53,37 +51,32 @@ func (s *Service) CurrentFile(ctx context.Context, subject, itemID string) (*ent
 	if item.HeadRevisionID == nil {
 		return nil, invalid("the item has no file")
 	}
-	revision, err := s.Client.ItemRevision.Get(ctx, *item.HeadRevisionID)
+	revision, err := s.revision(ctx, *item.HeadRevisionID)
 	if err != nil {
 		return nil, err
 	}
 	if revision.BlobID == nil {
 		return nil, invalid("the item has no file")
 	}
-	file, err := s.Client.Blob.Get(ctx, *revision.BlobID)
-	if err == nil {
-		file.Filename = revision.Filename
+	file, err := s.DAL.Blobs().Blob(ctx, *revision.BlobID)
+	if err != nil {
+		return nil, err
 	}
-	return file, err
+	file.Filename = revision.Filename
+	return &file, nil
 }
 
 func (s *Service) currentBlobID(ctx context.Context, itemID string) (string, error) {
-	r, err := s.Client.Resource.Query().Where(resource.IDEQ(itemID), resource.DeletedAtIsNil()).Only(ctx)
-	if ent.IsNotFound(err) {
+	r, err := s.DAL.Resources().Resource(ctx, itemID)
+	if dberr.IsNotFound(err) || err == nil && r.DeletedAt != nil {
 		return "", ErrNotFound
 	}
-	if err != nil {
+	if err != nil || r.HeadRevisionID == nil {
 		return "", err
 	}
-	if r.HeadRevisionID == nil {
-		return "", nil
-	}
-	rev, err := s.Client.ItemRevision.Get(ctx, *r.HeadRevisionID)
-	if err != nil {
+	rev, err := s.revision(ctx, *r.HeadRevisionID)
+	if err != nil || rev.BlobID == nil {
 		return "", err
-	}
-	if rev.BlobID == nil {
-		return "", nil
 	}
 	return *rev.BlobID, nil
 }
@@ -92,20 +85,27 @@ func (s *Service) currentBlobID(ctx context.Context, itemID string) (string, err
 // its current file, and the published one when it differs. A deleted or
 // missing item has none.
 func (s *Service) ItemFiles(ctx context.Context, itemID string) ([]string, error) {
-	rows, err := s.Client.QueryContext(ctx, `SELECT DISTINCT v.blob_id FROM resources r JOIN item_revisions v ON v.id IN (r.head_revision_id, r.published_revision_id)
- WHERE r.id=? AND r.deleted_at IS NULL AND v.blob_id IS NOT NULL`, itemID)
+	r, err := s.DAL.Resources().Resource(ctx, itemID)
+	if dberr.IsNotFound(err) || err == nil && r.DeletedAt != nil {
+		return nil, nil
+	}
 	if err != nil {
 		return nil, err
 	}
 	var out []string
-	for rows.Next() {
-		var id string
-		if err = rows.Scan(&id); err != nil {
-			break
+	for _, id := range []*string{r.HeadRevisionID, r.PublishedRevisionID} {
+		if id == nil {
+			continue
 		}
-		out = append(out, id)
+		rev, err := s.revision(ctx, *id)
+		if err != nil {
+			return nil, err
+		}
+		if rev.BlobID != nil && !slices.Contains(out, *rev.BlobID) {
+			out = append(out, *rev.BlobID)
+		}
 	}
-	return out, errors.Join(err, rows.Err(), rows.Close())
+	return out, nil
 }
 
 // fresh reports whether every source is still its item's current file.
@@ -127,7 +127,7 @@ func (s *Service) fresh(ctx context.Context, sources []model.StagedSource) (bool
 
 // StageFile records a staged file. The subject needs write access to the
 // item, and the sources must still be current.
-func (s *Service) StageFile(ctx context.Context, subject string, in StageInput) (out *ent.StagedFile, err error) {
+func (s *Service) StageFile(ctx context.Context, subject string, in StageInput) (out *blobs.StagedFile, err error) {
 	err = s.write(ctx, func(t *Service) error {
 		if _, e := t.canWriteFile(ctx, subject, in.ItemID); e != nil {
 			return e
@@ -153,32 +153,28 @@ func (s *Service) StageFile(ctx context.Context, subject string, in StageInput) 
 		if !ok {
 			return fmt.Errorf("%w: a source file changed", ErrConflict)
 		}
-		r, e := t.Client.Resource.Get(ctx, in.ItemID)
+		r, e := t.DAL.Resources().Resource(ctx, in.ItemID)
 		if e != nil {
 			return e
 		}
-		metrics := in.Metrics
-		if len(metrics) == 0 {
-			metrics = json.RawMessage(`{}`)
-		}
-		out, e = t.Client.StagedFile.Create().SetWorkspaceID(r.WorkspaceID).SetItemID(in.ItemID).SetRunID(in.RunID).SetSources(in.Sources).
-			SetObjectKey(in.ObjectKey).SetFilename(in.Filename).SetContentType(in.ContentType).SetSize(in.Size).SetSha256(in.SHA256).
-			SetMetrics(metrics).SetCreatedBy(subject).Save(ctx)
+		staged, e := t.DAL.Blobs().Stage(ctx, blobs.StagedFile{WorkspaceID: r.WorkspaceID, ItemID: in.ItemID, RunID: in.RunID, Sources: in.Sources,
+			ObjectKey: in.ObjectKey, Filename: in.Filename, ContentType: in.ContentType, Size: in.Size, Sha256: in.SHA256, Metrics: in.Metrics, CreatedBy: subject})
+		out = &staged
 		return e
 	})
 	return
 }
 
 // StagedFile returns a staged file to a subject who may read its item.
-func (s *Service) StagedFile(ctx context.Context, subject, id string) (*ent.StagedFile, error) {
+func (s *Service) StagedFile(ctx context.Context, subject, id string) (*blobs.StagedFile, error) {
 	if !s.transaction {
-		return read(ctx, s, func(t *Service) (*ent.StagedFile, error) { return t.StagedFile(ctx, subject, id) })
+		return read(ctx, s, func(t *Service) (*blobs.StagedFile, error) { return t.StagedFile(ctx, subject, id) })
 	}
 	if err := s.RequireScope(ctx, subject, "document.read"); err != nil {
 		return nil, err
 	}
-	f, err := s.Client.StagedFile.Get(ctx, id)
-	if ent.IsNotFound(err) {
+	f, err := s.stagedFile(ctx, id)
+	if errors.Is(err, ErrNotFound) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
@@ -191,19 +187,34 @@ func (s *Service) StagedFile(ctx context.Context, subject, id string) (*ent.Stag
 }
 
 // StagedFresh reports whether a pending staged file's sources are current.
-func (s *Service) StagedFresh(ctx context.Context, f *ent.StagedFile) (bool, error) {
-	if f.State != stagedfile.StatePending {
+func (s *Service) StagedFresh(ctx context.Context, id string) (bool, error) {
+	if !s.transaction {
+		return read(ctx, s, func(t *Service) (bool, error) { return t.StagedFresh(ctx, id) })
+	}
+	file, err := s.stagedFile(ctx, id)
+	if err != nil {
+		return false, err
+	}
+	if file.State != blobs.StagedPending {
 		return false, nil
 	}
-	if !s.transaction {
-		return read(ctx, s, func(t *Service) (bool, error) { return t.fresh(ctx, f.Sources) })
-	}
-	return s.fresh(ctx, f.Sources)
+	return s.fresh(ctx, file.Sources)
 }
 
-func (s *Service) runStaged(ctx context.Context, subject, id, runID string) (*ent.StagedFile, error) {
-	f, err := s.Client.StagedFile.Get(ctx, id)
-	if ent.IsNotFound(err) || err == nil && f.RunID != runID {
+func (s *Service) stagedFile(ctx context.Context, id string) (*blobs.StagedFile, error) {
+	f, err := s.DAL.Blobs().StagedFile(ctx, id)
+	if dberr.IsNotFound(err) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &f, nil
+}
+
+func (s *Service) runStaged(ctx context.Context, subject, id, runID string) (*blobs.StagedFile, error) {
+	f, err := s.stagedFile(ctx, id)
+	if errors.Is(err, ErrNotFound) || err == nil && f.RunID != runID {
 		return nil, invalid("the staged file is not this run's")
 	}
 	if err != nil {
@@ -221,13 +232,13 @@ func (s *Service) runStaged(ctx context.Context, subject, id, runID string) (*en
 // ErrConflict when a source is no longer current. With recycleSources, the
 // other source items go to the recycle bin in the same transaction, so a
 // newer upload cannot arrive between the freshness check and their deletion.
-func (s *Service) PromoteStagedFile(ctx context.Context, subject, id, runID string, recycleSources bool) (out *ent.Blob, err error) {
+func (s *Service) PromoteStagedFile(ctx context.Context, subject, id, runID string, recycleSources bool) (out *blobs.Blob, err error) {
 	err = s.write(ctx, func(t *Service) error {
 		f, e := t.runStaged(ctx, subject, id, runID)
 		if e != nil {
 			return e
 		}
-		if f.State != stagedfile.StatePending {
+		if f.State != blobs.StagedPending {
 			return fmt.Errorf("%w: the staged file is %s", ErrConflict, f.State)
 		}
 		ok, e := t.fresh(ctx, f.Sources)
@@ -237,7 +248,7 @@ func (s *Service) PromoteStagedFile(ctx context.Context, subject, id, runID stri
 		if !ok {
 			return fmt.Errorf("%w: a source file changed after the file was made", ErrConflict)
 		}
-		r, e := t.Client.Resource.Get(ctx, f.ItemID)
+		r, e := t.DAL.Resources().Resource(ctx, f.ItemID)
 		if e != nil {
 			return e
 		}
@@ -245,7 +256,7 @@ func (s *Service) PromoteStagedFile(ctx context.Context, subject, id, runID stri
 		languages := ""
 		for _, src := range f.Sources {
 			if src.ItemID == f.ItemID {
-				b, e := t.Client.Blob.Query().Where(blob.IDEQ(src.BlobID)).Only(ctx)
+				b, e := t.DAL.Blobs().Blob(ctx, src.BlobID)
 				if e != nil {
 					return e
 				}
@@ -272,7 +283,7 @@ func (s *Service) PromoteStagedFile(ctx context.Context, subject, id, runID stri
 				recycled[src.ItemID] = true
 			}
 		}
-		return t.Client.StagedFile.UpdateOne(f).SetState(stagedfile.StatePromoted).Exec(ctx)
+		return t.DAL.Blobs().SetStagedState(ctx, f.ID, blobs.StagedPromoted)
 	})
 	return
 }
@@ -286,22 +297,17 @@ func (s *Service) DiscardStagedFile(ctx context.Context, subject, id, runID stri
 			return e
 		}
 		switch f.State {
-		case stagedfile.StateDiscarded:
+		case blobs.StagedDiscarded:
 			return nil
-		case stagedfile.StatePromoted:
+		case blobs.StagedPromoted:
 			return fmt.Errorf("%w: the staged file was promoted", ErrConflict)
 		}
-		return t.Client.StagedFile.UpdateOne(f).SetState(stagedfile.StateDiscarded).Exec(ctx)
+		return t.DAL.Blobs().SetStagedState(ctx, f.ID, blobs.StagedDiscarded)
 	})
 }
 
 // DiscardRunStagedFiles discards the pending staged files of finished runs,
 // inside the caller's write transaction.
 func (s *Service) DiscardRunStagedFiles(ctx context.Context, runIDs ...string) error {
-	if len(runIDs) == 0 {
-		return nil
-	}
-	_, err := s.Client.StagedFile.Update().Where(stagedfile.RunIDIn(runIDs...), stagedfile.StateEQ(stagedfile.StatePending)).
-		SetState(stagedfile.StateDiscarded).SetUpdatedAt(time.Now().UTC()).Save(ctx)
-	return err
+	return s.DAL.Blobs().DiscardRunStaged(ctx, runIDs...)
 }

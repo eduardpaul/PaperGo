@@ -6,12 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"papergo/internal/dal/resources"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
-	"papergo/ent"
 	"papergo/internal/dms"
 	"papergo/internal/forms"
 )
@@ -294,7 +294,7 @@ func (e *env) target(inputs map[string]any) (string, error) {
 	return e.itemID, nil
 }
 
-func (e *env) load(id string) (*ent.Resource, error) {
+func (e *env) load(id string) (*resources.Resource, error) {
 	r, err := e.t.GetSurface(e.ctx, e.author, id, "auto")
 	if err != nil {
 		return nil, err
@@ -306,7 +306,7 @@ func (e *env) load(id string) (*ent.Resource, error) {
 }
 
 // snapshot is the token and output view of an item.
-func snapshot(r *ent.Resource) map[string]any {
+func snapshot(r *resources.Resource) map[string]any {
 	out := map[string]any{"id": r.ID, "name": r.Name, "keywords": anyList(r.Keywords), "values": forms.Plain(r.Values), "version": r.Version, "created_by": r.CreatedBy, "updated_by": r.UpdatedBy, "created_at": r.CreatedAt.UTC().Format(time.RFC3339Nano), "updated_at": r.UpdatedAt.UTC().Format(time.RFC3339Nano), "published": r.PublishedRevisionID != nil}
 	if r.ContainerID != nil {
 		out["collection_id"] = *r.ContainerID

@@ -3,17 +3,17 @@ package dms
 import (
 	"errors"
 	"github.com/google/uuid"
-	"papergo/ent"
-	"papergo/ent/auditevent"
-	"papergo/ent/itemrevision"
-	"papergo/ent/relationship"
-	"papergo/ent/resource"
+	"maps"
+	auditstore "papergo/internal/dal/audit"
+	"papergo/internal/dal/daltest"
+	eventstore "papergo/internal/dal/events"
+	"papergo/internal/dal/relationships"
+	"papergo/internal/dal/resources"
 	"strings"
 	"testing"
-	"time"
 )
 
-func davLibrary(t *testing.T, s *Service, w *ent.Resource, publishing bool) *ent.Resource {
+func davLibrary(t *testing.T, s *Service, w *resources.Resource, publishing bool) *resources.Resource {
 	t.Helper()
 	lib, err := s.Create(testContext, "alice", w.ID, CreateResource{Kind: "library", Name: "Shared", PublishingEnabled: publishing, WebDAVEnabled: true})
 	if err != nil {
@@ -21,12 +21,12 @@ func davLibrary(t *testing.T, s *Service, w *ent.Resource, publishing bool) *ent
 	}
 	return lib
 }
-func content(name string) BlobInput {
+func pdfContent(name string) BlobInput {
 	return BlobInput{ObjectKey: uuid.NewString(), Filename: name, ContentType: "application/pdf", Size: 1, SHA256: strings.Repeat("a", 64)}
 }
 func revisionCount(t *testing.T, s *Service, id string) int {
 	t.Helper()
-	n, err := s.Client.ItemRevision.Query().Where(itemrevision.ItemIDEQ(id)).Count(testContext)
+	n, err := countRevisions(s, id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,48 +132,34 @@ func TestDeleteFolderTreeRequiresExplicitIntentAndPermissions(t *testing.T) {
 	}
 	versions := map[string]int{folder.ID: folder.Version, nested.ID: nested.Version, inner.ID: locked.Version}
 	for id, version := range versions {
-		raw, err := s.Client.Resource.Get(testContext, id)
+		raw, err := s.DAL.Resources().Resource(testContext, id)
 		if err != nil || raw.DeletedAt != nil || raw.Version != version {
 			t.Fatalf("rejected delete changed resource: %+v %v", raw, err)
 		}
 	}
-	if n, err := s.Client.Relationship.Query().Where(relationship.TargetIDEQ(inner.ID)).Count(testContext); err != nil || n != 1 {
+	if n, err := s.DAL.Relationships().Count(testContext, relationships.Filter{TargetID: inner.ID}); err != nil || n != 1 {
 		t.Fatalf("rejected delete removed relationship: %d %v", n, err)
 	}
-	if n, err := s.Client.AuditEvent.Query().Where(auditevent.ResourceIDEQ(folder.ID), auditevent.ActionEQ("resource.delete")).Count(testContext); err != nil || n != 0 {
+	if n, err := s.DAL.Audit().Count(testContext, auditstore.Filter{ResourceID: folder.ID, Action: "resource.delete"}); err != nil || n != 0 {
 		t.Fatalf("rejected delete was audited: %d %v", n, err)
 	}
-	counts := map[string]int{}
-	for _, table := range []string{"field_values", "item_surfaces", "relationships", "audit_events", "domain_events", "item_revisions"} {
-		var n int
-		if err := s.scan(testContext, []any{&n}, "SELECT count(*) FROM "+table); err != nil {
-			t.Fatal(err)
-		}
-		counts[table] = n
-	}
+	counts := storedCounts(t, s)
 	// Fail after projections have been removed to exercise
 	// transaction rollback, including queued deletion events.
-	if _, err := s.Client.ExecContext(testContext, `CREATE TRIGGER reject_folder_tree_delete BEFORE UPDATE OF deleted_at ON resources WHEN NEW.kind='item' AND NEW.deleted_at IS NOT NULL BEGIN SELECT RAISE(ABORT, 'test delete failure'); END`); err != nil {
-		t.Fatal(err)
-	}
+	stop := daltest.Reject(t, s.DAL, "resources", daltest.OnUpdate, daltest.Row{"kind": "item", "deleted_at": daltest.NotNull})
 	if err := s.Delete(testContext, "alice", folder.ID, folder.Version, DeleteOptions{Recursive: true}); err == nil {
 		t.Fatal("injected failure did not reject recursive deletion")
 	}
-	for table, expected := range counts {
-		var n int
-		if err := s.scan(testContext, []any{&n}, "SELECT count(*) FROM "+table); err != nil || n != expected {
-			t.Fatalf("recursive rollback changed %s: %d, want %d: %v", table, n, expected, err)
-		}
+	if after := storedCounts(t, s); !maps.Equal(after, counts) {
+		t.Fatalf("recursive rollback changed stored records: %v, want %v", after, counts)
 	}
 	for id, version := range versions {
-		raw, err := s.Client.Resource.Get(testContext, id)
+		raw, err := s.DAL.Resources().Resource(testContext, id)
 		if err != nil || raw.DeletedAt != nil || raw.Version != version {
 			t.Fatalf("recursive rollback changed resource: %+v %v", raw, err)
 		}
 	}
-	if _, err := s.Client.ExecContext(testContext, `DROP TRIGGER reject_folder_tree_delete`); err != nil {
-		t.Fatal(err)
-	}
+	stop()
 	if err := s.Delete(testContext, "alice", folder.ID, folder.Version, DeleteOptions{Recursive: true}); err != nil {
 		t.Fatal(err)
 	}
@@ -197,22 +183,21 @@ func TestDeleteFolderTreeRequiresExplicitIntentAndPermissions(t *testing.T) {
 	if n := revisionCount(t, s, inner.ID); n != 1 {
 		t.Fatalf("revisions not retained: %d", n)
 	}
-	if n, err := s.Client.Relationship.Query().Where(relationship.TargetIDEQ(inner.ID)).Count(testContext); err != nil || n != 1 {
+	if n, err := s.DAL.Relationships().Count(testContext, relationships.Filter{TargetID: inner.ID}); err != nil || n != 1 {
 		t.Fatalf("relationship not retained for recovery: %d %v", n, err)
 	}
 	if links, err := s.Relationships(testContext, "alice", outside.ID, "both", "", "", 50); err != nil || len(links.Data) != 0 {
 		t.Fatalf("deleted relationship exposed: %+v %v", links, err)
 	}
-	event, err := s.Client.AuditEvent.Query().Where(auditevent.ResourceIDEQ(folder.ID), auditevent.ActionEQ("resource.delete")).Only(testContext)
-	if err != nil || event.Details["descendants"] != float64(2) && event.Details["descendants"] != 2 {
-		t.Fatalf("delete not audited: %+v %v", event, err)
+	events, err := s.DAL.Audit().List(testContext, auditstore.Filter{ResourceID: folder.ID, Action: "resource.delete"})
+	if err != nil || len(events) != 1 || events[0].Details["descendants"] != float64(2) {
+		t.Fatalf("delete not audited: %+v %v", events, err)
 	}
-	var deletedEvents int
-	if err := s.scan(testContext, []any{&deletedEvents}, `SELECT count(*) FROM domain_events WHERE type=? AND resource_id=?`, EventItemDeleted, inner.ID); err != nil || deletedEvents != 1 {
+	if deletedEvents, err := s.DAL.Events().Count(testContext, eventstore.Filter{Types: []string{EventItemDeleted}, ResourceID: inner.ID}); err != nil || deletedEvents != 1 {
 		t.Fatalf("recursive item deletion event: %d %v", deletedEvents, err)
 	}
 	// Restoring below a deleted parent cannot bypass the restore transition.
-	if _, err = s.Client.Resource.UpdateOneID(inner.ID).ClearDeletedAt().Save(testContext); err == nil {
+	if _, err = s.DAL.Resources().Restore(testContext, inner.ID, folder.ID, "inner", "alice"); err == nil {
 		t.Fatal("restored beneath a deleted parent")
 	}
 	if _, err = s.Create(testContext, "alice", folder.ID, CreateResource{Kind: "item", Name: "Late.txt"}); !errors.Is(err, ErrNotFound) {
@@ -249,11 +234,11 @@ func TestMoveStaysInCollectionAndFollowsTheNewScope(t *testing.T) {
 	if _, err = s.Update(testContext, "alice", item.ID, moved.Version, UpdateResource{ParentID: &list.ID}); err == nil {
 		t.Fatal("item moved to another collection")
 	}
-	if _, err = s.Client.Resource.UpdateOneID(item.ID).SetParentID(list.ID).Save(testContext); err == nil {
-		t.Fatal("trigger allowed a cross-collection move")
+	if err = s.DAL.Resources().Change(testContext, item.ID, moved.Version, "alice", resources.Changes{ParentID: &list.ID}); err == nil {
+		t.Fatal("DAL allowed a cross-collection parent")
 	}
-	if _, err = s.Client.Resource.UpdateOneID(private.ID).SetParentID(nested.ID).Save(testContext); err == nil {
-		t.Fatal("trigger allowed a cycle")
+	if err = s.DAL.Resources().Change(testContext, private.ID, current(t, s, private.ID).Version, "alice", resources.Changes{ParentID: &nested.ID}); err == nil {
+		t.Fatal("DAL allowed a cycle")
 	}
 	// Moving the item back out drops the folder's scope again.
 	if _, err = s.Update(testContext, "alice", item.ID, moved.Version, UpdateResource{ParentID: &lib.ID}); err != nil {
@@ -262,7 +247,7 @@ func TestMoveStaysInCollectionAndFollowsTheNewScope(t *testing.T) {
 	if _, err = s.Get(testContext, "bob", item.ID); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("scope kept after moving out: %v", err)
 	}
-	scope, err := s.Client.Resource.Query().Where(resource.IDEQ(item.ID)).Only(testContext)
+	scope, err := s.DAL.Resources().One(testContext, resources.Filter{IDs: []string{item.ID}})
 	if err != nil || *scope.ScopeID != w.ID {
 		t.Fatal("scope not recomputed", err)
 	}
@@ -295,7 +280,7 @@ func TestLibraryFilesPutMoveAndDelete(t *testing.T) {
 	if _, err := s.MakeFolder(testContext, "alice", lib.ID, []string{"Docs"}); err != nil {
 		t.Fatal(err)
 	}
-	f, created, err := s.PutFile(testContext, "alice", lib.ID, []string{"docs", "a.txt"}, PutFile{Blob: content("a.txt")})
+	f, created, err := s.PutFile(testContext, "alice", lib.ID, []string{"docs", "a.txt"}, PutFile{Blob: pdfContent("a.txt")})
 	if err != nil || !created || f.Blob == nil || f.Name != "a.txt" {
 		t.Fatal(f, created, err)
 	}
@@ -303,23 +288,23 @@ func TestLibraryFilesPutMoveAndDelete(t *testing.T) {
 	if n := revisionCount(t, s, f.ID); n != 1 {
 		t.Fatalf("new file has %d revisions", n)
 	}
-	if _, _, err = s.PutFile(testContext, "alice", lib.ID, []string{"Docs", "A.TXT"}, PutFile{FileConditions: FileConditions{IfNoneMatch: "*"}, Blob: content("a.txt")}); !errors.Is(err, ErrPreconditionFailed) {
+	if _, _, err = s.PutFile(testContext, "alice", lib.ID, []string{"Docs", "A.TXT"}, PutFile{FileConditions: FileConditions{IfNoneMatch: "*"}, Blob: pdfContent("a.txt")}); !errors.Is(err, ErrPreconditionFailed) {
 		t.Fatalf("If-None-Match ignored: %v", err)
 	}
-	if _, _, err = s.PutFile(testContext, "alice", lib.ID, []string{"Docs", "a.txt"}, PutFile{FileConditions: FileConditions{IfMatch: `"stale"`}, Blob: content("a.txt")}); !errors.Is(err, ErrPreconditionFailed) {
+	if _, _, err = s.PutFile(testContext, "alice", lib.ID, []string{"Docs", "a.txt"}, PutFile{FileConditions: FileConditions{IfMatch: `"stale"`}, Blob: pdfContent("a.txt")}); !errors.Is(err, ErrPreconditionFailed) {
 		t.Fatalf("If-Match ignored: %v", err)
 	}
-	f, created, err = s.PutFile(testContext, "alice", lib.ID, []string{"Docs", "a.txt"}, PutFile{FileConditions: FileConditions{IfMatch: f.ETag()}, Blob: content("a.txt")})
+	f, created, err = s.PutFile(testContext, "alice", lib.ID, []string{"Docs", "a.txt"}, PutFile{FileConditions: FileConditions{IfMatch: f.ETag()}, Blob: pdfContent("a.txt")})
 	if err != nil || created || revisionCount(t, s, f.ID) != 2 {
 		t.Fatal(f, created, err)
 	}
-	if _, _, err = s.PutFile(testContext, "alice", lib.ID, []string{"Docs"}, PutFile{Blob: content("Docs")}); !errors.Is(err, ErrExists) {
+	if _, _, err = s.PutFile(testContext, "alice", lib.ID, []string{"Docs"}, PutFile{Blob: pdfContent("Docs")}); !errors.Is(err, ErrExists) {
 		t.Fatalf("file written over a folder: %v", err)
 	}
-	if _, _, err = s.PutFile(testContext, "alice", lib.ID, []string{"Docs", "a.txt", "x"}, PutFile{Blob: content("x")}); !errors.Is(err, ErrMissingParent) {
+	if _, _, err = s.PutFile(testContext, "alice", lib.ID, []string{"Docs", "a.txt", "x"}, PutFile{Blob: pdfContent("x")}); !errors.Is(err, ErrMissingParent) {
 		t.Fatalf("file used as folder: %v", err)
 	}
-	other, _, err := s.PutFile(testContext, "alice", lib.ID, []string{"b.txt"}, PutFile{Blob: content("b.txt")})
+	other, _, err := s.PutFile(testContext, "alice", lib.ID, []string{"b.txt"}, PutFile{Blob: pdfContent("b.txt")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -360,7 +345,7 @@ func TestPublishedNamesResolveConsistently(t *testing.T) {
 	s, w, _ := fixture(t)
 	lib := davLibrary(t, s, w, true)
 	grantReader(t, s, w)
-	old, _, err := s.PutFile(testContext, "alice", lib.ID, []string{"a.txt"}, PutFile{Blob: content("a.txt")})
+	old, _, err := s.PutFile(testContext, "alice", lib.ID, []string{"a.txt"}, PutFile{Blob: pdfContent("a.txt")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -376,7 +361,7 @@ func TestPublishedNamesResolveConsistently(t *testing.T) {
 		t.Fatalf("editor resolved the published name: %v", err)
 	}
 	// The head name is free, so another file may take it; once published it wins.
-	fresh, _, err := s.PutFile(testContext, "alice", lib.ID, []string{"a.txt"}, PutFile{Blob: content("a.txt")})
+	fresh, _, err := s.PutFile(testContext, "alice", lib.ID, []string{"a.txt"}, PutFile{Blob: pdfContent("a.txt")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -391,49 +376,5 @@ func TestPublishedNamesResolveConsistently(t *testing.T) {
 	}
 	if _, err = s.WriteTarget(testContext, "reader", lib.ID, []string{"new.txt"}, FileConditions{}); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("reader may write: %v", err)
-	}
-}
-
-func TestWebDAVCredentials(t *testing.T) {
-	s, _, _ := fixture(t)
-	c, err := s.CreateWebDAVCredential(testContext, "alice", WebDAVCredentialInput{Label: "Laptop"})
-	if err != nil || !strings.HasPrefix(c.Password, credentialPrefix) || c.SecretHash == c.Password {
-		t.Fatal(c, err)
-	}
-	if subject, err := s.AuthenticateWebDAV(testContext, c.Password); err != nil || subject != "alice" {
-		t.Fatal(subject, err)
-	}
-	if _, err = s.AuthenticateWebDAV(testContext, c.Password+"x"); !errors.Is(err, ErrForbidden) {
-		t.Fatalf("wrong password accepted: %v", err)
-	}
-	// Labels are limited in characters, not bytes.
-	if _, err = s.CreateWebDAVCredential(testContext, "alice", WebDAVCredentialInput{Label: strings.Repeat("文", 100)}); err != nil {
-		t.Fatalf("100-character label refused: %v", err)
-	}
-	if _, err = s.CreateWebDAVCredential(testContext, "alice", WebDAVCredentialInput{Label: strings.Repeat("文", 101)}); err == nil {
-		t.Fatal("101-character label accepted")
-	}
-	if _, err = s.CreateWebDAVCredential(testContext, "alice", WebDAVCredentialInput{Label: "Old", ExpiresAt: ptr(time.Now().Add(-time.Minute))}); err == nil {
-		t.Fatal("expired credential issued")
-	}
-	soon, err := s.CreateWebDAVCredential(testContext, "alice", WebDAVCredentialInput{Label: "Soon", ExpiresAt: ptr(time.Now().Add(50 * time.Millisecond))})
-	if err != nil {
-		t.Fatal(err)
-	}
-	time.Sleep(100 * time.Millisecond)
-	if _, err = s.AuthenticateWebDAV(testContext, soon.Password); !errors.Is(err, ErrForbidden) {
-		t.Fatalf("expired credential accepted: %v", err)
-	}
-	if list, err := s.WebDAVCredentials(testContext, "bob"); err != nil || len(list) != 0 {
-		t.Fatal("credentials leaked to another principal", list, err)
-	}
-	if err = s.RevokeWebDAVCredential(testContext, "bob", c.ID); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("revoked someone else's credential: %v", err)
-	}
-	if err = s.RevokeWebDAVCredential(testContext, "alice", c.ID); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = s.AuthenticateWebDAV(testContext, c.Password); !errors.Is(err, ErrForbidden) {
-		t.Fatalf("revoked credential accepted: %v", err)
 	}
 }

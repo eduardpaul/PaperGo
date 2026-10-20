@@ -7,14 +7,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"papergo/internal/dal/resources"
 	"time"
 
 	"github.com/google/uuid"
-	"papergo/ent"
-	"papergo/ent/integrationitem"
-	"papergo/ent/listintegration"
-	"papergo/ent/operation"
 	"papergo/internal/calendar"
+	"papergo/internal/dal/catalog"
+	"papergo/internal/dal/integrations"
+	"papergo/internal/dal/operations"
 )
 
 // Runtime dependencies belong to the provider; persistent storage is generic.
@@ -46,7 +46,7 @@ func eventRecipe() TemplateInput {
 		{Key: "event_exdates", Label: "Excluded dates", Type: "note"}, {Key: "event_rdates", Label: "Additional dates", Type: "note"},
 	}}
 }
-func (s *Service) ensureEventType(ctx context.Context, subject string, c *ent.Resource) (*ent.ContentType, error) {
+func (s *Service) ensureEventType(ctx context.Context, subject string, c *resources.Resource) (*catalog.ContentType, error) {
 	ids, err := s.provisionCollectionTypes(ctx, subject, CollectionTemplate{ContentTypes: []TemplateInput{eventRecipe()}})
 	if err != nil {
 		return nil, err
@@ -54,7 +54,7 @@ func (s *Service) ensureEventType(ctx context.Context, subject string, c *ent.Re
 	if _, err = s.attachContentType(ctx, subject, c.ID, c.Version, AttachContentTypeInput{ContentTypeID: ids[0]}); err != nil {
 		return nil, err
 	}
-	typ, err := s.Client.ContentType.Get(ctx, ids[0])
+	typ, err := s.DAL.Catalog().ContentType(ctx, ids[0])
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +65,7 @@ func (s *Service) ensureEventType(ctx context.Context, subject string, c *ent.Re
 	// Existing default views and ordinary content types stay as configured.
 	return typ, nil
 }
-func (s *Service) validateEventFields(ctx context.Context, typ *ent.ContentType) error {
+func (s *Service) validateEventFields(ctx context.Context, typ *catalog.ContentType) error {
 	defs, err := s.typeDefinitions(ctx, typ)
 	if err != nil {
 		return err
@@ -73,14 +73,14 @@ func (s *Service) validateEventFields(ctx context.Context, typ *ent.ContentType)
 	byKey := definitionMap(defs)
 	for _, f := range eventRecipe().Fields {
 		d := byKey[f.Key]
-		if d == nil || string(d.Type) != f.Type || d.Options.Multiple {
+		if d == nil || d.Type != f.Type || d.Options.Multiple {
 			return invalid("Event fields required by an active integration cannot be removed or change type: " + f.Key)
 		}
 	}
 	return nil
 }
-func (s *Service) validateIntegrationSchema(ctx context.Context, c *ent.Resource) error {
-	active, err := s.Client.ListIntegration.Query().Where(listintegration.ContainerIDEQ(c.ID)).Exist(ctx)
+func (s *Service) validateIntegrationSchema(ctx context.Context, c *resources.Resource) error {
+	active, err := s.DAL.Integrations().Exists(ctx, integrations.Filter{ContainerID: c.ID})
 	if err != nil || !active {
 		return err
 	}
@@ -91,33 +91,39 @@ func (s *Service) validateIntegrationSchema(ctx context.Context, c *ent.Resource
 	return s.validateEventFields(ctx, typ)
 }
 
-func (s *Service) refreshIntegrationOperation(ctx context.Context, op *ent.Operation) error {
+func (s *Service) refreshIntegrationOperation(ctx context.Context, op *operations.Operation) error {
 	id, err := decodeIntegrationRefresh(op.Payload)
 	if err != nil {
 		return err
 	}
-	var source *ent.ListIntegration
+	var source *integrations.Integration
 	lease := uuid.NewString()
 	err = s.write(ctx, func(t *Service) error {
-		current, e := t.Client.Operation.Get(ctx, op.ID)
+		current, e := t.DAL.Operations().Find(ctx, op.ID)
 		if e != nil {
 			return e
 		}
-		if current.Status != operation.StatusPending {
+		if current.Status != operations.StatusPending {
 			return nil
 		}
 		if e = validateIntegrationRefresh(ctx, t, op.CreatedBy, op.ContainerID, op.Payload); e != nil {
 			return e
 		}
-		source, e = t.Client.ListIntegration.Get(ctx, id)
+		found, e := t.DAL.Integrations().Find(ctx, id)
 		if e != nil {
 			return e
 		}
-		if e = t.checkIntegrationLease(source); e != nil {
+		if e = t.checkIntegrationLease(&found); e != nil {
 			return e
 		}
-		source, e = t.Client.ListIntegration.UpdateOne(source).SetLeaseToken(lease).SetLeaseUntil(time.Now().UTC().Add(integrationLease)).SetLastAttemptAt(time.Now().UTC()).Save(ctx)
-		return e
+		attempt := time.Now().UTC()
+		until := attempt.Add(integrationLease)
+		found.LeaseToken, found.LeaseUntil, found.LastAttemptAt = lease, &until, &attempt
+		if e = t.DAL.Integrations().Save(ctx, &found); e != nil {
+			return e
+		}
+		source = &found
+		return nil
 	})
 	if err != nil || source == nil {
 		return err
@@ -128,8 +134,7 @@ func (s *Service) refreshIntegrationOperation(ctx context.Context, op *ent.Opera
 		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
 		_ = s.write(cleanup, func(t *Service) error {
-			_, e := t.Client.ListIntegration.Update().Where(listintegration.IDEQ(id), listintegration.LeaseTokenEQ(lease)).SetLeaseToken("").ClearLeaseUntil().Save(cleanup)
-			return e
+			return t.DAL.Integrations().ReleaseLease(cleanup, id, lease)
 		})
 	}()
 	if s.integrations == nil {
@@ -168,11 +173,11 @@ func (s *Service) refreshIntegrationOperation(ctx context.Context, op *ent.Opera
 		if row.LeaseToken != lease || row.Version != source.Version || row.LeaseUntil == nil || !row.LeaseUntil.After(time.Now().UTC()) {
 			return ErrIntegrationBusy
 		}
-		current, e := t.Client.Operation.Get(ctx, op.ID)
+		current, e := t.DAL.Operations().Find(ctx, op.ID)
 		if e != nil {
 			return e
 		}
-		if current.Status != operation.StatusPending {
+		if current.Status != operations.StatusPending {
 			return nil
 		}
 		count := row.ItemCount
@@ -183,20 +188,22 @@ func (s *Service) refreshIntegrationOperation(ctx context.Context, op *ent.Opera
 				return errors.New("calendar snapshot could not be applied to the list; existing events were retained")
 			}
 		}
-		b := t.Client.ListIntegration.UpdateOne(row).SetLastSuccessAt(time.Now().UTC()).SetError("").SetItemCount(count).SetLeaseToken("").ClearLeaseUntil()
+		success := time.Now().UTC()
+		row.LastSuccessAt, row.Error, row.ItemCount, row.LeaseToken, row.LeaseUntil = &success, "", count, "", nil
 		if !downloaded.NotModified {
-			stateJSON, _ := json.Marshal(iCalendarState{downloaded.ETag, downloaded.LastModified})
-			b.SetState(stateJSON)
+			row.State, _ = json.Marshal(iCalendarState{downloaded.ETag, downloaded.LastModified})
 		}
-		if e = b.Exec(ctx); e != nil {
+		if e = t.DAL.Integrations().Save(ctx, row); e != nil {
 			return e
 		}
 		result, _ := json.Marshal(map[string]any{"integration_id": id, "item_count": count, "not_modified": downloaded.NotModified})
-		return t.Client.Operation.UpdateOne(current).SetStatus(operation.StatusSucceeded).SetProgress(100).SetCompletedAt(time.Now().UTC()).SetResult(result).Exec(ctx)
+		completed := time.Now().UTC()
+		current.Status, current.Progress, current.CompletedAt, current.Result = operations.StatusSucceeded, 100, &completed, result
+		return t.DAL.Operations().Save(ctx, &current)
 	})
 	return err
 }
-func (s *Service) reconcileCalendar(ctx context.Context, subject string, source *ent.ListIntegration, events []calendar.Event) (int, error) {
+func (s *Service) reconcileCalendar(ctx context.Context, subject string, source *integrations.Integration, events []calendar.Event) (int, error) {
 	typ, err := s.eventType(ctx, source.ContainerID)
 	if err != nil {
 		return 0, err
@@ -204,13 +211,13 @@ func (s *Service) reconcileCalendar(ctx context.Context, subject string, source 
 	if err = s.validateEventFields(ctx, typ); err != nil {
 		return 0, err
 	}
-	rows, err := s.Client.IntegrationItem.Query().Where(integrationitem.IntegrationIDEQ(source.ID)).All(ctx)
+	rows, err := s.DAL.Integrations().Items(ctx, source.ID)
 	if err != nil {
 		return 0, err
 	}
-	byUID := map[string]*ent.IntegrationItem{}
-	for _, row := range rows {
-		byUID[row.ExternalID] = row
+	byUID := map[string]*integrations.Item{}
+	for i := range rows {
+		byUID[rows[i].ExternalID] = &rows[i]
 	}
 	present := map[string]bool{}
 	count := 0
@@ -248,12 +255,12 @@ func (s *Service) reconcileCalendar(ctx context.Context, subject string, source 
 			if err != nil {
 				return 0, err
 			}
-			if err = s.Client.IntegrationItem.Create().SetItemID(item.ID).SetIntegrationID(source.ID).SetExternalID(event.UID).SetProviderKind(IntegrationKindICalendar).SetManagedFields(append([]string{"$name", "$content_type"}, calendar.ManagedFields...)).Exec(ctx); err != nil {
+			if _, err = s.DAL.Integrations().AddItem(ctx, integrations.Item{ItemID: item.ID, IntegrationID: source.ID, ExternalID: event.UID, ProviderKind: IntegrationKindICalendar, ManagedFields: append([]string{"$name", "$content_type"}, calendar.ManagedFields...)}); err != nil {
 				return 0, err
 			}
 			continue
 		}
-		item, err := s.Client.Resource.Get(ctx, row.ItemID)
+		item, err := s.DAL.Resources().Resource(ctx, row.ItemID)
 		if err != nil {
 			return 0, err
 		}
@@ -266,7 +273,7 @@ func (s *Service) reconcileCalendar(ctx context.Context, subject string, source 
 		if err = s.overlayHead(ctx, item); err != nil {
 			return 0, err
 		}
-		head, err := s.Client.ItemRevision.Get(ctx, *item.HeadRevisionID)
+		head, err := s.revision(ctx, *item.HeadRevisionID)
 		if err != nil {
 			return 0, err
 		}
@@ -274,9 +281,9 @@ func (s *Service) reconcileCalendar(ctx context.Context, subject string, source 
 		if err != nil {
 			return 0, err
 		}
-		changed := item.Name != title || data == nil || !equalJSON(json.RawMessage(snapshot), data.Data)
+		changed := item.Name != title || data == nil || !sameJSON(json.RawMessage(snapshot), data.Data)
 		for key, value := range values {
-			if !equalJSON(value, item.Values[key]) {
+			if !sameJSON(value, item.Values[key]) {
 				changed = true
 			}
 		}
@@ -293,7 +300,7 @@ func (s *Service) reconcileCalendar(ctx context.Context, subject string, source 
 		if present[row.ExternalID] {
 			continue
 		}
-		item, err := s.Client.Resource.Get(ctx, row.ItemID)
+		item, err := s.DAL.Resources().Resource(ctx, row.ItemID)
 		if err != nil {
 			return 0, err
 		}
@@ -317,7 +324,7 @@ type CalendarQuery struct {
 
 type CalendarOccurrence struct {
 	calendar.Occurrence
-	Item *ent.Resource `json:"item"`
+	Item *resources.Resource `json:"item"`
 }
 
 func (s *Service) CalendarOccurrences(ctx context.Context, subject, list string, from, to time.Time, surface string, query ...QuerySpec) ([]CalendarOccurrence, error) {
@@ -371,12 +378,12 @@ func (s *Service) CalendarExport(ctx context.Context, subject, list, surface str
 		return calendar.Export(events, ids)
 	})
 }
-func (s *Service) calendarItems(ctx context.Context, subject, list, surface string, query ...QuerySpec) ([]*ent.Resource, error) {
+func (s *Service) calendarItems(ctx context.Context, subject, list, surface string, query ...QuerySpec) ([]*resources.Resource, error) {
 	typ, err := s.eventType(ctx, list)
 	if err != nil {
 		return nil, err
 	}
-	out := []*ent.Resource{}
+	out := []*resources.Resource{}
 	spec := QuerySpec{ContentTypeID: typ.ID}
 	if len(query) > 0 {
 		spec = query[0]
@@ -410,7 +417,7 @@ func (s *Service) calendarItems(ctx context.Context, subject, list, surface stri
 	}
 	return out, nil
 }
-func (s *Service) calendarEventForItem(ctx context.Context, r *ent.Resource) (calendar.Event, error) {
+func (s *Service) calendarEventForItem(ctx context.Context, r *resources.Resource) (calendar.Event, error) {
 	// GetSurface overlays the selected head/published revision ID and values.
 	var snapshot json.RawMessage
 	selected := r.HeadRevisionID
@@ -418,7 +425,7 @@ func (s *Service) calendarEventForItem(ctx context.Context, r *ent.Resource) (ca
 		selected = r.PublishedRevisionID
 	}
 	if selected != nil {
-		rev, err := s.Client.ItemRevision.Get(ctx, *selected)
+		rev, err := s.revision(ctx, *selected)
 		if err != nil {
 			return calendar.Event{}, err
 		}

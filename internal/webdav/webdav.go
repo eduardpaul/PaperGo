@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"net/url"
 	"papergo/internal/auth"
+	"papergo/internal/dal"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
 	"papergo/internal/storage"
@@ -60,7 +61,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	subject, err := h.authenticate(r)
+	r, subject, err := h.authenticate(r)
 	if err != nil {
 		if !errors.Is(err, dms.ErrForbidden) {
 			h.Logger.ErrorContext(r.Context(), "webdav authentication failed", "error", err)
@@ -131,27 +132,35 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // authenticate accepts the deployment's trusted proxy assertion, or an API
-// bearer token or Basic WebDAV app password in bearer-authenticated deployments.
-func (h *Handler) authenticate(r *http.Request) (string, error) {
+// bearer token or Basic access token in bearer-authenticated deployments.
+func (h *Handler) authenticate(r *http.Request) (*http.Request, string, error) {
 	if h.Auth.Kind() == auth.TrustedProxy {
 		ident, err := h.Auth.Authenticate(r)
 		if err != nil {
-			return "", dms.ErrForbidden
+			return r, "", dms.ErrForbidden
 		}
 		if err = h.DMS.Directory().EnsureUser(r.Context(), ident.Subject); err != nil {
-			return "", err
+			return r, "", err
 		}
-		if err = identity.RequireActive(r.Context(), h.DMS.Directory().DB, ident.Subject); err != nil {
-			return "", dms.ErrForbidden
+		if err = identity.RequireActive(r.Context(), dal.NewStore(h.DMS.Directory().DB), ident.Subject); err != nil {
+			return r, "", dms.ErrForbidden
 		}
-		return ident.Subject, nil
+		return r, ident.Subject, nil
 	}
-	scheme, _, _ := strings.Cut(strings.TrimSpace(r.Header.Get("Authorization")), " ")
+	scheme, secret, _ := strings.Cut(strings.TrimSpace(r.Header.Get("Authorization")), " ")
+	secret = strings.TrimSpace(secret)
 	switch {
 	case strings.EqualFold(scheme, "Bearer"):
+		if strings.HasPrefix(secret, identity.AccessTokenPrefix) {
+			token, err := h.DMS.Directory().AuthenticateAccessToken(r.Context(), secret)
+			if err != nil {
+				return r, "", dms.ErrForbidden
+			}
+			return r.WithContext(identity.WithAccessToken(r.Context(), token)), token.Subject, nil
+		}
 		ident, err := h.Auth.Authenticate(r)
 		if err != nil {
-			return "", dms.ErrForbidden
+			return r, "", dms.ErrForbidden
 		}
 		if err = h.DMS.Directory().SyncUser(r.Context(), identity.UserIdentity{
 			Subject:           ident.Subject,
@@ -161,20 +170,24 @@ func (h *Handler) authenticate(r *http.Request) (string, error) {
 			Groups:            ident.Groups,
 			SyncGroups:        ident.SyncGroups,
 		}); err != nil {
-			return "", err
+			return r, "", err
 		}
-		if err = identity.RequireActive(r.Context(), h.DMS.Directory().DB, ident.Subject); err != nil {
-			return "", dms.ErrForbidden
+		if err = identity.RequireActive(r.Context(), dal.NewStore(h.DMS.Directory().DB), ident.Subject); err != nil {
+			return r, "", dms.ErrForbidden
 		}
-		return ident.Subject, nil
+		return r, ident.Subject, nil
 	case strings.EqualFold(scheme, "Basic"):
 		_, password, ok := r.BasicAuth()
 		if !ok {
-			return "", dms.ErrForbidden
+			return r, "", dms.ErrForbidden
 		}
-		return h.DMS.AuthenticateWebDAV(r.Context(), password)
+		token, err := h.DMS.Directory().AuthenticateAccessToken(r.Context(), password)
+		if err != nil {
+			return r, "", dms.ErrForbidden
+		}
+		return r.WithContext(identity.WithAccessToken(r.Context(), token)), token.Subject, nil
 	}
-	return "", dms.ErrForbidden
+	return r, "", dms.ErrForbidden
 }
 
 // parsePath splits an escaped request path into a library ID and decoded

@@ -20,12 +20,12 @@ Reproduce using the pinned SDK:
 ```sh
 python3 scripts/native.py
 source .tools/native/env.sh
-go test -race ./internal/search/zvecstore ./internal/backup ./cmd/admin
-PAPERGO_ZVEC_SOAK=1 go test ./internal/search/zvecstore -run '^TestRealDimensionsSoak$' -count=1 -v
+go test -race ./internal/dal/search/zvecstore ./internal/backup ./cmd/admin
+PAPERGO_ZVEC_SOAK=1 go test ./internal/dal/search/zvecstore -run '^TestRealDimensionsSoak$' -count=1 -v
 PAPERGO_TEST_SEARCH_STORE=zvec go test -race ./internal/dms ./internal/httpapi ./internal/runner \
   -run '(Search|Content|Receipt|Contract|AIComplete|Prefix|SmartFolder|View|Listing|Query)'
-go test ./internal/search/zvecstore -run '^$' -fuzz '^FuzzNativeFilter$' -fuzztime=10s -parallel=2
-go test ./internal/search/zvecstore -run '^$' -fuzz '^FuzzNativeText$' -fuzztime=10s -parallel=2
+go test ./internal/dal/search/zvecstore -run '^$' -fuzz '^FuzzNativeFilter$' -fuzztime=10s -parallel=2
+go test ./internal/dal/search/zvecstore -run '^$' -fuzz '^FuzzNativeText$' -fuzztime=10s -parallel=2
 ```
 
 The regular native suite includes shared store conformance, literal prefixes and typed boundaries, staged content, enrichments, surface/scope updates, restart, acknowledged process-exit recovery, partial-write quarantine, exclusive ownership, offline SQLite → zvec → SQLite copy across batch boundaries, cached-model activation, vector collection and native backup/restore. CI runs the full native suite on Linux amd64 and arm64, plus SDK and packaged-release smoke checks on macOS ARM64 and Windows amd64. Release archives include native SDKs for Linux amd64/arm64, macOS ARM64 and Windows amd64.

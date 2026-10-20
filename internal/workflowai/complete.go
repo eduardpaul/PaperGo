@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"strings"
 
-	"papergo/internal/activitystore"
 	"papergo/internal/ai"
+	"papergo/internal/dal/activitystore"
 	"papergo/internal/doctext"
 	"papergo/internal/forms"
 	"papergo/internal/workflow"
@@ -157,7 +157,7 @@ func prepareComplete(step workflow.Step, in map[string]any) (workflow.Prepared, 
 		if err != nil {
 			return workflow.Prepared{}, err
 		}
-		text, err := step.DMS().BlobText(step.Context(), textID)
+		text, err := step.DMS().DAL.Blobs().Text(step.Context(), textID)
 		if err != nil {
 			return workflow.Prepared{}, err
 		}
@@ -188,10 +188,10 @@ func prepareComplete(step workflow.Step, in map[string]any) (workflow.Prepared, 
 		if err != nil {
 			return workflow.Prepared{}, err
 		}
-		if !strings.HasPrefix(blob.ContentType, "image/") {
+		if !strings.HasPrefix(string(blob.ContentType), "image/") {
 			return workflow.Prepared{}, errors.New("image must be an image file")
 		}
-		job.Images = append(job.Images, imageRef{ObjectKey: blob.ObjectKey, ContentType: blob.ContentType})
+		job.Images = append(job.Images, imageRef{ObjectKey: blob.ObjectKey, ContentType: string(blob.ContentType)})
 		filePins = append(filePins, blobPin{ItemID: itemID, BlobID: blob.ID})
 	}
 	schema, err := json.Marshal(job.Schema)

@@ -28,7 +28,7 @@ The first start takes a few minutes while authentik migrates its database. The l
 
 Open `https://papergo.localhost:18443` in a browser (browsers resolve `*.localhost` to this machine; import `generated/ca.crt` as a trusted authority or accept the warning), choose **Sign in with single sign-on**, and sign in as `papergo-admin` with the `papergo_password` from `generated/credentials.json`. The authentik admin UI is at `https://auth.papergo.localhost:18443/if/admin/` as `akadmin` with `authentik_password`.
 
-`verify.py` checks the HTTP-to-HTTPS redirects, issuer discovery, the embedded app and its browser sign-in settings, then signs in through authentik's flows with the authorization code flow and PKCE, as the browser does. It checks the token's issuer, audience and groups, the administrator group mapping, rejection of unauthenticated and forged tokens, refresh tokens and CORS for the browser, that redirects only go to the registered PaperGo callback, and that a user outside `papergo-users` is denied. It then creates a personal REST token, a workspace and a WebDAV library, exercises Unicode WebDAV PUT/GET/MOVE/COPY with chunked uploads, signs out through authentik and checks that the authentik session ended, and confirms that only Caddy publishes ports. Run `python3 verify.py --large-upload` to also check a 64 MiB upload and download at the configured limit.
+`verify.py` checks the HTTP-to-HTTPS redirects, issuer discovery, the embedded app and its browser sign-in settings, then signs in through authentik's flows with the authorization code flow and PKCE, as the browser does. It checks the token's issuer, audience and groups, the administrator group mapping, rejection of unauthenticated and forged tokens, refresh tokens and CORS for the browser, that redirects only go to the registered PaperGo callback, and that a user outside `papergo-users` is denied. It then creates a personal access token, a workspace and a WebDAV library, exercises Unicode WebDAV PUT/GET/MOVE/COPY with chunked uploads, signs out through authentik and checks that the authentik session ended, and confirms that only Caddy publishes ports. Run `python3 verify.py --large-upload` to also check a 64 MiB upload and download at the configured limit.
 
 ## Deploy with public certificates
 
@@ -55,7 +55,7 @@ Manage people in authentik (**Directory → Users** and **Groups**):
 
 Users manage their password, TOTP and passkeys in authentik's user interface. To require MFA, edit the `default-authentication-mfa-validation` stage and set **Not configured action** to **Force the user to configure an authenticator**. Password recovery and invitations need email: add the `AUTHENTIK_EMAIL__*` settings (host, port, username, password, TLS, from) to both authentik services in a `compose.override.yaml`; the worker sends mail through the `idp-egress` network.
 
-Scripts and integrations use **personal REST tokens** (PaperGo **Settings → REST tokens**, or `POST /v1/identity/me/tokens`) and WebDAV clients use **WebDAV app passwords**, both scoped to the user's current PaperGo roles. They keep working while the user stays active in PaperGo.
+Scripts and integrations use **personal access tokens** (PaperGo **Settings → access tokens**, or `POST /v1/identity/me/tokens`) and WebDAV clients use **WebDAV app passwords**, both scoped to the user's current PaperGo roles. They keep working while the user stays active in PaperGo.
 
 ## Sign-in configuration
 

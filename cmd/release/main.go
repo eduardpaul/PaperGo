@@ -10,14 +10,14 @@ import (
 	"os"
 	"time"
 
-	"papergo/internal/releaseplan"
-	"papergo/migrations"
+	"papergo/internal/dal/migrations"
+	"papergo/internal/dal/releaseplan"
 )
 
 func main() {
 	version := flag.String("version", "", "release tag (vX.Y.Z or vX.Y.Z-rc.N)")
 	previous := flag.String("previous", "", "previous published release bundle")
-	output := flag.String("output", "migrations/release.json", "generated release bundle")
+	output := flag.String("output", "internal/dal/migrations/release.json", "generated release bundle")
 	flag.Parse()
 	if _, err := migrations.CompareVersions(*version, *version); err != nil {
 		log.Fatal(err)
@@ -43,9 +43,6 @@ func main() {
 		}
 	}
 	r := migrations.Release{Version: *version, Hash: migrations.SchemaHash(), Schema: migrations.SchemaSQL}
-	if migrations.Hash(r.Schema) != r.Hash {
-		log.Fatal("atlas.sum is stale; run atlas migrate hash --dir file://migrations")
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	from := r.Schema

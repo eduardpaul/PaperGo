@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"papergo/ent"
 	"papergo/internal/auth"
 	"papergo/internal/dms"
 	"strings"
@@ -33,7 +32,7 @@ func TestRelationshipTaxonomyAPI(t *testing.T) {
 	}
 	bob := (&API{DMS: s, Auth: auth.Development{Token: testToken, Subject: "bob"}, Logger: slog.Default()}).Handler()
 	res := request(bob, "POST", "/v1/items/"+a.ID+"/relationships", fmt.Sprintf(`{"type":"Related","target_id":%q}`, b.ID), testToken, "", "application/json")
-	var edge ent.Relationship
+	var edge dms.RelationshipRecord
 	if res.Code != 201 || json.Unmarshal(res.Body.Bytes(), &edge) != nil {
 		t.Fatal(res.Code, res.Body.String())
 	}

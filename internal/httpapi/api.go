@@ -10,8 +10,10 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
-	"papergo/ent"
 	"papergo/internal/auth"
+	"papergo/internal/dal"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/resources"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
 	"papergo/internal/requestmeta"
@@ -123,11 +125,6 @@ func (a *API) Handler() http.Handler {
 	api.HandleFunc("POST /v1/items/{id}/content/versions/{number}/restore", a.restoreBlob)
 	api.HandleFunc("GET /v1/audit", a.audit)
 	api.HandleFunc("GET /v1/workspaces/{id}/keywords", a.keywords)
-	if a.Auth == nil || a.Auth.Kind() != auth.TrustedProxy {
-		api.HandleFunc("GET /v1/webdav-credentials", a.webdavCredentials)
-		api.HandleFunc("POST /v1/webdav-credentials", a.createWebDAVCredential)
-		api.HandleFunc("DELETE /v1/webdav-credentials/{id}", a.revokeWebDAVCredential)
-	}
 	api.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { a.problem(w, r, 404, "not_found", "route not found") })
 	root := http.NewServeMux()
 	root.HandleFunc("GET /auth/config", func(w http.ResponseWriter, r *http.Request) {
@@ -390,7 +387,7 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 		problem(412, "precondition_failed", "resource changed; read its current ETag before retrying")
 	case errors.Is(err, dms.ErrIntegrationBusy):
 		problem(409, "integration_busy", err.Error())
-	case errors.Is(err, dms.ErrConflict) || identity.IsConstraint(err):
+	case errors.Is(err, dms.ErrConflict) || dberr.IsIntegrityError(err):
 		problem(409, "conflict", "resource conflicts with existing state")
 	case errors.Is(err, storage.ErrUnsupportedFile):
 		a.problem(w, r, 415, "unsupported_file_type", err.Error())
@@ -519,11 +516,11 @@ func (a *API) get(w http.ResponseWriter, r *http.Request) {
 
 // resourceWithAccess is a single resource with the caller's allowed actions.
 type resourceWithAccess struct {
-	*ent.Resource
+	*resources.Resource
 	Access []string `json:"access"`
 }
 
-func (a *API) respondWithAccess(w http.ResponseWriter, r *http.Request, out *ent.Resource) {
+func (a *API) respondWithAccess(w http.ResponseWriter, r *http.Request, out *resources.Resource) {
 	access, err := a.DMS.Access(r.Context(), subject(r), out)
 	if err != nil {
 		a.failure(w, r, err)
@@ -740,7 +737,7 @@ func (a *API) download(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
-	w.Header().Set("Content-Type", b.ContentType)
+	w.Header().Set("Content-Type", string(b.ContentType))
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": b.Filename}))
 	w.Header().Set("ETag", strconv.Quote(b.Sha256))
 	http.ServeContent(transfer.Writer(w), r, b.Filename, b.CreatedAt, file)
@@ -751,13 +748,13 @@ func (a *API) authenticate(next http.Handler) http.Handler {
 		var ident auth.Identity
 		var err error
 		parts := strings.Fields(r.Header.Get("Authorization"))
-		if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") && strings.HasPrefix(parts[1], identity.RESTTokenPrefix) {
-			token, e := a.DMS.Directory().AuthenticateRESTToken(r.Context(), parts[1])
+		if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") && strings.HasPrefix(parts[1], identity.AccessTokenPrefix) {
+			token, e := a.DMS.Directory().AuthenticateAccessToken(r.Context(), parts[1])
 			if e != nil || (a.Auth.Kind() == auth.TrustedProxy && !token.Integration) {
 				err = auth.ErrUnauthenticated
 			} else {
 				ident = auth.Identity{Subject: token.Subject}
-				r = r.WithContext(identity.WithRESTToken(r.Context(), token))
+				r = r.WithContext(identity.WithAccessToken(r.Context(), token))
 			}
 		} else {
 			ident, err = a.Auth.Authenticate(r)
@@ -770,12 +767,12 @@ func (a *API) authenticate(next http.Handler) http.Handler {
 			a.problem(w, r, 401, "unauthorized", "valid authentication is required")
 			return
 		}
-		if _, token := identity.RESTTokenContext(r.Context()); !token && (a.Auth.Kind() == auth.TrustedProxy || a.Auth.Kind() == auth.LocalMode) {
+		if _, token := identity.AccessTokenContext(r.Context()); !token && (a.Auth.Kind() == auth.TrustedProxy || a.Auth.Kind() == auth.LocalMode) {
 			if err = a.DMS.Directory().EnsureUser(r.Context(), ident.Subject); err != nil {
 				a.failure(w, r, err)
 				return
 			}
-		} else if _, personal := identity.RESTTokenContext(r.Context()); !personal {
+		} else if _, personal := identity.AccessTokenContext(r.Context()); !personal {
 			if err = a.DMS.Directory().SyncUser(r.Context(), identity.UserIdentity{
 				Subject:           ident.Subject,
 				Name:              ident.Name,
@@ -788,7 +785,7 @@ func (a *API) authenticate(next http.Handler) http.Handler {
 				return
 			}
 		}
-		if err = identity.RequireActive(r.Context(), a.DMS.Directory().DB, ident.Subject); err != nil {
+		if err = identity.RequireActive(r.Context(), dal.NewStore(a.DMS.Directory().DB), ident.Subject); err != nil {
 			a.failure(w, r, err)
 			return
 		}

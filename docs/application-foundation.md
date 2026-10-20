@@ -1,6 +1,6 @@
 # Reusable application foundation
 
-PaperGo 0.3 adds rich fields, reusable schema templates, saved views, controlled taxonomy, and typed relationships. The deployment remains one organization with multiple workspaces, SQLite, Ent, and Atlas.
+PaperGo 0.3 adds rich fields, reusable schema templates, saved views, controlled taxonomy, and typed relationships. The deployment remains one organization with multiple workspaces, stored in SQLite or PostgreSQL through the DAL.
 
 ## Permission scopes
 
@@ -270,7 +270,7 @@ Operations dispatch through handlers registered at startup. Each handler validat
 
 Each frame carries a durable numeric `id`. Reconnect with `Last-Event-ID` to replay retained changes; the journal retains seven days and an expired cursor returns 410. A new connection starts at the current position. Repeated changes to the same entity may be coalesced, so this stream is a notification API, not an audit feed. Keepalive frames advance the cursor even when intervening changes are hidden by permissions.
 
-Streams use a separate admission pool (four per user, 64 per process), send keepalives and close after 30 minutes for reconnect. Inactive accounts and revoked or expired personal REST tokens receive `reauthenticate` and disconnect. Live run status is reconciled by the workflow dispatcher.
+Streams use a separate admission pool (four per user, 64 per process), send keepalives and close after 30 minutes for reconnect. Inactive accounts and revoked or expired personal access tokens receive `reauthenticate` and disconnect. Live run status is reconciled by the workflow dispatcher.
 
 ## Configuration and content packages
 

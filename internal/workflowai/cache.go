@@ -14,11 +14,11 @@ import (
 	"strconv"
 	"time"
 
-	"papergo/internal/activitystore"
 	"papergo/internal/ai"
+	"papergo/internal/dal/activitystore"
+	"papergo/internal/dal/resultcache"
 	"papergo/internal/dms"
 	"papergo/internal/forms"
-	"papergo/internal/resultcache"
 	"papergo/internal/workflow"
 )
 

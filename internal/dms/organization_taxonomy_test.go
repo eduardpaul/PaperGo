@@ -3,10 +3,12 @@ package dms
 import (
 	"encoding/json"
 	"errors"
-	"papergo/ent/domainevent"
+	auditstore "papergo/internal/dal/audit"
+	"papergo/internal/dal/daltest"
+	"papergo/internal/dal/directory"
+	eventstore "papergo/internal/dal/events"
 	"papergo/internal/identity"
 	"papergo/internal/model"
-	"papergo/internal/testutil"
 	"strings"
 	"testing"
 )
@@ -14,21 +16,21 @@ import (
 func taxonomyOnlyRole(t *testing.T, s *Service, subject string, scopes ...string) string {
 	t.Helper()
 	d := s.Directory()
-	if err := d.SetAssignment(testContext, "alice", identity.MemberRole, identity.Principal{Type: "user", ID: subject}, true); err != nil {
+	if err := d.SetAssignment(testContext, "alice", identity.MemberRole, identity.Principal{Type: directory.PrincipalUser, ID: subject}, true); err != nil {
 		t.Fatal(err)
 	}
 	r, err := d.SaveRole(testContext, "alice", "", 0, identity.RoleInput{Name: "Taxonomy " + subject, Scopes: scopes})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = d.SetAssignment(testContext, "alice", r.ID, identity.Principal{Type: "user", ID: subject}, false); err != nil {
+	if err = d.SetAssignment(testContext, "alice", r.ID, identity.Principal{Type: directory.PrincipalUser, ID: subject}, false); err != nil {
 		t.Fatal(err)
 	}
 	return r.ID
 }
 
 func TestTaxonomyScopesIndependentOfWorkspaceAccess(t *testing.T) {
-	s := NewService(testutil.Database(t).SQL)
+	s := NewService(daltest.Database(t).SQL)
 	ctx := testContext
 	role := taxonomyOnlyRole(t, s, "bob", "taxonomy.read")
 	taxonomyOnlyRole(t, s, "carol", "taxonomy.read", "taxonomy.manage")
@@ -83,7 +85,7 @@ func TestTaxonomyScopesIndependentOfWorkspaceAccess(t *testing.T) {
 			return e
 		},
 	}
-	before, err := s.Client.AuditEvent.Query().Count(ctx)
+	before, err := s.DAL.Audit().Count(ctx, auditstore.Filter{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +96,7 @@ func TestTaxonomyScopesIndependentOfWorkspaceAccess(t *testing.T) {
 			}
 		})
 	}
-	after, err := s.Client.AuditEvent.Query().Count(ctx)
+	after, err := s.DAL.Audit().Count(ctx, auditstore.Filter{})
 	if err != nil || before != after {
 		t.Fatal("denied mutation left an audit", before, after, err)
 	}
@@ -123,7 +125,7 @@ func TestTaxonomyScopesIndependentOfWorkspaceAccess(t *testing.T) {
 	if _, err = s.Term(ctx, "bob", added.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err = s.Directory().SetAssignment(ctx, "alice", role, identity.Principal{Type: "user", ID: "bob"}, true); err != nil {
+	if err = s.Directory().SetAssignment(ctx, "alice", role, identity.Principal{Type: directory.PrincipalUser, ID: "bob"}, true); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = s.TermsByID(ctx, "bob", []string{added.ID}); !errors.Is(err, ErrForbidden) {
@@ -173,7 +175,7 @@ func TestSharedTaxonomyAcrossWorkspacesAndDeletion(t *testing.T) {
 	if _, err = s.MergeTerm(ctx, "carol", old.ID, old.Version, MergeTermInput{TargetTermID: current.ID}); err != nil {
 		t.Fatal(err)
 	}
-	events, err := s.Client.DomainEvent.Query().Where(domainevent.TypeEQ(EventTermMerged)).All(ctx)
+	events, err := s.DAL.Events().List(ctx, eventstore.Filter{Types: []string{EventTermMerged}})
 	if err != nil || len(events) != 2 {
 		t.Fatal("workspace subscribers were omitted", events, err)
 	}

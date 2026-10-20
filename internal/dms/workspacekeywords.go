@@ -2,7 +2,8 @@ package dms
 
 import (
 	"context"
-	"papergo/ent/resource"
+	"papergo/internal/dal/content"
+	"papergo/internal/dal/refs"
 	"strings"
 )
 
@@ -32,59 +33,30 @@ func (s *Service) WorkspaceKeywords(ctx context.Context, subject, workspaceID st
 	if err != nil {
 		return Page[WorkspaceKeywordCount]{}, err
 	}
-	if w.Kind != resource.KindWorkspace {
+	if w.Kind != refs.KindWorkspace {
 		return Page[WorkspaceKeywordCount]{}, invalid("keywords belong to a workspace")
 	}
-	scope, args := "r.workspace_id=?", []any{workspaceID}
+	query := content.WorkspaceKeywords{Reader: principal(ctx, subject), WorkspaceID: workspaceID, Prefix: in.Prefix, Limit: pageSize(in.Limit) + 1}
 	if in.CollectionID != "" {
 		c, err := s.authorize(ctx, subject, in.CollectionID, "read")
 		if err != nil {
 			return Page[WorkspaceKeywordCount]{}, err
 		}
-		if c.WorkspaceID != workspaceID || c.Kind != resource.KindList && c.Kind != resource.KindLibrary {
+		if c.WorkspaceID != workspaceID || c.Kind != refs.KindList && c.Kind != refs.KindLibrary {
 			return Page[WorkspaceKeywordCount]{}, invalid("collection_id must be a list or library of the workspace")
 		}
-		scope, args = "r.container_id=?", []any{in.CollectionID}
-	}
-	readable, readArgs := permissionSQL(ctx, "r.id", subject, "read")
-	selected, surfaceArgs := surfaceSQL(ctx, "r.id", subject, "auto")
-	query := `WITH usage AS (
- SELECT r.id,coalesce(t.merged_into_id,t.id) keyword FROM resources r JOIN resource_keywords k ON k.resource_id=r.id JOIN terms t ON t.id=k.keyword
- WHERE r.kind NOT IN ('item','folder') AND r.deleted_at IS NULL AND ` + scope + ` AND ` + readable + `
- UNION
- SELECT r.id,coalesce(t.merged_into_id,t.id) FROM resources r JOIN item_surfaces p ON p.item_id=r.id JOIN terms t ON t.id IN (` + surfaceKeywordsSQL + `)
- WHERE r.deleted_at IS NULL AND ` + scope + ` AND p.surface=` + selected + ` AND ` + readable + `
- ) SELECT t.id,t.name,count(*) FROM usage u JOIN terms t ON t.id=u.keyword WHERE 1`
-	values := append(append([]any{}, args...), readArgs...)
-	values = append(values, args...)
-	values = append(values, surfaceArgs...)
-	values = append(values, readArgs...)
-	if in.Prefix != "" {
-		query += " AND instr(t.normalized_name,?)=1"
-		values = append(values, strings.ToLower(in.Prefix))
+		query.CollectionID = in.CollectionID
 	}
 	if in.After != "" {
-		name, id, _ := strings.Cut(in.After, "\x1f")
-		query += " AND (t.normalized_name,t.id)>(?,?)"
-		values = append(values, name, id)
+		query.AfterName, query.AfterID, _ = strings.Cut(in.After, "\x1f")
 	}
-	query += " GROUP BY t.id ORDER BY t.normalized_name,t.id LIMIT ?"
-	values = append(values, pageSize(in.Limit)+1)
-	rows, err := s.Client.QueryContext(ctx, query, values...)
+	counts, err := s.DAL.Content().WorkspaceKeywords(ctx, query)
 	if err != nil {
 		return Page[WorkspaceKeywordCount]{}, err
 	}
-	defer rows.Close()
-	out := []WorkspaceKeywordCount{}
-	for rows.Next() {
-		var entry WorkspaceKeywordCount
-		if err = rows.Scan(&entry.Keyword, &entry.Name, &entry.Count); err != nil {
-			return Page[WorkspaceKeywordCount]{}, err
-		}
-		out = append(out, entry)
-	}
-	if err = rows.Err(); err != nil {
-		return Page[WorkspaceKeywordCount]{}, err
+	out := make([]WorkspaceKeywordCount, len(counts))
+	for i, c := range counts {
+		out[i] = WorkspaceKeywordCount{Keyword: c.ID, Name: c.Name, Count: c.Count}
 	}
 	return entityPage(out, in.Limit, func(entry WorkspaceKeywordCount) string { return strings.ToLower(entry.Name) + "\x1f" + entry.Keyword }), nil
 }

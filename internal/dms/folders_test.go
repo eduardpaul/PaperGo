@@ -3,11 +3,10 @@ package dms
 import (
 	"encoding/json"
 	"errors"
+	"papergo/internal/dal/surfaces"
 	"testing"
 
-	"papergo/ent/itemrevision"
-	"papergo/ent/itemsurface"
-	"papergo/ent/publication"
+	"papergo/internal/dal/taxonomy"
 	"papergo/internal/model"
 )
 
@@ -73,7 +72,7 @@ func TestFolderFieldsSearchAndLiveReaderVisibility(t *testing.T) {
 	if _, err = s.RevisionHistory(testContext, "reader", f.ID, 0, 10); !isValidation(err) {
 		t.Fatal("folder history exposed", err)
 	}
-	count, err := s.Client.Publication.Query().Where(publication.ItemIDEQ(f.ID)).Count(testContext)
+	count, err := countPublications(s, f.ID)
 	if err != nil || count != 0 {
 		t.Fatal("folder publication rows", count, err)
 	}
@@ -81,12 +80,12 @@ func TestFolderFieldsSearchAndLiveReaderVisibility(t *testing.T) {
 		t.Fatal(err)
 	}
 	bad := map[string]any{"topic": "unrecognized", "notes": false}
-	before, _ := s.Client.Term.Query().Count(testContext)
+	before, _ := s.DAL.Taxonomy().Terms(testContext, taxonomy.TermFilter{})
 	if _, err = s.Update(testContext, "alice", f.ID, f.Version, UpdateResource{Values: &bad}); !isValidation(err) {
 		t.Fatal("invalid folder metadata accepted", err)
 	}
-	after, _ := s.Client.Term.Query().Count(testContext)
-	if before != after || latest(t, s, f.ID).Version != f.Version {
+	after, _ := s.DAL.Taxonomy().Terms(testContext, taxonomy.TermFilter{})
+	if len(before) != len(after) || latest(t, s, f.ID).Version != f.Version {
 		t.Fatal("invalid metadata leaked writes")
 	}
 	if _, err = s.Update(testContext, "reader", f.ID, f.Version, UpdateResource{Values: &patch}); !errors.Is(err, ErrForbidden) {
@@ -127,7 +126,7 @@ func TestFolderReclassificationSchemaChangesAndRecycle(t *testing.T) {
 	if err = s.Delete(testContext, "alice", f.ID, f.Version, DeleteOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	count, _ := s.Client.ItemSurface.Query().Where(itemsurface.ItemIDEQ(f.ID)).Count(testContext)
+	count, _ := countSurfaces(s, surfaces.Filter{ItemID: f.ID})
 	if count != 0 {
 		t.Fatal("deleted folder has projections", count)
 	}
@@ -154,7 +153,7 @@ func TestFolderReclassificationSchemaChangesAndRecycle(t *testing.T) {
 	if err = s.PurgeDeleted(testContext, "alice", c.ID, f.ID, false); err != nil {
 		t.Fatal(err)
 	}
-	count, err = s.Client.ItemRevision.Query().Where(itemrevision.ItemIDEQ(f.ID)).Count(testContext)
+	count, err = countRevisions(s, f.ID)
 	if err != nil || count != 0 {
 		t.Fatal("purged folder snapshots remain", count, err)
 	}

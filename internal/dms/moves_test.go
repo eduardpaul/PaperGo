@@ -2,12 +2,14 @@ package dms
 
 import (
 	"errors"
+	"papergo/internal/dal/daltest"
+	"papergo/internal/dal/refs"
+	"papergo/internal/dal/resources"
+	"papergo/internal/dal/surfaces"
 	"slices"
 	"testing"
 
-	"papergo/ent"
-	"papergo/ent/grant"
-	"papergo/ent/itemsurface"
+	"papergo/internal/dal/grants"
 )
 
 func TestMoveInboxFileToWritableFolderInAnotherWorkspace(t *testing.T) {
@@ -19,7 +21,7 @@ func TestMoveInboxFileToWritableFolderInAnotherWorkspace(t *testing.T) {
 	}
 	doc, err := s.CreateInboxDocument(ctx, "alice", "", home.InboxLibraryID, DocumentMetadata{
 		Name: "Invoice.pdf", Keywords: []string{"Finance"}, Values: map[string]any{"description": "Incoming invoice"},
-	}, content("invoice.pdf"))
+	}, pdfContent("invoice.pdf"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +67,7 @@ func TestMoveInboxFileToWritableFolderInAnotherWorkspace(t *testing.T) {
 	}
 }
 
-func moveDestination(t *testing.T, s *Service, workspace, kind, typeID string) *ent.Resource {
+func moveDestination(t *testing.T, s *Service, workspace, kind, typeID string) *resources.Resource {
 	t.Helper()
 	c, err := s.Create(testContext, "alice", workspace, CreateResource{Kind: kind, Name: "Destination", ContentTypeIDs: []string{typeID}, PublishingEnabled: true})
 	if err != nil {
@@ -97,13 +99,7 @@ func TestMoveItemAcrossWorkspacesPreservesContentAndResetsACL(t *testing.T) {
 		t.Fatal(err)
 	}
 	other := create(t, s, "", "workspace", "Other", nil)
-	wf, err := s.Client.Workflow.Create().SetWorkspaceID(w.ID).SetKey("audit").SetName("Audit").SetCurrentVersion(1).SetCreatedBy("alice").SetUpdatedBy("alice").Save(testContext)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = s.Client.WorkflowRun.Create().SetID("run").SetWorkflowID(wf.ID).SetWorkflowVersion(1).SetWorkspaceID(w.ID).SetItemID(item.ID).SetEventID("event").SetEventType(EventItemCreated).SetDepth(0).SetActor("alice").Exec(testContext); err != nil {
-		t.Fatal(err)
-	}
+	itemRun(t, s, w.ID, item.ID)
 	if err = s.SetWorkspaceMember(testContext, "alice", other.ID, WorkspaceMember{Subject: "carol", Role: "member"}); err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +115,7 @@ func TestMoveItemAcrossWorkspacesPreservesContentAndResetsACL(t *testing.T) {
 	if revisionCount(t, s, item.ID) != versions {
 		t.Fatal("move-only revision added")
 	}
-	if run, err := s.Client.WorkflowRun.Get(testContext, "run"); err != nil || run.WorkspaceID != other.ID {
+	if run, err := s.DAL.Runs().Find(testContext, "run"); err != nil || run.WorkspaceID != other.ID {
 		t.Fatal("run location not moved", run, err)
 	}
 	if blob, err := s.GetBlob(testContext, "carol", item.ID, ""); err != nil || blob.ObjectKey != "bytes" {
@@ -128,8 +124,8 @@ func TestMoveItemAcrossWorkspacesPreservesContentAndResetsACL(t *testing.T) {
 	if _, err = s.Get(testContext, "bob", item.ID); !errors.Is(err, ErrForbidden) {
 		t.Fatal("source ACL carried", err)
 	}
-	if n, err := s.Client.Grant.Query().Where(grant.ResourceIDEQ(item.ID)).Count(testContext); err != nil || n != 0 {
-		t.Fatal("source grants kept", n, err)
+	if held, err := s.DAL.Grants().List(testContext, grants.Filter{ResourceID: item.ID}); err != nil || len(held) != 0 {
+		t.Fatal("source grants kept", held, err)
 	}
 	if links, err := s.Relationships(testContext, "alice", item.ID, "both", "", "", 50); err != nil || len(links.Data) != 1 || links.Data[0].ID != edge.ID {
 		t.Fatal("links lost", links, err)
@@ -198,9 +194,7 @@ func TestMoveItemFailuresAreAtomic(t *testing.T) {
 	if _, err := s.MoveItem(testContext, "alice", folder.ID, folder.Version, MoveItem{CollectionID: dest.ID}); err == nil {
 		t.Fatal("folder crossed collection")
 	}
-	if _, err := s.Client.ExecContext(testContext, `CREATE TRIGGER fail_move BEFORE INSERT ON item_surfaces WHEN new.container_id='`+dest.ID+`' BEGIN SELECT RAISE(ABORT,'injected move failure'); END;`); err != nil {
-		t.Fatal(err)
-	}
+	daltest.Reject(t, s.DAL, "item_surfaces", daltest.OnInsert, daltest.Row{"container_id": dest.ID})
 	if _, err := s.MoveItem(testContext, "alice", item.ID, item.Version, MoveItem{CollectionID: dest.ID}); err == nil {
 		t.Fatal("injected failure ignored")
 	}
@@ -208,7 +202,7 @@ func TestMoveItemFailuresAreAtomic(t *testing.T) {
 	if raw.Version != item.Version || *raw.ContainerID != c.ID {
 		t.Fatal("partial move", raw)
 	}
-	if projection, err := s.Client.ItemSurface.Query().Where(itemsurface.ItemIDEQ(item.ID), itemsurface.SurfaceEQ(itemsurface.SurfaceHead)).Only(testContext); err != nil || projection.ContainerID != c.ID {
+	if projection, err := s.DAL.Surfaces().Surfaces(testContext, surfaces.Filter{ItemID: item.ID, Surface: refs.SurfaceHead}); err != nil || len(projection) != 1 || projection[0].ContainerID != c.ID {
 		t.Fatal("projection rollback", projection, err)
 	}
 }

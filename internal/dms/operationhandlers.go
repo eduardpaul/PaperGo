@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"papergo/ent"
-	"papergo/ent/fielddefinition"
-	"papergo/ent/operation"
-	"papergo/ent/operationitem"
+	"papergo/internal/dal"
+	"papergo/internal/dal/catalog"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/operations"
 	"papergo/internal/identity"
 	"papergo/internal/requestmeta"
 	"regexp"
@@ -23,27 +23,30 @@ const OperationRetention = 30 * 24 * time.Hour
 type OperationHandler struct {
 	Scope    string
 	Validate func(context.Context, *Service, string, string, json.RawMessage) error
-	Step     func(context.Context, *Service, *ent.Operation) error
+	Step     func(context.Context, *Service, *operations.Operation) error
 	// ExternalStep runs outside the database writer, and owns its checkpoint
 	// transactions. Network integrations must never fetch in a write transaction.
-	ExternalStep func(context.Context, *Service, *ent.Operation) error
-	Failed       func(context.Context, *Service, *ent.Operation, error) error
+	ExternalStep func(context.Context, *Service, *operations.Operation) error
+	Failed       func(context.Context, *Service, *operations.Operation, error) error
 }
 
 func builtInOperationHandlers() map[string]OperationHandler {
 	return map[string]OperationHandler{
 		OperationKindIntegrationRefresh: integrationOperationHandler(),
-		OperationKindFieldIndex: {Step: func(ctx context.Context, s *Service, op *ent.Operation) error { return s.fieldIndexBatch(ctx, op) }, Failed: func(ctx context.Context, s *Service, op *ent.Operation, cause error) error {
-			err := s.Client.FieldDefinition.UpdateOneID(op.FieldID).SetIndexStatus(fielddefinition.IndexStatusFailed).Exec(ctx)
-			if ent.IsNotFound(err) {
+		OperationKindFieldIndex: {Step: func(ctx context.Context, s *Service, op *operations.Operation) error {
+			return s.fieldIndexBatch(ctx, op)
+		}, Failed: func(ctx context.Context, s *Service, op *operations.Operation, cause error) error {
+			err := s.DAL.Catalog().SetIndexStatus(ctx, []string{op.FieldID}, catalog.IndexFailed)
+			if dberr.IsNotFound(err) {
 				return nil
 			}
 			return err
 		}},
 		OperationKindSearchReindex: searchReindexHandler(),
-		OperationKindBulkUpdate: {Scope: "list.write", Step: func(ctx context.Context, s *Service, op *ent.Operation) error { return s.bulkUpdateStep(ctx, op) }, Failed: func(ctx context.Context, s *Service, op *ent.Operation, cause error) error {
-			_, err := s.Client.OperationItem.Delete().Where(operationitem.OperationIDEQ(op.ID)).Exec(ctx)
-			return err
+		OperationKindBulkUpdate: {Scope: "list.write", Step: func(ctx context.Context, s *Service, op *operations.Operation) error {
+			return s.bulkUpdateStep(ctx, op)
+		}, Failed: func(ctx context.Context, s *Service, op *operations.Operation, cause error) error {
+			return s.DAL.Operations().ClearItems(ctx, op.ID)
 		}},
 	}
 }
@@ -72,7 +75,7 @@ func (s *Service) RegisterOperationHandler(kind string, handler OperationHandler
 
 // EnqueueOperation is used by registered feature endpoints. Its validation and
 // permissions commit with the durable payload; payloads are never returned.
-func (s *Service) EnqueueOperation(ctx context.Context, subject, containerID, kind string, payload json.RawMessage) (out *ent.Operation, err error) {
+func (s *Service) EnqueueOperation(ctx context.Context, subject, containerID, kind string, payload json.RawMessage) (out *OperationView, err error) {
 	handler, exists := s.operationHandlers[kind]
 	if !exists || handler.Validate == nil {
 		return nil, invalid("operation kind is not startable")
@@ -87,16 +90,11 @@ func (s *Service) EnqueueOperation(ctx context.Context, subject, containerID, ki
 		if err := handler.Validate(ctx, t, subject, containerID, payload); err != nil {
 			return err
 		}
-		b := t.Client.Operation.Create().SetKind(kind).SetCreatedBy(subject).SetPayload(payload).SetTraceID(t.traceID)
-		if containerID != "" {
-			b.SetContainerID(containerID)
-		}
-		b = operationCredentials(ctx, b)
-		var e error
-		out, e = b.Save(ctx)
+		op, e := t.enqueue(ctx, operations.Operation{ContainerID: containerID, Kind: kind, CreatedBy: subject, Payload: payload})
 		if e != nil {
 			return e
 		}
+		out = viewOperation(op)
 		return t.auditCatalog(ctx, subject, "operation.create", map[string]any{"operation_id": out.ID})
 	})
 	if err == nil {
@@ -108,14 +106,17 @@ func (s *Service) EnqueueOperation(ctx context.Context, subject, containerID, ki
 	return
 }
 
-func operationCredentials(ctx context.Context, b *ent.OperationCreate) *ent.OperationCreate {
-	if token, limited := identity.RESTTokenContext(ctx); limited {
-		b.SetCredentialID(token.ID).SetCredentialScopes(token.Scopes)
+// enqueue records a pending operation in this trace, limited to the caller's
+// access token when one authenticated the request.
+func (s *Service) enqueue(ctx context.Context, op operations.Operation) (operations.Operation, error) {
+	op.TraceID = s.traceID
+	if token, limited := identity.AccessTokenContext(ctx); limited {
+		op.CredentialID, op.CredentialScopes = token.ID, token.Scopes
 	}
-	return b
+	return s.DAL.Operations().Enqueue(ctx, op)
 }
 func (s *Service) operationPermission(ctx context.Context, subject, containerID, scope string) error {
-	if err := identity.RequireActive(ctx, s.tx, subject); err != nil {
+	if err := identity.RequireActive(ctx, dal.NewStore(s.db).WithTx(s.tx), subject); err != nil {
 		return ErrForbidden
 	}
 	if err := s.RequireScope(ctx, subject, scope); err != nil {
@@ -127,11 +128,11 @@ func (s *Service) operationPermission(ctx context.Context, subject, containerID,
 	_, err := s.authorize(ctx, subject, containerID, "write")
 	return err
 }
-func (s *Service) operationContext(ctx context.Context, op *ent.Operation) (context.Context, error) {
+func (s *Service) operationContext(ctx context.Context, op *operations.Operation) (context.Context, error) {
 	ctx = requestmeta.WithTrace(ctx, op.TraceID)
 	if op.CredentialID != "" {
-		ctx = identity.WithRESTToken(ctx, identity.RESTTokenIdentity{Subject: op.CreatedBy, ID: op.CredentialID, Scopes: op.CredentialScopes})
-		if err := identity.RequireCredential(ctx, s.tx, op.CreatedBy); err != nil {
+		ctx = identity.WithAccessToken(ctx, identity.AccessTokenIdentity{Subject: op.CreatedBy, ID: op.CredentialID, Scopes: op.CredentialScopes})
+		if err := identity.RequireCredential(ctx, dal.NewStore(s.db).WithTx(s.tx), op.CreatedBy); err != nil {
 			return ctx, ErrForbidden
 		}
 	}
@@ -145,22 +146,8 @@ func (s *Service) CollectExpiredOperations(ctx context.Context, now time.Time) e
 	for {
 		var n int
 		err := s.write(ctx, func(t *Service) error {
-			rows, err := t.Client.Operation.Query().Where(operation.StatusNEQ(operation.StatusPending), operation.UpdatedAtLTE(cutoff)).Limit(operationPurgePage).All(ctx)
-			if err != nil {
-				return err
-			}
-			ids := make([]string, len(rows))
-			for i, row := range rows {
-				ids[i] = row.ID
-			}
-			n = len(ids)
-			if n == 0 {
-				return nil
-			}
-			if _, err = t.Client.OperationItem.Delete().Where(operationitem.OperationIDIn(ids...)).Exec(ctx); err != nil {
-				return err
-			}
-			_, err = t.Client.Operation.Delete().Where(operation.IDIn(ids...)).Exec(ctx)
+			var err error
+			n, err = t.DAL.Operations().CollectExpired(ctx, cutoff, operationPurgePage)
 			return err
 		})
 		if err != nil || n < operationPurgePage {
@@ -171,28 +158,25 @@ func (s *Service) CollectExpiredOperations(ctx context.Context, now time.Time) e
 
 const operationPurgePage = 200
 
-func (s *Service) failOperation(ctx context.Context, op *ent.Operation, cause error) error {
+func (s *Service) failOperation(ctx context.Context, op *operations.Operation, cause error) error {
 	return s.write(ctx, func(t *Service) error {
-		current, err := t.Client.Operation.Get(ctx, op.ID)
+		current, err := t.DAL.Operations().Find(ctx, op.ID)
 		if err != nil {
 			return err
 		}
-		if current.Status != operation.StatusPending {
+		if current.Status != operations.StatusPending {
 			return nil
 		}
-		b := t.Client.Operation.UpdateOne(current).SetStatus(operation.StatusFailed).SetCompletedAt(time.Now().UTC()).SetError(cause.Error())
+		completed := time.Now().UTC()
+		current.Status, current.CompletedAt, current.Error = operations.StatusFailed, &completed, cause.Error()
 		if op.StartedAt != nil {
-			b.SetStartedAt(*op.StartedAt)
+			current.StartedAt = op.StartedAt
 		}
-		if err := b.Exec(ctx); err != nil {
+		if err := t.DAL.Operations().Save(ctx, &current); err != nil {
 			return err
 		}
 		if handler, exists := t.operationHandlers[op.Kind]; exists && handler.Failed != nil {
-			current, err = t.Client.Operation.Get(ctx, op.ID)
-			if err != nil {
-				return err
-			}
-			return handler.Failed(ctx, t, current, cause)
+			return handler.Failed(ctx, t, &current, cause)
 		}
 		return nil
 	})
@@ -200,7 +184,7 @@ func (s *Service) failOperation(ctx context.Context, op *ent.Operation, cause er
 
 var errUnknownOperation = errors.New("no handler registered for operation kind")
 
-func executeOperation(ctx context.Context, s *Service, handler OperationHandler, op *ent.Operation) (err error) {
+func executeOperation(ctx context.Context, s *Service, handler OperationHandler, op *operations.Operation) (err error) {
 	defer func() {
 		if recover() != nil {
 			err = errors.New("operation handler panicked")
@@ -209,7 +193,7 @@ func executeOperation(ctx context.Context, s *Service, handler OperationHandler,
 	return handler.Step(ctx, s, op)
 }
 
-func executeExternalOperation(ctx context.Context, s *Service, step func(context.Context, *Service, *ent.Operation) error, op *ent.Operation) (err error) {
+func executeExternalOperation(ctx context.Context, s *Service, step func(context.Context, *Service, *operations.Operation) error, op *operations.Operation) (err error) {
 	defer func() {
 		if recover() != nil {
 			err = errors.New("operation handler panicked")
@@ -218,7 +202,7 @@ func executeExternalOperation(ctx context.Context, s *Service, step func(context
 	return step(ctx, s, op)
 }
 
-func operationCheckpoint(op *ent.Operation) string {
+func operationCheckpoint(op *operations.Operation) string {
 	raw, _ := json.Marshal([]any{op.Surface, op.AfterItemID, op.Processed, op.Prepared, op.Matched, op.Updated, op.Failed, op.Progress, op.Failures, op.Error, op.Result})
 	return string(raw)
 }

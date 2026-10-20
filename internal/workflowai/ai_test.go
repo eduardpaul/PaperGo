@@ -9,11 +9,11 @@ import (
 	"time"
 
 	"papergo/internal/ai"
+	"papergo/internal/dal/daltest"
+	"papergo/internal/dal/resultcache"
+	"papergo/internal/dal/search/sqlitestore"
 	"papergo/internal/forms"
-	"papergo/internal/resultcache"
 	"papergo/internal/search"
-	"papergo/internal/search/sqlitestore"
-	"papergo/internal/testutil"
 	"papergo/internal/workflow"
 )
 
@@ -28,7 +28,7 @@ func (c resultTestChat) Complete(_ context.Context, in ai.Completion) (ai.Answer
 
 func TestEnrichmentRetryReusesCompletedChunks(t *testing.T) {
 	ctx := context.Background()
-	cache := resultcache.New(testutil.Database(t).SQL)
+	cache := resultcache.New(daltest.Database(t).SQL)
 	index, err := sqlitestore.Open(ctx, filepath.Join(t.TempDir(), "search.db"), sqlitestore.Options{})
 	if err != nil {
 		t.Fatal(err)
@@ -97,7 +97,7 @@ func TestEnrichmentRetryReusesCompletedChunks(t *testing.T) {
 
 func TestCompleteCachesOnlyValidatedAnswers(t *testing.T) {
 	ctx := context.Background()
-	cache := resultcache.New(testutil.Database(t).SQL)
+	cache := resultcache.New(daltest.Database(t).SQL)
 	calls := 0
 	chat := resultTestChat{complete: func(ai.Completion) (ai.Answer, error) {
 		calls++

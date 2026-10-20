@@ -3,10 +3,11 @@ package dms
 import (
 	"context"
 	"errors"
+	"papergo/internal/dal/surfaces"
 	"testing"
 
-	"papergo/ent/itemrevision"
-	"papergo/ent/itemsurface"
+	runstore "papergo/internal/dal/runs"
+	"papergo/internal/dal/workflows"
 )
 
 func TestRecycleBinRestoreTreeAndPurge(t *testing.T) {
@@ -50,7 +51,7 @@ func TestRecycleBinRestoreTreeAndPurge(t *testing.T) {
 	if _, err = s.Get(testContext, "alice", older.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatal("older deletion resurrected", err)
 	}
-	count, err := s.Client.ItemSurface.Query().Where(itemsurface.ItemIDEQ(item.ID)).Count(testContext)
+	count, err := countSurfaces(s, surfaces.Filter{ItemID: item.ID})
 	if err != nil || count != 2 {
 		t.Fatal("surfaces", count, err)
 	}
@@ -63,7 +64,7 @@ func TestRecycleBinRestoreTreeAndPurge(t *testing.T) {
 	if err = s.PurgeDeleted(testContext, "alice", c.ID, folder.ID, true); err != nil {
 		t.Fatal(err)
 	}
-	if n, err := s.Client.ItemRevision.Query().Where(itemrevision.ItemIDEQ(item.ID)).Count(testContext); err != nil || n != 0 {
+	if n, err := countRevisions(s, item.ID); err != nil || n != 0 {
 		t.Fatal("revisions retained", n, err)
 	}
 	if _, err = s.RestoreDeleted(testContext, "alice", c.ID, item.ID, false); !errors.Is(err, ErrNotFound) {
@@ -116,21 +117,15 @@ func TestPurgeCleanupRetries(t *testing.T) {
 	s, _, c := fixture(t)
 	lib := create(t, s, c.WorkspaceID, "library", "Files", nil)
 	item := create(t, s, lib.ID, "item", "File", nil)
-	wf, err := s.Client.Workflow.Create().SetWorkspaceID(lib.WorkspaceID).SetKey("audit").SetName("Audit").SetCurrentVersion(1).SetCreatedBy("alice").SetUpdatedBy("alice").Save(testContext)
+	itemRun(t, s, lib.WorkspaceID, item.ID)
+	if err := s.DAL.Runs().AddItem(testContext, "run", item.ID, 0); err != nil {
+		t.Fatal(err)
+	}
+	_, err := s.AttachBlob(testContext, "alice", item.ID, item.Version, BlobInput{ObjectKey: "object", Filename: "file", ContentType: "application/pdf", Size: 1, SHA256: emptySHA256})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = s.Client.WorkflowRun.Create().SetID("run").SetWorkflowID(wf.ID).SetWorkflowVersion(1).SetWorkspaceID(lib.WorkspaceID).SetItemID(item.ID).SetEventID("event").SetEventType(EventItemCreated).SetDepth(0).SetActor("alice").Exec(testContext); err != nil {
-		t.Fatal(err)
-	}
-	if err = s.Client.WorkflowRunItem.Create().SetID("run:0").SetRunID("run").SetItemID(item.ID).SetPosition(0).Exec(testContext); err != nil {
-		t.Fatal(err)
-	}
-	_, err = s.AttachBlob(testContext, "alice", item.ID, item.Version, BlobInput{ObjectKey: "object", Filename: "file", ContentType: "application/pdf", Size: 1, SHA256: emptySHA256})
-	if err != nil {
-		t.Fatal(err)
-	}
-	item, err = s.Client.Resource.Get(testContext, item.ID)
+	item, err = s.DAL.Resources().Resource(testContext, item.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,11 +135,11 @@ func TestPurgeCleanupRetries(t *testing.T) {
 	if err = s.PurgeDeleted(testContext, "alice", lib.ID, item.ID, false); err != nil {
 		t.Fatal(err)
 	}
-	if run, err := s.Client.WorkflowRun.Get(testContext, "run"); err != nil || run.ItemID == nil || *run.ItemID != item.ID {
+	if run, err := s.DAL.Runs().Find(testContext, "run"); err != nil || run.ItemID != item.ID {
 		t.Fatal("run audit lost", run, err)
 	}
-	if member, err := s.Client.WorkflowRunItem.Get(testContext, "run:0"); err != nil || member.ItemID != item.ID {
-		t.Fatal("run membership lost", member, err)
+	if members, err := s.DAL.Runs().Items(testContext, []string{"run"}, ""); err != nil || len(members) != 1 || members[0].ItemID != item.ID {
+		t.Fatal("run membership lost", members, err)
 	}
 	d := &failingDeleter{fail: true}
 	if err = s.CleanupPurgedBlobs(testContext, d); err == nil {
@@ -154,8 +149,8 @@ func TestPurgeCleanupRetries(t *testing.T) {
 	if err = s.CleanupPurgedBlobs(testContext, d); err != nil || len(d.keys) != 1 {
 		t.Fatal("retry", d.keys, err)
 	}
-	if n, err := s.Client.BlobDeletion.Query().Count(testContext); err != nil || n != 0 {
-		t.Fatal("cleanup queue", n, err)
+	if queued, err := s.DAL.Blobs().Deletions(testContext, 10); err != nil || len(queued) != 0 {
+		t.Fatal("cleanup queue", queued, err)
 	}
 }
 
@@ -171,7 +166,7 @@ func TestRecycleRestoreConflictRollsBack(t *testing.T) {
 	if _, err := s.RestoreDeleted(testContext, "alice", lib.ID, folder.ID, true); !errors.Is(err, ErrConflict) {
 		t.Fatal("name conflict accepted", err)
 	}
-	if r, err := s.Client.Resource.Get(testContext, item.ID); err != nil || r.DeletedAt == nil {
+	if r, err := s.DAL.Resources().Resource(testContext, item.ID); err != nil || r.DeletedAt == nil {
 		t.Fatal("partial restore", r, err)
 	}
 }
@@ -217,5 +212,17 @@ func TestRecycleBinListsTopLevelDeletionsNewestFirst(t *testing.T) {
 	}
 	if _, err = s.RecycleBin(testContext, "alice", c.ID, RecycleBinQuery{After: "nonsense"}); err == nil {
 		t.Fatal("bad cursor accepted")
+	}
+}
+
+// itemRun records run "run" of a new workflow on an item.
+func itemRun(t *testing.T, s *Service, workspaceID, itemID string) {
+	t.Helper()
+	wf, err := s.DAL.Workflows().Create(testContext, workflows.CreateInput{WorkspaceID: workspaceID, Key: "audit", Name: "Audit", CreatedBy: "alice"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.DAL.Runs().Create(testContext, runstore.CreateInput{ID: "run", WorkflowID: wf.ID, WorkflowVersion: 1, WorkspaceID: workspaceID, ItemID: itemID, EventID: "event", EventType: EventItemCreated, Actor: "alice"}); err != nil {
+		t.Fatal(err)
 	}
 }

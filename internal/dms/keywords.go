@@ -3,12 +3,11 @@ package dms
 import (
 	"context"
 	"encoding/json"
-	"papergo/ent"
-	"papergo/ent/term"
-	"papergo/ent/termset"
 	"strings"
 
-	entsql "entgo.io/ent/dialect/sql"
+	"papergo/internal/dal/catalog"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/taxonomy"
 )
 
 // Keywords are the terms of a organization's keywords set plus the terms of
@@ -17,16 +16,6 @@ import (
 // managed sets.
 
 const maxKeywordSuggestions = 20
-
-func (s *Service) keywordsSet(ctx context.Context) (*ent.TermSet, error) {
-	return s.Client.TermSet.Query().Where(termset.IsKeywordsEQ(true)).Only(ctx)
-}
-
-// keywordTerms selects the active organization keyword terms.
-func keywordTerms(q *ent.TermQuery, keywordsSetID string) *ent.TermQuery {
-	return q.Where(term.DeprecatedEQ(false), term.Or(term.TermSetIDEQ(keywordsSetID),
-		term.AvailableAsKeywordEQ(true)))
-}
 
 // Keywords suggests up to 20 keywords whose name, label or synonym contains
 // search; names that start with it come first.
@@ -41,20 +30,11 @@ func (s *Service) Keywords(ctx context.Context, subject, search string, limit in
 		if e := t.requireTaxonomy(ctx, subject, "read"); e != nil {
 			return nil, e
 		}
-		set, e := t.keywordsSet(ctx)
+		set, e := t.DAL.Taxonomy().KeywordsSet(ctx)
 		if e != nil {
 			return nil, e
 		}
-		q := keywordTerms(t.Client.Term.Query(), set.ID)
-		needle := strings.ToLower(strings.TrimSpace(search))
-		if needle != "" {
-			q.Where(func(sel *entsql.Selector) {
-				sel.Where(entsql.ExprP("(instr(normalized_name,?)>0 OR EXISTS(SELECT 1 FROM json_each(synonyms) WHERE instr(unicode_lower(value),?)>0) OR EXISTS(SELECT 1 FROM json_each(labels) WHERE instr(unicode_lower(value),?)>0))", needle, needle, needle))
-			})
-		}
-		rows, e := q.Order(func(sel *entsql.Selector) {
-			sel.OrderExpr(entsql.ExprP("instr(normalized_name,?)<>1", needle))
-		}, ent.Asc(term.FieldNormalizedName), ent.Asc(term.FieldID)).Limit(limit).All(ctx)
+		rows, e := t.DAL.Taxonomy().Terms(ctx, taxonomy.TermFilter{KeywordSet: set.ID, Current: true, Search: strings.ToLower(strings.TrimSpace(search)), Order: taxonomy.OrderPrefix, Limit: limit})
 		if e != nil {
 			return nil, e
 		}
@@ -77,37 +57,18 @@ func (s *Service) AddKeyword(ctx context.Context, subject string, in KeywordInpu
 		if e := t.requireTaxonomy(ctx, subject, "read"); e != nil {
 			return e
 		}
-		v, set, e := t.keyword(ctx, name)
-		if e != nil || v != nil {
-			out = TermView{Term: v}
+		v, set, found, e := t.DAL.Taxonomy().Keyword(ctx, name)
+		if e != nil || found {
+			out = viewTerm(v)
 			return e
 		}
-		if v, e = t.insertTerm(ctx, set, nil, TermInput{Name: name, Labels: map[string]string{}, Synonyms: []string{}}); e != nil {
+		if v, e = t.insertTerm(ctx, set.ID, TermInput{Name: name, Labels: map[string]string{}, Synonyms: []string{}}); e != nil {
 			return e
 		}
-		out, created = TermView{Term: v}, true
+		out, created = viewTerm(v), true
 		return t.auditTaxonomy(ctx, subject, "keyword.create", map[string]any{"term_id": v.ID})
 	})
 	return
-}
-
-// keyword finds the active keyword called name, if any. A root keyword of the
-// keywords set wins over a promoted term.
-func (s *Service) keyword(ctx context.Context, name string) (*ent.Term, *ent.TermSet, error) {
-	set, e := s.keywordsSet(ctx)
-	if e != nil {
-		return nil, nil, e
-	}
-	key := strings.ToLower(name)
-	rows, e := keywordTerms(s.Client.Term.Query(), set.ID).Where(func(sel *entsql.Selector) {
-		sel.Where(entsql.ExprP("(normalized_name=? OR EXISTS(SELECT 1 FROM json_each(synonyms) WHERE unicode_lower(value)=?))", key, key))
-	}).Order(func(sel *entsql.Selector) {
-		sel.OrderExpr(entsql.ExprP("(term_set_id<>? OR parent_id IS NOT NULL OR normalized_name<>?)", set.ID, key))
-	}, ent.Asc(term.FieldID)).Limit(1).All(ctx)
-	if e != nil || len(rows) == 0 {
-		return nil, set, e
-	}
-	return rows[0], set, nil
 }
 
 type KeywordCount struct {
@@ -126,43 +87,32 @@ func (s *Service) PopularKeywords(ctx context.Context, subject string, top int) 
 		if e := t.requireTaxonomy(ctx, subject, "manage"); e != nil {
 			return nil, e
 		}
-		set, e := t.keywordsSet(ctx)
+		set, e := t.DAL.Taxonomy().KeywordsSet(ctx)
 		if e != nil {
 			return nil, e
 		}
-		rows, e := t.Client.QueryContext(ctx, `WITH usage AS (
- SELECT p.item_id,coalesce(t.merged_into_id,t.id) keyword FROM item_surfaces p JOIN resources c ON c.id=p.container_id AND c.deleted_at IS NULL JOIN resources r ON r.id=p.item_id AND r.deleted_at IS NULL JOIN terms t ON t.id IN (`+surfaceKeywordsSQL+`) WHERE p.surface=CASE WHEN c.publishing_enabled THEN 'head' ELSE 'published' END
- ) SELECT u.keyword,count(DISTINCT u.item_id) n FROM usage u JOIN terms t ON t.id=u.keyword WHERE t.deprecated=0 AND (t.term_set_id=? OR t.available_as_keyword) GROUP BY u.keyword ORDER BY n DESC,u.keyword LIMIT ?`, set.ID, top)
+		popular, e := t.DAL.Content().PopularKeywords(ctx, set.ID, top)
 		if e != nil {
 			return nil, e
 		}
 		counts := map[string]int{}
 		ids := []string{}
-		for rows.Next() {
-			var id string
-			var n int
-			if e = rows.Scan(&id, &n); e != nil {
-				break
-			}
-			counts[id] = n
-			ids = append(ids, id)
+		for _, c := range popular {
+			counts[c.ID] = c.Count
+			ids = append(ids, c.ID)
 		}
-		if e == nil {
-			e = rows.Err()
+		if len(ids) == 0 {
+			return []KeywordCount{}, nil
 		}
-		rows.Close()
+		terms, e := t.DAL.Taxonomy().Terms(ctx, taxonomy.TermFilter{IDs: ids})
 		if e != nil {
 			return nil, e
 		}
-		terms, e := t.Client.Term.Query().Where(term.IDIn(ids...)).All(ctx)
-		if e != nil {
-			return nil, e
-		}
-		byID := map[string]*ent.Term{}
+		byID := map[string]taxonomy.Term{}
 		for _, v := range terms {
 			byID[v.ID] = v
 		}
-		ordered := make([]*ent.Term, len(ids))
+		ordered := make([]taxonomy.Term, len(ids))
 		for i, id := range ids {
 			ordered[i] = byID[id]
 		}
@@ -193,43 +143,38 @@ func (s *Service) PromoteKeyword(ctx context.Context, subject, id string, versio
 		if e != nil {
 			return e
 		}
-		if !from.IsKeywords || kw.Deprecated {
+		if !from.Keywords || kw.Deprecated {
 			return invalid("only active keywords of the keywords set can be promoted")
 		}
-		set, e := t.Client.TermSet.Get(ctx, in.TermSetID)
-		if ent.IsNotFound(e) || e == nil && set.IsKeywords {
+		set, e := t.DAL.Taxonomy().Set(ctx, in.TermSetID)
+		if dberr.IsNotFound(e) || e == nil && set.Keywords {
 			return invalid("term_set_id must identify another organization term set")
 		}
 		if e != nil {
 			return e
 		}
-		parent, e := t.moveParent(ctx, set, in.ParentID)
+		matches, e := t.DAL.Taxonomy().Terms(ctx, taxonomy.TermFilter{SetID: set.ID, Current: true, Match: kw.NormalizedName,
+			In: taxonomy.MatchName | taxonomy.MatchLabels | taxonomy.MatchSynonyms, Order: taxonomy.OrderExact, Limit: 1})
 		if e != nil {
 			return e
 		}
-		key := kw.NormalizedName
-		matches, e := t.Client.Term.Query().Where(term.TermSetIDEQ(set.ID), term.DeprecatedEQ(false), func(sel *entsql.Selector) {
-			sel.Where(entsql.ExprP("(normalized_name=? OR EXISTS(SELECT 1 FROM json_each(labels) WHERE unicode_lower(value)=?) OR EXISTS(SELECT 1 FROM json_each(synonyms) WHERE unicode_lower(value)=?))", key, key, key))
-		}).Order(func(sel *entsql.Selector) { sel.OrderExpr(entsql.ExprP("normalized_name<>?", key)) }, ent.Asc(term.FieldPath)).Limit(1).All(ctx)
-		if e != nil {
-			return e
-		}
-		var promoted *ent.Term
+		var promoted taxonomy.Term
 		action := "keyword.promote"
 		if len(matches) > 0 {
 			action = "keyword.merge"
-			if promoted, e = t.mergeInto(ctx, subject, kw, matches[0], set, true); e != nil {
+			if promoted, e = t.mergeInto(ctx, subject, kw, matches[0], true); e != nil {
 				return e
 			}
 		} else {
-			if promoted, e = t.relocate(ctx, kw, set, parent); e != nil {
-				return e
+			parent := ""
+			if in.ParentID != nil {
+				parent = *in.ParentID
 			}
-			if promoted, e = t.Client.Term.UpdateOne(promoted).SetAvailableAsKeyword(true).Save(ctx); e != nil {
-				return e
+			if promoted, e = t.DAL.Taxonomy().Move(ctx, kw.ID, version, set.ID, parent, true); e != nil {
+				return taxonomyError(e)
 			}
 		}
-		views, e := t.termViews(ctx, []*ent.Term{promoted})
+		views, e := t.termViews(ctx, []taxonomy.Term{promoted})
 		if e != nil {
 			return e
 		}
@@ -256,7 +201,7 @@ func (s *Service) normalizeKeywords(ctx context.Context, subject string, values,
 	for _, value := range previous {
 		old[value] = true
 	}
-	normalized, err := s.resolveTermValues(ctx, subject, &ent.FieldDefinition{Key: "$keywords", Type: "keywords"}, input, old)
+	normalized, err := s.resolveTermValues(ctx, subject, &catalog.FieldDefinition{Key: "$keywords", Type: "keywords"}, input, old)
 	if err != nil {
 		return nil, err
 	}
@@ -269,7 +214,6 @@ func (s *Service) normalizeKeywords(ctx context.Context, subject string, values,
 
 // Surface keywords include the intrinsic keywords and every indexed keywords
 // field, with one occurrence per term even if several fields hold it.
-const surfaceKeywordsSQL = "SELECT keyword FROM item_surface_keywords WHERE surface_id=p.id UNION SELECT value_text FROM field_values WHERE surface_id=p.id AND (field_type='keywords' OR field_type='term' AND value_text IN (SELECT t.id FROM terms t JOIN term_sets ts ON ts.id=t.term_set_id WHERE ts.is_keywords OR t.available_as_keyword))"
 
 // Keyword filters accept the same IDs and labels as keyword assignment, but
 // querying never adds terms to the vocabulary.
@@ -277,21 +221,19 @@ func (s *Service) keywordFilter(ctx context.Context, raw string) (string, error)
 	if raw == "" {
 		return raw, nil
 	}
-	found, err := s.Client.Term.Get(ctx, raw)
-	if err != nil && !ent.IsNotFound(err) {
-		return "", err
-	}
-	if found == nil {
-		found, _, err = s.keyword(ctx, strings.TrimSpace(raw))
-		if err != nil {
-			return "", err
+	terms := s.DAL.Taxonomy()
+	found, err := terms.Term(ctx, raw)
+	if dberr.IsNotFound(err) {
+		var ok bool
+		if found, _, ok, err = terms.Keyword(ctx, strings.TrimSpace(raw)); err == nil && !ok {
+			return raw, nil
 		}
 	}
-	if found == nil {
-		return raw, nil
+	if err != nil {
+		return "", err
 	}
-	if found.MergedIntoID != nil {
-		return *found.MergedIntoID, nil
+	if found.Merged() {
+		return found.MergedIntoID, nil
 	}
 	return found.ID, nil
 }
@@ -329,12 +271,12 @@ func (s *Service) keywordFilters(ctx context.Context, filter *FilterExpr) (*Filt
 
 // normalizeKeywordDefault stores keyword and taxonomy defaults as the same
 // term IDs used by assigned values, including in portable schema definitions.
-func (s *Service) normalizeKeywordDefault(ctx context.Context, subject string, d *ent.FieldDefinition) error {
+func (s *Service) normalizeKeywordDefault(ctx context.Context, subject string, d *catalog.FieldDefinition) error {
 	values := map[string]any{}
-	if err := s.normalizeItemValues(ctx, subject, []*ent.FieldDefinition{d}, values, nil, true); err != nil {
+	if err := s.normalizeItemValues(ctx, subject, []*catalog.FieldDefinition{d}, values, nil, true); err != nil {
 		return err
 	}
-	if d.Type == "keywords" || d.Type == "term" {
+	if d.Type == catalog.FieldKeywords || d.Type == catalog.FieldTerm {
 		raw, err := json.Marshal(values[d.Key])
 		if err != nil {
 			return err

@@ -121,7 +121,7 @@ func TestSearchFileContentRequiresDocumentRead(t *testing.T) {
 	if err = store.PublishContent(ctx, item.ID, b.ID, "generation"); err != nil {
 		t.Fatal(err)
 	}
-	limited := identity.WithRESTToken(ctx, identity.RESTTokenIdentity{Scopes: []string{"list.read"}})
+	limited := identity.WithAccessToken(ctx, identity.AccessTokenIdentity{Scopes: []string{"list.read"}})
 	if _, err = s.GetBlob(limited, "alice", item.ID, ""); !errors.Is(err, dms.ErrForbidden) {
 		t.Fatalf("download: %v", err)
 	}

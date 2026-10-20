@@ -3,8 +3,8 @@ package dms
 import (
 	"context"
 	"encoding/json"
-	"papergo/ent"
-	"papergo/ent/contenttype"
+	"papergo/internal/dal/catalog"
+	"papergo/internal/dal/dberr"
 	"reflect"
 	"sort"
 )
@@ -85,7 +85,7 @@ func (s *Service) RegisterCollectionTemplate(in CollectionTemplate) error {
 		if err := validateName(typ.Name); err != nil {
 			return err
 		}
-		defs := []*ent.FieldDefinition{}
+		defs := []*catalog.FieldDefinition{}
 		fields := map[string]bool{}
 		for _, f := range typ.Fields {
 			if f.ContentTypeID != "" || fields[f.Key] {
@@ -145,11 +145,11 @@ func (s *Service) CollectionTemplates(ctx context.Context, subject string) ([]Co
 
 func (s *Service) provisionCollectionTypes(ctx context.Context, subject string, template CollectionTemplate) ([]string, error) {
 	ids := []string{}
-	shared := map[string]*ent.FieldDefinition{}
+	shared := map[string]*catalog.FieldDefinition{}
 	// Load existing shared types first so new types reuse their live field IDs.
 	for _, recipe := range template.ContentTypes {
-		typ, err := s.Client.ContentType.Query().Where(contenttype.TemplateKeyEQ(recipe.Key)).Only(ctx)
-		if ent.IsNotFound(err) {
+		typ, err := s.DAL.Catalog().OneContentType(ctx, catalog.ContentTypeFilter{TemplateKey: recipe.Key})
+		if dberr.IsNotFound(err) {
 			continue
 		}
 		if err != nil {
@@ -167,12 +167,12 @@ func (s *Service) provisionCollectionTypes(ctx context.Context, subject string, 
 		}
 	}
 	for _, recipe := range template.ContentTypes {
-		typ, err := s.Client.ContentType.Query().Where(contenttype.TemplateKeyEQ(recipe.Key)).Only(ctx)
+		typ, err := s.DAL.Catalog().OneContentType(ctx, catalog.ContentTypeFilter{TemplateKey: recipe.Key})
 		if err == nil {
 			ids = append(ids, typ.ID)
 			continue
 		}
-		if !ent.IsNotFound(err) {
+		if !dberr.IsNotFound(err) {
 			return nil, err
 		}
 		raw, err := s.templateDefinition(ctx, subject, "", recipe)
@@ -191,7 +191,7 @@ func (s *Service) provisionCollectionTypes(ctx context.Context, subject string, 
 					return nil, invalid("template field identity conflicts: " + d.Key)
 				}
 			} else {
-				live, err = s.Client.FieldDefinition.Create().SetKey(d.Key).SetLabel(d.Label).SetType(d.Type).SetRequired(d.Required).SetChoices(d.Choices).SetIndexed(d.Indexed).SetScale(d.Scale).SetOptions(d.Options).Save(ctx)
+				live, err = s.persistFieldDefinition(ctx, d)
 				if err != nil {
 					return nil, err
 				}
@@ -206,7 +206,7 @@ func (s *Service) provisionCollectionTypes(ctx context.Context, subject string, 
 		if err = s.validateContentType(ctx, &candidate); err != nil {
 			return nil, err
 		}
-		typ, err = s.Client.ContentType.Create().SetKey(recipe.Key).SetTemplateKey(recipe.Key).SetName(recipe.Name).SetFieldIds(fieldIDs).SetRules(candidate.Rules).Save(ctx)
+		typ, err = s.persistContentType(ctx, candidate, recipe.Key)
 		if err != nil {
 			return nil, err
 		}

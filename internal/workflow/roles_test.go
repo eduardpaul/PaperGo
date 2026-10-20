@@ -5,12 +5,13 @@ import (
 	"errors"
 	"testing"
 
+	"papergo/internal/dal/daltest"
+	"papergo/internal/dal/workflows"
 	"papergo/internal/dms"
-	"papergo/internal/testutil"
 )
 
 func TestEnsureDefaultsRetriesAfterRollback(t *testing.T) {
-	db := testutil.Database(t)
+	db := daltest.Database(t)
 	s := dms.NewService(db.SQL)
 	ctx := context.Background()
 	ws, err := s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Workspace"})
@@ -27,8 +28,8 @@ func TestEnsureDefaultsRetriesAfterRollback(t *testing.T) {
 	if !errors.Is(err, injected) {
 		t.Fatal(err)
 	}
-	if count, err := s.Client.Workflow.Query().Count(ctx); err != nil || count != 0 {
-		t.Fatalf("rollback: %d %v", count, err)
+	if rows, err := s.DAL.Workflows().List(ctx, workflows.Filter{}); err != nil || len(rows) != 0 {
+		t.Fatalf("rollback: %d %v", len(rows), err)
 	}
 	for range 2 {
 		if err = s.Write(ctx, func(tx *dms.Service) error { return EnsureDefaults(ctx, tx, ws.ID) }); err != nil {
@@ -41,7 +42,7 @@ func TestEnsureDefaultsRetriesAfterRollback(t *testing.T) {
 			want++
 		}
 	}
-	if count, err := s.Client.Workflow.Query().Count(ctx); err != nil || count != want {
-		t.Fatalf("retry and repeat: %d, want %d: %v", count, want, err)
+	if rows, err := s.DAL.Workflows().List(ctx, workflows.Filter{}); err != nil || len(rows) != want {
+		t.Fatalf("retry and repeat: %d, want %d: %v", len(rows), want, err)
 	}
 }

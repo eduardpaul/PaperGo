@@ -3,7 +3,8 @@ package dms
 import (
 	"context"
 	"errors"
-	"papergo/ent"
+	"papergo/internal/dal"
+	"papergo/internal/dal/resources"
 	"papergo/internal/identity"
 )
 
@@ -12,9 +13,9 @@ func (s *Service) RequireScope(ctx context.Context, subject, scope string) error
 	if s.homeProvisioning {
 		return nil
 	}
-	var q identity.Querier = s.db
+	q := dal.NewStore(s.db)
 	if s.transaction {
-		q = s.tx
+		q = dal.NewStore(s.db).WithTx(s.tx)
 	}
 	err := identity.RequireScope(ctx, q, subject, scope)
 	if errors.Is(err, identity.ErrForbidden) {
@@ -31,10 +32,9 @@ func (s *Service) requireTaxonomy(ctx context.Context, subject, action string) e
 	return s.RequireScope(ctx, subject, scope)
 }
 func (s *Service) auditTaxonomy(ctx context.Context, subject, action string, details map[string]any) error {
-	typ, id := auditEntity(action, nil, details)
-	return s.Client.AuditEvent.Create().SetSubject(subject).SetAction(action).SetEntityType(typ).SetEntityID(id).SetProperties(s.changedProperties(id, action)).SetTraceID(s.traceID).SetDetails(details).Exec(ctx)
+	return s.RecordEntity(ctx, subject, action, AuditTarget{}, details)
 }
-func (s *Service) contentTypeResource(ctx context.Context, subject, id, action string) (*ent.Resource, error) {
+func (s *Service) contentTypeResource(ctx context.Context, subject, id, action string) (*resources.Resource, error) {
 	scope := "contentType.read"
 	if action == "manage" {
 		scope = "contentType.manage"
@@ -44,7 +44,7 @@ func (s *Service) contentTypeResource(ctx context.Context, subject, id, action s
 	}
 	return s.authorize(ctx, subject, id, action)
 }
-func (s *Service) schemaWorkspace(ctx context.Context, subject, id, action string) (*ent.Resource, error) {
+func (s *Service) schemaWorkspace(ctx context.Context, subject, id, action string) (*resources.Resource, error) {
 	scope := "contentType.read"
 	if action == "manage" {
 		scope = "contentType.manage"

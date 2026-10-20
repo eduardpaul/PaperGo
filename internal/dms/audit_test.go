@@ -2,6 +2,7 @@ package dms
 
 import (
 	"errors"
+	auditstore "papergo/internal/dal/audit"
 	"papergo/internal/identity"
 	"papergo/internal/requestmeta"
 	"slices"
@@ -50,7 +51,7 @@ func TestOrganizationAuditFiltersPropertiesAndPaging(t *testing.T) {
 	// Equal timestamps use descending IDs as the stable second key.
 	tie := time.Now().UTC()
 	for i := 0; i < 2; i++ {
-		if err = s.Client.AuditEvent.Create().SetCreatedAt(tie).SetSubject("alice").SetAction("tie.update").SetEntityType("tie").SetProperties([]string{}).SetTraceID("tie").SetDetails(map[string]any{}).Exec(ctx); err != nil {
+		if _, err = s.DAL.Audit().Append(ctx, auditstore.Event{CreatedAt: tie, Subject: "alice", Action: "tie.update", EntityType: "tie", TraceID: "tie"}); err != nil {
 			t.Fatal(err)
 		}
 	}

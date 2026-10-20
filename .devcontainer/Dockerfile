@@ -2,19 +2,6 @@
 # Keep Go and Node aligned with .github/workflows/ci.yml and the runtime build.
 FROM node:24.15.0-bookworm-slim AS node
 
-# PaperGo's schema uses FTS5, which upstream Atlas 1.3.0 images do not enable.
-# Build the pinned Community source with the SQLite feature the app requires.
-FROM golang:1.27.2-bookworm AS atlas
-ADD --checksum=sha256:4d83772262864d35f8490d919eb405aa47c44d5b703496494b3141c691ed8987 \
-    https://codeload.github.com/ariga/atlas/tar.gz/refs/tags/v1.3.0 /tmp/atlas.tar.gz
-RUN mkdir -p /src/atlas && tar -xzf /tmp/atlas.tar.gz --strip-components=1 -C /src/atlas
-WORKDIR /src/atlas/cmd/atlas
-RUN --mount=type=cache,target=/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-    go build -p 2 -tags sqlite_fts5 \
-        -ldflags="-X ariga.io/atlas/cmd/atlas/internal/cmdapi.version=v1.3.0" \
-        -o /out/atlas .
-
 FROM golang:1.27.2-bookworm
 
 RUN apt-get update \
@@ -36,7 +23,6 @@ RUN set -eu; \
 
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
-COPY --from=atlas /out/atlas /usr/local/bin/atlas
 RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -s /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 

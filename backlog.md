@@ -547,7 +547,7 @@ Scheduled maintenance creates durable DBOS executions while PaperGo is idle, but
 
 #### Proposed Specification
 1. Use an ordinary rowid table while retaining the unique `(run_id, step_id)` key and current transactional replay semantics. An isolated full-sample copy with this layout and compaction was 288 KiB smaller (7.8% of the database).
-2. Edit `migrations/20261007000100_schema.sql` in place, keep Ent metadata consistent where applicable, regenerate Ent and refresh the Atlas checksum. Do not add migrations, compatibility paths or data conversion procedures.
+2. Edit both DAL schema masters in place and regenerate Bob models from the PostgreSQL master. Do not add migrations, compatibility paths or data conversion procedures.
 3. Measure table plus primary-key-index allocation on representative step sizes, including outputs around the overflow threshold.
 
 #### Acceptance Criteria
@@ -844,7 +844,7 @@ Currently, document viewing and thumbnail displays either download full-resoluti
 In PaperDotNet, administrators can generate system-level API access tokens from the Administration console for external integrations, CLI tooling, and webhooks. In PaperGo, token creation is currently limited to personal user tokens in user preferences (`/settings/tokens`), which cannot represent system service accounts.
 
 #### Technical Analysis
-- **Schema (`ent/schema/identityresttoken.go`)**: Already includes `subject`, `name`, `prefix`, `secret_hash`, `scopes`, `expires_at`, `revoked_at`.
+- **Schema (`ent/schema/accesstoken.go`)**: Already includes `subject`, `name`, `prefix`, `secret_hash`, `scopes`, `expires_at`, `revoked_at`.
 - **API (`internal/httpapi/identity.go:14-25`)**: Currently mounted under `/v1/identity/me/tokens` bound to `subject(r)`.
 - Administration interface has no screen to inspect, issue, or revoke organization-wide service tokens.
 

@@ -3,9 +3,10 @@ package forms
 import (
 	"context"
 	"encoding/json"
+	"papergo/internal/dal/daltest"
+	"papergo/internal/dal/directory"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
-	"papergo/internal/testutil"
 	"strings"
 	"testing"
 )
@@ -146,7 +147,7 @@ func TestOpenDictionariesDefaultsAndValidation(t *testing.T) {
 
 func TestTermsPickerSelections(t *testing.T) {
 	ctx := context.Background()
-	service := dms.NewService(testutil.Database(t).SQL)
+	service := dms.NewService(daltest.Database(t).SQL)
 	group, err := service.CreateTermGroup(ctx, "alice", dms.TermGroupInput{Name: "Topics"})
 	if err != nil {
 		t.Fatal(err)
@@ -160,7 +161,7 @@ func TestTermsPickerSelections(t *testing.T) {
 		t.Fatal(err)
 	}
 	sets := MustParse(`{"type":"object","properties":{"pick":{"type":"string","x-papergo":{"kind":"terms","select":"sets","group_id":"` + group.ID + `"}}}}`)
-	if err = service.Directory().SetAssignment(ctx, "alice", identity.MemberRole, identity.Principal{Type: "user", ID: "bob"}, true); err != nil {
+	if err = service.Directory().SetAssignment(ctx, "alice", identity.MemberRole, identity.Principal{Type: directory.PrincipalUser, ID: "bob"}, true); err != nil {
 		t.Fatal(err)
 	}
 	terms := MustParse(`{"type":"object","properties":{"pick":{"type":"string","x-papergo":{"kind":"terms","term_set_id":"` + set.ID + `"}}}}`)

@@ -2,10 +2,8 @@ package identity
 
 import (
 	"context"
-	"database/sql"
-	"encoding/json"
 	"errors"
-	"strings"
+	"papergo/internal/dal"
 )
 
 var (
@@ -22,7 +20,6 @@ func invalid(message string) error       { return &ValidationError{message} }
 
 const AdministratorRole = "administrator"
 const MemberRole = "member"
-const MaxGroupDepth = 10
 
 type Scope struct {
 	Name             string `json:"name"`
@@ -43,103 +40,35 @@ var Catalog = []Scope{
 	{"organization.manage", false}, {"audit.read", false},
 }
 
-type Querier interface {
-	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
-	QueryRowContext(context.Context, string, ...any) *sql.Row
-	ExecContext(context.Context, string, ...any) (sql.Result, error)
-}
-
-// GroupIDsSQL expands nested memberships upward. UNION deduplicates diamonds
-// and bounds traversal even if an invalid cycle is inserted outside the API.
-const GroupIDsSQL = `WITH RECURSIVE effective_groups(id) AS (
- SELECT group_id FROM identity_memberships WHERE principal_type='user' AND principal_id=?
- UNION SELECT m.group_id FROM identity_memberships m JOIN effective_groups e
- ON m.principal_type='group' AND m.principal_id=e.id
-) SELECT id FROM effective_groups`
-
-// PrincipalSQL binds two occurrences of subject, and keeps user/group ID
-// namespaces distinct. It is shared by resource ACLs and organization roles.
-func PrincipalSQL(alias string, subject string) (string, []any) {
-	return `((` + alias + `.principal_type='user' AND ` + alias + `.principal_id=?) OR (` + alias + `.principal_type='group' AND ` + alias + `.principal_id IN (` + GroupIDsSQL + `)))`, []any{subject, subject}
-}
-
-func ScopeSQL(ctx context.Context, subject, scope string) (string, []any) {
-	if !credentialAllows(ctx, scope) {
-		return "0", nil
-	}
-	query, args := ScopeExpressionSQL(ctx, subject, "?")
-	return query, append(args, scope)
-}
-
-func scopeJSON(scopes []string) string { raw, _ := json.Marshal(scopes); return string(raw) }
-
-// ScopeExpressionSQL accepts only a trusted SQL expression built by the caller.
-func ScopeExpressionSQL(ctx context.Context, subject, expression string) (string, []any) {
-	principal, args := PrincipalSQL("a", subject)
-	restriction := ""
-	if token, limited := ctx.Value(restTokenContextKey{}).(RESTTokenIdentity); limited {
-		if len(token.Scopes) == 0 {
-			return "0", nil
-		}
-		marks := make([]string, len(token.Scopes))
-		for i, scope := range token.Scopes {
-			marks[i] = "?"
-			args = append(args, scope)
-		}
-		restriction = " AND sc.value IN (" + strings.Join(marks, ",") + ")"
-	}
-	roles := `(EXISTS (SELECT 1 FROM identity_users u WHERE u.id=? AND u.active=1) AND EXISTS (SELECT 1 FROM identity_assignments a JOIN identity_roles r ON r.id=a.role_id JOIN json_each(r.scopes) sc WHERE ` + principal + restriction + ` AND sc.value=` + expression + `))`
-	args = append([]any{subject}, args...)
-	// A queued operation retains the credential ID and cap, so it can use the
-	// same live integration grant without storing its secret or trusting flags.
-	if token, limited := RESTTokenContext(ctx); limited {
-		// The scope expression may contain placeholders; callers append those
-		// after our arguments. Keep it in one outer comparison.
-		roles = `(EXISTS (SELECT 1 FROM identity_users u WHERE u.id=? AND u.active=1) AND EXISTS (SELECT 1 FROM identity_assignments a JOIN identity_roles r ON r.id=a.role_id JOIN json_each(r.scopes) sc WHERE ` + principal + restriction + ` AND sc.value=scope.value))`
-		integration := `EXISTS(SELECT 1 FROM identity_rest_tokens t JOIN identity_users u ON u.id=t.subject JOIN json_each(t.scopes) sc WHERE t.id=? AND t.subject=? AND t.integration=1 AND t.revoked_at IS NULL AND (t.expires_at IS NULL OR datetime(t.expires_at)>CURRENT_TIMESTAMP) AND u.active=1 AND u.deleted_at IS NULL AND sc.value=scope.value)`
-		args = append(args, token.ID, subject)
-		return `(EXISTS(SELECT 1 FROM json_each(?) scope WHERE (` + roles + ` OR ` + integration + `) AND scope.value=` + expression + `))`, append([]any{scopeJSON(token.Scopes)}, args...)
-	}
-	return roles, args
-}
-
-func RequireScope(ctx context.Context, q Querier, subject, scope string) error {
+func RequireScope(ctx context.Context, store *dal.Store, subject, scope string) error {
 	if !credentialAllows(ctx, scope) {
 		return ErrForbidden
 	}
-	filter, args := ScopeSQL(ctx, subject, scope)
-	var allowed bool
-	if err := q.QueryRowContext(ctx, "SELECT "+filter, args...).Scan(&allowed); err != nil {
+	scopes, err := EffectiveScopes(ctx, store, subject)
+	if err != nil {
 		return err
 	}
-	if !allowed {
-		return ErrForbidden
+	for _, v := range scopes {
+		if v == scope {
+			return nil
+		}
 	}
-	return nil
+	return ErrForbidden
 }
-
-func EffectiveScopes(ctx context.Context, q Querier, subject string) ([]string, error) {
-	filter, args := PrincipalSQL("a", subject)
-	query := `SELECT DISTINCT sc.value FROM identity_assignments a JOIN identity_roles r ON r.id=a.role_id JOIN json_each(r.scopes) sc WHERE EXISTS(SELECT 1 FROM identity_users u WHERE u.id=? AND u.active=1) AND ` + filter + ` ORDER BY sc.value`
-	args = append([]any{subject}, args...)
-	if token, limited := RESTTokenContext(ctx); limited {
-		query = strings.TrimSuffix(query, " ORDER BY sc.value") + ` UNION SELECT sc.value FROM identity_rest_tokens t JOIN identity_users u ON u.id=t.subject JOIN json_each(t.scopes) sc WHERE t.id=? AND t.subject=? AND t.integration=1 AND t.revoked_at IS NULL AND (t.expires_at IS NULL OR datetime(t.expires_at)>CURRENT_TIMESTAMP) AND u.active=1 AND u.deleted_at IS NULL ORDER BY 1`
-		args = append(args, token.ID, subject)
+func EffectiveScopes(ctx context.Context, store *dal.Store, subject string) ([]string, error) {
+	tokenID := ""
+	if token, ok := AccessTokenContext(ctx); ok {
+		tokenID = token.ID
 	}
-	rows, err := q.QueryContext(ctx, query, args...)
+	scopes, err := store.Directory().EffectiveScopes(ctx, subject, tokenID)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 	out := []string{}
-	for rows.Next() {
-		var scope string
-		if err = rows.Scan(&scope); err != nil {
-			return nil, err
-		}
+	for _, scope := range scopes {
 		if credentialAllows(ctx, scope) {
 			out = append(out, scope)
 		}
 	}
-	return out, rows.Err()
+	return out, nil
 }

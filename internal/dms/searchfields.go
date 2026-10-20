@@ -1,14 +1,14 @@
 package dms
 
 import (
+	"cmp"
 	"context"
-	"errors"
+	"papergo/internal/dal/catalog"
+	"papergo/internal/dal/content"
+	"papergo/internal/dal/taxonomy"
+	"papergo/internal/search"
 	"slices"
 	"strings"
-
-	"papergo/ent"
-	"papergo/ent/fielddefinition"
-	"papergo/internal/search"
 )
 
 // SearchField is a field search can filter on: a key with a type and
@@ -28,11 +28,11 @@ type SearchField struct {
 }
 
 // searchOperators are the filter operators of each kind of field.
-func searchOperators(typ string) []string {
+func searchOperators(typ catalog.FieldType) []string {
 	switch typ {
-	case "term", "keywords":
+	case catalog.FieldTerm, catalog.FieldKeywords:
 		return []string{"eq", "ne", "in", "under", "present", "missing"}
-	case "boolean", "choice", "lookup", "person":
+	case catalog.FieldBoolean, catalog.FieldChoice, catalog.FieldLookup, catalog.FieldPerson:
 		return []string{"eq", "ne", "in", "present", "missing"}
 	default:
 		return []string{"eq", "ne", "gt", "gte", "lt", "lte", "in", "present", "missing"}
@@ -42,40 +42,30 @@ func searchOperators(typ string) []string {
 // searchFieldDefinitions are the field definitions of the lists and
 // libraries the subject may read, optionally of one workspace or
 // collection, by key. Notes are text, not filters.
-func (s *Service) searchFieldDefinitions(ctx context.Context, subject, workspaceID, collectionID string) (map[string][]*ent.FieldDefinition, error) {
-	readable, args := permissionSQL(ctx, "r.id", subject, "read")
-	conds := []string{"r.kind IN ('list','library')", "r.deleted_at IS NULL", readable}
-	if workspaceID != "" {
-		conds, args = append(conds, "r.workspace_id=?"), append(args, workspaceID)
-	}
-	if collectionID != "" {
-		conds, args = append(conds, "r.id=?"), append(args, collectionID)
-	}
-	rows, err := s.Client.QueryContext(ctx, `SELECT DISTINCT f.value FROM resources r JOIN collection_types a ON a.container_id=r.id
- JOIN content_types t ON t.id=a.content_type_id, json_each(t.field_ids) f WHERE `+strings.Join(conds, " AND "), args...)
+func (s *Service) searchFieldDefinitions(ctx context.Context, subject, workspaceID, collectionID string) (map[string][]*catalog.FieldDefinition, error) {
+	types, err := s.readableContentTypes(ctx, subject, workspaceID, collectionID)
 	if err != nil {
 		return nil, err
 	}
-	var ids []string
-	for rows.Next() {
-		var id string
-		if err = rows.Scan(&id); err != nil {
-			break
+	ids := []string{}
+	for _, typ := range types {
+		for _, id := range typ.FieldIds {
+			if !slices.Contains(ids, id) {
+				ids = append(ids, id)
+			}
 		}
-		ids = append(ids, id)
 	}
-	if err = errors.Join(err, rows.Err(), rows.Close()); err != nil || len(ids) == 0 {
-		return map[string][]*ent.FieldDefinition{}, err
+	if len(ids) == 0 {
+		return map[string][]*catalog.FieldDefinition{}, nil
 	}
-	defs, err := s.Client.FieldDefinition.Query().Where(fielddefinition.IDIn(ids...), fielddefinition.TypeNEQ(fielddefinition.TypeNote)).
-		Order(ent.Asc(fielddefinition.FieldKey), ent.Asc(fielddefinition.FieldID)).All(ctx)
+	defs, err := s.DAL.Catalog().Fields(ctx, catalog.FieldFilter{IDs: append([]string{}, ids...), ExcludeType: "note"})
 	if err != nil {
 		return nil, err
 	}
-	out := map[string][]*ent.FieldDefinition{}
+	out := map[string][]*catalog.FieldDefinition{}
 	for _, d := range defs {
 		// Preserve the scopes, available choices and index readiness needed by typed rule editors.
-		if !slices.ContainsFunc(out[d.Key], func(x *ent.FieldDefinition) bool {
+		if !slices.ContainsFunc(out[d.Key], func(x *catalog.FieldDefinition) bool {
 			return x.Type == d.Type && x.Scale == d.Scale && x.Options.Multiple == d.Options.Multiple && x.Options.TermSetID == d.Options.TermSetID && x.Options.LookupContainerID == d.Options.LookupContainerID && queryable(x) == queryable(d) && slices.Equal(x.Choices, d.Choices)
 		}) {
 			out[d.Key] = append(out[d.Key], d)
@@ -106,7 +96,7 @@ func (s *Service) SearchFields(ctx context.Context, subject, workspaceID, collec
 		}) {
 			for _, d := range defs[key] {
 				out = append(out, SearchField{Key: d.Key, Label: d.Label, Type: string(d.Type), Scale: d.Scale, Multiple: d.Options.Multiple,
-					Choices: d.Choices, TermSetID: d.Options.TermSetID, Operators: searchOperators(string(d.Type)), Queryable: queryable(d), LookupContainerID: d.Options.LookupContainerID})
+					Choices: d.Choices, TermSetID: d.Options.TermSetID, Operators: searchOperators(d.Type), Queryable: queryable(d), LookupContainerID: d.Options.LookupContainerID})
 			}
 		}
 		return out, nil
@@ -125,28 +115,33 @@ func (s *Service) SearchContentTypes(ctx context.Context, subject, workspaceID, 
 		return nil, err
 	}
 	return read(ctx, s, func(t *Service) ([]SearchContentType, error) {
-		readable, args := permissionSQL(ctx, "r.id", subject, "read")
-		conditions := []string{"r.kind IN ('list','library')", "r.deleted_at IS NULL", readable}
-		if workspaceID != "" {
-			conditions, args = append(conditions, "r.workspace_id=?"), append(args, workspaceID)
-		}
-		if collectionID != "" {
-			conditions, args = append(conditions, "r.id=?"), append(args, collectionID)
-		}
-		rows, err := t.Client.QueryContext(ctx, `SELECT DISTINCT t.id,t.name,t.key FROM resources r JOIN collection_types a ON a.container_id=r.id JOIN content_types t ON t.id=a.content_type_id WHERE `+strings.Join(conditions, " AND ")+` ORDER BY t.name,t.id`, args...)
+		types, err := t.readableContentTypes(ctx, subject, workspaceID, collectionID)
 		if err != nil {
 			return nil, err
 		}
-		out := []SearchContentType{}
-		for rows.Next() {
-			var typ SearchContentType
-			if err = rows.Scan(&typ.ID, &typ.Name, &typ.Key); err != nil {
-				break
-			}
-			out = append(out, typ)
+		out := make([]SearchContentType, len(types))
+		for i, typ := range types {
+			out[i] = SearchContentType{ID: typ.ID, Name: typ.Name, Key: typ.Key}
 		}
-		return out, errors.Join(err, rows.Err(), rows.Close())
+		slices.SortFunc(out, func(a, b SearchContentType) int {
+			return cmp.Or(strings.Compare(a.Name, b.Name), strings.Compare(a.ID, b.ID))
+		})
+		return out, nil
 	})
+}
+
+// readableContentTypes are the content types of the lists and libraries the
+// subject may read, optionally of one workspace or collection.
+func (s *Service) readableContentTypes(ctx context.Context, subject, workspaceID, collectionID string) ([]*catalog.ContentType, error) {
+	scope := content.Collections{Reader: principal(ctx, subject), WorkspaceID: workspaceID}
+	if collectionID != "" {
+		scope.IDs = []string{collectionID}
+	}
+	collections, err := s.DAL.Content().CollectionIDs(ctx, scope)
+	if err != nil {
+		return nil, err
+	}
+	return s.DAL.Catalog().ContentTypes(ctx, catalog.ContentTypeFilter{CollectionIDs: collections})
 }
 
 // Search filters are bounded like collection query filters.
@@ -158,7 +153,7 @@ const (
 // searchFilter compiles a filter on search fields: each condition applies
 // to every type and scale its key has among the definitions, with the value
 // encoded as the field index encodes it.
-func (s *Service) searchFilter(ctx context.Context, f *FilterExpr, defs map[string][]*ent.FieldDefinition, depth int, nodes *int) (*search.FieldFilter, error) {
+func (s *Service) searchFilter(ctx context.Context, f *FilterExpr, defs map[string][]*catalog.FieldDefinition, depth int, nodes *int) (*search.FieldFilter, error) {
 	if *nodes++; depth > maxSearchFilterDepth || *nodes > maxSearchFilterNodes {
 		return nil, invalid("filter is limited to 32 nodes and depth 6")
 	}
@@ -242,9 +237,9 @@ func cmpOr(a, b error) error {
 }
 
 // searchCondition compiles a condition on one field definition.
-func (s *Service) searchCondition(ctx context.Context, d *ent.FieldDefinition, op string, f *FilterExpr) (search.FieldFilter, error) {
+func (s *Service) searchCondition(ctx context.Context, d *catalog.FieldDefinition, op string, f *FilterExpr) (search.FieldFilter, error) {
 	c := search.FieldFilter{Key: d.Key, Type: string(d.Type), Scale: d.Scale, Op: op}
-	if !slices.Contains(searchOperators(c.Type), op) {
+	if !slices.Contains(searchOperators(d.Type), op) {
 		return c, invalid(f.Field + " does not support " + op)
 	}
 	if op == "present" || op == "missing" {
@@ -271,7 +266,7 @@ func (s *Service) searchCondition(ctx context.Context, d *ent.FieldDefinition, o
 		}
 		c.Values = append(c.Values, searchQueryValue(encoded))
 	}
-	if d.Type != "term" && d.Type != "keywords" {
+	if d.Type != catalog.FieldTerm && d.Type != catalog.FieldKeywords {
 		return c, nil
 	}
 	// A term matches the terms merged into it; under also its descendants.
@@ -316,17 +311,15 @@ func searchQueryValue(v any) search.FieldValue {
 // SearchTermAliases is a term with the terms merged into it: retained values
 // may hold any of these IDs while displaying the target's words.
 func (s *Service) SearchTermAliases(ctx context.Context, id string) ([]string, error) {
-	rows, err := s.Client.QueryContext(ctx, "SELECT ? UNION SELECT id FROM terms WHERE merged_into_id=?", id, id)
+	merged, err := s.DAL.Taxonomy().Terms(ctx, taxonomy.TermFilter{MergedInto: id})
 	if err != nil {
 		return nil, err
 	}
-	out := []string{}
-	for rows.Next() {
-		var v string
-		if err = rows.Scan(&v); err != nil {
-			break
+	out := []string{id}
+	for _, t := range merged {
+		if t.ID != id {
+			out = append(out, t.ID)
 		}
-		out = append(out, v)
 	}
-	return out, errors.Join(err, rows.Err(), rows.Close())
+	return out, nil
 }

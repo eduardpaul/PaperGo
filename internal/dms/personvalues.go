@@ -2,13 +2,13 @@ package dms
 
 import (
 	"context"
-	"papergo/ent"
-	"papergo/ent/identityuser"
+	"papergo/internal/dal/catalog"
+	"papergo/internal/dal/directory"
 	"papergo/internal/identity"
 )
 
 // Person IDs are enrolled OIDC subjects, the organization directory's user IDs.
-func normalizePersonRef(_ *ent.FieldDefinition, value any) (any, error) {
+func normalizePersonRef(_ *catalog.FieldDefinition, value any) (any, error) {
 	id, ok := value.(string)
 	if !ok {
 		return nil, invalid("expected a user ID")
@@ -25,7 +25,7 @@ func (s *Service) validatePersonValues(ctx context.Context, values []any, old ma
 		if old[id] {
 			continue
 		}
-		exists, err := s.Client.IdentityUser.Query().Where(identityuser.IDEQ(id), identityuser.ActiveEQ(true)).Exist(ctx)
+		exists, err := s.DAL.Directory().ActiveUser(ctx, id)
 		if err != nil {
 			return err
 		}
@@ -40,5 +40,13 @@ func (s *Service) People(ctx context.Context, subject string) ([]string, error) 
 	if err := s.RequireScope(ctx, subject, "list.read"); err != nil {
 		return nil, err
 	}
-	return s.Client.IdentityUser.Query().Where(identityuser.ActiveEQ(true)).Order(ent.Asc(identityuser.FieldID)).IDs(ctx)
+	users, err := s.DAL.Directory().Users(ctx, directory.UserFilter{Active: true})
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, len(users))
+	for i, u := range users {
+		ids[i] = u.ID
+	}
+	return ids, nil
 }

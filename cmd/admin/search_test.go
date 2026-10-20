@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"papergo/internal/dal/search/sqlitestore"
+	"papergo/internal/dal/search/zvecstore"
 	"papergo/internal/search"
-	"papergo/internal/search/sqlitestore"
-	"papergo/internal/search/zvecstore"
 )
 
 func TestSearchCopyCommand(t *testing.T) {

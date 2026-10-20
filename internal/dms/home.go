@@ -3,9 +3,8 @@ package dms
 import (
 	"context"
 	"errors"
-	"papergo/ent"
-	"papergo/ent/identityuser"
-	"papergo/ent/resource"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/resources"
 )
 
 var ErrProtectedHome = errors.New("Home and its default libraries are protected")
@@ -31,17 +30,17 @@ func (s *Service) Home(ctx context.Context, subject string) (out Home, err error
 // the owning write transaction; it grants no general creation capability.
 func (s *Service) ensureHome(ctx context.Context, subject string) (Home, error) {
 	var out Home
-	active, err := s.Client.IdentityUser.Query().Where(identityuser.IDEQ(subject), identityuser.ActiveEQ(true), identityuser.DeletedAtIsNil()).Exist(ctx)
-	if err != nil {
+	user, err := s.DAL.Directory().User(ctx, subject)
+	if err != nil && !dberr.IsNotFound(err) {
 		return out, err
 	}
-	if !active {
+	if err != nil || !user.Live() {
 		return out, ErrForbidden
 	}
 	s.homeProvisioning = true
 	defer func() { s.homeProvisioning = false }()
-	w, err := s.Client.Resource.Query().Where(resource.PersonalOwnerIDEQ(subject)).Only(ctx)
-	if ent.IsNotFound(err) {
+	w, err := s.DAL.Resources().One(ctx, resources.Filter{PersonalOwnerID: subject})
+	if dberr.IsNotFound(err) {
 		w, err = s.create(ctx, subject, "", CreateResource{Kind: "workspace", Name: "Home", Description: "Personal workspace."}, nil)
 	}
 	if err != nil {
@@ -58,8 +57,8 @@ func (s *Service) ensureHome(ctx context.Context, subject string) (Home, error) 
 		{"home.documents", "Documents", "Your documents.", &out.DocumentsLibraryID},
 		{"home.inbox", "Inbox", "New uploads land here for triage.", &out.InboxLibraryID},
 	} {
-		lib, err := s.Client.Resource.Query().Where(resource.WorkspaceIDEQ(w.ID), resource.SystemKeyEQ(recipe.key)).Only(ctx)
-		if ent.IsNotFound(err) {
+		lib, err := s.DAL.Resources().One(ctx, resources.Filter{WorkspaceID: w.ID, SystemKey: resources.SystemKey(recipe.key)})
+		if dberr.IsNotFound(err) {
 			lib, err = s.create(ctx, subject, w.ID, CreateResource{Name: recipe.name, Description: recipe.description, TemplateKey: "documents"}, nil)
 		}
 		if err != nil {

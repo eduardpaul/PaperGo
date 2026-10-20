@@ -1,20 +1,24 @@
 package dms
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"papergo/internal/dal/daltest"
+	"papergo/internal/dal/resources"
 	"reflect"
 	"slices"
 	"strconv"
 	"testing"
+	"time"
 
-	"papergo/ent"
-	"papergo/ent/domainevent"
+	"papergo/internal/dal"
+	eventstore "papergo/internal/dal/events"
 )
 
-func changeEvents(t *testing.T, s *Service, typ string) []*ent.DomainEvent {
+func changeEvents(t *testing.T, s *Service, typ string) []eventstore.Event {
 	t.Helper()
-	rows, err := s.Client.DomainEvent.Query().Where(domainevent.TypeEQ(typ)).Order(ent.Asc(domainevent.FieldID)).All(testContext)
+	rows, err := s.DAL.Events().List(testContext, eventstore.Filter{Types: []string{typ}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,14 +31,14 @@ func TestPermissionsChangedEvents(t *testing.T) {
 	item := create(t, s, folder.ID, "item", "Item", nil)
 	commits := 0
 	s.OnCommit(func() { commits++ })
-	for _, r := range []*ent.Resource{list, folder, item} {
+	for _, r := range []*resources.Resource{list, folder, item} {
 		updated, err := s.SetPermissions(WithCause(testContext, 1, "run"), "alice", r.ID, r.Version, Permissions{CopyInherited: true})
 		if err != nil {
 			t.Fatal(err)
 		}
 		events := changeEvents(t, s, EventPermissionsChanged)
 		e := events[len(events)-1]
-		if e.WorkspaceID != w.ID || e.CollectionID == nil || *e.CollectionID != list.ID || e.ResourceID == nil || *e.ResourceID != r.ID || e.Actor != "alice" || e.Depth != 2 || e.CauseRunID == nil || *e.CauseRunID != "run" {
+		if e.WorkspaceID != w.ID || e.CollectionID != list.ID || e.ResourceID != r.ID || e.Actor != "alice" || e.Depth != 2 || e.CauseRunID != "run" {
 			t.Fatalf("event context: %+v", e)
 		}
 		before, after := e.Data["previous"].(map[string]any), e.Data["current"].(map[string]any)
@@ -103,7 +107,7 @@ func TestWorkspaceMembershipRaisesPermissionsChanged(t *testing.T) {
 	}
 	for i, want := range [][2]string{{"", "member"}, {"member", "visitor"}, {"visitor", ""}} {
 		e := events[i]
-		if e.CollectionID != nil || e.ResourceID == nil || *e.ResourceID != w.ID || e.Data["resource_kind"] != "workspace" || e.Data["member_subject"] != "bob" || e.Data["previous_role"] != want[0] || e.Data["role"] != want[1] {
+		if e.CollectionID != "" || e.ResourceID != w.ID || e.Data["resource_kind"] != "workspace" || e.Data["member_subject"] != "bob" || e.Data["previous_role"] != want[0] || e.Data["role"] != want[1] {
 			t.Fatal(e)
 		}
 	}
@@ -130,7 +134,7 @@ func TestPermissionGrantChangesRaiseEventsWithoutInheritanceChange(t *testing.T)
 	for i, e := range events {
 		current := e.Data["current"].(map[string]any)
 		grants := current["grants"].([]any)
-		if e.CollectionID == nil || *e.CollectionID != library.ID || e.Data["resource_kind"] != "library" || current["inherit"] != false {
+		if e.CollectionID != library.ID || e.Data["resource_kind"] != "library" || current["inherit"] != false {
 			t.Fatal(e)
 		}
 		if i < 2 {
@@ -173,7 +177,7 @@ func TestTermChangedEventsFanOutAndRollback(t *testing.T) {
 	}
 	workspaces := map[string]bool{first.ID: true, second.ID: true}
 	for _, e := range events {
-		if !workspaces[e.WorkspaceID] || e.ResourceID != nil || e.CollectionID != nil || e.Actor != "alice" || e.Depth != 3 || e.CauseRunID == nil || *e.CauseRunID != "curation" {
+		if !workspaces[e.WorkspaceID] || e.ResourceID != "" || e.CollectionID != "" || e.Actor != "alice" || e.Depth != 3 || e.CauseRunID != "curation" {
 			t.Fatal(e)
 		}
 		delete(workspaces, e.WorkspaceID)
@@ -193,9 +197,7 @@ func TestTermChangedEventsFanOutAndRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 	// An audit failure must roll back both the relabel and every workspace event.
-	if _, err = s.db.Exec(`CREATE TRIGGER reject_term_audit BEFORE INSERT ON audit_events WHEN NEW.action='term.update' BEGIN SELECT RAISE(ABORT, 'reject audit'); END`); err != nil {
-		t.Fatal(err)
-	}
+	daltest.Reject(t, s.DAL, "audit_events", daltest.OnInsert, daltest.Row{"action": "term.update"})
 	if _, err = s.UpdateTerm(testContext, "alice", term.ID, updated.Version, TermInput{Name: "Rejected"}); err == nil {
 		t.Fatal("audit failure was ignored")
 	}
@@ -232,7 +234,7 @@ func TestPermissionTargets(t *testing.T) {
 		return ids
 	}
 	sorted := func(ids ...string) []string { slices.Sort(ids); return ids }
-	setPermissions := func(r *ent.Resource, in Permissions) Event {
+	setPermissions := func(r *resources.Resource, in Permissions) Event {
 		t.Helper()
 		current, err := s.Get(testContext, "alice", r.ID)
 		if err != nil {
@@ -243,9 +245,9 @@ func TestPermissionTargets(t *testing.T) {
 		}
 		events := changeEvents(t, s, EventPermissionsChanged)
 		row := events[len(events)-1]
-		e := Event{ID: row.ID, Type: row.Type, WorkspaceID: row.WorkspaceID, ResourceID: *row.ResourceID, Data: row.Data}
-		if row.CollectionID != nil {
-			e.CollectionID = *row.CollectionID
+		e := Event{ID: row.ID, Type: row.Type, WorkspaceID: row.WorkspaceID, ResourceID: row.ResourceID, Data: row.Data}
+		if row.CollectionID != "" {
+			e.CollectionID = row.CollectionID
 		}
 		return e
 	}
@@ -276,11 +278,24 @@ func TestPermissionTargets(t *testing.T) {
 	}
 }
 
-func mustGet(t *testing.T, s *Service, id string) *ent.Resource {
+func mustGet(t *testing.T, s *Service, id string) *resources.Resource {
 	t.Helper()
 	r, err := s.Get(testContext, "alice", id)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return r
+}
+
+// dispatchAll marks every logged event dispatched.
+func dispatchAll(ctx context.Context, store *dal.Store) error {
+	pending, err := store.Events().List(ctx, eventstore.Filter{Undispatched: true})
+	if err != nil {
+		return err
+	}
+	ids := make([]string, len(pending))
+	for i, e := range pending {
+		ids[i] = e.ID
+	}
+	return store.Events().Dispatch(ctx, ids, time.Now())
 }

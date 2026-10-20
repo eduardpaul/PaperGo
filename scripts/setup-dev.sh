@@ -6,11 +6,14 @@ python3 scripts/native.py
 source .tools/native/env.sh
 
 go mod download
+# The release planner tests need sqlite3def; the devcontainer provides it.
+if ! command -v sqlite3def >/dev/null && ! bash scripts/sqlite3def.sh; then
+    printf 'sqlite3def could not be installed; release planner tests will fail until it is.\n' >&2
+fi
 npm ci --prefix web
 npm --prefix web run build
 mkdir -p data/blobs .cache
-atlas migrate validate --env local
-atlas migrate apply --env local
+go run ./cmd/admin initialize --database data/papergo.db
 
 # Keep the same private, random token across container rebuilds and API restarts.
 if [[ ! -e .cache/development.env ]]; then

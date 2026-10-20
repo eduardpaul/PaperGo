@@ -2,7 +2,7 @@ package dms
 
 import (
 	"fmt"
-	"papergo/ent/fieldvalue"
+	"papergo/internal/dal/surfaces"
 	"papergo/internal/model"
 	"strings"
 	"testing"
@@ -52,7 +52,7 @@ func TestValidationLargeArrayPersistsAndDeduplicates(t *testing.T) {
 	if len(item.Values["selected"].([]any)) != 150 {
 		t.Fatal("array normalization", item.Values)
 	}
-	n, err := s.Client.FieldValue.Query().Where(fieldvalue.ItemIDEQ(item.ID)).Count(testContext)
+	n, err := countFieldValues(s, surfaces.ValueFilter{ItemID: item.ID})
 	if err != nil || n != 150 {
 		t.Fatal("indexed values", n, err)
 	}

@@ -213,8 +213,8 @@ These differences shape the Go design. Each changes something in the port.
 | Package | Contents | Imports |
 | --- | --- | --- |
 | `internal/search` | Store interface and types, the `FullTextQuery` parser, `Filter` tree, `Service`, RRF, snippets, chunkers, the document builder (from a read snapshot to `Document`) | `dms` read API; standard library otherwise |
-| `internal/search/sqlitestore` | The default store in `search.db`, with its in-memory vector index | `modernc.org/sqlite` |
-| `internal/search/zvecstore` | Native zvec store through cgo | `github.com/zvec-ai/zvec-go` |
+| `internal/dal/search/sqlitestore` | The default store in `search.db`, with its in-memory vector index | `modernc.org/sqlite` |
+| `internal/dal/search/zvecstore` | Native zvec store through cgo | `github.com/zvec-ai/zvec-go` |
 | `internal/search/storetest` | Conformance suite that each store's tests call | `search` |
 | `internal/doctext` | Page text of a file: PDF text layer, rendering and OCR through the port, the text cache | `ocr`, `imaging`, a PDF reader (section 7.3) |
 | `internal/ai` | Embeddings client (OpenAI-compatible `/v1/embeddings`), retries, query cache | standard library |
@@ -827,7 +827,7 @@ P1 and P2 give global search over all items and folders, and move collection sea
 
 ## P6 implementation and validation
 
-`internal/search/zvecstore` implements the full contract independently through cgo SDKs. Native source records keep documents, staged/published chunks, enrichment and cached vectors; native FTS and cosine HNSW serve queries. `SEARCH_STORE` selects the backend, and the native directory is owned by one process. Offline CLI copy and native backup/restore preserve chunks and vectors without provider calls.
+`internal/dal/search/zvecstore` implements the full contract independently through cgo SDKs. Native source records keep documents, staged/published chunks, enrichment and cached vectors; native FTS and cosine HNSW serve queries. `SEARCH_STORE` selects the backend, and the native directory is owned by one process. Offline CLI copy and native backup/restore preserve chunks and vectors without provider calls.
 
 Two layout refinements preserve the contract with the pinned C API: encoded whitespace FTS tokens provide exact words, stems and tiny prefixes instead of trigram substring matches; exact typed fields use the native source-record catalog to restrict document keys before FTS/HNSW candidate selection, because dynamically adding STRING columns is unsupported. Neither number nor currency filters use floats. A separate vector collection contains only embedded passage rows and carries each surface's metadata, so scope/filter restrictions apply before ANN top-k. Native index maintenance seals/optimizes buffered writes every 30 seconds and on close. Cached model activation rebuilds the native vector space without embedding calls.
 

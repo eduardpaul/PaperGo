@@ -3,17 +3,18 @@ package identity
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"regexp"
 	"sort"
 	"strings"
 	"time"
 
+	"papergo/internal/dal"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/directory"
 	"papergo/internal/model"
 	_ "time/tzdata"
 
-	"github.com/google/uuid"
 	"golang.org/x/text/language"
 )
 
@@ -45,34 +46,24 @@ type Preferences struct {
 	Version           int      `json:"version"`
 }
 
-func preferenceOwner(subject string, organization bool) (string, string) {
+func preferenceOwner(subject string, organization bool) (directory.PreferenceOwner, string) {
 	if organization {
-		return "organization", ""
+		return directory.OwnerOrganization, ""
 	}
-	return "user", subject
+	return directory.OwnerUser, subject
 }
 
-func ownPreferences(ctx context.Context, q Querier, ownerType, ownerID string) (map[string]string, int, error) {
-	var raw string
-	version := 0
-	err := q.QueryRowContext(ctx, "SELECT `values`,version FROM identity_preferences WHERE owner_type=? AND owner_id=?", ownerType, ownerID).Scan(&raw, &version)
-	if errors.Is(err, sql.ErrNoRows) {
-		return map[string]string{}, 0, nil
-	}
-	if err != nil {
-		return nil, 0, err
-	}
-	values := map[string]string{}
-	err = json.Unmarshal([]byte(raw), &values)
-	return values, version, err
+func ownPreferences(ctx context.Context, store *dal.Store, ownerType directory.PreferenceOwner, ownerID string) (map[string]string, int, error) {
+	row, err := store.Directory().Preferences(ctx, ownerType, ownerID)
+	return row.Values, int(row.Version), err
 }
 
-func readPreferences(ctx context.Context, q Querier, subject string, organization bool) (Preferences, error) {
+func readPreferences(ctx context.Context, store *dal.Store, subject string, organization bool) (Preferences, error) {
 	values := map[string]string{}
 	for k, v := range builtInPreferences {
 		values[k] = v
 	}
-	defaults, _, err := ownPreferences(ctx, q, "organization", "")
+	defaults, _, err := ownPreferences(ctx, store, directory.OwnerOrganization, "")
 	if err != nil {
 		return Preferences{}, err
 	}
@@ -82,7 +73,7 @@ func readPreferences(ctx context.Context, q Querier, subject string, organizatio
 		}
 	}
 	ownerType, ownerID := preferenceOwner(subject, organization)
-	own, version, err := ownPreferences(ctx, q, ownerType, ownerID)
+	own, version, err := ownPreferences(ctx, store, ownerType, ownerID)
 	if err != nil {
 		return Preferences{}, err
 	}
@@ -99,11 +90,11 @@ func readPreferences(ctx context.Context, q Querier, subject string, organizatio
 
 func (d Directory) Preferences(ctx context.Context, subject string, organization bool) (out Preferences, err error) {
 	err = d.transaction(ctx, func(tx *sql.Tx) error {
-		if err := RequireActive(ctx, tx, subject); err != nil {
+		if err := RequireActive(ctx, d.store(tx), subject); err != nil {
 			return err
 		}
 		var e error
-		out, e = readPreferences(ctx, tx, subject, organization)
+		out, e = readPreferences(ctx, d.store(tx), subject, organization)
 		return e
 	})
 	return
@@ -170,16 +161,16 @@ func (d Directory) PatchPreferences(ctx context.Context, subject string, organiz
 		patch[k] = &value
 	}
 	err = d.transaction(ctx, func(tx *sql.Tx) error {
-		if e := RequireActive(ctx, tx, subject); e != nil {
+		if e := RequireActive(ctx, d.store(tx), subject); e != nil {
 			return e
 		}
 		if organization {
-			if e := RequireScope(ctx, tx, subject, "organization.manage"); e != nil {
+			if e := RequireScope(ctx, d.store(tx), subject, "organization.manage"); e != nil {
 				return e
 			}
 		}
 		ownerType, ownerID := preferenceOwner(subject, organization)
-		own, current, e := ownPreferences(ctx, tx, ownerType, ownerID)
+		own, current, e := ownPreferences(ctx, d.store(tx), ownerType, ownerID)
 		if e != nil {
 			return e
 		}
@@ -201,25 +192,14 @@ func (d Directory) PatchPreferences(ctx context.Context, subject string, organiz
 				own[k] = *v
 			}
 		}
-		raw, e := json.Marshal(own)
-		if e != nil {
-			return e
-		}
-		if current == 0 {
-			_, e = tx.ExecContext(ctx, "INSERT INTO identity_preferences(id,created_at,owner_type,owner_id,`values`,version) VALUES(?,CURRENT_TIMESTAMP,?,?,?,1)", uuid.NewString(), ownerType, ownerID, string(raw))
-			if IsConstraint(e) {
+		if e = d.store(tx).Directory().SavePreferences(ctx, ownerType, ownerID, int64(current), own); e != nil {
+			if errors.Is(e, dberr.ErrConcurrentUpdate) {
 				return ErrPreconditionFailed
 			}
-			if e != nil {
-				return e
-			}
-		} else {
-			result, e := tx.ExecContext(ctx, "UPDATE identity_preferences SET `values`=?,version=version+1 WHERE owner_type=? AND owner_id=? AND version=?", string(raw), ownerType, ownerID, current)
-			if e = changed(result, e); e != nil {
-				return e
-			}
+			return e
 		}
-		out, e = readPreferences(ctx, tx, subject, organization)
+
+		out, e = readPreferences(ctx, d.store(tx), subject, organization)
 		return e
 	})
 	return

@@ -12,7 +12,12 @@ import (
 	"papergo/internal/auth"
 	"papergo/internal/buildinfo"
 	"papergo/internal/config"
-	"papergo/internal/database"
+	"papergo/internal/dal/database"
+	"papergo/internal/dal/integrations"
+	"papergo/internal/dal/migrations"
+	"papergo/internal/dal/resultcache"
+	"papergo/internal/dal/search/sqlitestore"
+	"papergo/internal/dal/search/zvecstore"
 	"papergo/internal/decision"
 	"papergo/internal/dms"
 	"papergo/internal/doctext/pdfium"
@@ -20,16 +25,12 @@ import (
 	"papergo/internal/identity"
 	"papergo/internal/integration"
 	"papergo/internal/readiness"
-	"papergo/internal/resultcache"
 	"papergo/internal/runner"
 	"papergo/internal/search"
-	"papergo/internal/search/sqlitestore"
-	"papergo/internal/search/zvecstore"
 	"papergo/internal/storage"
 	"papergo/internal/webdav"
 	"papergo/internal/workflow"
 	"papergo/internal/workflowai"
-	"papergo/migrations"
 	"path/filepath"
 	"syscall"
 	"time"
@@ -68,55 +69,28 @@ func run(log *slog.Logger) error {
 	}
 	startup, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	// Every SQLite handle, including the runner, uses the same canonical name.
-	resolved, err := filepath.EvalSymlinks(c.DatabasePath)
-	if err == nil {
-		c.DatabasePath = resolved
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("resolve database path: %w", err)
-	}
-	dataLease, err := database.AcquireLease(c.DatabasePath, migrations.Published())
-	if err != nil {
-		return err
-	}
-	defer dataLease.Close()
 	blobLease, err := database.AcquireLease(c.BlobPath, false)
 	if err != nil {
 		return err
 	}
 	defer blobLease.Close()
-	db, err := database.Open(startup, c.DatabasePath)
-	if err != nil {
-		return err
-	}
-	defer func() { db.Close() }()
-	if migrations.Published() {
-		bundle, e := migrations.EmbeddedBundle()
-		if e != nil {
-			return e
+	var db *database.Database
+	if c.DatabaseURL != "" {
+		if db, err = database.OpenPostgres(startup, c.DatabaseURL); err != nil {
+			return err
 		}
-		snapshot, e := db.ApplyRelease(startup, c.DatabasePath, bundle)
-		if e != nil {
-			return e
+		defer func() { db.Close() }()
+		if err = db.EnsureSchema(startup); err != nil {
+			return err
 		}
-		if snapshot != "" {
-			log.Info("database upgraded", "snapshot", snapshot, "version", buildinfo.Version)
+	} else {
+		var lease *os.File
+		db, lease, err = openSQLite(startup, log, &c)
+		if err != nil {
+			return err
 		}
-		// Windows cannot downgrade a byte-range lease atomically. Close all
-		// SQLite handles before sharing the lease, then reopen under that lease.
-		if e = db.Close(); e != nil {
-			return e
-		}
-		if e = database.ShareLease(dataLease); e != nil {
-			return e
-		}
-		reopened, e := database.Open(startup, c.DatabasePath)
-		if e != nil {
-			return e
-		}
-		db = reopened
-	} else if err = db.EnsureSchema(startup); err != nil {
-		return err
+		defer lease.Close()
+		defer func() { db.Close() }()
 	}
 	if err = db.CheckSchema(startup); err != nil {
 		return err
@@ -144,7 +118,7 @@ func run(log *slog.Logger) error {
 	}
 	var verifier auth.Authenticator
 	if c.AuthMode == "local" {
-		verifier = auth.Local{DB: db.SQL}
+		verifier = auth.Local{DAL: db.DAL}
 	} else {
 		verifier, err = auth.New(startup, c)
 		if err != nil {
@@ -152,7 +126,7 @@ func run(log *slog.Logger) error {
 		}
 	}
 	service := dms.NewService(db.SQL)
-	configuredIntegrations, err := service.Client.ListIntegration.Query().Exist(startup)
+	configuredIntegrations, err := db.DAL.Integrations().Exists(startup, integrations.Filter{})
 	if err != nil {
 		return err
 	}
@@ -267,7 +241,7 @@ func run(log *slog.Logger) error {
 		}
 		log.Info("ai batch coordinator enabled", "workspace", c.BatchWorkspace, "queue", "shared")
 	}
-	run, err := runner.New(runner.Config{DatabasePath: c.DatabasePath, NodeID: c.NodeID, Retention: c.RunRetention, SystemRetention: c.SystemRunRetention, Logger: log}, db.SQL, service, workflows)
+	run, err := runner.New(runner.Config{DatabasePath: c.DatabasePath, DatabaseURL: c.DatabaseURL, NodeID: c.NodeID, Retention: c.RunRetention, SystemRetention: c.SystemRunRetention, Logger: log}, db.SQL, service, workflows)
 	if err != nil {
 		return err
 	}
@@ -320,4 +294,58 @@ func run(log *slog.Logger) error {
 		return err
 	}
 	return nil
+}
+
+// openSQLite opens the SQLite file under its lease and brings its schema to
+// this build: a published release applies its upgrade bundle, a development
+// build installs the schema into an empty file. It returns the lease, which
+// the caller closes after the database.
+func openSQLite(startup context.Context, log *slog.Logger, c *config.Config) (*database.Database, *os.File, error) {
+	// Every SQLite handle, including the runner, uses the same canonical name.
+	resolved, err := filepath.EvalSymlinks(c.DatabasePath)
+	if err == nil {
+		c.DatabasePath = resolved
+	} else if !os.IsNotExist(err) {
+		return nil, nil, fmt.Errorf("resolve database path: %w", err)
+	}
+	dataLease, err := database.AcquireLease(c.DatabasePath, migrations.Published())
+	if err != nil {
+		return nil, nil, err
+	}
+	db, err := database.Open(startup, c.DatabasePath)
+	if err != nil {
+		dataLease.Close()
+		return nil, nil, err
+	}
+	if !migrations.Published() {
+		if err = db.EnsureSchema(startup); err != nil {
+			db.Close()
+			dataLease.Close()
+			return nil, nil, err
+		}
+		return db, dataLease, nil
+	}
+	bundle, err := migrations.EmbeddedBundle()
+	if err == nil {
+		var snapshot string
+		if snapshot, err = db.ApplyRelease(startup, c.DatabasePath, bundle); err == nil && snapshot != "" {
+			log.Info("database upgraded", "snapshot", snapshot, "version", buildinfo.Version)
+		}
+	}
+	// Windows cannot downgrade a byte-range lease atomically. Close all
+	// SQLite handles before sharing the lease, then reopen under that lease.
+	if closeErr := db.Close(); err == nil {
+		err = closeErr
+	}
+	if err == nil {
+		err = database.ShareLease(dataLease)
+	}
+	if err == nil {
+		db, err = database.Open(startup, c.DatabasePath)
+	}
+	if err != nil {
+		dataLease.Close()
+		return nil, nil, err
+	}
+	return db, dataLease, nil
 }

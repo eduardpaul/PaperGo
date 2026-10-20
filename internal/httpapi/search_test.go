@@ -8,12 +8,12 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	directorydomain "papergo/internal/dal/directory"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
-	"papergo/ent"
 	"papergo/internal/auth"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
@@ -174,7 +174,7 @@ func TestSearchReindexAndRebuild(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = directory.SetAssignment(ctx, "organization-admin", role.ID, identity.Principal{Type: "user", ID: "alice"}, false); err != nil {
+	if err = directory.SetAssignment(ctx, "organization-admin", role.ID, identity.Principal{Type: directorydomain.PrincipalUser, ID: "alice"}, false); err != nil {
 		t.Fatal(err)
 	}
 	ws, err := s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Archive"})
@@ -200,7 +200,7 @@ func TestSearchReindexAndRebuild(t *testing.T) {
 	go func() { s.RunOperations(workerCtx, slog.New(slog.NewTextHandler(io.Discard, nil))); close(stopped) }()
 	t.Cleanup(func() { cancel(); <-stopped })
 	res := request(h, "POST", "/v1/search/reindex", "", testToken, "", "")
-	var op ent.Operation
+	var op dms.OperationView
 	if res.Code != 202 || json.Unmarshal(res.Body.Bytes(), &op) != nil || op.Kind != dms.OperationKindSearchReindex || res.Header().Get("Location") != "/v1/operations/"+op.ID {
 		t.Fatal(res.Code, res.Body.String())
 	}
@@ -251,12 +251,12 @@ func TestSearchReindexAndRebuild(t *testing.T) {
 	}
 }
 
-func waitOperation(t *testing.T, h http.Handler, id string) ent.Operation {
+func waitOperation(t *testing.T, h http.Handler, id string) dms.OperationView {
 	t.Helper()
 	deadline := time.Now().Add(10 * time.Second)
 	for {
 		res := request(h, "GET", "/v1/operations/"+id, "", testToken, "", "")
-		var got ent.Operation
+		var got dms.OperationView
 		if res.Code != 200 || json.Unmarshal(res.Body.Bytes(), &got) != nil {
 			t.Fatal(res.Code, res.Body.String())
 		}

@@ -68,9 +68,6 @@ func runRelationshipList(e *env, in map[string]any) (outcome, error) {
 	}
 	rows := make([]any, 0, len(page.Data))
 	for _, view := range page.Data {
-		if view.Relationship == nil {
-			continue
-		}
 		related := ""
 		if view.RelatedItem.Resource != nil {
 			related = view.RelatedItem.ID

@@ -7,6 +7,10 @@ server:
   data_dir: ./data
   public_url: http://localhost:8080
 
+# PostgreSQL instead of the SQLite file in data_dir:
+# database:
+#   url: postgres://papergo:secret@localhost:5432/papergo
+
 auth:
   mode: local
   admin_user: admin

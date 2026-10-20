@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 
+	"papergo/internal/dal/blobs"
 	"papergo/internal/dms"
 	"papergo/internal/forms"
 	"papergo/internal/preview"
@@ -43,11 +44,11 @@ func runPreview(e *env, in map[string]any) (outcome, error) {
 	if err != nil {
 		return outcome{}, err
 	}
-	if cached != nil && cached.Status == "ready" {
+	if cached != nil && cached.Status == blobs.PreviewReady {
 		out["ready"] = true
 		return outcome{Port: "done", Output: out}, nil
 	}
-	job, err := json.Marshal(previewJob{id, file.ID, file.Sha256, file.ObjectKey, file.ContentType})
+	job, err := json.Marshal(previewJob{id, file.ID, file.Sha256, file.ObjectKey, string(file.ContentType)})
 	if err != nil {
 		return outcome{}, err
 	}

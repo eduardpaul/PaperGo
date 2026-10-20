@@ -234,7 +234,7 @@ def main():
     finally:
         authentik_shell(delete, {"username": outsider})
 
-    # Personal REST tokens for scripts.
+    # Personal access tokens for scripts.
     created = client.request("POST", app + "/v1/identity/me/tokens", {"name": "verify " + secrets.token_hex(4), "scopes": ["workspace.read"], "expires_in_days": 1}, headers=bearer, expected=201)[2]
     personal = {"Authorization": "Bearer " + created["secret"]}
     assert get(app + "/v1/identity/me", headers=personal, expected=200)["subject"] == me["subject"]
@@ -280,7 +280,7 @@ def main():
         assert not any(ports.values()), f"{service} is published on the host"
     print("Verified HTTP-to-HTTPS redirects, verified HTTPS, issuer discovery, embedded UI and deep links, browser sign-in settings, "
           "authorization code + PKCE sign-in, token audience and groups, administrator group mapping, forged-token rejection, "
-          "refresh tokens with CORS, redirect URI pinning, papergo-users access policy, personal REST tokens, REST writes, "
+          "refresh tokens with CORS, redirect URI pinning, papergo-users access policy, personal access tokens, REST writes, "
           "Unicode WebDAV PUT/GET/MOVE/COPY with chunked uploads, provider sign-out, and private backends.")
     print(f"Test workspace: {workspace['id']}; WebDAV library: {library['id']}")
 

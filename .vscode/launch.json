@@ -13,6 +13,24 @@
         "${workspaceFolder}/.cache/development.env"
       ],
       "preLaunchTask": "PaperGo: build frontend"
+    },
+    {
+      "name": "PaperGo API (PostgreSQL)",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/cmd/api",
+      "cwd": "${workspaceFolder}",
+      "envFile": [
+        "${workspaceFolder}/.tools/native/native.env",
+        "${workspaceFolder}/.cache/development.env"
+      ],
+      "preLaunchTask": "PaperGo: prepare API on PostgreSQL",
+      "env": {
+        "DATABASE_URL": "postgres://papergo:papergo-dev@localhost:55432/papergo_dev?sslmode=disable",
+        "DATABASE_PATH": "${workspaceFolder}/data/postgres/papergo.db",
+        "BLOB_PATH": "${workspaceFolder}/data/postgres/blobs"
+      }
     }
   ]
 }

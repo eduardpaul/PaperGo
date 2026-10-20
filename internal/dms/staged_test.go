@@ -3,12 +3,13 @@ package dms
 import (
 	"bytes"
 	"errors"
+	"papergo/internal/dal/blobs"
+	runstore "papergo/internal/dal/runs"
+	"papergo/internal/dal/workflows"
 	"testing"
 	"time"
 
-	"papergo/ent"
-	"papergo/ent/domainevent"
-	"papergo/ent/stagedfile"
+	eventstore "papergo/internal/dal/events"
 	"papergo/internal/model"
 	"papergo/internal/storage"
 )
@@ -24,7 +25,7 @@ func TestPromoteAndRecycleSourcesIsAtomic(t *testing.T) {
 			var items []*File
 			var sources []model.StagedSource
 			for _, name := range []string{"primary.pdf", "first.pdf", "second.pdf"} {
-				item, _, err := s.PutFile(testContext, "alice", lib.ID, []string{name}, PutFile{Blob: content(name)})
+				item, _, err := s.PutFile(testContext, "alice", lib.ID, []string{name}, PutFile{Blob: pdfContent(name)})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -35,6 +36,7 @@ func TestPromoteAndRecycleSourcesIsAtomic(t *testing.T) {
 				items = append(items, item)
 				sources = append(sources, model.StagedSource{ItemID: item.ID, BlobID: b.ID})
 			}
+			stagingRuns(t, s, w.ID, "conversion")
 			f, err := s.StageFile(testContext, "bob", StageInput{ItemID: items[0].ID, RunID: "conversion", Sources: sources,
 				ObjectKey: "combined", Filename: "combined.pdf", ContentType: "application/pdf", Size: 12, SHA256: hash('a')})
 			if err != nil {
@@ -42,11 +44,11 @@ func TestPromoteAndRecycleSourcesIsAtomic(t *testing.T) {
 			}
 			switch scenario {
 			case "changed source":
-				if _, _, err = s.PutFile(testContext, "alice", lib.ID, []string{"second.pdf"}, PutFile{Blob: content("second.pdf")}); err != nil {
+				if _, _, err = s.PutFile(testContext, "alice", lib.ID, []string{"second.pdf"}, PutFile{Blob: pdfContent("second.pdf")}); err != nil {
 					t.Fatal(err)
 				}
 			case "cannot recycle source":
-				r, err := s.Client.Resource.Get(testContext, items[2].ID)
+				r, err := s.DAL.Resources().Resource(testContext, items[2].ID)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -82,7 +84,7 @@ func TestPromoteAndRecycleSourcesIsAtomic(t *testing.T) {
 				t.Fatal("failed cleanup replaced the primary file")
 			}
 			for _, item := range items[1:] {
-				r, err := s.Client.Resource.Get(testContext, item.ID)
+				r, err := s.DAL.Resources().Resource(testContext, item.ID)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -90,19 +92,20 @@ func TestPromoteAndRecycleSourcesIsAtomic(t *testing.T) {
 					t.Fatalf("source %s deleted at %v in %s", item.ID, r.DeletedAt, scenario)
 				}
 			}
-			f, err = s.Client.StagedFile.Get(testContext, f.ID)
+			stored, err := s.DAL.Blobs().StagedFile(testContext, f.ID)
 			if err != nil {
 				t.Fatal(err)
 			}
-			wantState := stagedfile.StatePending
+			f = &stored
+			wantState := blobs.StagedPending
 			if scenario == "promote" {
-				wantState = stagedfile.StatePromoted
+				wantState = blobs.StagedPromoted
 			}
 			if f.State != wantState {
 				t.Fatalf("staged file is %s, want %s", f.State, wantState)
 			}
 			// A failed cleanup must roll back the file change event too.
-			events, err := s.Client.DomainEvent.Query().Where(domainevent.TypeIn(EventFileAdded, EventFileUpdated), domainevent.ResourceIDEQ(items[0].ID)).Order(ent.Asc(domainevent.FieldID)).All(testContext)
+			events, err := s.DAL.Events().List(testContext, eventstore.Filter{Types: []string{EventFileAdded, EventFileUpdated}, ResourceID: items[0].ID})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -120,6 +123,7 @@ func TestPromoteAndRecycleSourcesIsAtomic(t *testing.T) {
 func TestStagedFilesPromoteDiscardAndCollect(t *testing.T) {
 	s, w, _ := fixture(t)
 	lib := davLibrary(t, s, w, false)
+	stagingRuns(t, s, w.ID, "run-1", "run-3", "run-4", "run-5")
 	store, err := storage.NewLocal(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -175,7 +179,7 @@ func TestStagedFilesPromoteDiscardAndCollect(t *testing.T) {
 	if _, err = s.PromoteStagedFile(testContext, "alice", smaller, "run-1", false); !errors.Is(err, ErrConflict) {
 		t.Fatalf("promoting twice: %v", err)
 	}
-	e, err := s.Client.DomainEvent.Query().Where(domainevent.TypeIn(EventFileAdded, EventFileUpdated), domainevent.ResourceIDEQ(f.ID)).Order(domainevent.ByID()).All(testContext)
+	e, err := s.DAL.Events().List(testContext, eventstore.Filter{Types: []string{EventFileAdded, EventFileUpdated}, ResourceID: f.ID})
 	if err != nil || len(e) != 2 || e[1].Data["source"] != FileWorkflow {
 		t.Fatalf("file change events %v, %v", e, err)
 	}
@@ -208,11 +212,25 @@ func TestStagedFilesPromoteDiscardAndCollect(t *testing.T) {
 	if err = s.Write(testContext, func(t *Service) error { return t.DiscardRunStagedFiles(testContext, "run-4") }); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := s.Client.StagedFile.Get(testContext, pending); got.State != stagedfile.StateDiscarded {
+	if got, _ := s.DAL.Blobs().StagedFile(testContext, pending); got.State != blobs.StagedDiscarded {
 		t.Fatalf("pending file of a finished run is %s", got.State)
 	}
 	// Someone without write access can neither stage nor promote.
 	if _, err = s.StageFile(testContext, "mallory", StageInput{ItemID: f.ID, RunID: "run-5", Sources: []model.StagedSource{{ItemID: f.ID, BlobID: b2.ID}}, ObjectKey: "k", Filename: "x.pdf", ContentType: "application/pdf", Size: 1, SHA256: hash('a')}); err == nil {
 		t.Fatal("a stranger staged a file")
+	}
+}
+
+// stagingRuns records runs of a new workflow, which staged files belong to.
+func stagingRuns(t *testing.T, s *Service, workspaceID string, ids ...string) {
+	t.Helper()
+	wf, err := s.DAL.Workflows().Create(testContext, workflows.CreateInput{WorkspaceID: workspaceID, Key: "staging", Name: "Staging", CreatedBy: "alice"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range ids {
+		if _, err = s.DAL.Runs().Create(testContext, runstore.CreateInput{ID: id, WorkflowID: wf.ID, WorkflowVersion: 1, WorkspaceID: workspaceID, EventID: id, EventType: "manual", Actor: "alice"}); err != nil {
+			t.Fatal(err)
+		}
 	}
 }

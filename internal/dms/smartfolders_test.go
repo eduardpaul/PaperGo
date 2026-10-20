@@ -4,15 +4,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"papergo/ent"
-	"papergo/ent/fielddefinition"
-	"papergo/ent/itemsurface"
+	"papergo/internal/dal/catalog"
+	"papergo/internal/dal/resources"
+	viewstore "papergo/internal/dal/views"
 	"papergo/internal/model"
 	"testing"
 	"time"
 )
 
-func smartOK(t *testing.T, s *Service, in SmartFolderInput) *ent.SmartFolder {
+func smartOK(t *testing.T, s *Service, in SmartFolderInput) *viewstore.SmartFolder {
 	t.Helper()
 	f, err := s.CreateSmartFolder(testContext, "alice", in)
 	if err != nil {
@@ -26,11 +26,7 @@ func TestSmartFolderPhysicalFoldersAndExactTimes(t *testing.T) {
 	folder := create(t, s, l.ID, "folder", "Documents", nil)
 	create(t, s, l.ID, "item", "Record", nil)
 	stamp := time.Date(2026, 10, 8, 12, 30, 0, 123456789, time.FixedZone("offset", 3600))
-	_, err := s.Client.Resource.UpdateOneID(folder.ID).SetUpdatedAt(stamp).Save(testContext)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = s.Client.ItemSurface.Update().Where(itemsurface.ItemIDEQ(folder.ID)).SetModifiedAt(queryTime(stamp)).Save(testContext); err != nil {
+	if err := s.DAL.Surfaces().Touch(testContext, []string{folder.ID}, stamp, "alice"); err != nil {
 		t.Fatal(err)
 	}
 	f := smartOK(t, s, SmartFolderInput{Name: "Folders", WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Mode: "query", IncludeFolders: true, Filter: &FilterExpr{Field: "$modified_at", Value: json.RawMessage(`"2026-10-08T11:30:00.123456789Z"`)}, GroupBy: []SmartFolderGroupBy{{Field: "$modified_at", By: "month"}}}})
@@ -122,7 +118,7 @@ func TestRelativeFiltersAreTypedAndBounded(t *testing.T) {
 			t.Fatal(ref, got, err)
 		}
 	}
-	defs := map[string]*ent.FieldDefinition{"due": {Type: fielddefinition.TypeDate}, "at": {Type: fielddefinition.TypeDatetime}, "owner": {Type: fielddefinition.TypeText}}
+	defs := map[string]*catalog.FieldDefinition{"due": {Type: "date"}, "at": {Type: "datetime"}, "owner": {Type: "text"}}
 	for field, want := range map[string]string{"due": `"2026-10-08"`, "at": `"2026-10-08T00:00:00Z"`} {
 		got, err := resolveFilter(&FilterExpr{Field: field, ValueRef: "today"}, "alice", now, defs)
 		if err != nil || string(got.Value) != want {
@@ -171,7 +167,7 @@ func TestSmartFoldersTermsSurfacesNavigationAndGlobalPaging(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for i, c := range []*ent.Resource{a, b} {
+	for i, c := range []*resources.Resource{a, b} {
 		fieldOK(t, s, c.ID, CreateField{Key: fmt.Sprintf("project_%d", i), Label: "Project", Type: "term", Indexed: true, Options: model.FieldOptions{TermSetID: set.ID, Multiple: i == 1}})
 		fieldOK(t, s, c.ID, CreateField{Key: "issued", Label: "Issued", Type: "date", Indexed: true})
 		fieldOK(t, s, c.ID, CreateField{Key: "status", Label: "Status", Type: "text", Indexed: true})
@@ -179,7 +175,7 @@ func TestSmartFoldersTermsSurfacesNavigationAndGlobalPaging(t *testing.T) {
 	one := create(t, s, a.ID, "item", "Plan", map[string]any{"project_0": root.ID, "issued": "2025-03-01", "status": "open"})
 	two := create(t, s, b.ID, "item", "Spec", map[string]any{"project_1": []any{child.ID}, "issued": "2026-02-01", "status": "open"})
 	three := create(t, s, b.ID, "item", "Empty date", map[string]any{"project_1": []any{root.ID}, "status": "open"})
-	for _, item := range []*ent.Resource{one, two, three} {
+	for _, item := range []*resources.Resource{one, two, three} {
 		if _, err = s.Publish(testContext, "alice", item.ID, item.Version); err != nil {
 			t.Fatal(err)
 		}

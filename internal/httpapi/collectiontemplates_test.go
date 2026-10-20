@@ -3,7 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
-	"papergo/ent"
+	"papergo/internal/dal/resources"
 	"papergo/internal/dms"
 	"strings"
 	"testing"
@@ -20,7 +20,7 @@ func TestCollectionTemplateAPI(t *testing.T) {
 		t.Fatal(res.Code, res.Body.String())
 	}
 	res = request(h, "POST", "/v1/resources/"+w.ID+"/children", `{"name":"Address book","template_key":"contacts"}`, testToken, "", "application/json")
-	var c ent.Resource
+	var c resources.Resource
 	if res.Code != 201 || json.Unmarshal(res.Body.Bytes(), &c) != nil || c.Kind != "list" || c.SchemaHeadID == nil {
 		t.Fatal(res.Code, res.Body.String())
 	}

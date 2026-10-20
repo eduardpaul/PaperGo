@@ -2,8 +2,9 @@ package dms
 
 import (
 	"context"
-	"papergo/ent"
-	"papergo/ent/resource"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/refs"
+	"papergo/internal/dal/resources"
 )
 
 type MoveSelectionItem struct {
@@ -37,7 +38,7 @@ func (s *Service) MoveSelection(ctx context.Context, subject, collectionID strin
 		if err != nil {
 			return err
 		}
-		if collection.Kind != resource.KindList && collection.Kind != resource.KindLibrary {
+		if collection.Kind != refs.KindList && collection.Kind != refs.KindLibrary {
 			return invalid("moves require a collection")
 		}
 		parent := in.ParentID
@@ -48,11 +49,11 @@ func (s *Service) MoveSelection(ctx context.Context, subject, collectionID strin
 		if err != nil {
 			return err
 		}
-		if target.ID != collectionID && (target.Kind != resource.KindFolder || target.ContainerID == nil || *target.ContainerID != collectionID) {
+		if target.ID != collectionID && (target.Kind != refs.KindFolder || target.ContainerID == nil || *target.ContainerID != collectionID) {
 			return invalid("destination must be a folder of this collection")
 		}
 		selected := map[string]bool{}
-		rows := make([]*ent.Resource, 0, len(in.Items))
+		rows := make([]*resources.Resource, 0, len(in.Items))
 		for _, input := range in.Items {
 			if input.ID == "" || selected[input.ID] || input.Version < 1 {
 				return invalid("each selected entry needs a unique id and current positive version")
@@ -75,7 +76,7 @@ func (s *Service) MoveSelection(ctx context.Context, subject, collectionID strin
 				if selected[*ancestor] {
 					return invalid("select a folder or its descendants, not both")
 				}
-				p, err := t.Client.Resource.Get(ctx, *ancestor)
+				p, err := t.DAL.Resources().Resource(ctx, *ancestor)
 				if err != nil {
 					return err
 				}
@@ -89,16 +90,16 @@ func (s *Service) MoveSelection(ctx context.Context, subject, collectionID strin
 				continue
 			}
 			if row.NameKey != nil {
-				existing, err := t.Client.Resource.Query().Where(resource.ParentIDEQ(parent), resource.NameKeyEQ(*row.NameKey), resource.DeletedAtIsNil(), resource.IDNEQ(row.ID)).Only(ctx)
+				existing, err := t.DAL.Resources().One(ctx, resources.Filter{ParentID: parent, NameKey: *row.NameKey, State: resources.Live, ExceptID: row.ID})
 				if err == nil {
 					conflict := &MoveNameConflict{SourceID: row.ID}
 					_, writeErr := t.authorize(ctx, subject, existing.ID, "write")
-					if row.Kind == resource.KindItem && existing.Kind == resource.KindItem && writeErr == nil {
+					if row.Kind == refs.KindItem && existing.Kind == refs.KindItem && writeErr == nil {
 						conflict.Existing = &DocumentNameConflict{ItemID: existing.ID, Version: existing.Version}
 					}
 					return conflict
 				}
-				if !ent.IsNotFound(err) {
+				if !dberr.IsNotFound(err) {
 					return err
 				}
 			}

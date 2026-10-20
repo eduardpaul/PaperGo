@@ -3,6 +3,8 @@ package httpapi
 import (
 	"net/http"
 	"papergo/internal/auth"
+	"papergo/internal/dal"
+	"papergo/internal/dal/directory"
 	"papergo/internal/identity"
 )
 
@@ -10,24 +12,24 @@ func (a *API) registerIdentity(m *http.ServeMux) {
 	a.registerPreferences(m)
 	a.registerInboxes(m)
 	d := a.DMS.Directory()
-	m.HandleFunc("GET /v1/identity/tokens", foundationRead(a, func(r *http.Request) (any, error) { return d.OrganizationRESTTokens(r.Context(), subject(r)) }))
-	m.HandleFunc("POST /v1/identity/tokens", foundationMutation(a, 201, false, func(r *http.Request, in identity.RESTTokenInput, _ int) (any, error) {
+	m.HandleFunc("GET /v1/identity/tokens", foundationRead(a, func(r *http.Request) (any, error) { return d.OrganizationAccessTokens(r.Context(), subject(r)) }))
+	m.HandleFunc("POST /v1/identity/tokens", foundationMutation(a, 201, false, func(r *http.Request, in identity.AccessTokenInput, _ int) (any, error) {
 		return d.CreateIntegrationToken(r.Context(), subject(r), in)
 	}))
 	m.HandleFunc("DELETE /v1/identity/tokens/{id}", func(w http.ResponseWriter, r *http.Request) {
-		if err := d.RevokeOrganizationRESTToken(r.Context(), subject(r), r.PathValue("id")); err != nil {
+		if err := d.RevokeOrganizationAccessToken(r.Context(), subject(r), r.PathValue("id")); err != nil {
 			a.failure(w, r, err)
 			return
 		}
 		w.WriteHeader(204)
 	})
 	if a.Auth == nil || a.Auth.Kind() != auth.TrustedProxy {
-		m.HandleFunc("GET /v1/identity/me/tokens", foundationRead(a, func(r *http.Request) (any, error) { return d.RESTTokens(r.Context(), subject(r)) }))
-		m.HandleFunc("POST /v1/identity/me/tokens", foundationMutation(a, 201, false, func(r *http.Request, in identity.RESTTokenInput, _ int) (any, error) {
-			return d.CreateRESTToken(r.Context(), subject(r), in)
+		m.HandleFunc("GET /v1/identity/me/tokens", foundationRead(a, func(r *http.Request) (any, error) { return d.AccessTokens(r.Context(), subject(r)) }))
+		m.HandleFunc("POST /v1/identity/me/tokens", foundationMutation(a, 201, false, func(r *http.Request, in identity.AccessTokenInput, _ int) (any, error) {
+			return d.CreateAccessToken(r.Context(), subject(r), in)
 		}))
 		m.HandleFunc("DELETE /v1/identity/me/tokens/{id}", func(w http.ResponseWriter, r *http.Request) {
-			if err := d.RevokeRESTToken(r.Context(), subject(r), r.PathValue("id")); err != nil {
+			if err := d.RevokeAccessToken(r.Context(), subject(r), r.PathValue("id")); err != nil {
 				a.failure(w, r, err)
 				return
 			}
@@ -60,7 +62,9 @@ func (a *API) registerIdentity(m *http.ServeMux) {
 		}
 		return identity.Catalog, nil
 	}))
-	m.HandleFunc("GET /v1/identity/me/scopes", foundationRead(a, func(r *http.Request) (any, error) { return identity.EffectiveScopes(r.Context(), d.DB, subject(r)) }))
+	m.HandleFunc("GET /v1/identity/me/scopes", foundationRead(a, func(r *http.Request) (any, error) {
+		return identity.EffectiveScopes(r.Context(), dal.NewStore(d.DB), subject(r))
+	}))
 	m.HandleFunc("GET /v1/identity/users", foundationRead(a, func(r *http.Request) (any, error) { return d.Users(r.Context(), subject(r)) }))
 	m.HandleFunc("GET /v1/identity/me", foundationRead(a, func(r *http.Request) (any, error) { return d.Me(r.Context(), subject(r)) }))
 	m.HandleFunc("PATCH /v1/identity/me", foundationMutation(a, 200, false, func(r *http.Request, in struct {
@@ -95,7 +99,7 @@ func (a *API) registerIdentity(m *http.ServeMux) {
 	m.HandleFunc("GET /v1/identity/groups/{id}/members", foundationRead(a, func(r *http.Request) (any, error) { return d.Members(r.Context(), subject(r), r.PathValue("id")) }))
 	for _, method := range []string{"PUT", "DELETE"} {
 		m.HandleFunc(method+" /v1/identity/groups/{id}/members/{principalType}/{principalID}", func(w http.ResponseWriter, r *http.Request) {
-			err := d.SetMember(r.Context(), subject(r), r.PathValue("id"), identity.Principal{Type: r.PathValue("principalType"), ID: r.PathValue("principalID")}, r.Method == "DELETE")
+			err := d.SetMember(r.Context(), subject(r), r.PathValue("id"), identity.Principal{Type: directory.PrincipalType(r.PathValue("principalType")), ID: r.PathValue("principalID")}, r.Method == "DELETE")
 			if err != nil {
 				a.failure(w, r, err)
 				return
@@ -114,7 +118,7 @@ func (a *API) registerIdentity(m *http.ServeMux) {
 	m.HandleFunc("GET /v1/identity/roles/{id}/assignments", foundationRead(a, func(r *http.Request) (any, error) { return d.Assignments(r.Context(), subject(r), r.PathValue("id")) }))
 	for _, method := range []string{"PUT", "DELETE"} {
 		m.HandleFunc(method+" /v1/identity/roles/{id}/assignments/{principalType}/{principalID}", func(w http.ResponseWriter, r *http.Request) {
-			err := d.SetAssignment(r.Context(), subject(r), r.PathValue("id"), identity.Principal{Type: r.PathValue("principalType"), ID: r.PathValue("principalID")}, r.Method == "DELETE")
+			err := d.SetAssignment(r.Context(), subject(r), r.PathValue("id"), identity.Principal{Type: directory.PrincipalType(r.PathValue("principalType")), ID: r.PathValue("principalID")}, r.Method == "DELETE")
 			if err != nil {
 				a.failure(w, r, err)
 				return

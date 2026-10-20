@@ -38,7 +38,7 @@
         }
       ],
       "delete": {
-        "summary": "Revoke a caller-owned personal REST token",
+        "summary": "Revoke a caller-owned personal access token",
         "responses": {
           "204": {
             "description": "Revoked immediately"
@@ -63,7 +63,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/RESTToken"
+                    "$ref": "#/components/schemas/AccessToken"
                   }
                 }
               }
@@ -78,7 +78,7 @@
         }
       },
       "post": {
-        "summary": "Create an expiring scoped personal REST token",
+        "summary": "Create an expiring scoped personal access token",
         "description": "Scopes must be distinct permissions the caller currently holds. Token authentication intersects these scopes with live user roles on every request. At most 100 active tokens per user. Personal tokens authenticate REST calls with Authorization: Bearer; WebDAV uses its own credentials.",
         "requestBody": {
           "required": true,
@@ -122,7 +122,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CreatedRESTToken"
+                  "$ref": "#/components/schemas/CreatedAccessToken"
                 }
               }
             }
@@ -941,107 +941,6 @@
             }
           }
         ]
-      }
-    },
-    "/v1/webdav-credentials": {
-      "get": {
-        "summary": "List the caller's WebDAV credentials",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "value",
-                    "@odata.nextLink"
-                  ],
-                  "properties": {
-                    "value": {
-                      "type": "array",
-                      "maxItems": 20,
-                      "items": {
-                        "$ref": "#/components/schemas/WebDAVCredential"
-                      }
-                    },
-                    "@odata.nextLink": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "$ref": "#/components/responses/Problem"
-          },
-          "404": {
-            "description": "Route is unavailable in trusted proxy authentication mode, or requested credential does not exist"
-          }
-        }
-      },
-      "post": {
-        "summary": "Issue a WebDAV app password for the caller (at most 20)",
-        "description": "Clients such as Windows Explorer authenticate to /webdav/ with HTTP Basic: any user name and this password. The password is returned only in this response; only its SHA-256 is stored.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/WebDAVCredentialInput"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Created",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/NewWebDAVCredential"
-                }
-              }
-            }
-          },
-          "default": {
-            "$ref": "#/components/responses/Problem"
-          },
-          "404": {
-            "description": "Route is unavailable in trusted proxy authentication mode, or requested credential does not exist"
-          }
-        }
-      }
-    },
-    "/v1/webdav-credentials/{id}": {
-      "parameters": [
-        {
-          "name": "id",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "string",
-            "format": "uuid"
-          }
-        }
-      ],
-      "delete": {
-        "summary": "Revoke one of the caller's WebDAV credentials",
-        "responses": {
-          "204": {
-            "description": "Revoked"
-          },
-          "default": {
-            "$ref": "#/components/responses/Problem"
-          },
-          "404": {
-            "description": "Route is unavailable in trusted proxy authentication mode, or requested credential does not exist"
-          }
-        }
       }
     },
     "/v1/resources/{id}/children": {
@@ -17242,7 +17141,7 @@
     },
     "/v1/identity/tokens": {
       "get": {
-        "operationId": "listOrganizationRESTTokens",
+        "operationId": "listOrganizationAccessTokens",
         "summary": "List organization token metadata",
         "description": "Requires organization.manage. Includes personal and integration credentials, with issuer, subject, expiration, revocation and last use. Never returns secrets or hashes.",
         "x-module-scopes": [
@@ -17256,7 +17155,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/RESTToken"
+                    "$ref": "#/components/schemas/AccessToken"
                   }
                 }
               }
@@ -17268,7 +17167,7 @@
         }
       },
       "post": {
-        "operationId": "createIntegrationRESTToken",
+        "operationId": "createIntegrationAccessToken",
         "summary": "Create a scoped integration credential and service identity",
         "description": "Requires organization.manage. Scopes must be distinct scopes held by the caller. Returns the pgo_ secret once; only its hash is stored. Service identities use token scopes and resource ACLs.",
         "x-module-scopes": [
@@ -17290,7 +17189,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CreatedRESTToken"
+                  "$ref": "#/components/schemas/CreatedAccessToken"
                 }
               }
             }
@@ -17314,7 +17213,7 @@
         }
       ],
       "delete": {
-        "operationId": "revokeOrganizationRESTToken",
+        "operationId": "revokeOrganizationAccessToken",
         "summary": "Revoke any organization REST credential immediately",
         "x-module-scopes": [
           "organization.manage"
@@ -18031,12 +17930,12 @@
       "bearerAuth": {
         "type": "http",
         "scheme": "bearer",
-        "bearerFormat": "JWT or pgo_ personal/integration REST token"
+        "bearerFormat": "JWT or pgo_ personal/integration access token"
       },
       "proxyBasicAuth": {
         "type": "http",
         "scheme": "basic",
-        "description": "In AUTH_MODE=proxy, authenticate at the trusted reverse proxy over HTTPS. PaperGo validates the proxy assertion and applies persisted permissions. Personal-token and WebDAV credential endpoints are unavailable in this mode. Integration REST tokens authenticate directly when the API ingress forwards Authorization: Bearer pgo_\u2026."
+        "description": "In AUTH_MODE=proxy, authenticate at the trusted reverse proxy over HTTPS. PaperGo validates the proxy assertion and applies persisted permissions. Personal-token and WebDAV credential endpoints are unavailable in this mode. Integration access tokens authenticate directly when the API ingress forwards Authorization: Bearer pgo_\u2026."
       },
       "localBasicAuth": {
         "type": "http",
@@ -18063,11 +17962,11 @@
       }
     },
     "schemas": {
-      "CreatedRESTToken": {
+      "CreatedAccessToken": {
         "type": "object",
         "properties": {
           "token": {
-            "$ref": "#/components/schemas/RESTToken"
+            "$ref": "#/components/schemas/AccessToken"
           },
           "secret": {
             "type": "string",
@@ -18079,7 +17978,7 @@
           "secret"
         ]
       },
-      "RESTToken": {
+      "AccessToken": {
         "type": "object",
         "properties": {
           "id": {
@@ -18777,74 +18676,6 @@
         "required": [],
         "additionalProperties": false
       },
-      "WebDAVCredentialInput": {
-        "type": "object",
-        "properties": {
-          "label": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 100,
-            "description": "Trimmed name identifying the device or client."
-          },
-          "expires_at": {
-            "type": "string",
-            "format": "date-time",
-            "description": "Optional future expiry; credentials without one last until revoked."
-          }
-        },
-        "required": [
-          "label"
-        ],
-        "additionalProperties": false
-      },
-      "WebDAVCredential": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "subject": {
-            "type": "string"
-          },
-          "label": {
-            "type": "string"
-          },
-          "expires_at": {
-            "type": "string",
-            "format": "date-time"
-          }
-        },
-        "required": [
-          "id",
-          "created_at",
-          "subject",
-          "label"
-        ]
-      },
-      "NewWebDAVCredential": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/WebDAVCredential"
-          },
-          {
-            "type": "object",
-            "properties": {
-              "password": {
-                "type": "string",
-                "description": "Shown once. Use it as the HTTP Basic password for /webdav/ with any user name."
-              }
-            },
-            "required": [
-              "password"
-            ]
-          }
-        ]
-      },
       "CreateField": {
         "type": "object",
         "properties": {
@@ -19359,15 +19190,6 @@
             "type": "string",
             "format": "uuid"
           },
-          "edges": {
-            "properties": {
-              "schema_revision": {
-                "$ref": "#/components/schemas/SchemaRevision"
-              }
-            },
-            "description": "Schema snapshot included in revision history for interpreting historical values.",
-            "type": "object"
-          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -19426,6 +19248,10 @@
               "maxLength": 255
             },
             "description": "Shared folksonomy keywords. Responses contain term IDs. Writes accept existing IDs or trimmed labels; new labels create terms in the organization Keywords term set. Keywords fields use the same vocabulary."
+          },
+          "schema_revision": {
+            "$ref": "#/components/schemas/SchemaRevision",
+            "description": "Schema snapshot included in revision history for interpreting historical values."
           }
         },
         "type": "object",
@@ -20002,10 +19828,6 @@
           "version": {
             "type": "integer"
           },
-          "edges": {
-            "type": "object",
-            "additionalProperties": true
-          },
           "workspace_id": {
             "type": "string"
           },
@@ -20042,10 +19864,6 @@
           },
           "version": {
             "type": "integer"
-          },
-          "edges": {
-            "type": "object",
-            "additionalProperties": true
           },
           "inverse_label": {
             "type": "string"
@@ -20093,10 +19911,6 @@
           },
           "version": {
             "type": "integer"
-          },
-          "edges": {
-            "type": "object",
-            "additionalProperties": true
           },
           "container_id": {
             "type": "string"
@@ -22510,10 +22324,6 @@
           "version": {
             "type": "integer"
           },
-          "edges": {
-            "type": "object",
-            "additionalProperties": true
-          },
           "name": {
             "type": "string"
           },
@@ -22598,10 +22408,6 @@
           },
           "version": {
             "type": "integer"
-          },
-          "edges": {
-            "type": "object",
-            "additionalProperties": true
           },
           "group_id": {
             "type": "string"
@@ -22725,10 +22531,6 @@
           },
           "version": {
             "type": "integer"
-          },
-          "edges": {
-            "type": "object",
-            "additionalProperties": true
           },
           "term_set_id": {
             "type": "string"
@@ -25292,10 +25094,6 @@
             "type": "integer",
             "description": "Sum of distinct available blob sizes, one per SHA-256. File content is stored outside the database."
           },
-          "orphan_step_results": {
-            "type": "integer",
-            "description": "runner_step_results rows whose run_id is not a workflow_runs id. The request does not delete them."
-          },
           "runs": {
             "type": "array",
             "description": "Workflow executions grouped by name and status. When workflow_status exists, name and status come from that table. Otherwise they are workflow_runs event_type and live_status. Payload columns are not read.",
@@ -25394,7 +25192,6 @@
           "search_bytes",
           "search_documents",
           "blob_bytes",
-          "orphan_step_results",
           "runs",
           "expired",
           "retained"

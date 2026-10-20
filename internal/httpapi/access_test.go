@@ -44,7 +44,7 @@ func TestResourceReadsReportCallerAccess(t *testing.T) {
 	}
 	token := func(subject string, scopes ...string) string {
 		t.Helper()
-		created, err := s.Directory().CreateRESTToken(ctx, subject, identity.RESTTokenInput{Name: subject, Scopes: scopes})
+		created, err := s.Directory().CreateAccessToken(ctx, subject, identity.AccessTokenInput{Name: subject, Scopes: scopes})
 		if err != nil {
 			t.Fatal(err)
 		}

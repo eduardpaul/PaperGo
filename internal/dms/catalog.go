@@ -2,13 +2,15 @@ package dms
 
 import (
 	"context"
-	"papergo/ent"
+
+	"papergo/internal/dal/catalog"
+	"papergo/internal/dal/dberr"
 )
 
-func (s *Service) Template(ctx context.Context, subject, id string) (*ent.SchemaTemplate, error) {
-	return read(ctx, s, func(t *Service) (*ent.SchemaTemplate, error) {
-		v, e := t.Client.SchemaTemplate.Get(ctx, id)
-		if ent.IsNotFound(e) {
+func (s *Service) Template(ctx context.Context, subject, id string) (*catalog.Template, error) {
+	return read(ctx, s, func(t *Service) (*catalog.Template, error) {
+		v, e := t.DAL.Catalog().Template(ctx, id)
+		if dberr.IsNotFound(e) {
 			return nil, ErrNotFound
 		}
 		if e != nil {

@@ -3,14 +3,14 @@ package runner
 import (
 	"encoding/json"
 	"errors"
+	directorydomain "papergo/internal/dal/directory"
 	"reflect"
 	"slices"
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
-	"papergo/ent/domainevent"
+	eventstore "papergo/internal/dal/events"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
 	"papergo/internal/workflow"
@@ -105,8 +105,8 @@ func TestPermissionsChangedFansOutInBatches(t *testing.T) {
 	if _, err := f.r.Dispatch(ctx); err != nil {
 		t.Fatal(err)
 	}
-	rows, err := f.db.Client.DomainEvent.Query().Where(domainevent.TypeEQ(dms.EventPermissionsChanged), domainevent.ResourceIDEQ(f.list.ID)).All(ctx)
-	if err != nil || len(rows) != 1 || rows[0].DispatchedAt == nil || rows[0].FanoutCursor != nil {
+	rows, err := f.db.DAL.Events().List(ctx, eventstore.Filter{Types: []string{dms.EventPermissionsChanged}, ResourceID: f.list.ID})
+	if err != nil || len(rows) != 1 || rows[0].DispatchedAt == nil || rows[0].FanoutCursor != "" {
 		t.Fatalf("unheard change: %+v %v", rows, err)
 	}
 	flow := f.workflow(t, "Access", `{"triggers":[{"type":"permissions.changed","collection_id":"$LIST"}],"flow":{"start":"done","nodes":{"done":{"activity":"end"}}}}`)
@@ -182,7 +182,7 @@ func workspaceOnlyAuthor(t *testing.T, f *fixture) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	principal := identity.Principal{Type: "user", ID: "bob"}
+	principal := identity.Principal{Type: directorydomain.PrincipalUser, ID: "bob"}
 	if err = directory.SetAssignment(ctx, "alice", role.ID, principal, false); err != nil {
 		t.Fatal(err)
 	}
@@ -212,7 +212,7 @@ func TestTermChangedSubscriptionsRequireTaxonomyRead(t *testing.T) {
 		t.Fatalf("unreadable taxonomy subscription updated: %v", err)
 	}
 	directory := f.dms.Directory()
-	principal := identity.Principal{Type: "user", ID: "bob"}
+	principal := identity.Principal{Type: directorydomain.PrincipalUser, ID: "bob"}
 	if err = directory.SetAssignment(ctx, "alice", readerRole, principal, false); err != nil {
 		t.Fatal(err)
 	}
@@ -246,7 +246,7 @@ func TestTermChangedRunRechecksTaxonomyReadAfterWait(t *testing.T) {
 	f := setup(t)
 	readerRole := workspaceOnlyAuthor(t, f)
 	directory := f.dms.Directory()
-	principal := identity.Principal{Type: "user", ID: "bob"}
+	principal := identity.Principal{Type: directorydomain.PrincipalUser, ID: "bob"}
 	if err := directory.SetAssignment(ctx, "alice", readerRole, principal, false); err != nil {
 		t.Fatal(err)
 	}
@@ -262,18 +262,7 @@ func TestTermChangedRunRechecksTaxonomyReadAfterWait(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	var runID string
-	deadline := time.Now().Add(20 * time.Second)
-	for time.Now().Before(deadline) {
-		err = f.db.SQL.QueryRowContext(ctx, "SELECT r.id FROM workflow_runs r JOIN runner_step_results s ON s.run_id=r.id WHERE r.workflow_id=? AND s.step='wait'", flow.ID).Scan(&runID)
-		if err == nil {
-			break
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	if runID == "" {
-		t.Fatal("run never reached its wait", err)
-	}
+	runID := f.waitingRun(t, flow.ID)
 	if err = directory.SetAssignment(ctx, "alice", readerRole, principal, true); err != nil {
 		t.Fatal(err)
 	}
