@@ -9,6 +9,7 @@ PaperGo is being built from scratch. It has never been released and has no deplo
 - **Schema masters live in DAL.** `internal/dal/schema/sqlite.sql` and `internal/dal/schema/postgres.sql` are the sources of truth. Edit them directly, keep the two engines consistent, and regenerate Bob models when their shape changes. Do not derive schema changes from `migrations/`, or add development migration files.
 - **No development backfills or upgrade paths.** No development data needs to survive a schema change. Local databases are disposable; recreate them from the selected DAL schema. Release upgrade fixtures are not development upgrade paths.
 - **Docs describe the current app only.** Do not document past behaviour, conversions or "previously" notes.
+- **The Extension-First Protocol (Stop Core Bloat).** When planning or implementing any feature [Step 1: Extension-First Trial] ──► Can this exist purely as a consumer/plugin/extension/module? If Yes: Implement as Extension. Do NOT touch Core or base DAL tables. If No: [Step 2: Identify the Socket]   ──► What generic primitive/hook/event is missing in Core? propose the required extensibility point (consider variants, other use cases, similar functionalities could benefit,) and ask before implementing.  
 
 ## Database access
 
