@@ -30,16 +30,16 @@ func TestRelationshipDirectAndWorkspaceQueries(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, filter := range []string{"attributes/amount gt 100", "100 lt attributes/amount", "attributes/note eq 'Bob''s'", "directed eq true and (attributes/amount ge 100 or false)", "not (attributes/amount le 100)", "id eq " + e1.ID} {
-		page, err := s.WorkspaceRelationships(testContext, "alice", w.ID, "Line", ptr(true), filter, "", 1)
+		page, err := s.WorkspaceRelationships(testContext, "alice", w.ID, WorkspaceRelationshipsQuery{Type: "Line", Directed: ptr(true), Filter: filter, After: "", Limit: 1})
 		if err != nil || len(page.Data) != 1 || page.Data[0].ID != e1.ID || page.Data[0].TargetItem.ID != b.ID {
 			t.Fatal(filter, page, err)
 		}
 	}
-	page, err := s.WorkspaceRelationships(testContext, "alice", w.ID, "", nil, "", "", 1)
+	page, err := s.WorkspaceRelationships(testContext, "alice", w.ID, WorkspaceRelationshipsQuery{Type: "", Directed: nil, Filter: "", After: "", Limit: 1})
 	if err != nil || len(page.Data) != 1 || page.NextCursor == "" {
 		t.Fatal(page, err)
 	}
-	next, err := s.WorkspaceRelationships(testContext, "alice", w.ID, "", nil, "", page.NextCursor, 1)
+	next, err := s.WorkspaceRelationships(testContext, "alice", w.ID, WorkspaceRelationshipsQuery{Type: "", Directed: nil, Filter: "", After: page.NextCursor, Limit: 1})
 	if err != nil || len(next.Data) != 1 || next.Data[0].ID == page.Data[0].ID || next.NextCursor != "" {
 		t.Fatal(next, err)
 	}
@@ -52,12 +52,12 @@ func TestRelationshipDirectAndWorkspaceQueries(t *testing.T) {
 	if _, err = s.Relationship(testContext, "bob", a.ID, e1.ID); !errors.Is(err, ErrForbidden) {
 		t.Fatal("hidden peer", err)
 	}
-	page, err = s.WorkspaceRelationships(testContext, "bob", w.ID, "", nil, "", "", 50)
+	page, err = s.WorkspaceRelationships(testContext, "bob", w.ID, WorkspaceRelationshipsQuery{Type: "", Directed: nil, Filter: "", After: "", Limit: 50})
 	if err != nil || len(page.Data) != 1 || page.Data[0].TargetID != c.ID {
 		t.Fatal("hidden edge leaked", page, err)
 	}
 	for _, filter := range []string{"attributes/a/b eq 1", "directed gt true", "attributes/note lt 'a'", "id eq 'anything'", "attributes/amount eq 1; DELETE FROM resources", "attributes/note eq 'unterminated"} {
-		if _, err = s.WorkspaceRelationships(testContext, "alice", w.ID, "", nil, filter, "", 50); err == nil {
+		if _, err = s.WorkspaceRelationships(testContext, "alice", w.ID, WorkspaceRelationshipsQuery{Type: "", Directed: nil, Filter: filter, After: "", Limit: 50}); err == nil {
 			t.Fatal("invalid filter accepted", filter)
 		}
 	}

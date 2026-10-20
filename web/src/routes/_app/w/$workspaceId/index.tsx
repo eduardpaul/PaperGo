@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { Briefcase, Library, Plus, Settings, Tag as KeywordIcon } from 'lucide-react';
+import { Briefcase, GitFork, Library, Plus, Settings, Tag as KeywordIcon } from 'lucide-react';
 import { useState } from 'react';
 import { collectionChildren, resourceQuery } from '@/api/queries';
 import { Page, PageHeader } from '@/components/page';
@@ -47,6 +47,11 @@ function WorkspacePage() {
             <Button asChild variant="ghost">
               <Link to="/w/$workspaceId/keywords" params={{ workspaceId }}>
                 <KeywordIcon /> Keywords
+              </Link>
+            </Button>
+            <Button asChild variant="ghost">
+              <Link to="/w/$workspaceId/relationships" params={{ workspaceId }}>
+                <GitFork /> Relationships
               </Link>
             </Button>
             {canManage && (

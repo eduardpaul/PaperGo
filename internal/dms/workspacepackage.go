@@ -553,6 +553,9 @@ func (s *Service) prepareWorkspacePackage(ctx context.Context, p corePackage, na
 			if table == "resources" && sourceID == p.WorkspaceID {
 				mapped["name"] = name
 			}
+			if table == "item_surfaces" {
+				mapped["folded_name"] = refs.FoldName(fmt.Sprint(mapped["name"]))
+			}
 			if table == "identity_users" {
 				if reused[table][sourceID] {
 					continue

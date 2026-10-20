@@ -97,7 +97,7 @@ func (q Queries) SurfaceFields(ctx context.Context, ids, keys []string) (map[str
 func (q Queries) InsertSurface(ctx context.Context, s surfaces.Surface) error {
 	_, err := models.ItemSurfaces.Insert(&models.ItemSurfaceSetter{
 		ID: omit.From(s.ID), CreatedAt: omit.From(s.CreatedAt), ItemID: omit.From(s.ItemID), ContainerID: omit.From(s.ContainerID),
-		WorkspaceID: omit.From(s.WorkspaceID), Surface: omit.From(string(s.Surface)), RevisionID: omit.From(s.RevisionID), Name: omit.From(s.Name),
+		WorkspaceID: omit.From(s.WorkspaceID), Surface: omit.From(string(s.Surface)), RevisionID: omit.From(s.RevisionID), Name: omit.From(s.Name), FoldedName: omit.From(refs.FoldName(s.Name)),
 		Keywords: omit.From(types.NewJSON(s.Keywords)), Payload: omit.From(types.NewJSON(s.Payload)), ItemCreatedAt: omit.From(s.ItemCreatedAt),
 		ItemCreatedBy: omit.From(s.ItemCreatedBy), ModifiedAt: omit.From(s.ModifiedAt), ModifiedBy: omit.From(s.ModifiedBy),
 	}).Exec(ctx, q.exec)
@@ -106,7 +106,7 @@ func (q Queries) InsertSurface(ctx context.Context, s surfaces.Surface) error {
 
 func (q Queries) UpdateSurface(ctx context.Context, s surfaces.Surface) error {
 	set := &models.ItemSurfaceSetter{
-		ContainerID: omit.From(s.ContainerID), WorkspaceID: omit.From(s.WorkspaceID), RevisionID: omit.From(s.RevisionID), Name: omit.From(s.Name),
+		ContainerID: omit.From(s.ContainerID), WorkspaceID: omit.From(s.WorkspaceID), RevisionID: omit.From(s.RevisionID), Name: omit.From(s.Name), FoldedName: omit.From(refs.FoldName(s.Name)),
 		Keywords: omit.From(types.NewJSON(s.Keywords)), Payload: omit.From(types.NewJSON(s.Payload)), ModifiedAt: omit.From(s.ModifiedAt), ModifiedBy: omit.From(s.ModifiedBy),
 	}
 	_, err := models.ItemSurfaces.Update(set.UpdateMod(), models.UpdateWhere.ItemSurfaces.ID.EQ(s.ID)).Exec(ctx, q.exec)

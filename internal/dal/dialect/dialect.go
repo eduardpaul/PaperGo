@@ -26,6 +26,15 @@ func (d Dialect) Elements(array, alias string) string {
 	return `json_each(` + array + `) ` + alias
 }
 
+// ObjectValues is a table expression of the text values of a JSON object,
+// named alias with a column value.
+func (d Dialect) ObjectValues(object, alias string) string {
+	if d.Postgres {
+		return `jsonb_each_text(` + object + `) AS ` + alias
+	}
+	return `json_each(` + object + `) ` + alias
+}
+
 // OrderedJoin joins a table in the order written: SQLite's CROSS JOIN keeps
 // its planner from reordering the tables, PostgreSQL plans an inner join.
 func (d Dialect) OrderedJoin() string {

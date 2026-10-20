@@ -36,6 +36,7 @@ import { Route as AppSettingsWebdavRouteImport } from './routes/_app/settings/we
 import { Route as AppWIndexRouteImport } from './routes/_app/w/index'
 import { Route as AppWWorkspaceIdIndexRouteImport } from './routes/_app/w/$workspaceId/index'
 import { Route as AppWWorkspaceIdKeywordsRouteImport } from './routes/_app/w/$workspaceId/keywords'
+import { Route as AppWWorkspaceIdRelationshipsRouteImport } from './routes/_app/w/$workspaceId/relationships'
 import { Route as AppWWorkspaceIdSettingsRouteImport } from './routes/_app/w/$workspaceId/settings'
 import { Route as AppWWorkspaceIdSettingsIndexRouteImport } from './routes/_app/w/$workspaceId/settings/index'
 import { Route as AppWWorkspaceIdSettingsMembersRouteImport } from './routes/_app/w/$workspaceId/settings/members'
@@ -186,6 +187,12 @@ const AppWWorkspaceIdKeywordsRoute = AppWWorkspaceIdKeywordsRouteImport.update({
   path: '/w/$workspaceId/keywords',
   getParentRoute: () => AppRoute,
 } as any)
+const AppWWorkspaceIdRelationshipsRoute =
+  AppWWorkspaceIdRelationshipsRouteImport.update({
+    id: '/w/$workspaceId/relationships',
+    path: '/w/$workspaceId/relationships',
+    getParentRoute: () => AppRoute,
+  } as any)
 const AppWWorkspaceIdSettingsRoute = AppWWorkspaceIdSettingsRouteImport.update({
   id: '/w/$workspaceId/settings',
   path: '/w/$workspaceId/settings',
@@ -296,6 +303,7 @@ export interface FileRoutesByFullPath {
   '/settings/': typeof AppSettingsIndexRoute
   '/w/': typeof AppWIndexRoute
   '/w/$workspaceId/keywords': typeof AppWWorkspaceIdKeywordsRoute
+  '/w/$workspaceId/relationships': typeof AppWWorkspaceIdRelationshipsRoute
   '/w/$workspaceId/settings': typeof AppWWorkspaceIdSettingsRouteWithChildren
   '/w/$workspaceId/': typeof AppWWorkspaceIdIndexRoute
   '/w/$workspaceId/settings/members': typeof AppWWorkspaceIdSettingsMembersRoute
@@ -336,6 +344,7 @@ export interface FileRoutesByTo {
   '/settings': typeof AppSettingsIndexRoute
   '/w': typeof AppWIndexRoute
   '/w/$workspaceId/keywords': typeof AppWWorkspaceIdKeywordsRoute
+  '/w/$workspaceId/relationships': typeof AppWWorkspaceIdRelationshipsRoute
   '/w/$workspaceId': typeof AppWWorkspaceIdIndexRoute
   '/w/$workspaceId/settings/members': typeof AppWWorkspaceIdSettingsMembersRoute
   '/w/$workspaceId/settings/runs': typeof AppWWorkspaceIdSettingsRunsRoute
@@ -378,6 +387,7 @@ export interface FileRoutesById {
   '/_app/settings/': typeof AppSettingsIndexRoute
   '/_app/w/': typeof AppWIndexRoute
   '/_app/w/$workspaceId/keywords': typeof AppWWorkspaceIdKeywordsRoute
+  '/_app/w/$workspaceId/relationships': typeof AppWWorkspaceIdRelationshipsRoute
   '/_app/w/$workspaceId/settings': typeof AppWWorkspaceIdSettingsRouteWithChildren
   '/_app/w/$workspaceId/': typeof AppWWorkspaceIdIndexRoute
   '/_app/w/$workspaceId/settings/members': typeof AppWWorkspaceIdSettingsMembersRoute
@@ -422,6 +432,7 @@ export interface FileRouteTypes {
     | '/settings/'
     | '/w/'
     | '/w/$workspaceId/keywords'
+    | '/w/$workspaceId/relationships'
     | '/w/$workspaceId/settings'
     | '/w/$workspaceId/'
     | '/w/$workspaceId/settings/members'
@@ -462,6 +473,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/w'
     | '/w/$workspaceId/keywords'
+    | '/w/$workspaceId/relationships'
     | '/w/$workspaceId'
     | '/w/$workspaceId/settings/members'
     | '/w/$workspaceId/settings/runs'
@@ -503,6 +515,7 @@ export interface FileRouteTypes {
     | '/_app/settings/'
     | '/_app/w/'
     | '/_app/w/$workspaceId/keywords'
+    | '/_app/w/$workspaceId/relationships'
     | '/_app/w/$workspaceId/settings'
     | '/_app/w/$workspaceId/'
     | '/_app/w/$workspaceId/settings/members'
@@ -717,6 +730,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppWWorkspaceIdKeywordsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/w/$workspaceId/relationships': {
+      id: '/_app/w/$workspaceId/relationships'
+      path: '/w/$workspaceId/relationships'
+      fullPath: '/w/$workspaceId/relationships'
+      preLoaderRoute: typeof AppWWorkspaceIdRelationshipsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/w/$workspaceId/settings': {
       id: '/_app/w/$workspaceId/settings'
       path: '/w/$workspaceId/settings'
@@ -927,6 +947,7 @@ interface AppRouteChildren {
   AppFFolderIdRoute: typeof AppFFolderIdRoute
   AppWIndexRoute: typeof AppWIndexRoute
   AppWWorkspaceIdKeywordsRoute: typeof AppWWorkspaceIdKeywordsRoute
+  AppWWorkspaceIdRelationshipsRoute: typeof AppWWorkspaceIdRelationshipsRoute
   AppWWorkspaceIdSettingsRoute: typeof AppWWorkspaceIdSettingsRouteWithChildren
   AppWWorkspaceIdIndexRoute: typeof AppWWorkspaceIdIndexRoute
   AppWWorkspaceIdLListIdRecycleBinRoute: typeof AppWWorkspaceIdLListIdRecycleBinRoute
@@ -944,6 +965,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppFFolderIdRoute: AppFFolderIdRoute,
   AppWIndexRoute: AppWIndexRoute,
   AppWWorkspaceIdKeywordsRoute: AppWWorkspaceIdKeywordsRoute,
+  AppWWorkspaceIdRelationshipsRoute: AppWWorkspaceIdRelationshipsRoute,
   AppWWorkspaceIdSettingsRoute: AppWWorkspaceIdSettingsRouteWithChildren,
   AppWWorkspaceIdIndexRoute: AppWWorkspaceIdIndexRoute,
   AppWWorkspaceIdLListIdRecycleBinRoute: AppWWorkspaceIdLListIdRecycleBinRoute,

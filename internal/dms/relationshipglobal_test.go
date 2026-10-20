@@ -22,7 +22,7 @@ func TestUntypedCrossWorkspaceRelationships(t *testing.T) {
 		t.Fatal(retry, err)
 	}
 	for _, w := range []string{w1.ID, w2.ID} {
-		page, err := s.WorkspaceRelationships(testContext, "alice", w, "", nil, "attributes/amount gt 100", "", 50)
+		page, err := s.WorkspaceRelationships(testContext, "alice", w, WorkspaceRelationshipsQuery{Type: "", Directed: nil, Filter: "attributes/amount gt 100", After: "", Limit: 50})
 		if err != nil || len(page.Data) != 1 || page.Data[0].ID != edge.ID {
 			t.Fatal(page, err)
 		}
