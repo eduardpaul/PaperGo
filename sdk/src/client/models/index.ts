@@ -4364,6 +4364,7 @@ export function deserializeIntoQueryResult(queryResult: Partial<QueryResult> | u
 // @ts-ignore
 export function deserializeIntoQuerySpec(querySpec: Partial<QuerySpec> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
+        "ancestor_id": n => { querySpec.ancestorId = n.getGuidValue(); },
         "content_type_id": n => { querySpec.contentTypeId = n.getGuidValue(); },
         "filter": n => { querySpec.filter = n.getObjectValue<FilterExpr>(createFilterExprFromDiscriminatorValue); },
         "group_by": n => { querySpec.groupBy = n.getStringValue(); },
@@ -7187,6 +7188,10 @@ export interface QueryResult extends Parsable {
  */
 export interface QuerySpec extends Parsable {
     /**
+     * Keeps what is anywhere below a folder: in it or its subfolders; the collection itself means everything. Cannot be combined with parent_id.
+     */
+    ancestorId?: Guid | null;
+    /**
      * Optional collection content type filter. Field filters, sorting and grouping must use fields assigned to that type.
      */
     contentTypeId?: Guid | null;
@@ -9517,6 +9522,7 @@ export function serializeQueryResult(writer: SerializationWriter, queryResult: P
 // @ts-ignore
 export function serializeQuerySpec(writer: SerializationWriter, querySpec: Partial<QuerySpec> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!querySpec || isSerializingDerivedType) { return; }
+    writer.writeGuidValue("ancestor_id", querySpec.ancestorId);
     writer.writeGuidValue("content_type_id", querySpec.contentTypeId);
     writer.writeObjectValue<FilterExpr>("filter", querySpec.filter, serializeFilterExpr);
     writer.writeStringValue("group_by", querySpec.groupBy);

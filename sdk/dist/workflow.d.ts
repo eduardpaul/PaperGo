@@ -3571,6 +3571,10 @@ export interface QueryResult extends Parsable {
  */
 export interface QuerySpec extends Parsable {
 	/**
+	 * Keeps what is anywhere below a folder: in it or its subfolders; the collection itself means everything. Cannot be combined with parent_id.
+	 */
+	ancestorId?: Guid | null;
+	/**
 	 * Optional collection content type filter. Field filters, sorting and grouping must use fields assigned to that type.
 	 */
 	contentTypeId?: Guid | null;

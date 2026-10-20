@@ -1,8 +1,64 @@
 # MCP server port from PaperDotNet
 
-Status: implementation plan. Reviewed against PaperGo `main` at
-`15733bcb4a062359ecdfea9d8a922ca521a77f6c` on 2026-10-20. No MCP runtime is
-implemented by this document.
+Status: implemented in `cmd/mcp` and `extensions/mcp`; see [MCP](../mcp.md).
+Reviewed against PaperGo `main` at
+`15733bcb4a062359ecdfea9d8a922ca521a77f6c` on 2026-10-20, and again at
+`a8769d2` before implementation (see [review against a8769d2](#review-against-a8769d2)).
+
+## Review against a8769d2
+
+`main` changed after the first review. The design holds; these points adjust it:
+
+- **Search is optional.** Search is now the `internal/documentsearch` extension, which a
+  deployment may run without (`SEARCH_STORE=none`). `GET /v1/search` exists only
+  when it runs, so the `search` tool is a contribution-style `Available` check:
+  it is listed and callable only when the backend's workflow catalog
+  (`GET /v1/workflow-catalog`) holds search's `search.index` role, as the web app
+  decides. Without search, `query_items`' `query.search` still works: the backend
+  matches names.
+- **`ancestor_id`.** `QuerySpec` accepts `ancestor_id`, but `api/openapi.json` did
+  not describe it. The contract now does; REST behavior is unchanged.
+- **SDK.** go-sdk v1.8.0 negotiates 2026-07-28 down to 2024-11-05, answers GET
+  and DELETE with 405 when stateless, and its `ServerOptions.SetCacheable` and
+  `StreamableHTTPOptions.PropagateRequestCancellation` exist as the plan assumes.
+- **Scopes.** The identity catalog spells scopes as strings; the extension names
+  the wire scopes it requires as its own constants.
+
+## Acceptance record
+
+Automated, with the official go-sdk client against the real API handlers, on
+SQLite and on PostgreSQL 17 (`extensions/mcp/integration`, also run with
+`-race`), plus pure-Go unit tests of the registry, configuration, path safety,
+cursors and the executable:
+
+- Tool listing, schemas and annotations; protocol revisions 2026-07-28 to
+  2024-11-05 without sessions; GET/DELETE 405; private, uncacheable responses;
+  health; logs free of credentials.
+- Two users concurrently, scope-narrowed personal tokens, an integration
+  token's own identity, revocation, missing/malformed/invalid credentials and
+  an inactive user. Hidden and unknown tools fail alike.
+- Contribution availability for listing and direct calls; a disabled
+  contribution is not served; invalid, duplicate and colliding registrations
+  fail startup.
+- Workspace and collection discovery, both collection kinds, folders, schema
+  reads and a schema change between reads; structured filters, sorts,
+  `select`, paging, empty pages, mismatched cursors and hostile next links.
+- Integers above 2^53 and scaled decimals in filters, values and results, on
+  the wire in both text and structured content.
+- Create with a caller ID repeated, wrong parent kinds, invalid values,
+  updates with patch/null semantics, stale versions, and a write whose answer
+  is lost (sent once, never retried).
+- Keyword search with paging when search runs, another user's items absent,
+  and the tool absent when it does not.
+- Origin and Host protection, overload with `Retry-After`, request and result
+  size limits, an unreachable or malformed backend, readiness, and graceful
+  shutdown draining a request in flight.
+
+Not automated: OIDC provider tokens, semantic and hybrid search with an
+embedding provider, task and event entries, and search-index leakage checks
+beyond permissions (tombstones, unpublished drafts, `document.read` on file
+text); those paths are the API's own and covered by its suites. The image
+build was verified locally; CI builds it in the `MCP server` job.
 
 ## 1. Goal and architectural decision
 

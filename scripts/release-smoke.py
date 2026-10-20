@@ -237,7 +237,7 @@ def main():
         for preset in ('embeddinggemma-2', 'harrier-oss-v1-0.6b'):
             assert (package / 'assets/models/embedding' / preset).is_dir()
         binary, admin = package / f'papergo{suffix}', package / f'papergo-admin{suffix}'
-        for executable in (binary, admin):
+        for executable in (binary, admin, package / f'papergo-mcp{suffix}'):
             version = subprocess.check_output([str(executable), '--version'], cwd=directory, text=True)
             assert (current['version'] if current else 'PaperGo') in version
         # Use an unrelated working directory: native libraries and shared models

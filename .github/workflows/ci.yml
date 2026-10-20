@@ -117,7 +117,7 @@ jobs:
       - name: Test the application on PostgreSQL
         env:
           PAPERGO_TEST_POSTGRES_DSN: postgres://papergo:papergo-test@localhost:5432/papergo?sslmode=disable
-        run: go test ./internal/dms ./internal/httpapi ./internal/identity ./internal/scriptrun ./internal/webdav ./internal/workflow ./internal/aiops ./internal/worker ./internal/documenttext ./internal/documentpreview ./internal/documentfiles ./internal/documentsearch -count=1 -timeout 40m
+        run: go test ./internal/dms ./internal/httpapi ./internal/identity ./internal/scriptrun ./internal/webdav ./internal/workflow ./internal/aiops ./internal/worker ./internal/documenttext ./internal/documentpreview ./internal/documentfiles ./internal/documentsearch ./extensions/mcp/integration -count=1 -timeout 40m
 
   frontend:
     name: Build embedded frontend
@@ -163,6 +163,31 @@ jobs:
           npm --prefix sdk run build
           git add -N sdk
           git diff --exit-code -- sdk
+  mcp:
+    name: MCP server (pure Go)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.2'
+          cache: true
+      - name: Build and test without native code
+        env:
+          CGO_ENABLED: '0'
+        run: |
+          go build -o /dev/null ./cmd/mcp
+          go test -count=1 ./cmd/mcp ./extensions/mcp ./extensions/mcp/builtin ./extensions/mcp/server
+      - name: Keep the server apart from the application
+        # papergo-mcp reaches PaperGo only through its HTTP API.
+        run: |
+          imported=$(go list -deps ./cmd/mcp | grep '^papergo/internal/' | sort | tr '\n' ' ')
+          test "$imported" = "papergo/internal/buildinfo papergo/internal/dal/refs " || { echo "papergo-mcp imports $imported"; exit 1; }
+      - name: Build the image
+        run: docker build -f extensions/mcp/Dockerfile -t papergo-mcp:ci . && docker run --rm papergo-mcp:ci --version
   devcontainer:
     name: Development container
     runs-on: ubuntu-latest
@@ -255,7 +280,7 @@ jobs:
       - name: Verify module checksums
         run: go mod verify
       - name: Verify formatting
-        run: test -z "$(gofmt -l cmd internal web/*.go)"
+        run: test -z "$(gofmt -l cmd extensions internal web/*.go)"
       - name: Vet
         run: go vet ./...
       - uses: actions/download-artifact@v4

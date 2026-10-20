@@ -13,6 +13,7 @@ def package(version, system, arch, bin_dir, release_database, dist):
     inputs = {
         f'papergo{suffix}': bin_dir / f'papergo{suffix}',
         f'papergo-admin{suffix}': bin_dir / f'papergo-admin{suffix}',
+        f'papergo-mcp{suffix}': bin_dir / f'papergo-mcp{suffix}',
         'release-database.json': release_database,
         'RELEASES.md': ROOT / 'docs/releases.md',
         'config.yaml': ROOT / 'deploy/config.yaml',
@@ -30,7 +31,7 @@ def package(version, system, arch, bin_dir, release_database, dist):
         'lib/libonnxruntime.dylib', 'lib/libpdfium.dylib', 'lib/libzvec_c_api.dylib',
     ]
     if any(name not in inputs for name in required):
-        raise ValueError('Build the native libraries alongside both executables before packaging')
+        raise ValueError('Build the native libraries alongside the executables before packaging')
     bundle = json.loads(release_database.read_text())
     if bundle['releases'][-1]['version'] != version:
         raise ValueError('Packaged bundle does not match release tag')

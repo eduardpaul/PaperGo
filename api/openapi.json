@@ -21706,6 +21706,11 @@
             "type": "string",
             "maxLength": 64,
             "description": "Keyword term ID or label. Matches intrinsic keywords and keywords fields on the selected visible surface."
+          },
+          "ancestor_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Keeps what is anywhere below a folder: in it or its subfolders; the collection itself means everything. Cannot be combined with parent_id."
           }
         },
         "required": [],
