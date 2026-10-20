@@ -8,7 +8,7 @@ Status: **proposal for review**. This is the Phase 0 deliverable of [the operati
 - worker configuration, controls, residency and artifacts;
 - acceptance tests mapped to phases.
 
-Decisions D1–D8 are [settled](#settled-decisions); Phase 1 can start. CPU and memory budgets are out of scope (see the plan's deferred work).
+Decisions D1–D9 are [settled](#settled-decisions); Phase 1 can start. CPU and memory budgets are out of scope (see the plan's deferred work).
 
 ## 1. Inventory
 
@@ -353,6 +353,8 @@ Staging stays workflow-only: `staged_files` keeps `run_id NOT NULL`, its states 
 5. **API caller.** `document.optimize_image` and `document.compose_pdf` have no public routes in this plan: an API caller could not stage or promote their output. Their operations are submitted by workflow actions only. Document text keeps its public route.
 6. Cancelling, superseding or expiring an operation before it succeeds publishes nothing. Cancelling a workflow consumer after the output was staged follows run cancellation, as today.
 
+Optimization and composition become operations even though only workflows consume them today, because the workflow engine is replaced in the next release. The operation output is the engine-independent temporary storage. Staging into `staged_files` is the current engine's consumer adapter: it is deleted together with the JSON interpreter, and the replacement engine consumes the operation output directly. Its review and promotion path from an operation output is designed on the script branch, not here.
+
 ## 5. Completion observation (socket 2)
 
 - **Durable state is the truth.** A consumer records the operation id in its own state, then reads it with `Finished(ids)`, so an operation that finished before the consumer subscribed needs no special case.
@@ -592,5 +594,6 @@ Maintenance tasks (`RegisterMaintenance(name, every, fn)`) stop the same way.
 - **D6:** `operations.workspace_id`.
 - **D7:** `operations.error_code` with `deadline_exceeded`, `retries_exhausted` and `forbidden`.
 - **D8:** staging stays workflow-only. Operations return outputs by object reference; runs stage them; optimization and composition have no public routes.
+- **D9:** optimization and composition become operations (not workflow actions using only the OCR handle), so their compute and outputs outlive the current workflow engine.
 
 The script-engine branch is not in this checkout. Its document-text code and in-process API were not inspected, and Phase 3 extracts them when the branch is available.
