@@ -49,7 +49,7 @@ export function ItemWorkflows({ item, collectionId, canWrite }: { item: Resource
       <h3 className="font-medium">Workflow history</h3>
       <QueryFeedback query={history} />
       <ul className="grid gap-2">{history.items.map((run) => <li key={run.id} className="rounded-md border p-3 text-sm">
-        <div className="flex items-center justify-between gap-2"><span className="font-medium">{names.get(run.workflow_id) ?? run.workflow_id}</span><Badge tone={run.status === 'failed' ? 'danger' : run.status === 'completed' ? 'success' : 'neutral'}>{run.outcome === 'unchanged' ? 'No changes needed' : runStatusLabel(run.status)}</Badge></div>
+        <div className="flex items-center justify-between gap-2"><span className="font-medium">{names.get(run.workflow_id) ?? run.workflow_id}</span><Badge tone={run.status === 'failed' ? 'danger' : run.status === 'completed' ? 'success' : 'neutral'}>{runStatusLabel(run.status)}</Badge></div>
         <p className="text-xs text-muted">{runOriginLabel(run.event_type)} · {format.dateTime(run.created_at)}{run.actor && ` · ${run.actor}`}</p>
         {run.updated_at && <p className="text-xs text-muted">Elapsed: {Math.max(0, Math.round((Date.parse(run.updated_at) - Date.parse(run.created_at)) / 1000))}s</p>}
         {canManage && <a className="text-xs text-accent underline" href={`/w/${item.workspace_id}/settings/runs?run=${run.id}`}>View steps{run.status === 'failed' ? ' and retry' : ''}</a>}

@@ -63,7 +63,7 @@ type WorkflowsQuery = *sqlite.ViewQuery[*Workflow, WorkflowSlice]
 
 // workflowR is where relationships are stored.
 type workflowR struct {
-	Tasks              TaskSlice            // fk_tasks_1
+	Tasks              TaskSlice            // fk_tasks_2
 	WorkflowRuns       WorkflowRunSlice     // fk_workflow_runs_1
 	WorkflowTriggers   WorkflowTriggerSlice // fk_workflow_triggers_2
 	WorkflowVersions   WorkflowVersionSlice // fk_workflow_versions_0
@@ -77,7 +77,7 @@ type workflowR struct {
 
 // workflowRLoaded tracks which relationships on Workflow have been loaded.
 type workflowRLoaded struct {
-	Tasks              bool // fk_tasks_1
+	Tasks              bool // fk_tasks_2
 	WorkflowRuns       bool // fk_workflow_runs_1
 	WorkflowTriggers   bool // fk_workflow_triggers_2
 	WorkflowVersions   bool // fk_workflow_versions_0

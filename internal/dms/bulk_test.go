@@ -66,7 +66,6 @@ func TestBulkItemLifecycle(t *testing.T) {
 	if err != nil || item.Name != name || *item.ParentID != folder.ID || item.Values["amount"] != json.Number("9007199254740994") {
 		t.Fatalf("update/move: %+v %v", item, err)
 	}
-	indexSearch(t, s)
 	page, err := s.Browse(testContext, "alice", Browse{WorkspaceID: w.ID, Search: name, Surface: "published"})
 	if err != nil || len(page.Data) != 0 {
 		t.Fatalf("draft leaked: %+v %v", page, err)
@@ -275,7 +274,6 @@ func TestBulkDeleteRollbackRestoresRelationshipsAndSurfaces(t *testing.T) {
 			BulkOperation{Action: action, ID: first.ID, Version: 3},
 			BulkOperation{Action: "delete", ID: second.ID, Version: 99},
 		)
-		indexSearch(t, s)
 		page, err := s.Browse(testContext, "alice", Browse{WorkspaceID: w.ID, Search: "Searchable", Surface: "published"})
 		if err != nil || len(page.Data) != 1 || page.Data[0].ID != first.ID || page.Data[0].Version != 3 {
 			t.Fatalf("%s lost published FTS surface: %+v %v", action, page, err)

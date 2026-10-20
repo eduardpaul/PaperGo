@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"github.com/google/uuid"
-	"papergo/internal/ai"
 	"papergo/internal/dal"
 	"papergo/internal/dal/access"
 	"papergo/internal/dal/blobs"
@@ -17,12 +15,13 @@ import (
 	"papergo/internal/dal/refs"
 	"papergo/internal/dal/relationships"
 	"papergo/internal/dal/resources"
+	"papergo/internal/dal/workflows"
 	"papergo/internal/identity"
 	"papergo/internal/model"
 	"papergo/internal/requestmeta"
-	"papergo/internal/search"
 	"strings"
-	"sync/atomic"
+
+	"github.com/google/uuid"
 )
 
 type Service struct {
@@ -32,35 +31,31 @@ type Service struct {
 	transaction bool
 	// Set only while provisioning the caller's fixed Home resources.
 	homeProvisioning bool
-	// operations wakes RunOperations when work is queued.
-	operations             chan struct{}
-	onCommit               func()
-	tx                     *sql.Tx
-	pending                *[]Event
-	collectionTemplates    map[string]CollectionTemplate
-	auditProperties        map[string]map[string]bool
-	traceID                string
-	operationHandlers      map[string]OperationHandler
+	// accepted records that a write accepted operations, for the hook
+	// that wakes workers after it commits.
+	accepted            *bool
+	onCommit            func()
+	tx                  *sql.Tx
+	pending             *[]Event
+	collectionTemplates map[string]CollectionTemplate
+	auditProperties     map[string]map[string]bool
+	traceID             string
+	ops                 *operationRuntime
+	// finished collects the operations a write ended, for the hook that
+	// runs after it commits.
+	finished               *[]string
 	integrations           *integrationRuntime
 	integrationWrite       bool
 	pendingIntegrationData *IntegrationData
-	runPurger              func(context.Context, *sql.Tx, string) error
-	runSealer              func(context.Context, []string) error
 	// batch is set while one request applies many operations in a transaction.
 	batch *batchCache
-	// search is the search store, set with SetSearch.
-	search search.Store
-	// embeddings embeds searches for semantic and hybrid search; nil when
-	// no embedding model is configured.
-	embeddings ai.Embedder
-	// searchRebuild is set while the search store is rebuilt from scratch:
-	// searches answer ErrSearchUnavailable until it is done.
-	searchRebuild *atomic.Bool
+	// ext holds what extensions plug into the service.
+	ext *extensions
 }
 
 // NewService serves the PaperGo database db.
 func NewService(db *sql.DB) *Service {
-	return &Service{DAL: dal.NewStore(db), db: db, writer: newWriterSlot(), operations: make(chan struct{}, 1), collectionTemplates: builtInCollectionTemplates(), operationHandlers: builtInOperationHandlers(), searchRebuild: &atomic.Bool{}}
+	return &Service{DAL: dal.NewStore(db), db: db, writer: newWriterSlot(), collectionTemplates: builtInCollectionTemplates(), ops: &operationRuntime{handlers: builtInOperationHandlers(), holder: "operations/" + uuid.NewString()}, ext: &extensions{}}
 }
 
 // OnCommit calls f after each committed write that recorded domain events,
@@ -77,27 +72,39 @@ func (s *Service) write(ctx context.Context, fn func(*Service) error) error {
 	if s.transaction {
 		return fn(s)
 	}
-	if err := s.writer.acquire(ctx); err != nil {
-		return err
-	}
-	defer s.writer.release()
 	var recorded int
-	err := dal.Retry(ctx, func() error {
-		tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
-		if err != nil {
+	var finished []string
+	var accepted bool
+	err := func() error {
+		if err := s.writer.acquire(ctx); err != nil {
 			return err
 		}
-		if recorded, err = s.inTx(ctx, tx, fn); err != nil {
-			_ = tx.Rollback()
-			return err
-		}
-		return tx.Commit()
-	})
+		defer s.writer.release()
+		return dal.Retry(ctx, func() error {
+			finished, accepted = finished[:0], false
+			tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+			if err != nil {
+				return err
+			}
+			if recorded, err = s.inTx(ctx, tx, &finished, &accepted, fn); err != nil {
+				_ = tx.Rollback()
+				return err
+			}
+			return tx.Commit()
+		})
+	}()
 	if dberr.IsConstraintError(err) {
 		return ErrConflict
 	}
+	// Hooks run after the writer is free, so they may write themselves.
 	if err == nil && recorded > 0 && s.onCommit != nil {
 		s.onCommit()
+	}
+	if err == nil && len(finished) > 0 {
+		s.ops.ended(finished)
+	}
+	if err == nil && accepted {
+		s.ops.wake()
 	}
 	return err
 }
@@ -105,10 +112,10 @@ func (s *Service) write(ctx context.Context, fn func(*Service) error) error {
 // inTx runs fn on a service bound to tx and then records the events fn
 // raised in the domain event log, so they commit or roll back with its
 // writes. It returns how many events it recorded.
-func (s *Service) inTx(ctx context.Context, tx *sql.Tx, fn func(*Service) error) (int, error) {
+func (s *Service) inTx(ctx context.Context, tx *sql.Tx, finished *[]string, accepted *bool, fn func(*Service) error) (int, error) {
 	ctx = requestmeta.EnsureTrace(ctx)
 	var pending []Event
-	t := &Service{DAL: s.DAL.WithTx(tx), db: s.db, writer: s.writer, transaction: true, operations: s.operations, tx: tx, pending: &pending, collectionTemplates: s.collectionTemplates, operationHandlers: s.operationHandlers, runPurger: s.runPurger, search: s.search, embeddings: s.embeddings, searchRebuild: s.searchRebuild}
+	t := &Service{DAL: s.DAL.WithTx(tx), db: s.db, writer: s.writer, transaction: true, tx: tx, pending: &pending, finished: finished, accepted: accepted, collectionTemplates: s.collectionTemplates, ops: s.ops, ext: s.ext}
 	t.integrations = s.integrations
 	t.traceID = requestmeta.Trace(ctx)
 	t.auditProperties = map[string]map[string]bool{}
@@ -141,7 +148,7 @@ func read[T any](ctx context.Context, s *Service, fn func(*Service) (T, error)) 
 			return err
 		}
 		defer tx.Rollback()
-		if out, err = fn(&Service{DAL: s.DAL.WithTx(tx), db: s.db, writer: s.writer, transaction: true, operations: s.operations, tx: tx, collectionTemplates: s.collectionTemplates, operationHandlers: s.operationHandlers, integrations: s.integrations, search: s.search, embeddings: s.embeddings, searchRebuild: s.searchRebuild}); err != nil {
+		if out, err = fn(&Service{DAL: s.DAL.WithTx(tx), db: s.db, writer: s.writer, transaction: true, tx: tx, collectionTemplates: s.collectionTemplates, ops: s.ops, integrations: s.integrations, ext: s.ext}); err != nil {
 			return err
 		}
 		return tx.Commit()
@@ -855,15 +862,19 @@ func (s *Service) delete(ctx context.Context, subject, id string, version int, r
 	if err != nil {
 		return err
 	}
+	// Schedules and event dispatch only select enabled, live workflows.
+	var retired []workflows.Workflow
 	switch {
 	case r.Kind == refs.KindWorkspace:
-		// Schedules and event dispatch only select enabled, live workflows.
-		err = s.DAL.Workflows().Retire(ctx, id, "", subject)
+		retired, err = s.DAL.Workflows().Retire(ctx, id, "", subject)
 	case collection:
-		err = s.DAL.Workflows().Retire(ctx, "", id, subject)
+		retired, err = s.DAL.Workflows().Retire(ctx, "", id, subject)
 	}
 	if err != nil {
 		return err
+	}
+	for _, w := range retired {
+		s.emit(ctx, EventWorkflowDeleted, subject, w.WorkspaceID, nil, "", map[string]any{"workflow_id": w.ID})
 	}
 	deleted, err := s.DAL.Resources().Delete(ctx, id, subject)
 	if err != nil {

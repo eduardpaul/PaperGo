@@ -42,8 +42,12 @@ func Roles() []*Role {
 
 // fills checks that def can fill the role: its output schema has every
 // output of the role with the same type, and requires what the role
-// requires.
+// requires. A role no extension registered in this deployment, such as
+// search's without search, asks nothing.
 func (r *Role) fills(def Definition) error {
+	if r == nil {
+		return nil
+	}
 	want, _ := r.OutputSchema["properties"].(map[string]any)
 	if len(want) == 0 {
 		return nil
@@ -83,12 +87,11 @@ func claimRole(ctx context.Context, t *dms.Service, subject string, w *workflows
 		return err
 	}
 	for _, other := range others {
-		other, _, err = revise(ctx, t, subject, other, mustCurrent(ctx, t, other), func(u *workflows.Changes) { u.AutomaticEnabled = boolPtr(false) })
+		v, err := current(ctx, t, other)
 		if err != nil {
 			return err
 		}
-		v, err := current(ctx, t, other)
-		if err != nil {
+		if other, v, err = revise(ctx, t, subject, other, v.Content, func(u *workflows.Changes) { u.AutomaticEnabled = boolPtr(false) }); err != nil {
 			return err
 		}
 		def, err := ParseDefinition(v.Definition)

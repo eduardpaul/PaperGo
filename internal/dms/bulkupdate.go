@@ -34,24 +34,32 @@ func (s *Service) StartBulkUpdate(ctx context.Context, subject, collectionID str
 		if e != nil {
 			return e
 		}
-		if _, e = t.compileQuery(ctx, subject, c.ID, QueryRequest{Query: in.Query, Surface: "head"}, false); e != nil {
-			return e
-		}
 		payload, e := json.Marshal(in)
 		if e != nil {
 			return e
 		}
-		op, e := t.enqueue(ctx, operations.Operation{ContainerID: c.ID, Kind: OperationKindBulkUpdate, CreatedBy: subject, Payload: payload})
+		if out, e = t.replay(ctx, operations.Operation{ContainerID: c.ID, Kind: OperationKindBulkUpdate, CreatedBy: subject, Payload: payload}); out != nil || e != nil {
+			return e
+		}
+		if _, e = t.compileQuery(ctx, subject, c.ID, QueryRequest{Query: in.Query, Surface: "head"}, false); e != nil {
+			return e
+		}
+		op, replayed, e := t.enqueue(ctx, operations.Operation{ContainerID: c.ID, Kind: OperationKindBulkUpdate, CreatedBy: subject, Payload: payload})
 		if e != nil {
 			return e
 		}
-		out = viewOperation(op)
+		out = viewOperation(op, time.Now())
+		out.Replayed = replayed
+		if replayed {
+			return nil
+		}
 		return t.audit(ctx, subject, "bulk_update.start", c, map[string]any{"operation_id": out.ID})
 	})
-	if err == nil {
-		select {
-		case s.operations <- struct{}{}:
-		default:
+	if err != nil {
+		if payload, e := json.Marshal(in); e == nil {
+			if replay, ok := s.replayAfterConflict(ctx, operations.Operation{ContainerID: collectionID, Kind: OperationKindBulkUpdate, CreatedBy: subject, Payload: payload}, err); ok {
+				return replay, nil
+			}
 		}
 	}
 	return
@@ -88,7 +96,7 @@ func (s *Service) bulkUpdateStep(ctx context.Context, op *operations.Operation) 
 		if matched == 0 {
 			op.Status, op.Progress = operations.StatusSucceeded, 100
 		}
-		return s.DAL.Operations().Save(ctx, op)
+		return s.SaveOperation(ctx, op)
 	}
 	rows, e := s.DAL.Operations().Items(ctx, op.ID, bulkStepItems)
 	if e != nil {
@@ -96,7 +104,7 @@ func (s *Service) bulkUpdateStep(ctx context.Context, op *operations.Operation) 
 	}
 	if len(rows) == 0 {
 		op.Status, op.Progress = operations.StatusSucceeded, 100
-		return s.DAL.Operations().Save(ctx, op)
+		return s.SaveOperation(ctx, op)
 	}
 	// One transaction edits a batch of items, each under its own savepoint;
 	// the time budget keeps other writers from waiting long behind it.
@@ -130,7 +138,7 @@ func (s *Service) bulkUpdateStep(ctx context.Context, op *operations.Operation) 
 	if processed == op.Matched {
 		op.Status = operations.StatusSucceeded
 	}
-	return s.DAL.Operations().Save(ctx, op)
+	return s.SaveOperation(ctx, op)
 }
 
 // Each bulk update step edits at most bulkStepItems items, and stops early

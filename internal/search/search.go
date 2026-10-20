@@ -331,6 +331,9 @@ type Content struct {
 // harmless.
 type Store interface {
 	Name() string
+	// Fresh reports that the store was created empty when it opened, so it
+	// must be rebuilt from the database.
+	Fresh() bool
 	// UpsertDocuments writes documents, each replacing the document of its
 	// key, with the stamp of the write (a reindex deletes older stamps).
 	UpsertDocuments(ctx context.Context, docs []Document, stamp int64) error
@@ -343,8 +346,11 @@ type Store interface {
 	// are not searched until the generation is published.
 	StageContent(ctx context.Context, itemID, blobID, generation string, chunks []Chunk) error
 	// PublishContent makes a generation the searchable content of the item's
-	// file version: its other generations are dropped, and the documents of
-	// that version match its text.
+	// file version: its older generations are dropped, newer staged ones
+	// stay, and the documents of that version match its text. Generations
+	// order by ID, a later one having the greater ID. It returns
+	// ErrSuperseded, changing nothing, when a newer generation of the file
+	// version is published, so publishing again or out of order is safe.
 	PublishContent(ctx context.Context, itemID, blobID, generation string) error
 	// DeleteContent drops the content of the item's file versions not in
 	// keep, staged or published.
@@ -389,3 +395,7 @@ type Store interface {
 // ErrUnavailable means the store cannot answer now, for example while it is
 // rebuilt.
 var ErrUnavailable = errors.New("search is unavailable")
+
+// ErrSuperseded refuses to publish a generation older than the published
+// one.
+var ErrSuperseded = errors.New("a newer generation of the file's content is published")

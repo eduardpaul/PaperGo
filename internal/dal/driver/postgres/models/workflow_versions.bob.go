@@ -31,6 +31,9 @@ type WorkflowVersion struct {
 	WorkflowID string                      `db:"workflow_id" `
 	Number     int64                       `db:"number" `
 	Definition types.JSON[json.RawMessage] `db:"definition" `
+	Source     string                      `db:"source" `
+	Bundle     string                      `db:"bundle" `
+	BundleHash string                      `db:"bundle_hash" `
 	CreatedBy  string                      `db:"created_by" `
 
 	R workflowVersionR `db:"-" `
@@ -62,7 +65,7 @@ type workflowVersionRLoaded struct {
 
 func buildWorkflowVersionColumns(tableName string) workflowVersionColumns {
 	columnsExpr := expr.NewColumnsExpr(
-		"id", "created_at", "workflow_id", "number", "definition", "created_by",
+		"id", "created_at", "workflow_id", "number", "definition", "source", "bundle", "bundle_hash", "created_by",
 	)
 
 	if tableName != "" {
@@ -77,6 +80,9 @@ func buildWorkflowVersionColumns(tableName string) workflowVersionColumns {
 		WorkflowID:  buildWorkflowVersionColumn(tableName, "workflow_id"),
 		Number:      buildWorkflowVersionColumn(tableName, "number"),
 		Definition:  buildWorkflowVersionColumn(tableName, "definition"),
+		Source:      buildWorkflowVersionColumn(tableName, "source"),
+		Bundle:      buildWorkflowVersionColumn(tableName, "bundle"),
+		BundleHash:  buildWorkflowVersionColumn(tableName, "bundle_hash"),
 		CreatedBy:   buildWorkflowVersionColumn(tableName, "created_by"),
 	}
 }
@@ -89,6 +95,9 @@ type workflowVersionColumns struct {
 	WorkflowID workflowVersionColumn
 	Number     workflowVersionColumn
 	Definition workflowVersionColumn
+	Source     workflowVersionColumn
+	Bundle     workflowVersionColumn
+	BundleHash workflowVersionColumn
 	CreatedBy  workflowVersionColumn
 }
 
@@ -140,11 +149,14 @@ type WorkflowVersionSetter struct {
 	WorkflowID omit.Val[string]                      `db:"workflow_id" `
 	Number     omit.Val[int64]                       `db:"number" `
 	Definition omit.Val[types.JSON[json.RawMessage]] `db:"definition" `
+	Source     omit.Val[string]                      `db:"source" `
+	Bundle     omit.Val[string]                      `db:"bundle" `
+	BundleHash omit.Val[string]                      `db:"bundle_hash" `
 	CreatedBy  omit.Val[string]                      `db:"created_by" `
 }
 
 func (s WorkflowVersionSetter) SetColumns() []string {
-	vals := make([]string, 0, 6)
+	vals := make([]string, 0, 9)
 	if s.ID.IsValue() {
 		vals = append(vals, "id")
 	}
@@ -159,6 +171,15 @@ func (s WorkflowVersionSetter) SetColumns() []string {
 	}
 	if s.Definition.IsValue() {
 		vals = append(vals, "definition")
+	}
+	if s.Source.IsValue() {
+		vals = append(vals, "source")
+	}
+	if s.Bundle.IsValue() {
+		vals = append(vals, "bundle")
+	}
+	if s.BundleHash.IsValue() {
+		vals = append(vals, "bundle_hash")
 	}
 	if s.CreatedBy.IsValue() {
 		vals = append(vals, "created_by")
@@ -181,6 +202,15 @@ func (s WorkflowVersionSetter) Overwrite(t *WorkflowVersion) {
 	}
 	if s.Definition.IsValue() {
 		t.Definition = s.Definition.MustGet()
+	}
+	if s.Source.IsValue() {
+		t.Source = s.Source.MustGet()
+	}
+	if s.Bundle.IsValue() {
+		t.Bundle = s.Bundle.MustGet()
+	}
+	if s.BundleHash.IsValue() {
+		t.BundleHash = s.BundleHash.MustGet()
 	}
 	if s.CreatedBy.IsValue() {
 		t.CreatedBy = s.CreatedBy.MustGet()
@@ -219,6 +249,21 @@ func (s *WorkflowVersionSetter) Apply(q *dialect.InsertQuery) {
 			}
 			return psql.Arg(s.Definition.MustGet()).WriteSQL(ctx, w, d, start)
 		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.Source.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.Source.MustGet()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.Bundle.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.Bundle.MustGet()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.BundleHash.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.BundleHash.MustGet()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
 			if s.CreatedBy.IsUnset() {
 				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
 			}
@@ -231,7 +276,7 @@ func (s WorkflowVersionSetter) UpdateMod() bob.Mod[*dialect.UpdateQuery] {
 }
 
 func (s WorkflowVersionSetter) Expressions(prefix ...string) []bob.Expression {
-	exprs := make([]bob.Expression, 0, 6)
+	exprs := make([]bob.Expression, 0, 9)
 
 	if s.ID.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
@@ -268,6 +313,27 @@ func (s WorkflowVersionSetter) Expressions(prefix ...string) []bob.Expression {
 		}})
 	}
 
+	if s.Source.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "source")...),
+			psql.Arg(s.Source),
+		}})
+	}
+
+	if s.Bundle.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "bundle")...),
+			psql.Arg(s.Bundle),
+		}})
+	}
+
+	if s.BundleHash.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "bundle_hash")...),
+			psql.Arg(s.BundleHash),
+		}})
+	}
+
 	if s.CreatedBy.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
 			psql.Quote(append(prefix, "created_by")...),
@@ -285,7 +351,7 @@ func workflowVersionScanMapper(ctx context.Context, cols []string) (scan.BeforeF
 		idx int
 		dst func(o *WorkflowVersion) any
 	}
-	targets := make([]target, 0, 6)
+	targets := make([]target, 0, 9)
 	for i, col := range cols {
 		switch col {
 		case "id":
@@ -298,6 +364,12 @@ func workflowVersionScanMapper(ctx context.Context, cols []string) (scan.BeforeF
 			targets = append(targets, target{i, func(o *WorkflowVersion) any { return &o.Number }})
 		case "definition":
 			targets = append(targets, target{i, func(o *WorkflowVersion) any { return &o.Definition }})
+		case "source":
+			targets = append(targets, target{i, func(o *WorkflowVersion) any { return &o.Source }})
+		case "bundle":
+			targets = append(targets, target{i, func(o *WorkflowVersion) any { return &o.Bundle }})
+		case "bundle_hash":
+			targets = append(targets, target{i, func(o *WorkflowVersion) any { return &o.BundleHash }})
 		case "created_by":
 			targets = append(targets, target{i, func(o *WorkflowVersion) any { return &o.CreatedBy }})
 		}
@@ -658,6 +730,9 @@ type workflowVersionWhere[Q psql.Filterable] struct {
 	WorkflowID psql.WhereMod[Q, string]
 	Number     psql.WhereMod[Q, int64]
 	Definition psql.WhereMod[Q, types.JSON[json.RawMessage]]
+	Source     psql.WhereMod[Q, string]
+	Bundle     psql.WhereMod[Q, string]
+	BundleHash psql.WhereMod[Q, string]
 	CreatedBy  psql.WhereMod[Q, string]
 	R          workflowVersionWhereR[Q]
 }
@@ -674,6 +749,9 @@ func buildWorkflowVersionWhere[Q psql.Filterable](cols workflowVersionColumns) w
 		WorkflowID: psql.Where[Q, string](cols.WorkflowID.Expression),
 		Number:     psql.Where[Q, int64](cols.Number.Expression),
 		Definition: psql.Where[Q, types.JSON[json.RawMessage]](cols.Definition.Expression),
+		Source:     psql.Where[Q, string](cols.Source.Expression),
+		Bundle:     psql.Where[Q, string](cols.Bundle.Expression),
+		BundleHash: psql.Where[Q, string](cols.BundleHash.Expression),
 		CreatedBy:  psql.Where[Q, string](cols.CreatedBy.Expression),
 		R:          workflowVersionWhereR[Q]{cols: cols},
 	}

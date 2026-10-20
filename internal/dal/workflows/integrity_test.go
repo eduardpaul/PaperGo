@@ -35,27 +35,29 @@ func TestWorkflowsOperationsAndLiveChangesPruning(t *testing.T) {
 			WorkspaceID: ws.ID,
 			Key:         "ocr-pipeline",
 			Name:        "OCR Pipeline",
+			Content:     daltest.Script,
 			CreatedBy:   "u1",
 		})
 		if err != nil {
 			t.Fatalf("CreateWorkflow: %v", err)
 		}
 
-		run, err := s.Runs().Create(ctx, runstore.CreateInput{ID: "run-1", WorkflowID: wf.ID, WorkspaceID: ws.ID, ItemID: "", EventID: "evt-1", EventType: "item.created", Actor: "u1", WorkflowVersion: 1})
-		if err != nil {
+		if err := daltest.Run(ctx, s, runstore.CreateInput{ID: "run-1", WorkflowID: wf.ID, WorkspaceID: ws.ID, ItemID: "", EventID: "evt-1", EventType: "item.created", Actor: "u1", WorkflowVersion: 1}); err != nil {
 			t.Fatalf("CreateWorkflowRun: %v", err)
 		}
-		if err := s.Runs().Observe(ctx, run.ID, runstore.StatusRunning, time.Now(), false); err != nil {
-			t.Fatalf("observe run: %v", err)
-		}
 
-		op, err := s.Operations().Enqueue(ctx, operations.Operation{Kind: "reindex", TraceID: "trace-1", CreatedBy: "u1"})
-		if err != nil {
-			t.Fatalf("enqueue operation: %v", err)
+		now := time.Now()
+		if _, _, err := s.Operations().Accept(ctx, operations.Operation{Kind: "reindex", TraceID: "trace-1", CreatedBy: "u1"}, now); err != nil {
+			t.Fatalf("accept operation: %v", err)
 		}
-		op.Status, op.Progress, op.Processed = operations.StatusSucceeded, 100, 10
-		if err := s.Operations().Save(ctx, &op); err != nil {
-			t.Fatalf("save operation: %v", err)
+		claimed, err := s.Operations().Claim(ctx, operations.ClaimRequest{Ready: operations.Ready{Kinds: []string{"reindex"}, Now: now, Limit: 1}, Holder: "test", TTL: time.Minute})
+		if err != nil || len(claimed) != 1 {
+			t.Fatalf("claim operation: %v %v", claimed, err)
+		}
+		op := claimed[0]
+		op.Status, op.Processed = operations.StatusSucceeded, 10
+		if err := s.Operations().Finish(ctx, &op, now); err != nil {
+			t.Fatalf("finish operation: %v", err)
 		}
 
 		if _, err := s.Audit().Append(ctx, audit.Event{WorkspaceID: ws.ID, Subject: "u1", Action: "permissions.replace", EntityType: "resource", EntityID: ws.ID, TraceID: "trace-1"}); err != nil {

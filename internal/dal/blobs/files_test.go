@@ -71,29 +71,47 @@ func testBlobFiles(t *testing.T, s *dal.Store) {
 		t.Fatalf("reclaimed blob revived: %v", err)
 	}
 
-	// Staged files keep the blobs they were made from.
-	definition := []byte(`{"flow":{"start":"done","nodes":{"done":{"activity":"end"}}}}`)
-	wf, err := s.Workflows().Create(ctx, workflows.CreateInput{WorkspaceID: f.Workspace, Key: "optimize", Name: "Optimize", CreatedBy: "alice", Definition: definition})
+	// Staged files keep the blobs their artifacts were made from.
+	wf, err := s.Workflows().Create(ctx, workflows.CreateInput{WorkspaceID: f.Workspace, Key: "optimize", Name: "Optimize", CreatedBy: "alice", Content: daltest.Script})
 	if err != nil {
 		t.Fatal(err)
 	}
-	run, err := s.Runs().Create(ctx, runstore.CreateInput{ID: "run", WorkflowID: wf.ID, WorkspaceID: f.Workspace, ItemID: f.Item, EventID: "event", EventType: "manual", Actor: "alice", WorkflowVersion: 1})
+	run := runstore.CreateInput{ID: "run", WorkflowID: wf.ID, WorkspaceID: f.Workspace, ItemID: f.Item, EventID: "event", EventType: "manual", Actor: "alice", WorkflowVersion: 1}
+	if err = daltest.Run(ctx, s, run); err != nil {
+		t.Fatal(err)
+	}
+	key := strings.Repeat("e", 64)
+	artifact, err := r.AddArtifact(ctx, blobs.Artifact{WorkspaceID: f.Workspace, ItemID: f.Item, InputKey: key, Sources: []model.ArtifactSource{{ItemID: f.Item, BlobID: second.ID}},
+		ObjectKey: "artifact", Filename: "small.pdf", ContentType: "application/pdf", Size: 5, Sha256: strings.Repeat("d", 64), CreatedBy: "alice", ExpiresAt: time.Now().Add(time.Hour)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	staged, err := r.Stage(ctx, blobs.StagedFile{WorkspaceID: f.Workspace, ItemID: f.Item, RunID: run.ID, Sources: []model.StagedSource{{ItemID: f.Item, BlobID: second.ID}},
-		ObjectKey: "staged", Filename: "small.pdf", ContentType: "application/pdf", Size: 5, Sha256: strings.Repeat("d", 64), CreatedBy: "alice"})
+	if reused, err := r.ReusableArtifact(ctx, f.Item, key); err != nil || reused.ID != artifact.ID || len(reused.Sources) != 1 {
+		t.Fatalf("reusable artifact: %+v %v", reused, err)
+	}
+	if _, err = r.ReusableArtifact(ctx, f.Item, strings.Repeat("f", 64)); !errors.Is(err, dberr.ErrNotFound) {
+		t.Fatalf("another input reused the artifact: %v", err)
+	}
+	if held, err := r.Staged(ctx, second); err != nil || held {
+		t.Fatalf("an unstaged artifact holds its source: %v %v", held, err)
+	}
+	staged, err := r.Stage(ctx, blobs.StagedFile{WorkspaceID: f.Workspace, ItemID: f.Item, ArtifactID: artifact.ID, RunID: run.ID, CreatedBy: "alice"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if held, err := r.Staged(ctx, second); err != nil || !held {
 		t.Fatalf("staged source: %v %v", held, err)
 	}
-	if err = r.DiscardRunStaged(ctx, run.ID); err != nil {
+	// A pending staged file keeps its artifact past its expiry.
+	later := time.Now().Add(2 * time.Hour)
+	if n, err := r.DeleteExpiredArtifacts(ctx, later, 10); err != nil || n != 0 {
+		t.Fatalf("deleted a held artifact: %d %v", n, err)
+	}
+	if err = r.DiscardStaged(ctx, blobs.StagedSelection{RunIDs: []string{run.ID}}); err != nil {
 		t.Fatal(err)
 	}
 	stored, err := r.StagedFile(ctx, staged.ID)
-	if err != nil || stored.State != blobs.StagedDiscarded || len(stored.Sources) != 1 {
+	if err != nil || stored.State != blobs.StagedDiscarded || stored.ArtifactID != artifact.ID || stored.RunID != run.ID {
 		t.Fatalf("discarded staged file: %+v %v", stored, err)
 	}
 	if held, err := r.Staged(ctx, second); err != nil || held {
@@ -101,5 +119,14 @@ func testBlobFiles(t *testing.T, s *dal.Store) {
 	}
 	if leased, err := r.Leased(ctx, second.ID); err != nil || leased {
 		t.Fatalf("lease: %v %v", leased, err)
+	}
+	if n, err := r.DeleteExpiredArtifacts(ctx, time.Now(), 10); err != nil || n != 0 {
+		t.Fatalf("deleted an unexpired artifact: %d %v", n, err)
+	}
+	if n, err := r.DeleteExpiredArtifacts(ctx, later, 10); err != nil || n != 1 {
+		t.Fatalf("expired artifact: %d %v", n, err)
+	}
+	if _, err = r.StagedFile(ctx, staged.ID); !errors.Is(err, dberr.ErrNotFound) {
+		t.Fatalf("the staged file outlived its artifact: %v", err)
 	}
 }

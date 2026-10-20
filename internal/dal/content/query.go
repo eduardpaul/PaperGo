@@ -395,7 +395,10 @@ func (r *Repo) Compile(p Plan) *Query {
 	if p.Keyword != "" {
 		add("EXISTS(SELECT 1 FROM ("+SurfaceKeywords+") k JOIN terms kt ON kt.id=k.keyword WHERE coalesce(kt.merged_into_id,kt.id)=coalesce((SELECT merged_into_id FROM terms WHERE id=?),?))", p.Keyword, p.Keyword)
 	}
-	if p.Search != nil {
+	if p.Search != nil && p.Search.ByName {
+		// p is the surface the reader reads: match its name.
+		add(r.d.Contains("p.folded_name", "?"), p.Search.Name)
+	} else if p.Search != nil {
 		head, _ := json.Marshal(nonNil(p.Search.Head))
 		published, _ := json.Marshal(nonNil(p.Search.Published))
 		// p is the surface the reader reads: match on that surface.

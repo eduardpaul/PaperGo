@@ -8,7 +8,7 @@ import (
 
 func (a *API) recycleBin(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	out, err := a.DMS.RecycleBin(r.Context(), subject(r), r.PathValue("id"), dms.RecycleBinQuery{After: q.Get("$skiptoken"), Limit: queryInt(r, "$top"), TopLevel: q.Get("top_level") == "true"})
+	out, err := a.dms(r).RecycleBin(r.Context(), subject(r), r.PathValue("id"), dms.RecycleBinQuery{After: q.Get("$skiptoken"), Limit: queryInt(r, "$top"), TopLevel: q.Get("top_level") == "true"})
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -20,7 +20,7 @@ func (a *API) restoreDeleted(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	out, err := a.DMS.RestoreDeleted(r.Context(), subject(r), r.PathValue("id"), r.PathValue("itemID"), recursive)
+	out, err := a.dms(r).RestoreDeleted(r.Context(), subject(r), r.PathValue("id"), r.PathValue("itemID"), recursive)
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -33,12 +33,12 @@ func (a *API) purgeDeleted(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := a.DMS.PurgeDeleted(r.Context(), subject(r), r.PathValue("id"), r.PathValue("itemID"), recursive); err != nil {
+	if err := a.dms(r).PurgeDeleted(r.Context(), subject(r), r.PathValue("id"), r.PathValue("itemID"), recursive); err != nil {
 		a.failure(w, r, err)
 		return
 	}
 	if a.Storage != nil {
-		if err := a.DMS.CleanupPurgedBlobs(r.Context(), a.Storage); err != nil {
+		if err := a.dms(r).CleanupPurgedBlobs(r.Context(), a.Storage); err != nil {
 			a.Logger.Error("purged blob cleanup", "error", err)
 		}
 	}

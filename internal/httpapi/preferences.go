@@ -6,14 +6,14 @@ import (
 	"papergo/internal/identity"
 )
 
-func (a *API) registerPreferences(m *http.ServeMux) {
+func (a *API) registerPreferences(m *router) {
 	for _, endpoint := range []struct {
 		path         string
 		organization bool
 	}{{"/v1/identity/me/preferences", false}, {"/v1/organization/preferences", true}} {
 		organization := endpoint.organization
 		m.HandleFunc("GET "+endpoint.path, func(w http.ResponseWriter, r *http.Request) {
-			out, err := a.DMS.Directory().Preferences(r.Context(), subject(r), organization)
+			out, err := a.dms(r).Directory().Preferences(r.Context(), subject(r), organization)
 			if err != nil {
 				a.failure(w, r, err)
 				return
@@ -31,7 +31,7 @@ func (a *API) registerPreferences(m *http.ServeMux) {
 				return
 			}
 			var out identity.Preferences
-			out, err := a.DMS.Directory().PatchPreferences(r.Context(), subject(r), organization, version, patch)
+			out, err := a.dms(r).Directory().PatchPreferences(r.Context(), subject(r), organization, version, patch)
 			if err != nil {
 				a.failure(w, r, err)
 				return

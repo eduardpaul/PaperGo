@@ -38,7 +38,6 @@ func TestPublishingSurfacesAndLifecycle(t *testing.T) {
 	if _, err := s.GetSurface(testContext, "reader", item.ID, "head"); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("draft access: %v", err)
 	}
-	indexSearch(t, s)
 	p, err := s.Browse(testContext, "reader", Browse{ParentID: list.ID, Search: "Hiddenword"})
 	if err != nil || len(p.Data) != 0 {
 		t.Fatalf("draft search: %+v %v", p, err)
@@ -58,14 +57,12 @@ func TestPublishingSurfacesAndLifecycle(t *testing.T) {
 	if err != nil || visible.Name != "Hiddenword" || len(visible.Keywords) != 0 || visible.HeadRevisionID != nil {
 		t.Fatalf("published surface leaked: %+v %v", visible, err)
 	}
-	indexSearch(t, s)
 	for _, in := range []Browse{{ParentID: list.ID, Search: "Secretedit"}, {ParentID: list.ID, Keyword: "secret"}} {
 		p, err = s.Browse(testContext, "reader", in)
 		if err != nil || len(p.Data) != 0 {
 			t.Fatalf("draft query leaked: %+v %v", p, err)
 		}
 	}
-	indexSearch(t, s)
 	p, err = s.Browse(testContext, "reader", Browse{ParentID: list.ID, Search: "Hiddenword"})
 	if err != nil || len(p.Data) != 1 || p.Data[0].Name != "Hiddenword" {
 		t.Fatalf("published search lost: %+v %v", p, err)

@@ -13,7 +13,7 @@ import (
 	"papergo/internal/transfer"
 )
 
-func (a *API) registerTasks(api *http.ServeMux) {
+func (a *API) registerTasks(api *router) {
 	api.HandleFunc("GET /v1/me/tasks", a.myTasks)
 	api.HandleFunc("GET /v1/workspaces/{id}/tasks", a.workspaceTasks)
 	api.HandleFunc("POST /v1/workspaces/{id}/tasks", a.createTask)
@@ -26,7 +26,7 @@ func (a *API) registerTasks(api *http.ServeMux) {
 	api.HandleFunc("GET /v1/staged-files/{id}/content", a.stagedFileContent)
 }
 
-func (a *API) tasks() *tasks.Service { return &tasks.Service{DMS: a.DMS} }
+func (a *API) tasks(r *http.Request) *tasks.Service { return &tasks.Service{DMS: a.dms(r)} }
 
 func taskFilter(r *http.Request) tasks.Filter {
 	q := r.URL.Query()
@@ -46,17 +46,17 @@ func (a *API) listTasks(w http.ResponseWriter, r *http.Request, out dms.Page[tas
 }
 
 func (a *API) myTasks(w http.ResponseWriter, r *http.Request) {
-	out, err := a.tasks().Mine(r.Context(), subject(r), taskFilter(r))
+	out, err := a.tasks(r).Mine(r.Context(), subject(r), taskFilter(r))
 	a.listTasks(w, r, out, err)
 }
 
 func (a *API) workspaceTasks(w http.ResponseWriter, r *http.Request) {
-	out, err := a.tasks().Workspace(r.Context(), subject(r), r.PathValue("id"), taskFilter(r))
+	out, err := a.tasks(r).Workspace(r.Context(), subject(r), r.PathValue("id"), taskFilter(r))
 	a.listTasks(w, r, out, err)
 }
 
 func (a *API) itemTasks(w http.ResponseWriter, r *http.Request) {
-	out, err := a.tasks().Item(r.Context(), subject(r), r.PathValue("id"), taskFilter(r))
+	out, err := a.tasks(r).Item(r.Context(), subject(r), r.PathValue("id"), taskFilter(r))
 	a.listTasks(w, r, out, err)
 }
 
@@ -74,6 +74,7 @@ type taskCreate struct {
 	Values      map[string]any       `json:"values"`
 	Priority    taskstore.Priority   `json:"priority"`
 	DueAt       *time.Time           `json:"due_at"`
+	Review      map[string]any       `json:"review"`
 }
 
 func (a *API) createTask(w http.ResponseWriter, r *http.Request) {
@@ -81,9 +82,9 @@ func (a *API) createTask(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &in) {
 		return
 	}
-	out, err := a.tasks().Create(r.Context(), subject(r), tasks.Input{WorkspaceID: r.PathValue("id"), ItemID: in.ItemID, Kind: in.Kind, Key: in.Key, Title: in.Title,
+	out, err := a.tasks(r).Create(r.Context(), subject(r), runOf(r), tasks.Input{WorkspaceID: r.PathValue("id"), ItemID: in.ItemID, Kind: in.Kind, Key: in.Key, Title: in.Title,
 		Description: in.Description, Assignees: in.Assignees, Completion: in.Completion, Outcomes: in.Outcomes, InputSchema: in.InputSchema, Values: in.Values,
-		Priority: in.Priority, DueAt: in.DueAt, Actor: subject(r)})
+		Priority: in.Priority, DueAt: in.DueAt, Review: in.Review, Actor: subject(r)})
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -93,7 +94,7 @@ func (a *API) createTask(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) getTask(w http.ResponseWriter, r *http.Request) {
-	out, err := a.tasks().Get(r.Context(), subject(r), r.PathValue("id"))
+	out, err := a.tasks(r).Get(r.Context(), subject(r), r.PathValue("id"))
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -106,7 +107,7 @@ func (a *API) respondTask(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &in) {
 		return
 	}
-	out, err := a.tasks().Respond(r.Context(), subject(r), r.PathValue("id"), in)
+	out, err := a.tasks(r).Respond(r.Context(), subject(r), r.PathValue("id"), in)
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -121,7 +122,7 @@ func (a *API) reassignTask(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &in) {
 		return
 	}
-	out, err := a.tasks().Reassign(r.Context(), subject(r), r.PathValue("id"), in.Assignees)
+	out, err := a.tasks(r).Reassign(r.Context(), subject(r), r.PathValue("id"), in.Assignees)
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -130,7 +131,7 @@ func (a *API) reassignTask(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) cancelTask(w http.ResponseWriter, r *http.Request) {
-	out, err := a.tasks().Cancel(r.Context(), subject(r), r.PathValue("id"))
+	out, err := a.tasks(r).Cancel(r.Context(), subject(r), r.PathValue("id"))
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -142,7 +143,8 @@ func (a *API) cancelTask(w http.ResponseWriter, r *http.Request) {
 type stagedFile struct {
 	ID          string    `json:"id"`
 	ItemID      string    `json:"item_id"`
-	RunID       string    `json:"run_id"`
+	ArtifactID  string    `json:"artifact_id"`
+	RunID       string    `json:"run_id,omitempty"`
 	Filename    string    `json:"filename"`
 	ContentType string    `json:"content_type"`
 	Size        int64     `json:"size"`
@@ -155,36 +157,38 @@ type stagedFile struct {
 }
 
 func (a *API) getStagedFile(w http.ResponseWriter, r *http.Request) {
-	f, err := a.DMS.StagedFile(r.Context(), subject(r), r.PathValue("id"))
+	f, err := a.dms(r).StagedFile(r.Context(), subject(r), r.PathValue("id"))
 	if err != nil {
 		a.failure(w, r, err)
 		return
 	}
-	fresh, err := a.DMS.StagedFresh(r.Context(), f.ID)
+	fresh, err := a.dms(r).StagedFresh(r.Context(), f.ID)
 	if err != nil {
 		a.failure(w, r, err)
 		return
 	}
-	respond(w, r, 200, stagedFile{ID: f.ID, ItemID: f.ItemID, RunID: f.RunID, Filename: f.Filename, ContentType: f.ContentType, Size: f.Size,
-		SHA256: f.Sha256, Metrics: f.Metrics, Sources: f.Sources, State: string(f.State), Fresh: fresh, CreatedAt: f.CreatedAt})
+	art := f.Artifact
+	respond(w, r, 200, stagedFile{ID: f.ID, ItemID: f.ItemID, ArtifactID: art.ID, RunID: f.RunID, Filename: art.Filename, ContentType: art.ContentType, Size: art.Size,
+		SHA256: art.Sha256, Metrics: art.Metrics, Sources: art.Sources, State: string(f.State), Fresh: fresh, CreatedAt: f.CreatedAt})
 }
 
 // stagedFileContent serves a staged file's bytes inline, for review screens.
 func (a *API) stagedFileContent(w http.ResponseWriter, r *http.Request) {
-	f, err := a.DMS.StagedFile(r.Context(), subject(r), r.PathValue("id"))
+	f, err := a.dms(r).StagedFile(r.Context(), subject(r), r.PathValue("id"))
 	if err != nil {
 		a.failure(w, r, err)
 		return
 	}
-	file, err := a.Storage.Open(r.Context(), f.ObjectKey)
+	art := f.Artifact
+	file, err := a.Storage.Open(r.Context(), art.ObjectKey)
 	if err != nil {
 		a.failure(w, r, err)
 		return
 	}
 	defer file.Close()
-	w.Header().Set("Content-Type", f.ContentType)
-	w.Header().Set("Content-Disposition", mime.FormatMediaType("inline", map[string]string{"filename": f.Filename}))
-	w.Header().Set("ETag", strconv.Quote(f.Sha256))
+	w.Header().Set("Content-Type", art.ContentType)
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("inline", map[string]string{"filename": art.Filename}))
+	w.Header().Set("ETag", strconv.Quote(art.Sha256))
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	http.ServeContent(transfer.Writer(w), r, f.Filename, f.CreatedAt, file)
+	http.ServeContent(transfer.Writer(w), r, art.Filename, art.CreatedAt, file)
 }

@@ -28,12 +28,15 @@ func TestStorageStatusRequiresOrganizationManage(t *testing.T) {
 	if err = s.Directory().SetAssignment(ctx, "organization-admin", role.ID, identity.Principal{Type: directory.PrincipalUser, ID: "alice"}, false); err != nil {
 		t.Fatal(err)
 	}
+	s.AddStorageReporter(func(context.Context) (dms.StorageUsage, error) {
+		return dms.StorageUsage{Name: "index", Store: "test", Bytes: 7, Entries: 2}, nil
+	})
 	res := request(h, "GET", "/v1/storage/status", "", testToken, "", "")
 	var got dms.StorageStatus
 	if res.Code != 200 || json.Unmarshal(res.Body.Bytes(), &got) != nil {
 		t.Fatal(res.Code, res.Body.String())
 	}
-	if got.Tables == nil || got.Runs == nil || got.SearchStore != "sqlite" || got.DatabaseBytes == 0 {
+	if got.Tables == nil || got.Runs == nil || len(got.Extensions) != 1 || got.Extensions[0] != (dms.StorageUsage{Name: "index", Store: "test", Bytes: 7, Entries: 2}) || got.DatabaseBytes == 0 {
 		t.Fatalf("%+v", got)
 	}
 	pages := int64(got.PageCount) * int64(got.PageSize)

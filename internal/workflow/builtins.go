@@ -2,31 +2,31 @@ package workflow
 
 import (
 	"context"
-	"encoding/json"
+	"embed"
 	"fmt"
-	"papergo/internal/dal/refs"
-	"papergo/internal/dal/resources"
-	"papergo/internal/jsonutil"
-	"regexp"
 	"sort"
+	"sync"
 
 	"papergo/internal/dal/blobs"
+	"papergo/internal/dal/refs"
+	"papergo/internal/dal/resources"
 	"papergo/internal/dal/workflows"
 	"papergo/internal/dms"
 	"papergo/internal/forms"
 )
 
-// BuiltIn is a workflow PaperGo ships. Turned on in a workspace (or for one
-// collection), it becomes an ordinary workflow row whose definition is the
-// release definition with the parameters filled in, so its runs, history
-// and triggers work like any other workflow. People change it through its
-// parameters, turn it off, or copy it into a workflow they edit freely.
+// BuiltIn is a workflow PaperGo ships: a script embedded from
+// builtin/{key}.ts with a form of parameters. Turned on in a workspace (or
+// for one collection), it becomes an ordinary workflow row whose version is
+// the script read with the parameters, so its runs, history and triggers
+// work like any other workflow. People change it through its parameters,
+// turn it off, or copy it into a workflow they edit freely.
 type BuiltIn struct {
 	Key         string `json:"key"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
-	// PerCollection built-ins are turned on for one list or library;
-	// {param:collection} is that collection's ID.
+	// PerCollection built-ins are turned on for one list or library, whose
+	// ID is the collection parameter.
 	PerCollection bool `json:"per_collection"`
 	// Role identifies the product process. Automatic providers are configured
 	// per collection; the workspace catalog exposes manual use only.
@@ -34,47 +34,88 @@ type BuiltIn struct {
 	// Default built-ins prepare an automatic provider in every collection
 	// until people explicitly pause, replace or delete it.
 	Default bool `json:"default,omitempty"`
-	// System built-ins are product processes: their runs use the runner's
-	// system queue, so they never delay people's workflows. Successful automatic
-	// runs follow SYSTEM_RUN_RETENTION; manual runs use ordinary retention, and their release definitions may read taxonomy
-	// events whatever their author's scopes.
+	// System built-ins are product processes: their successful automatic
+	// runs follow SYSTEM_RUN_RETENTION, manual runs ordinary retention, and
+	// they may read taxonomy events whatever their author's scopes.
 	System            bool              `json:"system,omitempty"`
 	AutomaticTriggers []Trigger         `json:"automatic_triggers"`
 	ManualMode        string            `json:"manual_mode"`
 	ManualMediaTypes  []blobs.MediaType `json:"manual_media_types,omitempty"`
+	// NeedsOCR built-ins read text in images.
+	NeedsOCR bool `json:"needs_ocr,omitempty"`
 	// ParametersSchema is the form of the built-in's parameters.
 	ParametersSchema map[string]any `json:"parameters_schema"`
-	// Definition is the release definition, with {param:x} placeholders.
-	Definition string `json:"-"`
+	// Source is the script, read from builtin/{key}.ts.
+	Source string `json:"-"`
 }
 
-var builtins = map[string]*BuiltIn{}
+//go:embed builtin/*.ts
+var builtinSources embed.FS
 
-// RegisterBuiltIn adds a built-in to the release catalog. A built-in with a
-// role needs that role registered and declares outputs that fill it.
+var (
+	builtins = map[string]*BuiltIn{}
+	// describing guards describe, which reads the triggers of built-ins
+	// registered since the catalog was last listed.
+	describing sync.Mutex
+)
+
+// RegisterBuiltIn adds a built-in to the release catalog, with its script
+// from builtin/{key}.ts unless it has one. A built-in with a role needs that
+// role registered and declares outputs that fill it.
 func RegisterBuiltIn(b *BuiltIn) {
-	b.ManualMode = "none"
-	b.AutomaticTriggers = []Trigger{}
-	if def, err := ParseDefinition(json.RawMessage(b.Definition)); err == nil {
-		for _, tr := range def.Triggers {
-			if tr.Type != TriggerManual {
-				b.AutomaticTriggers = append(b.AutomaticTriggers, tr)
-			}
-			if tr.Type == TriggerManual {
-				b.ManualMode = "standalone"
-				if tr.CollectionID != "" || tr.Selection == SelectionPerItem {
-					b.ManualMode = "single"
-				}
-				if tr.Selection == SelectionAll {
-					b.ManualMode = "selection"
-				}
-			}
+	if b.Source == "" {
+		source, err := builtinSources.ReadFile("builtin/" + b.Key + ".ts")
+		if err != nil {
+			panic("built-in " + b.Key + ": " + err.Error())
 		}
+		b.Source = string(source)
 	}
 	if b.Role != "" && (b.PerCollection || roles[b.Role] == nil) {
 		panic("built-in " + b.Key + ": a role built-in uses role scoping and fills a registered role")
 	}
 	builtins[b.Key] = b
+}
+
+// describedCollection stands for the collection a per-collection built-in
+// is turned on for, when the catalog describes it.
+const describedCollection = "00000000-0000-0000-0000-000000000000"
+
+// describe reads the triggers of every built-in not yet described from
+// its script with its default parameters, for the catalog.
+func describe() {
+	describing.Lock()
+	defer describing.Unlock()
+	for _, b := range builtins {
+		if b.AutomaticTriggers != nil {
+			continue
+		}
+		b.ManualMode, b.AutomaticTriggers = "none", []Trigger{}
+		params := forms.Defaults(b.ParametersSchema)
+		if b.PerCollection || b.Role != "" {
+			// Its triggers name the collection it is turned on for.
+			params["collection"] = describedCollection
+		}
+		def, _, err := compile(context.Background(), b.Source, params)
+		if err != nil {
+			panic("built-in " + b.Key + ": " + err.Error())
+		}
+		for _, tr := range def.Triggers {
+			if tr.CollectionID == describedCollection {
+				tr.CollectionID = ""
+			}
+			if tr.Type != TriggerManual {
+				b.AutomaticTriggers = append(b.AutomaticTriggers, tr)
+				continue
+			}
+			b.ManualMode = "standalone"
+			if tr.CollectionID != "" || tr.Selection == SelectionPerItem || b.PerCollection || b.Role != "" {
+				b.ManualMode = "single"
+			}
+			if tr.Selection == SelectionAll {
+				b.ManualMode = "selection"
+			}
+		}
+	}
 }
 
 // systemWorkflow reports whether the built-in key identifies a system workflow.
@@ -84,128 +125,13 @@ func systemWorkflow(key string) bool {
 
 // BuiltIns returns the release catalog, sorted by key.
 func BuiltIns() []*BuiltIn {
+	describe()
 	out := make([]*BuiltIn, 0, len(builtins))
 	for _, b := range builtins {
 		out = append(out, b)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
 	return out
-}
-
-func init() {
-	RegisterBuiltIn(&BuiltIn{
-		Key:           "items.expire",
-		Name:          "Unpublish expired items",
-		Description:   "Every day, unpublishes the published items whose date field is before today.",
-		PerCollection: true,
-		ParametersSchema: forms.MustParse(`{"type": "object", "required": ["field"], "properties": {
-			"field": {"type": "string", "title": "Expiry field", "description": "Key of an indexed date field holding the expiry date."},
-			"cron": {"type": "string", "title": "Schedule", "description": "When to check, as a cron expression.", "default": "0 1 * * *"},
-			"time_zone": {"type": "string", "title": "Time zone", "description": "Time zone of the schedule.", "default": "UTC"}
-		}}`),
-		Definition: `{
-			"triggers": [{"type": "schedule", "collection_id": "{param:collection}", "cron": "{param:cron}", "time_zone": "{param:time_zone}", "surface": "published"}],
-			"condition": {"field": "{param:field}", "op": "lt", "value_ref": "today"},
-			"flow": {"start": "unpublish", "nodes": {"unpublish": {"activity": "item.unpublish"}}}
-		}`,
-	})
-}
-
-func init() {
-	RegisterBuiltIn(&BuiltIn{
-		Key:              "documents.optimize",
-		ManualMediaTypes: []blobs.MediaType{blobs.MediaJPEG, blobs.MediaPNG, blobs.MediaWebP},
-		Name:             "Optimize image storage",
-		Description:      "When an image is added, proposes a smaller WebP copy whose smallest text keeps a readable height, and asks the owners (or the approvers) to compare both before it replaces the file. A newer file cancels the waiting review. Also runs on demand.",
-		PerCollection:    true,
-		ParametersSchema: forms.MustParse(`{"type": "object", "properties": {
-			"target_height": {"type": "number", "title": "Smallest text height", "description": "Height in pixels the smallest text keeps.", "minimum": 4, "maximum": 200, "default": 12},
-			"min_confidence": {"type": "number", "title": "Minimum confidence", "description": "Detector score a text line needs, 0 to 100.", "minimum": 0, "maximum": 100, "default": 50},
-			"percentile": {"type": "number", "title": "Height percentile", "description": "Percentile of the text heights taken as the smallest text.", "minimum": 0, "maximum": 100, "default": 5},
-			"max_analysis_dimension": {"type": "integer", "title": "Analysis size", "description": "Longest side in pixels of the copy the detector analyzes.", "minimum": 256, "maximum": 2600, "default": 2600},
-			"minimum_scale": {"type": "number", "title": "Minimum scale", "description": "How far an image may shrink.", "minimum": 0.01, "maximum": 1, "default": 0.05},
-			"quality": {"type": "integer", "title": "WebP quality", "minimum": 1, "maximum": 100, "default": 80},
-			"approvers": {"type": "array", "title": "Approvers", "description": "Who reviews the smaller file; none means the workspace's owners.", "maxItems": 50, "items": {"type": "string"}, "x-papergo": {"kind": "people", "access": "read_draft"}}
-		}}`),
-		Definition: `{
-			"triggers": [{"type": "file.added", "collection_id": "{param:collection}"}, {"type": "file.updated", "collection_id": "{param:collection}"}, {"type": "manual", "collection_id": "{param:collection}", "selection": "per_item"}],
-			"concurrency": "replace",
-			"flow": {"start": "prepare", "nodes": {
-				"prepare": {"activity": "file.optimize_image", "inputs": {"target_height": "{param:target_height}", "min_confidence": "{param:min_confidence}",
-					"percentile": "{param:percentile}", "max_analysis_dimension": "{param:max_analysis_dimension}", "minimum_scale": "{param:minimum_scale}", "quality": "{param:quality}"},
-					"next": {"candidate": "review"}},
-				"review": {"activity": "approval", "inputs": {"title": "Review a smaller file for {item:name}",
-					"description": "The proposed WebP file is shown beside the current file at full size. Approve if its smallest text is still readable.",
-					"assignees": "{param:approvers}", "review": {"type": "file.compare", "staged_file_id": "{step:prepare.staged_file_id}"}},
-					"next": {"approved": "promote", "rejected": "discard"}},
-				"promote": {"activity": "file.promote", "inputs": {"staged_file_id": "{step:prepare.staged_file_id}"}},
-				"discard": {"activity": "file.discard", "inputs": {"staged_file_id": "{step:prepare.staged_file_id}"}}
-			}}
-		}`,
-	})
-}
-
-func init() {
-	RegisterBuiltIn(&BuiltIn{
-		Key:              "documents.photos_to_pdf",
-		ManualMediaTypes: []blobs.MediaType{blobs.MediaJPEG, blobs.MediaPNG, blobs.MediaWebP},
-		Name:             "Photos to PDF",
-		Description:      "Combines selected photos, in the chosen order, into one searchable PDF. After the owners (or the approvers) review it, the primary item gets the PDF as its new file, keeping its metadata and file history, and the other photos go to the recycle bin. Started on a selection.",
-		PerCollection:    true,
-		ParametersSchema: forms.MustParse(`{"type": "object", "properties": {
-			"target_height": {"type": "number", "title": "Smallest text height", "description": "Height in pixels the smallest text of each page keeps; pages never grow.", "minimum": 8, "maximum": 200, "default": 32},
-			"quality": {"type": "integer", "title": "JPEG quality", "minimum": 1, "maximum": 100, "default": 80},
-			"approvers": {"type": "array", "title": "Approvers", "description": "Who reviews the PDF; none means the workspace's owners.", "maxItems": 50, "items": {"type": "string"}, "x-papergo": {"kind": "people", "access": "read_draft"}}
-		}}`),
-		Definition: `{
-			"input_schema": {"type": "object", "properties": {}, "x-papergo-selection": {"preview": "image", "item_label": "page", "order_label": "Page order",
-				"primary_description": "This item gets the approved PDF as its new file, keeping its metadata and file history. The other photos go to the recycle bin."}},
-			"triggers": [{"type": "manual", "collection_id": "{param:collection}", "selection": "selection"}],
-			"concurrency": "skip",
-			"flow": {"start": "compose", "nodes": {
-				"compose": {"activity": "file.compose_pdf", "inputs": {"target_height": "{param:target_height}", "quality": "{param:quality}"}, "next": {"done": "review"}},
-				"review": {"activity": "approval", "inputs": {"title": "Review the PDF made from photos for {item:name}",
-					"description": "The pages are the selected photos in order. Approve to replace the primary item's file with this PDF and move the other photos to the recycle bin.",
-					"assignees": "{param:approvers}", "review": {"type": "file.preview", "staged_file_id": "{step:compose.staged_file_id}"}},
-					"next": {"approved": "promote", "rejected": "discard"}},
-				"promote": {"activity": "file.promote", "inputs": {"staged_file_id": "{step:compose.staged_file_id}", "recycle_sources": true}},
-				"discard": {"activity": "file.discard", "inputs": {"staged_file_id": "{step:compose.staged_file_id}"}}
-			}}
-		}`,
-	})
-}
-
-var paramPattern = regexp.MustCompile(`\{param:([a-z][a-z0-9_]*)\}`)
-
-// fill replaces {param:x} in the release definition. A string that is
-// exactly one parameter takes the parameter's typed value.
-func (b *BuiltIn) fill(params map[string]any) (json.RawMessage, error) {
-	var tree any
-	if err := json.Unmarshal([]byte(b.Definition), &tree); err != nil {
-		return nil, err
-	}
-	var walk func(any) any
-	walk = func(v any) any {
-		switch node := v.(type) {
-		case string:
-			if m := paramPattern.FindStringSubmatch(node); m != nil && m[0] == node {
-				return params[m[1]]
-			}
-			return paramPattern.ReplaceAllStringFunc(node, func(token string) string {
-				return text2(params[paramPattern.FindStringSubmatch(token)[1]])
-			})
-		case map[string]any:
-			for k, child := range node {
-				node[k] = walk(child)
-			}
-		case []any:
-			for i, child := range node {
-				node[i] = walk(child)
-			}
-		}
-		return v
-	}
-	return json.Marshal(walk(tree))
 }
 
 // params applies defaults and checks a built-in's parameters.
@@ -218,6 +144,23 @@ func (b *BuiltIn) params(values map[string]any, collectionID string) (map[string
 		out["collection"] = collectionID
 	}
 	return out, nil
+}
+
+// compile reads the built-in's version with params, with the disabled
+// automatic triggers turned off.
+func (b *BuiltIn) compile(ctx context.Context, params map[string]any, disabled []string) (Definition, workflows.Content, error) {
+	def, content, err := compile(ctx, b.Source, params)
+	if err != nil {
+		return Definition{}, workflows.Content{}, err
+	}
+	if len(disabled) == 0 {
+		return def, content, nil
+	}
+	if content.Definition, err = withDisabledTriggers(content.Definition, disabled); err != nil {
+		return Definition{}, workflows.Content{}, err
+	}
+	def, err = ParseDefinition(content.Definition)
+	return def, content, err
 }
 
 // SetBuiltIn turns a built-in on or off and sets its parameters. The first
@@ -269,8 +212,8 @@ func (s *Service) builtInScope(ctx context.Context, t *dms.Service, subject, wor
 	return nil
 }
 
-// storedParams are the parameters kept with a built-in's workflow: the
-// collection is its scope, not a parameter.
+// storedParams are the parameters kept with a workflow: the collection is
+// its scope, not a parameter.
 func storedParams(params map[string]any) map[string]any {
 	stored := map[string]any{}
 	for k, v := range params {
@@ -282,25 +225,22 @@ func storedParams(params map[string]any) map[string]any {
 }
 
 // createBuiltIn creates the workflow of a built-in in a workspace, or for
-// collection c, with its filled release definition, and indexes its
+// collection c, with its script read with the parameters, and indexes its
 // triggers.
 func createBuiltIn(ctx context.Context, t *dms.Service, subject, workspaceID string, b *BuiltIn, collection string, enabled bool, values map[string]any, options ...SetBuiltIn) (*workflows.Workflow, *workflows.Version, error) {
 	params, err := b.params(values, collection)
 	if err != nil {
 		return nil, nil, err
 	}
-	filled, err := b.fill(params)
+	var disabled []string
+	if len(options) > 0 && options[0].DisabledTriggers != nil {
+		disabled = *options[0].DisabledTriggers
+	}
+	def, content, err := b.compile(ctx, params, disabled)
 	if err != nil {
 		return nil, nil, err
 	}
-	if len(options) > 0 && options[0].DisabledTriggers != nil {
-		filled, err = withDisabledTriggers(filled, *options[0].DisabledTriggers)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-	def, raw, err := checkDefinition(ctx, t, subject, workspaceID, filled)
-	if err != nil {
+	if err = checkDefinition(ctx, t, subject, workspaceID, def); err != nil {
 		return nil, nil, dms.Invalid("parameters: " + err.Error())
 	}
 	if enabled {
@@ -335,7 +275,7 @@ func createBuiltIn(ctx context.Context, t *dms.Service, subject, workspaceID str
 		}
 		name = fmt.Sprintf("%s (%d)", baseName, n)
 	}
-	in := workflows.CreateInput{WorkspaceID: workspaceID, Key: wkey, Name: name, Description: b.Description, AutomaticEnabled: enabled, ManualEnabled: true, BuiltinKey: b.Key, Role: b.Role, CollectionID: collection, AutomaticProvider: b.Role != "" && collection != "", CreatedBy: subject, Definition: raw}
+	in := workflows.CreateInput{WorkspaceID: workspaceID, Key: wkey, Name: name, Description: b.Description, AutomaticEnabled: enabled, ManualEnabled: true, BuiltinKey: b.Key, Role: b.Role, CollectionID: collection, AutomaticProvider: b.Role != "" && collection != "", CreatedBy: subject, Content: content}
 	if len(options) > 0 {
 		option := options[0]
 		if option.State != "" {
@@ -348,8 +288,7 @@ func createBuiltIn(ctx context.Context, t *dms.Service, subject, workspaceID str
 			in.ManualEnabled = *option.ManualEnabled
 		}
 	}
-	in.Parameters, err = json.Marshal(storedParams(params))
-	if err != nil {
+	if in.Parameters, err = jsonObject(storedParams(params)); err != nil {
 		return nil, nil, err
 	}
 	w, err := createWorkflow(ctx, t, in)
@@ -386,14 +325,6 @@ func (s *Service) UpdateBuiltIn(ctx context.Context, subject, workspaceID, key s
 		if err != nil {
 			return err
 		}
-		filled, err := b.fill(params)
-		if err != nil {
-			return err
-		}
-		_, raw, err := checkDefinition(ctx, t, subject, workspaceID, filled)
-		if err != nil {
-			return dms.Invalid("parameters: " + err.Error())
-		}
 		w, err := s.builtInRow(ctx, t, workspaceID, b, in.CollectionID)
 		if err != nil {
 			return err
@@ -410,19 +341,22 @@ func (s *Service) UpdateBuiltIn(ctx context.Context, subject, workspaceID, key s
 			if in.Version != w.Version {
 				return dms.ErrPreconditionFailed
 			}
-			disabled := disabledTriggerTypes(mustCurrent(ctx, t, w))
+			cur, err := current(ctx, t, w)
+			if err != nil {
+				return err
+			}
+			disabled := disabledTriggerTypes(cur.Definition)
 			if in.DisabledTriggers != nil {
 				disabled = *in.DisabledTriggers
 			}
-			raw, err = withDisabledTriggers(raw, disabled)
+			def, content, err := b.compile(ctx, params, disabled)
 			if err != nil {
 				return err
 			}
-			def, err := ParseDefinition(raw)
-			if err != nil {
-				return err
+			if err = checkDefinition(ctx, t, subject, workspaceID, def); err != nil {
+				return dms.Invalid("parameters: " + err.Error())
 			}
-			if w, v, err = revise(ctx, t, subject, w, raw, func(u *workflows.Changes) {
+			if w, v, err = revise(ctx, t, subject, w, content, func(u *workflows.Changes) {
 				// Whoever configures a built-in becomes its runs' author.
 				u.Author = true
 				u.AutomaticEnabled = &in.AutomaticEnabled
@@ -464,6 +398,8 @@ type CopyBuiltIn struct {
 	Parameters   map[string]any `json:"parameters,omitempty"`
 }
 
+// CopyBuiltIn creates a draft workflow with the built-in's script and
+// parameters, which its managers edit freely.
 func (s *Service) CopyBuiltIn(ctx context.Context, subject, workspaceID, key string, in CopyBuiltIn) (out Workflow, err error) {
 	b := builtins[key]
 	if b == nil {
@@ -477,24 +413,16 @@ func (s *Service) CopyBuiltIn(ctx context.Context, subject, workspaceID, key str
 		if err != nil {
 			return err
 		}
-		filled, err := b.fill(params)
-		if err != nil {
-			return err
+		// A copy that is not a role provider keeps its collection among its
+		// parameters, where its script reads it.
+		if b.Role != "" {
+			params = storedParams(params)
 		}
-		if out, err = s.create(ctx, t, subject, workspaceID, Save{Name: in.Name, Description: b.Description, Definition: filled, State: "draft", Role: b.Role, CollectionID: roleScope(b, in.CollectionID)}); err != nil {
-			return err
-		}
-		return nil
+		out, err = s.create(ctx, t, subject, workspaceID, Save{Name: in.Name, Description: b.Description, Source: b.Source, Parameters: params,
+			State: "draft", Role: b.Role, CollectionID: roleScope(b, in.CollectionID)})
+		return err
 	})
 	return
-}
-
-func mustCurrent(ctx context.Context, t *dms.Service, w *workflows.Workflow) json.RawMessage {
-	v, err := current(ctx, t, w)
-	if err != nil {
-		return nil
-	}
-	return v.Definition
 }
 
 // BuiltInState is a built-in with the workflows that turn it on in a
@@ -532,10 +460,9 @@ func (s *Service) ListBuiltIns(ctx context.Context, subject, workspaceID string)
 }
 
 // SyncBuiltIns brings every built-in workflow to the running release: a
-// changed release definition becomes a new version (running runs keep
-// theirs), and a built-in no longer shipped is turned off. Parameters that
-// no longer validate keep the old version, turned off. The runner calls it
-// when it launches.
+// changed script becomes a new version (running runs keep theirs), and a
+// built-in no longer shipped is turned off. Parameters that no longer
+// validate keep the old version, turned off. Startup calls it.
 func (s *Service) SyncBuiltIns(ctx context.Context) error {
 	return s.DMS.Write(ctx, func(t *dms.Service) error {
 		rows, err := listWorkflows(ctx, t, workflows.Filter{OnlyBuiltins: true, LiveOnly: true})
@@ -543,48 +470,29 @@ func (s *Service) SyncBuiltIns(ctx context.Context) error {
 			return err
 		}
 		for _, w := range rows {
-			b := builtins[w.BuiltinKey]
-			var raw json.RawMessage
-			var def Definition
-			if b != nil {
-				collection := ""
-				if w.CollectionID != "" {
-					collection = w.CollectionID
-				}
-				params, err := b.params(w.Parameters, collection)
-				if err == nil {
-					var filled json.RawMessage
-					if filled, err = b.fill(params); err == nil {
-						def, raw, err = checkDefinition(ctx, t, w.UpdatedBy, w.WorkspaceID, filled)
+			cur, err := current(ctx, t, w)
+			if err != nil {
+				return err
+			}
+			content, def, ok := cur.Content, Definition{}, false
+			if b := builtins[w.BuiltinKey]; b != nil {
+				if params, e := b.params(w.Parameters, w.CollectionID); e == nil {
+					var next workflows.Content
+					if def, next, e = b.compile(ctx, params, disabledTriggerTypes(cur.Definition)); e == nil && checkDefinition(ctx, t, w.UpdatedBy, w.WorkspaceID, def) == nil {
+						content, ok = next, true
 					}
 				}
-				if err != nil {
-					raw = nil
-				}
 			}
-			if raw != nil {
-				raw, err = withDisabledTriggers(raw, disabledTriggerTypes(mustCurrent(ctx, t, w)))
-				if err != nil {
-					return err
-				}
-				def, err = ParseDefinition(raw)
-				if err != nil {
+			enabled := w.AutomaticEnabled && ok
+			if !ok {
+				if def, err = ParseDefinition(cur.Definition); err != nil {
 					return err
 				}
 			}
-			enabled := w.AutomaticEnabled && raw != nil
-			if raw == nil {
-				raw = mustCurrent(ctx, t, w)
-				if def, err = ParseDefinition(raw); err != nil {
-					return err
-				}
-			}
-			if v, err := current(ctx, t, w); err != nil {
-				return err
-			} else if jsonutil.Equal(v.Definition, raw) && enabled == w.AutomaticEnabled {
+			if cur.BundleHash == content.BundleHash && cur.Source == content.Source && string(cur.Definition) == string(content.Definition) && enabled == w.AutomaticEnabled {
 				continue
 			}
-			if w, _, err = revise(ctx, t, w.UpdatedBy, w, raw, func(u *workflows.Changes) { u.AutomaticEnabled = &enabled }); err != nil {
+			if w, _, err = revise(ctx, t, w.UpdatedBy, w, content, func(u *workflows.Changes) { u.AutomaticEnabled = &enabled }); err != nil {
 				return err
 			}
 			if err = index(ctx, t, w, def); err != nil {

@@ -37,7 +37,7 @@ function RunsPage() {
     <SettingsSection title="Runs" description="Recent workflow runs in this workspace.">
       <div className="mb-4 grid gap-2 sm:grid-cols-3">
         <Select aria-label="Workflow" value={workflowId} onChange={event => setWorkflowId(event.target.value)}><option value="">All workflows</option>{definitions.data?.map(entry => <option key={entry.id} value={entry.id}>{entry.name}</option>)}</Select>
-        <Select aria-label="Run origin" value={origin} onChange={event => setOrigin(event.target.value)}><option value="">All origins</option><option value="manual">Manual</option><option value="automatic">Automatic events</option><option value="schedule">Scheduled</option></Select>
+        <Select aria-label="Run origin" value={origin} onChange={event => setOrigin(event.target.value)}><option value="">All origins</option><option value="manual">Manual</option><option value="automatic">Automatic events</option><option value="schedule">Scheduled</option><option value="test">Test</option></Select>
         <Select aria-label="Run status" value={status} onChange={event => setStatus(event.target.value)}><option value="">All statuses</option>{['queued','running','waiting','completed','failed','cancelled'].map(status => <option key={status} value={status}>{runStatusLabel(status)}</option>)}</Select>
       </div>
       <label className="mb-3 flex items-center gap-2 text-sm"><Checkbox checked={includeSystem} onChange={event => setIncludeSystem(event.target.checked)} />Include automatic system runs. Manual runs are always shown.</label>
@@ -48,7 +48,7 @@ function RunsPage() {
             <div className="min-w-0 flex-1">
               <p className="truncate text-[13px] font-medium">{names.get(run.workflow_id) ?? run.workflow_id}</p>
               <p className="text-xs text-muted">
-                {run.outcome === 'unchanged' ? 'No changes needed' : runStatusLabel(run.status)} · {runOriginLabel(run.event_type)} · {format.dateTime(run.created_at)}
+                {runStatusLabel(run.status)} · {runOriginLabel(run.event_type)} · {format.dateTime(run.created_at)}
                 {run.error ? ` · ${run.error}` : ''}
               </p>
             </div>
@@ -65,7 +65,7 @@ function RunsPage() {
 }
 
 function RunActions({ run, pending, onAct }: { run: WorkflowRun; pending: boolean; onAct: (action: 'cancel' | 'retry') => void }) {
-  if (run.status === 'queued' || run.status === 'running') {
+  if (run.status === 'queued' || run.status === 'running' || run.status === 'waiting') {
     return (
       <Button size="sm" disabled={pending} onClick={() => onAct('cancel')}>
         Cancel

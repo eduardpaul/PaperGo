@@ -3,6 +3,7 @@ package dms
 import (
 	"context"
 	"errors"
+	"papergo/internal/dal/daltest"
 	"papergo/internal/dal/surfaces"
 	"testing"
 
@@ -218,11 +219,11 @@ func TestRecycleBinListsTopLevelDeletionsNewestFirst(t *testing.T) {
 // itemRun records run "run" of a new workflow on an item.
 func itemRun(t *testing.T, s *Service, workspaceID, itemID string) {
 	t.Helper()
-	wf, err := s.DAL.Workflows().Create(testContext, workflows.CreateInput{WorkspaceID: workspaceID, Key: "audit", Name: "Audit", CreatedBy: "alice"})
+	wf, err := s.DAL.Workflows().Create(testContext, workflows.CreateInput{WorkspaceID: workspaceID, Key: "audit", Name: "Audit", Content: daltest.Script, CreatedBy: "alice"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.DAL.Runs().Create(testContext, runstore.CreateInput{ID: "run", WorkflowID: wf.ID, WorkflowVersion: 1, WorkspaceID: workspaceID, ItemID: itemID, EventID: "event", EventType: EventItemCreated, Actor: "alice"}); err != nil {
+	if err = daltest.Run(testContext, s.DAL, runstore.CreateInput{ID: "run", WorkflowID: wf.ID, WorkflowVersion: 1, WorkspaceID: workspaceID, ItemID: itemID, EventID: "event", EventType: EventItemCreated, Actor: "alice"}); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"papergo/internal/dal/catalog"
 	"papergo/internal/dal/content"
+	"papergo/internal/dal/refs"
 	"papergo/internal/dal/resources"
 	"strconv"
 	"strings"
@@ -311,6 +312,20 @@ func (s *Service) compileQuery(ctx context.Context, subject, containerID string,
 	return s.compileCollectionQuery(ctx, subject, c, defs, in, grouped)
 }
 
+// matchQueryText matches the search text of a query of a collection the
+// subject may read before its read transaction opens.
+func (s *Service) matchQueryText(ctx context.Context, subject, collectionID, text string) (context.Context, error) {
+	if s.transaction || strings.TrimSpace(text) == "" {
+		return ctx, nil
+	}
+	c, err := s.Authorize(ctx, subject, collectionID, "read")
+	if err != nil || c.Kind != refs.KindList && c.Kind != refs.KindLibrary {
+		// The query reports what is wrong.
+		return ctx, nil
+	}
+	return s.matchFirst(ctx, subject, collectionID, "", text)
+}
+
 // The caller has authorized c in the current snapshot.
 func (s *Service) compileCollectionQuery(ctx context.Context, subject string, c *resources.Resource, defs []*catalog.FieldDefinition, in QueryRequest, grouped bool) (compiledQuery, error) {
 	plan, q, err := s.collectionPlan(ctx, subject, c, defs, in, grouped)
@@ -334,7 +349,7 @@ func (s *Service) collectionPlan(ctx context.Context, subject string, c *resourc
 		return content.Plan{}, compiledQuery{}, invalid("search or keyword exceeds size limit")
 	}
 	var keywordErr error
-	in.Query.Keyword, keywordErr = s.keywordFilter(ctx, in.Query.Keyword)
+	in.Query.Keyword, keywordErr = s.CanonicalKeyword(ctx, in.Query.Keyword)
 	if keywordErr != nil {
 		return content.Plan{}, compiledQuery{}, keywordErr
 	}
@@ -437,12 +452,9 @@ func (s *Service) collectionPlan(ctx context.Context, subject string, c *resourc
 	plan.Keyword = in.Query.Keyword
 	searchCapped := false
 	if strings.TrimSpace(in.Query.Search) != "" {
-		head, published, capped, e := s.searchMatches(ctx, subject, c.ID, "", in.Query.Search)
-		if e != nil {
+		if plan.Search, searchCapped, e = s.matchText(ctx, subject, c.ID, "", in.Query.Search); e != nil {
 			return content.Plan{}, compiledQuery{}, e
 		}
-		plan.Search = &content.SearchMatch{Head: head, Published: published}
-		searchCapped = capped
 	}
 	fingerprint, _ := json.Marshal(struct {
 		Subject, Collection, Surface, Schema string
@@ -552,6 +564,10 @@ func (s *Service) Query(ctx context.Context, subject, containerID string, in Que
 	if in.Surface == "" {
 		in.Surface = "auto"
 	}
+	ctx, err := s.matchQueryText(ctx, subject, containerID, in.Query.Search)
+	if err != nil {
+		return QueryResult{}, err
+	}
 	return read(ctx, s, func(t *Service) (QueryResult, error) {
 		q, e := t.compileQuery(ctx, subject, containerID, in, false)
 		if e != nil {
@@ -632,6 +648,10 @@ func (s *Service) queryCompiled(ctx context.Context, subject string, in QueryReq
 	})
 }
 func (s *Service) QueryGroups(ctx context.Context, subject, containerID string, in QueryRequest) (Page[QueryGroup], error) {
+	ctx, err := s.matchQueryText(ctx, subject, containerID, in.Query.Search)
+	if err != nil {
+		return Page[QueryGroup]{}, err
+	}
 	return read(ctx, s, func(t *Service) (Page[QueryGroup], error) {
 		q, e := t.compileQuery(ctx, subject, containerID, in, true)
 		if e != nil {

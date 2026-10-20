@@ -141,9 +141,6 @@ func (s *Service) GetSurface(ctx context.Context, subject, id, surface string) (
 	return r, nil
 }
 
-// AccessActions lists the actions in the order the access field reports them.
-var AccessActions = []string{"read", "read_draft", "write", "publish", "manage"}
-
 // Access returns the actions the subject may take on r, so clients can offer
 // only those. It applies the same ACL and module-scope rules as the writes:
 // adding or changing content (write, publish) below a workspace also needs the
@@ -160,17 +157,17 @@ func (s *Service) Access(ctx context.Context, subject string, r *resources.Resou
 			return nil, err
 		}
 	}
+	allowed, err := s.DAL.Resources().Actions(ctx, r.ID, principal(ctx, subject))
+	if err != nil {
+		return nil, err
+	}
 	out := []string{}
-	for _, action := range AccessActions {
-		if (action == "write" || action == "publish") && !contentWrite {
-			continue
-		}
-		allowed, err := s.allowedMany(ctx, subject, action, []*resources.Resource{r})
-		if err != nil {
-			return nil, err
-		}
-		if allowed[r.ID] {
-			out = append(out, action)
+	for _, action := range []struct {
+		name    string
+		allowed bool
+	}{{"read", allowed.Read}, {"read_draft", allowed.ReadDraft}, {"write", allowed.Write && contentWrite}, {"publish", allowed.Publish && contentWrite}, {"manage", allowed.Manage}} {
+		if action.allowed {
+			out = append(out, action.name)
 		}
 	}
 	return out, nil

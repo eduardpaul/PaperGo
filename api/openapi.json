@@ -5702,7 +5702,7 @@
       "get": {
         "summary": "Workflow catalog",
         "operationId": "workflowCatalog",
-        "description": "Trigger types, activities with their inputs and ports, and the built-in workflows of this release.",
+        "description": "Trigger types, roles and the built-in workflows of this release.",
         "parameters": [],
         "responses": {
           "200": {
@@ -6706,6 +6706,143 @@
         }
       }
     },
+    "/v1/workflows/{id}/test-runs": {
+      "post": {
+        "summary": "Test Workflow",
+        "operationId": "testWorkflow",
+        "description": "Start a test run of the workflow's current version, draft or published, whatever its triggers, condition and use. Requires workspace manage and write access to every item. One item starts a run on it; several start one selection run, primary_item_id (default the first) being its item. A test run makes real changes like any run, ignores the workflow's concurrency and raises no wf.* or role.* events. Its event type is test.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowTestRun"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "headers": {
+              "Location": {
+                "description": "The run: /v1/workflow-runs/{id}",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowTestStarted"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{id}/workflow-builtins": {
       "get": {
         "summary": "Built-in Workflows",
@@ -7188,7 +7325,8 @@
               "enum": [
                 "manual",
                 "automatic",
-                "schedule"
+                "schedule",
+                "test"
               ]
             }
           },
@@ -12269,6 +12407,9 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -12282,13 +12423,40 @@
           }
         },
         "responses": {
+          "200": {
+            "description": "An Idempotency-Key returned the operation this request accepted earlier.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              },
+              "Idempotent-Replayed": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
           "202": {
             "description": "Queued operation. Follow Location for progress.",
             "headers": {
               "Location": {
                 "schema": {
                   "type": "string"
-                }
+                },
+                "description": "The operation, at /v1/operations/{id}."
               }
             },
             "content": {
@@ -12322,6 +12490,23 @@
           },
           "422": {
             "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "description": "Too many pending operations for the caller, the workspace or the installation (code operation_quota). Nothing was accepted; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
           },
           "500": {
             "$ref": "#/components/responses/Problem"
@@ -13562,13 +13747,40 @@
           "organization.manage"
         ],
         "responses": {
+          "200": {
+            "description": "An Idempotency-Key returned the operation this request accepted earlier.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              },
+              "Idempotent-Replayed": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
           "202": {
             "description": "Queued package operation. Follow Location for status, result and validation errors.",
             "headers": {
               "Location": {
                 "schema": {
                   "type": "string"
-                }
+                },
+                "description": "The operation, at /v1/operations/{id}."
               }
             },
             "content": {
@@ -13593,6 +13805,23 @@
           },
           "415": {
             "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "description": "Too many pending operations for the caller, the workspace or the installation (code operation_quota). Nothing was accepted; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -13604,7 +13833,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/v1/portability/imports": {
@@ -13635,6 +13869,9 @@
               "maxLength": 200
             },
             "description": "Name of the new workspace. Omit to use the source name. Valid only for workspace packages."
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -13649,13 +13886,40 @@
           }
         },
         "responses": {
+          "200": {
+            "description": "An Idempotency-Key returned the operation this request accepted earlier.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              },
+              "Idempotent-Replayed": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
           "202": {
             "description": "Queued package operation. Follow Location for status, result and validation errors.",
             "headers": {
               "Location": {
                 "schema": {
                   "type": "string"
-                }
+                },
+                "description": "The operation, at /v1/operations/{id}."
               }
             },
             "content": {
@@ -13680,6 +13944,23 @@
           },
           "415": {
             "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "description": "Too many pending operations for the caller, the workspace or the installation (code operation_quota). Nothing was accepted; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
           }
         }
       }
@@ -14496,7 +14777,7 @@
       "post": {
         "summary": "Create Task",
         "operationId": "createTask",
-        "description": "Creates a task without a workflow. The creator needs read access to the workspace, and write access to the item when it concerns one. Assignees are recipient entries; none means the workspace's owners. Unknown recipients fail with their names.",
+        "description": "Creates a task. The creator needs read access to the workspace, and write access to the item when it concerns one. Assignees are recipient entries; none means the workspace's owners. Unknown recipients fail with their names. A task a workflow run creates is that workflow's: its operation_id is the operation its answer ends, which the run waits on, it may review a staged file of the run, and it is cancelled with the run.",
         "parameters": [
           {
             "name": "id",
@@ -15169,7 +15450,7 @@
       "post": {
         "summary": "Cancel Task",
         "operationId": "cancelTask",
-        "description": "Cancels an open task a person or the system created; its creator or a workspace owner may. A workflow's task ends with its run.",
+        "description": "Cancels an open task; its creator or a workspace owner may. A run waiting for a workflow's task gets the cancellation as the outcome of its wait.",
         "parameters": [
           {
             "name": "id",
@@ -15714,8 +15995,24 @@
         "summary": "Queue a refresh of this integration only",
         "description": "Requires list Manage and list.write; paused integrations must be resumed. The durable operation carries only the integration ID.",
         "responses": {
-          "202": {
-            "description": "Refresh queued",
+          "200": {
+            "description": "An Idempotency-Key returned the operation this request accepted earlier.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              },
+              "Idempotent-Replayed": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -15724,10 +16021,56 @@
               }
             }
           },
+          "202": {
+            "description": "Refresh queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "description": "Too many pending operations for the caller, the workspace or the installation (code operation_quota). Nothing was accepted; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "default": {
             "$ref": "#/components/responses/Problem"
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/v1/items/{id}/integration": {
@@ -15981,7 +16324,7 @@
         ],
         "operationId": "search",
         "summary": "Search items and folders across readable workspaces",
-        "description": "Keyword search over the search index, trimmed to what the caller reads now and on the surface they read; every hit is rechecked against current permissions. File text participates in matching and snippets only with document.read; otherwise metadata is searched. Facets are omitted if any matching source fails current authorization. Indexing is asynchronous (the search.index workflow). See docs/search.md.",
+        "description": "Keyword search over the search index, trimmed to what the caller reads now and on the surface they read; every hit is rechecked against current permissions. File text participates in matching and snippets only with document.read; otherwise metadata is searched. Facets are omitted if any matching source fails current authorization. Indexing is asynchronous (the search.index workflow). See docs/search.md. Served when the deployment runs search (SEARCH_STORE is not none).",
         "x-required-scopes": [
           "list.read"
         ],
@@ -16174,7 +16517,7 @@
             "$ref": "#/components/responses/Problem"
           },
           "503": {
-            "description": "search_unavailable: no search store, or it is being rebuilt.",
+            "description": "search_unavailable: the search index is being rebuilt.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -16191,7 +16534,7 @@
         ],
         "operationId": "searchWithFilter",
         "summary": "Search items and folders with field filters",
-        "description": "Keyword search over the search index, trimmed to what the caller reads now and on the surface they read; every hit is rechecked against current permissions. File text participates in matching and snippets only with document.read; otherwise metadata is searched. Facets are omitted if any matching source fails current authorization. Indexing is asynchronous (the search.index workflow). See docs/search.md. The JSON body takes the GET parameters (kind as an array) and a filter on search fields; $top and $skiptoken stay in the URL, and a next page repeats the body.",
+        "description": "Keyword search over the search index, trimmed to what the caller reads now and on the surface they read; every hit is rechecked against current permissions. File text participates in matching and snippets only with document.read; otherwise metadata is searched. Facets are omitted if any matching source fails current authorization. Indexing is asynchronous (the search.index workflow). See docs/search.md. The JSON body takes the GET parameters (kind as an array) and a filter on search fields; $top and $skiptoken stay in the URL, and a next page repeats the body. Served when the deployment runs search (SEARCH_STORE is not none).",
         "x-required-scopes": [
           "list.read"
         ],
@@ -16242,7 +16585,7 @@
             "$ref": "#/components/responses/Problem"
           },
           "503": {
-            "description": "search_unavailable: no search store, or it is being rebuilt.",
+            "description": "search_unavailable: the search index is being rebuilt.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -16271,17 +16614,26 @@
         ],
         "operationId": "reindexSearch",
         "summary": "Rewrite every search document",
-        "description": "Rewrites the documents of every live item and folder in batches and removes documents of entries that no longer exist. With content, the workflow filling search.content reads, chunks and publishes again the current file of items whose file has no content (all of them with force); text read before is reused. Search keeps answering meanwhile.",
+        "description": "Rewrites the documents of every live item and folder in batches and removes documents of entries that no longer exist. With content, the workflow filling search.content reads, chunks and publishes again the current file of items whose file has no content (all of them with force); text read before is reused. Search keeps answering meanwhile. Served when the deployment runs search (SEARCH_STORE is not none).",
         "x-required-scopes": [
           "organization.manage"
         ],
         "responses": {
-          "202": {
-            "description": "Queued operation. Follow Location for progress.",
+          "200": {
+            "description": "An Idempotency-Key returned the operation this request accepted earlier.",
             "headers": {
               "Location": {
                 "schema": {
                   "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              },
+              "Idempotent-Replayed": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
                 }
               }
             },
@@ -16293,16 +16645,57 @@
               }
             }
           },
+          "202": {
+            "description": "Queued operation. Follow Location for progress.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
           "401": {
             "$ref": "#/components/responses/Problem"
           },
           "403": {
             "$ref": "#/components/responses/Problem"
           },
-          "503": {
+          "409": {
             "$ref": "#/components/responses/Problem"
           },
           "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "description": "Too many pending operations for the caller, the workspace or the installation (code operation_quota). Nothing was accepted; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
             "$ref": "#/components/responses/Problem"
           }
         },
@@ -16328,7 +16721,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/v1/search/status": {
@@ -16361,7 +16759,8 @@
           "503": {
             "$ref": "#/components/responses/Problem"
           }
-        }
+        },
+        "description": "Served when the deployment runs search (SEARCH_STORE is not none)."
       }
     },
     "/v1/search/fields": {
@@ -16482,252 +16881,117 @@
             "$ref": "#/components/responses/Problem"
           }
         }
-      }
-    },
-    "/v1/workflow-waits": {
-      "get": {
-        "summary": "List open workflow waits",
-        "operationId": "listWorkflowWaits",
-        "description": "Managing a workspace requires workspace manage permission. Omitting workspace_id requires organization.manage. Claims expire after ten minutes; updates by a claim holder require its current unexpired token.",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WorkflowWaitPage"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "415": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          }
-        },
+      },
+      "post": {
+        "tags": [
+          "Documents"
+        ],
+        "operationId": "readItemText",
+        "summary": "Read the text of the item's current file",
+        "description": "Starts reading the text of the item's current file as a background operation: the text layer of PDF pages, and OCR of pages without one and of images when the deployment has OCR. The operation reads the file version that is current now, even if the item gets another file meanwhile. Text already read from the same bytes with the same settings is reused. Requires document.write and write access to the item. When the operation succeeds, its result is a ReadTextResult and GET /v1/items/{id}/text returns the pages. A file whose text cannot be read (another format, a protected or broken PDF) fails the operation. The body is optional. 422 refuses ocr=always without an OCR engine.",
+        "x-required-scopes": [
+          "document.write"
+        ],
         "parameters": [
           {
-            "in": "query",
-            "name": "kind",
+            "name": "id",
+            "in": "path",
             "required": true,
             "schema": {
               "type": "string"
             }
           },
           {
-            "in": "query",
-            "name": "queue",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "workspace_id",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "$skiptoken",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "$top",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100,
-              "default": 100
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadText"
+              }
             }
           }
-        ]
-      },
-      "patch": {
-        "summary": "Update open wait data",
-        "operationId": "updateWorkflowWait",
-        "description": "Managing a workspace requires workspace manage permission. Omitting workspace_id requires organization.manage. Claims expire after ten minutes; updates by a claim holder require its current unexpired token.",
+        },
         "responses": {
           "200": {
-            "description": "Success",
+            "description": "An Idempotency-Key returned the operation this request accepted earlier.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              },
+              "Idempotent-Replayed": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "updated": {
-                      "type": "boolean"
-                    }
-                  }
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Queued operation. Follow Location; its result is a ReadTextResult.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
                 }
               }
             }
           },
           "400": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Problem"
           },
           "401": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Problem"
           },
           "403": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Problem"
           },
           "404": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Problem"
           },
           "409": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Problem"
           },
           "413": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Problem"
           },
           "415": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Problem"
           },
           "422": {
-            "description": "Request failed",
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "description": "Too many pending operations for the caller, the workspace or the installation (code operation_quota). Nothing was accepted; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -16737,278 +17001,7 @@
             }
           },
           "500": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateWorkflowWait"
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/workflow-waits/claim": {
-      "post": {
-        "summary": "Claim open workflow waits",
-        "operationId": "claimWorkflowWaits",
-        "description": "Managing a workspace requires workspace manage permission. Omitting workspace_id requires organization.manage. Claims expire after ten minutes; updates by a claim holder require its current unexpired token.",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "value": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/WorkflowWait"
-                      }
-                    },
-                    "claim_token": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "415": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ClaimWorkflowWaits"
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/workflow-waits/complete": {
-      "post": {
-        "summary": "Complete a workflow wait",
-        "operationId": "completeWorkflowWait",
-        "description": "Managing a workspace requires workspace manage permission. Omitting workspace_id requires organization.manage. Claims expire after ten minutes; updates by a claim holder require its current unexpired token.",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "completed": {
-                      "type": "boolean"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "415": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CompleteWorkflowWait"
-              }
-            }
+            "$ref": "#/components/responses/Problem"
           }
         }
       }
@@ -17391,6 +17384,110 @@
           },
           "default": {
             "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Documents"
+        ],
+        "operationId": "renderItemPreview",
+        "summary": "Render a preview of the item's current file",
+        "description": "Starts rendering a first-page WebP preview, under 100 KiB and 800 pixels, of the item's current file as a background operation; GET /v1/items/{id}/preview serves it. Previews are kept once per file bytes, so bytes rendered before finish at once. Requires document.write and write access to the item.",
+        "x-required-scopes": [
+          "document.write"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An Idempotency-Key returned the operation this request accepted earlier.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              },
+              "Idempotent-Replayed": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Queued operation. Follow Location; its result is a PreviewResult.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "description": "Too many pending operations for the caller, the workspace or the installation (code operation_quota). Nothing was accepted; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
           }
         }
       }
@@ -18308,6 +18405,1551 @@
         "x-module-scopes": [
           "list.read"
         ]
+      }
+    },
+    "/v1/operations/{id}/cancel": {
+      "post": {
+        "operationId": "cancelOperation",
+        "summary": "Cancel an operation",
+        "description": "Ends a pending operation for its creator or an organization manager. Work in progress is discarded: a running execution cannot publish its result, and work shared with other operations continues for them. Index maintenance cannot be cancelled.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The cancelled operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "description": "The operation already ended (code conflict).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/items/{id}/search/chunks": {
+      "post": {
+        "tags": [
+          "Search"
+        ],
+        "operationId": "chunkItemText",
+        "summary": "Stage chunks of a file's text for search",
+        "description": "Splits text read from the item's file, or text given directly, into chunks and stages them in the search store under a generation, which POST /v1/search/generations/{id}/publish makes searchable. A new generation is identified by this operation's ID. Requires document.write and write access to the item. 422 when the deployment has no search store.",
+        "x-required-scopes": [
+          "document.write"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChunkText"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "An Idempotency-Key returned the operation this request accepted earlier.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              },
+              "Idempotent-Replayed": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Queued operation. Follow Location; its result is a ChunkResult.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "description": "Too many pending operations for the caller, the workspace or the installation (code operation_quota). Nothing was accepted; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/search/generations/{id}/chunks": {
+      "get": {
+        "tags": [
+          "Search"
+        ],
+        "operationId": "generationChunks",
+        "summary": "Chunks of a generation",
+        "description": "The staged or published chunks of a generation the caller started, by part and ordinal, a page at a time.",
+        "x-required-scopes": [
+          "document.read"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The generation: the ID of the chunk operation that started it."
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "1 to 100, 20 when omitted."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationChunkPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/search/generations/{id}/enrichments": {
+      "put": {
+        "tags": [
+          "Search"
+        ],
+        "operationId": "enrichGeneration",
+        "summary": "Set model-written context on chunks",
+        "description": "Sets the enrichment of chunks of a generation the caller started; chunks it does not name keep theirs. The enrichment is searched with its chunk and embedded with it, so embed after enriching.",
+        "x-required-scopes": [
+          "document.read"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The generation: the ID of the chunk operation that started it."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerationEnrichments"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Done"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/search/generations/{id}/embeddings": {
+      "post": {
+        "tags": [
+          "Search"
+        ],
+        "operationId": "embedGeneration",
+        "summary": "Embed a generation for semantic search",
+        "description": "Gives the chunks of a generation the caller started their embedding vectors, reusing vectors of equal chunk inputs. Without an embedding model, or when the model fails, the result says why and the embedding sweep embeds the chunks once they are published.",
+        "x-required-scopes": [
+          "document.write"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The generation: the ID of the chunk operation that started it."
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An Idempotency-Key returned the operation this request accepted earlier.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              },
+              "Idempotent-Replayed": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Queued operation. Follow Location; its result is a EmbedResult.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "description": "Too many pending operations for the caller, the workspace or the installation (code operation_quota). Nothing was accepted; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/search/generations/{id}/publish": {
+      "post": {
+        "tags": [
+          "Search"
+        ],
+        "operationId": "publishGeneration",
+        "summary": "Make a generation the searchable content of its file",
+        "description": "Replaces the searchable content of the generation's file version with the generation, unless the item is gone or no longer has that file: a slow workflow never replaces a newer file's content.",
+        "x-required-scopes": [
+          "document.write"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The generation: the ID of the chunk operation that started it."
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An Idempotency-Key returned the operation this request accepted earlier.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              },
+              "Idempotent-Replayed": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Queued operation. Follow Location; its result is a PublishResult.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "description": "Too many pending operations for the caller, the workspace or the installation (code operation_quota). Nothing was accepted; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{id}/search/sync": {
+      "post": {
+        "tags": [
+          "Search"
+        ],
+        "operationId": "syncSearch",
+        "summary": "Queue search entries to be brought up to date",
+        "description": "Queues a search.sync operation that rewrites the search documents of resources of the workspace from their current state, and removes those of resources that are gone. The search worker runs queued syncs together, up to 200 at a time, outside any database transaction; syncing again is harmless. Its result counts what the batch wrote and removed (SearchSyncResult). Requires write access to the workspace; a resource of another workspace is refused. Served when the deployment runs search.",
+        "x-required-scopes": [
+          "list.read"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchSync"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "An Idempotency-Key returned the operation this request accepted earlier.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              },
+              "Idempotent-Replayed": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Queued operation. Follow Location; its result is a SearchSyncResult.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{id}/search/term-entries": {
+      "get": {
+        "tags": [
+          "Search"
+        ],
+        "operationId": "searchTermEntries",
+        "summary": "Resources holding terms",
+        "description": "Lists, 500 at a time, the resources of the workspace, or of one of its collections, holding any of the terms or the terms merged into them: the entries a relabel or merge changes. Requires manage access to the workspace.",
+        "x-required-scopes": [
+          "workspace.read"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "term_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "description": "1 to 20 terms."
+          },
+          {
+            "name": "collection_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The next of the previous page."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TermEntries"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/ai/completions": {
+      "post": {
+        "tags": [
+          "AI"
+        ],
+        "operationId": "startCompletion",
+        "summary": "Ask the chat model",
+        "description": "Asks the configured chat model to do something with text or an image: summarize it, extract values, clean it up. Immediate completions call the model as soon as a worker is free; batch completions wait for their queue's group and are sent as a provider batch. Answers are cached: the same model, prompt, schema and input reuse the answer. Requires document.read and access to the item or workspace. 422 without the model the execution needs.",
+        "x-required-scopes": [
+          "document.read"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompletionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "An Idempotency-Key returned the operation this request accepted earlier.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              },
+              "Idempotent-Replayed": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Queued operation. Follow Location; its result is a CompletionResult.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "description": "Too many pending operations for the caller, the workspace or the installation (code operation_quota). Nothing was accepted; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/ai/decisions": {
+      "post": {
+        "tags": [
+          "AI"
+        ],
+        "operationId": "startDecision",
+        "summary": "Answer questions with the local decision engine",
+        "description": "Answers ordered choice, noul or ordinal score questions about text, JSON data or a document with probability scores. Requires document.read. 422 without the decision engine.",
+        "x-required-scopes": [
+          "document.read"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "An Idempotency-Key returned the operation this request accepted earlier.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              },
+              "Idempotent-Replayed": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Queued operation. Follow Location; its result is a DecisionResult.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "description": "Too many pending operations for the caller, the workspace or the installation (code operation_quota). Nothing was accepted; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/ai/taxonomy-decisions": {
+      "post": {
+        "tags": [
+          "AI"
+        ],
+        "operationId": "startTaxonomyDecision",
+        "summary": "Pick managed terms for a document",
+        "description": "Evaluates active terms of an organization term set and returns the accepted term IDs, every candidate's score and a taxonomy guard for updating the item. The operation fails when the item's file or the term set changed while it ran. Requires document.read and taxonomy read access. 422 without the decision engine.",
+        "x-required-scopes": [
+          "document.read"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaxonomyDecisionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "An Idempotency-Key returned the operation this request accepted earlier.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              },
+              "Idempotent-Replayed": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Queued operation. Follow Location; its result is a DecisionResult.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "description": "Too many pending operations for the caller, the workspace or the installation (code operation_quota). Nothing was accepted; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/items/{id}/optimize-image": {
+      "post": {
+        "tags": [
+          "Documents"
+        ],
+        "operationId": "optimizeItemImage",
+        "summary": "Propose a smaller copy of an image",
+        "description": "Analyzes the text of the item's current JPEG, PNG or WebP image with OCR and makes a smaller WebP copy, as an artifact, whose smallest text keeps the target height. An identical request for the same file version reuses an unexpired artifact (reused). The result gives the reason when the original is kept: the format is not supported, the image is animated, has no reliable text or would not get smaller, or a newer file replaced file_version.",
+        "x-required-scopes": [
+          "document.write"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OptimizeImage"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "An Idempotency-Key returned the operation this request accepted earlier.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              },
+              "Idempotent-Replayed": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Queued operation. Follow Location; its result is a OptimizeImageResult.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "description": "Too many pending operations for the caller, the workspace or the installation (code operation_quota). Nothing was accepted; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/items/{id}/compose-pdf": {
+      "post": {
+        "tags": [
+          "Documents"
+        ],
+        "operationId": "composeItemPDF",
+        "summary": "Combine photos into one searchable PDF",
+        "description": "Combines the current files of photo items of the item's list or library into one PDF in page order, as an artifact for the item. Each page is turned upright and shrunk so its smallest text keeps target_height, and OCR places the recognized text invisibly on it. An identical request for the same photos reuses an unexpired artifact (reused). The operation fails when a photo changes before the PDF is made. Requires write access to every photo.",
+        "x-required-scopes": [
+          "document.write"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ComposePDF"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "An Idempotency-Key returned the operation this request accepted earlier.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              },
+              "Idempotent-Replayed": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Queued operation. Follow Location; its result is a ComposePDFResult.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "description": "Too many pending operations for the caller, the workspace or the installation (code operation_quota). Nothing was accepted; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/staged-files/{id}/promote": {
+      "post": {
+        "tags": [
+          "Documents"
+        ],
+        "operationId": "promoteStagedFile",
+        "summary": "Make a staged file its item's current file",
+        "description": "Makes a staged file its item's current file, as a new file version. A file a workflow run staged answers only that run, one staged without a run only callers without one (422 otherwise), each with write access to the item. Fails with 409 when a file it was made from is no longer current. With recycle_sources, moves the other source items to the recycle bin in the same transaction.",
+        "x-required-scopes": [
+          "document.write"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromoteStagedFile"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromotedFile"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/staged-files/{id}/discard": {
+      "post": {
+        "tags": [
+          "Documents"
+        ],
+        "operationId": "discardStagedFile",
+        "summary": "Discard a staged file",
+        "description": "Discards a staged file; its item keeps its current file and the artifact stays for reuse until it expires. A file a workflow run staged answers only that run, one staged without a run only callers without one (422 otherwise).",
+        "x-required-scopes": [
+          "document.write"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Done"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/artifacts/{id}": {
+      "get": {
+        "tags": [
+          "Documents"
+        ],
+        "operationId": "getArtifact",
+        "summary": "Get an artifact",
+        "description": "An artifact an operation made, such as a smaller image or a composed PDF, to readers of its item.",
+        "x-required-scopes": [
+          "document.read"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Artifact"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/artifacts/{id}/content": {
+      "get": {
+        "tags": [
+          "Documents"
+        ],
+        "operationId": "getArtifactContent",
+        "summary": "Get an artifact's bytes",
+        "description": "The artifact's bytes, inline, to readers of its item.",
+        "x-required-scopes": [
+          "document.read"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/artifacts/{id}/stage": {
+      "post": {
+        "tags": [
+          "Documents"
+        ],
+        "operationId": "stageArtifact",
+        "summary": "Stage an artifact for review",
+        "description": "Claims an artifact as a staged file for the caller: for the calling workflow run, or for a person or client without one, who alone can then promote or discard it. Requires write access to the item, and fails with 409 when a file it was made from is no longer current.",
+        "x-required-scopes": [
+          "document.write"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Staged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StagedArtifact"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/items/{id}/content/reclaim": {
+      "post": {
+        "tags": [
+          "Documents"
+        ],
+        "operationId": "reclaimFileVersion",
+        "summary": "Free a file version's bytes",
+        "description": "Asks to free the bytes of a file version of the item after the grace period, such as an original a smaller copy replaced. The version keeps its number, filename, media type, size and checksum. Current, published and staged files defer it, with the reason. Asking again does not move the deadline. Requires write access to the item.",
+        "x-required-scopes": [
+          "document.write"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReclaimFileVersion"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReclaimedFileVersion"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
       }
     }
   },
@@ -20423,7 +22065,7 @@
       },
       "Operation": {
         "type": "object",
-        "description": "Tracked operation executed by a registered handler in bounded transactional batches. Field indexing and filtered bulk edits are built in. Payloads and credential constraints are private; progress and results are visible through operation reads. Terminal records expire after 30 days without an update. Pending work resumes after restart; handlers must be registered before workers start.",
+        "description": "Tracked operation executed by a registered handler, in bounded transactional batches or outside the database writer under a renewed claim. Field indexing and filtered bulk edits are built in. Payloads, credential constraints and claims are private; progress and results are visible through operation reads. Pending work resumes after restart: an execution that stops gives its claim back or lets it expire, and transient failures retry later. Terminal records expire after 30 days without an update.",
         "properties": {
           "id": {
             "type": "string"
@@ -20447,7 +22089,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 64,
-            "description": "Registered operation kind; field_index, bulk_update and search_reindex are built in."
+            "description": "Registered operation kind; field_index and bulk_update are built in, and extensions register others, such as search.reindex."
           },
           "status": {
             "type": "string",
@@ -20455,8 +22097,10 @@
               "pending",
               "succeeded",
               "failed",
-              "superseded"
-            ]
+              "superseded",
+              "cancelled"
+            ],
+            "description": "superseded: replaced by newer work; cancelled: withdrawn by its creator or an organization manager."
           },
           "processed": {
             "type": "integer",
@@ -20508,6 +22152,49 @@
             "format": "date-time"
           },
           "trace_id": {
+            "type": "string"
+          },
+          "workspace_id": {
+            "type": "string",
+            "description": "Workspace the operation belongs to; absent for organization work."
+          },
+          "waiting": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "retry",
+              "scheduled",
+              "remote"
+            ],
+            "description": "Why a pending operation has not finished: queued for a worker, running now, waiting to retry after a transient failure, scheduled for a later attempt, or waiting for remote work it joined."
+          },
+          "attempts": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Executions that began, including the current one."
+          },
+          "next_attempt_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When a waiting operation is next attempted."
+          },
+          "deadline": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Latest completion; past it the operation fails with deadline_exceeded."
+          },
+          "error_code": {
+            "type": "string",
+            "enum": [
+              "deadline_exceeded",
+              "retries_exhausted",
+              "forbidden"
+            ],
+            "description": "Why a failed operation failed, when the reason is one clients act on: its deadline passed, its retries ran out, or its creator lost permission."
+          },
+          "parent_id": {
+            "description": "The operation that started this one and owns it: cancelling the parent cancels it.",
             "type": "string"
           }
         },
@@ -21861,69 +23548,6 @@
         ],
         "additionalProperties": false
       },
-      "WorkflowRetry": {
-        "type": "object",
-        "properties": {
-          "attempts": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 10
-          },
-          "delay": {
-            "type": "string",
-            "description": "Go duration, at most 24h."
-          }
-        },
-        "required": [
-          "attempts"
-        ],
-        "additionalProperties": false
-      },
-      "WorkflowNode": {
-        "type": "object",
-        "description": "A catalog activity with literal or token inputs. ai.decide accepts exactly one source (input, JSON data, or text_id with blob_id) and ordered typed questions. taxonomy.decide accepts the same sources and a managed term_set_id, returning term_ids and provenance guards. item.update accepts expected_version, expected_blob_id and expected_taxonomy as transactional preconditions. See docs/decisions.md and the catalog input/output schemas.",
-        "properties": {
-          "activity": {
-            "type": "string"
-          },
-          "inputs": {
-            "type": "object",
-            "additionalProperties": true
-          },
-          "next": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
-          },
-          "retry": {
-            "$ref": "#/components/schemas/WorkflowRetry"
-          }
-        },
-        "required": [
-          "activity"
-        ],
-        "additionalProperties": false
-      },
-      "WorkflowFlow": {
-        "type": "object",
-        "properties": {
-          "start": {
-            "type": "string"
-          },
-          "nodes": {
-            "type": "object",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/WorkflowNode"
-            }
-          }
-        },
-        "required": [
-          "start",
-          "nodes"
-        ],
-        "additionalProperties": false
-      },
       "WorkflowDefinition": {
         "type": "object",
         "properties": {
@@ -21936,10 +23560,6 @@
           "condition": {
             "$ref": "#/components/schemas/FilterExpr"
           },
-          "variables": {
-            "type": "object",
-            "additionalProperties": true
-          },
           "concurrency": {
             "type": "string",
             "enum": [
@@ -21949,9 +23569,6 @@
               "coalesce"
             ],
             "description": "While a run on the same item (or selection member) is active: start anyway (parallel, default), start nothing (skip), cancel the active run (replace), or coalesce: start nothing while a run is queued, otherwise queue one run that starts when the active run ends. Selection workflows cannot coalesce."
-          },
-          "flow": {
-            "$ref": "#/components/schemas/WorkflowFlow"
           },
           "input_schema": {
             "allOf": [
@@ -21967,19 +23584,14 @@
                 "$ref": "#/components/schemas/WorkflowForm"
               }
             ],
-            "description": "Form of what a completed run returns. Every output must be one of its properties."
-          },
-          "outputs": {
-            "type": "object",
-            "additionalProperties": true,
-            "description": "Values of the output_schema's properties, usually tokens. Evaluated when a run completes, checked against output_schema (defaults applied, at most 16 KB), and carried as result.outputs and as data.outputs of wf.{key}.completed."
+            "description": "Form of what a completed run returns: the run's output is checked against it and carried as data.outputs of wf.{key}.completed."
           }
         },
         "required": [
-          "triggers",
-          "flow"
+          "triggers"
         ],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "description": "What a workflow version's script declares in its export: workflow({ triggers, condition, input_schema, output_schema, concurrency, run }). Read when the version is saved; run never runs then."
       },
       "WorkflowInputBody": {
         "type": "object",
@@ -21993,12 +23605,9 @@
           "description": {
             "type": "string"
           },
-          "definition": {
-            "$ref": "#/components/schemas/WorkflowDefinition"
-          },
           "role": {
             "type": "string",
-            "description": "Make the workflow a filler of this role; set at creation. Its outputs must fill the role's output_schema."
+            "description": "Make the workflow a filler of this role; set at creation. Its output_schema must fill the role's."
           },
           "collection_id": {
             "type": "string",
@@ -22022,11 +23631,22 @@
               "archived"
             ],
             "default": "published"
+          },
+          "source": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1048576,
+            "description": "The script: TypeScript or JavaScript whose default export is a @papergo/workflow workflow(). It may import only @papergo/workflow. Its definition is read when it is saved: a script that does not bundle, or whose definition is invalid, is refused with 422."
+          },
+          "parameters": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "What the script reads as ctx.params; an update without them keeps the workflow's."
           }
         },
         "required": [
           "name",
-          "definition"
+          "source"
         ],
         "additionalProperties": false
       },
@@ -22056,13 +23676,15 @@
           },
           "parameters": {
             "type": "object",
-            "additionalProperties": true
+            "additionalProperties": true,
+            "description": "What the script reads as ctx.params, such as a built-in's settings. A workflow of one collection also gets collection."
           },
           "current_version": {
             "type": "integer"
           },
           "definition": {
-            "$ref": "#/components/schemas/WorkflowDefinition"
+            "$ref": "#/components/schemas/WorkflowDefinition",
+            "description": "What the current version's script declares."
           },
           "created_by": {
             "type": "string"
@@ -22112,7 +23734,11 @@
           "execution_author": {
             "type": "string",
             "readOnly": true,
-            "description": "Author of the current immutable definition version; steps execute with this identity."
+            "description": "Author of the current version; runs act as this identity."
+          },
+          "source": {
+            "type": "string",
+            "description": "The current version's script: TypeScript or JavaScript whose default export is a @papergo/workflow workflow()."
           }
         },
         "required": [
@@ -22169,10 +23795,14 @@
           "created_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "source": {
+            "type": "string"
           }
         },
         "required": [
           "number",
+          "source",
           "definition"
         ],
         "additionalProperties": false
@@ -22243,50 +23873,39 @@
         ],
         "additionalProperties": false
       },
-      "WorkflowActivity": {
+      "WorkflowTestRun": {
         "type": "object",
         "properties": {
-          "key": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "flow",
-              "action"
-            ]
-          },
-          "ports": {
+          "item_ids": {
             "type": "array",
             "items": {
               "type": "string"
-            }
+            },
+            "maxItems": 100,
+            "description": "Items of the workflow's workspace to test on, in order; duplicates are dropped. None starts a run without an item."
           },
-          "terminal": {
-            "type": "boolean"
-          },
-          "input_schema": {
-            "$ref": "#/components/schemas/WorkflowForm"
-          },
-          "output_schema": {
-            "$ref": "#/components/schemas/WorkflowForm"
-          },
-          "ports_from": {
+          "primary_item_id": {
             "type": "string",
-            "enum": [
-              "outcomes"
-            ],
-            "description": "A node's ports come from this input instead of ports: a task node's outcomes."
+            "description": "The run's item when several are given; must be one of item_ids. Default: the first."
+          },
+          "inputs": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Launch form values, checked against the version's input_schema."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "WorkflowTestStarted": {
+        "type": "object",
+        "properties": {
+          "run_id": {
+            "type": "string"
           }
         },
         "required": [
-          "key",
-          "kind",
-          "ports",
-          "input_schema"
+          "run_id"
         ],
         "additionalProperties": false
       },
@@ -22373,12 +23992,6 @@
               "additionalProperties": false
             }
           },
-          "activities": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/WorkflowActivity"
-            }
-          },
           "builtins": {
             "type": "array",
             "items": {
@@ -22394,7 +24007,6 @@
         },
         "required": [
           "triggers",
-          "activities",
           "builtins",
           "roles"
         ],
@@ -22557,13 +24169,42 @@
       "WorkflowRunStep": {
         "type": "object",
         "properties": {
-          "id": {
+          "seq": {
             "type": "integer"
           },
-          "name": {
-            "type": "string"
+          "kind": {
+            "type": "string",
+            "enum": [
+              "request",
+              "wait",
+              "value"
+            ]
           },
-          "output": {},
+          "name": {
+            "type": "string",
+            "description": "A request's method and path, operations or sleep for a wait, or what a value is (now, random, uuid)."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "completed",
+              "failed"
+            ]
+          },
+          "input": {
+            "description": "What a wait waits for."
+          },
+          "output": {
+            "description": "A request's response (status, headers, body), or a value."
+          },
+          "operations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The operations a request started or a wait waits for."
+          },
           "error": {
             "type": "string"
           },
@@ -22577,9 +24218,12 @@
           }
         },
         "required": [
-          "id",
-          "name"
+          "seq",
+          "kind",
+          "name",
+          "status"
         ],
+        "description": "One recorded step of a run's script: a replay returns its output instead of repeating it.",
         "additionalProperties": false
       },
       "WorkflowRun": {
@@ -22624,7 +24268,8 @@
               "completed",
               "failed",
               "cancelled"
-            ]
+            ],
+            "description": "queued until its script first ran; running while it runs or can continue; waiting while it waits for operations, a time, or the active run of a coalescing workflow on its item."
           },
           "error": {
             "type": "string"
@@ -22637,7 +24282,9 @@
             "type": "string",
             "format": "date-time"
           },
-          "result": {},
+          "result": {
+            "description": "What the script returned (run detail only)."
+          },
           "steps": {
             "type": "array",
             "items": {
@@ -22656,12 +24303,56 @@
             "additionalProperties": true,
             "description": "Launch form values of a manual run, defaults applied (run detail only)."
           },
-          "outcome": {
+          "error_code": {
             "type": "string",
             "enum": [
-              "unchanged"
-            ],
-            "description": "Successful execution reported an explicit no-change reason."
+              "deadline_exceeded",
+              "retries_exhausted",
+              "forbidden"
+            ]
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "waiting_until": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When a run waiting for a time continues."
+          },
+          "logs": {
+            "type": "array",
+            "description": "What the script logged, oldest first, up to the last 500 entries (run detail only).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "level": {
+                  "type": "string",
+                  "enum": [
+                    "info",
+                    "warn",
+                    "error"
+                  ]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "level",
+                "message",
+                "at"
+              ],
+              "additionalProperties": false
+            }
           }
         },
         "required": [
@@ -22674,7 +24365,8 @@
           "status",
           "created_at"
         ],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "description": "A workflow run: a script.run operation, whose status, error and result it shows, with its provenance."
       },
       "WorkflowRunPage": {
         "type": "object",
@@ -24550,9 +26242,6 @@
           "run_id": {
             "type": "string"
           },
-          "node": {
-            "type": "string"
-          },
           "status": {
             "type": "string",
             "enum": [
@@ -24613,6 +26302,10 @@
           "can_reassign": {
             "type": "boolean",
             "description": "Whether the caller may change the open task's assignees; set when one task is read."
+          },
+          "operation_id": {
+            "type": "string",
+            "description": "A workflow's task: the operation its answer ends, which the run waits on with ctx.wait. It succeeds with the task's result when the task completes and is cancelled with the task."
           }
         },
         "required": [
@@ -24790,6 +26483,27 @@
           "due_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "review": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "file.compare",
+                  "file.preview"
+                ]
+              },
+              "staged_file_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "staged_file_id"
+            ],
+            "description": "A staged file of the calling workflow run for the assignees to review: beside the item's current file (file.compare) or alone (file.preview).",
+            "additionalProperties": false
           }
         },
         "required": [
@@ -24844,8 +26558,13 @@
           "item_id": {
             "type": "string"
           },
+          "artifact_id": {
+            "type": "string",
+            "description": "The artifact the staged file holds."
+          },
           "run_id": {
-            "type": "string"
+            "type": "string",
+            "description": "The workflow run that staged the file; absent when a person or client staged it."
           },
           "filename": {
             "type": "string"
@@ -24898,7 +26617,7 @@
         "required": [
           "id",
           "item_id",
-          "run_id",
+          "artifact_id",
           "filename",
           "content_type",
           "size",
@@ -24906,7 +26625,8 @@
           "state",
           "fresh",
           "created_at"
-        ]
+        ],
+        "description": "A consumer's claim on an artifact, with the artifact's file: it waits until its consumer promotes it to the item's current file or discards it."
       },
       "ListIntegration": {
         "type": "object",
@@ -25493,18 +27213,6 @@
               "additionalProperties": false
             }
           },
-          "search_store": {
-            "type": "string",
-            "description": "sqlite or zvec, or an empty string when search is not configured."
-          },
-          "search_bytes": {
-            "type": "integer",
-            "description": "Bytes reported by the search store. Zero when search is not configured."
-          },
-          "search_documents": {
-            "type": "integer",
-            "description": "Documents reported by the search store. Zero when search is not configured."
-          },
           "blob_bytes": {
             "type": "integer",
             "description": "Sum of distinct available blob sizes, one per SHA-256. File content is stored outside the database."
@@ -25583,6 +27291,13 @@
               "publications"
             ],
             "additionalProperties": false
+          },
+          "extensions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StorageUsage"
+            },
+            "description": "What extensions keep outside the database, such as the search index."
           }
         },
         "required": [
@@ -25603,13 +27318,11 @@
           "unused_bytes",
           "accounted_bytes",
           "tables",
-          "search_store",
-          "search_bytes",
-          "search_documents",
           "blob_bytes",
           "runs",
           "expired",
-          "retained"
+          "retained",
+          "extensions"
         ],
         "additionalProperties": false
       },
@@ -25898,212 +27611,6 @@
             "description": "Include items, folders, retained revisions/publications and file bytes. False exports configuration only."
           }
         }
-      },
-      "WorkflowCompletion": {
-        "type": "object",
-        "properties": {
-          "output": {
-            "type": "object",
-            "additionalProperties": true
-          },
-          "port": {
-            "type": "string"
-          },
-          "error": {
-            "type": "string"
-          }
-        }
-      },
-      "WorkflowWait": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "kind": {
-            "type": "string"
-          },
-          "key": {
-            "type": "string"
-          },
-          "workspace_id": {
-            "type": "string"
-          },
-          "run_id": {
-            "type": "string"
-          },
-          "node": {
-            "type": "string"
-          },
-          "execution_id": {
-            "type": "string"
-          },
-          "queue": {
-            "type": "string"
-          },
-          "payload_id": {
-            "type": "string"
-          },
-          "claim_run_id": {
-            "type": "string"
-          },
-          "claim_token": {
-            "type": "string"
-          },
-          "data": {
-            "type": "object",
-            "additionalProperties": true
-          },
-          "completion": {
-            "$ref": "#/components/schemas/WorkflowCompletion"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "open",
-              "completed",
-              "closed"
-            ]
-          },
-          "parking": {
-            "type": "boolean"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "deadline": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "claim_until": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "notified_at": {
-            "type": "string",
-            "format": "date-time"
-          }
-        },
-        "required": [
-          "id",
-          "kind",
-          "key",
-          "workspace_id",
-          "run_id",
-          "node",
-          "execution_id",
-          "data",
-          "status",
-          "parking",
-          "created_at",
-          "updated_at"
-        ]
-      },
-      "WorkflowWaitPage": {
-        "type": "object",
-        "properties": {
-          "value": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/WorkflowWait"
-            }
-          },
-          "@odata.nextLink": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "value"
-        ]
-      },
-      "ClaimWorkflowWaits": {
-        "type": "object",
-        "properties": {
-          "kind": {
-            "type": "string"
-          },
-          "key": {
-            "type": "string"
-          },
-          "workspace_id": {
-            "type": "string"
-          },
-          "holder": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 80
-          },
-          "limit": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 100,
-            "default": 100
-          }
-        },
-        "required": [
-          "kind",
-          "holder"
-        ]
-      },
-      "UpdateWorkflowWait": {
-        "type": "object",
-        "properties": {
-          "kind": {
-            "type": "string"
-          },
-          "key": {
-            "type": "string"
-          },
-          "workspace_id": {
-            "type": "string"
-          },
-          "holder": {
-            "type": "string"
-          },
-          "claim_token": {
-            "type": "string"
-          },
-          "data": {
-            "type": "object",
-            "additionalProperties": true
-          }
-        },
-        "required": [
-          "kind",
-          "key",
-          "holder",
-          "data"
-        ]
-      },
-      "CompleteWorkflowWait": {
-        "type": "object",
-        "properties": {
-          "kind": {
-            "type": "string"
-          },
-          "key": {
-            "type": "string"
-          },
-          "workspace_id": {
-            "type": "string"
-          },
-          "completion": {
-            "$ref": "#/components/schemas/WorkflowCompletion"
-          }
-        },
-        "required": [
-          "kind",
-          "key",
-          "completion"
-        ]
       },
       "SmartFolderPreview": {
         "type": "object",
@@ -26438,6 +27945,1096 @@
           "edges",
           "truncated"
         ]
+      },
+      "ReadText": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "How the text is read.",
+        "properties": {
+          "ocr": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "always",
+              "never"
+            ],
+            "description": "auto (the default) reads text layers and OCRs pages and images without one; always OCRs every page; never reads text layers only."
+          },
+          "max_pages": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2000,
+            "description": "Pages read, 500 when omitted; later pages are left out (truncated)."
+          },
+          "languages": {
+            "type": "string",
+            "description": "OCR language codes joined with + (eng+deu); the file's languages when omitted."
+          }
+        }
+      },
+      "ReadTextResult": {
+        "type": "object",
+        "description": "The result of a succeeded readItemText operation.",
+        "required": [
+          "text_id",
+          "item_id",
+          "blob_id",
+          "pages",
+          "chars",
+          "ocr_pages",
+          "skipped_pages",
+          "truncated",
+          "reused"
+        ],
+        "properties": {
+          "text_id": {
+            "type": "string",
+            "description": "The kept text; GET /v1/items/{id}/text returns it as its text_id."
+          },
+          "item_id": {
+            "type": "string"
+          },
+          "blob_id": {
+            "type": "string",
+            "description": "The file version read."
+          },
+          "pages": {
+            "type": "integer"
+          },
+          "chars": {
+            "type": "integer"
+          },
+          "ocr_pages": {
+            "type": "integer"
+          },
+          "skipped_pages": {
+            "type": "integer",
+            "description": "Pages without a text layer that were not OCRed."
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "language": {
+            "type": "string"
+          },
+          "reused": {
+            "type": "boolean",
+            "description": "The text had been read before with the same settings."
+          }
+        }
+      },
+      "PreviewResult": {
+        "type": "object",
+        "properties": {
+          "item_id": {
+            "type": "string"
+          },
+          "blob_id": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean",
+            "description": "A preview exists; false means the file cannot be rendered."
+          },
+          "reused": {
+            "type": "boolean",
+            "description": "The bytes had been rendered before."
+          }
+        },
+        "required": [
+          "item_id",
+          "blob_id",
+          "ready",
+          "reused"
+        ],
+        "description": "The result of a preview operation.",
+        "additionalProperties": false
+      },
+      "ChunkText": {
+        "type": "object",
+        "properties": {
+          "text_id": {
+            "type": "string",
+            "description": "The text_id of a read of the file's text (POST /v1/items/{id}/text)."
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 1048576,
+            "description": "Instead of text_id: text given directly, such as a summary."
+          },
+          "blob_id": {
+            "type": "string",
+            "description": "The file version; the item's current file when omitted."
+          },
+          "chunker": {
+            "type": "string",
+            "enum": [
+              "window",
+              "pages",
+              "paragraphs",
+              "headings",
+              "whole"
+            ],
+            "description": "window (the default): overlapping windows of each page; pages: a chunk per page; paragraphs: paragraphs merged up to the size; headings: sections, each starting with its heading; whole: the whole text as one chunk."
+          },
+          "max_chars": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 20000,
+            "description": "Chunk size, 1200 when omitted."
+          },
+          "overlap": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5000,
+            "description": "Characters consecutive windows share, 150 when omitted."
+          },
+          "max_chunks": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2000,
+            "description": "400 when omitted."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "content",
+              "summary",
+              "extract"
+            ],
+            "description": "content when omitted."
+          },
+          "generation": {
+            "type": "string",
+            "description": "Add the chunks to this generation the caller started for the same file version; a new generation when omitted."
+          }
+        },
+        "description": "What text to chunk and how. Give text_id or text.",
+        "additionalProperties": false
+      },
+      "ChunkResult": {
+        "type": "object",
+        "properties": {
+          "generation": {
+            "type": "string",
+            "description": "The generation: the ID of the operation that started it."
+          },
+          "chunks": {
+            "type": "integer"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "item_id": {
+            "type": "string"
+          },
+          "blob_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "generation",
+          "chunks",
+          "truncated",
+          "item_id",
+          "blob_id"
+        ],
+        "description": "The result of a chunk operation.",
+        "additionalProperties": false
+      },
+      "GenerationChunk": {
+        "type": "object",
+        "properties": {
+          "part": {
+            "type": "string",
+            "description": "The chunk operation that staged the chunk."
+          },
+          "ordinal": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "enrichment": {
+            "type": "string"
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "The text was cut to keep the page within its budget."
+          }
+        },
+        "required": [
+          "part",
+          "ordinal",
+          "kind",
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "GenerationChunkPage": {
+        "type": "object",
+        "properties": {
+          "chunks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GenerationChunk"
+            }
+          },
+          "next_offset": {
+            "type": "integer"
+          },
+          "more": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "chunks",
+          "next_offset",
+          "more"
+        ],
+        "additionalProperties": false
+      },
+      "GenerationEnrichments": {
+        "type": "object",
+        "properties": {
+          "enrichments": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 2000,
+            "items": {
+              "type": "object",
+              "properties": {
+                "part": {
+                  "type": "string"
+                },
+                "ordinal": {
+                  "type": "integer"
+                },
+                "text": {
+                  "type": "string",
+                  "maxLength": 4000
+                }
+              },
+              "required": [
+                "part",
+                "ordinal",
+                "text"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "enrichments"
+        ],
+        "additionalProperties": false
+      },
+      "EmbedResult": {
+        "type": "object",
+        "properties": {
+          "generation": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "embedded": {
+            "type": "integer"
+          },
+          "reused": {
+            "type": "integer"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why vectors were left to the embedding sweep, which embeds published chunks without them."
+          }
+        },
+        "required": [
+          "generation",
+          "embedded",
+          "reused"
+        ],
+        "description": "The result of an embed operation.",
+        "additionalProperties": false
+      },
+      "PublishResult": {
+        "type": "object",
+        "properties": {
+          "generation": {
+            "type": "string"
+          },
+          "published": {
+            "type": "boolean"
+          },
+          "item_id": {
+            "type": "string"
+          },
+          "blob_id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why the generation was not published: the item is gone or no longer has the file it was made from."
+          }
+        },
+        "required": [
+          "generation",
+          "published",
+          "item_id",
+          "blob_id"
+        ],
+        "description": "The result of a publish operation.",
+        "additionalProperties": false
+      },
+      "SearchSync": {
+        "type": "object",
+        "properties": {
+          "resource_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 500,
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "resource_ids"
+        ],
+        "additionalProperties": false
+      },
+      "SearchSyncResult": {
+        "type": "object",
+        "properties": {
+          "written": {
+            "type": "integer"
+          },
+          "removed": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "written",
+          "removed"
+        ],
+        "additionalProperties": false
+      },
+      "TermEntries": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "next": {
+            "type": "string",
+            "description": "The after of the next page; omitted on the last."
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "CompletionRequest": {
+        "type": "object",
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8000,
+            "description": "What to do with the input."
+          },
+          "input": {
+            "type": "string",
+            "description": "Text to work on."
+          },
+          "workspace_id": {
+            "type": "string",
+            "description": "Where a request on text given directly is made."
+          },
+          "item_id": {
+            "type": "string",
+            "description": "The item whose file text_id or image_blob_id are."
+          },
+          "text_id": {
+            "type": "string",
+            "description": "Instead of input: a text read from the item's file version blob_id."
+          },
+          "blob_id": {
+            "type": "string",
+            "description": "With text_id: the file version; the current one when omitted."
+          },
+          "image_blob_id": {
+            "type": "string",
+            "description": "An image file version of the item the model sees, alone or with text."
+          },
+          "max_chars": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 200000,
+            "description": "Characters of the input sent, 20000 when omitted."
+          },
+          "output_schema": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "A form schema of an object: the answer is JSON matching it, else text."
+          },
+          "execution": {
+            "type": "string",
+            "enum": [
+              "immediate",
+              "batch"
+            ],
+            "description": "immediate calls the model now; batch sends the request in a provider batch, which its worker admits in groups per queue. The deployment's default when omitted."
+          },
+          "queue": {
+            "type": "string",
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "description": "The batch queue, shared when omitted."
+          }
+        },
+        "required": [
+          "prompt"
+        ],
+        "description": "A completion. Give item_id with text_id or image_blob_id, else workspace_id.",
+        "additionalProperties": false
+      },
+      "CompletionResult": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "json": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "cached": {
+            "type": "boolean"
+          },
+          "model": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "cached",
+          "model"
+        ],
+        "description": "The answer: json with an output_schema, else text.",
+        "additionalProperties": false
+      },
+      "DecisionRequest": {
+        "type": "object",
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "description": "Where a decision on input or data is made."
+          },
+          "input": {
+            "type": "string",
+            "maxLength": 16384,
+            "description": "Text to decide about."
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "JSON data to decide about."
+          },
+          "item_id": {
+            "type": "string"
+          },
+          "text_id": {
+            "type": "string",
+            "description": "A text read from the item's current file version blob_id."
+          },
+          "blob_id": {
+            "type": "string"
+          },
+          "context": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "With text_id: document context shown with the text."
+          },
+          "questions": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "choice",
+                    "noul",
+                    "score"
+                  ],
+                  "description": "choice selects an option; noul returns the true probability; score is the expected zero-based ordinal level."
+                },
+                "instructions": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "options": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 20,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "key": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      },
+                      "text": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "text"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "key",
+                "instructions",
+                "options"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "questions"
+        ],
+        "description": "Questions about text, JSON data or a document: exactly one of input, data or text_id.",
+        "additionalProperties": false
+      },
+      "TaxonomyDecisionRequest": {
+        "type": "object",
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "description": "Where a decision on input or data is made."
+          },
+          "input": {
+            "type": "string",
+            "maxLength": 16384,
+            "description": "Text to decide about."
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "JSON data to decide about."
+          },
+          "item_id": {
+            "type": "string"
+          },
+          "text_id": {
+            "type": "string",
+            "description": "A text read from the item's current file version blob_id."
+          },
+          "blob_id": {
+            "type": "string"
+          },
+          "context": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "With text_id: document context shown with the text."
+          },
+          "term_set_id": {
+            "type": "string"
+          },
+          "selection": {
+            "type": "string",
+            "enum": [
+              "multiple",
+              "single"
+            ],
+            "description": "multiple (the default) compares each term independently; single makes one joint choice."
+          },
+          "threshold": {
+            "type": "number",
+            "exclusiveMinimum": 0.5,
+            "maximum": 1,
+            "description": "Probability a term needs, 0.8 when omitted. Experimental scores, not calibrated confidence."
+          },
+          "question": {
+            "type": "string"
+          },
+          "other_text": {
+            "type": "string"
+          },
+          "root_term_id": {
+            "type": "string"
+          },
+          "term_ids": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "string"
+            }
+          },
+          "leaf_only": {
+            "type": "boolean"
+          },
+          "description_overrides": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "properties": {
+                "term_id": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "term_id",
+                "text"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "term_set_id"
+        ],
+        "description": "Picks active terms of an organization term set for text, data or a document.",
+        "additionalProperties": false
+      },
+      "DecisionResult": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "answers by question key; a taxonomy decision has term_ids, scores, other_probability and taxonomy_guard instead. Every result has model, input_hash, cached and, for a document, source.",
+        "properties": {
+          "answers": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "term_set_id": {
+            "type": "string"
+          },
+          "selection": {
+            "type": "string"
+          },
+          "strategy": {
+            "type": "string"
+          },
+          "term_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "scores": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "other_probability": {
+            "type": "number"
+          },
+          "taxonomy_guard": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "source": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "model": {
+            "type": "string"
+          },
+          "input_hash": {
+            "type": "string"
+          },
+          "cached": {
+            "type": "boolean"
+          }
+        }
+      },
+      "OptimizeImage": {
+        "type": "object",
+        "properties": {
+          "target_height": {
+            "type": "number",
+            "minimum": 4,
+            "maximum": 200,
+            "description": "Height in pixels the smallest text keeps, 12 when omitted."
+          },
+          "min_confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Detector score a text line needs, 50 when omitted."
+          },
+          "percentile": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Percentile of the text heights taken as the smallest text, 5 when omitted."
+          },
+          "max_analysis_dimension": {
+            "type": "integer",
+            "minimum": 256,
+            "maximum": 2600,
+            "description": "Longest side of the copy analyzed, 2600 when omitted."
+          },
+          "minimum_scale": {
+            "type": "number",
+            "minimum": 0.01,
+            "maximum": 1,
+            "description": "How far the image may shrink, 0.05 when omitted."
+          },
+          "quality": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "WebP quality, 80 when omitted."
+          },
+          "file_version": {
+            "type": "integer",
+            "description": "The file version the workflow was started for: a newer one is kept as it is."
+          }
+        },
+        "additionalProperties": false
+      },
+      "OptimizeImageResult": {
+        "type": "object",
+        "properties": {
+          "artifact_id": {
+            "type": "string",
+            "description": "The smaller WebP copy, as an artifact to stage."
+          },
+          "reused": {
+            "type": "boolean",
+            "description": "An identical request made the artifact."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why the original is kept."
+          },
+          "item_id": {
+            "type": "string"
+          },
+          "blob_id": {
+            "type": "string"
+          },
+          "file_version": {
+            "type": "integer"
+          },
+          "metrics": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "item_id",
+          "blob_id",
+          "file_version"
+        ],
+        "description": "A smaller copy as an artifact, or the reason the original is kept.",
+        "additionalProperties": false
+      },
+      "ComposePDF": {
+        "type": "object",
+        "properties": {
+          "item_ids": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "type": "string"
+            },
+            "description": "The photo items in page order, the item among them; the item alone when omitted."
+          },
+          "target_height": {
+            "type": "number",
+            "minimum": 8,
+            "maximum": 200,
+            "description": "Height in pixels the smallest text of each page keeps, 32 when omitted; pages never grow."
+          },
+          "quality": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "JPEG quality, 80 when omitted."
+          }
+        },
+        "additionalProperties": false
+      },
+      "ComposePDFResult": {
+        "type": "object",
+        "properties": {
+          "artifact_id": {
+            "type": "string",
+            "description": "The PDF, as an artifact to stage."
+          },
+          "reused": {
+            "type": "boolean",
+            "description": "An identical request made the artifact."
+          },
+          "item_id": {
+            "type": "string"
+          },
+          "others": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "pages": {
+            "type": "integer"
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "metrics": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "artifact_id",
+          "item_id",
+          "others",
+          "pages",
+          "bytes"
+        ],
+        "additionalProperties": false
+      },
+      "PromoteStagedFile": {
+        "type": "object",
+        "properties": {
+          "recycle_sources": {
+            "type": "boolean",
+            "description": "Move the other source items to the recycle bin with the promotion."
+          }
+        },
+        "additionalProperties": false
+      },
+      "PromotedFile": {
+        "type": "object",
+        "properties": {
+          "item_id": {
+            "type": "string"
+          },
+          "blob_id": {
+            "type": "string"
+          },
+          "file_version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "item_id",
+          "blob_id",
+          "file_version"
+        ],
+        "additionalProperties": false
+      },
+      "Artifact": {
+        "type": "object",
+        "description": "A file an operation made from file versions for an item, kept for reuse and staging until expires_at, and longer while a staged file holds it.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "item_id": {
+            "type": "string"
+          },
+          "operation_id": {
+            "type": "string",
+            "description": "The operation that made it."
+          },
+          "filename": {
+            "type": "string"
+          },
+          "content_type": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "metrics": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "item_id": {
+                  "type": "string"
+                },
+                "blob_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "item_id",
+                "blob_id"
+              ]
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "item_id",
+          "filename",
+          "content_type",
+          "size",
+          "sha256",
+          "metrics",
+          "sources",
+          "created_at",
+          "expires_at"
+        ],
+        "additionalProperties": false
+      },
+      "StagedArtifact": {
+        "type": "object",
+        "description": "The staged file a consumer made of an artifact.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "artifact_id": {
+            "type": "string"
+          },
+          "item_id": {
+            "type": "string"
+          },
+          "run_id": {
+            "type": "string",
+            "description": "The calling workflow run; absent for other callers."
+          }
+        },
+        "required": [
+          "id",
+          "artifact_id",
+          "item_id"
+        ],
+        "additionalProperties": false
+      },
+      "ReclaimFileVersion": {
+        "type": "object",
+        "properties": {
+          "blob_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "blob_id"
+        ],
+        "additionalProperties": false
+      },
+      "ReclaimedFileVersion": {
+        "type": "object",
+        "properties": {
+          "blob_id": {
+            "type": "string"
+          },
+          "availability": {
+            "type": "string"
+          },
+          "deferred": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "reclaim_after": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "blob_id",
+          "availability",
+          "deferred"
+        ],
+        "additionalProperties": false
+      },
+      "StorageUsage": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The extension, such as search."
+          },
+          "store": {
+            "type": "string",
+            "description": "Its store, such as zvec or sqlite."
+          },
+          "bytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "entries": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Entries the store holds, such as search documents."
+          }
+        },
+        "required": [
+          "name",
+          "store",
+          "bytes",
+          "entries"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "parameters": {
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": false,
+        "description": "Makes the request safe to retry: a repeat with the same key, by the same caller, for the same operation kind and container and with the same request, returns the operation accepted first (200 with Idempotent-Replayed) instead of accepting another. The same key with a different request is rejected with 409 idempotency_conflict. A key stays bound while its operation is pending and for 30 days after it finishes; after that it names a new operation.",
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[\\x21-\\x7e]+$"
+        }
       }
     }
   }

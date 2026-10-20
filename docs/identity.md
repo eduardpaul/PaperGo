@@ -32,7 +32,7 @@ Send personal tokens as `Authorization: Bearer {secret}` to the REST API. Person
 
 Deleting an account permanently purges its personal Home and documents, metadata histories, configuration and execution payloads in the same transaction as account anonymization; payloads a running workflow wrote while that transaction ran are removed right after it commits, and later writes are refused. Shared library documents and organization audit records remain. Personal Home does not block the last-workspace-owner guard; shared workspaces still do. Removed file objects are queued for retryable cleanup, preserving bytes referenced by surviving documents. Home and Inbox bindings are included in core configuration/content packages.
 
-Home cleanup includes DBOS replay inputs and outputs when the runner is attached. Permanent audit markers prevent in-flight or replayed runs from recreating removed execution payloads.
+Home cleanup deletes the workflow runs of the Home workspace, with their recorded steps and inputs. Permanent audit markers prevent in-flight runs from recreating removed execution payloads.
 
 ## Integration access tokens
 

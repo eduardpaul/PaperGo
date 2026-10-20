@@ -12,7 +12,6 @@ Direct Go modules and the licences they ship under. Add a row when a change adds
 | `github.com/jackc/pgx/v5` | PostgreSQL driver | MIT |
 | `github.com/blevesearch/snowballstem` | word stems for search in the `SEARCH_LANGUAGES` (`internal/search` only): the Snowball project's generated stemmers | BSD-3-Clause |
 | `github.com/coreos/go-oidc/v3` | OIDC bearer token verification | Apache-2.0 |
-| `github.com/dbos-inc/dbos-transact-golang` | the embedded workflow runner (`internal/runner` only) | MIT |
 | `github.com/yalue/onnxruntime_go` | cgo ONNX Runtime binding shared by OCR, embeddings and decisions | MIT |
 | `github.com/zvec-ai/zvec-go` | cgo search SDK, pinned to the `eduardpaul/zvec-go` string-array fix | Apache-2.0 |
 | `github.com/klippa-app/go-pdfium` | cgo PDF text reading and rendering | MIT |
@@ -23,9 +22,14 @@ Direct Go modules and the licences they ship under. Add a row when a change adds
 | `golang.org/x/image` | image resampling for OCR, WebP decoding in `cmd/ocr`, fonts in OCR tests | BSD-3-Clause |
 | `golang.org/x/oauth2` | bearer-token transport for OIDC UserInfo | BSD-3-Clause |
 | `github.com/robfig/cron/v3` | parsing workflow schedule triggers | MIT |
-| `modernc.org/sqlite` | SQLite driver shared with DBOS | BSD-3-Clause |
+| `modernc.org/sqlite` | SQLite driver | BSD-3-Clause |
+| `github.com/dop251/goja` | JavaScript runtime for workflow scripts (`internal/script` only) | MIT |
+| `github.com/evanw/esbuild` | bundling workflow scripts (`internal/script` only) | MIT |
 
-The runner also links, through DBOS: `puddle/v2`, `pgpassfile`, `pgservicefile` and `pgerrcode` (MIT), and `github.com/gorilla/websocket` (BSD-2-Clause; DBOS's optional Conductor client, not used).
+goja also links `github.com/dlclark/regexp2` (MIT), `github.com/go-sourcemap/sourcemap` (BSD-2-Clause) and `github.com/google/pprof` (Apache-2.0).
+
+The embedded workflow SDK (`sdk/dist/sdk.js`) bundles the npm packages `@microsoft/kiota-abstractions` and the Kiota JSON, text, form and multipart serializers (MIT), `@opentelemetry/api` and `@std-uritemplate/std-uritemplate` (Apache-2.0), and `tinyduration` (MIT). The client is generated with Kiota 1.35.0 (MIT), a development tool.
+
 
 The native SDK installer (`scripts/native.py`, checksums in `scripts/native.json`) provisions these libraries:
 

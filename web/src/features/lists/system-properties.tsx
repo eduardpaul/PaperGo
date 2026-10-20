@@ -3,6 +3,7 @@ import type { Resource } from '@/api/types';
 import { useTermNames } from '@/features/fields/names';
 import { usePeopleNames } from '@/features/fields/people';
 import { useFormat } from '@/lib/preferences';
+import { useSearchAvailable } from '@/lib/search';
 
 /** Intrinsic properties are shown separately from configurable schema fields. */
 export function SystemProperties({ item, file, keywords = [], contentType }: { item?: Resource; keywords?: string[]; contentType?: string; file?: { filename: string; content_type: string; size: number } }) {
@@ -10,6 +11,7 @@ export function SystemProperties({ item, file, keywords = [], contentType }: { i
   const people = usePeopleNames();
   const assigned = [...new Set([...(item?.keywords ?? []), ...keywords])];
   const terms = useTermNames(assigned);
+  const searchAvailable = useSearchAvailable();
   const properties = [
     ['Name', 'Text', item?.name],
     ['File name', 'Text', file?.filename],
@@ -29,7 +31,7 @@ export function SystemProperties({ item, file, keywords = [], contentType }: { i
         {item && <dd className="break-words">{value ?? '—'}</dd>}
       </div>)}
       <div><dt className="text-muted">Keywords <span className="text-xs">· Terms</span></dt>
-        {item && <dd className="flex flex-wrap gap-1">{assigned.length ? assigned.map(keyword => <Link key={keyword} to="/search" search={{ q: undefined, workspace: undefined, collection: undefined, kind: undefined, keyword }} className="rounded border px-1.5 text-accent hover:underline">{terms.get(keyword) ?? keyword}</Link>) : '—'}</dd>}
+        {item && <dd className="flex flex-wrap gap-1">{assigned.length ? assigned.map(keyword => searchAvailable ? <Link key={keyword} to="/search" search={{ q: undefined, workspace: undefined, collection: undefined, kind: undefined, keyword }} className="rounded border px-1.5 text-accent hover:underline">{terms.get(keyword) ?? keyword}</Link> : <span key={keyword} className="rounded border px-1.5">{terms.get(keyword) ?? keyword}</span>) : '—'}</dd>}
       </div>
     </dl>
   </section>;

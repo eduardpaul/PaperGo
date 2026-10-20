@@ -46,12 +46,23 @@ type Workflow struct {
 // Deleted reports whether the workflow was deleted.
 func (w Workflow) Deleted() bool { return w.DeletedAt != nil }
 
-// Version is an immutable definition of a workflow.
+// Content is what a version holds: the script's source, its compiled
+// bundle with that bundle's hash, and the definition extracted from it.
+type Content struct {
+	Definition                 json.RawMessage
+	Source, Bundle, BundleHash string
+}
+
+func (c Content) equal(other Content) bool {
+	return c.Source == other.Source && c.BundleHash == other.BundleHash && jsonutil.Equal(c.Definition, other.Definition)
+}
+
+// Version is an immutable version of a workflow.
 type Version struct {
 	ID, WorkflowID, CreatedBy string
 	Number                    int
-	Definition                json.RawMessage
-	CreatedAt                 time.Time
+	Content
+	CreatedAt time.Time
 }
 
 // Trigger is an event type or schedule a workflow's definition listens to,
@@ -64,13 +75,14 @@ type Trigger struct {
 }
 
 // CreateInput describes a workflow and its first version. A missing ID is
-// generated, a missing state is published and missing parameters and
-// definition are empty objects.
+// generated, a missing state is published and missing parameters are an
+// empty object.
 type CreateInput struct {
 	ID, WorkspaceID, CollectionID, Key, Name, Description, Role, BuiltinKey string
 	State                                                                   State
 	AutomaticEnabled, ManualEnabled, AutomaticProvider                      bool
-	Parameters, Definition                                                  json.RawMessage
+	Parameters                                                              json.RawMessage
+	Content                                                                 Content
 	CreatedBy                                                               string
 }
 
@@ -215,10 +227,6 @@ func (r *Repo) Create(ctx context.Context, in CreateInput) (Workflow, error) {
 			return Workflow{}, fmt.Errorf("%w: workflow parameters must be an object", dberr.ErrCheckViolation)
 		}
 	}
-	def := in.Definition
-	if len(def) == 0 {
-		def = json.RawMessage(`{}`)
-	}
 	at := now()
 	w := Workflow{
 		ID: in.ID, WorkspaceID: in.WorkspaceID, Key: in.Key, Name: in.Name, Description: in.Description, CreatedBy: in.CreatedBy, UpdatedBy: in.CreatedBy,
@@ -245,7 +253,7 @@ func (r *Repo) Create(ctx context.Context, in CreateInput) (Workflow, error) {
 		if err := q.InsertWorkflow(ctx, w); err != nil {
 			return err
 		}
-		return q.InsertWorkflowVersion(ctx, Version{ID: uuid.NewString(), WorkflowID: w.ID, CreatedBy: in.CreatedBy, Number: 1, Definition: def, CreatedAt: at})
+		return q.InsertWorkflowVersion(ctx, Version{ID: uuid.NewString(), WorkflowID: w.ID, CreatedBy: in.CreatedBy, Number: 1, Content: in.Content, CreatedAt: at})
 	})
 	if err != nil {
 		return Workflow{}, err
@@ -267,9 +275,9 @@ func lock(ctx context.Context, q Queries, id string) (Workflow, error) {
 }
 
 // Revise applies changes to a live workflow read at version and returns it
-// with its current definition. A definition that differs from the current one
+// with its current version. Content that differs from the current one
 // becomes the next version.
-func (r *Repo) Revise(ctx context.Context, id string, version int, subject string, definition json.RawMessage, in Changes) (Workflow, Version, error) {
+func (r *Repo) Revise(ctx context.Context, id string, version int, subject string, content Content, in Changes) (Workflow, Version, error) {
 	var w Workflow
 	var current Version
 	err := r.write(ctx, func(q Queries) error {
@@ -314,8 +322,8 @@ func (r *Repo) Revise(ctx context.Context, id string, version int, subject strin
 		if in.Parameters != nil {
 			w.Parameters = *in.Parameters
 		}
-		if !jsonutil.Equal(current.Definition, definition) || in.Author && current.CreatedBy != subject {
-			current = Version{ID: uuid.NewString(), WorkflowID: id, CreatedBy: subject, Number: w.CurrentVersion + 1, Definition: definition, CreatedAt: at}
+		if !current.Content.equal(content) || in.Author && current.CreatedBy != subject {
+			current = Version{ID: uuid.NewString(), WorkflowID: id, CreatedBy: subject, Number: w.CurrentVersion + 1, Content: content, CreatedAt: at}
 			if err := q.InsertWorkflowVersion(ctx, current); err != nil {
 				return err
 			}
@@ -352,10 +360,12 @@ func (r *Repo) Delete(ctx context.Context, id string, version int, subject strin
 
 // Retire disables and deletes the live workflows a deleted workspace or
 // collection leaves behind: every workflow of the workspace, or those of
-// the collection and those its current definition triggers in it.
-func (r *Repo) Retire(ctx context.Context, workspaceID, collectionID, subject string) error {
-	return r.write(ctx, func(q Queries) error {
-		var retired []Workflow
+// the collection and those its current definition triggers in it. It
+// returns the workflows it retired.
+func (r *Repo) Retire(ctx context.Context, workspaceID, collectionID, subject string) ([]Workflow, error) {
+	var retired []Workflow
+	err := r.write(ctx, func(q Queries) error {
+		retired = nil
 		if workspaceID != "" {
 			rows, err := q.Workflows(ctx, Filter{WorkspaceID: workspaceID, LiveOnly: true})
 			if err != nil {
@@ -398,6 +408,7 @@ func (r *Repo) Retire(ctx context.Context, workspaceID, collectionID, subject st
 		}
 		return nil
 	})
+	return retired, err
 }
 
 // ReplaceTriggers indexes a workflow's triggers from its definition. A

@@ -1,6 +1,9 @@
 package web
 
 import (
+	"bytes"
+	"compress/gzip"
+	"io"
 	"io/fs"
 	"net/http/httptest"
 	"strings"
@@ -79,6 +82,59 @@ func TestEmbeddedBuildAssets(t *testing.T) {
 	}
 	if underscoreChunks == 0 {
 		t.Fatal("expected Vite's underscore-prefixed route chunks to be embedded")
+	}
+}
+
+func TestCompressedAssets(t *testing.T) {
+	h := Handler()
+	var name string
+	var data []byte
+	err := fs.WalkDir(assets, "dist/assets", func(path string, entry fs.DirEntry, err error) error {
+		if err != nil || !strings.HasSuffix(path, ".js") {
+			return err
+		}
+		if b, err := assets.ReadFile(path); err != nil || len(b) > len(data) {
+			name, data = path, b
+			return err
+		}
+		return nil
+	})
+	if err != nil || name == "" {
+		t.Fatal(name, err)
+	}
+	route := "/" + strings.TrimPrefix(name, "dist/")
+	for _, tc := range []struct {
+		accept string
+		gzip   bool
+	}{{"gzip, deflate, br", true}, {"br;q=1.0, GZIP;q=0.5", true}, {"", false}, {"gzip;q=0", false}, {"identity", false}} {
+		r := httptest.NewRequest("GET", route, nil)
+		if tc.accept != "" {
+			r.Header.Set("Accept-Encoding", tc.accept)
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		header := w.Header()
+		if w.Code != 200 || header.Get("Vary") != "Accept-Encoding" || !strings.Contains(header.Get("Content-Type"), "javascript") || header.Get("Cache-Control") != "public, max-age=31536000, immutable" {
+			t.Fatalf("%q: %d %v", tc.accept, w.Code, header)
+		}
+		body := w.Body.Bytes()
+		if tc.gzip {
+			if header.Get("Content-Encoding") != "gzip" || len(body) >= len(data) {
+				t.Fatalf("%q must be gzip: %v %d", tc.accept, header, len(body))
+			}
+			z, err := gzip.NewReader(bytes.NewReader(body))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if body, err = io.ReadAll(z); err != nil {
+				t.Fatal(err)
+			}
+		} else if header.Get("Content-Encoding") != "" {
+			t.Fatalf("%q must be identity: %v", tc.accept, header)
+		}
+		if !bytes.Equal(body, data) {
+			t.Fatalf("%q: content differs", tc.accept)
+		}
 	}
 }
 

@@ -11,7 +11,6 @@ func TestAncestorKeepsEverythingBelowAFolder(t *testing.T) {
 	create(t, s, c.ID, "item", "Acme letter", nil)
 	other := create(t, s, c.ID, "folder", "2025", nil)
 	create(t, s, other.ID, "item", "Acme order", nil)
-	indexSearch(t, s)
 	found := func(spec QuerySpec) map[string]bool {
 		t.Helper()
 		q, err := s.Query(testContext, "alice", c.ID, QueryRequest{IncludeTotal: true, Query: spec})

@@ -30,6 +30,10 @@ const (
 	EventFolderDeleted  = "folder.deleted"
 	EventFolderRestored = "folder.restored"
 	EventFolderPurged   = "folder.purged"
+	// EventWorkflowDeleted is raised when a workflow is deleted, also with
+	// its workspace or collection, with its workflow_id: its active runs,
+	// open tasks and staged files go with it.
+	EventWorkflowDeleted = "workflow.deleted"
 )
 
 // File sources describe file.added and file.updated events.

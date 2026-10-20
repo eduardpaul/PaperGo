@@ -22,10 +22,14 @@ func TestReferencesRetainExpiredPayloadsAndTheirResponses(t *testing.T) {
 	}
 	request := activitystore.ID("test", "queue", "request")
 	response := activitystore.ID("test", "queue", "response")
-	if err := s.Reference(ctx, "wait", request); err != nil {
+	if err := s.Put(ctx, activitystore.Record{Namespace: "test", Scope: "queue", Key: "holder", Payload: json.RawMessage(`{}`)}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Reference(ctx, request, response); err != nil {
+	holder := activitystore.RecordOwner(activitystore.ID("test", "queue", "holder"))
+	if err := s.Reference(ctx, holder, request); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Reference(ctx, activitystore.RecordOwner(request), response); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Purge(ctx, time.Now()); err != nil {
@@ -40,13 +44,14 @@ func TestReferencesRetainExpiredPayloadsAndTheirResponses(t *testing.T) {
 	if r, err := s.Get(ctx, "test", "queue", "unreferenced"); err != nil || r != nil {
 		t.Fatalf("expired payload retained: %+v %v", r, err)
 	}
-	if err := s.Release(ctx, "wait"); err != nil {
+	if err := s.Release(ctx, holder); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Purge(ctx, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	if count := daltest.Count(t, db.DAL, "activity_records", nil); count != 0 {
+	// Only the unexpired holder remains.
+	if count := daltest.Count(t, db.DAL, "activity_records", nil); count != 1 {
 		t.Fatalf("unconsumed storage: %d", count)
 	}
 }

@@ -77,6 +77,8 @@ type ResourcesQuery = *sqlite.ViewQuery[*Resource, ResourceSlice]
 
 // resourceR is where relationships are stored.
 type resourceR struct {
+	ItemArtifacts                 ArtifactSlice        // fk_artifacts_1
+	WorkspaceArtifacts            ArtifactSlice        // fk_artifacts_2
 	ItemBlobs                     BlobSlice            // fk_blobs_0
 	ItemBusinessKeys              BusinessKeySlice     // fk_business_keys_0
 	ContainerBusinessKeys         BusinessKeySlice     // fk_business_keys_1
@@ -96,7 +98,8 @@ type resourceR struct {
 	ContainerListIntegrations     ListIntegrationSlice // fk_list_integrations_0
 	ContainerListViews            ListViewSlice        // fk_list_views_0
 	ItemOperationItems            OperationItemSlice   // fk_operation_items_0
-	ContainerOperations           OperationSlice       // fk_operations_0
+	WorkspaceOperations           OperationSlice       // fk_operations_1
+	ContainerOperations           OperationSlice       // fk_operations_2
 	ItemPublications              PublicationSlice     // fk_publications_1
 	TargetRelationships           RelationshipSlice    // fk_relationships_1
 	SourceRelationships           RelationshipSlice    // fk_relationships_2
@@ -117,16 +120,15 @@ type resourceR struct {
 	ContainerSchemaRevisions      SchemaRevisionSlice  // fk_schema_revisions_0
 	WorkspaceSchemaTemplates      SchemaTemplateSlice  // fk_schema_templates_0
 	WorkspaceSmartFolders         SmartFolderSlice     // fk_smart_folders_1
-	ItemStagedFiles               StagedFileSlice      // fk_staged_files_1
-	WorkspaceStagedFiles          StagedFileSlice      // fk_staged_files_2
+	ItemStagedFiles               StagedFileSlice      // fk_staged_files_2
+	WorkspaceStagedFiles          StagedFileSlice      // fk_staged_files_3
 	ItemSyncStates                SyncStateSlice       // fk_sync_states_0
 	ContainerSyncViews            SyncViewSlice        // fk_sync_views_0
-	ItemTasks                     TaskSlice            // fk_tasks_2
-	WorkspaceTasks                TaskSlice            // fk_tasks_3
+	ItemTasks                     TaskSlice            // fk_tasks_3
+	WorkspaceTasks                TaskSlice            // fk_tasks_4
 	WorkspaceWorkflowRuns         WorkflowRunSlice     // fk_workflow_runs_0
 	CollectionWorkflowTriggers    WorkflowTriggerSlice // fk_workflow_triggers_0
 	WorkspaceWorkflowTriggers     WorkflowTriggerSlice // fk_workflow_triggers_1
-	WorkspaceWorkflowWaits        WorkflowWaitSlice    // fk_workflow_waits_1
 	CollectionWorkflows           WorkflowSlice        // fk_workflows_0
 	WorkspaceWorkflows            WorkflowSlice        // fk_workflows_1
 	// Loaded reports whether each relationship has been loaded.
@@ -137,6 +139,8 @@ type resourceR struct {
 
 // resourceRLoaded tracks which relationships on Resource have been loaded.
 type resourceRLoaded struct {
+	ItemArtifacts                 bool // fk_artifacts_1
+	WorkspaceArtifacts            bool // fk_artifacts_2
 	ItemBlobs                     bool // fk_blobs_0
 	ItemBusinessKeys              bool // fk_business_keys_0
 	ContainerBusinessKeys         bool // fk_business_keys_1
@@ -156,7 +160,8 @@ type resourceRLoaded struct {
 	ContainerListIntegrations     bool // fk_list_integrations_0
 	ContainerListViews            bool // fk_list_views_0
 	ItemOperationItems            bool // fk_operation_items_0
-	ContainerOperations           bool // fk_operations_0
+	WorkspaceOperations           bool // fk_operations_1
+	ContainerOperations           bool // fk_operations_2
 	ItemPublications              bool // fk_publications_1
 	TargetRelationships           bool // fk_relationships_1
 	SourceRelationships           bool // fk_relationships_2
@@ -177,16 +182,15 @@ type resourceRLoaded struct {
 	ContainerSchemaRevisions      bool // fk_schema_revisions_0
 	WorkspaceSchemaTemplates      bool // fk_schema_templates_0
 	WorkspaceSmartFolders         bool // fk_smart_folders_1
-	ItemStagedFiles               bool // fk_staged_files_1
-	WorkspaceStagedFiles          bool // fk_staged_files_2
+	ItemStagedFiles               bool // fk_staged_files_2
+	WorkspaceStagedFiles          bool // fk_staged_files_3
 	ItemSyncStates                bool // fk_sync_states_0
 	ContainerSyncViews            bool // fk_sync_views_0
-	ItemTasks                     bool // fk_tasks_2
-	WorkspaceTasks                bool // fk_tasks_3
+	ItemTasks                     bool // fk_tasks_3
+	WorkspaceTasks                bool // fk_tasks_4
 	WorkspaceWorkflowRuns         bool // fk_workflow_runs_0
 	CollectionWorkflowTriggers    bool // fk_workflow_triggers_0
 	WorkspaceWorkflowTriggers     bool // fk_workflow_triggers_1
-	WorkspaceWorkflowWaits        bool // fk_workflow_waits_1
 	CollectionWorkflows           bool // fk_workflows_0
 	WorkspaceWorkflows            bool // fk_workflows_1
 }
@@ -1401,6 +1405,44 @@ func (o ResourceSlice) ReloadAll(ctx context.Context, exec bob.Executor) error {
 	return nil
 }
 
+// ItemArtifacts starts a query for related objects on artifacts
+func (o *Resource) ItemArtifacts(mods ...bob.Mod[*dialect.SelectQuery]) ArtifactsQuery {
+	return Artifacts.Query(append(mods,
+		sm.Where(Artifacts.Columns.ItemID.EQ(sqlite.Arg(o.ID))),
+	)...)
+}
+
+func (os ResourceSlice) ItemArtifacts(mods ...bob.Mod[*dialect.SelectQuery]) ArtifactsQuery {
+	PKArgSlice := make([]bob.Expression, len(os))
+	for i, o := range os {
+		PKArgSlice[i] = sqlite.ArgGroup(o.ID)
+	}
+	PKArgExpr := sqlite.Group(PKArgSlice...)
+
+	return Artifacts.Query(append(mods,
+		sm.Where(sqlite.Group(Artifacts.Columns.ItemID).OP("IN", PKArgExpr)),
+	)...)
+}
+
+// WorkspaceArtifacts starts a query for related objects on artifacts
+func (o *Resource) WorkspaceArtifacts(mods ...bob.Mod[*dialect.SelectQuery]) ArtifactsQuery {
+	return Artifacts.Query(append(mods,
+		sm.Where(Artifacts.Columns.WorkspaceID.EQ(sqlite.Arg(o.ID))),
+	)...)
+}
+
+func (os ResourceSlice) WorkspaceArtifacts(mods ...bob.Mod[*dialect.SelectQuery]) ArtifactsQuery {
+	PKArgSlice := make([]bob.Expression, len(os))
+	for i, o := range os {
+		PKArgSlice[i] = sqlite.ArgGroup(o.ID)
+	}
+	PKArgExpr := sqlite.Group(PKArgSlice...)
+
+	return Artifacts.Query(append(mods,
+		sm.Where(sqlite.Group(Artifacts.Columns.WorkspaceID).OP("IN", PKArgExpr)),
+	)...)
+}
+
 // ItemBlobs starts a query for related objects on blobs
 func (o *Resource) ItemBlobs(mods ...bob.Mod[*dialect.SelectQuery]) BlobsQuery {
 	return Blobs.Query(append(mods,
@@ -1759,6 +1801,25 @@ func (os ResourceSlice) ItemOperationItems(mods ...bob.Mod[*dialect.SelectQuery]
 
 	return OperationItems.Query(append(mods,
 		sm.Where(sqlite.Group(OperationItems.Columns.ItemID).OP("IN", PKArgExpr)),
+	)...)
+}
+
+// WorkspaceOperations starts a query for related objects on operations
+func (o *Resource) WorkspaceOperations(mods ...bob.Mod[*dialect.SelectQuery]) OperationsQuery {
+	return Operations.Query(append(mods,
+		sm.Where(Operations.Columns.WorkspaceID.EQ(sqlite.Arg(o.ID))),
+	)...)
+}
+
+func (os ResourceSlice) WorkspaceOperations(mods ...bob.Mod[*dialect.SelectQuery]) OperationsQuery {
+	PKArgSlice := make([]bob.Expression, len(os))
+	for i, o := range os {
+		PKArgSlice[i] = sqlite.ArgGroup(o.ID)
+	}
+	PKArgExpr := sqlite.Group(PKArgSlice...)
+
+	return Operations.Query(append(mods,
+		sm.Where(sqlite.Group(Operations.Columns.WorkspaceID).OP("IN", PKArgExpr)),
 	)...)
 }
 
@@ -2337,25 +2398,6 @@ func (os ResourceSlice) WorkspaceWorkflowTriggers(mods ...bob.Mod[*dialect.Selec
 	)...)
 }
 
-// WorkspaceWorkflowWaits starts a query for related objects on workflow_waits
-func (o *Resource) WorkspaceWorkflowWaits(mods ...bob.Mod[*dialect.SelectQuery]) WorkflowWaitsQuery {
-	return WorkflowWaits.Query(append(mods,
-		sm.Where(WorkflowWaits.Columns.WorkspaceID.EQ(sqlite.Arg(o.ID))),
-	)...)
-}
-
-func (os ResourceSlice) WorkspaceWorkflowWaits(mods ...bob.Mod[*dialect.SelectQuery]) WorkflowWaitsQuery {
-	PKArgSlice := make([]bob.Expression, len(os))
-	for i, o := range os {
-		PKArgSlice[i] = sqlite.ArgGroup(o.ID)
-	}
-	PKArgExpr := sqlite.Group(PKArgSlice...)
-
-	return WorkflowWaits.Query(append(mods,
-		sm.Where(sqlite.Group(WorkflowWaits.Columns.WorkspaceID).OP("IN", PKArgExpr)),
-	)...)
-}
-
 // CollectionWorkflows starts a query for related objects on workflows
 func (o *Resource) CollectionWorkflows(mods ...bob.Mod[*dialect.SelectQuery]) WorkflowsQuery {
 	return Workflows.Query(append(mods,
@@ -2392,6 +2434,128 @@ func (os ResourceSlice) WorkspaceWorkflows(mods ...bob.Mod[*dialect.SelectQuery]
 	return Workflows.Query(append(mods,
 		sm.Where(sqlite.Group(Workflows.Columns.WorkspaceID).OP("IN", PKArgExpr)),
 	)...)
+}
+
+func insertResourceItemArtifacts0(ctx context.Context, exec bob.Executor, artifacts1 []*ArtifactSetter, resource0 *Resource) (ArtifactSlice, error) {
+	for i := range artifacts1 {
+		artifacts1[i].ItemID = omit.From(resource0.ID)
+	}
+
+	ret, err := Artifacts.Insert(bob.ToMods(artifacts1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertResourceItemArtifacts0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachResourceItemArtifacts0(ctx context.Context, exec bob.Executor, count int, artifacts1 ArtifactSlice, resource0 *Resource) (ArtifactSlice, error) {
+	setter := &ArtifactSetter{
+		ItemID: omit.From(resource0.ID),
+	}
+
+	err := artifacts1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachResourceItemArtifacts0: %w", err)
+	}
+
+	return artifacts1, nil
+}
+
+func (resource0 *Resource) InsertItemArtifacts(ctx context.Context, exec bob.Executor, related ...*ArtifactSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	artifacts1, err := insertResourceItemArtifacts0(ctx, exec, related, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.ItemArtifacts = append(resource0.R.ItemArtifacts, artifacts1...)
+
+	return nil
+}
+
+func (resource0 *Resource) AttachItemArtifacts(ctx context.Context, exec bob.Executor, related ...*Artifact) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	artifacts1 := ArtifactSlice(related)
+
+	_, err = attachResourceItemArtifacts0(ctx, exec, len(related), artifacts1, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.ItemArtifacts = append(resource0.R.ItemArtifacts, artifacts1...)
+
+	return nil
+}
+
+func insertResourceWorkspaceArtifacts0(ctx context.Context, exec bob.Executor, artifacts1 []*ArtifactSetter, resource0 *Resource) (ArtifactSlice, error) {
+	for i := range artifacts1 {
+		artifacts1[i].WorkspaceID = omit.From(resource0.ID)
+	}
+
+	ret, err := Artifacts.Insert(bob.ToMods(artifacts1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertResourceWorkspaceArtifacts0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachResourceWorkspaceArtifacts0(ctx context.Context, exec bob.Executor, count int, artifacts1 ArtifactSlice, resource0 *Resource) (ArtifactSlice, error) {
+	setter := &ArtifactSetter{
+		WorkspaceID: omit.From(resource0.ID),
+	}
+
+	err := artifacts1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachResourceWorkspaceArtifacts0: %w", err)
+	}
+
+	return artifacts1, nil
+}
+
+func (resource0 *Resource) InsertWorkspaceArtifacts(ctx context.Context, exec bob.Executor, related ...*ArtifactSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	artifacts1, err := insertResourceWorkspaceArtifacts0(ctx, exec, related, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.WorkspaceArtifacts = append(resource0.R.WorkspaceArtifacts, artifacts1...)
+
+	return nil
+}
+
+func (resource0 *Resource) AttachWorkspaceArtifacts(ctx context.Context, exec bob.Executor, related ...*Artifact) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	artifacts1 := ArtifactSlice(related)
+
+	_, err = attachResourceWorkspaceArtifacts0(ctx, exec, len(related), artifacts1, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.WorkspaceArtifacts = append(resource0.R.WorkspaceArtifacts, artifacts1...)
+
+	return nil
 }
 
 func insertResourceItemBlobs0(ctx context.Context, exec bob.Executor, blobs1 []*BlobSetter, resource0 *Resource) (BlobSlice, error) {
@@ -3540,6 +3704,67 @@ func (resource0 *Resource) AttachItemOperationItems(ctx context.Context, exec bo
 	}
 
 	resource0.R.ItemOperationItems = append(resource0.R.ItemOperationItems, operationItems1...)
+
+	return nil
+}
+
+func insertResourceWorkspaceOperations0(ctx context.Context, exec bob.Executor, operations1 []*OperationSetter, resource0 *Resource) (OperationSlice, error) {
+	for i := range operations1 {
+		operations1[i].WorkspaceID = omitnull.From(resource0.ID)
+	}
+
+	ret, err := Operations.Insert(bob.ToMods(operations1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertResourceWorkspaceOperations0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachResourceWorkspaceOperations0(ctx context.Context, exec bob.Executor, count int, operations1 OperationSlice, resource0 *Resource) (OperationSlice, error) {
+	setter := &OperationSetter{
+		WorkspaceID: omitnull.From(resource0.ID),
+	}
+
+	err := operations1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachResourceWorkspaceOperations0: %w", err)
+	}
+
+	return operations1, nil
+}
+
+func (resource0 *Resource) InsertWorkspaceOperations(ctx context.Context, exec bob.Executor, related ...*OperationSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	operations1, err := insertResourceWorkspaceOperations0(ctx, exec, related, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.WorkspaceOperations = append(resource0.R.WorkspaceOperations, operations1...)
+
+	return nil
+}
+
+func (resource0 *Resource) AttachWorkspaceOperations(ctx context.Context, exec bob.Executor, related ...*Operation) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	operations1 := OperationSlice(related)
+
+	_, err = attachResourceWorkspaceOperations0(ctx, exec, len(related), operations1, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.WorkspaceOperations = append(resource0.R.WorkspaceOperations, operations1...)
 
 	return nil
 }
@@ -5236,67 +5461,6 @@ func (resource0 *Resource) AttachWorkspaceWorkflowTriggers(ctx context.Context, 
 	return nil
 }
 
-func insertResourceWorkspaceWorkflowWaits0(ctx context.Context, exec bob.Executor, workflowWaits1 []*WorkflowWaitSetter, resource0 *Resource) (WorkflowWaitSlice, error) {
-	for i := range workflowWaits1 {
-		workflowWaits1[i].WorkspaceID = omit.From(resource0.ID)
-	}
-
-	ret, err := WorkflowWaits.Insert(bob.ToMods(workflowWaits1...)).All(ctx, exec)
-	if err != nil {
-		return ret, fmt.Errorf("insertResourceWorkspaceWorkflowWaits0: %w", err)
-	}
-
-	return ret, nil
-}
-
-func attachResourceWorkspaceWorkflowWaits0(ctx context.Context, exec bob.Executor, count int, workflowWaits1 WorkflowWaitSlice, resource0 *Resource) (WorkflowWaitSlice, error) {
-	setter := &WorkflowWaitSetter{
-		WorkspaceID: omit.From(resource0.ID),
-	}
-
-	err := workflowWaits1.UpdateAll(ctx, exec, *setter)
-	if err != nil {
-		return nil, fmt.Errorf("attachResourceWorkspaceWorkflowWaits0: %w", err)
-	}
-
-	return workflowWaits1, nil
-}
-
-func (resource0 *Resource) InsertWorkspaceWorkflowWaits(ctx context.Context, exec bob.Executor, related ...*WorkflowWaitSetter) error {
-	if len(related) == 0 {
-		return nil
-	}
-
-	var err error
-
-	workflowWaits1, err := insertResourceWorkspaceWorkflowWaits0(ctx, exec, related, resource0)
-	if err != nil {
-		return err
-	}
-
-	resource0.R.WorkspaceWorkflowWaits = append(resource0.R.WorkspaceWorkflowWaits, workflowWaits1...)
-
-	return nil
-}
-
-func (resource0 *Resource) AttachWorkspaceWorkflowWaits(ctx context.Context, exec bob.Executor, related ...*WorkflowWait) error {
-	if len(related) == 0 {
-		return nil
-	}
-
-	var err error
-	workflowWaits1 := WorkflowWaitSlice(related)
-
-	_, err = attachResourceWorkspaceWorkflowWaits0(ctx, exec, len(related), workflowWaits1, resource0)
-	if err != nil {
-		return err
-	}
-
-	resource0.R.WorkspaceWorkflowWaits = append(resource0.R.WorkspaceWorkflowWaits, workflowWaits1...)
-
-	return nil
-}
-
 func insertResourceCollectionWorkflows0(ctx context.Context, exec bob.Executor, workflows1 []*WorkflowSetter, resource0 *Resource) (WorkflowSlice, error) {
 	for i := range workflows1 {
 		workflows1[i].CollectionID = omitnull.From(resource0.ID)
@@ -5508,6 +5672,34 @@ func buildResourceWhere[Q sqlite.Filterable](cols resourceColumns) resourceWhere
 // R struct — so they cannot collide with column-based filter fields.
 type resourceWhereR[Q sqlite.Filterable] struct {
 	cols resourceColumns
+}
+
+// HasItemArtifacts filters parents that have a matching ItemArtifacts using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Artifacts).
+func (w resourceWhereR[Q]) HasItemArtifacts(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := sqlite.Select(
+		sm.Columns(sqlite.Raw("1")),
+		sm.From(Artifacts.NameExpr()),
+		sm.Where(Artifacts.Columns.ItemID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: sqlite.Exists(q)}
+}
+
+// HasWorkspaceArtifacts filters parents that have a matching WorkspaceArtifacts using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Artifacts).
+func (w resourceWhereR[Q]) HasWorkspaceArtifacts(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := sqlite.Select(
+		sm.Columns(sqlite.Raw("1")),
+		sm.From(Artifacts.NameExpr()),
+		sm.Where(Artifacts.Columns.WorkspaceID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: sqlite.Exists(q)}
 }
 
 // HasItemBlobs filters parents that have a matching ItemBlobs using a
@@ -5771,6 +5963,20 @@ func (w resourceWhereR[Q]) HasItemOperationItems(filters ...bob.Mod[*dialect.Sel
 		sm.Columns(sqlite.Raw("1")),
 		sm.From(OperationItems.NameExpr()),
 		sm.Where(OperationItems.Columns.ItemID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: sqlite.Exists(q)}
+}
+
+// HasWorkspaceOperations filters parents that have a matching WorkspaceOperations using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Operations).
+func (w resourceWhereR[Q]) HasWorkspaceOperations(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := sqlite.Select(
+		sm.Columns(sqlite.Raw("1")),
+		sm.From(Operations.NameExpr()),
+		sm.Where(Operations.Columns.WorkspaceID.EQ(w.cols.ID)),
 	)
 	q.Apply(filters...)
 	return mods.Where[Q]{E: sqlite.Exists(q)}
@@ -6201,20 +6407,6 @@ func (w resourceWhereR[Q]) HasWorkspaceWorkflowTriggers(filters ...bob.Mod[*dial
 		sm.Columns(sqlite.Raw("1")),
 		sm.From(WorkflowTriggers.NameExpr()),
 		sm.Where(WorkflowTriggers.Columns.WorkspaceID.EQ(w.cols.ID)),
-	)
-	q.Apply(filters...)
-	return mods.Where[Q]{E: sqlite.Exists(q)}
-}
-
-// HasWorkspaceWorkflowWaits filters parents that have a matching WorkspaceWorkflowWaits using a
-// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
-// multiply parent rows, so no DISTINCT is needed. The optional filters are
-// applied to the subquery (i.e. to WorkflowWaits).
-func (w resourceWhereR[Q]) HasWorkspaceWorkflowWaits(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
-	q := sqlite.Select(
-		sm.Columns(sqlite.Raw("1")),
-		sm.From(WorkflowWaits.NameExpr()),
-		sm.Where(WorkflowWaits.Columns.WorkspaceID.EQ(w.cols.ID)),
 	)
 	q.Apply(filters...)
 	return mods.Where[Q]{E: sqlite.Exists(q)}

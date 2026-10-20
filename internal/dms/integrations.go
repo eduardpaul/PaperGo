@@ -16,7 +16,6 @@ import (
 	"papergo/internal/dal/dberr"
 	"papergo/internal/dal/integrations"
 	"papergo/internal/dal/operations"
-	"papergo/internal/dal/workflows"
 	"papergo/internal/identity"
 	"papergo/internal/integration"
 )
@@ -28,20 +27,13 @@ const integrationLease = 2 * time.Minute
 var ErrIntegrationBusy = errors.New("integration is refreshing; try again after it finishes")
 
 type integrationRuntime struct {
-	activate func(context.Context, *Service, string, string) error
-	secrets  *integration.Secrets
-	ical     *iCalendarRuntime
+	secrets *integration.Secrets
+	ical    *iCalendarRuntime
 }
 
 // ConfigureIntegrations supplies the deployment key before serving requests.
 func (s *Service) ConfigureIntegrations(secrets *integration.Secrets) {
 	s.integrations = &integrationRuntime{secrets: secrets, ical: newICalendarRuntime()}
-}
-
-func (s *Service) OnIntegrationCreated(f func(context.Context, *Service, string, string) error) {
-	if s.integrations != nil {
-		s.integrations.activate = f
-	}
 }
 
 type IntegrationInput struct {
@@ -203,11 +195,6 @@ func (s *Service) CreateIntegration(ctx context.Context, subject, list string, i
 		if _, e = t.enqueueIntegrationRefresh(ctx, subject, &created); e != nil {
 			return e
 		}
-		if t.integrations.activate != nil {
-			if e = t.integrations.activate(ctx, t, subject, c.ID); e != nil {
-				return e
-			}
-		}
 		return t.audit(ctx, subject, "integration.create", c, map[string]any{"integration_id": out.ID, "kind": in.Kind})
 	})
 	return
@@ -324,7 +311,9 @@ func (s *Service) RemoveIntegration(ctx context.Context, subject, list, id strin
 	})
 }
 func (s *Service) supersedeIntegrationRefreshes(ctx context.Context, id string) error {
-	return s.DAL.Operations().Supersede(ctx, operations.Filter{Kinds: []string{OperationKindIntegrationRefresh}, PayloadField: "integration_id", PayloadValue: id})
+	ended, err := s.DAL.Operations().Supersede(ctx, operations.Filter{Kinds: []string{OperationKindIntegrationRefresh}, PayloadField: "integration_id", PayloadValue: id}, time.Now())
+	s.operationsFinished(ended...)
+	return err
 }
 
 type integrationRefreshPayload struct {
@@ -344,7 +333,7 @@ func (s *Service) enqueueIntegrationRefresh(ctx context.Context, subject string,
 		return nil, err
 	}
 	if len(pending) > 0 {
-		return viewOperation(pending[0]), nil
+		return viewOperation(pending[0], time.Now()), nil
 	}
 	// Validate and enqueue through the operation registry for the caller's live
 	// scopes and collection ACL. Deduplication never reveals another actor's job.
@@ -383,7 +372,7 @@ func validateIntegrationRefresh(ctx context.Context, t *Service, subject, list s
 	return nil
 }
 func integrationOperationHandler() OperationHandler {
-	return OperationHandler{Scope: "list.write", Validate: validateIntegrationRefresh, ExternalStep: func(ctx context.Context, s *Service, op *operations.Operation) error {
+	return OperationHandler{Scope: "list.write", Validate: validateIntegrationRefresh, Execute: func(ctx context.Context, s *Service, op *operations.Operation) error {
 		return s.refreshIntegrationOperation(ctx, op)
 	}, Failed: func(ctx context.Context, t *Service, op *operations.Operation, cause error) error {
 		id, err := decodeIntegrationRefresh(op.Payload)
@@ -404,50 +393,24 @@ func integrationOperationHandler() OperationHandler {
 	}}
 }
 
-// QueueIntegrationRefreshes is used by the workspace's scheduled workflow.
-// Each subscription rechecks its configuring user's credential and list Manage
-// permission; one revoked credential does not stop other subscriptions.
-func (s *Service) QueueIntegrationRefreshes(ctx context.Context, subject, workspace, id string) (int, error) {
-	return s.queueIntegrationRefreshes(ctx, subject, workspace, id, false)
-}
-func (s *Service) QueueScheduledIntegrationRefreshes(ctx context.Context, workflowID string) (int, error) {
-	w, err := s.DAL.Workflows().Find(ctx, workflowID)
-	if err != nil {
-		return 0, err
-	}
-	if w.BuiltinKey != "integrations.refresh" || !w.AutomaticEnabled || w.State != workflows.StatePublished || w.Deleted() {
-		return 0, ErrForbidden
-	}
-	return s.queueIntegrationRefreshes(ctx, w.CreatedBy, w.WorkspaceID, "", true)
-}
-func (s *Service) queueIntegrationRefreshes(ctx context.Context, subject, workspace, id string, scheduled bool) (int, error) {
-	n := 0
-	err := s.write(ctx, func(t *Service) error {
-		if !scheduled && id == "" {
-			if _, err := t.authorize(ctx, subject, workspace, "manage"); err != nil {
-				return err
-			}
-		}
+// RefreshIntegrations queues a refresh of every active list integration. It
+// is a maintenance task. Each refresh rechecks its configuring user's
+// credential and list Manage permission; one revoked credential does not
+// stop the others.
+func (s *Service) RefreshIntegrations(ctx context.Context, _ time.Time) error {
+	return s.write(ctx, func(t *Service) error {
 		rows, err := t.DAL.Integrations().List(ctx, integrations.Filter{Unpaused: true})
 		if err != nil {
 			return err
 		}
 		for i := range rows {
 			row := &rows[i]
-			if id != "" && row.ID != id {
-				continue
-			}
 			c, err := t.DAL.Resources().Resource(ctx, row.ContainerID)
 			if err != nil {
 				return err
 			}
-			if c.WorkspaceID != workspace || c.DeletedAt != nil {
+			if c.DeletedAt != nil {
 				continue
-			}
-			if !scheduled {
-				if _, err = t.integration(ctx, subject, c.ID, row.ID, "manage"); err != nil {
-					return err
-				}
 			}
 			actor := row.ConfiguredBy
 			credentialCtx := ctx
@@ -463,11 +426,9 @@ func (s *Service) queueIntegrationRefreshes(ctx context.Context, subject, worksp
 			if _, err = t.enqueueIntegrationRefresh(credentialCtx, actor, row); err != nil {
 				return err
 			}
-			n++
 		}
 		return nil
 	})
-	return n, err
 }
 func (s *Service) eventType(ctx context.Context, list string) (*catalog.ContentType, error) {
 	typ, err := s.DAL.Catalog().OneContentType(ctx, catalog.ContentTypeFilter{TemplateKey: "event"})

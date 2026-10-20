@@ -5,13 +5,13 @@ package models
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
-	"papergo/internal/model"
 	"time"
 
+	"github.com/aarondl/opt/null"
 	"github.com/aarondl/opt/omit"
+	"github.com/aarondl/opt/omitnull"
 	"github.com/stephenafamo/bob"
 	"github.com/stephenafamo/bob/dialect/psql"
 	"github.com/stephenafamo/bob/dialect/psql/dialect"
@@ -20,28 +20,21 @@ import (
 	"github.com/stephenafamo/bob/dialect/psql/um"
 	"github.com/stephenafamo/bob/expr"
 	"github.com/stephenafamo/bob/mods"
-	"github.com/stephenafamo/bob/types"
 	"github.com/stephenafamo/bob/types/pgtypes"
 	"github.com/stephenafamo/scan"
 )
 
 // StagedFile is an object representing the database table.
 type StagedFile struct {
-	ID          string                           `db:"id,pk" `
-	CreatedAt   time.Time                        `db:"created_at" `
-	UpdatedAt   time.Time                        `db:"updated_at" `
-	WorkspaceID string                           `db:"workspace_id" `
-	ItemID      string                           `db:"item_id" `
-	RunID       string                           `db:"run_id" `
-	Sources     types.JSON[[]model.StagedSource] `db:"sources" `
-	ObjectKey   string                           `db:"object_key" `
-	Filename    string                           `db:"filename" `
-	ContentType string                           `db:"content_type" `
-	Size        int64                            `db:"size" `
-	Sha256      string                           `db:"sha256" `
-	Metrics     types.JSON[json.RawMessage]      `db:"metrics" `
-	State       string                           `db:"state" `
-	CreatedBy   string                           `db:"created_by" `
+	ID          string           `db:"id,pk" `
+	CreatedAt   time.Time        `db:"created_at" `
+	UpdatedAt   time.Time        `db:"updated_at" `
+	WorkspaceID string           `db:"workspace_id" `
+	ItemID      string           `db:"item_id" `
+	ArtifactID  string           `db:"artifact_id" `
+	RunID       null.Val[string] `db:"run_id" `
+	State       string           `db:"state" `
+	CreatedBy   string           `db:"created_by" `
 
 	R stagedFileR `db:"-" `
 }
@@ -58,6 +51,7 @@ type StagedFilesQuery = *psql.ViewQuery[*StagedFile, StagedFileSlice]
 
 // stagedFileR is where relationships are stored.
 type stagedFileR struct {
+	Artifact          *Artifact    // staged_files.staged_files_artifact_id_fkey
 	ItemResource      *Resource    // staged_files.staged_files_item_id_fkey
 	RunWorkflowRun    *WorkflowRun // staged_files.staged_files_run_id_fkey
 	WorkspaceResource *Resource    // staged_files.staged_files_workspace_id_fkey
@@ -69,6 +63,7 @@ type stagedFileR struct {
 
 // stagedFileRLoaded tracks which relationships on StagedFile have been loaded.
 type stagedFileRLoaded struct {
+	Artifact          bool // staged_files.staged_files_artifact_id_fkey
 	ItemResource      bool // staged_files.staged_files_item_id_fkey
 	RunWorkflowRun    bool // staged_files.staged_files_run_id_fkey
 	WorkspaceResource bool // staged_files.staged_files_workspace_id_fkey
@@ -76,7 +71,7 @@ type stagedFileRLoaded struct {
 
 func buildStagedFileColumns(tableName string) stagedFileColumns {
 	columnsExpr := expr.NewColumnsExpr(
-		"id", "created_at", "updated_at", "workspace_id", "item_id", "run_id", "sources", "object_key", "filename", "content_type", "size", "sha256", "metrics", "state", "created_by",
+		"id", "created_at", "updated_at", "workspace_id", "item_id", "artifact_id", "run_id", "state", "created_by",
 	)
 
 	if tableName != "" {
@@ -91,14 +86,8 @@ func buildStagedFileColumns(tableName string) stagedFileColumns {
 		UpdatedAt:   buildStagedFileColumn(tableName, "updated_at"),
 		WorkspaceID: buildStagedFileColumn(tableName, "workspace_id"),
 		ItemID:      buildStagedFileColumn(tableName, "item_id"),
+		ArtifactID:  buildStagedFileColumn(tableName, "artifact_id"),
 		RunID:       buildStagedFileColumn(tableName, "run_id"),
-		Sources:     buildStagedFileColumn(tableName, "sources"),
-		ObjectKey:   buildStagedFileColumn(tableName, "object_key"),
-		Filename:    buildStagedFileColumn(tableName, "filename"),
-		ContentType: buildStagedFileColumn(tableName, "content_type"),
-		Size:        buildStagedFileColumn(tableName, "size"),
-		Sha256:      buildStagedFileColumn(tableName, "sha256"),
-		Metrics:     buildStagedFileColumn(tableName, "metrics"),
 		State:       buildStagedFileColumn(tableName, "state"),
 		CreatedBy:   buildStagedFileColumn(tableName, "created_by"),
 	}
@@ -112,14 +101,8 @@ type stagedFileColumns struct {
 	UpdatedAt   stagedFileColumn
 	WorkspaceID stagedFileColumn
 	ItemID      stagedFileColumn
+	ArtifactID  stagedFileColumn
 	RunID       stagedFileColumn
-	Sources     stagedFileColumn
-	ObjectKey   stagedFileColumn
-	Filename    stagedFileColumn
-	ContentType stagedFileColumn
-	Size        stagedFileColumn
-	Sha256      stagedFileColumn
-	Metrics     stagedFileColumn
 	State       stagedFileColumn
 	CreatedBy   stagedFileColumn
 }
@@ -167,25 +150,19 @@ func (c stagedFileColumn) ShouldOmitParens() bool {
 // All values are optional, and do not have to be set
 // Generated columns are not included
 type StagedFileSetter struct {
-	ID          omit.Val[string]                           `db:"id,pk" `
-	CreatedAt   omit.Val[time.Time]                        `db:"created_at" `
-	UpdatedAt   omit.Val[time.Time]                        `db:"updated_at" `
-	WorkspaceID omit.Val[string]                           `db:"workspace_id" `
-	ItemID      omit.Val[string]                           `db:"item_id" `
-	RunID       omit.Val[string]                           `db:"run_id" `
-	Sources     omit.Val[types.JSON[[]model.StagedSource]] `db:"sources" `
-	ObjectKey   omit.Val[string]                           `db:"object_key" `
-	Filename    omit.Val[string]                           `db:"filename" `
-	ContentType omit.Val[string]                           `db:"content_type" `
-	Size        omit.Val[int64]                            `db:"size" `
-	Sha256      omit.Val[string]                           `db:"sha256" `
-	Metrics     omit.Val[types.JSON[json.RawMessage]]      `db:"metrics" `
-	State       omit.Val[string]                           `db:"state" `
-	CreatedBy   omit.Val[string]                           `db:"created_by" `
+	ID          omit.Val[string]     `db:"id,pk" `
+	CreatedAt   omit.Val[time.Time]  `db:"created_at" `
+	UpdatedAt   omit.Val[time.Time]  `db:"updated_at" `
+	WorkspaceID omit.Val[string]     `db:"workspace_id" `
+	ItemID      omit.Val[string]     `db:"item_id" `
+	ArtifactID  omit.Val[string]     `db:"artifact_id" `
+	RunID       omitnull.Val[string] `db:"run_id" `
+	State       omit.Val[string]     `db:"state" `
+	CreatedBy   omit.Val[string]     `db:"created_by" `
 }
 
 func (s StagedFileSetter) SetColumns() []string {
-	vals := make([]string, 0, 15)
+	vals := make([]string, 0, 9)
 	if s.ID.IsValue() {
 		vals = append(vals, "id")
 	}
@@ -201,29 +178,11 @@ func (s StagedFileSetter) SetColumns() []string {
 	if s.ItemID.IsValue() {
 		vals = append(vals, "item_id")
 	}
-	if s.RunID.IsValue() {
+	if s.ArtifactID.IsValue() {
+		vals = append(vals, "artifact_id")
+	}
+	if s.RunID.IsValue() || s.RunID.IsNull() {
 		vals = append(vals, "run_id")
-	}
-	if s.Sources.IsValue() {
-		vals = append(vals, "sources")
-	}
-	if s.ObjectKey.IsValue() {
-		vals = append(vals, "object_key")
-	}
-	if s.Filename.IsValue() {
-		vals = append(vals, "filename")
-	}
-	if s.ContentType.IsValue() {
-		vals = append(vals, "content_type")
-	}
-	if s.Size.IsValue() {
-		vals = append(vals, "size")
-	}
-	if s.Sha256.IsValue() {
-		vals = append(vals, "sha256")
-	}
-	if s.Metrics.IsValue() {
-		vals = append(vals, "metrics")
 	}
 	if s.State.IsValue() {
 		vals = append(vals, "state")
@@ -250,29 +209,11 @@ func (s StagedFileSetter) Overwrite(t *StagedFile) {
 	if s.ItemID.IsValue() {
 		t.ItemID = s.ItemID.MustGet()
 	}
-	if s.RunID.IsValue() {
-		t.RunID = s.RunID.MustGet()
+	if s.ArtifactID.IsValue() {
+		t.ArtifactID = s.ArtifactID.MustGet()
 	}
-	if s.Sources.IsValue() {
-		t.Sources = s.Sources.MustGet()
-	}
-	if s.ObjectKey.IsValue() {
-		t.ObjectKey = s.ObjectKey.MustGet()
-	}
-	if s.Filename.IsValue() {
-		t.Filename = s.Filename.MustGet()
-	}
-	if s.ContentType.IsValue() {
-		t.ContentType = s.ContentType.MustGet()
-	}
-	if s.Size.IsValue() {
-		t.Size = s.Size.MustGet()
-	}
-	if s.Sha256.IsValue() {
-		t.Sha256 = s.Sha256.MustGet()
-	}
-	if s.Metrics.IsValue() {
-		t.Metrics = s.Metrics.MustGet()
+	if s.RunID.IsValue() || s.RunID.IsNull() {
+		t.RunID = s.RunID.MustGetNull()
 	}
 	if s.State.IsValue() {
 		t.State = s.State.MustGet()
@@ -314,45 +255,15 @@ func (s *StagedFileSetter) Apply(q *dialect.InsertQuery) {
 			}
 			return psql.Arg(s.ItemID.MustGet()).WriteSQL(ctx, w, d, start)
 		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.ArtifactID.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.ArtifactID.MustGet()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
 			if s.RunID.IsUnset() {
 				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
 			}
-			return psql.Arg(s.RunID.MustGet()).WriteSQL(ctx, w, d, start)
-		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
-			if s.Sources.IsUnset() {
-				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
-			}
-			return psql.Arg(s.Sources.MustGet()).WriteSQL(ctx, w, d, start)
-		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
-			if s.ObjectKey.IsUnset() {
-				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
-			}
-			return psql.Arg(s.ObjectKey.MustGet()).WriteSQL(ctx, w, d, start)
-		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
-			if s.Filename.IsUnset() {
-				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
-			}
-			return psql.Arg(s.Filename.MustGet()).WriteSQL(ctx, w, d, start)
-		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
-			if s.ContentType.IsUnset() {
-				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
-			}
-			return psql.Arg(s.ContentType.MustGet()).WriteSQL(ctx, w, d, start)
-		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
-			if s.Size.IsUnset() {
-				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
-			}
-			return psql.Arg(s.Size.MustGet()).WriteSQL(ctx, w, d, start)
-		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
-			if s.Sha256.IsUnset() {
-				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
-			}
-			return psql.Arg(s.Sha256.MustGet()).WriteSQL(ctx, w, d, start)
-		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
-			if s.Metrics.IsUnset() {
-				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
-			}
-			return psql.Arg(s.Metrics.MustGet()).WriteSQL(ctx, w, d, start)
+			return psql.Arg(s.RunID.MustGetNull()).WriteSQL(ctx, w, d, start)
 		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
 			if s.State.IsUnset() {
 				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
@@ -371,7 +282,7 @@ func (s StagedFileSetter) UpdateMod() bob.Mod[*dialect.UpdateQuery] {
 }
 
 func (s StagedFileSetter) Expressions(prefix ...string) []bob.Expression {
-	exprs := make([]bob.Expression, 0, 15)
+	exprs := make([]bob.Expression, 0, 9)
 
 	if s.ID.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
@@ -408,59 +319,17 @@ func (s StagedFileSetter) Expressions(prefix ...string) []bob.Expression {
 		}})
 	}
 
-	if s.RunID.IsValue() {
+	if s.ArtifactID.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "artifact_id")...),
+			psql.Arg(s.ArtifactID),
+		}})
+	}
+
+	if s.RunID.IsValue() || s.RunID.IsNull() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
 			psql.Quote(append(prefix, "run_id")...),
 			psql.Arg(s.RunID),
-		}})
-	}
-
-	if s.Sources.IsValue() {
-		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
-			psql.Quote(append(prefix, "sources")...),
-			psql.Arg(s.Sources),
-		}})
-	}
-
-	if s.ObjectKey.IsValue() {
-		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
-			psql.Quote(append(prefix, "object_key")...),
-			psql.Arg(s.ObjectKey),
-		}})
-	}
-
-	if s.Filename.IsValue() {
-		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
-			psql.Quote(append(prefix, "filename")...),
-			psql.Arg(s.Filename),
-		}})
-	}
-
-	if s.ContentType.IsValue() {
-		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
-			psql.Quote(append(prefix, "content_type")...),
-			psql.Arg(s.ContentType),
-		}})
-	}
-
-	if s.Size.IsValue() {
-		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
-			psql.Quote(append(prefix, "size")...),
-			psql.Arg(s.Size),
-		}})
-	}
-
-	if s.Sha256.IsValue() {
-		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
-			psql.Quote(append(prefix, "sha256")...),
-			psql.Arg(s.Sha256),
-		}})
-	}
-
-	if s.Metrics.IsValue() {
-		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
-			psql.Quote(append(prefix, "metrics")...),
-			psql.Arg(s.Metrics),
 		}})
 	}
 
@@ -488,7 +357,7 @@ func stagedFileScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc, 
 		idx int
 		dst func(o *StagedFile) any
 	}
-	targets := make([]target, 0, 15)
+	targets := make([]target, 0, 9)
 	for i, col := range cols {
 		switch col {
 		case "id":
@@ -501,22 +370,10 @@ func stagedFileScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc, 
 			targets = append(targets, target{i, func(o *StagedFile) any { return &o.WorkspaceID }})
 		case "item_id":
 			targets = append(targets, target{i, func(o *StagedFile) any { return &o.ItemID }})
+		case "artifact_id":
+			targets = append(targets, target{i, func(o *StagedFile) any { return &o.ArtifactID }})
 		case "run_id":
 			targets = append(targets, target{i, func(o *StagedFile) any { return &o.RunID }})
-		case "sources":
-			targets = append(targets, target{i, func(o *StagedFile) any { return &o.Sources }})
-		case "object_key":
-			targets = append(targets, target{i, func(o *StagedFile) any { return &o.ObjectKey }})
-		case "filename":
-			targets = append(targets, target{i, func(o *StagedFile) any { return &o.Filename }})
-		case "content_type":
-			targets = append(targets, target{i, func(o *StagedFile) any { return &o.ContentType }})
-		case "size":
-			targets = append(targets, target{i, func(o *StagedFile) any { return &o.Size }})
-		case "sha256":
-			targets = append(targets, target{i, func(o *StagedFile) any { return &o.Sha256 }})
-		case "metrics":
-			targets = append(targets, target{i, func(o *StagedFile) any { return &o.Metrics }})
 		case "state":
 			targets = append(targets, target{i, func(o *StagedFile) any { return &o.State }})
 		case "created_by":
@@ -796,6 +653,36 @@ func (o StagedFileSlice) ReloadAll(ctx context.Context, exec bob.Executor) error
 	return nil
 }
 
+// Artifact starts a query for related objects on artifacts
+func (o *StagedFile) Artifact(mods ...bob.Mod[*dialect.SelectQuery]) ArtifactsQuery {
+	return Artifacts.Query(append(mods,
+		sm.Where(Artifacts.Columns.ID.EQ(psql.Arg(o.ArtifactID))),
+	)...)
+}
+
+func (os StagedFileSlice) Artifact(mods ...bob.Mod[*dialect.SelectQuery]) ArtifactsQuery {
+	pkArtifactID := make(pgtypes.Array[string], 0, len(os))
+
+	// the array is only a filter (semi-join), so duplicate keys can be
+	// dropped before they are sent over the wire
+	seenArtifactID := make(map[string]struct{}, len(os))
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		if _, ok := seenArtifactID[o.ArtifactID]; ok {
+			continue
+		}
+		seenArtifactID[o.ArtifactID] = struct{}{}
+		pkArtifactID = append(pkArtifactID, o.ArtifactID)
+	}
+	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkArtifactID), "text[]"))
+
+	return Artifacts.Query(append(mods,
+		sm.Where(Artifacts.Columns.ID.EQ(PKArgExpr)),
+	)...)
+}
+
 // ItemResource starts a query for related objects on resources
 func (o *StagedFile) ItemResource(mods ...bob.Mod[*dialect.SelectQuery]) ResourcesQuery {
 	return Resources.Query(append(mods,
@@ -834,11 +721,11 @@ func (o *StagedFile) RunWorkflowRun(mods ...bob.Mod[*dialect.SelectQuery]) Workf
 }
 
 func (os StagedFileSlice) RunWorkflowRun(mods ...bob.Mod[*dialect.SelectQuery]) WorkflowRunsQuery {
-	pkRunID := make(pgtypes.Array[string], 0, len(os))
+	pkRunID := make(pgtypes.Array[null.Val[string]], 0, len(os))
 
 	// the array is only a filter (semi-join), so duplicate keys can be
 	// dropped before they are sent over the wire
-	seenRunID := make(map[string]struct{}, len(os))
+	seenRunID := make(map[null.Val[string]]struct{}, len(os))
 	for _, o := range os {
 		if o == nil {
 			continue
@@ -884,6 +771,52 @@ func (os StagedFileSlice) WorkspaceResource(mods ...bob.Mod[*dialect.SelectQuery
 	return Resources.Query(append(mods,
 		sm.Where(Resources.Columns.ID.EQ(PKArgExpr)),
 	)...)
+}
+
+func attachStagedFileArtifact0(ctx context.Context, exec bob.Executor, count int, stagedFile0 *StagedFile, artifact1 *Artifact) (*StagedFile, error) {
+	setter := &StagedFileSetter{
+		ArtifactID: omit.From(artifact1.ID),
+	}
+
+	err := stagedFile0.Update(ctx, exec, setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachStagedFileArtifact0: %w", err)
+	}
+
+	return stagedFile0, nil
+}
+
+func (stagedFile0 *StagedFile) InsertArtifact(ctx context.Context, exec bob.Executor, related *ArtifactSetter) error {
+	var err error
+
+	artifact1, err := Artifacts.Insert(related).One(ctx, exec)
+	if err != nil {
+		return fmt.Errorf("inserting related objects: %w", err)
+	}
+
+	_, err = attachStagedFileArtifact0(ctx, exec, 1, stagedFile0, artifact1)
+	if err != nil {
+		return err
+	}
+
+	stagedFile0.R.Artifact = artifact1
+	stagedFile0.R.Loaded.Artifact = true
+
+	return nil
+}
+
+func (stagedFile0 *StagedFile) AttachArtifact(ctx context.Context, exec bob.Executor, artifact1 *Artifact) error {
+	var err error
+
+	_, err = attachStagedFileArtifact0(ctx, exec, 1, stagedFile0, artifact1)
+	if err != nil {
+		return err
+	}
+
+	stagedFile0.R.Artifact = artifact1
+	stagedFile0.R.Loaded.Artifact = true
+
+	return nil
 }
 
 func attachStagedFileItemResource0(ctx context.Context, exec bob.Executor, count int, stagedFile0 *StagedFile, resource1 *Resource) (*StagedFile, error) {
@@ -934,7 +867,7 @@ func (stagedFile0 *StagedFile) AttachItemResource(ctx context.Context, exec bob.
 
 func attachStagedFileRunWorkflowRun0(ctx context.Context, exec bob.Executor, count int, stagedFile0 *StagedFile, workflowRun1 *WorkflowRun) (*StagedFile, error) {
 	setter := &StagedFileSetter{
-		RunID: omit.From(workflowRun1.ID),
+		RunID: omitnull.From(workflowRun1.ID),
 	}
 
 	err := stagedFile0.Update(ctx, exec, setter)
@@ -1031,14 +964,8 @@ type stagedFileWhere[Q psql.Filterable] struct {
 	UpdatedAt   psql.WhereMod[Q, time.Time]
 	WorkspaceID psql.WhereMod[Q, string]
 	ItemID      psql.WhereMod[Q, string]
-	RunID       psql.WhereMod[Q, string]
-	Sources     psql.WhereMod[Q, types.JSON[[]model.StagedSource]]
-	ObjectKey   psql.WhereMod[Q, string]
-	Filename    psql.WhereMod[Q, string]
-	ContentType psql.WhereMod[Q, string]
-	Size        psql.WhereMod[Q, int64]
-	Sha256      psql.WhereMod[Q, string]
-	Metrics     psql.WhereMod[Q, types.JSON[json.RawMessage]]
+	ArtifactID  psql.WhereMod[Q, string]
+	RunID       psql.WhereNullMod[Q, string]
 	State       psql.WhereMod[Q, string]
 	CreatedBy   psql.WhereMod[Q, string]
 	R           stagedFileWhereR[Q]
@@ -1056,14 +983,8 @@ func buildStagedFileWhere[Q psql.Filterable](cols stagedFileColumns) stagedFileW
 		UpdatedAt:   psql.Where[Q, time.Time](cols.UpdatedAt.Expression),
 		WorkspaceID: psql.Where[Q, string](cols.WorkspaceID.Expression),
 		ItemID:      psql.Where[Q, string](cols.ItemID.Expression),
-		RunID:       psql.Where[Q, string](cols.RunID.Expression),
-		Sources:     psql.Where[Q, types.JSON[[]model.StagedSource]](cols.Sources.Expression),
-		ObjectKey:   psql.Where[Q, string](cols.ObjectKey.Expression),
-		Filename:    psql.Where[Q, string](cols.Filename.Expression),
-		ContentType: psql.Where[Q, string](cols.ContentType.Expression),
-		Size:        psql.Where[Q, int64](cols.Size.Expression),
-		Sha256:      psql.Where[Q, string](cols.Sha256.Expression),
-		Metrics:     psql.Where[Q, types.JSON[json.RawMessage]](cols.Metrics.Expression),
+		ArtifactID:  psql.Where[Q, string](cols.ArtifactID.Expression),
+		RunID:       psql.WhereNull[Q, string](cols.RunID.Expression),
 		State:       psql.Where[Q, string](cols.State.Expression),
 		CreatedBy:   psql.Where[Q, string](cols.CreatedBy.Expression),
 		R:           stagedFileWhereR[Q]{cols: cols},
@@ -1075,6 +996,20 @@ func buildStagedFileWhere[Q psql.Filterable](cols stagedFileColumns) stagedFileW
 // R struct — so they cannot collide with column-based filter fields.
 type stagedFileWhereR[Q psql.Filterable] struct {
 	cols stagedFileColumns
+}
+
+// HasArtifact filters parents that have a matching Artifact using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Artifacts).
+func (w stagedFileWhereR[Q]) HasArtifact(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := psql.Select(
+		sm.Columns(psql.Raw("1")),
+		sm.From(Artifacts.NameExpr()),
+		sm.Where(Artifacts.Columns.ID.EQ(w.cols.ArtifactID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: psql.Exists(q)}
 }
 
 // HasItemResource filters parents that have a matching ItemResource using a

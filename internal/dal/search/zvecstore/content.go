@@ -57,11 +57,17 @@ func (s *Store) StageContent(ctx context.Context, item, blob, generation string,
 
 func (s *Store) PublishContent(ctx context.Context, item, blob, generation string) error {
 	return s.write(ctx, func() error {
+		// A refusal changes nothing, so it comes before the mutation.
+		for _, c := range s.byFile[[2]string{item, blob}] {
+			if c.ItemID == item && c.BlobID == blob && c.Published && c.Generation > generation {
+				return search.ErrSuperseded
+			}
+		}
 		return s.mutation(func() error {
 			var remove []string
 			rows := []*row{}
 			for k, c := range s.byFile[[2]string{item, blob}] {
-				if c.ItemID != item || c.BlobID != blob {
+				if c.ItemID != item || c.BlobID != blob || c.Generation > generation {
 					continue
 				}
 				if c.Generation != generation {

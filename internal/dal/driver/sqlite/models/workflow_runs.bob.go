@@ -5,6 +5,7 @@ package models
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"time"
@@ -20,24 +21,24 @@ import (
 	"github.com/stephenafamo/bob/dialect/sqlite/um"
 	"github.com/stephenafamo/bob/expr"
 	"github.com/stephenafamo/bob/mods"
+	"github.com/stephenafamo/bob/types"
 	"github.com/stephenafamo/scan"
 )
 
 // WorkflowRun is an object representing the database table.
 type WorkflowRun struct {
-	ID              string           `db:"id,pk" `
-	CreatedAt       time.Time        `db:"created_at" `
-	WorkflowID      string           `db:"workflow_id" `
-	WorkflowVersion int64            `db:"workflow_version" `
-	WorkspaceID     string           `db:"workspace_id" `
-	ItemID          null.Val[string] `db:"item_id" `
-	EventID         string           `db:"event_id" `
-	EventType       string           `db:"event_type" `
-	Depth           int64            `db:"depth" `
-	Actor           string           `db:"actor" `
-	RetryOf         null.Val[string] `db:"retry_of" `
-	LiveStatus      string           `db:"live_status" `
-	LiveUpdatedAt   time.Time        `db:"live_updated_at" `
+	ID              string                      `db:"id,pk" `
+	CreatedAt       time.Time                   `db:"created_at" `
+	WorkflowID      string                      `db:"workflow_id" `
+	WorkflowVersion int64                       `db:"workflow_version" `
+	WorkspaceID     string                      `db:"workspace_id" `
+	ItemID          null.Val[string]            `db:"item_id" `
+	EventID         string                      `db:"event_id" `
+	EventType       string                      `db:"event_type" `
+	Depth           int64                       `db:"depth" `
+	Actor           string                      `db:"actor" `
+	RetryOf         null.Val[string]            `db:"retry_of" `
+	Logs            types.JSON[json.RawMessage] `db:"logs" `
 
 	R workflowRunR `db:"-" `
 }
@@ -54,14 +55,13 @@ type WorkflowRunsQuery = *sqlite.ViewQuery[*WorkflowRun, WorkflowRunSlice]
 
 // workflowRunR is where relationships are stored.
 type workflowRunR struct {
-	RunBlobLeases        BlobLeaseSlice        // fk_blob_leases_1
-	RunRunnerStepResults RunnerStepResultSlice // fk_runner_step_results_0
-	RunStagedFiles       StagedFileSlice       // fk_staged_files_0
-	RunTasks             TaskSlice             // fk_tasks_0
-	RunWorkflowRunItems  WorkflowRunItemSlice  // fk_workflow_run_items_0
-	WorkspaceResource    *Resource             // fk_workflow_runs_0
-	Workflow             *Workflow             // fk_workflow_runs_1
-	RunWorkflowWaits     WorkflowWaitSlice     // fk_workflow_waits_0
+	RunStagedFiles      StagedFileSlice      // fk_staged_files_0
+	RunTasks            TaskSlice            // fk_tasks_1
+	RunWorkflowRunItems WorkflowRunItemSlice // fk_workflow_run_items_0
+	WorkspaceResource   *Resource            // fk_workflow_runs_0
+	Workflow            *Workflow            // fk_workflow_runs_1
+	IDOperation         *Operation           // fk_workflow_runs_2
+	RunWorkflowSteps    WorkflowStepSlice    // fk_workflow_steps_0
 	// Loaded reports whether each relationship has been loaded.
 	// A relationship's bool is set by Load*, Preload, ThenLoad, factory builds,
 	// and to-one Attach/Insert operations. To-many Attach/Insert operations leave it unchanged.
@@ -70,19 +70,18 @@ type workflowRunR struct {
 
 // workflowRunRLoaded tracks which relationships on WorkflowRun have been loaded.
 type workflowRunRLoaded struct {
-	RunBlobLeases        bool // fk_blob_leases_1
-	RunRunnerStepResults bool // fk_runner_step_results_0
-	RunStagedFiles       bool // fk_staged_files_0
-	RunTasks             bool // fk_tasks_0
-	RunWorkflowRunItems  bool // fk_workflow_run_items_0
-	WorkspaceResource    bool // fk_workflow_runs_0
-	Workflow             bool // fk_workflow_runs_1
-	RunWorkflowWaits     bool // fk_workflow_waits_0
+	RunStagedFiles      bool // fk_staged_files_0
+	RunTasks            bool // fk_tasks_1
+	RunWorkflowRunItems bool // fk_workflow_run_items_0
+	WorkspaceResource   bool // fk_workflow_runs_0
+	Workflow            bool // fk_workflow_runs_1
+	IDOperation         bool // fk_workflow_runs_2
+	RunWorkflowSteps    bool // fk_workflow_steps_0
 }
 
 func buildWorkflowRunColumns(tableName string) workflowRunColumns {
 	columnsExpr := expr.NewColumnsExpr(
-		"id", "created_at", "workflow_id", "workflow_version", "workspace_id", "item_id", "event_id", "event_type", "depth", "actor", "retry_of", "live_status", "live_updated_at",
+		"id", "created_at", "workflow_id", "workflow_version", "workspace_id", "item_id", "event_id", "event_type", "depth", "actor", "retry_of", "logs",
 	)
 
 	if tableName != "" {
@@ -103,8 +102,7 @@ func buildWorkflowRunColumns(tableName string) workflowRunColumns {
 		Depth:           buildWorkflowRunColumn(tableName, "depth"),
 		Actor:           buildWorkflowRunColumn(tableName, "actor"),
 		RetryOf:         buildWorkflowRunColumn(tableName, "retry_of"),
-		LiveStatus:      buildWorkflowRunColumn(tableName, "live_status"),
-		LiveUpdatedAt:   buildWorkflowRunColumn(tableName, "live_updated_at"),
+		Logs:            buildWorkflowRunColumn(tableName, "logs"),
 	}
 }
 
@@ -122,8 +120,7 @@ type workflowRunColumns struct {
 	Depth           workflowRunColumn
 	Actor           workflowRunColumn
 	RetryOf         workflowRunColumn
-	LiveStatus      workflowRunColumn
-	LiveUpdatedAt   workflowRunColumn
+	Logs            workflowRunColumn
 }
 
 // Alias returns the current table alias for the columns set.
@@ -169,23 +166,22 @@ func (c workflowRunColumn) ShouldOmitParens() bool {
 // All values are optional, and do not have to be set
 // Generated columns are not included
 type WorkflowRunSetter struct {
-	ID              omit.Val[string]     `db:"id,pk" `
-	CreatedAt       omit.Val[time.Time]  `db:"created_at" `
-	WorkflowID      omit.Val[string]     `db:"workflow_id" `
-	WorkflowVersion omit.Val[int64]      `db:"workflow_version" `
-	WorkspaceID     omit.Val[string]     `db:"workspace_id" `
-	ItemID          omitnull.Val[string] `db:"item_id" `
-	EventID         omit.Val[string]     `db:"event_id" `
-	EventType       omit.Val[string]     `db:"event_type" `
-	Depth           omit.Val[int64]      `db:"depth" `
-	Actor           omit.Val[string]     `db:"actor" `
-	RetryOf         omitnull.Val[string] `db:"retry_of" `
-	LiveStatus      omit.Val[string]     `db:"live_status" `
-	LiveUpdatedAt   omit.Val[time.Time]  `db:"live_updated_at" `
+	ID              omit.Val[string]                      `db:"id,pk" `
+	CreatedAt       omit.Val[time.Time]                   `db:"created_at" `
+	WorkflowID      omit.Val[string]                      `db:"workflow_id" `
+	WorkflowVersion omit.Val[int64]                       `db:"workflow_version" `
+	WorkspaceID     omit.Val[string]                      `db:"workspace_id" `
+	ItemID          omitnull.Val[string]                  `db:"item_id" `
+	EventID         omit.Val[string]                      `db:"event_id" `
+	EventType       omit.Val[string]                      `db:"event_type" `
+	Depth           omit.Val[int64]                       `db:"depth" `
+	Actor           omit.Val[string]                      `db:"actor" `
+	RetryOf         omitnull.Val[string]                  `db:"retry_of" `
+	Logs            omit.Val[types.JSON[json.RawMessage]] `db:"logs" `
 }
 
 func (s WorkflowRunSetter) SetColumns() []string {
-	vals := make([]string, 0, 13)
+	vals := make([]string, 0, 12)
 	if s.ID.IsValue() {
 		vals = append(vals, "id")
 	}
@@ -219,11 +215,8 @@ func (s WorkflowRunSetter) SetColumns() []string {
 	if s.RetryOf.IsValue() || s.RetryOf.IsNull() {
 		vals = append(vals, "retry_of")
 	}
-	if s.LiveStatus.IsValue() {
-		vals = append(vals, "live_status")
-	}
-	if s.LiveUpdatedAt.IsValue() {
-		vals = append(vals, "live_updated_at")
+	if s.Logs.IsValue() {
+		vals = append(vals, "logs")
 	}
 	return vals
 }
@@ -262,11 +255,8 @@ func (s WorkflowRunSetter) Overwrite(t *WorkflowRun) {
 	if s.RetryOf.IsValue() || s.RetryOf.IsNull() {
 		t.RetryOf = s.RetryOf.MustGetNull()
 	}
-	if s.LiveStatus.IsValue() {
-		t.LiveStatus = s.LiveStatus.MustGet()
-	}
-	if s.LiveUpdatedAt.IsValue() {
-		t.LiveUpdatedAt = s.LiveUpdatedAt.MustGet()
+	if s.Logs.IsValue() {
+		t.Logs = s.Logs.MustGet()
 	}
 }
 
@@ -363,19 +353,12 @@ func (s *WorkflowRunSetter) Apply(q *dialect.InsertQuery) {
 				}
 				return sqlite.Arg(s.RetryOf.MustGetNull()).WriteSQL(ctx, w, d, start)
 			}))
-		case "live_status":
+		case "logs":
 			vals = append(vals, bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
-				if s.LiveStatus.IsUnset() {
+				if s.Logs.IsUnset() {
 					return sqlite.Arg(nil).WriteSQL(ctx, w, d, start)
 				}
-				return sqlite.Arg(s.LiveStatus.MustGet()).WriteSQL(ctx, w, d, start)
-			}))
-		case "live_updated_at":
-			vals = append(vals, bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
-				if s.LiveUpdatedAt.IsUnset() {
-					return sqlite.Arg(nil).WriteSQL(ctx, w, d, start)
-				}
-				return sqlite.Arg(s.LiveUpdatedAt.MustGet()).WriteSQL(ctx, w, d, start)
+				return sqlite.Arg(s.Logs.MustGet()).WriteSQL(ctx, w, d, start)
 			}))
 		}
 	}
@@ -388,7 +371,7 @@ func (s WorkflowRunSetter) UpdateMod() bob.Mod[*dialect.UpdateQuery] {
 }
 
 func (s WorkflowRunSetter) Expressions(prefix ...string) []bob.Expression {
-	exprs := make([]bob.Expression, 0, 13)
+	exprs := make([]bob.Expression, 0, 12)
 
 	if s.ID.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
@@ -467,17 +450,10 @@ func (s WorkflowRunSetter) Expressions(prefix ...string) []bob.Expression {
 		}})
 	}
 
-	if s.LiveStatus.IsValue() {
+	if s.Logs.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
-			sqlite.Quote(append(prefix, "live_status")...),
-			sqlite.Arg(s.LiveStatus),
-		}})
-	}
-
-	if s.LiveUpdatedAt.IsValue() {
-		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
-			sqlite.Quote(append(prefix, "live_updated_at")...),
-			sqlite.Arg(s.LiveUpdatedAt),
+			sqlite.Quote(append(prefix, "logs")...),
+			sqlite.Arg(s.Logs),
 		}})
 	}
 
@@ -491,7 +467,7 @@ func workflowRunScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc,
 		idx int
 		dst func(o *WorkflowRun) any
 	}
-	targets := make([]target, 0, 13)
+	targets := make([]target, 0, 12)
 	for i, col := range cols {
 		switch col {
 		case "id":
@@ -516,10 +492,8 @@ func workflowRunScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc,
 			targets = append(targets, target{i, func(o *WorkflowRun) any { return &o.Actor }})
 		case "retry_of":
 			targets = append(targets, target{i, func(o *WorkflowRun) any { return &o.RetryOf }})
-		case "live_status":
-			targets = append(targets, target{i, func(o *WorkflowRun) any { return &o.LiveStatus }})
-		case "live_updated_at":
-			targets = append(targets, target{i, func(o *WorkflowRun) any { return &o.LiveUpdatedAt }})
+		case "logs":
+			targets = append(targets, target{i, func(o *WorkflowRun) any { return &o.Logs }})
 		}
 	}
 
@@ -765,44 +739,6 @@ func (o WorkflowRunSlice) ReloadAll(ctx context.Context, exec bob.Executor) erro
 	return nil
 }
 
-// RunBlobLeases starts a query for related objects on blob_leases
-func (o *WorkflowRun) RunBlobLeases(mods ...bob.Mod[*dialect.SelectQuery]) BlobLeasesQuery {
-	return BlobLeases.Query(append(mods,
-		sm.Where(BlobLeases.Columns.RunID.EQ(sqlite.Arg(o.ID))),
-	)...)
-}
-
-func (os WorkflowRunSlice) RunBlobLeases(mods ...bob.Mod[*dialect.SelectQuery]) BlobLeasesQuery {
-	PKArgSlice := make([]bob.Expression, len(os))
-	for i, o := range os {
-		PKArgSlice[i] = sqlite.ArgGroup(o.ID)
-	}
-	PKArgExpr := sqlite.Group(PKArgSlice...)
-
-	return BlobLeases.Query(append(mods,
-		sm.Where(sqlite.Group(BlobLeases.Columns.RunID).OP("IN", PKArgExpr)),
-	)...)
-}
-
-// RunRunnerStepResults starts a query for related objects on runner_step_results
-func (o *WorkflowRun) RunRunnerStepResults(mods ...bob.Mod[*dialect.SelectQuery]) RunnerStepResultsQuery {
-	return RunnerStepResults.Query(append(mods,
-		sm.Where(RunnerStepResults.Columns.RunID.EQ(sqlite.Arg(o.ID))),
-	)...)
-}
-
-func (os WorkflowRunSlice) RunRunnerStepResults(mods ...bob.Mod[*dialect.SelectQuery]) RunnerStepResultsQuery {
-	PKArgSlice := make([]bob.Expression, len(os))
-	for i, o := range os {
-		PKArgSlice[i] = sqlite.ArgGroup(o.ID)
-	}
-	PKArgExpr := sqlite.Group(PKArgSlice...)
-
-	return RunnerStepResults.Query(append(mods,
-		sm.Where(sqlite.Group(RunnerStepResults.Columns.RunID).OP("IN", PKArgExpr)),
-	)...)
-}
-
 // RunStagedFiles starts a query for related objects on staged_files
 func (o *WorkflowRun) RunStagedFiles(mods ...bob.Mod[*dialect.SelectQuery]) StagedFilesQuery {
 	return StagedFiles.Query(append(mods,
@@ -898,150 +834,47 @@ func (os WorkflowRunSlice) Workflow(mods ...bob.Mod[*dialect.SelectQuery]) Workf
 	)...)
 }
 
-// RunWorkflowWaits starts a query for related objects on workflow_waits
-func (o *WorkflowRun) RunWorkflowWaits(mods ...bob.Mod[*dialect.SelectQuery]) WorkflowWaitsQuery {
-	return WorkflowWaits.Query(append(mods,
-		sm.Where(WorkflowWaits.Columns.RunID.EQ(sqlite.Arg(o.ID))),
+// IDOperation starts a query for related objects on operations
+func (o *WorkflowRun) IDOperation(mods ...bob.Mod[*dialect.SelectQuery]) OperationsQuery {
+	return Operations.Query(append(mods,
+		sm.Where(Operations.Columns.ID.EQ(sqlite.Arg(o.ID))),
 	)...)
 }
 
-func (os WorkflowRunSlice) RunWorkflowWaits(mods ...bob.Mod[*dialect.SelectQuery]) WorkflowWaitsQuery {
+func (os WorkflowRunSlice) IDOperation(mods ...bob.Mod[*dialect.SelectQuery]) OperationsQuery {
 	PKArgSlice := make([]bob.Expression, len(os))
 	for i, o := range os {
 		PKArgSlice[i] = sqlite.ArgGroup(o.ID)
 	}
 	PKArgExpr := sqlite.Group(PKArgSlice...)
 
-	return WorkflowWaits.Query(append(mods,
-		sm.Where(sqlite.Group(WorkflowWaits.Columns.RunID).OP("IN", PKArgExpr)),
+	return Operations.Query(append(mods,
+		sm.Where(sqlite.Group(Operations.Columns.ID).OP("IN", PKArgExpr)),
 	)...)
 }
 
-func insertWorkflowRunRunBlobLeases0(ctx context.Context, exec bob.Executor, blobLeases1 []*BlobLeaseSetter, workflowRun0 *WorkflowRun) (BlobLeaseSlice, error) {
-	for i := range blobLeases1 {
-		blobLeases1[i].RunID = omit.From(workflowRun0.ID)
-	}
-
-	ret, err := BlobLeases.Insert(bob.ToMods(blobLeases1...)).All(ctx, exec)
-	if err != nil {
-		return ret, fmt.Errorf("insertWorkflowRunRunBlobLeases0: %w", err)
-	}
-
-	return ret, nil
+// RunWorkflowSteps starts a query for related objects on workflow_steps
+func (o *WorkflowRun) RunWorkflowSteps(mods ...bob.Mod[*dialect.SelectQuery]) WorkflowStepsQuery {
+	return WorkflowSteps.Query(append(mods,
+		sm.Where(WorkflowSteps.Columns.RunID.EQ(sqlite.Arg(o.ID))),
+	)...)
 }
 
-func attachWorkflowRunRunBlobLeases0(ctx context.Context, exec bob.Executor, count int, blobLeases1 BlobLeaseSlice, workflowRun0 *WorkflowRun) (BlobLeaseSlice, error) {
-	setter := &BlobLeaseSetter{
-		RunID: omit.From(workflowRun0.ID),
+func (os WorkflowRunSlice) RunWorkflowSteps(mods ...bob.Mod[*dialect.SelectQuery]) WorkflowStepsQuery {
+	PKArgSlice := make([]bob.Expression, len(os))
+	for i, o := range os {
+		PKArgSlice[i] = sqlite.ArgGroup(o.ID)
 	}
+	PKArgExpr := sqlite.Group(PKArgSlice...)
 
-	err := blobLeases1.UpdateAll(ctx, exec, *setter)
-	if err != nil {
-		return nil, fmt.Errorf("attachWorkflowRunRunBlobLeases0: %w", err)
-	}
-
-	return blobLeases1, nil
-}
-
-func (workflowRun0 *WorkflowRun) InsertRunBlobLeases(ctx context.Context, exec bob.Executor, related ...*BlobLeaseSetter) error {
-	if len(related) == 0 {
-		return nil
-	}
-
-	var err error
-
-	blobLeases1, err := insertWorkflowRunRunBlobLeases0(ctx, exec, related, workflowRun0)
-	if err != nil {
-		return err
-	}
-
-	workflowRun0.R.RunBlobLeases = append(workflowRun0.R.RunBlobLeases, blobLeases1...)
-
-	return nil
-}
-
-func (workflowRun0 *WorkflowRun) AttachRunBlobLeases(ctx context.Context, exec bob.Executor, related ...*BlobLease) error {
-	if len(related) == 0 {
-		return nil
-	}
-
-	var err error
-	blobLeases1 := BlobLeaseSlice(related)
-
-	_, err = attachWorkflowRunRunBlobLeases0(ctx, exec, len(related), blobLeases1, workflowRun0)
-	if err != nil {
-		return err
-	}
-
-	workflowRun0.R.RunBlobLeases = append(workflowRun0.R.RunBlobLeases, blobLeases1...)
-
-	return nil
-}
-
-func insertWorkflowRunRunRunnerStepResults0(ctx context.Context, exec bob.Executor, runnerStepResults1 []*RunnerStepResultSetter, workflowRun0 *WorkflowRun) (RunnerStepResultSlice, error) {
-	for i := range runnerStepResults1 {
-		runnerStepResults1[i].RunID = omit.From(workflowRun0.ID)
-	}
-
-	ret, err := RunnerStepResults.Insert(bob.ToMods(runnerStepResults1...)).All(ctx, exec)
-	if err != nil {
-		return ret, fmt.Errorf("insertWorkflowRunRunRunnerStepResults0: %w", err)
-	}
-
-	return ret, nil
-}
-
-func attachWorkflowRunRunRunnerStepResults0(ctx context.Context, exec bob.Executor, count int, runnerStepResults1 RunnerStepResultSlice, workflowRun0 *WorkflowRun) (RunnerStepResultSlice, error) {
-	setter := &RunnerStepResultSetter{
-		RunID: omit.From(workflowRun0.ID),
-	}
-
-	err := runnerStepResults1.UpdateAll(ctx, exec, *setter)
-	if err != nil {
-		return nil, fmt.Errorf("attachWorkflowRunRunRunnerStepResults0: %w", err)
-	}
-
-	return runnerStepResults1, nil
-}
-
-func (workflowRun0 *WorkflowRun) InsertRunRunnerStepResults(ctx context.Context, exec bob.Executor, related ...*RunnerStepResultSetter) error {
-	if len(related) == 0 {
-		return nil
-	}
-
-	var err error
-
-	runnerStepResults1, err := insertWorkflowRunRunRunnerStepResults0(ctx, exec, related, workflowRun0)
-	if err != nil {
-		return err
-	}
-
-	workflowRun0.R.RunRunnerStepResults = append(workflowRun0.R.RunRunnerStepResults, runnerStepResults1...)
-
-	return nil
-}
-
-func (workflowRun0 *WorkflowRun) AttachRunRunnerStepResults(ctx context.Context, exec bob.Executor, related ...*RunnerStepResult) error {
-	if len(related) == 0 {
-		return nil
-	}
-
-	var err error
-	runnerStepResults1 := RunnerStepResultSlice(related)
-
-	_, err = attachWorkflowRunRunRunnerStepResults0(ctx, exec, len(related), runnerStepResults1, workflowRun0)
-	if err != nil {
-		return err
-	}
-
-	workflowRun0.R.RunRunnerStepResults = append(workflowRun0.R.RunRunnerStepResults, runnerStepResults1...)
-
-	return nil
+	return WorkflowSteps.Query(append(mods,
+		sm.Where(sqlite.Group(WorkflowSteps.Columns.RunID).OP("IN", PKArgExpr)),
+	)...)
 }
 
 func insertWorkflowRunRunStagedFiles0(ctx context.Context, exec bob.Executor, stagedFiles1 []*StagedFileSetter, workflowRun0 *WorkflowRun) (StagedFileSlice, error) {
 	for i := range stagedFiles1 {
-		stagedFiles1[i].RunID = omit.From(workflowRun0.ID)
+		stagedFiles1[i].RunID = omitnull.From(workflowRun0.ID)
 	}
 
 	ret, err := StagedFiles.Insert(bob.ToMods(stagedFiles1...)).All(ctx, exec)
@@ -1054,7 +887,7 @@ func insertWorkflowRunRunStagedFiles0(ctx context.Context, exec bob.Executor, st
 
 func attachWorkflowRunRunStagedFiles0(ctx context.Context, exec bob.Executor, count int, stagedFiles1 StagedFileSlice, workflowRun0 *WorkflowRun) (StagedFileSlice, error) {
 	setter := &StagedFileSetter{
-		RunID: omit.From(workflowRun0.ID),
+		RunID: omitnull.From(workflowRun0.ID),
 	}
 
 	err := stagedFiles1.UpdateAll(ctx, exec, *setter)
@@ -1314,63 +1147,109 @@ func (workflowRun0 *WorkflowRun) AttachWorkflow(ctx context.Context, exec bob.Ex
 	return nil
 }
 
-func insertWorkflowRunRunWorkflowWaits0(ctx context.Context, exec bob.Executor, workflowWaits1 []*WorkflowWaitSetter, workflowRun0 *WorkflowRun) (WorkflowWaitSlice, error) {
-	for i := range workflowWaits1 {
-		workflowWaits1[i].RunID = omit.From(workflowRun0.ID)
+func attachWorkflowRunIDOperation0(ctx context.Context, exec bob.Executor, count int, workflowRun0 *WorkflowRun, operation1 *Operation) (*WorkflowRun, error) {
+	setter := &WorkflowRunSetter{
+		ID: omit.From(operation1.ID),
 	}
 
-	ret, err := WorkflowWaits.Insert(bob.ToMods(workflowWaits1...)).All(ctx, exec)
+	err := workflowRun0.Update(ctx, exec, setter)
 	if err != nil {
-		return ret, fmt.Errorf("insertWorkflowRunRunWorkflowWaits0: %w", err)
+		return nil, fmt.Errorf("attachWorkflowRunIDOperation0: %w", err)
+	}
+
+	return workflowRun0, nil
+}
+
+func (workflowRun0 *WorkflowRun) InsertIDOperation(ctx context.Context, exec bob.Executor, related *OperationSetter) error {
+	var err error
+
+	operation1, err := Operations.Insert(related).One(ctx, exec)
+	if err != nil {
+		return fmt.Errorf("inserting related objects: %w", err)
+	}
+
+	_, err = attachWorkflowRunIDOperation0(ctx, exec, 1, workflowRun0, operation1)
+	if err != nil {
+		return err
+	}
+
+	workflowRun0.R.IDOperation = operation1
+	workflowRun0.R.Loaded.IDOperation = true
+
+	return nil
+}
+
+func (workflowRun0 *WorkflowRun) AttachIDOperation(ctx context.Context, exec bob.Executor, operation1 *Operation) error {
+	var err error
+
+	_, err = attachWorkflowRunIDOperation0(ctx, exec, 1, workflowRun0, operation1)
+	if err != nil {
+		return err
+	}
+
+	workflowRun0.R.IDOperation = operation1
+	workflowRun0.R.Loaded.IDOperation = true
+
+	return nil
+}
+
+func insertWorkflowRunRunWorkflowSteps0(ctx context.Context, exec bob.Executor, workflowSteps1 []*WorkflowStepSetter, workflowRun0 *WorkflowRun) (WorkflowStepSlice, error) {
+	for i := range workflowSteps1 {
+		workflowSteps1[i].RunID = omit.From(workflowRun0.ID)
+	}
+
+	ret, err := WorkflowSteps.Insert(bob.ToMods(workflowSteps1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertWorkflowRunRunWorkflowSteps0: %w", err)
 	}
 
 	return ret, nil
 }
 
-func attachWorkflowRunRunWorkflowWaits0(ctx context.Context, exec bob.Executor, count int, workflowWaits1 WorkflowWaitSlice, workflowRun0 *WorkflowRun) (WorkflowWaitSlice, error) {
-	setter := &WorkflowWaitSetter{
+func attachWorkflowRunRunWorkflowSteps0(ctx context.Context, exec bob.Executor, count int, workflowSteps1 WorkflowStepSlice, workflowRun0 *WorkflowRun) (WorkflowStepSlice, error) {
+	setter := &WorkflowStepSetter{
 		RunID: omit.From(workflowRun0.ID),
 	}
 
-	err := workflowWaits1.UpdateAll(ctx, exec, *setter)
+	err := workflowSteps1.UpdateAll(ctx, exec, *setter)
 	if err != nil {
-		return nil, fmt.Errorf("attachWorkflowRunRunWorkflowWaits0: %w", err)
+		return nil, fmt.Errorf("attachWorkflowRunRunWorkflowSteps0: %w", err)
 	}
 
-	return workflowWaits1, nil
+	return workflowSteps1, nil
 }
 
-func (workflowRun0 *WorkflowRun) InsertRunWorkflowWaits(ctx context.Context, exec bob.Executor, related ...*WorkflowWaitSetter) error {
+func (workflowRun0 *WorkflowRun) InsertRunWorkflowSteps(ctx context.Context, exec bob.Executor, related ...*WorkflowStepSetter) error {
 	if len(related) == 0 {
 		return nil
 	}
 
 	var err error
 
-	workflowWaits1, err := insertWorkflowRunRunWorkflowWaits0(ctx, exec, related, workflowRun0)
+	workflowSteps1, err := insertWorkflowRunRunWorkflowSteps0(ctx, exec, related, workflowRun0)
 	if err != nil {
 		return err
 	}
 
-	workflowRun0.R.RunWorkflowWaits = append(workflowRun0.R.RunWorkflowWaits, workflowWaits1...)
+	workflowRun0.R.RunWorkflowSteps = append(workflowRun0.R.RunWorkflowSteps, workflowSteps1...)
 
 	return nil
 }
 
-func (workflowRun0 *WorkflowRun) AttachRunWorkflowWaits(ctx context.Context, exec bob.Executor, related ...*WorkflowWait) error {
+func (workflowRun0 *WorkflowRun) AttachRunWorkflowSteps(ctx context.Context, exec bob.Executor, related ...*WorkflowStep) error {
 	if len(related) == 0 {
 		return nil
 	}
 
 	var err error
-	workflowWaits1 := WorkflowWaitSlice(related)
+	workflowSteps1 := WorkflowStepSlice(related)
 
-	_, err = attachWorkflowRunRunWorkflowWaits0(ctx, exec, len(related), workflowWaits1, workflowRun0)
+	_, err = attachWorkflowRunRunWorkflowSteps0(ctx, exec, len(related), workflowSteps1, workflowRun0)
 	if err != nil {
 		return err
 	}
 
-	workflowRun0.R.RunWorkflowWaits = append(workflowRun0.R.RunWorkflowWaits, workflowWaits1...)
+	workflowRun0.R.RunWorkflowSteps = append(workflowRun0.R.RunWorkflowSteps, workflowSteps1...)
 
 	return nil
 }
@@ -1388,8 +1267,7 @@ type workflowRunWhere[Q sqlite.Filterable] struct {
 	Depth           sqlite.WhereMod[Q, int64]
 	Actor           sqlite.WhereMod[Q, string]
 	RetryOf         sqlite.WhereNullMod[Q, string]
-	LiveStatus      sqlite.WhereMod[Q, string]
-	LiveUpdatedAt   sqlite.WhereMod[Q, time.Time]
+	Logs            sqlite.WhereMod[Q, types.JSON[json.RawMessage]]
 	R               workflowRunWhereR[Q]
 }
 
@@ -1411,8 +1289,7 @@ func buildWorkflowRunWhere[Q sqlite.Filterable](cols workflowRunColumns) workflo
 		Depth:           sqlite.Where[Q, int64](cols.Depth.Expression),
 		Actor:           sqlite.Where[Q, string](cols.Actor.Expression),
 		RetryOf:         sqlite.WhereNull[Q, string](cols.RetryOf.Expression),
-		LiveStatus:      sqlite.Where[Q, string](cols.LiveStatus.Expression),
-		LiveUpdatedAt:   sqlite.Where[Q, time.Time](cols.LiveUpdatedAt.Expression),
+		Logs:            sqlite.Where[Q, types.JSON[json.RawMessage]](cols.Logs.Expression),
 		R:               workflowRunWhereR[Q]{cols: cols},
 	}
 }
@@ -1422,34 +1299,6 @@ func buildWorkflowRunWhere[Q sqlite.Filterable](cols workflowRunColumns) workflo
 // R struct — so they cannot collide with column-based filter fields.
 type workflowRunWhereR[Q sqlite.Filterable] struct {
 	cols workflowRunColumns
-}
-
-// HasRunBlobLeases filters parents that have a matching RunBlobLeases using a
-// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
-// multiply parent rows, so no DISTINCT is needed. The optional filters are
-// applied to the subquery (i.e. to BlobLeases).
-func (w workflowRunWhereR[Q]) HasRunBlobLeases(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
-	q := sqlite.Select(
-		sm.Columns(sqlite.Raw("1")),
-		sm.From(BlobLeases.NameExpr()),
-		sm.Where(BlobLeases.Columns.RunID.EQ(w.cols.ID)),
-	)
-	q.Apply(filters...)
-	return mods.Where[Q]{E: sqlite.Exists(q)}
-}
-
-// HasRunRunnerStepResults filters parents that have a matching RunRunnerStepResults using a
-// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
-// multiply parent rows, so no DISTINCT is needed. The optional filters are
-// applied to the subquery (i.e. to RunnerStepResults).
-func (w workflowRunWhereR[Q]) HasRunRunnerStepResults(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
-	q := sqlite.Select(
-		sm.Columns(sqlite.Raw("1")),
-		sm.From(RunnerStepResults.NameExpr()),
-		sm.Where(RunnerStepResults.Columns.RunID.EQ(w.cols.ID)),
-	)
-	q.Apply(filters...)
-	return mods.Where[Q]{E: sqlite.Exists(q)}
 }
 
 // HasRunStagedFiles filters parents that have a matching RunStagedFiles using a
@@ -1522,15 +1371,29 @@ func (w workflowRunWhereR[Q]) HasWorkflow(filters ...bob.Mod[*dialect.SelectQuer
 	return mods.Where[Q]{E: sqlite.Exists(q)}
 }
 
-// HasRunWorkflowWaits filters parents that have a matching RunWorkflowWaits using a
+// HasIDOperation filters parents that have a matching IDOperation using a
 // correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
 // multiply parent rows, so no DISTINCT is needed. The optional filters are
-// applied to the subquery (i.e. to WorkflowWaits).
-func (w workflowRunWhereR[Q]) HasRunWorkflowWaits(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+// applied to the subquery (i.e. to Operations).
+func (w workflowRunWhereR[Q]) HasIDOperation(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
 	q := sqlite.Select(
 		sm.Columns(sqlite.Raw("1")),
-		sm.From(WorkflowWaits.NameExpr()),
-		sm.Where(WorkflowWaits.Columns.RunID.EQ(w.cols.ID)),
+		sm.From(Operations.NameExpr()),
+		sm.Where(Operations.Columns.ID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: sqlite.Exists(q)}
+}
+
+// HasRunWorkflowSteps filters parents that have a matching RunWorkflowSteps using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to WorkflowSteps).
+func (w workflowRunWhereR[Q]) HasRunWorkflowSteps(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := sqlite.Select(
+		sm.Columns(sqlite.Raw("1")),
+		sm.From(WorkflowSteps.NameExpr()),
+		sm.Where(WorkflowSteps.Columns.RunID.EQ(w.cols.ID)),
 	)
 	q.Apply(filters...)
 	return mods.Where[Q]{E: sqlite.Exists(q)}

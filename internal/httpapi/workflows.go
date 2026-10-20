@@ -4,12 +4,11 @@ import (
 	"net/http"
 
 	"papergo/internal/dms"
-	"papergo/internal/runner"
 	"papergo/internal/tasks"
 	"papergo/internal/workflow"
 )
 
-func (a *API) registerWorkflows(api *http.ServeMux) {
+func (a *API) registerWorkflows(api *router) {
 	api.HandleFunc("GET /v1/workflow-catalog", a.workflowCatalog)
 	api.HandleFunc("GET /v1/workspaces/{id}/workflows", a.workflows)
 	api.HandleFunc("POST /v1/workspaces/{id}/workflows", a.createWorkflow)
@@ -18,6 +17,7 @@ func (a *API) registerWorkflows(api *http.ServeMux) {
 	api.HandleFunc("DELETE /v1/workflows/{id}", a.deleteWorkflow)
 	api.HandleFunc("GET /v1/workflows/{id}/versions", a.workflowVersions)
 	api.HandleFunc("POST /v1/workflows/{id}/runs", a.startWorkflow)
+	api.HandleFunc("POST /v1/workflows/{id}/test-runs", a.testWorkflow)
 	api.HandleFunc("POST /v1/workflows/{id}/check", a.checkWorkflow)
 	api.HandleFunc("POST /v1/workflows/{id}/explain", a.explainWorkflow)
 	api.HandleFunc("POST /v1/workspaces/{id}/workflow-actions", a.workflowActions)
@@ -29,10 +29,6 @@ func (a *API) registerWorkflows(api *http.ServeMux) {
 	api.HandleFunc("GET /v1/workflow-runs/{id}", a.workflowRun)
 	api.HandleFunc("POST /v1/workflow-runs/{id}/cancel", a.cancelWorkflowRun)
 	api.HandleFunc("POST /v1/workflow-runs/{id}/retry", a.retryWorkflowRun)
-	api.HandleFunc("GET /v1/workflow-waits", a.listWaits)
-	api.HandleFunc("POST /v1/workflow-waits/claim", a.claimWaits)
-	api.HandleFunc("PATCH /v1/workflow-waits", a.updateWait)
-	api.HandleFunc("POST /v1/workflow-waits/complete", a.completeWait)
 }
 
 // triggerTypes documents the trigger types for the catalog.
@@ -53,15 +49,16 @@ var triggerTypes = []map[string]string{
 	{"type": workflow.TriggerSchedule, "description": "A cron occurrence (cron, time_zone). With collection_id, one run per item that meets the condition."},
 	{"type": workflow.TriggerManual, "description": "Started through POST /v1/workflows/{id}/runs, with standalone (no items), per_item (exactly one), or selection (1–100 items) association; item modes may scope collection_id."},
 	{"type": dms.EventTermMerged, "description": "A term was merged into another; data has source_term_id, target_term_id and term_set_id; the run has no item."},
-	{"type": dms.EventTermChanged, "description": "A term's name, localized labels or other editable properties changed; data has term_id, term_set_id, version, changed_fields, previous and current term properties. Delivered to every live workspace; the run has no item and the trigger takes no options. Subscriptions require taxonomy.read, rechecked for the workflow version author at dispatch and before each executing node."},
+	{"type": dms.EventTermChanged, "description": "A term's name, localized labels or other editable properties changed; data has term_id, term_set_id, version, changed_fields, previous and current term properties. Delivered to every live workspace; the run has no item and the trigger takes no options. Subscriptions require taxonomy.read, rechecked for the workflow version author at dispatch."},
 	{"type": tasks.EventCreated, "description": "A task was created; data has task_id, kind, key, assignees, source, item_id and run_id, and the run has the task's item. task_key limits it to tasks with that key."},
 	{"type": tasks.EventCompleted, "description": "A task was completed; data as for task.created, with outcome and completed_by. task_key as for task.created."},
 	{"type": tasks.EventCancelled, "description": "A task was cancelled; data as for task.created. task_key as for task.created."},
-	{"type": "wf.{key}.{event}", "description": "Raised by runs of workflow key: completed, failed, or an event.raise node's event; carries the run's item."},
+	{"type": "wf.{key}.{event}", "description": "Raised by runs of workflow key: completed, with the run's output as data.outputs, or failed, with data.error; carries the run's item."},
+	{"type": "role.{role}.{event}", "description": "Raised by runs of the workflow that fills role, as for wf.{key}.{event}: completed or failed."},
 }
 
 func (a *API) workflowCatalog(w http.ResponseWriter, r *http.Request) {
-	respond(w, r, 200, map[string]any{"triggers": triggerTypes, "activities": workflow.Activities(), "builtins": workflow.BuiltIns(), "roles": workflow.Roles()})
+	respond(w, r, 200, map[string]any{"triggers": triggerTypes, "builtins": workflow.BuiltIns(), "roles": workflow.Roles()})
 }
 
 // collectionWorkflowRoles shows which workflow fills each role for a list or
@@ -161,6 +158,21 @@ func (a *API) startWorkflow(w http.ResponseWriter, r *http.Request) {
 	respond(w, r, 202, map[string]any{"run_ids": ids})
 }
 
+// testWorkflow starts a test run of a workflow's current version.
+func (a *API) testWorkflow(w http.ResponseWriter, r *http.Request) {
+	var in workflow.TestRun
+	if !a.decode(w, r, &in) {
+		return
+	}
+	id, err := a.Workflows.StartTest(r.Context(), subject(r), r.PathValue("id"), in)
+	if err != nil {
+		a.failure(w, r, err)
+		return
+	}
+	w.Header().Set("Location", "/v1/workflow-runs/"+id)
+	respond(w, r, 202, map[string]any{"run_id": id})
+}
+
 func (a *API) workflowBuiltIns(w http.ResponseWriter, r *http.Request) {
 	out, err := a.Workflows.ListBuiltIns(r.Context(), subject(r), r.PathValue("id"))
 	if err != nil {
@@ -210,7 +222,7 @@ func (a *API) copyWorkflowBuiltIn(w http.ResponseWriter, r *http.Request) {
 func (a *API) workflowRuns(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	limit := queryInt(r, "$top")
-	out, err := a.Runner.Runs(r.Context(), subject(r), r.PathValue("id"), runner.RunFilter{WorkflowID: q.Get("workflow_id"), ItemID: q.Get("item_id"), After: q.Get("$skiptoken"), Limit: limit, Origin: q.Get("origin"), Status: q.Get("status"), IncludeSystem: q.Get("include_system") == "true"})
+	out, err := a.Workflows.Runs(r.Context(), subject(r), r.PathValue("id"), workflow.RunFilter{WorkflowID: q.Get("workflow_id"), ItemID: q.Get("item_id"), After: q.Get("$skiptoken"), Limit: limit, Origin: q.Get("origin"), Status: q.Get("status"), IncludeSystem: q.Get("include_system") == "true"})
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -219,7 +231,7 @@ func (a *API) workflowRuns(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) workflowRun(w http.ResponseWriter, r *http.Request) {
-	out, err := a.Runner.Run(r.Context(), subject(r), r.PathValue("id"))
+	out, err := a.Workflows.Run(r.Context(), subject(r), r.PathValue("id"))
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -228,7 +240,7 @@ func (a *API) workflowRun(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) cancelWorkflowRun(w http.ResponseWriter, r *http.Request) {
-	out, err := a.Runner.Cancel(r.Context(), subject(r), r.PathValue("id"))
+	out, err := a.Workflows.CancelRun(r.Context(), subject(r), r.PathValue("id"))
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -237,7 +249,7 @@ func (a *API) cancelWorkflowRun(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) retryWorkflowRun(w http.ResponseWriter, r *http.Request) {
-	out, err := a.Runner.Retry(r.Context(), subject(r), r.PathValue("id"))
+	out, err := a.Workflows.RetryRun(r.Context(), subject(r), r.PathValue("id"))
 	if err != nil {
 		a.failure(w, r, err)
 		return

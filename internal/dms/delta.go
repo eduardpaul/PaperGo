@@ -236,7 +236,7 @@ func (s *Service) deltaVisible(ctx context.Context, subject, collectionID string
 	out := map[string]visibleDeltaItem{}
 	after := ""
 	for {
-		rows, err := s.DAL.Resources().Resources(ctx, resources.Filter{ContainerID: collectionID, Kinds: contentKinds, State: resources.Live, AfterID: after,
+		rows, err := s.DAL.Resources().Resources(ctx, resources.Filter{ContainerID: collectionID, Kinds: ContentKinds, State: resources.Live, AfterID: after,
 			Reader: &resources.Reader{Principal: principal(ctx, subject), Action: access.Read, Surface: "auto"}, Limit: 500})
 		if err != nil {
 			return nil, err

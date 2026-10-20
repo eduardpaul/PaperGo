@@ -91,7 +91,7 @@ func (s *Service) rebuildBusinessKeys(ctx context.Context, collection string) er
 		return nil
 	}
 	for after := ""; ; {
-		items, err := s.DAL.Resources().Resources(ctx, resources.Filter{ContainerID: collection, Kinds: contentKinds, State: resources.Live, AfterID: after, Limit: surfaceBatch})
+		items, err := s.DAL.Resources().Resources(ctx, resources.Filter{ContainerID: collection, Kinds: ContentKinds, State: resources.Live, AfterID: after, Limit: surfaceBatch})
 		if err != nil {
 			return err
 		}

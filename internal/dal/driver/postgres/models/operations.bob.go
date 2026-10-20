@@ -54,6 +54,20 @@ type Operation struct {
 	Failed           int64                                `db:"failed" `
 	Progress         int64                                `db:"progress" `
 	Failures         types.JSON[[]model.OperationFailure] `db:"failures" `
+	WorkspaceID      null.Val[string]                     `db:"workspace_id" `
+	AttemptAt        time.Time                            `db:"attempt_at" `
+	Attempts         int64                                `db:"attempts" `
+	ClaimHolder      null.Val[string]                     `db:"claim_holder" `
+	ClaimToken       null.Val[string]                     `db:"claim_token" `
+	ClaimUntil       null.Val[time.Time]                  `db:"claim_until" `
+	ParentID         null.Val[string]                     `db:"parent_id" `
+	ExecutionID      string                               `db:"execution_id" `
+	GroupKey         string                               `db:"group_key" `
+	InputKey         string                               `db:"input_key" `
+	Deadline         null.Val[time.Time]                  `db:"deadline" `
+	IdempotencyKey   string                               `db:"idempotency_key" `
+	PayloadDigest    string                               `db:"payload_digest" `
+	ErrorCode        string                               `db:"error_code" `
 
 	R operationR `db:"-" `
 }
@@ -70,8 +84,15 @@ type OperationsQuery = *psql.ViewQuery[*Operation, OperationSlice]
 
 // operationR is where relationships are stored.
 type operationR struct {
+	Artifacts         ArtifactSlice      // artifacts.artifacts_operation_id_fkey
+	BlobLeases        BlobLeaseSlice     // blob_leases.blob_leases_operation_id_fkey
 	OperationItems    OperationItemSlice // operation_items.operation_items_operation_id_fkey
 	ContainerResource *Resource          // operations.operations_container_id_fkey
+	Parent            *Operation         // operations.operations_parent_id_fkey
+	ReverseParents    OperationSlice     // operations.operations_parent_id_fkey__self_join_reverse
+	WorkspaceResource *Resource          // operations.operations_workspace_id_fkey
+	Tasks             TaskSlice          // tasks.tasks_operation_id_fkey
+	IDWorkflowRun     *WorkflowRun       // workflow_runs.workflow_runs_id_fkey
 	// Loaded reports whether each relationship has been loaded.
 	// A relationship's bool is set by Load*, Preload, ThenLoad, factory builds,
 	// and to-one Attach/Insert operations. To-many Attach/Insert operations leave it unchanged.
@@ -80,13 +101,20 @@ type operationR struct {
 
 // operationRLoaded tracks which relationships on Operation have been loaded.
 type operationRLoaded struct {
+	Artifacts         bool // artifacts.artifacts_operation_id_fkey
+	BlobLeases        bool // blob_leases.blob_leases_operation_id_fkey
 	OperationItems    bool // operation_items.operation_items_operation_id_fkey
 	ContainerResource bool // operations.operations_container_id_fkey
+	Parent            bool // operations.operations_parent_id_fkey
+	ReverseParents    bool // operations.operations_parent_id_fkey__self_join_reverse
+	WorkspaceResource bool // operations.operations_workspace_id_fkey
+	Tasks             bool // tasks.tasks_operation_id_fkey
+	IDWorkflowRun     bool // workflow_runs.workflow_runs_id_fkey
 }
 
 func buildOperationColumns(tableName string) operationColumns {
 	columnsExpr := expr.NewColumnsExpr(
-		"id", "created_at", "updated_at", "container_id", "field_id", "kind", "trace_id", "credential_id", "credential_scopes", "result", "started_at", "completed_at", "status", "surface", "after_item_id", "processed", "error", "created_by", "payload", "prepared", "matched", "updated", "failed", "progress", "failures",
+		"id", "created_at", "updated_at", "container_id", "field_id", "kind", "trace_id", "credential_id", "credential_scopes", "result", "started_at", "completed_at", "status", "surface", "after_item_id", "processed", "error", "created_by", "payload", "prepared", "matched", "updated", "failed", "progress", "failures", "workspace_id", "attempt_at", "attempts", "claim_holder", "claim_token", "claim_until", "parent_id", "execution_id", "group_key", "input_key", "deadline", "idempotency_key", "payload_digest", "error_code",
 	)
 
 	if tableName != "" {
@@ -121,6 +149,20 @@ func buildOperationColumns(tableName string) operationColumns {
 		Failed:           buildOperationColumn(tableName, "failed"),
 		Progress:         buildOperationColumn(tableName, "progress"),
 		Failures:         buildOperationColumn(tableName, "failures"),
+		WorkspaceID:      buildOperationColumn(tableName, "workspace_id"),
+		AttemptAt:        buildOperationColumn(tableName, "attempt_at"),
+		Attempts:         buildOperationColumn(tableName, "attempts"),
+		ClaimHolder:      buildOperationColumn(tableName, "claim_holder"),
+		ClaimToken:       buildOperationColumn(tableName, "claim_token"),
+		ClaimUntil:       buildOperationColumn(tableName, "claim_until"),
+		ParentID:         buildOperationColumn(tableName, "parent_id"),
+		ExecutionID:      buildOperationColumn(tableName, "execution_id"),
+		GroupKey:         buildOperationColumn(tableName, "group_key"),
+		InputKey:         buildOperationColumn(tableName, "input_key"),
+		Deadline:         buildOperationColumn(tableName, "deadline"),
+		IdempotencyKey:   buildOperationColumn(tableName, "idempotency_key"),
+		PayloadDigest:    buildOperationColumn(tableName, "payload_digest"),
+		ErrorCode:        buildOperationColumn(tableName, "error_code"),
 	}
 }
 
@@ -152,6 +194,20 @@ type operationColumns struct {
 	Failed           operationColumn
 	Progress         operationColumn
 	Failures         operationColumn
+	WorkspaceID      operationColumn
+	AttemptAt        operationColumn
+	Attempts         operationColumn
+	ClaimHolder      operationColumn
+	ClaimToken       operationColumn
+	ClaimUntil       operationColumn
+	ParentID         operationColumn
+	ExecutionID      operationColumn
+	GroupKey         operationColumn
+	InputKey         operationColumn
+	Deadline         operationColumn
+	IdempotencyKey   operationColumn
+	PayloadDigest    operationColumn
+	ErrorCode        operationColumn
 }
 
 // Alias returns the current table alias for the columns set.
@@ -222,10 +278,24 @@ type OperationSetter struct {
 	Failed           omit.Val[int64]                                `db:"failed" `
 	Progress         omit.Val[int64]                                `db:"progress" `
 	Failures         omit.Val[types.JSON[[]model.OperationFailure]] `db:"failures" `
+	WorkspaceID      omitnull.Val[string]                           `db:"workspace_id" `
+	AttemptAt        omit.Val[time.Time]                            `db:"attempt_at" `
+	Attempts         omit.Val[int64]                                `db:"attempts" `
+	ClaimHolder      omitnull.Val[string]                           `db:"claim_holder" `
+	ClaimToken       omitnull.Val[string]                           `db:"claim_token" `
+	ClaimUntil       omitnull.Val[time.Time]                        `db:"claim_until" `
+	ParentID         omitnull.Val[string]                           `db:"parent_id" `
+	ExecutionID      omit.Val[string]                               `db:"execution_id" `
+	GroupKey         omit.Val[string]                               `db:"group_key" `
+	InputKey         omit.Val[string]                               `db:"input_key" `
+	Deadline         omitnull.Val[time.Time]                        `db:"deadline" `
+	IdempotencyKey   omit.Val[string]                               `db:"idempotency_key" `
+	PayloadDigest    omit.Val[string]                               `db:"payload_digest" `
+	ErrorCode        omit.Val[string]                               `db:"error_code" `
 }
 
 func (s OperationSetter) SetColumns() []string {
-	vals := make([]string, 0, 25)
+	vals := make([]string, 0, 39)
 	if s.ID.IsValue() {
 		vals = append(vals, "id")
 	}
@@ -300,6 +370,48 @@ func (s OperationSetter) SetColumns() []string {
 	}
 	if s.Failures.IsValue() {
 		vals = append(vals, "failures")
+	}
+	if s.WorkspaceID.IsValue() || s.WorkspaceID.IsNull() {
+		vals = append(vals, "workspace_id")
+	}
+	if s.AttemptAt.IsValue() {
+		vals = append(vals, "attempt_at")
+	}
+	if s.Attempts.IsValue() {
+		vals = append(vals, "attempts")
+	}
+	if s.ClaimHolder.IsValue() || s.ClaimHolder.IsNull() {
+		vals = append(vals, "claim_holder")
+	}
+	if s.ClaimToken.IsValue() || s.ClaimToken.IsNull() {
+		vals = append(vals, "claim_token")
+	}
+	if s.ClaimUntil.IsValue() || s.ClaimUntil.IsNull() {
+		vals = append(vals, "claim_until")
+	}
+	if s.ParentID.IsValue() || s.ParentID.IsNull() {
+		vals = append(vals, "parent_id")
+	}
+	if s.ExecutionID.IsValue() {
+		vals = append(vals, "execution_id")
+	}
+	if s.GroupKey.IsValue() {
+		vals = append(vals, "group_key")
+	}
+	if s.InputKey.IsValue() {
+		vals = append(vals, "input_key")
+	}
+	if s.Deadline.IsValue() || s.Deadline.IsNull() {
+		vals = append(vals, "deadline")
+	}
+	if s.IdempotencyKey.IsValue() {
+		vals = append(vals, "idempotency_key")
+	}
+	if s.PayloadDigest.IsValue() {
+		vals = append(vals, "payload_digest")
+	}
+	if s.ErrorCode.IsValue() {
+		vals = append(vals, "error_code")
 	}
 	return vals
 }
@@ -379,6 +491,48 @@ func (s OperationSetter) Overwrite(t *Operation) {
 	}
 	if s.Failures.IsValue() {
 		t.Failures = s.Failures.MustGet()
+	}
+	if s.WorkspaceID.IsValue() || s.WorkspaceID.IsNull() {
+		t.WorkspaceID = s.WorkspaceID.MustGetNull()
+	}
+	if s.AttemptAt.IsValue() {
+		t.AttemptAt = s.AttemptAt.MustGet()
+	}
+	if s.Attempts.IsValue() {
+		t.Attempts = s.Attempts.MustGet()
+	}
+	if s.ClaimHolder.IsValue() || s.ClaimHolder.IsNull() {
+		t.ClaimHolder = s.ClaimHolder.MustGetNull()
+	}
+	if s.ClaimToken.IsValue() || s.ClaimToken.IsNull() {
+		t.ClaimToken = s.ClaimToken.MustGetNull()
+	}
+	if s.ClaimUntil.IsValue() || s.ClaimUntil.IsNull() {
+		t.ClaimUntil = s.ClaimUntil.MustGetNull()
+	}
+	if s.ParentID.IsValue() || s.ParentID.IsNull() {
+		t.ParentID = s.ParentID.MustGetNull()
+	}
+	if s.ExecutionID.IsValue() {
+		t.ExecutionID = s.ExecutionID.MustGet()
+	}
+	if s.GroupKey.IsValue() {
+		t.GroupKey = s.GroupKey.MustGet()
+	}
+	if s.InputKey.IsValue() {
+		t.InputKey = s.InputKey.MustGet()
+	}
+	if s.Deadline.IsValue() || s.Deadline.IsNull() {
+		t.Deadline = s.Deadline.MustGetNull()
+	}
+	if s.IdempotencyKey.IsValue() {
+		t.IdempotencyKey = s.IdempotencyKey.MustGet()
+	}
+	if s.PayloadDigest.IsValue() {
+		t.PayloadDigest = s.PayloadDigest.MustGet()
+	}
+	if s.ErrorCode.IsValue() {
+		t.ErrorCode = s.ErrorCode.MustGet()
 	}
 }
 
@@ -513,6 +667,76 @@ func (s *OperationSetter) Apply(q *dialect.InsertQuery) {
 				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
 			}
 			return psql.Arg(s.Failures.MustGet()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.WorkspaceID.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.WorkspaceID.MustGetNull()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.AttemptAt.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.AttemptAt.MustGet()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.Attempts.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.Attempts.MustGet()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.ClaimHolder.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.ClaimHolder.MustGetNull()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.ClaimToken.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.ClaimToken.MustGetNull()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.ClaimUntil.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.ClaimUntil.MustGetNull()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.ParentID.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.ParentID.MustGetNull()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.ExecutionID.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.ExecutionID.MustGet()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.GroupKey.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.GroupKey.MustGet()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.InputKey.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.InputKey.MustGet()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.Deadline.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.Deadline.MustGetNull()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.IdempotencyKey.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.IdempotencyKey.MustGet()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.PayloadDigest.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.PayloadDigest.MustGet()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.ErrorCode.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.ErrorCode.MustGet()).WriteSQL(ctx, w, d, start)
 		}))
 }
 
@@ -521,7 +745,7 @@ func (s OperationSetter) UpdateMod() bob.Mod[*dialect.UpdateQuery] {
 }
 
 func (s OperationSetter) Expressions(prefix ...string) []bob.Expression {
-	exprs := make([]bob.Expression, 0, 25)
+	exprs := make([]bob.Expression, 0, 39)
 
 	if s.ID.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
@@ -698,6 +922,104 @@ func (s OperationSetter) Expressions(prefix ...string) []bob.Expression {
 		}})
 	}
 
+	if s.WorkspaceID.IsValue() || s.WorkspaceID.IsNull() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "workspace_id")...),
+			psql.Arg(s.WorkspaceID),
+		}})
+	}
+
+	if s.AttemptAt.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "attempt_at")...),
+			psql.Arg(s.AttemptAt),
+		}})
+	}
+
+	if s.Attempts.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "attempts")...),
+			psql.Arg(s.Attempts),
+		}})
+	}
+
+	if s.ClaimHolder.IsValue() || s.ClaimHolder.IsNull() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "claim_holder")...),
+			psql.Arg(s.ClaimHolder),
+		}})
+	}
+
+	if s.ClaimToken.IsValue() || s.ClaimToken.IsNull() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "claim_token")...),
+			psql.Arg(s.ClaimToken),
+		}})
+	}
+
+	if s.ClaimUntil.IsValue() || s.ClaimUntil.IsNull() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "claim_until")...),
+			psql.Arg(s.ClaimUntil),
+		}})
+	}
+
+	if s.ParentID.IsValue() || s.ParentID.IsNull() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "parent_id")...),
+			psql.Arg(s.ParentID),
+		}})
+	}
+
+	if s.ExecutionID.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "execution_id")...),
+			psql.Arg(s.ExecutionID),
+		}})
+	}
+
+	if s.GroupKey.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "group_key")...),
+			psql.Arg(s.GroupKey),
+		}})
+	}
+
+	if s.InputKey.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "input_key")...),
+			psql.Arg(s.InputKey),
+		}})
+	}
+
+	if s.Deadline.IsValue() || s.Deadline.IsNull() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "deadline")...),
+			psql.Arg(s.Deadline),
+		}})
+	}
+
+	if s.IdempotencyKey.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "idempotency_key")...),
+			psql.Arg(s.IdempotencyKey),
+		}})
+	}
+
+	if s.PayloadDigest.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "payload_digest")...),
+			psql.Arg(s.PayloadDigest),
+		}})
+	}
+
+	if s.ErrorCode.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "error_code")...),
+			psql.Arg(s.ErrorCode),
+		}})
+	}
+
 	return exprs
 }
 
@@ -708,7 +1030,7 @@ func operationScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc, f
 		idx int
 		dst func(o *Operation) any
 	}
-	targets := make([]target, 0, 25)
+	targets := make([]target, 0, 39)
 	for i, col := range cols {
 		switch col {
 		case "id":
@@ -761,6 +1083,34 @@ func operationScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc, f
 			targets = append(targets, target{i, func(o *Operation) any { return &o.Progress }})
 		case "failures":
 			targets = append(targets, target{i, func(o *Operation) any { return &o.Failures }})
+		case "workspace_id":
+			targets = append(targets, target{i, func(o *Operation) any { return &o.WorkspaceID }})
+		case "attempt_at":
+			targets = append(targets, target{i, func(o *Operation) any { return &o.AttemptAt }})
+		case "attempts":
+			targets = append(targets, target{i, func(o *Operation) any { return &o.Attempts }})
+		case "claim_holder":
+			targets = append(targets, target{i, func(o *Operation) any { return &o.ClaimHolder }})
+		case "claim_token":
+			targets = append(targets, target{i, func(o *Operation) any { return &o.ClaimToken }})
+		case "claim_until":
+			targets = append(targets, target{i, func(o *Operation) any { return &o.ClaimUntil }})
+		case "parent_id":
+			targets = append(targets, target{i, func(o *Operation) any { return &o.ParentID }})
+		case "execution_id":
+			targets = append(targets, target{i, func(o *Operation) any { return &o.ExecutionID }})
+		case "group_key":
+			targets = append(targets, target{i, func(o *Operation) any { return &o.GroupKey }})
+		case "input_key":
+			targets = append(targets, target{i, func(o *Operation) any { return &o.InputKey }})
+		case "deadline":
+			targets = append(targets, target{i, func(o *Operation) any { return &o.Deadline }})
+		case "idempotency_key":
+			targets = append(targets, target{i, func(o *Operation) any { return &o.IdempotencyKey }})
+		case "payload_digest":
+			targets = append(targets, target{i, func(o *Operation) any { return &o.PayloadDigest }})
+		case "error_code":
+			targets = append(targets, target{i, func(o *Operation) any { return &o.ErrorCode }})
 		}
 	}
 
@@ -1036,6 +1386,52 @@ func (o OperationSlice) ReloadAll(ctx context.Context, exec bob.Executor) error 
 	return nil
 }
 
+// Artifacts starts a query for related objects on artifacts
+func (o *Operation) Artifacts(mods ...bob.Mod[*dialect.SelectQuery]) ArtifactsQuery {
+	return Artifacts.Query(append(mods,
+		sm.Where(Artifacts.Columns.OperationID.EQ(psql.Arg(o.ID))),
+	)...)
+}
+
+func (os OperationSlice) Artifacts(mods ...bob.Mod[*dialect.SelectQuery]) ArtifactsQuery {
+	pkID := make(pgtypes.Array[string], 0, len(os))
+
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		pkID = append(pkID, o.ID)
+	}
+	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkID), "text[]"))
+
+	return Artifacts.Query(append(mods,
+		sm.Where(Artifacts.Columns.OperationID.EQ(PKArgExpr)),
+	)...)
+}
+
+// BlobLeases starts a query for related objects on blob_leases
+func (o *Operation) BlobLeases(mods ...bob.Mod[*dialect.SelectQuery]) BlobLeasesQuery {
+	return BlobLeases.Query(append(mods,
+		sm.Where(BlobLeases.Columns.OperationID.EQ(psql.Arg(o.ID))),
+	)...)
+}
+
+func (os OperationSlice) BlobLeases(mods ...bob.Mod[*dialect.SelectQuery]) BlobLeasesQuery {
+	pkID := make(pgtypes.Array[string], 0, len(os))
+
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		pkID = append(pkID, o.ID)
+	}
+	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkID), "text[]"))
+
+	return BlobLeases.Query(append(mods,
+		sm.Where(BlobLeases.Columns.OperationID.EQ(PKArgExpr)),
+	)...)
+}
+
 // OperationItems starts a query for related objects on operation_items
 func (o *Operation) OperationItems(mods ...bob.Mod[*dialect.SelectQuery]) OperationItemsQuery {
 	return OperationItems.Query(append(mods,
@@ -1087,6 +1483,257 @@ func (os OperationSlice) ContainerResource(mods ...bob.Mod[*dialect.SelectQuery]
 	return Resources.Query(append(mods,
 		sm.Where(Resources.Columns.ID.EQ(PKArgExpr)),
 	)...)
+}
+
+// Parent starts a query for related objects on operations
+func (o *Operation) Parent(mods ...bob.Mod[*dialect.SelectQuery]) OperationsQuery {
+	return Operations.Query(append(mods,
+		sm.Where(Operations.Columns.ID.EQ(psql.Arg(o.ParentID))),
+	)...)
+}
+
+func (os OperationSlice) Parent(mods ...bob.Mod[*dialect.SelectQuery]) OperationsQuery {
+	pkParentID := make(pgtypes.Array[null.Val[string]], 0, len(os))
+
+	// the array is only a filter (semi-join), so duplicate keys can be
+	// dropped before they are sent over the wire
+	seenParentID := make(map[null.Val[string]]struct{}, len(os))
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		if _, ok := seenParentID[o.ParentID]; ok {
+			continue
+		}
+		seenParentID[o.ParentID] = struct{}{}
+		pkParentID = append(pkParentID, o.ParentID)
+	}
+	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkParentID), "text[]"))
+
+	return Operations.Query(append(mods,
+		sm.Where(Operations.Columns.ID.EQ(PKArgExpr)),
+	)...)
+}
+
+// ReverseParents starts a query for related objects on operations
+func (o *Operation) ReverseParents(mods ...bob.Mod[*dialect.SelectQuery]) OperationsQuery {
+	return Operations.Query(append(mods,
+		sm.Where(Operations.Columns.ParentID.EQ(psql.Arg(o.ID))),
+	)...)
+}
+
+func (os OperationSlice) ReverseParents(mods ...bob.Mod[*dialect.SelectQuery]) OperationsQuery {
+	pkID := make(pgtypes.Array[string], 0, len(os))
+
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		pkID = append(pkID, o.ID)
+	}
+	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkID), "text[]"))
+
+	return Operations.Query(append(mods,
+		sm.Where(Operations.Columns.ParentID.EQ(PKArgExpr)),
+	)...)
+}
+
+// WorkspaceResource starts a query for related objects on resources
+func (o *Operation) WorkspaceResource(mods ...bob.Mod[*dialect.SelectQuery]) ResourcesQuery {
+	return Resources.Query(append(mods,
+		sm.Where(Resources.Columns.ID.EQ(psql.Arg(o.WorkspaceID))),
+	)...)
+}
+
+func (os OperationSlice) WorkspaceResource(mods ...bob.Mod[*dialect.SelectQuery]) ResourcesQuery {
+	pkWorkspaceID := make(pgtypes.Array[null.Val[string]], 0, len(os))
+
+	// the array is only a filter (semi-join), so duplicate keys can be
+	// dropped before they are sent over the wire
+	seenWorkspaceID := make(map[null.Val[string]]struct{}, len(os))
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		if _, ok := seenWorkspaceID[o.WorkspaceID]; ok {
+			continue
+		}
+		seenWorkspaceID[o.WorkspaceID] = struct{}{}
+		pkWorkspaceID = append(pkWorkspaceID, o.WorkspaceID)
+	}
+	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkWorkspaceID), "text[]"))
+
+	return Resources.Query(append(mods,
+		sm.Where(Resources.Columns.ID.EQ(PKArgExpr)),
+	)...)
+}
+
+// Tasks starts a query for related objects on tasks
+func (o *Operation) Tasks(mods ...bob.Mod[*dialect.SelectQuery]) TasksQuery {
+	return Tasks.Query(append(mods,
+		sm.Where(Tasks.Columns.OperationID.EQ(psql.Arg(o.ID))),
+	)...)
+}
+
+func (os OperationSlice) Tasks(mods ...bob.Mod[*dialect.SelectQuery]) TasksQuery {
+	pkID := make(pgtypes.Array[string], 0, len(os))
+
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		pkID = append(pkID, o.ID)
+	}
+	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkID), "text[]"))
+
+	return Tasks.Query(append(mods,
+		sm.Where(Tasks.Columns.OperationID.EQ(PKArgExpr)),
+	)...)
+}
+
+// IDWorkflowRun starts a query for related objects on workflow_runs
+func (o *Operation) IDWorkflowRun(mods ...bob.Mod[*dialect.SelectQuery]) WorkflowRunsQuery {
+	return WorkflowRuns.Query(append(mods,
+		sm.Where(WorkflowRuns.Columns.ID.EQ(psql.Arg(o.ID))),
+	)...)
+}
+
+func (os OperationSlice) IDWorkflowRun(mods ...bob.Mod[*dialect.SelectQuery]) WorkflowRunsQuery {
+	pkID := make(pgtypes.Array[string], 0, len(os))
+
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		pkID = append(pkID, o.ID)
+	}
+	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkID), "text[]"))
+
+	return WorkflowRuns.Query(append(mods,
+		sm.Where(WorkflowRuns.Columns.ID.EQ(PKArgExpr)),
+	)...)
+}
+
+func insertOperationArtifacts0(ctx context.Context, exec bob.Executor, artifacts1 []*ArtifactSetter, operation0 *Operation) (ArtifactSlice, error) {
+	for i := range artifacts1 {
+		artifacts1[i].OperationID = omitnull.From(operation0.ID)
+	}
+
+	ret, err := Artifacts.Insert(bob.ToMods(artifacts1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertOperationArtifacts0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachOperationArtifacts0(ctx context.Context, exec bob.Executor, count int, artifacts1 ArtifactSlice, operation0 *Operation) (ArtifactSlice, error) {
+	setter := &ArtifactSetter{
+		OperationID: omitnull.From(operation0.ID),
+	}
+
+	err := artifacts1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachOperationArtifacts0: %w", err)
+	}
+
+	return artifacts1, nil
+}
+
+func (operation0 *Operation) InsertArtifacts(ctx context.Context, exec bob.Executor, related ...*ArtifactSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	artifacts1, err := insertOperationArtifacts0(ctx, exec, related, operation0)
+	if err != nil {
+		return err
+	}
+
+	operation0.R.Artifacts = append(operation0.R.Artifacts, artifacts1...)
+
+	return nil
+}
+
+func (operation0 *Operation) AttachArtifacts(ctx context.Context, exec bob.Executor, related ...*Artifact) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	artifacts1 := ArtifactSlice(related)
+
+	_, err = attachOperationArtifacts0(ctx, exec, len(related), artifacts1, operation0)
+	if err != nil {
+		return err
+	}
+
+	operation0.R.Artifacts = append(operation0.R.Artifacts, artifacts1...)
+
+	return nil
+}
+
+func insertOperationBlobLeases0(ctx context.Context, exec bob.Executor, blobLeases1 []*BlobLeaseSetter, operation0 *Operation) (BlobLeaseSlice, error) {
+	for i := range blobLeases1 {
+		blobLeases1[i].OperationID = omit.From(operation0.ID)
+	}
+
+	ret, err := BlobLeases.Insert(bob.ToMods(blobLeases1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertOperationBlobLeases0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachOperationBlobLeases0(ctx context.Context, exec bob.Executor, count int, blobLeases1 BlobLeaseSlice, operation0 *Operation) (BlobLeaseSlice, error) {
+	setter := &BlobLeaseSetter{
+		OperationID: omit.From(operation0.ID),
+	}
+
+	err := blobLeases1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachOperationBlobLeases0: %w", err)
+	}
+
+	return blobLeases1, nil
+}
+
+func (operation0 *Operation) InsertBlobLeases(ctx context.Context, exec bob.Executor, related ...*BlobLeaseSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	blobLeases1, err := insertOperationBlobLeases0(ctx, exec, related, operation0)
+	if err != nil {
+		return err
+	}
+
+	operation0.R.BlobLeases = append(operation0.R.BlobLeases, blobLeases1...)
+
+	return nil
+}
+
+func (operation0 *Operation) AttachBlobLeases(ctx context.Context, exec bob.Executor, related ...*BlobLease) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	blobLeases1 := BlobLeaseSlice(related)
+
+	_, err = attachOperationBlobLeases0(ctx, exec, len(related), blobLeases1, operation0)
+	if err != nil {
+		return err
+	}
+
+	operation0.R.BlobLeases = append(operation0.R.BlobLeases, blobLeases1...)
+
+	return nil
 }
 
 func insertOperationOperationItems0(ctx context.Context, exec bob.Executor, operationItems1 []*OperationItemSetter, operation0 *Operation) (OperationItemSlice, error) {
@@ -1196,6 +1843,272 @@ func (operation0 *Operation) AttachContainerResource(ctx context.Context, exec b
 	return nil
 }
 
+func attachOperationParent0(ctx context.Context, exec bob.Executor, count int, operation0 *Operation, operation1 *Operation) (*Operation, error) {
+	setter := &OperationSetter{
+		ParentID: omitnull.From(operation1.ID),
+	}
+
+	err := operation0.Update(ctx, exec, setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachOperationParent0: %w", err)
+	}
+
+	return operation0, nil
+}
+
+func (operation0 *Operation) InsertParent(ctx context.Context, exec bob.Executor, related *OperationSetter) error {
+	var err error
+
+	operation1, err := Operations.Insert(related).One(ctx, exec)
+	if err != nil {
+		return fmt.Errorf("inserting related objects: %w", err)
+	}
+
+	_, err = attachOperationParent0(ctx, exec, 1, operation0, operation1)
+	if err != nil {
+		return err
+	}
+
+	operation0.R.Parent = operation1
+	operation0.R.Loaded.Parent = true
+
+	return nil
+}
+
+func (operation0 *Operation) AttachParent(ctx context.Context, exec bob.Executor, operation1 *Operation) error {
+	var err error
+
+	_, err = attachOperationParent0(ctx, exec, 1, operation0, operation1)
+	if err != nil {
+		return err
+	}
+
+	operation0.R.Parent = operation1
+	operation0.R.Loaded.Parent = true
+
+	return nil
+}
+
+func insertOperationReverseParents0(ctx context.Context, exec bob.Executor, operations1 []*OperationSetter, operation0 *Operation) (OperationSlice, error) {
+	for i := range operations1 {
+		operations1[i].ParentID = omitnull.From(operation0.ID)
+	}
+
+	ret, err := Operations.Insert(bob.ToMods(operations1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertOperationReverseParents0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachOperationReverseParents0(ctx context.Context, exec bob.Executor, count int, operations1 OperationSlice, operation0 *Operation) (OperationSlice, error) {
+	setter := &OperationSetter{
+		ParentID: omitnull.From(operation0.ID),
+	}
+
+	err := operations1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachOperationReverseParents0: %w", err)
+	}
+
+	return operations1, nil
+}
+
+func (operation0 *Operation) InsertReverseParents(ctx context.Context, exec bob.Executor, related ...*OperationSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	operations1, err := insertOperationReverseParents0(ctx, exec, related, operation0)
+	if err != nil {
+		return err
+	}
+
+	operation0.R.ReverseParents = append(operation0.R.ReverseParents, operations1...)
+
+	return nil
+}
+
+func (operation0 *Operation) AttachReverseParents(ctx context.Context, exec bob.Executor, related ...*Operation) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	operations1 := OperationSlice(related)
+
+	_, err = attachOperationReverseParents0(ctx, exec, len(related), operations1, operation0)
+	if err != nil {
+		return err
+	}
+
+	operation0.R.ReverseParents = append(operation0.R.ReverseParents, operations1...)
+
+	return nil
+}
+
+func attachOperationWorkspaceResource0(ctx context.Context, exec bob.Executor, count int, operation0 *Operation, resource1 *Resource) (*Operation, error) {
+	setter := &OperationSetter{
+		WorkspaceID: omitnull.From(resource1.ID),
+	}
+
+	err := operation0.Update(ctx, exec, setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachOperationWorkspaceResource0: %w", err)
+	}
+
+	return operation0, nil
+}
+
+func (operation0 *Operation) InsertWorkspaceResource(ctx context.Context, exec bob.Executor, related *ResourceSetter) error {
+	var err error
+
+	resource1, err := Resources.Insert(related).One(ctx, exec)
+	if err != nil {
+		return fmt.Errorf("inserting related objects: %w", err)
+	}
+
+	_, err = attachOperationWorkspaceResource0(ctx, exec, 1, operation0, resource1)
+	if err != nil {
+		return err
+	}
+
+	operation0.R.WorkspaceResource = resource1
+	operation0.R.Loaded.WorkspaceResource = true
+
+	return nil
+}
+
+func (operation0 *Operation) AttachWorkspaceResource(ctx context.Context, exec bob.Executor, resource1 *Resource) error {
+	var err error
+
+	_, err = attachOperationWorkspaceResource0(ctx, exec, 1, operation0, resource1)
+	if err != nil {
+		return err
+	}
+
+	operation0.R.WorkspaceResource = resource1
+	operation0.R.Loaded.WorkspaceResource = true
+
+	return nil
+}
+
+func insertOperationTasks0(ctx context.Context, exec bob.Executor, tasks1 []*TaskSetter, operation0 *Operation) (TaskSlice, error) {
+	for i := range tasks1 {
+		tasks1[i].OperationID = omitnull.From(operation0.ID)
+	}
+
+	ret, err := Tasks.Insert(bob.ToMods(tasks1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertOperationTasks0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachOperationTasks0(ctx context.Context, exec bob.Executor, count int, tasks1 TaskSlice, operation0 *Operation) (TaskSlice, error) {
+	setter := &TaskSetter{
+		OperationID: omitnull.From(operation0.ID),
+	}
+
+	err := tasks1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachOperationTasks0: %w", err)
+	}
+
+	return tasks1, nil
+}
+
+func (operation0 *Operation) InsertTasks(ctx context.Context, exec bob.Executor, related ...*TaskSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	tasks1, err := insertOperationTasks0(ctx, exec, related, operation0)
+	if err != nil {
+		return err
+	}
+
+	operation0.R.Tasks = append(operation0.R.Tasks, tasks1...)
+
+	return nil
+}
+
+func (operation0 *Operation) AttachTasks(ctx context.Context, exec bob.Executor, related ...*Task) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	tasks1 := TaskSlice(related)
+
+	_, err = attachOperationTasks0(ctx, exec, len(related), tasks1, operation0)
+	if err != nil {
+		return err
+	}
+
+	operation0.R.Tasks = append(operation0.R.Tasks, tasks1...)
+
+	return nil
+}
+
+func insertOperationIDWorkflowRun0(ctx context.Context, exec bob.Executor, workflowRun1 *WorkflowRunSetter, operation0 *Operation) (*WorkflowRun, error) {
+	workflowRun1.ID = omit.From(operation0.ID)
+
+	ret, err := WorkflowRuns.Insert(workflowRun1).One(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertOperationIDWorkflowRun0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachOperationIDWorkflowRun0(ctx context.Context, exec bob.Executor, count int, workflowRun1 *WorkflowRun, operation0 *Operation) (*WorkflowRun, error) {
+	setter := &WorkflowRunSetter{
+		ID: omit.From(operation0.ID),
+	}
+
+	err := workflowRun1.Update(ctx, exec, setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachOperationIDWorkflowRun0: %w", err)
+	}
+
+	return workflowRun1, nil
+}
+
+func (operation0 *Operation) InsertIDWorkflowRun(ctx context.Context, exec bob.Executor, related *WorkflowRunSetter) error {
+	var err error
+
+	workflowRun1, err := insertOperationIDWorkflowRun0(ctx, exec, related, operation0)
+	if err != nil {
+		return err
+	}
+
+	operation0.R.IDWorkflowRun = workflowRun1
+	operation0.R.Loaded.IDWorkflowRun = true
+
+	return nil
+}
+
+func (operation0 *Operation) AttachIDWorkflowRun(ctx context.Context, exec bob.Executor, workflowRun1 *WorkflowRun) error {
+	var err error
+
+	_, err = attachOperationIDWorkflowRun0(ctx, exec, 1, workflowRun1, operation0)
+	if err != nil {
+		return err
+	}
+
+	operation0.R.IDWorkflowRun = workflowRun1
+	operation0.R.Loaded.IDWorkflowRun = true
+
+	return nil
+}
+
 type operationWhere[Q psql.Filterable] struct {
 	cols             operationColumns
 	ID               psql.WhereMod[Q, string]
@@ -1223,6 +2136,20 @@ type operationWhere[Q psql.Filterable] struct {
 	Failed           psql.WhereMod[Q, int64]
 	Progress         psql.WhereMod[Q, int64]
 	Failures         psql.WhereMod[Q, types.JSON[[]model.OperationFailure]]
+	WorkspaceID      psql.WhereNullMod[Q, string]
+	AttemptAt        psql.WhereMod[Q, time.Time]
+	Attempts         psql.WhereMod[Q, int64]
+	ClaimHolder      psql.WhereNullMod[Q, string]
+	ClaimToken       psql.WhereNullMod[Q, string]
+	ClaimUntil       psql.WhereNullMod[Q, time.Time]
+	ParentID         psql.WhereNullMod[Q, string]
+	ExecutionID      psql.WhereMod[Q, string]
+	GroupKey         psql.WhereMod[Q, string]
+	InputKey         psql.WhereMod[Q, string]
+	Deadline         psql.WhereNullMod[Q, time.Time]
+	IdempotencyKey   psql.WhereMod[Q, string]
+	PayloadDigest    psql.WhereMod[Q, string]
+	ErrorCode        psql.WhereMod[Q, string]
 	R                operationWhereR[Q]
 }
 
@@ -1258,6 +2185,20 @@ func buildOperationWhere[Q psql.Filterable](cols operationColumns) operationWher
 		Failed:           psql.Where[Q, int64](cols.Failed.Expression),
 		Progress:         psql.Where[Q, int64](cols.Progress.Expression),
 		Failures:         psql.Where[Q, types.JSON[[]model.OperationFailure]](cols.Failures.Expression),
+		WorkspaceID:      psql.WhereNull[Q, string](cols.WorkspaceID.Expression),
+		AttemptAt:        psql.Where[Q, time.Time](cols.AttemptAt.Expression),
+		Attempts:         psql.Where[Q, int64](cols.Attempts.Expression),
+		ClaimHolder:      psql.WhereNull[Q, string](cols.ClaimHolder.Expression),
+		ClaimToken:       psql.WhereNull[Q, string](cols.ClaimToken.Expression),
+		ClaimUntil:       psql.WhereNull[Q, time.Time](cols.ClaimUntil.Expression),
+		ParentID:         psql.WhereNull[Q, string](cols.ParentID.Expression),
+		ExecutionID:      psql.Where[Q, string](cols.ExecutionID.Expression),
+		GroupKey:         psql.Where[Q, string](cols.GroupKey.Expression),
+		InputKey:         psql.Where[Q, string](cols.InputKey.Expression),
+		Deadline:         psql.WhereNull[Q, time.Time](cols.Deadline.Expression),
+		IdempotencyKey:   psql.Where[Q, string](cols.IdempotencyKey.Expression),
+		PayloadDigest:    psql.Where[Q, string](cols.PayloadDigest.Expression),
+		ErrorCode:        psql.Where[Q, string](cols.ErrorCode.Expression),
 		R:                operationWhereR[Q]{cols: cols},
 	}
 }
@@ -1267,6 +2208,34 @@ func buildOperationWhere[Q psql.Filterable](cols operationColumns) operationWher
 // R struct — so they cannot collide with column-based filter fields.
 type operationWhereR[Q psql.Filterable] struct {
 	cols operationColumns
+}
+
+// HasArtifacts filters parents that have a matching Artifacts using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Artifacts).
+func (w operationWhereR[Q]) HasArtifacts(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := psql.Select(
+		sm.Columns(psql.Raw("1")),
+		sm.From(Artifacts.NameExpr()),
+		sm.Where(Artifacts.Columns.OperationID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: psql.Exists(q)}
+}
+
+// HasBlobLeases filters parents that have a matching BlobLeases using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to BlobLeases).
+func (w operationWhereR[Q]) HasBlobLeases(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := psql.Select(
+		sm.Columns(psql.Raw("1")),
+		sm.From(BlobLeases.NameExpr()),
+		sm.Where(BlobLeases.Columns.OperationID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: psql.Exists(q)}
 }
 
 // HasOperationItems filters parents that have a matching OperationItems using a
@@ -1292,6 +2261,82 @@ func (w operationWhereR[Q]) HasContainerResource(filters ...bob.Mod[*dialect.Sel
 		sm.Columns(psql.Raw("1")),
 		sm.From(Resources.NameExpr()),
 		sm.Where(Resources.Columns.ID.EQ(w.cols.ContainerID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: psql.Exists(q)}
+}
+
+// HasParent filters parents that have a matching Parent using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Operations).
+func (w operationWhereR[Q]) HasParent(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	// self-referential relation: alias the subquery table so the correlation
+	// columns still reference the parent row rather than the subquery's own row.
+	relTbl := Operations.Columns.AliasedAs("Parent")
+	q := psql.Select(
+		sm.Columns(psql.Raw("1")),
+		sm.From(Operations.NameExpr().As("Parent")),
+		sm.Where(relTbl.ID.EQ(w.cols.ParentID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: psql.Exists(q)}
+}
+
+// HasReverseParents filters parents that have a matching ReverseParents using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Operations).
+func (w operationWhereR[Q]) HasReverseParents(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	// self-referential relation: alias the subquery table so the correlation
+	// columns still reference the parent row rather than the subquery's own row.
+	relTbl := Operations.Columns.AliasedAs("ReverseParents")
+	q := psql.Select(
+		sm.Columns(psql.Raw("1")),
+		sm.From(Operations.NameExpr().As("ReverseParents")),
+		sm.Where(relTbl.ParentID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: psql.Exists(q)}
+}
+
+// HasWorkspaceResource filters parents that have a matching WorkspaceResource using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Resources).
+func (w operationWhereR[Q]) HasWorkspaceResource(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := psql.Select(
+		sm.Columns(psql.Raw("1")),
+		sm.From(Resources.NameExpr()),
+		sm.Where(Resources.Columns.ID.EQ(w.cols.WorkspaceID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: psql.Exists(q)}
+}
+
+// HasTasks filters parents that have a matching Tasks using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Tasks).
+func (w operationWhereR[Q]) HasTasks(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := psql.Select(
+		sm.Columns(psql.Raw("1")),
+		sm.From(Tasks.NameExpr()),
+		sm.Where(Tasks.Columns.OperationID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: psql.Exists(q)}
+}
+
+// HasIDWorkflowRun filters parents that have a matching IDWorkflowRun using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to WorkflowRuns).
+func (w operationWhereR[Q]) HasIDWorkflowRun(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := psql.Select(
+		sm.Columns(psql.Raw("1")),
+		sm.From(WorkflowRuns.NameExpr()),
+		sm.Where(WorkflowRuns.Columns.ID.EQ(w.cols.ID)),
 	)
 	q.Apply(filters...)
 	return mods.Where[Q]{E: psql.Exists(q)}

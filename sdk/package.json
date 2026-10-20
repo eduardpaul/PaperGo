@@ -1,0 +1,31 @@
+{
+  "name": "@papergo/workflow",
+  "private": true,
+  "version": "0.1.0",
+  "description": "The API PaperGo workflow scripts are written against.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "generate": "node scripts/generate.mjs",
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node scripts/test.mjs"
+  },
+  "dependencies": {
+    "@microsoft/kiota-abstractions": "1.0.0-preview.106",
+    "@microsoft/kiota-serialization-form": "1.0.0-preview.106",
+    "@microsoft/kiota-serialization-json": "1.0.0-preview.106",
+    "@microsoft/kiota-serialization-multipart": "1.0.0-preview.106",
+    "@microsoft/kiota-serialization-text": "1.0.0-preview.106"
+  },
+  "devDependencies": {
+    "@microsoft/kiota": "1.35.0",
+    "dts-bundle-generator": "9.5.1",
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3"
+  }
+}

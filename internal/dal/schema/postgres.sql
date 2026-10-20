@@ -656,7 +656,7 @@ CREATE TABLE operations (
     result JSONB NOT NULL DEFAULT '{}'::jsonb,
     started_at TIMESTAMPTZ,
     completed_at TIMESTAMPTZ,
-    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'succeeded', 'failed', 'superseded')),
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'succeeded', 'failed', 'superseded', 'cancelled')),
     surface TEXT NOT NULL DEFAULT 'head' CHECK (surface IN ('head', 'published')),
     after_item_id TEXT NOT NULL DEFAULT '',
     processed BIGINT NOT NULL DEFAULT 0 CHECK (processed >= 0),
@@ -668,11 +668,33 @@ CREATE TABLE operations (
     updated BIGINT NOT NULL DEFAULT 0 CHECK (updated >= 0),
     failed BIGINT NOT NULL DEFAULT 0 CHECK (failed >= 0),
     progress BIGINT NOT NULL DEFAULT 0 CHECK (progress BETWEEN 0 AND 100),
-    failures JSONB NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(failures) = 'array')
+    failures JSONB NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(failures) = 'array'),
+    workspace_id TEXT REFERENCES resources(id) ON DELETE CASCADE DEFERRABLE,
+    attempt_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    attempts BIGINT NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+    claim_holder TEXT,
+    claim_token TEXT,
+    claim_until TIMESTAMPTZ,
+    parent_id TEXT REFERENCES operations(id) ON DELETE SET NULL,
+    execution_id TEXT NOT NULL DEFAULT '',
+    group_key TEXT NOT NULL DEFAULT '' CHECK (length(group_key) <= 128),
+    input_key TEXT NOT NULL DEFAULT '' CHECK (length(input_key) <= 128),
+    deadline TIMESTAMPTZ,
+    idempotency_key TEXT NOT NULL DEFAULT '' CHECK (length(idempotency_key) <= 128),
+    payload_digest TEXT NOT NULL DEFAULT '',
+    error_code TEXT NOT NULL DEFAULT '' CHECK (error_code IN ('', 'deadline_exceeded', 'retries_exhausted', 'forbidden')),
+    CHECK ((claim_token IS NULL) = (claim_until IS NULL) AND (claim_token IS NULL) = (claim_holder IS NULL))
 );
 CREATE INDEX operation_status_created_at ON operations(status, created_at);
 CREATE INDEX operation_status_updated_at ON operations(status, updated_at);
 CREATE INDEX operation_container_id_id ON operations(container_id, id);
+CREATE INDEX operation_parent_id ON operations(parent_id) WHERE parent_id IS NOT NULL;
+CREATE INDEX operation_ready ON operations(kind, workspace_id, attempt_at) WHERE status = 'pending';
+CREATE INDEX operation_group ON operations(kind, group_key, created_at) WHERE status = 'pending';
+CREATE INDEX operation_pending_workspace ON operations(workspace_id) WHERE status = 'pending';
+CREATE INDEX operation_pending_creator ON operations(created_by) WHERE status = 'pending';
+CREATE INDEX operation_execution_id ON operations(execution_id) WHERE execution_id <> '';
+CREATE UNIQUE INDEX operation_idempotency ON operations(created_by, kind, COALESCE(container_id, ''), idempotency_key) WHERE idempotency_key <> '';
 
 CREATE TABLE operation_items (
     id TEXT PRIMARY KEY NOT NULL,
@@ -717,6 +739,9 @@ CREATE TABLE workflow_versions (
     workflow_id TEXT NOT NULL REFERENCES workflows(id) ON DELETE CASCADE DEFERRABLE,
     number BIGINT NOT NULL CHECK (number > 0),
     definition JSONB NOT NULL CHECK (jsonb_typeof(definition) = 'object'),
+    source TEXT NOT NULL CHECK (length(source) BETWEEN 1 AND 1048576),
+    bundle TEXT NOT NULL CHECK (length(bundle) >= 1),
+    bundle_hash TEXT NOT NULL CHECK (length(bundle_hash) = 64),
     created_by TEXT NOT NULL
 );
 CREATE UNIQUE INDEX workflowversion_workflow_id_number ON workflow_versions(workflow_id, number);
@@ -736,9 +761,11 @@ CREATE INDEX workflowtrigger_type_workspace_id_collection_id ON workflow_trigger
 CREATE INDEX workflowtrigger_workflow_id ON workflow_triggers(workflow_id);
 CREATE INDEX workflowtrigger_next_at ON workflow_triggers(next_at) WHERE next_at IS NOT NULL;
 
--- Run item and retry identifiers are provenance; current references are validated by DAL.
+-- A run is the provenance of a script.run operation, which holds its
+-- execution state. Run item and retry identifiers are provenance; current
+-- references are validated by DAL.
 CREATE TABLE workflow_runs (
-    id TEXT PRIMARY KEY NOT NULL,
+    id TEXT PRIMARY KEY NOT NULL REFERENCES operations(id) ON DELETE CASCADE DEFERRABLE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     workflow_id TEXT NOT NULL REFERENCES workflows(id) ON DELETE CASCADE DEFERRABLE,
     workflow_version BIGINT NOT NULL CHECK (workflow_version > 0),
@@ -749,8 +776,7 @@ CREATE TABLE workflow_runs (
     depth BIGINT NOT NULL CHECK (depth >= 0),
     actor TEXT NOT NULL,
     retry_of TEXT,
-    live_status TEXT NOT NULL DEFAULT 'queued',
-    live_updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    logs JSONB NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(logs) = 'array')
 );
 CREATE UNIQUE INDEX workflowrun_workflow_id_event_id ON workflow_runs(workflow_id, event_id);
 CREATE INDEX workflowrun_workspace_id_created_at_id ON workflow_runs(workspace_id, created_at, id);
@@ -786,13 +812,13 @@ CREATE TABLE domain_events (
 CREATE INDEX domainevent_created_at_id ON domain_events(created_at, id) WHERE dispatched_at IS NULL;
 CREATE INDEX domainevent_dispatched_at ON domain_events(dispatched_at) WHERE dispatched_at IS NOT NULL;
 
-CREATE TABLE staged_files (
+CREATE TABLE artifacts (
     id TEXT PRIMARY KEY NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     workspace_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE DEFERRABLE,
     item_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE DEFERRABLE,
-    run_id TEXT NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE DEFERRABLE,
+    operation_id TEXT REFERENCES operations(id) ON DELETE SET NULL DEFERRABLE,
+    input_key TEXT NOT NULL CHECK (length(input_key) = 64),
     sources JSONB NOT NULL CHECK (jsonb_typeof(sources) = 'array'),
     object_key TEXT NOT NULL CHECK (object_key <> ''),
     filename TEXT NOT NULL CHECK (length(filename) BETWEEN 1 AND 255),
@@ -800,12 +826,27 @@ CREATE TABLE staged_files (
     size BIGINT NOT NULL CHECK (size >= 0),
     sha256 TEXT NOT NULL CHECK (length(sha256) = 64),
     metrics JSONB NOT NULL DEFAULT '{}'::jsonb,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_by TEXT NOT NULL
+);
+CREATE INDEX artifact_item_id_input_key ON artifacts(item_id, input_key);
+CREATE INDEX artifact_expires_at ON artifacts(expires_at);
+CREATE INDEX artifact_object_key ON artifacts(object_key);
+
+CREATE TABLE staged_files (
+    id TEXT PRIMARY KEY NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    workspace_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE DEFERRABLE,
+    item_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE DEFERRABLE,
+    artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE DEFERRABLE,
+    run_id TEXT REFERENCES workflow_runs(id) ON DELETE CASCADE DEFERRABLE,
     state TEXT NOT NULL DEFAULT 'pending' CHECK (state IN ('pending', 'promoted', 'discarded')),
     created_by TEXT NOT NULL
 );
 CREATE INDEX stagedfile_run_id ON staged_files(run_id);
 CREATE INDEX stagedfile_item_id ON staged_files(item_id);
-CREATE INDEX stagedfile_object_key_state ON staged_files(object_key, state);
+CREATE INDEX stagedfile_artifact_id_state ON staged_files(artifact_id, state);
 
 CREATE TABLE tasks (
     id TEXT PRIMARY KEY NOT NULL,
@@ -829,8 +870,7 @@ CREATE TABLE tasks (
     source TEXT NOT NULL CHECK (source IN ('workflow', 'user', 'system')),
     workflow_id TEXT REFERENCES workflows(id) ON DELETE SET NULL DEFERRABLE,
     run_id TEXT REFERENCES workflow_runs(id) ON DELETE SET NULL DEFERRABLE,
-    node TEXT,
-    wait BOOLEAN NOT NULL DEFAULT FALSE,
+    operation_id TEXT REFERENCES operations(id) ON DELETE SET NULL DEFERRABLE,
     status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'completed', 'cancelled', 'expired')),
     outcome TEXT,
     completed_by TEXT,
@@ -838,10 +878,11 @@ CREATE TABLE tasks (
     "comment" TEXT NOT NULL DEFAULT '' CHECK (length("comment") <= 4000),
     "input" JSONB,
     created_by TEXT NOT NULL,
-    CHECK (source <> 'workflow' OR (workflow_id IS NOT NULL AND run_id IS NOT NULL AND node IS NOT NULL)),
+    CHECK (source = 'workflow' OR (workflow_id IS NULL AND run_id IS NULL AND operation_id IS NULL)),
     CHECK ((status = 'open') = (completed_at IS NULL))
 );
 CREATE INDEX task_run_id ON tasks(run_id);
+CREATE INDEX task_operation_id ON tasks(operation_id);
 CREATE INDEX task_workspace_id_status ON tasks(workspace_id, status);
 CREATE INDEX task_item_id ON tasks(item_id);
 
@@ -857,41 +898,32 @@ CREATE TABLE task_responses (
 );
 CREATE UNIQUE INDEX taskresponse_task_id_assignee ON task_responses(task_id, assignee);
 
-CREATE TABLE runner_step_results (
+CREATE TABLE workflow_steps (
     run_id TEXT NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE DEFERRABLE,
-    step_id BIGINT NOT NULL,
-    step TEXT NOT NULL,
-    "output" BYTEA NOT NULL,
-    PRIMARY KEY (run_id, step_id)
+    seq BIGINT NOT NULL CHECK (seq >= 0),
+    kind TEXT NOT NULL CHECK (kind IN ('request', 'wait', 'value')),
+    name TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 300),
+    input_hash TEXT NOT NULL CHECK (length(input_hash) = 64),
+    status TEXT NOT NULL CHECK (status IN ('pending', 'completed', 'failed')),
+    "input" JSONB,
+    "output" BYTEA,
+    error TEXT,
+    started_at TIMESTAMPTZ NOT NULL,
+    completed_at TIMESTAMPTZ,
+    PRIMARY KEY (run_id, seq),
+    CHECK (status = 'pending' OR completed_at IS NOT NULL),
+    CHECK (status <> 'pending' OR kind = 'wait')
 );
+CREATE INDEX workflow_steps_pending ON workflow_steps(status, started_at) WHERE status = 'pending';
 
-CREATE TABLE workflow_waits (
-    queue TEXT NOT NULL DEFAULT '',
-    payload_id TEXT NOT NULL DEFAULT '',
-    id TEXT PRIMARY KEY NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    kind TEXT NOT NULL CHECK (length(kind) BETWEEN 1 AND 64),
-    "key" TEXT NOT NULL CHECK (length("key") BETWEEN 1 AND 128),
-    workspace_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE DEFERRABLE,
-    run_id TEXT NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE DEFERRABLE,
-    node TEXT NOT NULL,
-    execution_id TEXT NOT NULL CHECK (length(execution_id) BETWEEN 1 AND 128),
-    data JSONB NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(data) = 'object' AND octet_length(data::text) <= 16384),
-    completion JSONB CHECK (completion IS NULL OR octet_length(completion::text) <= 65536),
-    deadline TIMESTAMPTZ,
-    notified_at TIMESTAMPTZ,
-    claim_until TIMESTAMPTZ,
-    claim_run_id TEXT,
-    claim_token TEXT,
-    status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'completed', 'closed')),
-    parking BOOLEAN NOT NULL DEFAULT FALSE
+CREATE TABLE workflow_step_operations (
+    run_id TEXT NOT NULL,
+    seq BIGINT NOT NULL,
+    operation_id TEXT NOT NULL,
+    PRIMARY KEY (run_id, seq, operation_id),
+    FOREIGN KEY (run_id, seq) REFERENCES workflow_steps(run_id, seq) ON DELETE CASCADE DEFERRABLE
 );
-CREATE UNIQUE INDEX workflow_wait_kind_key ON workflow_waits(kind, "key");
-CREATE INDEX workflow_wait_open_kind_workspace ON workflow_waits(kind, workspace_id, created_at) WHERE status = 'open';
-CREATE INDEX workflow_wait_queue ON workflow_waits(kind, queue, status, id);
-CREATE INDEX workflow_wait_run ON workflow_waits(run_id);
-CREATE INDEX workflow_wait_parking ON workflow_waits(status, deadline) WHERE parking = TRUE;
+CREATE INDEX workflow_step_operations_operation ON workflow_step_operations(operation_id);
 
 -- =============================================================================
 -- 7. Durable Activity, Caching, Sync, Audit & Live Notifications
@@ -932,22 +964,21 @@ CREATE INDEX activityrecord_expires_at ON activity_records(expires_at);
 CREATE TABLE activity_references (
     id TEXT PRIMARY KEY NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    owner_kind TEXT NOT NULL CHECK (owner_kind IN ('record', 'operation')),
     owner_id TEXT NOT NULL,
     record_id TEXT NOT NULL REFERENCES activity_records(id) ON DELETE CASCADE DEFERRABLE
 );
-CREATE UNIQUE INDEX activityreference_owner_id_record_id ON activity_references(owner_id, record_id);
+CREATE UNIQUE INDEX activityreference_owner_record ON activity_references(owner_kind, owner_id, record_id);
 CREATE INDEX activityreference_record_id ON activity_references(record_id);
 
 CREATE TABLE blob_leases (
     id TEXT PRIMARY KEY NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    owner_id TEXT NOT NULL,
-    run_id TEXT NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE DEFERRABLE,
+    operation_id TEXT NOT NULL REFERENCES operations(id) ON DELETE CASCADE DEFERRABLE,
     blob_id TEXT NOT NULL REFERENCES blobs(id) ON DELETE CASCADE DEFERRABLE
 );
-CREATE UNIQUE INDEX bloblease_owner_id_blob_id ON blob_leases(owner_id, blob_id);
+CREATE UNIQUE INDEX bloblease_operation_id_blob_id ON blob_leases(operation_id, blob_id);
 CREATE INDEX bloblease_blob_id ON blob_leases(blob_id);
-CREATE INDEX bloblease_run_id ON blob_leases(run_id);
 
 CREATE TABLE sync_views (
     id TEXT PRIMARY KEY NOT NULL,

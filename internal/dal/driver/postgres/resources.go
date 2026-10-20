@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/aarondl/opt/omit"
@@ -147,6 +148,25 @@ func (q Queries) ResourceIDs(ctx context.Context, f resources.Filter) ([]string,
 	}
 	ids, err := bob.All(ctx, q.exec, psql.Select(mods...), scan.SingleColumnMapper[string])
 	return ids, dberr.Translate(err)
+}
+
+func (q Queries) ResourceActions(ctx context.Context, id string, p access.Principal) (resources.Actions, error) {
+	columns := make([]string, 0, 5)
+	var args []any
+	for _, action := range []access.Action{access.Read, access.ReadDraft, access.Write, access.Publish, access.Manage} {
+		allowed, actionArgs := access.Postgres.Rows(`"resources"`, p, action)
+		columns = append(columns, allowed+` AS "`+string(action)+`"`)
+		args = append(args, actionArgs...)
+	}
+	type row struct {
+		Read      bool `db:"read"`
+		ReadDraft bool `db:"read_draft"`
+		Write     bool `db:"write"`
+		Publish   bool `db:"publish"`
+		Manage    bool `db:"manage"`
+	}
+	a, err := bob.One(ctx, q.exec, psql.RawQuery(`SELECT `+strings.Join(columns, ", ")+` FROM resources "resources" WHERE "resources".id = ?`, append(args, id)...), scan.StructMapper[row]())
+	return resources.Actions{Read: a.Read, ReadDraft: a.ReadDraft, Write: a.Write, Publish: a.Publish, Manage: a.Manage}, dberr.Translate(err)
 }
 
 func (q Queries) CountResources(ctx context.Context, f resources.Filter) (int, error) {
@@ -318,7 +338,7 @@ func (q Queries) ClearWorkspace(ctx context.Context, workspaceID, actor string, 
 	views := "SELECT id FROM sync_views WHERE container_id IN (" + sub + ")"
 	statements := []string{
 		"DELETE FROM relationships WHERE source_id IN (" + sub + ") OR target_id IN (" + sub + ")",
-		"DELETE FROM runner_step_results WHERE run_id IN (" + runs + ")",
+		"DELETE FROM workflow_steps WHERE run_id IN (" + runs + ")",
 		"DELETE FROM workflow_run_items WHERE run_id IN (" + runs + ")",
 		"DELETE FROM workflow_runs WHERE workspace_id = $1",
 		"DELETE FROM workflow_triggers WHERE workspace_id = $1",

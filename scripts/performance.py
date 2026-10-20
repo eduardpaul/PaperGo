@@ -179,7 +179,7 @@ def main():
     # Explicitly clear deployment configuration; the benchmark must be isolated.
     env = {k: v for k, v in os.environ.items() if k in ("PATH", "HOME", "TMPDIR", "LANG", "TZ", "SYSTEMROOT", "LD_LIBRARY_PATH")}
     env.update(APP_ENV="test", AUTH_MODE="development", DEV_TOKEN=TOKEN,
-               DEV_SUBJECT="performance-admin", ADMIN_SUBJECT="performance-admin", NODE_ID="performance",
+               DEV_SUBJECT="performance-admin", ADMIN_SUBJECT="performance-admin",
                SEARCH_STORE=args.search_store)
     with tempfile.TemporaryDirectory(prefix="papergo-performance-") as temp:
         directory = Path(temp)

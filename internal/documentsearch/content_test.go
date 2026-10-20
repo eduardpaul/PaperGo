@@ -1,0 +1,249 @@
+package documentsearch_test
+
+import (
+	"context"
+	"encoding/json"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"papergo/internal/ai"
+	"papergo/internal/auth"
+	"papergo/internal/dal/daltest"
+	"papergo/internal/dal/operations"
+	"papergo/internal/dal/search/sqlitestore"
+	"papergo/internal/dms"
+	"papergo/internal/documentsearch"
+	"papergo/internal/httpapi"
+	"papergo/internal/search"
+	"papergo/internal/storage"
+	"papergo/internal/worker"
+)
+
+func TestMain(m *testing.M) { daltest.Main(m) }
+
+const token = "0123456789abcdef0123456789abcdef"
+
+func call(t *testing.T, h http.Handler, method, path, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	r := httptest.NewRequest(method, path, strings.NewReader(body))
+	r.Header.Set("Authorization", "Bearer "+token)
+	if body != "" {
+		r.Header.Set("Content-Type", "application/json")
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	return w
+}
+
+// A file's text becomes searchable in steps: chunks staged under a
+// generation, enriched, embedded and published. Publishing a generation
+// made from a file the item no longer has changes nothing.
+func TestContentSteps(t *testing.T) {
+	ctx := context.Background()
+	s := dms.NewService(daltest.Database(t).SQL)
+	store, err := storage.NewLocal(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	index, err := sqlitestore.Open(ctx, filepath.Join(t.TempDir(), "search.db"), sqlitestore.Options{Languages: []string{"english"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer index.Close()
+	x := &documentsearch.Search{Storage: store, Store: index}
+	if err = x.Register(s); err != nil {
+		t.Fatal(err)
+	}
+	a := &httpapi.API{DMS: s, Auth: auth.Development{Token: token, Subject: "alice"}, Storage: store, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), MaxUpload: 1 << 20, Modules: []httpapi.Module{x.Module()}}
+	h := a.Handler()
+	ws, err := s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Docs"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lib, err := s.Create(ctx, "alice", ws.ID, dms.CreateResource{Kind: "library", Name: "Letters"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	item, err := s.Create(ctx, "alice", lib.ID, dms.CreateResource{Kind: "item", Name: "Letter"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	upload := func(version, body string) {
+		r := httptest.NewRequest("PUT", "/v1/items/"+item.ID+"/content", strings.NewReader(body))
+		r.Header.Set("Authorization", "Bearer "+token)
+		r.Header.Set("If-Match", `"`+version+`"`)
+		r.Header.Set("Content-Type", "application/pdf")
+		r.Header.Set("X-Filename", "letter.pdf")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		if w.Code != 201 && w.Code != 200 {
+			t.Fatal(w.Code, w.Body.String())
+		}
+	}
+	upload("1", "%PDF-letter")
+	accepted := func(path, body string) dms.OperationView {
+		t.Helper()
+		res := call(t, h, "POST", path, body)
+		var op dms.OperationView
+		if res.Code != 202 || json.Unmarshal(res.Body.Bytes(), &op) != nil {
+			t.Fatal(path, res.Code, res.Body.String())
+		}
+		if err := worker.Drain(ctx, s); err != nil {
+			t.Fatal(err)
+		}
+		done, err := s.Operation(ctx, "alice", op.ID)
+		if err != nil || done.Status != operations.StatusSucceeded {
+			t.Fatalf("%s: %+v %v", path, done, err)
+		}
+		return *done
+	}
+	chunks := "/v1/items/" + item.ID + "/search/chunks"
+	if res := call(t, h, "POST", chunks, `{}`); res.Code != 422 {
+		t.Fatal("chunked nothing:", res.Code, res.Body.String())
+	}
+	staged := accepted(chunks, `{"text":"Quarterly invoice from Northwind for printer paper","chunker":"whole"}`)
+	var result documentsearch.ChunkResult
+	if json.Unmarshal(staged.Result, &result) != nil || result.Generation != staged.ID || result.Chunks != 1 {
+		t.Fatalf("%s", staged.Result)
+	}
+	gen := "/v1/search/generations/" + result.Generation
+	// A second part adds to the generation.
+	accepted(chunks, `{"text":"Summary: paper supplies","kind":"summary","generation":"`+result.Generation+`"}`)
+	res := call(t, h, "GET", gen+"/chunks?limit=10", "")
+	var page documentsearch.ChunkPage
+	if res.Code != 200 || json.Unmarshal(res.Body.Bytes(), &page) != nil || len(page.Chunks) != 2 || page.More {
+		t.Fatal(res.Code, res.Body.String())
+	}
+	enrich := `{"enrichments":[{"part":"` + page.Chunks[0].Part + `","ordinal":` + itoa(page.Chunks[0].Ordinal) + `,"text":"An invoice for office supplies"}]}`
+	if res = call(t, h, "PUT", gen+"/enrichments", enrich); res.Code != 204 {
+		t.Fatal(res.Code, res.Body.String())
+	}
+	var embedded documentsearch.EmbedResult
+	if op := accepted(gen+"/embeddings", ""); json.Unmarshal(op.Result, &embedded) != nil || embedded.Reason == "" {
+		t.Fatalf("embedding without a model: %s", op.Result)
+	}
+	var published documentsearch.PublishResult
+	if op := accepted(gen+"/publish", ""); json.Unmarshal(op.Result, &published) != nil || !published.Published {
+		t.Fatalf("%s", op.Result)
+	}
+	// Entries are written by syncing them.
+	accepted("/v1/workspaces/"+ws.ID+"/search/sync", `{"resource_ids":["`+item.ID+`"]}`)
+	found, err := x.Search(ctx, s, "alice", documentsearch.Request{Q: "northwind"})
+	if err != nil || len(found.Hits) != 1 {
+		t.Fatalf("%+v %v", found, err)
+	}
+	// A newer file makes the old generation stale.
+	stale := accepted(chunks, `{"text":"An older reading","chunker":"whole"}`)
+	upload("2", "%PDF-letter again")
+	if op := accepted("/v1/search/generations/"+stale.ID+"/publish", ""); json.Unmarshal(op.Result, &published) != nil || published.Published || published.Reason == "" {
+		t.Fatalf("%s", op.Result)
+	}
+	// A chunk operation that added to a generation is not one.
+	if res = call(t, h, "GET", "/v1/search/generations/"+item.ID+"/chunks", ""); res.Code != 404 {
+		t.Fatal(res.Code, res.Body.String())
+	}
+
+	var sync documentsearch.SyncResult
+	if op := accepted("/v1/workspaces/"+ws.ID+"/search/sync", `{"resource_ids":["`+item.ID+`","gone"]}`); json.Unmarshal(op.Result, &sync) != nil || sync.Written != 1 {
+		t.Fatalf("%s", op.Result)
+	}
+	other, err := s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Other"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res = call(t, h, "POST", "/v1/workspaces/"+other.ID+"/search/sync", `{"resource_ids":["`+item.ID+`"]}`); res.Code != 422 {
+		t.Fatal("synced another workspace's item:", res.Code, res.Body.String())
+	}
+	if res = call(t, h, "GET", "/v1/workspaces/"+ws.ID+"/search/term-entries?term_id=missing", ""); res.Code != 200 || !strings.Contains(res.Body.String(), `"items":[]`) {
+		t.Fatal(res.Code, res.Body.String())
+	}
+}
+
+func itoa(n int) string { b, _ := json.Marshal(n); return string(b) }
+
+// busyEmbedder answers with a busy provider's error busy times, then
+// embeds.
+type busyEmbedder struct {
+	mu          sync.Mutex
+	busy, calls int
+}
+
+func (*busyEmbedder) Key(context.Context) (string, error) { return "test-model", nil }
+
+func (e *busyEmbedder) Embed(_ context.Context, texts []string) ([][]float32, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.calls++
+	if e.busy > 0 {
+		e.busy--
+		return nil, &ai.Error{Model: "embedding model", Status: http.StatusTooManyRequests, Message: "busy", Retry: true, After: time.Minute}
+	}
+	out := make([][]float32, len(texts))
+	for i := range out {
+		out[i] = []float32{1, 0}
+	}
+	return out, nil
+}
+
+func (*busyEmbedder) EmbedQuery(context.Context, string) ([]float32, error) {
+	return []float32{1, 0}, nil
+}
+
+func (*busyEmbedder) Close() error { return nil }
+
+// The embedding sweep embeds nothing itself: it queues one search.sweep
+// operation for the search worker, which a busy provider defers rather
+// than holding the worker.
+func TestSweepQueuesEmbedding(t *testing.T) {
+	ctx := context.Background()
+	s := dms.NewService(daltest.Database(t).SQL)
+	index, err := sqlitestore.Open(ctx, filepath.Join(t.TempDir(), "search.db"), sqlitestore.Options{Languages: []string{"english"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer index.Close()
+	model := &busyEmbedder{busy: 1}
+	x := &documentsearch.Search{Store: index, Embeddings: model}
+	if err = x.Register(s); err != nil {
+		t.Fatal(err)
+	}
+	if err = index.StageContent(ctx, "item", "blob", "g1", []search.Chunk{{Part: "read", Kind: search.KindContent, Text: "the invoice is due"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err = index.PublishContent(ctx, "item", "blob", "g1"); err != nil {
+		t.Fatal(err)
+	}
+	sweeps := func() []operations.Operation {
+		t.Helper()
+		ops, err := s.DAL.Operations().List(ctx, operations.Filter{Kinds: []string{documentsearch.KindSweep}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return ops
+	}
+	for range 2 {
+		if err = x.Sweep(ctx, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if ops := sweeps(); len(ops) != 1 || model.calls != 0 {
+		t.Fatalf("%d sweeps queued, %d embedding calls", len(ops), model.calls)
+	}
+	if worked, err := s.RunOperation(ctx, []string{documentsearch.KindSweep}); err != nil || !worked {
+		t.Fatal(worked, err)
+	}
+	deferred := sweeps()[0]
+	if deferred.Status != operations.StatusPending || !deferred.AttemptAt.After(time.Now().Add(50*time.Second)) || !strings.Contains(deferred.Error, "busy") {
+		t.Fatalf("a busy provider did not defer the sweep: %+v", deferred)
+	}
+	if worked, err := s.RunOperation(ctx, []string{documentsearch.KindSweep}); err != nil || worked {
+		t.Fatal("the deferred sweep ran before its time", worked, err)
+	}
+}

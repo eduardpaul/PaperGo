@@ -94,6 +94,7 @@ it('shows a stale review of an approval and the answers given, read only', async
         stringifyJSON({
           id: 'staged',
           item_id: 'item',
+          artifact_id: 'artifact',
           run_id: 'run',
           filename: 'receipt.webp',
           content_type: 'image/webp',

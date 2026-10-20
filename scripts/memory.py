@@ -95,7 +95,7 @@ def main():
     # Deployment auth, paths, model settings and allocator overrides stay out.
     env = {k: v for k, v in os.environ.items() if k in ('PATH', 'HOME', 'LANG', 'TMPDIR', 'LD_LIBRARY_PATH')}
     env.update(APP_ENV='test', AUTH_MODE='development', DEV_TOKEN=TOKEN,
-               DEV_SUBJECT='memory-admin', ADMIN_SUBJECT='memory-admin', NODE_ID='memory',
+               DEV_SUBJECT='memory-admin', ADMIN_SUBJECT='memory-admin',
                SEARCH_STORE=args.search_store)
     with tempfile.TemporaryDirectory(prefix='papergo-memory-') as temp:
         directory = Path(temp)

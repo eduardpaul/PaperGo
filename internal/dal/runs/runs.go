@@ -1,6 +1,6 @@
 // Package runs owns workflow run records shared by every database driver:
-// the runs themselves, the items a selection run covers, the live status
-// clients follow and the step results a run checkpoints. Drivers implement
+// the provenance of each run operation, the items a selection run covers,
+// and the steps a run's script recorded. Drivers implement
 // Queries; this package decides what those statements mean.
 package runs
 
@@ -8,15 +8,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"time"
 
-	"github.com/google/uuid"
 	"papergo/internal/dal/dberr"
 	"papergo/internal/dal/live"
+	"papergo/internal/dal/operations"
 	"papergo/internal/dal/refs"
 )
 
-// Status is the live status of a run as last observed from its execution.
+// Status is a run's status, derived from its operation.
 type Status string
 
 const (
@@ -44,17 +45,73 @@ func (s Status) Finished() bool {
 	return s == StatusCompleted || s == StatusFailed || s == StatusCancelled
 }
 
-// Run is a stored workflow run. Its identity and inputs never change; only
-// its live status does. Empty optional identifiers are stored as NULL.
+// Run is a workflow run: the provenance of a script.run operation, which
+// holds its execution. The provenance never changes. Empty optional
+// identifiers are stored as NULL.
 type Run struct {
 	ID, WorkflowID, WorkspaceID, ItemID, EventID, EventType string
 	Actor, RetryOf                                          string
 	WorkflowVersion, Depth                                  int
-	Status                                                  Status
-	CreatedAt, StatusAt                                     time.Time
+	CreatedAt                                               time.Time
+	// Status and the rest are the operation's: queued until a slice ran,
+	// running while one runs or the run can continue, and waiting while it
+	// waits for operations or a time.
+	Status                 Status
+	Error                  string
+	ErrorCode              operations.ErrorCode
+	Output                 json.RawMessage
+	Attempts               int
+	StartedAt, CompletedAt *time.Time
+	UpdatedAt              time.Time
+	// WaitingUntil is when a run waiting for a time continues.
+	WaitingUntil *time.Time
+	// ExecutionID is what a waiting run waits under, such as the active run
+	// of a coalescing workflow on its item.
+	ExecutionID string
+	// Logs are what the run's script logged, oldest first.
+	Logs []Log
 }
 
-// CreateInput describes a run. A missing ID is generated.
+// Log is one entry a run's script logged.
+type Log struct {
+	Level   string    `json:"level"`
+	Message string    `json:"message"`
+	At      time.Time `json:"at"`
+}
+
+// MaxLogs bounds the entries kept per run: the oldest go first.
+const MaxLogs = 500
+
+// execution fills r from its operation.
+func (r *Run) execution(op operations.Operation, now time.Time) {
+	r.Error, r.ErrorCode, r.Attempts, r.ExecutionID = op.Error, op.ErrorCode, op.Attempts, op.ExecutionID
+	r.StartedAt, r.CompletedAt, r.UpdatedAt = op.StartedAt, op.CompletedAt, op.UpdatedAt
+	if op.Status == operations.StatusSucceeded {
+		r.Output = op.Result
+	}
+	switch {
+	case op.Status == operations.StatusSucceeded:
+		r.Status = StatusCompleted
+	case op.Status == operations.StatusFailed:
+		r.Status = StatusFailed
+	case op.Status == operations.StatusCancelled:
+		r.Status = StatusCancelled
+	case op.ExecutionID != "":
+		r.Status = StatusWaiting
+	case op.Claim.Holder != "" && op.Claim.Until.After(now):
+		r.Status = StatusRunning
+	case op.StartedAt == nil:
+		r.Status = StatusQueued
+	case op.AttemptAt.After(now):
+		r.Status = StatusWaiting
+		at := op.AttemptAt
+		r.WaitingUntil = &at
+	default:
+		r.Status = StatusRunning
+	}
+}
+
+// CreateInput describes a run of the operation ID.
 type CreateInput struct {
 	ID, WorkflowID, WorkspaceID, ItemID, EventID, EventType string
 	Actor, RetryOf                                          string
@@ -69,10 +126,11 @@ type Item struct {
 
 // Filter selects runs, newest first unless Order is "id". SystemKeys names
 // the built-in workflows whose runs HideSystem hides and SystemOnly
-// selects; manual runs of them are never system runs.
+// selects; manual runs of them are never system runs. Statuses selects by
+// derived status.
 type Filter struct {
 	WorkspaceID, WorkflowID, AfterID, BeforeID string
-	// Origin is "manual", "schedule" or "automatic".
+	// Origin is "manual", "schedule", "test" or "automatic".
 	Origin                                      string
 	IDs, ItemIDs, SystemKeys, ExcludeEventTypes []string
 	Statuses                                    []Status
@@ -82,31 +140,48 @@ type Filter struct {
 	Order                                       string
 }
 
+// operationStatuses are the operation statuses runs of statuses have.
+func operationStatuses(statuses []Status) []operations.Status {
+	var out []operations.Status
+	add := func(s operations.Status) {
+		if !slices.Contains(out, s) {
+			out = append(out, s)
+		}
+	}
+	for _, s := range statuses {
+		switch s {
+		case StatusCompleted:
+			add(operations.StatusSucceeded)
+		case StatusFailed:
+			add(operations.StatusFailed)
+		case StatusCancelled:
+			add(operations.StatusCancelled)
+		default:
+			add(operations.StatusPending)
+		}
+	}
+	return out
+}
+
 // Queries are the statements a driver runs for workflow runs. Each method
 // executes on the transaction or connection the driver was bound to.
 type Queries interface {
 	refs.Queries
 	live.Queries
+	StepQueries
+	Operations(ctx context.Context, f operations.Filter) ([]operations.Operation, error)
 	VersionExists(ctx context.Context, workflowID string, number int64) (bool, error)
 	WorkflowRun(ctx context.Context, id string) (Run, error)
 	WorkflowRunExists(ctx context.Context, workflowID, eventID string) (bool, error)
-	WorkflowRuns(ctx context.Context, f Filter) ([]Run, error)
+	// WorkflowRuns returns the runs f selects; operationStatuses limits
+	// them to runs whose operations have one of those statuses.
+	WorkflowRuns(ctx context.Context, f Filter, operationStatuses []operations.Status) ([]Run, error)
 	InsertWorkflowRun(ctx context.Context, r Run) error
-	// SetRunStatus records an observed status, of an active run only when
-	// activeOnly, and reports how many runs changed.
-	SetRunStatus(ctx context.Context, id string, status Status, at time.Time, activeOnly bool) (int64, error)
-	DeleteWorkflowRuns(ctx context.Context, ids []string) error
+	SetRunLogs(ctx context.Context, id string, logs []Log) error
 	// RunItems returns selection items ordered by run and position; empty
 	// arguments match every run or item.
 	RunItems(ctx context.Context, runIDs []string, itemID string) ([]Item, error)
 	InsertRunItem(ctx context.Context, i Item) error
-	StepResult(ctx context.Context, runID string, step int) (name string, body []byte, err error)
-	InsertStepResult(ctx context.Context, runID string, step int, name string, body []byte) error
-	StepBodies(ctx context.Context, runID string) (map[int]json.RawMessage, error)
-	// CopyStepResults copies a run's results of the steps before a step to
-	// another run.
-	CopyStepResults(ctx context.Context, target, source string, before int) error
-	DeleteStepResults(ctx context.Context, runIDs []string) error
 	AuditRecorded(ctx context.Context, entityType, entityID, action string) (bool, error)
 }
 
@@ -125,17 +200,18 @@ func NewRepo(read Queries, write func(context.Context, func(Queries) error) erro
 
 func now() time.Time { return time.Now().UTC().Truncate(time.Microsecond) }
 
-// Create records a queued run of a workflow version in the workflow's
-// workspace. Its item must be an item or folder of that workspace, and a
-// retry must repeat a run of the same workflow version and workspace.
+// Create records the provenance of the run operation in.ID: a run of a
+// workflow version in the workflow's workspace. Its item must be an item
+// or folder of that workspace, and a retry must repeat a run of the same
+// workflow version and workspace.
 func (r *Repo) Create(ctx context.Context, in CreateInput) (Run, error) {
 	if in.ID == "" {
-		in.ID = uuid.NewString()
+		return Run{}, fmt.Errorf("%w: a run needs its operation", dberr.ErrInvalidReference)
 	}
 	at := now()
 	run := Run{
 		ID: in.ID, WorkflowID: in.WorkflowID, WorkspaceID: in.WorkspaceID, ItemID: in.ItemID, EventID: in.EventID, EventType: in.EventType,
-		Actor: in.Actor, RetryOf: in.RetryOf, WorkflowVersion: in.WorkflowVersion, Depth: in.Depth, Status: StatusQueued, CreatedAt: at, StatusAt: at,
+		Actor: in.Actor, RetryOf: in.RetryOf, WorkflowVersion: in.WorkflowVersion, Depth: in.Depth, Status: StatusQueued, CreatedAt: at, UpdatedAt: at,
 	}
 	err := r.write(ctx, func(q Queries) error {
 		wf, err := q.Workflow(ctx, in.WorkflowID)
@@ -197,7 +273,48 @@ func selectable(ctx context.Context, q Queries, itemID, workspaceID string) erro
 }
 
 func (r *Repo) Find(ctx context.Context, id string) (Run, error) {
-	return r.read.WorkflowRun(ctx, id)
+	run, err := r.read.WorkflowRun(ctx, id)
+	if err != nil {
+		return Run{}, err
+	}
+	out, err := r.executions(ctx, []Run{run}, nil)
+	if err != nil {
+		return Run{}, err
+	}
+	return out[0], nil
+}
+
+// executions fills runs from their operations, keeping those with one of
+// statuses when there are any.
+func (r *Repo) executions(ctx context.Context, rows []Run, statuses []Status) ([]Run, error) {
+	if len(rows) == 0 {
+		return rows, nil
+	}
+	ids := make([]string, len(rows))
+	for i, run := range rows {
+		ids[i] = run.ID
+	}
+	ops, err := r.read.Operations(ctx, operations.Filter{IDs: ids})
+	if err != nil {
+		return nil, err
+	}
+	byID := make(map[string]operations.Operation, len(ops))
+	for _, op := range ops {
+		byID[op.ID] = op
+	}
+	at := now()
+	out := rows[:0]
+	for _, run := range rows {
+		op, ok := byID[run.ID]
+		if !ok {
+			return nil, fmt.Errorf("run %s has no operation", run.ID)
+		}
+		run.execution(op, at)
+		if len(statuses) == 0 || slices.Contains(statuses, run.Status) {
+			out = append(out, run)
+		}
+	}
+	return out, nil
 }
 
 // Exists reports whether an event already started a run of a workflow.
@@ -205,11 +322,18 @@ func (r *Repo) Exists(ctx context.Context, workflowID, eventID string) (bool, er
 	return r.read.WorkflowRunExists(ctx, workflowID, eventID)
 }
 
+// List returns the runs f selects. A status filter of queued, running or
+// waiting is applied after reading the pending runs, so a limited page may
+// hold fewer runs.
 func (r *Repo) List(ctx context.Context, f Filter) ([]Run, error) {
 	if f.SystemOnly && len(f.SystemKeys) == 0 {
 		return []Run{}, nil
 	}
-	return r.read.WorkflowRuns(ctx, f)
+	rows, err := r.read.WorkflowRuns(ctx, f, operationStatuses(f.Statuses))
+	if err != nil {
+		return nil, err
+	}
+	return r.executions(ctx, rows, f.Statuses)
 }
 
 // Items returns selection items of runs, of an item, or both.
@@ -231,52 +355,26 @@ func (r *Repo) AddItem(ctx context.Context, runID, itemID string, position int) 
 	})
 }
 
-// Observe records a run's status as observed at a time and notifies clients
-// when it changed. With activeOnly, finished runs keep their status.
-func (r *Repo) Observe(ctx context.Context, id string, status Status, at time.Time, activeOnly bool) error {
-	return r.write(ctx, func(q Queries) error {
-		n, err := q.SetRunStatus(ctx, id, status, at.UTC(), activeOnly)
-		if err != nil || n == 0 {
-			return err
-		}
-		return live.Notify(ctx, q, live.KindRun, id, live.ActionUpdated)
-	})
-}
-
-func (r *Repo) Delete(ctx context.Context, ids []string) error {
-	if len(ids) == 0 {
+// AddLogs appends what a run's script logged, keeping the last MaxLogs
+// entries.
+func (r *Repo) AddLogs(ctx context.Context, id string, logs []Log) error {
+	if len(logs) == 0 {
 		return nil
 	}
-	return r.read.DeleteWorkflowRuns(ctx, ids)
+	return r.write(ctx, func(q Queries) error {
+		run, err := q.WorkflowRun(ctx, id)
+		if err != nil {
+			return err
+		}
+		all := append(run.Logs, logs...)
+		if len(all) > MaxLogs {
+			all = all[len(all)-MaxLogs:]
+		}
+		return q.SetRunLogs(ctx, id, all)
+	})
 }
 
 // Purged reports whether a run was purged with its workspace's content.
 func (r *Repo) Purged(ctx context.Context, id string) (bool, error) {
 	return r.read.AuditRecorded(ctx, "workflow_run", id, "run.purge")
-}
-
-// StepResult returns the name and body a run checkpointed for a step.
-func (r *Repo) StepResult(ctx context.Context, runID string, step int) (string, []byte, error) {
-	return r.read.StepResult(ctx, runID, step)
-}
-
-func (r *Repo) SaveStepResult(ctx context.Context, runID string, step int, name string, body []byte) error {
-	return r.read.InsertStepResult(ctx, runID, step, name, body)
-}
-
-// StepBodies returns a run's checkpointed bodies by step.
-func (r *Repo) StepBodies(ctx context.Context, runID string) (map[int]json.RawMessage, error) {
-	return r.read.StepBodies(ctx, runID)
-}
-
-// ForkSteps gives a retry the results its origin checkpointed before a step.
-func (r *Repo) ForkSteps(ctx context.Context, target, source string, before int) error {
-	return r.read.CopyStepResults(ctx, target, source, before)
-}
-
-func (r *Repo) DeleteSteps(ctx context.Context, runIDs []string) error {
-	if len(runIDs) == 0 {
-		return nil
-	}
-	return r.read.DeleteStepResults(ctx, runIDs)
 }

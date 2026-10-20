@@ -20,10 +20,13 @@ import (
 	"papergo/internal/dal/dberr"
 	"papergo/internal/dal/directory"
 	grantstore "papergo/internal/dal/grants"
+	"papergo/internal/dal/operations"
 	taskstore "papergo/internal/dal/tasks"
 	"papergo/internal/dms"
 	"papergo/internal/forms"
 	"papergo/internal/model"
+
+	"github.com/google/uuid"
 )
 
 // Events tasks raise. Workflows can start on them.
@@ -96,18 +99,41 @@ type Input struct {
 	DueAt       *time.Time
 	// Workflow is set for a workflow's task; Wait when its run waits.
 	Workflow *Source
-	Wait     bool
 	// System marks a task PaperGo itself creates.
 	System bool
 	// Actor is who caused the run, for the actor entry.
 	Actor string
 }
 
-// Source is the workflow node that created a task.
+// Source is the workflow run that created a task. Its script waits for the
+// answer on the task's operation.
 type Source struct {
 	WorkflowID string
 	RunID      string
-	Node       string
+}
+
+// OperationKind is the operation a workflow's task answer ends: it
+// succeeds with the task's result when the task completes, and is
+// cancelled with the task.
+const OperationKind = "task.response"
+
+// Register makes s accept the operations of workflow tasks.
+func Register(s *dms.Service) error {
+	return s.RegisterOperationHandler(OperationKind, dms.OperationHandler{Scope: "workspace.read", External: true,
+		Validate: func(context.Context, *dms.Service, string, string, json.RawMessage) error {
+			return dms.Invalid("a workflow's task starts this operation")
+		},
+		// The work a cancelled run waited for is cancelled, its open task
+		// included.
+		Cancelled: func(ctx context.Context, t *dms.Service, op *operations.Operation) error {
+			rows, err := t.DAL.Tasks().List(ctx, taskstore.Filter{OperationID: op.ID, Status: taskstore.StatusOpen})
+			for _, tk := range rows {
+				if _, err = cancel(ctx, t, tk, tk.CreatedBy); err != nil {
+					return err
+				}
+			}
+			return err
+		}})
 }
 
 // Create creates a task as subject inside t's write transaction, after
@@ -168,13 +194,22 @@ func Create(ctx context.Context, t *dms.Service, subject string, in Input) (task
 	input := taskstore.CreateInput{
 		WorkspaceID: in.WorkspaceID, ItemID: in.ItemID, Kind: in.Kind, Key: in.Key, Title: in.Title, Description: in.Description,
 		Assignees: assignees, Completion: in.Completion, Outcomes: in.Outcomes, InputSchema: in.InputSchema, Values: in.Values, Review: in.Review,
-		Priority: in.Priority, DueAt: in.DueAt, Wait: in.Wait, CreatedBy: subject, Source: taskstore.SourceUser,
+		Priority: in.Priority, DueAt: in.DueAt, CreatedBy: subject, Source: taskstore.SourceUser,
 	}
 	if in.Workflow != nil {
+		input.ID = uuid.NewString()
+		payload, err := json.Marshal(map[string]string{"task_id": input.ID})
+		if err != nil {
+			return taskstore.Task{}, err
+		}
+		op, err := t.AcceptOperation(ctx, operations.Operation{Kind: OperationKind, CreatedBy: subject, ContainerID: in.WorkspaceID, Payload: payload})
+		if err != nil {
+			return taskstore.Task{}, err
+		}
 		input.Source = taskstore.SourceWorkflow
 		input.WorkflowID = in.Workflow.WorkflowID
 		input.RunID = in.Workflow.RunID
-		input.Node = in.Workflow.Node
+		input.OperationID = op.ID
 	} else if in.System {
 		input.Source = taskstore.SourceSystem
 	}
@@ -329,8 +364,12 @@ func checkReview(ctx context.Context, t *dms.Service, subject string, in Input) 
 	if err != nil {
 		return fmt.Errorf("review: %w", err)
 	}
-	if f.RunID != in.Workflow.RunID {
-		return dms.Invalid("review: the staged file is not this run's")
+	run := ""
+	if in.Workflow != nil {
+		run = in.Workflow.RunID
+	}
+	if f.RunID != run {
+		return dms.Invalid("review: the staged file is another workflow run's")
 	}
 	return nil
 }
@@ -622,11 +661,31 @@ func Respond(ctx context.Context, t *dms.Service, subject, id string, r Response
 		return taskstore.Task{}, err
 	}
 	if tk.Status == taskstore.StatusCompleted {
-		if err = raise(ctx, t, tk, EventCompleted, subject); err != nil {
+		if err = completed(ctx, t, tk, subject); err != nil {
 			return taskstore.Task{}, err
 		}
 	}
 	return tk, nil
+}
+
+// completed raises a completed task's event and ends the operation a
+// workflow waits on with its result.
+func completed(ctx context.Context, t *dms.Service, tk taskstore.Task, actor string) error {
+	if err := raise(ctx, t, tk, EventCompleted, actor); err != nil {
+		return err
+	}
+	if tk.OperationID == "" {
+		return nil
+	}
+	result, err := Result(ctx, t, tk.ID)
+	if err != nil {
+		return err
+	}
+	raw, err := json.Marshal(result)
+	if err != nil {
+		return err
+	}
+	return t.EndExternalOperation(ctx, tk.OperationID, operations.StatusSucceeded, raw, "")
 }
 
 // Reassign replaces an open task's assignees, as an owner of its workspace
@@ -678,7 +737,7 @@ func Reassign(ctx context.Context, t *dms.Service, subject, id string, entries [
 		return taskstore.Task{}, err
 	}
 	if tk.Status == taskstore.StatusCompleted {
-		if err = raise(ctx, t, tk, EventCompleted, subject); err != nil {
+		if err = completed(ctx, t, tk, subject); err != nil {
 			return taskstore.Task{}, err
 		}
 	}
@@ -720,9 +779,9 @@ func raise(ctx context.Context, t *dms.Service, tk taskstore.Task, typ, actor st
 // ErrCancelled is the error a run waiting for a cancelled task gets.
 var ErrCancelled = errors.New("the task was cancelled")
 
-// Cancel cancels an open task inside t's write transaction. Its creator and
-// the workspace's owners may cancel a person's or the system's task; a
-// workflow's task belongs to its run, so cancel the run.
+// Cancel cancels an open task inside t's write transaction, as its creator
+// or an owner of its workspace. A run waiting for a workflow's task gets the
+// cancellation as the outcome of its wait.
 func Cancel(ctx context.Context, t *dms.Service, subject, id string) (taskstore.Task, error) {
 	tk, err := t.DAL.Tasks().Find(ctx, id)
 	if dberr.IsNotFound(err) {
@@ -741,36 +800,10 @@ func Cancel(ctx context.Context, t *dms.Service, subject, id string) (taskstore.
 	if tk.CreatedBy != subject && !manages(ctx, t, subject, tk.WorkspaceID) {
 		return taskstore.Task{}, dms.ErrForbidden
 	}
-	if tk.Source == taskstore.SourceWorkflow {
-		return taskstore.Task{}, dms.Invalid("a workflow's task ends with its run: cancel the run")
-	}
 	if tk.Status != taskstore.StatusOpen {
 		return taskstore.Task{}, fmt.Errorf("%w: the task is %s", dms.ErrConflict, tk.Status)
 	}
 	return cancel(ctx, t, tk, subject)
-}
-
-// CancelByWorkflow cancels a task as a workflow's task.cancel node does: an
-// open task of the workflow's workspace that no run waits for. A task a run
-// waits for ends with its run.
-func CancelByWorkflow(ctx context.Context, t *dms.Service, author, workspaceID, id string) (taskstore.Task, error) {
-	tk, err := t.DAL.Tasks().Find(ctx, id)
-	if dberr.IsNotFound(err) {
-		return taskstore.Task{}, dms.ErrNotFound
-	}
-	if err != nil {
-		return taskstore.Task{}, err
-	}
-	if tk.WorkspaceID != workspaceID {
-		return taskstore.Task{}, dms.ErrNotFound
-	}
-	if tk.Status != taskstore.StatusOpen {
-		return tk, nil
-	}
-	if tk.Wait {
-		return taskstore.Task{}, dms.Invalid("a run waits for this task: cancel the run instead")
-	}
-	return cancel(ctx, t, tk, author)
 }
 
 func cancel(ctx context.Context, t *dms.Service, tk taskstore.Task, actor string) (taskstore.Task, error) {
@@ -781,21 +814,39 @@ func cancel(ctx context.Context, t *dms.Service, tk taskstore.Task, actor string
 	if err = raise(ctx, t, tk, EventCancelled, actor); err != nil {
 		return taskstore.Task{}, err
 	}
+	// The operation a run waits on ends with the task, unless its
+	// cancellation is what cancels the task.
+	if tk.OperationID != "" {
+		op, err := t.DAL.Operations().Find(ctx, tk.OperationID)
+		if err != nil {
+			return taskstore.Task{}, err
+		}
+		if op.Status == operations.StatusPending {
+			if err = t.EndExternalOperation(ctx, tk.OperationID, operations.StatusCancelled, nil, ErrCancelled.Error()); err != nil {
+				return taskstore.Task{}, err
+			}
+		}
+	}
 	return tk, nil
 }
 
-// CancelRun cancels open tasks whose owning run was cancelled.
-func CancelRun(ctx context.Context, t *dms.Service, runID string) (bool, error) {
-	rows, err := t.DAL.Tasks().List(ctx, taskstore.Filter{RunID: runID, Status: taskstore.StatusOpen, WaitOnly: true})
+// CancelOpen cancels the open tasks f selects except those of the run
+// except, such as the tasks about a deleted item or of a deleted workflow.
+func CancelOpen(ctx context.Context, t *dms.Service, f taskstore.Filter, except string) error {
+	f.Status = taskstore.StatusOpen
+	rows, err := t.DAL.Tasks().List(ctx, f)
 	if err != nil {
-		return false, err
+		return err
 	}
 	for _, tk := range rows {
+		if except != "" && tk.RunID == except {
+			continue
+		}
 		if _, err = cancel(ctx, t, tk, tk.CreatedBy); err != nil {
-			return false, err
+			return err
 		}
 	}
-	return len(rows) > 0, nil
+	return nil
 }
 
 func manages(ctx context.Context, t *dms.Service, subject, workspaceID string) bool {

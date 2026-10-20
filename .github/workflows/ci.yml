@@ -117,7 +117,7 @@ jobs:
       - name: Test the application on PostgreSQL
         env:
           PAPERGO_TEST_POSTGRES_DSN: postgres://papergo:papergo-test@localhost:5432/papergo?sslmode=disable
-        run: go test ./internal/dms ./internal/httpapi ./internal/identity ./internal/runner ./internal/webdav ./internal/workflow ./internal/workflowai -count=1 -timeout 40m
+        run: go test ./internal/dms ./internal/httpapi ./internal/identity ./internal/scriptrun ./internal/webdav ./internal/workflow ./internal/aiops ./internal/worker ./internal/documenttext ./internal/documentpreview ./internal/documentfiles ./internal/documentsearch -count=1 -timeout 40m
 
   frontend:
     name: Build embedded frontend
@@ -141,6 +141,28 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
+  workflow-sdk:
+    name: Workflow SDK
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: sdk/package-lock.json
+      - name: Verify the generated client and bundle
+        run: |
+          npm ci --prefix sdk
+          npm --prefix sdk run generate
+          npm --prefix sdk run typecheck
+          npm --prefix sdk test
+          npm --prefix sdk run build
+          git add -N sdk
+          git diff --exit-code -- sdk
   devcontainer:
     name: Development container
     runs-on: ubuntu-latest
@@ -334,7 +356,7 @@ jobs:
       - name: Service, HTTP and workflow parity
         env:
           PAPERGO_TEST_SEARCH_STORE: zvec
-        run: go test -race ./internal/dms ./internal/httpapi ./internal/runner -run '(Search|Content|Receipt|Contract|AIComplete|Prefix|SmartFolder|View|Listing|Query)'
+        run: go test -race ./internal/dms ./internal/httpapi ./internal/scriptrun -run '(Search|Content|Receipt|Contract|AIComplete|Prefix|SmartFolder|View|Listing|Query)'
       - name: Real dimensions soak
         env:
           PAPERGO_ZVEC_SOAK: '1'

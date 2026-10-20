@@ -83,22 +83,34 @@ type BlobFilter struct {
 	Limit   int
 }
 
-// StagedFile is a file a workflow run produced for an item, waiting to be
-// promoted to the item's next file version or discarded.
-type StagedFile struct {
-	ID, WorkspaceID, ItemID, RunID string
-	Sources                        []model.StagedSource
-	ObjectKey, Filename            string
-	ContentType                    string
-	Size                           int64
-	Sha256                         string
-	Metrics                        json.RawMessage
-	State                          StagedState
-	CreatedBy                      string
-	CreatedAt, UpdatedAt           time.Time
+// Artifact is a file an operation made from file versions for an item,
+// such as a smaller image or a PDF composed from photos. It is kept until
+// ExpiresAt, and longer while a pending staged file holds it, so identical
+// requests (the same InputKey for the item) reuse it.
+type Artifact struct {
+	ID, WorkspaceID, ItemID, OperationID, InputKey string
+	Sources                                        []model.ArtifactSource
+	ObjectKey, Filename                            string
+	ContentType                                    string
+	Size                                           int64
+	Sha256                                         string
+	Metrics                                        json.RawMessage
+	CreatedBy                                      string
+	CreatedAt, ExpiresAt                           time.Time
 }
 
-// FileQueries are the statements a driver runs for blobs and staged files.
+// StagedFile is a consumer's claim on an artifact for an item: a workflow
+// run's, or without RunID a person's or a client's, until it promotes the
+// artifact to the item's next file version or discards it.
+type StagedFile struct {
+	ID, WorkspaceID, ItemID, ArtifactID, RunID string
+	State                                      StagedState
+	CreatedBy                                  string
+	CreatedAt, UpdatedAt                       time.Time
+}
+
+// FileQueries are the statements a driver runs for blobs, artifacts and
+// staged files.
 type FileQueries interface {
 	refs.Queries
 	Blob(ctx context.Context, id string) (Blob, error)
@@ -109,15 +121,31 @@ type FileQueries interface {
 	LatestBlobVersion(ctx context.Context, itemID string) (int, error)
 	InsertBlob(ctx context.Context, b Blob) error
 	SetBlobAvailability(ctx context.Context, id string, a Availability, reclaimAfter *time.Time) error
+	Artifact(ctx context.Context, id string) (Artifact, error)
+	InsertArtifact(ctx context.Context, a Artifact) error
+	// ReusableArtifact returns the newest artifact of the item with the
+	// input key that expires after now.
+	ReusableArtifact(ctx context.Context, itemID, inputKey string, now time.Time) (Artifact, error)
+	// DeleteExpiredArtifacts deletes up to limit artifacts that expired by
+	// now and no pending staged file holds, and returns how many.
+	DeleteExpiredArtifacts(ctx context.Context, now time.Time, limit int) (int, error)
 	StagedFile(ctx context.Context, id string) (StagedFile, error)
 	InsertStagedFile(ctx context.Context, f StagedFile) error
 	SetStagedState(ctx context.Context, id string, state StagedState, at time.Time) error
-	// BlobStaged reports whether a pending staged file stores its bytes in
-	// the object or was made from the blob.
+	// BlobStaged reports whether the artifact of a pending staged file
+	// stores its bytes in the object or was made from the blob.
 	BlobStaged(ctx context.Context, objectKey, blobID string) (bool, error)
 	BlobLeased(ctx context.Context, blobID string) (bool, error)
-	// DiscardRunStaged discards the pending staged files of runs.
-	DiscardRunStaged(ctx context.Context, runIDs []string, at time.Time) error
+	// DiscardStaged discards the pending staged files s selects.
+	DiscardStaged(ctx context.Context, s StagedSelection, at time.Time) error
+}
+
+// StagedSelection selects staged files: those of runs, of an item, or of
+// the runs of a workflow, except those of ExceptRunID. It selects at least
+// one of them.
+type StagedSelection struct {
+	RunIDs                          []string
+	ItemID, WorkflowID, ExceptRunID string
 }
 
 // Blob returns a blob, or dberr.ErrNotFound.
@@ -223,8 +251,8 @@ func (r *Repo) SetAvailability(ctx context.Context, id string, a Availability, r
 	return out, err
 }
 
-// Staged reports whether a pending staged file needs a blob: it stores its
-// bytes in the blob's object or was made from the blob.
+// Staged reports whether a pending staged file needs a blob: its artifact
+// stores its bytes in the blob's object or was made from the blob.
 func (r *Repo) Staged(ctx context.Context, b Blob) (bool, error) {
 	return r.read.BlobStaged(ctx, b.ObjectKey, b.ID)
 }
@@ -234,21 +262,47 @@ func (r *Repo) Leased(ctx context.Context, blobID string) (bool, error) {
 	return r.read.BlobLeased(ctx, blobID)
 }
 
+// Artifact returns an artifact, or dberr.ErrNotFound.
+func (r *Repo) Artifact(ctx context.Context, id string) (Artifact, error) {
+	return r.read.Artifact(ctx, id)
+}
+
+// AddArtifact records an artifact.
+func (r *Repo) AddArtifact(ctx context.Context, a Artifact) (Artifact, error) {
+	if a.ID == "" {
+		a.ID = uuid.NewString()
+	}
+	if a.Sources == nil {
+		a.Sources = []model.ArtifactSource{}
+	}
+	if len(a.Metrics) == 0 {
+		a.Metrics = json.RawMessage(`{}`)
+	}
+	a.CreatedAt, a.ExpiresAt = now(), a.ExpiresAt.UTC()
+	return a, r.read.InsertArtifact(ctx, a)
+}
+
+// ReusableArtifact returns the newest unexpired artifact of the item made
+// from the same input, or dberr.ErrNotFound.
+func (r *Repo) ReusableArtifact(ctx context.Context, itemID, inputKey string) (Artifact, error) {
+	return r.read.ReusableArtifact(ctx, itemID, inputKey, now())
+}
+
+// DeleteExpiredArtifacts deletes up to limit expired artifacts no pending
+// staged file holds, with their staged files, and returns how many.
+func (r *Repo) DeleteExpiredArtifacts(ctx context.Context, at time.Time, limit int) (int, error) {
+	return r.read.DeleteExpiredArtifacts(ctx, at.UTC(), limit)
+}
+
 // StagedFile returns a staged file, or dberr.ErrNotFound.
 func (r *Repo) StagedFile(ctx context.Context, id string) (StagedFile, error) {
 	return r.read.StagedFile(ctx, id)
 }
 
-// Stage records a pending staged file.
+// Stage records a pending staged file of an artifact.
 func (r *Repo) Stage(ctx context.Context, f StagedFile) (StagedFile, error) {
 	if f.ID == "" {
 		f.ID = uuid.NewString()
-	}
-	if f.Sources == nil {
-		f.Sources = []model.StagedSource{}
-	}
-	if len(f.Metrics) == 0 {
-		f.Metrics = json.RawMessage(`{}`)
 	}
 	f.State, f.CreatedAt = StagedPending, now()
 	f.UpdatedAt = f.CreatedAt
@@ -263,12 +317,12 @@ func (r *Repo) SetStagedState(ctx context.Context, id string, state StagedState)
 	return r.read.SetStagedState(ctx, id, state, now())
 }
 
-// DiscardRunStaged discards the pending staged files of finished runs.
-func (r *Repo) DiscardRunStaged(ctx context.Context, runIDs ...string) error {
-	if len(runIDs) == 0 {
+// DiscardStaged discards the pending staged files s selects.
+func (r *Repo) DiscardStaged(ctx context.Context, s StagedSelection) error {
+	if len(s.RunIDs) == 0 && s.ItemID == "" && s.WorkflowID == "" {
 		return nil
 	}
-	return r.read.DiscardRunStaged(ctx, runIDs, now())
+	return r.read.DiscardStaged(ctx, s, now())
 }
 
 func one[T any](rows []T, err error) (T, error) {

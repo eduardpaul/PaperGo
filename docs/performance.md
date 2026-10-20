@@ -164,12 +164,14 @@ Six uploaded file versions represented 144 MiB of logical content, with only
 the shorter 20,000-item run still had 144 MiB while redundant upload objects
 awaited cleanup. Duplicate uploads therefore still need temporary disk space.
 
-The embedded frontend build contained approximately **1 MiB of assets**. Assets
-referenced directly by the initial HTML totalled **488 KiB uncompressed**, or
-**145 KiB with gzip** measured locally. Additional routes load further chunks.
-The application serves assets without response compression; enable compression
-at the reverse proxy if bandwidth matters. Browser rendering performance was not
-tested.
+The embedded frontend build contains approximately **13 MiB of assets**, 12 MiB
+of them the workflow script editor (Monaco and its TypeScript checker), which
+loads only when a script is opened. Assets referenced directly by the initial
+HTML total **652 KiB uncompressed**, or **206 KiB with gzip** measured locally.
+Additional routes load further chunks. The application serves its JavaScript,
+CSS, font and other text assets gzip-compressed to clients that accept gzip,
+compressing each file once on its first such request; the whole build
+compresses to about 3 MiB. Browser rendering performance was not tested.
 
 ### Permission and service benchmarks
 
@@ -247,7 +249,7 @@ Collections can retain 1–500 metadata versions per item (default 50 when
 versioning is enabled). With versioning off, replaced files enter byte reclamation
 after the grace period. With versioning enabled, file versions are retained
 independently; `max_versions` does not cap stored file bytes. Dispatched events and finished workflow runs use the
-30-day default runner retention (`RUN_RETENTION`); successful automatic system runs use `SYSTEM_RUN_RETENTION` (default 24h) and reusable answers use `RESULT_CACHE_TTL` (default 720h). Cleanup is hourly, so an eligible row can wait up to one hour. Live changes use seven days. Ordinary audit
+30-day default run retention (`RUN_RETENTION`); successful automatic system runs use `SYSTEM_RUN_RETENTION` (default 24h) and reusable answers use `RESULT_CACHE_TTL` (default 720h). Cleanup is hourly, so an eligible row can wait up to one hour. Live changes use seven days. Ordinary audit
 history has no general automatic expiry, and publication snapshots stay while the item is live. Retention deletions free SQLite pages
 for reuse; they do not inherently shrink the database file. The server logs
 every request, so configure log rotation independently of application retention.
@@ -324,20 +326,3 @@ The service fixtures do not run the workflow dispatcher. In particular,
 repeated-edit throughput is a backlog stress case. Use the HTTP extended edit
 stages, which run the dispatcher, for a closer estimate of normal server edits.
 Allocation `B/op` is bytes allocated per operation, not retained process RAM.
-
-For a repeatable storage comparison against a Git revision, run:
-
-```sh
-python3 scripts/native.py
-python3 scripts/compare-storage.py --base origin/main --repeats 3
-```
-
-The [comparison harness](../scripts/compare-storage.py) builds the same
-[durable workflow benchmark](../internal/runner/storage_benchmark_test.go) in
-the current working tree and a disposable copy of the baseline revision. It
-alternates execution order, creates fresh databases for each sample, and writes
-raw measurements and a Markdown report under `reports/storage-efficiency-comparison`.
-It measures main-file growth, step allocation and payloads, retained WAL, workflow
-completion, run inspection and maintenance retention. Run it without other test
-or load processes. The workload and measurement limits are recorded in the report;
-timing improvements are observations rather than assertions in the test suite.

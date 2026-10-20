@@ -47,7 +47,7 @@ func (a *API) workspaceRelationships(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	out, err := a.DMS.WorkspaceRelationships(r.Context(), subject(r), r.PathValue("id"), in)
+	out, err := a.dms(r).WorkspaceRelationships(r.Context(), subject(r), r.PathValue("id"), in)
 	a.relationshipResult(w, r, out, err)
 }
 func (a *API) workspaceRelationshipTypes(w http.ResponseWriter, r *http.Request) {
@@ -55,7 +55,7 @@ func (a *API) workspaceRelationshipTypes(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		return
 	}
-	out, err := a.DMS.WorkspaceRelationshipTypes(r.Context(), subject(r), r.PathValue("id"), in)
+	out, err := a.dms(r).WorkspaceRelationshipTypes(r.Context(), subject(r), r.PathValue("id"), in)
 	a.relationshipResult(w, r, out, err)
 }
 func (a *API) workspaceRelationshipItems(w http.ResponseWriter, r *http.Request) {
@@ -63,7 +63,7 @@ func (a *API) workspaceRelationshipItems(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		return
 	}
-	out, err := a.DMS.WorkspaceRelationshipItems(r.Context(), subject(r), r.PathValue("id"), in)
+	out, err := a.dms(r).WorkspaceRelationshipItems(r.Context(), subject(r), r.PathValue("id"), in)
 	a.relationshipResult(w, r, out, err)
 }
 func (a *API) workspaceRelationshipNeighborhood(w http.ResponseWriter, r *http.Request) {
@@ -71,6 +71,6 @@ func (a *API) workspaceRelationshipNeighborhood(w http.ResponseWriter, r *http.R
 	if !ok {
 		return
 	}
-	out, err := a.DMS.WorkspaceRelationshipNeighborhood(r.Context(), subject(r), r.PathValue("id"), in)
+	out, err := a.dms(r).WorkspaceRelationshipNeighborhood(r.Context(), subject(r), r.PathValue("id"), in)
 	a.relationshipResult(w, r, out, err)
 }

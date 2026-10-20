@@ -5,9 +5,11 @@ PaperGo reads text in page images through an OCR layer:
 - **`internal/ocr`** is the port. An `Engine` detects text regions (`Detect`) and reads text lines with their positions (`Recognize`) in a decoded image.
 - **`internal/ocr/paddle`** is the only engine: PaddleOCR running in ONNX Runtime.
 
-Engines never read storage or the database. Callers decode the file, apply EXIF orientation and pass an `image.Image` of at most 64 million pixels (`ocr.MaxPixels`). Workflow activities use the layer through the port only (see [workflows](workflows.md#building-features-on-workflows)).
+Engines never read storage or the database. Callers decode the file, apply EXIF orientation and pass an `image.Image` of at most 64 million pixels (`ocr.MaxPixels`). Features use the layer through the port only.
 
-Workflow activities use it: [`file.optimize_image`](workflows.md#image-optimization) detects text to shrink images, [`file.compose_pdf`](workflows.md#photos-to-pdf) also recognizes it for the text layer of searchable PDFs (`internal/pdf`), and [`document.read_text`](workflows.md#reading-text) reads scanned PDF pages and photos, keeping their text for search.
+`POST /v1/items/{id}/text` reads the text of an item's current file as a background operation, for API clients and workflow scripts alike. It answers `202 Accepted` with the pending operation and its `Location`. The operation reads text layers and OCRs pages and images without one (`ocr`: `auto`, `always` or `never`; `max_pages`; `languages`), reuses text already read from the same bytes with the same settings, and keeps the pages where `GET /v1/items/{id}/text` returns them. Its result counts the pages, characters and OCRed pages; a file whose text cannot be read fails it. Starting it requires `document.write` and write access to the item. The `documents` worker runs these operations one at a time, so a long document delays the reads queued after it, not other work. See [reading text](documents.md#reading-text).
+
+[Image optimization](documents.md#image-optimization) detects text to shrink images, and [photos to PDF](documents.md#photos-to-pdf) also recognizes it for the text layer of searchable PDFs (`internal/pdf`).
 
 ## Configuration
 

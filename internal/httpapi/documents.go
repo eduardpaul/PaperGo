@@ -35,13 +35,13 @@ func (a *API) createDocumentTo(w http.ResponseWriter, r *http.Request, groupID s
 	libraryID := r.PathValue("id")
 	if inbox {
 		var err error
-		libraryID, err = a.DMS.InboxUploadDestination(r.Context(), subject(r), groupID)
+		libraryID, err = a.dms(r).InboxUploadDestination(r.Context(), subject(r), groupID)
 		if err != nil {
 			a.failure(w, r, err)
 			return
 		}
 	}
-	if err := a.DMS.CanCreateDocument(r.Context(), subject(r), libraryID); err != nil {
+	if err := a.dms(r).CanCreateDocument(r.Context(), subject(r), libraryID); err != nil {
 		a.failure(w, r, err)
 		return
 	}
@@ -170,9 +170,9 @@ func (a *API) createDocumentTo(w http.ResponseWriter, r *http.Request, groupID s
 	content := dms.BlobInput{ObjectKey: object.Key, Filename: filename, ContentType: media, Size: object.Size, SHA256: object.SHA256}
 	var out *dms.DocumentUpload
 	if inbox {
-		out, err = a.DMS.CreateInboxDocument(r.Context(), subject(r), groupID, libraryID, metadata, content)
+		out, err = a.dms(r).CreateInboxDocument(r.Context(), subject(r), groupID, libraryID, metadata, content)
 	} else {
-		out, err = a.DMS.CreateDocument(r.Context(), subject(r), libraryID, metadata, content)
+		out, err = a.dms(r).CreateDocument(r.Context(), subject(r), libraryID, metadata, content)
 	}
 	if err != nil {
 		a.failure(w, r, err)
@@ -194,7 +194,7 @@ func (a *API) restoreBlob(w http.ResponseWriter, r *http.Request) {
 		a.failure(w, r, dms.ErrNotFound)
 		return
 	}
-	out, err := a.DMS.RestoreBlob(r.Context(), subject(r), r.PathValue("id"), number, version)
+	out, err := a.dms(r).RestoreBlob(r.Context(), subject(r), r.PathValue("id"), number, version)
 	if err != nil {
 		a.failure(w, r, err)
 		return

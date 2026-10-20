@@ -4,15 +4,16 @@ import (
 	"context"
 	"time"
 
+	"papergo/internal/dal/blobs"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/driver/sqlite/models"
+
 	"github.com/aarondl/opt/omit"
 	"github.com/stephenafamo/bob"
 	"github.com/stephenafamo/bob/dialect/sqlite"
 	"github.com/stephenafamo/bob/dialect/sqlite/im"
 	"github.com/stephenafamo/bob/dialect/sqlite/sm"
 	"github.com/stephenafamo/scan"
-	"papergo/internal/dal/blobs"
-	"papergo/internal/dal/dberr"
-	"papergo/internal/dal/driver/sqlite/models"
 )
 
 func (q Queries) BytesHeld(ctx context.Context, sha256 string) (bool, error) {
@@ -96,18 +97,8 @@ func (q Queries) DeleteDeletion(ctx context.Context, id string) error {
 
 func (q Queries) InsertBlobLease(ctx context.Context, l blobs.Lease) error {
 	_, err := models.BlobLeases.Insert(&models.BlobLeaseSetter{
-		ID: omit.From(l.ID), CreatedAt: omit.From(l.CreatedAt), OwnerID: omit.From(l.OwnerID), RunID: omit.From(l.RunID), BlobID: omit.From(l.BlobID),
-	}, im.OnConflict("owner_id", "blob_id").DoNothing()).Exec(ctx, q.exec)
-	return dberr.Translate(err)
-}
-
-func (q Queries) DeleteOwnerBlobLeases(ctx context.Context, ownerID string) error {
-	_, err := models.BlobLeases.Delete(models.DeleteWhere.BlobLeases.OwnerID.EQ(ownerID)).Exec(ctx, q.exec)
-	return dberr.Translate(err)
-}
-
-func (q Queries) DeleteRunBlobLeases(ctx context.Context, runID string) error {
-	_, err := models.BlobLeases.Delete(models.DeleteWhere.BlobLeases.RunID.EQ(runID)).Exec(ctx, q.exec)
+		ID: omit.From(l.ID), CreatedAt: omit.From(l.CreatedAt), OperationID: omit.From(l.OperationID), BlobID: omit.From(l.BlobID),
+	}, im.OnConflict("operation_id", "blob_id").DoNothing()).Exec(ctx, q.exec)
 	return dberr.Translate(err)
 }
 
@@ -125,7 +116,7 @@ func (q Queries) ObjectReferenced(ctx context.Context, key string, p blobs.Packa
 	a, err := bob.One(ctx, q.exec, sqlite.RawQuery(`SELECT EXISTS(SELECT 1 FROM blobs WHERE object_key=? AND availability<>'reclaimed')
 	OR EXISTS(SELECT 1 FROM activity_records WHERE namespace='blob_text' AND json_extract(payload,'$.object_key')=?)
 	OR EXISTS(SELECT 1 FROM blob_previews WHERE object_key=?)
-	OR EXISTS(SELECT 1 FROM staged_files WHERE object_key=? AND state='pending')
+	OR EXISTS(SELECT 1 FROM artifacts WHERE object_key=?)
 	OR EXISTS(SELECT 1 FROM operations WHERE (kind=? AND status='pending' AND json_extract(payload,'$.object_key')=?)
 		OR (kind=? AND status='succeeded' AND json_extract(result,'$.object_key')=? AND julianday(json_extract(result,'$.expires_at'))>julianday('now')))
 	OR EXISTS(SELECT 1 FROM blob_leases l JOIN blobs b ON b.id=l.blob_id WHERE b.object_key=?) AS referenced`, key, key, key, key, p.ImportKind, key, p.ExportKind, key, key), scan.StructMapper[answer]())

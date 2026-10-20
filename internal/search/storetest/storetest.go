@@ -4,6 +4,7 @@ package storetest
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -34,6 +35,7 @@ func Run(t *testing.T, open func(t *testing.T) search.Store) {
 		"FieldFilters":                    fieldFilters,
 		"FieldFiltersAreExact":            fieldFiltersAreExact,
 		"ContentIsSearchedOncePublished":  contentIsSearchedOncePublished,
+		"PublishingIsMonotonic":           publishingIsMonotonic,
 		"ContentFollowsFileVersions":      contentFollowsFileVersions,
 		"SemanticFindsContentByMeaning":   semanticFindsContentByMeaning,
 		"HybridFusesBothLists":            hybridFusesBothLists,
@@ -517,6 +519,33 @@ func contentIsSearchedOncePublished(t *testing.T, s search.Store) {
 	stage(t, s, "a", "b1", "g2", []search.Chunk{{Part: "summary", Kind: search.KindSummary, Text: "Short summary about renting"}})
 	expect(t, "restaged part", find(t, s, "leasing", all))
 	expect(t, "restaged part text", find(t, s, "renting", all), "a")
+}
+
+// Publishing is safe to repeat and to finish out of order: an older
+// generation never replaces a newer published one, and publishing keeps
+// newer staged generations.
+func publishingIsMonotonic(t *testing.T, s search.Store) {
+	upsert(t, s, withFile("a", "Contract", "b1"))
+	all := search.Filter{Access: everyone}
+	stage(t, s, "a", "b1", "g1", chunks("read", "First draft"))
+	stage(t, s, "a", "b1", "g2", chunks("read", "Second draft"))
+	publish(t, s, "a", "b1", "g1")
+	publish(t, s, "a", "b1", "g1")
+	expect(t, "older generation published", find(t, s, "first", all), "a")
+	publish(t, s, "a", "b1", "g2")
+	expect(t, "newer generation published", find(t, s, "second", all), "a")
+	expect(t, "older generation dropped", find(t, s, "first", all))
+	if err := s.PublishContent(ctx, "a", "b1", "g1"); !errors.Is(err, search.ErrSuperseded) {
+		t.Fatalf("publishing an older generation again: %v", err)
+	}
+	stage(t, s, "a", "b1", "g0", chunks("read", "Stale draft"))
+	if err := s.PublishContent(ctx, "a", "b1", "g0"); !errors.Is(err, search.ErrSuperseded) {
+		t.Fatalf("publishing an older generation late: %v", err)
+	}
+	expect(t, "newer generation kept", find(t, s, "second", all), "a")
+	if c, err := s.Content(ctx, "a", "b1"); err != nil || c.Generation != "g2" || c.Chunks != 1 {
+		t.Fatalf("content: %+v %v", c, err)
+	}
 }
 
 // Content belongs to a file version: a new version starts without it, and

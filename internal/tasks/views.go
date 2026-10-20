@@ -34,17 +34,19 @@ type View struct {
 	Source      taskstore.Source     `json:"source"`
 	WorkflowID  *string              `json:"workflow_id,omitempty"`
 	RunID       *string              `json:"run_id,omitempty"`
-	Node        *string              `json:"node,omitempty"`
-	Status      taskstore.Status     `json:"status"`
-	Outcome     *string              `json:"outcome,omitempty"`
-	CompletedBy *string              `json:"completed_by,omitempty"`
-	CompletedAt *time.Time           `json:"completed_at,omitempty"`
-	Comment     string               `json:"comment,omitempty"`
-	Input       json.RawMessage      `json:"input,omitempty"`
-	CreatedBy   string               `json:"created_by"`
-	CreatedAt   time.Time            `json:"created_at"`
-	UpdatedAt   time.Time            `json:"updated_at"`
-	Version     int                  `json:"version"`
+	// OperationID is the operation the task's answer ends, which its
+	// workflow run waits on.
+	OperationID *string          `json:"operation_id,omitempty"`
+	Status      taskstore.Status `json:"status"`
+	Outcome     *string          `json:"outcome,omitempty"`
+	CompletedBy *string          `json:"completed_by,omitempty"`
+	CompletedAt *time.Time       `json:"completed_at,omitempty"`
+	Comment     string           `json:"comment,omitempty"`
+	Input       json.RawMessage  `json:"input,omitempty"`
+	CreatedBy   string           `json:"created_by"`
+	CreatedAt   time.Time        `json:"created_at"`
+	UpdatedAt   time.Time        `json:"updated_at"`
+	Version     int              `json:"version"`
 	// Responses are the answers so far, oldest first; only in single reads.
 	Responses []ResponseView `json:"responses,omitempty"`
 	// Answered tells the reader that they, or their group, already answered;
@@ -70,7 +72,7 @@ type ResponseView struct {
 func toView(tk taskstore.Task) View {
 	return View{ID: tk.ID, WorkspaceID: tk.WorkspaceID, ItemID: ptr(tk.ItemID), Kind: tk.Kind, Key: tk.Key, Title: tk.Title, Description: tk.Description,
 		Assignees: tk.Assignees, Completion: tk.Completion, Outcomes: tk.Outcomes, InputSchema: tk.InputSchema, Values: tk.Values, Review: tk.Review,
-		Priority: tk.Priority, DueAt: tk.DueAt, Source: tk.Source, WorkflowID: ptr(tk.WorkflowID), RunID: ptr(tk.RunID), Node: ptr(tk.Node), Status: tk.Status, Outcome: ptr(tk.Outcome), CompletedBy: ptr(tk.CompletedBy), CompletedAt: tk.CompletedAt, Comment: tk.Comment, Input: tk.Input,
+		Priority: tk.Priority, DueAt: tk.DueAt, Source: tk.Source, WorkflowID: ptr(tk.WorkflowID), RunID: ptr(tk.RunID), OperationID: ptr(tk.OperationID), Status: tk.Status, Outcome: ptr(tk.Outcome), CompletedBy: ptr(tk.CompletedBy), CompletedAt: tk.CompletedAt, Comment: tk.Comment, Input: tk.Input,
 		CreatedBy: tk.CreatedBy, CreatedAt: tk.CreatedAt, UpdatedAt: tk.UpdatedAt, Version: int(tk.Version)}
 }
 
@@ -348,11 +350,22 @@ func view(ctx context.Context, t *dms.Service, tk taskstore.Task, subject string
 	return v, nil
 }
 
-// Create creates a standalone task as subject.
-func (s *Service) Create(ctx context.Context, subject string, in Input) (View, error) {
+// Create creates a task as subject: a workflow's task when the workflow
+// run run creates it, else a standalone task.
+func (s *Service) Create(ctx context.Context, subject, run string, in Input) (View, error) {
 	var out View
 	err := s.DMS.Write(ctx, func(t *dms.Service) error {
-		in.Workflow, in.System, in.Wait = nil, false, false
+		in.Workflow, in.System = nil, false
+		if run != "" {
+			r, err := t.DAL.Runs().Find(ctx, run)
+			if err != nil {
+				return err
+			}
+			if r.WorkspaceID != in.WorkspaceID {
+				return dms.Invalid("a workflow creates tasks in its own workspace")
+			}
+			in.Workflow = &Source{WorkflowID: r.WorkflowID, RunID: r.ID}
+		}
 		tk, err := Create(ctx, t, subject, in)
 		if err != nil {
 			return err
@@ -395,7 +408,7 @@ func (s *Service) Reassign(ctx context.Context, subject, id string, assignees []
 	return out, err
 }
 
-// Cancel cancels a person's or the system's open task.
+// Cancel cancels an open task.
 func (s *Service) Cancel(ctx context.Context, subject, id string) (View, error) {
 	var out View
 	err := s.DMS.Write(ctx, func(t *dms.Service) error {

@@ -6,12 +6,11 @@ import (
 	"papergo/internal/dal/catalog"
 	"papergo/internal/dal/content"
 	"papergo/internal/dal/taxonomy"
-	"papergo/internal/search"
 	"slices"
 	"strings"
 )
 
-// SearchField is a field search can filter on: a key with a type and
+// SearchField is a field searches and smart folders can filter on: a key with a type and
 // scale, as the readable lists and libraries define it.
 type SearchField struct {
 	Queryable         bool     `json:"queryable"`
@@ -144,17 +143,45 @@ func (s *Service) readableContentTypes(ctx context.Context, subject, workspaceID
 	return s.DAL.Catalog().ContentTypes(ctx, catalog.ContentTypeFilter{CollectionIDs: collections})
 }
 
-// Search filters are bounded like collection query filters.
+// IndexFilter is a filter on the fields of the lists and libraries a
+// subject may read, for an index kept outside the database: a condition
+// on one type and scale of a key, or a group. Values are encoded as the
+// field index encodes them, and terms are expanded to the terms merged
+// into them (under: also their descendants).
+type IndexFilter struct {
+	Key    string
+	Type   string
+	Scale  int
+	Op     string
+	Values []IndexValue
+	And    []IndexFilter
+	Or     []IndexFilter
+	Not    *IndexFilter
+}
+
+// Index filters are bounded like collection query filters.
 const (
-	maxSearchFilterNodes = 32
-	maxSearchFilterDepth = 6
+	maxIndexFilterNodes = 32
+	maxIndexFilterDepth = 6
 )
 
-// searchFilter compiles a filter on search fields: each condition applies
-// to every type and scale its key has among the definitions, with the value
-// encoded as the field index encodes it.
-func (s *Service) searchFilter(ctx context.Context, f *FilterExpr, defs map[string][]*catalog.FieldDefinition, depth int, nodes *int) (*search.FieldFilter, error) {
-	if *nodes++; depth > maxSearchFilterDepth || *nodes > maxSearchFilterNodes {
+// CompileIndexFilter compiles a filter on the fields of the lists and
+// libraries the subject may read (SearchFields), optionally of one
+// workspace or collection. A condition applies to every type and scale its
+// key has among them.
+func (s *Service) CompileIndexFilter(ctx context.Context, subject, workspaceID, collectionID string, f *FilterExpr) (*IndexFilter, error) {
+	return read(ctx, s, func(t *Service) (*IndexFilter, error) {
+		defs, err := t.searchFieldDefinitions(ctx, subject, workspaceID, collectionID)
+		if err != nil {
+			return nil, err
+		}
+		nodes := 0
+		return t.indexFilter(ctx, f, defs, 0, &nodes)
+	})
+}
+
+func (s *Service) indexFilter(ctx context.Context, f *FilterExpr, defs map[string][]*catalog.FieldDefinition, depth int, nodes *int) (*IndexFilter, error) {
+	if *nodes++; depth > maxIndexFilterDepth || *nodes > maxIndexFilterNodes {
 		return nil, invalid("filter is limited to 32 nodes and depth 6")
 	}
 	groups := 0
@@ -168,11 +195,11 @@ func (s *Service) searchFilter(ctx context.Context, f *FilterExpr, defs map[stri
 			return nil, invalid("filter node must be a group or a condition")
 		}
 		if f.Not != nil {
-			inner, err := s.searchFilter(ctx, f.Not, defs, depth+1, nodes)
+			inner, err := s.indexFilter(ctx, f.Not, defs, depth+1, nodes)
 			if err != nil {
 				return nil, err
 			}
-			return &search.FieldFilter{Not: inner}, nil
+			return &IndexFilter{Not: inner}, nil
 		}
 		list := f.And
 		if f.Or != nil {
@@ -181,18 +208,18 @@ func (s *Service) searchFilter(ctx context.Context, f *FilterExpr, defs map[stri
 		if len(list) == 0 {
 			return nil, invalid("filter groups cannot be empty")
 		}
-		parts := make([]search.FieldFilter, len(list))
+		parts := make([]IndexFilter, len(list))
 		for i := range list {
-			part, err := s.searchFilter(ctx, &list[i], defs, depth+1, nodes)
+			part, err := s.indexFilter(ctx, &list[i], defs, depth+1, nodes)
 			if err != nil {
 				return nil, err
 			}
 			parts[i] = *part
 		}
 		if f.Or != nil {
-			return &search.FieldFilter{Or: parts}, nil
+			return &IndexFilter{Or: parts}, nil
 		}
-		return &search.FieldFilter{And: parts}, nil
+		return &IndexFilter{And: parts}, nil
 	}
 	if f.ValueRef != "" {
 		return nil, invalid("search filters take values, not value_ref")
@@ -205,10 +232,10 @@ func (s *Service) searchFilter(ctx context.Context, f *FilterExpr, defs map[stri
 	if op == "" {
 		op = "eq"
 	}
-	var conds []search.FieldFilter
+	var conds []IndexFilter
 	var first error
 	for _, d := range variants {
-		c, err := s.searchCondition(ctx, d, op, f)
+		c, err := s.indexCondition(ctx, d, op, f)
 		if err != nil {
 			first = cmpOr(first, err)
 			continue
@@ -224,9 +251,9 @@ func (s *Service) searchFilter(ctx context.Context, f *FilterExpr, defs map[stri
 	// Missing means missing in every type the key has; the others hold
 	// when any type matches.
 	if op == "missing" {
-		return &search.FieldFilter{And: conds}, nil
+		return &IndexFilter{And: conds}, nil
 	}
-	return &search.FieldFilter{Or: conds}, nil
+	return &IndexFilter{Or: conds}, nil
 }
 
 func cmpOr(a, b error) error {
@@ -236,9 +263,9 @@ func cmpOr(a, b error) error {
 	return b
 }
 
-// searchCondition compiles a condition on one field definition.
-func (s *Service) searchCondition(ctx context.Context, d *catalog.FieldDefinition, op string, f *FilterExpr) (search.FieldFilter, error) {
-	c := search.FieldFilter{Key: d.Key, Type: string(d.Type), Scale: d.Scale, Op: op}
+// indexCondition compiles a condition on one field definition.
+func (s *Service) indexCondition(ctx context.Context, d *catalog.FieldDefinition, op string, f *FilterExpr) (IndexFilter, error) {
+	c := IndexFilter{Key: d.Key, Type: string(d.Type), Scale: d.Scale, Op: op}
 	if !slices.Contains(searchOperators(d.Type), op) {
 		return c, invalid(f.Field + " does not support " + op)
 	}
@@ -264,7 +291,7 @@ func (s *Service) searchCondition(ctx context.Context, d *catalog.FieldDefinitio
 		if err != nil {
 			return c, err
 		}
-		c.Values = append(c.Values, searchQueryValue(encoded))
+		c.Values = append(c.Values, queryIndexValue(encoded))
 	}
 	if d.Type != catalog.FieldTerm && d.Type != catalog.FieldKeywords {
 		return c, nil
@@ -272,9 +299,9 @@ func (s *Service) searchCondition(ctx context.Context, d *catalog.FieldDefinitio
 	// A term matches the terms merged into it; under also its descendants.
 	var ids []string
 	for _, v := range c.Values {
-		expand := s.SearchTermAliases
+		expand := s.TermAliases
 		if op == "under" {
-			expand = s.SearchTerms
+			expand = s.TermFamily
 		}
 		expanded, err := expand(ctx, v.Text)
 		if err != nil {
@@ -284,7 +311,7 @@ func (s *Service) searchCondition(ctx context.Context, d *catalog.FieldDefinitio
 	}
 	c.Values = c.Values[:0]
 	for _, id := range ids {
-		c.Values = append(c.Values, search.FieldValue{Text: id})
+		c.Values = append(c.Values, IndexValue{Text: id})
 	}
 	if op != "ne" {
 		c.Op = "in"
@@ -292,25 +319,25 @@ func (s *Service) searchCondition(ctx context.Context, d *catalog.FieldDefinitio
 	return c, nil
 }
 
-// searchQueryValue turns an encoded query value into a search value.
-func searchQueryValue(v any) search.FieldValue {
+// queryIndexValue turns an encoded query value into an index value.
+func queryIndexValue(v any) IndexValue {
 	switch x := v.(type) {
 	case int64:
-		return search.FieldValue{Int: x}
+		return IndexValue{Int: x}
 	case bool:
 		if x {
-			return search.FieldValue{Int: 1}
+			return IndexValue{Int: 1}
 		}
-		return search.FieldValue{}
+		return IndexValue{}
 	case string:
-		return search.FieldValue{Text: x}
+		return IndexValue{Text: x}
 	}
-	return search.FieldValue{}
+	return IndexValue{}
 }
 
-// SearchTermAliases is a term with the terms merged into it: retained values
-// may hold any of these IDs while displaying the target's words.
-func (s *Service) SearchTermAliases(ctx context.Context, id string) ([]string, error) {
+// TermAliases is a term with the terms merged into it: retained values may
+// hold any of these IDs while displaying the target's words.
+func (s *Service) TermAliases(ctx context.Context, id string) ([]string, error) {
 	merged, err := s.DAL.Taxonomy().Terms(ctx, taxonomy.TermFilter{MergedInto: id})
 	if err != nil {
 		return nil, err

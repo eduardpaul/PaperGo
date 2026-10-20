@@ -37,22 +37,28 @@ func testBlobPreviewsAndDeletions(t *testing.T, s *dal.Store) {
 	if ok, err := s.Blobs().Referenced(ctx, "object", packages); err != nil || !ok {
 		t.Fatalf("blob object not referenced: %v %v", ok, err)
 	}
-	export, err := s.Operations().Enqueue(ctx, operations.Operation{Kind: "export", CreatedBy: "alice"})
-	if err != nil {
-		t.Fatal(err)
+	export := func(key string, expires time.Time) {
+		t.Helper()
+		now := time.Now()
+		if _, _, err := s.Operations().Accept(ctx, operations.Operation{Kind: "export", CreatedBy: "alice"}, now); err != nil {
+			t.Fatal(err)
+		}
+		claimed, err := s.Operations().Claim(ctx, operations.ClaimRequest{Ready: operations.Ready{Kinds: []string{"export"}, Now: now, Limit: 1}, Holder: "test", TTL: time.Minute})
+		if err != nil || len(claimed) != 1 {
+			t.Fatalf("claim export: %v %v", claimed, err)
+		}
+		op := claimed[0]
+		op.Status, op.Result = operations.StatusSucceeded, json.RawMessage(`{"object_key":"`+key+`","expires_at":"`+expires.UTC().Format(time.RFC3339)+`"}`)
+		if err := s.Operations().Finish(ctx, &op, now); err != nil {
+			t.Fatal(err)
+		}
 	}
-	export.Status, export.Result = operations.StatusSucceeded, json.RawMessage(`{"object_key":"package","expires_at":"`+time.Now().Add(time.Hour).UTC().Format(time.RFC3339)+`"}`)
-	if err := s.Operations().Save(ctx, &export); err != nil {
-		t.Fatal(err)
-	}
+	export("package", time.Now().Add(time.Hour))
 	if ok, err := s.Blobs().Referenced(ctx, "package", packages); err != nil || !ok {
 		t.Fatalf("export package not referenced: %v %v", ok, err)
 	}
-	export.Result = json.RawMessage(`{"object_key":"package","expires_at":"` + time.Now().Add(-time.Hour).UTC().Format(time.RFC3339) + `"}`)
-	if err := s.Operations().Save(ctx, &export); err != nil {
-		t.Fatal(err)
-	}
-	if ok, err := s.Blobs().Referenced(ctx, "package", packages); err != nil || ok {
+	export("stale", time.Now().Add(-time.Hour))
+	if ok, err := s.Blobs().Referenced(ctx, "stale", packages); err != nil || ok {
 		t.Fatalf("expired export package referenced: %v %v", ok, err)
 	}
 	if p, err := s.Blobs().Preview(ctx, sha); err != nil || p != nil {

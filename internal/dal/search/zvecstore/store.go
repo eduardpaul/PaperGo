@@ -37,6 +37,15 @@ var activityEpoch = time.Now()
 
 const nativeIdleTimeout = 5 * time.Minute
 
+// Optimizing seals segments and rebuilds indexes while holding the store's
+// lock for seconds, so searches and writes wait for it. Maintenance
+// optimizes once writes have paused for optimizeQuiet, or at the latest
+// optimizeMaxDelay after the first write since the last optimization.
+const (
+	optimizeQuiet    = time.Minute
+	optimizeMaxDelay = 30 * time.Minute
+)
+
 type Options struct {
 	Languages []string
 	// KeywordCandidates bounds keyword matches and their counts/facets.
@@ -89,7 +98,10 @@ type Store struct {
 	closeOnce       sync.Once
 	closeErr        error
 	optimizePending bool
-	lastNativeUse   atomic.Int64
+	// optimizeSince is the first write since the last optimization, and
+	// lastWrite the latest.
+	optimizeSince, lastWrite time.Time
+	lastNativeUse            atomic.Int64
 }
 
 var _ search.Store = (*Store)(nil)
@@ -501,7 +513,11 @@ func (s *Store) mutation(fn func() error) error {
 		return err
 	}
 	s.dirty = false
-	s.optimizePending = true
+	now := time.Now()
+	if !s.optimizePending {
+		s.optimizeSince = now
+	}
+	s.optimizePending, s.lastWrite = true, now
 	return nil
 }
 
@@ -531,8 +547,10 @@ func (s *Store) maintain(now time.Time) error {
 	if s.dirty {
 		return nil
 	}
-	if err := s.optimize(); err != nil {
-		return err
+	if now.Sub(s.lastWrite) >= optimizeQuiet || now.Sub(s.optimizeSince) >= optimizeMaxDelay {
+		if err := s.optimize(); err != nil {
+			return err
+		}
 	}
 	if s.handle != nil && len(s.writes) == 0 && now.Sub(activityEpoch)-time.Duration(s.lastNativeUse.Load()) >= nativeIdleTimeout {
 		if err := s.closeCollections(); err != nil {

@@ -28,11 +28,14 @@ type Browse struct {
 	Limit   int
 }
 
-// SearchMatch matches workspaces and collections whose name contains Name,
-// and the items and folders the search store found on each surface.
+// SearchMatch matches workspaces and collections whose folded name
+// contains Name, and the items and folders a text matcher found on each
+// surface, or with ByName those whose name on the surface read contains
+// Name.
 type SearchMatch struct {
 	Name            string
 	Head, Published []string
+	ByName          bool
 }
 
 // ValueColumn is the column an indexed field value is compared in.
@@ -140,7 +143,13 @@ func (r *Repo) BrowseIDs(ctx context.Context, b Browse) ([]string, error) {
 		})
 	}
 	var head, published string
-	if b.Search != nil {
+	switch {
+	case b.Search != nil && b.Search.ByName:
+		candidates = append(candidates, candidate{
+			"SELECT item_id FROM item_surfaces WHERE " + r.d.Contains("folded_name", "?") + " UNION ALL SELECT id FROM resources WHERE kind IN ('workspace','list','library') AND " + r.d.Contains(r.d.Fold("name"), "?"),
+			[]any{b.Search.Name, b.Search.Name},
+		})
+	case b.Search != nil:
 		h, _ := json.Marshal(nonNil(b.Search.Head))
 		p, _ := json.Marshal(nonNil(b.Search.Published))
 		head, published = string(h), string(p)
@@ -175,9 +184,15 @@ func (r *Repo) BrowseIDs(ctx context.Context, b Browse) ([]string, error) {
 	if b.Search != nil {
 		selected, selectedArgs := r.acl.Surface("r.id", b.Reader, b.Surface)
 		// An entry matches on the surface the reader reads.
-		cond := "(r.kind NOT IN ('item','folder') AND " + r.d.Contains(r.d.Fold("r.name"), "?") + " OR r.kind IN ('item','folder') AND r.id IN (SELECT value FROM " + r.d.Elements("CASE "+selected+" WHEN 'head' THEN "+r.d.JSONArg()+" ELSE "+r.d.JSONArg()+" END", "matched") + "))"
-		a := append([]any{b.Search.Name}, selectedArgs...)
-		add(cond, append(a, head, published)...)
+		if b.Search.ByName {
+			cond := "(r.kind NOT IN ('item','folder') AND " + r.d.Contains(r.d.Fold("r.name"), "?") + " OR r.kind IN ('item','folder') AND EXISTS(SELECT 1 FROM item_surfaces p WHERE p.item_id=r.id AND p.surface=" + selected + " AND " + r.d.Contains("p.folded_name", "?") + "))"
+			a := append([]any{b.Search.Name}, selectedArgs...)
+			add(cond, append(a, b.Search.Name)...)
+		} else {
+			cond := "(r.kind NOT IN ('item','folder') AND " + r.d.Contains(r.d.Fold("r.name"), "?") + " OR r.kind IN ('item','folder') AND r.id IN (SELECT value FROM " + r.d.Elements("CASE "+selected+" WHEN 'head' THEN "+r.d.JSONArg()+" ELSE "+r.d.JSONArg()+" END", "matched") + "))"
+			a := append([]any{b.Search.Name}, selectedArgs...)
+			add(cond, append(a, head, published)...)
+		}
 	}
 	if f := b.Field; f != nil {
 		selected, selectedArgs := r.acl.Surface("r.id", b.Reader, b.Surface)

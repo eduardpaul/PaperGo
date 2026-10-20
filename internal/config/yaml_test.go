@@ -249,3 +249,37 @@ func TestYAMLConfigFileSelection(t *testing.T) {
 		t.Fatal("explicit config", got, err)
 	}
 }
+
+func TestWorkersYAML(t *testing.T) {
+	c, err := LoadFrom(func(string) string { return "" }, `workers:
+  documents:
+    concurrency: 2
+    window:
+      time_zone: Europe/Madrid
+      from: "22:00"
+      to: "06:00"
+  maintenance:
+    admission:
+      policy: threshold_or_max_wait
+      threshold: 50
+      max_wait: 2h
+      batch: 100
+      flush:
+        cron: "0 3 * * *"
+        time_zone: UTC
+        missed: once
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, m := c.Workers["documents"], c.Workers["maintenance"]
+	if d.Concurrency == nil || *d.Concurrency != 2 || d.Window == nil || d.Window.From != "22:00" || d.Admission != nil {
+		t.Fatalf("documents %+v", d)
+	}
+	if a := m.Admission; a == nil || a.Threshold != 50 || a.MaxWait != "2h" || a.Batch != 100 || a.Flush == nil || a.Flush.Missed != "once" {
+		t.Fatalf("maintenance %+v", m)
+	}
+	if _, err = LoadFrom(func(string) string { return "" }, "workers:\n  documents:\n    concurency: 2\n"); err == nil {
+		t.Fatal("an unknown worker setting was accepted")
+	}
+}

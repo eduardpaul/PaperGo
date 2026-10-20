@@ -49,7 +49,7 @@ export PAPERGO_REQUIRE_DECISION=1 PAPERGO_REQUIRE_EMBEDDING=1 PAPERGO_REQUIRE_OC
 go test -race -p 1 -timeout 20m ./internal/onnx ./internal/decision \
   ./internal/embedding ./internal/ocr/paddle ./internal/forms \
   ./internal/workflow ./internal/config ./cmd/decide
-go test -race -p 1 -timeout 20m ./internal/dms ./internal/runner ./internal/httpapi
+go test -race -p 1 -timeout 20m ./internal/dms ./internal/scriptrun ./internal/httpapi
 go vet ./...
 staticcheck ./...
 python3 -m unittest discover -s scripts/tests -v

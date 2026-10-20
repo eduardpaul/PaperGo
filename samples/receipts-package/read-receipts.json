@@ -1,0 +1,13 @@
+{
+  "name": "Read receipts",
+  "description": "Reads a receipt photo, keeps a smaller copy when one is suitable, and files the purchase lines.",
+  "script": "read-receipts.ts",
+  "parameters": {
+    "library": "$LIBRARY",
+    "lines": "$LINES",
+    "line_type": "$LINE_TYPE"
+  },
+  "automatic_enabled": true,
+  "manual_enabled": true,
+  "state": "published"
+}

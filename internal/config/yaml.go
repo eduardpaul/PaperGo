@@ -48,10 +48,43 @@ type yamlConfig struct {
 		TokenType          string `yaml:"token_type"`
 		GroupsFromUserInfo bool   `yaml:"groups_from_userinfo"`
 	} `yaml:"oidc"`
+	Workers map[string]Worker `yaml:"workers"`
+}
+
+// Worker adjusts a named worker of the operation runtime. Fields left out
+// keep the executable's default.
+type Worker struct {
+	Concurrency *int             `yaml:"concurrency"`
+	Admission   *WorkerAdmission `yaml:"admission"`
+	Window      *WorkerWindow    `yaml:"window"`
+}
+
+// WorkerAdmission is when a worker's queued work becomes eligible.
+type WorkerAdmission struct {
+	Policy    string       `yaml:"policy"`
+	Threshold int          `yaml:"threshold"`
+	MaxWait   string       `yaml:"max_wait"`
+	Batch     int          `yaml:"batch"`
+	Flush     *WorkerFlush `yaml:"flush"`
+}
+
+// WorkerFlush is a schedule that makes every group of a worker eligible.
+type WorkerFlush struct {
+	Cron     string `yaml:"cron"`
+	TimeZone string `yaml:"time_zone"`
+	Missed   string `yaml:"missed"`
+}
+
+// WorkerWindow is the daily time a worker starts executions in.
+type WorkerWindow struct {
+	TimeZone string `yaml:"time_zone"`
+	From     string `yaml:"from"`
+	To       string `yaml:"to"`
 }
 
 type yamlFile struct {
 	values            map[string]string
+	workers           map[string]Worker
 	passwordSpecified bool
 	password          string
 }
@@ -85,6 +118,7 @@ func parseYAML(text string) (yamlFile, error) {
 	if err := decoder.Decode(new(yamlConfig)); err != io.EOF {
 		return file, fmt.Errorf("config.yaml must contain one YAML document")
 	}
+	file.workers = in.Workers
 	file.values = map[string]string{
 		"PUBLIC_URL": in.Server.PublicURL, "DATABASE_URL": in.Database.URL, "AUTH_MODE": in.Auth.Mode,
 		"ADMIN_SUBJECT": in.Auth.AdminUser, "ADMIN_GROUP": in.Auth.AdminGroup,

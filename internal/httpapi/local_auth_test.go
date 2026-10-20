@@ -16,7 +16,6 @@ import (
 	"papergo/internal/dal/database"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
-	"papergo/internal/testutil/searchstore"
 )
 
 func TestLocalAdminBasicAndSession(t *testing.T) {
@@ -62,18 +61,16 @@ func TestLocalAdminBasicAndSession(t *testing.T) {
 		t.Fatal("second start reset the password", stored)
 	}
 	service := dms.NewService(db.SQL)
-	index := searchstore.Open(t, filepath.Join(t.TempDir(), "search.db"), []string{"english"})
-	service.SetSearch(index)
 	handler := (&API{DMS: service, Auth: auth.Local{DAL: db.DAL}, Logger: slog.Default(), Ready: db.SQL.PingContext}).Handler()
 	config := request(handler, "GET", "/auth/config", "", "", "", "")
 	if config.Code != 200 || strings.TrimSpace(config.Body.String()) != `{"mode":"local"}` {
 		t.Fatal(config.Code, config.Body.String())
 	}
-	basic := httptest.NewRequest(http.MethodGet, "/v1/search/status", nil)
+	basic := httptest.NewRequest(http.MethodGet, "/v1/storage/status", nil)
 	basic.SetBasicAuth("admin", "admin")
 	basicRec := httptest.NewRecorder()
 	handler.ServeHTTP(basicRec, basic)
-	if basicRec.Code != 200 || !strings.Contains(basicRec.Body.String(), `"store":"sqlite"`) {
+	if basicRec.Code != 200 || !strings.Contains(basicRec.Body.String(), `"database_bytes"`) {
 		t.Fatal("basic admin", basicRec.Code, basicRec.Body.String())
 	}
 	login := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(`{"username":"admin","password":"admin"}`))
@@ -92,21 +89,21 @@ func TestLocalAdminBasicAndSession(t *testing.T) {
 	if cookie == nil || cookie.Value == "" {
 		t.Fatal("session cookie missing", loginRec.Header())
 	}
-	follow := httptest.NewRequest(http.MethodGet, "/v1/search/status", nil)
+	follow := httptest.NewRequest(http.MethodGet, "/v1/storage/status", nil)
 	follow.AddCookie(cookie)
 	followRec := httptest.NewRecorder()
 	handler.ServeHTTP(followRec, follow)
-	if followRec.Code != 200 || !strings.Contains(followRec.Body.String(), `"store":"sqlite"`) {
+	if followRec.Code != 200 || !strings.Contains(followRec.Body.String(), `"database_bytes"`) {
 		t.Fatal("session", followRec.Code, followRec.Body.String())
 	}
-	denied := httptest.NewRequest(http.MethodGet, "/v1/search/status", nil)
+	denied := httptest.NewRequest(http.MethodGet, "/v1/storage/status", nil)
 	denied.SetBasicAuth("admin", "wrong")
 	deniedRec := httptest.NewRecorder()
 	handler.ServeHTTP(deniedRec, denied)
 	if deniedRec.Code != 401 {
 		t.Fatal("wrong password", deniedRec.Code, deniedRec.Body.String())
 	}
-	t.Logf("basic admin:admin and session cookie succeeded on /v1/search/status; second password was not stored")
+	t.Logf("basic admin:admin and session cookie succeeded on /v1/storage/status; second password was not stored")
 }
 
 func TestLocalAuthenticationPreservesManagedProfile(t *testing.T) {

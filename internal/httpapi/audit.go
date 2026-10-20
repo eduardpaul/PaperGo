@@ -19,7 +19,7 @@ func (a *API) audit(w http.ResponseWriter, r *http.Request) {
 			*target = &date
 		}
 	}
-	out, err := a.DMS.OrganizationAudit(r.Context(), subject(r), in)
+	out, err := a.dms(r).OrganizationAudit(r.Context(), subject(r), in)
 	if err != nil {
 		a.failure(w, r, err)
 		return

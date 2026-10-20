@@ -9,7 +9,7 @@ import (
 )
 
 func (a *API) preview(w http.ResponseWriter, r *http.Request) {
-	file, preview, err := a.DMS.ItemPreview(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("blob_id"))
+	file, preview, err := a.dms(r).ItemPreview(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("blob_id"))
 	if err != nil {
 		a.failure(w, r, err)
 		return

@@ -30,7 +30,8 @@ type Config struct {
 	// SearchPath is the search store's SQLite file (SEARCH_DATABASE_PATH),
 	// by default search.db next to the database.
 	SearchPath string
-	// SearchStore selects sqlite (default) or the optional native zvec store.
+	// SearchStore is the search extension's store (SEARCH_STORE): zvec
+	// (default), sqlite, or none to run without search.
 	SearchStore           string
 	ZvecPath              string
 	ZvecKeywordCandidates int
@@ -49,9 +50,6 @@ type Config struct {
 	MaxInFlight int
 	// RequestTimeout cancels API reads that outlive it; mutations and blob transfers are exempt.
 	RequestTimeout time.Duration
-	// NodeID identifies this process to the workflow runner; a restarted
-	// node recovers the runs it was executing.
-	NodeID string
 	// RunRetention is how long finished workflow runs, dispatched events
 	// and failed runs are kept.
 	RunRetention time.Duration
@@ -61,6 +59,12 @@ type Config struct {
 	// ResultCacheTTL is the idle lifetime of reusable activity answers.
 	// It is independent of RunRetention.
 	ResultCacheTTL time.Duration
+	// OperationQuotas bound the pending operations people may queue
+	// (OPERATION_QUOTA_*); zero leaves a bound off.
+	OperationQuotas OperationQuotas
+	// Workers adjust the operation runtime's named workers (config.yaml
+	// workers); the executable validates them against its workers.
+	Workers map[string]Worker
 	// PublicURL is the scheme and host clients use, for example behind a
 	// TLS-terminating reverse proxy. Nil uses each request's own.
 	PublicURL *url.URL
@@ -104,10 +108,7 @@ type Config struct {
 	// An action's execution input overrides it. Empty is treated as immediate.
 	AIExecution string
 	// BatchDeadline is how long a parked batch request waits.
-	BatchDeadline time.Duration
-	// BatchWorkspace is the workspace whose AI batch coordinator admits
-	// installation queues. Empty leaves the coordinator off.
-	BatchWorkspace    string
+	BatchDeadline     time.Duration
 	ProxySecret       string
 	ProxyTrustedCIDRs []netip.Prefix
 	// AdminPassword is the local administrator's initial password. It is
@@ -118,6 +119,15 @@ type Config struct {
 	// existing administrator instead of inventing a password.
 	AdminPasswordOmitted bool
 }
+
+// Search stores (SEARCH_STORE).
+const (
+	SearchZvec   = "zvec"
+	SearchSQLite = "sqlite"
+	// SearchNone runs PaperGo without its search extension: listings match
+	// search text by name.
+	SearchNone = "none"
+)
 
 // Load reads config.yaml from PAPERGO_CONFIG or ./config.yaml, then applies
 // environment variables. Environment variables win when they are non-empty.
@@ -159,7 +169,7 @@ func loadFrom(getenv func(string) string, yamlText, directory string) (Config, e
 		}
 		return fallback
 	}
-	c := Config{Env: value("APP_ENV", "development"), Address: value("HTTP_ADDR", "127.0.0.1:8080"), DatabasePath: value("DATABASE_PATH", "data/papergo.db"), BlobPath: value("BLOB_PATH", "data/blobs"), AuthMode: value("AUTH_MODE", "local"), DevToken: lookup("DEV_TOKEN"), DevSubject: value("DEV_SUBJECT", "local-admin"), Issuer: lookup("OIDC_ISSUER"), Audience: lookup("OIDC_AUDIENCE"), MaxUpload: 64 * 1024 * 1024, MaxInFlight: 32, RequestTimeout: 30 * time.Second, NodeID: value("NODE_ID", "local"), RunRetention: 30 * 24 * time.Hour, SystemRunRetention: 24 * time.Hour, ResultCacheTTL: 30 * 24 * time.Hour}
+	c := Config{Env: value("APP_ENV", "development"), Address: value("HTTP_ADDR", "127.0.0.1:8080"), DatabasePath: value("DATABASE_PATH", "data/papergo.db"), BlobPath: value("BLOB_PATH", "data/blobs"), AuthMode: value("AUTH_MODE", "local"), DevToken: lookup("DEV_TOKEN"), DevSubject: value("DEV_SUBJECT", "local-admin"), Issuer: lookup("OIDC_ISSUER"), Audience: lookup("OIDC_AUDIENCE"), MaxUpload: 64 * 1024 * 1024, MaxInFlight: 32, RequestTimeout: 30 * time.Second, RunRetention: 30 * 24 * time.Hour, SystemRunRetention: 24 * time.Hour, ResultCacheTTL: 30 * 24 * time.Hour}
 	c.DatabaseURL = lookup("DATABASE_URL")
 	if c.DatabaseURL != "" {
 		if u, err := url.Parse(c.DatabaseURL); err != nil || u.Scheme != "postgres" && u.Scheme != "postgresql" {
@@ -167,9 +177,9 @@ func loadFrom(getenv func(string) string, yamlText, directory string) (Config, e
 		}
 	}
 	c.SearchPath = value("SEARCH_DATABASE_PATH", filepath.Join(filepath.Dir(c.DatabasePath), "search.db"))
-	c.SearchStore = value("SEARCH_STORE", "zvec")
-	if c.SearchStore != "sqlite" && c.SearchStore != "zvec" {
-		return c, fmt.Errorf("SEARCH_STORE must be sqlite or zvec")
+	c.SearchStore = value("SEARCH_STORE", SearchZvec)
+	if c.SearchStore != SearchSQLite && c.SearchStore != SearchZvec && c.SearchStore != SearchNone {
+		return c, fmt.Errorf("SEARCH_STORE must be zvec, sqlite or none")
 	}
 	c.ZvecPath = value("SEARCH_ZVEC_PATH", filepath.Join(filepath.Dir(c.DatabasePath), "search", "zvec"))
 	c.ZvecKeywordCandidates = 10000
@@ -180,13 +190,15 @@ func loadFrom(getenv func(string) string, yamlText, directory string) (Config, e
 		}
 		c.ZvecKeywordCandidates = n
 	}
-	if c.SearchStore == "zvec" {
+	if c.SearchStore == SearchZvec {
 		if err := distinctZvecPath(c.ZvecPath, c.DatabasePath, c.BlobPath, c.SearchPath); err != nil {
 			return c, err
 		}
 	}
-	if err := distinctSearchPath(c.DatabasePath, c.SearchPath); err != nil {
-		return c, err
+	if c.SearchStore == SearchSQLite {
+		if err := distinctSearchPath(c.DatabasePath, c.SearchPath); err != nil {
+			return c, err
+		}
 	}
 	if languages := strings.ToLower(strings.TrimSpace(value("SEARCH_LANGUAGES", "english"))); languages != "none" {
 		for _, l := range strings.Split(languages, ",") {
@@ -245,6 +257,27 @@ func loadFrom(getenv func(string) string, yamlText, directory string) (Config, e
 		}
 		*setting.dst = d
 	}
+	c.Workers = file.workers
+	c.OperationQuotas = OperationQuotas{PerCreator: 1000, PerWorkspace: 5000, Installation: 50000, WorkspacePayloadBytes: 256 << 20}
+	for _, setting := range []struct {
+		key string
+		dst *int64
+	}{
+		{"OPERATION_QUOTA_PER_CREATOR", &c.OperationQuotas.PerCreator},
+		{"OPERATION_QUOTA_PER_WORKSPACE", &c.OperationQuotas.PerWorkspace},
+		{"OPERATION_QUOTA_INSTALLATION", &c.OperationQuotas.Installation},
+		{"OPERATION_QUOTA_WORKSPACE_PAYLOAD_BYTES", &c.OperationQuotas.WorkspacePayloadBytes},
+	} {
+		v := lookup(setting.key)
+		if v == "" {
+			continue
+		}
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || n < 0 {
+			return c, fmt.Errorf("%s must be zero (no bound) or a positive count", setting.key)
+		}
+		*setting.dst = n
+	}
 	c.OCRLibrary, c.OCRThreads = lookup("ONNXRUNTIME_LIB"), 1
 	if c.OCRLibrary == "" {
 		library := filepath.Join(directory, "lib", "libonnxruntime.so")
@@ -289,9 +322,6 @@ func loadFrom(getenv func(string) string, yamlText, directory string) (Config, e
 			return c, fmt.Errorf("PUBLIC_URL must be an http or https origin without a path, such as https://docs.example.com")
 		}
 		c.PublicURL = &url.URL{Scheme: u.Scheme, Host: u.Host}
-	}
-	if strings.TrimSpace(c.NodeID) == "" || len(c.NodeID) > 100 {
-		return c, fmt.Errorf("NODE_ID needs 1 to 100 characters")
 	}
 	if c.Env != "development" && c.Env != "test" && c.Env != "production" {
 		return c, fmt.Errorf("invalid APP_ENV")
@@ -609,10 +639,15 @@ func (c *Config) loadChat() error {
 	return nil
 }
 
+// OperationQuotas bound pending operations per creator, per workspace and
+// for the installation, and the payload bytes of a workspace.
+type OperationQuotas struct {
+	PerCreator, PerWorkspace, Installation, WorkspacePayloadBytes int64
+}
+
 // loadBatch reads AI_BATCH_*: an independent provider, endpoint, model and
 // credential file. AI_EXECUTION is the default for remote LLM actions.
-// AI_BATCH_DEADLINE bounds a parked request. AI_BATCH_WORKSPACE selects the
-// workspace that owns the installation coordinator.
+// AI_BATCH_DEADLINE bounds a parked request.
 func (c *Config) loadBatch() error {
 	batch := ai.BatchConfig{
 		Provider: strings.ToLower(value("AI_BATCH_PROVIDER", ai.ProviderNone)),
@@ -652,7 +687,6 @@ func (c *Config) loadBatch() error {
 		}
 		c.BatchDeadline = d
 	}
-	c.BatchWorkspace = strings.TrimSpace(os.Getenv("AI_BATCH_WORKSPACE"))
 	return nil
 }
 

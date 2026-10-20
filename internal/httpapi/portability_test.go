@@ -11,6 +11,7 @@ import (
 	"papergo/internal/dal/resources"
 	"papergo/internal/dms"
 	"papergo/internal/storage"
+	"papergo/internal/worker"
 	"strconv"
 	"strings"
 	"testing"
@@ -38,7 +39,7 @@ func TestPortabilityHTTPExportDownloadAndAuthorization(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan struct{})
-	go func() { defer close(done); s.RunOperations(ctx, a.Logger) }()
+	go func() { defer close(done); _ = worker.Single(s, a.Logger).Run(ctx) }()
 	defer func() { cancel(); <-done }()
 	for i := 0; i < 250; i++ {
 		current, err := s.Operation(t.Context(), "organization-admin", op.ID)
@@ -97,7 +98,7 @@ func TestPortabilityHTTPWorkspaceConfigurationCopy(t *testing.T) {
 	handler := (&API{DMS: source, Storage: store, Auth: auth.Development{Token: testToken, Subject: "organization-admin"}, Logger: logger}).Handler()
 	workerCtx, cancel := context.WithCancel(ctx)
 	done := make(chan struct{})
-	go func() { defer close(done); source.RunOperations(workerCtx, logger) }()
+	go func() { defer close(done); _ = worker.Single(source, logger).Run(workerCtx) }()
 	defer func() { cancel(); <-done }()
 	body := `{"workspace_id":"` + ws.ID + `","include_data":false}`
 	response := request(handler, "POST", "/v1/portability/exports", body, testToken, "", "application/json")
@@ -128,7 +129,7 @@ func TestPortabilityHTTPWorkspaceConfigurationCopy(t *testing.T) {
 	targetHandler := (&API{DMS: target, Storage: targetStore, Auth: auth.Development{Token: testToken, Subject: "organization-admin"}, Logger: logger}).Handler()
 	targetCtx, targetCancel := context.WithCancel(ctx)
 	targetDone := make(chan struct{})
-	go func() { defer close(targetDone); target.RunOperations(targetCtx, logger) }()
+	go func() { defer close(targetDone); _ = worker.Single(target, logger).Run(targetCtx) }()
 	defer func() { targetCancel(); <-targetDone }()
 	for _, dry := range []bool{true, false} {
 		response = request(targetHandler, "POST", "/v1/portability/imports?dry_run="+strconv.FormatBool(dry)+"&workspace_name=Copied%20via%20API", downloaded.Body.String(), testToken, "", "application/zip")

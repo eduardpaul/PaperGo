@@ -19,8 +19,8 @@ func TestBatchExecutionConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.AIExecution != "immediate" || c.Batch.Enabled() || c.BatchDeadline != 72*time.Hour || c.BatchWorkspace != "" {
-		t.Fatalf("defaults: %+v execution %s deadline %s workspace %q", c.Batch, c.AIExecution, c.BatchDeadline, c.BatchWorkspace)
+	if c.AIExecution != "immediate" || c.Batch.Enabled() || c.BatchDeadline != 72*time.Hour {
+		t.Fatalf("defaults: %+v execution %s deadline %s", c.Batch, c.AIExecution, c.BatchDeadline)
 	}
 	key := filepath.Join(dir, "batch.key")
 	if err = os.WriteFile(key, []byte("batch-secret\n"), 0600); err != nil {
@@ -31,14 +31,13 @@ func TestBatchExecutionConfig(t *testing.T) {
 	t.Setenv("AI_BATCH_MODEL", "gpt-batch")
 	t.Setenv("AI_BATCH_API_KEY_FILE", key)
 	t.Setenv("AI_BATCH_DEADLINE", "48h")
-	t.Setenv("AI_BATCH_WORKSPACE", " ws-1 ")
 	t.Setenv("AI_EXECUTION", "batch")
 	c, err = Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.AIExecution != "batch" || c.Batch.Model != "gpt-batch" || c.Batch.APIKey != "batch-secret" || c.Batch.Endpoint != "https://example.openai.azure.com/openai/v1/" || c.BatchDeadline != 48*time.Hour || c.BatchWorkspace != "ws-1" {
-		t.Fatalf("batch config: %+v execution %s deadline %s workspace %q", c.Batch, c.AIExecution, c.BatchDeadline, c.BatchWorkspace)
+	if c.AIExecution != "batch" || c.Batch.Model != "gpt-batch" || c.Batch.APIKey != "batch-secret" || c.Batch.Endpoint != "https://example.openai.azure.com/openai/v1/" || c.BatchDeadline != 48*time.Hour {
+		t.Fatalf("batch config: %+v execution %s deadline %s", c.Batch, c.AIExecution, c.BatchDeadline)
 	}
 	for _, tc := range []struct{ key, value string }{
 		{"AI_EXECUTION", "sometimes"},
@@ -63,6 +62,7 @@ func TestSearchDatabasePathRejectsApplicationDatabase(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "search.db")
 	t.Setenv("DATABASE_PATH", path)
+	t.Setenv("SEARCH_STORE", SearchSQLite)
 	t.Setenv("SEARCH_DATABASE_PATH", "")
 	if _, err := Load(); err == nil {
 		t.Fatal("default search path overlaps the application database")

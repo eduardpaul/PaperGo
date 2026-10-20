@@ -2,7 +2,14 @@ package postgres
 
 import (
 	"context"
+	"strconv"
+	"strings"
 	"time"
+
+	"papergo/internal/dal/blobs"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/driver/nullable"
+	"papergo/internal/dal/driver/postgres/models"
 
 	"github.com/aarondl/opt/omit"
 	"github.com/stephenafamo/bob"
@@ -10,10 +17,6 @@ import (
 	"github.com/stephenafamo/bob/dialect/psql/sm"
 	"github.com/stephenafamo/bob/types"
 	"github.com/stephenafamo/scan"
-	"papergo/internal/dal/blobs"
-	"papergo/internal/dal/dberr"
-	"papergo/internal/dal/driver/nullable"
-	"papergo/internal/dal/driver/postgres/models"
 )
 
 func (q Queries) Blob(ctx context.Context, id string) (blobs.Blob, error) {
@@ -96,14 +99,59 @@ func (q Queries) SetBlobAvailability(ctx context.Context, id string, a blobs.Ava
 	return dberr.Translate(err)
 }
 
+func artifactRecord(row *models.Artifact) blobs.Artifact {
+	return blobs.Artifact{
+		ID: row.ID, WorkspaceID: row.WorkspaceID, ItemID: row.ItemID, OperationID: row.OperationID.GetOrZero(), InputKey: row.InputKey, Sources: row.Sources.Val,
+		ObjectKey: row.ObjectKey, Filename: row.Filename, ContentType: row.ContentType, Size: row.Size, Sha256: row.Sha256, Metrics: row.Metrics.Val,
+		CreatedBy: row.CreatedBy, CreatedAt: row.CreatedAt.UTC(), ExpiresAt: row.ExpiresAt.UTC(),
+	}
+}
+
+func (q Queries) Artifact(ctx context.Context, id string) (blobs.Artifact, error) {
+	row, err := models.FindArtifact(ctx, q.exec, id)
+	if err != nil {
+		return blobs.Artifact{}, dberr.Translate(err)
+	}
+	return artifactRecord(row), nil
+}
+
+func (q Queries) InsertArtifact(ctx context.Context, a blobs.Artifact) error {
+	_, err := models.Artifacts.Insert(&models.ArtifactSetter{
+		ID: omit.From(a.ID), CreatedAt: omit.From(a.CreatedAt), WorkspaceID: omit.From(a.WorkspaceID), ItemID: omit.From(a.ItemID),
+		OperationID: nullable.String(a.OperationID), InputKey: omit.From(a.InputKey), Sources: omit.From(types.NewJSON(a.Sources)),
+		ObjectKey: omit.From(a.ObjectKey), Filename: omit.From(a.Filename), ContentType: omit.From(a.ContentType), Size: omit.From(a.Size),
+		Sha256: omit.From(a.Sha256), Metrics: omit.From(types.NewJSON(a.Metrics)), ExpiresAt: omit.From(a.ExpiresAt), CreatedBy: omit.From(a.CreatedBy),
+	}).Exec(ctx, q.exec)
+	return dberr.Translate(err)
+}
+
+func (q Queries) ReusableArtifact(ctx context.Context, itemID, inputKey string, now time.Time) (blobs.Artifact, error) {
+	w := models.SelectWhere.Artifacts
+	row, err := models.Artifacts.Query(w.ItemID.EQ(itemID), w.InputKey.EQ(inputKey), w.ExpiresAt.GT(now),
+		sm.OrderBy(models.Artifacts.Columns.CreatedAt).Desc(), sm.Limit(1)).One(ctx, q.exec)
+	if err != nil {
+		return blobs.Artifact{}, dberr.Translate(err)
+	}
+	return artifactRecord(row), nil
+}
+
+func (q Queries) DeleteExpiredArtifacts(ctx context.Context, now time.Time, limit int) (int, error) {
+	res, err := q.exec.ExecContext(ctx, `DELETE FROM artifacts WHERE id IN (SELECT a.id FROM artifacts a WHERE a.expires_at <= $1
+	AND NOT EXISTS (SELECT 1 FROM staged_files f WHERE f.artifact_id = a.id AND f.state = $2) ORDER BY a.expires_at LIMIT $3)`, now, string(blobs.StagedPending), limit)
+	if err != nil {
+		return 0, dberr.Translate(err)
+	}
+	n, err := res.RowsAffected()
+	return int(n), err
+}
+
 func (q Queries) StagedFile(ctx context.Context, id string) (blobs.StagedFile, error) {
 	row, err := models.FindStagedFile(ctx, q.exec, id)
 	if err != nil {
 		return blobs.StagedFile{}, dberr.Translate(err)
 	}
 	return blobs.StagedFile{
-		ID: row.ID, WorkspaceID: row.WorkspaceID, ItemID: row.ItemID, RunID: row.RunID, Sources: row.Sources.Val, ObjectKey: row.ObjectKey,
-		Filename: row.Filename, ContentType: row.ContentType, Size: row.Size, Sha256: row.Sha256, Metrics: row.Metrics.Val,
+		ID: row.ID, WorkspaceID: row.WorkspaceID, ItemID: row.ItemID, ArtifactID: row.ArtifactID, RunID: row.RunID.GetOrZero(),
 		State: blobs.StagedState(row.State), CreatedBy: row.CreatedBy, CreatedAt: row.CreatedAt.UTC(), UpdatedAt: row.UpdatedAt.UTC(),
 	}, nil
 }
@@ -111,9 +159,7 @@ func (q Queries) StagedFile(ctx context.Context, id string) (blobs.StagedFile, e
 func (q Queries) InsertStagedFile(ctx context.Context, f blobs.StagedFile) error {
 	_, err := models.StagedFiles.Insert(&models.StagedFileSetter{
 		ID: omit.From(f.ID), CreatedAt: omit.From(f.CreatedAt), UpdatedAt: omit.From(f.UpdatedAt), WorkspaceID: omit.From(f.WorkspaceID),
-		ItemID: omit.From(f.ItemID), RunID: omit.From(f.RunID), Sources: omit.From(types.NewJSON(f.Sources)), ObjectKey: omit.From(f.ObjectKey),
-		Filename: omit.From(f.Filename), ContentType: omit.From(f.ContentType), Size: omit.From(f.Size), Sha256: omit.From(f.Sha256),
-		Metrics: omit.From(types.NewJSON(f.Metrics)), State: omit.From(string(f.State)), CreatedBy: omit.From(f.CreatedBy),
+		ItemID: omit.From(f.ItemID), ArtifactID: omit.From(f.ArtifactID), RunID: nullable.String(f.RunID), State: omit.From(string(f.State)), CreatedBy: omit.From(f.CreatedBy),
 	}).Exec(ctx, q.exec)
 	return dberr.Translate(err)
 }
@@ -124,15 +170,35 @@ func (q Queries) SetStagedState(ctx context.Context, id string, state blobs.Stag
 	return dberr.Translate(err)
 }
 
-func (q Queries) DiscardRunStaged(ctx context.Context, runIDs []string, at time.Time) error {
-	set := &models.StagedFileSetter{State: omit.From(string(blobs.StagedDiscarded)), UpdatedAt: omit.From(at)}
-	w := models.UpdateWhere.StagedFiles
-	_, err := models.StagedFiles.Update(set.UpdateMod(), w.RunID.In(runIDs...), w.State.EQ(string(blobs.StagedPending))).Exec(ctx, q.exec)
+func (q Queries) DiscardStaged(ctx context.Context, s blobs.StagedSelection, at time.Time) error {
+	args := []any{string(blobs.StagedDiscarded), at, string(blobs.StagedPending)}
+	arg := func(v any) string {
+		args = append(args, v)
+		return "$" + strconv.Itoa(len(args))
+	}
+	where := []string{}
+	if len(s.RunIDs) > 0 {
+		in := make([]string, len(s.RunIDs))
+		for i, id := range s.RunIDs {
+			in[i] = arg(id)
+		}
+		where = append(where, "run_id IN ("+strings.Join(in, ", ")+")")
+	}
+	if s.ItemID != "" {
+		where = append(where, "item_id = "+arg(s.ItemID))
+	}
+	if s.WorkflowID != "" {
+		where = append(where, "run_id IN (SELECT id FROM workflow_runs WHERE workflow_id = "+arg(s.WorkflowID)+")")
+	}
+	if s.ExceptRunID != "" {
+		where = append(where, "(run_id IS NULL OR run_id <> "+arg(s.ExceptRunID)+")")
+	}
+	_, err := q.exec.ExecContext(ctx, "UPDATE staged_files SET state = $1, updated_at = $2 WHERE state = $3 AND "+strings.Join(where, " AND "), args...)
 	return dberr.Translate(err)
 }
 
 func (q Queries) BlobStaged(ctx context.Context, objectKey, blobID string) (bool, error) {
-	return directoryBool(ctx, q.exec, `SELECT EXISTS(SELECT 1 FROM staged_files WHERE state = $1 AND (object_key = $2 OR EXISTS(SELECT 1 FROM jsonb_array_elements(sources) s WHERE s ->> 'blob_id' = $3)))`, string(blobs.StagedPending), objectKey, blobID)
+	return directoryBool(ctx, q.exec, `SELECT EXISTS(SELECT 1 FROM staged_files f JOIN artifacts a ON a.id = f.artifact_id WHERE f.state = $1 AND (a.object_key = $2 OR EXISTS(SELECT 1 FROM jsonb_array_elements(a.sources) s WHERE s ->> 'blob_id' = $3)))`, string(blobs.StagedPending), objectKey, blobID)
 }
 
 func (q Queries) BlobLeased(ctx context.Context, blobID string) (bool, error) {

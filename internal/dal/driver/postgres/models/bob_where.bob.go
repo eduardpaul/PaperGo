@@ -18,6 +18,7 @@ var (
 
 func Where[Q psql.Filterable]() struct {
 	AccessTokens            accessTokenWhere[Q]
+	Artifacts               artifactWhere[Q]
 	AuditEvents             auditEventWhere[Q]
 	BlobDeletions           blobDeletionWhere[Q]
 	BlobLeases              blobLeaseWhere[Q]
@@ -56,7 +57,6 @@ func Where[Q psql.Filterable]() struct {
 	Relationships           relationshipWhere[Q]
 	ResourceKeywords        resourceKeywordWhere[Q]
 	Resources               resourceWhere[Q]
-	RunnerStepResults       runnerStepResultWhere[Q]
 	SchemaRevisions         schemaRevisionWhere[Q]
 	SchemaTemplates         schemaTemplateWhere[Q]
 	SmartFolders            smartFolderWhere[Q]
@@ -71,13 +71,15 @@ func Where[Q psql.Filterable]() struct {
 	Terms                   termWhere[Q]
 	WorkflowRunItems        workflowRunItemWhere[Q]
 	WorkflowRuns            workflowRunWhere[Q]
+	WorkflowStepOperations  workflowStepOperationWhere[Q]
+	WorkflowSteps           workflowStepWhere[Q]
 	WorkflowTriggers        workflowTriggerWhere[Q]
 	WorkflowVersions        workflowVersionWhere[Q]
-	WorkflowWaits           workflowWaitWhere[Q]
 	Workflows               workflowWhere[Q]
 } {
 	return struct {
 		AccessTokens            accessTokenWhere[Q]
+		Artifacts               artifactWhere[Q]
 		AuditEvents             auditEventWhere[Q]
 		BlobDeletions           blobDeletionWhere[Q]
 		BlobLeases              blobLeaseWhere[Q]
@@ -116,7 +118,6 @@ func Where[Q psql.Filterable]() struct {
 		Relationships           relationshipWhere[Q]
 		ResourceKeywords        resourceKeywordWhere[Q]
 		Resources               resourceWhere[Q]
-		RunnerStepResults       runnerStepResultWhere[Q]
 		SchemaRevisions         schemaRevisionWhere[Q]
 		SchemaTemplates         schemaTemplateWhere[Q]
 		SmartFolders            smartFolderWhere[Q]
@@ -131,12 +132,14 @@ func Where[Q psql.Filterable]() struct {
 		Terms                   termWhere[Q]
 		WorkflowRunItems        workflowRunItemWhere[Q]
 		WorkflowRuns            workflowRunWhere[Q]
+		WorkflowStepOperations  workflowStepOperationWhere[Q]
+		WorkflowSteps           workflowStepWhere[Q]
 		WorkflowTriggers        workflowTriggerWhere[Q]
 		WorkflowVersions        workflowVersionWhere[Q]
-		WorkflowWaits           workflowWaitWhere[Q]
 		Workflows               workflowWhere[Q]
 	}{
 		AccessTokens:            buildAccessTokenWhere[Q](AccessTokens.Columns),
+		Artifacts:               buildArtifactWhere[Q](Artifacts.Columns),
 		AuditEvents:             buildAuditEventWhere[Q](AuditEvents.Columns),
 		BlobDeletions:           buildBlobDeletionWhere[Q](BlobDeletions.Columns),
 		BlobLeases:              buildBlobLeaseWhere[Q](BlobLeases.Columns),
@@ -175,7 +178,6 @@ func Where[Q psql.Filterable]() struct {
 		Relationships:           buildRelationshipWhere[Q](Relationships.Columns),
 		ResourceKeywords:        buildResourceKeywordWhere[Q](ResourceKeywords.Columns),
 		Resources:               buildResourceWhere[Q](Resources.Columns),
-		RunnerStepResults:       buildRunnerStepResultWhere[Q](RunnerStepResults.Columns),
 		SchemaRevisions:         buildSchemaRevisionWhere[Q](SchemaRevisions.Columns),
 		SchemaTemplates:         buildSchemaTemplateWhere[Q](SchemaTemplates.Columns),
 		SmartFolders:            buildSmartFolderWhere[Q](SmartFolders.Columns),
@@ -190,9 +192,10 @@ func Where[Q psql.Filterable]() struct {
 		Terms:                   buildTermWhere[Q](Terms.Columns),
 		WorkflowRunItems:        buildWorkflowRunItemWhere[Q](WorkflowRunItems.Columns),
 		WorkflowRuns:            buildWorkflowRunWhere[Q](WorkflowRuns.Columns),
+		WorkflowStepOperations:  buildWorkflowStepOperationWhere[Q](WorkflowStepOperations.Columns),
+		WorkflowSteps:           buildWorkflowStepWhere[Q](WorkflowSteps.Columns),
 		WorkflowTriggers:        buildWorkflowTriggerWhere[Q](WorkflowTriggers.Columns),
 		WorkflowVersions:        buildWorkflowVersionWhere[Q](WorkflowVersions.Columns),
-		WorkflowWaits:           buildWorkflowWaitWhere[Q](WorkflowWaits.Columns),
 		Workflows:               buildWorkflowWhere[Q](Workflows.Columns),
 	}
 }

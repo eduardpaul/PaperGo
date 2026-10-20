@@ -90,6 +90,16 @@ func DSN(abs string, o Options) string {
 	return u.String()
 }
 
+// OpenSQLite opens the SQLite database dsn names with connections that
+// keep their prepared statements.
+func OpenSQLite(dsn string) (*sql.DB, error) {
+	connector, err := sqlite.NewConnector(dsn)
+	if err != nil {
+		return nil, err
+	}
+	return sql.OpenDB(cachingConnector{connector}), nil
+}
+
 func Open(ctx context.Context, path string) (*Database, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
@@ -98,7 +108,7 @@ func Open(ctx context.Context, path string) (*Database, error) {
 	if err = os.MkdirAll(filepath.Dir(abs), 0700); err != nil {
 		return nil, err
 	}
-	db, err := sql.Open("sqlite", DSN(abs, DefaultOptions))
+	db, err := OpenSQLite(DSN(abs, DefaultOptions))
 	if err != nil {
 		return nil, err
 	}

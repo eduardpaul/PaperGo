@@ -1,6 +1,8 @@
 # Search
 
-PaperGo keeps a search index of every item and folder in a store of its own, next to the database. Global search (`GET /v1/search`) and the `q` search of collection queries and resource listings both read it. The index is kept current by a [workflow](workflows.md) that people can see, turn off per collection, or replace, and every query is authorized against the database as it is now, whatever the index holds.
+Search is an extension (`internal/documentsearch`), on by default: a deployment runs it with a search store (`SEARCH_STORE=zvec`, the default, or `sqlite`) and without it with `SEARCH_STORE=none`. It keeps a search index of every item and folder in a store of its own, next to the database. Global search (`GET /v1/search`) and the `q` search of collection queries and resource listings both read it. The index is kept current by [workflows](workflows.md) that people can see, turn off per collection, or replace, and every query is authorized against the database as it is now, whatever the index holds.
+
+Without search, PaperGo has no global search, search routes or search workflows, and `q` in collection queries and listings matches names (see [search in collections and listings](#search-in-collections-and-listings)). Search plugs into the core through generic extension points: a text matcher for listings, a storage report and an import hook.
 
 ## What is indexed
 
@@ -24,30 +26,39 @@ The text of files is indexed too, as [file content](#file-content), separately f
 
 ## Keeping it current
 
-The **`search.index`** [built-in workflow](workflows.md#built-in-workflows) fills the `search.index` [role](workflows.md#roles). It is on by default in every collection, runs on the system queue as the system subject, and `coalesce`s: a burst of changes to one entry costs at most two runs, and the last one sees the final state.
+The **`search.index`** [built-in workflow](workflows.md#built-in-workflows) fills the `search.index` [role](workflows.md#roles). It is on by default in every collection and `coalesce`s: a burst of changes to one entry costs at most two runs, and the last one sees the final state.
 
 - **Triggers.** Item and folder changes (`created`, `updated`, `published`, `unpublished`, `deleted`, `restored`, `purged`), `permissions.changed` (once per affected entry, for `replace` and `move`), `term.changed` and `term.merged`, and `manual`.
-- **`search.sync`** re-reads the entry and writes its documents, or removes them when it is gone. It reads state, not the event, so running it again, late or out of order is harmless.
-- **Terms.** A term whose name, labels or synonyms change, and both terms of a merge, are re-read for every item that holds them or an alias merged into them: `search.items_with_term` lists them 500 at a time for `search.sync` in a `forEach`. Each provider refreshes only its own collection.
-- **Turning it off.** `PUT /v1/workspaces/{id}/workflow-builtins/search.index` with a `collection_id` and `"automatic_enabled": false` pauses the collection's automatic provider. Searching inside that collection then answers `400 search_off`, because its documents would go stale; global search keeps its entries as last indexed, still trimmed by current permissions. Duplicating creates a draft; explicitly publishing and enabling that copy replaces the automatic provider in that collection.
+- **`POST /v1/workspaces/{id}/search/sync`** with `resource_ids` queues a `search.sync` operation (202). The `search-sync` worker runs queued syncs together, up to 200 at a time: it re-reads each entry and writes its documents, or removes them when it is gone, outside any database transaction, so a busy store never holds the database's writer. It reads state, not the event, so running it again, late or out of order is harmless.
+- **Terms.** A term whose name, labels or synonyms change, and both terms of a merge, are re-read for every item that holds them or an alias merged into them: `GET /v1/workspaces/{id}/search/term-entries` lists them a page at a time for the sync. Each provider refreshes only its own collection.
+- **Turning it off.** `PUT /v1/workspaces/{id}/workflow-builtins/search.index` with a `collection_id` and `"automatic_enabled": false` pauses the collection's automatic provider. Searching inside that collection then matches names only, because its documents would go stale; global search keeps its entries as last indexed, still trimmed by current permissions. Duplicating creates a draft; explicitly publishing and enabling that copy replaces the automatic provider in that collection.
 
-Because indexing is asynchronous, a change appears in search after its run, usually within a second.
+Because indexing is asynchronous, a change appears in search after its run and its sync, usually within a second.
 
 ## File content
 
-The **`search.content`** built-in fills the `search.content` role. It is on by default in every collection, runs on the system queue and `coalesce`s. When a PDF or an image is added (uploaded, through WebDAV, restored, from a workflow, or by a content reindex), it:
+The **`search.content`** built-in fills the `search.content` role. It is on by default in every collection and `coalesce`s. When a PDF or an image is added (uploaded, through WebDAV, restored, from a workflow, or by a content reindex), it:
 
-1. reads the file's text with [`document.read_text`](workflows.md#reading-text) (text layers, OCR for scans and photos when configured), reused for identical files;
-2. splits it into chunks with [`search.chunk`](workflows.md#file-content-steps), under a new generation, staged and not yet searched;
-3. gives the chunks their vectors with [`search.embed`](workflows.md#file-content-steps), when an [embedding model](#semantic-and-hybrid-search) is configured;
-4. makes them the file's searchable content with [`search.publish`](workflows.md#file-content-steps), replacing the content it had.
+1. reads the file's text with [`POST /v1/items/{id}/text`](documents.md#reading-text) (text layers, OCR for scans and photos when configured), reused for identical files;
+2. splits it into chunks with [`POST /v1/items/{id}/search/chunks`](#content-steps), under a new generation, staged and not yet searched;
+3. gives the chunks their vectors with `POST /v1/search/generations/{id}/embeddings`, when an [embedding model](#semantic-and-hybrid-search) is configured;
+4. makes them the file's searchable content with `POST /v1/search/generations/{id}/publish`, replacing the content it had.
 
 Its parameters are `ocr`, `max_pages`, `chunker` (`window`, `pages`, `paragraphs`, `headings`, `whole`), `max_chars`, `overlap`, `max_chunks` and `embed` (`immediate` or `later`). A list or library can turn it on with other parameters, turn it off, or copy and recompose it (for example adding a summary chunk). Its runs end with outputs (`blob_id`, `text_id`, `pages`, `language`, `generation`, `chunks`), and every filler of the role raises `role.search.content.completed`, so a workflow can follow content indexing in any collection.
 
 - **Content belongs to a file version.** A new file starts without content until its run publishes; a rename or a field change rewrites the document from the stored chunks and reads nothing again. Content of versions no surface references is dropped.
-- **Fixed checks.** `search.publish` publishes only a generation of its own run, for a file one of the item's surfaces still has; otherwise it follows `stale` and changes nothing. Access always comes from the item's document, never from content.
+- **Fixed checks.** Publishing publishes a generation only for a file one of the item's surfaces still has, and never over a newer published generation of that file; otherwise its result says why (`published: false`) and nothing changes. Publishing drops the file's older generations and keeps newer staged ones, so publishing again or out of order is safe. Access always comes from the item's document, never from content.
 - **Page hits.** When the file's text matches, a hit gives the `page` of its best matching chunk and cuts the snippet from that chunk.
-- **Enrichment.** Context that [`search.enrich`](workflows.md#ai-steps) writes for a chunk is searched and embedded with it, but snippets show only the file's own text.
+- **Enrichment.** Context set on a chunk with `PUT /v1/search/generations/{id}/enrichments`, such as a model-written sentence on which contract and clause it is, is searched and embedded with it, but snippets show only the file's own text.
+
+### Content steps
+
+The steps are API requests a workflow can recompose, each a background operation except reading chunks and setting enrichments:
+
+- **Chunkers.** `POST /v1/items/{id}/search/chunks` splits text read from the item's file (`text_id`, `blob_id`) or text given directly (`text`, such as a summary) with a `chunker`: `window` (default) cuts each page into windows of about `max_chars` characters (1,200) that end at word boundaries and overlap by `overlap` (150), as PaperDotNet's passages; `pages` makes a chunk per page; `paragraphs` merges paragraphs up to the size; `headings` splits at headings (numbered, `§`, or capitals) and starts each chunk with its heading; `whole` makes the whole text one chunk (up to 20,000 characters). At most `max_chunks` (400) per text. `kind` is `content` (default), `summary` or `extract`.
+- **Generations.** A chunk request starts a generation, named by its operation's ID, which orders generations by creation; a later chunk request can add to it with `generation`, such as a summary chunk. Nothing is searched until it is published. `GET /v1/search/generations/{id}/chunks` reads a generation's chunks a page at a time, and `PUT .../enrichments` sets context on them (at most 4,000 characters each), which embedding then covers.
+- **Hashes.** Each chunk's input hash covers its kind, text and enrichment, not the file's name, so renaming never makes chunks new.
+- **Embedding.** `POST /v1/search/generations/{id}/embeddings` gives a generation's chunks their vectors: chunks whose input already has a vector reuse it (`reused`), the others are embedded (`embedded`). Without an embedding model, or when the model fails, its result gives the `reason` and the embedding sweep embeds the chunks once published.
 
 ## Authorization
 
@@ -90,9 +101,9 @@ With an embedding model, search also finds file content close in meaning to `q`,
 
 - **Model.** `AI_EMBEDDINGS_PROVIDER` chooses it, `none` by default:
   - `local` runs EmbeddingGemma 2 (default) or Harrier in the process, on the ONNX Runtime OCR uses ([embeddings](embeddings.md)): `ONNXRUNTIME_LIB`, `AI_EMBEDDINGS_MODELS_PATH` (defaults to `assets/models/embedding/{model}` beside the executable), and optionally `AI_EMBEDDINGS_MODEL`, `AI_EMBEDDINGS_DIMENSIONS` (Gemma: 768, 512, 256 or 128), `AI_EMBEDDINGS_THREADS` and `AI_EMBEDDINGS_MAX_TOKENS` (512). Nothing loads until the first embedding; a chunk longer than the token limit is embedded by its beginning.
-  - `openai` calls any OpenAI-compatible `/v1/embeddings` endpoint (OpenAI, Ollama, LM Studio, vLLM, llama.cpp): `AI_EMBEDDINGS_ENDPOINT` (default OpenAI's), `AI_EMBEDDINGS_MODEL`, optionally `AI_EMBEDDINGS_API_KEY_FILE` and `AI_EMBEDDINGS_DIMENSIONS` (else measured once). Requests carry 64 texts, time out after two minutes, and are retried on 429 and 5xx, honouring `Retry-After` up to 30 seconds.
+  - `openai` calls any OpenAI-compatible `/v1/embeddings` endpoint (OpenAI, Ollama, LM Studio, vLLM, llama.cpp): `AI_EMBEDDINGS_ENDPOINT` (default OpenAI's), `AI_EMBEDDINGS_MODEL`, optionally `AI_EMBEDDINGS_API_KEY_FILE` and `AI_EMBEDDINGS_DIMENSIONS` (else measured once). Requests carry 64 texts and time out after two minutes. A busy, failing or unreachable provider is called once per attempt: embedding and sweep operations defer themselves until its `Retry-After`, else for 30 seconds, keeping the vectors stored so far; a search whose query cannot be embedded searches by keyword.
 - **Vectors.** Chunks are embedded by their text, not their file's name, and vectors are kept per chunk input and model: identical text embeds once, a rename or reindex embeds nothing, and another model embeds everything again under its own key (`{provider}:{model}:…`). Vectors are normalized float32. SQLite compares the model's vectors in memory; zvec uses a native HNSW index. Status reports the cached vector bytes (vectors × dimensions × 4), excluding native index overhead.
-- **When content is embedded.** `search.embed` embeds before publishing. With `embed: later`, or when the model fails, content is published without vectors and keyword search finds it at once. The embedding sweep (every 15 minutes) embeds published chunks without a vector of the current model, 2,000 per run, which also covers a model change. Vectors no chunk has used for 7 days are deleted then.
+- **When content is embedded.** `search.content` embeds before publishing. With `embed: later`, or when the model fails, content is published without vectors and keyword search finds it at once. Every 15 minutes, maintenance queues a `search.sweep` operation, unless one is pending, when published chunks lack a vector of the current model, which also covers a model change. The `search` worker runs it like other search work, under its window and concurrency, embedding 2,000 chunks per sweep. Vectors no chunk has used for 7 days are deleted then.
 - **Semantic.** The query's words, without operators, quotes and excluded words, are embedded (cached for 30 minutes) and searched against the chunk vectors. A file matches with its most similar chunk at a cosine similarity of at least 0.3, which gives the `page` and the snippet. Up to 200 entries, best first; excluded words still exclude. Only file content is embedded, so metadata alone never matches semantically, and file content needs `document.read`.
 - **Hybrid.** The best 200 keyword matches and the best 200 semantic matches are fused by reciprocal rank (k = 60): an entry found both ways ranks highest. `total` and facets cover the fused entries.
 - **Failures.** `semantic` or `hybrid` without a model is a validation error on `mode`. When embedding the query fails, the search runs by keyword and says `mode: keyword`. A next page continues in the first page's mode.
@@ -115,9 +126,11 @@ With an embedding model, search also finds file content close in meaning to `q`,
 
 `q` on collection queries (`POST /v1/resources/{id}/query`) and on resource listings (`GET /v1/resources/{id}/children`, `GET /v1/resources?workspace_id=`) matches a literal phrase whose last word is a prefix, as people type: `acm` finds Acme. It matches words as they are, not stems, in names, fields and file content. The index supplies the matching entries of the collection (or workspace), up to 10,000; the query then authorizes, filters, sorts and pages them in the database as usual. When more entries match, the page says `search_capped: true` and covers only the first 10,000 matches; narrow the search. Workspaces, lists and libraries in listings match by name.
 
+Without search, in a collection whose `search.index` provider is turned off, or while the index is rebuilt, `q` matches items and folders by name instead: their name on the surface read contains the text, ignoring case.
+
 ## The store
 
-`SEARCH_STORE=sqlite|zvec` selects the store (`zvec` by default). Both implement keyword, semantic and hybrid search, exact field filters, permissions and surfaces. Both hold derived data independently of the main database.
+`SEARCH_STORE=zvec|sqlite|none` selects the store (`zvec` by default); `none` runs PaperGo without search. Both implement keyword, semantic and hybrid search, exact field filters, permissions and surfaces. Both hold derived data independently of the main database.
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
@@ -125,7 +138,7 @@ With an embedding model, search also finds file content close in meaning to `q`,
 | `SEARCH_ZVEC_PATH` | `search/zvec` beside `DATABASE_PATH` | Native zvec directory |
 | `SEARCH_ZVEC_KEYWORD_CANDIDATES` | `10000` | Native keyword candidate cap (1–99,999); capped totals and facets set `total_estimated: true` |
 
-SQLite does not load the zvec library. zvec is a **single-process, single-node** store: one API owns its directory, enforced with an exclusive lease. It serializes mutations through a bounded writer and queries a consistent index. Source/FTS records and embedded passages have separate native collections, so HNSW contains only real, non-null vectors. Every 30 seconds and on close, maintenance seals buffered writes and builds/compacts the configured indexes; recent writes are searchable before maintenance. Reads of an empty store do not create native collections. Incomplete native write batches quarantine the store; restarting rebuilds it from the main database.
+SQLite does not load the zvec library. zvec is a **single-process, single-node** store: one API owns its directory, enforced with an exclusive lease. It serializes mutations through a bounded writer and queries a consistent index. Source/FTS records and embedded passages have separate native collections, so HNSW contains only real, non-null vectors. Maintenance seals buffered writes and builds/compacts the configured indexes once writes have paused for a minute, or at the latest 30 minutes after the first write since it last did, and on close; recent writes are searchable before then. Sealing holds the store for seconds, so searches and writes wait for it; deferring it while writes continue keeps that wait rare. Reads of an empty store do not create native collections. Incomplete native write batches quarantine the store; restarting rebuilds it from the main database.
 
 zvec keeps source documents, staged and published chunks, enrichments and cached vectors in native records. Its two full-text fields, `metadata` and `content`, use encoded words, Snowball stems and prefixes, including one-letter prefixes, with exact phrase verification. Name and keyword ranking is applied in Go. Semantic search uses native cosine HNSW with scopes and surfaces applied before candidate selection. Typed field filters use an in-memory catalog of those source records to restrict native document keys before top-k; this preserves exact multi-value, int64 and decimal comparisons. It does not open SQLite. The catalog and native FTS/HNSW indexes add memory beyond the vector bytes in status.
 
@@ -137,9 +150,9 @@ After five minutes without a native search or write, maintenance flushes and clo
 
 Search paths must differ from the application database and its sidecar files, including through symbolic or hard links. The zvec directory must not overlap the database, blob directory or SQLite search file. Startup rejects unrelated databases at the search path.
 
-- **Rebuild.** A new store, or one whose layout changed in a new release, is rebuilt from the database at startup. Until the rebuild completes, search answers `503 search_unavailable`; collection queries and listings without `q` keep working.
+- **Rebuild.** A new store, or one whose layout changed in a new release, is rebuilt from the database at startup. Until the rebuild completes, global search answers `503 search_unavailable`, and collection queries and listings match `q` by name.
 - **Reindex.** `POST /v1/search/reindex` (`organization.manage`) rewrites every document as an [operation](application-foundation.md) (202 with `Location: /v1/operations/{id}`), in batches of 200, and removes documents of entries that no longer exist. Search keeps answering meanwhile. With `{"content": true}` it also raises `file.updated` with the `reindex` source for the current file of every item without content (`"force": true`: every item), so the workflow filling `search.content` for its collection indexes it again; text read before is reused. A rebuild and an import do this too.
-- **Status.** `GET /v1/search/status` (`organization.manage`) gives the store's name, whether it is rebuilding, its document and chunk counts and its size; with an embedding model, its `model` and `embeddings`: stored `vectors`, chunk inputs `pending` a vector, and the `memory_bytes` semantic search holds.
+- **Status.** `GET /v1/search/status` (`organization.manage`) gives the store's name, whether it is rebuilding, its document and chunk counts and its size; with an embedding model, its `model` and `embeddings`: stored `vectors`, chunk inputs `pending` a vector, and the `memory_bytes` semantic search holds. `GET /v1/storage/status` lists the store under `extensions`.
 - **Backups.** SQLite search is excluded and removed on restore, then rebuilt. With `SEARCH_STORE=zvec`, stop the API first so the collection flushes and closes; `papergo-admin backup --file backup.tar.gz` includes the complete native directory with checksums. Restore it with the same backend and search path configuration. Active API/native leases reject offline snapshots.
 
 ### Copying between stores
@@ -158,8 +171,11 @@ For the other direction, use `--from zvec --to sqlite`. `--database`, `--sqlite`
 | Method | Route | Purpose |
 | --- | --- | --- |
 | GET / POST | /v1/search | Global search; POST takes a JSON body with a field `filter` |
-| GET | /v1/search/fields | The fields the caller can filter on |
 | POST | /v1/search/reindex | Rebuild every document (operation) |
 | GET | /v1/search/status | Store state |
+| POST | /v1/workspaces/{id}/search/sync | Queue entries to be written (operation) |
+| GET | /v1/workspaces/{id}/search/term-entries | Entries holding terms |
+
+These routes, and the [content steps](#content-steps), are served when the deployment runs search. `GET /v1/search/fields` and `GET /v1/search/content-types` belong to the core, since smart folders filter on the same fields: they list the fields the caller can filter on, and the content types of readable collections.
 
 The search page offers a content-type selector and matching type facets. `GET /v1/search/content-types` lists IDs, keys and names attached to readable collections, optionally narrowed by `workspace_id` and `collection_id`; pass `content_type_id` to `/v1/search` to filter. Expand Relationships on a result to load its authorized incoming/outgoing links and open a related item.

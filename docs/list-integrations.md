@@ -12,7 +12,7 @@ Configuring integrations with a access token requires `list.read` and `list.writ
 
 ## Refresh and reconciliation
 
-Adding the first integration creates the workspace's **Refresh list integrations** built-in workflow. Every 15 minutes in UTC, its `integration.refresh` activity queues durable operations for active integrations. Each operation rechecks the configuring user's current list permissions and stored REST credential, when applicable. Revoked credentials do not authorize automatic work. A disabled workspace workflow stays disabled when another integration is added. Ordinary workflows can use the activity with `integration_id` for one managed subscription, or omit it with workspace Manage access.
+Every 15 minutes, a maintenance task queues a refresh operation for each active integration that has none pending. Each operation rechecks the configuring user's current list permissions and stored REST credential, when applicable. Revoked credentials do not authorize automatic work. Pausing an integration stops its refreshes; `POST .../refresh` refreshes one at once, for API clients and workflow scripts alike.
 
 Refresh now queues a tracked operation for that integration only. Its progress is visible under Background work. Downloads happen outside the database writer. Conditional HTTP validators avoid repeated transfers. Expiring source leases serialize fetching, reconciliation and configuration changes; conflicting configuration changes return 409. A crash resumes pending operations after the lease expires.
 

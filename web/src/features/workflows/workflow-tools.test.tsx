@@ -36,6 +36,7 @@ it('preserves an ordered selection, explicit primary item and exact typed launch
     automatic_enabled: false, manual_enabled: true, state: 'published', automatic_provider: false,
     version: 1,
     current_version: 1,
+        source: '',
     definition: {
       triggers: [{ type: 'manual', collection_id: 'collection', selection: 'selection' }],
       input_schema: {
@@ -43,7 +44,6 @@ it('preserves an ordered selection, explicit primary item and exact typed launch
         required: ['amount'],
         properties: { amount: { type: 'integer', title: 'Amount' } },
       },
-      flow: { start: 'end', nodes: { end: { activity: 'end' } } },
     },
   };
   const client = new QueryClient();
@@ -88,6 +88,7 @@ it('shows selection hints and image previews of the ordered items', async () => 
     automatic_enabled: false, manual_enabled: true, state: 'published', automatic_provider: false,
     version: 1,
     current_version: 1,
+        source: '',
     definition: {
       triggers: [{ type: 'manual', collection_id: 'collection', selection: 'selection' }],
       input_schema: {
@@ -95,7 +96,6 @@ it('shows selection hints and image previews of the ordered items', async () => 
         properties: {},
         'x-papergo-selection': { preview: 'image', item_label: 'page', order_label: 'Page order', primary_description: 'Gets the PDF.' },
       },
-      flow: { start: 'end', nodes: { end: { activity: 'end' } } },
     },
   };
   const client = new QueryClient();
@@ -126,7 +126,8 @@ it('explains server readiness failures and prevents an unavailable run', async (
     id: 'optimizer', key: 'optimizer', workspace_id: 'workspace', name: 'Optimize', description: '',
     automatic_enabled: false, manual_enabled: true, automatic_provider: false, state: 'published',
     version: 1, current_version: 1,
-    definition: { triggers: [{ type: 'manual', selection: 'per_item' }, { type: 'file.added', collection_id: 'photos' }], flow: { start: 'end', nodes: { end: { activity: 'end' } } } },
+        source: '',
+    definition: { triggers: [{ type: 'manual', selection: 'per_item' }, { type: 'file.added', collection_id: 'photos' }] },
   };
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(<QueryClientProvider client={client}><LaunchWorkflow workflow={workflow} itemIds={['photo']} onClose={vi.fn()} /></QueryClientProvider>);

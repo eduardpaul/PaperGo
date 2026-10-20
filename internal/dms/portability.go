@@ -156,7 +156,7 @@ func (s *Service) finishPackage(ctx context.Context, op *operations.Operation, r
 	}
 	completed := time.Now().UTC()
 	op.Result, op.Status, op.Progress, op.CompletedAt = raw, operations.StatusSucceeded, 100, &completed
-	return s.DAL.Operations().Save(ctx, op)
+	return s.SaveOperation(ctx, op)
 }
 func (s *Service) StartExport(ctx context.Context, subject string, options ExportOptions) (*OperationView, error) {
 	raw, err := json.Marshal(packagePayload{ExportOptions: options})
@@ -651,11 +651,10 @@ func (s *Service) importCorePackage(ctx context.Context, store storage.Store, su
 	if err != nil || in.DryRun {
 		return result, err
 	}
-	// Imported entries raised no change events: rebuild the search index,
-	// file content included (the imported text is reused, not read again).
-	if s.search != nil {
-		raw, _ := json.Marshal(searchReindexPayload{Stamp: time.Now().UnixNano(), Content: true})
-		if _, err = s.DAL.Operations().Enqueue(ctx, operations.Operation{Kind: OperationKindSearchReindex, CreatedBy: systemSubject, Payload: raw, TraceID: s.traceID}); err != nil {
+	// Imported entries raised no change events: extensions that derive
+	// state from them rebuild it.
+	for _, hook := range s.ext.imported {
+		if err = hook(ctx, s); err != nil {
 			return result, err
 		}
 	}

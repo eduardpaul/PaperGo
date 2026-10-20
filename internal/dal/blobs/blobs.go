@@ -55,11 +55,10 @@ type Deletion struct {
 	CreatedAt     time.Time
 }
 
-// Lease keeps a blob's bytes for an owner, such as a wait, until the owner
-// releases it or its run is deleted.
+// Lease keeps a blob's bytes for an operation until it ends or is deleted.
 type Lease struct {
-	ID, OwnerID, RunID, BlobID string
-	CreatedAt                  time.Time
+	ID, OperationID, BlobID string
+	CreatedAt               time.Time
 }
 
 // Packages names the operation kinds whose payload or result holds a stored
@@ -94,8 +93,6 @@ type Queries interface {
 	DeleteDeletion(ctx context.Context, id string) error
 	// InsertBlobLease inserts l unless its owner already leases the blob.
 	InsertBlobLease(ctx context.Context, l Lease) error
-	DeleteOwnerBlobLeases(ctx context.Context, ownerID string) error
-	DeleteRunBlobLeases(ctx context.Context, runID string) error
 	// ObjectReferenced reports whether anything still references a stored
 	// object: an unreclaimed or leased blob, an extracted text, a preview, a
 	// pending staged file or a package operation.
@@ -193,30 +190,20 @@ func (r *Repo) Dequeue(ctx context.Context, id string) error {
 	return r.read.DeleteDeletion(ctx, id)
 }
 
-// Lease keeps blobs for an owner within a run.
-func (r *Repo) Lease(ctx context.Context, ownerID, runID string, blobIDs []string) error {
+// LeaseOperation keeps blobs for an operation until it ends.
+func (r *Repo) LeaseOperation(ctx context.Context, operationID string, blobIDs []string) error {
 	if len(blobIDs) == 0 {
 		return nil
 	}
 	at := now()
 	return r.write(ctx, func(q Queries) error {
 		for _, id := range blobIDs {
-			if err := q.InsertBlobLease(ctx, Lease{ID: uuid.NewString(), OwnerID: ownerID, RunID: runID, BlobID: id, CreatedAt: at}); err != nil {
+			if err := q.InsertBlobLease(ctx, Lease{ID: uuid.NewString(), OperationID: operationID, BlobID: id, CreatedAt: at}); err != nil {
 				return err
 			}
 		}
 		return nil
 	})
-}
-
-// Release ends an owner's leases.
-func (r *Repo) Release(ctx context.Context, ownerID string) error {
-	return r.read.DeleteOwnerBlobLeases(ctx, ownerID)
-}
-
-// ReleaseRun ends every lease of a run.
-func (r *Repo) ReleaseRun(ctx context.Context, runID string) error {
-	return r.read.DeleteRunBlobLeases(ctx, runID)
 }
 
 // Referenced reports whether anything still references a stored object, so

@@ -215,9 +215,10 @@ func (s *Service) normalizeKeywords(ctx context.Context, subject string, values,
 // Surface keywords include the intrinsic keywords and every indexed keywords
 // field, with one occurrence per term even if several fields hold it.
 
+// CanonicalKeyword resolves a keyword filter to its canonical term ID.
 // Keyword filters accept the same IDs and labels as keyword assignment, but
 // querying never adds terms to the vocabulary.
-func (s *Service) keywordFilter(ctx context.Context, raw string) (string, error) {
+func (s *Service) CanonicalKeyword(ctx context.Context, raw string) (string, error) {
 	if raw == "" {
 		return raw, nil
 	}
@@ -247,7 +248,7 @@ func (s *Service) keywordFilters(ctx context.Context, filter *FilterExpr) (*Filt
 	if filter.Field == "$keywords" && len(filter.Value) > 0 {
 		var value string
 		if json.Unmarshal(filter.Value, &value) == nil {
-			value, err = s.keywordFilter(ctx, value)
+			value, err = s.CanonicalKeyword(ctx, value)
 			if err != nil {
 				return nil, err
 			}

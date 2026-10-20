@@ -17,12 +17,11 @@ import (
 const (
 	// RequestTimeout bounds one request.
 	RequestTimeout = 2 * time.Minute
-	// attempts is how often a request is tried when the provider is busy
-	// or failing.
-	attempts = 4
-	// maxRetryAfter is the longest Retry-After waited for; a longer one
-	// fails the call.
-	maxRetryAfter = 30 * time.Second
+	// retryDefault is how long to wait before trying a busy or failing
+	// provider again when it does not say.
+	retryDefault = 30 * time.Second
+	// maxRetryAfter bounds the wait a provider's Retry-After asks for.
+	maxRetryAfter = time.Hour
 	maxResponse   = 256 << 20
 )
 
@@ -32,6 +31,25 @@ type Error struct {
 	Model   string
 	Status  int
 	Message string
+	// Retry says the call may succeed later: the provider was busy,
+	// failing or unreachable. After is how long it asked to wait.
+	Retry bool
+	After time.Duration
+}
+
+// RetryAfter reports whether err is a provider failure worth trying again
+// and how long to wait first: what the provider asked for, else 30
+// seconds. A call makes one attempt; the operation that made it defers
+// itself for the next one, so no worker waits.
+func RetryAfter(err error) (time.Duration, bool) {
+	var e *Error
+	if !errors.As(err, &e) || !e.Retry {
+		return 0, false
+	}
+	if e.After > 0 {
+		return e.After, true
+	}
+	return retryDefault, true
 }
 
 func (e *Error) Error() string {
@@ -48,7 +66,6 @@ type endpoint struct {
 	apiKey string
 	client *http.Client
 	now    func() time.Time
-	sleep  func(context.Context, time.Duration) error
 }
 
 // newEndpoint is route (such as /embeddings) under base, unless base
@@ -61,43 +78,30 @@ func newEndpoint(what, base, route, apiKey string, client *http.Client) endpoint
 	if !strings.HasSuffix(url, route) {
 		url += route
 	}
-	return endpoint{what: what, url: url, apiKey: apiKey, client: client, now: time.Now, sleep: sleep}
+	return endpoint{what: what, url: url, apiKey: apiKey, client: client, now: time.Now}
 }
 
-// call posts payload and decodes the answer, retrying when the provider is
-// busy or failing; an answer decode refuses is not tried again.
+// call posts payload once and decodes the answer. A busy or failing
+// provider returns an Error with Retry set; an answer decode refuses is
+// not worth trying again.
 func (p endpoint) call(ctx context.Context, payload []byte, decode func([]byte) error) error {
-	var last error
-	for attempt := range attempts {
-		raw, wait, err := p.post(ctx, payload)
-		if err == nil {
-			if err = decode(raw); err != nil {
-				return &Error{Model: p.what, Status: http.StatusOK, Message: err.Error()}
-			}
-			return nil
-		}
-		last = err
-		if wait < 0 || attempt == attempts-1 {
-			break
-		}
-		if wait == 0 {
-			wait = time.Duration(500<<attempt) * time.Millisecond
-		}
-		if err := p.sleep(ctx, wait); err != nil {
-			return err
-		}
+	raw, err := p.post(ctx, payload)
+	if err != nil {
+		return err
 	}
-	return last
+	if err = decode(raw); err != nil {
+		return &Error{Model: p.what, Status: http.StatusOK, Message: err.Error()}
+	}
+	return nil
 }
 
-// post sends one request. wait is how long to wait before trying again: 0
-// for the default backoff, negative when trying again cannot help.
-func (p endpoint) post(ctx context.Context, payload []byte) (_ []byte, wait time.Duration, _ error) {
+// post sends one request.
+func (p endpoint) post(ctx context.Context, payload []byte) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, RequestTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.url, bytes.NewReader(payload))
 	if err != nil {
-		return nil, -1, err
+		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if p.apiKey != "" {
@@ -106,27 +110,23 @@ func (p endpoint) post(ctx context.Context, payload []byte) (_ []byte, wait time
 	resp, err := p.client.Do(req)
 	if err != nil {
 		if ctx.Err() != nil && errors.Is(context.Cause(ctx), context.Canceled) {
-			return nil, -1, err
+			return nil, err
 		}
-		return nil, 0, &Error{Model: p.what, Message: err.Error()}
+		return nil, &Error{Model: p.what, Message: err.Error(), Retry: true}
 	}
 	defer resp.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxResponse))
 	if err != nil {
-		return nil, 0, &Error{Model: p.what, Message: err.Error()}
+		return nil, &Error{Model: p.what, Message: err.Error(), Retry: true}
 	}
 	if resp.StatusCode != http.StatusOK {
 		failure := &Error{Model: p.what, Status: resp.StatusCode, Message: errorMessage(raw)}
-		if resp.StatusCode != http.StatusTooManyRequests && resp.StatusCode < 500 {
-			return nil, -1, failure
+		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
+			failure.Retry, failure.After = true, retryAfter(resp.Header.Get("Retry-After"), p.now())
 		}
-		wait, ok := retryAfter(resp.Header.Get("Retry-After"), p.now())
-		if !ok {
-			return nil, -1, failure
-		}
-		return nil, wait, failure
+		return nil, failure
 	}
-	return raw, 0, nil
+	return raw, nil
 }
 
 func errorMessage(raw []byte) string {
@@ -145,34 +145,14 @@ func errorMessage(raw []byte) string {
 	return message
 }
 
-// retryAfter reads a Retry-After header (seconds or an HTTP date): 0 when
-// absent, and false when it asks to wait longer than is worth waiting.
-func retryAfter(header string, now time.Time) (time.Duration, bool) {
-	if header == "" {
-		return 0, true
-	}
+// retryAfter reads a Retry-After header (seconds or an HTTP date), up to an
+// hour: 0 when absent or unreadable.
+func retryAfter(header string, now time.Time) time.Duration {
 	var wait time.Duration
 	if seconds, err := strconv.Atoi(strings.TrimSpace(header)); err == nil {
 		wait = time.Duration(max(seconds, 0)) * time.Second
 	} else if at, err := http.ParseTime(header); err == nil {
 		wait = max(at.Sub(now), 0)
-	} else {
-		return 0, true
 	}
-	if wait > maxRetryAfter {
-		return 0, false
-	}
-	// At least a moment, so 0 is not read as "use the backoff".
-	return max(wait, time.Millisecond), true
-}
-
-func sleep(ctx context.Context, d time.Duration) error {
-	t := time.NewTimer(d)
-	defer t.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-t.C:
-		return nil
-	}
+	return min(wait, maxRetryAfter)
 }

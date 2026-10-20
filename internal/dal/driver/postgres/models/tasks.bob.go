@@ -50,8 +50,7 @@ type Task struct {
 	Source      string                                `db:"source" `
 	WorkflowID  null.Val[string]                      `db:"workflow_id" `
 	RunID       null.Val[string]                      `db:"run_id" `
-	Node        null.Val[string]                      `db:"node" `
-	Wait        bool                                  `db:"wait" `
+	OperationID null.Val[string]                      `db:"operation_id" `
 	Status      string                                `db:"status" `
 	Outcome     null.Val[string]                      `db:"outcome" `
 	CompletedBy null.Val[string]                      `db:"completed_by" `
@@ -77,6 +76,7 @@ type TasksQuery = *psql.ViewQuery[*Task, TaskSlice]
 type taskR struct {
 	TaskResponses     TaskResponseSlice // task_responses.task_responses_task_id_fkey
 	ItemResource      *Resource         // tasks.tasks_item_id_fkey
+	Operation         *Operation        // tasks.tasks_operation_id_fkey
 	RunWorkflowRun    *WorkflowRun      // tasks.tasks_run_id_fkey
 	Workflow          *Workflow         // tasks.tasks_workflow_id_fkey
 	WorkspaceResource *Resource         // tasks.tasks_workspace_id_fkey
@@ -90,6 +90,7 @@ type taskR struct {
 type taskRLoaded struct {
 	TaskResponses     bool // task_responses.task_responses_task_id_fkey
 	ItemResource      bool // tasks.tasks_item_id_fkey
+	Operation         bool // tasks.tasks_operation_id_fkey
 	RunWorkflowRun    bool // tasks.tasks_run_id_fkey
 	Workflow          bool // tasks.tasks_workflow_id_fkey
 	WorkspaceResource bool // tasks.tasks_workspace_id_fkey
@@ -97,7 +98,7 @@ type taskRLoaded struct {
 
 func buildTaskColumns(tableName string) taskColumns {
 	columnsExpr := expr.NewColumnsExpr(
-		"id", "created_at", "updated_at", "version", "workspace_id", "item_id", "kind", "key", "title", "description", "assignees", "completion", "outcomes", "input_schema", "values", "review", "priority", "due_at", "source", "workflow_id", "run_id", "node", "wait", "status", "outcome", "completed_by", "completed_at", "comment", "input", "created_by",
+		"id", "created_at", "updated_at", "version", "workspace_id", "item_id", "kind", "key", "title", "description", "assignees", "completion", "outcomes", "input_schema", "values", "review", "priority", "due_at", "source", "workflow_id", "run_id", "operation_id", "status", "outcome", "completed_by", "completed_at", "comment", "input", "created_by",
 	)
 
 	if tableName != "" {
@@ -128,8 +129,7 @@ func buildTaskColumns(tableName string) taskColumns {
 		Source:      buildTaskColumn(tableName, "source"),
 		WorkflowID:  buildTaskColumn(tableName, "workflow_id"),
 		RunID:       buildTaskColumn(tableName, "run_id"),
-		Node:        buildTaskColumn(tableName, "node"),
-		Wait:        buildTaskColumn(tableName, "wait"),
+		OperationID: buildTaskColumn(tableName, "operation_id"),
 		Status:      buildTaskColumn(tableName, "status"),
 		Outcome:     buildTaskColumn(tableName, "outcome"),
 		CompletedBy: buildTaskColumn(tableName, "completed_by"),
@@ -164,8 +164,7 @@ type taskColumns struct {
 	Source      taskColumn
 	WorkflowID  taskColumn
 	RunID       taskColumn
-	Node        taskColumn
-	Wait        taskColumn
+	OperationID taskColumn
 	Status      taskColumn
 	Outcome     taskColumn
 	CompletedBy taskColumn
@@ -239,8 +238,7 @@ type TaskSetter struct {
 	Source      omit.Val[string]                          `db:"source" `
 	WorkflowID  omitnull.Val[string]                      `db:"workflow_id" `
 	RunID       omitnull.Val[string]                      `db:"run_id" `
-	Node        omitnull.Val[string]                      `db:"node" `
-	Wait        omit.Val[bool]                            `db:"wait" `
+	OperationID omitnull.Val[string]                      `db:"operation_id" `
 	Status      omit.Val[string]                          `db:"status" `
 	Outcome     omitnull.Val[string]                      `db:"outcome" `
 	CompletedBy omitnull.Val[string]                      `db:"completed_by" `
@@ -251,7 +249,7 @@ type TaskSetter struct {
 }
 
 func (s TaskSetter) SetColumns() []string {
-	vals := make([]string, 0, 30)
+	vals := make([]string, 0, 29)
 	if s.ID.IsValue() {
 		vals = append(vals, "id")
 	}
@@ -315,11 +313,8 @@ func (s TaskSetter) SetColumns() []string {
 	if s.RunID.IsValue() || s.RunID.IsNull() {
 		vals = append(vals, "run_id")
 	}
-	if s.Node.IsValue() || s.Node.IsNull() {
-		vals = append(vals, "node")
-	}
-	if s.Wait.IsValue() {
-		vals = append(vals, "wait")
+	if s.OperationID.IsValue() || s.OperationID.IsNull() {
+		vals = append(vals, "operation_id")
 	}
 	if s.Status.IsValue() {
 		vals = append(vals, "status")
@@ -409,11 +404,8 @@ func (s TaskSetter) Overwrite(t *Task) {
 	if s.RunID.IsValue() || s.RunID.IsNull() {
 		t.RunID = s.RunID.MustGetNull()
 	}
-	if s.Node.IsValue() || s.Node.IsNull() {
-		t.Node = s.Node.MustGetNull()
-	}
-	if s.Wait.IsValue() {
-		t.Wait = s.Wait.MustGet()
+	if s.OperationID.IsValue() || s.OperationID.IsNull() {
+		t.OperationID = s.OperationID.MustGetNull()
 	}
 	if s.Status.IsValue() {
 		t.Status = s.Status.MustGet()
@@ -550,15 +542,10 @@ func (s *TaskSetter) Apply(q *dialect.InsertQuery) {
 			}
 			return psql.Arg(s.RunID.MustGetNull()).WriteSQL(ctx, w, d, start)
 		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
-			if s.Node.IsUnset() {
+			if s.OperationID.IsUnset() {
 				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
 			}
-			return psql.Arg(s.Node.MustGetNull()).WriteSQL(ctx, w, d, start)
-		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
-			if s.Wait.IsUnset() {
-				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
-			}
-			return psql.Arg(s.Wait.MustGet()).WriteSQL(ctx, w, d, start)
+			return psql.Arg(s.OperationID.MustGetNull()).WriteSQL(ctx, w, d, start)
 		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
 			if s.Status.IsUnset() {
 				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
@@ -602,7 +589,7 @@ func (s TaskSetter) UpdateMod() bob.Mod[*dialect.UpdateQuery] {
 }
 
 func (s TaskSetter) Expressions(prefix ...string) []bob.Expression {
-	exprs := make([]bob.Expression, 0, 30)
+	exprs := make([]bob.Expression, 0, 29)
 
 	if s.ID.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
@@ -751,17 +738,10 @@ func (s TaskSetter) Expressions(prefix ...string) []bob.Expression {
 		}})
 	}
 
-	if s.Node.IsValue() || s.Node.IsNull() {
+	if s.OperationID.IsValue() || s.OperationID.IsNull() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
-			psql.Quote(append(prefix, "node")...),
-			psql.Arg(s.Node),
-		}})
-	}
-
-	if s.Wait.IsValue() {
-		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
-			psql.Quote(append(prefix, "wait")...),
-			psql.Arg(s.Wait),
+			psql.Quote(append(prefix, "operation_id")...),
+			psql.Arg(s.OperationID),
 		}})
 	}
 
@@ -824,7 +804,7 @@ func taskScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc, func(a
 		idx int
 		dst func(o *Task) any
 	}
-	targets := make([]target, 0, 30)
+	targets := make([]target, 0, 29)
 	for i, col := range cols {
 		switch col {
 		case "id":
@@ -869,10 +849,8 @@ func taskScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc, func(a
 			targets = append(targets, target{i, func(o *Task) any { return &o.WorkflowID }})
 		case "run_id":
 			targets = append(targets, target{i, func(o *Task) any { return &o.RunID }})
-		case "node":
-			targets = append(targets, target{i, func(o *Task) any { return &o.Node }})
-		case "wait":
-			targets = append(targets, target{i, func(o *Task) any { return &o.Wait }})
+		case "operation_id":
+			targets = append(targets, target{i, func(o *Task) any { return &o.OperationID }})
 		case "status":
 			targets = append(targets, target{i, func(o *Task) any { return &o.Status }})
 		case "outcome":
@@ -1215,6 +1193,36 @@ func (os TaskSlice) ItemResource(mods ...bob.Mod[*dialect.SelectQuery]) Resource
 	)...)
 }
 
+// Operation starts a query for related objects on operations
+func (o *Task) Operation(mods ...bob.Mod[*dialect.SelectQuery]) OperationsQuery {
+	return Operations.Query(append(mods,
+		sm.Where(Operations.Columns.ID.EQ(psql.Arg(o.OperationID))),
+	)...)
+}
+
+func (os TaskSlice) Operation(mods ...bob.Mod[*dialect.SelectQuery]) OperationsQuery {
+	pkOperationID := make(pgtypes.Array[null.Val[string]], 0, len(os))
+
+	// the array is only a filter (semi-join), so duplicate keys can be
+	// dropped before they are sent over the wire
+	seenOperationID := make(map[null.Val[string]]struct{}, len(os))
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		if _, ok := seenOperationID[o.OperationID]; ok {
+			continue
+		}
+		seenOperationID[o.OperationID] = struct{}{}
+		pkOperationID = append(pkOperationID, o.OperationID)
+	}
+	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkOperationID), "text[]"))
+
+	return Operations.Query(append(mods,
+		sm.Where(Operations.Columns.ID.EQ(PKArgExpr)),
+	)...)
+}
+
 // RunWorkflowRun starts a query for related objects on workflow_runs
 func (o *Task) RunWorkflowRun(mods ...bob.Mod[*dialect.SelectQuery]) WorkflowRunsQuery {
 	return WorkflowRuns.Query(append(mods,
@@ -1412,6 +1420,52 @@ func (task0 *Task) AttachItemResource(ctx context.Context, exec bob.Executor, re
 	return nil
 }
 
+func attachTaskOperation0(ctx context.Context, exec bob.Executor, count int, task0 *Task, operation1 *Operation) (*Task, error) {
+	setter := &TaskSetter{
+		OperationID: omitnull.From(operation1.ID),
+	}
+
+	err := task0.Update(ctx, exec, setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachTaskOperation0: %w", err)
+	}
+
+	return task0, nil
+}
+
+func (task0 *Task) InsertOperation(ctx context.Context, exec bob.Executor, related *OperationSetter) error {
+	var err error
+
+	operation1, err := Operations.Insert(related).One(ctx, exec)
+	if err != nil {
+		return fmt.Errorf("inserting related objects: %w", err)
+	}
+
+	_, err = attachTaskOperation0(ctx, exec, 1, task0, operation1)
+	if err != nil {
+		return err
+	}
+
+	task0.R.Operation = operation1
+	task0.R.Loaded.Operation = true
+
+	return nil
+}
+
+func (task0 *Task) AttachOperation(ctx context.Context, exec bob.Executor, operation1 *Operation) error {
+	var err error
+
+	_, err = attachTaskOperation0(ctx, exec, 1, task0, operation1)
+	if err != nil {
+		return err
+	}
+
+	task0.R.Operation = operation1
+	task0.R.Loaded.Operation = true
+
+	return nil
+}
+
 func attachTaskRunWorkflowRun0(ctx context.Context, exec bob.Executor, count int, task0 *Task, workflowRun1 *WorkflowRun) (*Task, error) {
 	setter := &TaskSetter{
 		RunID: omitnull.From(workflowRun1.ID),
@@ -1573,8 +1627,7 @@ type taskWhere[Q psql.Filterable] struct {
 	Source      psql.WhereMod[Q, string]
 	WorkflowID  psql.WhereNullMod[Q, string]
 	RunID       psql.WhereNullMod[Q, string]
-	Node        psql.WhereNullMod[Q, string]
-	Wait        psql.WhereMod[Q, bool]
+	OperationID psql.WhereNullMod[Q, string]
 	Status      psql.WhereMod[Q, string]
 	Outcome     psql.WhereNullMod[Q, string]
 	CompletedBy psql.WhereNullMod[Q, string]
@@ -1613,8 +1666,7 @@ func buildTaskWhere[Q psql.Filterable](cols taskColumns) taskWhere[Q] {
 		Source:      psql.Where[Q, string](cols.Source.Expression),
 		WorkflowID:  psql.WhereNull[Q, string](cols.WorkflowID.Expression),
 		RunID:       psql.WhereNull[Q, string](cols.RunID.Expression),
-		Node:        psql.WhereNull[Q, string](cols.Node.Expression),
-		Wait:        psql.Where[Q, bool](cols.Wait.Expression),
+		OperationID: psql.WhereNull[Q, string](cols.OperationID.Expression),
 		Status:      psql.Where[Q, string](cols.Status.Expression),
 		Outcome:     psql.WhereNull[Q, string](cols.Outcome.Expression),
 		CompletedBy: psql.WhereNull[Q, string](cols.CompletedBy.Expression),
@@ -1656,6 +1708,20 @@ func (w taskWhereR[Q]) HasItemResource(filters ...bob.Mod[*dialect.SelectQuery])
 		sm.Columns(psql.Raw("1")),
 		sm.From(Resources.NameExpr()),
 		sm.Where(Resources.Columns.ID.EQ(w.cols.ItemID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: psql.Exists(q)}
+}
+
+// HasOperation filters parents that have a matching Operation using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Operations).
+func (w taskWhereR[Q]) HasOperation(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := psql.Select(
+		sm.Columns(psql.Raw("1")),
+		sm.From(Operations.NameExpr()),
+		sm.Where(Operations.Columns.ID.EQ(w.cols.OperationID)),
 	)
 	q.Apply(filters...)
 	return mods.Where[Q]{E: psql.Exists(q)}

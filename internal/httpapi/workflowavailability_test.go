@@ -22,8 +22,8 @@ func TestWorkflowAvailabilityRoutesKeepManualAndAutomaticUseIndependent(t *testi
 	ws := create("", dms.CreateResource{Kind: "workspace", Name: "Workspace"})
 	lib := create(ws, dms.CreateResource{Kind: "library", Name: "Photos"})
 	item := create(lib, dms.CreateResource{Kind: "item", Name: "Photo"})
-	definition := `{"triggers":[{"type":"manual","collection_id":"` + lib + `"},{"type":"item.updated","collection_id":"` + lib + `"}],"flow":{"start":"end","nodes":{"end":{"activity":"end"}}}}`
-	response := request(h, "POST", "/v1/workspaces/"+ws+"/workflows", `{"name":"Reusable feature","definition":`+definition+`}`, testToken, "", "application/json")
+	source := workflowScript(`[{"type":"manual","collection_id":"` + lib + `"},{"type":"item.updated","collection_id":"` + lib + `"}]`)
+	response := request(h, "POST", "/v1/workspaces/"+ws+"/workflows", workflowBody(t, "Reusable feature", source, nil), testToken, "", "application/json")
 	var w workflow.Workflow
 	if response.Code != 201 || json.Unmarshal(response.Body.Bytes(), &w) != nil || w.AutomaticEnabled || !w.ManualEnabled {
 		t.Fatal(response.Code, response.Body.String())
