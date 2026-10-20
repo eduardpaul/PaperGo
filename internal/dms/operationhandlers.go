@@ -499,18 +499,18 @@ func (s *Service) SaveOperation(ctx context.Context, op *operations.Operation) e
 	return nil
 }
 
-// ParkOperations makes claimed operations members of the durable module
-// execution executionID, such as a provider batch or a waiting script run,
+// ParkOperations makes claimed operations members of a durable module
+// execution, such as a provider batch or a waiting script run,
 // releasing their claims: they hold no worker until FinishParkedOperation
 // ends them or UnparkOperations returns them to the queue. Call it on a
 // service bound to a write.
-func (s *Service) ParkOperations(ctx context.Context, ops []*operations.Operation, executionID string) error {
+func (s *Service) ParkOperations(ctx context.Context, ops []*operations.Operation, in operations.Parking) error {
 	now := time.Now()
 	for _, op := range ops {
-		if err := s.DAL.Operations().Park(ctx, []string{op.ID}, op.Claim, executionID, now); err != nil {
+		if err := s.DAL.Operations().Park(ctx, []string{op.ID}, op.Claim, in, now); err != nil {
 			return err
 		}
-		op.ExecutionID, op.Claim = executionID, operations.Claim{}
+		op.ExecutionID, op.Claim = in.ExecutionID, operations.Claim{}
 	}
 	return nil
 }

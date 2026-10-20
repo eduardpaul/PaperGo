@@ -196,6 +196,38 @@ func TestBatchCompletion(t *testing.T) {
 
 // Decisions run on the local engine; a document decision fails when the
 // item's file changed while it ran.
+func TestBatchRetriesExhaustAttempts(t *testing.T) {
+	ctx := context.Background()
+	f := setup(t)
+	f.batch.failing = "fail me"
+	op := f.start(t, "/v1/ai/completions", `{"prompt":"Classify","input":"fail me","workspace_id":"`+f.ws+`","execution":"batch"}`)
+	for attempt := 1; attempt <= dms.DefaultMaxAttempts; attempt++ {
+		worked, err := f.s.RunOperationGroup(ctx, aiops.KindBatch, "shared", nil, 20)
+		if err != nil || !worked {
+			t.Fatalf("attempt %d: %v %v", attempt, worked, err)
+		}
+		if batches := len(f.batch.batches); batches != attempt {
+			t.Fatalf("attempt %d reused submission identity: %d batches", attempt, batches)
+		}
+		if parked := f.operation(t, op.ID); parked.Attempts != attempt || parked.Waiting != dms.WaitingRemote {
+			t.Fatalf("attempt %d: %+v", attempt, parked)
+		}
+		f.batch.finish()
+		if err := f.a.Poll(ctx, time.Now().Add(time.Hour)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if worked, err := f.s.RunOperationGroup(ctx, aiops.KindBatch, "shared", nil, 20); err != nil || !worked {
+		t.Fatal(worked, err)
+	}
+	if ended := f.operation(t, op.ID); ended.Status != operations.StatusFailed || ended.ErrorCode != operations.ErrorRetriesExhausted {
+		t.Fatalf("retry budget not exhausted: %+v", ended)
+	}
+	if len(f.batch.batches) != dms.DefaultMaxAttempts {
+		t.Fatal("submitted another provider batch after exhausting retries")
+	}
+}
+
 func TestDecision(t *testing.T) {
 	ctx := context.Background()
 	f := setup(t)

@@ -128,7 +128,7 @@ func (a *Assistant) submit(ctx context.Context, s *dms.Service, ops []*operation
 	}
 	f.NextPoll = time.Now().UTC().Add(pollEvery)
 	return s.Write(ctx, func(t *dms.Service) error {
-		if err := t.ParkOperations(ctx, send, f.Execution); err != nil {
+		if err := t.ParkOperations(ctx, send, operations.Parking{ExecutionID: f.Execution, CountAttempt: true}); err != nil {
 			return err
 		}
 		return putFlight(ctx, records.WithTx(t.SQLTx()), tag, f)

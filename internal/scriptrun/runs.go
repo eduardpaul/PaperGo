@@ -117,7 +117,7 @@ func (r *Runner) slice(ctx context.Context, s *dms.Service, op *operations.Opera
 			if !waiting {
 				return t.ReleaseOperation(ctx, op)
 			}
-			return t.ParkOperations(ctx, []*operations.Operation{op}, waitExecution)
+			return t.ParkOperations(ctx, []*operations.Operation{op}, operations.Parking{ExecutionID: waitExecution})
 		}
 	})
 }

@@ -275,7 +275,7 @@ func testMembership(t *testing.T, s *dal.Store) {
 	if len(got) != 2 {
 		t.Fatalf("claimed: %+v", got)
 	}
-	if err := ops.Park(ctx, []string{one.ID, two.ID}, got[0].Claim, "flight", start); err != nil {
+	if err := ops.Park(ctx, []string{one.ID, two.ID}, got[0].Claim, operations.Parking{ExecutionID: "flight", CountAttempt: true}, start); err != nil {
 		t.Fatal(err)
 	}
 	// Parked members wait for their execution, not for a claim.
@@ -290,6 +290,9 @@ func testMembership(t *testing.T, s *dal.Store) {
 		t.Fatalf("cancel: %v %v", ok, err)
 	}
 	member, _ := ops.Find(ctx, one.ID)
+	if member.Attempts != 1 {
+		t.Fatalf("submission attempt not retained: %+v", member)
+	}
 	member.Status = operations.StatusSucceeded
 	if err := ops.FinishMember(ctx, &member, "flight", start); err != nil {
 		t.Fatal(err)
@@ -305,13 +308,13 @@ func testMembership(t *testing.T, s *dal.Store) {
 	// Unparked members are ready again with their original creation time.
 	three := accept(t, ops, operations.Operation{}, start)
 	got = claim(t, ops, "batch", 1, start)
-	if err := ops.Park(ctx, []string{three.ID}, got[0].Claim, "retry", start); err != nil {
+	if err := ops.Park(ctx, []string{three.ID}, got[0].Claim, operations.Parking{ExecutionID: "retry"}, start); err != nil {
 		t.Fatal(err)
 	}
 	if err := ops.Unpark(ctx, "retry", []string{three.ID}, start.Add(time.Minute), start); err != nil {
 		t.Fatal(err)
 	}
-	if got := claim(t, ops, "batch", 1, start.Add(time.Minute)); len(got) != 1 || got[0].ID != three.ID || !got[0].CreatedAt.Equal(start) {
+	if got := claim(t, ops, "batch", 1, start.Add(time.Minute)); len(got) != 1 || got[0].ID != three.ID || got[0].Attempts != 1 || !got[0].CreatedAt.Equal(start) {
 		t.Fatalf("unparked: %+v", got)
 	}
 }

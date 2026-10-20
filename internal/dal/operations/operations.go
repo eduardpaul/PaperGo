@@ -501,15 +501,26 @@ func (r *Repo) Finish(ctx context.Context, op *Operation, now time.Time) error {
 	return r.finish(ctx, op, Fence{IDs: []string{op.ID}, Token: op.Claim.Token, Now: now}, now)
 }
 
-// Park makes claimed operations members of the durable module execution
-// executionID, releasing their claims. Parking does not count as an
-// attempt: the execution made progress.
-func (r *Repo) Park(ctx context.Context, ids []string, c Claim, executionID string, now time.Time) error {
-	if executionID == "" {
+// Parking describes the durable execution an operation waits for.
+type Parking struct {
+	ExecutionID string
+	// CountAttempt keeps the attempt consumed by an asynchronous submission.
+	// A workflow pausing after making progress gives its attempt back.
+	CountAttempt bool
+}
+
+// Park makes claimed operations members of a durable module execution,
+// releasing their claims.
+func (r *Repo) Park(ctx context.Context, ids []string, c Claim, in Parking, now time.Time) error {
+	if in.ExecutionID == "" {
 		return errors.New("parking needs an execution")
 	}
+	attempts := -1
+	if in.CountAttempt {
+		attempts = 0
+	}
 	return r.write(ctx, func(q Queries) error {
-		return r.fenced(ctx, q, Fence{IDs: ids, Token: c.Token, Now: now}, Change{ClearClaim: true, ExecutionID: &executionID, Attempts: -1})
+		return r.fenced(ctx, q, Fence{IDs: ids, Token: c.Token, Now: now}, Change{ClearClaim: true, ExecutionID: &in.ExecutionID, Attempts: attempts})
 	})
 }
 
