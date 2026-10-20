@@ -49,7 +49,11 @@ func ParseSchedule(spec, zone string, missed Missed) (*Schedule, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cron %q: %w", spec, err)
 	}
-	return &Schedule{Spec: spec, Location: location, Missed: missed, cron: parsed}, nil
+	s := &Schedule{Spec: spec, Location: location, Missed: missed, cron: parsed}
+	if s.Next(time.Now()).IsZero() {
+		return nil, fmt.Errorf("cron %q has no future occurrence", spec)
+	}
+	return s, nil
 }
 
 // Next returns the first occurrence after t.
@@ -60,11 +64,15 @@ func (s *Schedule) Next(t time.Time) time.Time { return s.cron.Next(t.In(s.Locat
 // MissedSkip only within a minute of its time.
 func (s *Schedule) Due(last, now time.Time) (time.Time, bool) {
 	next := s.Next(last)
-	if next.After(now) {
+	if next.IsZero() || !next.After(last) || next.After(now) {
 		return time.Time{}, false
 	}
 	// The latest occurrence at or before now.
-	for after := s.Next(next); !after.After(now); after = s.Next(after) {
+	for {
+		after := s.Next(next)
+		if after.IsZero() || !after.After(next) || after.After(now) {
+			break
+		}
 		next = after
 	}
 	if s.Missed == MissedSkip && now.Sub(next) > time.Minute {
