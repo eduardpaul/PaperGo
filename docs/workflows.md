@@ -52,8 +52,9 @@ The web app's workflow editor checks scripts as you type: it completes the SDK a
 
 | Field | Value |
 | --- | --- |
-| `ctx.run` | `id`, `workflow` (`id`, `key`, `version`), `workspace_id`, `item_id`, `items` (a selection's members in order), `event` (the event that started the run, see [triggers](#triggers)), `actor` (who caused the run) and `params` |
+| `ctx.run` | `id`, `workflow` (`id`, `key`, `version`), `workspace_id`, `item_id`, `items` (a selection's members in order), `event` (the event that started the run, see [triggers](#triggers)), `trigger`, `actor` (who caused the run) and `params` |
 | `ctx.itemId` | the run's item, when it has one |
+| `ctx.trigger` | the triggering object snapshot, also available as `ctx.run.trigger`; narrow on `kind` (`manual`, `item`, `folder`, or `file`) |
 | `ctx.params` | the workflow's [parameters](#parameters) |
 | `ctx.api` | the REST API, acting as the version's author |
 | `ctx.wait(operation)` | waits until operations finish; see [waiting](#waiting) |
@@ -61,6 +62,35 @@ The web app's workflow editor checks scripts as you type: it completes the SDK a
 | `ctx.log(...)`, `ctx.warn(...)`, `ctx.error(...)` | write to the run's log, as `console` does |
 
 What `run` returns is the run's [output](#outputs). An exception fails the run with its message and stack; an API error is an exception with the response's status and problem.
+
+**Triggering objects.** Item triggers expose `ctx.trigger.item`; folder triggers expose `ctx.trigger.folder`. File triggers have `kind: "file"` and expose both `item` and `file`. Item and folder snapshots contain `id`, `workspace_id`, `collection_id`, `revision_id`, `revision_number`, `content_type_id`, `name`, `keywords` and plain JSON `values`. File metadata contains `id` (the blob ID), `version`, `filename`, `content_type` (media type) and `size`. Monaco completes these fields, documents them on hover and checks access after narrowing the kind.
+
+```ts
+if (ctx.trigger?.kind === "file") {
+  ctx.log(ctx.trigger.item.name, ctx.trigger.file.filename, ctx.trigger.file.version);
+}
+if (ctx.trigger?.kind === "item") {
+  ctx.log(ctx.trigger.item.values?.title);
+}
+```
+
+**Manual starts and tests** expose `kind: "manual"`, including standalone runs. `input` contains the submitted launch form results and is the same object passed as the second argument to `run`. `item` is the primary selected item's readable snapshot, when available. `items` contains every selected item in launch order as `{ id, snapshot? }`, including the primary item; a single-item run has one entry and a standalone run has an empty array. An entry keeps its ID even if the author cannot read its snapshot or the item was deleted before dispatch. Declare the workflow's input type for form-field completion in Monaco:
+
+```ts
+export default workflow<{ note: string }>({
+  triggers: [{ type: "manual", selection: "selection" }],
+  input_schema: { type: "object", properties: { note: { type: "string" } }, required: ["note"] },
+  run(ctx) {
+    if (ctx.trigger?.kind !== "manual") return;
+    ctx.log(ctx.trigger.input.note, ctx.trigger.item?.name);
+    for (const selected of ctx.trigger.items) ctx.log(selected.id, selected.snapshot?.name);
+  },
+});
+```
+
+An event with a `revision_id` captures that revision, even if the item changes before dispatch. Manual and test starts capture each selected item's readable revision at dispatch. Scheduled and other item-associated starts without a revision capture their primary item's readable revision at dispatch; schedules configured for the published surface capture the published revision. Snapshots are persisted once with the run and stay the same across waits, resumes and retries. They use the workflow version author's read permissions; unpublished item content requires draft access. Automatic events for standalone, deleted/purged or inaccessible resources have no snapshot.
+
+Snapshots have a 64 KiB JSON budget shared by the complete selection. If field values would exceed it, `values` is absent and `values_omitted` is `true`; otherwise `values_omitted` is `false`. Form results use the run's separately stored input, and the primary item references its selection snapshot. This keeps workflows that only need identity or file metadata usable for large items. Oversized remaining metadata fails the run with a visible error. File bytes, storage keys, permissions, relationships and history are excluded. An API read returns current state, which coalescing workflows may need; snapshots contain no current ETag, so obtain one through the API before a conditional write.
 
 **Steps and replay.** Each API request, wait, sleep, clock reading (`Date`), random value (`Math.random`, `crypto.randomUUID`) is a recorded **step**. A request runs in-process through the same handlers as an HTTP request, in a transaction that also records its response, so a crash either keeps both or neither: its database writes happen once. A run executes in **slices**: a slice replays the script from the start, answering each recorded step from the journal instead of repeating it, and continues until the script returns, throws, waits or sleeps. A run therefore continues where it was after a restart, and nothing it wrote to the database is written twice. Work a request starts, such as OCR or a model call, runs as its own operation, which may repeat its work outside the database under its module's [recovery protocol](architecture.md#durability-boundaries).
 
@@ -186,8 +216,8 @@ The `data` for each event type:
 - `folder.created` / `folder.updated`: `revision_id`, `revision_number`, `content_type_id` for a new name or keywords; `from_parent_id` and `parent_id` for a move
 - `item.published`: `revision_id`, `revision_number`, `publication_id`
 - `item.unpublished`: `revision_id`
-- `schedule`: `workflow_id`, `occurrence`
-- `manual`: `workflow_id`, `inputs`
+- `schedule`: `workflow_id`, `occurrence`; item-associated schedules also include `surface` (`head` or `published`)
+- `manual`: `workflow_id`; form results are available as `ctx.trigger.input` and `run(ctx, input)`'s second argument
 - `term.merged`: `source_term_id`, `target_term_id`, `term_set_id`
 - `term.changed`: `term_id`, `term_set_id`, `version`, sorted `changed_fields`, and `previous` / `current` term properties (`name`, `parent_id`, `description`, `color`, `sort_order`, `labels`, `synonyms`, `deprecated`, `available_as_keyword`; absent optional fields mean unset). The event has no `resource_id` because the term is organization taxonomy, not a workspace resource.
 - `task.*`: `task_id`, `kind`, `key`, `assignees`, `source`, `item_id`, `run_id`; `task.completed` adds `outcome` and `completed_by`

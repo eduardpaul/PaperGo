@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"papergo/internal/dal/resources"
 	"regexp"
 	"slices"
@@ -1003,6 +1004,18 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event) (started []s
 			}
 			payload := RunPayload{WorkflowID: w.ID, Key: w.Key, Version: m.v.Number, WorkspaceID: w.WorkspaceID, ItemID: eventItemID(e), Event: runEvent(e),
 				Params: m.params(), Role: w.Role, System: systemWorkflow(w.BuiltinKey), StartError: startError}
+			if payload.StartError == "" {
+				payload.Trigger, err = triggerObject(ctx, t, m.v.CreatedBy, e)
+				if err != nil {
+					// A bad/oversized snapshot fails its run visibly without blocking
+					// dispatch of other events. Database failures retry the batch.
+					var invalid *dms.ValidationError
+					if !errors.As(err, &invalid) {
+						return nil, nil, err
+					}
+					payload.StartError = err.Error()
+				}
+			}
 			if m.def.Concurrency == ConcurrencyCoalesce && len(members) > 0 && e.Type != TestStart {
 				payload.Serial = w.ID + ":" + members[0]
 			}
@@ -1030,6 +1043,13 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event) (started []s
 // runEvent is how a run's script sees the event that started it.
 func runEvent(e dms.Event) RunEvent {
 	data := e.Data
+	if e.Type == TriggerManual || e.Type == TestStart {
+		// The run stores validated form input separately. The SDK exposes it
+		// as manual trigger.input and run(ctx, input), without a second copy
+		// inside the script's event metadata. Keep the logged event intact.
+		data = maps.Clone(data)
+		delete(data, "inputs")
+	}
 	if data == nil {
 		data = map[string]any{}
 	}
@@ -1259,6 +1279,7 @@ func occurrence(ctx context.Context, t *dms.Service, row workflows.Trigger, now 
 	if surface == "" {
 		surface = "head"
 	}
+	data["surface"] = surface
 	var events []dms.Event
 	q := dms.QueryRequest{Query: dms.QuerySpec{Filter: def.Condition}, Surface: surface, Limit: 100}
 	for len(events) < MaxScheduled {

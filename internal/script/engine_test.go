@@ -712,3 +712,86 @@ export default workflow({
 		t.Fatalf("%+v", steps)
 	}
 }
+
+func TestTriggerContextSurvivesReplayWithoutFetchingResource(t *testing.T) {
+	m := newMemory(nil)
+	e := New(m, 0)
+	const operationID = "00000000-0000-4000-8000-000000000009"
+	m.operations[operationID] = "pending"
+	var trigger any
+	if err := json.Unmarshal([]byte(`{"kind":"file","item":{"id":"item","name":"Event item","values":{"title":"Invoice"}},"file":{"id":"blob","version":1,"filename":"trigger.pdf"}}`), &trigger); err != nil {
+		t.Fatal(err)
+	}
+	run := Run{ID: "trigger-context", Context: map[string]any{"trigger": trigger}, Artifact: bundle(t, `
+import { workflow } from "@papergo/workflow";
+export default workflow({
+  async run(ctx) {
+    const trigger = ctx.trigger;
+    if (trigger !== ctx.run.trigger || trigger?.kind !== "file") throw new Error("missing trigger");
+    await ctx.wait("00000000-0000-4000-8000-000000000009");
+    return { name: trigger.item.name, filename: trigger.file.filename, title: trigger.item.values?.title };
+  },
+});
+`)}
+	if out := execute(t, e, run); out.Status != Suspended || len(m.requests) != 0 {
+		t.Fatalf("snapshot access performed a request or failed: %+v", out)
+	}
+	m.finish(operationID, "succeeded")
+	for range 2 {
+		out := execute(t, e, run)
+		if out.Status != Completed || string(out.Output) != `{"name":"Event item","filename":"trigger.pdf","title":"Invoice"}` {
+			t.Fatalf("snapshot lost on replay: %+v", out)
+		}
+	}
+	if len(m.requests) != 1 || m.requests[0].URL != "/v1/operations/"+operationID {
+		t.Fatal("snapshot access fetched the resource", m.requests)
+	}
+}
+
+func TestManualTriggerFormAndSelectionReplay(t *testing.T) {
+	for _, tc := range []struct {
+		name, selection, primary, expected string
+	}{
+		{"standalone", `[]`, "", `{"note":"Saved form","primary":null,"items":[]}`},
+		{"single", `[{"id":"a","snapshot":{"id":"a","name":"First"}}]`, "a", `{"note":"Saved form","primary":"a","items":[{"id":"a","name":"First"}]}`},
+		{"selection", `[{"id":"a","snapshot":{"id":"a","name":"First"}},{"id":"b","snapshot":{"id":"b","name":"Second"}},{"id":"unavailable"}]`, "b", `{"note":"Saved form","primary":"b","items":[{"id":"a","name":"First"},{"id":"b","name":"Second"},{"id":"unavailable","name":null}]}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newMemory(nil)
+			e := New(m, 0)
+			const operationID = "00000000-0000-4000-8000-000000000009"
+			m.operations[operationID] = "pending"
+			info := withInput(`{"note":"Saved form"}`)
+			info["item_id"] = tc.primary
+			var trigger any
+			if err := json.Unmarshal([]byte(`{"kind":"manual","items":`+tc.selection+`}`), &trigger); err != nil {
+				t.Fatal(err)
+			}
+			info["trigger"] = trigger
+			run := Run{ID: "manual-" + tc.name, Context: info, Artifact: bundle(t, `
+import { workflow } from "@papergo/workflow";
+export default workflow<{note: string}>({
+  async run(ctx, input) {
+    const trigger = ctx.trigger;
+    if (trigger?.kind !== "manual" || trigger.input !== input || trigger !== ctx.run.trigger) throw new Error("missing form input");
+    if (trigger.item !== trigger.items.find(item => item.id === ctx.itemId)?.snapshot) throw new Error("wrong primary item");
+    await ctx.wait("00000000-0000-4000-8000-000000000009");
+    return { note: trigger.input.note, primary: trigger.item?.id ?? null, items: trigger.items.map(item => ({id: item.id, name: item.snapshot?.name ?? null})) };
+  },
+});
+`)}
+			if out := execute(t, e, run); out.Status != Suspended || len(m.requests) != 0 {
+				t.Fatalf("manual context failed or fetched resources: %+v", out)
+			}
+			m.finish(operationID, "succeeded")
+			for range 2 {
+				if out := execute(t, e, run); out.Status != Completed || string(out.Output) != tc.expected {
+					t.Fatalf("manual form/selection lost on replay: %+v", out)
+				}
+			}
+			if len(m.requests) != 1 || m.requests[0].URL != "/v1/operations/"+operationID {
+				t.Fatal("manual context fetched resources", m.requests)
+			}
+		})
+	}
+}

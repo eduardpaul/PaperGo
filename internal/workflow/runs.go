@@ -20,6 +20,7 @@ type RunPayload struct {
 	ItemID      string         `json:"item_id,omitempty"`
 	Items       []string       `json:"items,omitempty"`
 	Event       RunEvent       `json:"event"`
+	Trigger     *TriggerObject `json:"trigger,omitempty"`
 	Input       map[string]any `json:"input,omitempty"`
 	Params      map[string]any `json:"params,omitempty"`
 	// Role is the role the workflow fills, whose events its run raises.
@@ -65,6 +66,9 @@ func (p RunPayload) Context() map[string]any {
 	}
 	if p.ItemID != "" {
 		out["item_id"] = p.ItemID
+	}
+	if p.Trigger != nil {
+		out["trigger"] = p.Trigger
 	}
 	return out
 }

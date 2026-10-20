@@ -68,8 +68,58 @@ export interface RunEvent {
   data: Record<string, unknown>;
 }
 
+/** Content captured once for the triggering revision; use the API for current state and ETags. */
+export interface TriggerResource {
+  readonly id: string;
+  readonly workspace_id: string;
+  readonly collection_id: string;
+  readonly revision_id: string;
+  readonly revision_number: number;
+  readonly content_type_id: string;
+  readonly name: string;
+  readonly keywords: readonly string[];
+  /** Plain JSON field values. Absent when they would exceed the snapshot's 64 KiB budget. */
+  readonly values?: Readonly<Record<string, unknown>>;
+  /** True when values were excluded to keep the snapshot small; API reads return current state. */
+  readonly values_omitted: boolean;
+}
+
+/** Metadata of the file version that caused the event; file bytes stay behind the API. */
+export interface TriggerFile {
+  readonly id: string;
+  readonly version: number;
+  readonly filename: string;
+  readonly content_type: string;
+  readonly size: number;
+}
+
+/** One manually selected item, in launch order. */
+export interface TriggerSelection {
+  readonly id: string;
+  /** Readable content at dispatch; absent if inaccessible or deleted. */
+  readonly snapshot?: TriggerResource;
+}
+
+/** A manual launch, including test runs of a script with form values and selected items. */
+export interface ManualTrigger<I = unknown> {
+  readonly kind: "manual";
+  /** Submitted launch form values; the same object as run(ctx, input)'s second argument. */
+  readonly input: I;
+  /** The primary selected item's readable snapshot, when available. */
+  readonly item?: TriggerResource;
+  /** Every selected item in launch order, including the primary item. Empty for standalone starts. */
+  readonly items: readonly TriggerSelection[];
+}
+
+/** Narrow on kind to access manual inputs and selection, or the triggering item, folder or file. */
+export type TriggerObject<I = unknown> =
+  | ManualTrigger<I>
+  | { readonly kind: "item"; readonly item: TriggerResource }
+  | { readonly kind: "folder"; readonly folder: TriggerResource }
+  | { readonly kind: "file"; readonly item: TriggerResource; readonly file: TriggerFile };
+
 /** The run being executed. */
-export interface Run<P = Record<string, unknown>> {
+export interface Run<P = Record<string, unknown>, I = unknown> {
   id: string;
   workflow: { id: string; key: string; version: number };
   workspace_id: string;
@@ -78,18 +128,28 @@ export interface Run<P = Record<string, unknown>> {
   /** A selection run's items, in order. */
   items: string[];
   event: RunEvent;
+  /** Stable trigger snapshot, when the author can read its content. */
+  trigger?: TriggerObject<I>;
   /** Who caused the run. */
   actor: string;
   params: P;
 }
 
-export interface Context<P = Record<string, unknown>> {
+export interface Context<P = Record<string, unknown>, I = unknown> {
   readonly runId: string;
-  readonly run: Run<P>;
+  readonly run: Run<P, I>;
   /** The workflow's parameters, such as a built-in's settings. */
   readonly params: P;
   /** The run's item, when it has one. */
   readonly itemId?: string;
+  /**
+   * Triggering revision content, persisted for replay (up to 64 KiB).
+   * File events include file metadata and their item. Manual/test starts
+   * expose input, primary item and the complete ordered selection.
+   * Other standalone, deleted, purged or inaccessible resources have no snapshot.
+   * Coalescing workflows should use the API when they need current state.
+   */
+  readonly trigger?: TriggerObject<I>;
   /** The PaperGo REST API, acting as the workflow version's author. Each call is one exactly-once step. */
   readonly api: PaperGoClient;
   /**
@@ -119,7 +179,7 @@ export interface Workflow<I = unknown, O = unknown, P = Record<string, unknown>>
   /** The form of what run returns, checked when the run completes. */
   output_schema?: Record<string, unknown>;
   concurrency?: Concurrency;
-  run(ctx: Context<P>, input: I): O | Promise<O>;
+  run(ctx: Context<P, I>, input: I): O | Promise<O>;
 }
 
 /** Declares a workflow. A script's default export must be one. */
@@ -213,15 +273,16 @@ async function sleep(duration: number | { until: Date | string }): Promise<void>
   host.sleep(until);
 }
 
-function context<P>(run: Run<P>): Context<P> {
+function context<P, I>(run: Run<P, I>): Context<P, I> {
   return {
     runId: run.id,
     run,
     params: run.params,
     itemId: run.item_id,
+    trigger: run.trigger,
     api,
     wait: ((operations: Operation | string | (Operation | string)[]) =>
-      Array.isArray(operations) ? wait(operations) : wait([operations]).then((all) => all[0])) as Context<P>["wait"],
+      Array.isArray(operations) ? wait(operations) : wait([operations]).then((all) => all[0])) as Context<P, I>["wait"],
     sleep,
     log: (...values) => host.log("info", format(values)),
     warn: (...values) => host.log("warn", format(values)),
@@ -241,7 +302,18 @@ function check(definition: unknown): Workflow {
  * JSON with its input; the promise resolves to the output as JSON text.
  */
 export async function __start(definition: unknown, run: string): Promise<string> {
-  const { input, ...info } = JSON.parse(run) as Run & { input: unknown };
+  const { input: providedInput, ...info } = JSON.parse(run) as Run & { input: unknown };
+  const input = info.trigger?.kind === "manual" ? providedInput ?? {} : providedInput;
+  if (info.trigger?.kind === "manual") {
+    // Input and the primary snapshot are already persisted once. Expose
+    // references here instead of duplicating them in the run payload.
+    const trigger = info.trigger;
+    Object.assign(trigger, {
+      input,
+      items: trigger.items ?? [],
+      item: trigger.items?.find((selected) => selected.id === info.item_id)?.snapshot,
+    });
+  }
   const output = await check(definition).run(context(info), input);
   return JSON.stringify(output ?? null);
 }
