@@ -1,7 +1,7 @@
 # Data access layer
 
 `internal/dal` owns transactional database invariants using Bob v0.50.0.
-`schema/sqlite.sql` and `schema/postgres.sql` define the same 62 tables with
+`schema/sqlite.sql` and `schema/postgres.sql` define the same 63 tables with
 native SQLite and PostgreSQL types. Both schemas use declarative constraints;
 repository methods maintain cross-table invariants and derived data in Go.
 SQLite JSON columns use TEXT affinity with JSON checks to preserve numeric
@@ -123,6 +123,15 @@ Directory graph mutations use a transaction-scoped advisory lock, and taxonomy
 hierarchy mutations lock their term set. These locks serialize checks whose
 invariants span multiple rows, including last-owner and cycle checks. SQLite's
 single writer provides the corresponding serialization.
+
+Live notifications advance `live_change_position` in their mutation transaction.
+Its singleton row serializes position allocation until commit, so a stream cursor
+cannot pass an uncommitted change. The committed position survives journal
+retention. PostgreSQL content sort columns use the `C` collation, matching
+SQLite's binary text order and Go's merge of head and published pages.
+Case-insensitive matching lowers text with the built-in `pg_c_utf8` collation,
+which folds every script whatever the database locale, as SQLite's
+`unicode_lower` and Go's `strings.ToLower` do.
 
 SQL and Bob query construction belong inside this module. Application packages
 call typed repository methods and pass filters; they do not execute queries or

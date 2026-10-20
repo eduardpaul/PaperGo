@@ -7,12 +7,72 @@ import (
 	"papergo/internal/dal/catalog"
 	"papergo/internal/dal/daltest"
 	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/live"
 	"papergo/internal/dal/refs"
 	"papergo/internal/dal/resources"
 	"papergo/internal/dal/surfaces"
 	"testing"
 	"time"
 )
+
+func TestVersionMutationNotifications(t *testing.T) {
+	daltest.Engines(t, func(t *testing.T, newStore func(testing.TB) *dal.Store) {
+		ctx := context.Background()
+		s := newStore(t)
+		f := daltest.NewFixture(t, s)
+		for _, action := range []string{"touch", "publish", "unpublish"} {
+			t.Run(action, func(t *testing.T) {
+				_, before, err := s.LiveChanges().Bounds(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				item, err := s.Resources().Resource(ctx, f.Item)
+				if err != nil {
+					t.Fatal(err)
+				}
+				switch action {
+				case "touch":
+					err = s.Resources().Touch(ctx, f.Item, item.Version, "alice")
+				case "publish":
+					err = s.Resources().SetPublished(ctx, f.Item, f.Revision, true)
+				case "unpublish":
+					err = s.Resources().Unpublish(ctx, f.Item, item.Version)
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				changes, err := s.LiveChanges().After(ctx, before)
+				if err != nil || len(changes) != 1 || changes[0].EntityID != f.Item || changes[0].Kind != live.KindItem || changes[0].Action != live.ActionUpdated {
+					t.Fatalf("%s notification: %+v %v", action, changes, err)
+				}
+			})
+		}
+		_, before, err := s.LiveChanges().Bounds(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		tx, err := s.SQLDB().BeginTx(ctx, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer tx.Rollback()
+		if err := s.WithTx(tx).Resources().Touch(ctx, f.Item, 0, "alice"); err != nil {
+			t.Fatal(err)
+		}
+		if err := tx.Rollback(); err != nil {
+			t.Fatal(err)
+		}
+		if changes, err := s.LiveChanges().After(ctx, before); err != nil || len(changes) != 0 {
+			t.Fatalf("rolled-back notification escaped: %+v %v", changes, err)
+		}
+		if err := s.Resources().Touch(ctx, f.Workspace, 0, "alice"); err != nil {
+			t.Fatal(err)
+		}
+		if changes, err := s.LiveChanges().After(ctx, before); err != nil || len(changes) != 0 {
+			t.Fatalf("workspace emitted an item notification: %+v %v", changes, err)
+		}
+	})
+}
 
 func TestResourceChanges_SQLite(t *testing.T)   { testResourceChanges(t, daltest.SQLiteStore(t)) }
 func TestResourceChanges_Postgres(t *testing.T) { testResourceChanges(t, daltest.PostgresStore(t)) }

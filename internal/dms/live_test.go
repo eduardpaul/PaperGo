@@ -44,7 +44,7 @@ func TestLivePositionsCommitRollbackAndExpiry(t *testing.T) {
 	if _, err = s.LivePosition(testContext, &before); !errors.Is(err, ErrLiveExpired) {
 		t.Fatal(err)
 	}
-	// Autoincrement never reuses a position after collecting the whole journal.
+	// The committed cursor never reuses a position after collecting the whole journal.
 	create(t, s, list.ID, "item", "B", nil)
 	changes, err = s.LiveChanges(testContext, 0)
 	if err != nil || len(changes) == 0 || changes[len(changes)-1].ID <= head {

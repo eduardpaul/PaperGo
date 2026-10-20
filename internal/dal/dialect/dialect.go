@@ -70,7 +70,9 @@ func (d Dialect) HasPrefix(text, prefix string) string {
 // Fold lowers text for every script, as Go's strings.ToLower does.
 func (d Dialect) Fold(text string) string {
 	if d.Postgres {
-		return `lower(` + text + `)`
+		// pg_c_utf8 lowers every script whatever the database locale, and
+		// orders by code point, as the C sort columns and SQLite do.
+		return `lower(` + text + ` COLLATE "pg_c_utf8")`
 	}
 	return `unicode_lower(` + text + `)`
 }

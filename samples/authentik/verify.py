@@ -241,11 +241,11 @@ def main():
     client.request("DELETE", app + f"/v1/identity/me/tokens/{created['token']['id']}", headers=bearer, expected=204)
     get(app + "/v1/identity/me", headers=personal, expected=401)
 
-    # REST writes and WebDAV with an app password.
+    # REST writes and WebDAV with a scoped access token.
     workspace = client.request("POST", app + "/v1/workspaces", {"name": "Authentik verification " + secrets.token_hex(4)}, headers=bearer, expected=201)[2]
     library = client.request("POST", app + f"/v1/resources/{workspace['id']}/children", {"kind": "library", "name": "Documents", "webdav_enabled": True}, headers=bearer, expected=201)[2]
-    credential = client.request("POST", app + "/v1/webdav-credentials", {"label": "verify"}, headers=bearer, expected=201)[2]
-    dav = {"Authorization": "Basic " + base64.b64encode(f"{credentials['papergo_user']}:{credential['password']}".encode()).decode()}
+    credential = client.request("POST", app + "/v1/identity/me/tokens", {"name": "WebDAV verification", "scopes": ["list.read", "list.write", "document.read", "document.write"], "expires_in_days": 1}, headers=bearer, expected=201)[2]
+    dav = {"Authorization": "Basic " + base64.b64encode(f"{credentials['papergo_user']}:{credential['secret']}".encode()).decode()}
     folder = app + f"/webdav/{library['id']}/" + urllib.parse.quote("Sample Ω")
     client.request("MKCOL", folder, headers=dav, expected=201)
     content = b"%PDF-1.7\nPaperGo authentik verification\n%%EOF\n"

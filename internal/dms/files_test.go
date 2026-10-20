@@ -342,31 +342,37 @@ func TestLibraryFilesPutMoveAndDelete(t *testing.T) {
 }
 
 func TestPublishedNamesResolveConsistently(t *testing.T) {
+	for _, filename := range []string{"a.txt", "Ä.txt"} {
+		t.Run(filename, func(t *testing.T) { testPublishedNamesResolveConsistently(t, filename) })
+	}
+}
+
+func testPublishedNamesResolveConsistently(t *testing.T, filename string) {
 	s, w, _ := fixture(t)
 	lib := davLibrary(t, s, w, true)
 	grantReader(t, s, w)
-	old, _, err := s.PutFile(testContext, "alice", lib.ID, []string{"a.txt"}, PutFile{Blob: pdfContent("a.txt")})
+	old, _, err := s.PutFile(testContext, "alice", lib.ID, []string{filename}, PutFile{Blob: pdfContent(filename)})
 	if err != nil {
 		t.Fatal(err)
 	}
 	publishItem(t, s, old.Resource)
-	if _, err = s.MoveFile(testContext, "alice", lib.ID, []string{"a.txt"}, []string{"renamed.txt"}, false); err != nil {
+	if _, err = s.MoveFile(testContext, "alice", lib.ID, []string{filename}, []string{"renamed.txt"}, false); err != nil {
 		t.Fatal(err)
 	}
 	// The rename is a draft: readers keep the published name, editors see the head.
-	if f, err := s.LibraryFile(testContext, "reader", lib.ID, []string{"A.txt"}); err != nil || f.ID != old.ID {
+	if f, err := s.LibraryFile(testContext, "reader", lib.ID, []string{strings.ToUpper(filename)}); err != nil || f.ID != old.ID {
 		t.Fatal("reader lost the published name", err)
 	}
-	if _, err = s.LibraryFile(testContext, "alice", lib.ID, []string{"a.txt"}); !errors.Is(err, ErrNotFound) {
+	if _, err = s.LibraryFile(testContext, "alice", lib.ID, []string{filename}); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("editor resolved the published name: %v", err)
 	}
 	// The head name is free, so another file may take it; once published it wins.
-	fresh, _, err := s.PutFile(testContext, "alice", lib.ID, []string{"a.txt"}, PutFile{Blob: pdfContent("a.txt")})
+	fresh, _, err := s.PutFile(testContext, "alice", lib.ID, []string{filename}, PutFile{Blob: pdfContent(filename)})
 	if err != nil {
 		t.Fatal(err)
 	}
 	publishItem(t, s, fresh.Resource)
-	f, err := s.LibraryFile(testContext, "reader", lib.ID, []string{"a.txt"})
+	f, err := s.LibraryFile(testContext, "reader", lib.ID, []string{filename})
 	if err != nil || f.ID != fresh.ID {
 		t.Fatal("head-name owner did not win", err)
 	}

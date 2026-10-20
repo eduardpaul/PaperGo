@@ -6,6 +6,7 @@ import (
 	"papergo/internal/model"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -25,12 +26,12 @@ func TestSeekPagesMatchSortedEligibleRows(t *testing.T) {
 			values["n"] = num(i % 4)
 		}
 		if i%3 != 0 {
-			values["label"] = []string{"b", "a", "c"}[i%3]
+			values["label"] = []string{"b", "A", "é", "a", "Z", "Ä", "z"}[i%7]
 		}
 		if i%4 != 0 {
 			values["x"] = json.Number(fmt.Sprintf("%d.5", i%3))
 		}
-		name := fmt.Sprintf("item %02d", i%7)
+		name := "item " + []string{"b", "A", "é", "a", "Z", "Ä", "z"}[i%7]
 		keywords := []string{}
 		if i%2 == 0 {
 			keywords = []string{"even"}
@@ -64,14 +65,19 @@ func TestSeekPagesMatchSortedEligibleRows(t *testing.T) {
 			}
 		}
 	}
+	unicodeFilter := QuerySpec{Filter: &FilterExpr{Field: "label", Op: "contains", Value: json.RawMessage(`"ä"`)}}
 	specs := []QuerySpec{
 		{},
 		{Filter: &FilterExpr{Field: "n", Op: "gte", Value: json.RawMessage("1")}},
+		unicodeFilter,
 		{Keyword: "even"},
 		{Search: "item"},
 	}
 	sorts := []string{"", "$name", "$modified_at", "$created_by", "n", "label", "x"}
 	indexSearch(t, s)
+	if out, err := s.Query(testContext, "alice", list.ID, QueryRequest{Query: unicodeFilter}); err != nil || len(out.Data) == 0 {
+		t.Fatalf("Unicode case-insensitive filter matched no rows: %+v %v", out, err)
+	}
 	compared := 0
 	for _, subject := range []string{"alice", "reader"} {
 		for _, surface := range []string{"auto", "head", "published"} {
@@ -86,6 +92,20 @@ func TestSeekPagesMatchSortedEligibleRows(t *testing.T) {
 						seek, sorted := pageAll(t, s, subject, list.ID, surface, spec, true), pageAll(t, s, subject, list.ID, surface, spec, false)
 						if !reflect.DeepEqual(seek, sorted) {
 							t.Fatalf("%s/%s %+v sort %s %s:\n seek   %v\n sorted %v", subject, surface, base, field, direction, seek, sorted)
+						}
+						if field == "$name" {
+							names := make([]string, len(seek))
+							for i, entry := range seek {
+								_, names[i], _ = strings.Cut(entry, ":")
+							}
+							expected := slices.Clone(names)
+							slices.Sort(expected)
+							if direction == "desc" {
+								slices.Reverse(expected)
+							}
+							if !slices.Equal(names, expected) {
+								t.Fatalf("%s/%s text order %s: %v, want binary order %v", subject, surface, direction, names, expected)
+							}
 						}
 						compared += len(seek)
 					}

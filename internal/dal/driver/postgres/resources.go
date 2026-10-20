@@ -51,10 +51,10 @@ func resourceWhere(f resources.Filter) []bob.Mod[*dialect.SelectQuery] {
 		}
 	}
 	if f.FoldedName != "" {
-		where(psql.Raw(`lower("resources"."name") = ?`, f.FoldedName))
+		where(psql.Raw(`lower("resources"."name" COLLATE "pg_c_utf8") = ?`, f.FoldedName))
 	}
 	if f.PublishedName != "" {
-		where(psql.Raw(`("resources"."name_key" = ? OR "resources"."id" IN (SELECT p.item_id FROM item_surfaces p WHERE p.surface = 'published' AND lower(p.name) = ?))`, f.PublishedName, f.PublishedName))
+		where(psql.Raw(`("resources"."name_key" = ? OR "resources"."id" IN (SELECT p.item_id FROM item_surfaces p WHERE p.surface = 'published' AND lower(p.name COLLATE "pg_c_utf8") = ?))`, f.PublishedName, f.PublishedName))
 	}
 	if f.ExceptID != "" {
 		where(c.ID.NE(psql.Arg(f.ExceptID)))
@@ -67,7 +67,7 @@ func resourceWhere(f resources.Filter) []bob.Mod[*dialect.SelectQuery] {
 		}
 	}
 	if f.Below != "" {
-		where(psql.Raw(`"resources"."id" IN (WITH RECURSIVE subtree(id) AS (SELECT CAST(? AS TEXT) UNION ALL SELECT c.id FROM resources c JOIN subtree ON c.parent_id = subtree.id) SELECT id FROM subtree)`, f.Below))
+		where(psql.Raw(`"resources"."id" IN (WITH RECURSIVE subtree(id) AS (SELECT CAST(? AS TEXT) COLLATE "C" UNION ALL SELECT c.id FROM resources c JOIN subtree ON c.parent_id = subtree.id) SELECT id FROM subtree)`, f.Below))
 	}
 	switch f.State {
 	case resources.Live:
@@ -252,7 +252,7 @@ func (q Queries) Subtree(ctx context.Context, id string, f resources.TreeFilter)
 		cond += ` AND c.deleted_at = ?`
 		args = append(args, *f.DeletedAt)
 	}
-	query := psql.RawQuery(`WITH RECURSIVE sub(id, depth) AS (SELECT CAST(? AS TEXT), 0 UNION ALL SELECT c.id, sub.depth + 1 FROM resources c JOIN sub ON c.parent_id = sub.id WHERE TRUE`+cond+`) SELECT id FROM sub ORDER BY depth, id`, args...)
+	query := psql.RawQuery(`WITH RECURSIVE sub(id, depth) AS (SELECT CAST(? AS TEXT) COLLATE "C", 0 UNION ALL SELECT c.id, sub.depth + 1 FROM resources c JOIN sub ON c.parent_id = sub.id WHERE TRUE`+cond+`) SELECT id FROM sub ORDER BY depth, id`, args...)
 	ids, err := bob.All(ctx, q.exec, query, scan.SingleColumnMapper[string])
 	return ids, dberr.Translate(err)
 }

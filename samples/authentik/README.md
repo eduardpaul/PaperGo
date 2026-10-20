@@ -55,7 +55,7 @@ Manage people in authentik (**Directory → Users** and **Groups**):
 
 Users manage their password, TOTP and passkeys in authentik's user interface. To require MFA, edit the `default-authentication-mfa-validation` stage and set **Not configured action** to **Force the user to configure an authenticator**. Password recovery and invitations need email: add the `AUTHENTIK_EMAIL__*` settings (host, port, username, password, TLS, from) to both authentik services in a `compose.override.yaml`; the worker sends mail through the `idp-egress` network.
 
-Scripts and integrations use **personal access tokens** (PaperGo **Settings → access tokens**, or `POST /v1/identity/me/tokens`) and WebDAV clients use **WebDAV app passwords**, both scoped to the user's current PaperGo roles. They keep working while the user stays active in PaperGo.
+Scripts and integrations use **personal access tokens** (PaperGo **Settings → access tokens**, or `POST /v1/identity/me/tokens`) and WebDAV clients use those tokens as their Basic password with library and document scopes. Tokens are capped by the user's current PaperGo roles. They keep working while the user stays active in PaperGo.
 
 ## Sign-in configuration
 

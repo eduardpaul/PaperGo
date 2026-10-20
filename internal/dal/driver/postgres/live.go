@@ -16,7 +16,14 @@ import (
 )
 
 func (q Queries) InsertLiveChange(ctx context.Context, c live.Change) error {
-	_, err := models.LiveChanges.Insert(&models.LiveChangeSetter{
+	// Updating the singleton locks it until commit, so no later position
+	// becomes visible before this transaction's notifications do.
+	position, err := bob.One(ctx, q.exec, psql.RawQuery(`UPDATE live_change_position SET position = position + 1 WHERE id = 1 RETURNING position`), scan.SingleColumnMapper[int64])
+	if err != nil {
+		return dberr.Translate(err)
+	}
+	_, err = models.LiveChanges.Insert(&models.LiveChangeSetter{
+		ID:        omit.From(position),
 		CreatedAt: omit.From(c.CreatedAt), Kind: omit.From(string(c.Kind)), EntityID: omit.From(c.EntityID), Action: omit.From(string(c.Action)),
 	}).Exec(ctx, q.exec)
 	return dberr.Translate(err)
@@ -35,10 +42,10 @@ func (q Queries) LiveChanges(ctx context.Context, after int64, limit int) ([]liv
 }
 
 // LiveBounds reads the bounds in one statement, so both come from one
-// snapshot. The identity sequence keeps the highest ID assigned; it is NULL before the first.
+// snapshot. The counter advances only with committed notifications.
 func (q Queries) LiveBounds(ctx context.Context) (int64, int64, error) {
 	type bounds struct{ Earliest, Latest int64 }
-	b, err := bob.One(ctx, q.exec, psql.RawQuery(`SELECT coalesce((SELECT min(id) FROM live_changes), 0) AS earliest, coalesce(pg_sequence_last_value(pg_get_serial_sequence('live_changes', 'id')::regclass), 0) AS latest`), scan.StructMapper[bounds]())
+	b, err := bob.One(ctx, q.exec, psql.RawQuery(`SELECT coalesce((SELECT min(id) FROM live_changes), 0) AS earliest, position AS latest FROM live_change_position WHERE id = 1`), scan.StructMapper[bounds]())
 	return b.Earliest, b.Latest, dberr.Translate(err)
 }
 

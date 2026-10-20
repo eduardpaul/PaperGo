@@ -386,7 +386,7 @@ func (r *Repo) Compile(p Plan) *Query {
 		add("r.parent_id=?", p.ParentID)
 	}
 	if p.AncestorID != "" {
-		add("r.parent_id IN (WITH RECURSIVE below(id) AS (SELECT CAST(? AS TEXT) UNION ALL SELECT f.id FROM resources f JOIN below ON f.parent_id=below.id WHERE f.kind='folder' AND f.deleted_at IS NULL) SELECT id FROM below)", p.AncestorID)
+		add("r.parent_id IN (WITH RECURSIVE below(id) AS (SELECT id FROM resources WHERE id=? UNION ALL SELECT f.id FROM resources f JOIN below ON f.parent_id=below.id WHERE f.kind='folder' AND f.deleted_at IS NULL) SELECT id FROM below)", p.AncestorID)
 	}
 	if p.Filter != nil {
 		text, args := r.filter(p.Filter)
