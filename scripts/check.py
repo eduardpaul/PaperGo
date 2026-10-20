@@ -5,6 +5,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -16,6 +17,13 @@ ROOT = Path(__file__).resolve().parent.parent
 # PostgreSQL with --postgres.
 POSTGRES_PACKAGES = ['./internal/dal/...', './internal/dms', './internal/httpapi', './internal/identity', './internal/runner',
                      './internal/webdav', './internal/workflow', './internal/workflowai', './internal/backup']
+
+
+def analyzed_packages():
+    """Go packages Staticcheck analyzes: generated Bob models are left out,
+    as their hook plumbing assigns contexts it does not use."""
+    listed = subprocess.run(['go', 'list', './...'], cwd=ROOT, check=True, capture_output=True, text=True).stdout.split()
+    return [package for package in listed if not re.search(r'/internal/dal/driver/[^/]+/models$', package)]
 
 
 def run(*command):
@@ -169,7 +177,7 @@ def main():
             run('go', 'mod', 'verify')
             check_generated()
             run('go', 'vet', './...')
-            run('staticcheck', './...')
+            run('staticcheck', *analyzed_packages())
             flags += ['-count=1', '-vet=off']
         if args.race or args.native:
             flags += ['-race', '-count=1']
