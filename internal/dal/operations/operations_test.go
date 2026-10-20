@@ -31,6 +31,23 @@ func TestOperations(t *testing.T) {
 
 var start = time.Date(2026, 10, 20, 9, 0, 0, 0, time.UTC)
 
+// A creator's count holds what they asked for: not unasked kinds, such as
+// workflow runs, nor what another operation started for them.
+func TestPendingTotalsLeaveOutUnaskedWork(t *testing.T) {
+	ctx := context.Background()
+	s := daltest.Database(t).DAL
+	f := daltest.NewFixture(t, s)
+	ops := s.Operations()
+	now := time.Now()
+	accept(t, ops, operations.Operation{WorkspaceID: f.Workspace, Kind: "export"}, now)
+	run := accept(t, ops, operations.Operation{WorkspaceID: f.Workspace, Kind: "script.run"}, now)
+	accept(t, ops, operations.Operation{WorkspaceID: f.Workspace, Kind: "preview", ParentID: run.ID}, now)
+	totals, err := ops.PendingTotals(ctx, "alice", f.Workspace, nil, []string{"script.run"})
+	if err != nil || totals.Creator != 1 || totals.Workspace != 3 || totals.Installation != 3 {
+		t.Fatalf("totals: %+v %v", totals, err)
+	}
+}
+
 func accept(t *testing.T, ops *operations.Repo, in operations.Operation, at time.Time) operations.Operation {
 	t.Helper()
 	if in.Kind == "" {
@@ -76,7 +93,7 @@ func testRecords(t *testing.T, s *dal.Store) {
 	if ok, err := ops.Exists(ctx, operations.Filter{PayloadField: "integration_id", PayloadValue: "one", Statuses: []operations.Status{operations.StatusPending}}); err != nil || !ok {
 		t.Fatalf("payload match: %v %v", ok, err)
 	}
-	totals, err := ops.PendingTotals(ctx, "alice", f.Workspace, []string{"field_index"})
+	totals, err := ops.PendingTotals(ctx, "alice", f.Workspace, []string{"field_index"}, nil)
 	// Exempt kinds, such as index maintenance, do not count.
 	if err != nil || totals.Creator != 1 || totals.Workspace != 1 || totals.Installation != 1 || totals.WorkspacePayloadBytes < int64(len(`{"integration_id":"one"}`)) {
 		t.Fatalf("totals: %+v %v", totals, err)

@@ -371,15 +371,20 @@ func (q Queries) NextAttempt(ctx context.Context, kinds []string, now time.Time)
 	return next, nil
 }
 
-func (q Queries) PendingTotals(ctx context.Context, createdBy, workspaceID string, exempt []string) (operations.Totals, error) {
-	kinds := ""
-	args := []any{createdBy, workspaceID, workspaceID}
+func (q Queries) PendingTotals(ctx context.Context, createdBy, workspaceID string, exempt, unasked []string) (operations.Totals, error) {
+	kinds, asked := "", ""
+	args := []any{createdBy}
+	if len(unasked) > 0 {
+		asked = ` AND kind NOT IN (` + marks(len(unasked)) + `)`
+		args = append(args, anys(unasked)...)
+	}
+	args = append(args, workspaceID, workspaceID)
 	if len(exempt) > 0 {
 		kinds = ` AND kind NOT IN (` + marks(len(exempt)) + `)`
 		args = append(args, anys(exempt)...)
 	}
 	t, err := bob.One(ctx, q.exec, psql.RawQuery(`SELECT
-		COALESCE(SUM(CASE WHEN created_by = ? THEN 1 ELSE 0 END), 0) AS creator,
+		COALESCE(SUM(CASE WHEN created_by = ? AND parent_id IS NULL`+asked+` THEN 1 ELSE 0 END), 0) AS creator,
 		COALESCE(SUM(CASE WHEN workspace_id = ? THEN 1 ELSE 0 END), 0) AS workspace,
 		COUNT(*) AS installation,
 		COALESCE(SUM(CASE WHEN workspace_id = ? THEN octet_length(payload::text) ELSE 0 END), 0) AS workspace_payload_bytes

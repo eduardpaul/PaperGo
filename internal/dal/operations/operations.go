@@ -223,8 +223,8 @@ type Queries interface {
 	// kinds becomes ready, or nil when there is none.
 	NextAttempt(ctx context.Context, kinds []string, now time.Time) (*time.Time, error)
 	// PendingTotals counts pending operations, except those of exempt
-	// kinds.
-	PendingTotals(ctx context.Context, createdBy, workspaceID string, exempt []string) (Totals, error)
+	// kinds; the creator's count leaves out unasked kinds too.
+	PendingTotals(ctx context.Context, createdBy, workspaceID string, exempt, unasked []string) (Totals, error)
 	DeleteOperations(ctx context.Context, ids []string) error
 	OperationItems(ctx context.Context, operationID string, limit int) ([]Item, error)
 	CountOperationItems(ctx context.Context, operationID string) (int64, error)
@@ -339,9 +339,12 @@ func (r *Repo) Exists(ctx context.Context, f Filter) (bool, error) {
 }
 
 // PendingTotals counts the pending operations of a creator, a workspace
-// and the installation for acceptance quotas, leaving out exempt kinds.
-func (r *Repo) PendingTotals(ctx context.Context, createdBy, workspaceID string, exempt []string) (Totals, error) {
-	return r.read.PendingTotals(ctx, createdBy, workspaceID, exempt)
+// and the installation for acceptance quotas, leaving out exempt kinds. The
+// creator's count holds only what they asked for themselves: operations of
+// unasked kinds, and operations another operation started for them, are
+// left out of it.
+func (r *Repo) PendingTotals(ctx context.Context, createdBy, workspaceID string, exempt, unasked []string) (Totals, error) {
+	return r.read.PendingTotals(ctx, createdBy, workspaceID, exempt, unasked)
 }
 
 // FindIdempotent returns the operation a creator's idempotency key names

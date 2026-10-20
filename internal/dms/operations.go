@@ -101,6 +101,16 @@ func (s *Service) ReadyOperationGroups(ctx context.Context, kinds []string) ([]o
 // errors are bulk results; a Retry error defers it. It reports whether it
 // found work.
 func (s *Service) RunOperation(ctx context.Context, kinds []string) (bool, error) {
+	// A claim is a write, and every accepted operation wakes every worker:
+	// look first, so a worker with nothing ready never queues for the
+	// writer.
+	if !s.transaction {
+		now := time.Now()
+		next, err := s.DAL.Operations().NextAttempt(ctx, kinds, now)
+		if err != nil || next == nil || next.After(now) {
+			return false, err
+		}
+	}
 	var op *operations.Operation
 	var execute func(context.Context, *Service, *operations.Operation) error
 	err := s.write(ctx, func(t *Service) error {

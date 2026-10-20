@@ -49,11 +49,38 @@ var ErrNoTextMatch = errors.New("the text matcher does not search here")
 // queries.
 func (s *Service) SetTextMatcher(m TextMatcher) { s.ext.matcher = m }
 
+// matchedKey carries a text match made before a read transaction opened.
+type matchedKey struct{}
+
+type matched struct {
+	collectionID, workspaceID, text string
+	match                           *content.SearchMatch
+	capped                          bool
+}
+
+// matchFirst matches text in a collection (or a workspace) before a read
+// transaction opens and carries the result to matchText in it: a matcher,
+// such as a search index, can take far longer than the query, and must not
+// hold a database connection meanwhile.
+func (s *Service) matchFirst(ctx context.Context, subject, collectionID, workspaceID, text string) (context.Context, error) {
+	if s.transaction || s.ext.matcher == nil || strings.TrimSpace(text) == "" {
+		return ctx, nil
+	}
+	m, capped, err := s.matchText(ctx, subject, collectionID, workspaceID, text)
+	if err != nil {
+		return ctx, err
+	}
+	return context.WithValue(ctx, matchedKey{}, matched{collectionID: collectionID, workspaceID: workspaceID, text: strings.TrimSpace(text), match: m, capped: capped}), nil
+}
+
 // matchText decides how a listing or collection query matches text: by
 // the matcher's IDs, with workspaces and collections still matching by
 // name, or by name alone.
 func (s *Service) matchText(ctx context.Context, subject, collectionID, workspaceID, text string) (*content.SearchMatch, bool, error) {
 	text = strings.TrimSpace(text)
+	if m, ok := ctx.Value(matchedKey{}).(matched); ok && m.collectionID == collectionID && m.workspaceID == workspaceID && m.text == text {
+		return m.match, m.capped, nil
+	}
 	name := refs.FoldName(text)
 	if s.ext.matcher != nil {
 		found, err := s.ext.matcher.MatchText(ctx, s, subject, TextMatch{CollectionID: collectionID, WorkspaceID: workspaceID, Text: text})

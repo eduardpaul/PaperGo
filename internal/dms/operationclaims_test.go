@@ -44,13 +44,21 @@ func TestOperationQuotas(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.SetOperationQuotas(OperationQuotas{PerCreator: 2})
+	var first *OperationView
 	for range 2 {
-		if _, err := s.EnqueueOperation(testContext, "alice", list.ID, "checkpoint", json.RawMessage(`{}`)); err != nil {
+		op, err := s.EnqueueOperation(testContext, "alice", list.ID, "checkpoint", json.RawMessage(`{}`))
+		if err != nil {
 			t.Fatal(err)
 		}
+		first = op
 	}
 	if _, err := s.EnqueueOperation(testContext, "alice", list.ID, "checkpoint", json.RawMessage(`{}`)); !errors.Is(err, ErrOperationQuota) {
 		t.Fatal(err)
+	}
+	// Work an operation starts, such as a workflow run's requests, is not
+	// the person's to count.
+	if _, err := s.EnqueueOperation(WithParentOperation(testContext, first.ID), "alice", list.ID, "checkpoint", json.RawMessage(`{}`)); err != nil {
+		t.Fatal("work started for alice counted against her", err)
 	}
 	// Finished work no longer counts.
 	if err := s.runOperations(testContext); err != nil {

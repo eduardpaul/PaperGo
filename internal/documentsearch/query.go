@@ -98,7 +98,10 @@ func (x *Search) Search(ctx context.Context, s *dms.Service, subject string, in 
 	if err := x.embedSearch(ctx, &in); err != nil {
 		return Result{}, err
 	}
-	return dms.Read(ctx, s, func(t *dms.Service) (Result, error) { return x.search(ctx, t, subject, in) })
+	// The store is asked outside any transaction, so a slow search never
+	// holds a database connection; every hit is checked against the
+	// database as it is when the check runs.
+	return x.search(ctx, s, subject, in)
 }
 
 // errUnavailable answers searches while the store is rebuilt.

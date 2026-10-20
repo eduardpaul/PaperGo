@@ -40,12 +40,17 @@ func TestSearchTextMatchesNamesWithoutAMatcher(t *testing.T) {
 }
 
 // matchIDs is a text matcher that matches the IDs it holds, or declines.
+// It records whether it was asked inside a transaction.
 type matchIDs struct {
 	ids     []string
 	decline bool
+	inTx    *bool
 }
 
-func (m matchIDs) MatchText(context.Context, *Service, string, TextMatch) (TextMatches, error) {
+func (m matchIDs) MatchText(_ context.Context, s *Service, _ string, _ TextMatch) (TextMatches, error) {
+	if m.inTx != nil {
+		*m.inTx = *m.inTx || s.transaction
+	}
 	if m.decline {
 		return TextMatches{}, ErrNoTextMatch
 	}
@@ -58,10 +63,20 @@ func TestTextMatcherDecidesMatches(t *testing.T) {
 	s, _, c := fixture(t)
 	acme := create(t, s, c.ID, "item", "Acme", nil)
 	globex := create(t, s, c.ID, "item", "Globex", nil)
-	s.SetTextMatcher(matchIDs{ids: []string{globex.ID}})
+	inTx := false
+	s.SetTextMatcher(matchIDs{ids: []string{globex.ID}, inTx: &inTx})
 	q, err := s.Query(testContext, "alice", c.ID, QueryRequest{Query: QuerySpec{Search: "acme"}})
 	if err != nil || len(q.Data) != 1 || q.Data[0].ID != globex.ID || !q.SearchCapped {
 		t.Fatal("matcher", q, err)
+	}
+	page, err := s.Browse(testContext, "alice", Browse{ParentID: c.ID, Search: "acme"})
+	if err != nil || len(page.Data) != 1 || page.Data[0].ID != globex.ID {
+		t.Fatal("browse matcher", page, err)
+	}
+	// A matcher, such as a search index, never holds a database
+	// connection: it runs before the read transaction opens.
+	if inTx {
+		t.Fatal("the matcher ran inside a read transaction")
 	}
 	s.SetTextMatcher(matchIDs{decline: true})
 	q, err = s.Query(testContext, "alice", c.ID, QueryRequest{Query: QuerySpec{Search: "acme"}})

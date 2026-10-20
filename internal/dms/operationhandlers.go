@@ -412,13 +412,19 @@ func (s *Service) checkOperationQuota(ctx context.Context, op operations.Operati
 		return nil
 	}
 	// Index maintenance follows configuration changes; it never uses up a
-	// person's quota.
-	totals, err := s.DAL.Operations().PendingTotals(ctx, op.CreatedBy, op.WorkspaceID, []string{OperationKindFieldIndex})
+	// person's quota. Neither do the workflow runs PaperGo starts for a
+	// person, nor the work an operation starts: a backlog of runs must not
+	// refuse the requests those runs make. Workspace and installation
+	// quotas still bound them.
+	totals, err := s.DAL.Operations().PendingTotals(ctx, op.CreatedBy, op.WorkspaceID, []string{OperationKindFieldIndex}, []string{OperationKindRun})
 	if err != nil {
 		return err
 	}
 	if op.IdempotencyKey == "" {
-		totals.Creator, totals.Installation = totals.Creator+1, totals.Installation+1
+		if op.ParentID == "" && op.Kind != OperationKindRun {
+			totals.Creator++
+		}
+		totals.Installation++
 		if op.WorkspaceID != "" {
 			totals.Workspace++
 			totals.WorkspacePayloadBytes += int64(len(op.Payload))

@@ -46,6 +46,12 @@ func pageSize(limit int) int {
 
 func (s *Service) Browse(ctx context.Context, subject string, in Browse) (Page[*resources.Resource], error) {
 	if !s.transaction {
+		if collection, workspace, ok := s.browseMatchScope(ctx, subject, in); ok {
+			var err error
+			if ctx, err = s.matchFirst(ctx, subject, collection, workspace, in.Search); err != nil {
+				return Page[*resources.Resource]{}, err
+			}
+		}
 		return read(ctx, s, func(t *Service) (Page[*resources.Resource], error) { return t.Browse(ctx, subject, in) })
 	}
 	scope := "list.read"
@@ -133,6 +139,29 @@ func (s *Service) Browse(ctx context.Context, subject string, in Browse) (Page[*
 		return out, err
 	}
 	return out, nil
+}
+
+// browseMatchScope is where a listing's search text matches, before its
+// read transaction: in the parent's collection, or across the workspace.
+// It reports false when there is no text or the listing will fail anyway.
+func (s *Service) browseMatchScope(ctx context.Context, subject string, in Browse) (collection, workspace string, ok bool) {
+	if strings.TrimSpace(in.Search) == "" {
+		return "", "", false
+	}
+	if in.ParentID == "" {
+		return "", in.WorkspaceID, in.WorkspaceID != ""
+	}
+	parent, err := s.Authorize(ctx, subject, in.ParentID, "read")
+	switch {
+	case err != nil:
+		return "", "", false
+	case parent.Kind == refs.KindList || parent.Kind == refs.KindLibrary:
+		return parent.ID, "", true
+	case parent.ContainerID != nil:
+		return *parent.ContainerID, "", true
+	default:
+		return "", parent.WorkspaceID, true
+	}
 }
 
 // overlayPage applies each item's selected surface and returns the selected revision
