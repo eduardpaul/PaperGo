@@ -11,7 +11,7 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface DiscardRequestBuilder extends BaseRequestBuilder<DiscardRequestBuilder> {
     /**
-     * Discards a staged file of the calling run; its item keeps its current file. Staged files belong to the workflow run that made them, so only a workflow script can call this; 422 for other clients.
+     * Discards a staged file; its item keeps its current file and the artifact stays for reuse until it expires. A file a workflow run staged answers only that run, one staged without a run only callers without one (422 otherwise).
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @throws {Problem} error when the service returns a 400 status code
      * @throws {Problem} error when the service returns a 401 status code
@@ -22,7 +22,7 @@ export interface DiscardRequestBuilder extends BaseRequestBuilder<DiscardRequest
      */
      post(requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<void>;
     /**
-     * Discards a staged file of the calling run; its item keeps its current file. Staged files belong to the workflow run that made them, so only a workflow script can call this; 422 for other clients.
+     * Discards a staged file; its item keeps its current file and the artifact stays for reuse until it expires. A file a workflow run staged answers only that run, one staged without a run only callers without one (422 otherwise).
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */

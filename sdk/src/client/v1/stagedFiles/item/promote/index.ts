@@ -11,7 +11,7 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface PromoteRequestBuilder extends BaseRequestBuilder<PromoteRequestBuilder> {
     /**
-     * Makes a staged file of the calling run its item's current file, as a new file version. Fails with 409 when a file it was made from is no longer current. With recycle_sources, moves the other source items to the recycle bin in the same transaction. Staged files belong to the workflow run that made them, so only a workflow script can call this; 422 for other clients.
+     * Makes a staged file its item's current file, as a new file version. A file a workflow run staged answers only that run, one staged without a run only callers without one (422 otherwise), each with write access to the item. Fails with 409 when a file it was made from is no longer current. With recycle_sources, moves the other source items to the recycle bin in the same transaction.
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<PromotedFile>}
@@ -24,7 +24,7 @@ export interface PromoteRequestBuilder extends BaseRequestBuilder<PromoteRequest
      */
      post(body: PromoteStagedFile, requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<PromotedFile | undefined>;
     /**
-     * Makes a staged file of the calling run its item's current file, as a new file version. Fails with 409 when a file it was made from is no longer current. With recycle_sources, moves the other source items to the recycle bin in the same transaction. Staged files belong to the workflow run that made them, so only a workflow script can call this; 422 for other clients.
+     * Makes a staged file its item's current file, as a new file version. A file a workflow run staged answers only that run, one staged without a run only callers without one (422 otherwise), each with write access to the item. Fails with 409 when a file it was made from is no longer current. With recycle_sources, moves the other source items to the recycle bin in the same transaction.
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}

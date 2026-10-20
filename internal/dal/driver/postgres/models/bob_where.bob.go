@@ -18,6 +18,7 @@ var (
 
 func Where[Q psql.Filterable]() struct {
 	AccessTokens            accessTokenWhere[Q]
+	Artifacts               artifactWhere[Q]
 	AuditEvents             auditEventWhere[Q]
 	BlobDeletions           blobDeletionWhere[Q]
 	BlobLeases              blobLeaseWhere[Q]
@@ -78,6 +79,7 @@ func Where[Q psql.Filterable]() struct {
 } {
 	return struct {
 		AccessTokens            accessTokenWhere[Q]
+		Artifacts               artifactWhere[Q]
 		AuditEvents             auditEventWhere[Q]
 		BlobDeletions           blobDeletionWhere[Q]
 		BlobLeases              blobLeaseWhere[Q]
@@ -137,6 +139,7 @@ func Where[Q psql.Filterable]() struct {
 		Workflows               workflowWhere[Q]
 	}{
 		AccessTokens:            buildAccessTokenWhere[Q](AccessTokens.Columns),
+		Artifacts:               buildArtifactWhere[Q](Artifacts.Columns),
 		AuditEvents:             buildAuditEventWhere[Q](AuditEvents.Columns),
 		BlobDeletions:           buildBlobDeletionWhere[Q](BlobDeletions.Columns),
 		BlobLeases:              buildBlobLeaseWhere[Q](BlobLeases.Columns),

@@ -78,6 +78,8 @@ type ResourcesQuery = *psql.ViewQuery[*Resource, ResourceSlice]
 
 // resourceR is where relationships are stored.
 type resourceR struct {
+	ItemArtifacts                 ArtifactSlice        // artifacts.artifacts_item_id_fkey
+	WorkspaceArtifacts            ArtifactSlice        // artifacts.artifacts_workspace_id_fkey
 	ItemBlobs                     BlobSlice            // blobs.blobs_item_id_fkey
 	ContainerBusinessKeys         BusinessKeySlice     // business_keys.business_keys_container_id_fkey
 	ItemBusinessKeys              BusinessKeySlice     // business_keys.business_keys_item_id_fkey
@@ -138,6 +140,8 @@ type resourceR struct {
 
 // resourceRLoaded tracks which relationships on Resource have been loaded.
 type resourceRLoaded struct {
+	ItemArtifacts                 bool // artifacts.artifacts_item_id_fkey
+	WorkspaceArtifacts            bool // artifacts.artifacts_workspace_id_fkey
 	ItemBlobs                     bool // blobs.blobs_item_id_fkey
 	ContainerBusinessKeys         bool // business_keys.business_keys_container_id_fkey
 	ItemBusinessKeys              bool // business_keys.business_keys_item_id_fkey
@@ -1349,6 +1353,52 @@ func (o ResourceSlice) ReloadAll(ctx context.Context, exec bob.Executor) error {
 	o.copyMatchingRows(o2...)
 
 	return nil
+}
+
+// ItemArtifacts starts a query for related objects on artifacts
+func (o *Resource) ItemArtifacts(mods ...bob.Mod[*dialect.SelectQuery]) ArtifactsQuery {
+	return Artifacts.Query(append(mods,
+		sm.Where(Artifacts.Columns.ItemID.EQ(psql.Arg(o.ID))),
+	)...)
+}
+
+func (os ResourceSlice) ItemArtifacts(mods ...bob.Mod[*dialect.SelectQuery]) ArtifactsQuery {
+	pkID := make(pgtypes.Array[string], 0, len(os))
+
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		pkID = append(pkID, o.ID)
+	}
+	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkID), "text[]"))
+
+	return Artifacts.Query(append(mods,
+		sm.Where(Artifacts.Columns.ItemID.EQ(PKArgExpr)),
+	)...)
+}
+
+// WorkspaceArtifacts starts a query for related objects on artifacts
+func (o *Resource) WorkspaceArtifacts(mods ...bob.Mod[*dialect.SelectQuery]) ArtifactsQuery {
+	return Artifacts.Query(append(mods,
+		sm.Where(Artifacts.Columns.WorkspaceID.EQ(psql.Arg(o.ID))),
+	)...)
+}
+
+func (os ResourceSlice) WorkspaceArtifacts(mods ...bob.Mod[*dialect.SelectQuery]) ArtifactsQuery {
+	pkID := make(pgtypes.Array[string], 0, len(os))
+
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		pkID = append(pkID, o.ID)
+	}
+	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkID), "text[]"))
+
+	return Artifacts.Query(append(mods,
+		sm.Where(Artifacts.Columns.WorkspaceID.EQ(PKArgExpr)),
+	)...)
 }
 
 // ItemBlobs starts a query for related objects on blobs
@@ -2613,6 +2663,128 @@ func (os ResourceSlice) WorkspaceWorkflows(mods ...bob.Mod[*dialect.SelectQuery]
 	return Workflows.Query(append(mods,
 		sm.Where(Workflows.Columns.WorkspaceID.EQ(PKArgExpr)),
 	)...)
+}
+
+func insertResourceItemArtifacts0(ctx context.Context, exec bob.Executor, artifacts1 []*ArtifactSetter, resource0 *Resource) (ArtifactSlice, error) {
+	for i := range artifacts1 {
+		artifacts1[i].ItemID = omit.From(resource0.ID)
+	}
+
+	ret, err := Artifacts.Insert(bob.ToMods(artifacts1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertResourceItemArtifacts0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachResourceItemArtifacts0(ctx context.Context, exec bob.Executor, count int, artifacts1 ArtifactSlice, resource0 *Resource) (ArtifactSlice, error) {
+	setter := &ArtifactSetter{
+		ItemID: omit.From(resource0.ID),
+	}
+
+	err := artifacts1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachResourceItemArtifacts0: %w", err)
+	}
+
+	return artifacts1, nil
+}
+
+func (resource0 *Resource) InsertItemArtifacts(ctx context.Context, exec bob.Executor, related ...*ArtifactSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	artifacts1, err := insertResourceItemArtifacts0(ctx, exec, related, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.ItemArtifacts = append(resource0.R.ItemArtifacts, artifacts1...)
+
+	return nil
+}
+
+func (resource0 *Resource) AttachItemArtifacts(ctx context.Context, exec bob.Executor, related ...*Artifact) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	artifacts1 := ArtifactSlice(related)
+
+	_, err = attachResourceItemArtifacts0(ctx, exec, len(related), artifacts1, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.ItemArtifacts = append(resource0.R.ItemArtifacts, artifacts1...)
+
+	return nil
+}
+
+func insertResourceWorkspaceArtifacts0(ctx context.Context, exec bob.Executor, artifacts1 []*ArtifactSetter, resource0 *Resource) (ArtifactSlice, error) {
+	for i := range artifacts1 {
+		artifacts1[i].WorkspaceID = omit.From(resource0.ID)
+	}
+
+	ret, err := Artifacts.Insert(bob.ToMods(artifacts1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertResourceWorkspaceArtifacts0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachResourceWorkspaceArtifacts0(ctx context.Context, exec bob.Executor, count int, artifacts1 ArtifactSlice, resource0 *Resource) (ArtifactSlice, error) {
+	setter := &ArtifactSetter{
+		WorkspaceID: omit.From(resource0.ID),
+	}
+
+	err := artifacts1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachResourceWorkspaceArtifacts0: %w", err)
+	}
+
+	return artifacts1, nil
+}
+
+func (resource0 *Resource) InsertWorkspaceArtifacts(ctx context.Context, exec bob.Executor, related ...*ArtifactSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	artifacts1, err := insertResourceWorkspaceArtifacts0(ctx, exec, related, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.WorkspaceArtifacts = append(resource0.R.WorkspaceArtifacts, artifacts1...)
+
+	return nil
+}
+
+func (resource0 *Resource) AttachWorkspaceArtifacts(ctx context.Context, exec bob.Executor, related ...*Artifact) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	artifacts1 := ArtifactSlice(related)
+
+	_, err = attachResourceWorkspaceArtifacts0(ctx, exec, len(related), artifacts1, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.WorkspaceArtifacts = append(resource0.R.WorkspaceArtifacts, artifacts1...)
+
+	return nil
 }
 
 func insertResourceItemBlobs0(ctx context.Context, exec bob.Executor, blobs1 []*BlobSetter, resource0 *Resource) (BlobSlice, error) {
@@ -5729,6 +5901,34 @@ func buildResourceWhere[Q psql.Filterable](cols resourceColumns) resourceWhere[Q
 // R struct — so they cannot collide with column-based filter fields.
 type resourceWhereR[Q psql.Filterable] struct {
 	cols resourceColumns
+}
+
+// HasItemArtifacts filters parents that have a matching ItemArtifacts using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Artifacts).
+func (w resourceWhereR[Q]) HasItemArtifacts(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := psql.Select(
+		sm.Columns(psql.Raw("1")),
+		sm.From(Artifacts.NameExpr()),
+		sm.Where(Artifacts.Columns.ItemID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: psql.Exists(q)}
+}
+
+// HasWorkspaceArtifacts filters parents that have a matching WorkspaceArtifacts using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Artifacts).
+func (w resourceWhereR[Q]) HasWorkspaceArtifacts(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := psql.Select(
+		sm.Columns(psql.Raw("1")),
+		sm.From(Artifacts.NameExpr()),
+		sm.Where(Artifacts.Columns.WorkspaceID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: psql.Exists(q)}
 }
 
 // HasItemBlobs filters parents that have a matching ItemBlobs using a

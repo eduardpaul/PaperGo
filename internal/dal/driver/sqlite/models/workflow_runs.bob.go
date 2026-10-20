@@ -874,7 +874,7 @@ func (os WorkflowRunSlice) RunWorkflowSteps(mods ...bob.Mod[*dialect.SelectQuery
 
 func insertWorkflowRunRunStagedFiles0(ctx context.Context, exec bob.Executor, stagedFiles1 []*StagedFileSetter, workflowRun0 *WorkflowRun) (StagedFileSlice, error) {
 	for i := range stagedFiles1 {
-		stagedFiles1[i].RunID = omit.From(workflowRun0.ID)
+		stagedFiles1[i].RunID = omitnull.From(workflowRun0.ID)
 	}
 
 	ret, err := StagedFiles.Insert(bob.ToMods(stagedFiles1...)).All(ctx, exec)
@@ -887,7 +887,7 @@ func insertWorkflowRunRunStagedFiles0(ctx context.Context, exec bob.Executor, st
 
 func attachWorkflowRunRunStagedFiles0(ctx context.Context, exec bob.Executor, count int, stagedFiles1 StagedFileSlice, workflowRun0 *WorkflowRun) (StagedFileSlice, error) {
 	setter := &StagedFileSetter{
-		RunID: omit.From(workflowRun0.ID),
+		RunID: omitnull.From(workflowRun0.ID),
 	}
 
 	err := stagedFiles1.UpdateAll(ctx, exec, *setter)

@@ -143,7 +143,8 @@ func (a *API) cancelTask(w http.ResponseWriter, r *http.Request) {
 type stagedFile struct {
 	ID          string    `json:"id"`
 	ItemID      string    `json:"item_id"`
-	RunID       string    `json:"run_id"`
+	ArtifactID  string    `json:"artifact_id"`
+	RunID       string    `json:"run_id,omitempty"`
 	Filename    string    `json:"filename"`
 	ContentType string    `json:"content_type"`
 	Size        int64     `json:"size"`
@@ -166,8 +167,9 @@ func (a *API) getStagedFile(w http.ResponseWriter, r *http.Request) {
 		a.failure(w, r, err)
 		return
 	}
-	respond(w, r, 200, stagedFile{ID: f.ID, ItemID: f.ItemID, RunID: f.RunID, Filename: f.Filename, ContentType: f.ContentType, Size: f.Size,
-		SHA256: f.Sha256, Metrics: f.Metrics, Sources: f.Sources, State: string(f.State), Fresh: fresh, CreatedAt: f.CreatedAt})
+	art := f.Artifact
+	respond(w, r, 200, stagedFile{ID: f.ID, ItemID: f.ItemID, ArtifactID: art.ID, RunID: f.RunID, Filename: art.Filename, ContentType: art.ContentType, Size: art.Size,
+		SHA256: art.Sha256, Metrics: art.Metrics, Sources: art.Sources, State: string(f.State), Fresh: fresh, CreatedAt: f.CreatedAt})
 }
 
 // stagedFileContent serves a staged file's bytes inline, for review screens.
@@ -177,15 +179,16 @@ func (a *API) stagedFileContent(w http.ResponseWriter, r *http.Request) {
 		a.failure(w, r, err)
 		return
 	}
-	file, err := a.Storage.Open(r.Context(), f.ObjectKey)
+	art := f.Artifact
+	file, err := a.Storage.Open(r.Context(), art.ObjectKey)
 	if err != nil {
 		a.failure(w, r, err)
 		return
 	}
 	defer file.Close()
-	w.Header().Set("Content-Type", f.ContentType)
-	w.Header().Set("Content-Disposition", mime.FormatMediaType("inline", map[string]string{"filename": f.Filename}))
-	w.Header().Set("ETag", strconv.Quote(f.Sha256))
+	w.Header().Set("Content-Type", art.ContentType)
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("inline", map[string]string{"filename": art.Filename}))
+	w.Header().Set("ETag", strconv.Quote(art.Sha256))
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	http.ServeContent(transfer.Writer(w), r, f.Filename, f.CreatedAt, file)
+	http.ServeContent(transfer.Writer(w), r, art.Filename, art.CreatedAt, file)
 }

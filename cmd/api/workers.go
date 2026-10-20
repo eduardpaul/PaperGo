@@ -46,6 +46,7 @@ func workers(service *dms.Service, store storage.Store, f features, runs *script
 		{Name: "purged blobs", Every: time.Minute, Run: func(ctx context.Context, _ time.Time) error { return service.CleanupPurgedBlobs(ctx, store) }},
 		{Name: "unreferenced objects", Every: time.Minute, Run: func(ctx context.Context, now time.Time) error { return service.CollectObjects(ctx, store, now) }},
 		{Name: "reclaimed files", Every: time.Minute, Run: func(ctx context.Context, now time.Time) error { return service.SweepReclaims(ctx, store, now) }},
+		{Name: "artifact retention", Every: time.Hour, Run: service.CollectArtifacts},
 		{Name: "embedding sweep", Every: 15 * time.Minute, Run: f.search.Sweep},
 		{Name: "AI batches", Every: time.Minute, Run: f.ai.Poll},
 		{Name: "AI records", Every: time.Hour, Run: f.ai.Collect},

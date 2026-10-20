@@ -2,6 +2,7 @@ package scriptrun
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
@@ -26,18 +27,19 @@ func files(s *dms.Service, store storage.Store) httpapi.Module {
 	return m.Module()
 }
 
-// reviewSource optimizes the run's photo and waits for a review of the
-// staged copy, after leaving a follow-up task it does not wait for.
+// reviewSource optimizes the run's photo, stages the copy and waits for a
+// review of it, after leaving a follow-up task it does not wait for.
 const reviewSource = `import { plain, workflow } from "@papergo/workflow";
 export default workflow({
   triggers: [{ type: "manual", collection_id: "%s" }],
   async run(ctx) {
-    const optimized = plain((await ctx.wait((await ctx.api.v1.items.byId(ctx.itemId!).optimizeImage.post({}))!)).result) as { staged_file_id?: string };
-    if (!optimized.staged_file_id) throw new Error("nothing staged");
+    const optimized = plain((await ctx.wait((await ctx.api.v1.items.byId(ctx.itemId!).optimizeImage.post({}))!)).result) as { artifact_id?: string };
+    if (!optimized.artifact_id) throw new Error("nothing made");
+    const staged = (await ctx.api.v1.artifacts.byId(optimized.artifact_id).stage.post())!;
     const tasks = ctx.api.v1.workspaces.byId(ctx.run.workspace_id).tasks;
     await tasks.post({ itemId: ctx.itemId, title: "Follow up" });
     const review = await tasks.post({ kind: "approval", itemId: ctx.itemId, title: "Review",
-      review: { type: "file.compare", stagedFileId: optimized.staged_file_id } });
+      review: { type: "file.compare", stagedFileId: staged.id } });
     await ctx.wait(review!.operationId!);
   },
 });
@@ -214,5 +216,56 @@ func TestCancellingARunCancelsWhatItOwns(t *testing.T) {
 	r.await(t, other, runstore.StatusWaiting)
 	if n := r.openTasks(t, taskstore.Filter{WorkspaceID: r.ws}); n != 1 {
 		t.Fatalf("%d open tasks, want the other run's", n)
+	}
+}
+
+// An optimization belongs to no workflow: a client without a run gets an
+// artifact, an identical request reuses it, and the client stages and
+// promotes it itself. A workflow run cannot promote the client's file.
+func TestArtifactsWithoutRuns(t *testing.T) {
+	r := run(t, files)
+	library, err := r.s.Create(t.Context(), "alice", r.ws, dms.CreateResource{Kind: "library", Name: "Photos", WebDAVEnabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := r.photo(t, library.ID, "photo.png")
+	optimize := func() documentfiles.OptimizeResult {
+		t.Helper()
+		var op dms.OperationView
+		r.call(t, "POST", "/v1/items/"+item+"/optimize-image", "", 202, &op)
+		for deadline := time.Now().Add(20 * time.Second); op.Status == operations.StatusPending; time.Sleep(20 * time.Millisecond) {
+			if time.Now().After(deadline) {
+				t.Fatal("the optimization did not finish")
+			}
+			r.call(t, "GET", "/v1/operations/"+op.ID, "", 200, &op)
+		}
+		var res documentfiles.OptimizeResult
+		if op.Status != operations.StatusSucceeded || json.Unmarshal(op.Result, &res) != nil || res.ArtifactID == "" {
+			t.Fatalf("%+v", op)
+		}
+		return res
+	}
+	first := optimize()
+	again := optimize()
+	if first.Reused || !again.Reused || again.ArtifactID != first.ArtifactID || again.Metrics.Bytes != first.Metrics.Bytes {
+		t.Fatalf("not reused: %+v %+v", first, again)
+	}
+	var artifact documentfiles.ArtifactView
+	r.call(t, "GET", "/v1/artifacts/"+first.ArtifactID, "", 200, &artifact)
+	if artifact.ItemID != item || artifact.ContentType != "image/webp" || len(artifact.Sources) != 1 || !artifact.ExpiresAt.After(time.Now()) {
+		t.Fatalf("%+v", artifact)
+	}
+	var staged documentfiles.StagedResult
+	r.call(t, "POST", "/v1/artifacts/"+first.ArtifactID+"/stage", "", 201, &staged)
+	if staged.RunID != "" || staged.ArtifactID != first.ArtifactID {
+		t.Fatalf("%+v", staged)
+	}
+	if r.pendingStaged(t, item) != 1 {
+		t.Fatal("the staged file is not pending")
+	}
+	var promoted documentfiles.PromoteResult
+	r.call(t, "POST", "/v1/staged-files/"+staged.ID+"/promote", "{}", 200, &promoted)
+	if promoted.FileVersion != 2 {
+		t.Fatalf("%+v", promoted)
 	}
 }

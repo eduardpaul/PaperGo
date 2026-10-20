@@ -11,7 +11,7 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface ComposePdfRequestBuilder extends BaseRequestBuilder<ComposePdfRequestBuilder> {
     /**
-     * Combines the current files of photo items of the item's list or library into one PDF in page order, staged for the item. Each page is turned upright and shrunk so its smallest text keeps target_height, and OCR places the recognized text invisibly on it. The operation fails when a photo changes before the PDF is staged. Requires write access to every photo. Staged files belong to the workflow run that made them, so only a workflow script can call this; 422 for other clients.
+     * Combines the current files of photo items of the item's list or library into one PDF in page order, as an artifact for the item. Each page is turned upright and shrunk so its smallest text keeps target_height, and OCR places the recognized text invisibly on it. An identical request for the same photos reuses an unexpired artifact (reused). The operation fails when a photo changes before the PDF is made. Requires write access to every photo.
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<Operation>}
@@ -25,7 +25,7 @@ export interface ComposePdfRequestBuilder extends BaseRequestBuilder<ComposePdfR
      */
      post(body: ComposePDF, requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<Operation | undefined>;
     /**
-     * Combines the current files of photo items of the item's list or library into one PDF in page order, staged for the item. Each page is turned upright and shrunk so its smallest text keeps target_height, and OCR places the recognized text invisibly on it. The operation fails when a photo changes before the PDF is staged. Requires write access to every photo. Staged files belong to the workflow run that made them, so only a workflow script can call this; 422 for other clients.
+     * Combines the current files of photo items of the item's list or library into one PDF in page order, as an artifact for the item. Each page is turned upright and shrunk so its smallest text keeps target_height, and OCR places the recognized text invisibly on it. An identical request for the same photos reuses an unexpired artifact (reused). The operation fails when a photo changes before the PDF is made. Requires write access to every photo.
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}

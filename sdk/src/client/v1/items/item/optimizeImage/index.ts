@@ -11,7 +11,7 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface OptimizeImageRequestBuilder extends BaseRequestBuilder<OptimizeImageRequestBuilder> {
     /**
-     * Analyzes the text of the item's current JPEG, PNG or WebP image with OCR and stages a smaller WebP copy whose smallest text keeps the target height. The result gives the reason when the original is kept: the format is not supported, the image is animated, has no reliable text or would not get smaller, or a newer file replaced file_version. Staged files belong to the workflow run that made them, so only a workflow script can call this; 422 for other clients.
+     * Analyzes the text of the item's current JPEG, PNG or WebP image with OCR and makes a smaller WebP copy, as an artifact, whose smallest text keeps the target height. An identical request for the same file version reuses an unexpired artifact (reused). The result gives the reason when the original is kept: the format is not supported, the image is animated, has no reliable text or would not get smaller, or a newer file replaced file_version.
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<Operation>}
@@ -25,7 +25,7 @@ export interface OptimizeImageRequestBuilder extends BaseRequestBuilder<Optimize
      */
      post(body: OptimizeImage, requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<Operation | undefined>;
     /**
-     * Analyzes the text of the item's current JPEG, PNG or WebP image with OCR and stages a smaller WebP copy whose smallest text keeps the target height. The result gives the reason when the original is kept: the format is not supported, the image is animated, has no reliable text or would not get smaller, or a newer file replaced file_version. Staged files belong to the workflow run that made them, so only a workflow script can call this; 422 for other clients.
+     * Analyzes the text of the item's current JPEG, PNG or WebP image with OCR and makes a smaller WebP copy, as an artifact, whose smallest text keeps the target height. An identical request for the same file version reuses an unexpired artifact (reused). The result gives the reason when the original is kept: the format is not supported, the image is animated, has no reliable text or would not get smaller, or a newer file replaced file_version.
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}

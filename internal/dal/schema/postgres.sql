@@ -812,13 +812,13 @@ CREATE TABLE domain_events (
 CREATE INDEX domainevent_created_at_id ON domain_events(created_at, id) WHERE dispatched_at IS NULL;
 CREATE INDEX domainevent_dispatched_at ON domain_events(dispatched_at) WHERE dispatched_at IS NOT NULL;
 
-CREATE TABLE staged_files (
+CREATE TABLE artifacts (
     id TEXT PRIMARY KEY NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     workspace_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE DEFERRABLE,
     item_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE DEFERRABLE,
-    run_id TEXT NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE DEFERRABLE,
+    operation_id TEXT REFERENCES operations(id) ON DELETE SET NULL DEFERRABLE,
+    input_key TEXT NOT NULL CHECK (length(input_key) = 64),
     sources JSONB NOT NULL CHECK (jsonb_typeof(sources) = 'array'),
     object_key TEXT NOT NULL CHECK (object_key <> ''),
     filename TEXT NOT NULL CHECK (length(filename) BETWEEN 1 AND 255),
@@ -826,12 +826,27 @@ CREATE TABLE staged_files (
     size BIGINT NOT NULL CHECK (size >= 0),
     sha256 TEXT NOT NULL CHECK (length(sha256) = 64),
     metrics JSONB NOT NULL DEFAULT '{}'::jsonb,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_by TEXT NOT NULL
+);
+CREATE INDEX artifact_item_id_input_key ON artifacts(item_id, input_key);
+CREATE INDEX artifact_expires_at ON artifacts(expires_at);
+CREATE INDEX artifact_object_key ON artifacts(object_key);
+
+CREATE TABLE staged_files (
+    id TEXT PRIMARY KEY NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    workspace_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE DEFERRABLE,
+    item_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE DEFERRABLE,
+    artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE DEFERRABLE,
+    run_id TEXT REFERENCES workflow_runs(id) ON DELETE CASCADE DEFERRABLE,
     state TEXT NOT NULL DEFAULT 'pending' CHECK (state IN ('pending', 'promoted', 'discarded')),
     created_by TEXT NOT NULL
 );
 CREATE INDEX stagedfile_run_id ON staged_files(run_id);
 CREATE INDEX stagedfile_item_id ON staged_files(item_id);
-CREATE INDEX stagedfile_object_key_state ON staged_files(object_key, state);
+CREATE INDEX stagedfile_artifact_id_state ON staged_files(artifact_id, state);
 
 CREATE TABLE tasks (
     id TEXT PRIMARY KEY NOT NULL,

@@ -56,6 +56,7 @@ sql:
     collection_types: []
     schema_revisions: []
     schema_templates: []
+    artifacts: []
     staged_files: []
     business_keys: []
     item_revisions: []
@@ -89,7 +90,7 @@ no_tests: true
 no_back_referencing: true
 
 types:
-  "types.JSON[[]model.StagedSource]":
+  "types.JSON[[]model.ArtifactSource]":
     imports:
       - '"github.com/stephenafamo/bob/types"'
       - '"papergo/internal/model"'
@@ -240,11 +241,11 @@ replacements:
     match:
       name: "definition"
     replace: "types.JSON[json.RawMessage]"
-  - tables: ["staged_files"]
+  - tables: ["artifacts"]
     match:
       name: "sources"
-    replace: "types.JSON[[]model.StagedSource]"
-  - tables: ["staged_files"]
+    replace: "types.JSON[[]model.ArtifactSource]"
+  - tables: ["artifacts"]
     match:
       name: "metrics"
     replace: "types.JSON[json.RawMessage]"

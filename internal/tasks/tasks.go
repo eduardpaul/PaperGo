@@ -364,8 +364,12 @@ func checkReview(ctx context.Context, t *dms.Service, subject string, in Input) 
 	if err != nil {
 		return fmt.Errorf("review: %w", err)
 	}
-	if f.RunID != in.Workflow.RunID {
-		return dms.Invalid("review: the staged file is not this run's")
+	run := ""
+	if in.Workflow != nil {
+		run = in.Workflow.RunID
+	}
+	if f.RunID != run {
+		return dms.Invalid("review: the staged file is another workflow run's")
 	}
 	return nil
 }

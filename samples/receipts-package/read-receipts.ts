@@ -70,10 +70,11 @@ export default workflow<unknown, unknown, Params>({
     const api = ctx.api;
     let version: number;
     try {
-      const optimized = plain((await ctx.wait((await api.v1.items.byId(id).optimizeImage.post({}))!)).result) as { staged_file_id?: string; blob_id: string };
+      const optimized = plain((await ctx.wait((await api.v1.items.byId(id).optimizeImage.post({}))!)).result) as { artifact_id?: string; blob_id: string };
       let image = optimized.blob_id;
-      if (optimized.staged_file_id) {
-        image = (await api.v1.stagedFiles.byId(optimized.staged_file_id).promote.post({}))!.blobId!;
+      if (optimized.artifact_id) {
+        const staged = (await api.v1.artifacts.byId(optimized.artifact_id).stage.post())!;
+        image = (await api.v1.stagedFiles.byId(staged.id!).promote.post({}))!.blobId!;
       }
       version = (await api.v1.resources.byId(id).get())!.version!;
       const answer = await ctx.wait((await api.v1.ai.completions.post({
@@ -99,7 +100,7 @@ export default workflow<unknown, unknown, Params>({
         });
         await api.v1.items.byId(id).relationships.post({ type: contains, directed: true, targetId: created!.id });
       }
-      if (optimized.staged_file_id) {
+      if (optimized.artifact_id) {
         // The replaced photo goes once the grace period ends.
         await api.v1.items.byId(id).content.reclaim.post({ blobId: optimized.blob_id });
       }

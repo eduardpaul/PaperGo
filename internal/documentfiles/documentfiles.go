@@ -1,23 +1,28 @@
-// Package documentfiles makes new files from items' files for a workflow
-// run to review: POST /v1/items/{id}/optimize-image proposes a smaller
-// copy of an image, and POST /v1/items/{id}/compose-pdf combines photos
-// into one searchable PDF. Each is an operation that stages its file for
-// the run; POST /v1/staged-files/{id}/promote makes it the item's file and
-// POST /v1/staged-files/{id}/discard drops it. Staged files belong to the
-// run that made them, so these routes answer only workflow runs.
-// POST /v1/items/{id}/content/reclaim frees the bytes of a file version a
-// smaller copy replaced.
+// Package documentfiles makes new files from items' files:
+// POST /v1/items/{id}/optimize-image proposes a smaller copy of an image,
+// and POST /v1/items/{id}/compose-pdf combines photos into one searchable
+// PDF. Each is an operation whose result is an artifact, kept for reuse by
+// identical requests whoever asks. A consumer stages an artifact with
+// POST /v1/artifacts/{id}/stage to review it; POST
+// /v1/staged-files/{id}/promote makes it the item's file and POST
+// /v1/staged-files/{id}/discard drops the claim. A file staged by a
+// workflow run answers only that run. POST /v1/items/{id}/content/reclaim
+// frees the bytes of a file version a smaller copy replaced.
 package documentfiles
 
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -29,6 +34,7 @@ import (
 	"papergo/internal/ocr"
 	"papergo/internal/optimize"
 	"papergo/internal/storage"
+	"papergo/internal/transfer"
 )
 
 // Operation kinds.
@@ -45,8 +51,6 @@ const (
 )
 
 var (
-	// ErrNoRun refuses staging outside a workflow run.
-	ErrNoRun = errors.New("staged files belong to workflow runs; call this from a workflow script")
 	// ErrNoOCR refuses analysis in a deployment without an OCR engine.
 	ErrNoOCR = errors.New("image analysis needs OCR; configure ONNXRUNTIME_LIB and OCR_MODELS")
 	// errPhotoChanged fails a composition whose photos changed: the
@@ -83,6 +87,9 @@ func (h module) Routes() []httpapi.Route {
 	return []httpapi.Route{
 		{Method: http.MethodPost, Pattern: "/v1/items/{id}/optimize-image", OperationID: "optimizeItemImage", Handle: h.optimize},
 		{Method: http.MethodPost, Pattern: "/v1/items/{id}/compose-pdf", OperationID: "composeItemPDF", Handle: h.compose},
+		{Method: http.MethodGet, Pattern: "/v1/artifacts/{id}", OperationID: "getArtifact", Handle: h.getArtifact},
+		{Method: http.MethodGet, Pattern: "/v1/artifacts/{id}/content", OperationID: "getArtifactContent", Handle: h.artifactContent},
+		{Method: http.MethodPost, Pattern: "/v1/artifacts/{id}/stage", OperationID: "stageArtifact", Handle: h.stage},
 		{Method: http.MethodPost, Pattern: "/v1/staged-files/{id}/promote", OperationID: "promoteStagedFile", Handle: h.promote},
 		{Method: http.MethodPost, Pattern: "/v1/staged-files/{id}/discard", OperationID: "discardStagedFile", Handle: h.discard},
 		{Method: http.MethodPost, Pattern: "/v1/items/{id}/content/reclaim", OperationID: "reclaimFileVersion", Handle: h.reclaim},
@@ -97,22 +104,24 @@ type OptimizeRequest struct {
 	FileVersion int `json:"file_version,omitempty"`
 }
 
-// OptimizeResult is a finished optimization's result: the staged WebP, or
-// the reason the original is kept.
+// OptimizeResult is a finished optimization's result: the WebP artifact,
+// or the reason the original is kept. Reused says an identical request
+// made the artifact.
 type OptimizeResult struct {
-	StagedFileID string           `json:"staged_file_id,omitempty"`
-	Reason       string           `json:"reason,omitempty"`
-	ItemID       string           `json:"item_id"`
-	BlobID       string           `json:"blob_id"`
-	FileVersion  int              `json:"file_version"`
-	Metrics      optimize.Metrics `json:"metrics"`
+	ArtifactID  string           `json:"artifact_id,omitempty"`
+	Reused      bool             `json:"reused,omitempty"`
+	Reason      string           `json:"reason,omitempty"`
+	ItemID      string           `json:"item_id"`
+	BlobID      string           `json:"blob_id"`
+	FileVersion int              `json:"file_version"`
+	Metrics     optimize.Metrics `json:"metrics"`
 }
 
-// job is an operation's payload: the run that stages the file, and the
-// file versions it is made from, the item's first.
+// job is an operation's payload: the item, the file versions its file is
+// made from, the item's first, and the key identical requests share.
 type job struct {
-	Run      string           `json:"run"`
 	ItemID   string           `json:"item_id"`
+	InputKey string           `json:"input_key"`
 	Files    []file           `json:"files"`
 	Optimize optimize.Options `json:"optimize,omitempty"`
 	Compose  compose.Options  `json:"compose,omitempty"`
@@ -133,7 +142,7 @@ func (h module) optimize(w http.ResponseWriter, r *http.Request, in httpapi.Requ
 	if r.ContentLength != 0 && !in.Decode(w, r, &request) {
 		return nil
 	}
-	op, err := h.m.StartOptimize(r.Context(), in.DMS, in.Subject, in.Run, r.PathValue("id"), request)
+	op, err := h.m.StartOptimize(r.Context(), in.DMS, in.Subject, r.PathValue("id"), request)
 	if err != nil {
 		return err
 	}
@@ -141,12 +150,9 @@ func (h module) optimize(w http.ResponseWriter, r *http.Request, in httpapi.Requ
 	return nil
 }
 
-// StartOptimize proposes a smaller WebP copy of the item's current image
-// for run, as subject.
-func (m *Maker) StartOptimize(ctx context.Context, s *dms.Service, subject, run, itemID string, in OptimizeRequest) (*dms.OperationView, error) {
-	if run == "" {
-		return nil, dms.Invalid(ErrNoRun.Error())
-	}
+// StartOptimize proposes a smaller WebP copy of the item's current image,
+// as subject.
+func (m *Maker) StartOptimize(ctx context.Context, s *dms.Service, subject, itemID string, in OptimizeRequest) (*dms.OperationView, error) {
 	o := optimize.Defaults
 	if in.TargetHeight != 0 {
 		o.TargetHeight = in.TargetHeight
@@ -173,7 +179,7 @@ func (m *Maker) StartOptimize(ctx context.Context, s *dms.Service, subject, run,
 	if err != nil {
 		return nil, err
 	}
-	j := job{Run: run, ItemID: itemID, Optimize: o, Files: []file{{ItemID: itemID, BlobID: b.ID, Version: b.Version, ObjectKey: b.ObjectKey, Filename: b.Filename}}}
+	j := job{ItemID: itemID, Optimize: o, Files: []file{{ItemID: itemID, BlobID: b.ID, Version: b.Version, ObjectKey: b.ObjectKey, Filename: b.Filename}}}
 	switch {
 	case in.FileVersion != 0 && in.FileVersion != b.Version:
 		j.Reason = ReasonSuperseded
@@ -190,7 +196,7 @@ func (h module) compose(w http.ResponseWriter, r *http.Request, in httpapi.Reque
 	if r.ContentLength != 0 && !in.Decode(w, r, &request) {
 		return nil
 	}
-	op, err := h.m.StartCompose(r.Context(), in.DMS, in.Subject, in.Run, r.PathValue("id"), request)
+	op, err := h.m.StartCompose(r.Context(), in.DMS, in.Subject, r.PathValue("id"), request)
 	if err != nil {
 		return err
 	}
@@ -207,23 +213,22 @@ type ComposeRequest struct {
 	ItemIDs []string `json:"item_ids,omitempty"`
 }
 
-// ComposeResult is a finished composition's result.
+// ComposeResult is a finished composition's result: the PDF artifact.
+// Reused says an identical request made it.
 type ComposeResult struct {
-	StagedFileID string          `json:"staged_file_id"`
-	ItemID       string          `json:"item_id"`
-	Others       []string        `json:"others"`
-	Pages        int             `json:"pages"`
-	Bytes        int64           `json:"bytes"`
-	Metrics      compose.Metrics `json:"metrics"`
+	ArtifactID string          `json:"artifact_id"`
+	Reused     bool            `json:"reused,omitempty"`
+	ItemID     string          `json:"item_id"`
+	Others     []string        `json:"others"`
+	Pages      int             `json:"pages"`
+	Bytes      int64           `json:"bytes"`
+	Metrics    compose.Metrics `json:"metrics"`
 }
 
 // StartCompose combines the current files of photo items of the item's
-// list or library into one PDF staged for the item, for run, as subject,
-// who needs write access to every photo.
-func (m *Maker) StartCompose(ctx context.Context, s *dms.Service, subject, run, itemID string, in ComposeRequest) (*dms.OperationView, error) {
-	if run == "" {
-		return nil, dms.Invalid(ErrNoRun.Error())
-	}
+// list or library into one PDF for the item, as subject, who needs write
+// access to every photo.
+func (m *Maker) StartCompose(ctx context.Context, s *dms.Service, subject, itemID string, in ComposeRequest) (*dms.OperationView, error) {
 	if m.OCR == nil {
 		return nil, dms.Invalid(ErrNoOCR.Error())
 	}
@@ -248,7 +253,7 @@ func (m *Maker) StartCompose(ctx context.Context, s *dms.Service, subject, run, 
 	if err != nil {
 		return nil, err
 	}
-	j := job{Run: run, ItemID: itemID, Compose: o}
+	j := job{ItemID: itemID, Compose: o}
 	seen := map[string]bool{}
 	for _, id := range ids {
 		if seen[id] {
@@ -280,6 +285,7 @@ func (m *Maker) StartCompose(ctx context.Context, s *dms.Service, subject, run, 
 }
 
 func start(ctx context.Context, s *dms.Service, subject, kind string, j job) (*dms.OperationView, error) {
+	j.InputKey = inputKey(kind, j)
 	payload, err := json.Marshal(j)
 	if err != nil {
 		return nil, err
@@ -299,10 +305,22 @@ func start(ctx context.Context, s *dms.Service, subject, kind string, j job) (*d
 	return out, err
 }
 
+// inputKey identifies what a file is made from and how: the kind, the item,
+// the source file versions in order and the options.
+func inputKey(kind string, j job) string {
+	h := sha256.New()
+	enc := json.NewEncoder(h)
+	_ = enc.Encode([]any{kind, j.ItemID, j.Optimize, j.Compose})
+	for _, f := range j.Files {
+		_ = enc.Encode([]string{f.ItemID, f.BlobID})
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}
+
 // validate runs in the accepting transaction.
 func validate(_ context.Context, _ *dms.Service, _, itemID string, payload json.RawMessage) error {
 	var j job
-	if err := json.Unmarshal(payload, &j); err != nil || j.ItemID != itemID || j.Run == "" || len(j.Files) == 0 {
+	if err := json.Unmarshal(payload, &j); err != nil || j.ItemID != itemID || len(j.InputKey) != 64 || len(j.Files) == 0 {
 		return dms.Invalid("invalid file payload")
 	}
 	return nil
@@ -344,6 +362,16 @@ func (m *Maker) optimize(ctx context.Context, s *dms.Service, op *operations.Ope
 	if res.Reason != "" {
 		return finish(ctx, s, op, res)
 	}
+	if a, err := s.ReusableArtifact(ctx, j.ItemID, j.InputKey); err != nil || a != nil {
+		if err != nil {
+			return err
+		}
+		res.ArtifactID, res.Reused = a.ID, true
+		if err = json.Unmarshal(a.Metrics, &res.Metrics); err != nil {
+			return err
+		}
+		return finish(ctx, s, op, res)
+	}
 	if m.OCR == nil {
 		return ErrNoOCR
 	}
@@ -369,7 +397,7 @@ func (m *Maker) optimize(ctx context.Context, s *dms.Service, op *operations.Ope
 	}
 	name := strings.TrimSuffix(f.Filename, path.Ext(f.Filename)) + ".webp"
 	return s.Write(ctx, func(t *dms.Service) error {
-		staged, err := t.StageFile(ctx, op.CreatedBy, dms.StageInput{ItemID: j.ItemID, RunID: j.Run, Sources: []model.StagedSource{{ItemID: j.ItemID, BlobID: f.BlobID}},
+		a, err := t.AddArtifact(ctx, op.CreatedBy, dms.ArtifactInput{ItemID: j.ItemID, OperationID: op.ID, InputKey: j.InputKey, Sources: []model.ArtifactSource{{ItemID: j.ItemID, BlobID: f.BlobID}},
 			ObjectKey: obj.Key, Filename: name, ContentType: "image/webp", Size: obj.Size, SHA256: obj.SHA256, Metrics: metrics})
 		switch {
 		case errors.Is(err, dms.ErrConflict):
@@ -378,7 +406,7 @@ func (m *Maker) optimize(ctx context.Context, s *dms.Service, op *operations.Ope
 		case err != nil:
 			return err
 		default:
-			res.StagedFileID = staged.ID
+			res.ArtifactID = a.ID
 		}
 		return save(ctx, t, op, res)
 	})
@@ -389,6 +417,17 @@ func (m *Maker) compose(ctx context.Context, s *dms.Service, op *operations.Oper
 	var j job
 	if err := json.Unmarshal(op.Payload, &j); err != nil {
 		return err
+	}
+	if a, err := s.ReusableArtifact(ctx, j.ItemID, j.InputKey); err != nil || a != nil {
+		if err != nil {
+			return err
+		}
+		res := ComposeResult{ArtifactID: a.ID, Reused: true, ItemID: j.ItemID, Others: others(j), Bytes: a.Size}
+		if err = json.Unmarshal(a.Metrics, &res.Metrics); err != nil {
+			return err
+		}
+		res.Pages = res.Metrics.Pages
+		return finish(ctx, s, op, res)
 	}
 	if m.OCR == nil {
 		return ErrNoOCR
@@ -412,19 +451,17 @@ func (m *Maker) compose(ctx context.Context, s *dms.Service, op *operations.Oper
 	if err != nil {
 		return err
 	}
-	res := ComposeResult{ItemID: j.ItemID, Others: []string{}, Pages: metrics.Pages, Bytes: obj.Size, Metrics: metrics}
-	sources := make([]model.StagedSource, len(j.Files))
+	res := ComposeResult{ItemID: j.ItemID, Others: others(j), Pages: metrics.Pages, Bytes: obj.Size, Metrics: metrics}
+	sources := make([]model.ArtifactSource, len(j.Files))
 	name := ""
 	for i, f := range j.Files {
-		sources[i] = model.StagedSource{ItemID: f.ItemID, BlobID: f.BlobID}
+		sources[i] = model.ArtifactSource{ItemID: f.ItemID, BlobID: f.BlobID}
 		if f.ItemID == j.ItemID {
 			name = strings.TrimSuffix(f.Filename, path.Ext(f.Filename)) + ".pdf"
-		} else {
-			res.Others = append(res.Others, f.ItemID)
 		}
 	}
 	return s.Write(ctx, func(t *dms.Service) error {
-		staged, err := t.StageFile(ctx, op.CreatedBy, dms.StageInput{ItemID: j.ItemID, RunID: j.Run, Sources: sources,
+		a, err := t.AddArtifact(ctx, op.CreatedBy, dms.ArtifactInput{ItemID: j.ItemID, OperationID: op.ID, InputKey: j.InputKey, Sources: sources,
 			ObjectKey: obj.Key, Filename: name, ContentType: "application/pdf", Size: obj.Size, SHA256: obj.SHA256, Metrics: raw})
 		if errors.Is(err, dms.ErrConflict) {
 			return errPhotoChanged
@@ -432,9 +469,20 @@ func (m *Maker) compose(ctx context.Context, s *dms.Service, op *operations.Oper
 		if err != nil {
 			return err
 		}
-		res.StagedFileID = staged.ID
+		res.ArtifactID = a.ID
 		return save(ctx, t, op, res)
 	})
+}
+
+// others are the photo items other than the item a composition is for.
+func others(j job) []string {
+	out := []string{}
+	for _, f := range j.Files {
+		if f.ItemID != j.ItemID {
+			out = append(out, f.ItemID)
+		}
+	}
+	return out
 }
 
 func finish(ctx context.Context, s *dms.Service, op *operations.Operation, result any) error {
@@ -450,6 +498,69 @@ func save(ctx context.Context, t *dms.Service, op *operations.Operation, result 
 	completed := time.Now().UTC()
 	op.Status, op.Result, op.CompletedAt = operations.StatusSucceeded, raw, &completed
 	return t.SaveOperation(ctx, op)
+}
+
+// ArtifactView is an artifact as the API shows it.
+type ArtifactView struct {
+	ID          string                 `json:"id"`
+	ItemID      string                 `json:"item_id"`
+	OperationID string                 `json:"operation_id,omitempty"`
+	Filename    string                 `json:"filename"`
+	ContentType string                 `json:"content_type"`
+	Size        int64                  `json:"size"`
+	SHA256      string                 `json:"sha256"`
+	Metrics     json.RawMessage        `json:"metrics"`
+	Sources     []model.ArtifactSource `json:"sources"`
+	CreatedAt   time.Time              `json:"created_at"`
+	ExpiresAt   time.Time              `json:"expires_at"`
+}
+
+func (h module) getArtifact(w http.ResponseWriter, r *http.Request, in httpapi.Request) error {
+	a, err := in.DMS.Artifact(r.Context(), in.Subject, r.PathValue("id"))
+	if err != nil {
+		return err
+	}
+	httpapi.Respond(w, r, http.StatusOK, ArtifactView{ID: a.ID, ItemID: a.ItemID, OperationID: a.OperationID, Filename: a.Filename, ContentType: a.ContentType,
+		Size: a.Size, SHA256: a.Sha256, Metrics: a.Metrics, Sources: a.Sources, CreatedAt: a.CreatedAt, ExpiresAt: a.ExpiresAt})
+	return nil
+}
+
+// artifactContent serves an artifact's bytes inline, for review screens.
+func (h module) artifactContent(w http.ResponseWriter, r *http.Request, in httpapi.Request) error {
+	a, err := in.DMS.Artifact(r.Context(), in.Subject, r.PathValue("id"))
+	if err != nil {
+		return err
+	}
+	file, err := h.m.Storage.Open(r.Context(), a.ObjectKey)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	w.Header().Set("Content-Type", a.ContentType)
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("inline", map[string]string{"filename": a.Filename}))
+	w.Header().Set("ETag", strconv.Quote(a.Sha256))
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	http.ServeContent(transfer.Writer(w), r, a.Filename, a.CreatedAt, file)
+	return nil
+}
+
+// StagedResult is the staged file a consumer's staging made.
+type StagedResult struct {
+	ID         string `json:"id"`
+	ArtifactID string `json:"artifact_id"`
+	ItemID     string `json:"item_id"`
+	RunID      string `json:"run_id,omitempty"`
+}
+
+// stage claims an artifact for the caller: for its workflow run when a run
+// calls, otherwise for anyone with write access to the item.
+func (h module) stage(w http.ResponseWriter, r *http.Request, in httpapi.Request) error {
+	f, err := in.DMS.StageArtifact(r.Context(), in.Subject, r.PathValue("id"), in.Run)
+	if err != nil {
+		return err
+	}
+	httpapi.Respond(w, r, http.StatusCreated, StagedResult{ID: f.ID, ArtifactID: f.ArtifactID, ItemID: f.ItemID, RunID: f.RunID})
+	return nil
 }
 
 // PromoteResult is the file version a promotion made.
@@ -468,9 +579,6 @@ func (h module) promote(w http.ResponseWriter, r *http.Request, in httpapi.Reque
 	if r.ContentLength != 0 && !in.Decode(w, r, &request) {
 		return nil
 	}
-	if in.Run == "" {
-		return dms.Invalid(ErrNoRun.Error())
-	}
 	b, err := in.DMS.PromoteStagedFile(r.Context(), in.Subject, r.PathValue("id"), in.Run, request.RecycleSources)
 	if err != nil {
 		return err
@@ -480,9 +588,6 @@ func (h module) promote(w http.ResponseWriter, r *http.Request, in httpapi.Reque
 }
 
 func (h module) discard(w http.ResponseWriter, r *http.Request, in httpapi.Request) error {
-	if in.Run == "" {
-		return dms.Invalid(ErrNoRun.Error())
-	}
 	if err := in.DMS.DiscardStagedFile(r.Context(), in.Subject, r.PathValue("id"), in.Run); err != nil {
 		return err
 	}

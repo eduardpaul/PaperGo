@@ -19376,7 +19376,7 @@
         ],
         "operationId": "optimizeItemImage",
         "summary": "Propose a smaller copy of an image",
-        "description": "Analyzes the text of the item's current JPEG, PNG or WebP image with OCR and stages a smaller WebP copy whose smallest text keeps the target height. The result gives the reason when the original is kept: the format is not supported, the image is animated, has no reliable text or would not get smaller, or a newer file replaced file_version. Staged files belong to the workflow run that made them, so only a workflow script can call this; 422 for other clients.",
+        "description": "Analyzes the text of the item's current JPEG, PNG or WebP image with OCR and makes a smaller WebP copy, as an artifact, whose smallest text keeps the target height. An identical request for the same file version reuses an unexpired artifact (reused). The result gives the reason when the original is kept: the format is not supported, the image is animated, has no reliable text or would not get smaller, or a newer file replaced file_version.",
         "x-required-scopes": [
           "document.write"
         ],
@@ -19492,7 +19492,7 @@
         ],
         "operationId": "composeItemPDF",
         "summary": "Combine photos into one searchable PDF",
-        "description": "Combines the current files of photo items of the item's list or library into one PDF in page order, staged for the item. Each page is turned upright and shrunk so its smallest text keeps target_height, and OCR places the recognized text invisibly on it. The operation fails when a photo changes before the PDF is staged. Requires write access to every photo. Staged files belong to the workflow run that made them, so only a workflow script can call this; 422 for other clients.",
+        "description": "Combines the current files of photo items of the item's list or library into one PDF in page order, as an artifact for the item. Each page is turned upright and shrunk so its smallest text keeps target_height, and OCR places the recognized text invisibly on it. An identical request for the same photos reuses an unexpired artifact (reused). The operation fails when a photo changes before the PDF is made. Requires write access to every photo.",
         "x-required-scopes": [
           "document.write"
         ],
@@ -19608,7 +19608,7 @@
         ],
         "operationId": "promoteStagedFile",
         "summary": "Make a staged file its item's current file",
-        "description": "Makes a staged file of the calling run its item's current file, as a new file version. Fails with 409 when a file it was made from is no longer current. With recycle_sources, moves the other source items to the recycle bin in the same transaction. Staged files belong to the workflow run that made them, so only a workflow script can call this; 422 for other clients.",
+        "description": "Makes a staged file its item's current file, as a new file version. A file a workflow run staged answers only that run, one staged without a run only callers without one (422 otherwise), each with write access to the item. Fails with 409 when a file it was made from is no longer current. With recycle_sources, moves the other source items to the recycle bin in the same transaction.",
         "x-required-scopes": [
           "document.write"
         ],
@@ -19671,7 +19671,7 @@
         ],
         "operationId": "discardStagedFile",
         "summary": "Discard a staged file",
-        "description": "Discards a staged file of the calling run; its item keeps its current file. Staged files belong to the workflow run that made them, so only a workflow script can call this; 422 for other clients.",
+        "description": "Discards a staged file; its item keeps its current file and the artifact stays for reuse until it expires. A file a workflow run staged answers only that run, one staged without a run only callers without one (422 otherwise).",
         "x-required-scopes": [
           "document.write"
         ],
@@ -19688,6 +19688,154 @@
         "responses": {
           "204": {
             "description": "Done"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/artifacts/{id}": {
+      "get": {
+        "tags": [
+          "Documents"
+        ],
+        "operationId": "getArtifact",
+        "summary": "Get an artifact",
+        "description": "An artifact an operation made, such as a smaller image or a composed PDF, to readers of its item.",
+        "x-required-scopes": [
+          "document.read"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Artifact"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/artifacts/{id}/content": {
+      "get": {
+        "tags": [
+          "Documents"
+        ],
+        "operationId": "getArtifactContent",
+        "summary": "Get an artifact's bytes",
+        "description": "The artifact's bytes, inline, to readers of its item.",
+        "x-required-scopes": [
+          "document.read"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/artifacts/{id}/stage": {
+      "post": {
+        "tags": [
+          "Documents"
+        ],
+        "operationId": "stageArtifact",
+        "summary": "Stage an artifact for review",
+        "description": "Claims an artifact as a staged file for the caller: for the calling workflow run, or for a person or client without one, who alone can then promote or discard it. Requires write access to the item, and fails with 409 when a file it was made from is no longer current.",
+        "x-required-scopes": [
+          "document.write"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Staged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StagedArtifact"
+                }
+              }
+            }
           },
           "400": {
             "$ref": "#/components/responses/Problem"
@@ -26376,8 +26524,13 @@
           "item_id": {
             "type": "string"
           },
+          "artifact_id": {
+            "type": "string",
+            "description": "The artifact the staged file holds."
+          },
           "run_id": {
-            "type": "string"
+            "type": "string",
+            "description": "The workflow run that staged the file; absent when a person or client staged it."
           },
           "filename": {
             "type": "string"
@@ -26430,7 +26583,7 @@
         "required": [
           "id",
           "item_id",
-          "run_id",
+          "artifact_id",
           "filename",
           "content_type",
           "size",
@@ -26438,7 +26591,8 @@
           "state",
           "fresh",
           "created_at"
-        ]
+        ],
+        "description": "A consumer's claim on an artifact, with the artifact's file: it waits until its consumer promotes it to the item's current file or discards it."
       },
       "ListIntegration": {
         "type": "object",
@@ -28546,9 +28700,13 @@
       "OptimizeImageResult": {
         "type": "object",
         "properties": {
-          "staged_file_id": {
+          "artifact_id": {
             "type": "string",
-            "description": "The staged WebP copy."
+            "description": "The smaller WebP copy, as an artifact to stage."
+          },
+          "reused": {
+            "type": "boolean",
+            "description": "An identical request made the artifact."
           },
           "reason": {
             "type": "string",
@@ -28573,7 +28731,7 @@
           "blob_id",
           "file_version"
         ],
-        "description": "A staged copy, or the reason the original is kept.",
+        "description": "A smaller copy as an artifact, or the reason the original is kept.",
         "additionalProperties": false
       },
       "ComposePDF": {
@@ -28605,8 +28763,13 @@
       "ComposePDFResult": {
         "type": "object",
         "properties": {
-          "staged_file_id": {
-            "type": "string"
+          "artifact_id": {
+            "type": "string",
+            "description": "The PDF, as an artifact to stage."
+          },
+          "reused": {
+            "type": "boolean",
+            "description": "An identical request made the artifact."
           },
           "item_id": {
             "type": "string"
@@ -28629,7 +28792,7 @@
           }
         },
         "required": [
-          "staged_file_id",
+          "artifact_id",
           "item_id",
           "others",
           "pages",
@@ -28664,6 +28827,103 @@
           "item_id",
           "blob_id",
           "file_version"
+        ],
+        "additionalProperties": false
+      },
+      "Artifact": {
+        "type": "object",
+        "description": "A file an operation made from file versions for an item, kept for reuse and staging until expires_at, and longer while a staged file holds it.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "item_id": {
+            "type": "string"
+          },
+          "operation_id": {
+            "type": "string",
+            "description": "The operation that made it."
+          },
+          "filename": {
+            "type": "string"
+          },
+          "content_type": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "metrics": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "item_id": {
+                  "type": "string"
+                },
+                "blob_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "item_id",
+                "blob_id"
+              ]
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "item_id",
+          "filename",
+          "content_type",
+          "size",
+          "sha256",
+          "metrics",
+          "sources",
+          "created_at",
+          "expires_at"
+        ],
+        "additionalProperties": false
+      },
+      "StagedArtifact": {
+        "type": "object",
+        "description": "The staged file a consumer made of an artifact.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "artifact_id": {
+            "type": "string"
+          },
+          "item_id": {
+            "type": "string"
+          },
+          "run_id": {
+            "type": "string",
+            "description": "The calling workflow run; absent for other callers."
+          }
+        },
+        "required": [
+          "id",
+          "artifact_id",
+          "item_id"
         ],
         "additionalProperties": false
       },

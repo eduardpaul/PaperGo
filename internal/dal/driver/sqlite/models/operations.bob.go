@@ -83,6 +83,7 @@ type OperationsQuery = *sqlite.ViewQuery[*Operation, OperationSlice]
 
 // operationR is where relationships are stored.
 type operationR struct {
+	Artifacts         ArtifactSlice      // fk_artifacts_0
 	BlobLeases        BlobLeaseSlice     // fk_blob_leases_1
 	OperationItems    OperationItemSlice // fk_operation_items_1
 	Parent            *Operation         // fk_operations_0
@@ -99,6 +100,7 @@ type operationR struct {
 
 // operationRLoaded tracks which relationships on Operation have been loaded.
 type operationRLoaded struct {
+	Artifacts         bool // fk_artifacts_0
 	BlobLeases        bool // fk_blob_leases_1
 	OperationItems    bool // fk_operation_items_1
 	Parent            bool // fk_operations_0
@@ -1444,6 +1446,25 @@ func (o OperationSlice) ReloadAll(ctx context.Context, exec bob.Executor) error 
 	return nil
 }
 
+// Artifacts starts a query for related objects on artifacts
+func (o *Operation) Artifacts(mods ...bob.Mod[*dialect.SelectQuery]) ArtifactsQuery {
+	return Artifacts.Query(append(mods,
+		sm.Where(Artifacts.Columns.OperationID.EQ(sqlite.Arg(o.ID))),
+	)...)
+}
+
+func (os OperationSlice) Artifacts(mods ...bob.Mod[*dialect.SelectQuery]) ArtifactsQuery {
+	PKArgSlice := make([]bob.Expression, len(os))
+	for i, o := range os {
+		PKArgSlice[i] = sqlite.ArgGroup(o.ID)
+	}
+	PKArgExpr := sqlite.Group(PKArgSlice...)
+
+	return Artifacts.Query(append(mods,
+		sm.Where(sqlite.Group(Artifacts.Columns.OperationID).OP("IN", PKArgExpr)),
+	)...)
+}
+
 // BlobLeases starts a query for related objects on blob_leases
 func (o *Operation) BlobLeases(mods ...bob.Mod[*dialect.SelectQuery]) BlobLeasesQuery {
 	return BlobLeases.Query(append(mods,
@@ -1594,6 +1615,67 @@ func (os OperationSlice) IDWorkflowRun(mods ...bob.Mod[*dialect.SelectQuery]) Wo
 	return WorkflowRuns.Query(append(mods,
 		sm.Where(sqlite.Group(WorkflowRuns.Columns.ID).OP("IN", PKArgExpr)),
 	)...)
+}
+
+func insertOperationArtifacts0(ctx context.Context, exec bob.Executor, artifacts1 []*ArtifactSetter, operation0 *Operation) (ArtifactSlice, error) {
+	for i := range artifacts1 {
+		artifacts1[i].OperationID = omitnull.From(operation0.ID)
+	}
+
+	ret, err := Artifacts.Insert(bob.ToMods(artifacts1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertOperationArtifacts0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachOperationArtifacts0(ctx context.Context, exec bob.Executor, count int, artifacts1 ArtifactSlice, operation0 *Operation) (ArtifactSlice, error) {
+	setter := &ArtifactSetter{
+		OperationID: omitnull.From(operation0.ID),
+	}
+
+	err := artifacts1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachOperationArtifacts0: %w", err)
+	}
+
+	return artifacts1, nil
+}
+
+func (operation0 *Operation) InsertArtifacts(ctx context.Context, exec bob.Executor, related ...*ArtifactSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	artifacts1, err := insertOperationArtifacts0(ctx, exec, related, operation0)
+	if err != nil {
+		return err
+	}
+
+	operation0.R.Artifacts = append(operation0.R.Artifacts, artifacts1...)
+
+	return nil
+}
+
+func (operation0 *Operation) AttachArtifacts(ctx context.Context, exec bob.Executor, related ...*Artifact) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	artifacts1 := ArtifactSlice(related)
+
+	_, err = attachOperationArtifacts0(ctx, exec, len(related), artifacts1, operation0)
+	if err != nil {
+		return err
+	}
+
+	operation0.R.Artifacts = append(operation0.R.Artifacts, artifacts1...)
+
+	return nil
 }
 
 func insertOperationBlobLeases0(ctx context.Context, exec bob.Executor, blobLeases1 []*BlobLeaseSetter, operation0 *Operation) (BlobLeaseSlice, error) {
@@ -2129,6 +2211,20 @@ func buildOperationWhere[Q sqlite.Filterable](cols operationColumns) operationWh
 // R struct — so they cannot collide with column-based filter fields.
 type operationWhereR[Q sqlite.Filterable] struct {
 	cols operationColumns
+}
+
+// HasArtifacts filters parents that have a matching Artifacts using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Artifacts).
+func (w operationWhereR[Q]) HasArtifacts(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := sqlite.Select(
+		sm.Columns(sqlite.Raw("1")),
+		sm.From(Artifacts.NameExpr()),
+		sm.Where(Artifacts.Columns.OperationID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: sqlite.Exists(q)}
 }
 
 // HasBlobLeases filters parents that have a matching BlobLeases using a

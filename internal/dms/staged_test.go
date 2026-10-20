@@ -24,7 +24,7 @@ func TestPromoteAndRecycleSourcesIsAtomic(t *testing.T) {
 				t.Fatal(err)
 			}
 			var items []*File
-			var sources []model.StagedSource
+			var sources []model.ArtifactSource
 			for _, name := range []string{"primary.pdf", "first.pdf", "second.pdf"} {
 				item, _, err := s.PutFile(testContext, "alice", lib.ID, []string{name}, PutFile{Blob: pdfContent(name)})
 				if err != nil {
@@ -35,17 +35,14 @@ func TestPromoteAndRecycleSourcesIsAtomic(t *testing.T) {
 					t.Fatal(err)
 				}
 				items = append(items, item)
-				sources = append(sources, model.StagedSource{ItemID: item.ID, BlobID: b.ID})
+				sources = append(sources, model.ArtifactSource{ItemID: item.ID, BlobID: b.ID})
 			}
 			stagingRuns(t, s, w.ID, "conversion")
-			f, err := s.StageFile(testContext, "bob", StageInput{ItemID: items[0].ID, RunID: "conversion", Sources: sources,
+			f := stageArtifact(t, s, "bob", "conversion", ArtifactInput{ItemID: items[0].ID, Sources: sources,
 				ObjectKey: "combined", Filename: "combined.pdf", ContentType: "application/pdf", Size: 12, SHA256: hash('a')})
-			if err != nil {
-				t.Fatal(err)
-			}
 			switch scenario {
 			case "changed source":
-				if _, _, err = s.PutFile(testContext, "alice", lib.ID, []string{"second.pdf"}, PutFile{Blob: pdfContent("second.pdf")}); err != nil {
+				if _, _, err := s.PutFile(testContext, "alice", lib.ID, []string{"second.pdf"}, PutFile{Blob: pdfContent("second.pdf")}); err != nil {
 					t.Fatal(err)
 				}
 			case "cannot recycle source":
@@ -59,7 +56,7 @@ func TestPromoteAndRecycleSourcesIsAtomic(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			_, err = s.PromoteStagedFile(testContext, "bob", f.ID, "conversion", true)
+			_, err := s.PromoteStagedFile(testContext, "bob", f.ID, "conversion", true)
 			if scenario == "promote" {
 				if err != nil {
 					t.Fatal(err)
@@ -78,7 +75,7 @@ func TestPromoteAndRecycleSourcesIsAtomic(t *testing.T) {
 				t.Fatal(err)
 			}
 			if scenario == "promote" {
-				if current.ObjectKey != f.ObjectKey || current.Version != 2 {
+				if current.ObjectKey != f.Artifact.ObjectKey || current.Version != 2 {
 					t.Fatalf("promoted file %+v", current)
 				}
 			} else if current.ID != sources[0].BlobID {
@@ -97,13 +94,12 @@ func TestPromoteAndRecycleSourcesIsAtomic(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			f = &stored
 			wantState := blobs.StagedPending
 			if scenario == "promote" {
 				wantState = blobs.StagedPromoted
 			}
-			if f.State != wantState {
-				t.Fatalf("staged file is %s, want %s", f.State, wantState)
+			if stored.State != wantState {
+				t.Fatalf("staged file is %s, want %s", stored.State, wantState)
 			}
 			// A failed cleanup must roll back the file change event too.
 			events, err := s.DAL.Events().List(testContext, eventstore.Filter{Types: []string{EventFileAdded, EventFileUpdated}, ResourceID: items[0].ID})
@@ -146,16 +142,13 @@ func TestStagedFilesPromoteDiscardAndCollect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	stage := func(run, data string, sources []model.StagedSource) (string, storage.Object) {
+	stage := func(run, data string, sources []model.ArtifactSource) (string, storage.Object) {
 		t.Helper()
 		o := put(data)
-		staged, err := s.StageFile(testContext, "alice", StageInput{ItemID: f.ID, RunID: run, Sources: sources, ObjectKey: o.Key, Filename: "scan.pdf", ContentType: "application/pdf", Size: o.Size, SHA256: o.SHA256, Metrics: []byte(`{"pages":1}`)})
-		if err != nil {
-			t.Fatal(err)
-		}
+		staged := stageArtifact(t, s, "alice", run, ArtifactInput{ItemID: f.ID, Sources: sources, ObjectKey: o.Key, Filename: "scan.pdf", ContentType: "application/pdf", Size: o.Size, SHA256: o.SHA256, Metrics: []byte(`{"pages":1}`)})
 		return staged.ID, o
 	}
-	sources := []model.StagedSource{{ItemID: f.ID, BlobID: current.ID}}
+	sources := []model.ArtifactSource{{ItemID: f.ID, BlobID: current.ID}}
 	smaller, smallerObject := stage("run-1", "%PDF-small", sources)
 	discarded, discardedObject := stage("run-1", "%PDF-other", sources)
 
@@ -167,8 +160,11 @@ func TestStagedFilesPromoteDiscardAndCollect(t *testing.T) {
 	if _, err = store.Open(testContext, smallerObject.Key); err != nil {
 		t.Fatalf("a pending staged file lost its bytes: %v", err)
 	}
-	if _, err = s.PromoteStagedFile(testContext, "alice", smaller, "run-2", false); err == nil {
-		t.Fatal("another run promoted the staged file")
+	// A run's staged file answers only that run.
+	for _, run := range []string{"run-2", ""} {
+		if _, err = s.PromoteStagedFile(testContext, "alice", smaller, run, false); err == nil {
+			t.Fatalf("%q promoted another run's staged file", run)
+		}
 	}
 	b, err := s.PromoteStagedFile(testContext, "alice", smaller, "run-1", false)
 	if err != nil {
@@ -194,22 +190,34 @@ func TestStagedFilesPromoteDiscardAndCollect(t *testing.T) {
 	if err = s.DiscardStagedFile(testContext, "alice", discarded, "run-1"); err != nil {
 		t.Fatalf("discarding twice: %v", err)
 	}
+	// A discarded file's artifact keeps its bytes for reuse until it
+	// expires.
 	if err = s.CollectObjects(testContext, store, later); err != nil {
 		t.Fatal(err)
 	}
+	if _, err = store.Open(testContext, discardedObject.Key); err != nil {
+		t.Fatalf("an unexpired artifact lost its bytes: %v", err)
+	}
+	expired := time.Now().UTC().Add(ArtifactRetention + time.Hour)
+	if err = s.CollectArtifacts(testContext, expired); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.CollectObjects(testContext, store, expired); err != nil {
+		t.Fatal(err)
+	}
 	if _, err = store.Open(testContext, discardedObject.Key); err == nil {
-		t.Fatal("a discarded staged file kept its bytes")
+		t.Fatal("an expired artifact kept its bytes")
 	}
 	if _, err = store.Open(testContext, smallerObject.Key); err != nil {
 		t.Fatalf("the promoted file lost its bytes: %v", err)
 	}
-	// Staging from a file that is no longer current is refused.
-	if _, err = s.StageFile(testContext, "alice", StageInput{ItemID: f.ID, RunID: "run-3", Sources: sources, ObjectKey: "k", Filename: "x.pdf", ContentType: "application/pdf", Size: 1, SHA256: hash('a')}); !errors.Is(err, ErrConflict) {
-		t.Fatalf("staged from an old file: %v", err)
+	// An artifact made from a file that is no longer current is refused.
+	if _, err = s.AddArtifact(testContext, "alice", ArtifactInput{ItemID: f.ID, InputKey: hash('k'), Sources: sources, ObjectKey: "k", Filename: "x.pdf", ContentType: "application/pdf", Size: 1, SHA256: hash('a')}); !errors.Is(err, ErrConflict) {
+		t.Fatalf("an artifact from an old file: %v", err)
 	}
 	// Finished runs discard their pending files.
 	b2, _ := s.CurrentFile(testContext, "alice", f.ID)
-	pending, _ := stage("run-4", "%PDF-pending", []model.StagedSource{{ItemID: f.ID, BlobID: b2.ID}})
+	pending, _ := stage("run-4", "%PDF-pending", []model.ArtifactSource{{ItemID: f.ID, BlobID: b2.ID}})
 	if err = s.Write(testContext, func(t *Service) error {
 		return t.DiscardStagedFiles(testContext, blobs.StagedSelection{RunIDs: []string{"run-4"}})
 	}); err != nil {
@@ -218,10 +226,38 @@ func TestStagedFilesPromoteDiscardAndCollect(t *testing.T) {
 	if got, _ := s.DAL.Blobs().StagedFile(testContext, pending); got.State != blobs.StagedDiscarded {
 		t.Fatalf("pending file of a finished run is %s", got.State)
 	}
-	// Someone without write access can neither stage nor promote.
-	if _, err = s.StageFile(testContext, "mallory", StageInput{ItemID: f.ID, RunID: "run-5", Sources: []model.StagedSource{{ItemID: f.ID, BlobID: b2.ID}}, ObjectKey: "k", Filename: "x.pdf", ContentType: "application/pdf", Size: 1, SHA256: hash('a')}); err == nil {
-		t.Fatal("a stranger staged a file")
+	// Without a run, anyone with write access stages and promotes.
+	own := stageArtifact(t, s, "alice", "", ArtifactInput{ItemID: f.ID, Sources: []model.ArtifactSource{{ItemID: f.ID, BlobID: b2.ID}}, ObjectKey: put("%PDF-own").Key, Filename: "own.pdf", ContentType: "application/pdf", Size: 8, SHA256: hash('o')})
+	if _, err = s.PromoteStagedFile(testContext, "alice", own.ID, "run-5", false); err == nil {
+		t.Fatal("a run promoted someone's staged file")
 	}
+	if _, err = s.PromoteStagedFile(testContext, "alice", own.ID, "", false); err != nil {
+		t.Fatal(err)
+	}
+	// Someone without write access can neither make nor stage an artifact.
+	if _, err = s.AddArtifact(testContext, "mallory", ArtifactInput{ItemID: f.ID, InputKey: hash('k'), Sources: []model.ArtifactSource{{ItemID: f.ID, BlobID: b2.ID}}, ObjectKey: "k", Filename: "x.pdf", ContentType: "application/pdf", Size: 1, SHA256: hash('a')}); err == nil {
+		t.Fatal("a stranger made an artifact")
+	}
+	if _, err = s.StageArtifact(testContext, "mallory", own.ArtifactID, ""); err == nil {
+		t.Fatal("a stranger staged an artifact")
+	}
+}
+
+// stageArtifact records an artifact as subject and stages it for run.
+func stageArtifact(t *testing.T, s *Service, subject, run string, in ArtifactInput) *Staged {
+	t.Helper()
+	if in.InputKey == "" {
+		in.InputKey = hash('i')
+	}
+	a, err := s.AddArtifact(testContext, subject, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := s.StageArtifact(testContext, subject, a.ID, run)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return f
 }
 
 // stagingRuns records runs of a new workflow, which staged files belong to.

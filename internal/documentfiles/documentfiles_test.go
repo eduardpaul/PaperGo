@@ -21,8 +21,7 @@ func TestMain(m *testing.M) { daltest.Main(m) }
 
 const token = "0123456789abcdef0123456789abcdef"
 
-// Staged files belong to workflow runs, so other clients cannot stage or
-// promote them; reclaiming a replaced file version needs no run.
+// The routes answer people and clients as they answer workflow runs.
 func TestRoutesOutsideRuns(t *testing.T) {
 	ctx := context.Background()
 	s := dms.NewService(daltest.Database(t).SQL)
@@ -57,8 +56,11 @@ func TestRoutesOutsideRuns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, path := range []string{"/v1/items/" + item.ID + "/optimize-image", "/v1/items/" + item.ID + "/compose-pdf", "/v1/staged-files/x/promote", "/v1/staged-files/x/discard"} {
-		if res := call("POST", path, ""); res.Code != 422 || !strings.Contains(res.Body.String(), "workflow runs") {
+	if res := call("POST", "/v1/items/"+item.ID+"/optimize-image", ""); res.Code != 422 || !strings.Contains(res.Body.String(), "no file") {
+		t.Fatal(res.Code, res.Body.String())
+	}
+	for _, path := range []string{"/v1/artifacts/x/stage", "/v1/staged-files/x/promote", "/v1/staged-files/x/discard"} {
+		if res := call("POST", path, ""); res.Code != 404 {
 			t.Fatal(path, res.Code, res.Body.String())
 		}
 	}

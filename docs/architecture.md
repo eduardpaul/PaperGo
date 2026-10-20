@@ -34,7 +34,7 @@ Database effects are transactional: a write's rows, its audit and domain events,
 
 | Boundary | Effect | Recovery protocol |
 | --- | --- | --- |
-| Object storage | Uploads, file versions, previews, extracted text, staged files, package exports and imports | Bytes are written under a new immutable key before the transaction that references them. A crash in between leaves an unreferenced object, which the object sweep deletes after an hour's grace; a repeat writes a new object. |
+| Object storage | Uploads, file versions, previews, extracted text, artifacts, package exports and imports | Bytes are written under a new immutable key before the transaction that references them. A crash in between leaves an unreferenced object, which the object sweep deletes after an hour's grace; a repeat writes a new object. |
 | Search store | Documents, staged chunks, vectors and publication | The store is derived and its writes are idempotent: documents carry their write stamp, staging replaces a part's chunks, vectors are keyed by input hash, and publishing a generation never replaces a newer published one (`search.ErrSuperseded`), so publishing again or out of order is safe. A reindex rebuilds it from the database. |
 | Immediate AI completions | One provider call | The answer is cached by request before the operation ends; a repeat after that reuses it, a repeat before it calls the provider again. |
 | Batch AI completions | A provider batch | A submission record and the members' parking commit before the batch is created, so a crash leaves the members with their batch. Polling finds an unconfirmed batch by its submission tag before anything is sent again; see [AI batches](ai.md#batches). |

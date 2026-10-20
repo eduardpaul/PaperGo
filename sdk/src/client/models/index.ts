@@ -18,6 +18,67 @@ export interface ApplyTemplateInput extends Parsable {
     templateVersion?: number | null;
 }
 /**
+ * A file an operation made from file versions for an item, kept for reuse and staging until expires_at, and longer while a staged file holds it.
+ */
+export interface Artifact extends Parsable {
+    /**
+     * The content_type property
+     */
+    contentType?: string | null;
+    /**
+     * The created_at property
+     */
+    createdAt?: Date | null;
+    /**
+     * The expires_at property
+     */
+    expiresAt?: Date | null;
+    /**
+     * The filename property
+     */
+    filename?: string | null;
+    /**
+     * The id property
+     */
+    id?: string | null;
+    /**
+     * The item_id property
+     */
+    itemId?: string | null;
+    /**
+     * The metrics property
+     */
+    metrics?: Artifact_metrics | null;
+    /**
+     * The operation that made it.
+     */
+    operationId?: string | null;
+    /**
+     * The sha256 property
+     */
+    sha256?: string | null;
+    /**
+     * The size property
+     */
+    size?: number | null;
+    /**
+     * The sources property
+     */
+    sources?: Artifact_sources[] | null;
+}
+export interface Artifact_metrics extends AdditionalDataHolder, Parsable {
+}
+export interface Artifact_sources extends AdditionalDataHolder, Parsable {
+    /**
+     * The blob_id property
+     */
+    blobId?: string | null;
+    /**
+     * The item_id property
+     */
+    itemId?: string | null;
+}
+/**
  * Attach the organization definition by ID without copying. At most 32 types per collection. Selecting a default affects only this collection. Conflicting field keys are rejected; types that share a key must reference the same catalog field ID.
  */
 export interface AttachContentTypeInput extends Parsable {
@@ -568,6 +629,33 @@ export interface ContentTypeInput extends Parsable {
 // @ts-ignore
 export function createApplyTemplateInputFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoApplyTemplateInput;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {Artifact_metrics}
+ */
+// @ts-ignore
+export function createArtifact_metricsFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoArtifact_metrics;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {Artifact_sources}
+ */
+// @ts-ignore
+export function createArtifact_sourcesFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoArtifact_sources;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {Artifact}
+ */
+// @ts-ignore
+export function createArtifactFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoArtifact;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -2127,6 +2215,15 @@ export function createSortSpecFromDiscriminatorValue(parseNode: ParseNode | unde
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {StagedArtifact}
+ */
+// @ts-ignore
+export function createStagedArtifactFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoStagedArtifact;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {StagedFile_metrics}
  */
 // @ts-ignore
@@ -2783,6 +2880,49 @@ export function deserializeIntoApplyTemplateInput(applyTemplateInput: Partial<Ap
     return {
         "content_type_id": n => { applyTemplateInput.contentTypeId = n.getGuidValue(); },
         "template_version": n => { applyTemplateInput.templateVersion = n.getNumberValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param Artifact The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoArtifact(artifact: Partial<Artifact> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "content_type": n => { artifact.contentType = n.getStringValue(); },
+        "created_at": n => { artifact.createdAt = n.getDateValue(); },
+        "expires_at": n => { artifact.expiresAt = n.getDateValue(); },
+        "filename": n => { artifact.filename = n.getStringValue(); },
+        "id": n => { artifact.id = n.getStringValue(); },
+        "item_id": n => { artifact.itemId = n.getStringValue(); },
+        "metrics": n => { artifact.metrics = n.getObjectValue<Artifact_metrics>(createArtifact_metricsFromDiscriminatorValue); },
+        "operation_id": n => { artifact.operationId = n.getStringValue(); },
+        "sha256": n => { artifact.sha256 = n.getStringValue(); },
+        "size": n => { artifact.size = n.getNumberValue(); },
+        "sources": n => { artifact.sources = n.getCollectionOfObjectValues<Artifact_sources>(createArtifact_sourcesFromDiscriminatorValue); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param Artifact_metrics The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoArtifact_metrics(artifact_metrics: Partial<Artifact_metrics> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param Artifact_sources The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoArtifact_sources(artifact_sources: Partial<Artifact_sources> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "blob_id": n => { artifact_sources.blobId = n.getStringValue(); },
+        "item_id": n => { artifact_sources.itemId = n.getStringValue(); },
     }
 }
 /**
@@ -5009,12 +5149,27 @@ export function deserializeIntoSortSpec(sortSpec: Partial<SortSpec> | undefined 
 }
 /**
  * The deserialization information for the current model
+ * @param StagedArtifact The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoStagedArtifact(stagedArtifact: Partial<StagedArtifact> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "artifact_id": n => { stagedArtifact.artifactId = n.getStringValue(); },
+        "id": n => { stagedArtifact.id = n.getStringValue(); },
+        "item_id": n => { stagedArtifact.itemId = n.getStringValue(); },
+        "run_id": n => { stagedArtifact.runId = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
  * @param StagedFile The instance to deserialize into.
  * @returns {Record<string, (node: ParseNode) => void>}
  */
 // @ts-ignore
 export function deserializeIntoStagedFile(stagedFile: Partial<StagedFile> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
+        "artifact_id": n => { stagedFile.artifactId = n.getStringValue(); },
         "content_type": n => { stagedFile.contentType = n.getStringValue(); },
         "created_at": n => { stagedFile.createdAt = n.getDateValue(); },
         "filename": n => { stagedFile.filename = n.getStringValue(); },
@@ -7877,6 +8032,51 @@ export function serializeApplyTemplateInput(writer: SerializationWriter, applyTe
 }
 /**
  * Serializes information the current object
+ * @param Artifact The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeArtifact(writer: SerializationWriter, artifact: Partial<Artifact> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!artifact || isSerializingDerivedType) { return; }
+    writer.writeStringValue("content_type", artifact.contentType);
+    writer.writeDateValue("created_at", artifact.createdAt);
+    writer.writeDateValue("expires_at", artifact.expiresAt);
+    writer.writeStringValue("filename", artifact.filename);
+    writer.writeStringValue("id", artifact.id);
+    writer.writeStringValue("item_id", artifact.itemId);
+    writer.writeObjectValue<Artifact_metrics>("metrics", artifact.metrics, serializeArtifact_metrics);
+    writer.writeStringValue("operation_id", artifact.operationId);
+    writer.writeStringValue("sha256", artifact.sha256);
+    writer.writeNumberValue("size", artifact.size);
+    writer.writeCollectionOfObjectValues<Artifact_sources>("sources", artifact.sources, serializeArtifact_sources);
+}
+/**
+ * Serializes information the current object
+ * @param Artifact_metrics The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeArtifact_metrics(writer: SerializationWriter, artifact_metrics: Partial<Artifact_metrics> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!artifact_metrics || isSerializingDerivedType) { return; }
+    writer.writeAdditionalData(artifact_metrics.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param Artifact_sources The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeArtifact_sources(writer: SerializationWriter, artifact_sources: Partial<Artifact_sources> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!artifact_sources || isSerializingDerivedType) { return; }
+    writer.writeStringValue("blob_id", artifact_sources.blobId);
+    writer.writeStringValue("item_id", artifact_sources.itemId);
+    writer.writeAdditionalData(artifact_sources.additionalData);
+}
+/**
+ * Serializes information the current object
  * @param AttachContentTypeInput The instance to serialize from.
  * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
  * @param writer Serialization writer to use to serialize this model
@@ -10140,12 +10340,27 @@ export function serializeSortSpec(writer: SerializationWriter, sortSpec: Partial
 /**
  * Serializes information the current object
  * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param StagedArtifact The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeStagedArtifact(writer: SerializationWriter, stagedArtifact: Partial<StagedArtifact> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!stagedArtifact || isSerializingDerivedType) { return; }
+    writer.writeStringValue("artifact_id", stagedArtifact.artifactId);
+    writer.writeStringValue("id", stagedArtifact.id);
+    writer.writeStringValue("item_id", stagedArtifact.itemId);
+    writer.writeStringValue("run_id", stagedArtifact.runId);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
  * @param StagedFile The instance to serialize from.
  * @param writer Serialization writer to use to serialize this model
  */
 // @ts-ignore
 export function serializeStagedFile(writer: SerializationWriter, stagedFile: Partial<StagedFile> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!stagedFile || isSerializingDerivedType) { return; }
+    writer.writeStringValue("artifact_id", stagedFile.artifactId);
     writer.writeStringValue("content_type", stagedFile.contentType);
     writer.writeDateValue("created_at", stagedFile.createdAt);
     writer.writeStringValue("filename", stagedFile.filename);
@@ -11358,7 +11573,35 @@ export interface SortSpec extends Parsable {
     field?: string | null;
 }
 export type SortSpec_direction = (typeof SortSpec_directionObject)[keyof typeof SortSpec_directionObject];
+/**
+ * The staged file a consumer made of an artifact.
+ */
+export interface StagedArtifact extends Parsable {
+    /**
+     * The artifact_id property
+     */
+    artifactId?: string | null;
+    /**
+     * The id property
+     */
+    id?: string | null;
+    /**
+     * The item_id property
+     */
+    itemId?: string | null;
+    /**
+     * The calling workflow run; absent for other callers.
+     */
+    runId?: string | null;
+}
+/**
+ * A consumer's claim on an artifact, with the artifact's file: it waits until its consumer promotes it to the item's current file or discards it.
+ */
 export interface StagedFile extends AdditionalDataHolder, Parsable {
+    /**
+     * The artifact the staged file holds.
+     */
+    artifactId?: string | null;
     /**
      * The content_type property
      */
@@ -11388,7 +11631,7 @@ export interface StagedFile extends AdditionalDataHolder, Parsable {
      */
     metrics?: StagedFile_metrics | null;
     /**
-     * The run_id property
+     * The workflow run that staged the file; absent when a person or client staged it.
      */
     runId?: string | null;
     /**

@@ -319,7 +319,7 @@ without resources and preserve entity IDs. Imports preserve the importing
 administrator. All metadata applies atomically; file objects and their extracted
 text are checksummed and copied to local storage, typed indexes are rebuilt and a
 search reindex is queued. Dry runs copy no objects and apply no metadata.
-Unreferenced staged objects are collected.
+Expired artifacts nothing holds, and their objects, are collected.
 
 Limits are 100000 core records, a 64 MiB manifest and 4 GiB compressed
 package/uncompressed content. ZIP entries must exactly match the manifest;

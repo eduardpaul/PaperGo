@@ -506,7 +506,9 @@ export interface Task {
 export interface StagedFile {
   id: string;
   item_id: string;
-  run_id: string;
+  artifact_id: string;
+  /** The workflow run that staged it; absent when a person or client did. */
+  run_id?: string;
   filename: string;
   content_type: string;
   size: number;

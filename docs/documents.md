@@ -35,25 +35,30 @@ Libraries accept `duplicate_policy: "allow" | "warn" | "block"` on creation and 
 
 The text is kept once per file bytes and reading settings (reader, OCR engine and models, mode, page bound, languages): an identical file, or the same file read again, reuses it without reading again (`reused`). The result has `text_id`, `item_id`, `blob_id`, `pages`, `chars`, `language`, `ocr_pages`, `skipped_pages`, `truncated` and `reused`; a file whose text cannot be read, such as a protected or broken PDF or another format, fails the operation. Later requests refer to the text by `text_id`. `GET /v1/items/{id}/text` returns it, content packages carry it with the file, and it is deleted when no file with its bytes remains.
 
-## Staged files
+## Artifacts and staged files
 
-Requests that produce files, such as a smaller image or a PDF composed from photos, do not replace anything themselves. They **stage** the file:
+Requests that produce files, such as a smaller image or a PDF composed from photos, replace nothing themselves. Their operation's result is an **artifact**: a file made for an item from file versions, with the metrics reviewers need. It belongs to no workflow:
 
-- A staged file belongs to the workflow run that asked for it and to the item it would replace. Only that run promotes or discards it, so these requests come from workflow scripts.
-- It records the file versions it was made from, and keeps its bytes while it is pending. `GET /v1/staged-files/{id}` and `/content` show it to readers of its item.
+- Anyone who may write the item can ask, from a workflow script or not. An identical request (same item, file versions and options) reuses an unexpired artifact instead of computing it again; its result says `reused: true`.
+- An artifact is kept for 7 days, and longer while a staged file holds it. `GET /v1/artifacts/{id}` and `/content` show it to readers of its item. Expired artifacts nothing holds are deleted hourly, and the storage collector frees their bytes after its grace period.
+
+To review or keep an artifact, a consumer **stages** it with `POST /v1/artifacts/{id}/stage` (`201`, with the staged file's `id`). A staged file is that consumer's claim:
+
+- Staged from a workflow script, it belongs to the run; otherwise to the person or client who staged it. Only the same consumer promotes or discards it: a run its own staged files, a caller without a run those staged without one, each with write access to the item. Staging needs write access, and every file the artifact was made from must still be current.
+- `GET /v1/staged-files/{id}` and `/content` show it, with its artifact's file, to readers of its item.
 - `POST /v1/staged-files/{id}/promote` makes it the item's current file. That is a new file version (`file.updated` with source `workflow` for replacements), with the item's metadata, revision history, audit and events like an upload. It succeeds only if every file it was made from is still its item's current file, so a candidate made from an old upload never replaces a newer one.
 - With `recycle_sources: true` (default `false`), promotion also moves the other source items to the recycle bin in the same transaction. The caller must be able to write every source item. If any source changed or cannot be recycled, neither promotion nor recycling commits.
-- `POST /v1/staged-files/{id}/discard` drops it.
+- `POST /v1/staged-files/{id}/discard` drops the claim; the artifact stays for reuse until it expires.
 
-A completed or cancelled run discards its pending staged files. A failed run keeps them for a retry until the run is deleted. Purging an item deletes its staged files. The storage collector frees discarded files' bytes after its grace period.
+A completed or cancelled run discards its pending staged files. A failed run keeps them for a retry until the run is deleted. Deleting an item discards the staged files about it; purging it deletes its artifacts.
 
 ## Reclaiming a file version
 
-`POST /v1/items/{id}/content/reclaim` with a `blob_id` asks for one file version's bytes back. The version keeps its id, number, filename, content type, size and checksum. The request marks it `pending`. A current file, a published file, a staged file, or a byte lease held by an operation defers the grace period (`deferred`, with `reason` `current`, `published`, `staged` or `in use`). Asking again for a version that is already pending does not move `reclaim_after`. After the one-hour object grace period, the collector marks an unprotected version `reclaimed` and deletes bytes that no other file still needs.
+`POST /v1/items/{id}/content/reclaim` with a `blob_id` asks for one file version's bytes back. The version keeps its id, number, filename, content type, size and checksum. The request marks it `pending`. A current file, a published file, a pending staged file's artifact (or a file it was made from), or a byte lease held by an operation defers the grace period (`deferred`, with `reason` `current`, `published`, `staged` or `in use`). Asking again for a version that is already pending does not move `reclaim_after`. After the one-hour object grace period, the collector marks an unprotected version `reclaimed` and deletes bytes that no other file still needs.
 
 ## Image optimization
 
-`POST /v1/items/{id}/optimize-image` shrinks a page image without making its text unreadable. It is a background operation (`202 Accepted`) that a workflow script starts, since the copy is [staged](#staged-files) for its run; it needs `document.write` and write access to the item, with the options below in its body and an optional `file_version` the request was made for. It is PaperDotNet's storage optimization, with the same parameters and results:
+`POST /v1/items/{id}/optimize-image` shrinks a page image without making its text unreadable. It is a background operation (`202 Accepted`) whose result is an [artifact](#artifacts-and-staged-files); it needs `document.write` and write access to the item, with the options below in its body and an optional `file_version` the request was made for. It is PaperDotNet's storage optimization, with the same parameters and results:
 
 1. It keeps files that are not JPEG, PNG or WebP, and a `file_version` a newer file already replaced.
 2. It decodes the image (at most 64 megapixels), applies its EXIF orientation, and keeps animated images unchanged.
@@ -61,18 +66,18 @@ A completed or cancelled run discards its pending staged files. A failed run kee
 4. The `percentile` (default 5) of those heights, interpolated and rounded, at least 4, is the smallest text. The scale is `target_height` (default 12) divided by it, between `minimum_scale` (default 0.05) and 1: images never grow.
 5. The image is resized with the Mitchell filter (transparency flattened onto white) and encoded as WebP at `quality` (default 80).
 
-Its result keeps the original, with a `reason`, when the image has no reliable text, is already WebP with its smallest text at the target, or the WebP file would not be smaller. Otherwise it [stages](#staged-files) the WebP file, named after the original, and its result has the `staged_file_id` and `metrics` for reviewers: text regions, smallest text height, scale, sizes before and after, and the settings, detector and model hashes. Without an OCR engine (see [OCR configuration](ocr.md#configuration)) the request is refused. The [Optimize image storage](workflows.md#built-in-workflows) built-in asks for a review of the staged copy before it promotes it.
+Its result keeps the original, with a `reason`, when the image has no reliable text, is already WebP with its smallest text at the target, or the WebP file would not be smaller. Otherwise it makes the WebP file an [artifact](#artifacts-and-staged-files), named after the original, and its result has the `artifact_id` and `metrics` for reviewers: text regions, smallest text height, scale, sizes before and after, and the settings, detector and model hashes. Without an OCR engine (see [OCR configuration](ocr.md#configuration)) the request is refused. The [Optimize image storage](workflows.md#built-in-workflows) built-in stages the copy and asks for a review before it promotes it.
 
 ## Photos to PDF
 
-`POST /v1/items/{id}/compose-pdf` ports PaperDotNet's photo to document conversion. It is a background operation on the primary item that a workflow script starts, with `item_ids` (the photos in page order, the item among them), `target_height` and `quality`:
+`POST /v1/items/{id}/compose-pdf` ports PaperDotNet's photo to document conversion. It is a background operation on the primary item whose result is an [artifact](#artifacts-and-staged-files), with `item_ids` (the photos in page order, the item among them), `target_height` and `quality`:
 
 1. **Snapshot.** Every item must be an item of the primary item's library that the caller may write, with a JPEG, PNG or WebP file. The request records each file version; at most 100 photos.
 2. **Pages.** Each photo, in order, is decoded (at most 64 megapixels, not animated), turned upright and flattened onto white. Its text lines are measured as in [image optimization](#image-optimization), and the page is scaled so that its smallest line is `target_height` pixels high (default 32). Unlike PaperDotNet, pages never grow; a page without text keeps its size.
 3. **Text.** OCR reads the full-resolution photo. Each line is placed, invisible, at its position on the scaled page, so the PDF can be searched and its text selected and copied. The text layer embeds a placeholder font and maps characters to Unicode, so it needs no system fonts and keeps every script.
-4. **PDF.** Each page image is embedded at 150 pixels per inch, as JPEG at `quality` (default 80), or losslessly when that is smaller. The PDF is staged for the primary item, named after its file, with the other items as `others`.
+4. **PDF.** Each page image is embedded at 150 pixels per inch, as JPEG at `quality` (default 80), or losslessly when that is smaller. The PDF is an artifact for the primary item, named after its file, with the other items as `others`.
 
-The operation fails if a photo changes before the PDF is staged; promotion fails if one changes before promotion commits. Either way, start a new conversion. The [Photos to PDF](workflows.md#built-in-workflows) built-in promotes with `recycle_sources: true`, so the PDF replacement and recycling commit together and no upload can arrive between them.
+The operation fails if a photo changes before the PDF is made; staging and promotion fail if one changes before they commit. Either way, start a new conversion. The [Photos to PDF](workflows.md#built-in-workflows) built-in promotes with `recycle_sources: true`, so the PDF replacement and recycling commit together and no upload can arrive between them.
 
 ## Renaming and upload name conflicts
 
