@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"papergo/internal/auth"
 	"papergo/internal/dms"
+	"papergo/internal/worker"
 	"strings"
 	"testing"
 	"time"
@@ -58,7 +59,10 @@ func TestRESTFilteredBulkUpdateProgressFailuresAndStrictInput(t *testing.T) {
 	}
 	workerCtx, cancel := context.WithCancel(ctx)
 	stopped := make(chan struct{})
-	go func() { s.RunOperations(workerCtx, slog.New(slog.NewTextHandler(io.Discard, nil))); close(stopped) }()
+	go func() {
+		_ = worker.Single(s, slog.New(slog.NewTextHandler(io.Discard, nil))).Run(workerCtx)
+		close(stopped)
+	}()
 	t.Cleanup(func() { cancel(); <-stopped })
 	wait := func(id string) dms.OperationView {
 		t.Helper()

@@ -1,10 +1,7 @@
 package dms
 
 import (
-	"context"
 	"fmt"
-	"io"
-	"log/slog"
 	"papergo/internal/dal/operations"
 	"papergo/internal/dal/surfaces"
 	"testing"
@@ -114,46 +111,6 @@ func TestEmptyCollectionIndexIsReadyAtOnce(t *testing.T) {
 	}
 	if n, err := s.DAL.Operations().Count(testContext, operations.Filter{}); err != nil || n != 0 {
 		t.Fatal("operation queued for an empty collection", n, err)
-	}
-}
-
-// RunOperations wakes when work is queued and stops with its context.
-func TestRunOperationsBuildsQueuedIndexes(t *testing.T) {
-	s, _, list := fixture(t)
-	d, err := s.CreateField(testContext, "alice", list.ID, CreateField{Key: "n", Label: "N", Type: "integer"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	create(t, s, list.ID, "item", "One", map[string]any{"n": num(1)})
-	ctx, cancel := context.WithCancel(testContext)
-	stopped := make(chan struct{})
-	go func() {
-		s.RunOperations(ctx, slog.New(slog.NewTextHandler(io.Discard, nil)))
-		close(stopped)
-	}()
-	indexed := true
-	if _, err = s.UpdateField(testContext, "alice", list.ID, d.ID, latest(t, s, list.ID).Version, UpdateField{Indexed: &indexed}); err != nil {
-		t.Fatal(err)
-	}
-	deadline := time.Now().Add(10 * time.Second)
-	for {
-		got, err := s.DAL.Catalog().Field(testContext, d.ID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got.IndexStatus == "ready" {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("runner did not build the queued index")
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	cancel()
-	select {
-	case <-stopped:
-	case <-time.After(10 * time.Second):
-		t.Fatal("runner ignored cancellation")
 	}
 }
 

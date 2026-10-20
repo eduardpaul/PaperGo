@@ -23,3 +23,15 @@ search:
 storage:
   blob_path: ./data/blobs
   max_upload_mb: 100
+
+# Operation workers. Each named worker runs its own kinds of background
+# work; settings left out keep the defaults. Workers: maintenance (index
+# builds, bulk edits, search reindex, package export and import),
+# integrations (list integration refreshes) and documents (text reads).
+# workers:
+#   documents:
+#     concurrency: 2
+#     window:          # start new work only overnight
+#       time_zone: Europe/Madrid
+#       from: "22:00"
+#       to: "06:00"

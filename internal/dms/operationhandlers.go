@@ -15,6 +15,7 @@ import (
 	"papergo/internal/identity"
 	"papergo/internal/requestmeta"
 	"regexp"
+	"slices"
 	"sync"
 	"time"
 )
@@ -32,14 +33,27 @@ type OperationHandler struct {
 	// Deadline is the completion deadline of accepted operations; zero
 	// means none.
 	Deadline time.Duration
-	Step     func(context.Context, *Service, *operations.Operation) error
+	// Admission returns the admission group and input identity of an
+	// accepted payload, for kinds a worker admits in groups: operations
+	// of one group run together, and operations with the same input count
+	// once toward a threshold.
+	Admission func(json.RawMessage) (group, input string, err error)
+	Step      func(context.Context, *Service, *operations.Operation) error
 	// Execute runs outside the database writer under the operation's claim,
 	// and owns its checkpoint transactions. Network integrations must never
 	// fetch in a write transaction. A Retry error defers the operation.
 	Execute func(context.Context, *Service, *operations.Operation) error
+	// ExecuteGroup runs claimed members of one admission group together
+	// outside the writer, for workers that admit the kind in groups. It
+	// finishes or parks each member under its claim; a member it leaves
+	// pending is given back. A Retry error defers them all.
+	ExecuteGroup func(context.Context, *Service, []*operations.Operation) error
 	// Failed and Cancelled run in the transaction that ends the operation.
 	Failed    func(context.Context, *Service, *operations.Operation, error) error
 	Cancelled func(context.Context, *Service, *operations.Operation) error
+	// External operations are never executed: a domain action ends them,
+	// such as the response that completes a task. They are accepted parked.
+	External bool
 	// MaxAttempts bounds the executions an operation may begin, including
 	// those a stopped process or a retry ended; zero means
 	// DefaultMaxAttempts. Past it the operation fails with
@@ -84,8 +98,14 @@ func builtInOperationHandlers() map[string]OperationHandler {
 var operationKind = regexp.MustCompile(`^[a-z][a-z0-9_.-]{0,63}$`)
 
 func (s *Service) RegisterOperationHandler(kind string, handler OperationHandler) error {
-	if !operationKind.MatchString(kind) || (handler.Step == nil) == (handler.Execute == nil) || handler.Validate == nil || handler.Deadline < 0 || handler.MaxAttempts < 0 {
-		return invalid("operation handlers require a kind, a validator and either a step or an execution")
+	executions := 0
+	for _, set := range []bool{handler.Step != nil, handler.Execute != nil, handler.ExecuteGroup != nil, handler.External} {
+		if set {
+			executions++
+		}
+	}
+	if !operationKind.MatchString(kind) || executions != 1 || handler.Validate == nil || handler.Deadline < 0 || handler.MaxAttempts < 0 {
+		return invalid("operation handlers require a kind, a validator and exactly one way to run: a step, an execution, a group execution or an external end")
 	}
 	known := false
 	for _, scope := range identity.Catalog {
@@ -111,17 +131,21 @@ type operationRuntime struct {
 	holder   string
 	quotas   OperationQuotas
 	finished func([]string)
-	// running cancels this process's executions by operation ID.
+	// wakes are called when operations were accepted.
+	wakeMu sync.Mutex
+	wakes  []func()
+	// running takes an operation out of this process's execution of it,
+	// by operation ID.
 	running sync.Map
 }
 
-// ended stops this process's executions of operations that ended, such as
-// cancelled ones, at once instead of at their next renewal, and then tells
-// the consumers waiting on them.
+// ended takes operations that ended, such as cancelled ones, out of this
+// process's executions at once instead of at their next renewal, and then
+// tells the consumers waiting on them.
 func (r *operationRuntime) ended(ids []string) {
 	for _, id := range ids {
-		if cancel, ok := r.running.Load(id); ok {
-			cancel.(context.CancelCauseFunc)(operations.ErrClaimLost)
+		if leave, ok := r.running.Load(id); ok {
+			leave.(func())()
 		}
 	}
 	if r.finished != nil {
@@ -291,9 +315,17 @@ func (s *Service) accept(ctx context.Context, op operations.Operation, quota boo
 			op.WorkspaceID = r.ID
 		}
 	}
-	if handler := s.ops.handlers[op.Kind]; handler.Deadline > 0 && op.Deadline == nil {
+	handler := s.ops.handlers[op.Kind]
+	if handler.Deadline > 0 && op.Deadline == nil {
 		deadline := now.Add(handler.Deadline)
 		op.Deadline = &deadline
+	}
+	if handler.Admission != nil {
+		group, input, err := handler.Admission(op.Payload)
+		if err != nil {
+			return operations.Operation{}, false, err
+		}
+		op.GroupKey, op.InputKey = group, input
 	}
 	if quota && op.IdempotencyKey == "" {
 		if err := s.checkOperationQuota(ctx, op); err != nil {
@@ -356,12 +388,29 @@ func payloadDigest(op operations.Operation) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// wakeOperations wakes the runner once this write commits; the runner's
-// claim waits for the writer slot, so it sees the operation.
+// wakeOperations wakes the workers once this write commits.
 func (s *Service) wakeOperations() {
-	select {
-	case s.operations <- struct{}{}:
-	default:
+	if s.accepted != nil {
+		*s.accepted = true
+	}
+}
+
+// OnOperationsAccepted adds f to the functions called after each committed
+// write that accepted operations, once the writer is free, so workers claim
+// them at once.
+func (s *Service) OnOperationsAccepted(f func()) {
+	s.ops.wakeMu.Lock()
+	s.ops.wakes = append(s.ops.wakes, f)
+	s.ops.wakeMu.Unlock()
+}
+
+// wake tells everything waiting for work that operations were accepted.
+func (r *operationRuntime) wake() {
+	r.wakeMu.Lock()
+	wakes := slices.Clone(r.wakes)
+	r.wakeMu.Unlock()
+	for _, f := range wakes {
+		f()
 	}
 }
 
@@ -484,7 +533,7 @@ const operationPurgePage = 200
 // ExpireOperations fails pending operations whose deadline passed, with
 // their handlers' failure cleanup.
 func (s *Service) ExpireOperations(ctx context.Context, now time.Time) error {
-	kinds := s.operationKinds()
+	kinds := s.OperationKinds()
 	at := now.UTC()
 	// Checking first keeps an idle loop off the writer.
 	if due, err := s.DAL.Operations().Exists(ctx, operations.Filter{Kinds: kinds, Statuses: []operations.Status{operations.StatusPending}, DeadlineBefore: &at}); err != nil || !due {

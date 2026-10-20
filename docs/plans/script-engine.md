@@ -78,6 +78,17 @@ const text = await ctx.api.v1.items.byId(itemId).text.get();
 - **Keep short waits warm.** The largest remaining saving is not replaying at all: a run waiting for a short operation, such as OCR of a page, can keep its runtime for a few seconds and continue in place when the wait is released, unloading only when the wait outlasts that window. This belongs in the scheduler.
 - **Operations run one at a time.** `dms.RunOperations` is one sequential worker: claims let it skip work that waits for a retry, but a 500-page OCR still delays every operation queued behind it. The worker runtime of the operation workers plan gives text reading its own lane before scripts depend on it at volume.
 
+## Cutover design
+
+The cutover replaces the JSON interpreter and the DBOS runner in one branch, in this order, keeping the tree green after each step:
+
+1. **Worker runtime.** `internal/worker` replaces `dms.RunOperations`: named workers own operation kinds with their own capacity, admission policies and maintenance tasks, and shut down cleanly (operation workers plan, Phase 2).
+2. **Script workflows.** A workflow version holds TypeScript source and its bundle. Its default export, `workflow({ triggers, concurrency, input, run })`, is evaluated once when the version is saved to extract its triggers and settings; the run function never runs then. Workflows keep their rows, immutable versions, roles, per-collection providers, built-in catalog and parameters; a per-collection workflow's triggers are limited to its collection, and its parameters reach the script as `ctx.params`.
+3. **Runs are `script.run` operations.** The dispatcher, a worker maintenance task woken by committed domain events, matches events to triggers and accepts runs in one transaction, applying the workflow's concurrency (`parallel`, `skip`, `replace`, `coalesce`) per item. Schedules are cron occurrences of the worker runtime, manual starts are API requests. A slice that waits parks its run until the wait is released; `ctx.sleep` defers it. A run that ends raises `wf.{key}.completed` or `wf.{key}.failed` for other workflows.
+4. **Activities become API endpoints.** What JSON activities did, scripts do through the API: core routes for items, relationships, keywords, tasks and integrations, and module operation routes for document text, previews, image optimization and composition with output promotion, search synchronization and content indexing, embeddings, AI completion and decisions. A task is awaited as an operation that its completion ends.
+5. **Built-in workflows become embedded scripts** in `internal/workflow/builtin/*.ts`, filling the same roles.
+6. **Delete** the JSON interpreter, its activities, editor and explain/check endpoints, `workflow_waits` and its API, the DBOS runner and `runner_step_results`, the AI batch coordinator workflow, and their docs and samples, replacing them with the script equivalents.
+
 ## Remaining work
 
 1. **Run lifecycle.** Script definitions and immutable versions (source, bundle, hash, author), triggers declared by the script's export and extracted on save, run creation from domain events, manual starts and schedules, and run status.

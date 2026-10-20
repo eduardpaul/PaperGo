@@ -23,6 +23,7 @@ import (
 	"papergo/internal/dms"
 	"papergo/internal/model"
 	"papergo/internal/storage"
+	"papergo/internal/worker"
 	"papergo/internal/workflow"
 	"papergo/internal/workflowai"
 )
@@ -38,7 +39,10 @@ func sampleOperations(t *testing.T, s *dms.Service, store storage.Store) {
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan struct{})
-	go func() { defer close(done); s.RunOperations(ctx, slog.New(slog.NewTextHandler(io.Discard, nil))) }()
+	go func() {
+		defer close(done)
+		_ = worker.Single(s, slog.New(slog.NewTextHandler(io.Discard, nil))).Run(ctx)
+	}()
 	t.Cleanup(func() { cancel(); <-done })
 }
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"papergo/internal/worker"
 	"path/filepath"
 	"testing"
 	"time"
@@ -113,7 +114,10 @@ func (f *fixture) work(t *testing.T, done func() bool) {
 	t.Helper()
 	ctx, stop := context.WithCancel(context.Background())
 	stopped := make(chan struct{})
-	go func() { f.s.RunOperations(ctx, slog.New(slog.NewTextHandler(io.Discard, nil))); close(stopped) }()
+	go func() {
+		_ = worker.Single(f.s, slog.New(slog.NewTextHandler(io.Discard, nil))).Run(ctx)
+		close(stopped)
+	}()
 	defer func() { stop(); <-stopped }()
 	deadline := time.Now().Add(20 * time.Second)
 	for !done() {

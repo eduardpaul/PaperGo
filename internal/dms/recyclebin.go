@@ -2,7 +2,6 @@ package dms
 
 import (
 	"context"
-	"log/slog"
 	"papergo/internal/dal/access"
 	"papergo/internal/dal/dberr"
 	"papergo/internal/dal/refs"
@@ -348,27 +347,6 @@ func (s *Service) CollectObjects(ctx context.Context, store storage.Store, now t
 	return store.WalkObjects(ctx, now.Add(-ObjectGracePeriod), func(key string) error {
 		return s.write(ctx, func(t *Service) error { return t.deleteUnreferencedObject(ctx, store, key) })
 	})
-}
-
-func (s *Service) RunBlobCleanup(ctx context.Context, store storage.Store, log *slog.Logger) {
-	ticker := time.NewTicker(time.Minute)
-	defer ticker.Stop()
-	for {
-		if err := s.CleanupPurgedBlobs(ctx, store); err != nil && ctx.Err() == nil {
-			log.Error("purged blob cleanup", "error", err)
-		}
-		if err := s.CollectObjects(ctx, store, time.Now().UTC()); err != nil && ctx.Err() == nil {
-			log.Error("unreferenced object cleanup", "error", err)
-		}
-		if err := s.SweepReclaims(ctx, store, time.Now().UTC()); err != nil && ctx.Err() == nil {
-			log.Error("reclaimed file cleanup", "error", err)
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-		}
-	}
 }
 
 // emitRestored raises item.restored or folder.restored for a restored entry.

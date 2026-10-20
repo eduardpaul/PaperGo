@@ -606,6 +606,24 @@ Phase 1 follows the contracts above, with these concrete choices:
 - **Acceptance.** A request whose idempotency key already names the same request is replayed before validation, so a retry still answers with what was accepted after the state it was validated against changed. A keyed request that loses the unique key to the same request accepted concurrently by another process is answered with that operation too. Index maintenance does not count toward quotas.
 - **Search reindex.** The reindex stamp is the operation's acceptance time instead of a payload field, so identical reindex requests have identical payloads and can be replayed by idempotency key.
 
+## Phase 2 as implemented
+
+The runtime lives in `internal/worker`; `cmd/api/workers.go` composes it. The composition differs from §7 as follows:
+
+- **Workers in code.** The executable defines its workers and their kinds: `maintenance`, `integrations` and `documents`. `config.yaml` only adjusts them by name, through `concurrency`, `window` and `admission`. There is no `operation_kinds` key, because a kind moving between workers is a code change validated at startup.
+- **Retries.** They stay with each handler's `MaxAttempts` and `Retry(err, after)`; there is no per-worker retry key.
+- **Fairness.** Ready order (`attempt_at`, then age) is the fairness rule. There are no priorities or starvation clock yet.
+- **Controls.** Controls (`running`, `paused`, `draining`) and flushes are activity records, which `papergo-admin workers` writes. Each process polls them every 15 seconds and reports its status there. `unload` and `disable` follow with the resource registry.
+- **Group admission.**
+  - Handlers that declare `Admission` and `ExecuteGroup` run in groups.
+  - A group released by `max_wait` or a flush records a drain marker with its cutoff, so a restart continues that backlog.
+  - A flush schedule records its last occurrence, so a missed one runs once or is skipped.
+  - Startup rejects a group kind under immediate admission and a single-execution kind under a group policy.
+  - `External` handlers are completed by a domain action, so no worker owns them.
+- **Shutdown.** Workers stop claiming and running work gets `DrainTimeout` (10s). Then its context is cancelled and the claims are given back.
+- **Maintenance.** Operation and change retention, deadlines, purged blobs, unreferenced objects, reclaimed files and script waits are maintenance tasks. They run on their own periods, so they continue with empty queues.
+- **Resources.** The resource registry (OCR, Laya, embeddings) arrives in Phase 3 together with the engines that use it.
+
 ## Settled decisions
 
 - **D1:** execution columns on `operations`.

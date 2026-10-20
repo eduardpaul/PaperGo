@@ -64,6 +64,9 @@ type Config struct {
 	// OperationQuotas bound the pending operations people may queue
 	// (OPERATION_QUOTA_*); zero leaves a bound off.
 	OperationQuotas OperationQuotas
+	// Workers adjust the operation runtime's named workers (config.yaml
+	// workers); the executable validates them against its workers.
+	Workers map[string]Worker
 	// PublicURL is the scheme and host clients use, for example behind a
 	// TLS-terminating reverse proxy. Nil uses each request's own.
 	PublicURL *url.URL
@@ -248,6 +251,7 @@ func loadFrom(getenv func(string) string, yamlText, directory string) (Config, e
 		}
 		*setting.dst = d
 	}
+	c.Workers = file.workers
 	c.OperationQuotas = OperationQuotas{PerCreator: 1000, PerWorkspace: 5000, Installation: 50000, WorkspacePayloadBytes: 256 << 20}
 	for _, setting := range []struct {
 		key string

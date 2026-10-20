@@ -35,6 +35,9 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 	if len(args) > 0 && args[0] == "search" {
 		return searchCommand(ctx, args[1:], out)
 	}
+	if len(args) > 0 && args[0] == "workers" {
+		return workersCommand(ctx, args[1:], out)
+	}
 	if len(args) > 0 && args[0] == "health" {
 		flags := flag.NewFlagSet("health", flag.ContinueOnError)
 		flags.SetOutput(out)
@@ -77,7 +80,7 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		return database.Initialize(ctx, path)
 	}
 	if len(args) == 0 || args[0] != "backup" && args[0] != "restore" {
-		return errors.New("usage: papergo-admin initialize|health|backup|restore|search; each command accepts --help")
+		return errors.New("usage: papergo-admin initialize|health|backup|restore|search|workers; each command accepts --help")
 	}
 	if os.Getenv("DATABASE_URL") != "" {
 		return errors.New(args[0] + " archives the SQLite database; DATABASE_URL selects PostgreSQL, which its own tools back up")

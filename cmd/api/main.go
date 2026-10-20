@@ -254,7 +254,7 @@ func run(log *slog.Logger) error {
 	}
 	// Workflows and scripts waiting on an operation continue as soon as it
 	// ends; waits whose release a stopped process missed are reconciled at
-	// startup.
+	// startup and by maintenance.
 	releaseWaits := scriptrun.ReleaseWaits(service, log)
 	service.OnOperationsFinished(func(ids []string) {
 		releaseWaits(ids)
@@ -292,11 +292,18 @@ func run(log *slog.Logger) error {
 		return err
 	}
 	server := &http.Server{Addr: c.Address, Handler: a.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 60 * time.Second, WriteTimeout: 120 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 * 1024}
+	runtime := workers(service, store, log)
+	if err = configure(runtime, c.Workers); err != nil {
+		return err
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	// Background operations (index builds) resume from their persisted progress.
-	go service.RunOperations(ctx, log)
-	go service.RunBlobCleanup(ctx, store, log)
+	// Operations resume from their persisted progress; the runtime stops
+	// after the server, and the engines and database close after it.
+	working, stopWorking := context.WithCancel(context.Background())
+	stopped := make(chan struct{})
+	go func() { _ = runtime.Run(working); close(stopped) }()
+	defer func() { stopWorking(); <-stopped }()
 	result := make(chan error, 1)
 	go func() { result <- server.ListenAndServe() }()
 	log.Info("api listening", "address", c.Address, "environment", c.Env)
@@ -317,15 +324,15 @@ func run(log *slog.Logger) error {
 	return nil
 }
 
-// openSQLite opens the SQLite file under its lease and brings its schema to
-// this build: a published release applies its upgrade bundle, a development
-// build installs the schema into an empty file. It returns the lease, which
-// the caller closes after the database.
 // modules are the feature modules whose routes the API serves.
 func modules(text *documenttext.Reader) []httpapi.Module {
 	return []httpapi.Module{text.Module()}
 }
 
+// openSQLite opens the SQLite file under its lease and brings its schema to
+// this build: a published release applies its upgrade bundle, a development
+// build installs the schema into an empty file. It returns the lease, which
+// the caller closes after the database.
 func openSQLite(startup context.Context, log *slog.Logger, c *config.Config) (*database.Database, *os.File, error) {
 	// Every SQLite handle, including the runner, uses the same canonical name.
 	resolved, err := filepath.EvalSymlinks(c.DatabasePath)

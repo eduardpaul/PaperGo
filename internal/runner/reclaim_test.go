@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"papergo/internal/dal/blobs"
+	"papergo/internal/worker"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -519,7 +520,7 @@ func runServiceOperations(t *testing.T, service *dms.Service) func() {
 	work, cancel := context.WithCancel(ctx)
 	stopped := make(chan struct{})
 	go func() {
-		service.RunOperations(work, slog.New(slog.NewTextHandler(io.Discard, nil)))
+		_ = worker.Single(service, slog.New(slog.NewTextHandler(io.Discard, nil))).Run(work)
 		close(stopped)
 	}()
 	return func() { cancel(); <-stopped }

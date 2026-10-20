@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	directorydomain "papergo/internal/dal/directory"
+	"papergo/internal/worker"
 	"strings"
 	"testing"
 	"time"
@@ -211,6 +212,9 @@ func (f *fixture) operations(t *testing.T) func() {
 	t.Helper()
 	work, cancel := context.WithCancel(ctx)
 	stopped := make(chan struct{})
-	go func() { f.dms.RunOperations(work, slog.New(slog.NewTextHandler(io.Discard, nil))); close(stopped) }()
+	go func() {
+		_ = worker.Single(f.dms, slog.New(slog.NewTextHandler(io.Discard, nil))).Run(work)
+		close(stopped)
+	}()
 	return func() { cancel(); <-stopped }
 }

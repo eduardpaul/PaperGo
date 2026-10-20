@@ -18,6 +18,7 @@ import (
 	"papergo/internal/dms"
 	"papergo/internal/identity"
 	"papergo/internal/model"
+	"papergo/internal/worker"
 )
 
 type searchResponse struct {
@@ -197,7 +198,10 @@ func TestSearchReindexAndRebuild(t *testing.T) {
 	}
 	workerCtx, cancel := context.WithCancel(ctx)
 	stopped := make(chan struct{})
-	go func() { s.RunOperations(workerCtx, slog.New(slog.NewTextHandler(io.Discard, nil))); close(stopped) }()
+	go func() {
+		_ = worker.Single(s, slog.New(slog.NewTextHandler(io.Discard, nil))).Run(workerCtx)
+		close(stopped)
+	}()
 	t.Cleanup(func() { cancel(); <-stopped })
 	res := request(h, "POST", "/v1/search/reindex", "", testToken, "", "")
 	var op dms.OperationView
@@ -237,7 +241,10 @@ func TestSearchReindexAndRebuild(t *testing.T) {
 	}
 	rebuildCtx, stopRebuild := context.WithCancel(ctx)
 	rebuilt := make(chan struct{})
-	go func() { s.RunOperations(rebuildCtx, slog.New(slog.NewTextHandler(io.Discard, nil))); close(rebuilt) }()
+	go func() {
+		_ = worker.Single(s, slog.New(slog.NewTextHandler(io.Discard, nil))).Run(rebuildCtx)
+		close(rebuilt)
+	}()
 	t.Cleanup(func() { stopRebuild(); <-rebuilt })
 	deadline := time.Now().Add(10 * time.Second)
 	for request(h, "GET", "/v1/search?q=invoice", "", testToken, "", "").Code != 200 {

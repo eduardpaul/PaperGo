@@ -3,8 +3,6 @@ package dms
 import (
 	"context"
 	"fmt"
-	"io"
-	"log/slog"
 	"os"
 	"papergo/internal/dal/daltest"
 	"papergo/internal/dal/database"
@@ -156,7 +154,7 @@ func benchWrites(b *testing.B, building bool) {
 	s, path, list, field := benchCollection(b)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go s.RunOperations(ctx, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	go s.workOperations(ctx)
 	items, err := s.Query(ctx, "alice", list, QueryRequest{Surface: "head"})
 	if err != nil {
 		b.Fatal(err)

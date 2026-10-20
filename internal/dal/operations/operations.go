@@ -246,9 +246,10 @@ func UTC(t time.Time) time.Time { return t.UTC().Truncate(time.Microsecond) }
 const claimScan = 1000
 
 // Accept records a pending operation and notifies clients. An operation
-// with an idempotency key returns the one the key already names with the
-// same payload digest, reporting it as replayed, and ErrIdempotencyConflict
-// when the digest differs.
+// accepted with an ExecutionID starts parked: that execution, such as a
+// task, ends it. An operation with an idempotency key returns the one the
+// key already names with the same payload digest, reporting it as
+// replayed, and ErrIdempotencyConflict when the digest differs.
 func (r *Repo) Accept(ctx context.Context, in Operation, now time.Time) (op Operation, replayed bool, err error) {
 	at := UTC(now)
 	op = Operation{
@@ -256,6 +257,7 @@ func (r *Repo) Accept(ctx context.Context, in Operation, now time.Time) (op Oper
 		CreatedBy: in.CreatedBy, CredentialID: in.CredentialID, CredentialScopes: in.CredentialScopes, Payload: in.Payload, Result: json.RawMessage(`{}`),
 		Status: StatusPending, Surface: refs.SurfaceHead, Failures: []model.OperationFailure{}, CreatedAt: at, UpdatedAt: at, AttemptAt: at,
 		GroupKey: in.GroupKey, InputKey: in.InputKey, Deadline: in.Deadline, IdempotencyKey: in.IdempotencyKey, PayloadDigest: in.PayloadDigest,
+		ExecutionID: in.ExecutionID,
 	}
 	if op.CredentialScopes == nil {
 		op.CredentialScopes = []string{}

@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log/slog"
+	"maps"
 	"papergo/internal/dal/catalog"
 	"papergo/internal/dal/dberr"
 	"papergo/internal/dal/operations"
@@ -12,6 +12,7 @@ import (
 	"papergo/internal/dal/surfaces"
 	"papergo/internal/model"
 	"slices"
+	"sync"
 	"time"
 )
 
@@ -63,88 +64,48 @@ const (
 	inlineClaim    = 24 * time.Hour
 )
 
-// RunOperations processes pending operations until ctx ends, resuming any left
-// by an earlier process.
-func (s *Service) RunOperations(ctx context.Context, log *slog.Logger) {
-	nextCleanup, nextExpiry := time.Time{}, time.Time{}
-	for {
-		if now := time.Now().UTC(); !now.Before(nextCleanup) {
-			if err := s.CollectExpiredOperations(ctx, now); err != nil && ctx.Err() == nil {
-				log.Error("operation cleanup failed", "error", err)
-			}
-			if err := s.CollectExpiredDeltas(ctx, now); err != nil && ctx.Err() == nil {
-				log.Error("delta cleanup failed", "error", err)
-			}
-			if err := s.CollectExpiredLiveChanges(ctx, now); err != nil && ctx.Err() == nil {
-				log.Error("live change cleanup failed", "error", err)
-			}
-			nextCleanup = now.Add(time.Hour)
-		}
-		if now := time.Now(); !now.Before(nextExpiry) {
-			if err := s.ExpireOperations(ctx, now); err != nil && ctx.Err() == nil {
-				log.Error("operation deadlines failed", "error", err)
-			}
-			nextExpiry = now.Add(time.Minute)
-		}
-		worked, err := s.operationStep(ctx)
-		if ctx.Err() != nil {
-			return
-		}
-		if err != nil {
-			log.Error("background operation failed", "error", err)
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(time.Second):
-			}
-			continue
-		}
-		if worked {
-			continue
-		}
-		wait := time.Minute
-		if next, e := s.DAL.Operations().NextAttempt(ctx, s.operationKinds(), time.Now()); e == nil && next != nil {
-			wait = min(wait, max(time.Until(*next), 0))
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-s.operations:
-		case <-time.After(wait):
-		}
-	}
-}
-
-// runOperations drains every pending operation that is ready now.
-func (s *Service) runOperations(ctx context.Context) error {
-	for {
-		worked, err := s.operationStep(ctx)
-		if err != nil || !worked {
-			return err
-		}
-	}
-}
-
-// operationKinds lists the kinds this process runs.
-func (s *Service) operationKinds() []string {
+// OperationKinds lists the kinds this process executes; kinds a domain
+// action completes are not among them.
+func (s *Service) OperationKinds() []string {
 	kinds := make([]string, 0, len(s.ops.handlers))
-	for kind := range s.ops.handlers {
-		kinds = append(kinds, kind)
+	for kind, handler := range s.ops.handlers {
+		if !handler.External {
+			kinds = append(kinds, kind)
+		}
 	}
 	slices.Sort(kinds)
 	return kinds
 }
 
-// operationStep claims the oldest ready operation and advances it by one
-// index batch or bulk item in the claim's transaction, or claims it for an
-// execution outside the writer. An operation error fails it; item errors are
-// bulk results; a Retry error defers it.
-func (s *Service) operationStep(ctx context.Context) (bool, error) {
+// OperationRunsInGroups reports whether kind's handler executes admission
+// groups, which only a group policy runs.
+func (s *Service) OperationRunsInGroups(kind string) bool {
+	return s.ops.handlers[kind].ExecuteGroup != nil
+}
+
+// NextOperationAttempt returns when pending work of kinds next becomes
+// ready, or nil when nothing waits for time.
+func (s *Service) NextOperationAttempt(ctx context.Context, kinds []string) (*time.Time, error) {
+	return s.DAL.Operations().NextAttempt(ctx, kinds, time.Now())
+}
+
+// ReadyOperationGroups returns the admission groups of kinds with ready
+// work, for workers that admit operations in groups.
+func (s *Service) ReadyOperationGroups(ctx context.Context, kinds []string) ([]operations.Group, error) {
+	return s.DAL.Operations().ReadyGroups(ctx, kinds, time.Now())
+}
+
+// RunOperation claims the oldest ready operation of kinds and advances it
+// by one index batch or bulk item in the claim's transaction, or claims it
+// for an execution outside the writer. An operation error fails it; item
+// errors are bulk results; a Retry error defers it. It reports whether it
+// found work.
+func (s *Service) RunOperation(ctx context.Context, kinds []string) (bool, error) {
 	var op *operations.Operation
 	var execute func(context.Context, *Service, *operations.Operation) error
 	err := s.write(ctx, func(t *Service) error {
 		op, execute = nil, nil
-		claimed, e := t.DAL.Operations().Claim(ctx, operations.ClaimRequest{Ready: operations.Ready{Kinds: t.operationKinds(), Now: time.Now(), Limit: 1}, Holder: t.ops.holder, TTL: operationClaim})
+		claimed, e := t.DAL.Operations().Claim(ctx, operations.ClaimRequest{Ready: operations.Ready{Kinds: kinds, Now: time.Now(), Limit: 1}, Holder: t.ops.holder, TTL: operationClaim})
 		if e != nil || len(claimed) == 0 {
 			return e
 		}
@@ -222,7 +183,7 @@ func (s *Service) operationStep(ctx context.Context) (bool, error) {
 	// A failed claim transaction rolled its claim back with the step.
 	committed := err == nil
 	if committed {
-		err = s.executeClaimed(ctx, execute, op)
+		err = s.executeClaimed(ctx, []*operations.Operation{op}, func(run context.Context) error { return executeExternalOperation(run, s, execute, op) })
 	}
 	if err == nil {
 		return true, nil
@@ -230,13 +191,31 @@ func (s *Service) operationStep(ctx context.Context) (bool, error) {
 	return true, s.endAttempt(ctx, op, committed, err)
 }
 
-// executeClaimed runs an execution outside the writer, renewing its claim
-// until it returns. A lost claim cancels it.
-func (s *Service) executeClaimed(ctx context.Context, execute func(context.Context, *Service, *operations.Operation) error, op *operations.Operation) error {
+// executeClaimed runs an execution of claimed operations outside the
+// writer, renewing their claims until it returns. A member whose operation
+// ends meanwhile, or whose claim is lost, leaves the execution; the
+// execution is cancelled once no member is left, and then reports
+// operations.ErrClaimLost.
+func (s *Service) executeClaimed(ctx context.Context, ops []*operations.Operation, execute func(context.Context) error) error {
 	run, cancel := context.WithCancelCause(ctx)
 	defer cancel(nil)
-	s.ops.running.Store(op.ID, cancel)
-	defer s.ops.running.Delete(op.ID)
+	var mu sync.Mutex
+	live := map[string]operations.Claim{}
+	for _, op := range ops {
+		live[op.ID] = op.Claim
+	}
+	leave := func(id string) {
+		mu.Lock()
+		defer mu.Unlock()
+		delete(live, id)
+		if len(live) == 0 {
+			cancel(operations.ErrClaimLost)
+		}
+	}
+	for _, op := range ops {
+		s.ops.running.Store(op.ID, func() { leave(op.ID) })
+		defer s.ops.running.Delete(op.ID)
+	}
 	done := make(chan struct{})
 	defer close(done)
 	go func() {
@@ -247,18 +226,22 @@ func (s *Service) executeClaimed(ctx context.Context, execute func(context.Conte
 			case <-done:
 				return
 			case <-ticker.C:
+				mu.Lock()
+				claims := maps.Clone(live)
+				mu.Unlock()
 				now := time.Now()
 				until := now.Add(operationClaim)
-				// The token fences the execution's writes; its expiry lives
+				// The tokens fence the execution's writes; their expiry lives
 				// only in the database.
-				if err := s.write(run, func(t *Service) error { return t.DAL.Operations().Renew(run, op.ID, op.Claim, until, now) }); errors.Is(err, operations.ErrClaimLost) {
-					cancel(err)
-					return
+				for id, claim := range claims {
+					if err := s.write(run, func(t *Service) error { return t.DAL.Operations().Renew(run, id, claim, until, now) }); errors.Is(err, operations.ErrClaimLost) {
+						leave(id)
+					}
 				}
 			}
 		}
 	}()
-	err := executeExternalOperation(run, s, execute, op)
+	err := execute(run)
 	if cause := context.Cause(run); errors.Is(cause, operations.ErrClaimLost) {
 		return cause
 	}

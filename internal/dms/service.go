@@ -32,8 +32,9 @@ type Service struct {
 	transaction bool
 	// Set only while provisioning the caller's fixed Home resources.
 	homeProvisioning bool
-	// operations wakes RunOperations when work is queued.
-	operations          chan struct{}
+	// accepted records that a write accepted operations, for the hook
+	// that wakes workers after it commits.
+	accepted            *bool
 	onCommit            func()
 	tx                  *sql.Tx
 	pending             *[]Event
@@ -63,7 +64,7 @@ type Service struct {
 
 // NewService serves the PaperGo database db.
 func NewService(db *sql.DB) *Service {
-	return &Service{DAL: dal.NewStore(db), db: db, writer: newWriterSlot(), operations: make(chan struct{}, 1), collectionTemplates: builtInCollectionTemplates(), ops: &operationRuntime{handlers: builtInOperationHandlers(), holder: "operations/" + uuid.NewString()}, searchRebuild: &atomic.Bool{}}
+	return &Service{DAL: dal.NewStore(db), db: db, writer: newWriterSlot(), collectionTemplates: builtInCollectionTemplates(), ops: &operationRuntime{handlers: builtInOperationHandlers(), holder: "operations/" + uuid.NewString()}, searchRebuild: &atomic.Bool{}}
 }
 
 // OnCommit calls f after each committed write that recorded domain events,
@@ -82,18 +83,19 @@ func (s *Service) write(ctx context.Context, fn func(*Service) error) error {
 	}
 	var recorded int
 	var finished []string
+	var accepted bool
 	err := func() error {
 		if err := s.writer.acquire(ctx); err != nil {
 			return err
 		}
 		defer s.writer.release()
 		return dal.Retry(ctx, func() error {
-			finished = finished[:0]
+			finished, accepted = finished[:0], false
 			tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 			if err != nil {
 				return err
 			}
-			if recorded, err = s.inTx(ctx, tx, &finished, fn); err != nil {
+			if recorded, err = s.inTx(ctx, tx, &finished, &accepted, fn); err != nil {
 				_ = tx.Rollback()
 				return err
 			}
@@ -110,16 +112,19 @@ func (s *Service) write(ctx context.Context, fn func(*Service) error) error {
 	if err == nil && len(finished) > 0 {
 		s.ops.ended(finished)
 	}
+	if err == nil && accepted {
+		s.ops.wake()
+	}
 	return err
 }
 
 // inTx runs fn on a service bound to tx and then records the events fn
 // raised in the domain event log, so they commit or roll back with its
 // writes. It returns how many events it recorded.
-func (s *Service) inTx(ctx context.Context, tx *sql.Tx, finished *[]string, fn func(*Service) error) (int, error) {
+func (s *Service) inTx(ctx context.Context, tx *sql.Tx, finished *[]string, accepted *bool, fn func(*Service) error) (int, error) {
 	ctx = requestmeta.EnsureTrace(ctx)
 	var pending []Event
-	t := &Service{DAL: s.DAL.WithTx(tx), db: s.db, writer: s.writer, transaction: true, operations: s.operations, tx: tx, pending: &pending, finished: finished, collectionTemplates: s.collectionTemplates, ops: s.ops, runPurger: s.runPurger, search: s.search, embeddings: s.embeddings, searchRebuild: s.searchRebuild}
+	t := &Service{DAL: s.DAL.WithTx(tx), db: s.db, writer: s.writer, transaction: true, tx: tx, pending: &pending, finished: finished, accepted: accepted, collectionTemplates: s.collectionTemplates, ops: s.ops, runPurger: s.runPurger, search: s.search, embeddings: s.embeddings, searchRebuild: s.searchRebuild}
 	t.integrations = s.integrations
 	t.traceID = requestmeta.Trace(ctx)
 	t.auditProperties = map[string]map[string]bool{}
@@ -152,7 +157,7 @@ func read[T any](ctx context.Context, s *Service, fn func(*Service) (T, error)) 
 			return err
 		}
 		defer tx.Rollback()
-		if out, err = fn(&Service{DAL: s.DAL.WithTx(tx), db: s.db, writer: s.writer, transaction: true, operations: s.operations, tx: tx, collectionTemplates: s.collectionTemplates, ops: s.ops, integrations: s.integrations, search: s.search, embeddings: s.embeddings, searchRebuild: s.searchRebuild}); err != nil {
+		if out, err = fn(&Service{DAL: s.DAL.WithTx(tx), db: s.db, writer: s.writer, transaction: true, tx: tx, collectionTemplates: s.collectionTemplates, ops: s.ops, integrations: s.integrations, search: s.search, embeddings: s.embeddings, searchRebuild: s.searchRebuild}); err != nil {
 			return err
 		}
 		return tx.Commit()
