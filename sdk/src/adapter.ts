@@ -20,8 +20,8 @@ import {
   type RequestInformation,
   InMemoryBackingStoreFactory,
 } from "@microsoft/kiota-abstractions";
-import { JsonParseNode } from "@microsoft/kiota-serialization-json";
 import { host, type HostResponse } from "./host.js";
+import { HostParseNode } from "./parsenode.js";
 import { expand } from "./uritemplate.js";
 
 /** The origin request builders put in front of every path; the engine strips it. */
@@ -127,11 +127,12 @@ export class HostRequestAdapter implements RequestAdapter {
     return this.parse(response);
   }
 
-  // JSON text goes straight to Kiota's JSON parse node; encoding it to bytes
-  // for the factory and decoding it again costs more than the parse.
+  // JSON text is parsed once and read by HostParseNode, which gives what
+  // Kiota's JSON parse node gives with far fewer allocations; encoding it
+  // to bytes for the factory and decoding it again costs more than both.
   private parse(response: HostResponse): ParseNode {
     const type = mediaType(response.headers["content-type"]);
-    if (!response.bytes && jsonType.test(type)) return new JsonParseNode(JSON.parse(response.body), this.store);
+    if (!response.bytes && jsonType.test(type)) return new HostParseNode(JSON.parse(response.body), this.store);
     return this.parseNodes.getRootParseNode(type, bytes(response));
   }
 

@@ -159,6 +159,7 @@ jobs:
           npm ci --prefix sdk
           npm --prefix sdk run generate
           npm --prefix sdk run typecheck
+          npm --prefix sdk test
           npm --prefix sdk run build
           git add -N sdk
           git diff --exit-code -- sdk

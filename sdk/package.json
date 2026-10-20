@@ -12,7 +12,8 @@
   "scripts": {
     "generate": "node scripts/generate.mjs",
     "build": "node scripts/build.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node scripts/test.mjs"
   },
   "dependencies": {
     "@microsoft/kiota-abstractions": "1.0.0-preview.106",
