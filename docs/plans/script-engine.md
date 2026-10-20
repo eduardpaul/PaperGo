@@ -89,6 +89,29 @@ The cutover replaces the JSON interpreter and the DBOS runner in one branch, in 
 5. **Built-in workflows become embedded scripts** in `internal/workflow/builtin/*.ts`, filling the same roles.
 6. **Delete** the JSON interpreter, its activities, editor and explain/check endpoints, `workflow_waits` and its API, the DBOS runner and `runner_step_results`, the AI batch coordinator workflow, and their docs and samples, replacing them with the script equivalents.
 
+## Cutover implementation
+
+Step 4 is done: the activities are API operations (`documentpreview`, `searchcontent`, `aiops`, `documentfiles`, `documenttext`). The switch replaces the interpreter and the runner in one change, with these decisions:
+
+- **Versions.** A workflow version stores the script `source`, its `bundle` and `bundle_hash`, and `definition`, which is now the manifest extracted from the script's export. The manifest has the same shape as the old definition without the flow: `triggers`, `condition`, `input_schema`, `concurrency` and `output_schema`. Trigger matching, schedules, roles, availability and explain read the manifest as before.
+- **Manifest.** `workflow({ triggers, condition, input_schema, concurrency, output_schema, run })` uses the REST API's snake_case shapes. `triggers` may be a function of the parameters. A per-collection or role instance gets `collection` among its parameters, like `{param:collection}` before.
+- **Built-ins** are TypeScript files embedded from `internal/workflow/builtin/`. Each instance's version is its source compiled with the instance's parameters. `integrations.refresh` becomes the worker maintenance task that queues due refreshes, and `ai.batch` becomes the `ai-batch` worker.
+- **Runs.**
+  - Each run is a `script.run` operation, and `workflow_runs` is its provenance row: the same ID, with a foreign key to the operation and deletion by cascade.
+  - Run IDs stay deterministic (`wf:{workflow}:{event}`), and a run's status is derived from its operation.
+  - The operation's payload holds the run's input, the trigger event, its items and the parameters. A replay therefore sees what the first slice saw.
+- **Slices.** The `script.run` handler executes one slice per claim:
+  - completed: the operation succeeds with the output, checked against `output_schema`, and the run raises `wf.{key}.completed` and its role event;
+  - failed: the operation fails and the run raises `wf.{key}.failed`;
+  - suspended: the operation parks. Once the wait step is released it is unparked; a step released before parking leaves it ready;
+  - `ctx.sleep`: the operation waits until the wake time. Neither parking nor sleeping counts as an attempt;
+  - infrastructure errors: the slice is retried.
+- **Concurrency.** `skip` drops the start. `replace` cancels the active runs. `coalesce` drops the start when a run is queued, and otherwise parks the new run behind the active one, which unparks it when it ends.
+- **Dispatch, schedules and retention** are worker maintenance tasks. Dispatch is woken by committed events. Run retention deletes old runs with their operations. Activity records, result cache, dispatched events and revisions are collected as the runner's purge did.
+- **Tasks.** A task created by a run is backed by a parked operation of kind `task.response`. Its answer, cancellation or expiry ends that operation, so the script waits on it like any other.
+- **Cancelling a run** cancels its open tasks, discards its staged files, and cancels the pending operations its requests started; the in-process path records those per step.
+- **Deleted:** the JSON flow, the activities, tokens, the interpreter, `workflow_waits` and its routes, the catalog route, `runner_step_results`, the DBOS runner and its schema, and `internal/workflowai`. The visual editor becomes a script editor.
+
 ## Remaining work
 
 1. **Run lifecycle.** Script definitions and immutable versions (source, bundle, hash, author), triggers declared by the script's export and extracted on save, run creation from domain events, manual starts and schedules, and run status.
