@@ -156,7 +156,7 @@ For an upgrade:
    transaction. Each step records its release version and schema checksum in
    `papergo_release`; foreign keys and integrity are checked after each step before
    committing the chain. Only
-   then does it start the runner and HTTP server and permit online backups.
+   then does it start the workers and HTTP server and permit online backups.
 5. Check `/health/ready` and the startup logs. Keep snapshots and full backups
    until the new release has been validated; remove them according to your
    retention policy. Startup has a ten-minute limit and requires space for the
@@ -170,11 +170,9 @@ with the same release version and schema checksum is a no-op and creates no
 extra snapshot. Releases that share a schema checksum still advance the recorded
 version, so a downgrade to an older version is rejected even with identical DDL.
 
-The automatic snapshot contains only SQLite, including runner state. It does not
-replace the full database-plus-blobs backup. DBOS maintains its own runner tables
-when it starts; those tables are outside the PaperGo schema comparison. A DBOS
-migration or later startup failure may happen after the PaperGo schema transaction
-has committed. Rolling back an installed application requires stopping it and
+The automatic snapshot contains only SQLite, including workflow runs and other
+operations. It does not replace the full database-plus-blobs backup. A later
+startup failure may happen after the PaperGo schema transaction has committed. Rolling back an installed application requires stopping it and
 restoring the full backup with the matching old `papergo-admin` before starting
 the old binary. Backup archives remain tied to their schema checksum; use the
 matching release's admin tool to restore them. Do not simply start an older

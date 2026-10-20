@@ -149,7 +149,7 @@ module verification, Bob generation/drift check, Go formatting, vet, Staticcheck
 uncached ordinary Go tests and the application build. Staticcheck must be
 installed, as it is in the devcontainer. `--race` runs the entire Go suite with
 race detection and forced execution. `--native` requires `DECISION_MODELS_PATH`
-and `EMBEDDING_MODELS_ROOT`, then runs real decision, embedding, OCR and runner
+and `EMBEDDING_MODELS_ROOT`, then runs real decision, embedding, OCR and workflow
 tests with race detection; missing required assets fail. The PowerShell entry
 point accepts the same arguments, for example
 `./scripts/check.ps1 --packages ./internal/dms`. `govulncheck ./...` runs a

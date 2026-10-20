@@ -24,30 +24,39 @@ The text of files is indexed too, as [file content](#file-content), separately f
 
 ## Keeping it current
 
-The **`search.index`** [built-in workflow](workflows.md#built-in-workflows) fills the `search.index` [role](workflows.md#roles). It is on by default in every collection, runs on the system queue as the system subject, and `coalesce`s: a burst of changes to one entry costs at most two runs, and the last one sees the final state.
+The **`search.index`** [built-in workflow](workflows.md#built-in-workflows) fills the `search.index` [role](workflows.md#roles). It is on by default in every collection and `coalesce`s: a burst of changes to one entry costs at most two runs, and the last one sees the final state.
 
 - **Triggers.** Item and folder changes (`created`, `updated`, `published`, `unpublished`, `deleted`, `restored`, `purged`), `permissions.changed` (once per affected entry, for `replace` and `move`), `term.changed` and `term.merged`, and `manual`.
-- **`search.sync`** re-reads the entry and writes its documents, or removes them when it is gone. It reads state, not the event, so running it again, late or out of order is harmless.
-- **Terms.** A term whose name, labels or synonyms change, and both terms of a merge, are re-read for every item that holds them or an alias merged into them: `search.items_with_term` lists them 500 at a time for `search.sync` in a `forEach`. Each provider refreshes only its own collection.
+- **`POST /v1/workspaces/{id}/search/sync`** with `resource_ids` re-reads each entry and writes its documents, or removes them when it is gone. It reads state, not the event, so running it again, late or out of order is harmless.
+- **Terms.** A term whose name, labels or synonyms change, and both terms of a merge, are re-read for every item that holds them or an alias merged into them: `GET /v1/workspaces/{id}/search/term-entries` lists them a page at a time for the sync. Each provider refreshes only its own collection.
 - **Turning it off.** `PUT /v1/workspaces/{id}/workflow-builtins/search.index` with a `collection_id` and `"automatic_enabled": false` pauses the collection's automatic provider. Searching inside that collection then answers `400 search_off`, because its documents would go stale; global search keeps its entries as last indexed, still trimmed by current permissions. Duplicating creates a draft; explicitly publishing and enabling that copy replaces the automatic provider in that collection.
 
 Because indexing is asynchronous, a change appears in search after its run, usually within a second.
 
 ## File content
 
-The **`search.content`** built-in fills the `search.content` role. It is on by default in every collection, runs on the system queue and `coalesce`s. When a PDF or an image is added (uploaded, through WebDAV, restored, from a workflow, or by a content reindex), it:
+The **`search.content`** built-in fills the `search.content` role. It is on by default in every collection and `coalesce`s. When a PDF or an image is added (uploaded, through WebDAV, restored, from a workflow, or by a content reindex), it:
 
-1. reads the file's text with [`document.read_text`](workflows.md#reading-text) (text layers, OCR for scans and photos when configured), reused for identical files;
-2. splits it into chunks with [`search.chunk`](workflows.md#file-content-steps), under a new generation, staged and not yet searched;
-3. gives the chunks their vectors with [`search.embed`](workflows.md#file-content-steps), when an [embedding model](#semantic-and-hybrid-search) is configured;
-4. makes them the file's searchable content with [`search.publish`](workflows.md#file-content-steps), replacing the content it had.
+1. reads the file's text with [`POST /v1/items/{id}/text`](documents.md#reading-text) (text layers, OCR for scans and photos when configured), reused for identical files;
+2. splits it into chunks with [`POST /v1/items/{id}/search/chunks`](#content-steps), under a new generation, staged and not yet searched;
+3. gives the chunks their vectors with `POST /v1/search/generations/{id}/embeddings`, when an [embedding model](#semantic-and-hybrid-search) is configured;
+4. makes them the file's searchable content with `POST /v1/search/generations/{id}/publish`, replacing the content it had.
 
 Its parameters are `ocr`, `max_pages`, `chunker` (`window`, `pages`, `paragraphs`, `headings`, `whole`), `max_chars`, `overlap`, `max_chunks` and `embed` (`immediate` or `later`). A list or library can turn it on with other parameters, turn it off, or copy and recompose it (for example adding a summary chunk). Its runs end with outputs (`blob_id`, `text_id`, `pages`, `language`, `generation`, `chunks`), and every filler of the role raises `role.search.content.completed`, so a workflow can follow content indexing in any collection.
 
 - **Content belongs to a file version.** A new file starts without content until its run publishes; a rename or a field change rewrites the document from the stored chunks and reads nothing again. Content of versions no surface references is dropped.
-- **Fixed checks.** `search.publish` publishes only a generation of its own run, for a file one of the item's surfaces still has; otherwise it follows `stale` and changes nothing. Access always comes from the item's document, never from content.
+- **Fixed checks.** Publishing publishes a generation only for a file one of the item's surfaces still has; otherwise its result says why (`published: false`) and nothing changes. Access always comes from the item's document, never from content.
 - **Page hits.** When the file's text matches, a hit gives the `page` of its best matching chunk and cuts the snippet from that chunk.
-- **Enrichment.** Context that [`search.enrich`](workflows.md#ai-steps) writes for a chunk is searched and embedded with it, but snippets show only the file's own text.
+- **Enrichment.** Context set on a chunk with `PUT /v1/search/generations/{id}/enrichments`, such as a model-written sentence on which contract and clause it is, is searched and embedded with it, but snippets show only the file's own text.
+
+### Content steps
+
+The steps are API requests a workflow can recompose, each a background operation except reading chunks and setting enrichments:
+
+- **Chunkers.** `POST /v1/items/{id}/search/chunks` splits text read from the item's file (`text_id`, `blob_id`) or text given directly (`text`, such as a summary) with a `chunker`: `window` (default) cuts each page into windows of about `max_chars` characters (1,200) that end at word boundaries and overlap by `overlap` (150), as PaperDotNet's passages; `pages` makes a chunk per page; `paragraphs` merges paragraphs up to the size; `headings` splits at headings (numbered, `§`, or capitals) and starts each chunk with its heading; `whole` makes the whole text one chunk (up to 20,000 characters). At most `max_chunks` (400) per text. `kind` is `content` (default), `summary` or `extract`.
+- **Generations.** A chunk request starts a generation, named by its operation's ID; a later chunk request can add to it with `generation`, such as a summary chunk. Nothing is searched until it is published. `GET /v1/search/generations/{id}/chunks` reads a generation's chunks a page at a time, and `PUT .../enrichments` sets context on them (at most 4,000 characters each), which embedding then covers.
+- **Hashes.** Each chunk's input hash covers its kind, text and enrichment, not the file's name, so renaming never makes chunks new.
+- **Embedding.** `POST /v1/search/generations/{id}/embeddings` gives a generation's chunks their vectors: chunks whose input already has a vector reuse it (`reused`), the others are embedded (`embedded`). Without an embedding model, or when the model fails, its result gives the `reason` and the embedding sweep embeds the chunks once published.
 
 ## Authorization
 
@@ -92,7 +101,7 @@ With an embedding model, search also finds file content close in meaning to `q`,
   - `local` runs EmbeddingGemma 2 (default) or Harrier in the process, on the ONNX Runtime OCR uses ([embeddings](embeddings.md)): `ONNXRUNTIME_LIB`, `AI_EMBEDDINGS_MODELS_PATH` (defaults to `assets/models/embedding/{model}` beside the executable), and optionally `AI_EMBEDDINGS_MODEL`, `AI_EMBEDDINGS_DIMENSIONS` (Gemma: 768, 512, 256 or 128), `AI_EMBEDDINGS_THREADS` and `AI_EMBEDDINGS_MAX_TOKENS` (512). Nothing loads until the first embedding; a chunk longer than the token limit is embedded by its beginning.
   - `openai` calls any OpenAI-compatible `/v1/embeddings` endpoint (OpenAI, Ollama, LM Studio, vLLM, llama.cpp): `AI_EMBEDDINGS_ENDPOINT` (default OpenAI's), `AI_EMBEDDINGS_MODEL`, optionally `AI_EMBEDDINGS_API_KEY_FILE` and `AI_EMBEDDINGS_DIMENSIONS` (else measured once). Requests carry 64 texts, time out after two minutes, and are retried on 429 and 5xx, honouring `Retry-After` up to 30 seconds.
 - **Vectors.** Chunks are embedded by their text, not their file's name, and vectors are kept per chunk input and model: identical text embeds once, a rename or reindex embeds nothing, and another model embeds everything again under its own key (`{provider}:{model}:…`). Vectors are normalized float32. SQLite compares the model's vectors in memory; zvec uses a native HNSW index. Status reports the cached vector bytes (vectors × dimensions × 4), excluding native index overhead.
-- **When content is embedded.** `search.embed` embeds before publishing. With `embed: later`, or when the model fails, content is published without vectors and keyword search finds it at once. The embedding sweep (every 15 minutes) embeds published chunks without a vector of the current model, 2,000 per run, which also covers a model change. Vectors no chunk has used for 7 days are deleted then.
+- **When content is embedded.** `search.content` embeds before publishing. With `embed: later`, or when the model fails, content is published without vectors and keyword search finds it at once. The embedding sweep (every 15 minutes) embeds published chunks without a vector of the current model, 2,000 per run, which also covers a model change. Vectors no chunk has used for 7 days are deleted then.
 - **Semantic.** The query's words, without operators, quotes and excluded words, are embedded (cached for 30 minutes) and searched against the chunk vectors. A file matches with its most similar chunk at a cosine similarity of at least 0.3, which gives the `page` and the snippet. Up to 200 entries, best first; excluded words still exclude. Only file content is embedded, so metadata alone never matches semantically, and file content needs `document.read`.
 - **Hybrid.** The best 200 keyword matches and the best 200 semantic matches are fused by reciprocal rank (k = 60): an entry found both ways ranks highest. `total` and facets cover the fused entries.
 - **Failures.** `semantic` or `hybrid` without a model is a validation error on `mode`. When embedding the query fails, the search runs by keyword and says `mode: keyword`. A next page continues in the first page's mode.

@@ -18,11 +18,61 @@ files and record metadata history; retention accepts 1–500 metadata entries.
 
 Libraries accept `duplicate_policy: "allow" | "warn" | "block"` on creation and PATCH. It defaults to `warn`; changing it requires library manage access and the current `If-Match`. Collection templates can set the policy. Uploads compare SHA-256 hashes against current files visible to the caller across libraries and workspaces, excluding the item being replaced, historical files and deleted items. `warn` returns up to 20 matching documents in `duplicates`; `allow` returns an empty list; `block` rejects matching uploads with `409 duplicate_file`. File creation and replacement, including WebDAV, enforce blocking inside the same transaction as their revisions. Failed REST uploads remove their stored object. File restoration follows the version history and does not apply upload duplicate policy.
 
-`GET /v1/items/{id}/content/versions` lists the retained files of an item, newest first, with `$top` and `$skiptoken` paging. Each entry has its `version` number, `filename`, `content_type`, `size`, `sha256`, `created_at`, `created_by` (who uploaded or restored it), `is_current` (the file of the caller's visible revision) and `availability` (`available`, `pending` or `reclaimed`). Draft readers see every version; ordinary readers see only the published file. It requires `document.read`. A workflow asks for the bytes back with [`file.reclaim`](workflows.md#reclaiming-a-file-version). The version stays in history. `pending` still downloads. After the one-hour grace period an unprotected version becomes `reclaimed`: its download and restore answer `410 content_unavailable`, and file history shows it as unavailable. Bytes another file still needs stay stored.
+`GET /v1/items/{id}/content/versions` lists the retained files of an item, newest first, with `$top` and `$skiptoken` paging. Each entry has its `version` number, `filename`, `content_type`, `size`, `sha256`, `created_at`, `created_by` (who uploaded or restored it), `is_current` (the file of the caller's visible revision) and `availability` (`available`, `pending` or `reclaimed`). Draft readers see every version; ordinary readers see only the published file. It requires `document.read`. `POST /v1/items/{id}/content/reclaim` asks for the bytes back ([reclaiming a file version](#reclaiming-a-file-version)). The version stays in history. `pending` still downloads. After the one-hour grace period an unprotected version becomes `reclaimed`: its download and restore answer `410 content_unavailable`, and file history shows it as unavailable. Bytes another file still needs stay stored.
 
-`GET /v1/items/{id}/text` returns the text read from the file the caller may read (the current one, or `blob_id`), once a workflow with [`document.read_text`](workflows.md#reading-text) read it: `pages` (`page`, `text`, and `ocr` for recognized pages), `page_count`, `chars`, `language`, `ocr_pages`, `skipped_pages`, `truncated`, `text_id` and `read_at`. Before that it answers `404 text_not_read`. It requires `document.read` and follows the same visibility as downloads.
+`GET /v1/items/{id}/text` returns the text read from the file the caller may read (the current one, or `blob_id`), once [`POST /v1/items/{id}/text`](#reading-text) read it: `pages` (`page`, `text`, and `ocr` for recognized pages), `page_count`, `chars`, `language`, `ocr_pages`, `skipped_pages`, `truncated`, `text_id` and `read_at`. Before that it answers `404 text_not_read`. It requires `document.read` and follows the same visibility as downloads.
 
 `POST /v1/items/{id}/content/versions/{number}/restore` restores an earlier file that still has its bytes as a new file version. A reclaimed version answers `410 content_unavailable`. It requires item write permission, `list.write` and `document.write` and the current resource `If-Match`. It retains current metadata, restores the selected bytes and filename, and follows the library's publication settings. In a library with explicit publishing, restoring creates a draft and leaves the publication unchanged. Earlier files and metadata revisions remain immutable. Identical SHA-256 and size reuse one stored byte object across items and workspaces. File names, media types, language hints and access remain specific to each file version. Purging an item queues its objects once; cleanup rechecks all file-version references while holding the database write lock. Bytes shared by another item remain available. A periodic collector runs each minute and removes unreferenced completed objects older than one hour, including objects left by interrupted uploads. Failed storage deletion stays queued for retry.
+
+## Reading text
+
+`POST /v1/items/{id}/text` reads the text of the item's current file as a background operation (`202 Accepted`), for API clients and workflow scripts alike: `ocr` (`auto`, `always`, `never`), `max_pages` (default 500, at most 2,000) and `languages` (OCR codes such as `eng+deu`; default the file's). It requires `document.write` and write access to the item.
+
+- **PDFs:** each page's text layer is read with the linked PDFium SDK. With `ocr: auto`, a page without a text layer is rendered at 200 DPI and read by [OCR](ocr.md); `always` OCRs every page; `never` reads text layers only. PaperGo's own searchable PDFs (Photos to PDF) carry their OCR text, so they are not OCRed again.
+- **Images** (JPEG, PNG, WebP, and the first page of a TIFF) are turned upright and read by OCR.
+- **Without OCR** configured, `auto` reads text layers only and counts the pages it could not read in `skipped_pages`; `always` is refused.
+- **Language:** the file's language hint (`languages` on upload, `X-OCR-Languages`) when it names one language, else the language detected among the hinted ones or `SEARCH_LANGUAGES`, else none.
+
+The text is kept once per file bytes and reading settings (reader, OCR engine and models, mode, page bound, languages): an identical file, or the same file read again, reuses it without reading again (`reused`). The result has `text_id`, `item_id`, `blob_id`, `pages`, `chars`, `language`, `ocr_pages`, `skipped_pages`, `truncated` and `reused`; a file whose text cannot be read, such as a protected or broken PDF or another format, fails the operation. Later requests refer to the text by `text_id`. `GET /v1/items/{id}/text` returns it, content packages carry it with the file, and it is deleted when no file with its bytes remains.
+
+## Staged files
+
+Requests that produce files, such as a smaller image or a PDF composed from photos, do not replace anything themselves. They **stage** the file:
+
+- A staged file belongs to the workflow run that asked for it and to the item it would replace. Only that run promotes or discards it, so these requests come from workflow scripts.
+- It records the file versions it was made from, and keeps its bytes while it is pending. `GET /v1/staged-files/{id}` and `/content` show it to readers of its item.
+- `POST /v1/staged-files/{id}/promote` makes it the item's current file. That is a new file version (`file.updated` with source `workflow` for replacements), with the item's metadata, revision history, audit and events like an upload. It succeeds only if every file it was made from is still its item's current file, so a candidate made from an old upload never replaces a newer one.
+- With `recycle_sources: true` (default `false`), promotion also moves the other source items to the recycle bin in the same transaction. The caller must be able to write every source item. If any source changed or cannot be recycled, neither promotion nor recycling commits.
+- `POST /v1/staged-files/{id}/discard` drops it.
+
+A completed or cancelled run discards its pending staged files. A failed run keeps them for a retry until the run is deleted. Purging an item deletes its staged files. The storage collector frees discarded files' bytes after its grace period.
+
+## Reclaiming a file version
+
+`POST /v1/items/{id}/content/reclaim` with a `blob_id` asks for one file version's bytes back. The version keeps its id, number, filename, content type, size and checksum. The request marks it `pending`. A current file, a published file, a staged file, or a byte lease held by an operation defers the grace period (`deferred`, with `reason` `current`, `published`, `staged` or `in use`). Asking again for a version that is already pending does not move `reclaim_after`. After the one-hour object grace period, the collector marks an unprotected version `reclaimed` and deletes bytes that no other file still needs.
+
+## Image optimization
+
+`POST /v1/items/{id}/optimize-image` shrinks a page image without making its text unreadable. It is a background operation (`202 Accepted`) that a workflow script starts, since the copy is [staged](#staged-files) for its run; it needs `document.write` and write access to the item, with the options below in its body and an optional `file_version` the request was made for. It is PaperDotNet's storage optimization, with the same parameters and results:
+
+1. It keeps files that are not JPEG, PNG or WebP, and a `file_version` a newer file already replaced.
+2. It decodes the image (at most 64 megapixels), applies its EXIF orientation, and keeps animated images unchanged.
+3. A copy at most `max_analysis_dimension` pixels long (default 2600) goes to the OCR detector. Text lines that score at least `min_confidence` (default 50), are at least 6 analysis pixels high and at least 1.5 times as long as high count. Each line's height is its shortest side, projected back to the image's pixels.
+4. The `percentile` (default 5) of those heights, interpolated and rounded, at least 4, is the smallest text. The scale is `target_height` (default 12) divided by it, between `minimum_scale` (default 0.05) and 1: images never grow.
+5. The image is resized with the Mitchell filter (transparency flattened onto white) and encoded as WebP at `quality` (default 80).
+
+Its result keeps the original, with a `reason`, when the image has no reliable text, is already WebP with its smallest text at the target, or the WebP file would not be smaller. Otherwise it [stages](#staged-files) the WebP file, named after the original, and its result has the `staged_file_id` and `metrics` for reviewers: text regions, smallest text height, scale, sizes before and after, and the settings, detector and model hashes. Without an OCR engine (see [OCR configuration](ocr.md#configuration)) the request is refused. The [Optimize image storage](workflows.md#built-in-workflows) built-in asks for a review of the staged copy before it promotes it.
+
+## Photos to PDF
+
+`POST /v1/items/{id}/compose-pdf` ports PaperDotNet's photo to document conversion. It is a background operation on the primary item that a workflow script starts, with `item_ids` (the photos in page order, the item among them), `target_height` and `quality`:
+
+1. **Snapshot.** Every item must be an item of the primary item's library that the caller may write, with a JPEG, PNG or WebP file. The request records each file version; at most 100 photos.
+2. **Pages.** Each photo, in order, is decoded (at most 64 megapixels, not animated), turned upright and flattened onto white. Its text lines are measured as in [image optimization](#image-optimization), and the page is scaled so that its smallest line is `target_height` pixels high (default 32). Unlike PaperDotNet, pages never grow; a page without text keeps its size.
+3. **Text.** OCR reads the full-resolution photo. Each line is placed, invisible, at its position on the scaled page, so the PDF can be searched and its text selected and copied. The text layer embeds a placeholder font and maps characters to Unicode, so it needs no system fonts and keeps every script.
+4. **PDF.** Each page image is embedded at 150 pixels per inch, as JPEG at `quality` (default 80), or losslessly when that is smaller. The PDF is staged for the primary item, named after its file, with the other items as `others`.
+
+The operation fails if a photo changes before the PDF is staged; promotion fails if one changes before promotion commits. Either way, start a new conversion. The [Photos to PDF](workflows.md#built-in-workflows) built-in promotes with `recycle_sources: true`, so the PDF replacement and recycling commit together and no upload can arrive between them.
 
 ## Renaming and upload name conflicts
 
