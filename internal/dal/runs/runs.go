@@ -130,7 +130,7 @@ type Item struct {
 // derived status.
 type Filter struct {
 	WorkspaceID, WorkflowID, AfterID, BeforeID string
-	// Origin is "manual", "schedule" or "automatic".
+	// Origin is "manual", "schedule", "test" or "automatic".
 	Origin                                      string
 	IDs, ItemIDs, SystemKeys, ExcludeEventTypes []string
 	Statuses                                    []Status

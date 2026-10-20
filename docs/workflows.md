@@ -94,6 +94,18 @@ export default workflow<unknown, unknown, { collection: string }>({
 
 `triggers` and `condition` may be functions of the parameters; saving the workflow evaluates them. Workspace packages remap the IDs in parameters when they are imported into another workspace, so scripts keep IDs in parameters rather than in their source.
 
+## Testing
+
+The workflow editor saves the script and, beside it, runs its current version as a **test run** on items you choose, showing its steps and log as they happen. `POST /v1/workflows/{id}/test-runs` does the same for API clients, with `item_ids`, `primary_item_id` and `inputs` (202 with `run_id`). A test run:
+
+- runs drafts and published workflows alike, whatever their triggers, condition and manual or automatic use;
+- runs on no item, on one, or once on several, the primary (default the first) being its item, as a [selection run](#selection-runs);
+- makes real changes as the version's author, like any run, so use items meant for testing;
+- ignores the workflow's concurrency, so it never cancels or waits for the workflow's other runs;
+- raises no `wf.*` or `role.*` events, so nothing that follows the workflow reacts to it.
+
+Its event type is `test`, and run lists select test runs with `origin=test`. Starting one needs workspace manage access and write access to every item.
+
 ## Manual use and automatic processing
 
 A workflow has independent `manual_enabled` and `automatic_enabled` settings. Its lifecycle is `draft`, `published` or `archived`; only published workflows accept new runs. New custom workflows in the editor and duplicated built-ins start as drafts with automatic processing off. Publishing makes the allowed entry points usable. Pausing automatic processing leaves manual use available.
@@ -469,6 +481,7 @@ Audit events and publication snapshots are a separate product record. Run retent
 | Create, change, delete workflows; turn on, configure and copy built-ins | workspace `manage` (built-ins per collection also need collection `manage`) |
 | Start a manual workflow on items | `write` on each item |
 | Start a manual workflow with no item | workspace `manage` |
+| Start a test run | workspace `manage`, and `write` on each item |
 | See, cancel and retry runs | workspace `manage` |
 | Answer a task | being an assignee (or in an assigned group) who can read the workspace and the item's draft |
 | Create a task | workspace `read`, and `write` on the item when it concerns one |
@@ -484,13 +497,14 @@ Audit events and publication snapshots are a separate product record. Run retent
 | GET / PUT / DELETE | /v1/workflows/{id} | Read, replace (If-Match), delete (If-Match) |
 | GET | /v1/workflows/{id}/versions | Versions with their scripts, newest first |
 | POST | /v1/workflows/{id}/runs | Manual start: `{"item_ids": [...], "inputs": {...}, "workflow_version": 1}` (202 with `run_ids`) |
+| POST | /v1/workflows/{id}/test-runs | [Test run](#testing) of the current version, draft or published: `{"item_ids": [...], "primary_item_id", "inputs": {...}}` (202 with `run_id`) |
 | POST | /v1/workflows/{id}/check | Read-only manual preflight with the same launch body |
 | POST | /v1/workspaces/{id}/workflow-actions | Manual actions and availability reasons for a selection |
 | POST | /v1/workflows/{id}/explain | Read-only automatic eligibility for an item and event scenario |
 | GET | /v1/workspaces/{id}/workflow-builtins | Built-ins with the workspace's built-in workflows |
 | PUT | /v1/workspaces/{id}/workflow-builtins/{key} | Turn on/off, set parameters |
 | POST | /v1/workspaces/{id}/workflow-builtins/{key}/copy | Copy into an editable workflow |
-| GET | /v1/workspaces/{id}/workflow-runs | Runs, newest first (`workflow_id`, `item_id`, `origin`, `status`, `include_system`, `$skiptoken`, `$top`) |
+| GET | /v1/workspaces/{id}/workflow-runs | Runs, newest first (`workflow_id`, `item_id`, `origin` (`manual`, `schedule`, `test` or `automatic`), `status`, `include_system`, `$skiptoken`, `$top`) |
 | GET | /v1/workflow-runs/{id} | A run with its result, steps and log |
 | POST | /v1/workflow-runs/{id}/cancel, /retry | Cancel, or retry a failed run |
 | GET | /v1/me/tasks | The caller's tasks (`waiting=true` for those still to answer, `status`, `kind`, `key`, `workspace_id`, `item_id`, `$top`); open ones by due time, in pages linked by `@odata.nextLink` like the other task lists |

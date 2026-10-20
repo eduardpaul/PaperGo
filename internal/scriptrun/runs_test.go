@@ -416,3 +416,44 @@ export default workflow({
 		t.Fatalf("pending runs: %+v %v", pending, err)
 	}
 }
+
+// A test run executes a draft's current version on an item whatever its
+// triggers, and raises no workflow events.
+func TestTestRunsExecuteDrafts(t *testing.T) {
+	r := run(t)
+	w, err := r.wf.Create(t.Context(), "alice", r.ws, workflow.Save{Name: "Draft", State: "draft", Source: `import { workflow } from "@papergo/workflow";
+export default workflow({
+  triggers: [{ type: "item.created", collection_id: "` + r.list + `" }],
+  concurrency: "replace",
+  async run(ctx) {
+    ctx.log("testing", ctx.run.event.type);
+    return { item: ctx.itemId };
+  },
+});
+`})
+	if err != nil || w.State != "draft" {
+		t.Fatal(w, err)
+	}
+	itemID := r.item(t, "Sample")
+	if _, err = r.wf.StartRuns(t.Context(), "alice", w.ID, workflow.Start{ItemIDs: []string{itemID}}); err == nil {
+		t.Fatal("a draft started an ordinary run")
+	}
+	var started struct {
+		RunID string `json:"run_id"`
+	}
+	r.call(t, "POST", "/v1/workflows/"+w.ID+"/test-runs", `{"item_ids":["`+itemID+`"]}`, 202, &started)
+	done := r.await(t, started.RunID, runstore.StatusCompleted)
+	if done.EventType != workflow.TestStart || string(done.Result) != `{"item":"`+itemID+`"}` || len(done.Logs) != 1 || done.Logs[0].Message != "testing test" {
+		t.Fatalf("test run: %+v %s", done, done.Result)
+	}
+	if n := daltest.Count(t, r.s.DAL, "domain_events", daltest.Row{"type": "wf." + w.Key + ".completed"}); n != 0 {
+		t.Fatalf("a test run raised %d workflow events", n)
+	}
+	var page struct {
+		Value []workflow.Run `json:"value"`
+	}
+	r.call(t, "GET", "/v1/workspaces/"+r.ws+"/workflow-runs?origin=test", "", 200, &page)
+	if len(page.Value) != 1 || page.Value[0].ID != started.RunID {
+		t.Fatalf("test runs: %+v", page.Value)
+	}
+}

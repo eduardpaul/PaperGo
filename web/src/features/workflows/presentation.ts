@@ -31,4 +31,4 @@ export function manualSummary(workflow: Workflow) {
 }
 
 export const runStatusLabel = (status: string) => ({ queued: 'Queued', running: 'Running', waiting: 'Waiting', completed: 'Completed', failed: 'Failed', cancelled: 'Cancelled' })[status] ?? status;
-export const runOriginLabel = (event = 'unknown') => event === 'manual' ? 'Manual' : event === 'schedule' ? 'Scheduled' : `Automatic · ${triggerLabel({ type: event })}`;
+export const runOriginLabel = (event = 'unknown') => event === 'manual' ? 'Manual' : event === 'schedule' ? 'Scheduled' : event === 'test' ? 'Test' : `Automatic · ${triggerLabel({ type: event })}`;

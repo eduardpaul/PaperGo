@@ -123,8 +123,8 @@ func (s *Service) Runs(ctx context.Context, subject, workspaceID string, f RunFi
 			restricted = true
 		}
 		filter := runstore.Filter{WorkspaceID: workspaceID, WorkflowID: f.WorkflowID, Origin: f.Origin, Limit: f.Limit + 1}
-		if f.Origin != "" && f.Origin != "manual" && f.Origin != "schedule" && f.Origin != "automatic" {
-			return RunPage{}, dms.Invalid("origin must be manual, schedule or automatic")
+		if f.Origin != "" && f.Origin != "manual" && f.Origin != "schedule" && f.Origin != TestStart && f.Origin != "automatic" {
+			return RunPage{}, dms.Invalid("origin must be manual, schedule, test or automatic")
 		}
 		if f.Status != "" {
 			if !runstore.Status(f.Status).Valid() {

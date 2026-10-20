@@ -17,6 +17,7 @@ func (a *API) registerWorkflows(api *router) {
 	api.HandleFunc("DELETE /v1/workflows/{id}", a.deleteWorkflow)
 	api.HandleFunc("GET /v1/workflows/{id}/versions", a.workflowVersions)
 	api.HandleFunc("POST /v1/workflows/{id}/runs", a.startWorkflow)
+	api.HandleFunc("POST /v1/workflows/{id}/test-runs", a.testWorkflow)
 	api.HandleFunc("POST /v1/workflows/{id}/check", a.checkWorkflow)
 	api.HandleFunc("POST /v1/workflows/{id}/explain", a.explainWorkflow)
 	api.HandleFunc("POST /v1/workspaces/{id}/workflow-actions", a.workflowActions)
@@ -155,6 +156,21 @@ func (a *API) startWorkflow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respond(w, r, 202, map[string]any{"run_ids": ids})
+}
+
+// testWorkflow starts a test run of a workflow's current version.
+func (a *API) testWorkflow(w http.ResponseWriter, r *http.Request) {
+	var in workflow.TestRun
+	if !a.decode(w, r, &in) {
+		return
+	}
+	id, err := a.Workflows.StartTest(r.Context(), subject(r), r.PathValue("id"), in)
+	if err != nil {
+		a.failure(w, r, err)
+		return
+	}
+	w.Header().Set("Location", "/v1/workflow-runs/"+id)
+	respond(w, r, 202, map[string]any{"run_id": id})
 }
 
 func (a *API) workflowBuiltIns(w http.ResponseWriter, r *http.Request) {

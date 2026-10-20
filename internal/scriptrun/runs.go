@@ -223,10 +223,13 @@ func finished(ctx context.Context, t *dms.Service, p workflow.RunPayload) error 
 	return t.UnparkOperations(ctx, execution, ids, time.Now())
 }
 
-// raise raises wf.{key}.{status} for a run that ended, and the role event
+// raise raises wf.{key}.{status} for a run that ended, unless it is a test, and the role event
 // of the role its workflow fills: one level deeper than the event that
 // started the run, on its item.
 func raise(ctx context.Context, t *dms.Service, runID string, p workflow.RunPayload, status string, data map[string]any) {
+	if p.Test {
+		return
+	}
 	data["run_id"], data["status"], data["workflow_id"] = runID, status, p.WorkflowID
 	event := func(typ string) dms.Event {
 		return dms.Event{ID: dms.NewEventID(), Type: typ, WorkspaceID: p.WorkspaceID, CollectionID: p.Event.CollectionID, ResourceID: p.ItemID,

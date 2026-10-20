@@ -6706,6 +6706,143 @@
         }
       }
     },
+    "/v1/workflows/{id}/test-runs": {
+      "post": {
+        "summary": "Test Workflow",
+        "operationId": "testWorkflow",
+        "description": "Start a test run of the workflow's current version, draft or published, whatever its triggers, condition and use. Requires workspace manage and write access to every item. One item starts a run on it; several start one selection run, primary_item_id (default the first) being its item. A test run makes real changes like any run, ignores the workflow's concurrency and raises no wf.* or role.* events. Its event type is test.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowTestRun"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "headers": {
+              "Location": {
+                "description": "The run: /v1/workflow-runs/{id}",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowTestStarted"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{id}/workflow-builtins": {
       "get": {
         "summary": "Built-in Workflows",
@@ -7188,7 +7325,8 @@
               "enum": [
                 "manual",
                 "automatic",
-                "schedule"
+                "schedule",
+                "test"
               ]
             }
           },
@@ -23549,6 +23687,42 @@
         ],
         "additionalProperties": false
       },
+        "WorkflowTestRun": {
+          "type": "object",
+          "properties": {
+            "item_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 100,
+              "description": "Items of the workflow's workspace to test on, in order; duplicates are dropped. None starts a run without an item."
+            },
+            "primary_item_id": {
+              "type": "string",
+              "description": "The run's item when several are given; must be one of item_ids. Default: the first."
+            },
+            "inputs": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Launch form values, checked against the version's input_schema."
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "WorkflowTestStarted": {
+          "type": "object",
+          "properties": {
+            "run_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "run_id"
+          ],
+          "additionalProperties": false
+        },
       "WorkflowBuiltIn": {
         "type": "object",
         "properties": {

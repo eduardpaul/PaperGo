@@ -28,6 +28,8 @@ type RunPayload struct {
 	System bool `json:"system,omitempty"`
 	// StartError fails the run before its script runs, with the reason.
 	StartError string `json:"start_error,omitempty"`
+	// Test marks a test run, which raises no workflow events.
+	Test bool `json:"test,omitempty"`
 	// Serial names the runs of a coalescing workflow on one item, which run
 	// one at a time: a run that starts while another is active waits for
 	// it under SerialExecution(Serial).

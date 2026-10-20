@@ -10,12 +10,28 @@ import { useFormat } from '@/lib/preferences';
 import { runStatusLabel } from './presentation';
 
 const stepKind = { request: 'API request', wait: 'Wait', value: 'Value' } as const;
+const active = ['queued', 'running', 'waiting'];
 
-/** A run with the steps its script recorded, what it logged and its result. */
+/** A run in a dialog. */
 export function RunDetails({ id, onClose }: { id: string; onClose: () => void }) {
+  return <Dialog open onOpenChange={(open) => !open && onClose()}><DialogContent className="max-h-[85vh] overflow-auto">
+    <DialogHeader><DialogTitle>Workflow run details</DialogTitle></DialogHeader>
+    <div className="px-5 pb-5"><RunView id={id} /></div>
+  </DialogContent></Dialog>;
+}
+
+/**
+ * A run with the steps its script recorded, what it logged and its result,
+ * refreshed every `interval` milliseconds while it is active.
+ */
+export function RunView({ id, interval = 3000 }: { id: string; interval?: number }) {
   const client = useQueryClient();
   const format = useFormat();
-  const query = useQuery({ queryKey: ['workflow-runs', 'detail', id], queryFn: async () => (await api<WorkflowRun>(`/v1/workflow-runs/${id}`)).data, refetchInterval: 3000 });
+  const query = useQuery({
+    queryKey: ['workflow-runs', 'detail', id],
+    queryFn: async () => (await api<WorkflowRun>(`/v1/workflow-runs/${id}`)).data,
+    refetchInterval: (q) => (q.state.data && !active.includes(q.state.data.status) ? false : interval),
+  });
   const act = useMutation({
     mutationFn: (action: 'retry' | 'cancel') => api(`/v1/workflow-runs/${id}/${action}`, { method: 'POST' }),
     onSuccess: async (_, action) => {
@@ -24,30 +40,27 @@ export function RunDetails({ id, onClose }: { id: string; onClose: () => void })
     },
   });
   const run = query.data;
-  return <Dialog open onOpenChange={(open) => !open && onClose()}><DialogContent className="max-h-[85vh] overflow-auto">
-    <DialogHeader><DialogTitle>Workflow run details</DialogTitle></DialogHeader>
-    <div className="grid gap-3 px-5 pb-5">
-      <QueryFeedback query={query} />
-      <QueryFeedback query={act} />
-      {run && <>
-        <p>{runStatusLabel(run.status)} · {run.event_type} · {run.actor}{run.workflow_version ? ` · version ${run.workflow_version}` : ''}</p>
-        {run.waiting_until && run.status === 'waiting' && <p className="text-sm text-muted">Continues at {format.dateTime(run.waiting_until)}</p>}
-        {run.error && <pre className="overflow-auto whitespace-pre-wrap text-xs text-danger">{run.error}</pre>}
-        <div className="flex gap-2">
-          {run.status === 'failed' && <Button disabled={act.isPending} onClick={() => act.mutate('retry')}>Retry run</Button>}
-          {['queued', 'running', 'waiting'].includes(run.status) && <Button disabled={act.isPending} onClick={() => act.mutate('cancel')}>Cancel run</Button>}
-        </div>
-        {run.result !== undefined && run.result !== null && <details open><summary>Result</summary><pre className="overflow-auto whitespace-pre-wrap text-xs">{stringifyJSON(run.result)}</pre></details>}
-        <h3 className="font-medium">Steps</h3>
-        {!run.steps?.length && <p className="text-sm text-muted">No steps recorded yet.</p>}
-        <ol className="grid gap-2">{run.steps?.map((step) => <Step key={step.seq} step={step} />)}</ol>
-        {!!run.logs?.length && <>
-          <h3 className="font-medium">Log</h3>
-          <ol className="grid gap-1 font-mono text-xs">{run.logs.map((entry, index) => <li key={index} className={entry.level === 'error' ? 'text-danger' : entry.level === 'warn' ? 'text-warning' : undefined}>{format.dateTime(entry.at)} {entry.message}</li>)}</ol>
-        </>}
+  return <div className="grid gap-3">
+    <QueryFeedback query={query} />
+    <QueryFeedback query={act} />
+    {run && <>
+      <p>{runStatusLabel(run.status)} · {run.event_type} · {run.actor}{run.workflow_version ? ` · version ${run.workflow_version}` : ''}</p>
+      {run.waiting_until && run.status === 'waiting' && <p className="text-sm text-muted">Continues at {format.dateTime(run.waiting_until)}</p>}
+      {run.error && <pre className="overflow-auto whitespace-pre-wrap text-xs text-danger">{run.error}</pre>}
+      <div className="flex gap-2">
+        {run.status === 'failed' && <Button disabled={act.isPending} onClick={() => act.mutate('retry')}>Retry run</Button>}
+        {active.includes(run.status) && <Button disabled={act.isPending} onClick={() => act.mutate('cancel')}>Cancel run</Button>}
+      </div>
+      {run.result !== undefined && run.result !== null && <details open><summary>Result</summary><pre className="overflow-auto whitespace-pre-wrap text-xs">{stringifyJSON(run.result)}</pre></details>}
+      <h3 className="font-medium">Steps</h3>
+      {!run.steps?.length && <p className="text-sm text-muted">No steps recorded yet.</p>}
+      <ol className="grid gap-2">{run.steps?.map((step) => <Step key={step.seq} step={step} />)}</ol>
+      {!!run.logs?.length && <>
+        <h3 className="font-medium">Log</h3>
+        <ol className="grid gap-1 font-mono text-xs">{run.logs.map((entry, index) => <li key={index} className={entry.level === 'error' ? 'text-danger' : entry.level === 'warn' ? 'text-warning' : undefined}>{format.dateTime(entry.at)} {entry.message}</li>)}</ol>
       </>}
-    </div>
-  </DialogContent></Dialog>;
+    </>}
+  </div>;
 }
 
 function Step({ step }: { step: WorkflowRunStep }) {

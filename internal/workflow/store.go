@@ -567,6 +567,102 @@ type Start struct {
 // MaxStartItems bounds one manual start, and one selection.
 const MaxStartItems = 100
 
+// TestStart is the event type of test runs. A workspace manager starts the
+// current version of a workflow, draft or published, on chosen items,
+// whatever its triggers, condition and use: one item starts a run on it,
+// several one selection run. A test run makes real changes like any run,
+// ignores the workflow's concurrency and raises no workflow events, so
+// nothing that follows the workflow reacts to it.
+const TestStart = "test"
+
+// TestRun asks for a test run: its items in order, its primary item
+// (default the first) and its launch inputs.
+type TestRun struct {
+	ItemIDs       []string       `json:"item_ids,omitempty"`
+	PrimaryItemID string         `json:"primary_item_id,omitempty"`
+	Inputs        map[string]any `json:"inputs,omitempty"`
+}
+
+// StartTest starts a test run of a workflow's current version and returns
+// its run ID. The start is logged as an event with the request's
+// transaction; the dispatcher starts the run moments later.
+func (s *Service) StartTest(ctx context.Context, subject, id string, in TestRun) (run string, err error) {
+	err = s.DMS.Write(ctx, func(t *dms.Service) error {
+		w, err := live(ctx, t, id)
+		if err != nil {
+			return err
+		}
+		if err = workspace(ctx, t, subject, w.WorkspaceID, "manage"); err != nil {
+			return err
+		}
+		if err = t.RequireScope(ctx, subject, "list.write"); err != nil {
+			return err
+		}
+		v, err := current(ctx, t, w)
+		if err != nil {
+			return err
+		}
+		def, err := ParseDefinition(v.Definition)
+		if err != nil {
+			return err
+		}
+		inputs, err := def.launchInputs(in.Inputs)
+		if err != nil {
+			return err
+		}
+		if def.InputSchema != nil {
+			if err = forms.CheckValues(ctx, t, subject, w.WorkspaceID, def.InputSchema, inputs, "inputs"); err != nil {
+				return err
+			}
+		}
+		items := make([]string, 0, len(in.ItemIDs))
+		for _, itemID := range in.ItemIDs {
+			if !slices.Contains(items, itemID) {
+				items = append(items, itemID)
+			}
+		}
+		if len(items) > MaxStartItems {
+			return dms.Invalid(fmt.Sprintf("test at most %d items at once", MaxStartItems))
+		}
+		primary := in.PrimaryItemID
+		if primary != "" && !slices.Contains(items, primary) {
+			return dms.Invalid("primary_item_id must be one of item_ids")
+		}
+		if primary == "" && len(items) > 0 {
+			primary = items[0]
+		}
+		e := dms.Event{ID: dms.NewEventID(), Type: TestStart, WorkspaceID: w.WorkspaceID, Actor: subject,
+			Data: map[string]any{"workflow_id": w.ID, "workflow_version": v.Number, "inputs": inputs}}
+		for _, itemID := range items {
+			r, err := t.Authorize(ctx, subject, itemID, "write")
+			if err != nil {
+				return err
+			}
+			if r.Kind != "item" || r.WorkspaceID != w.WorkspaceID {
+				return issue("wrong_workspace", "Choose items from this workflow's workspace.")
+			}
+			if itemID == primary && r.ContainerID != nil {
+				e.CollectionID = *r.ContainerID
+			}
+		}
+		if err = s.manualReadiness(ctx, t, w, v.CreatedBy, def, items); err != nil {
+			return err
+		}
+		e.ResourceID = primary
+		if len(items) > 1 {
+			members := make([]any, len(items))
+			for i, itemID := range items {
+				members[i] = itemID
+			}
+			e.Data["items"] = members
+		}
+		t.Emit(ctx, e)
+		run = RunID(w.ID, e.ID)
+		return nil
+	})
+	return
+}
+
 // StartRuns starts a workflow by hand and returns the run IDs. Starting on
 // items needs write access to each item; starting without an item needs
 // manage access to the workspace. Everything is checked before any run
@@ -758,7 +854,7 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event) (started []s
 		}
 		var candidates []*workflows.Workflow
 		switch e.Type {
-		case TriggerManual, TriggerSchedule:
+		case TriggerManual, TriggerSchedule, TestStart:
 			id, _ := e.Data["workflow_id"].(string)
 			w, err := findWorkflow(ctx, t, id)
 			if err != nil {
@@ -792,17 +888,17 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event) (started []s
 			lookups[key] = candidates
 		}
 		for _, w := range candidates {
-			if e.Type != TriggerManual && w.Role != "" && (w.CollectionID == "" || e.CollectionID != "" && w.CollectionID != e.CollectionID || !w.AutomaticProvider) {
+			if e.Type != TriggerManual && e.Type != TestStart && w.Role != "" && (w.CollectionID == "" || e.CollectionID != "" && w.CollectionID != e.CollectionID || !w.AutomaticProvider) {
 				continue
 			}
 			versionKey := w.ID
-			if e.Type == TriggerManual {
+			if e.Type == TriggerManual || e.Type == TestStart {
 				versionKey += fmt.Sprint(e.Data["workflow_version"])
 			}
 			m := versions[versionKey]
 			if m == nil {
 				v, err := current(ctx, t, w)
-				if e.Type == TriggerManual {
+				if e.Type == TriggerManual || e.Type == TestStart {
 					number, ok := forms.Number(e.Data["workflow_version"])
 					if !ok {
 						return nil, nil, dms.Invalid("manual event requires its accepted workflow version")
@@ -834,7 +930,7 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event) (started []s
 				}
 			}
 			startError := ""
-			if m.def.Condition != nil && e.Type != TriggerManual && e.Type != TriggerSchedule {
+			if m.def.Condition != nil && e.Type != TriggerManual && e.Type != TriggerSchedule && e.Type != TestStart {
 				if e.ResourceID == "" || e.CollectionID == "" {
 					continue
 				}
@@ -846,7 +942,7 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event) (started []s
 				}
 			}
 			members := eventMembers(e)
-			if e.Type == TriggerManual {
+			if e.Type == TriggerManual || e.Type == TestStart {
 				for _, id := range members {
 					if _, err := t.Authorize(ctx, e.Actor, id, "write"); err != nil {
 						startError = "Manual run is no longer authorized for the selected items."
@@ -857,7 +953,7 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event) (started []s
 			// A coalescing workflow runs one item at a time: a run that starts
 			// while another is active waits for it.
 			waiting := false
-			if c := m.def.Concurrency; c != "" && c != ConcurrencyParallel && len(members) > 0 {
+			if c := m.def.Concurrency; c != "" && c != ConcurrencyParallel && len(members) > 0 && e.Type != TestStart {
 				busy, err := activeRuns(ctx, t, w.ID, members)
 				if err != nil {
 					return nil, nil, err
@@ -907,10 +1003,11 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event) (started []s
 			}
 			payload := RunPayload{WorkflowID: w.ID, Key: w.Key, Version: m.v.Number, WorkspaceID: w.WorkspaceID, ItemID: eventItemID(e), Event: runEvent(e),
 				Params: m.params(), Role: w.Role, System: systemWorkflow(w.BuiltinKey), StartError: startError}
-			if m.def.Concurrency == ConcurrencyCoalesce && len(members) > 0 {
+			if m.def.Concurrency == ConcurrencyCoalesce && len(members) > 0 && e.Type != TestStart {
 				payload.Serial = w.ID + ":" + members[0]
 			}
-			if e.Type == TriggerManual {
+			payload.Test = e.Type == TestStart
+			if e.Type == TriggerManual || e.Type == TestStart {
 				if inputs, ok := e.Data["inputs"].(map[string]any); ok {
 					payload.Input = inputs
 				}
@@ -941,7 +1038,7 @@ func runEvent(e dms.Event) RunEvent {
 
 // eventMembers are the items a run started by e works on.
 func eventMembers(e dms.Event) []string {
-	if e.Type == TriggerManual {
+	if e.Type == TriggerManual || e.Type == TestStart {
 		if list, _ := e.Data["items"].([]any); len(list) > 0 {
 			out := make([]string, 0, len(list))
 			for _, v := range list {
@@ -1006,7 +1103,7 @@ func (m *matchable) params() map[string]any {
 
 // accepts reports whether any trigger of e's type accepts e.
 func (m *matchable) accepts(ctx context.Context, t *dms.Service, e dms.Event) (bool, error) {
-	if e.Type == TriggerManual || e.Type == TriggerSchedule {
+	if e.Type == TriggerManual || e.Type == TriggerSchedule || e.Type == TestStart {
 		// Targeted events were checked when they were raised.
 		return true, nil
 	}
