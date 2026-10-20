@@ -6,6 +6,7 @@ package sdk
 import (
 	_ "embed"
 	"encoding/json"
+	"net/url"
 	"strings"
 )
 
@@ -32,11 +33,19 @@ var excluded = func() [][]string {
 	return patterns
 }()
 
-// Excluded reports whether scripts are refused the API path, which has no
-// query string. It applies scope.json as the client generator does: * is one
-// segment and ** one or more.
+// Excluded reports whether scripts are refused the escaped API path, which
+// has no query string. Like http.ServeMux, it unescapes each path segment
+// separately. It applies scope.json as the client generator does: * is one
+// segment and ** one or more. Invalid escapes are refused.
 func Excluded(path string) bool {
 	segments := strings.Split(strings.Trim(path, "/"), "/")
+	for i, segment := range segments {
+		decoded, err := url.PathUnescape(segment)
+		if err != nil {
+			return true
+		}
+		segments[i] = decoded
+	}
 	for _, pattern := range excluded {
 		if match(pattern, segments) {
 			return true

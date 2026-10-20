@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -333,6 +334,7 @@ func (h *host) wait(ids []string) goja.Value {
 func (h *host) textCodecs() {
 	rt := h.rt
 	uint8Array, _ := goja.AssertConstructor(rt.Get("Uint8Array"))
+	isView, _ := goja.AssertFunction(rt.Get("ArrayBuffer").ToObject(rt).Get("isView"))
 	_ = rt.Set("TextEncoder", func(call goja.ConstructorCall) *goja.Object {
 		_ = call.This.Set("encoding", "utf-8")
 		_ = call.This.Set("encode", func(s goja.Value) goja.Value {
@@ -351,7 +353,7 @@ func (h *host) textCodecs() {
 	_ = rt.Set("TextDecoder", func(call goja.ConstructorCall) *goja.Object {
 		_ = call.This.Set("encoding", "utf-8")
 		_ = call.This.Set("decode", func(v goja.Value) string {
-			b := bytesOf(rt, v)
+			b := bytesOf(rt, v, isView)
 			return strings.ToValidUTF8(string(b), "�")
 		})
 		return nil
@@ -359,18 +361,34 @@ func (h *host) textCodecs() {
 }
 
 // bytesOf returns the bytes of an ArrayBuffer or of a view of one.
-func bytesOf(rt *goja.Runtime, v goja.Value) []byte {
+func bytesOf(rt *goja.Runtime, v goja.Value, isView goja.Callable) []byte {
 	if v == nil || goja.IsUndefined(v) || goja.IsNull(v) {
 		return nil
 	}
-	if buf, ok := v.Export().(goja.ArrayBuffer); ok {
-		return buf.Bytes()
+	if v.ExportType() == reflect.TypeFor[goja.ArrayBuffer]() {
+		return v.Export().(goja.ArrayBuffer).Bytes()
 	}
-	obj := v.ToObject(rt)
-	buf, ok := obj.Get("buffer").Export().(goja.ArrayBuffer)
-	if !ok {
+	view, err := isView(goja.Undefined(), v)
+	if err != nil {
+		panic(err)
+	}
+	if !view.ToBoolean() {
 		panic(rt.NewTypeError("TextDecoder.decode needs an ArrayBuffer or a view of one"))
 	}
-	offset, length := obj.Get("byteOffset").ToInteger(), obj.Get("byteLength").ToInteger()
-	return buf.Bytes()[offset : offset+length]
+	obj := v.ToObject(rt)
+	buffer := obj.Get("buffer")
+	if buffer == nil || buffer.ExportType() != reflect.TypeFor[goja.ArrayBuffer]() {
+		panic(rt.NewTypeError("TextDecoder.decode needs a view with an ArrayBuffer"))
+	}
+	buf := buffer.Export().(goja.ArrayBuffer)
+	offsetValue, lengthValue := obj.Get("byteOffset"), obj.Get("byteLength")
+	if offsetValue == nil || lengthValue == nil || goja.IsUndefined(offsetValue) || goja.IsUndefined(lengthValue) {
+		panic(rt.NewTypeError("TextDecoder.decode needs a view with byteOffset and byteLength"))
+	}
+	offset, length := offsetValue.ToInteger(), lengthValue.ToInteger()
+	data := buf.Bytes()
+	if offset < 0 || length < 0 || offset > int64(len(data)) || length > int64(len(data))-offset {
+		panic(rt.NewTypeError("TextDecoder.decode view is outside its ArrayBuffer"))
+	}
+	return data[offset : offset+length]
 }

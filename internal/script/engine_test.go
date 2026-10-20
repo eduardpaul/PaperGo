@@ -441,6 +441,105 @@ export default workflow({
 	}
 }
 
+func TestSandboxRefusesEncodedExcludedPaths(t *testing.T) {
+	for _, path := range []string{
+		"/v1/%69dentity/me/scopes",
+		"/v%31/events",
+		"/v1/%24batch",
+		"/v1/resources/r%2F1/workflow-roles",
+	} {
+		t.Run(path, func(t *testing.T) {
+			m := newMemory(func(Request) Response { return jsonResponse(200, `{}`) })
+			out := execute(t, New(m, 0), Run{ID: "encoded-scope", Artifact: bundle(t, `
+import { workflow } from "@papergo/workflow";
+declare const __papergo: any;
+export default workflow({
+  run() {
+    try {
+      __papergo.request("GET", "http://papergo.workflow`+path+`", {}, undefined);
+      return "allowed";
+    } catch (e) {
+      return e instanceof TypeError ? "refused" : "unexpected error";
+    }
+  },
+});
+`)})
+			if out.Status != Completed || string(out.Output) != `"refused"` || len(m.requests) != 0 {
+				t.Fatalf("outcome: %+v, requests: %+v", out, m.requests)
+			}
+		})
+	}
+}
+
+func TestTextDecoderRejectsInvalidInputs(t *testing.T) {
+	for name, input := range map[string]string{
+		"plain object":       `{}`,
+		"null prototype":     `Object.create(null)`,
+		"number":             `42`,
+		"string":             `"text"`,
+		"array":              `[65]`,
+		"fake view":          `{ buffer: new ArrayBuffer(1), byteOffset: -1, byteLength: 1 }`,
+		"negative offset":    `Object.defineProperty(new Uint8Array(1), "byteOffset", { value: -1 })`,
+		"negative length":    `Object.defineProperty(new Uint8Array(1), "byteLength", { value: -1 })`,
+		"offset past buffer": `Object.defineProperty(new Uint8Array(1), "byteOffset", { value: 2 })`,
+		"length past buffer": `Object.defineProperty(new Uint8Array(1), "byteLength", { value: 2 })`,
+		"overflowing length": `Object.defineProperty(new Uint8Array(1), "byteLength", { value: 1e100 })`,
+		"missing buffer":     `Object.defineProperty(new Uint8Array(1), "buffer", { value: undefined })`,
+		"invalid buffer":     `Object.defineProperty(new Uint8Array(1), "buffer", { value: {} })`,
+		"missing offset":     `Object.defineProperty(new Uint8Array(1), "byteOffset", { value: undefined })`,
+		"missing length":     `Object.defineProperty(new Uint8Array(1), "byteLength", { value: undefined })`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			out := execute(t, New(newMemory(nil), 0), Run{ID: "invalid-decode", Artifact: bundle(t, `
+import { workflow } from "@papergo/workflow";
+export default workflow({
+  run() {
+    try {
+      new TextDecoder().decode(`+input+`);
+      return "accepted";
+    } catch (e) {
+      return e instanceof TypeError ? "refused" : "unexpected error";
+    }
+  },
+});
+`)})
+			if out.Status != Completed || string(out.Output) != `"refused"` {
+				t.Fatalf("outcome: %+v", out)
+			}
+		})
+	}
+}
+
+func TestTextDecoderReadsBufferViews(t *testing.T) {
+	out := execute(t, New(newMemory(nil), 0), Run{ID: "decode-views", Artifact: bundle(t, `
+import { workflow } from "@papergo/workflow";
+export default workflow({
+  run() {
+    const bytes = new Uint8Array([88, 89, 65, 66, 90]);
+    const decode = (v) => new TextDecoder().decode(v);
+    // Mutating the global must not let a plain object pass the view check.
+    ArrayBuffer.isView = () => true;
+    let spoofed = false;
+    try { decode({ buffer: bytes.buffer, byteOffset: 0, byteLength: 1 }); }
+    catch (e) { spoofed = e instanceof TypeError; }
+    return {
+      buffer: decode(bytes.buffer),
+      subarray: decode(bytes.subarray(2, 4)),
+      dataView: decode(new DataView(bytes.buffer, 2, 2)),
+      wideView: decode(new Uint16Array(bytes.buffer, 2, 1)),
+      empty: decode(bytes.subarray(5)),
+      omitted: new TextDecoder().decode(),
+      spoofed,
+    };
+  },
+});
+`)})
+	want := `{"buffer":"XYABZ","subarray":"AB","dataView":"AB","wideView":"AB","empty":"","omitted":"","spoofed":true}`
+	if out.Status != Completed || string(out.Output) != want {
+		t.Fatalf("outcome: %+v\nwant %s", out, want)
+	}
+}
+
 // Binary bodies travel as ArrayBuffers in both directions.
 func TestBinaryBodies(t *testing.T) {
 	m := newMemory(func(req Request) Response {
