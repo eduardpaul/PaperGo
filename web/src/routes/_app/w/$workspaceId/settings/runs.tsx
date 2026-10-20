@@ -48,7 +48,7 @@ function RunsPage() {
             <div className="min-w-0 flex-1">
               <p className="truncate text-[13px] font-medium">{names.get(run.workflow_id) ?? run.workflow_id}</p>
               <p className="text-xs text-muted">
-                {run.outcome === 'unchanged' ? 'No changes needed' : runStatusLabel(run.status)} · {runOriginLabel(run.event_type)} · {format.dateTime(run.created_at)}
+                {runStatusLabel(run.status)} · {runOriginLabel(run.event_type)} · {format.dateTime(run.created_at)}
                 {run.error ? ` · ${run.error}` : ''}
               </p>
             </div>
@@ -65,7 +65,7 @@ function RunsPage() {
 }
 
 function RunActions({ run, pending, onAct }: { run: WorkflowRun; pending: boolean; onAct: (action: 'cancel' | 'retry') => void }) {
-  if (run.status === 'queued' || run.status === 'running') {
+  if (run.status === 'queued' || run.status === 'running' || run.status === 'waiting') {
     return (
       <Button size="sm" disabled={pending} onClick={() => onAct('cancel')}>
         Cancel

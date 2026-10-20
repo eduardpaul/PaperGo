@@ -151,7 +151,7 @@ describe('reviewed frontend flows', () => {
   });
 
   it('uses the selected built-in workflow version and resets parameters when switching collections', async () => {
-    const workflow = (id: string, version: number, field: string): Workflow => ({ id, collection_id: id, workspace_id: 'workspace', key: id, name: id, description: '', automatic_enabled: false, manual_enabled: true, state: 'published', automatic_provider: false, current_version: 1, definition: {triggers: [{type: 'schedule'}]}, version, parameters: { field } });
+    const workflow = (id: string, version: number, field: string): Workflow => ({ id, collection_id: id, workspace_id: 'workspace', key: id, name: id, description: '', automatic_enabled: false, manual_enabled: true, state: 'published', automatic_provider: false, current_version: 1, source: '', definition: {triggers: [{type: 'schedule'}]}, version, parameters: { field } });
     const builtin: BuiltInState = { key: 'items.expire', name: 'Expire', description: '', per_collection: true, parameters_schema: { properties: { field: { type: 'string', title: 'Expiry field', default: 'default' } } }, workflows: [workflow('a', 2, 'expiry_a'), workflow('b', 9, 'expiry_b')] };
     const writes: { version?: string; body: { collection_id: string; parameters: { field: string } } }[] = [];
     mockAPI((url, init) => {

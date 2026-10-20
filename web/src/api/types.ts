@@ -334,6 +334,9 @@ export interface Workflow {
   collection_id?: string;
   parameters?: Record<string, unknown>;
   current_version: number;
+  /** The current version's TypeScript script. */
+  source: string;
+  /** What the current version's script declares: its triggers and forms. */
   definition: unknown;
   version: number;
 }
@@ -360,20 +363,41 @@ export interface BuiltInState {
   workflows?: Workflow[] | null;
 }
 
+/** One recorded step of a run's script: an API request, a wait or a value it read. */
+export interface WorkflowRunStep {
+  seq: number;
+  kind: 'request' | 'wait' | 'value';
+  name: string;
+  status: 'pending' | 'completed' | 'failed';
+  input?: unknown;
+  output?: unknown;
+  operations?: string[];
+  error?: string;
+  started_at?: string;
+  completed_at?: string;
+}
+
 export interface WorkflowRun {
-  outcome?: string;
-  updated_at?: string;
-  inputs?: Record<string, unknown>;
-  result?: unknown;
-  steps?: { id: number; name: string; error?: string; output?: unknown; started_at?: string; completed_at?: string }[];
   id: string;
   workflow_id: string;
+  workflow_version?: number;
   status: string;
   event_type?: string;
   item_id?: string;
+  items?: string[];
+  retry_of?: string;
   error?: string;
   created_at: string;
+  updated_at?: string;
+  started_at?: string;
+  completed_at?: string;
+  /** When a sleeping run continues. */
+  waiting_until?: string;
   actor?: string;
+  inputs?: Record<string, unknown>;
+  result?: unknown;
+  steps?: WorkflowRunStep[];
+  logs?: { level: 'info' | 'warn' | 'error'; message: string; at: string }[];
 }
 
 export interface AccessToken {
@@ -460,7 +484,8 @@ export interface Task {
   source: 'workflow' | 'user' | 'system';
   workflow_id?: string;
   run_id?: string;
-  node?: string;
+  /** The operation a workflow task's answer ends, which its run waits on. */
+  operation_id?: string;
   status: 'open' | 'completed' | 'cancelled' | 'expired';
   outcome?: string;
   completed_by?: string;

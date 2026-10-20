@@ -255,7 +255,7 @@ an interrupted run leaves behind are dropped by a later run after a day.
 
 ```sh
 PAPERGO_TEST_POSTGRES_DSN='postgres://user:pass@localhost:55433/papergo?sslmode=disable' \
-  go test ./internal/dms ./internal/httpapi ./internal/runner -count=1
+  go test ./internal/dms ./internal/httpapi ./internal/scriptrun -count=1
 ```
 
 `bash scripts/check.sh --postgres` runs the DAL and application suites this way

@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { api } from '@/api/http';
-import { stringifyJSON } from '@/api/json';
 import { allPages, useApiPages } from '@/api/pages';
 import type { Resource, Workflow, WorkflowAvailability } from '@/api/types';
 import { FormDialog } from '@/components/form-dialog';
@@ -183,7 +182,7 @@ export function WorkflowVersions({
   const versions = useQuery({
     queryKey: ['workflow-versions', workflow.id],
     queryFn: () =>
-      allPages<{ number: number; definition: WorkflowDefinition; created_at: string; created_by: string }>(
+      allPages<{ number: number; source: string; definition: WorkflowDefinition; created_at: string; created_by: string }>(
         `/v1/workflows/${workflow.id}/versions`,
       ),
   });
@@ -193,11 +192,11 @@ export function WorkflowVersions({
     <FormDialog
       open
       title={`Versions of ${workflow.name}`}
-      submitLabel="Use this definition"
+      submitLabel="Edit from this version"
       submitDisabled={!canManage || !!workflow.builtin_key || !selected}
       onClose={onClose}
       onSubmit={() => {
-        if (selected) onEdit({ ...workflow, definition: selected.definition });
+        if (selected) onEdit({ ...workflow, source: selected.source, definition: selected.definition });
         onClose();
       }}
     >
@@ -210,7 +209,7 @@ export function WorkflowVersions({
         ))}
       </Select>
       <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded bg-surface-muted p-3 text-xs">
-        {selected && stringifyJSON(selected.definition)}
+        {selected?.source}
       </pre>
     </FormDialog>
   );

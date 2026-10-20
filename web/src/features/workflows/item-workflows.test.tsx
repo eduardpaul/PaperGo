@@ -11,7 +11,7 @@ const clients: QueryClient[] = [];
 afterEach(() => { cleanup(); clients.splice(0).forEach((client) => client.clear()); vi.unstubAllGlobals(); });
 const flow = (id: string, trigger: object, enabled = true): Workflow => ({
   id, key: id, name: id, workspace_id: 'workspace', description: '', version: 1, current_version: 1, automatic_enabled: false, manual_enabled: enabled, state: 'published', automatic_provider: false,
-  definition: { triggers: [trigger], flow: { start: 'end', nodes: { end: { activity: 'end' } } } },
+  source: '', definition: { triggers: [trigger] },
 });
 const entries = [
   flow('single', { type: 'manual', collection_id: 'collection' }),
@@ -79,13 +79,13 @@ it('shows item-scoped history and refreshes its status without exposing manager 
 });
 
 it('shows execution steps and queues a failed run retry for managers', async () => {
-  const fetch = vi.fn(async (input: URL | string, _init?: RequestInit) => new Response(stringifyJSON(String(input).endsWith('/retry') ? { id: 'retry' } : { id: 'run', status: 'failed', event_type: 'manual', steps: [{ id: 1, name: 'Read invoice', error: 'Provider unavailable' }] })));
+  const fetch = vi.fn(async (input: URL | string, _init?: RequestInit) => new Response(stringifyJSON(String(input).endsWith('/retry') ? { id: 'retry' } : { id: 'run', status: 'failed', event_type: 'manual', steps: [{ seq: 0, kind: 'request', name: 'POST /v1/items/item/text', status: 'completed' }], logs: [{ level: 'error', message: 'Provider unavailable', at: '2026-10-20T10:00:00Z' }] })));
   vi.stubGlobal('fetch', fetch);
   const client = new QueryClient();
   clients.push(client);
   render(<QueryClientProvider client={client}><RunDetails id="run" onClose={vi.fn()} /></QueryClientProvider>);
-  expect(await screen.findByText('Read invoice')).toBeTruthy();
-  expect(screen.getByText('Provider unavailable')).toBeTruthy();
+  expect(await screen.findByText(/POST \/v1\/items\/item\/text/)).toBeTruthy();
+  expect(screen.getByText(/Provider unavailable/)).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Retry run' }));
   await waitFor(() => expect(fetch.mock.calls.some(([url, init]) => String(url).endsWith('/v1/workflow-runs/run/retry') && init?.method === 'POST')).toBe(true));
 });
