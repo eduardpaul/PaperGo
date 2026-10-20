@@ -5,7 +5,7 @@ import (
 	"papergo/internal/dms"
 )
 
-func (a *API) registerIntegrations(m *http.ServeMux) {
+func (a *API) registerIntegrations(m *router) {
 	m.HandleFunc("GET /v1/resources/{id}/integrations", foundationRead(a, func(r *http.Request) (any, error) {
 		return a.DMS.ListIntegrations(r.Context(), subject(r), r.PathValue("id"))
 	}))
@@ -26,14 +26,14 @@ func (a *API) registerIntegrations(m *http.ServeMux) {
 		}
 		w.WriteHeader(204)
 	})
-	m.HandleFunc("POST /v1/resources/{id}/integrations/{integrationID}/refresh", func(w http.ResponseWriter, r *http.Request) {
+	m.HandleFunc("POST /v1/resources/{id}/integrations/{integrationID}/refresh", a.idempotent(func(w http.ResponseWriter, r *http.Request) {
 		op, err := a.DMS.RefreshIntegration(r.Context(), subject(r), r.PathValue("id"), r.PathValue("integrationID"))
 		if err != nil {
 			a.failure(w, r, err)
 			return
 		}
-		respond(w, r, 202, op)
-	})
+		Accepted(w, r, op)
+	}))
 	m.HandleFunc("GET /v1/items/{id}/integration", foundationRead(a, func(r *http.Request) (any, error) {
 		return a.DMS.ItemIntegration(r.Context(), subject(r), r.PathValue("id"))
 	}))

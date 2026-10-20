@@ -584,6 +584,23 @@ Maintenance tasks (`RegisterMaintenance(name, every, fn)`) stop the same way.
 | Bulk embedding versus interactive search | 6 | Query latency bound during a sweep |
 | API versus current workflow versus later script | 3–6 (script branch later) | Same operation observed by the API and by a workflow wait |
 
+## Phase 1 as implemented
+
+Phase 1 follows the contracts above, with these concrete choices:
+
+- **Configuration.** Quotas come from `OPERATION_QUOTA_PER_CREATOR`, `OPERATION_QUOTA_PER_WORKSPACE`, `OPERATION_QUOTA_INSTALLATION` and `OPERATION_QUOTA_WORKSPACE_PAYLOAD_BYTES` (0 removes a bound), like the other deployment settings. The `workers` section of `config.yaml` arrives with the runtime in Phase 2.
+- **Service contract.**
+  - `OperationHandler.Execute` replaces `ExternalStep` with the same signature: it receives the claimed operation, whose `Claim` fences its writes.
+  - Steps save through `Service.SaveOperation`, which checkpoints a pending operation or finishes a terminal one.
+  - `Retry(err, after)` marks transient errors.
+  - `Cancelled` is an optional handler hook beside `Failed`.
+- **Claims.**
+  - `operations.Ready` also takes `IDs`, so a step whose transaction rolled back can claim exactly its operation again to fail or defer it.
+  - The loop claims only registered kinds. An operation of a kind no handler serves stays pending with `waiting: queued`; it is not failed.
+  - Transactional steps release their claim after each batch without counting an attempt, so other work can run between batches.
+- **Routes.** `API.Validate` rejects colliding module routes, reused operation IDs and patterns outside `/v1` at startup. The OpenAPI check is the `TestRoutesMatchOpenAPI` test, because the spec is not compiled into the executable. `httpapi.Accepted` writes the 202, or replayed 200, response for operation-starting routes.
+- **Search reindex.** The reindex stamp is the operation's acceptance time instead of a payload field, so identical reindex requests have identical payloads and can be replayed by idempotency key.
+
 ## Settled decisions
 
 - **D1:** execution columns on `operations`.

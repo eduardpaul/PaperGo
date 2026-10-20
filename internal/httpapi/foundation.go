@@ -92,7 +92,7 @@ func foundationRead(a *API, fn func(*http.Request) (any, error)) http.HandlerFun
 		respond(w, r, 200, out)
 	}
 }
-func (a *API) registerFoundation(m *http.ServeMux) {
+func (a *API) registerFoundation(m *router) {
 	m.HandleFunc("GET /v1/collection-templates", foundationRead(a, func(r *http.Request) (any, error) {
 		return a.DMS.CollectionTemplates(r.Context(), subject(r))
 	}))
@@ -182,7 +182,15 @@ func (a *API) registerFoundation(m *http.ServeMux) {
 		return a.DMS.Operations(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("$skiptoken"), queryInt(r, "$top"))
 	}))
 	m.HandleFunc("GET /v1/operations/{id}", foundationRead(a, func(r *http.Request) (any, error) { return a.DMS.Operation(r.Context(), subject(r), r.PathValue("id")) }))
-	m.HandleFunc("POST /v1/resources/{id}/bulk-update", func(w http.ResponseWriter, r *http.Request) {
+	m.HandleFunc("POST /v1/operations/{id}/cancel", func(w http.ResponseWriter, r *http.Request) {
+		op, err := a.DMS.CancelOperation(r.Context(), subject(r), r.PathValue("id"))
+		if err != nil {
+			a.failure(w, r, err)
+			return
+		}
+		respond(w, r, 200, op)
+	})
+	m.HandleFunc("POST /v1/resources/{id}/bulk-update", a.idempotent(func(w http.ResponseWriter, r *http.Request) {
 		var in dms.FilteredBulkUpdate
 		if !a.decode(w, r, &in) {
 			return
@@ -192,9 +200,8 @@ func (a *API) registerFoundation(m *http.ServeMux) {
 			a.failure(w, r, e)
 			return
 		}
-		w.Header().Set("Location", "/v1/operations/"+op.ID)
-		respond(w, r, http.StatusAccepted, op)
-	})
+		Accepted(w, r, op)
+	}))
 	m.HandleFunc("GET /v1/resources/{id}/views", foundationRead(a, func(r *http.Request) (any, error) {
 		return a.DMS.Views(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("$skiptoken"), queryInt(r, "$top"))
 	}))

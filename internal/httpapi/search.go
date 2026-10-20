@@ -12,12 +12,12 @@ import (
 	"papergo/internal/dms"
 )
 
-func (a *API) registerSearch(api *http.ServeMux) {
+func (a *API) registerSearch(api *router) {
 	api.HandleFunc("GET /v1/search", a.search)
 	api.HandleFunc("POST /v1/search", a.search)
 	api.HandleFunc("GET /v1/search/fields", a.searchFields)
 	api.HandleFunc("GET /v1/search/content-types", a.searchContentTypes)
-	api.HandleFunc("POST /v1/search/reindex", a.reindexSearch)
+	api.HandleFunc("POST /v1/search/reindex", a.idempotent(a.reindexSearch))
 	api.HandleFunc("GET /v1/search/status", a.searchStatus)
 }
 
@@ -182,8 +182,7 @@ func (a *API) reindexSearch(w http.ResponseWriter, r *http.Request) {
 		a.failure(w, r, err)
 		return
 	}
-	w.Header().Set("Location", "/v1/operations/"+op.ID)
-	respond(w, r, 202, op)
+	Accepted(w, r, op)
 }
 
 func (a *API) searchStatus(w http.ResponseWriter, r *http.Request) {

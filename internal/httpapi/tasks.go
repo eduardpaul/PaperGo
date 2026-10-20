@@ -13,7 +13,7 @@ import (
 	"papergo/internal/transfer"
 )
 
-func (a *API) registerTasks(api *http.ServeMux) {
+func (a *API) registerTasks(api *router) {
 	api.HandleFunc("GET /v1/me/tasks", a.myTasks)
 	api.HandleFunc("GET /v1/workspaces/{id}/tasks", a.workspaceTasks)
 	api.HandleFunc("POST /v1/workspaces/{id}/tasks", a.createTask)

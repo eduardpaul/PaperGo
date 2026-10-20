@@ -6,7 +6,7 @@ import (
 	"papergo/internal/identity"
 )
 
-func (a *API) registerPreferences(m *http.ServeMux) {
+func (a *API) registerPreferences(m *router) {
 	for _, endpoint := range []struct {
 		path         string
 		organization bool

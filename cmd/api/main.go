@@ -273,6 +273,9 @@ func run(log *slog.Logger) error {
 		a.WebDAV.PublicHost = c.PublicURL.Host
 	}
 	// Content uploads/downloads extend these deadlines while data keeps flowing.
+	if err = a.Validate(); err != nil {
+		return err
+	}
 	server := &http.Server{Addr: c.Address, Handler: a.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 60 * time.Second, WriteTimeout: 120 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 * 1024}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

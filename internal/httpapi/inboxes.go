@@ -5,7 +5,7 @@ import (
 	"papergo/internal/dms"
 )
 
-func (a *API) registerInboxes(m *http.ServeMux) {
+func (a *API) registerInboxes(m *router) {
 	m.HandleFunc("GET /v1/identity/me/home", foundationRead(a, func(r *http.Request) (any, error) { return a.DMS.Home(r.Context(), subject(r)) }))
 	m.HandleFunc("GET /v1/identity/me/inboxes", foundationRead(a, func(r *http.Request) (any, error) { return a.DMS.Inboxes(r.Context(), subject(r)) }))
 	m.HandleFunc("POST /v1/identity/me/inbox/documents", a.createPersonalInboxDocument)

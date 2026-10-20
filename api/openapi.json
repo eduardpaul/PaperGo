@@ -12269,6 +12269,9 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -12282,13 +12285,40 @@
           }
         },
         "responses": {
+          "200": {
+            "description": "An Idempotency-Key returned the operation this request accepted earlier.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              },
+              "Idempotent-Replayed": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
           "202": {
             "description": "Queued operation. Follow Location for progress.",
             "headers": {
               "Location": {
                 "schema": {
                   "type": "string"
-                }
+                },
+                "description": "The operation, at /v1/operations/{id}."
               }
             },
             "content": {
@@ -12322,6 +12352,23 @@
           },
           "422": {
             "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "description": "Too many pending operations for the caller, the workspace or the installation (code operation_quota). Nothing was accepted; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
           },
           "500": {
             "$ref": "#/components/responses/Problem"
@@ -13562,13 +13609,40 @@
           "organization.manage"
         ],
         "responses": {
+          "200": {
+            "description": "An Idempotency-Key returned the operation this request accepted earlier.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              },
+              "Idempotent-Replayed": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
           "202": {
             "description": "Queued package operation. Follow Location for status, result and validation errors.",
             "headers": {
               "Location": {
                 "schema": {
                   "type": "string"
-                }
+                },
+                "description": "The operation, at /v1/operations/{id}."
               }
             },
             "content": {
@@ -13593,6 +13667,23 @@
           },
           "415": {
             "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "description": "Too many pending operations for the caller, the workspace or the installation (code operation_quota). Nothing was accepted; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -13604,7 +13695,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/v1/portability/imports": {
@@ -13635,6 +13731,9 @@
               "maxLength": 200
             },
             "description": "Name of the new workspace. Omit to use the source name. Valid only for workspace packages."
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -13649,13 +13748,40 @@
           }
         },
         "responses": {
+          "200": {
+            "description": "An Idempotency-Key returned the operation this request accepted earlier.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              },
+              "Idempotent-Replayed": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
           "202": {
             "description": "Queued package operation. Follow Location for status, result and validation errors.",
             "headers": {
               "Location": {
                 "schema": {
                   "type": "string"
-                }
+                },
+                "description": "The operation, at /v1/operations/{id}."
               }
             },
             "content": {
@@ -13680,6 +13806,23 @@
           },
           "415": {
             "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "description": "Too many pending operations for the caller, the workspace or the installation (code operation_quota). Nothing was accepted; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
           }
         }
       }
@@ -15714,8 +15857,24 @@
         "summary": "Queue a refresh of this integration only",
         "description": "Requires list Manage and list.write; paused integrations must be resumed. The durable operation carries only the integration ID.",
         "responses": {
-          "202": {
-            "description": "Refresh queued",
+          "200": {
+            "description": "An Idempotency-Key returned the operation this request accepted earlier.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              },
+              "Idempotent-Replayed": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -15724,10 +15883,56 @@
               }
             }
           },
+          "202": {
+            "description": "Refresh queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "description": "Too many pending operations for the caller, the workspace or the installation (code operation_quota). Nothing was accepted; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "default": {
             "$ref": "#/components/responses/Problem"
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/v1/items/{id}/integration": {
@@ -16276,12 +16481,21 @@
           "organization.manage"
         ],
         "responses": {
-          "202": {
-            "description": "Queued operation. Follow Location for progress.",
+          "200": {
+            "description": "An Idempotency-Key returned the operation this request accepted earlier.",
             "headers": {
               "Location": {
                 "schema": {
                   "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              },
+              "Idempotent-Replayed": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
                 }
               }
             },
@@ -16293,16 +16507,57 @@
               }
             }
           },
+          "202": {
+            "description": "Queued operation. Follow Location for progress.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
           "401": {
             "$ref": "#/components/responses/Problem"
           },
           "403": {
             "$ref": "#/components/responses/Problem"
           },
-          "503": {
+          "409": {
             "$ref": "#/components/responses/Problem"
           },
           "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "description": "Too many pending operations for the caller, the workspace or the installation (code operation_quota). Nothing was accepted; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
             "$ref": "#/components/responses/Problem"
           }
         },
@@ -16328,7 +16583,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/v1/search/status": {
@@ -18308,6 +18568,54 @@
         "x-module-scopes": [
           "list.read"
         ]
+      }
+    },
+    "/v1/operations/{id}/cancel": {
+      "post": {
+        "operationId": "cancelOperation",
+        "summary": "Cancel an operation",
+        "description": "Ends a pending operation for its creator or an organization manager. Work in progress is discarded: a running execution cannot publish its result, and work shared with other operations continues for them. Index maintenance cannot be cancelled.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The cancelled operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "description": "The operation already ended (code conflict).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
       }
     }
   },
@@ -20423,7 +20731,7 @@
       },
       "Operation": {
         "type": "object",
-        "description": "Tracked operation executed by a registered handler in bounded transactional batches. Field indexing and filtered bulk edits are built in. Payloads and credential constraints are private; progress and results are visible through operation reads. Terminal records expire after 30 days without an update. Pending work resumes after restart; handlers must be registered before workers start.",
+        "description": "Tracked operation executed by a registered handler, in bounded transactional batches or outside the database writer under a renewed claim. Field indexing and filtered bulk edits are built in. Payloads, credential constraints and claims are private; progress and results are visible through operation reads. Pending work resumes after restart: an execution that stops gives its claim back or lets it expire, and transient failures retry later. Terminal records expire after 30 days without an update.",
         "properties": {
           "id": {
             "type": "string"
@@ -20455,8 +20763,10 @@
               "pending",
               "succeeded",
               "failed",
-              "superseded"
-            ]
+              "superseded",
+              "cancelled"
+            ],
+            "description": "superseded: replaced by newer work; cancelled: withdrawn by its creator or an organization manager."
           },
           "processed": {
             "type": "integer",
@@ -20509,6 +20819,45 @@
           },
           "trace_id": {
             "type": "string"
+          },
+          "workspace_id": {
+            "type": "string",
+            "description": "Workspace the operation belongs to; absent for organization work."
+          },
+          "waiting": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "retry",
+              "scheduled",
+              "remote"
+            ],
+            "description": "Why a pending operation has not finished: queued for a worker, running now, waiting to retry after a transient failure, scheduled for a later attempt, or waiting for remote work it joined."
+          },
+          "attempts": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Executions that began, including the current one."
+          },
+          "next_attempt_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When a waiting operation is next attempted."
+          },
+          "deadline": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Latest completion; past it the operation fails with deadline_exceeded."
+          },
+          "error_code": {
+            "type": "string",
+            "enum": [
+              "deadline_exceeded",
+              "retries_exhausted",
+              "forbidden"
+            ],
+            "description": "Why a failed operation failed, when the reason is one clients act on: its deadline passed, its retries ran out, or its creator lost permission."
           }
         },
         "required": [
@@ -26438,6 +26787,20 @@
           "edges",
           "truncated"
         ]
+      }
+    },
+    "parameters": {
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": false,
+        "description": "Makes the request safe to retry: a repeat with the same key, by the same caller, for the same operation kind and container and with the same request, returns the operation accepted first (200 with Idempotent-Replayed) instead of accepting another. The same key with a different request is rejected with 409 idempotency_conflict. A key stays bound while its operation is pending and for 30 days after it finishes; after that it names a new operation.",
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[\\x21-\\x7e]+$"
+        }
       }
     }
   }

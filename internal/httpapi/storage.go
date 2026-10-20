@@ -2,7 +2,7 @@ package httpapi
 
 import "net/http"
 
-func (a *API) registerStorage(api *http.ServeMux) {
+func (a *API) registerStorage(api *router) {
 	api.HandleFunc("GET /v1/storage/status", a.storageStatus)
 }
 

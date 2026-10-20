@@ -654,7 +654,7 @@ func (s *Service) importCorePackage(ctx context.Context, store storage.Store, su
 	// Imported entries raised no change events: rebuild the search index,
 	// file content included (the imported text is reused, not read again).
 	if s.search != nil {
-		raw, _ := json.Marshal(searchReindexPayload{Stamp: time.Now().UnixNano(), Content: true})
+		raw, _ := json.Marshal(searchReindexPayload{Content: true})
 		if _, _, err = s.accept(ctx, operations.Operation{Kind: OperationKindSearchReindex, CreatedBy: systemSubject, Payload: raw}, false); err != nil {
 			return result, err
 		}

@@ -49,6 +49,8 @@ type API struct {
 	// BrowserSignIn, when set, tells the web frontend which OIDC client signs
 	// users in. It is public configuration: an issuer, a client ID and scopes.
 	BrowserSignIn *BrowserSignIn
+	// Modules contribute feature routes; Validate checks they compose.
+	Modules []Module
 }
 
 // BrowserSignIn describes the public OIDC client of the web frontend
@@ -63,22 +65,8 @@ type subjectKey struct{}
 type requestKey struct{}
 type publicURLKey struct{}
 
-func subject(r *http.Request) string { v, _ := r.Context().Value(subjectKey{}).(string); return v }
-func (a *API) Handler() http.Handler {
-	api := http.NewServeMux()
-	api.HandleFunc("GET /v1/events", a.events)
-	a.registerPortability(api)
-	a.registerIdentity(api)
-	a.registerFoundation(api)
-	a.registerIntegrations(api)
-	a.registerSmartFolders(api)
-	a.registerWorkflows(api)
-	a.registerSearch(api)
-	a.registerStorage(api)
-	a.registerTasks(api)
-	// Subrequests already share the outer admission slot; authenticating them
-	// separately preserves authorization overrides without recursively queueing.
-	api.HandleFunc("POST /v1/$batch", a.batch(a.observe(a.authenticate(api))))
+// registerResources adds the workspace, resource and item routes.
+func (a *API) registerResources(api *router) {
 	api.HandleFunc("GET /v1/workspaces", a.browse)
 	api.HandleFunc("POST /v1/workspaces", a.workspace)
 	api.HandleFunc("GET /v1/workspaces/{id}/members", a.workspaceMembers)
@@ -125,8 +113,26 @@ func (a *API) Handler() http.Handler {
 	api.HandleFunc("POST /v1/items/{id}/content/versions/{number}/restore", a.restoreBlob)
 	api.HandleFunc("GET /v1/audit", a.audit)
 	api.HandleFunc("GET /v1/workspaces/{id}/keywords", a.keywords)
-	api.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { a.problem(w, r, 404, "not_found", "route not found") })
-	root := http.NewServeMux()
+}
+
+func subject(r *http.Request) string { v, _ := r.Context().Value(subjectKey{}).(string); return v }
+func (a *API) Handler() http.Handler {
+	root, err := a.root()
+	if err != nil {
+		// Validate reports this before the API serves.
+		panic(err)
+	}
+	return a.observe(root)
+}
+
+// root builds every route the API serves: authentication, health, the
+// authenticated /v1 API, WebDAV and the web frontend.
+func (a *API) root() (*router, error) {
+	api, err := a.routes()
+	if err != nil {
+		return nil, err
+	}
+	root := newRouter()
 	root.HandleFunc("GET /auth/config", func(w http.ResponseWriter, r *http.Request) {
 		mode := auth.Bearer
 		if a.Auth != nil {
@@ -174,7 +180,7 @@ func (a *API) Handler() http.Handler {
 		root.Handle(webdav.Prefix, http.NotFoundHandler())
 		root.Handle(strings.TrimSuffix(webdav.Prefix, "/"), http.NotFoundHandler())
 	}
-	return a.observe(root)
+	return root, nil
 }
 
 // admissionWait is how long a request may queue for a slot before it is shed.
@@ -387,6 +393,11 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 		problem(412, "precondition_failed", "resource changed; read its current ETag before retrying")
 	case errors.Is(err, dms.ErrIntegrationBusy):
 		problem(409, "integration_busy", err.Error())
+	case errors.Is(err, dms.ErrIdempotencyConflict):
+		problem(409, "idempotency_conflict", "this Idempotency-Key was used for a different request")
+	case errors.Is(err, dms.ErrOperationQuota):
+		w.Header().Set("Retry-After", "60")
+		problem(429, "operation_quota", err.Error())
 	case errors.Is(err, dms.ErrConflict) || dberr.IsIntegrityError(err):
 		problem(409, "conflict", "resource conflicts with existing state")
 	case errors.Is(err, storage.ErrUnsupportedFile):

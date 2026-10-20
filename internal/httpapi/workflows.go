@@ -9,7 +9,7 @@ import (
 	"papergo/internal/workflow"
 )
 
-func (a *API) registerWorkflows(api *http.ServeMux) {
+func (a *API) registerWorkflows(api *router) {
 	api.HandleFunc("GET /v1/workflow-catalog", a.workflowCatalog)
 	api.HandleFunc("GET /v1/workspaces/{id}/workflows", a.workflows)
 	api.HandleFunc("POST /v1/workspaces/{id}/workflows", a.createWorkflow)

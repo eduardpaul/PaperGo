@@ -8,7 +8,7 @@ import (
 	"papergo/internal/identity"
 )
 
-func (a *API) registerIdentity(m *http.ServeMux) {
+func (a *API) registerIdentity(m *router) {
 	a.registerPreferences(m)
 	a.registerInboxes(m)
 	d := a.DMS.Directory()

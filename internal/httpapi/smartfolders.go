@@ -5,7 +5,7 @@ import (
 	"papergo/internal/dms"
 )
 
-func (a *API) registerSmartFolders(m *http.ServeMux) {
+func (a *API) registerSmartFolders(m *router) {
 	m.HandleFunc("POST /v1/smart-folders/preview", foundationMutation(a, 200, false, func(r *http.Request, in dms.SmartFolderPreview, _ int) (any, error) {
 		return a.DMS.PreviewSmartFolder(r.Context(), subject(r), in)
 	}))

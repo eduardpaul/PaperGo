@@ -10,7 +10,7 @@ import (
 	"papergo/internal/dms"
 )
 
-func (a *API) registerTaxonomy(m *http.ServeMux) {
+func (a *API) registerTaxonomy(m *router) {
 	m.HandleFunc("GET /v1/term-groups", foundationRead(a, func(r *http.Request) (any, error) {
 		return a.DMS.TermGroups(r.Context(), subject(r), r.URL.Query().Get("$skiptoken"), queryInt(r, "$top"))
 	}))

@@ -10,8 +10,8 @@ import (
 	"time"
 )
 
-func (a *API) registerPortability(m *http.ServeMux) {
-	m.HandleFunc("POST /v1/portability/exports", func(w http.ResponseWriter, r *http.Request) {
+func (a *API) registerPortability(m *router) {
+	m.HandleFunc("POST /v1/portability/exports", a.idempotent(func(w http.ResponseWriter, r *http.Request) {
 		if a.Storage == nil {
 			a.problem(w, r, 503, "storage_unavailable", "package storage is unavailable")
 			return
@@ -27,10 +27,9 @@ func (a *API) registerPortability(m *http.ServeMux) {
 			a.failure(w, r, err)
 			return
 		}
-		w.Header().Set("Location", "/v1/operations/"+op.ID)
-		respond(w, r, 202, op)
-	})
-	m.HandleFunc("POST /v1/portability/imports", func(w http.ResponseWriter, r *http.Request) {
+		Accepted(w, r, op)
+	}))
+	m.HandleFunc("POST /v1/portability/imports", a.idempotent(func(w http.ResponseWriter, r *http.Request) {
 		if err := a.DMS.RequireScope(r.Context(), subject(r), "organization.manage"); err != nil {
 			a.failure(w, r, err)
 			return
@@ -62,9 +61,8 @@ func (a *API) registerPortability(m *http.ServeMux) {
 			a.failure(w, r, err)
 			return
 		}
-		w.Header().Set("Location", "/v1/operations/"+op.ID)
-		respond(w, r, 202, op)
-	})
+		Accepted(w, r, op)
+	}))
 	m.HandleFunc("GET /v1/portability/exports/{id}/package", func(w http.ResponseWriter, r *http.Request) {
 		if a.Storage == nil {
 			a.problem(w, r, 503, "storage_unavailable", "package storage is unavailable")

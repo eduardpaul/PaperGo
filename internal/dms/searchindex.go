@@ -114,10 +114,10 @@ const OperationKindSearchReindex = "search_reindex"
 
 const searchReindexBatch = 200
 
-// searchReindexPayload holds the reindex's stamp: documents not written
-// since it started are removed when it ends.
+// searchReindexPayload is what a reindex does. Its stamp is the time the
+// operation was accepted: documents not written since are removed when it
+// ends.
 type searchReindexPayload struct {
-	Stamp int64 `json:"stamp"`
 	// Rebuild marks the rebuild of an empty store: search is unavailable
 	// until it completes.
 	Rebuild bool `json:"rebuild,omitempty"`
@@ -148,7 +148,7 @@ func (s *Service) RebuildSearch(ctx context.Context) error {
 			s.searchRebuild.Store(pending)
 			return err
 		}
-		raw, _ := json.Marshal(searchReindexPayload{Stamp: time.Now().UnixNano(), Rebuild: true, Content: true})
+		raw, _ := json.Marshal(searchReindexPayload{Rebuild: true, Content: true})
 		if _, _, err = t.accept(ctx, operations.Operation{Kind: OperationKindSearchReindex, CreatedBy: systemSubject, Payload: raw}, false); err != nil {
 			return err
 		}
@@ -191,7 +191,7 @@ func (s *Service) StartSearchReindex(ctx context.Context, subject string, in Sea
 	if in.Force && !in.Content {
 		return nil, invalid("force applies to a content reindex")
 	}
-	raw, _ := json.Marshal(searchReindexPayload{Stamp: time.Now().UnixNano(), Content: in.Content, Force: in.Force})
+	raw, _ := json.Marshal(searchReindexPayload{Content: in.Content, Force: in.Force})
 	return s.EnqueueOperation(ctx, subject, "", OperationKindSearchReindex, raw)
 }
 
@@ -213,7 +213,8 @@ func (s *Service) searchReindexStep(ctx context.Context, op *operations.Operatio
 	if err != nil {
 		return err
 	}
-	if err = s.search.UpsertDocuments(ctx, docs, p.Stamp); err != nil {
+	stamp := op.CreatedAt.UnixNano()
+	if err = s.search.UpsertDocuments(ctx, docs, stamp); err != nil {
 		return err
 	}
 	if p.Content {
@@ -226,7 +227,7 @@ func (s *Service) searchReindexStep(ctx context.Context, op *operations.Operatio
 		op.AfterItemID = ids[len(ids)-1]
 		return s.SaveOperation(ctx, op)
 	}
-	if err = s.search.DeleteDocuments(ctx, search.Selection{Before: p.Stamp}); err != nil {
+	if err = s.search.DeleteDocuments(ctx, search.Selection{Before: stamp}); err != nil {
 		return err
 	}
 	op.Status, op.Progress = operations.StatusSucceeded, 100
