@@ -35,7 +35,7 @@ def run(*command):
 def digest(paths, root):
     result = hashlib.sha256()
     for path in sorted(paths):
-        result.update(path.relative_to(root).as_posix().encode() + b'\0')
+        result.update(Path(os.path.relpath(path, root)).as_posix().encode() + b'\0')
         result.update(path.read_bytes())
         result.update(b'\0')
     return result.hexdigest()
@@ -47,6 +47,8 @@ def frontend_state():
     for directory, folders, files in os.walk(web):
         folders[:] = sorted(name for name in folders if name not in {'node_modules', 'dist', '.git'})
         sources.extend(Path(directory) / name for name in files if not name.endswith('.tsbuildinfo'))
+    # The script editor bundles the workflow SDK's declarations.
+    sources.append(ROOT / 'sdk/dist/workflow.d.ts')
     outputs = [path for path in (web / 'dist').rglob('*') if path.is_file()]
     return {'source': digest(sources, web), 'output': digest(outputs, web)}
 

@@ -4,6 +4,7 @@ WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
 COPY web ./
+COPY sdk/dist/workflow.d.ts /src/sdk/dist/
 RUN npm run build
 
 # Export once on a fixed CPU platform; every target uses this verified graph.

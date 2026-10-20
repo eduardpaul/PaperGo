@@ -1,10 +1,13 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { parseJSON, stringifyJSON } from '@/api/json';
 import type { Workflow } from '@/api/types';
 import { WorkflowEditor } from './workflow-editor';
+
+// Monaco needs a browser; the editor's text area stands in.
+vi.mock('./monaco', () => new Promise(() => {}));
 
 afterEach(() => {
   cleanup();

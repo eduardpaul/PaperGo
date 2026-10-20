@@ -6,7 +6,7 @@ The API PaperGo workflow scripts are written against. The engine is described in
 npm ci --prefix sdk
 npm --prefix sdk run generate   # regenerate src/client after api/openapi.json changes
 npm --prefix sdk run typecheck
-npm --prefix sdk run build      # rebuild dist/sdk.js, which Go embeds
+npm --prefix sdk run build      # rebuild dist/sdk.js, which Go embeds, and dist/workflow.d.ts
 ```
 
-`src/client/` and `dist/sdk.js` are generated and committed. `scope.json` lists the API paths scripts cannot call; the generator and the engine both read it.
+`src/client/`, `dist/sdk.js` and `dist/workflow.d.ts` are generated and committed. `dist/workflow.d.ts` holds the SDK's declarations, Kiota's and the runtime's globals (`src/globals.d.ts`) in one file; the web app's script editor checks scripts against it. `scope.json` lists the API paths scripts cannot call; the generator and the engine both read it.

@@ -46,6 +46,8 @@ export default workflow<{ reviewer: string }>({
 
 A script imports `@papergo/workflow`, the workflow SDK, and may be split into its own functions, but not into other files. It runs in an embedded JavaScript engine without network or file access. Its only way to act is `ctx.api`, a client of the [PaperGo REST API](application-foundation.md) generated from the OpenAPI contract, with typed requests and responses. The [SDK README](../sdk/README.md) describes the client and how it is regenerated.
 
+The web app's workflow editor checks scripts as you type: it completes the SDK and the API client, shows their documentation on hover, and marks type errors, against ECMAScript 2022 and the runtime's globals only.
+
 `run(ctx, input)` receives the run's context and, for a manual start, its launch form's values:
 
 | Field | Value |

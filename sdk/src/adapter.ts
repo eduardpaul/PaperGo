@@ -1,3 +1,5 @@
+/// <reference path="./globals.d.ts" />
+
 // HostRequestAdapter sends Kiota requests to the workflow engine instead of the
 // network. The engine runs each request in-process as the workflow version's
 // author and records it as one exactly-once step, so a replay returns the
