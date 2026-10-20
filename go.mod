@@ -10,7 +10,6 @@ require (
 	github.com/daulet/tokenizers v1.27.0
 	github.com/dbos-inc/dbos-transact-golang v1.6.0
 	github.com/dop251/goja v0.0.0-20261004200024-481fdb442bb4
-	github.com/dop251/goja_nodejs v0.0.0-20260918173711-b481721df8a2
 	github.com/emersion/go-ical v0.0.0-20250609112844-439c63cef608
 	github.com/evanw/esbuild v0.28.2
 	github.com/go-jose/go-jose/v4 v4.1.4
@@ -60,7 +59,6 @@ require (
 	github.com/docker/docker v28.2.2+incompatible // indirect
 	github.com/docker/go-connections v0.5.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
-	github.com/dop251/base64dec v0.0.0-20231022112746-c6c9f9a96217 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/ebitengine/purego v0.10.1 // indirect
 	github.com/fatih/color v1.18.0 // indirect

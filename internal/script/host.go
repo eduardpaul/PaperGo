@@ -17,10 +17,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/dop251/goja"
-	"github.com/dop251/goja_nodejs/buffer"
-	"github.com/dop251/goja_nodejs/console"
-	"github.com/dop251/goja_nodejs/require"
-	nodeurl "github.com/dop251/goja_nodejs/url"
 	"github.com/google/uuid"
 	"papergo/internal/dal/runs"
 	"papergo/sdk"
@@ -51,33 +47,14 @@ type host struct {
 }
 
 // runtime returns a runtime with the globals scripts may use: ECMAScript,
-// the SDK's host functions, Buffer, URL, TextEncoder, TextDecoder, console
-// and an empty process. require() resolves only the SDK; it reads no files.
+// the SDK's host functions, TextEncoder and TextDecoder. The SDK adds
+// console. There is no require, process, timer or network access.
 func (h *host) runtime() *goja.Runtime {
 	rt := goja.New()
 	h.rt = rt
 	rt.SetTimeSource(h.now)
 	rt.SetRandSource(h.random)
 	rt.SetMaxCallStackSize(maxCallStack)
-
-	registry := require.NewRegistry(require.WithLoader(func(string) ([]byte, error) {
-		return nil, require.ModuleFileDoesNotExistError
-	}))
-	registry.RegisterNativeModule(SDKModule, func(rt *goja.Runtime, module *goja.Object) {
-		_ = module.Set("exports", rt.Get("__papergoSdk"))
-	})
-	// goja_nodejs's own process module exposes the server's environment.
-	registry.RegisterNativeModule("process", func(rt *goja.Runtime, module *goja.Object) {
-		process := rt.NewObject()
-		_ = process.Set("env", rt.NewObject())
-		_ = module.Set("exports", process)
-	})
-	registry.RegisterNativeModule(console.ModuleName, console.RequireWithPrinter(printer{h}))
-	registry.Enable(rt)
-	buffer.Enable(rt)
-	nodeurl.Enable(rt)
-	console.Enable(rt)
-	_ = rt.Set("process", require.Require(rt, "process"))
 	h.textCodecs()
 
 	papergo := rt.NewObject()
@@ -88,12 +65,6 @@ func (h *host) runtime() *goja.Runtime {
 	_ = rt.Set("__papergo", papergo)
 	return rt
 }
-
-type printer struct{ h *host }
-
-func (p printer) Log(s string)   { p.h.log("info", s) }
-func (p printer) Warn(s string)  { p.h.log("warn", s) }
-func (p printer) Error(s string) { p.h.log("error", s) }
 
 // log keeps entries written after the replay caught up with the journal;
 // earlier ones were written by the slice that recorded those steps.
@@ -233,8 +204,10 @@ func ResponseOutput(response Response) json.RawMessage {
 	return b
 }
 
-// request runs an API request through the SDK's adapter.
-func (h *host) request(method, rawURL string, headers map[string]string, body goja.Value, encoded bool) goja.Value {
+// request runs an API request through the SDK's adapter. A text body is a
+// string and a binary one an ArrayBuffer; a response's binary body comes back
+// as the ArrayBuffer bytes.
+func (h *host) request(method, rawURL string, headers map[string]string, body goja.Value) goja.Value {
 	if h.abort != nil || h.suspended {
 		return goja.Undefined()
 	}
@@ -248,10 +221,8 @@ func (h *host) request(method, rawURL string, headers map[string]string, body go
 	}
 	var content []byte
 	if body != nil && !goja.IsUndefined(body) && !goja.IsNull(body) {
-		if encoded {
-			if content, err = base64.StdEncoding.DecodeString(body.String()); err != nil {
-				panic(h.rt.NewTypeError("the request body is not base64"))
-			}
+		if buf, ok := body.Export().(goja.ArrayBuffer); ok {
+			content = append([]byte(nil), buf.Bytes()...)
 		} else {
 			content = []byte(body.String())
 		}
@@ -292,8 +263,16 @@ func (h *host) request(method, rawURL string, headers map[string]string, body go
 		_ = headerObject.Set(name, value)
 	}
 	_ = obj.Set("headers", headerObject)
-	_ = obj.Set("body", out.Body)
-	_ = obj.Set("base64", out.Base64)
+	if out.Base64 {
+		data, err := base64.StdEncoding.DecodeString(out.Body)
+		if err != nil {
+			return h.stop(fmt.Errorf("step %d of %s: %w", h.next-1, h.run.ID, err))
+		}
+		_ = obj.Set("body", "")
+		_ = obj.Set("bytes", h.rt.NewArrayBuffer(data))
+	} else {
+		_ = obj.Set("body", out.Body)
+	}
 	return obj
 }
 

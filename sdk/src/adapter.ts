@@ -111,20 +111,12 @@ export class HostRequestAdapter implements RequestAdapter {
     info.headers.forEach((values, name) => {
       headers[name.toLowerCase()] = Array.from(values).join(", ");
     });
-    let body: string | undefined;
-    let encoded = false;
-    if (info.content !== undefined) {
-      if (textType.test(mediaType(headers["content-type"]))) {
-        body = new TextDecoder().decode(info.content);
-      } else {
-        body = Buffer.from(info.content).toString("base64");
-        encoded = true;
-      }
-    }
+    let body: string | ArrayBuffer | undefined = info.content;
+    if (body !== undefined && textType.test(mediaType(headers["content-type"]))) body = new TextDecoder().decode(body);
     // RequestInformation.URL expands with std-uritemplate; see uritemplate.ts.
     const raw = info.pathParameters["request-raw-url"];
     const url = typeof raw === "string" ? raw : expand(info.urlTemplate ?? "", { ...info.queryParameters, ...info.pathParameters });
-    return host.request(info.httpMethod ?? "GET", url, headers, body, encoded);
+    return host.request(info.httpMethod ?? "GET", url, headers, body);
   }
 
   private content(response: HostResponse, errors: ErrorMappings | undefined): ParseNode | undefined {
@@ -137,7 +129,7 @@ export class HostRequestAdapter implements RequestAdapter {
   // for the factory and decoding it again costs more than the parse.
   private parse(response: HostResponse): ParseNode {
     const type = mediaType(response.headers["content-type"]);
-    if (!response.base64 && jsonType.test(type)) return new JsonParseNode(JSON.parse(response.body), this.store);
+    if (!response.bytes && jsonType.test(type)) return new JsonParseNode(JSON.parse(response.body), this.store);
     return this.parseNodes.getRootParseNode(type, bytes(response));
   }
 
@@ -166,10 +158,11 @@ export class HostRequestAdapter implements RequestAdapter {
 }
 
 function isEmpty(response: HostResponse): boolean {
-  return response.status === 204 || response.status === 304 || response.body === "";
+  return response.status === 204 || response.status === 304 || (response.body === "" && !response.bytes?.byteLength);
 }
 
 function bytes(response: HostResponse): ArrayBuffer {
-  const view = response.base64 ? new Uint8Array(Buffer.from(response.body, "base64")) : new TextEncoder().encode(response.body);
+  if (response.bytes) return response.bytes;
+  const view = new TextEncoder().encode(response.body);
   return view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength) as ArrayBuffer;
 }

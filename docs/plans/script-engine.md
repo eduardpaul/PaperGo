@@ -43,7 +43,7 @@ A run executes in slices. Each slice creates a goja runtime, replays the script 
 
 `internal/script` bundles a script with esbuild's Go API (one file; it may import only `@papergo/workflow`) and keeps compiled programs in an LRU cache keyed by bundle hash. The SDK program is compiled once and shared.
 
-Each runtime provides ECMAScript, `require` for `@papergo/workflow`, and from goja_nodejs `Buffer`, `URL`, `URLSearchParams` and `console`. The engine adds `TextEncoder`, `TextDecoder` and an empty `process`. goja_nodejs's own `process` module copies the server's environment and registers itself for every `require`, so the engine registers its own `process` module first, and `require` reads no files. There is no `fetch`, timer or event loop.
+Each runtime provides ECMAScript and the SDK's host functions; the engine adds `TextEncoder` and `TextDecoder`, and the SDK defines `console`, which writes to the run's log. There is no `require`, `process`, `fetch`, timer or event loop: a bundle reaches the SDK through the `__papergoSdk` global the engine runs first. Binary request and response bodies cross the host as `ArrayBuffer`s. Without `Buffer` and `process`, Kiota takes its browser code path, which differs only for byte-array model fields; the client has none.
 
 ## Operations as the long-work contract
 
@@ -66,9 +66,9 @@ const text = await ctx.api.v1.items.byId(itemId).text.get();
 | Benchmark | Time | Allocated |
 | --- | --- | --- |
 | Compile the SDK, once per process | 28 ms | 10.8 MB |
-| A runtime with the engine's globals | 0.2 ms | 0.13 MB |
-| A runtime with the SDK loaded | 4.2 ms | 2.5 MB |
-| `BenchmarkSlice`: a script that returns at once | 4.3 ms | 2.6 MB |
+| A runtime with the engine's globals | 0.02 ms | 0.02 MB |
+| A runtime with the SDK loaded | 4.0 ms | 2.4 MB |
+| `BenchmarkSlice`: a script that returns at once | 3.7 ms | 2.5 MB |
 | `BenchmarkReplay`: replaying 100 recorded Kiota requests | 55 ms | 29 MB |
 | `BenchmarkReplayHost`: the same 100 requests through the host directly | 5.9 ms | 3.1 MB |
 

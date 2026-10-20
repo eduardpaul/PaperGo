@@ -415,34 +415,59 @@ func TestSandbox(t *testing.T) {
 	m := newMemory(nil)
 	out := execute(t, New(m, 0), Run{ID: "run-8", Artifact: bundle(t, `
 import { workflow } from "@papergo/workflow";
-// A require() call esbuild can see is an import; reach the runtime's own.
-const require = (globalThis as any).require as (name: string) => any;
-declare const process: any;
 declare const __papergo: any;
 function refused(fn: () => unknown): string {
   try { fn(); return "allowed"; } catch (e: any) { return "refused"; }
 }
 export default workflow({
   async run() {
+    const scope = globalThis as any;
+    console.log("logged", { n: 1 });
     return {
-      env: Object.keys(process.env).length + Object.keys(require("process").env).length,
-      fs: refused(() => require("fs")),
-      file: refused(() => require("/etc/hostname")),
-      relative: refused(() => require("./other.js")),
-      fetch: typeof (globalThis as any).fetch,
-      setTimeout: typeof (globalThis as any).setTimeout,
-      identity: refused(() => __papergo.request("GET", "http://papergo.workflow/v1/identity/me", {}, undefined, false)),
-      elsewhere: refused(() => __papergo.request("GET", "https://example.com/", {}, undefined, false)),
-      url: new URL("https://a.example/x?y=1").searchParams.get("y"),
-      buffer: Buffer.from("aGk=", "base64").toString("utf8"),
+      absent: ["require", "process", "Buffer", "URL", "fetch", "setTimeout", "queueMicrotask"].filter((name) => typeof scope[name] !== "undefined"),
+      identity: refused(() => __papergo.request("GET", "http://papergo.workflow/v1/identity/me", {}, undefined)),
+      elsewhere: refused(() => __papergo.request("GET", "https://example.com/", {}, undefined)),
       text: new TextDecoder().decode(new TextEncoder().encode("ünï")),
     };
   },
 });
 `)})
-	want := `{"env":0,"fs":"refused","file":"refused","relative":"refused","fetch":"undefined","setTimeout":"undefined","identity":"refused","elsewhere":"refused","url":"1","buffer":"hi","text":"ünï"}`
+	want := `{"absent":[],"identity":"refused","elsewhere":"refused","text":"ünï"}`
 	if out.Status != Completed || string(out.Output) != want {
 		t.Fatalf("outcome: %+v\nwant %s", out, want)
+	}
+	if len(out.Logs) != 1 || out.Logs[0].Message != `logged {"n":1}` {
+		t.Fatalf("logs: %+v", out.Logs)
+	}
+}
+
+// Binary bodies travel as ArrayBuffers in both directions.
+func TestBinaryBodies(t *testing.T) {
+	m := newMemory(func(req Request) Response {
+		if req.Method == "PUT" {
+			return jsonResponse(201, fmt.Sprintf(`{"id":"5f0c8b8e-6d0a-4f1e-9a52-6a9a7c1f0a11","size":%d}`, len(req.Body)))
+		}
+		return Response{Status: 200, Header: map[string]string{"Content-Type": "application/octet-stream"}, Body: []byte{0, 255, 1, 128}}
+	})
+	e := New(m, 0)
+	run := Run{ID: "run-binary", Artifact: bundle(t, `
+import { workflow } from "@papergo/workflow";
+declare const __papergo: any;
+export default workflow({
+  async run(ctx) {
+    const blob = await ctx.api.v1.items.byId("0b0e3e2a-6f39-4a39-9a0e-2a7b5d1c9f01").content.put(new Uint8Array([0, 255, 254, 1]).buffer);
+    const r = __papergo.request("GET", "http://papergo.workflow/v1/items/0b0e3e2a-6f39-4a39-9a0e-2a7b5d1c9f01/content", {}, undefined);
+    return { size: blob?.size, got: Array.from(new Uint8Array(r.bytes)) };
+  },
+});
+`)}
+	for range 2 {
+		if out := execute(t, e, run); out.Status != Completed || string(out.Output) != `{"size":4,"got":[0,255,1,128]}` {
+			t.Fatalf("outcome: %+v", out)
+		}
+	}
+	if len(m.requests) != 2 || string(m.requests[0].Body) != "\x00\xff\xfe\x01" {
+		t.Fatalf("requests: %+v", m.requests)
 	}
 }
 

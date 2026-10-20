@@ -101,6 +101,14 @@ function format(values: unknown[]): string {
 const api = createPaperGoClient(new HostRequestAdapter());
 
 (globalThis as Record<string, unknown>).crypto = { randomUUID: () => host.uuid() };
+// console writes to the run's log, like ctx.log.
+(globalThis as Record<string, unknown>).console = {
+  log: (...values: unknown[]) => host.log("info", format(values)),
+  info: (...values: unknown[]) => host.log("info", format(values)),
+  debug: (...values: unknown[]) => host.log("info", format(values)),
+  warn: (...values: unknown[]) => host.log("warn", format(values)),
+  error: (...values: unknown[]) => host.log("error", format(values)),
+};
 
 async function wait(operations: Operation[]): Promise<Operation[]> {
   const ids = operations.map((op) => {

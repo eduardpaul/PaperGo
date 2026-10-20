@@ -25,6 +25,9 @@ type Artifact struct {
 	Hash string
 }
 
+// sdkModule stands for @papergo/workflow inside a bundle.
+var sdkModule = "module.exports = globalThis.__papergoSdk;"
+
 // entry calls the engine's start function with the script's default export.
 const entry = `import definition from "workflow:script";
 import { __start } from "@papergo/workflow";
@@ -55,7 +58,6 @@ func Bundle(name, source string) (Artifact, error) {
 		Target:         api.ES2020,
 		Charset:        api.CharsetUTF8,
 		LogLevel:       api.LogLevelSilent,
-		External:       []string{SDKModule},
 		Sourcemap:      api.SourceMapInline,
 		SourcesContent: api.SourcesContentInclude,
 		Plugins: []api.Plugin{{
@@ -64,14 +66,19 @@ func Bundle(name, source string) (Artifact, error) {
 				build.OnResolve(api.OnResolveOptions{Filter: `^workflow:script$`}, func(api.OnResolveArgs) (api.OnResolveResult, error) {
 					return api.OnResolveResult{Path: name, Namespace: "workflow"}, nil
 				})
+				build.OnResolve(api.OnResolveOptions{Filter: `^@papergo/workflow$`}, func(api.OnResolveArgs) (api.OnResolveResult, error) {
+					return api.OnResolveResult{Path: SDKModule, Namespace: "sdk"}, nil
+				})
 				build.OnResolve(api.OnResolveOptions{Filter: `.*`, Namespace: "workflow"}, func(args api.OnResolveArgs) (api.OnResolveResult, error) {
-					if args.Path == SDKModule {
-						return api.OnResolveResult{Path: SDKModule, External: true}, nil
-					}
 					return api.OnResolveResult{}, fmt.Errorf("a workflow script can import only %s, not %q", SDKModule, args.Path)
 				})
 				build.OnLoad(api.OnLoadOptions{Filter: `.*`, Namespace: "workflow"}, func(api.OnLoadArgs) (api.OnLoadResult, error) {
 					return api.OnLoadResult{Contents: &source, Loader: loader}, nil
+				})
+				// The SDK is not bundled into scripts: the engine runs it
+				// first, and it defines __papergoSdk.
+				build.OnLoad(api.OnLoadOptions{Filter: `.*`, Namespace: "sdk"}, func(api.OnLoadArgs) (api.OnLoadResult, error) {
+					return api.OnLoadResult{Contents: &sdkModule, Loader: api.LoaderJS}, nil
 				})
 			},
 		}},
