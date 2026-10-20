@@ -150,6 +150,17 @@ func (s *Service) operationStep(ctx context.Context) (bool, error) {
 		}
 		op = &claimed[0]
 		handler := t.ops.handlers[op.Kind]
+		if op.Attempts > handler.maxAttempts() {
+			// Work that keeps stopping its process or asking to retry ends
+			// here instead of coming back after every claim expiry.
+			cause := errors.New("the operation's attempts ran out")
+			completed := time.Now().UTC()
+			op.Status, op.ErrorCode, op.Error, op.CompletedAt = operations.StatusFailed, operations.ErrorRetriesExhausted, cause.Error(), &completed
+			if e = t.SaveOperation(ctx, op); e != nil || handler.Failed == nil {
+				return e
+			}
+			return handler.Failed(ctx, t, op, cause)
+		}
 		if handler.Execute == nil {
 			// A step runs inside the claim's own transaction, which nobody
 			// else sees until it ends, so its claim must outlast the step
@@ -203,6 +214,11 @@ func (s *Service) operationStep(ctx context.Context) (bool, error) {
 	if op == nil || err == nil && execute == nil {
 		return op != nil, err
 	}
+	if err != nil && dberr.IsRetryable(err) {
+		// The database refused the claim's transaction, not the work: the
+		// operation stays ready for the next pass.
+		return true, err
+	}
 	// A failed claim transaction rolled its claim back with the step.
 	committed := err == nil
 	if committed {
@@ -219,6 +235,8 @@ func (s *Service) operationStep(ctx context.Context) (bool, error) {
 func (s *Service) executeClaimed(ctx context.Context, execute func(context.Context, *Service, *operations.Operation) error, op *operations.Operation) error {
 	run, cancel := context.WithCancelCause(ctx)
 	defer cancel(nil)
+	s.ops.running.Store(op.ID, cancel)
+	defer s.ops.running.Delete(op.ID)
 	done := make(chan struct{})
 	defer close(done)
 	go func() {

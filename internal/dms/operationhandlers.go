@@ -15,6 +15,7 @@ import (
 	"papergo/internal/identity"
 	"papergo/internal/requestmeta"
 	"regexp"
+	"sync"
 	"time"
 )
 
@@ -39,6 +40,22 @@ type OperationHandler struct {
 	// Failed and Cancelled run in the transaction that ends the operation.
 	Failed    func(context.Context, *Service, *operations.Operation, error) error
 	Cancelled func(context.Context, *Service, *operations.Operation) error
+	// MaxAttempts bounds the executions an operation may begin, including
+	// those a stopped process or a retry ended; zero means
+	// DefaultMaxAttempts. Past it the operation fails with
+	// retries_exhausted.
+	MaxAttempts int
+}
+
+// DefaultMaxAttempts bounds an operation's executions when its handler
+// sets no bound.
+const DefaultMaxAttempts = 5
+
+func (h OperationHandler) maxAttempts() int {
+	if h.MaxAttempts > 0 {
+		return h.MaxAttempts
+	}
+	return DefaultMaxAttempts
 }
 
 func builtInOperationHandlers() map[string]OperationHandler {
@@ -67,7 +84,7 @@ func builtInOperationHandlers() map[string]OperationHandler {
 var operationKind = regexp.MustCompile(`^[a-z][a-z0-9_.-]{0,63}$`)
 
 func (s *Service) RegisterOperationHandler(kind string, handler OperationHandler) error {
-	if !operationKind.MatchString(kind) || (handler.Step == nil) == (handler.Execute == nil) || handler.Validate == nil || handler.Deadline < 0 {
+	if !operationKind.MatchString(kind) || (handler.Step == nil) == (handler.Execute == nil) || handler.Validate == nil || handler.Deadline < 0 || handler.MaxAttempts < 0 {
 		return invalid("operation handlers require a kind, a validator and either a step or an execution")
 	}
 	known := false
@@ -94,6 +111,22 @@ type operationRuntime struct {
 	holder   string
 	quotas   OperationQuotas
 	finished func([]string)
+	// running cancels this process's executions by operation ID.
+	running sync.Map
+}
+
+// ended stops this process's executions of operations that ended, such as
+// cancelled ones, at once instead of at their next renewal, and then tells
+// the consumers waiting on them.
+func (r *operationRuntime) ended(ids []string) {
+	for _, id := range ids {
+		if cancel, ok := r.running.Load(id); ok {
+			cancel.(context.CancelCauseFunc)(operations.ErrClaimLost)
+		}
+	}
+	if r.finished != nil {
+		r.finished(ids)
+	}
 }
 
 // OperationQuotas bound the pending operations people may queue: per
@@ -111,8 +144,10 @@ var ErrOperationQuota = errors.New("too many pending operations; try again later
 func (s *Service) SetOperationQuotas(q OperationQuotas) { s.ops.quotas = q }
 
 // OnOperationsFinished calls f after each committed write that ended
-// operations, with their IDs, so consumers waiting on them wake at once.
-// Call it before the service is used.
+// operations, with their IDs, once the writer is free, so consumers waiting
+// on them wake at once. It is a prompt, not a guarantee: a process can stop
+// between the commit and the call, so consumers also reconcile from
+// FinishedOperations. Call it before the service is used.
 func (s *Service) OnOperationsFinished(f func(ids []string)) { s.ops.finished = f }
 
 // Retry marks err as transient: the operation is deferred for after, or a
@@ -182,7 +217,21 @@ func (s *Service) EnqueueOperation(ctx context.Context, subject, containerID, ki
 		}
 		return t.auditCatalog(ctx, subject, "operation.create", map[string]any{"operation_id": out.ID})
 	})
+	if replay, ok := s.replayAfterConflict(ctx, operations.Operation{ContainerID: containerID, Kind: kind, CreatedBy: subject, Payload: payload}, err); ok {
+		return replay, nil
+	}
 	return
+}
+
+// replayAfterConflict answers a keyed request whose acceptance lost a race
+// with the same request from another process: the unique key refused the
+// second insert, and the operation the first one accepted is the answer.
+func (s *Service) replayAfterConflict(ctx context.Context, op operations.Operation, err error) (*OperationView, bool) {
+	if _, keyed := ctx.Value(idempotencyKey{}).(string); !keyed || !errors.Is(err, ErrConflict) {
+		return nil, false
+	}
+	out, e := read(ctx, s, func(t *Service) (*OperationView, error) { return t.replay(ctx, op) })
+	return out, e == nil && out != nil
 }
 
 // enqueue accepts an operation for its creator in this trace, limited to

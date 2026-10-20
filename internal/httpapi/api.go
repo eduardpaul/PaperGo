@@ -116,6 +116,24 @@ func (a *API) registerResources(api *router) {
 }
 
 func subject(r *http.Request) string { v, _ := r.Context().Value(subjectKey{}).(string); return v }
+
+// Loopback serves the /v1 API in-process to a workflow script acting as
+// subject. Its handlers, module routes included, run on t, a service bound
+// to the caller's transaction, so a request's writes commit or roll back
+// with the step that records it. It neither authenticates nor rate-limits.
+func (a *API) Loopback(t *dms.Service, subject string) http.Handler {
+	scoped := *a
+	scoped.DMS = t
+	routes, err := scoped.routes()
+	if err != nil {
+		// Validate reports this before the API serves.
+		panic(err)
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		routes.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), subjectKey{}, subject)))
+	})
+}
+
 func (a *API) Handler() http.Handler {
 	root, err := a.root()
 	if err != nil {

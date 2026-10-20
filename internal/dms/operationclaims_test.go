@@ -269,3 +269,72 @@ func TestReplaysSkipRevalidation(t *testing.T) {
 		t.Fatal("new request skipped validation")
 	}
 }
+
+func TestOperationRetriesRunOut(t *testing.T) {
+	s, _, list := fixture(t)
+	handler := checkpointHandler()
+	handler.Step, handler.MaxAttempts = nil, 2
+	runs := 0
+	handler.Execute = func(context.Context, *Service, *operations.Operation) error {
+		runs++
+		return Retry(errors.New("provider busy"), time.Millisecond)
+	}
+	failed := false
+	handler.Failed = func(context.Context, *Service, *operations.Operation, error) error { failed = true; return nil }
+	if err := s.RegisterOperationHandler("flaky", handler); err != nil {
+		t.Fatal(err)
+	}
+	op, err := s.EnqueueOperation(testContext, "alice", list.ID, "flaky", json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		time.Sleep(5 * time.Millisecond)
+		if worked, err := s.operationStep(testContext); !worked || err != nil {
+			t.Fatal(worked, err)
+		}
+	}
+	ended, err := s.Operation(testContext, "alice", op.ID)
+	if err != nil || ended.Status != operations.StatusFailed || ended.ErrorCode != operations.ErrorRetriesExhausted || runs != 2 || !failed {
+		t.Fatal(ended, err, runs, failed)
+	}
+}
+
+func TestCancellationStopsARunningExecution(t *testing.T) {
+	s, _, list := fixture(t)
+	handler := checkpointHandler()
+	handler.Step = nil
+	started, stopped := make(chan struct{}), make(chan error, 1)
+	handler.Execute = func(ctx context.Context, _ *Service, _ *operations.Operation) error {
+		close(started)
+		select {
+		case <-ctx.Done():
+			stopped <- context.Cause(ctx)
+		case <-time.After(10 * time.Second):
+			stopped <- errors.New("still running")
+		}
+		return ctx.Err()
+	}
+	if err := s.RegisterOperationHandler("long", handler); err != nil {
+		t.Fatal(err)
+	}
+	op, err := s.EnqueueOperation(testContext, "alice", list.ID, "long", json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { _, err := s.operationStep(testContext); done <- err }()
+	<-started
+	if _, err = s.CancelOperation(testContext, "alice", op.ID); err != nil {
+		t.Fatal(err)
+	}
+	if cause := <-stopped; !errors.Is(cause, operations.ErrClaimLost) {
+		t.Fatal("execution kept running after its operation was cancelled", cause)
+	}
+	if err = <-done; err != nil {
+		t.Fatal(err)
+	}
+	if ended, _ := s.Operation(testContext, "alice", op.ID); ended.Status != operations.StatusCancelled {
+		t.Fatal(ended)
+	}
+}

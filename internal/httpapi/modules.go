@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"papergo/internal/dms"
+	"slices"
 	"strings"
 )
 
@@ -32,6 +33,13 @@ type Route struct {
 type Request struct {
 	Subject string
 	DMS     *dms.Service
+	api     *API
+}
+
+// Decode reads the request's JSON body into dst like core routes do. When
+// it reports false it has answered the request with the problem.
+func (in Request) Decode(w http.ResponseWriter, r *http.Request, dst any) bool {
+	return in.api.decode(w, r, dst)
 }
 
 // router records the method-qualified patterns it serves, so the API can
@@ -75,7 +83,7 @@ func (a *API) registerModules(m *router) error {
 
 func (a *API) moduleHandler(route Route) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if err := route.Handle(w, r, Request{Subject: subject(r), DMS: a.DMS}); err != nil {
+		if err := route.Handle(w, r, Request{Subject: subject(r), DMS: a.DMS, api: a}); err != nil {
 			a.failure(w, r, err)
 		}
 	}
@@ -86,6 +94,29 @@ func (a *API) moduleHandler(route Route) http.HandlerFunc {
 func (a *API) Validate() error {
 	_, err := a.root()
 	return err
+}
+
+// Routes lists the method-qualified routes the API serves, core and module
+// alike, such as "POST /v1/operations/{id}/cancel", for checking them
+// against the API contract. Fallbacks and WebDAV discovery are left out.
+func (a *API) Routes() ([]string, error) {
+	api, err := a.routes()
+	if err != nil {
+		return nil, err
+	}
+	root, err := a.root()
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, pattern := range append(api.patterns, root.patterns...) {
+		method, path, ok := strings.Cut(pattern, " ")
+		if ok && method == strings.ToUpper(method) && path != "/{$}" && !slices.Contains(out, pattern) {
+			out = append(out, pattern)
+		}
+	}
+	slices.Sort(out)
+	return out, nil
 }
 
 // routes builds the /v1 routes, the core API's and the modules'. A module

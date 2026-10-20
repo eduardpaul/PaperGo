@@ -1,0 +1,10 @@
+Warning: KiotaBuilder OpenAPI warning: #/ - The schema BulkOperation is a polymorphic type but does not define a discriminator. This will result in serialization errors.
+Warning: KiotaBuilder OpenAPI warning: #/paths/~1auth~1config/get/responses/200/content/application~1json/schema/properties/oidc/properties/issuer - The format uri is not supported by Kiota and the string type will be used.
+Warning: KiotaBuilder OpenAPI warning: #/components/schemas/WorkspaceRelationshipPage/properties/@odata.nextLink - The format uri is not supported by Kiota and the string type will be used.
+Warning: KiotaBuilder OpenAPI warning: #/components/schemas/DeltaPage/properties/@odata.nextLink - The format uri is not supported by Kiota and the string type will be used.
+Warning: KiotaBuilder OpenAPI warning: #/components/schemas/DeltaPage/properties/@odata.deltaLink - The format uri is not supported by Kiota and the string type will be used.
+Warning: KiotaBuilder OpenAPI warning: #/components/schemas/AuditPage/properties/@odata.nextLink - The format uri is not supported by Kiota and the string type will be used.
+Warning: KiotaBuilder OpenAPI warning: #/components/schemas/CreateListIntegration/properties/configuration/properties/url - The format uri is not supported by Kiota and the string type will be used.
+Warning: KiotaBuilder OpenAPI warning: #/components/schemas/UpdateListIntegration/properties/configuration/properties/url - The format uri is not supported by Kiota and the string type will be used.
+Warning: KiotaBuilder OpenAPI warning: #/components/schemas/WorkspaceRelationshipTypePage/properties/@odata.nextLink - The format uri is not supported by Kiota and the string type will be used.
+Warning: KiotaBuilder OpenAPI warning: #/components/schemas/RelationshipEndpointPage/properties/@odata.nextLink - The format uri is not supported by Kiota and the string type will be used.

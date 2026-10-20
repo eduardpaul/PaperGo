@@ -16742,6 +16742,129 @@
             "$ref": "#/components/responses/Problem"
           }
         }
+      },
+      "post": {
+        "tags": [
+          "Documents"
+        ],
+        "operationId": "readItemText",
+        "summary": "Read the text of the item's current file",
+        "description": "Starts reading the text of the item's current file as a background operation: the text layer of PDF pages, and OCR of pages without one and of images when the deployment has OCR. The operation reads the file version that is current now, even if the item gets another file meanwhile. Text already read from the same bytes with the same settings is reused. Requires document.write and write access to the item. When the operation succeeds, its result is a ReadTextResult and GET /v1/items/{id}/text returns the pages. A file whose text cannot be read (another format, a protected or broken PDF) fails the operation. The body is optional. 422 refuses ocr=always without an OCR engine.",
+        "x-required-scopes": [
+          "document.write"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadText"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "An Idempotency-Key returned the operation this request accepted earlier.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              },
+              "Idempotent-Replayed": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Queued operation. Follow Location; its result is a ReadTextResult.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "415": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "description": "Too many pending operations for the caller, the workspace or the installation (code operation_quota). Nothing was accepted; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
       }
     },
     "/v1/workflow-waits": {
@@ -26787,6 +26910,83 @@
           "edges",
           "truncated"
         ]
+      },
+      "ReadText": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "How the text is read.",
+        "properties": {
+          "ocr": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "always",
+              "never"
+            ],
+            "description": "auto (the default) reads text layers and OCRs pages and images without one; always OCRs every page; never reads text layers only."
+          },
+          "max_pages": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2000,
+            "description": "Pages read, 500 when omitted; later pages are left out (truncated)."
+          },
+          "languages": {
+            "type": "string",
+            "description": "OCR language codes joined with + (eng+deu); the file's languages when omitted."
+          }
+        }
+      },
+      "ReadTextResult": {
+        "type": "object",
+        "description": "The result of a succeeded readItemText operation.",
+        "required": [
+          "text_id",
+          "item_id",
+          "blob_id",
+          "pages",
+          "chars",
+          "ocr_pages",
+          "skipped_pages",
+          "truncated",
+          "reused"
+        ],
+        "properties": {
+          "text_id": {
+            "type": "string",
+            "description": "The kept text; GET /v1/items/{id}/text returns it as its text_id."
+          },
+          "item_id": {
+            "type": "string"
+          },
+          "blob_id": {
+            "type": "string",
+            "description": "The file version read."
+          },
+          "pages": {
+            "type": "integer"
+          },
+          "chars": {
+            "type": "integer"
+          },
+          "ocr_pages": {
+            "type": "integer"
+          },
+          "skipped_pages": {
+            "type": "integer",
+            "description": "Pages without a text layer that were not OCRed."
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "language": {
+            "type": "string"
+          },
+          "reused": {
+            "type": "boolean",
+            "description": "The text had been read before with the same settings."
+          }
+        }
       }
     },
     "parameters": {

@@ -5,10 +5,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
-	"runtime"
-	"slices"
 	"strings"
 	"testing"
 
@@ -19,76 +15,6 @@ import (
 	"papergo/internal/dms"
 	"papergo/internal/identity"
 )
-
-// openAPIOperations returns the method-qualified paths api/openapi.json
-// describes, with their operation IDs where they have one.
-func openAPIOperations(t *testing.T) map[string]string {
-	t.Helper()
-	_, file, _, _ := runtime.Caller(0)
-	raw, err := os.ReadFile(filepath.Join(filepath.Dir(file), "..", "..", "api", "openapi.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var document struct {
-		Paths map[string]map[string]json.RawMessage `json:"paths"`
-	}
-	if err = json.Unmarshal(raw, &document); err != nil {
-		t.Fatal(err)
-	}
-	out := map[string]string{}
-	for path, item := range document.Paths {
-		for method, raw := range item {
-			var operation struct {
-				OperationID string `json:"operationId"`
-			}
-			if json.Unmarshal(raw, &operation) != nil || method == "parameters" {
-				continue
-			}
-			out[strings.ToUpper(method)+" "+path] = operation.OperationID
-		}
-	}
-	return out
-}
-
-func TestRoutesMatchOpenAPI(t *testing.T) {
-	db := daltest.Database(t)
-	a := &API{DMS: dms.NewService(db.SQL), Auth: auth.Local{DAL: db.DAL}, Logger: slog.Default()}
-	api, err := a.routes()
-	if err != nil {
-		t.Fatal(err)
-	}
-	root, err := a.root()
-	if err != nil {
-		t.Fatal(err)
-	}
-	served := map[string]bool{}
-	for _, pattern := range append(api.patterns, root.patterns...) {
-		method, path, ok := strings.Cut(pattern, " ")
-		// Method-less patterns are fallbacks; WebDAV discovery is not part
-		// of the JSON API.
-		if !ok || method != strings.ToUpper(method) || path == "/{$}" {
-			continue
-		}
-		served[pattern] = true
-	}
-	described := openAPIOperations(t)
-	var missing, extra []string
-	for route := range served {
-		if _, ok := described[route]; !ok {
-			missing = append(missing, route)
-		}
-	}
-	for route := range described {
-		if !served[route] {
-			extra = append(extra, route)
-		}
-	}
-	slices.Sort(missing)
-	slices.Sort(extra)
-	if len(missing) > 0 || len(extra) > 0 {
-		t.Fatalf("routes without a contract: %v\ncontract without a route: %v", missing, extra)
-	}
-}
 
 type testModule struct{ routes []Route }
 

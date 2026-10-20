@@ -882,6 +882,33 @@ CREATE TABLE runner_step_results (
     PRIMARY KEY (run_id, step_id)
 );
 
+CREATE TABLE workflow_steps (
+    run_id TEXT NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE,
+    seq INTEGER NOT NULL CHECK (seq >= 0),
+    kind TEXT NOT NULL CHECK (kind IN ('request', 'wait', 'value')),
+    name TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 300),
+    input_hash TEXT NOT NULL CHECK (length(input_hash) = 64),
+    status TEXT NOT NULL CHECK (status IN ('pending', 'completed', 'failed')),
+    "input" TEXT CHECK ("input" IS NULL OR json_valid("input")),
+    "output" BLOB,
+    error TEXT,
+    started_at DATETIME NOT NULL,
+    completed_at DATETIME,
+    PRIMARY KEY (run_id, seq),
+    CHECK (status = 'pending' OR completed_at IS NOT NULL),
+    CHECK (status <> 'pending' OR kind = 'wait')
+);
+CREATE INDEX workflow_steps_pending ON workflow_steps(status, started_at) WHERE status = 'pending';
+
+CREATE TABLE workflow_step_operations (
+    run_id TEXT NOT NULL,
+    seq INTEGER NOT NULL,
+    operation_id TEXT NOT NULL,
+    PRIMARY KEY (run_id, seq, operation_id),
+    FOREIGN KEY (run_id, seq) REFERENCES workflow_steps(run_id, seq) ON DELETE CASCADE
+);
+CREATE INDEX workflow_step_operations_operation ON workflow_step_operations(operation_id);
+
 CREATE TABLE workflow_waits (
     queue TEXT NOT NULL DEFAULT '',
     payload_id TEXT NOT NULL DEFAULT '',

@@ -13,6 +13,7 @@ import (
 	"github.com/stephenafamo/bob/dialect/psql/um"
 	"github.com/stephenafamo/bob/types"
 	"github.com/stephenafamo/scan"
+	"papergo/internal/dal/activitystore"
 	"papergo/internal/dal/dberr"
 	"papergo/internal/dal/driver/nullable"
 	"papergo/internal/dal/driver/postgres/models"
@@ -282,7 +283,8 @@ func (q Queries) ReleaseOperationRetention(ctx context.Context, ids []string) er
 	if _, err := models.BlobLeases.Delete(models.DeleteWhere.BlobLeases.OperationID.In(ids...)).Exec(ctx, q.exec); err != nil {
 		return dberr.Translate(err)
 	}
-	_, err := bob.Exec(ctx, q.exec, psql.RawQuery(`DELETE FROM activity_references WHERE owner_kind = 'operation' AND owner_id IN (`+marks(len(ids))+`)`, anys(ids)...))
+	args := append([]any{string(activitystore.OwnerOperation)}, anys(ids)...)
+	_, err := bob.Exec(ctx, q.exec, psql.RawQuery(`DELETE FROM activity_references WHERE owner_kind = ? AND owner_id IN (`+marks(len(ids))+`)`, args...))
 	return dberr.Translate(err)
 }
 

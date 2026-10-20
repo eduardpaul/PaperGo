@@ -267,7 +267,9 @@ Exit: main provides usable API operations and policy-driven workers independentl
 
 ## Apply to the script-engine branch
 
-After Phases 1–7 land, merge updated `main` into the script-engine branch. Resolve conflicts around the resulting module/operation contracts, not by retaining both implementations.
+The script-engine branch was merged into this work after Phase 1, before Phase 2. Items 1–3 below are done: document text is a module route on the shared execution contract, `API.Loopback` serves core and module routes on the step's transaction, and script waits are released by the script module from the completion hook and reconciled, with no wait SQL in the operations repository. The remaining items continue on the unified branch as the phases land.
+
+Resolve later conflicts around the resulting module/operation contracts, not by retaining both implementations.
 
 1. Remove the branch's duplicate document-text registration, `API.DocumentText` dependency and direct model lifecycle wiring. Use the modules composed on `main`.
 2. Preserve transactional in-process API execution, but use the same registered routes and request context as external API calls. A script-created operation and its replay step must commit atomically; rollback cannot leave orphan accepted work or source leases.
@@ -275,7 +277,7 @@ After Phases 1–7 land, merge updated `main` into the script-engine branch. Res
 4. Keep the script scheduler responsible for script slices, replay, cancellation and run retention. Worker admission, resource lifetime, provider polling and operation execution remain in the worker/module layer. Suspending a script does not unload another operation's active resources.
 5. Regenerate the Kiota client and embedded bundle from the resulting OpenAPI contract. Check exclusion scope, SDK type checking, deterministic generation and bundle tests.
 6. Extend script integration tests: submit document text, optimization/composition, embedding, LLM and generic/taxonomy decision operations, suspend, restart, let a worker finish, replay and consume results without repeating submission. Include rejected requests, independent cancellation of shared work, source/output retention and changed-source/taxonomy guards. Scripts use module routes through the generated SDK; do not add script-only inference helpers. Script cancellation cancels the script's own operations, which never cancels computation shared with other operations.
-7. Update the script-engine plan (on the script-engine branch) to treat this work as its operation foundation. Continue the script lifecycle/scheduler work separately. When the script feature replaces JSON workflows/DBOS, delete those implementations and their consumers/contracts/docs in the same cutover.
+7. Keep [the script-engine plan](script-engine.md) treating this work as its operation foundation. Continue the script lifecycle/scheduler work separately. When the script feature replaces JSON workflows/DBOS, delete those implementations and their consumers/contracts/docs in the same cutover.
 
 ## Acceptance matrix
 

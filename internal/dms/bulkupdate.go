@@ -55,6 +55,13 @@ func (s *Service) StartBulkUpdate(ctx context.Context, subject, collectionID str
 		}
 		return t.audit(ctx, subject, "bulk_update.start", c, map[string]any{"operation_id": out.ID})
 	})
+	if err != nil {
+		if payload, e := json.Marshal(in); e == nil {
+			if replay, ok := s.replayAfterConflict(ctx, operations.Operation{ContainerID: collectionID, Kind: OperationKindBulkUpdate, CreatedBy: subject, Payload: payload}, err); ok {
+				return replay, nil
+			}
+		}
+	}
 	return
 }
 

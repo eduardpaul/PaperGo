@@ -80,32 +80,35 @@ func (s *Service) write(ctx context.Context, fn func(*Service) error) error {
 	if s.transaction {
 		return fn(s)
 	}
-	if err := s.writer.acquire(ctx); err != nil {
-		return err
-	}
-	defer s.writer.release()
 	var recorded int
 	var finished []string
-	err := dal.Retry(ctx, func() error {
-		finished = finished[:0]
-		tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
-		if err != nil {
+	err := func() error {
+		if err := s.writer.acquire(ctx); err != nil {
 			return err
 		}
-		if recorded, err = s.inTx(ctx, tx, &finished, fn); err != nil {
-			_ = tx.Rollback()
-			return err
-		}
-		return tx.Commit()
-	})
+		defer s.writer.release()
+		return dal.Retry(ctx, func() error {
+			finished = finished[:0]
+			tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+			if err != nil {
+				return err
+			}
+			if recorded, err = s.inTx(ctx, tx, &finished, fn); err != nil {
+				_ = tx.Rollback()
+				return err
+			}
+			return tx.Commit()
+		})
+	}()
 	if dberr.IsConstraintError(err) {
 		return ErrConflict
 	}
+	// Hooks run after the writer is free, so they may write themselves.
 	if err == nil && recorded > 0 && s.onCommit != nil {
 		s.onCommit()
 	}
-	if err == nil && len(finished) > 0 && s.ops.finished != nil {
-		s.ops.finished(finished)
+	if err == nil && len(finished) > 0 {
+		s.ops.ended(finished)
 	}
 	return err
 }

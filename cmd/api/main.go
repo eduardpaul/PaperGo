@@ -21,11 +21,13 @@ import (
 	"papergo/internal/decision"
 	"papergo/internal/dms"
 	"papergo/internal/doctext/pdfium"
+	"papergo/internal/documenttext"
 	"papergo/internal/httpapi"
 	"papergo/internal/identity"
 	"papergo/internal/integration"
 	"papergo/internal/readiness"
 	"papergo/internal/runner"
+	"papergo/internal/scriptrun"
 	"papergo/internal/search"
 	"papergo/internal/storage"
 	"papergo/internal/webdav"
@@ -231,6 +233,10 @@ func run(log *slog.Logger) error {
 		}
 	}
 	workflows := &workflow.Service{DMS: service, Tools: tools}
+	text := &documenttext.Reader{Storage: store, PDF: tools.PDF, OCR: tools.OCR, Languages: c.SearchLanguages}
+	if err = text.Register(service); err != nil {
+		return err
+	}
 	service.OnIntegrationCreated(workflows.EnsureIntegrationWorkflow)
 	if c.BatchWorkspace != "" && batch != nil {
 		subject := c.AdminSubject
@@ -246,8 +252,17 @@ func run(log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	// Workflows waiting on an operation reconcile as soon as it ends.
-	service.OnOperationsFinished(func([]string) { run.Wake() })
+	// Workflows and scripts waiting on an operation continue as soon as it
+	// ends; waits whose release a stopped process missed are reconciled at
+	// startup.
+	releaseWaits := scriptrun.ReleaseWaits(service, log)
+	service.OnOperationsFinished(func(ids []string) {
+		releaseWaits(ids)
+		run.Wake()
+	})
+	if _, err = scriptrun.ReconcileWaits(startup, service); err != nil {
+		return err
+	}
 	if err = run.Launch(startup); err != nil {
 		return err
 	}
@@ -257,7 +272,7 @@ func run(log *slog.Logger) error {
 			log.Error("runner shutdown", "error", err)
 		}
 	}()
-	a := &httpapi.API{DMS: service, Workflows: workflows, Runner: run, Auth: verifier, Storage: store, Logger: log, MaxUpload: c.MaxUpload, MaxInFlight: c.MaxInFlight, RequestTimeout: c.RequestTimeout, Ready: func(ctx context.Context) error {
+	a := &httpapi.API{DMS: service, Workflows: workflows, Modules: modules(text), Runner: run, Auth: verifier, Storage: store, Logger: log, MaxUpload: c.MaxUpload, MaxInFlight: c.MaxInFlight, RequestTimeout: c.RequestTimeout, Ready: func(ctx context.Context) error {
 		if err := db.SQL.PingContext(ctx); err != nil {
 			return err
 		}
@@ -306,6 +321,11 @@ func run(log *slog.Logger) error {
 // this build: a published release applies its upgrade bundle, a development
 // build installs the schema into an empty file. It returns the lease, which
 // the caller closes after the database.
+// modules are the feature modules whose routes the API serves.
+func modules(text *documenttext.Reader) []httpapi.Module {
+	return []httpapi.Module{text.Module()}
+}
+
 func openSQLite(startup context.Context, log *slog.Logger, c *config.Config) (*database.Database, *os.File, error) {
 	// Every SQLite handle, including the runner, uses the same canonical name.
 	resolved, err := filepath.EvalSymlinks(c.DatabasePath)

@@ -1,13 +1,10 @@
 package workflow
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"papergo/internal/dal/blobs"
-	"strconv"
 	"strings"
 
 	"papergo/internal/doctext"
@@ -132,25 +129,8 @@ func runReadText(e *env, in map[string]any) (outcome, error) {
 	return outcome{Job: job, BlobIDs: []string{b.ID}, Output: map[string]any{"item_id": itemID, "blob_id": b.ID}}, nil
 }
 
-// textSettings identify how text is read, so a result is reused only for
-// the same reader, OCR engine and models, mode, page bound and languages.
-func (t Tools) textSettings(o doctext.Options) string {
-	parts := []string{doctext.Version, "ocr=" + o.OCR, "pages=" + strconv.Itoa(o.MaxPages), "languages=" + o.Hints + "/" + strings.Join(o.Languages, ",")}
-	if t.PDF != nil {
-		parts = append(parts, "pdf="+t.PDF.Name())
-	}
-	if t.OCR != nil && o.OCR != doctext.OCRNever {
-		info := t.OCR.Info()
-		parts = append(parts, "engine="+info.Engine)
-		for _, m := range info.Models {
-			parts = append(parts, m.Name+"="+m.SHA256)
-		}
-	} else {
-		parts = append(parts, "engine=none")
-	}
-	h := sha256.Sum256([]byte(strings.Join(parts, "\n")))
-	return hex.EncodeToString(h[:])
-}
+// textSettings identify how text is read; see doctext.Settings.
+func (t Tools) textSettings(o doctext.Options) string { return doctext.Settings(o, t.PDF, t.OCR) }
 
 func textOutcome(itemID, blobID string, row *blobs.Text, reused bool) outcome {
 	out := map[string]any{"text_id": row.ID, "item_id": itemID, "blob_id": blobID, "pages": row.Pages, "chars": row.Chars, "language": row.Language,
