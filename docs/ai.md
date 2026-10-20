@@ -18,7 +18,7 @@ The result is `text` or `json`, `cached` and `model`. An answer that does not ma
 
 ## Models
 
-Immediate completions use any OpenAI-compatible `/v1/chat/completions` endpoint (OpenAI, Ollama, LM Studio, vLLM, llama.cpp): `AI_CHAT_PROVIDER=openai`, `AI_CHAT_MODEL`, `AI_CHAT_ENDPOINT` (default OpenAI's) and, if the server needs one, `AI_CHAT_API_KEY_FILE`. They run at temperature 0, time out after two minutes, and are retried on 429 and 5xx, honouring `Retry-After` up to 30 seconds. Without a chat model, immediate requests are refused.
+Immediate completions use any OpenAI-compatible `/v1/chat/completions` endpoint (OpenAI, Ollama, LM Studio, vLLM, llama.cpp): `AI_CHAT_PROVIDER=openai`, `AI_CHAT_MODEL`, `AI_CHAT_ENDPOINT` (default OpenAI's) and, if the server needs one, `AI_CHAT_API_KEY_FILE`. They run at temperature 0 and time out after two minutes. A busy, failing or unreachable provider (429, 5xx or no answer) is called once per attempt: the operation defers itself until the provider's `Retry-After` (at most an hour), else for 30 seconds, without holding a worker, and fails when its attempts run out. Without a chat model, immediate requests are refused.
 
 Batch completions need their own provider and never fall back to the chat provider: `AI_BATCH_PROVIDER=openai`, `AI_BATCH_MODEL` (empty uses the chat model), `AI_BATCH_ENDPOINT` (empty uses the chat endpoint, otherwise OpenAI's) and, when the server needs one, `AI_BATCH_API_KEY_FILE`. The client speaks the OpenAI Batch protocol, including Azure bases that end in `/openai/v1`.
 

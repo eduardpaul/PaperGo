@@ -138,8 +138,7 @@ func (s *Service) RunOperation(ctx context.Context, kinds []string) (bool, error
 			return e
 		}
 		t.traceID = op.TraceID
-		// Field index builds and PaperGo's own search rebuilds act for no one.
-		if op.Kind != OperationKindFieldIndex && (op.Kind != OperationKindSearchReindex || op.CreatedBy != systemSubject) {
+		if actsForSomeone(op) {
 			if e = t.operationPermission(ctx, op.CreatedBy, op.ContainerID, handler.Scope); e != nil {
 				return e
 			}
@@ -462,6 +461,13 @@ type OperationView struct {
 	// Replayed is set when an idempotency key returned an operation
 	// accepted earlier.
 	Replayed bool `json:"-"`
+}
+
+// actsForSomeone reports whether op runs with its creator's permissions:
+// field index builds and the operations PaperGo starts itself act for no
+// one.
+func actsForSomeone(op *operations.Operation) bool {
+	return op.Kind != OperationKindFieldIndex && op.CreatedBy != systemSubject
 }
 
 func viewOperation(op operations.Operation, now time.Time) *OperationView {

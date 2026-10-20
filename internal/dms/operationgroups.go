@@ -35,7 +35,7 @@ func (s *Service) RunOperationGroup(ctx context.Context, kind, group string, thr
 				continue
 			}
 			opCtx, e := t.operationContext(ctx, op)
-			if e == nil {
+			if e == nil && actsForSomeone(op) {
 				e = t.operationPermission(opCtx, op.CreatedBy, op.ContainerID, handler.Scope)
 			}
 			if errors.Is(e, ErrForbidden) {

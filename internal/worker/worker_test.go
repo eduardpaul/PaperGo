@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -258,6 +259,47 @@ func TestThresholdAdmission(t *testing.T) {
 	eventually(t, "the full group did not run", func() bool { return len(g.executions()) == 1 })
 	if sizes := g.executions(); sizes[0] != 4 {
 		t.Fatalf("executions: %v", sizes)
+	}
+}
+
+// A grouped worker runs up to its concurrency of groups at once.
+func TestGroupedConcurrency(t *testing.T) {
+	f := setup(t)
+	var running, most atomic.Int64
+	both := make(chan struct{})
+	var once sync.Once
+	f.register(t, "test.batch", dms.OperationHandler{
+		Admission: (&group{}).handler().Admission,
+		ExecuteGroup: func(ctx context.Context, s *dms.Service, ops []*operations.Operation) error {
+			n := running.Add(1)
+			defer running.Add(-1)
+			for m := most.Load(); n > m && !most.CompareAndSwap(m, n); m = most.Load() {
+			}
+			if n == 2 {
+				once.Do(func() { close(both) })
+			}
+			select {
+			case <-both:
+			case <-time.After(5 * time.Second):
+			}
+			for _, op := range ops {
+				if err := finish(ctx, s, op); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+	})
+	f.own()
+	f.rt.Add(Definition{Name: "batch", Kinds: []string{"test.batch"}, Concurrency: 2, Admission: Admission{Policy: Threshold, Threshold: 1, Batch: 10}})
+	a := f.enqueue(t, "test.batch", `{"group":"a","input":"x"}`)
+	b := f.enqueue(t, "test.batch", `{"group":"b","input":"y"}`)
+	f.start(t)
+	eventually(t, "the groups did not finish", func() bool {
+		return f.status(t, a).Status == operations.StatusSucceeded && f.status(t, b).Status == operations.StatusSucceeded
+	})
+	if most.Load() != 2 {
+		t.Fatalf("at most %d groups ran at once", most.Load())
 	}
 }
 

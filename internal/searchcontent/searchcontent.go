@@ -40,6 +40,9 @@ const (
 	KindChunk   = "search.chunk"
 	KindEmbed   = "search.embed"
 	KindPublish = "search.publish"
+	// KindSweep embeds published chunks that lack vectors; PaperGo queues
+	// it itself.
+	KindSweep = "search.sweep"
 )
 
 // ErrNoSearch refuses content requests in a deployment without a search
@@ -53,6 +56,8 @@ type Indexer struct {
 	Search search.Store
 	// Embeddings is nil when semantic search is off.
 	Embeddings ai.Embedder
+
+	svc *dms.Service
 }
 
 // maxText bounds text given to a chunk request directly.
@@ -68,10 +73,12 @@ const (
 
 // Register makes s run the operations.
 func (x *Indexer) Register(s *dms.Service) error {
+	x.svc = s
 	for kind, h := range map[string]dms.OperationHandler{
 		KindChunk:   {Scope: "document.write", Validate: x.validateChunk, Execute: x.chunk},
 		KindEmbed:   {Scope: "document.write", Validate: x.validateGeneration, Execute: x.embed},
 		KindPublish: {Scope: "document.write", Validate: x.validateGeneration, Execute: x.publish},
+		KindSweep:   {Scope: "organization.manage", Validate: refuseSweep, Execute: x.sweep},
 	} {
 		if err := s.RegisterOperationHandler(kind, h); err != nil {
 			return err
@@ -360,8 +367,10 @@ type EmbedResult struct {
 }
 
 // embed gives the generation's chunk inputs without a vector of the model
-// their vectors. A provider failure is a result, not an error: the sweep
-// embeds the chunks once they are published.
+// their vectors. A busy provider defers the operation while it has
+// attempts left, keeping the vectors stored so far; otherwise a provider
+// failure is a result, not an error: the sweep embeds the chunks once they
+// are published.
 func (x *Indexer) embed(ctx context.Context, s *dms.Service, op *operations.Operation) error {
 	var j generationJob
 	if err := json.Unmarshal(op.Payload, &j); err != nil {
@@ -390,6 +399,9 @@ func (x *Indexer) embed(ctx context.Context, s *dms.Service, op *operations.Oper
 	if err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
+		}
+		if after, retry := ai.RetryAfter(err); retry && op.Attempts < dms.DefaultMaxAttempts {
+			return dms.Retry(err, after)
 		}
 		res.Reason = "The embedding model failed: " + err.Error()
 	}
@@ -422,19 +434,46 @@ func (x *Indexer) embedInputs(ctx context.Context, model string, todo []search.C
 	return done, nil
 }
 
-// Sweep embeds published chunks without a vector of the current model, at
-// most 2,000 per call, then deletes vectors no chunk has used for a week.
-// A provider failure stops it until the next sweep.
+// Sweep queues a search.sweep operation when published chunks lack a
+// vector of the current model, unless one is pending, so the search
+// worker's window and concurrency govern the embedding; then it deletes
+// vectors no chunk has used for a week. It is a maintenance task.
 func (x *Indexer) Sweep(ctx context.Context, _ time.Time) error {
-	if x.Search == nil || x.Embeddings == nil {
+	if x.Search == nil || x.Embeddings == nil || x.svc == nil {
 		return nil
 	}
 	model, err := x.Embeddings.Key(ctx)
 	if err != nil {
 		return err
 	}
-	for embedded := 0; embedded < sweepLimit; {
-		todo, err := x.Search.ChunksToEmbed(ctx, model, min(embedBatch, sweepLimit-embedded))
+	todo, err := x.Search.ChunksToEmbed(ctx, model, 1)
+	if err != nil {
+		return err
+	}
+	if len(todo) > 0 {
+		if err = x.svc.EnsureSystemOperation(ctx, KindSweep, nil); err != nil {
+			return err
+		}
+	}
+	_, err = x.Search.CollectVectors(ctx, model, time.Now(), vectorKeepTime)
+	return err
+}
+
+// sweep embeds up to 2,000 published chunks without a vector of the
+// current model. A busy provider defers it, keeping the vectors stored so
+// far; the next maintenance pass queues another sweep for what remains.
+func (x *Indexer) sweep(ctx context.Context, s *dms.Service, op *operations.Operation) error {
+	res := SweepResult{}
+	if x.Search == nil || x.Embeddings == nil {
+		return finish(ctx, s, op, res)
+	}
+	model, err := x.Embeddings.Key(ctx)
+	if err != nil {
+		return err
+	}
+	res.Model = model
+	for res.Embedded < sweepLimit {
+		todo, err := x.Search.ChunksToEmbed(ctx, model, min(embedBatch, sweepLimit-res.Embedded))
 		if err != nil {
 			return err
 		}
@@ -442,13 +481,27 @@ func (x *Indexer) Sweep(ctx context.Context, _ time.Time) error {
 			break
 		}
 		n, err := x.embedInputs(ctx, model, todo)
-		embedded += n
+		res.Embedded += n
+		if after, retry := ai.RetryAfter(err); retry {
+			return dms.Retry(err, after)
+		}
 		if err != nil {
 			return err
 		}
 	}
-	_, err = x.Search.CollectVectors(ctx, model, time.Now(), vectorKeepTime)
-	return err
+	return finish(ctx, s, op, res)
+}
+
+// refuseSweep refuses sweeps the API asks for: maintenance queues them.
+func refuseSweep(context.Context, *dms.Service, string, string, json.RawMessage) error {
+	return dms.Invalid("PaperGo queues embedding sweeps itself")
+}
+
+// SweepResult is a finished sweep's result: the model and how many chunk
+// inputs it embedded.
+type SweepResult struct {
+	Model    string `json:"model,omitempty"`
+	Embedded int    `json:"embedded"`
 }
 
 // PublishResult is a finished publish operation's result. A generation is

@@ -9,14 +9,18 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
+	"papergo/internal/ai"
 	"papergo/internal/auth"
 	"papergo/internal/dal/daltest"
 	"papergo/internal/dal/operations"
 	"papergo/internal/dal/search/sqlitestore"
 	"papergo/internal/dms"
 	"papergo/internal/httpapi"
+	"papergo/internal/search"
 	"papergo/internal/searchcontent"
 	"papergo/internal/storage"
 	"papergo/internal/worker"
@@ -166,3 +170,83 @@ func TestContentSteps(t *testing.T) {
 }
 
 func itoa(n int) string { b, _ := json.Marshal(n); return string(b) }
+
+// busyEmbedder answers with a busy provider's error busy times, then
+// embeds.
+type busyEmbedder struct {
+	mu          sync.Mutex
+	busy, calls int
+}
+
+func (*busyEmbedder) Key(context.Context) (string, error) { return "test-model", nil }
+
+func (e *busyEmbedder) Embed(_ context.Context, texts []string) ([][]float32, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.calls++
+	if e.busy > 0 {
+		e.busy--
+		return nil, &ai.Error{Model: "embedding model", Status: http.StatusTooManyRequests, Message: "busy", Retry: true, After: time.Minute}
+	}
+	out := make([][]float32, len(texts))
+	for i := range out {
+		out[i] = []float32{1, 0}
+	}
+	return out, nil
+}
+
+func (*busyEmbedder) EmbedQuery(context.Context, string) ([]float32, error) {
+	return []float32{1, 0}, nil
+}
+
+func (*busyEmbedder) Close() error { return nil }
+
+// The embedding sweep embeds nothing itself: it queues one search.sweep
+// operation for the search worker, which a busy provider defers rather
+// than holding the worker.
+func TestSweepQueuesEmbedding(t *testing.T) {
+	ctx := context.Background()
+	s := dms.NewService(daltest.Database(t).SQL)
+	index, err := sqlitestore.Open(ctx, filepath.Join(t.TempDir(), "search.db"), sqlitestore.Options{Languages: []string{"english"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer index.Close()
+	model := &busyEmbedder{busy: 1}
+	x := &searchcontent.Indexer{Search: index, Embeddings: model}
+	if err = x.Register(s); err != nil {
+		t.Fatal(err)
+	}
+	if err = index.StageContent(ctx, "item", "blob", "g1", []search.Chunk{{Part: "read", Kind: search.KindContent, Text: "the invoice is due"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err = index.PublishContent(ctx, "item", "blob", "g1"); err != nil {
+		t.Fatal(err)
+	}
+	sweeps := func() []operations.Operation {
+		t.Helper()
+		ops, err := s.DAL.Operations().List(ctx, operations.Filter{Kinds: []string{searchcontent.KindSweep}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return ops
+	}
+	for range 2 {
+		if err = x.Sweep(ctx, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if ops := sweeps(); len(ops) != 1 || model.calls != 0 {
+		t.Fatalf("%d sweeps queued, %d embedding calls", len(ops), model.calls)
+	}
+	if worked, err := s.RunOperation(ctx, []string{searchcontent.KindSweep}); err != nil || !worked {
+		t.Fatal(worked, err)
+	}
+	deferred := sweeps()[0]
+	if deferred.Status != operations.StatusPending || !deferred.AttemptAt.After(time.Now().Add(50*time.Second)) || !strings.Contains(deferred.Error, "busy") {
+		t.Fatalf("a busy provider did not defer the sweep: %+v", deferred)
+	}
+	if worked, err := s.RunOperation(ctx, []string{searchcontent.KindSweep}); err != nil || worked {
+		t.Fatal("the deferred sweep ran before its time", worked, err)
+	}
+}

@@ -138,23 +138,34 @@ type SearchReindex struct {
 // systemSubject is the creator of operations PaperGo starts itself.
 const systemSubject = "papergo"
 
+// EnsureSystemOperation queues an operation of kind that PaperGo starts
+// itself, unless one is pending: maintenance hands expensive work to the
+// kind's worker this way, so the worker's window, concurrency and retries
+// govern it.
+func (s *Service) EnsureSystemOperation(ctx context.Context, kind string, payload json.RawMessage) error {
+	if payload == nil {
+		payload = json.RawMessage(`{}`)
+	}
+	return s.write(ctx, func(t *Service) error {
+		pending, err := t.DAL.Operations().Exists(ctx, operations.Filter{Kinds: []string{kind}, Statuses: []operations.Status{operations.StatusPending}, CreatedBy: systemSubject})
+		if err != nil || pending {
+			return err
+		}
+		_, _, err = t.accept(ctx, operations.Operation{Kind: kind, CreatedBy: systemSubject, Payload: payload}, false)
+		return err
+	})
+}
+
 // RebuildSearch queues a rebuild of the search store from every live item
 // and folder, when the store is new or was recreated, unless one is already
 // queued. Search answers ErrSearchUnavailable until it completes.
 func (s *Service) RebuildSearch(ctx context.Context) error {
-	return s.write(ctx, func(t *Service) error {
-		pending, err := t.DAL.Operations().Exists(ctx, operations.Filter{Kinds: []string{OperationKindSearchReindex}, Statuses: []operations.Status{operations.StatusPending}, CreatedBy: systemSubject})
-		if err != nil || pending {
-			s.searchRebuild.Store(pending)
-			return err
-		}
-		raw, _ := json.Marshal(searchReindexPayload{Rebuild: true, Content: true})
-		if _, _, err = t.accept(ctx, operations.Operation{Kind: OperationKindSearchReindex, CreatedBy: systemSubject, Payload: raw}, false); err != nil {
-			return err
-		}
-		s.searchRebuild.Store(true)
-		return nil
-	})
+	raw, _ := json.Marshal(searchReindexPayload{Rebuild: true, Content: true})
+	if err := s.EnsureSystemOperation(ctx, OperationKindSearchReindex, raw); err != nil {
+		return err
+	}
+	s.searchRebuild.Store(true)
+	return nil
 }
 
 // ResumeSearchRebuild marks search unavailable while a rebuild queued before

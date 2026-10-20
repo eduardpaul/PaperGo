@@ -28,7 +28,7 @@ func workers(service *dms.Service, store storage.Store, f features, runs *script
 	rt.Add(worker.Definition{Name: "integrations", Kinds: []string{dms.OperationKindIntegrationRefresh}, Concurrency: 2})
 	rt.Add(worker.Definition{Name: "documents", Kinds: []string{documenttext.Kind, documentfiles.KindOptimize, documentfiles.KindCompose}})
 	rt.Add(worker.Definition{Name: "previews", Kinds: []string{documentpreview.Kind}})
-	rt.Add(worker.Definition{Name: "search", Kinds: []string{searchcontent.KindChunk, searchcontent.KindEmbed, searchcontent.KindPublish}})
+	rt.Add(worker.Definition{Name: "search", Kinds: []string{searchcontent.KindChunk, searchcontent.KindEmbed, searchcontent.KindPublish, searchcontent.KindSweep}})
 	rt.Add(worker.Definition{Name: "ai", Kinds: []string{aiops.KindComplete}, Concurrency: 2})
 	// Batch completions go to the provider in groups of 20, and whatever
 	// waits goes once a day.

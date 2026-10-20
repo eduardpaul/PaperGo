@@ -71,28 +71,31 @@ func TestEmbeddingsBatchesNormalizesAndCaches(t *testing.T) {
 	}
 }
 
-func TestEmbeddingsRetriesBusyProviders(t *testing.T) {
+// A busy or failing provider is tried once: the error says to try again
+// and when, so the operation that called defers itself.
+func TestEmbeddingsReportBusyProviders(t *testing.T) {
 	server := aitest.New(t)
 	e := model(t, server.Endpoint()+"/embeddings", 64)
 	ctx := context.Background()
-	server.Fail(2, http.StatusTooManyRequests)
-	if _, err := e.Embed(ctx, []string{"a"}); err != nil {
-		t.Fatal(err)
-	}
-	server.Fail(10, http.StatusServiceUnavailable)
-	start := time.Now()
-	_, err := e.Embed(ctx, []string{"a"})
-	var failure *ai.Error
-	if !errors.As(err, &failure) || failure.Status != http.StatusServiceUnavailable || failure.Message != "unavailable" {
-		t.Fatal(err)
-	}
-	if time.Since(start) > 10*time.Second {
-		t.Fatal("waited too long")
+	for _, status := range []int{http.StatusTooManyRequests, http.StatusServiceUnavailable} {
+		server.Fail(1, status)
+		before := server.Requests.Load()
+		_, err := e.Embed(ctx, []string{"a"})
+		var failure *ai.Error
+		if !errors.As(err, &failure) || failure.Status != status || failure.Message != "unavailable" || server.Requests.Load()-before != 1 {
+			t.Fatal(status, err)
+		}
+		if after, retry := ai.RetryAfter(err); !retry || after != 30*time.Second {
+			t.Fatal(status, after, retry)
+		}
 	}
 	server.Fail(1, http.StatusBadRequest)
-	before := server.Requests.Load()
-	if _, err = e.Embed(ctx, []string{"a"}); err == nil || server.Requests.Load()-before != 1 {
-		t.Fatal("a refused request is tried again", err)
+	_, err := e.Embed(ctx, []string{"a"})
+	if _, retry := ai.RetryAfter(err); err == nil || retry {
+		t.Fatal("a refused request is worth trying again", err)
+	}
+	if _, err = e.Embed(ctx, []string{"a"}); err != nil {
+		t.Fatal(err)
 	}
 }
 

@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -115,27 +117,35 @@ func (w *worker) groups(ctx, work context.Context) {
 	}
 }
 
-// admit runs every eligible group once and reports whether it ran any.
-// next moves to when the earliest group below its threshold becomes due.
+// admit runs every eligible group once, up to the worker's concurrency at
+// a time and never one group twice at once, and reports whether it ran
+// any. next moves to when the earliest group below its threshold becomes
+// due.
 func (w *worker) admit(ctx, work context.Context, records *activitystore.Store, now time.Time, flushed bool, next *time.Time) (bool, error) {
 	a := w.def.Admission
 	groups, err := w.rt.svc.ReadyOperationGroups(ctx, w.def.Kinds)
 	if err != nil {
 		return false, err
 	}
-	ran := false
+	type admitted struct {
+		kind, group, key string
+		through          *time.Time
+		worked           bool
+		err              error
+	}
+	var due []*admitted
 	for _, g := range groups {
 		key := drainKey(g.Kind, g.Key)
 		marker, err := records.Get(ctx, drainNamespace, w.def.Name, key)
 		if err != nil {
-			return ran, err
+			return false, err
 		}
 		var through *time.Time
 		switch {
 		case marker != nil:
 			var d drain
 			if err = json.Unmarshal(marker.Payload, &d); err != nil {
-				return ran, err
+				return false, err
 			}
 			through = &d.Cutoff
 		case flushed || (a.Policy == MaxWait || a.Policy == ThresholdOrMaxWait) && !now.Before(g.Oldest.Add(a.MaxWait)):
@@ -143,7 +153,7 @@ func (w *worker) admit(ctx, work context.Context, records *activitystore.Store, 
 			cutoff := now.UTC()
 			raw, _ := json.Marshal(drain{Cutoff: cutoff})
 			if err = records.Put(ctx, activitystore.Record{Namespace: drainNamespace, Scope: w.def.Name, Key: key, Payload: raw}); err != nil {
-				return ran, err
+				return false, err
 			}
 			through = &cutoff
 		case (a.Policy == Threshold || a.Policy == ThresholdOrMaxWait) && g.Inputs >= a.Threshold:
@@ -155,22 +165,36 @@ func (w *worker) admit(ctx, work context.Context, records *activitystore.Store, 
 			}
 			continue
 		}
+		due = append(due, &admitted{kind: g.Kind, group: g.Key, key: key, through: through})
+	}
+	slots := make(chan struct{}, w.def.Concurrency)
+	var wg sync.WaitGroup
+	for _, d := range due {
+		slots <- struct{}{}
 		w.active.Add(1)
-		worked, err := w.rt.svc.RunOperationGroup(work, g.Kind, g.Key, through, a.Batch)
-		w.active.Add(-1)
-		if err != nil {
-			return ran, err
+		wg.Go(func() {
+			defer func() { w.active.Add(-1); <-slots }()
+			d.worked, d.err = w.rt.svc.RunOperationGroup(work, d.kind, d.group, d.through, a.Batch)
+		})
+	}
+	wg.Wait()
+	ran := false
+	var errs []error
+	for _, d := range due {
+		if d.err != nil {
+			errs = append(errs, d.err)
+			continue
 		}
-		ran = ran || worked
-		if through != nil && !worked {
+		ran = ran || d.worked
+		if d.through != nil && !d.worked {
 			// The frozen backlog is done.
 			expired := now.UTC()
-			if err = records.Put(ctx, activitystore.Record{Namespace: drainNamespace, Scope: w.def.Name, Key: key, Payload: json.RawMessage(`{}`), ExpiresAt: &expired}); err != nil {
-				return ran, err
+			if err = records.Put(ctx, activitystore.Record{Namespace: drainNamespace, Scope: w.def.Name, Key: d.key, Payload: json.RawMessage(`{}`), ExpiresAt: &expired}); err != nil {
+				errs = append(errs, err)
 			}
 		}
 	}
-	return ran, nil
+	return ran, errors.Join(errs...)
 }
 
 // flushDue reports whether a flush is due now, from the schedule or an

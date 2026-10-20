@@ -27,13 +27,16 @@ func TestChatAnswersTextAndJSON(t *testing.T) {
 	if err != nil || answer.JSON["vendor"] != "vendor Bakery" || answer.JSON["total"] != float64(42) {
 		t.Fatalf("%+v %v", answer, err)
 	}
-	server.Fail(2, http.StatusTooManyRequests)
-	if _, err = chat.Complete(ctx, ai.Completion{Instructions: "x", Input: "y"}); err != nil {
-		t.Fatal("not retried:", err)
+	// A busy provider is worth trying again; a refusal is not.
+	server.Fail(1, http.StatusTooManyRequests)
+	if _, err = chat.Complete(ctx, ai.Completion{Instructions: "x", Input: "y"}); err == nil {
+		t.Fatal("a busy provider answered")
+	} else if _, retry := ai.RetryAfter(err); !retry {
+		t.Fatal("a busy provider is not worth trying again:", err)
 	}
 	server.Fail(1, http.StatusUnauthorized)
 	var failure *ai.Error
-	if _, err = chat.Complete(ctx, ai.Completion{Instructions: "x", Input: "y"}); !errors.As(err, &failure) || failure.Status != http.StatusUnauthorized || failure.Model != "chat model" {
+	if _, err = chat.Complete(ctx, ai.Completion{Instructions: "x", Input: "y"}); !errors.As(err, &failure) || failure.Status != http.StatusUnauthorized || failure.Model != "chat model" || failure.Retry {
 		t.Fatal(err)
 	}
 	if c, err := ai.NewChat(ai.ChatConfig{Provider: ai.ProviderNone}, nil); c != nil || err != nil {

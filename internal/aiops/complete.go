@@ -301,6 +301,10 @@ func (a *Assistant) complete(ctx context.Context, s *dms.Service, op *operations
 		return err
 	}
 	answer, err := a.Chat.Complete(ctx, ai.Completion{Instructions: c.Prompt, Input: input, Schema: c.Schema, Images: images})
+	if after, retry := ai.RetryAfter(err); retry {
+		// A busy provider defers the operation instead of holding a worker.
+		return dms.Retry(err, after)
+	}
 	if err != nil {
 		return err
 	}
