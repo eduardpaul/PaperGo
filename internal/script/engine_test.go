@@ -3,6 +3,7 @@ package script
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -11,23 +12,25 @@ import (
 	"papergo/internal/dal/runs"
 )
 
-// memory is an in-memory journal whose requests a test answers.
+// memory is an in-memory journal with operations. Requests a test does not
+// answer start bulk updates and read operations, like the API.
 type memory struct {
-	mu       sync.Mutex
-	steps    map[string][]runs.Step
-	requests []Request
-	started  []runs.Step
-	answer   func(Request) Response
+	mu         sync.Mutex
+	steps      map[string][]runs.Step
+	requests   []Request
+	waits      int
+	operations map[string]string
+	answer     func(Request) Response
 }
 
 func newMemory(answer func(Request) Response) *memory {
-	return &memory{steps: map[string][]runs.Step{}, answer: answer}
+	return &memory{steps: map[string][]runs.Step{}, operations: map[string]string{}, answer: answer}
 }
 
-func (m *memory) Steps(_ context.Context, runID string) ([]runs.Step, error) {
+func (m *memory) Steps(_ context.Context, run Run) ([]runs.Step, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return append([]runs.Step(nil), m.steps[runID]...), nil
+	return append([]runs.Step(nil), m.steps[run.ID]...), nil
 }
 
 func (m *memory) record(steps ...runs.Step) {
@@ -39,36 +42,70 @@ func (m *memory) record(steps ...runs.Step) {
 	}
 }
 
-func (m *memory) Request(_ context.Context, unsaved []runs.Step, step runs.Step, req Request) (Response, error) {
+func (m *memory) Request(_ context.Context, _ Run, unsaved []runs.Step, step runs.Step, req Request) (Response, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.requests = append(m.requests, req)
-	response := m.answer(req)
+	var response Response
+	switch {
+	case req.Method == "POST" && strings.HasSuffix(req.URL, "/bulk-update"):
+		id := fmt.Sprintf("00000000-0000-4000-8000-%012d", len(m.operations)+1)
+		m.operations[id] = "pending"
+		response = jsonResponse(202, `{"id":"`+id+`","status":"pending"}`)
+	case req.Method == "GET" && strings.HasPrefix(req.URL, "/v1/operations/"):
+		id := strings.TrimPrefix(req.URL, "/v1/operations/")
+		status := m.operations[id]
+		body := `{"id":"` + id + `","status":"` + status + `","result":{"updated":2,"ids":["a","b"]}}`
+		if status == "failed" {
+			body = `{"id":"` + id + `","status":"failed","error":"the list is locked"}`
+		}
+		response = jsonResponse(200, body)
+	default:
+		response = m.answer(req)
+	}
 	step.Output = ResponseOutput(response)
 	m.record(append(unsaved, step)...)
 	return response, nil
 }
 
-func (m *memory) Start(_ context.Context, unsaved []runs.Step, step runs.Step) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.started = append(m.started, step)
-	m.record(append(unsaved, step)...)
-	return nil
+func (m *memory) over(step runs.Step) bool {
+	for _, id := range step.Operations {
+		if m.operations[id] == "pending" {
+			return false
+		}
+	}
+	return true
 }
 
-func (m *memory) finish(t *testing.T, runID string, seq int, output, failure string) {
-	t.Helper()
+func (m *memory) Wait(_ context.Context, _ Run, unsaved []runs.Step, step runs.Step) (bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	s := &m.steps[runID][seq]
-	if s.Status != runs.StepPending {
-		t.Fatalf("step %d is %s", seq, s.Status)
+	for _, id := range step.Operations {
+		if _, ok := m.operations[id]; !ok {
+			return false, ErrUnknownOperation
+		}
 	}
-	if failure != "" {
-		s.Status, s.Error = runs.StepFailed, failure
-	} else {
-		s.Status, s.Output = runs.StepCompleted, json.RawMessage(output)
+	m.waits++
+	done := m.over(step)
+	if done {
+		step.Status = runs.StepCompleted
+	}
+	m.record(append(unsaved, step)...)
+	return done, nil
+}
+
+// finish ends an operation and releases the waits it completes, as the
+// operations repository does.
+func (m *memory) finish(id, status string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.operations[id] = status
+	for _, steps := range m.steps {
+		for i := range steps {
+			if steps[i].Kind == runs.StepWait && steps[i].Status == runs.StepPending && m.over(steps[i]) {
+				steps[i].Status = runs.StepCompleted
+			}
+		}
 	}
 }
 
@@ -156,54 +193,140 @@ export default workflow({
 	}
 }
 
-func TestActionsSuspendAndResume(t *testing.T) {
-	m := newMemory(func(Request) Response { return jsonResponse(500, `{}`) })
+const listID = "0b0e3e2a-6f39-4a39-9a0e-2a7b5d1c9f01"
+
+func TestWaitsSuspendAndResume(t *testing.T) {
+	m := newMemory(nil)
 	e := New(m, 0)
-	run := Run{ID: "run-3", Input: json.RawMessage(`{"doc":"d1"}`), Artifact: bundle(t, `
-import { workflow } from "@papergo/workflow";
+	run := Run{ID: "run-3", Input: json.RawMessage(`{"list":"` + listID + `"}`), Artifact: bundle(t, `
+import { workflow, plain } from "@papergo/workflow";
 export default workflow({
-  async run(ctx, input: { doc: string }) {
-    ctx.log("reading", input.doc);
-    const text = await ctx.action<{ text: string }>("ocr", { doc: input.doc });
-    ctx.log("read", text.text);
-    const vector = await ctx.action<number[]>("embeddings", { text: text.text });
-    return { text: text.text, size: vector.length };
+  async run(ctx, input: { list: string }) {
+    const started = await ctx.api.v1.resources.byId(input.list).bulkUpdate.post({ values: { status: "done" } });
+    ctx.log("started", started?.status);
+    const done = await ctx.wait(started!);
+    ctx.log("finished", done.status);
+    return { status: done.status, result: plain(done.result) };
   },
 });
 `)}
 	out := execute(t, e, run)
-	if out.Status != Suspended || len(m.started) != 1 || m.started[0].Name != "ocr" || string(m.started[0].Input) != `{"doc":"d1"}` {
-		t.Fatalf("first slice: %+v, started %+v", out, m.started)
+	if out.Status != Suspended || m.waits != 1 || len(m.requests) != 1 {
+		t.Fatalf("first slice: %+v, %d waits, %d requests", out, m.waits, len(m.requests))
 	}
-	if len(out.Logs) != 1 || out.Logs[0].Message != "reading d1" {
+	if len(out.Logs) != 1 || out.Logs[0].Message != "started pending" {
 		t.Fatalf("first slice logs: %+v", out.Logs)
 	}
-	if again := execute(t, e, run); again.Status != Suspended || len(m.started) != 1 || len(again.Logs) != 0 {
-		t.Fatalf("a pending action must not start again: %+v, started %d", again, len(m.started))
+	if again := execute(t, e, run); again.Status != Suspended || m.waits != 1 || len(m.requests) != 1 || len(again.Logs) != 0 {
+		t.Fatalf("a pending wait must not repeat anything: %+v", again)
 	}
-	m.finish(t, run.ID, 0, `{"text":"hello"}`, "")
+	m.finish("00000000-0000-4000-8000-000000000001", "succeeded")
 	out = execute(t, e, run)
-	if out.Status != Suspended || len(m.started) != 2 || m.started[1].Name != "embeddings" || string(m.started[1].Input) != `{"text":"hello"}` {
-		t.Fatalf("second slice: %+v", out)
-	}
-	if len(out.Logs) != 1 || out.Logs[0].Message != "read hello" {
-		t.Fatalf("second slice logs: %+v", out.Logs)
-	}
-	m.finish(t, run.ID, 1, `[0.1,0.2,0.3]`, "")
-	out = execute(t, e, run)
-	if out.Status != Completed || string(out.Output) != `{"text":"hello","size":3}` || len(m.requests) != 0 {
+	if out.Status != Completed || string(out.Output) != `{"status":"succeeded","result":{"updated":2,"ids":["a","b"]}}` {
 		t.Fatalf("last slice: %+v", out)
+	}
+	if len(out.Logs) != 1 || out.Logs[0].Message != "finished succeeded" || len(m.requests) != 2 {
+		t.Fatalf("last slice logs %+v after %d requests", out.Logs, len(m.requests))
+	}
+}
+
+func TestWaitingForSeveralOperationsSuspendsOnce(t *testing.T) {
+	m := newMemory(nil)
+	e := New(m, 0)
+	run := Run{ID: "run-parallel", Input: json.RawMessage(`{"list":"` + listID + `"}`), Artifact: bundle(t, `
+import { workflow } from "@papergo/workflow";
+export default workflow({
+  async run(ctx, input: { list: string }) {
+    const a = await ctx.api.v1.resources.byId(input.list).bulkUpdate.post({ values: { status: "a" } });
+    const b = await ctx.api.v1.resources.byId(input.list).bulkUpdate.post({ values: { status: "b" } });
+    const done = await ctx.wait([a!, b!]);
+    return done.map((op) => op.status);
+  },
+});
+`)}
+	if out := execute(t, e, run); out.Status != Suspended || m.waits != 1 {
+		t.Fatalf("outcome: %+v", out)
+	}
+	m.finish("00000000-0000-4000-8000-000000000002", "succeeded")
+	if out := execute(t, e, run); out.Status != Suspended {
+		t.Fatalf("one finished operation must not end the wait: %+v", out)
+	}
+	m.finish("00000000-0000-4000-8000-000000000001", "succeeded")
+	if out := execute(t, e, run); out.Status != Completed || string(out.Output) != `["succeeded","succeeded"]` || m.waits != 1 {
+		t.Fatalf("outcome: %+v", out)
+	}
+}
+
+func TestWaitingForFinishedOperationsContinues(t *testing.T) {
+	m := newMemory(nil)
+	m.operations["00000000-0000-4000-8000-000000000009"] = "succeeded"
+	out := execute(t, New(m, 0), Run{ID: "run-finished", Artifact: bundle(t, `
+import { workflow } from "@papergo/workflow";
+export default workflow({
+  async run(ctx) {
+    const op = await ctx.wait({ id: "00000000-0000-4000-8000-000000000009" });
+    return op.status;
+  },
+});
+`)})
+	if out.Status != Completed || string(out.Output) != `"succeeded"` {
+		t.Fatalf("outcome: %+v", out)
+	}
+}
+
+func TestFailedOperationsThrow(t *testing.T) {
+	m := newMemory(nil)
+	e := New(m, 0)
+	run := Run{ID: "run-5", Input: json.RawMessage(`{"list":"` + listID + `"}`), Artifact: bundle(t, `
+import { workflow, OperationError } from "@papergo/workflow";
+export default workflow({
+  async run(ctx, input: { list: string }) {
+    const op = await ctx.api.v1.resources.byId(input.list).bulkUpdate.post({ values: { status: "done" } });
+    try {
+      await ctx.wait(op!);
+      return "succeeded";
+    } catch (e) {
+      return e instanceof OperationError ? e.message : "unexpected: " + e;
+    }
+  },
+});
+`)}
+	if out := execute(t, e, run); out.Status != Suspended {
+		t.Fatalf("outcome: %+v", out)
+	}
+	m.finish("00000000-0000-4000-8000-000000000001", "failed")
+	if out := execute(t, e, run); out.Status != Completed || string(out.Output) != `"operation 00000000-0000-4000-8000-000000000001 failed: the list is locked"` {
+		t.Fatalf("outcome: %+v", out)
+	}
+}
+
+func TestWaitsNeedKnownOperations(t *testing.T) {
+	out := execute(t, New(newMemory(nil), 0), Run{ID: "run-unknown", Artifact: bundle(t, `
+import { workflow } from "@papergo/workflow";
+export default workflow({
+  async run(ctx) {
+    try {
+      await ctx.wait({ id: "00000000-0000-4000-8000-000000000404" });
+    } catch (e: any) {
+      return e.message;
+    }
+  },
+});
+`)})
+	if out.Status != Completed || !strings.Contains(string(out.Output), "no such operation") {
+		t.Fatalf("outcome: %+v", out)
 	}
 }
 
 func TestSuspensionCannotBeCaught(t *testing.T) {
 	m := newMemory(nil)
-	run := Run{ID: "run-4", Artifact: bundle(t, `
+	run := Run{ID: "run-4", Input: json.RawMessage(`{"list":"` + listID + `"}`), Artifact: bundle(t, `
 import { workflow } from "@papergo/workflow";
 export default workflow({
-  async run(ctx) {
+  async run(ctx, input: { list: string }) {
+    const op = await ctx.api.v1.resources.byId(input.list).bulkUpdate.post({ values: { status: "done" } });
     try {
-      await ctx.action("approval", {});
+      await ctx.wait(op!);
     } catch {
       ctx.log("caught");
       return "caught";
@@ -220,40 +343,16 @@ export default workflow({
 	}
 }
 
-func TestFailedActionsThrow(t *testing.T) {
-	m := newMemory(nil)
-	e := New(m, 0)
-	run := Run{ID: "run-5", Artifact: bundle(t, `
-import { workflow } from "@papergo/workflow";
-export default workflow({
-  async run(ctx) {
-    try {
-      await ctx.action("ocr", { doc: "d" });
-      return "read";
-    } catch (e: any) {
-      return "failed: " + e.message;
-    }
-  },
-});
-`)}
-	if out := execute(t, e, run); out.Status != Suspended {
-		t.Fatalf("outcome: %+v", out)
-	}
-	m.finish(t, run.ID, 0, "", "the file has no pages")
-	if out := execute(t, e, run); out.Status != Completed || string(out.Output) != `"failed: the file has no pages"` {
-		t.Fatalf("outcome: %+v", out)
-	}
-}
-
 func TestValuesReplayDeterministically(t *testing.T) {
 	m := newMemory(nil)
 	e := New(m, 0)
+	m.operations["00000000-0000-4000-8000-000000000009"] = "pending"
 	run := Run{ID: "run-6", Artifact: bundle(t, `
 import { workflow } from "@papergo/workflow";
 export default workflow({
   async run(ctx) {
     const before = { now: Date.now(), date: new Date().toISOString(), random: Math.random(), id: crypto.randomUUID() };
-    await ctx.action("wait", {});
+    await ctx.wait({ id: "00000000-0000-4000-8000-000000000009" });
     return { before };
   },
 });
@@ -261,11 +360,11 @@ export default workflow({
 	if out := execute(t, e, run); out.Status != Suspended {
 		t.Fatalf("outcome: %+v", out)
 	}
-	// The values were recorded with the action that followed them.
-	if steps := m.steps[run.ID]; len(steps) != 5 || steps[0].Name != "now" || steps[3].Name != "uuid" || steps[4].Kind != runs.StepAction {
+	// The values were recorded with the wait that followed them.
+	if steps := m.steps[run.ID]; len(steps) != 5 || steps[0].Name != "now" || steps[3].Name != "uuid" || steps[4].Kind != runs.StepWait {
 		t.Fatalf("steps: %+v", steps)
 	}
-	m.finish(t, run.ID, 4, "null", "")
+	m.finish("00000000-0000-4000-8000-000000000009", "succeeded")
 	first := execute(t, e, run)
 	second := execute(t, e, run)
 	if first.Status != Completed || string(first.Output) != string(second.Output) {
@@ -291,11 +390,11 @@ import { workflow } from "@papergo/workflow";
 export default workflow({
   async run(ctx) {
     await ctx.api.v1.resources.byId("0b0e3e2a-6f39-4a39-9a0e-2a7b5d1c9f01").get();
-    await ctx.action("ocr", {});
+    await ctx.api.v1.resources.byId("0b0e3e2a-6f39-4a39-9a0e-2a7b5d1c9f01").bulkUpdate.post({ values: { status: "done" } });
   },
 });
 `)}
-	if out := execute(t, e, run); out.Status != Suspended {
+	if out := execute(t, e, run); out.Status != Completed {
 		t.Fatalf("outcome: %+v", out)
 	}
 	run.Artifact = bundle(t, `
@@ -307,7 +406,7 @@ export default workflow({
 });
 `)
 	out := execute(t, e, run)
-	if out.Status != Failed || !strings.Contains(out.Error, ErrNondeterministic.Error()) || len(m.requests) != 1 {
+	if out.Status != Failed || !strings.Contains(out.Error, ErrNondeterministic.Error()) || len(m.requests) != 2 {
 		t.Fatalf("outcome: %+v, requests %d", out, len(m.requests))
 	}
 }

@@ -69,8 +69,8 @@ export interface ReindexRequestBuilder extends BaseRequestBuilder<ReindexRequest
 // @ts-ignore
 export function serializeReindexPostRequestBody(writer: SerializationWriter, reindexPostRequestBody: Partial<ReindexPostRequestBody> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!reindexPostRequestBody || isSerializingDerivedType) { return; }
-    writer.writeBooleanValue("content", reindexPostRequestBody.content ?? false);
-    writer.writeBooleanValue("force", reindexPostRequestBody.force ?? false);
+    writer.writeBooleanValue("content", reindexPostRequestBody.content);
+    writer.writeBooleanValue("force", reindexPostRequestBody.force);
 }
 /**
  * Uri template for the request builder.

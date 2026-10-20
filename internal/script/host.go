@@ -43,7 +43,7 @@ type host struct {
 	next     int
 	unsaved  []runs.Step
 	logs     []Log
-	// suspended is set when the run waits for an action; abort when the
+	// suspended is set when the run waits for operations; abort when the
 	// slice must stop for another reason. Either interrupts the runtime,
 	// which JavaScript cannot catch.
 	suspended bool
@@ -82,7 +82,7 @@ func (h *host) runtime() *goja.Runtime {
 
 	papergo := rt.NewObject()
 	_ = papergo.Set("request", h.request)
-	_ = papergo.Set("action", h.action)
+	_ = papergo.Set("wait", h.wait)
 	_ = papergo.Set("uuid", h.uuid)
 	_ = papergo.Set("log", func(level, message string) { h.log(level, message) })
 	_ = rt.Set("__papergo", papergo)
@@ -272,7 +272,7 @@ func (h *host) request(method, rawURL string, headers map[string]string, body go
 	} else {
 		step := h.newStep(runs.StepRequest, name, hash)
 		h.watch.pause()
-		response, err := h.effects.Request(h.ctx, h.unsaved, step, Request{Method: method, URL: target, Header: headers, Body: content})
+		response, err := h.effects.Request(h.ctx, h.run, h.unsaved, step, Request{Method: method, URL: target, Header: headers, Body: content})
 		h.watch.resume()
 		if err != nil {
 			return h.stop(err)
@@ -297,42 +297,52 @@ func (h *host) request(method, rawURL string, headers map[string]string, body go
 	return obj
 }
 
-// action replays a platform action's recorded result or starts it. A run
-// whose action has not completed suspends; a failed action throws an error
-// the script can catch.
-func (h *host) action(name, input string) goja.Value {
+// wait replays a recorded wait or records one. A run whose operations have
+// not all finished suspends; a wait that failed, such as by timing out,
+// throws an error the script can catch.
+func (h *host) wait(ids []string) goja.Value {
 	if h.abort != nil || h.suspended {
 		return goja.Undefined()
 	}
-	if name == "" || len(name) > 100 {
-		panic(h.rt.NewTypeError("an action name has 1 to 100 characters"))
+	if len(ids) == 0 || len(ids) > maxWaits {
+		panic(h.rt.NewTypeError("ctx.wait takes 1 to %d operations", maxWaits))
 	}
-	if len(input) > maxActionInput || !json.Valid([]byte(input)) {
-		panic(h.rt.NewTypeError("action input must be JSON of at most %d bytes", maxActionInput))
+	seen := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		if id == "" || len(id) > 64 || seen[id] {
+			panic(h.rt.NewTypeError("ctx.wait takes distinct operation IDs"))
+		}
+		seen[id] = true
 	}
-	hash := digest(string(runs.StepAction), name, input)
-	recorded, err := h.replay(runs.StepAction, name, hash)
+	hash := digest(append([]string{string(runs.StepWait)}, ids...)...)
+	recorded, err := h.replay(runs.StepWait, "operations", hash)
 	if err != nil {
 		return h.stop(err)
 	}
 	if recorded == nil {
-		step := h.newStep(runs.StepAction, name, hash)
-		step.Status = runs.StepPending
-		step.Input = json.RawMessage(input)
+		step := h.newStep(runs.StepWait, "operations", hash)
+		step.Status, step.Operations = runs.StepPending, ids
+		step.Input, _ = json.Marshal(map[string][]string{"operations": ids})
 		h.watch.pause()
-		err := h.effects.Start(h.ctx, h.unsaved, step)
+		done, err := h.effects.Wait(h.ctx, h.run, h.unsaved, step)
 		h.watch.resume()
+		if errors.Is(err, ErrUnknownOperation) {
+			panic(h.rt.NewTypeError("ctx.wait: %v", err))
+		}
 		if err != nil {
 			return h.stop(err)
 		}
 		h.unsaved = nil
 		h.next++
+		if done {
+			return goja.Undefined()
+		}
 		return h.stop(errSuspended)
 	}
 	h.next++
 	switch recorded.Status {
 	case runs.StepCompleted:
-		return h.rt.ToValue(string(recorded.Output))
+		return goja.Undefined()
 	case runs.StepFailed:
 		panic(h.rt.NewGoError(errors.New(recorded.Error)))
 	default:

@@ -6702,7 +6702,7 @@ export function serializeApplyTemplateInput(writer: SerializationWriter, applyTe
 export function serializeAttachContentTypeInput(writer: SerializationWriter, attachContentTypeInput: Partial<AttachContentTypeInput> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!attachContentTypeInput || isSerializingDerivedType) { return; }
     writer.writeGuidValue("content_type_id", attachContentTypeInput.contentTypeId);
-    writer.writeBooleanValue("is_default", attachContentTypeInput.isDefault ?? false);
+    writer.writeBooleanValue("is_default", attachContentTypeInput.isDefault);
 }
 /**
  * Serializes information the current object
@@ -6966,7 +6966,7 @@ export function serializeCalendarQuery(writer: SerializationWriter, calendarQuer
     if (!calendarQuery || isSerializingDerivedType) { return; }
     writer.writeDateValue("from", calendarQuery.from);
     writer.writeObjectValue<QuerySpec>("query", calendarQuery.query, serializeQuerySpec);
-    writer.writeEnumValue<CalendarQuery_surface>("surface", calendarQuery.surface ?? CalendarQuery_surfaceObject.Auto);
+    writer.writeEnumValue<CalendarQuery_surface>("surface", calendarQuery.surface);
     writer.writeDateValue("to", calendarQuery.to);
 }
 /**
@@ -7047,12 +7047,12 @@ export function serializeContentTypeInput(writer: SerializationWriter, contentTy
 export function serializeCreateCatalogField(writer: SerializationWriter, createCatalogField: Partial<CreateCatalogField> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!createCatalogField || isSerializingDerivedType) { return; }
     writer.writeCollectionOfPrimitiveValues<string>("choices", createCatalogField.choices);
-    writer.writeBooleanValue("indexed", createCatalogField.indexed ?? false);
+    writer.writeBooleanValue("indexed", createCatalogField.indexed);
     writer.writeStringValue("key", createCatalogField.key);
     writer.writeStringValue("label", createCatalogField.label);
     writer.writeObjectValue<FieldOptions>("options", createCatalogField.options, serializeFieldOptions);
     writer.writeBooleanValue("required", createCatalogField.required);
-    writer.writeNumberValue("scale", createCatalogField.scale ?? 0);
+    writer.writeNumberValue("scale", createCatalogField.scale);
     writer.writeEnumValue<CreateCatalogField_type>("type", createCatalogField.type);
 }
 /**
@@ -7066,12 +7066,12 @@ export function serializeCreateField(writer: SerializationWriter, createField: P
     if (!createField || isSerializingDerivedType) { return; }
     writer.writeCollectionOfPrimitiveValues<string>("choices", createField.choices);
     writer.writeGuidValue("content_type_id", createField.contentTypeId);
-    writer.writeBooleanValue("indexed", createField.indexed ?? false);
+    writer.writeBooleanValue("indexed", createField.indexed);
     writer.writeStringValue("key", createField.key);
     writer.writeStringValue("label", createField.label);
     writer.writeObjectValue<FieldOptions>("options", createField.options, serializeFieldOptions);
     writer.writeBooleanValue("required", createField.required);
-    writer.writeNumberValue("scale", createField.scale ?? 0);
+    writer.writeNumberValue("scale", createField.scale);
     writer.writeEnumValue<CreateField_type>("type", createField.type);
 }
 /**
@@ -7132,7 +7132,7 @@ export function serializeCreateRelationship_metadata(writer: SerializationWriter
 // @ts-ignore
 export function serializeCreateResource(writer: SerializationWriter, createResource: Partial<CreateResource> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!createResource || isSerializingDerivedType) { return; }
-    writer.writeBooleanValue("allow_folders", createResource.allowFolders ?? true);
+    writer.writeBooleanValue("allow_folders", createResource.allowFolders);
     writer.writeGuidValue("content_type_id", createResource.contentTypeId);
     writer.writeCollectionOfPrimitiveValues<Guid>("content_type_ids", createResource.contentTypeIds);
     writer.writeStringValue("description", createResource.description);
@@ -7142,11 +7142,11 @@ export function serializeCreateResource(writer: SerializationWriter, createResou
     writer.writeEnumValue<CreateResource_kind>("kind", createResource.kind);
     writer.writeNumberValue("max_versions", createResource.maxVersions);
     writer.writeStringValue("name", createResource.name);
-    writer.writeBooleanValue("publishing_enabled", createResource.publishingEnabled ?? false);
+    writer.writeBooleanValue("publishing_enabled", createResource.publishingEnabled);
     writer.writeStringValue("template_key", createResource.templateKey);
     writer.writeObjectValue<CreateResource_values>("values", createResource.values, serializeCreateResource_values);
     writer.writeEnumValue<CreateResource_versioning>("versioning", createResource.versioning);
-    writer.writeBooleanValue("webdav_enabled", createResource.webdavEnabled ?? false);
+    writer.writeBooleanValue("webdav_enabled", createResource.webdavEnabled);
 }
 /**
  * Serializes information the current object
@@ -7290,13 +7290,13 @@ export function serializeFieldDefinition(writer: SerializationWriter, fieldDefin
     writer.writeCollectionOfPrimitiveValues<string>("choices", fieldDefinition.choices);
     writer.writeDateValue("created_at", fieldDefinition.createdAt);
     writer.writeStringValue("id", fieldDefinition.id);
-    writer.writeBooleanValue("indexed", fieldDefinition.indexed ?? false);
+    writer.writeBooleanValue("indexed", fieldDefinition.indexed);
     writer.writeEnumValue<FieldDefinition_index_status>("index_status", fieldDefinition.indexStatus);
     writer.writeStringValue("key", fieldDefinition.key);
     writer.writeStringValue("label", fieldDefinition.label);
     writer.writeObjectValue<FieldOptions>("options", fieldDefinition.options, serializeFieldOptions);
     writer.writeBooleanValue("required", fieldDefinition.required);
-    writer.writeNumberValue("scale", fieldDefinition.scale ?? 0);
+    writer.writeNumberValue("scale", fieldDefinition.scale);
     writer.writeEnumValue<FieldDefinition_type>("type", fieldDefinition.type);
     writer.writeNumberValue("version", fieldDefinition.version);
     writer.writeAdditionalData(fieldDefinition.additionalData);
@@ -7317,10 +7317,10 @@ export function serializeFieldOptions(writer: SerializationWriter, fieldOptions:
     writer.writeStringValue("maximum", fieldOptions.maximum);
     writer.writeNumberValue("max_length", fieldOptions.maxLength);
     writer.writeStringValue("minimum", fieldOptions.minimum);
-    writer.writeBooleanValue("multiple", fieldOptions.multiple ?? false);
+    writer.writeBooleanValue("multiple", fieldOptions.multiple);
     writer.writeEnumValue<FieldOptions_search_weight>("search_weight", fieldOptions.searchWeight);
     writer.writeStringValue("term_set_id", fieldOptions.termSetId);
-    writer.writeBooleanValue("unique", fieldOptions.unique ?? false);
+    writer.writeBooleanValue("unique", fieldOptions.unique);
 }
 /**
  * Serializes information the current object
@@ -7672,7 +7672,7 @@ export function serializeOperationPage(writer: SerializationWriter, operationPag
 // @ts-ignore
 export function serializePermissions(writer: SerializationWriter, permissions: Partial<Permissions> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!permissions || isSerializingDerivedType) { return; }
-    writer.writeBooleanValue("copy_inherited", permissions.copyInherited ?? false);
+    writer.writeBooleanValue("copy_inherited", permissions.copyInherited);
     writer.writeCollectionOfObjectValues<Permissions_grants>("grants", permissions.grants, serializePermissions_grants);
     writer.writeBooleanValue("inherit", permissions.inherit);
 }
@@ -7686,7 +7686,7 @@ export function serializePermissions(writer: SerializationWriter, permissions: P
 export function serializePermissions_effective_grants(writer: SerializationWriter, permissions_effective_grants: Partial<Permissions_effective_grants> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!permissions_effective_grants || isSerializingDerivedType) { return; }
     writer.writeEnumValue<Permissions_effective_grants_action>("action", permissions_effective_grants.action);
-    writer.writeEnumValue<Permissions_effective_grants_effect>("effect", permissions_effective_grants.effect ?? Permissions_effective_grants_effectObject.Allow);
+    writer.writeEnumValue<Permissions_effective_grants_effect>("effect", permissions_effective_grants.effect);
     writer.writeStringValue("principal_id", permissions_effective_grants.principalId);
     writer.writeEnumValue<Permissions_effective_grants_principal_type>("principal_type", permissions_effective_grants.principalType);
 }
@@ -7700,7 +7700,7 @@ export function serializePermissions_effective_grants(writer: SerializationWrite
 export function serializePermissions_grants(writer: SerializationWriter, permissions_grants: Partial<Permissions_grants> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!permissions_grants || isSerializingDerivedType) { return; }
     writer.writeEnumValue<Permissions_grants_action>("action", permissions_grants.action);
-    writer.writeEnumValue<Permissions_grants_effect>("effect", permissions_grants.effect ?? Permissions_grants_effectObject.Allow);
+    writer.writeEnumValue<Permissions_grants_effect>("effect", permissions_grants.effect);
     writer.writeStringValue("principal_id", permissions_grants.principalId);
     writer.writeEnumValue<Permissions_grants_principal_type>("principal_type", permissions_grants.principalType);
 }
@@ -7731,10 +7731,10 @@ export function serializePortableSmartFolderDefinition(writer: SerializationWrit
     writer.writeCollectionOfPrimitiveValues<string>("content_types", portableSmartFolderDefinition.contentTypes);
     writer.writeObjectValue<FilterExpr>("filter", portableSmartFolderDefinition.filter, serializeFilterExpr);
     writer.writeCollectionOfObjectValues<SmartFolderGroupBy>("group_by", portableSmartFolderDefinition.groupBy, serializeSmartFolderGroupBy);
-    writer.writeBooleanValue("include_folders", portableSmartFolderDefinition.includeFolders ?? false);
+    writer.writeBooleanValue("include_folders", portableSmartFolderDefinition.includeFolders);
     writer.writeEnumValue<PortableSmartFolderDefinition_mode>("mode", portableSmartFolderDefinition.mode);
     writer.writeCollectionOfPrimitiveValues<string>("templates", portableSmartFolderDefinition.templates);
-    writer.writeEnumValue<PortableSmartFolderDefinition_term_match>("term_match", portableSmartFolderDefinition.termMatch ?? PortableSmartFolderDefinition_term_matchObject.All);
+    writer.writeEnumValue<PortableSmartFolderDefinition_term_match>("term_match", portableSmartFolderDefinition.termMatch);
     writer.writeCollectionOfObjectValues<SmartFolderTermRef>("terms", portableSmartFolderDefinition.terms, serializeSmartFolderTermRef);
 }
 /**
@@ -7904,10 +7904,10 @@ export function serializeQueryGroupPage(writer: SerializationWriter, queryGroupP
 // @ts-ignore
 export function serializeQueryRequest(writer: SerializationWriter, queryRequest: Partial<QueryRequest> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!queryRequest || isSerializingDerivedType) { return; }
-    writer.writeBooleanValue("include_total", queryRequest.includeTotal ?? false);
+    writer.writeBooleanValue("include_total", queryRequest.includeTotal);
     writer.writeObjectValue<QuerySpec>("query", queryRequest.query, serializeQuerySpec);
     writer.writeCollectionOfPrimitiveValues<string>("select", queryRequest.select);
-    writer.writeEnumValue<QueryRequest_surface>("surface", queryRequest.surface ?? QueryRequest_surfaceObject.Auto);
+    writer.writeEnumValue<QueryRequest_surface>("surface", queryRequest.surface);
 }
 /**
  * Serializes information the current object
@@ -8064,7 +8064,7 @@ export function serializeRelationshipView(writer: SerializationWriter, relations
 // @ts-ignore
 export function serializeResource(writer: SerializationWriter, resource: Partial<Resource> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!resource || isSerializingDerivedType) { return; }
-    writer.writeBooleanValue("allow_folders", resource.allowFolders ?? true);
+    writer.writeBooleanValue("allow_folders", resource.allowFolders);
     writer.writeGuidValue("container_id", resource.containerId);
     writer.writeDateValue("created_at", resource.createdAt);
     writer.writeStringValue("default_currency", resource.defaultCurrency);
@@ -8080,13 +8080,13 @@ export function serializeResource(writer: SerializationWriter, resource: Partial
     writer.writeNumberValue("next_revision_number", resource.nextRevisionNumber);
     writer.writeGuidValue("parent_id", resource.parentId);
     writer.writeGuidValue("published_revision_id", resource.publishedRevisionId);
-    writer.writeBooleanValue("publishing_enabled", resource.publishingEnabled ?? false);
+    writer.writeBooleanValue("publishing_enabled", resource.publishingEnabled);
     writer.writeGuidValue("schema_head_id", resource.schemaHeadId);
     writer.writeDateValue("updated_at", resource.updatedAt);
     writer.writeObjectValue<Resource_values>("values", resource.values, serializeResource_values);
     writer.writeNumberValue("version", resource.version);
     writer.writeEnumValue<Resource_versioning>("versioning", resource.versioning);
-    writer.writeBooleanValue("webdav_enabled", resource.webdavEnabled ?? false);
+    writer.writeBooleanValue("webdav_enabled", resource.webdavEnabled);
     writer.writeGuidValue("workspace_id", resource.workspaceId);
     writer.writeAdditionalData(resource.additionalData);
 }
@@ -8155,7 +8155,7 @@ export function serializeSchemaRevision_definition_fields(writer: SerializationW
     writer.writeBooleanValue("indexed", schemaRevision_definition_fields.indexed);
     writer.writeStringValue("label", schemaRevision_definition_fields.label);
     writer.writeBooleanValue("required", schemaRevision_definition_fields.required);
-    writer.writeNumberValue("scale", schemaRevision_definition_fields.scale ?? 0);
+    writer.writeNumberValue("scale", schemaRevision_definition_fields.scale);
     writer.writeEnumValue<SchemaRevision_definition_fields_type>("type", schemaRevision_definition_fields.type);
     writer.writeAdditionalData(schemaRevision_definition_fields.additionalData);
 }
@@ -8302,7 +8302,7 @@ export function serializeSearchRequest(writer: SerializationWriter, searchReques
     writer.writeStringValue("collection_id", searchRequest.collectionId);
     writer.writeStringValue("content_type_id", searchRequest.contentTypeId);
     writer.writeStringValue("created_by", searchRequest.createdBy);
-    writer.writeBooleanValue("facets", searchRequest.facets ?? true);
+    writer.writeBooleanValue("facets", searchRequest.facets);
     writer.writeObjectValue<FilterExpr>("filter", searchRequest.filter, serializeFilterExpr);
     writer.writeStringValue("keyword", searchRequest.keyword);
     if(searchRequest.kind)
@@ -8355,7 +8355,7 @@ export function serializeSearchStatus_embeddings(writer: SerializationWriter, se
 // @ts-ignore
 export function serializeSetWorkspaceMember(writer: SerializationWriter, setWorkspaceMember: Partial<SetWorkspaceMember> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!setWorkspaceMember || isSerializingDerivedType) { return; }
-    writer.writeEnumValue<SetWorkspaceMember_role>("role", setWorkspaceMember.role ?? SetWorkspaceMember_roleObject.Member);
+    writer.writeEnumValue<SetWorkspaceMember_role>("role", setWorkspaceMember.role);
     writer.writeStringValue("subject", setWorkspaceMember.subject);
 }
 /**
@@ -8394,10 +8394,10 @@ export function serializeSmartFolderDefinition(writer: SerializationWriter, smar
     writer.writeCollectionOfPrimitiveValues<string>("content_types", smartFolderDefinition.contentTypes);
     writer.writeObjectValue<FilterExpr>("filter", smartFolderDefinition.filter, serializeFilterExpr);
     writer.writeCollectionOfObjectValues<SmartFolderGroupBy>("group_by", smartFolderDefinition.groupBy, serializeSmartFolderGroupBy);
-    writer.writeBooleanValue("include_folders", smartFolderDefinition.includeFolders ?? false);
+    writer.writeBooleanValue("include_folders", smartFolderDefinition.includeFolders);
     writer.writeEnumValue<SmartFolderDefinition_mode>("mode", smartFolderDefinition.mode);
     writer.writeCollectionOfPrimitiveValues<string>("templates", smartFolderDefinition.templates);
-    writer.writeEnumValue<SmartFolderDefinition_term_match>("term_match", smartFolderDefinition.termMatch ?? SmartFolderDefinition_term_matchObject.All);
+    writer.writeEnumValue<SmartFolderDefinition_term_match>("term_match", smartFolderDefinition.termMatch);
     writer.writeCollectionOfPrimitiveValues<Guid>("terms", smartFolderDefinition.terms);
 }
 /**
@@ -8549,10 +8549,10 @@ export function serializeSmartFolderPreview(writer: SerializationWriter, smartFo
 // @ts-ignore
 export function serializeSmartFolderQueryRequest(writer: SerializationWriter, smartFolderQueryRequest: Partial<SmartFolderQueryRequest> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!smartFolderQueryRequest || isSerializingDerivedType) { return; }
-    writer.writeBooleanValue("include_total", smartFolderQueryRequest.includeTotal ?? false);
+    writer.writeBooleanValue("include_total", smartFolderQueryRequest.includeTotal);
     writer.writeCollectionOfPrimitiveValues<string>("path", smartFolderQueryRequest.path);
     writer.writeObjectValue<SmartFolderQueryRequest_sort>("sort", smartFolderQueryRequest.sort, serializeSmartFolderQueryRequest_sort);
-    writer.writeEnumValue<SmartFolderQueryRequest_surface>("surface", smartFolderQueryRequest.surface ?? SmartFolderQueryRequest_surfaceObject.Auto);
+    writer.writeEnumValue<SmartFolderQueryRequest_surface>("surface", smartFolderQueryRequest.surface);
 }
 /**
  * Serializes information the current object
@@ -8902,12 +8902,12 @@ export function serializeTaxonomyPackage(writer: SerializationWriter, taxonomyPa
 export function serializeTemplateField(writer: SerializationWriter, templateField: Partial<TemplateField> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!templateField || isSerializingDerivedType) { return; }
     writer.writeCollectionOfPrimitiveValues<string>("choices", templateField.choices);
-    writer.writeBooleanValue("indexed", templateField.indexed ?? false);
+    writer.writeBooleanValue("indexed", templateField.indexed);
     writer.writeStringValue("key", templateField.key);
     writer.writeStringValue("label", templateField.label);
     writer.writeObjectValue<FieldOptions>("options", templateField.options, serializeFieldOptions);
     writer.writeBooleanValue("required", templateField.required);
-    writer.writeNumberValue("scale", templateField.scale ?? 0);
+    writer.writeNumberValue("scale", templateField.scale);
     writer.writeEnumValue<TemplateField_type>("type", templateField.type);
 }
 /**
@@ -9199,7 +9199,7 @@ export function serializeUpdateResource(writer: SerializationWriter, updateResou
     writer.writeNumberValue("max_versions", updateResource.maxVersions);
     writer.writeStringValue("name", updateResource.name);
     writer.writeGuidValue("parent_id", updateResource.parentId);
-    writer.writeBooleanValue("publishing_enabled", updateResource.publishingEnabled ?? false);
+    writer.writeBooleanValue("publishing_enabled", updateResource.publishingEnabled);
     writer.writeObjectValue<UpdateResource_values>("values", updateResource.values, serializeUpdateResource_values);
     writer.writeEnumValue<UpdateResource_versioning>("versioning", updateResource.versioning);
     writer.writeBooleanValue("webdav_enabled", updateResource.webdavEnabled);
@@ -9261,7 +9261,7 @@ export function serializeViewInput(writer: SerializationWriter, viewInput: Parti
     if (!viewInput || isSerializingDerivedType) { return; }
     writer.writeCollectionOfPrimitiveValues<string>("columns", viewInput.columns);
     writer.writeBooleanValue("is_default", viewInput.isDefault);
-    writer.writeEnumValue<ViewInput_layout>("layout", viewInput.layout ?? ViewInput_layoutObject.Table);
+    writer.writeEnumValue<ViewInput_layout>("layout", viewInput.layout);
     writer.writeStringValue("name", viewInput.name);
     writer.writeObjectValue<QuerySpec>("query", viewInput.query, serializeQuerySpec);
 }
@@ -9274,9 +9274,9 @@ export function serializeViewInput(writer: SerializationWriter, viewInput: Parti
 // @ts-ignore
 export function serializeViewQueryRequest(writer: SerializationWriter, viewQueryRequest: Partial<ViewQueryRequest> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!viewQueryRequest || isSerializingDerivedType) { return; }
-    writer.writeBooleanValue("include_total", viewQueryRequest.includeTotal ?? false);
+    writer.writeBooleanValue("include_total", viewQueryRequest.includeTotal);
     writer.writeCollectionOfPrimitiveValues<string>("select", viewQueryRequest.select);
-    writer.writeEnumValue<ViewQueryRequest_surface>("surface", viewQueryRequest.surface ?? ViewQueryRequest_surfaceObject.Auto);
+    writer.writeEnumValue<ViewQueryRequest_surface>("surface", viewQueryRequest.surface);
 }
 /**
  * Serializes information the current object

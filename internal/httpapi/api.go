@@ -64,7 +64,10 @@ type requestKey struct{}
 type publicURLKey struct{}
 
 func subject(r *http.Request) string { v, _ := r.Context().Value(subjectKey{}).(string); return v }
-func (a *API) Handler() http.Handler {
+
+// routes is the authenticated /v1 API. Handlers reach the database through
+// a.DMS.
+func (a *API) routes() *http.ServeMux {
 	api := http.NewServeMux()
 	api.HandleFunc("GET /v1/events", a.events)
 	a.registerPortability(api)
@@ -126,6 +129,24 @@ func (a *API) Handler() http.Handler {
 	api.HandleFunc("GET /v1/audit", a.audit)
 	api.HandleFunc("GET /v1/workspaces/{id}/keywords", a.keywords)
 	api.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { a.problem(w, r, 404, "not_found", "route not found") })
+	return api
+}
+
+// Loopback serves the /v1 API in-process to a workflow script acting as
+// subject. Its handlers run on t, a service bound to the caller's
+// transaction, so a request's writes commit or roll back with the step that
+// records it. It neither authenticates nor rate-limits.
+func (a *API) Loopback(t *dms.Service, subject string) http.Handler {
+	scoped := *a
+	scoped.DMS = t
+	routes := scoped.routes()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		routes.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), subjectKey{}, subject)))
+	})
+}
+
+func (a *API) Handler() http.Handler {
+	api := a.routes()
 	root := http.NewServeMux()
 	root.HandleFunc("GET /auth/config", func(w http.ResponseWriter, r *http.Request) {
 		mode := auth.Bearer

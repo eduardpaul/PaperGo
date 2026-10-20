@@ -7,6 +7,7 @@ import (
 
 	"github.com/aarondl/opt/omit"
 	"github.com/aarondl/opt/omitnull"
+	"github.com/stephenafamo/bob"
 	"github.com/stephenafamo/bob/dialect/psql/sm"
 	"papergo/internal/dal/dberr"
 	"papergo/internal/dal/driver/nullable"
@@ -36,6 +37,15 @@ func (q Queries) InsertRunStep(ctx context.Context, s runs.Step) error {
 		InputHash: omit.From(s.InputHash), Status: omit.From(string(s.Status)), Input: nullable.JSON(s.Input),
 		Output: stepOutput(s.Output), Error: nullable.String(s.Error), StartedAt: omit.From(s.StartedAt), CompletedAt: nullable.Time(s.CompletedAt),
 	}).Exec(ctx, q.exec)
+	return dberr.Translate(err)
+}
+
+func (q Queries) InsertStepOperations(ctx context.Context, runID string, seq int, operationIDs []string) error {
+	rows := make([]*models.WorkflowStepOperationSetter, len(operationIDs))
+	for i, id := range operationIDs {
+		rows[i] = &models.WorkflowStepOperationSetter{RunID: omit.From(runID), Seq: omit.From(int64(seq)), OperationID: omit.From(id)}
+	}
+	_, err := models.WorkflowStepOperations.Insert(bob.ToMods(rows...)).Exec(ctx, q.exec)
 	return dberr.Translate(err)
 }
 

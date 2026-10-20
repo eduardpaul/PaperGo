@@ -55,7 +55,8 @@ type WorkflowStepsQuery = *psql.ViewQuery[*WorkflowStep, WorkflowStepSlice]
 
 // workflowStepR is where relationships are stored.
 type workflowStepR struct {
-	RunWorkflowRun *WorkflowRun // workflow_steps.workflow_steps_run_id_fkey
+	WorkflowStepOperations WorkflowStepOperationSlice // workflow_step_operations.workflow_step_operations_run_id_seq_fkey
+	RunWorkflowRun         *WorkflowRun               // workflow_steps.workflow_steps_run_id_fkey
 	// Loaded reports whether each relationship has been loaded.
 	// A relationship's bool is set by Load*, Preload, ThenLoad, factory builds,
 	// and to-one Attach/Insert operations. To-many Attach/Insert operations leave it unchanged.
@@ -64,7 +65,8 @@ type workflowStepR struct {
 
 // workflowStepRLoaded tracks which relationships on WorkflowStep have been loaded.
 type workflowStepRLoaded struct {
-	RunWorkflowRun bool // workflow_steps.workflow_steps_run_id_fkey
+	WorkflowStepOperations bool // workflow_step_operations.workflow_step_operations_run_id_seq_fkey
+	RunWorkflowRun         bool // workflow_steps.workflow_steps_run_id_fkey
 }
 
 func buildWorkflowStepColumns(tableName string) workflowStepColumns {
@@ -701,6 +703,35 @@ func (o WorkflowStepSlice) ReloadAll(ctx context.Context, exec bob.Executor) err
 	return nil
 }
 
+// WorkflowStepOperations starts a query for related objects on workflow_step_operations
+func (o *WorkflowStep) WorkflowStepOperations(mods ...bob.Mod[*dialect.SelectQuery]) WorkflowStepOperationsQuery {
+	return WorkflowStepOperations.Query(append(mods,
+		sm.Where(WorkflowStepOperations.Columns.RunID.EQ(psql.Arg(o.RunID))), sm.Where(WorkflowStepOperations.Columns.Seq.EQ(psql.Arg(o.Seq))),
+	)...)
+}
+
+func (os WorkflowStepSlice) WorkflowStepOperations(mods ...bob.Mod[*dialect.SelectQuery]) WorkflowStepOperationsQuery {
+	pkRunID := make(pgtypes.Array[string], 0, len(os))
+
+	pkSeq := make(pgtypes.Array[int64], 0, len(os))
+
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		pkRunID = append(pkRunID, o.RunID)
+		pkSeq = append(pkSeq, o.Seq)
+	}
+
+	return WorkflowStepOperations.Query(append(mods,
+		sm.InnerJoin(psql.Select(
+			sm.Distinct(),
+			sm.Columns(psql.Quote("bob_rel_keys_src", "RunID"), psql.Quote("bob_rel_keys_src", "Seq")),
+			sm.From(psql.F("unnest", psql.Cast(psql.Arg(pkRunID), "text[]"), psql.Cast(psql.Arg(pkSeq), "bigint[]"))).As("bob_rel_keys_src", "RunID", "Seq"),
+		)).As("bob_rel_keys").On(WorkflowStepOperations.Columns.RunID.EQ(psql.Quote("bob_rel_keys", "RunID")), WorkflowStepOperations.Columns.Seq.EQ(psql.Quote("bob_rel_keys", "Seq"))),
+	)...)
+}
+
 // RunWorkflowRun starts a query for related objects on workflow_runs
 func (o *WorkflowStep) RunWorkflowRun(mods ...bob.Mod[*dialect.SelectQuery]) WorkflowRunsQuery {
 	return WorkflowRuns.Query(append(mods,
@@ -729,6 +760,69 @@ func (os WorkflowStepSlice) RunWorkflowRun(mods ...bob.Mod[*dialect.SelectQuery]
 	return WorkflowRuns.Query(append(mods,
 		sm.Where(WorkflowRuns.Columns.ID.EQ(PKArgExpr)),
 	)...)
+}
+
+func insertWorkflowStepWorkflowStepOperations0(ctx context.Context, exec bob.Executor, workflowStepOperations1 []*WorkflowStepOperationSetter, workflowStep0 *WorkflowStep) (WorkflowStepOperationSlice, error) {
+	for i := range workflowStepOperations1 {
+		workflowStepOperations1[i].RunID = omit.From(workflowStep0.RunID)
+		workflowStepOperations1[i].Seq = omit.From(workflowStep0.Seq)
+	}
+
+	ret, err := WorkflowStepOperations.Insert(bob.ToMods(workflowStepOperations1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertWorkflowStepWorkflowStepOperations0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachWorkflowStepWorkflowStepOperations0(ctx context.Context, exec bob.Executor, count int, workflowStepOperations1 WorkflowStepOperationSlice, workflowStep0 *WorkflowStep) (WorkflowStepOperationSlice, error) {
+	setter := &WorkflowStepOperationSetter{
+		RunID: omit.From(workflowStep0.RunID),
+		Seq:   omit.From(workflowStep0.Seq),
+	}
+
+	err := workflowStepOperations1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachWorkflowStepWorkflowStepOperations0: %w", err)
+	}
+
+	return workflowStepOperations1, nil
+}
+
+func (workflowStep0 *WorkflowStep) InsertWorkflowStepOperations(ctx context.Context, exec bob.Executor, related ...*WorkflowStepOperationSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	workflowStepOperations1, err := insertWorkflowStepWorkflowStepOperations0(ctx, exec, related, workflowStep0)
+	if err != nil {
+		return err
+	}
+
+	workflowStep0.R.WorkflowStepOperations = append(workflowStep0.R.WorkflowStepOperations, workflowStepOperations1...)
+
+	return nil
+}
+
+func (workflowStep0 *WorkflowStep) AttachWorkflowStepOperations(ctx context.Context, exec bob.Executor, related ...*WorkflowStepOperation) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	workflowStepOperations1 := WorkflowStepOperationSlice(related)
+
+	_, err = attachWorkflowStepWorkflowStepOperations0(ctx, exec, len(related), workflowStepOperations1, workflowStep0)
+	if err != nil {
+		return err
+	}
+
+	workflowStep0.R.WorkflowStepOperations = append(workflowStep0.R.WorkflowStepOperations, workflowStepOperations1...)
+
+	return nil
 }
 
 func attachWorkflowStepRunWorkflowRun0(ctx context.Context, exec bob.Executor, count int, workflowStep0 *WorkflowStep, workflowRun1 *WorkflowRun) (*WorkflowStep, error) {
@@ -820,6 +914,21 @@ func buildWorkflowStepWhere[Q psql.Filterable](cols workflowStepColumns) workflo
 // R struct — so they cannot collide with column-based filter fields.
 type workflowStepWhereR[Q psql.Filterable] struct {
 	cols workflowStepColumns
+}
+
+// HasWorkflowStepOperations filters parents that have a matching WorkflowStepOperations using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to WorkflowStepOperations).
+func (w workflowStepWhereR[Q]) HasWorkflowStepOperations(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := psql.Select(
+		sm.Columns(psql.Raw("1")),
+		sm.From(WorkflowStepOperations.NameExpr()),
+		sm.Where(WorkflowStepOperations.Columns.RunID.EQ(w.cols.RunID)),
+		sm.Where(WorkflowStepOperations.Columns.Seq.EQ(w.cols.Seq)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: psql.Exists(q)}
 }
 
 // HasRunWorkflowRun filters parents that have a matching RunWorkflowRun using a

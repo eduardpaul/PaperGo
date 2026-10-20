@@ -9,6 +9,8 @@ coverage.out
 *.test
 *.exe
 dist/
+# The workflow SDK bundle is generated and committed; Go embeds it.
+!/sdk/dist/
 __pycache__/
 /deploy/secrets/
 sdk/node_modules/

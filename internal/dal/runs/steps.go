@@ -13,15 +13,15 @@ type StepKind string
 const (
 	// StepRequest is an API request the run made as its author.
 	StepRequest StepKind = "request"
-	// StepAction is a platform action that completes outside the run.
-	StepAction StepKind = "action"
+	// StepWait waits until operations the run started have finished.
+	StepWait StepKind = "wait"
 	// StepValue is a clock reading or random value the script observed.
 	StepValue StepKind = "value"
 )
 
-func (k StepKind) Valid() bool { return k == StepRequest || k == StepAction || k == StepValue }
+func (k StepKind) Valid() bool { return k == StepRequest || k == StepWait || k == StepValue }
 
-// StepStatus is where a recorded step is: only actions are ever pending.
+// StepStatus is where a recorded step is: only waits are ever pending.
 type StepStatus string
 
 const (
@@ -48,6 +48,9 @@ type Step struct {
 	Error       string
 	StartedAt   time.Time
 	CompletedAt *time.Time
+	// Operations are the operations a wait step waits for. Finishing the
+	// last of them completes the step in the same transaction.
+	Operations []string
 }
 
 // StepQueries are the statements a driver runs for script steps.
@@ -55,6 +58,7 @@ type StepQueries interface {
 	// RunSteps returns a run's steps ordered by Seq.
 	RunSteps(ctx context.Context, runID string) ([]Step, error)
 	InsertRunStep(ctx context.Context, s Step) error
+	InsertStepOperations(ctx context.Context, runID string, seq int, operationIDs []string) error
 	// FinishRunStep completes or fails a pending step and reports whether it
 	// was pending.
 	FinishRunStep(ctx context.Context, runID string, seq int, status StepStatus, output json.RawMessage, message string, at time.Time) (bool, error)
@@ -65,16 +69,16 @@ func (r *Repo) Steps(ctx context.Context, runID string) ([]Step, error) {
 	return r.read.RunSteps(ctx, runID)
 }
 
-// RecordSteps appends steps to their runs. A pending step must be an
-// action; any other step is recorded complete.
+// RecordSteps appends steps to their runs. Only a wait can be pending, and
+// only a wait names operations; any other step is recorded complete.
 func (r *Repo) RecordSteps(ctx context.Context, steps []Step) error {
 	at := now()
 	for _, s := range steps {
 		if !s.Kind.Valid() || !s.Status.Valid() || s.Seq < 0 || s.Name == "" || s.InputHash == "" {
 			return fmt.Errorf("invalid step %d of %s", s.Seq, s.RunID)
 		}
-		if s.Status == StepPending && s.Kind != StepAction {
-			return fmt.Errorf("step %d of %s: only actions can be pending", s.Seq, s.RunID)
+		if (s.Status == StepPending || len(s.Operations) > 0) && s.Kind != StepWait {
+			return fmt.Errorf("step %d of %s: only waits can be pending or name operations", s.Seq, s.RunID)
 		}
 	}
 	return r.write(ctx, func(q Queries) error {
@@ -86,13 +90,19 @@ func (r *Repo) RecordSteps(ctx context.Context, steps []Step) error {
 			if err := q.InsertRunStep(ctx, s); err != nil {
 				return err
 			}
+			if len(s.Operations) > 0 {
+				if err := q.InsertStepOperations(ctx, s.RunID, s.Seq, s.Operations); err != nil {
+					return err
+				}
+			}
 		}
 		return nil
 	})
 }
 
-// FinishStep records the outcome of a pending action. It reports false when
-// the step was not pending, so a repeated completion changes nothing.
+// FinishStep records the outcome of a pending wait, such as its timeout. It
+// reports false when the step was not pending, so a repeated completion
+// changes nothing.
 func (r *Repo) FinishStep(ctx context.Context, runID string, seq int, output json.RawMessage, failure string) (bool, error) {
 	status := StepCompleted
 	if failure != "" {

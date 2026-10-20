@@ -71,6 +71,7 @@ func Where[Q psql.Filterable]() struct {
 	Terms                   termWhere[Q]
 	WorkflowRunItems        workflowRunItemWhere[Q]
 	WorkflowRuns            workflowRunWhere[Q]
+	WorkflowStepOperations  workflowStepOperationWhere[Q]
 	WorkflowSteps           workflowStepWhere[Q]
 	WorkflowTriggers        workflowTriggerWhere[Q]
 	WorkflowVersions        workflowVersionWhere[Q]
@@ -132,6 +133,7 @@ func Where[Q psql.Filterable]() struct {
 		Terms                   termWhere[Q]
 		WorkflowRunItems        workflowRunItemWhere[Q]
 		WorkflowRuns            workflowRunWhere[Q]
+		WorkflowStepOperations  workflowStepOperationWhere[Q]
 		WorkflowSteps           workflowStepWhere[Q]
 		WorkflowTriggers        workflowTriggerWhere[Q]
 		WorkflowVersions        workflowVersionWhere[Q]
@@ -192,6 +194,7 @@ func Where[Q psql.Filterable]() struct {
 		Terms:                   buildTermWhere[Q](Terms.Columns),
 		WorkflowRunItems:        buildWorkflowRunItemWhere[Q](WorkflowRunItems.Columns),
 		WorkflowRuns:            buildWorkflowRunWhere[Q](WorkflowRuns.Columns),
+		WorkflowStepOperations:  buildWorkflowStepOperationWhere[Q](WorkflowStepOperations.Columns),
 		WorkflowSteps:           buildWorkflowStepWhere[Q](WorkflowSteps.Columns),
 		WorkflowTriggers:        buildWorkflowTriggerWhere[Q](WorkflowTriggers.Columns),
 		WorkflowVersions:        buildWorkflowVersionWhere[Q](WorkflowVersions.Columns),

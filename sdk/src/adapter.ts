@@ -103,7 +103,11 @@ export class HostRequestAdapter implements RequestAdapter {
   private exchange(info: RequestInformation): HostResponse {
     info.pathParameters["baseurl"] = this.baseUrl;
     const headers: Record<string, string> = {};
-    for (const [name, values] of info.headers) headers[name.toLowerCase()] = Array.from(values).join(", ");
+    // Kiota's Headers keeps its values outside the Map it extends; only its
+    // own forEach sees them.
+    info.headers.forEach((values, name) => {
+      headers[name.toLowerCase()] = Array.from(values).join(", ");
+    });
     let body: string | undefined;
     let encoded = false;
     if (info.content !== undefined) {
@@ -134,8 +138,10 @@ export class HostRequestAdapter implements RequestAdapter {
     let error: Error & { responseStatusCode?: number; responseHeaders?: Record<string, string[]> };
     if (factory && !isEmpty(response)) {
       const node = this.parseNodes.getRootParseNode(mediaType(response.headers["content-type"]), bytes(response));
-      error = node.getObjectValue(factory) as unknown as Error;
-      if (!(error instanceof Error)) error = Object.assign(new DefaultApiError(`request failed with status ${response.status}`), error);
+      const problem = node.getObjectValue(factory) as unknown as Error & { code?: string; detail?: string };
+      error = problem instanceof Error ? problem : Object.assign(new DefaultApiError(), problem);
+      // A problem's detail says what was wrong; Kiota leaves the message empty.
+      error.message = [`request failed with status ${response.status}`, problem.code, problem.detail].filter(Boolean).join(": ");
     } else {
       error = new DefaultApiError(`request failed with status ${response.status}`);
     }

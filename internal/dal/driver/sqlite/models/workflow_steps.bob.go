@@ -54,7 +54,8 @@ type WorkflowStepsQuery = *sqlite.ViewQuery[*WorkflowStep, WorkflowStepSlice]
 
 // workflowStepR is where relationships are stored.
 type workflowStepR struct {
-	RunWorkflowRun *WorkflowRun // fk_workflow_steps_0
+	WorkflowStepOperations WorkflowStepOperationSlice // fk_workflow_step_operations_0
+	RunWorkflowRun         *WorkflowRun               // fk_workflow_steps_0
 	// Loaded reports whether each relationship has been loaded.
 	// A relationship's bool is set by Load*, Preload, ThenLoad, factory builds,
 	// and to-one Attach/Insert operations. To-many Attach/Insert operations leave it unchanged.
@@ -63,7 +64,8 @@ type workflowStepR struct {
 
 // workflowStepRLoaded tracks which relationships on WorkflowStep have been loaded.
 type workflowStepRLoaded struct {
-	RunWorkflowRun bool // fk_workflow_steps_0
+	WorkflowStepOperations bool // fk_workflow_step_operations_0
+	RunWorkflowRun         bool // fk_workflow_steps_0
 }
 
 func buildWorkflowStepColumns(tableName string) workflowStepColumns {
@@ -705,6 +707,25 @@ func (o WorkflowStepSlice) ReloadAll(ctx context.Context, exec bob.Executor) err
 	return nil
 }
 
+// WorkflowStepOperations starts a query for related objects on workflow_step_operations
+func (o *WorkflowStep) WorkflowStepOperations(mods ...bob.Mod[*dialect.SelectQuery]) WorkflowStepOperationsQuery {
+	return WorkflowStepOperations.Query(append(mods,
+		sm.Where(WorkflowStepOperations.Columns.RunID.EQ(sqlite.Arg(o.RunID))), sm.Where(WorkflowStepOperations.Columns.Seq.EQ(sqlite.Arg(o.Seq))),
+	)...)
+}
+
+func (os WorkflowStepSlice) WorkflowStepOperations(mods ...bob.Mod[*dialect.SelectQuery]) WorkflowStepOperationsQuery {
+	PKArgSlice := make([]bob.Expression, len(os))
+	for i, o := range os {
+		PKArgSlice[i] = sqlite.ArgGroup(o.RunID, o.Seq)
+	}
+	PKArgExpr := sqlite.Group(PKArgSlice...)
+
+	return WorkflowStepOperations.Query(append(mods,
+		sm.Where(sqlite.Group(WorkflowStepOperations.Columns.RunID, WorkflowStepOperations.Columns.Seq).OP("IN", PKArgExpr)),
+	)...)
+}
+
 // RunWorkflowRun starts a query for related objects on workflow_runs
 func (o *WorkflowStep) RunWorkflowRun(mods ...bob.Mod[*dialect.SelectQuery]) WorkflowRunsQuery {
 	return WorkflowRuns.Query(append(mods,
@@ -722,6 +743,69 @@ func (os WorkflowStepSlice) RunWorkflowRun(mods ...bob.Mod[*dialect.SelectQuery]
 	return WorkflowRuns.Query(append(mods,
 		sm.Where(sqlite.Group(WorkflowRuns.Columns.ID).OP("IN", PKArgExpr)),
 	)...)
+}
+
+func insertWorkflowStepWorkflowStepOperations0(ctx context.Context, exec bob.Executor, workflowStepOperations1 []*WorkflowStepOperationSetter, workflowStep0 *WorkflowStep) (WorkflowStepOperationSlice, error) {
+	for i := range workflowStepOperations1 {
+		workflowStepOperations1[i].RunID = omit.From(workflowStep0.RunID)
+		workflowStepOperations1[i].Seq = omit.From(workflowStep0.Seq)
+	}
+
+	ret, err := WorkflowStepOperations.Insert(bob.ToMods(workflowStepOperations1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertWorkflowStepWorkflowStepOperations0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachWorkflowStepWorkflowStepOperations0(ctx context.Context, exec bob.Executor, count int, workflowStepOperations1 WorkflowStepOperationSlice, workflowStep0 *WorkflowStep) (WorkflowStepOperationSlice, error) {
+	setter := &WorkflowStepOperationSetter{
+		RunID: omit.From(workflowStep0.RunID),
+		Seq:   omit.From(workflowStep0.Seq),
+	}
+
+	err := workflowStepOperations1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachWorkflowStepWorkflowStepOperations0: %w", err)
+	}
+
+	return workflowStepOperations1, nil
+}
+
+func (workflowStep0 *WorkflowStep) InsertWorkflowStepOperations(ctx context.Context, exec bob.Executor, related ...*WorkflowStepOperationSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	workflowStepOperations1, err := insertWorkflowStepWorkflowStepOperations0(ctx, exec, related, workflowStep0)
+	if err != nil {
+		return err
+	}
+
+	workflowStep0.R.WorkflowStepOperations = append(workflowStep0.R.WorkflowStepOperations, workflowStepOperations1...)
+
+	return nil
+}
+
+func (workflowStep0 *WorkflowStep) AttachWorkflowStepOperations(ctx context.Context, exec bob.Executor, related ...*WorkflowStepOperation) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	workflowStepOperations1 := WorkflowStepOperationSlice(related)
+
+	_, err = attachWorkflowStepWorkflowStepOperations0(ctx, exec, len(related), workflowStepOperations1, workflowStep0)
+	if err != nil {
+		return err
+	}
+
+	workflowStep0.R.WorkflowStepOperations = append(workflowStep0.R.WorkflowStepOperations, workflowStepOperations1...)
+
+	return nil
 }
 
 func attachWorkflowStepRunWorkflowRun0(ctx context.Context, exec bob.Executor, count int, workflowStep0 *WorkflowStep, workflowRun1 *WorkflowRun) (*WorkflowStep, error) {
@@ -813,6 +897,21 @@ func buildWorkflowStepWhere[Q sqlite.Filterable](cols workflowStepColumns) workf
 // R struct — so they cannot collide with column-based filter fields.
 type workflowStepWhereR[Q sqlite.Filterable] struct {
 	cols workflowStepColumns
+}
+
+// HasWorkflowStepOperations filters parents that have a matching WorkflowStepOperations using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to WorkflowStepOperations).
+func (w workflowStepWhereR[Q]) HasWorkflowStepOperations(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := sqlite.Select(
+		sm.Columns(sqlite.Raw("1")),
+		sm.From(WorkflowStepOperations.NameExpr()),
+		sm.Where(WorkflowStepOperations.Columns.RunID.EQ(w.cols.RunID)),
+		sm.Where(WorkflowStepOperations.Columns.Seq.EQ(w.cols.Seq)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: sqlite.Exists(q)}
 }
 
 // HasRunWorkflowRun filters parents that have a matching RunWorkflowRun using a

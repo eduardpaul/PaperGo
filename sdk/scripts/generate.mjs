@@ -5,7 +5,7 @@
 // verifies its checksum. Its JSON-RPC Generate call drops the serializer
 // registrations, so this script runs the downloaded command-line generator.
 import { spawnSync } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -39,3 +39,23 @@ for (const line of `${run.stdout}${run.stderr}`.split("\n")) {
   if (line.trim() && !ignored.test(line)) console.error(line);
 }
 if (run.status !== 0) process.exit(run.status ?? 1);
+
+// Kiota serializers write a property's schema default when a model leaves it
+// unset. The server applies its own defaults, and presence matters: an
+// update must not send the defaults of fields the caller did not change.
+const defaulted = /(writer\.write\w+(?:<[^>]*>)?\("[^"]+", [A-Za-z_$][\w$]*\.[A-Za-z_$][\w$]*) \?\? [^;]+\);/g;
+let stripped = 0;
+for (const entry of await readdir(join(sdk, "src", "client"), { recursive: true, withFileTypes: true })) {
+  if (!entry.isFile() || !entry.name.endsWith(".ts")) continue;
+  const file = join(entry.parentPath, entry.name);
+  const code = await readFile(file, "utf8");
+  const out = code.replace(defaulted, (_, call) => {
+    stripped++;
+    return `${call});`;
+  });
+  if (out !== code) await writeFile(file, out);
+}
+if (stripped === 0) {
+  console.error("found no serialized defaults to strip; check the Kiota output");
+  process.exit(1);
+}

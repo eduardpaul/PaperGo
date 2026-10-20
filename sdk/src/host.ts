@@ -14,8 +14,11 @@ export type LogLevel = "info" | "warn" | "error";
 interface Host {
   /** Runs an API request in-process as the workflow version's author. */
   request(method: string, url: string, headers: Record<string, string>, body: string | undefined, base64: boolean): HostResponse;
-  /** Runs a platform action and returns its JSON output; it may unload the run. */
-  action(name: string, input: string): string;
+  /**
+   * Returns once none of the operations is pending. The run is unloaded
+   * while it waits and replayed when the last one finishes.
+   */
+  wait(operationIds: string[]): void;
   uuid(): string;
   log(level: LogLevel, message: string): void;
 }
@@ -24,7 +27,7 @@ declare const __papergo: Host;
 
 export const host: Host = {
   request: (method, url, headers, body, base64) => __papergo.request(method, url, headers, body, base64),
-  action: (name, input) => __papergo.action(name, input),
+  wait: (operationIds) => __papergo.wait(operationIds),
   uuid: () => __papergo.uuid(),
   log: (level, message) => __papergo.log(level, message),
 };

@@ -93,6 +93,10 @@ type Queries interface {
 	CountOperationItems(ctx context.Context, operationID string) (int64, error)
 	DeleteOperationItem(ctx context.Context, id string) error
 	DeleteOperationItems(ctx context.Context, operationIDs []string) error
+	// ReleaseWaits completes the pending script wait steps that wait for any
+	// of the operations once none of the operations they wait for is
+	// pending.
+	ReleaseWaits(ctx context.Context, operationIDs []string, at time.Time) error
 }
 
 // Repo runs operation reads and single statements on its connection and
@@ -161,20 +165,42 @@ func (r *Repo) Exists(ctx context.Context, f Filter) (bool, error) {
 }
 
 // Save writes op's progress, result and status as of now and notifies
-// clients.
+// clients. Finishing an operation releases the script runs waiting for it
+// in the same transaction.
 func (r *Repo) Save(ctx context.Context, op *Operation) error {
 	op.UpdatedAt = now()
 	return r.write(ctx, func(q Queries) error {
 		if err := q.UpdateOperation(ctx, *op); err != nil {
 			return err
 		}
+		if op.Status != StatusPending {
+			if err := q.ReleaseWaits(ctx, []string{op.ID}, op.UpdatedAt); err != nil {
+				return err
+			}
+		}
 		return live.Notify(ctx, q, live.KindOperation, op.ID, live.ActionUpdated)
 	})
 }
 
-// Supersede ends the pending operations f selects.
+// Supersede ends the pending operations f selects and releases the script
+// runs waiting for them.
 func (r *Repo) Supersede(ctx context.Context, f Filter) error {
-	return r.read.SupersedeOperations(ctx, f, now())
+	at := now()
+	return r.write(ctx, func(q Queries) error {
+		f.Statuses, f.Limit = []Status{StatusPending}, 0
+		pending, err := q.Operations(ctx, f)
+		if err != nil || len(pending) == 0 {
+			return err
+		}
+		if err = q.SupersedeOperations(ctx, f, at); err != nil {
+			return err
+		}
+		ids := make([]string, len(pending))
+		for i, op := range pending {
+			ids[i] = op.ID
+		}
+		return q.ReleaseWaits(ctx, ids, at)
+	})
 }
 
 // CollectExpired deletes at most limit finished operations not updated since

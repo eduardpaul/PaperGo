@@ -21,6 +21,7 @@ sql:
     workflow_run_items: []
     runner_step_results: []
     workflow_steps: []
+    workflow_step_operations: []
     workflow_triggers: []
     operations: []
     operation_items: []

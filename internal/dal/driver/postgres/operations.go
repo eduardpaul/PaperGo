@@ -2,6 +2,8 @@ package postgres
 
 import (
 	"context"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/aarondl/opt/omit"
@@ -16,6 +18,7 @@ import (
 	"papergo/internal/dal/driver/postgres/models"
 	"papergo/internal/dal/operations"
 	"papergo/internal/dal/refs"
+	"papergo/internal/dal/runs"
 )
 
 // operationsMatching returns the conditions f selects.
@@ -196,4 +199,23 @@ func operationRecord(r *models.Operation) operations.Operation {
 		Failures: r.Failures.Val, Error: r.Error, StartedAt: nullable.UTC(r.StartedAt), CompletedAt: nullable.UTC(r.CompletedAt),
 		CreatedAt: r.CreatedAt.UTC(), UpdatedAt: r.UpdatedAt.UTC(),
 	}
+}
+
+func (q Queries) ReleaseWaits(ctx context.Context, operationIDs []string, at time.Time) error {
+	if len(operationIDs) == 0 {
+		return nil
+	}
+	args := []any{string(runs.StepCompleted), at, string(runs.StepPending), string(runs.StepWait)}
+	marks := make([]string, len(operationIDs))
+	for i, id := range operationIDs {
+		args = append(args, id)
+		marks[i] = "$" + strconv.Itoa(5+i)
+	}
+	args = append(args, string(operations.StatusPending))
+	_, err := q.exec.ExecContext(ctx, `UPDATE workflow_steps SET status = $1, completed_at = $2
+WHERE status = $3 AND kind = $4
+  AND EXISTS (SELECT 1 FROM workflow_step_operations l WHERE l.run_id = workflow_steps.run_id AND l.seq = workflow_steps.seq AND l.operation_id IN (`+strings.Join(marks, ", ")+`))
+  AND NOT EXISTS (SELECT 1 FROM workflow_step_operations l JOIN operations o ON o.id = l.operation_id
+    WHERE l.run_id = workflow_steps.run_id AND l.seq = workflow_steps.seq AND o.status = `+"$"+strconv.Itoa(len(args))+`)`, args...)
+	return dberr.Translate(err)
 }

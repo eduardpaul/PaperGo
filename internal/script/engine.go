@@ -28,9 +28,10 @@ type Response struct {
 	Body   []byte
 }
 
-// Run identifies the run a slice executes and what it runs.
+// Run identifies the run a slice executes, who it acts as and what it runs.
 type Run struct {
 	ID       string
+	Author   string
 	Artifact Artifact
 	Input    json.RawMessage
 }
@@ -41,16 +42,22 @@ type Run struct {
 // always sees the values earlier effects depended on.
 type Effects interface {
 	// Steps returns the run's recorded steps in order.
-	Steps(ctx context.Context, runID string) ([]runs.Step, error)
+	Steps(ctx context.Context, run Run) ([]runs.Step, error)
 	// Request performs req as the run's author and records step, with
 	// ResponseOutput(response) as its output, in the transaction of the
 	// request's writes. A failed request records its response but none of
 	// its writes.
-	Request(ctx context.Context, unsaved []runs.Step, step runs.Step, req Request) (Response, error)
-	// Start records the pending action step and schedules the action. The
-	// run resumes when the action's step is finished.
-	Start(ctx context.Context, unsaved []runs.Step, step runs.Step) error
+	Request(ctx context.Context, run Run, unsaved []runs.Step, step runs.Step, req Request) (Response, error)
+	// Wait records the wait step for step.Operations, which the author must
+	// be able to read: completed when none of them is pending, else pending
+	// until the last one finishes. It reports whether the wait is over.
+	// An operation the author cannot read is ErrUnknownOperation.
+	Wait(ctx context.Context, run Run, unsaved []runs.Step, step runs.Step) (bool, error)
 }
+
+// ErrUnknownOperation reports a wait for an operation that does not exist or
+// that the run's author cannot read.
+var ErrUnknownOperation = errors.New("no such operation")
 
 // OutcomeStatus is how an execution slice ended.
 type OutcomeStatus string
@@ -58,7 +65,7 @@ type OutcomeStatus string
 const (
 	// Completed: the workflow returned Output.
 	Completed OutcomeStatus = "completed"
-	// Suspended: the run waits for a pending action and holds no runtime.
+	// Suspended: the run waits for operations and holds no runtime.
 	Suspended OutcomeStatus = "suspended"
 	// Failed: the script threw, broke a limit or replayed differently.
 	Failed OutcomeStatus = "failed"
@@ -91,10 +98,9 @@ var (
 const (
 	defaultSlice = 5 * time.Second
 	// Output and request limits keep a run's journal small.
-	maxOutput       = 256 << 10
-	maxActionInput  = 64 << 10
-	maxResponseBody = 1 << 20
-	maxCallStack    = 4096
+	maxOutput    = 256 << 10
+	maxWaits     = 64
+	maxCallStack = 4096
 )
 
 // Engine executes script runs. It is safe for concurrent use; each slice
@@ -131,7 +137,7 @@ func (e *Engine) Execute(ctx context.Context, run Run) (Outcome, error) {
 	if err != nil {
 		return Outcome{Status: Failed, Error: err.Error()}, nil
 	}
-	recorded, err := e.effects.Steps(ctx, run.ID)
+	recorded, err := e.effects.Steps(ctx, run)
 	if err != nil {
 		return Outcome{}, err
 	}
