@@ -5,8 +5,12 @@ import (
 	"slices"
 	"time"
 
+	"papergo/internal/dal/blobs"
+	"papergo/internal/dal/operations"
 	runstore "papergo/internal/dal/runs"
+	taskstore "papergo/internal/dal/tasks"
 	"papergo/internal/dms"
+	"papergo/internal/tasks"
 	"papergo/internal/workflow"
 )
 
@@ -97,6 +101,17 @@ func (r *Runner) dispatchBatch(ctx context.Context) (n int, more bool, err error
 			return err
 		}
 		for _, e := range events {
+			if e.Type == dms.EventWorkflowDeleted {
+				workflowID, _ := e.Data["workflow_id"].(string)
+				runs, err := t.DAL.Runs().List(ctx, runstore.Filter{WorkflowID: workflowID, Statuses: runstore.Active})
+				if err != nil {
+					return err
+				}
+				for _, run := range runs {
+					cancel = append(cancel, run.ID)
+				}
+				continue
+			}
 			if (e.Type != dms.EventItemDeleted && e.Type != dms.EventItemPurged) || e.ResourceID == "" {
 				continue
 			}
@@ -123,6 +138,11 @@ func (r *Runner) dispatchBatch(ctx context.Context) (n int, more bool, err error
 		if err = t.CancelOperations(ctx, cancel); err != nil {
 			return err
 		}
+		for _, e := range events {
+			if err = cleanUp(ctx, t, e); err != nil {
+				return err
+			}
+		}
 		if len(ids) > 0 {
 			if err = t.DAL.Events().Dispatch(ctx, ids, time.Now().UTC()); err != nil {
 				return err
@@ -144,6 +164,49 @@ func (r *Runner) dispatchBatch(ctx context.Context) (n int, more bool, err error
 		more = false
 	}
 	return n, more, err
+}
+
+// cleanUp removes what a deleted item or workflow leaves pending once its
+// runs are cancelled: open tasks, pending staged files and, for an item,
+// the pending operations on it. Those of the run whose own request deleted
+// the item stay.
+func cleanUp(ctx context.Context, t *dms.Service, e dms.Event) error {
+	switch {
+	case e.Type == dms.EventWorkflowDeleted:
+		workflowID, _ := e.Data["workflow_id"].(string)
+		if workflowID == "" {
+			return nil
+		}
+		if err := tasks.CancelOpen(ctx, t, taskstore.Filter{WorkflowID: workflowID}, ""); err != nil {
+			return err
+		}
+		return t.DiscardStagedFiles(ctx, blobs.StagedSelection{WorkflowID: workflowID})
+	case e.Type == dms.EventItemDeleted && e.ResourceID != "":
+		if err := tasks.CancelOpen(ctx, t, taskstore.Filter{ItemID: e.ResourceID}, e.CauseRunID); err != nil {
+			return err
+		}
+		if err := t.DiscardStagedFiles(ctx, blobs.StagedSelection{ItemID: e.ResourceID, ExceptRunID: e.CauseRunID}); err != nil {
+			return err
+		}
+		pending, err := t.DAL.Operations().List(ctx, operations.Filter{ContainerID: e.ResourceID, Statuses: []operations.Status{operations.StatusPending}})
+		if err != nil {
+			return err
+		}
+		var own []string
+		if e.CauseRunID != "" {
+			if own, err = t.DAL.Runs().StepOperations(ctx, e.CauseRunID); err != nil {
+				return err
+			}
+		}
+		ids := make([]string, 0, len(pending))
+		for _, op := range pending {
+			if !slices.Contains(own, op.ID) {
+				ids = append(ids, op.ID)
+			}
+		}
+		return t.CancelOperations(ctx, ids)
+	}
+	return nil
 }
 
 // Tick raises the schedule triggers due now. It is a maintenance task.

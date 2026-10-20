@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"papergo/internal/dal/blobs"
 	"papergo/internal/dal/operations"
 	runstore "papergo/internal/dal/runs"
 	"papergo/internal/dms"
@@ -121,7 +122,7 @@ func deleteRuns(ctx context.Context, t *dms.Service, ids []string) error {
 	if len(ids) == 0 {
 		return nil
 	}
-	if err := t.DiscardRunStagedFiles(ctx, ids...); err != nil {
+	if err := t.DiscardStagedFiles(ctx, blobs.StagedSelection{RunIDs: ids}); err != nil {
 		return err
 	}
 	return t.DAL.Operations().Delete(ctx, ids)

@@ -499,8 +499,9 @@ func revise(ctx context.Context, t *dms.Service, subject string, w *workflows.Wo
 	return &out, &version, nil
 }
 
-// Delete removes a workflow; its versions and runs stay for history, and it
-// starts no new runs. Running runs finish with their version.
+// Delete removes a workflow; its versions and finished runs stay for
+// history, and it starts no new runs. Its active runs, open tasks and
+// staged files go with it, when its workflow.deleted event is dispatched.
 func (s *Service) Delete(ctx context.Context, subject, id string, version int) error {
 	return s.DMS.Write(ctx, func(t *dms.Service) error {
 		w, err := live(ctx, t, id)
@@ -519,6 +520,7 @@ func (s *Service) Delete(ctx context.Context, subject, id string, version int) e
 			}
 			return err
 		}
+		t.Raise(ctx, dms.EventWorkflowDeleted, subject, w.WorkspaceID, nil, "", map[string]any{"workflow_id": id})
 		return audit(ctx, t, subject, "workflow.delete", w, map[string]any{"workflow_id": id})
 	})
 }

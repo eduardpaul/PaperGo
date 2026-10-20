@@ -360,10 +360,12 @@ func (r *Repo) Delete(ctx context.Context, id string, version int, subject strin
 
 // Retire disables and deletes the live workflows a deleted workspace or
 // collection leaves behind: every workflow of the workspace, or those of
-// the collection and those its current definition triggers in it.
-func (r *Repo) Retire(ctx context.Context, workspaceID, collectionID, subject string) error {
-	return r.write(ctx, func(q Queries) error {
-		var retired []Workflow
+// the collection and those its current definition triggers in it. It
+// returns the workflows it retired.
+func (r *Repo) Retire(ctx context.Context, workspaceID, collectionID, subject string) ([]Workflow, error) {
+	var retired []Workflow
+	err := r.write(ctx, func(q Queries) error {
+		retired = nil
 		if workspaceID != "" {
 			rows, err := q.Workflows(ctx, Filter{WorkspaceID: workspaceID, LiveOnly: true})
 			if err != nil {
@@ -406,6 +408,7 @@ func (r *Repo) Retire(ctx context.Context, workspaceID, collectionID, subject st
 		}
 		return nil
 	})
+	return retired, err
 }
 
 // ReplaceTriggers indexes a workflow's triggers from its definition. A

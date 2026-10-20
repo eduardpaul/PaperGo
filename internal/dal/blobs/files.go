@@ -116,8 +116,16 @@ type FileQueries interface {
 	// the object or was made from the blob.
 	BlobStaged(ctx context.Context, objectKey, blobID string) (bool, error)
 	BlobLeased(ctx context.Context, blobID string) (bool, error)
-	// DiscardRunStaged discards the pending staged files of runs.
-	DiscardRunStaged(ctx context.Context, runIDs []string, at time.Time) error
+	// DiscardStaged discards the pending staged files s selects.
+	DiscardStaged(ctx context.Context, s StagedSelection, at time.Time) error
+}
+
+// StagedSelection selects staged files: those of runs, of an item, or of
+// the runs of a workflow, except those of ExceptRunID. It selects at least
+// one of them.
+type StagedSelection struct {
+	RunIDs                           []string
+	ItemID, WorkflowID, ExceptRunID string
 }
 
 // Blob returns a blob, or dberr.ErrNotFound.
@@ -263,12 +271,12 @@ func (r *Repo) SetStagedState(ctx context.Context, id string, state StagedState)
 	return r.read.SetStagedState(ctx, id, state, now())
 }
 
-// DiscardRunStaged discards the pending staged files of finished runs.
-func (r *Repo) DiscardRunStaged(ctx context.Context, runIDs ...string) error {
-	if len(runIDs) == 0 {
+// DiscardStaged discards the pending staged files s selects.
+func (r *Repo) DiscardStaged(ctx context.Context, s StagedSelection) error {
+	if len(s.RunIDs) == 0 && s.ItemID == "" && s.WorkflowID == "" {
 		return nil
 	}
-	return r.read.DiscardRunStaged(ctx, runIDs, now())
+	return r.read.DiscardStaged(ctx, s, now())
 }
 
 func one[T any](rows []T, err error) (T, error) {

@@ -210,7 +210,9 @@ func TestStagedFilesPromoteDiscardAndCollect(t *testing.T) {
 	// Finished runs discard their pending files.
 	b2, _ := s.CurrentFile(testContext, "alice", f.ID)
 	pending, _ := stage("run-4", "%PDF-pending", []model.StagedSource{{ItemID: f.ID, BlobID: b2.ID}})
-	if err = s.Write(testContext, func(t *Service) error { return t.DiscardRunStagedFiles(testContext, "run-4") }); err != nil {
+	if err = s.Write(testContext, func(t *Service) error {
+		return t.DiscardStagedFiles(testContext, blobs.StagedSelection{RunIDs: []string{"run-4"}})
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if got, _ := s.DAL.Blobs().StagedFile(testContext, pending); got.State != blobs.StagedDiscarded {

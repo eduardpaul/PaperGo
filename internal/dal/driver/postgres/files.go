@@ -2,7 +2,14 @@ package postgres
 
 import (
 	"context"
+	"strconv"
+	"strings"
 	"time"
+
+	"papergo/internal/dal/blobs"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/driver/nullable"
+	"papergo/internal/dal/driver/postgres/models"
 
 	"github.com/aarondl/opt/omit"
 	"github.com/stephenafamo/bob"
@@ -10,10 +17,6 @@ import (
 	"github.com/stephenafamo/bob/dialect/psql/sm"
 	"github.com/stephenafamo/bob/types"
 	"github.com/stephenafamo/scan"
-	"papergo/internal/dal/blobs"
-	"papergo/internal/dal/dberr"
-	"papergo/internal/dal/driver/nullable"
-	"papergo/internal/dal/driver/postgres/models"
 )
 
 func (q Queries) Blob(ctx context.Context, id string) (blobs.Blob, error) {
@@ -124,10 +127,30 @@ func (q Queries) SetStagedState(ctx context.Context, id string, state blobs.Stag
 	return dberr.Translate(err)
 }
 
-func (q Queries) DiscardRunStaged(ctx context.Context, runIDs []string, at time.Time) error {
-	set := &models.StagedFileSetter{State: omit.From(string(blobs.StagedDiscarded)), UpdatedAt: omit.From(at)}
-	w := models.UpdateWhere.StagedFiles
-	_, err := models.StagedFiles.Update(set.UpdateMod(), w.RunID.In(runIDs...), w.State.EQ(string(blobs.StagedPending))).Exec(ctx, q.exec)
+func (q Queries) DiscardStaged(ctx context.Context, s blobs.StagedSelection, at time.Time) error {
+	args := []any{string(blobs.StagedDiscarded), at, string(blobs.StagedPending)}
+	arg := func(v any) string {
+		args = append(args, v)
+		return "$" + strconv.Itoa(len(args))
+	}
+	where := []string{}
+	if len(s.RunIDs) > 0 {
+		in := make([]string, len(s.RunIDs))
+		for i, id := range s.RunIDs {
+			in[i] = arg(id)
+		}
+		where = append(where, "run_id IN ("+strings.Join(in, ", ")+")")
+	}
+	if s.ItemID != "" {
+		where = append(where, "item_id = "+arg(s.ItemID))
+	}
+	if s.WorkflowID != "" {
+		where = append(where, "run_id IN (SELECT id FROM workflow_runs WHERE workflow_id = "+arg(s.WorkflowID)+")")
+	}
+	if s.ExceptRunID != "" {
+		where = append(where, "run_id <> "+arg(s.ExceptRunID))
+	}
+	_, err := q.exec.ExecContext(ctx, "UPDATE staged_files SET state = $1, updated_at = $2 WHERE state = $3 AND "+strings.Join(where, " AND "), args...)
 	return dberr.Translate(err)
 }
 

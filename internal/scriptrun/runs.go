@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"time"
 
+	"papergo/internal/dal/blobs"
 	"papergo/internal/dal/operations"
 	runstore "papergo/internal/dal/runs"
 	"papergo/internal/dms"
@@ -161,7 +162,7 @@ func complete(ctx context.Context, t *dms.Service, op *operations.Operation, p w
 	var outputs any
 	_ = json.Unmarshal(output, &outputs)
 	raise(ctx, t, op.ID, p, "completed", map[string]any{"outputs": outputs})
-	if err := t.DiscardRunStagedFiles(ctx, op.ID); err != nil {
+	if err := t.DiscardStagedFiles(ctx, blobs.StagedSelection{RunIDs: []string{op.ID}}); err != nil {
 		return err
 	}
 	return finished(ctx, t, p)
@@ -197,7 +198,7 @@ func ended(ctx context.Context, t *dms.Service, op *operations.Operation, messag
 		if err = t.CancelOperations(ctx, started); err != nil {
 			return err
 		}
-		if err = t.DiscardRunStagedFiles(ctx, op.ID); err != nil {
+		if err = t.DiscardStagedFiles(ctx, blobs.StagedSelection{RunIDs: []string{op.ID}}); err != nil {
 			return err
 		}
 	}

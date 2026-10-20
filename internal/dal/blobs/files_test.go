@@ -88,7 +88,7 @@ func testBlobFiles(t *testing.T, s *dal.Store) {
 	if held, err := r.Staged(ctx, second); err != nil || !held {
 		t.Fatalf("staged source: %v %v", held, err)
 	}
-	if err = r.DiscardRunStaged(ctx, run.ID); err != nil {
+	if err = r.DiscardStaged(ctx, blobs.StagedSelection{RunIDs: []string{run.ID}}); err != nil {
 		t.Fatal(err)
 	}
 	stored, err := r.StagedFile(ctx, staged.ID)

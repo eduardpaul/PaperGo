@@ -306,8 +306,9 @@ func (s *Service) DiscardStagedFile(ctx context.Context, subject, id, runID stri
 	})
 }
 
-// DiscardRunStagedFiles discards the pending staged files of finished runs,
-// inside the caller's write transaction.
-func (s *Service) DiscardRunStagedFiles(ctx context.Context, runIDs ...string) error {
-	return s.DAL.Blobs().DiscardRunStaged(ctx, runIDs...)
+// DiscardStagedFiles discards the pending staged files sel selects, such
+// as those of runs that ended or of a deleted item, inside the caller's
+// write transaction.
+func (s *Service) DiscardStagedFiles(ctx context.Context, sel blobs.StagedSelection) error {
+	return s.DAL.Blobs().DiscardStaged(ctx, sel)
 }

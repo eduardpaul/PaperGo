@@ -28,6 +28,7 @@ const token = "0123456789abcdef0123456789abcdef"
 // runtime with the dispatcher, schedules and wait reconciliation.
 type runtime struct {
 	s       *dms.Service
+	blobs   storage.Store
 	wf      *workflow.Service
 	runs    *Runner
 	handler http.Handler
@@ -35,7 +36,8 @@ type runtime struct {
 	list    string
 }
 
-func run(t *testing.T) *runtime {
+// run starts a runtime with the feature modules features register.
+func run(t *testing.T, features ...func(*dms.Service, storage.Store) httpapi.Module) *runtime {
 	t.Helper()
 	ctx := context.Background()
 	db := daltest.Database(t)
@@ -47,6 +49,9 @@ func run(t *testing.T) *runtime {
 	s := dms.NewService(db.SQL)
 	wf := &workflow.Service{DMS: s}
 	api := &httpapi.API{DMS: s, Workflows: wf, Storage: blobs, Logger: log, Auth: auth.Development{Token: token, Subject: "alice"}, MaxUpload: 1 << 20}
+	for _, feature := range features {
+		api.Modules = append(api.Modules, feature(s, blobs))
+	}
 	runs := &Runner{DMS: s, API: api, Log: log}
 	if err = runs.Register(s); err != nil {
 		t.Fatal(err)
@@ -76,7 +81,7 @@ func run(t *testing.T) *runtime {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &runtime{s: s, wf: wf, runs: runs, handler: api.Handler(), ws: ws.ID, list: list.ID}
+	return &runtime{s: s, blobs: blobs, wf: wf, runs: runs, handler: api.Handler(), ws: ws.ID, list: list.ID}
 }
 
 // call makes an API request as alice and decodes its JSON response into out.

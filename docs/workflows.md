@@ -318,7 +318,7 @@ const task = await ctx.api.v1.workspaces.byId(ctx.run.workspace_id).tasks.post({
 const answer = plain((await ctx.wait(task!.operationId!)).result) as { outcome: string; input?: { total: number } };
 ```
 
-- **Workflow tasks.** A task a run creates belongs to its workflow and run (`source: "workflow"`) and has an `operation_id`: the operation its answer ends. `ctx.wait` on it returns, as the operation's result, `task_id`, `status`, `outcome`, `completed_by`, `comment`, `input` and every answer in `responses`; a cancelled task throws an `OperationError`. Cancelling a run cancels the tasks it waits for. Tasks it created without waiting, such as a follow-up, outlive it, and other workflows react to them with `task.*` triggers.
+- **Workflow tasks.** A task a run creates belongs to its workflow and run (`source: "workflow"`) and has an `operation_id`: the operation its answer ends. `ctx.wait` on it returns, as the operation's result, `task_id`, `status`, `outcome`, `completed_by`, `comment`, `input` and every answer in `responses`; a cancelled task throws an `OperationError`. Cancelling a run cancels the tasks it waits for. Tasks it created without waiting, such as a follow-up, outlive it, and other workflows react to them with `task.*` triggers, until [their item or workflow is deleted](#deleting-items-and-workflows).
 - **Assignees** are recipient entries:
   - a person's subject;
   - `group:<id>`, nested groups included;
@@ -418,7 +418,7 @@ Some processes are **roles**: product processes that one workflow fills, which p
 | `waiting` | waiting for operations, a time (`waiting_until`), or the active run of a coalescing workflow, without holding a worker |
 | `completed` | the script returned |
 | `failed` | the script threw, broke a limit, replayed differently, or could not start |
-| `cancelled` | stopped by a manager, replaced, or its item was deleted |
+| `cancelled` | stopped by a manager, replaced, or its item or workflow was deleted |
 
 `GET /v1/workflow-runs/{id}` shows the run's result, its launch `inputs`, its log and its recorded steps: each API request with its response, each wait with the operations it waited for, and each value the script read.
 
@@ -431,7 +431,20 @@ Each run is an operation of kind `script.run`, which the `workflows` worker exec
 
 Run lists leave out the runs of system built-ins, which run on every change, unless `workflow_id` selects their workflow or `item_id` selects the item being inspected.
 
-Finished runs, with their steps and logs, and dispatched events are deleted after `RUN_RETENTION` (default 30 days). Successful automatic runs of system built-ins are deleted after `SYSTEM_RUN_RETENTION` (default 24h), or `RUN_RETENTION` when that is shorter. Failures and manual system runs use `RUN_RETENTION`. Queued, running and waiting runs stay. Deleting a workflow stops it from matching triggers; its versions and runs are kept, and active runs finish with their version.
+Finished runs, with their steps and logs, and dispatched events are deleted after `RUN_RETENTION` (default 30 days). Successful automatic runs of system built-ins are deleted after `SYSTEM_RUN_RETENTION` (default 24h), or `RUN_RETENTION` when that is shorter. Failures and manual system runs use `RUN_RETENTION`. Queued, running and waiting runs stay.
+
+### Deleting items and workflows
+
+Deleting an item, alone or with its folder, moves it to the recycle bin and moments later cancels the work pending on it:
+
+- the queued, running and waiting runs on it, and the selection runs it belongs to, with the operations they started and those they wait for;
+- the open tasks about it, whoever created them;
+- the pending files staged to replace its file, a failed run's included;
+- the pending operations on it, such as a text read an API client asked for.
+
+The run whose own request deleted the item keeps its work, for example a run that replaces several photos with one PDF. Restoring the item from the recycle bin restores none of it and starts no workflow; run one by hand to process the item again.
+
+Deleting a workflow, alone or with its workspace or collection, raises `workflow.deleted`, which cancels its active runs, the open tasks of all its runs, and their pending staged files. Its versions and finished runs are kept.
 
 | Record | Lifetime | Collected |
 | --- | --- | --- |

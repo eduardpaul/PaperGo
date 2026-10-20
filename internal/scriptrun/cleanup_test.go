@@ -1,0 +1,172 @@
+package scriptrun
+
+import (
+	"bytes"
+	"fmt"
+	"testing"
+	"time"
+
+	"papergo/internal/dal/blobs"
+	"papergo/internal/dal/daltest"
+	runstore "papergo/internal/dal/runs"
+	taskstore "papergo/internal/dal/tasks"
+	"papergo/internal/dms"
+	"papergo/internal/documentfiles"
+	"papergo/internal/httpapi"
+	"papergo/internal/storage"
+)
+
+// files mounts the document files module with an OCR engine.
+func files(s *dms.Service, store storage.Store) httpapi.Module {
+	m := &documentfiles.Maker{Storage: store, OCR: receiptText{}, MaxFileBytes: 32 << 20}
+	if err := m.Register(s); err != nil {
+		panic(err)
+	}
+	return m.Module()
+}
+
+// reviewSource optimizes the run's photo and waits for a review of the
+// staged copy, after leaving a follow-up task it does not wait for.
+const reviewSource = `import { plain, workflow } from "@papergo/workflow";
+export default workflow({
+  triggers: [{ type: "manual", collection_id: "%s" }],
+  async run(ctx) {
+    const optimized = plain((await ctx.wait((await ctx.api.v1.items.byId(ctx.itemId!).optimizeImage.post({}))!)).result) as { staged_file_id?: string };
+    if (!optimized.staged_file_id) throw new Error("nothing staged");
+    const tasks = ctx.api.v1.workspaces.byId(ctx.run.workspace_id).tasks;
+    await tasks.post({ itemId: ctx.itemId, title: "Follow up" });
+    const review = await tasks.post({ kind: "approval", itemId: ctx.itemId, title: "Review",
+      review: { type: "file.compare", stagedFileId: optimized.staged_file_id } });
+    await ctx.wait(review!.operationId!);
+  },
+});
+`
+
+// photo uploads a large photo to library and returns its item.
+func (r *runtime) photo(t *testing.T, library, name string) string {
+	t.Helper()
+	o, err := r.blobs.Put(t.Context(), bytes.NewReader(receiptPhoto(t, 1200, 800)), 32<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	item, _, err := r.s.PutFile(t.Context(), "alice", library, []string{name}, dms.PutFile{Blob: dms.BlobInput{ObjectKey: o.Key, Filename: name, ContentType: "image/png", Size: o.Size, SHA256: o.SHA256}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return item.ID
+}
+
+// openTasks counts the open tasks f selects.
+func (r *runtime) openTasks(t *testing.T, f taskstore.Filter) int {
+	t.Helper()
+	f.Status = taskstore.StatusOpen
+	rows, err := r.s.DAL.Tasks().List(t.Context(), f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return len(rows)
+}
+
+// awaitTasks waits until f selects n open tasks.
+func (r *runtime) awaitTasks(t *testing.T, f taskstore.Filter, n int) {
+	t.Helper()
+	for deadline := time.Now().Add(20 * time.Second); r.openTasks(t, f) != n; time.Sleep(20 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("%d open tasks, want %d", r.openTasks(t, f), n)
+		}
+	}
+}
+
+// pendingStaged counts the pending staged files of an item.
+func (r *runtime) pendingStaged(t *testing.T, item string) int {
+	t.Helper()
+	return daltest.Count(t, r.s.DAL, "staged_files", daltest.Row{"item_id": item, "state": string(blobs.StagedPending)})
+}
+
+// Deleting an item cancels the runs on it, the tasks about it and the
+// files staged to replace its file.
+func TestDeletingAnItemCancelsItsWorkflowWork(t *testing.T) {
+	r := run(t, files)
+	library, err := r.s.Create(t.Context(), "alice", r.ws, dms.CreateResource{Kind: "library", Name: "Photos", WebDAVEnabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := r.workflow(t, "Review photos", fmt.Sprintf(reviewSource, library.ID))
+	item := r.photo(t, library.ID, "photo.png")
+	id := r.start(t, w, nil, item)
+	r.awaitTasks(t, taskstore.Filter{ItemID: item}, 2)
+	r.call(t, "POST", "/v1/workspaces/"+r.ws+"/tasks", `{"item_id":"`+item+`","title":"Check by hand"}`, 201, nil)
+	if n := r.openTasks(t, taskstore.Filter{ItemID: item}); n != 3 || r.pendingStaged(t, item) != 1 {
+		t.Fatalf("before the delete: %d open tasks, %d staged files", n, r.pendingStaged(t, item))
+	}
+
+	var current struct{ Version int }
+	r.call(t, "GET", "/v1/resources/"+item, "", 200, &current)
+	if err = r.s.Delete(t.Context(), "alice", item, current.Version, dms.DeleteOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	r.await(t, id, runstore.StatusCancelled)
+	if n := r.openTasks(t, taskstore.Filter{ItemID: item}); n != 0 {
+		t.Fatalf("%d tasks about the deleted item are open", n)
+	}
+	if n := r.pendingStaged(t, item); n != 0 {
+		t.Fatalf("%d staged files of the deleted item are pending", n)
+	}
+}
+
+// Deleting a workflow cancels its active runs, its open tasks and their
+// staged files, including tasks of runs that already ended.
+func TestDeletingAWorkflowCancelsItsWork(t *testing.T) {
+	r := run(t, files)
+	library, err := r.s.Create(t.Context(), "alice", r.ws, dms.CreateResource{Kind: "library", Name: "Photos", WebDAVEnabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := r.workflow(t, "Review photos", fmt.Sprintf(reviewSource, library.ID))
+	item := r.photo(t, library.ID, "photo.png")
+	id := r.start(t, w, nil, item)
+	r.awaitTasks(t, taskstore.Filter{WorkflowID: w.ID}, 2)
+	r.await(t, id, runstore.StatusWaiting)
+	current, err := r.wf.Get(t.Context(), "alice", w.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = r.wf.Delete(t.Context(), "alice", w.ID, current.Version); err != nil {
+		t.Fatal(err)
+	}
+	r.await(t, id, runstore.StatusCancelled)
+	if n := r.openTasks(t, taskstore.Filter{WorkflowID: w.ID}); n != 0 {
+		t.Fatalf("%d tasks of the deleted workflow are open", n)
+	}
+	if n := r.pendingStaged(t, item); n != 0 {
+		t.Fatalf("%d staged files of the deleted workflow are pending", n)
+	}
+}
+
+// Deleting a workspace cancels the runs of its workflows that have no item.
+func TestDeletingAWorkspaceCancelsItsRuns(t *testing.T) {
+	r := run(t)
+	w := r.workflow(t, "Wait", `import { workflow } from "@papergo/workflow";
+export default workflow({ triggers: [{ type: "manual" }], async run(ctx) { await ctx.sleep(3600 * 1000); } });
+`)
+	id := r.start(t, w, nil)
+	r.await(t, id, runstore.StatusWaiting)
+	var ws struct{ Version int }
+	r.call(t, "GET", "/v1/resources/"+r.ws, "", 200, &ws)
+	if err := r.s.Delete(t.Context(), "alice", r.ws, ws.Version, dms.DeleteOptions{Recursive: true}); err != nil {
+		t.Fatal(err)
+	}
+	for deadline := 0; ; deadline++ {
+		run, err := r.s.DAL.Runs().Find(t.Context(), id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if run.Status == runstore.StatusCancelled {
+			return
+		}
+		if deadline > 1000 {
+			t.Fatalf("the run of a deleted workspace is %s", run.Status)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}

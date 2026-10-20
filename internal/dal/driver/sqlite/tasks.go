@@ -54,6 +54,9 @@ func (q Queries) Tasks(ctx context.Context, f tasks.Filter) ([]tasks.Task, error
 	if f.OperationID != "" {
 		query.Apply(w.OperationID.EQ(f.OperationID))
 	}
+	if f.WorkflowID != "" {
+		query.Apply(w.WorkflowID.EQ(f.WorkflowID))
+	}
 	c := models.Tasks.Columns
 	if f.Status == tasks.StatusOpen {
 		query.Apply(sm.OrderBy(c.DueAt).Asc().NullsLast(), sm.OrderBy(c.CreatedAt), sm.OrderBy(c.ID))

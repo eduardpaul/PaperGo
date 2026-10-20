@@ -16,6 +16,7 @@ import (
 	"papergo/internal/dal/refs"
 	"papergo/internal/dal/relationships"
 	"papergo/internal/dal/resources"
+	"papergo/internal/dal/workflows"
 	"papergo/internal/identity"
 	"papergo/internal/model"
 	"papergo/internal/requestmeta"
@@ -870,15 +871,19 @@ func (s *Service) delete(ctx context.Context, subject, id string, version int, r
 	if err != nil {
 		return err
 	}
+	// Schedules and event dispatch only select enabled, live workflows.
+	var retired []workflows.Workflow
 	switch {
 	case r.Kind == refs.KindWorkspace:
-		// Schedules and event dispatch only select enabled, live workflows.
-		err = s.DAL.Workflows().Retire(ctx, id, "", subject)
+		retired, err = s.DAL.Workflows().Retire(ctx, id, "", subject)
 	case collection:
-		err = s.DAL.Workflows().Retire(ctx, "", id, subject)
+		retired, err = s.DAL.Workflows().Retire(ctx, "", id, subject)
 	}
 	if err != nil {
 		return err
+	}
+	for _, w := range retired {
+		s.emit(ctx, EventWorkflowDeleted, subject, w.WorkspaceID, nil, "", map[string]any{"workflow_id": w.ID})
 	}
 	deleted, err := s.DAL.Resources().Delete(ctx, id, subject)
 	if err != nil {

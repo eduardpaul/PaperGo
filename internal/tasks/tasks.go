@@ -826,6 +826,25 @@ func cancel(ctx context.Context, t *dms.Service, tk taskstore.Task, actor string
 	return tk, nil
 }
 
+// CancelOpen cancels the open tasks f selects except those of the run
+// except, such as the tasks about a deleted item or of a deleted workflow.
+func CancelOpen(ctx context.Context, t *dms.Service, f taskstore.Filter, except string) error {
+	f.Status = taskstore.StatusOpen
+	rows, err := t.DAL.Tasks().List(ctx, f)
+	if err != nil {
+		return err
+	}
+	for _, tk := range rows {
+		if except != "" && tk.RunID == except {
+			continue
+		}
+		if _, err = cancel(ctx, t, tk, tk.CreatedBy); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func manages(ctx context.Context, t *dms.Service, subject, workspaceID string) bool {
 	_, err := t.Authorize(ctx, subject, workspaceID, "manage")
 	return err == nil
