@@ -19,6 +19,7 @@
   },
   "include": [
     "src",
-    "../internal/workflow/builtin"
+    "../internal/workflow/builtin",
+    "../samples"
   ]
 }

@@ -149,6 +149,14 @@ export function plain(value: UntypedNode | null | undefined): unknown {
   return value.getValue() ?? null;
 }
 
+/**
+ * Wraps a free-form JSON object for a request field the API leaves open,
+ * such as an item's values or an output schema.
+ */
+export function json<T extends Record<string, unknown>>(value: T): { additionalData: T } {
+  return { additionalData: value };
+}
+
 function format(values: unknown[]): string {
   return values
     .map((value) => {

@@ -25,7 +25,6 @@ import (
 	"papergo/internal/storage"
 	"papergo/internal/worker"
 	"papergo/internal/workflow"
-	"papergo/internal/workflowai"
 )
 
 var updateSamplePackages = flag.Bool("update-sample-packages", false, "rebuild the checked-in workspace sample ZIPs from their definitions")
@@ -91,7 +90,9 @@ func importSampleHTTP(t *testing.T, handler http.Handler, s *dms.Service, subjec
 	var op struct {
 		ID string `json:"id"`
 	}
-	decodeJSON(t, rec, &op)
+	if err := json.Unmarshal(rec.Body.Bytes(), &op); err != nil {
+		t.Fatal(err)
+	}
 	result := awaitSampleOperation(t, s, subject, op.ID)
 	if !result.Valid || result.DryRun != dry {
 		t.Fatalf("sample import: %+v", result)
@@ -99,17 +100,27 @@ func importSampleHTTP(t *testing.T, handler http.Handler, s *dms.Service, subjec
 	return result
 }
 
+// sampleWorkflowSource reads a sample workflow: its settings, with the
+// placeholders of its parameters bound, and the script they name.
 func sampleWorkflowSource(t *testing.T, file string, bindings ...string) workflow.Save {
 	t.Helper()
 	raw, err := os.ReadFile(filepath.Join("../../samples", file))
 	if err != nil {
 		t.Fatal(err)
 	}
-	var save workflow.Save
-	if err := json.Unmarshal([]byte(strings.NewReplacer(bindings...).Replace(string(raw))), &save); err != nil {
+	var sample struct {
+		workflow.Save
+		Script string `json:"script"`
+	}
+	if err := json.Unmarshal([]byte(strings.NewReplacer(bindings...).Replace(string(raw))), &sample); err != nil {
 		t.Fatal(err)
 	}
-	return save
+	source, err := os.ReadFile(filepath.Join("../../samples", filepath.Dir(file), sample.Script))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sample.Save.Source = string(source)
+	return sample.Save
 }
 
 func sampleWorkflow(t *testing.T, s *workflow.Service, workspace, file string, bindings ...string) workflow.Workflow {
@@ -139,7 +150,7 @@ func checkImportedSampleSource(t *testing.T, s *dms.Service, w workflow.Workflow
 		if err != nil || len(types) != 1 {
 			t.Fatal(types, err)
 		}
-		source = sampleWorkflowSource(t, "receipts-package/workflow.json", "$LIBRARY", ids["Receipts"], "$LINES", ids["Receipt lines"], "$LINE_TYPE", types[0].ID)
+		source = sampleWorkflowSource(t, "receipts-package/read-receipts.json", "$LIBRARY", ids["Receipts"], "$LINES", ids["Receipt lines"], "$LINE_TYPE", types[0].ID)
 		for _, name := range []string{"Receipts", "Receipt lines"} {
 			views, err := s.Views(t.Context(), "organization-admin", ids[name], "", 100)
 			if err != nil {
@@ -156,9 +167,9 @@ func checkImportedSampleSource(t *testing.T, s *dms.Service, w workflow.Workflow
 			}
 		}
 	case "Index receipts":
-		source = sampleWorkflowSource(t, "workflows/receipts.json", "$LIBRARY", ids["Receipt summaries"])
+		source = sampleWorkflowSource(t, "workflows/index-receipts.json", "$LIBRARY", ids["Receipt summaries"])
 	case "Index contracts":
-		source = sampleWorkflowSource(t, "workflows/contracts.json", "$LIBRARY", ids["Contracts"])
+		source = sampleWorkflowSource(t, "workflows/index-contracts.json", "$LIBRARY", ids["Contracts"])
 	case "Taxonomy review":
 		set, err := s.DAL.Taxonomy().SetByKey(t.Context(), "sample_document_topics")
 		if err != nil {
@@ -167,19 +178,10 @@ func checkImportedSampleSource(t *testing.T, s *dms.Service, w workflow.Workflow
 		source = sampleWorkflowSource(t, "workflows/taxonomy-review.json", "$LIBRARY", ids["Documents to classify"], "$TERM_SET", set.ID, "$FIELD", "topics")
 	case "Decision routing":
 		source = sampleWorkflowSource(t, "workflows/decision-routing.json")
-	case "AI batch coordinator":
-		if w.BuiltInKey == nil || *w.BuiltInKey != "ai.batch" || !w.AutomaticEnabled || w.Parameters["queue"] != "shared" || w.Parameters["policy"] != "both" {
-			t.Fatal("sample lost its enabled batch coordinator", w)
-		}
-		return
 	default:
 		t.Fatal("unexpected sample workflow", w.Name)
 	}
-	expected, err := workflow.ParseDefinition(source.Definition)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(mustJSON(t, expected), mustJSON(t, w.Definition)) || source.Description != w.Description {
+	if source.Source != w.Source || !bytes.Equal(mustJSON(t, source.Parameters), mustJSON(t, w.Parameters)) || source.Description != w.Description {
 		t.Fatal("sample ZIP differs from its workflow source; rebuild the sample packages", w.Name)
 	}
 	if source.CollectionID != "" && (w.CollectionID == nil || *w.CollectionID != source.CollectionID || w.Role == nil || *w.Role != source.Role) {
@@ -286,10 +288,7 @@ func buildSamplePackage(t *testing.T, receipt bool, path string) {
 				}
 			}
 		}
-		sampleWorkflow(t, wf, workspace, "receipts-package/workflow.json", "$LIBRARY", collections["Receipts"], "$LINES", collections["Receipt lines"], "$LINE_TYPE", types["receipt_line"])
-		if err := workflowai.EnsureCoordinator(t.Context(), wf, "organization-admin", workspace); err != nil {
-			t.Fatal(err)
-		}
+		sampleWorkflow(t, wf, workspace, "receipts-package/read-receipts.json", "$LIBRARY", collections["Receipts"], "$LINES", collections["Receipt lines"], "$LINE_TYPE", types["receipt_line"])
 	} else {
 		workspace = create("", dms.CreateResource{Kind: "workspace", Name: "Workflow samples", Description: "Receipt summaries, contract indexing, local routing and taxonomy review."})
 		receipts := create(workspace, dms.CreateResource{Kind: "library", Name: "Receipt summaries", WebDAVEnabled: true})
@@ -311,8 +310,8 @@ func buildSamplePackage(t *testing.T, receipt bool, path string) {
 		if _, err := s.CreateField(t.Context(), "organization-admin", documents, dms.CreateField{Key: "topics", Label: "Topics", Type: "term", Indexed: true, Options: model.FieldOptions{TermSetID: set.ID, Multiple: true}}); err != nil {
 			t.Fatal(err)
 		}
-		sampleWorkflow(t, wf, workspace, "workflows/receipts.json", "$LIBRARY", receipts)
-		sampleWorkflow(t, wf, workspace, "workflows/contracts.json", "$LIBRARY", contracts)
+		sampleWorkflow(t, wf, workspace, "workflows/index-receipts.json", "$LIBRARY", receipts)
+		sampleWorkflow(t, wf, workspace, "workflows/index-contracts.json", "$LIBRARY", contracts)
 		sampleWorkflow(t, wf, workspace, "workflows/taxonomy-review.json", "$LIBRARY", documents, "$TERM_SET", set.ID, "$FIELD", "topics")
 		sampleWorkflow(t, wf, workspace, "workflows/decision-routing.json")
 	}
@@ -388,7 +387,7 @@ func TestSampleWorkspacePackages(t *testing.T) {
 		Path, Name string
 		Receipt    bool
 		Workflows  int
-	}{{"receipts-package/receipts.zip", "Receipts desk", true, 2}, {"workflows/workflows.zip", "Workflow samples", false, 4}} {
+	}{{"receipts-package/receipts.zip", "Receipts desk", true, 1}, {"workflows/workflows.zip", "Workflow samples", false, 4}} {
 		t.Run(sample.Name, func(t *testing.T) {
 			path := filepath.Join("../../samples", sample.Path)
 			if *updateSamplePackages {
@@ -426,16 +425,11 @@ func TestSampleWorkspacePackages(t *testing.T) {
 					if w.CreatedBy != "organization-admin" {
 						t.Fatal("template retained source author", w)
 					}
-					var got workflow.Workflow
-					if w.BuiltInKey != nil {
-						got, err = (&workflow.Service{DMS: s}).UpdateBuiltIn(t.Context(), "organization-admin", w.WorkspaceID, *w.BuiltInKey, workflow.SetBuiltIn{AutomaticEnabled: true, Version: w.Version, Parameters: w.Parameters})
-					} else {
-						got, err = (&workflow.Service{DMS: s}).Update(t.Context(), "organization-admin", w.ID, w.Version, workflow.Save{AutomaticEnabled: new(true), Name: w.Name, Description: w.Description, Definition: mustJSON(t, w.Definition)})
-					}
+					got, err := (&workflow.Service{DMS: s}).Update(t.Context(), "organization-admin", w.ID, w.Version, workflow.Save{AutomaticEnabled: new(true), Name: w.Name, Description: w.Description, Source: w.Source})
 					if err != nil || got.ID != w.ID {
 						t.Fatal("imported workflow cannot be saved", w.Name, err)
 					}
-					raw := string(mustJSON(t, w.Definition))
+					raw := string(mustJSON(t, w.Definition)) + string(mustJSON(t, w.Parameters))
 					for _, placeholder := range []string{"$LIBRARY", "$LINES", "$LINE_TYPE", "$TERM_SET", "$FIELD", sampleSubject} {
 						if strings.Contains(raw, placeholder) {
 							t.Fatal("unbound sample", placeholder)

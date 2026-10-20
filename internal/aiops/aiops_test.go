@@ -181,6 +181,17 @@ func TestBatchCompletion(t *testing.T) {
 	if op := f.operation(t, ids[2]); op.Status != operations.StatusPending || op.Waiting == dms.WaitingRemote {
 		t.Fatalf("the failed request did not return to the queue: %+v", op)
 	}
+	// A request answered before does not wait for the next batch.
+	again := f.start(t, "/v1/ai/completions", `{"prompt":"Classify","input":"one","workspace_id":"`+f.ws+`","execution":"batch","queue":"receipts"}`)
+	if again.Kind != aiops.KindComplete {
+		t.Fatalf("a cached request was queued: %+v", again)
+	}
+	if worked, err := f.s.RunOperation(ctx, []string{aiops.KindComplete}); err != nil || !worked {
+		t.Fatal(worked, err)
+	}
+	if op := f.operation(t, again.ID); op.Status != operations.StatusSucceeded || json.Unmarshal(op.Result, &answer) != nil || !answer.Cached || f.chat.calls() != 0 {
+		t.Fatalf("%+v %+v", op, answer)
+	}
 }
 
 // Decisions run on the local engine; a document decision fails when the

@@ -1,0 +1,13 @@
+{
+  "name": "Index contracts",
+  "description": "Indexes contracts by section, each chunk starting with its heading and carrying a model-written sentence on which contract and clause it is, so a search finds the clause with its page.",
+  "role": "search.content",
+  "collection_id": "$LIBRARY",
+  "script": "index-contracts.ts",
+  "parameters": {
+    "library": "$LIBRARY"
+  },
+  "automatic_enabled": true,
+  "manual_enabled": true,
+  "state": "published"
+}

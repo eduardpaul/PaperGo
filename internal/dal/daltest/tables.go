@@ -30,15 +30,6 @@ func quote(name string) string {
 	return strings.Join(parts, ".")
 }
 
-// DBOS names a table of the workflow engine's own: in its schema on
-// PostgreSQL, beside PaperGo's tables on SQLite.
-func DBOS(s *dal.Store, table string) string {
-	if s.Dialect() == dal.DialectPostgres {
-		return "dbos." + table
-	}
-	return table
-}
-
 // statement runs a statement written with ? placeholders on the store.
 func statement(s *dal.Store, query string) string {
 	if s.Dialect() != dal.DialectPostgres {

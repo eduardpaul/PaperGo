@@ -8,7 +8,6 @@ require (
 	github.com/blevesearch/snowballstem v0.9.0
 	github.com/coreos/go-oidc/v3 v3.17.0
 	github.com/daulet/tokenizers v1.27.0
-	github.com/dbos-inc/dbos-transact-golang v1.6.0
 	github.com/dop251/goja v0.0.0-20261004200024-481fdb442bb4
 	github.com/emersion/go-ical v0.0.0-20250609112844-439c63cef608
 	github.com/evanw/esbuild v0.28.2
@@ -76,13 +75,11 @@ require (
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/pprof v0.0.0-20260802141513-ef3492d7dac3 // indirect
-	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/hashicorp/go-hclog v1.6.3 // indirect
 	github.com/hashicorp/go-plugin v1.8.0 // indirect
 	github.com/hashicorp/hcl/v2 v2.18.1 // indirect
 	github.com/hashicorp/yamux v0.1.2 // indirect
 	github.com/huandu/xstrings v1.5.0 // indirect
-	github.com/jackc/pgerrcode v0.0.0-20250907135507-afb5586c32a6 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect

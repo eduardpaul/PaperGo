@@ -39,7 +39,7 @@ func TestCollectionSettingsAndDeleteAPI(t *testing.T) {
 		t.Fatal(collection, err)
 	}
 	wf := &workflow.Service{DMS: s}
-	bound, err := wf.Create(t.Context(), "alice", workspace.ID, workflow.Save{AutomaticEnabled: new(true), Name: "Manual collection workflow", Definition: json.RawMessage(`{"triggers":[{"type":"manual","collection_id":"` + collection.ID + `"}],"flow":{"start":"end","nodes":{"end":{"activity":"end"}}}}`)})
+	bound, err := wf.Create(t.Context(), "alice", workspace.ID, workflow.Save{AutomaticEnabled: new(true), Name: "Manual collection workflow", Source: workflowScript(`[{"type":"manual","collection_id":"` + collection.ID + `"}]`)})
 	if err != nil {
 		t.Fatal(err)
 	}

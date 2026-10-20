@@ -1,0 +1,13 @@
+{
+  "name": "Index receipts",
+  "description": "Indexes each receipt as one chunk of its text plus a model-written summary chunk, so a search for the vendor, the items or the total finds it.",
+  "role": "search.content",
+  "collection_id": "$LIBRARY",
+  "script": "index-receipts.ts",
+  "parameters": {
+    "library": "$LIBRARY"
+  },
+  "automatic_enabled": true,
+  "manual_enabled": true,
+  "state": "published"
+}

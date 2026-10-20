@@ -196,6 +196,17 @@ func (a *Assistant) StartCompletion(ctx context.Context, s *dms.Service, subject
 		parts = append(parts, image.ObjectKey, image.ContentType)
 	}
 	c.Key = ai.CacheKey(c.ModelKey, parts...)
+	if kind == KindBatch {
+		// A batch request answered before is answered from the cache at
+		// once, without waiting for its queue's next batch.
+		_, found, err := a.findAnswer(ctx, c.Key)
+		if err != nil {
+			return nil, err
+		}
+		if found {
+			kind = KindComplete
+		}
+	}
 	payload, err := json.Marshal(c)
 	if err != nil {
 		return nil, err
