@@ -8,6 +8,7 @@ import (
 
 	"papergo/internal/dal/blobs"
 	"papergo/internal/dal/daltest"
+	"papergo/internal/dal/operations"
 	runstore "papergo/internal/dal/runs"
 	taskstore "papergo/internal/dal/tasks"
 	"papergo/internal/dms"
@@ -168,5 +169,50 @@ export default workflow({ triggers: [{ type: "manual" }], async run(ctx) { await
 			t.Fatalf("the run of a deleted workspace is %s", run.Status)
 		}
 		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// ownershipSource leaves a task it owns and waits for an operation it was
+// given, which it only observes; without one, it waits for its own task.
+const ownershipSource = `import { workflow } from "@papergo/workflow";
+export default workflow<{ operation?: string }>({
+  triggers: [{ type: "manual" }],
+  input_schema: { type: "object", properties: { operation: { type: "string" } } },
+  async run(ctx, input) {
+    const task = await ctx.api.v1.workspaces.byId(ctx.run.workspace_id).tasks.post({ title: "Owned" });
+    await ctx.wait(input?.operation ?? task!.operationId!);
+  },
+});
+`
+
+// Cancelling a run cancels the work it started, which it owns, and leaves
+// the operations it only waits for, such as another run's task.
+func TestCancellingARunCancelsWhatItOwns(t *testing.T) {
+	r := run(t)
+	w := r.workflow(t, "Owner", ownershipSource)
+	other := r.start(t, w, nil)
+	r.awaitTasks(t, taskstore.Filter{WorkspaceID: r.ws}, 1)
+	shared, err := r.s.OwnedOperations(t.Context(), other)
+	if err != nil || len(shared) != 1 {
+		t.Fatalf("owned by the other run %v: %v", shared, err)
+	}
+	id := r.start(t, w, map[string]any{"operation": shared[0]})
+	r.awaitTasks(t, taskstore.Filter{WorkspaceID: r.ws}, 2)
+	r.await(t, id, runstore.StatusWaiting)
+	owned, err := r.s.OwnedOperations(t.Context(), id)
+	if err != nil || len(owned) != 1 || owned[0] == shared[0] {
+		t.Fatalf("owned %v: %v", owned, err)
+	}
+	r.call(t, "POST", "/v1/workflow-runs/"+id+"/cancel", "", 200, nil)
+	r.await(t, id, runstore.StatusCancelled)
+	for op, want := range map[string]operations.Status{owned[0]: operations.StatusCancelled, shared[0]: operations.StatusPending} {
+		got, err := r.s.DAL.Operations().Find(t.Context(), op)
+		if err != nil || got.Status != want {
+			t.Fatalf("%s is %s, want %s: %v", op, got.Status, want, err)
+		}
+	}
+	r.await(t, other, runstore.StatusWaiting)
+	if n := r.openTasks(t, taskstore.Filter{WorkspaceID: r.ws}); n != 1 {
+		t.Fatalf("%d open tasks, want the other run's", n)
 	}
 }

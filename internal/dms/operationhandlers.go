@@ -201,6 +201,16 @@ func (e *retryError) Unwrap() error { return e.err }
 
 type idempotencyKey struct{}
 
+type parentKey struct{}
+
+// WithParentOperation makes the operations accepted on ctx belong to the
+// operation id, such as the workflow run whose request starts them: the
+// parent owns them, and cancelling it cancels them. An operation a request
+// only finds, such as one an idempotency key replays, keeps its owner.
+func WithParentOperation(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, parentKey{}, id)
+}
+
 var idempotencyPattern = regexp.MustCompile(`^[\x21-\x7e]{1,128}$`)
 
 // WithIdempotencyKey makes the operation the next acceptance on ctx records
@@ -313,6 +323,9 @@ func (s *Service) replay(ctx context.Context, op operations.Operation) (*Operati
 func (s *Service) accept(ctx context.Context, op operations.Operation, quota bool) (operations.Operation, bool, error) {
 	now := time.Now()
 	op.TraceID = s.traceID
+	if parent, ok := ctx.Value(parentKey{}).(string); ok && op.ParentID == "" && parent != op.ID {
+		op.ParentID = parent
+	}
 	if op.ContainerID != "" && op.WorkspaceID == "" {
 		r, err := s.DAL.Resources().Resource(ctx, op.ContainerID)
 		if err != nil {
@@ -474,7 +487,7 @@ func (s *Service) operationPermission(ctx context.Context, subject, containerID,
 	return err
 }
 func (s *Service) operationContext(ctx context.Context, op *operations.Operation) (context.Context, error) {
-	ctx = requestmeta.WithTrace(ctx, op.TraceID)
+	ctx = WithParentOperation(requestmeta.WithTrace(ctx, op.TraceID), op.ID)
 	if op.CredentialID != "" {
 		ctx = identity.WithAccessToken(ctx, identity.AccessTokenIdentity{Subject: op.CreatedBy, ID: op.CredentialID, Scopes: op.CredentialScopes})
 		if err := identity.RequireCredential(ctx, dal.NewStore(s.db).WithTx(s.tx), op.CreatedBy); err != nil {
@@ -609,7 +622,8 @@ func (s *Service) CancelOperation(ctx context.Context, subject, id string) (out 
 }
 
 // cancelOperation ends a pending operation as cancelled, with its handler's
-// cleanup, and reports whether it was pending.
+// cleanup, then the pending operations it owns, and reports whether it was
+// pending.
 func (s *Service) cancelOperation(ctx context.Context, id string) (operations.Operation, bool, error) {
 	cancelled, err := s.DAL.Operations().Cancel(ctx, id, time.Now())
 	if err != nil || !cancelled {
@@ -625,13 +639,39 @@ func (s *Service) cancelOperation(ctx context.Context, id string) (operations.Op
 			return operations.Operation{}, false, err
 		}
 	}
+	owned, err := s.DAL.Operations().List(ctx, operations.Filter{ParentIDs: []string{id}, Statuses: []operations.Status{operations.StatusPending}})
+	if err != nil {
+		return operations.Operation{}, false, err
+	}
+	for _, child := range owned {
+		if _, _, err = s.cancelOperation(ctx, child.ID); err != nil {
+			return operations.Operation{}, false, err
+		}
+	}
 	return ended, true, nil
 }
 
+// OwnedOperations returns the operations id owns, directly or through
+// the operations it owns, whatever their status.
+func (s *Service) OwnedOperations(ctx context.Context, id string) ([]string, error) {
+	var out []string
+	for parents := []string{id}; len(parents) > 0; {
+		children, err := s.DAL.Operations().List(ctx, operations.Filter{ParentIDs: parents})
+		if err != nil {
+			return nil, err
+		}
+		parents = parents[:0]
+		for _, c := range children {
+			out, parents = append(out, c.ID), append(parents, c.ID)
+		}
+	}
+	return out, nil
+}
+
 // CancelOperations cancels the pending operations among ids that PaperGo
-// ends itself, such as a replaced workflow run or the work a cancelled run
-// started, with their handlers' cleanup; those that ended are left. It
-// checks no permissions. Call it on a service bound to a write.
+// ends itself, such as a replaced workflow run, with their handlers'
+// cleanup and the pending operations they own; those that ended are left.
+// It checks no permissions. Call it on a service bound to a write.
 func (s *Service) CancelOperations(ctx context.Context, ids []string) error {
 	for _, id := range ids {
 		if _, _, err := s.cancelOperation(ctx, id); err != nil {

@@ -134,7 +134,8 @@ func (a *API) Loopback(t *dms.Service, subject, run string) http.Handler {
 		panic(err)
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := context.WithValue(context.WithValue(r.Context(), subjectKey{}, subject), runKey{}, run)
+		// What the run's requests start belongs to the run.
+		ctx := dms.WithParentOperation(context.WithValue(context.WithValue(r.Context(), subjectKey{}, subject), runKey{}, run), run)
 		routes.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

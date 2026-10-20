@@ -181,8 +181,9 @@ func fail(ctx context.Context, t *dms.Service, op *operations.Operation, message
 
 // ended cleans up after a run that did not complete: failed with message,
 // or cancelled without one. A failed run keeps its staged files for a
-// retry to use; a cancelled one discards them and cancels the work its
-// requests started and the operations it waited for, such as tasks.
+// retry to use; a cancelled one discards them. Cancelling a run also
+// cancels the work its requests started, such as tasks, which it owns;
+// operations it only waited for go on.
 func ended(ctx context.Context, t *dms.Service, op *operations.Operation, message string) error {
 	var p workflow.RunPayload
 	if err := json.Unmarshal(op.Payload, &p); err != nil {
@@ -190,17 +191,8 @@ func ended(ctx context.Context, t *dms.Service, op *operations.Operation, messag
 	}
 	if message != "" {
 		raise(ctx, t, op.ID, p, "failed", map[string]any{"error": message})
-	} else {
-		started, err := t.DAL.Runs().StepOperations(ctx, op.ID)
-		if err != nil {
-			return err
-		}
-		if err = t.CancelOperations(ctx, started); err != nil {
-			return err
-		}
-		if err = t.DiscardStagedFiles(ctx, blobs.StagedSelection{RunIDs: []string{op.ID}}); err != nil {
-			return err
-		}
+	} else if err := t.DiscardStagedFiles(ctx, blobs.StagedSelection{RunIDs: []string{op.ID}}); err != nil {
+		return err
 	}
 	return finished(ctx, t, p)
 }

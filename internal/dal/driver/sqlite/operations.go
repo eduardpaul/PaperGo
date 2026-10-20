@@ -65,6 +65,9 @@ func operationsMatching(f operations.Filter) []dialect.Expression {
 	if f.ExecutionID != "" {
 		where = append(where, c.ExecutionID.EQ(sqlite.Arg(f.ExecutionID)))
 	}
+	if len(f.ParentIDs) > 0 {
+		where = append(where, c.ParentID.In(sqlite.Arg(anys(f.ParentIDs)...)))
+	}
 	if f.OwnedBy != "" {
 		where = append(where, sqlite.Or(c.CreatedBy.EQ(sqlite.Arg(f.OwnedBy)), c.Kind.In(sqlite.Arg(anys(f.SharedKinds)...))))
 	}
@@ -166,6 +169,7 @@ func (q Queries) InsertOperation(ctx context.Context, op operations.Operation) e
 		StartedAt: nullable.Time(op.StartedAt), CompletedAt: nullable.Time(op.CompletedAt), Deadline: nullable.Time(op.Deadline),
 		AttemptAt: omit.From(op.AttemptAt), Attempts: omit.From(int64(op.Attempts)), ExecutionID: omit.From(op.ExecutionID),
 		GroupKey: omit.From(op.GroupKey), InputKey: omit.From(op.InputKey), IdempotencyKey: omit.From(op.IdempotencyKey), PayloadDigest: omit.From(op.PayloadDigest),
+		ParentID: nullable.String(op.ParentID),
 	}).Exec(ctx, q.exec)
 	return dberr.Translate(err)
 }
@@ -423,6 +427,7 @@ func operationRecord(r *models.Operation) operations.Operation {
 		Failures: r.Failures.Val, Error: r.Error, StartedAt: nullable.UTC(r.StartedAt), CompletedAt: nullable.UTC(r.CompletedAt), Deadline: nullable.UTC(r.Deadline),
 		CreatedAt: r.CreatedAt.UTC(), UpdatedAt: r.UpdatedAt.UTC(), AttemptAt: r.AttemptAt.UTC(), Attempts: int(r.Attempts),
 		ExecutionID: r.ExecutionID, GroupKey: r.GroupKey, InputKey: r.InputKey, IdempotencyKey: r.IdempotencyKey, PayloadDigest: r.PayloadDigest,
+		ParentID: r.ParentID.GetOrZero(),
 	}
 	if token, ok := r.ClaimToken.Get(); ok {
 		op.Claim = operations.Claim{Holder: r.ClaimHolder.GetOrZero(), Token: token, Until: r.ClaimUntil.GetOrZero().UTC()}

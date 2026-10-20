@@ -70,8 +70,8 @@ func (e *Effects) Request(ctx context.Context, run script.Run, unsaved []runs.St
 			return errRejected
 		}
 		step.Output = script.ResponseOutput(response)
-		// An operation the request started is the run's, which cancelling
-		// the run cancels.
+		// The step shows the operation the request answered with; whether
+		// the run owns it is the operation's parent.
 		if location := response.Header["Location"]; response.Status == http.StatusAccepted && strings.HasPrefix(location, "/v1/operations/") {
 			step.Operations = []string{strings.TrimPrefix(location, "/v1/operations/")}
 		}

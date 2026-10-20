@@ -3,7 +3,6 @@ package sqlite
 import (
 	"context"
 	"encoding/json"
-	"slices"
 	"time"
 
 	"papergo/internal/dal/dberr"
@@ -76,20 +75,6 @@ WHERE status = ? AND kind = ?`+waiting+`
     WHERE l.run_id = workflow_steps.run_id AND l.seq = workflow_steps.seq AND o.status = ?)
 RETURNING run_id`, args...), scan.SingleColumnMapper[string])
 	return released, dberr.Translate(err)
-}
-
-func (q Queries) StepOperations(ctx context.Context, runID string) ([]string, error) {
-	rows, err := models.WorkflowStepOperations.Query(models.SelectWhere.WorkflowStepOperations.RunID.EQ(runID)).All(ctx, q.exec)
-	if err != nil {
-		return nil, dberr.Translate(err)
-	}
-	out := make([]string, 0, len(rows))
-	for _, r := range rows {
-		if !slices.Contains(out, r.OperationID) {
-			out = append(out, r.OperationID)
-		}
-	}
-	return out, nil
 }
 
 func (q Queries) CopyRunSteps(ctx context.Context, target, source string, before int) error {

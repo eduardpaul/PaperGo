@@ -672,6 +672,7 @@ CREATE TABLE operations (
     claim_holder TEXT,
     claim_token TEXT,
     claim_until DATETIME,
+    parent_id TEXT REFERENCES operations(id) ON DELETE SET NULL,
     execution_id TEXT NOT NULL DEFAULT '',
     group_key TEXT NOT NULL DEFAULT '' CHECK (length(group_key) <= 128),
     input_key TEXT NOT NULL DEFAULT '' CHECK (length(input_key) <= 128),
@@ -684,6 +685,7 @@ CREATE TABLE operations (
 CREATE INDEX operation_status_created_at ON operations(status, created_at);
 CREATE INDEX operation_status_updated_at ON operations(status, updated_at);
 CREATE INDEX operation_container_id_id ON operations(container_id, id);
+CREATE INDEX operation_parent_id ON operations(parent_id) WHERE parent_id IS NOT NULL;
 CREATE INDEX operation_ready ON operations(kind, workspace_id, attempt_at) WHERE status = 'pending';
 CREATE INDEX operation_group ON operations(kind, group_key, created_at) WHERE status = 'pending';
 CREATE INDEX operation_pending_workspace ON operations(workspace_id) WHERE status = 'pending';

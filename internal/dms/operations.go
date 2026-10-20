@@ -458,6 +458,7 @@ type OperationView struct {
 	Error         string                   `json:"error,omitempty"`
 	ErrorCode     operations.ErrorCode     `json:"error_code,omitempty"`
 	CreatedBy     string                   `json:"created_by,omitempty"`
+	ParentID      string                   `json:"parent_id,omitempty"`
 	// Replayed is set when an idempotency key returned an operation
 	// accepted earlier.
 	Replayed bool `json:"-"`
@@ -468,7 +469,7 @@ func viewOperation(op operations.Operation, now time.Time) *OperationView {
 		ID: op.ID, CreatedAt: op.CreatedAt, UpdatedAt: op.UpdatedAt, ContainerID: op.ContainerID, WorkspaceID: op.WorkspaceID, FieldID: op.FieldID, Kind: op.Kind,
 		TraceID: op.TraceID, Status: op.Status, Attempts: op.Attempts, Deadline: op.Deadline, Result: op.Result, StartedAt: op.StartedAt, CompletedAt: op.CompletedAt,
 		Processed: op.Processed, Matched: op.Matched, Updated: op.Updated, Failed: op.Failed, Progress: op.Progress,
-		Failures: op.Failures, Error: op.Error, ErrorCode: op.ErrorCode, CreatedBy: op.CreatedBy,
+		Failures: op.Failures, Error: op.Error, ErrorCode: op.ErrorCode, CreatedBy: op.CreatedBy, ParentID: op.ParentID,
 	}
 	if op.Status != operations.StatusPending {
 		return v

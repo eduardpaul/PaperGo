@@ -66,8 +66,6 @@ type StepQueries interface {
 	// every pending wait when there are none, whose operations have all
 	// ended, and returns the runs whose waits it completed.
 	ReleaseWaits(ctx context.Context, operationIDs []string, at time.Time) ([]string, error)
-	// StepOperations returns the operations a run's steps name.
-	StepOperations(ctx context.Context, runID string) ([]string, error)
 	// CopyRunSteps copies a run's steps before a position, with the
 	// operations they name, to another run.
 	CopyRunSteps(ctx context.Context, target, source string, before int) error
@@ -160,10 +158,4 @@ func (r *Repo) Waiting(ctx context.Context, runID string) (bool, error) {
 // its script replays them instead of repeating them.
 func (r *Repo) ForkSteps(ctx context.Context, target, source string, before int) error {
 	return r.write(ctx, func(q Queries) error { return q.CopyRunSteps(ctx, target, source, before) })
-}
-
-// StepOperations returns the operations a run's steps started or waited
-// for.
-func (r *Repo) StepOperations(ctx context.Context, runID string) ([]string, error) {
-	return r.read.StepOperations(ctx, runID)
 }

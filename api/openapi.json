@@ -22010,6 +22010,10 @@
               "forbidden"
             ],
             "description": "Why a failed operation failed, when the reason is one clients act on: its deadline passed, its retries ran out, or its creator lost permission."
+          },
+          "parent_id": {
+            "description": "The operation that started this one and owns it: cancelling the parent cancels it.",
+            "type": "string"
           }
         },
         "required": [

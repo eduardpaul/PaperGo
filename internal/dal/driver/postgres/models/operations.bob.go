@@ -60,6 +60,7 @@ type Operation struct {
 	ClaimHolder      null.Val[string]                     `db:"claim_holder" `
 	ClaimToken       null.Val[string]                     `db:"claim_token" `
 	ClaimUntil       null.Val[time.Time]                  `db:"claim_until" `
+	ParentID         null.Val[string]                     `db:"parent_id" `
 	ExecutionID      string                               `db:"execution_id" `
 	GroupKey         string                               `db:"group_key" `
 	InputKey         string                               `db:"input_key" `
@@ -86,6 +87,8 @@ type operationR struct {
 	BlobLeases        BlobLeaseSlice     // blob_leases.blob_leases_operation_id_fkey
 	OperationItems    OperationItemSlice // operation_items.operation_items_operation_id_fkey
 	ContainerResource *Resource          // operations.operations_container_id_fkey
+	Parent            *Operation         // operations.operations_parent_id_fkey
+	ReverseParents    OperationSlice     // operations.operations_parent_id_fkey__self_join_reverse
 	WorkspaceResource *Resource          // operations.operations_workspace_id_fkey
 	Tasks             TaskSlice          // tasks.tasks_operation_id_fkey
 	IDWorkflowRun     *WorkflowRun       // workflow_runs.workflow_runs_id_fkey
@@ -100,6 +103,8 @@ type operationRLoaded struct {
 	BlobLeases        bool // blob_leases.blob_leases_operation_id_fkey
 	OperationItems    bool // operation_items.operation_items_operation_id_fkey
 	ContainerResource bool // operations.operations_container_id_fkey
+	Parent            bool // operations.operations_parent_id_fkey
+	ReverseParents    bool // operations.operations_parent_id_fkey__self_join_reverse
 	WorkspaceResource bool // operations.operations_workspace_id_fkey
 	Tasks             bool // tasks.tasks_operation_id_fkey
 	IDWorkflowRun     bool // workflow_runs.workflow_runs_id_fkey
@@ -107,7 +112,7 @@ type operationRLoaded struct {
 
 func buildOperationColumns(tableName string) operationColumns {
 	columnsExpr := expr.NewColumnsExpr(
-		"id", "created_at", "updated_at", "container_id", "field_id", "kind", "trace_id", "credential_id", "credential_scopes", "result", "started_at", "completed_at", "status", "surface", "after_item_id", "processed", "error", "created_by", "payload", "prepared", "matched", "updated", "failed", "progress", "failures", "workspace_id", "attempt_at", "attempts", "claim_holder", "claim_token", "claim_until", "execution_id", "group_key", "input_key", "deadline", "idempotency_key", "payload_digest", "error_code",
+		"id", "created_at", "updated_at", "container_id", "field_id", "kind", "trace_id", "credential_id", "credential_scopes", "result", "started_at", "completed_at", "status", "surface", "after_item_id", "processed", "error", "created_by", "payload", "prepared", "matched", "updated", "failed", "progress", "failures", "workspace_id", "attempt_at", "attempts", "claim_holder", "claim_token", "claim_until", "parent_id", "execution_id", "group_key", "input_key", "deadline", "idempotency_key", "payload_digest", "error_code",
 	)
 
 	if tableName != "" {
@@ -148,6 +153,7 @@ func buildOperationColumns(tableName string) operationColumns {
 		ClaimHolder:      buildOperationColumn(tableName, "claim_holder"),
 		ClaimToken:       buildOperationColumn(tableName, "claim_token"),
 		ClaimUntil:       buildOperationColumn(tableName, "claim_until"),
+		ParentID:         buildOperationColumn(tableName, "parent_id"),
 		ExecutionID:      buildOperationColumn(tableName, "execution_id"),
 		GroupKey:         buildOperationColumn(tableName, "group_key"),
 		InputKey:         buildOperationColumn(tableName, "input_key"),
@@ -192,6 +198,7 @@ type operationColumns struct {
 	ClaimHolder      operationColumn
 	ClaimToken       operationColumn
 	ClaimUntil       operationColumn
+	ParentID         operationColumn
 	ExecutionID      operationColumn
 	GroupKey         operationColumn
 	InputKey         operationColumn
@@ -275,6 +282,7 @@ type OperationSetter struct {
 	ClaimHolder      omitnull.Val[string]                           `db:"claim_holder" `
 	ClaimToken       omitnull.Val[string]                           `db:"claim_token" `
 	ClaimUntil       omitnull.Val[time.Time]                        `db:"claim_until" `
+	ParentID         omitnull.Val[string]                           `db:"parent_id" `
 	ExecutionID      omit.Val[string]                               `db:"execution_id" `
 	GroupKey         omit.Val[string]                               `db:"group_key" `
 	InputKey         omit.Val[string]                               `db:"input_key" `
@@ -285,7 +293,7 @@ type OperationSetter struct {
 }
 
 func (s OperationSetter) SetColumns() []string {
-	vals := make([]string, 0, 38)
+	vals := make([]string, 0, 39)
 	if s.ID.IsValue() {
 		vals = append(vals, "id")
 	}
@@ -378,6 +386,9 @@ func (s OperationSetter) SetColumns() []string {
 	}
 	if s.ClaimUntil.IsValue() || s.ClaimUntil.IsNull() {
 		vals = append(vals, "claim_until")
+	}
+	if s.ParentID.IsValue() || s.ParentID.IsNull() {
+		vals = append(vals, "parent_id")
 	}
 	if s.ExecutionID.IsValue() {
 		vals = append(vals, "execution_id")
@@ -496,6 +507,9 @@ func (s OperationSetter) Overwrite(t *Operation) {
 	}
 	if s.ClaimUntil.IsValue() || s.ClaimUntil.IsNull() {
 		t.ClaimUntil = s.ClaimUntil.MustGetNull()
+	}
+	if s.ParentID.IsValue() || s.ParentID.IsNull() {
+		t.ParentID = s.ParentID.MustGetNull()
 	}
 	if s.ExecutionID.IsValue() {
 		t.ExecutionID = s.ExecutionID.MustGet()
@@ -682,6 +696,11 @@ func (s *OperationSetter) Apply(q *dialect.InsertQuery) {
 			}
 			return psql.Arg(s.ClaimUntil.MustGetNull()).WriteSQL(ctx, w, d, start)
 		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.ParentID.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.ParentID.MustGetNull()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
 			if s.ExecutionID.IsUnset() {
 				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
 			}
@@ -724,7 +743,7 @@ func (s OperationSetter) UpdateMod() bob.Mod[*dialect.UpdateQuery] {
 }
 
 func (s OperationSetter) Expressions(prefix ...string) []bob.Expression {
-	exprs := make([]bob.Expression, 0, 38)
+	exprs := make([]bob.Expression, 0, 39)
 
 	if s.ID.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
@@ -943,6 +962,13 @@ func (s OperationSetter) Expressions(prefix ...string) []bob.Expression {
 		}})
 	}
 
+	if s.ParentID.IsValue() || s.ParentID.IsNull() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "parent_id")...),
+			psql.Arg(s.ParentID),
+		}})
+	}
+
 	if s.ExecutionID.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
 			psql.Quote(append(prefix, "execution_id")...),
@@ -1002,7 +1028,7 @@ func operationScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc, f
 		idx int
 		dst func(o *Operation) any
 	}
-	targets := make([]target, 0, 38)
+	targets := make([]target, 0, 39)
 	for i, col := range cols {
 		switch col {
 		case "id":
@@ -1067,6 +1093,8 @@ func operationScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc, f
 			targets = append(targets, target{i, func(o *Operation) any { return &o.ClaimToken }})
 		case "claim_until":
 			targets = append(targets, target{i, func(o *Operation) any { return &o.ClaimUntil }})
+		case "parent_id":
+			targets = append(targets, target{i, func(o *Operation) any { return &o.ParentID }})
 		case "execution_id":
 			targets = append(targets, target{i, func(o *Operation) any { return &o.ExecutionID }})
 		case "group_key":
@@ -1432,6 +1460,59 @@ func (os OperationSlice) ContainerResource(mods ...bob.Mod[*dialect.SelectQuery]
 	)...)
 }
 
+// Parent starts a query for related objects on operations
+func (o *Operation) Parent(mods ...bob.Mod[*dialect.SelectQuery]) OperationsQuery {
+	return Operations.Query(append(mods,
+		sm.Where(Operations.Columns.ID.EQ(psql.Arg(o.ParentID))),
+	)...)
+}
+
+func (os OperationSlice) Parent(mods ...bob.Mod[*dialect.SelectQuery]) OperationsQuery {
+	pkParentID := make(pgtypes.Array[null.Val[string]], 0, len(os))
+
+	// the array is only a filter (semi-join), so duplicate keys can be
+	// dropped before they are sent over the wire
+	seenParentID := make(map[null.Val[string]]struct{}, len(os))
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		if _, ok := seenParentID[o.ParentID]; ok {
+			continue
+		}
+		seenParentID[o.ParentID] = struct{}{}
+		pkParentID = append(pkParentID, o.ParentID)
+	}
+	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkParentID), "text[]"))
+
+	return Operations.Query(append(mods,
+		sm.Where(Operations.Columns.ID.EQ(PKArgExpr)),
+	)...)
+}
+
+// ReverseParents starts a query for related objects on operations
+func (o *Operation) ReverseParents(mods ...bob.Mod[*dialect.SelectQuery]) OperationsQuery {
+	return Operations.Query(append(mods,
+		sm.Where(Operations.Columns.ParentID.EQ(psql.Arg(o.ID))),
+	)...)
+}
+
+func (os OperationSlice) ReverseParents(mods ...bob.Mod[*dialect.SelectQuery]) OperationsQuery {
+	pkID := make(pgtypes.Array[string], 0, len(os))
+
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		pkID = append(pkID, o.ID)
+	}
+	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkID), "text[]"))
+
+	return Operations.Query(append(mods,
+		sm.Where(Operations.Columns.ParentID.EQ(PKArgExpr)),
+	)...)
+}
+
 // WorkspaceResource starts a query for related objects on resources
 func (o *Operation) WorkspaceResource(mods ...bob.Mod[*dialect.SelectQuery]) ResourcesQuery {
 	return Resources.Query(append(mods,
@@ -1676,6 +1757,113 @@ func (operation0 *Operation) AttachContainerResource(ctx context.Context, exec b
 	return nil
 }
 
+func attachOperationParent0(ctx context.Context, exec bob.Executor, count int, operation0 *Operation, operation1 *Operation) (*Operation, error) {
+	setter := &OperationSetter{
+		ParentID: omitnull.From(operation1.ID),
+	}
+
+	err := operation0.Update(ctx, exec, setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachOperationParent0: %w", err)
+	}
+
+	return operation0, nil
+}
+
+func (operation0 *Operation) InsertParent(ctx context.Context, exec bob.Executor, related *OperationSetter) error {
+	var err error
+
+	operation1, err := Operations.Insert(related).One(ctx, exec)
+	if err != nil {
+		return fmt.Errorf("inserting related objects: %w", err)
+	}
+
+	_, err = attachOperationParent0(ctx, exec, 1, operation0, operation1)
+	if err != nil {
+		return err
+	}
+
+	operation0.R.Parent = operation1
+	operation0.R.Loaded.Parent = true
+
+	return nil
+}
+
+func (operation0 *Operation) AttachParent(ctx context.Context, exec bob.Executor, operation1 *Operation) error {
+	var err error
+
+	_, err = attachOperationParent0(ctx, exec, 1, operation0, operation1)
+	if err != nil {
+		return err
+	}
+
+	operation0.R.Parent = operation1
+	operation0.R.Loaded.Parent = true
+
+	return nil
+}
+
+func insertOperationReverseParents0(ctx context.Context, exec bob.Executor, operations1 []*OperationSetter, operation0 *Operation) (OperationSlice, error) {
+	for i := range operations1 {
+		operations1[i].ParentID = omitnull.From(operation0.ID)
+	}
+
+	ret, err := Operations.Insert(bob.ToMods(operations1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertOperationReverseParents0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachOperationReverseParents0(ctx context.Context, exec bob.Executor, count int, operations1 OperationSlice, operation0 *Operation) (OperationSlice, error) {
+	setter := &OperationSetter{
+		ParentID: omitnull.From(operation0.ID),
+	}
+
+	err := operations1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachOperationReverseParents0: %w", err)
+	}
+
+	return operations1, nil
+}
+
+func (operation0 *Operation) InsertReverseParents(ctx context.Context, exec bob.Executor, related ...*OperationSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	operations1, err := insertOperationReverseParents0(ctx, exec, related, operation0)
+	if err != nil {
+		return err
+	}
+
+	operation0.R.ReverseParents = append(operation0.R.ReverseParents, operations1...)
+
+	return nil
+}
+
+func (operation0 *Operation) AttachReverseParents(ctx context.Context, exec bob.Executor, related ...*Operation) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	operations1 := OperationSlice(related)
+
+	_, err = attachOperationReverseParents0(ctx, exec, len(related), operations1, operation0)
+	if err != nil {
+		return err
+	}
+
+	operation0.R.ReverseParents = append(operation0.R.ReverseParents, operations1...)
+
+	return nil
+}
+
 func attachOperationWorkspaceResource0(ctx context.Context, exec bob.Executor, count int, operation0 *Operation, resource1 *Resource) (*Operation, error) {
 	setter := &OperationSetter{
 		WorkspaceID: omitnull.From(resource1.ID),
@@ -1868,6 +2056,7 @@ type operationWhere[Q psql.Filterable] struct {
 	ClaimHolder      psql.WhereNullMod[Q, string]
 	ClaimToken       psql.WhereNullMod[Q, string]
 	ClaimUntil       psql.WhereNullMod[Q, time.Time]
+	ParentID         psql.WhereNullMod[Q, string]
 	ExecutionID      psql.WhereMod[Q, string]
 	GroupKey         psql.WhereMod[Q, string]
 	InputKey         psql.WhereMod[Q, string]
@@ -1916,6 +2105,7 @@ func buildOperationWhere[Q psql.Filterable](cols operationColumns) operationWher
 		ClaimHolder:      psql.WhereNull[Q, string](cols.ClaimHolder.Expression),
 		ClaimToken:       psql.WhereNull[Q, string](cols.ClaimToken.Expression),
 		ClaimUntil:       psql.WhereNull[Q, time.Time](cols.ClaimUntil.Expression),
+		ParentID:         psql.WhereNull[Q, string](cols.ParentID.Expression),
 		ExecutionID:      psql.Where[Q, string](cols.ExecutionID.Expression),
 		GroupKey:         psql.Where[Q, string](cols.GroupKey.Expression),
 		InputKey:         psql.Where[Q, string](cols.InputKey.Expression),
@@ -1971,6 +2161,40 @@ func (w operationWhereR[Q]) HasContainerResource(filters ...bob.Mod[*dialect.Sel
 		sm.Columns(psql.Raw("1")),
 		sm.From(Resources.NameExpr()),
 		sm.Where(Resources.Columns.ID.EQ(w.cols.ContainerID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: psql.Exists(q)}
+}
+
+// HasParent filters parents that have a matching Parent using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Operations).
+func (w operationWhereR[Q]) HasParent(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	// self-referential relation: alias the subquery table so the correlation
+	// columns still reference the parent row rather than the subquery's own row.
+	relTbl := Operations.Columns.AliasedAs("Parent")
+	q := psql.Select(
+		sm.Columns(psql.Raw("1")),
+		sm.From(Operations.NameExpr().As("Parent")),
+		sm.Where(relTbl.ID.EQ(w.cols.ParentID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: psql.Exists(q)}
+}
+
+// HasReverseParents filters parents that have a matching ReverseParents using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Operations).
+func (w operationWhereR[Q]) HasReverseParents(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	// self-referential relation: alias the subquery table so the correlation
+	// columns still reference the parent row rather than the subquery's own row.
+	relTbl := Operations.Columns.AliasedAs("ReverseParents")
+	q := psql.Select(
+		sm.Columns(psql.Raw("1")),
+		sm.From(Operations.NameExpr().As("ReverseParents")),
+		sm.Where(relTbl.ParentID.EQ(w.cols.ID)),
 	)
 	q.Apply(filters...)
 	return mods.Where[Q]{E: psql.Exists(q)}

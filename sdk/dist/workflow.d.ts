@@ -3000,6 +3000,10 @@ export interface Operation extends AdditionalDataHolder, Parsable {
 	 */
 	nextAttemptAt?: Date | null;
 	/**
+	 * The operation that started this one and owns it: cancelling the parent cancels it.
+	 */
+	parentId?: string | null;
+	/**
 	 * Surfaces processed for field_index; items completed (updated + failed) for bulk_update.
 	 */
 	processed?: number | null;

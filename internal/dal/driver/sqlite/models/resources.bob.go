@@ -96,8 +96,8 @@ type resourceR struct {
 	ContainerListIntegrations     ListIntegrationSlice // fk_list_integrations_0
 	ContainerListViews            ListViewSlice        // fk_list_views_0
 	ItemOperationItems            OperationItemSlice   // fk_operation_items_0
-	WorkspaceOperations           OperationSlice       // fk_operations_0
-	ContainerOperations           OperationSlice       // fk_operations_1
+	WorkspaceOperations           OperationSlice       // fk_operations_1
+	ContainerOperations           OperationSlice       // fk_operations_2
 	ItemPublications              PublicationSlice     // fk_publications_1
 	TargetRelationships           RelationshipSlice    // fk_relationships_1
 	SourceRelationships           RelationshipSlice    // fk_relationships_2
@@ -156,8 +156,8 @@ type resourceRLoaded struct {
 	ContainerListIntegrations     bool // fk_list_integrations_0
 	ContainerListViews            bool // fk_list_views_0
 	ItemOperationItems            bool // fk_operation_items_0
-	WorkspaceOperations           bool // fk_operations_0
-	ContainerOperations           bool // fk_operations_1
+	WorkspaceOperations           bool // fk_operations_1
+	ContainerOperations           bool // fk_operations_2
 	ItemPublications              bool // fk_publications_1
 	TargetRelationships           bool // fk_relationships_1
 	SourceRelationships           bool // fk_relationships_2

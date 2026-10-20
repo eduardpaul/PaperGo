@@ -101,6 +101,9 @@ type Operation struct {
 	Claim                                                           Claim
 	ExecutionID, GroupKey, InputKey                                 string
 	IdempotencyKey, PayloadDigest                                   string
+	// ParentID is the operation that created this one and owns it:
+	// cancelling the parent cancels it.
+	ParentID string
 }
 
 // Item is an item a bulk operation has still to process.
@@ -123,7 +126,9 @@ type Filter struct {
 	PayloadField, PayloadValue               string
 	// ExecutionID selects the members of a module execution.
 	ExecutionID string
-	Limit       int
+	// ParentIDs selects the operations these operations own.
+	ParentIDs []string
+	Limit     int
 }
 
 // Ready selects the pending operations of Kinds a worker may claim at Now:
@@ -264,7 +269,7 @@ func (r *Repo) Accept(ctx context.Context, in Operation, now time.Time) (op Oper
 		CreatedBy: in.CreatedBy, CredentialID: in.CredentialID, CredentialScopes: in.CredentialScopes, Payload: in.Payload, Result: json.RawMessage(`{}`),
 		Status: StatusPending, Surface: refs.SurfaceHead, Failures: []model.OperationFailure{}, CreatedAt: at, UpdatedAt: at, AttemptAt: at,
 		GroupKey: in.GroupKey, InputKey: in.InputKey, Deadline: in.Deadline, IdempotencyKey: in.IdempotencyKey, PayloadDigest: in.PayloadDigest,
-		ExecutionID: in.ExecutionID,
+		ExecutionID: in.ExecutionID, ParentID: in.ParentID,
 	}
 	if op.CredentialScopes == nil {
 		op.CredentialScopes = []string{}

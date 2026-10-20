@@ -3887,6 +3887,7 @@ export function deserializeIntoOperation(operation: Partial<Operation> | undefin
         "kind": n => { operation.kind = n.getStringValue(); },
         "matched": n => { operation.matched = n.getNumberValue(); },
         "next_attempt_at": n => { operation.nextAttemptAt = n.getDateValue(); },
+        "parent_id": n => { operation.parentId = n.getStringValue(); },
         "processed": n => { operation.processed = n.getNumberValue(); },
         "progress": n => { operation.progress = n.getNumberValue(); },
         "result": n => { operation.result = n.getObjectValue<UntypedNode>(createUntypedNodeFromDiscriminatorValue); },
@@ -6548,6 +6549,10 @@ export interface Operation extends AdditionalDataHolder, Parsable {
      */
     nextAttemptAt?: Date | null;
     /**
+     * The operation that started this one and owns it: cancelling the parent cancels it.
+     */
+    parentId?: string | null;
+    /**
      * Surfaces processed for field_index; items completed (updated + failed) for bulk_update.
      */
     processed?: number | null;
@@ -8994,6 +8999,7 @@ export function serializeOperation(writer: SerializationWriter, operation: Parti
     writer.writeStringValue("kind", operation.kind);
     writer.writeNumberValue("matched", operation.matched);
     writer.writeDateValue("next_attempt_at", operation.nextAttemptAt);
+    writer.writeStringValue("parent_id", operation.parentId);
     writer.writeNumberValue("processed", operation.processed);
     writer.writeNumberValue("progress", operation.progress);
     writer.writeObjectValue("result", operation.result);

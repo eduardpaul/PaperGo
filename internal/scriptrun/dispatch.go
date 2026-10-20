@@ -168,8 +168,8 @@ func (r *Runner) dispatchBatch(ctx context.Context) (n int, more bool, err error
 
 // cleanUp removes what a deleted item or workflow leaves pending once its
 // runs are cancelled: open tasks, pending staged files and, for an item,
-// the pending operations on it. Those of the run whose own request deleted
-// the item stay.
+// the pending operations on it. Those the run whose own request deleted
+// the item owns stay.
 func cleanUp(ctx context.Context, t *dms.Service, e dms.Event) error {
 	switch {
 	case e.Type == dms.EventWorkflowDeleted:
@@ -194,7 +194,7 @@ func cleanUp(ctx context.Context, t *dms.Service, e dms.Event) error {
 		}
 		var own []string
 		if e.CauseRunID != "" {
-			if own, err = t.DAL.Runs().StepOperations(ctx, e.CauseRunID); err != nil {
+			if own, err = t.OwnedOperations(ctx, e.CauseRunID); err != nil {
 				return err
 			}
 		}

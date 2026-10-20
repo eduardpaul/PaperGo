@@ -111,7 +111,7 @@ const text = plain(read.result) as { text_id: string; pages: number };
 
 `ctx.sleep(ms)` and `ctx.sleep({ until })` unload the run until a time; the run shows as `waiting` with `waiting_until`.
 
-Cancelling a run cancels the operations its requests started and those it waits for, such as a task.
+Cancelling a run cancels the operations its requests started, such as its tasks, which it [owns](operations.md#ownership-and-dependencies). Operations it only waits for, such as another run's task, go on: waiting is a dependency, not ownership.
 
 ## Parameters
 
@@ -481,7 +481,7 @@ Finished runs, with their steps and logs, and dispatched events are deleted afte
 
 Deleting an item, alone or with its folder, moves it to the recycle bin and moments later cancels the work pending on it:
 
-- the queued, running and waiting runs on it, and the selection runs it belongs to, with the operations they started and those they wait for;
+- the queued, running and waiting runs on it, and the selection runs it belongs to, with the operations they own;
 - the open tasks about it, whoever created them;
 - the pending files staged to replace its file, a failed run's included;
 - the pending operations on it, such as a text read an API client asked for.
