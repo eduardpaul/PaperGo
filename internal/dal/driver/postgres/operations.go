@@ -75,13 +75,14 @@ func operationsReady(kinds []string, now time.Time) []dialect.Expression {
 }
 
 // operationsClaimable returns the conditions of operations no execution
-// owns at now that are due.
+// owns at now that are due and still before their deadline.
 func operationsClaimable(now time.Time) []dialect.Expression {
 	c := models.Operations.Columns
 	return []dialect.Expression{
 		c.ExecutionID.EQ(psql.Arg("")),
 		c.AttemptAt.LTE(psql.Arg(now)),
 		psql.Or(c.ClaimUntil.IsNull(), c.ClaimUntil.LTE(psql.Arg(now))),
+		psql.Or(c.Deadline.IsNull(), c.Deadline.GT(psql.Arg(now))),
 	}
 }
 
@@ -242,6 +243,10 @@ func (q Queries) UpdateFenced(ctx context.Context, f operations.Fence, ch operat
 		set.Error = omit.From(*ch.Error)
 	}
 	update := models.Operations.Update(set.UpdateMod(), um.Where(c.ID.In(psql.Arg(anys(f.IDs)...))), um.Where(c.Status.EQ(psql.Arg(string(operations.StatusPending)))))
+	if ch.Progress != nil && ch.Progress.Status == operations.StatusSucceeded {
+		// Past its deadline an operation can no longer succeed.
+		update.Apply(um.Where(psql.Or(c.Deadline.IsNull(), c.Deadline.GT(psql.Arg(f.Now)))))
+	}
 	if ch.Attempts != 0 {
 		update.Apply(um.SetCol("attempts").To(psql.Raw("GREATEST(attempts + ?, 0)", ch.Attempts)))
 	}
@@ -354,13 +359,19 @@ func (q Queries) NextAttempt(ctx context.Context, kinds []string, now time.Time)
 	return next, nil
 }
 
-func (q Queries) PendingTotals(ctx context.Context, createdBy, workspaceID string) (operations.Totals, error) {
+func (q Queries) PendingTotals(ctx context.Context, createdBy, workspaceID string, exempt []string) (operations.Totals, error) {
+	kinds := ""
+	args := []any{createdBy, workspaceID, workspaceID}
+	if len(exempt) > 0 {
+		kinds = ` AND kind NOT IN (` + marks(len(exempt)) + `)`
+		args = append(args, anys(exempt)...)
+	}
 	t, err := bob.One(ctx, q.exec, psql.RawQuery(`SELECT
 		COALESCE(SUM(CASE WHEN created_by = ? THEN 1 ELSE 0 END), 0) AS creator,
 		COALESCE(SUM(CASE WHEN workspace_id = ? THEN 1 ELSE 0 END), 0) AS workspace,
 		COUNT(*) AS installation,
 		COALESCE(SUM(CASE WHEN workspace_id = ? THEN octet_length(payload::text) ELSE 0 END), 0) AS workspace_payload_bytes
-		FROM operations WHERE status = 'pending'`, createdBy, workspaceID, workspaceID), scan.StructMapper[operations.Totals]())
+		FROM operations WHERE status = 'pending'`+kinds, args...), scan.StructMapper[operations.Totals]())
 	return t, dberr.Translate(err)
 }
 

@@ -598,7 +598,10 @@ Phase 1 follows the contracts above, with these concrete choices:
   - `operations.Ready` also takes `IDs`, so a step whose transaction rolled back can claim exactly its operation again to fail or defer it.
   - The loop claims only registered kinds. An operation of a kind no handler serves stays pending with `waiting: queued`; it is not failed.
   - Transactional steps release their claim after each batch without counting an attempt, so other work can run between batches.
+  - A transactional step's claim lasts 24 hours, because it never outlives the step's own transaction. A batch that runs longer than the two-minute execution claim therefore still finishes or fails, instead of being claimed again forever.
+  - Operations past their deadline are not claimed, and cannot succeed under an existing claim.
 - **Routes.** `API.Validate` rejects colliding module routes, reused operation IDs and patterns outside `/v1` at startup. The OpenAPI check is the `TestRoutesMatchOpenAPI` test, because the spec is not compiled into the executable. `httpapi.Accepted` writes the 202, or replayed 200, response for operation-starting routes.
+- **Acceptance.** A request whose idempotency key already names the same request is replayed before validation, so a retry still answers with what was accepted after the state it was validated against changed. Index maintenance does not count toward quotas.
 - **Search reindex.** The reindex stamp is the operation's acceptance time instead of a payload field, so identical reindex requests have identical payloads and can be replayed by idempotency key.
 
 ## Settled decisions

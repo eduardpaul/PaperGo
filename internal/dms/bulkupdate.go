@@ -34,11 +34,14 @@ func (s *Service) StartBulkUpdate(ctx context.Context, subject, collectionID str
 		if e != nil {
 			return e
 		}
-		if _, e = t.compileQuery(ctx, subject, c.ID, QueryRequest{Query: in.Query, Surface: "head"}, false); e != nil {
-			return e
-		}
 		payload, e := json.Marshal(in)
 		if e != nil {
+			return e
+		}
+		if out, e = t.replay(ctx, operations.Operation{ContainerID: c.ID, Kind: OperationKindBulkUpdate, CreatedBy: subject, Payload: payload}); out != nil || e != nil {
+			return e
+		}
+		if _, e = t.compileQuery(ctx, subject, c.ID, QueryRequest{Query: in.Query, Surface: "head"}, false); e != nil {
 			return e
 		}
 		op, replayed, e := t.enqueue(ctx, operations.Operation{ContainerID: c.ID, Kind: OperationKindBulkUpdate, CreatedBy: subject, Payload: payload})

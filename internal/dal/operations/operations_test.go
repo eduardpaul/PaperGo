@@ -76,8 +76,9 @@ func testRecords(t *testing.T, s *dal.Store) {
 	if ok, err := ops.Exists(ctx, operations.Filter{PayloadField: "integration_id", PayloadValue: "one", Statuses: []operations.Status{operations.StatusPending}}); err != nil || !ok {
 		t.Fatalf("payload match: %v %v", ok, err)
 	}
-	totals, err := ops.PendingTotals(ctx, "alice", f.Workspace)
-	if err != nil || totals.Creator != 1 || totals.Workspace != 1 || totals.Installation != 2 || totals.WorkspacePayloadBytes < int64(len(`{"integration_id":"one"}`)) {
+	totals, err := ops.PendingTotals(ctx, "alice", f.Workspace, []string{"field_index"})
+	// Exempt kinds, such as index maintenance, do not count.
+	if err != nil || totals.Creator != 1 || totals.Workspace != 1 || totals.Installation != 1 || totals.WorkspacePayloadBytes < int64(len(`{"integration_id":"one"}`)) {
 		t.Fatalf("totals: %+v %v", totals, err)
 	}
 	ended, err := ops.Supersede(ctx, operations.Filter{Kinds: []string{"refresh"}, PayloadField: "integration_id", PayloadValue: "one"}, start)
@@ -353,6 +354,15 @@ func testGroups(t *testing.T, s *dal.Store) {
 	}
 }
 
+func claimOf(t *testing.T, ops *operations.Repo, id string) operations.Claim {
+	t.Helper()
+	op, err := ops.Find(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return op.Claim
+}
+
 func testTermination(t *testing.T, s *dal.Store) {
 	ctx := context.Background()
 	f := daltest.NewFixture(t, s)
@@ -379,6 +389,28 @@ func testTermination(t *testing.T, s *dal.Store) {
 	if leased, err := s.Blobs().Leased(ctx, blob.ID); err != nil || !leased {
 		t.Fatalf("operation lease: %v %v", leased, err)
 	}
+	// Past its deadline an operation is neither claimed nor can succeed.
+	if got := claim(t, ops, "late", 5, deadline); len(got) != 1 || got[0].ID != running.ID {
+		t.Fatalf("claimed past a deadline: %+v", got)
+	}
+	early := accept(t, ops, operations.Operation{Deadline: &deadline}, start)
+	got := claim(t, ops, "early", 1, start)
+	if len(got) != 1 || got[0].Deadline == nil {
+		t.Fatalf("claim before the deadline: %+v", got)
+	}
+	got[0].Status = operations.StatusSucceeded
+	if err := ops.Finish(ctx, &got[0], deadline.Add(time.Second)); !errors.Is(err, operations.ErrClaimLost) {
+		t.Fatalf("succeeded past its deadline: %v", err)
+	}
+	if err := ops.Release(ctx, got[0].ID, got[0].Claim, start); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := ops.Cancel(ctx, early.ID, start); err != nil || !ok {
+		t.Fatal(ok, err)
+	}
+	if err := ops.Release(ctx, running.ID, claimOf(t, ops, running.ID), start); err != nil {
+		t.Fatal(err)
+	}
 	if ended, err := ops.Expire(ctx, []string{"test"}, deadline, 10); err != nil || len(ended) != 0 {
 		t.Fatalf("expired at its deadline: %v %v", ended, err)
 	}
@@ -389,7 +421,7 @@ func testTermination(t *testing.T, s *dal.Store) {
 	if expired, _ := ops.Find(ctx, late.ID); expired.Status != operations.StatusFailed || expired.ErrorCode != operations.ErrorDeadlineExceeded {
 		t.Fatalf("expired: %+v", expired)
 	}
-	got := claim(t, ops, "worker", 1, start)
+	got = claim(t, ops, "worker", 1, start)
 	if len(got) != 1 || got[0].ID != running.ID {
 		t.Fatalf("claim: %+v", got)
 	}

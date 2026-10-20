@@ -164,6 +164,10 @@ func (s *Service) EnqueueOperation(ctx context.Context, subject, containerID, ki
 		if err := t.operationPermission(ctx, subject, containerID, handler.Scope); err != nil {
 			return err
 		}
+		var e error
+		if out, e = t.replay(ctx, operations.Operation{ContainerID: containerID, Kind: kind, CreatedBy: subject, Payload: payload}); out != nil || e != nil {
+			return e
+		}
 		if err := handler.Validate(ctx, t, subject, containerID, payload); err != nil {
 			return err
 		}
@@ -197,6 +201,29 @@ func (s *Service) enqueue(ctx context.Context, op operations.Operation) (operati
 		return stored, false, ErrIdempotencyConflict
 	}
 	return stored, replayed, err
+}
+
+// replay returns the operation the request's idempotency key already names
+// for the same request, before the request is validated again against
+// state that may have changed since; nil when there is none.
+func (s *Service) replay(ctx context.Context, op operations.Operation) (*OperationView, error) {
+	key, ok := ctx.Value(idempotencyKey{}).(string)
+	if !ok {
+		return nil, nil
+	}
+	existing, err := s.DAL.Operations().FindIdempotent(ctx, op.CreatedBy, op.Kind, op.ContainerID, key)
+	if dberr.IsNotFound(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if existing.PayloadDigest != payloadDigest(op) {
+		return nil, ErrIdempotencyConflict
+	}
+	out := viewOperation(existing, time.Now())
+	out.Replayed = true
+	return out, nil
 }
 
 // accept records a pending operation, attributed to its container's
@@ -245,7 +272,9 @@ func (s *Service) checkOperationQuota(ctx context.Context, op operations.Operati
 	if q == (OperationQuotas{}) {
 		return nil
 	}
-	totals, err := s.DAL.Operations().PendingTotals(ctx, op.CreatedBy, op.WorkspaceID)
+	// Index maintenance follows configuration changes; it never uses up a
+	// person's quota.
+	totals, err := s.DAL.Operations().PendingTotals(ctx, op.CreatedBy, op.WorkspaceID, []string{OperationKindFieldIndex})
 	if err != nil {
 		return err
 	}

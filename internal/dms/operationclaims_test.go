@@ -211,3 +211,61 @@ func TestOperationLeasesKeepAcceptedBytes(t *testing.T) {
 		t.Fatal("lease outlived its operation", protected, err)
 	}
 }
+
+func TestInlineStepsOwnTheirOperationForTheWholeStep(t *testing.T) {
+	s, _, list := fixture(t)
+	handler := checkpointHandler()
+	step := handler.Step
+	var until time.Time
+	handler.Step = func(ctx context.Context, t *Service, op *operations.Operation) error {
+		stored, err := t.DAL.Operations().Find(ctx, op.ID)
+		if err != nil {
+			return err
+		}
+		until = stored.Claim.Until
+		return step(ctx, t, op)
+	}
+	if err := s.RegisterOperationHandler("checkpoint", handler); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.EnqueueOperation(testContext, "alice", list.ID, "checkpoint", json.RawMessage(`{}`)); err != nil {
+		t.Fatal(err)
+	}
+	if worked, err := s.operationStep(testContext); !worked || err != nil {
+		t.Fatal(worked, err)
+	}
+	// A long batch does not lose its claim halfway through.
+	if until.Before(time.Now().Add(time.Hour)) {
+		t.Fatal("step claim expires during the step", until)
+	}
+}
+
+func TestReplaysSkipRevalidation(t *testing.T) {
+	s, _, list := fixture(t)
+	handler := checkpointHandler()
+	valid := true
+	handler.Validate = func(context.Context, *Service, string, string, json.RawMessage) error {
+		if !valid {
+			return invalid("no longer valid")
+		}
+		return nil
+	}
+	if err := s.RegisterOperationHandler("checkpoint", handler); err != nil {
+		t.Fatal(err)
+	}
+	ctx, _ := WithIdempotencyKey(testContext, "once")
+	first, err := s.EnqueueOperation(ctx, "alice", list.ID, "checkpoint", json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A lost response is retried after the state it was validated against
+	// changed; the retry still answers with what was accepted.
+	valid = false
+	again, err := s.EnqueueOperation(ctx, "alice", list.ID, "checkpoint", json.RawMessage(`{}`))
+	if err != nil || !again.Replayed || again.ID != first.ID {
+		t.Fatal(again, err)
+	}
+	if _, err = s.EnqueueOperation(testContext, "alice", list.ID, "checkpoint", json.RawMessage(`{}`)); err == nil {
+		t.Fatal("new request skipped validation")
+	}
+}

@@ -120,11 +120,21 @@ func TestModuleRoutes(t *testing.T) {
 	if res = request(h, "POST", "/v1/test-module/missing", "", testToken, "", ""); res.Code != 404 || !strings.Contains(res.Body.String(), `"code":"not_found"`) {
 		t.Fatal("module errors map like core errors", res.Code, res.Body.String())
 	}
+	// Module routes accept idempotency keys like core routes.
+	keyed := httptest.NewRequest("POST", "/v1/test-module/one", nil)
+	keyed.Header.Set("Authorization", "Bearer "+testToken)
+	keyed.Header.Set("Idempotency-Key", "has space")
+	invalidKey := httptest.NewRecorder()
+	h.ServeHTTP(invalidKey, keyed)
+	if invalidKey.Code != 400 {
+		t.Fatal("module route ignored Idempotency-Key", invalidKey.Code)
+	}
 	for name, routes := range map[string][]Route{
 		"core route":   {{Method: "GET", Pattern: "/v1/workspaces", OperationID: "shadow", Handle: echo.Handle}},
 		"two modules":  {echo, {Method: "POST", Pattern: "/v1/test-module/{other}", OperationID: "other", Handle: echo.Handle}},
 		"operation ID": {echo, {Method: "GET", Pattern: "/v1/test-module/{id}", OperationID: "testModule", Handle: echo.Handle}},
 		"outside /v1":  {{Method: "GET", Pattern: "/health/module", OperationID: "health", Handle: echo.Handle}},
+		"batch":        {{Method: "POST", Pattern: "/v1/$batch", OperationID: "batch", Handle: echo.Handle}},
 	} {
 		a.Modules = []Module{testModule{routes}}
 		if err := a.Validate(); err == nil {

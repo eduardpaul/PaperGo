@@ -56,12 +56,7 @@ func (m *router) ServeHTTP(w http.ResponseWriter, r *http.Request) { m.mux.Serve
 
 // registerModules adds the modules' routes. A pattern that another route
 // already serves, an invalid one or a reused operation ID is an error.
-func (a *API) registerModules(m *router) (err error) {
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			err = fmt.Errorf("module route conflicts: %v", recovered)
-		}
-	}()
+func (a *API) registerModules(m *router) error {
 	operations := map[string]string{}
 	for _, module := range a.Modules {
 		for _, route := range module.Routes() {
@@ -72,7 +67,7 @@ func (a *API) registerModules(m *router) (err error) {
 				return fmt.Errorf("module %s: operation %s is also %s", module.Name(), route.OperationID, previous)
 			}
 			operations[route.OperationID] = module.Name()
-			m.HandleFunc(route.Method+" "+route.Pattern, a.moduleHandler(route))
+			m.HandleFunc(route.Method+" "+route.Pattern, a.idempotent(a.moduleHandler(route)))
 		}
 	}
 	return nil
@@ -93,9 +88,15 @@ func (a *API) Validate() error {
 	return err
 }
 
-// routes builds the /v1 routes, the core API's and the modules'.
-func (a *API) routes() (*router, error) {
-	api := newRouter()
+// routes builds the /v1 routes, the core API's and the modules'. A module
+// pattern that collides with another route is an error.
+func (a *API) routes() (api *router, err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			api, err = nil, fmt.Errorf("module route conflicts: %v", recovered)
+		}
+	}()
+	api = newRouter()
 	api.HandleFunc("GET /v1/events", a.events)
 	a.registerPortability(api)
 	a.registerIdentity(api)

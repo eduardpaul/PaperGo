@@ -56,8 +56,12 @@ func (s *Service) enqueueFieldIndex(ctx context.Context, subject string, d *cata
 }
 
 // operationClaim is how long an execution owns an operation between
-// renewals; an execution renews at a third of it.
-const operationClaim = 2 * time.Minute
+// renewals; an execution renews at a third of it. inlineClaim covers a
+// transactional step, whose claim never outlives its transaction.
+const (
+	operationClaim = 2 * time.Minute
+	inlineClaim    = 24 * time.Hour
+)
 
 // RunOperations processes pending operations until ctx ends, resuming any left
 // by an earlier process.
@@ -139,13 +143,24 @@ func (s *Service) operationStep(ctx context.Context) (bool, error) {
 	var op *operations.Operation
 	var execute func(context.Context, *Service, *operations.Operation) error
 	err := s.write(ctx, func(t *Service) error {
+		op, execute = nil, nil
 		claimed, e := t.DAL.Operations().Claim(ctx, operations.ClaimRequest{Ready: operations.Ready{Kinds: t.operationKinds(), Now: time.Now(), Limit: 1}, Holder: t.ops.holder, TTL: operationClaim})
 		if e != nil || len(claimed) == 0 {
-			op = nil
 			return e
 		}
 		op = &claimed[0]
 		handler := t.ops.handlers[op.Kind]
+		if handler.Execute == nil {
+			// A step runs inside the claim's own transaction, which nobody
+			// else sees until it ends, so its claim must outlast the step
+			// however long it takes; it ends with the transaction.
+			now := time.Now()
+			until := now.Add(inlineClaim)
+			if e = t.DAL.Operations().Renew(ctx, op.ID, op.Claim, until, now); e != nil {
+				return e
+			}
+			op.Claim.Until = operations.UTC(until)
+		}
 		ctx, e = t.operationContext(ctx, op)
 		if e != nil {
 			return e

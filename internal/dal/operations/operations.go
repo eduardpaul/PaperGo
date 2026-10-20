@@ -61,7 +61,8 @@ func (c ErrorCode) Valid() bool {
 }
 
 // ErrClaimLost means the execution no longer owns the operation: its claim
-// expired or was replaced, or the operation is no longer pending.
+// expired or was replaced, the operation is no longer pending, or its
+// deadline passed before it could succeed.
 var ErrClaimLost = errors.New("operation claim was lost")
 
 // ErrIdempotencyConflict means the caller's idempotency key already names an
@@ -214,7 +215,9 @@ type Queries interface {
 	// NextAttempt returns the earliest time a pending, unparked operation of
 	// kinds becomes ready, or nil when there is none.
 	NextAttempt(ctx context.Context, kinds []string, now time.Time) (*time.Time, error)
-	PendingTotals(ctx context.Context, createdBy, workspaceID string) (Totals, error)
+	// PendingTotals counts pending operations, except those of exempt
+	// kinds.
+	PendingTotals(ctx context.Context, createdBy, workspaceID string, exempt []string) (Totals, error)
 	DeleteOperations(ctx context.Context, ids []string) error
 	OperationItems(ctx context.Context, operationID string, limit int) ([]Item, error)
 	CountOperationItems(ctx context.Context, operationID string) (int64, error)
@@ -308,9 +311,15 @@ func (r *Repo) Exists(ctx context.Context, f Filter) (bool, error) {
 }
 
 // PendingTotals counts the pending operations of a creator, a workspace
-// and the installation, for acceptance quotas.
-func (r *Repo) PendingTotals(ctx context.Context, createdBy, workspaceID string) (Totals, error) {
-	return r.read.PendingTotals(ctx, createdBy, workspaceID)
+// and the installation for acceptance quotas, leaving out exempt kinds.
+func (r *Repo) PendingTotals(ctx context.Context, createdBy, workspaceID string, exempt []string) (Totals, error) {
+	return r.read.PendingTotals(ctx, createdBy, workspaceID, exempt)
+}
+
+// FindIdempotent returns the operation a creator's idempotency key names
+// for a kind and container.
+func (r *Repo) FindIdempotent(ctx context.Context, createdBy, kind, containerID, key string) (Operation, error) {
+	return r.read.FindIdempotent(ctx, createdBy, kind, containerID, key)
 }
 
 // ClaimRequest asks for up to Limit ready operations for Holder until
@@ -491,9 +500,9 @@ func (r *Repo) finish(ctx context.Context, op *Operation, f Fence, now time.Time
 	if op.Status == StatusSucceeded {
 		op.Progress = 100
 	}
-	op.UpdatedAt, op.Claim, op.ExecutionID = at, Claim{}, ""
+	op.UpdatedAt = at
 	none := ""
-	return r.write(ctx, func(q Queries) error {
+	err := r.write(ctx, func(q Queries) error {
 		if err := r.fenced(ctx, q, f, Change{Progress: op, ClearClaim: true, ExecutionID: &none}); err != nil {
 			return err
 		}
@@ -502,6 +511,10 @@ func (r *Repo) finish(ctx context.Context, op *Operation, f Fence, now time.Time
 		}
 		return live.Notify(ctx, q, live.KindOperation, op.ID, live.ActionUpdated)
 	})
+	if err == nil {
+		op.Claim, op.ExecutionID = Claim{}, ""
+	}
+	return err
 }
 
 // Fail ends a pending operation that no execution owns, such as one whose
