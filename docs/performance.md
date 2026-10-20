@@ -164,12 +164,14 @@ Six uploaded file versions represented 144 MiB of logical content, with only
 the shorter 20,000-item run still had 144 MiB while redundant upload objects
 awaited cleanup. Duplicate uploads therefore still need temporary disk space.
 
-The embedded frontend build contained approximately **1 MiB of assets**. Assets
-referenced directly by the initial HTML totalled **488 KiB uncompressed**, or
-**145 KiB with gzip** measured locally. Additional routes load further chunks.
-The application serves assets without response compression; enable compression
-at the reverse proxy if bandwidth matters. Browser rendering performance was not
-tested.
+The embedded frontend build contains approximately **13 MiB of assets**, 12 MiB
+of them the workflow script editor (Monaco and its TypeScript checker), which
+loads only when a script is opened. Assets referenced directly by the initial
+HTML total **652 KiB uncompressed**, or **206 KiB with gzip** measured locally.
+Additional routes load further chunks. The application serves its JavaScript,
+CSS, font and other text assets gzip-compressed to clients that accept gzip,
+compressing each file once on its first such request; the whole build
+compresses to about 3 MiB. Browser rendering performance was not tested.
 
 ### Permission and service benchmarks
 
