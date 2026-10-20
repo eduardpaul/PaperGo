@@ -21,6 +21,7 @@ import (
 	"papergo/internal/decision"
 	"papergo/internal/dms"
 	"papergo/internal/doctext/pdfium"
+	"papergo/internal/documenttext"
 	"papergo/internal/httpapi"
 	"papergo/internal/identity"
 	"papergo/internal/integration"
@@ -230,6 +231,10 @@ func run(log *slog.Logger) error {
 		}
 	}
 	workflows := &workflow.Service{DMS: service, Tools: tools}
+	text := &documenttext.Reader{Storage: store, PDF: tools.PDF, OCR: tools.OCR, Languages: c.SearchLanguages}
+	if err = text.Register(service); err != nil {
+		return err
+	}
 	service.OnIntegrationCreated(workflows.EnsureIntegrationWorkflow)
 	if c.BatchWorkspace != "" && batch != nil {
 		subject := c.AdminSubject
@@ -254,7 +259,7 @@ func run(log *slog.Logger) error {
 			log.Error("runner shutdown", "error", err)
 		}
 	}()
-	a := &httpapi.API{DMS: service, Workflows: workflows, Runner: run, Auth: verifier, Storage: store, Logger: log, MaxUpload: c.MaxUpload, MaxInFlight: c.MaxInFlight, RequestTimeout: c.RequestTimeout, Ready: func(ctx context.Context) error {
+	a := &httpapi.API{DMS: service, Workflows: workflows, DocumentText: text, Runner: run, Auth: verifier, Storage: store, Logger: log, MaxUpload: c.MaxUpload, MaxInFlight: c.MaxInFlight, RequestTimeout: c.RequestTimeout, Ready: func(ctx context.Context) error {
 		if err := db.SQL.PingContext(ctx); err != nil {
 			return err
 		}

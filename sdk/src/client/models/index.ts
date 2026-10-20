@@ -1313,6 +1313,15 @@ export function createQuerySpecFromDiscriminatorValue(parseNode: ParseNode | und
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {ReadText}
+ */
+// @ts-ignore
+export function createReadTextFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoReadText;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {RecycleBinPage}
  */
 // @ts-ignore
@@ -3535,6 +3544,19 @@ export function deserializeIntoQuerySpec(querySpec: Partial<QuerySpec> | undefin
         "parent_id": n => { querySpec.parentId = n.getStringValue(); },
         "search": n => { querySpec.search = n.getStringValue(); },
         "sort": n => { querySpec.sort = n.getCollectionOfObjectValues<SortSpec>(createSortSpecFromDiscriminatorValue); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param ReadText The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoReadText(readText: Partial<ReadText> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "languages": n => { readText.languages = n.getStringValue(); },
+        "max_pages": n => { readText.maxPages = n.getNumberValue(); },
+        "ocr": n => { readText.ocr = n.getEnumValue<ReadText_ocr>(ReadText_ocrObject); },
     }
 }
 /**
@@ -6013,6 +6035,24 @@ export interface QuerySpec extends Parsable {
      */
     sort?: SortSpec[] | null;
 }
+/**
+ * How the text is read.
+ */
+export interface ReadText extends Parsable {
+    /**
+     * OCR language codes joined with + (eng+deu); the file's languages when omitted.
+     */
+    languages?: string | null;
+    /**
+     * Pages read, 500 when omitted; later pages are left out (truncated).
+     */
+    maxPages?: number | null;
+    /**
+     * auto (the default) reads text layers and OCRs pages and images without one; always OCRs every page; never reads text layers only.
+     */
+    ocr?: ReadText_ocr | null;
+}
+export type ReadText_ocr = (typeof ReadText_ocrObject)[keyof typeof ReadText_ocrObject];
 export interface RecycleBinPage extends AdditionalDataHolder, Parsable {
     /**
      * Absolute continuation URL, or null on the final page. Repeat the request method and body.
@@ -7940,6 +7980,19 @@ export function serializeQuerySpec(writer: SerializationWriter, querySpec: Parti
     writer.writeStringValue("parent_id", querySpec.parentId);
     writer.writeStringValue("search", querySpec.search);
     writer.writeCollectionOfObjectValues<SortSpec>("sort", querySpec.sort, serializeSortSpec);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param ReadText The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeReadText(writer: SerializationWriter, readText: Partial<ReadText> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!readText || isSerializingDerivedType) { return; }
+    writer.writeStringValue("languages", readText.languages);
+    writer.writeNumberValue("max_pages", readText.maxPages);
+    writer.writeEnumValue<ReadText_ocr>("ocr", readText.ocr);
 }
 /**
  * Serializes information the current object
@@ -10922,6 +10975,14 @@ export const QueryRequest_surfaceObject = {
     Auto: "auto",
     Head: "head",
     Published: "published",
+} as const;
+/**
+ * auto (the default) reads text layers and OCRs pages and images without one; always OCRs every page; never reads text layers only.
+ */
+export const ReadText_ocrObject = {
+    Auto: "auto",
+    Always: "always",
+    Never: "never",
 } as const;
 /**
  * Libraries only. Default warn. Compares hashes against current documents visible to the caller across libraries and workspaces. Allow suppresses warnings; block rejects duplicates with 409 duplicate_file.

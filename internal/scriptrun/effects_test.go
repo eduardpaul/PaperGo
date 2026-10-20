@@ -59,7 +59,18 @@ export default workflow({
 });
 `
 
-func TestScriptRunsThroughTheAPIExactlyOnce(t *testing.T) {
+// fixture is a service with alice's workspace, its API and a workflow whose
+// runs scripts execute as.
+type fixture struct {
+	s           *dms.Service
+	api         *httpapi.API
+	blobs       storage.Store
+	workspaceID string
+	workflowID  string
+}
+
+func setup(t *testing.T, configure ...func(*httpapi.API)) *fixture {
+	t.Helper()
 	ctx := context.Background()
 	db := daltest.Database(t)
 	blobs, err := storage.NewLocal(t.TempDir())
@@ -69,28 +80,61 @@ func TestScriptRunsThroughTheAPIExactlyOnce(t *testing.T) {
 	s := dms.NewService(db.SQL)
 	s.SetSearch(searchstore.Open(t, filepath.Join(t.TempDir(), "search.db"), []string{"english"}))
 	api := &httpapi.API{DMS: s, Storage: blobs, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	for _, c := range configure {
+		c(api)
+	}
 	ws, err := s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Docs"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	list, err := s.Create(ctx, "alice", ws.ID, dms.CreateResource{Kind: "list", Name: "Invoices"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	workflowID, runID := uuid.NewString(), uuid.NewString()
-	daltest.Insert(t, s.DAL, "workflows", daltest.Row{"id": workflowID, "workspace_id": ws.ID, "key": "review", "name": "Review", "current_version": 1, "created_by": "alice", "updated_by": "alice"})
-	daltest.Insert(t, s.DAL, "workflow_versions", daltest.Row{"id": uuid.NewString(), "workflow_id": workflowID, "number": 1, "definition": "{}", "created_by": "alice"})
-	if err = daltest.WorkflowRun(ctx, s.DAL, runID, workflowID, ws.ID, "alice", 1); err != nil {
-		t.Fatal(err)
-	}
-	artifact, err := script.Bundle("review.ts", source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	effects := &crashing{Effects: &Effects{DMS: s, API: api}}
-	engine := script.New(effects, 0)
-	run := script.Run{ID: runID, Author: "alice", Artifact: artifact, Input: []byte(`{"list":"` + list.ID + `"}`)}
+	f := &fixture{s: s, api: api, blobs: blobs, workspaceID: ws.ID, workflowID: uuid.NewString()}
+	daltest.Insert(t, s.DAL, "workflows", daltest.Row{"id": f.workflowID, "workspace_id": ws.ID, "key": "review", "name": "Review", "current_version": 1, "created_by": "alice", "updated_by": "alice"})
+	daltest.Insert(t, s.DAL, "workflow_versions", daltest.Row{"id": uuid.NewString(), "workflow_id": f.workflowID, "number": 1, "definition": "{}", "created_by": "alice"})
+	return f
+}
 
+// run records a new run of source with input, acting as alice.
+func (f *fixture) run(t *testing.T, source, input string) script.Run {
+	t.Helper()
+	id := uuid.NewString()
+	if err := daltest.WorkflowRun(context.Background(), f.s.DAL, id, f.workflowID, f.workspaceID, "alice", 1); err != nil {
+		t.Fatal(err)
+	}
+	artifact, err := script.Bundle("workflow.ts", source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return script.Run{ID: id, Author: "alice", Artifact: artifact, Input: []byte(input)}
+}
+
+// work runs the operation worker until done reports true.
+func (f *fixture) work(t *testing.T, done func() bool) {
+	t.Helper()
+	ctx, stop := context.WithCancel(context.Background())
+	stopped := make(chan struct{})
+	go func() { f.s.RunOperations(ctx, slog.New(slog.NewTextHandler(io.Discard, nil))); close(stopped) }()
+	defer func() { stop(); <-stopped }()
+	deadline := time.Now().Add(20 * time.Second)
+	for !done() {
+		if time.Now().After(deadline) {
+			t.Fatal("the operation worker did not finish")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+func TestScriptRunsThroughTheAPIExactlyOnce(t *testing.T) {
+	ctx := context.Background()
+	f := setup(t)
+	s := f.s
+	list, err := s.Create(ctx, "alice", f.workspaceID, dms.CreateResource{Kind: "list", Name: "Invoices"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := f.run(t, source, `{"list":"`+list.ID+`"}`)
+	runID := run.ID
+	effects := &crashing{Effects: &Effects{DMS: s, API: f.api}}
+	engine := script.New(effects, 0)
 	if _, err = engine.Execute(ctx, run); !errors.Is(err, errCrash) {
 		t.Fatalf("the first slice ended with %v", err)
 	}
@@ -122,24 +166,12 @@ func TestScriptRunsThroughTheAPIExactlyOnce(t *testing.T) {
 
 	// The real operation worker finishes the bulk update and, in the same
 	// transaction, the step waiting for it.
-	work, stop := context.WithCancel(ctx)
-	done := make(chan struct{})
-	go func() { s.RunOperations(work, slog.New(slog.NewTextHandler(io.Discard, nil))); close(done) }()
-	deadline := time.Now().Add(20 * time.Second)
-	for {
+	f.work(t, func() bool {
 		if steps, err = s.DAL.Runs().Steps(ctx, runID); err != nil {
 			t.Fatal(err)
 		}
-		if steps[3].Status == runs.StepCompleted {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("the bulk update did not release the waiting step")
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	stop()
-	<-done
+		return steps[3].Status == runs.StepCompleted
+	})
 	pending, err := s.DAL.Operations().List(ctx, operations.Filter{Statuses: []operations.Status{operations.StatusPending}})
 	if err != nil || len(pending) != 0 {
 		t.Fatalf("pending operations: %v, %v", pending, err)

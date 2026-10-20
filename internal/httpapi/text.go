@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"papergo/internal/documenttext"
 )
 
 // textPage is one page of a file's text.
@@ -45,4 +47,24 @@ func (a *API) itemText(w http.ResponseWriter, r *http.Request) {
 		"language": text.Language, "ocr_pages": text.OcrPages, "skipped_pages": text.SkippedPages, "truncated": text.Truncated,
 		"read_at": text.CreatedAt.UTC().Format(time.RFC3339Nano),
 	})
+}
+
+// readText starts reading the text of the item's current file and answers
+// with the pending operation. The body is optional.
+func (a *API) readText(w http.ResponseWriter, r *http.Request) {
+	if a.DocumentText == nil {
+		a.problem(w, r, http.StatusServiceUnavailable, "unavailable", "reading document text is not configured")
+		return
+	}
+	var in documenttext.Request
+	if r.ContentLength != 0 && !a.decode(w, r, &in) {
+		return
+	}
+	op, err := a.DocumentText.Start(r.Context(), a.DMS, subject(r), r.PathValue("id"), in)
+	if err != nil {
+		a.failure(w, r, err)
+		return
+	}
+	w.Header().Set("Location", "/v1/operations/"+op.ID)
+	respond(w, r, http.StatusAccepted, op)
 }

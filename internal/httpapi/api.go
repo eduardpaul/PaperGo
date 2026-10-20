@@ -15,6 +15,7 @@ import (
 	"papergo/internal/dal/dberr"
 	"papergo/internal/dal/resources"
 	"papergo/internal/dms"
+	"papergo/internal/documenttext"
 	"papergo/internal/identity"
 	"papergo/internal/requestmeta"
 	"papergo/internal/runner"
@@ -49,6 +50,9 @@ type API struct {
 	// BrowserSignIn, when set, tells the web frontend which OIDC client signs
 	// users in. It is public configuration: an issuer, a client ID and scopes.
 	BrowserSignIn *BrowserSignIn
+	// DocumentText reads files' text as operations; nil refuses
+	// POST /v1/items/{id}/text.
+	DocumentText *documenttext.Reader
 }
 
 // BrowserSignIn describes the public OIDC client of the web frontend
@@ -125,6 +129,7 @@ func (a *API) routes() *http.ServeMux {
 	api.HandleFunc("GET /v1/items/{id}/preview", a.preview)
 	api.HandleFunc("GET /v1/items/{id}/content/versions", a.fileVersions)
 	api.HandleFunc("GET /v1/items/{id}/text", a.itemText)
+	api.HandleFunc("POST /v1/items/{id}/text", a.readText)
 	api.HandleFunc("POST /v1/items/{id}/content/versions/{number}/restore", a.restoreBlob)
 	api.HandleFunc("GET /v1/audit", a.audit)
 	api.HandleFunc("GET /v1/workspaces/{id}/keywords", a.keywords)

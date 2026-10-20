@@ -51,11 +51,38 @@ Every action a workflow waits for is an endpoint that returns `202 Accepted` wit
 
 Operations run through `dms.RegisterOperationHandler`. `ExternalStep` handlers run outside the database writer, which suits OCR, embeddings, AI and PDF composition.
 
+Reading text is the first such endpoint: `POST /v1/items/{id}/text` (`internal/documenttext`, see [OCR](../ocr.md)). A script reads a scan like this:
+
+```ts
+const started = await ctx.api.v1.items.byId(itemId).text.post({ ocr: "auto" });
+const done = await ctx.wait(started!);
+const text = await ctx.api.v1.items.byId(itemId).text.get();
+```
+
+## Performance
+
+`go test ./internal/script -bench .` measures slices on an in-memory journal (Intel Xeon 2.1 GHz):
+
+| Benchmark | Time | Allocated |
+| --- | --- | --- |
+| Compile the SDK, once per process | 28 ms | 10.8 MB |
+| A runtime with the engine's globals | 0.2 ms | 0.13 MB |
+| A runtime with the SDK loaded | 4.2 ms | 2.5 MB |
+| `BenchmarkSlice`: a script that returns at once | 4.3 ms | 2.6 MB |
+| `BenchmarkReplay`: replaying 100 recorded Kiota requests | 55 ms | 29 MB |
+| `BenchmarkReplayHost`: the same 100 requests through the host directly | 5.9 ms | 3.1 MB |
+
+- **What is cached.** The SDK is compiled once per process and shared by every runtime, and scripts are compiled once per bundle hash. goja cannot persist compiled programs or snapshot a loaded runtime, so each slice still runs the SDK's top-level code: about 4 ms. A pool of runtimes prepared ahead of demand would hide that latency, not save the CPU.
+- **Kiota per call.** A replayed Kiota request costs about 0.5 ms; the engine's own share is about 15 µs. The bundle replaces `@opentelemetry/api` with a no-op tracer and `std-uritemplate` with an expander for Kiota's three template forms (`sdk/src/otel.ts`, `sdk/src/uritemplate.ts`), and JSON responses skip Kiota's byte round trip. Together these cut a slice by a quarter and a replayed request by over a third. What remains is Kiota's request objects and generated deserializers, which build a closure per model field for every response.
+- **Replay grows with history.** Every resume replays every recorded step, so a run's total replay time grows with its number of waits times its number of steps. A run with 50 requests spread over five waits replays for under 0.1 s in all. Long loops should use bulk operations or child runs, not thousands of requests in one run.
+- **Keep short waits warm.** The largest remaining saving is not replaying at all: a run waiting for a short operation, such as OCR of a page, can keep its runtime for a few seconds and continue in place when the wait is released, unloading only when the wait outlasts that window. This belongs in the scheduler.
+- **Operations run one at a time.** `dms.RunOperations` is one sequential worker, so a 500-page OCR delays every operation queued behind it, including index builds and bulk updates. Text reading needs its own lane, with claims, before scripts depend on it at volume.
+
 ## Remaining work
 
 1. **Run lifecycle.** Script definitions and immutable versions (source, bundle, hash, author), triggers declared by the script's export and extracted on save, run creation from domain events, manual starts and schedules, and run status.
 2. **Scheduler.** Claim runnable runs with leases (`FOR UPDATE SKIP LOCKED` on PostgreSQL), execute slices, mark runs ready when a wait is released, recover runs a dead process held, cancel, retry from the failed step, and retention. `ctx.sleep` and wait timeouts need deadlines on wait steps.
-3. **Operation endpoints.** OCR, embeddings, AI decisions, PDF composition and task approvals as operation endpoints with module scopes, per-caller admission limits, `Idempotency-Key` for external callers, cancellation, and cancelling a run's operations with the run.
+3. **Operation endpoints.** Embeddings, AI decisions, PDF composition and task approvals as operation endpoints like text reading, with module scopes, per-caller admission limits, `Idempotency-Key` for external callers, cancellation, cancelling a run's operations with the run, and worker lanes so long work does not hold up short operations.
 4. **Developer loop.** `papergo workflow dev` (watch, save a draft, start a run, stream logs and steps) and `papergo workflow test` (scripts' own tests on a disposable database with fake operations and a replay check that suspends after every step).
 5. **Cutover.** Port the built-in workflows to scripts, then delete the JSON interpreter, the visual editor, the DBOS runner, its tables and `runner_step_results`, and their docs, in the same change.
 6. **Contract fixes.** `BulkOperation` needs a discriminator; Kiota warns that it cannot deserialize it otherwise.

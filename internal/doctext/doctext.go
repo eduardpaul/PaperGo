@@ -8,9 +8,12 @@ package doctext
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"image"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -70,6 +73,27 @@ type Options struct {
 // Version changes when extraction changes what it reads, so stored results
 // made before are not reused.
 const Version = "doctext-1"
+
+// Settings identify how text is read, so a stored result is reused only for
+// the same reader, OCR engine and models, mode, page bound and languages.
+// pdf and engine may be nil.
+func Settings(o Options, pdf PDF, engine ocr.Engine) string {
+	parts := []string{Version, "ocr=" + o.OCR, "pages=" + strconv.Itoa(o.MaxPages), "languages=" + o.Hints + "/" + strings.Join(o.Languages, ",")}
+	if pdf != nil {
+		parts = append(parts, "pdf="+pdf.Name())
+	}
+	if engine != nil && o.OCR != OCRNever {
+		info := engine.Info()
+		parts = append(parts, "engine="+info.Engine)
+		for _, m := range info.Models {
+			parts = append(parts, m.Name+"="+m.SHA256)
+		}
+	} else {
+		parts = append(parts, "engine=none")
+	}
+	h := sha256.Sum256([]byte(strings.Join(parts, "\n")))
+	return hex.EncodeToString(h[:])
+}
 
 // Page is the text of one page, numbered from 1.
 type Page struct {
