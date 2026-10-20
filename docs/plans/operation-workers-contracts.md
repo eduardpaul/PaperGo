@@ -8,7 +8,7 @@ Status: **proposal for review**. This is the Phase 0 deliverable of [the operati
 - worker configuration, controls, residency and artifacts;
 - acceptance tests mapped to phases.
 
-Decisions D1–D9 are [settled](#settled-decisions); Phase 1 can start. CPU and memory budgets are out of scope (see the plan's deferred work).
+Decisions D1–D10 are [settled](#settled-decisions); Phase 1 can start. CPU and memory budgets are out of scope (see the plan's deferred work).
 
 ## 1. Inventory
 
@@ -617,5 +617,6 @@ Phase 1 follows the contracts above, with these concrete choices:
 - **D7:** `operations.error_code` with `deadline_exceeded`, `retries_exhausted` and `forbidden`.
 - **D8:** staging stays workflow-only. Operations return outputs by object reference; runs stage them; optimization and composition have no public routes.
 - **D9:** optimization and composition become operations (not workflow actions using only the OCR handle), so their compute and outputs outlive the current workflow engine.
+- **D10:** script runs are operations of kind `script.run`. The Phase 2 runtime schedules them like other kinds, with one queue, and parks waiting runs through `Park`/`Unpark`. A throwing script fails its run; infrastructure errors during a slice retry. Run history gets its own retention, and the runs API is a view over those operations (see [the script-engine plan](script-engine.md)).
 
 The script-engine branch is not in this checkout. Its document-text code and in-process API were not inspected, and Phase 3 extracts them when the branch is available.
