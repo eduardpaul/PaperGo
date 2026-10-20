@@ -52,7 +52,7 @@ Review concrete signatures, transaction boundaries and schema decisions before i
 
 1. **Submission identity and execution ownership.** Typed service/DAL methods to atomically bind an optional caller-scoped idempotency key to an accepted operation, select supported operation kinds, claim execution, renew/release a claim, defer a next attempt and checkpoint/complete under the current fencing token. Key binding and acceptance must share a transaction, as must claim selection and ownership. Completion, failure and supersession must invalidate stale executors. External computation runs outside the writer; result application verifies ownership inside its transaction.
 2. **Completion observation.** Durable terminal-state observation, independent of a particular workflow engine. Reuse existing operation live notifications and transactional events where sufficient. Notifications wake consumers; persisted state and reconciliation establish correctness. Core must not update script journal tables.
-3. **Resource ownership.** Durable payload references and source-file, temporary-output and staged-artifact ownership by an operation or module execution, independent of a workflow run. This includes `blob_leases`, `staged_files` and `activity_references`. Use a typed owner identity and explicit release/retention rules, including transfer to a result consumer or review; do not create fake workflow runs or infer liveness from opaque payloads.
+3. **Resource ownership.** Durable payload references, source-file leases and generated outputs owned by an operation or module execution, independent of a workflow run. This includes `blob_leases`, `activity_references` and operation result objects. Use a typed owner identity and explicit release/retention rules; do not create fake workflow runs or infer liveness from opaque payloads. Staging for review stays owned by workflow runs.
 4. **Module routes.** A bounded way for compiled modules to contribute authenticated feature routes and their OpenAPI contracts, using the request's subject and transaction-bound service. Reuse it for external requests and later in-process script requests. Reject duplicate routes/contracts at composition time. Preserve normal authorization, request limits and error handling.
 
 Reuse `operations`, activity records, references and existing notifications wherever they provide the necessary invariants. Do not add a second authoritative job queue or a generic job table by default. Keep policy/provider state in module namespaces. Before adding indexed ownership or due-time fields, demonstrate the query/atomicity requirement that existing records cannot meet and review the smallest generic schema change.
@@ -163,9 +163,9 @@ For local decisions, worker admission and native inference batching are separate
 
 ### Generated artifacts and retention
 
-Track source bytes, temporary outputs and published staged results as separate ownership boundaries. Protect output production and the interval between object storage and fenced result commit; define provisional staging ownership and recovery of writes left by a crash. Do not rely solely on the one-hour orphan-object grace period for long work.
+Track source bytes, generated outputs and staged results as separate ownership boundaries. Staging stays workflow-only: `staged_files` remains owned by a workflow run, with run-scoped promotion and discard.
 
-Transfer or add a durable reference when an output becomes an operation result or awaits review. A workflow ending, operation retention expiring or one consumer cancelling must not delete an artifact still retained by another consumer. Promotion to a current file must use the ordinary guarded domain write and atomically update its ownership. Failed/stale attempts may not publish artifacts; cleanup eventually collects their unreferenced objects. Apply this contract to staged PDFs, optimized images and durable provider input/output files as appropriate.
+An operation's generated output is an object referenced by its result while the operation is retained. The executor uploads it immediately before the fenced result commit, so the orphan grace period covers only that gap, never the computation. Failed/stale attempts may not publish outputs; cleanup collects their unreferenced objects. A workflow consumer stages the output for its run when it consumes the result, rechecking write access and source currency; promotion stays the ordinary guarded domain write. Operation retention expiring or one consumer cancelling must not delete an output already staged by another consumer.
 
 ## Implementation phases on main
 
@@ -184,13 +184,13 @@ Exit: reviewed contracts, state-transition diagram, schema rationale and accepta
 ### Phase 1 — Implement the generic operation sockets
 
 - Implement transactional claims, token-checked renewal/checkpoint/completion, deferral, cancellation and recovery on both engines.
-- Generalize byte/payload/staged-output ownership to typed owners. Pin the selected source version in the submission transaction and release it according to terminal state and consumer retention rules.
-- Implement atomic idempotent acceptance, workspace attribution, completion deadlines and fenced output publication, including provisional artifact ownership and retained result references. Verify payload conflicts, concurrent retries and retention boundaries through the typed DAL methods.
+- Generalize byte/payload ownership to typed owners. Pin the selected source version in the submission transaction and release it according to terminal state and consumer retention rules.
+- Implement atomic idempotent acceptance, workspace attribution, failure codes, completion deadlines and fenced output publication with retained result object references. Verify payload conflicts, concurrent retries and retention boundaries through the typed DAL methods.
 - Expose durable completion observation using existing mechanisms where possible. Cover completion before subscription and recovery after missed notifications.
 - Add module route composition and deterministic OpenAPI verification with authenticated request context. Do not add one feature field to `httpapi.API` per module.
 - Keep the operation's public status separate from execution ownership; waiting for a provider or admission does not mean failed.
 
-Exit: two competing executors cannot both commit; an expired executor cannot renew or commit; accepted work, its source bytes and staged outputs survive restart/reclamation without any workflow row.
+Exit: two competing executors cannot both commit; an expired executor cannot renew or commit; accepted work, its source bytes and its generated outputs survive restart/reclamation without any workflow row.
 
 ### Phase 2 — Implement the worker runtime module
 
@@ -214,10 +214,10 @@ Exit: fake feature modules demonstrate policy and lifecycle combinations; long b
 - Exercise on-demand, maximum idle and scheduled drain/warming residency with OCR.
 - Make the existing JSON workflow's document-text action a consumer of the operation, using the existing extensible wait/completion facilities. Delete its direct extraction execution path and duplicated result persistence. Any required general completion binding is a consumer of the Phase 1 socket.
 - Adopt the existing `file.optimize_image` and `file.compose_pdf` processing in document feature modules using the same OCR resource owner and worker execution policies. Replace direct interpreter execution and model access; preserve ordered photo selection, source-change guards, candidate/skipped results and explicit review/promotion. Do not introduce a second OCR gate.
-- Register typed operation routes/contracts for the processing actions as needed for API consumers; represent ordered selections and primary-item identity explicitly rather than requiring a workflow run. Keep approval and guarded promotion as explicit consumer/domain actions authorized against the staged file's owner.
-- Protect staged optimized images/PDFs through result consumption and review using the artifact ownership contract, including cancellation, failed guards, promotion and orphan recovery.
+- Optimization and composition operations are submitted by workflow actions only; they get no public routes, because staging and promotion stay workflow-owned. Their payloads still represent ordered selections and primary-item identity explicitly. The consuming run stages the output and keeps approval and guarded promotion.
+- Protect generated optimized images/PDFs from upload through consumption using the output retention contract, including cancellation, failed guards, run staging and orphan recovery.
 
-Exit: document processing works without workflow records; API and workflow callers use the same execution/lifecycle owner; changing a file during queued work cannot redirect processing to different bytes; existing optimization/composition retain guarded staging and review behavior without bypassing worker policy; every local model has one residency owner.
+Exit: document text works without workflow records; API and workflow callers use the same execution/lifecycle owner; changing a file during queued work cannot redirect processing to different bytes; existing optimization/composition retain guarded staging and review behavior without bypassing worker policy; every local model has one residency owner.
 
 ### Phase 4 — Move AI Batch ownership to its module
 
@@ -311,7 +311,7 @@ Use deterministic clocks and fake resources/providers for policy and crash tests
 | HTTP retries inside repeated worker execution | Total attempts and elapsed retry time stay within the operation budget; terminal failures do not block other work |
 | Pause / drain / unload / disable / flush | Documented control semantics; required polling/renewal continues and active native resources are retained until safe release |
 | One shared consumer cancelled / others remain | Cancelled consumer cannot publish success; remaining authorized consumers still complete; shared provider work is not cancelled indiscriminately |
-| Staged PDF/image written before crash / retained for review | Provisional/result references protect bytes; promotion is guarded; only unreferenced stale outputs are reclaimed |
+| Generated PDF/image written before crash / retained for review | Result references protect outputs; runs stage them with source checks; promotion is guarded; only unreferenced stale outputs are reclaimed |
 | Graceful shutdown and abrupt restart | No new claims during drain; unfinished work remains recoverable; resources close safely |
 | API versus current workflow versus later script | Same operation implementation, admission policy, resource owner and completion semantics |
 

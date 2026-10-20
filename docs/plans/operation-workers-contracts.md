@@ -8,7 +8,7 @@ Status: **proposal for review**. This is the Phase 0 deliverable of [the operati
 - worker configuration, controls, residency and artifacts;
 - acceptance tests mapped to phases.
 
-Decisions D1–D4 are settled. [D5–D8](#open-decisions) are still open, and Phase 1 starts once they are answered. CPU and memory budgets are out of scope (see the plan's deferred work).
+Decisions D1–D8 are [settled](#settled-decisions); Phase 1 can start. CPU and memory budgets are out of scope (see the plan's deferred work).
 
 ## 1. Inventory
 
@@ -41,7 +41,7 @@ Start routes answer `202` with `Location: /v1/operations/{id}`. Results are read
 | `document.read_text` | PDFium + OCR | DBOS step behind `workGate`; result in `blob_text` keyed by sha256 + settings | Phase 3: consumer of `document.text` |
 | `file.optimize_image` | OCR | Stages a WebP for the run; ports `candidate`/`skipped` | Phase 3: consumer of `document.optimize_image` |
 | `file.compose_pdf` | OCR | Stages a PDF for the primary item from ordered photos | Phase 3: consumer of `document.compose_pdf` |
-| `file.promote` | — | Promotes a staged file *of this run* (`runStaged`, `internal/dms/staged.go:215`) | Phase 3: promotes a staged file owned by the run, including one transferred from a consumed operation (§4) |
+| `file.promote` | — | Promotes a staged file *of this run* (`runStaged`, `internal/dms/staged.go:215`) | Unchanged: the run stages a consumed operation's output itself, then promotes it (§4) |
 | `ai.complete` (batch), `search.enrich` | Remote | Workflow waits, consumed by the `ai.batch` coordinator workflow | Phase 4: consumers of AI operations |
 | `ai.decide`, `taxonomy.decide` | Laya | DBOS step behind `workGate`; workspace-scoped result cache (`Results.Get(namespace, workspace, key)`) | Phase 5: consumers of decision operations |
 | `search.embed` | Embeddings | Immediate, or left to the sweep | Phase 6: consumer of the embedding module |
@@ -173,8 +173,7 @@ stateDiagram-v2
 2. **Terminal transitions clear ownership.** `Finish`, `Supersede`, `Cancel` and `Expire` clear the claim and `execution_id`. A stale executor's next fenced write affects no rows and returns `operations.ErrClaimLost`.
 3. **Terminal transitions release, in the same transaction:**
    - operation-owned blob leases;
-   - operation-owned activity references;
-   - `provisional` staged files of the operation.
+   - operation-owned activity references.
 
    They also write a live change (`Supersede` now does too).
 4. **Expiry is recovery.** An expired claim is ready again, with no startup sweep. A claimer that sees `attempts >= max_attempts` fails the operation with `retries_exhausted` instead of executing it.
@@ -305,7 +304,7 @@ func Retry(err error, after time.Duration) error // transient; after <= 0 uses b
 | Acceptance | `operationPermission` + `Validate` + quota + idempotency, then source leases, in one transaction |
 | Claim / step | `operationContext` + `operationPermission`, as today, with the two system exceptions |
 | Batch admission | Each member is rechecked; a revoked member fails alone with `forbidden` |
-| Result application | The fenced `Finish` transaction rechecks permission and the feature's freshness guards (staged sources, taxonomy fingerprint) |
+| Result application | The fenced `Finish` transaction rechecks permission and the feature's freshness guards (source currency, taxonomy fingerprint) |
 
 ## 3. The six clocks
 
@@ -326,7 +325,7 @@ func Retry(err error, after time.Duration) error // transient; after <= 0 uses b
 
 ### Typed owners (D4, settled)
 
-**`blob_leases` and `staged_files`.** `run_id` becomes nullable, and each table gains `operation_id TEXT REFERENCES operations(id) ON DELETE CASCADE` and `CHECK ((run_id IS NULL) <> (operation_id IS NULL))`, plus an index on `operation_id`. Reclamation only asks whether a lease exists, so it does not change.
+**`blob_leases`.** `run_id` becomes nullable, and the table gains `operation_id TEXT REFERENCES operations(id) ON DELETE CASCADE` and `CHECK ((run_id IS NULL) <> (operation_id IS NULL))`, plus an index on `operation_id`. Reclamation only asks whether a lease exists, so it does not change. `staged_files` keeps its required `run_id` (D8).
 
 **`activity_references`.** It gains `owner_kind TEXT NOT NULL CHECK (owner_kind IN ('run', 'wait', 'record', 'operation'))` (Go type `activitystore.OwnerKind`). The unique key becomes `(owner_kind, owner_id, record_id)`. `Purge` gets one explicit rule per kind:
 
@@ -343,32 +342,22 @@ func Retry(err error, after time.Duration) error // transient; after <= 0 uses b
 
 A source lease is taken at acceptance and released at the terminal transition. Results that outlive the source are stored separately; `blob_text` is keyed by content hash.
 
-### Staged outputs (D8)
+### Generated outputs (D8)
 
-`staged_files.state` gains `provisional`, so its states are `provisional | pending | promoted | discarded`. An operation stages output like this:
+Staging stays workflow-only: `staged_files` keeps `run_id NOT NULL`, its states and its run-scoped promotion and discard. Operations produce outputs; only a workflow run stages them.
 
-1. Compute the output (in memory or a temporary file), with its size and SHA-256.
-2. In a fenced transaction, insert a `provisional` staged row owned by the operation, with its object key.
-3. Upload the object.
-4. In a fenced `Finish`, set the row to `pending` and record its id in the result.
-
-Recovery and retention:
-
-- `ObjectReferenced` treats `provisional` and `pending` rows as references, so the upload is protected however long the work takes, not just for the one-hour grace period.
-- A crash leaves a `provisional` row. The next attempt or the terminal transition discards it, and the orphan sweep then collects its object.
-- A lost claim cannot publish, because step 4 is fenced.
-
-Who can promote or discard a `pending` staged row:
-
-- **API caller:** the operation's creator, with write access to the item, while the operation is retained. New routes: `POST /v1/staged-files/{id}/promote` and `POST /v1/staged-files/{id}/discard`. Promotion is the existing guarded `PromoteStagedFile`, authorized against the owner.
-- **Workflow consumer:** when the run's operation wait resolves, ownership moves from the operation to the run in the resolving transaction (`TransferStaged(id, operationID → runID)`). After that, `file.promote` keeps its "staged file of this run" rule. A run that is cancelled before it resolves leaves the file with the operation.
-- **Retention:** operation retention deletes the operation, which cascades to its staged rows. Run retention discards a run's pending rows, as today. Unreferenced objects are collected afterwards.
+1. The executor computes the output (in memory or a temporary file), uploads it as an object, and immediately applies the fenced `Finish`. The result records `object_key`, size, SHA-256, the sources it was made from, and the feature's outcome (for example `candidate` or `skipped`).
+2. `ObjectReferenced` generalizes its portability-specific operation check. A kind registered as producing objects keeps its result's `object_key` referenced while the succeeded operation is retained; `portability.export` keeps its `expires_at` rule and `portability.import` its pending-payload rule. `blobs.Packages` becomes this registered set.
+3. Between upload and commit there is one transaction, so the one-hour orphan grace period covers it however long the computation took. A lost claim or a crash in that gap leaves an unreferenced object that the orphan sweep collects. Failed and stale attempts never publish an output.
+4. **Workflow consumer.** When the run's operation wait resolves, the resolving transaction stages the output for the run with the ordinary `StageFile` (write access and source currency are rechecked there; a changed source follows `skipped`). From then on the staged row references the object as it does today, and `file.promote` and run retention are unchanged.
+5. **API caller.** `document.optimize_image` and `document.compose_pdf` have no public routes in this plan: an API caller could not stage or promote their output. Their operations are submitted by workflow actions only. Document text keeps its public route.
+6. Cancelling, superseding or expiring an operation before it succeeds publishes nothing. Cancelling a workflow consumer after the output was staged follows run cancellation, as today.
 
 ## 5. Completion observation (socket 2)
 
 - **Durable state is the truth.** A consumer records the operation id in its own state, then reads it with `Finished(ids)`, so an operation that finished before the consumer subscribed needs no special case.
 - **Wake-up.** `dms.Service.OnOperationsFinished(func(ids []string))` runs after commit for transactions that moved operations to a terminal state. `cmd/api` wires it to `Runner.Wake`. Live changes keep serving SSE clients.
-- **Workflow consumer.** `internal/workflow` registers a wait resolver of kind `operation` (key = operation id) that uses `Finished`, transfers staged ownership, and completes the wait with `{status, error_code, result}`. Core never writes `workflow_waits`.
+- **Workflow consumer.** `internal/workflow` registers a wait resolver of kind `operation` (key = operation id) that uses `Finished`, stages generated outputs for the run (§4), and completes the wait with `{status, error_code, result}`. Core never writes `workflow_waits`.
 - Operations raise no domain events.
 
 ## 6. Module routes (socket 4)
@@ -544,7 +533,7 @@ Maintenance tasks (`RegisterMaintenance(name, every, fn)`) stop the same way.
 - `POST /v1/operations/{id}/cancel`, for the creator or with `organization.manage`. It returns `409` when the operation is already terminal.
 - Cancel, supersede and expire all:
   - clear the claim and `execution_id`;
-  - release leases, references and provisional outputs;
+  - release leases and references;
   - write a live change and call the finished hook.
 - **Shared membership:** the provider batch completes for its other members. `FinishMember` skips non-pending members, and valid answers may still fill the reusable cache. Cancellation is terminal at once for the cancelled operation.
 - **Running local execution:** its context is cancelled at the next renewal (`ErrClaimLost`). Native inference returns through ONNX Runtime cancellation, and only then is the handle released.
@@ -574,7 +563,7 @@ Maintenance tasks (`RegisterMaintenance(name, every, fn)`) stop the same way.
 | Concurrent API retries / key conflict / key after retention | 1 | DAL unique-index race; `httpapi` replay and `409` |
 | Overload at acceptance | 1 | Quota counts per creator, workspace and installation; nothing persisted |
 | Source replaced / history collected while queued | 1, 3 | Operation lease blocks reclamation; end-to-end upload during the queue |
-| Staged output before crash / retained for review | 1, 3 | Provisional row protects the object; discard on retry; transfer to a run; promotion guards |
+| Generated output before crash / retained for review | 1, 3 | Result `object_key` keeps the object while the operation is retained; crash before commit leaves a collectable orphan; run staging rechecks sources; promotion guards unchanged |
 | Revoked caller / cancelled / superseded / one shared consumer cancelled | 1, 4 | Fenced finish; member skip with a fake provider |
 | Completion deadline (also while parked) | 1, 4 | `Expire` on a fake clock; batch continues |
 | Long OCR versus short maintenance | 2 | Blocking fake executor in one worker; `field_index` in another |
@@ -598,13 +587,10 @@ Maintenance tasks (`RegisterMaintenance(name, every, fn)`) stop the same way.
 - **D1:** execution columns on `operations`.
 - **D2:** `cancelled` status and the cancel route in Phase 1.
 - **D3:** single OpenAPI file with a route parity test.
-- **D4:** foreign-key owners on `blob_leases` and `staged_files`, and `owner_kind` on `activity_references`.
-
-## Open decisions
-
-- **D5 — Idempotency storage.** Store `idempotency_key` and `payload_digest` on `operations` with the unique expression index, so a binding lives exactly as long as its operation. *Recommended.* The alternative is a separate binding table with its own retention.
-- **D6 — Workspace attribution.** Add `operations.workspace_id`. *Recommended:* quota, fairness and the decision cache scope read it without joining `resources`, and inline requests have no container. The alternative is to join through `container_id` and give inline requests a workspace container.
-- **D7 — Failure codes.** Add `operations.error_code` with the fixed set `deadline_exceeded`, `retries_exhausted` and `forbidden`, so clients and workflow consumers can branch without parsing text. *Recommended.* The alternative is to encode the reason only in `error` text.
-- **D8 — Staged outputs.** Add the `provisional` staged state and ownership transfer to the consuming run, with promote and discard routes for API callers. *Recommended.* The alternative is to keep staged outputs workflow-only and give API callers optimization and composition results without staging.
+- **D4:** foreign-key owners on `blob_leases`, and `owner_kind` on `activity_references`.
+- **D5:** `idempotency_key` and `payload_digest` on `operations`; a binding lives as long as its operation.
+- **D6:** `operations.workspace_id`.
+- **D7:** `operations.error_code` with `deadline_exceeded`, `retries_exhausted` and `forbidden`.
+- **D8:** staging stays workflow-only. Operations return outputs by object reference; runs stage them; optimization and composition have no public routes.
 
 The script-engine branch is not in this checkout. Its document-text code and in-process API were not inspected, and Phase 3 extracts them when the branch is available.
