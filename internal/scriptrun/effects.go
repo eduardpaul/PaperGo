@@ -47,7 +47,7 @@ func (e *Effects) Request(ctx context.Context, run script.Run, unsaved []runs.St
 	var response script.Response
 	err := e.DMS.Write(ctx, func(t *dms.Service) error {
 		var err error
-		if response, err = serve(ctx, e.API.Loopback(t, run.Author), req); err != nil {
+		if response, err = serve(ctx, e.API.Loopback(t, run.Author, run.ID), req); err != nil {
 			return err
 		}
 		if response.Status >= 500 {

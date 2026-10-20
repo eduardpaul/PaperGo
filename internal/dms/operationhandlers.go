@@ -453,6 +453,43 @@ func (s *Service) SaveOperation(ctx context.Context, op *operations.Operation) e
 	return nil
 }
 
+// ParkOperations makes claimed operations members of the durable module
+// execution executionID, such as a provider batch or a waiting script run,
+// releasing their claims: they hold no worker until FinishParkedOperation
+// ends them or UnparkOperations returns them to the queue. Call it on a
+// service bound to a write.
+func (s *Service) ParkOperations(ctx context.Context, ops []*operations.Operation, executionID string) error {
+	now := time.Now()
+	for _, op := range ops {
+		if err := s.DAL.Operations().Park(ctx, []string{op.ID}, op.Claim, executionID, now); err != nil {
+			return err
+		}
+		op.ExecutionID, op.Claim = executionID, operations.Claim{}
+	}
+	return nil
+}
+
+// FinishParkedOperation ends op, a pending member of executionID, with its
+// terminal status. operations.ErrClaimLost means it ended or left the
+// execution meanwhile.
+func (s *Service) FinishParkedOperation(ctx context.Context, op *operations.Operation, executionID string) error {
+	if err := s.DAL.Operations().FinishMember(ctx, op, executionID, time.Now()); err != nil {
+		return err
+	}
+	s.operationsFinished(op.ID)
+	return nil
+}
+
+// UnparkOperations returns the pending members of executionID among ids
+// to the queue, ready at at; members that ended stay ended.
+func (s *Service) UnparkOperations(ctx context.Context, executionID string, ids []string, at time.Time) error {
+	if err := s.DAL.Operations().Unpark(ctx, executionID, ids, at, time.Now()); err != nil {
+		return err
+	}
+	s.wakeOperations()
+	return nil
+}
+
 // operationsFinished records operations this write ended, for the hook that
 // runs after it commits.
 func (s *Service) operationsFinished(ids ...string) {

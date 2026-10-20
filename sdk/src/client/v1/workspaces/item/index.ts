@@ -8,6 +8,8 @@ import { MembersRequestBuilderNavigationMetadata, MembersRequestBuilderRequestsM
 // @ts-ignore
 import { RelationshipsRequestBuilderNavigationMetadata, RelationshipsRequestBuilderRequestsMetadata, type RelationshipsRequestBuilder } from './relationships/index.js';
 // @ts-ignore
+import { SearchRequestBuilderNavigationMetadata, type SearchRequestBuilder } from './search/index.js';
+// @ts-ignore
 import { SmartFoldersRequestBuilderNavigationMetadata, type SmartFoldersRequestBuilder } from './smartFolders/index.js';
 // @ts-ignore
 import { TasksRequestBuilderRequestsMetadata, type TasksRequestBuilder } from './tasks/index.js';
@@ -32,6 +34,10 @@ export interface WorkspacesItemRequestBuilder extends BaseRequestBuilder<Workspa
      * The relationships property
      */
     get relationships(): RelationshipsRequestBuilder;
+    /**
+     * The search property
+     */
+    get search(): SearchRequestBuilder;
     /**
      * The smartFolders property
      */
@@ -63,6 +69,9 @@ export const WorkspacesItemRequestBuilderNavigationMetadata: Record<Exclude<keyo
     relationships: {
         requestsMetadata: RelationshipsRequestBuilderRequestsMetadata,
         navigationMetadata: RelationshipsRequestBuilderNavigationMetadata,
+    },
+    search: {
+        navigationMetadata: SearchRequestBuilderNavigationMetadata,
     },
     smartFolders: {
         navigationMetadata: SmartFoldersRequestBuilderNavigationMetadata,

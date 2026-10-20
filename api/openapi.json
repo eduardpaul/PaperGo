@@ -17776,6 +17776,110 @@
             "$ref": "#/components/responses/Problem"
           }
         }
+      },
+      "post": {
+        "tags": [
+          "Documents"
+        ],
+        "operationId": "renderItemPreview",
+        "summary": "Render a preview of the item's current file",
+        "description": "Starts rendering a first-page WebP preview, under 100 KiB and 800 pixels, of the item's current file as a background operation; GET /v1/items/{id}/preview serves it. Previews are kept once per file bytes, so bytes rendered before finish at once. Requires document.write and write access to the item.",
+        "x-required-scopes": [
+          "document.write"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An Idempotency-Key returned the operation this request accepted earlier.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              },
+              "Idempotent-Replayed": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Queued operation. Follow Location; its result is a PreviewResult.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "description": "Too many pending operations for the caller, the workspace or the installation (code operation_quota). Nothing was accepted; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/v1/workspaces/{id}/keywords": {
@@ -18737,6 +18841,1322 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/v1/items/{id}/search/chunks": {
+      "post": {
+        "tags": [
+          "Search"
+        ],
+        "operationId": "chunkItemText",
+        "summary": "Stage chunks of a file's text for search",
+        "description": "Splits text read from the item's file, or text given directly, into chunks and stages them in the search store under a generation, which POST /v1/search/generations/{id}/publish makes searchable. A new generation is identified by this operation's ID. Requires document.write and write access to the item. 422 when the deployment has no search store.",
+        "x-required-scopes": [
+          "document.write"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChunkText"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "An Idempotency-Key returned the operation this request accepted earlier.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              },
+              "Idempotent-Replayed": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Queued operation. Follow Location; its result is a ChunkResult.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "description": "Too many pending operations for the caller, the workspace or the installation (code operation_quota). Nothing was accepted; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/search/generations/{id}/chunks": {
+      "get": {
+        "tags": [
+          "Search"
+        ],
+        "operationId": "generationChunks",
+        "summary": "Chunks of a generation",
+        "description": "The staged or published chunks of a generation the caller started, by part and ordinal, a page at a time.",
+        "x-required-scopes": [
+          "document.read"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The generation: the ID of the chunk operation that started it."
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "1 to 100, 20 when omitted."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationChunkPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/search/generations/{id}/enrichments": {
+      "put": {
+        "tags": [
+          "Search"
+        ],
+        "operationId": "enrichGeneration",
+        "summary": "Set model-written context on chunks",
+        "description": "Sets the enrichment of chunks of a generation the caller started; chunks it does not name keep theirs. The enrichment is searched with its chunk and embedded with it, so embed after enriching.",
+        "x-required-scopes": [
+          "document.read"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The generation: the ID of the chunk operation that started it."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerationEnrichments"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Done"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/search/generations/{id}/embeddings": {
+      "post": {
+        "tags": [
+          "Search"
+        ],
+        "operationId": "embedGeneration",
+        "summary": "Embed a generation for semantic search",
+        "description": "Gives the chunks of a generation the caller started their embedding vectors, reusing vectors of equal chunk inputs. Without an embedding model, or when the model fails, the result says why and the embedding sweep embeds the chunks once they are published.",
+        "x-required-scopes": [
+          "document.write"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The generation: the ID of the chunk operation that started it."
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An Idempotency-Key returned the operation this request accepted earlier.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              },
+              "Idempotent-Replayed": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Queued operation. Follow Location; its result is a EmbedResult.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "description": "Too many pending operations for the caller, the workspace or the installation (code operation_quota). Nothing was accepted; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/search/generations/{id}/publish": {
+      "post": {
+        "tags": [
+          "Search"
+        ],
+        "operationId": "publishGeneration",
+        "summary": "Make a generation the searchable content of its file",
+        "description": "Replaces the searchable content of the generation's file version with the generation, unless the item is gone or no longer has that file: a slow workflow never replaces a newer file's content.",
+        "x-required-scopes": [
+          "document.write"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The generation: the ID of the chunk operation that started it."
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An Idempotency-Key returned the operation this request accepted earlier.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              },
+              "Idempotent-Replayed": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Queued operation. Follow Location; its result is a PublishResult.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "description": "Too many pending operations for the caller, the workspace or the installation (code operation_quota). Nothing was accepted; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{id}/search/sync": {
+      "post": {
+        "tags": [
+          "Search"
+        ],
+        "operationId": "syncSearch",
+        "summary": "Bring search entries up to date",
+        "description": "Rewrites the search documents of resources of the workspace from their current state, and removes those of resources that are gone. Syncing again is harmless. Requires read access to the workspace; a resource of another workspace is refused.",
+        "x-required-scopes": [
+          "workspace.read"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchSync"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchSyncResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{id}/search/term-entries": {
+      "get": {
+        "tags": [
+          "Search"
+        ],
+        "operationId": "searchTermEntries",
+        "summary": "Resources holding terms",
+        "description": "Lists, 500 at a time, the resources of the workspace, or of one of its collections, holding any of the terms or the terms merged into them: the entries a relabel or merge changes. Requires manage access to the workspace.",
+        "x-required-scopes": [
+          "workspace.read"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "term_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "description": "1 to 20 terms."
+          },
+          {
+            "name": "collection_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The next of the previous page."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TermEntries"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/ai/completions": {
+      "post": {
+        "tags": [
+          "AI"
+        ],
+        "operationId": "startCompletion",
+        "summary": "Ask the chat model",
+        "description": "Asks the configured chat model to do something with text or an image: summarize it, extract values, clean it up. Immediate completions call the model as soon as a worker is free; batch completions wait for their queue's group and are sent as a provider batch. Answers are cached: the same model, prompt, schema and input reuse the answer. Requires document.read and access to the item or workspace. 422 without the model the execution needs.",
+        "x-required-scopes": [
+          "document.read"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompletionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "An Idempotency-Key returned the operation this request accepted earlier.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              },
+              "Idempotent-Replayed": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Queued operation. Follow Location; its result is a CompletionResult.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "description": "Too many pending operations for the caller, the workspace or the installation (code operation_quota). Nothing was accepted; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/ai/decisions": {
+      "post": {
+        "tags": [
+          "AI"
+        ],
+        "operationId": "startDecision",
+        "summary": "Answer questions with the local decision engine",
+        "description": "Answers ordered choice, noul or ordinal score questions about text, JSON data or a document with probability scores. Requires document.read. 422 without the decision engine.",
+        "x-required-scopes": [
+          "document.read"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "An Idempotency-Key returned the operation this request accepted earlier.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              },
+              "Idempotent-Replayed": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Queued operation. Follow Location; its result is a DecisionResult.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "description": "Too many pending operations for the caller, the workspace or the installation (code operation_quota). Nothing was accepted; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/ai/taxonomy-decisions": {
+      "post": {
+        "tags": [
+          "AI"
+        ],
+        "operationId": "startTaxonomyDecision",
+        "summary": "Pick managed terms for a document",
+        "description": "Evaluates active terms of an organization term set and returns the accepted term IDs, every candidate's score and a taxonomy guard for updating the item. The operation fails when the item's file or the term set changed while it ran. Requires document.read and taxonomy read access. 422 without the decision engine.",
+        "x-required-scopes": [
+          "document.read"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaxonomyDecisionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "An Idempotency-Key returned the operation this request accepted earlier.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              },
+              "Idempotent-Replayed": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Queued operation. Follow Location; its result is a DecisionResult.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "description": "Too many pending operations for the caller, the workspace or the installation (code operation_quota). Nothing was accepted; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/items/{id}/optimize-image": {
+      "post": {
+        "tags": [
+          "Documents"
+        ],
+        "operationId": "optimizeItemImage",
+        "summary": "Propose a smaller copy of an image",
+        "description": "Analyzes the text of the item's current JPEG, PNG or WebP image with OCR and stages a smaller WebP copy whose smallest text keeps the target height. The result gives the reason when the original is kept: the format is not supported, the image is animated, has no reliable text or would not get smaller, or a newer file replaced file_version. Staged files belong to the workflow run that made them, so only a workflow script can call this; 422 for other clients.",
+        "x-required-scopes": [
+          "document.write"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OptimizeImage"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "An Idempotency-Key returned the operation this request accepted earlier.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              },
+              "Idempotent-Replayed": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Queued operation. Follow Location; its result is a OptimizeImageResult.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "description": "Too many pending operations for the caller, the workspace or the installation (code operation_quota). Nothing was accepted; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/items/{id}/compose-pdf": {
+      "post": {
+        "tags": [
+          "Documents"
+        ],
+        "operationId": "composeItemPDF",
+        "summary": "Combine photos into one searchable PDF",
+        "description": "Combines the current files of photo items of the item's list or library into one PDF in page order, staged for the item. Each page is turned upright and shrunk so its smallest text keeps target_height, and OCR places the recognized text invisibly on it. The operation fails when a photo changes before the PDF is staged. Requires write access to every photo. Staged files belong to the workflow run that made them, so only a workflow script can call this; 422 for other clients.",
+        "x-required-scopes": [
+          "document.write"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ComposePDF"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "An Idempotency-Key returned the operation this request accepted earlier.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              },
+              "Idempotent-Replayed": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Queued operation. Follow Location; its result is a ComposePDFResult.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "description": "Too many pending operations for the caller, the workspace or the installation (code operation_quota). Nothing was accepted; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/staged-files/{id}/promote": {
+      "post": {
+        "tags": [
+          "Documents"
+        ],
+        "operationId": "promoteStagedFile",
+        "summary": "Make a staged file its item's current file",
+        "description": "Makes a staged file of the calling run its item's current file, as a new file version. Fails with 409 when a file it was made from is no longer current. With recycle_sources, moves the other source items to the recycle bin in the same transaction. Staged files belong to the workflow run that made them, so only a workflow script can call this; 422 for other clients.",
+        "x-required-scopes": [
+          "document.write"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromoteStagedFile"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromotedFile"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/staged-files/{id}/discard": {
+      "post": {
+        "tags": [
+          "Documents"
+        ],
+        "operationId": "discardStagedFile",
+        "summary": "Discard a staged file",
+        "description": "Discards a staged file of the calling run; its item keeps its current file. Staged files belong to the workflow run that made them, so only a workflow script can call this; 422 for other clients.",
+        "x-required-scopes": [
+          "document.write"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Done"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/items/{id}/content/reclaim": {
+      "post": {
+        "tags": [
+          "Documents"
+        ],
+        "operationId": "reclaimFileVersion",
+        "summary": "Free a file version's bytes",
+        "description": "Asks to free the bytes of a file version of the item after the grace period, such as an original a smaller copy replaced. The version keeps its number, filename, media type, size and checksum. Current, published and staged files defer it, with the reason. Asking again does not move the deadline. Requires write access to the item.",
+        "x-required-scopes": [
+          "document.write"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReclaimFileVersion"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReclaimedFileVersion"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
           }
         }
       }
@@ -26987,6 +28407,870 @@
             "description": "The text had been read before with the same settings."
           }
         }
+      },
+      "PreviewResult": {
+        "type": "object",
+        "properties": {
+          "item_id": {
+            "type": "string"
+          },
+          "blob_id": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean",
+            "description": "A preview exists; false means the file cannot be rendered."
+          },
+          "reused": {
+            "type": "boolean",
+            "description": "The bytes had been rendered before."
+          }
+        },
+        "required": [
+          "item_id",
+          "blob_id",
+          "ready",
+          "reused"
+        ],
+        "description": "The result of a preview operation.",
+        "additionalProperties": false
+      },
+      "ChunkText": {
+        "type": "object",
+        "properties": {
+          "text_id": {
+            "type": "string",
+            "description": "The text_id of a read of the file's text (POST /v1/items/{id}/text)."
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 1048576,
+            "description": "Instead of text_id: text given directly, such as a summary."
+          },
+          "blob_id": {
+            "type": "string",
+            "description": "The file version; the item's current file when omitted."
+          },
+          "chunker": {
+            "type": "string",
+            "enum": [
+              "window",
+              "pages",
+              "paragraphs",
+              "headings",
+              "whole"
+            ],
+            "description": "window (the default): overlapping windows of each page; pages: a chunk per page; paragraphs: paragraphs merged up to the size; headings: sections, each starting with its heading; whole: the whole text as one chunk."
+          },
+          "max_chars": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 20000,
+            "description": "Chunk size, 1200 when omitted."
+          },
+          "overlap": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5000,
+            "description": "Characters consecutive windows share, 150 when omitted."
+          },
+          "max_chunks": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2000,
+            "description": "400 when omitted."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "content",
+              "summary",
+              "extract"
+            ],
+            "description": "content when omitted."
+          },
+          "generation": {
+            "type": "string",
+            "description": "Add the chunks to this generation the caller started for the same file version; a new generation when omitted."
+          }
+        },
+        "description": "What text to chunk and how. Give text_id or text.",
+        "additionalProperties": false
+      },
+      "ChunkResult": {
+        "type": "object",
+        "properties": {
+          "generation": {
+            "type": "string",
+            "description": "The generation: the ID of the operation that started it."
+          },
+          "chunks": {
+            "type": "integer"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "item_id": {
+            "type": "string"
+          },
+          "blob_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "generation",
+          "chunks",
+          "truncated",
+          "item_id",
+          "blob_id"
+        ],
+        "description": "The result of a chunk operation.",
+        "additionalProperties": false
+      },
+      "GenerationChunk": {
+        "type": "object",
+        "properties": {
+          "part": {
+            "type": "string",
+            "description": "The chunk operation that staged the chunk."
+          },
+          "ordinal": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "enrichment": {
+            "type": "string"
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "The text was cut to keep the page within its budget."
+          }
+        },
+        "required": [
+          "part",
+          "ordinal",
+          "kind",
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "GenerationChunkPage": {
+        "type": "object",
+        "properties": {
+          "chunks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GenerationChunk"
+            }
+          },
+          "next_offset": {
+            "type": "integer"
+          },
+          "more": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "chunks",
+          "next_offset",
+          "more"
+        ],
+        "additionalProperties": false
+      },
+      "GenerationEnrichments": {
+        "type": "object",
+        "properties": {
+          "enrichments": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 2000,
+            "items": {
+              "type": "object",
+              "properties": {
+                "part": {
+                  "type": "string"
+                },
+                "ordinal": {
+                  "type": "integer"
+                },
+                "text": {
+                  "type": "string",
+                  "maxLength": 4000
+                }
+              },
+              "required": [
+                "part",
+                "ordinal",
+                "text"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "enrichments"
+        ],
+        "additionalProperties": false
+      },
+      "EmbedResult": {
+        "type": "object",
+        "properties": {
+          "generation": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "embedded": {
+            "type": "integer"
+          },
+          "reused": {
+            "type": "integer"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why vectors were left to the embedding sweep, which embeds published chunks without them."
+          }
+        },
+        "required": [
+          "generation",
+          "embedded",
+          "reused"
+        ],
+        "description": "The result of an embed operation.",
+        "additionalProperties": false
+      },
+      "PublishResult": {
+        "type": "object",
+        "properties": {
+          "generation": {
+            "type": "string"
+          },
+          "published": {
+            "type": "boolean"
+          },
+          "item_id": {
+            "type": "string"
+          },
+          "blob_id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why the generation was not published: the item is gone or no longer has the file it was made from."
+          }
+        },
+        "required": [
+          "generation",
+          "published",
+          "item_id",
+          "blob_id"
+        ],
+        "description": "The result of a publish operation.",
+        "additionalProperties": false
+      },
+      "SearchSync": {
+        "type": "object",
+        "properties": {
+          "resource_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 500,
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "resource_ids"
+        ],
+        "additionalProperties": false
+      },
+      "SearchSyncResult": {
+        "type": "object",
+        "properties": {
+          "written": {
+            "type": "integer"
+          },
+          "removed": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "written",
+          "removed"
+        ],
+        "additionalProperties": false
+      },
+      "TermEntries": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "next": {
+            "type": "string",
+            "description": "The after of the next page; omitted on the last."
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "CompletionRequest": {
+        "type": "object",
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8000,
+            "description": "What to do with the input."
+          },
+          "input": {
+            "type": "string",
+            "description": "Text to work on."
+          },
+          "workspace_id": {
+            "type": "string",
+            "description": "Where a request on text given directly is made."
+          },
+          "item_id": {
+            "type": "string",
+            "description": "The item whose file text_id or image_blob_id are."
+          },
+          "text_id": {
+            "type": "string",
+            "description": "Instead of input: a text read from the item's file version blob_id."
+          },
+          "blob_id": {
+            "type": "string",
+            "description": "With text_id: the file version; the current one when omitted."
+          },
+          "image_blob_id": {
+            "type": "string",
+            "description": "An image file version of the item the model sees, alone or with text."
+          },
+          "max_chars": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 200000,
+            "description": "Characters of the input sent, 20000 when omitted."
+          },
+          "output_schema": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "A form schema of an object: the answer is JSON matching it, else text."
+          },
+          "execution": {
+            "type": "string",
+            "enum": [
+              "immediate",
+              "batch"
+            ],
+            "description": "immediate calls the model now; batch sends the request in a provider batch, which its worker admits in groups per queue. The deployment's default when omitted."
+          },
+          "queue": {
+            "type": "string",
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "description": "The batch queue, shared when omitted."
+          }
+        },
+        "required": [
+          "prompt"
+        ],
+        "description": "A completion. Give item_id with text_id or image_blob_id, else workspace_id.",
+        "additionalProperties": false
+      },
+      "CompletionResult": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "json": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "cached": {
+            "type": "boolean"
+          },
+          "model": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "cached",
+          "model"
+        ],
+        "description": "The answer: json with an output_schema, else text.",
+        "additionalProperties": false
+      },
+      "DecisionRequest": {
+        "type": "object",
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "description": "Where a decision on input or data is made."
+          },
+          "input": {
+            "type": "string",
+            "maxLength": 16384,
+            "description": "Text to decide about."
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "JSON data to decide about."
+          },
+          "item_id": {
+            "type": "string"
+          },
+          "text_id": {
+            "type": "string",
+            "description": "A text read from the item's current file version blob_id."
+          },
+          "blob_id": {
+            "type": "string"
+          },
+          "context": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "With text_id: document context shown with the text."
+          },
+          "questions": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "choice",
+                    "noul",
+                    "score"
+                  ],
+                  "description": "choice selects an option; noul returns the true probability; score is the expected zero-based ordinal level."
+                },
+                "instructions": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "options": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 20,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "key": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      },
+                      "text": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "text"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "key",
+                "instructions",
+                "options"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "questions"
+        ],
+        "description": "Questions about text, JSON data or a document: exactly one of input, data or text_id.",
+        "additionalProperties": false
+      },
+      "TaxonomyDecisionRequest": {
+        "type": "object",
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "description": "Where a decision on input or data is made."
+          },
+          "input": {
+            "type": "string",
+            "maxLength": 16384,
+            "description": "Text to decide about."
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "JSON data to decide about."
+          },
+          "item_id": {
+            "type": "string"
+          },
+          "text_id": {
+            "type": "string",
+            "description": "A text read from the item's current file version blob_id."
+          },
+          "blob_id": {
+            "type": "string"
+          },
+          "context": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "With text_id: document context shown with the text."
+          },
+          "term_set_id": {
+            "type": "string"
+          },
+          "selection": {
+            "type": "string",
+            "enum": [
+              "multiple",
+              "single"
+            ],
+            "description": "multiple (the default) compares each term independently; single makes one joint choice."
+          },
+          "threshold": {
+            "type": "number",
+            "exclusiveMinimum": 0.5,
+            "maximum": 1,
+            "description": "Probability a term needs, 0.8 when omitted. Experimental scores, not calibrated confidence."
+          },
+          "question": {
+            "type": "string"
+          },
+          "other_text": {
+            "type": "string"
+          },
+          "root_term_id": {
+            "type": "string"
+          },
+          "term_ids": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "string"
+            }
+          },
+          "leaf_only": {
+            "type": "boolean"
+          },
+          "description_overrides": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "properties": {
+                "term_id": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "term_id",
+                "text"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "term_set_id"
+        ],
+        "description": "Picks active terms of an organization term set for text, data or a document.",
+        "additionalProperties": false
+      },
+      "DecisionResult": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "answers by question key; a taxonomy decision has term_ids, scores, other_probability and taxonomy_guard instead. Every result has model, input_hash, cached and, for a document, source.",
+        "properties": {
+          "answers": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "term_set_id": {
+            "type": "string"
+          },
+          "selection": {
+            "type": "string"
+          },
+          "strategy": {
+            "type": "string"
+          },
+          "term_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "scores": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "other_probability": {
+            "type": "number"
+          },
+          "taxonomy_guard": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "source": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "model": {
+            "type": "string"
+          },
+          "input_hash": {
+            "type": "string"
+          },
+          "cached": {
+            "type": "boolean"
+          }
+        }
+      },
+      "OptimizeImage": {
+        "type": "object",
+        "properties": {
+          "target_height": {
+            "type": "number",
+            "minimum": 4,
+            "maximum": 200,
+            "description": "Height in pixels the smallest text keeps, 12 when omitted."
+          },
+          "min_confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Detector score a text line needs, 50 when omitted."
+          },
+          "percentile": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Percentile of the text heights taken as the smallest text, 5 when omitted."
+          },
+          "max_analysis_dimension": {
+            "type": "integer",
+            "minimum": 256,
+            "maximum": 2600,
+            "description": "Longest side of the copy analyzed, 2600 when omitted."
+          },
+          "minimum_scale": {
+            "type": "number",
+            "minimum": 0.01,
+            "maximum": 1,
+            "description": "How far the image may shrink, 0.05 when omitted."
+          },
+          "quality": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "WebP quality, 80 when omitted."
+          },
+          "file_version": {
+            "type": "integer",
+            "description": "The file version the workflow was started for: a newer one is kept as it is."
+          }
+        },
+        "additionalProperties": false
+      },
+      "OptimizeImageResult": {
+        "type": "object",
+        "properties": {
+          "staged_file_id": {
+            "type": "string",
+            "description": "The staged WebP copy."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why the original is kept."
+          },
+          "item_id": {
+            "type": "string"
+          },
+          "blob_id": {
+            "type": "string"
+          },
+          "file_version": {
+            "type": "integer"
+          },
+          "metrics": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "item_id",
+          "blob_id",
+          "file_version"
+        ],
+        "description": "A staged copy, or the reason the original is kept.",
+        "additionalProperties": false
+      },
+      "ComposePDF": {
+        "type": "object",
+        "properties": {
+          "item_ids": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "type": "string"
+            },
+            "description": "The photo items in page order, the item among them; the item alone when omitted."
+          },
+          "target_height": {
+            "type": "number",
+            "minimum": 8,
+            "maximum": 200,
+            "description": "Height in pixels the smallest text of each page keeps, 32 when omitted; pages never grow."
+          },
+          "quality": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "JPEG quality, 80 when omitted."
+          }
+        },
+        "additionalProperties": false
+      },
+      "ComposePDFResult": {
+        "type": "object",
+        "properties": {
+          "staged_file_id": {
+            "type": "string"
+          },
+          "item_id": {
+            "type": "string"
+          },
+          "others": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "pages": {
+            "type": "integer"
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "metrics": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "staged_file_id",
+          "item_id",
+          "others",
+          "pages",
+          "bytes"
+        ],
+        "additionalProperties": false
+      },
+      "PromoteStagedFile": {
+        "type": "object",
+        "properties": {
+          "recycle_sources": {
+            "type": "boolean",
+            "description": "Move the other source items to the recycle bin with the promotion."
+          }
+        },
+        "additionalProperties": false
+      },
+      "PromotedFile": {
+        "type": "object",
+        "properties": {
+          "item_id": {
+            "type": "string"
+          },
+          "blob_id": {
+            "type": "string"
+          },
+          "file_version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "item_id",
+          "blob_id",
+          "file_version"
+        ],
+        "additionalProperties": false
+      },
+      "ReclaimFileVersion": {
+        "type": "object",
+        "properties": {
+          "blob_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "blob_id"
+        ],
+        "additionalProperties": false
+      },
+      "ReclaimedFileVersion": {
+        "type": "object",
+        "properties": {
+          "blob_id": {
+            "type": "string"
+          },
+          "availability": {
+            "type": "string"
+          },
+          "deferred": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "reclaim_after": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "blob_id",
+          "availability",
+          "deferred"
+        ],
+        "additionalProperties": false
       }
     },
     "parameters": {

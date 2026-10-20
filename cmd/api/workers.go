@@ -6,23 +6,35 @@ import (
 	"log/slog"
 	"time"
 
+	"papergo/internal/aiops"
 	"papergo/internal/config"
 	"papergo/internal/dms"
+	"papergo/internal/documentfiles"
+	"papergo/internal/documentpreview"
 	"papergo/internal/documenttext"
 	"papergo/internal/scriptrun"
+	"papergo/internal/searchcontent"
 	"papergo/internal/storage"
 	"papergo/internal/worker"
 )
 
 // workers returns the runtime of the operations this executable runs: one
-// worker per kind of work, so long OCR never holds up index builds or bulk
-// edits, and the maintenance that keeps retention and cleanup going even
-// with empty queues.
-func workers(service *dms.Service, store storage.Store, log *slog.Logger) *worker.Runtime {
+// worker per kind of work, so long OCR never holds up index builds, bulk
+// edits or previews, and the maintenance that keeps retention and cleanup
+// going even with empty queues.
+func workers(service *dms.Service, store storage.Store, f features, log *slog.Logger) *worker.Runtime {
 	rt := worker.New(service, log)
 	rt.Add(worker.Definition{Name: "maintenance", Kinds: []string{dms.OperationKindFieldIndex, dms.OperationKindBulkUpdate, dms.OperationKindSearchReindex, dms.OperationKindExport, dms.OperationKindImport}})
 	rt.Add(worker.Definition{Name: "integrations", Kinds: []string{dms.OperationKindIntegrationRefresh}, Concurrency: 2})
-	rt.Add(worker.Definition{Name: "documents", Kinds: []string{documenttext.Kind}})
+	rt.Add(worker.Definition{Name: "documents", Kinds: []string{documenttext.Kind, documentfiles.KindOptimize, documentfiles.KindCompose}})
+	rt.Add(worker.Definition{Name: "previews", Kinds: []string{documentpreview.Kind}})
+	rt.Add(worker.Definition{Name: "search", Kinds: []string{searchcontent.KindChunk, searchcontent.KindEmbed, searchcontent.KindPublish}})
+	rt.Add(worker.Definition{Name: "ai", Kinds: []string{aiops.KindComplete}, Concurrency: 2})
+	// Batch completions go to the provider in groups of 20, and whatever
+	// waits goes once a day.
+	flush, _ := worker.ParseSchedule("0 1 * * *", "UTC", worker.MissedOnce)
+	rt.Add(worker.Definition{Name: "ai-batch", Kinds: []string{aiops.KindBatch}, Admission: worker.Admission{Policy: worker.Threshold, Threshold: 20, Batch: 20, Flush: flush}})
+	rt.Add(worker.Definition{Name: "decisions", Kinds: []string{aiops.KindDecide, aiops.KindTaxonomy}})
 	for _, m := range []worker.Maintenance{
 		{Name: "operation retention", Every: time.Hour, Run: service.CollectExpiredOperations},
 		{Name: "operation deadlines", Every: time.Minute, Run: service.ExpireOperations},
@@ -31,6 +43,8 @@ func workers(service *dms.Service, store storage.Store, log *slog.Logger) *worke
 		{Name: "purged blobs", Every: time.Minute, Run: func(ctx context.Context, _ time.Time) error { return service.CleanupPurgedBlobs(ctx, store) }},
 		{Name: "unreferenced objects", Every: time.Minute, Run: func(ctx context.Context, now time.Time) error { return service.CollectObjects(ctx, store, now) }},
 		{Name: "reclaimed files", Every: time.Minute, Run: func(ctx context.Context, now time.Time) error { return service.SweepReclaims(ctx, store, now) }},
+		{Name: "embedding sweep", Every: 15 * time.Minute, Run: f.search.Sweep},
+		{Name: "AI batches", Every: time.Minute, Run: f.ai.Poll},
 		{Name: "script waits", Every: time.Minute, Run: func(ctx context.Context, _ time.Time) error {
 			_, err := scriptrun.ReconcileWaits(ctx, service)
 			return err

@@ -9,9 +9,11 @@ import (
 	"os"
 	"os/signal"
 	"papergo/internal/ai"
+	"papergo/internal/aiops"
 	"papergo/internal/auth"
 	"papergo/internal/buildinfo"
 	"papergo/internal/config"
+	"papergo/internal/dal/activitystore"
 	"papergo/internal/dal/database"
 	"papergo/internal/dal/integrations"
 	"papergo/internal/dal/migrations"
@@ -21,6 +23,8 @@ import (
 	"papergo/internal/decision"
 	"papergo/internal/dms"
 	"papergo/internal/doctext/pdfium"
+	"papergo/internal/documentfiles"
+	"papergo/internal/documentpreview"
 	"papergo/internal/documenttext"
 	"papergo/internal/httpapi"
 	"papergo/internal/identity"
@@ -29,6 +33,7 @@ import (
 	"papergo/internal/runner"
 	"papergo/internal/scriptrun"
 	"papergo/internal/search"
+	"papergo/internal/searchcontent"
 	"papergo/internal/storage"
 	"papergo/internal/webdav"
 	"papergo/internal/workflow"
@@ -233,8 +238,18 @@ func run(log *slog.Logger) error {
 		}
 	}
 	workflows := &workflow.Service{DMS: service, Tools: tools}
-	text := &documenttext.Reader{Storage: store, PDF: tools.PDF, OCR: tools.OCR, Languages: c.SearchLanguages}
-	if err = text.Register(service); err != nil {
+	feats := features{
+		text:    &documenttext.Reader{Storage: store, PDF: tools.PDF, OCR: tools.OCR, Languages: c.SearchLanguages},
+		preview: &documentpreview.Renderer{Storage: store, PDF: tools.PDF},
+		search:  &searchcontent.Indexer{Storage: store, Search: index, Embeddings: embeddings},
+		ai: &aiops.Assistant{Storage: store, Chat: chat, Batch: batch, Results: resultcache.New(db.SQL), ResultTTL: c.ResultCacheTTL,
+			Records: activitystore.New(db.SQL), DefaultExecution: c.AIExecution, BatchDeadline: c.BatchDeadline},
+		files: &documentfiles.Maker{Storage: store, OCR: tools.OCR, MaxFileBytes: c.MaxUpload},
+	}
+	if decisions != nil {
+		feats.ai.Decisions = decisions
+	}
+	if err = feats.register(service); err != nil {
 		return err
 	}
 	service.OnIntegrationCreated(workflows.EnsureIntegrationWorkflow)
@@ -272,7 +287,7 @@ func run(log *slog.Logger) error {
 			log.Error("runner shutdown", "error", err)
 		}
 	}()
-	a := &httpapi.API{DMS: service, Workflows: workflows, Modules: modules(text), Runner: run, Auth: verifier, Storage: store, Logger: log, MaxUpload: c.MaxUpload, MaxInFlight: c.MaxInFlight, RequestTimeout: c.RequestTimeout, Ready: func(ctx context.Context) error {
+	a := &httpapi.API{DMS: service, Workflows: workflows, Modules: feats.modules(), Runner: run, Auth: verifier, Storage: store, Logger: log, MaxUpload: c.MaxUpload, MaxInFlight: c.MaxInFlight, RequestTimeout: c.RequestTimeout, Ready: func(ctx context.Context) error {
 		if err := db.SQL.PingContext(ctx); err != nil {
 			return err
 		}
@@ -292,7 +307,7 @@ func run(log *slog.Logger) error {
 		return err
 	}
 	server := &http.Server{Addr: c.Address, Handler: a.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 60 * time.Second, WriteTimeout: 120 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 * 1024}
-	runtime := workers(service, store, log)
+	runtime := workers(service, store, feats, log)
 	if err = configure(runtime, c.Workers); err != nil {
 		return err
 	}
@@ -322,11 +337,6 @@ func run(log *slog.Logger) error {
 		return err
 	}
 	return nil
-}
-
-// modules are the feature modules whose routes the API serves.
-func modules(text *documenttext.Reader) []httpapi.Module {
-	return []httpapi.Module{text.Module()}
 }
 
 // openSQLite opens the SQLite file under its lease and brings its schema to

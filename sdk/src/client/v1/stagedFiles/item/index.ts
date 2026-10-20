@@ -6,6 +6,10 @@ import { createProblemFromDiscriminatorValue, createStagedFileFromDiscriminatorV
 // @ts-ignore
 import { ContentRequestBuilderRequestsMetadata, type ContentRequestBuilder } from './content/index.js';
 // @ts-ignore
+import { DiscardRequestBuilderRequestsMetadata, type DiscardRequestBuilder } from './discard/index.js';
+// @ts-ignore
+import { PromoteRequestBuilderRequestsMetadata, type PromoteRequestBuilder } from './promote/index.js';
+// @ts-ignore
 import { type BaseRequestBuilder, type KeysToExcludeForNavigationMetadata, type NavigationMetadata, type Parsable, type ParsableFactory, type RequestConfiguration, type RequestInformation, type RequestsMetadata } from '@microsoft/kiota-abstractions';
 
 /**
@@ -16,6 +20,14 @@ export interface StagedFilesItemRequestBuilder extends BaseRequestBuilder<Staged
      * The content property
      */
     get content(): ContentRequestBuilder;
+    /**
+     * The discard property
+     */
+    get discard(): DiscardRequestBuilder;
+    /**
+     * The promote property
+     */
+    get promote(): PromoteRequestBuilder;
     /**
      * Get Staged File
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
@@ -48,6 +60,12 @@ export const StagedFilesItemRequestBuilderUriTemplate = "{+baseurl}/v1/staged-fi
 export const StagedFilesItemRequestBuilderNavigationMetadata: Record<Exclude<keyof StagedFilesItemRequestBuilder, KeysToExcludeForNavigationMetadata>, NavigationMetadata> = {
     content: {
         requestsMetadata: ContentRequestBuilderRequestsMetadata,
+    },
+    discard: {
+        requestsMetadata: DiscardRequestBuilderRequestsMetadata,
+    },
+    promote: {
+        requestsMetadata: PromoteRequestBuilderRequestsMetadata,
     },
 };
 /**

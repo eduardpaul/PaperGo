@@ -8,6 +8,8 @@ import { ContentTypesRequestBuilderRequestsMetadata, type ContentTypesRequestBui
 // @ts-ignore
 import { FieldsRequestBuilderRequestsMetadata, type FieldsRequestBuilder } from './fields/index.js';
 // @ts-ignore
+import { GenerationsRequestBuilderNavigationMetadata, type GenerationsRequestBuilder } from './generations/index.js';
+// @ts-ignore
 import { ReindexRequestBuilderRequestsMetadata, type ReindexRequestBuilder } from './reindex/index.js';
 // @ts-ignore
 import { StatusRequestBuilderRequestsMetadata, type StatusRequestBuilder } from './status/index.js';
@@ -28,6 +30,10 @@ export interface SearchRequestBuilder extends BaseRequestBuilder<SearchRequestBu
      * The fields property
      */
     get fields(): FieldsRequestBuilder;
+    /**
+     * The generations property
+     */
+    get generations(): GenerationsRequestBuilder;
     /**
      * The reindex property
      */
@@ -193,6 +199,9 @@ export const SearchRequestBuilderNavigationMetadata: Record<Exclude<keyof Search
     },
     fields: {
         requestsMetadata: FieldsRequestBuilderRequestsMetadata,
+    },
+    generations: {
+        navigationMetadata: GenerationsRequestBuilderNavigationMetadata,
     },
     reindex: {
         requestsMetadata: ReindexRequestBuilderRequestsMetadata,

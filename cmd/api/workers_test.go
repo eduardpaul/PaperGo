@@ -2,13 +2,18 @@ package main
 
 import (
 	"log/slog"
+
+	"papergo/internal/aiops"
+	"papergo/internal/documentfiles"
+	"papergo/internal/documentpreview"
+	"papergo/internal/documenttext"
+	"papergo/internal/searchcontent"
 	"strings"
 	"testing"
 
 	"papergo/internal/config"
 	"papergo/internal/dal/daltest"
 	"papergo/internal/dms"
-	"papergo/internal/documenttext"
 	"papergo/internal/storage"
 	"papergo/internal/worker"
 )
@@ -25,10 +30,11 @@ func TestWorkersCoverEveryKind(t *testing.T) {
 	if err = service.RegisterPortability(store); err != nil {
 		t.Fatal(err)
 	}
-	if err = (&documenttext.Reader{}).Register(service); err != nil {
+	f := testFeatures()
+	if err = f.register(service); err != nil {
 		t.Fatal(err)
 	}
-	rt := workers(service, store, slog.Default())
+	rt := workers(service, store, f, slog.Default())
 	if err = configure(rt, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -47,4 +53,9 @@ func TestWorkersCoverEveryKind(t *testing.T) {
 	if err := configure(rt, bad); err == nil {
 		t.Fatal("a threshold policy without a threshold was accepted")
 	}
+}
+
+// testFeatures are the feature modules without engines or models.
+func testFeatures() features {
+	return features{text: &documenttext.Reader{}, preview: &documentpreview.Renderer{}, search: &searchcontent.Indexer{}, ai: &aiops.Assistant{}, files: &documentfiles.Maker{}}
 }

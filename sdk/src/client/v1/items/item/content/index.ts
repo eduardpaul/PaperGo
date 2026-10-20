@@ -4,6 +4,8 @@
 // @ts-ignore
 import { createBlobFromDiscriminatorValue, createProblemFromDiscriminatorValue, type Blob, type Problem } from '../../../../models/index.js';
 // @ts-ignore
+import { ReclaimRequestBuilderRequestsMetadata, type ReclaimRequestBuilder } from './reclaim/index.js';
+// @ts-ignore
 import { type VersionsRequestBuilder, VersionsRequestBuilderNavigationMetadata, VersionsRequestBuilderRequestsMetadata } from './versions/index.js';
 // @ts-ignore
 import { type BaseRequestBuilder, type Guid, type KeysToExcludeForNavigationMetadata, type NavigationMetadata, type Parsable, type ParsableFactory, type RequestConfiguration, type RequestInformation, type RequestsMetadata } from '@microsoft/kiota-abstractions';
@@ -12,6 +14,10 @@ import { type BaseRequestBuilder, type Guid, type KeysToExcludeForNavigationMeta
  * Builds and executes requests for operations under /v1/items/{id}/content
  */
 export interface ContentRequestBuilder extends BaseRequestBuilder<ContentRequestBuilder> {
+    /**
+     * The reclaim property
+     */
+    get reclaim(): ReclaimRequestBuilder;
     /**
      * The versions property
      */
@@ -65,6 +71,9 @@ const ContentRequestBuilderGetQueryParametersMapper: Record<string, string> = {
  * Metadata for all the navigation properties in the request builder.
  */
 export const ContentRequestBuilderNavigationMetadata: Record<Exclude<keyof ContentRequestBuilder, KeysToExcludeForNavigationMetadata>, NavigationMetadata> = {
+    reclaim: {
+        requestsMetadata: ReclaimRequestBuilderRequestsMetadata,
+    },
     versions: {
         requestsMetadata: VersionsRequestBuilderRequestsMetadata,
         navigationMetadata: VersionsRequestBuilderNavigationMetadata,

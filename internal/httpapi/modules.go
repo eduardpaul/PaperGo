@@ -29,9 +29,11 @@ type Route struct {
 
 // Request is what a module route acts with: the authenticated subject and
 // the service, bound to the caller's transaction when the request runs
-// inside one.
+// inside one. Run is the workflow run that made the request in-process,
+// empty for other clients.
 type Request struct {
 	Subject string
+	Run     string
 	DMS     *dms.Service
 	api     *API
 }
@@ -83,7 +85,7 @@ func (a *API) registerModules(m *router) error {
 
 func (a *API) moduleHandler(route Route) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if err := route.Handle(w, r, Request{Subject: subject(r), DMS: a.DMS, api: a}); err != nil {
+		if err := route.Handle(w, r, Request{Subject: subject(r), Run: runOf(r), DMS: a.DMS, api: a}); err != nil {
 			a.failure(w, r, err)
 		}
 	}
@@ -147,6 +149,11 @@ func (a *API) routes() (api *router, err error) {
 	api.HandleFunc("POST /v1/$batch", a.batch(a.observe(a.authenticate(api))))
 	api.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { a.problem(w, r, 404, "not_found", "route not found") })
 	return api, nil
+}
+
+// Respond writes body as the JSON response with status.
+func Respond(w http.ResponseWriter, r *http.Request, status int, body any) {
+	respond(w, r, status, body)
 }
 
 // Accepted answers a request that accepted an operation: 202 with the

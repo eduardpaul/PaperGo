@@ -117,11 +117,18 @@ func (a *API) registerResources(api *router) {
 
 func subject(r *http.Request) string { v, _ := r.Context().Value(subjectKey{}).(string); return v }
 
-// Loopback serves the /v1 API in-process to a workflow script acting as
-// subject. Its handlers, module routes included, run on t, a service bound
+// runKey carries the workflow run an in-process request is made by.
+type runKey struct{}
+
+// runOf is the workflow run that made the request, empty for other
+// clients.
+func runOf(r *http.Request) string { v, _ := r.Context().Value(runKey{}).(string); return v }
+
+// Loopback serves the /v1 API in-process to the workflow run run, acting
+// as subject. Its handlers, module routes included, run on t, a service bound
 // to the caller's transaction, so a request's writes commit or roll back
 // with the step that records it. It neither authenticates nor rate-limits.
-func (a *API) Loopback(t *dms.Service, subject string) http.Handler {
+func (a *API) Loopback(t *dms.Service, subject, run string) http.Handler {
 	scoped := *a
 	scoped.DMS = t
 	routes, err := scoped.routes()
@@ -130,7 +137,8 @@ func (a *API) Loopback(t *dms.Service, subject string) http.Handler {
 		panic(err)
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		routes.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), subjectKey{}, subject)))
+		ctx := context.WithValue(context.WithValue(r.Context(), subjectKey{}, subject), runKey{}, run)
+		routes.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 

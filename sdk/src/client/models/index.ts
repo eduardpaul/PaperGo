@@ -330,6 +330,49 @@ export interface CalendarQuery extends Parsable {
     to?: Date | null;
 }
 export type CalendarQuery_surface = (typeof CalendarQuery_surfaceObject)[keyof typeof CalendarQuery_surfaceObject];
+/**
+ * What text to chunk and how. Give text_id or text.
+ */
+export interface ChunkText extends Parsable {
+    /**
+     * The file version; the item's current file when omitted.
+     */
+    blobId?: string | null;
+    /**
+     * window (the default): overlapping windows of each page; pages: a chunk per page; paragraphs: paragraphs merged up to the size; headings: sections, each starting with its heading; whole: the whole text as one chunk.
+     */
+    chunker?: ChunkText_chunker | null;
+    /**
+     * Add the chunks to this generation the caller started for the same file version; a new generation when omitted.
+     */
+    generation?: string | null;
+    /**
+     * content when omitted.
+     */
+    kind?: ChunkText_kind | null;
+    /**
+     * Chunk size, 1200 when omitted.
+     */
+    maxChars?: number | null;
+    /**
+     * 400 when omitted.
+     */
+    maxChunks?: number | null;
+    /**
+     * Characters consecutive windows share, 150 when omitted.
+     */
+    overlap?: number | null;
+    /**
+     * Instead of text_id: text given directly, such as a summary.
+     */
+    text?: string | null;
+    /**
+     * The text_id of a read of the file's text (POST /v1/items/{id}/text).
+     */
+    textId?: string | null;
+}
+export type ChunkText_chunker = (typeof ChunkText_chunkerObject)[keyof typeof ChunkText_chunkerObject];
+export type ChunkText_kind = (typeof ChunkText_kindObject)[keyof typeof ChunkText_kindObject];
 export interface CollectionContentType extends ContentType, Parsable {
     /**
      * Default only for this collection.
@@ -389,6 +432,75 @@ export interface CollectionTemplate extends AdditionalDataHolder, Parsable {
 export type CollectionTemplate_duplicate_policy = (typeof CollectionTemplate_duplicate_policyObject)[keyof typeof CollectionTemplate_duplicate_policyObject];
 export type CollectionTemplate_kind = (typeof CollectionTemplate_kindObject)[keyof typeof CollectionTemplate_kindObject];
 export type CollectionTemplate_versioning = (typeof CollectionTemplate_versioningObject)[keyof typeof CollectionTemplate_versioningObject];
+/**
+ * A completion. Give item_id with text_id or image_blob_id, else workspace_id.
+ */
+export interface CompletionRequest extends Parsable {
+    /**
+     * With text_id: the file version; the current one when omitted.
+     */
+    blobId?: string | null;
+    /**
+     * immediate calls the model now; batch sends the request in a provider batch, which its worker admits in groups per queue. The deployment's default when omitted.
+     */
+    execution?: CompletionRequest_execution | null;
+    /**
+     * An image file version of the item the model sees, alone or with text.
+     */
+    imageBlobId?: string | null;
+    /**
+     * Text to work on.
+     */
+    input?: string | null;
+    /**
+     * The item whose file text_id or image_blob_id are.
+     */
+    itemId?: string | null;
+    /**
+     * Characters of the input sent, 20000 when omitted.
+     */
+    maxChars?: number | null;
+    /**
+     * A form schema of an object: the answer is JSON matching it, else text.
+     */
+    outputSchema?: CompletionRequest_output_schema | null;
+    /**
+     * What to do with the input.
+     */
+    prompt?: string | null;
+    /**
+     * The batch queue, shared when omitted.
+     */
+    queue?: string | null;
+    /**
+     * Instead of input: a text read from the item's file version blob_id.
+     */
+    textId?: string | null;
+    /**
+     * Where a request on text given directly is made.
+     */
+    workspaceId?: string | null;
+}
+export type CompletionRequest_execution = (typeof CompletionRequest_executionObject)[keyof typeof CompletionRequest_executionObject];
+/**
+ * A form schema of an object: the answer is JSON matching it, else text.
+ */
+export interface CompletionRequest_output_schema extends AdditionalDataHolder, Parsable {
+}
+export interface ComposePDF extends Parsable {
+    /**
+     * The photo items in page order, the item among them; the item alone when omitted.
+     */
+    itemIds?: string[] | null;
+    /**
+     * JPEG quality, 80 when omitted.
+     */
+    quality?: number | null;
+    /**
+     * Height in pixels the smallest text of each page keeps, 32 when omitted; pages never grow.
+     */
+    targetHeight?: number | null;
+}
 export interface ContentType extends AdditionalDataHolder, Parsable {
     /**
      * The created_at property
@@ -675,6 +787,15 @@ export type CreateCatalogField_type = (typeof CreateCatalogField_typeObject)[key
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {ChunkText}
+ */
+// @ts-ignore
+export function createChunkTextFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoChunkText;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {CollectionContentType}
  */
 // @ts-ignore
@@ -689,6 +810,33 @@ export function createCollectionContentTypeFromDiscriminatorValue(parseNode: Par
 // @ts-ignore
 export function createCollectionTemplateFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoCollectionTemplate;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {CompletionRequest_output_schema}
+ */
+// @ts-ignore
+export function createCompletionRequest_output_schemaFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoCompletionRequest_output_schema;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {CompletionRequest}
+ */
+// @ts-ignore
+export function createCompletionRequestFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoCompletionRequest;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {ComposePDF}
+ */
+// @ts-ignore
+export function createComposePDFFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoComposePDF;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -779,6 +927,51 @@ export function createCreateResource_valuesFromDiscriminatorValue(parseNode: Par
 // @ts-ignore
 export function createCreateResourceFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoCreateResource;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {DecisionRequest_context}
+ */
+// @ts-ignore
+export function createDecisionRequest_contextFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoDecisionRequest_context;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {DecisionRequest_data}
+ */
+// @ts-ignore
+export function createDecisionRequest_dataFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoDecisionRequest_data;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {DecisionRequest_questions_options}
+ */
+// @ts-ignore
+export function createDecisionRequest_questions_optionsFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoDecisionRequest_questions_options;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {DecisionRequest_questions}
+ */
+// @ts-ignore
+export function createDecisionRequest_questionsFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoDecisionRequest_questions;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {DecisionRequest}
+ */
+// @ts-ignore
+export function createDecisionRequestFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoDecisionRequest;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -953,6 +1146,42 @@ export function createFilteredBulkUpdateFromDiscriminatorValue(parseNode: ParseN
 // @ts-ignore
 export function createFilterExprFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoFilterExpr;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {GenerationChunk}
+ */
+// @ts-ignore
+export function createGenerationChunkFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoGenerationChunk;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {GenerationChunkPage}
+ */
+// @ts-ignore
+export function createGenerationChunkPageFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoGenerationChunkPage;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {GenerationEnrichments_enrichments}
+ */
+// @ts-ignore
+export function createGenerationEnrichments_enrichmentsFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoGenerationEnrichments_enrichments;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {GenerationEnrichments}
+ */
+// @ts-ignore
+export function createGenerationEnrichmentsFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoGenerationEnrichments;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -1142,6 +1371,15 @@ export function createOperationPageFromDiscriminatorValue(parseNode: ParseNode |
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {OptimizeImage}
+ */
+// @ts-ignore
+export function createOptimizeImageFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoOptimizeImage;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {Permissions_effective_grants}
  */
 // @ts-ignore
@@ -1241,11 +1479,29 @@ export function createProblemFromDiscriminatorValue(parseNode: ParseNode | undef
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {PromotedFile}
+ */
+// @ts-ignore
+export function createPromotedFileFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoPromotedFile;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {PromoteKeyword}
  */
 // @ts-ignore
 export function createPromoteKeywordFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoPromoteKeyword;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {PromoteStagedFile}
+ */
+// @ts-ignore
+export function createPromoteStagedFileFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoPromoteStagedFile;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -1318,6 +1574,24 @@ export function createQuerySpecFromDiscriminatorValue(parseNode: ParseNode | und
 // @ts-ignore
 export function createReadTextFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoReadText;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {ReclaimedFileVersion}
+ */
+// @ts-ignore
+export function createReclaimedFileVersionFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoReclaimedFileVersion;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {ReclaimFileVersion}
+ */
+// @ts-ignore
+export function createReclaimFileVersionFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoReclaimFileVersion;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -1664,6 +1938,24 @@ export function createSearchStatusFromDiscriminatorValue(parseNode: ParseNode | 
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {SearchSync}
+ */
+// @ts-ignore
+export function createSearchSyncFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoSearchSync;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {SearchSyncResult}
+ */
+// @ts-ignore
+export function createSearchSyncResultFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoSearchSyncResult;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {SetWorkspaceMember}
  */
 // @ts-ignore
@@ -1979,6 +2271,42 @@ export function createTaskResponseInputFromDiscriminatorValue(parseNode: ParseNo
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {TaxonomyDecisionRequest_context}
+ */
+// @ts-ignore
+export function createTaxonomyDecisionRequest_contextFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoTaxonomyDecisionRequest_context;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {TaxonomyDecisionRequest_data}
+ */
+// @ts-ignore
+export function createTaxonomyDecisionRequest_dataFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoTaxonomyDecisionRequest_data;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {TaxonomyDecisionRequest_description_overrides}
+ */
+// @ts-ignore
+export function createTaxonomyDecisionRequest_description_overridesFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoTaxonomyDecisionRequest_description_overrides;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {TaxonomyDecisionRequest}
+ */
+// @ts-ignore
+export function createTaxonomyDecisionRequestFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoTaxonomyDecisionRequest;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {TaxonomyImportResult}
  */
 // @ts-ignore
@@ -2020,6 +2348,15 @@ export function createTemplateInputFromDiscriminatorValue(parseNode: ParseNode |
 // @ts-ignore
 export function createTerm_labelsFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoTerm_labels;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {TermEntries}
+ */
+// @ts-ignore
+export function createTermEntriesFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoTermEntries;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -2309,6 +2646,82 @@ export function createWorkspaceRelationshipTypePageFromDiscriminatorValue(parseN
 export function createWorkspaceRelationshipViewFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoWorkspaceRelationshipView;
 }
+/**
+ * Questions about text, JSON data or a document: exactly one of input, data or text_id.
+ */
+export interface DecisionRequest extends Parsable {
+    /**
+     * The blob_id property
+     */
+    blobId?: string | null;
+    /**
+     * With text_id: document context shown with the text.
+     */
+    context?: DecisionRequest_context | null;
+    /**
+     * JSON data to decide about.
+     */
+    data?: DecisionRequest_data | null;
+    /**
+     * Text to decide about.
+     */
+    input?: string | null;
+    /**
+     * The item_id property
+     */
+    itemId?: string | null;
+    /**
+     * The questions property
+     */
+    questions?: DecisionRequest_questions[] | null;
+    /**
+     * A text read from the item's current file version blob_id.
+     */
+    textId?: string | null;
+    /**
+     * Where a decision on input or data is made.
+     */
+    workspaceId?: string | null;
+}
+/**
+ * With text_id: document context shown with the text.
+ */
+export interface DecisionRequest_context extends AdditionalDataHolder, Parsable {
+}
+/**
+ * JSON data to decide about.
+ */
+export interface DecisionRequest_data extends AdditionalDataHolder, Parsable {
+}
+export interface DecisionRequest_questions extends Parsable {
+    /**
+     * The instructions property
+     */
+    instructions?: string | null;
+    /**
+     * The key property
+     */
+    key?: string | null;
+    /**
+     * The options property
+     */
+    options?: DecisionRequest_questions_options[] | null;
+    /**
+     * choice selects an option; noul returns the true probability; score is the expected zero-based ordinal level.
+     */
+    type?: DecisionRequest_questions_type | null;
+}
+export interface DecisionRequest_questions_options extends Parsable {
+    /**
+     * The key property
+     */
+    key?: string | null;
+    /**
+     * The text property
+     */
+    text?: string | null;
+}
+export type DecisionRequest_questions_type = (typeof DecisionRequest_questions_typeObject)[keyof typeof DecisionRequest_questions_typeObject];
 export interface DeletedResource extends Parsable, Resource {
     /**
      * The deleted_at property
@@ -2637,6 +3050,25 @@ export function deserializeIntoCalendarQuery(calendarQuery: Partial<CalendarQuer
 }
 /**
  * The deserialization information for the current model
+ * @param ChunkText The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoChunkText(chunkText: Partial<ChunkText> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "blob_id": n => { chunkText.blobId = n.getStringValue(); },
+        "chunker": n => { chunkText.chunker = n.getEnumValue<ChunkText_chunker>(ChunkText_chunkerObject); },
+        "generation": n => { chunkText.generation = n.getStringValue(); },
+        "kind": n => { chunkText.kind = n.getEnumValue<ChunkText_kind>(ChunkText_kindObject); },
+        "max_chars": n => { chunkText.maxChars = n.getNumberValue(); },
+        "max_chunks": n => { chunkText.maxChunks = n.getNumberValue(); },
+        "overlap": n => { chunkText.overlap = n.getNumberValue(); },
+        "text": n => { chunkText.text = n.getStringValue(); },
+        "text_id": n => { chunkText.textId = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
  * @param CollectionContentType The instance to deserialize into.
  * @returns {Record<string, (node: ParseNode) => void>}
  */
@@ -2667,6 +3099,50 @@ export function deserializeIntoCollectionTemplate(collectionTemplate: Partial<Co
         "versioning": n => { collectionTemplate.versioning = n.getEnumValue<CollectionTemplate_versioning>(CollectionTemplate_versioningObject); },
         "views": n => { collectionTemplate.views = n.getCollectionOfObjectValues<ViewInput>(createViewInputFromDiscriminatorValue); },
         "webdav_enabled": n => { collectionTemplate.webdavEnabled = n.getBooleanValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param CompletionRequest The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoCompletionRequest(completionRequest: Partial<CompletionRequest> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "blob_id": n => { completionRequest.blobId = n.getStringValue(); },
+        "execution": n => { completionRequest.execution = n.getEnumValue<CompletionRequest_execution>(CompletionRequest_executionObject); },
+        "image_blob_id": n => { completionRequest.imageBlobId = n.getStringValue(); },
+        "input": n => { completionRequest.input = n.getStringValue(); },
+        "item_id": n => { completionRequest.itemId = n.getStringValue(); },
+        "max_chars": n => { completionRequest.maxChars = n.getNumberValue(); },
+        "output_schema": n => { completionRequest.outputSchema = n.getObjectValue<CompletionRequest_output_schema>(createCompletionRequest_output_schemaFromDiscriminatorValue); },
+        "prompt": n => { completionRequest.prompt = n.getStringValue(); },
+        "queue": n => { completionRequest.queue = n.getStringValue(); },
+        "text_id": n => { completionRequest.textId = n.getStringValue(); },
+        "workspace_id": n => { completionRequest.workspaceId = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param CompletionRequest_output_schema The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoCompletionRequest_output_schema(completionRequest_output_schema: Partial<CompletionRequest_output_schema> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param ComposePDF The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoComposePDF(composePDF: Partial<ComposePDF> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "item_ids": n => { composePDF.itemIds = n.getCollectionOfPrimitiveValues<string>("string"); },
+        "quality": n => { composePDF.quality = n.getNumberValue(); },
+        "target_height": n => { composePDF.targetHeight = n.getNumberValue(); },
     }
 }
 /**
@@ -2820,6 +3296,70 @@ export function deserializeIntoCreateResource(createResource: Partial<CreateReso
 // @ts-ignore
 export function deserializeIntoCreateResource_values(createResource_values: Partial<CreateResource_values> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param DecisionRequest The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoDecisionRequest(decisionRequest: Partial<DecisionRequest> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "blob_id": n => { decisionRequest.blobId = n.getStringValue(); },
+        "context": n => { decisionRequest.context = n.getObjectValue<DecisionRequest_context>(createDecisionRequest_contextFromDiscriminatorValue); },
+        "data": n => { decisionRequest.data = n.getObjectValue<DecisionRequest_data>(createDecisionRequest_dataFromDiscriminatorValue); },
+        "input": n => { decisionRequest.input = n.getStringValue(); },
+        "item_id": n => { decisionRequest.itemId = n.getStringValue(); },
+        "questions": n => { decisionRequest.questions = n.getCollectionOfObjectValues<DecisionRequest_questions>(createDecisionRequest_questionsFromDiscriminatorValue); },
+        "text_id": n => { decisionRequest.textId = n.getStringValue(); },
+        "workspace_id": n => { decisionRequest.workspaceId = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param DecisionRequest_context The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoDecisionRequest_context(decisionRequest_context: Partial<DecisionRequest_context> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param DecisionRequest_data The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoDecisionRequest_data(decisionRequest_data: Partial<DecisionRequest_data> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param DecisionRequest_questions The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoDecisionRequest_questions(decisionRequest_questions: Partial<DecisionRequest_questions> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "instructions": n => { decisionRequest_questions.instructions = n.getStringValue(); },
+        "key": n => { decisionRequest_questions.key = n.getStringValue(); },
+        "options": n => { decisionRequest_questions.options = n.getCollectionOfObjectValues<DecisionRequest_questions_options>(createDecisionRequest_questions_optionsFromDiscriminatorValue); },
+        "type": n => { decisionRequest_questions.type = n.getEnumValue<DecisionRequest_questions_type>(DecisionRequest_questions_typeObject); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param DecisionRequest_questions_options The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoDecisionRequest_questions_options(decisionRequest_questions_options: Partial<DecisionRequest_questions_options> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "key": n => { decisionRequest_questions_options.key = n.getStringValue(); },
+        "text": n => { decisionRequest_questions_options.text = n.getStringValue(); },
     }
 }
 /**
@@ -3039,6 +3579,60 @@ export function deserializeIntoFilterExpr(filterExpr: Partial<FilterExpr> | unde
         "or": n => { filterExpr.or = n.getCollectionOfObjectValues<FilterExpr>(createFilterExprFromDiscriminatorValue); },
         "value": n => { filterExpr.value = n.getObjectValue<UntypedNode>(createUntypedNodeFromDiscriminatorValue); },
         "value_ref": n => { filterExpr.valueRef = n.getEnumValue<FilterExpr_value_ref>(FilterExpr_value_refObject); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param GenerationChunk The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoGenerationChunk(generationChunk: Partial<GenerationChunk> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "enrichment": n => { generationChunk.enrichment = n.getStringValue(); },
+        "kind": n => { generationChunk.kind = n.getStringValue(); },
+        "ordinal": n => { generationChunk.ordinal = n.getNumberValue(); },
+        "page": n => { generationChunk.page = n.getNumberValue(); },
+        "part": n => { generationChunk.part = n.getStringValue(); },
+        "text": n => { generationChunk.text = n.getStringValue(); },
+        "truncated": n => { generationChunk.truncated = n.getBooleanValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param GenerationChunkPage The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoGenerationChunkPage(generationChunkPage: Partial<GenerationChunkPage> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "chunks": n => { generationChunkPage.chunks = n.getCollectionOfObjectValues<GenerationChunk>(createGenerationChunkFromDiscriminatorValue); },
+        "more": n => { generationChunkPage.more = n.getBooleanValue(); },
+        "next_offset": n => { generationChunkPage.nextOffset = n.getNumberValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param GenerationEnrichments The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoGenerationEnrichments(generationEnrichments: Partial<GenerationEnrichments> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "enrichments": n => { generationEnrichments.enrichments = n.getCollectionOfObjectValues<GenerationEnrichments_enrichments>(createGenerationEnrichments_enrichmentsFromDiscriminatorValue); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param GenerationEnrichments_enrichments The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoGenerationEnrichments_enrichments(generationEnrichments_enrichments: Partial<GenerationEnrichments_enrichments> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "ordinal": n => { generationEnrichments_enrichments.ordinal = n.getNumberValue(); },
+        "part": n => { generationEnrichments_enrichments.part = n.getStringValue(); },
+        "text": n => { generationEnrichments_enrichments.text = n.getStringValue(); },
     }
 }
 /**
@@ -3322,6 +3916,23 @@ export function deserializeIntoOperationPage(operationPage: Partial<OperationPag
 }
 /**
  * The deserialization information for the current model
+ * @param OptimizeImage The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoOptimizeImage(optimizeImage: Partial<OptimizeImage> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "file_version": n => { optimizeImage.fileVersion = n.getNumberValue(); },
+        "max_analysis_dimension": n => { optimizeImage.maxAnalysisDimension = n.getNumberValue(); },
+        "min_confidence": n => { optimizeImage.minConfidence = n.getNumberValue(); },
+        "minimum_scale": n => { optimizeImage.minimumScale = n.getNumberValue(); },
+        "percentile": n => { optimizeImage.percentile = n.getNumberValue(); },
+        "quality": n => { optimizeImage.quality = n.getNumberValue(); },
+        "target_height": n => { optimizeImage.targetHeight = n.getNumberValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
  * @param Permissions The instance to deserialize into.
  * @returns {Record<string, (node: ParseNode) => void>}
  */
@@ -3487,6 +4098,19 @@ export function deserializeIntoProblem_existing_item(problem_existing_item: Part
 }
 /**
  * The deserialization information for the current model
+ * @param PromotedFile The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoPromotedFile(promotedFile: Partial<PromotedFile> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "blob_id": n => { promotedFile.blobId = n.getStringValue(); },
+        "file_version": n => { promotedFile.fileVersion = n.getNumberValue(); },
+        "item_id": n => { promotedFile.itemId = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
  * @param PromoteKeyword The instance to deserialize into.
  * @returns {Record<string, (node: ParseNode) => void>}
  */
@@ -3495,6 +4119,17 @@ export function deserializeIntoPromoteKeyword(promoteKeyword: Partial<PromoteKey
     return {
         "parent_id": n => { promoteKeyword.parentId = n.getStringValue(); },
         "term_set_id": n => { promoteKeyword.termSetId = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param PromoteStagedFile The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoPromoteStagedFile(promoteStagedFile: Partial<PromoteStagedFile> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "recycle_sources": n => { promoteStagedFile.recycleSources = n.getBooleanValue(); },
     }
 }
 /**
@@ -3608,6 +4243,32 @@ export function deserializeIntoReadText(readText: Partial<ReadText> | undefined 
         "languages": n => { readText.languages = n.getStringValue(); },
         "max_pages": n => { readText.maxPages = n.getNumberValue(); },
         "ocr": n => { readText.ocr = n.getEnumValue<ReadText_ocr>(ReadText_ocrObject); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param ReclaimedFileVersion The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoReclaimedFileVersion(reclaimedFileVersion: Partial<ReclaimedFileVersion> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "availability": n => { reclaimedFileVersion.availability = n.getStringValue(); },
+        "blob_id": n => { reclaimedFileVersion.blobId = n.getStringValue(); },
+        "deferred": n => { reclaimedFileVersion.deferred = n.getBooleanValue(); },
+        "reason": n => { reclaimedFileVersion.reason = n.getStringValue(); },
+        "reclaim_after": n => { reclaimedFileVersion.reclaimAfter = n.getDateValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param ReclaimFileVersion The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoReclaimFileVersion(reclaimFileVersion: Partial<ReclaimFileVersion> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "blob_id": n => { reclaimFileVersion.blobId = n.getStringValue(); },
     }
 }
 /**
@@ -4048,6 +4709,29 @@ export function deserializeIntoSearchStatus_embeddings(searchStatus_embeddings: 
         "memory_bytes": n => { searchStatus_embeddings.memoryBytes = n.getNumberValue(); },
         "pending": n => { searchStatus_embeddings.pending = n.getNumberValue(); },
         "vectors": n => { searchStatus_embeddings.vectors = n.getNumberValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param SearchSync The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoSearchSync(searchSync: Partial<SearchSync> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "resource_ids": n => { searchSync.resourceIds = n.getCollectionOfPrimitiveValues<string>("string"); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param SearchSyncResult The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoSearchSyncResult(searchSyncResult: Partial<SearchSyncResult> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "removed": n => { searchSyncResult.removed = n.getNumberValue(); },
+        "written": n => { searchSyncResult.written = n.getNumberValue(); },
     }
 }
 /**
@@ -4555,6 +5239,64 @@ export function deserializeIntoTaskResponseInput_input(taskResponseInput_input: 
 }
 /**
  * The deserialization information for the current model
+ * @param TaxonomyDecisionRequest The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoTaxonomyDecisionRequest(taxonomyDecisionRequest: Partial<TaxonomyDecisionRequest> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "blob_id": n => { taxonomyDecisionRequest.blobId = n.getStringValue(); },
+        "context": n => { taxonomyDecisionRequest.context = n.getObjectValue<TaxonomyDecisionRequest_context>(createTaxonomyDecisionRequest_contextFromDiscriminatorValue); },
+        "data": n => { taxonomyDecisionRequest.data = n.getObjectValue<TaxonomyDecisionRequest_data>(createTaxonomyDecisionRequest_dataFromDiscriminatorValue); },
+        "description_overrides": n => { taxonomyDecisionRequest.descriptionOverrides = n.getCollectionOfObjectValues<TaxonomyDecisionRequest_description_overrides>(createTaxonomyDecisionRequest_description_overridesFromDiscriminatorValue); },
+        "input": n => { taxonomyDecisionRequest.input = n.getStringValue(); },
+        "item_id": n => { taxonomyDecisionRequest.itemId = n.getStringValue(); },
+        "leaf_only": n => { taxonomyDecisionRequest.leafOnly = n.getBooleanValue(); },
+        "other_text": n => { taxonomyDecisionRequest.otherText = n.getStringValue(); },
+        "question": n => { taxonomyDecisionRequest.question = n.getStringValue(); },
+        "root_term_id": n => { taxonomyDecisionRequest.rootTermId = n.getStringValue(); },
+        "selection": n => { taxonomyDecisionRequest.selection = n.getEnumValue<TaxonomyDecisionRequest_selection>(TaxonomyDecisionRequest_selectionObject); },
+        "term_ids": n => { taxonomyDecisionRequest.termIds = n.getCollectionOfPrimitiveValues<string>("string"); },
+        "term_set_id": n => { taxonomyDecisionRequest.termSetId = n.getStringValue(); },
+        "text_id": n => { taxonomyDecisionRequest.textId = n.getStringValue(); },
+        "threshold": n => { taxonomyDecisionRequest.threshold = n.getNumberValue(); },
+        "workspace_id": n => { taxonomyDecisionRequest.workspaceId = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param TaxonomyDecisionRequest_context The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoTaxonomyDecisionRequest_context(taxonomyDecisionRequest_context: Partial<TaxonomyDecisionRequest_context> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param TaxonomyDecisionRequest_data The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoTaxonomyDecisionRequest_data(taxonomyDecisionRequest_data: Partial<TaxonomyDecisionRequest_data> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param TaxonomyDecisionRequest_description_overrides The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoTaxonomyDecisionRequest_description_overrides(taxonomyDecisionRequest_description_overrides: Partial<TaxonomyDecisionRequest_description_overrides> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "term_id": n => { taxonomyDecisionRequest_description_overrides.termId = n.getStringValue(); },
+        "text": n => { taxonomyDecisionRequest_description_overrides.text = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
  * @param TaxonomyImportResult The instance to deserialize into.
  * @returns {Record<string, (node: ParseNode) => void>}
  */
@@ -4646,6 +5388,18 @@ export function deserializeIntoTerm(term: Partial<Term> | undefined = {}) : Reco
 // @ts-ignore
 export function deserializeIntoTerm_labels(term_labels: Partial<Term_labels> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param TermEntries The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoTermEntries(termEntries: Partial<TermEntries> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "items": n => { termEntries.items = n.getCollectionOfPrimitiveValues<string>("string"); },
+        "next": n => { termEntries.next = n.getStringValue(); },
     }
 }
 /**
@@ -5336,6 +6090,70 @@ export interface FilterExpr extends Parsable {
 }
 export type FilterExpr_op = (typeof FilterExpr_opObject)[keyof typeof FilterExpr_opObject];
 export type FilterExpr_value_ref = (typeof FilterExpr_value_refObject)[keyof typeof FilterExpr_value_refObject];
+export interface GenerationChunk extends Parsable {
+    /**
+     * The enrichment property
+     */
+    enrichment?: string | null;
+    /**
+     * The kind property
+     */
+    kind?: string | null;
+    /**
+     * The ordinal property
+     */
+    ordinal?: number | null;
+    /**
+     * The page property
+     */
+    page?: number | null;
+    /**
+     * The chunk operation that staged the chunk.
+     */
+    part?: string | null;
+    /**
+     * The text property
+     */
+    text?: string | null;
+    /**
+     * The text was cut to keep the page within its budget.
+     */
+    truncated?: boolean | null;
+}
+export interface GenerationChunkPage extends Parsable {
+    /**
+     * The chunks property
+     */
+    chunks?: GenerationChunk[] | null;
+    /**
+     * The more property
+     */
+    more?: boolean | null;
+    /**
+     * The next_offset property
+     */
+    nextOffset?: number | null;
+}
+export interface GenerationEnrichments extends Parsable {
+    /**
+     * The enrichments property
+     */
+    enrichments?: GenerationEnrichments_enrichments[] | null;
+}
+export interface GenerationEnrichments_enrichments extends Parsable {
+    /**
+     * The ordinal property
+     */
+    ordinal?: number | null;
+    /**
+     * The part property
+     */
+    part?: string | null;
+    /**
+     * The text property
+     */
+    text?: string | null;
+}
 export interface ItemIntegration extends Parsable {
     /**
      * The integration_id property
@@ -5771,6 +6589,36 @@ export interface OperationPage extends Parsable {
      */
     value?: Operation[] | null;
 }
+export interface OptimizeImage extends Parsable {
+    /**
+     * The file version the workflow was started for: a newer one is kept as it is.
+     */
+    fileVersion?: number | null;
+    /**
+     * Longest side of the copy analyzed, 2600 when omitted.
+     */
+    maxAnalysisDimension?: number | null;
+    /**
+     * Detector score a text line needs, 50 when omitted.
+     */
+    minConfidence?: number | null;
+    /**
+     * How far the image may shrink, 0.05 when omitted.
+     */
+    minimumScale?: number | null;
+    /**
+     * Percentile of the text heights taken as the smallest text, 5 when omitted.
+     */
+    percentile?: number | null;
+    /**
+     * WebP quality, 80 when omitted.
+     */
+    quality?: number | null;
+    /**
+     * Height in pixels the smallest text keeps, 12 when omitted.
+     */
+    targetHeight?: number | null;
+}
 /**
  * SharePoint-style exclusive scopes. An inherited resource has no local grants. Grants at the nearest exclusive ancestor apply; ancestors beyond it do not. Grants within a scope are additive. Reset with inherit=true and no grants. Denies are rejected.
  */
@@ -6031,6 +6879,20 @@ export interface Problem_existing_item extends Parsable {
      */
     version?: number | null;
 }
+export interface PromotedFile extends Parsable {
+    /**
+     * The blob_id property
+     */
+    blobId?: string | null;
+    /**
+     * The file_version property
+     */
+    fileVersion?: number | null;
+    /**
+     * The item_id property
+     */
+    itemId?: string | null;
+}
 export interface PromoteKeyword extends Parsable {
     /**
      * The parent_id property
@@ -6040,6 +6902,12 @@ export interface PromoteKeyword extends Parsable {
      * The term_set_id property
      */
     termSetId?: string | null;
+}
+export interface PromoteStagedFile extends Parsable {
+    /**
+     * Move the other source items to the recycle bin with the promotion.
+     */
+    recycleSources?: boolean | null;
 }
 export interface Publication extends AdditionalDataHolder, Parsable {
     /**
@@ -6204,6 +7072,34 @@ export interface ReadText extends Parsable {
     ocr?: ReadText_ocr | null;
 }
 export type ReadText_ocr = (typeof ReadText_ocrObject)[keyof typeof ReadText_ocrObject];
+export interface ReclaimedFileVersion extends Parsable {
+    /**
+     * The availability property
+     */
+    availability?: string | null;
+    /**
+     * The blob_id property
+     */
+    blobId?: string | null;
+    /**
+     * The deferred property
+     */
+    deferred?: boolean | null;
+    /**
+     * The reason property
+     */
+    reason?: string | null;
+    /**
+     * The reclaim_after property
+     */
+    reclaimAfter?: Date | null;
+}
+export interface ReclaimFileVersion extends Parsable {
+    /**
+     * The blob_id property
+     */
+    blobId?: string | null;
+}
 export interface RecycleBinPage extends AdditionalDataHolder, Parsable {
     /**
      * Absolute continuation URL, or null on the final page. Repeat the request method and body.
@@ -6924,6 +7820,22 @@ export interface SearchStatus_embeddings extends Parsable {
      */
     vectors?: number | null;
 }
+export interface SearchSync extends Parsable {
+    /**
+     * The resource_ids property
+     */
+    resourceIds?: string[] | null;
+}
+export interface SearchSyncResult extends Parsable {
+    /**
+     * The removed property
+     */
+    removed?: number | null;
+    /**
+     * The written property
+     */
+    written?: number | null;
+}
 /**
  * Serializes information the current object
  * @param ApplyTemplateInput The instance to serialize from.
@@ -7215,6 +8127,25 @@ export function serializeCalendarQuery(writer: SerializationWriter, calendarQuer
 }
 /**
  * Serializes information the current object
+ * @param ChunkText The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeChunkText(writer: SerializationWriter, chunkText: Partial<ChunkText> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!chunkText || isSerializingDerivedType) { return; }
+    writer.writeStringValue("blob_id", chunkText.blobId);
+    writer.writeEnumValue<ChunkText_chunker>("chunker", chunkText.chunker);
+    writer.writeStringValue("generation", chunkText.generation);
+    writer.writeEnumValue<ChunkText_kind>("kind", chunkText.kind);
+    writer.writeNumberValue("max_chars", chunkText.maxChars);
+    writer.writeNumberValue("max_chunks", chunkText.maxChunks);
+    writer.writeNumberValue("overlap", chunkText.overlap);
+    writer.writeStringValue("text", chunkText.text);
+    writer.writeStringValue("text_id", chunkText.textId);
+}
+/**
+ * Serializes information the current object
  * @param CollectionContentType The instance to serialize from.
  * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
  * @param writer Serialization writer to use to serialize this model
@@ -7247,6 +8178,51 @@ export function serializeCollectionTemplate(writer: SerializationWriter, collect
     writer.writeCollectionOfObjectValues<ViewInput>("views", collectionTemplate.views, serializeViewInput);
     writer.writeBooleanValue("webdav_enabled", collectionTemplate.webdavEnabled);
     writer.writeAdditionalData(collectionTemplate.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param CompletionRequest The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeCompletionRequest(writer: SerializationWriter, completionRequest: Partial<CompletionRequest> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!completionRequest || isSerializingDerivedType) { return; }
+    writer.writeStringValue("blob_id", completionRequest.blobId);
+    writer.writeEnumValue<CompletionRequest_execution>("execution", completionRequest.execution);
+    writer.writeStringValue("image_blob_id", completionRequest.imageBlobId);
+    writer.writeStringValue("input", completionRequest.input);
+    writer.writeStringValue("item_id", completionRequest.itemId);
+    writer.writeNumberValue("max_chars", completionRequest.maxChars);
+    writer.writeObjectValue<CompletionRequest_output_schema>("output_schema", completionRequest.outputSchema, serializeCompletionRequest_output_schema);
+    writer.writeStringValue("prompt", completionRequest.prompt);
+    writer.writeStringValue("queue", completionRequest.queue);
+    writer.writeStringValue("text_id", completionRequest.textId);
+    writer.writeStringValue("workspace_id", completionRequest.workspaceId);
+}
+/**
+ * Serializes information the current object
+ * @param CompletionRequest_output_schema The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeCompletionRequest_output_schema(writer: SerializationWriter, completionRequest_output_schema: Partial<CompletionRequest_output_schema> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!completionRequest_output_schema || isSerializingDerivedType) { return; }
+    writer.writeAdditionalData(completionRequest_output_schema.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param ComposePDF The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeComposePDF(writer: SerializationWriter, composePDF: Partial<ComposePDF> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!composePDF || isSerializingDerivedType) { return; }
+    writer.writeCollectionOfPrimitiveValues<string>("item_ids", composePDF.itemIds);
+    writer.writeNumberValue("quality", composePDF.quality);
+    writer.writeNumberValue("target_height", composePDF.targetHeight);
 }
 /**
  * Serializes information the current object
@@ -7402,6 +8378,72 @@ export function serializeCreateResource(writer: SerializationWriter, createResou
 export function serializeCreateResource_values(writer: SerializationWriter, createResource_values: Partial<CreateResource_values> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!createResource_values || isSerializingDerivedType) { return; }
     writer.writeAdditionalData(createResource_values.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param DecisionRequest The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeDecisionRequest(writer: SerializationWriter, decisionRequest: Partial<DecisionRequest> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!decisionRequest || isSerializingDerivedType) { return; }
+    writer.writeStringValue("blob_id", decisionRequest.blobId);
+    writer.writeObjectValue<DecisionRequest_context>("context", decisionRequest.context, serializeDecisionRequest_context);
+    writer.writeObjectValue<DecisionRequest_data>("data", decisionRequest.data, serializeDecisionRequest_data);
+    writer.writeStringValue("input", decisionRequest.input);
+    writer.writeStringValue("item_id", decisionRequest.itemId);
+    writer.writeCollectionOfObjectValues<DecisionRequest_questions>("questions", decisionRequest.questions, serializeDecisionRequest_questions);
+    writer.writeStringValue("text_id", decisionRequest.textId);
+    writer.writeStringValue("workspace_id", decisionRequest.workspaceId);
+}
+/**
+ * Serializes information the current object
+ * @param DecisionRequest_context The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeDecisionRequest_context(writer: SerializationWriter, decisionRequest_context: Partial<DecisionRequest_context> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!decisionRequest_context || isSerializingDerivedType) { return; }
+    writer.writeAdditionalData(decisionRequest_context.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param DecisionRequest_data The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeDecisionRequest_data(writer: SerializationWriter, decisionRequest_data: Partial<DecisionRequest_data> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!decisionRequest_data || isSerializingDerivedType) { return; }
+    writer.writeAdditionalData(decisionRequest_data.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param DecisionRequest_questions The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeDecisionRequest_questions(writer: SerializationWriter, decisionRequest_questions: Partial<DecisionRequest_questions> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!decisionRequest_questions || isSerializingDerivedType) { return; }
+    writer.writeStringValue("instructions", decisionRequest_questions.instructions);
+    writer.writeStringValue("key", decisionRequest_questions.key);
+    writer.writeCollectionOfObjectValues<DecisionRequest_questions_options>("options", decisionRequest_questions.options, serializeDecisionRequest_questions_options);
+    writer.writeEnumValue<DecisionRequest_questions_type>("type", decisionRequest_questions.type);
+}
+/**
+ * Serializes information the current object
+ * @param DecisionRequest_questions_options The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeDecisionRequest_questions_options(writer: SerializationWriter, decisionRequest_questions_options: Partial<DecisionRequest_questions_options> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!decisionRequest_questions_options || isSerializingDerivedType) { return; }
+    writer.writeStringValue("key", decisionRequest_questions_options.key);
+    writer.writeStringValue("text", decisionRequest_questions_options.text);
 }
 /**
  * Serializes information the current object
@@ -7629,6 +8671,60 @@ export function serializeFilterExpr(writer: SerializationWriter, filterExpr: Par
     writer.writeCollectionOfObjectValues<FilterExpr>("or", filterExpr.or, serializeFilterExpr);
     writer.writeObjectValue("value", filterExpr.value);
     writer.writeEnumValue<FilterExpr_value_ref>("value_ref", filterExpr.valueRef);
+}
+/**
+ * Serializes information the current object
+ * @param GenerationChunk The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeGenerationChunk(writer: SerializationWriter, generationChunk: Partial<GenerationChunk> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!generationChunk || isSerializingDerivedType) { return; }
+    writer.writeStringValue("enrichment", generationChunk.enrichment);
+    writer.writeStringValue("kind", generationChunk.kind);
+    writer.writeNumberValue("ordinal", generationChunk.ordinal);
+    writer.writeNumberValue("page", generationChunk.page);
+    writer.writeStringValue("part", generationChunk.part);
+    writer.writeStringValue("text", generationChunk.text);
+    writer.writeBooleanValue("truncated", generationChunk.truncated);
+}
+/**
+ * Serializes information the current object
+ * @param GenerationChunkPage The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeGenerationChunkPage(writer: SerializationWriter, generationChunkPage: Partial<GenerationChunkPage> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!generationChunkPage || isSerializingDerivedType) { return; }
+    writer.writeCollectionOfObjectValues<GenerationChunk>("chunks", generationChunkPage.chunks, serializeGenerationChunk);
+    writer.writeBooleanValue("more", generationChunkPage.more);
+    writer.writeNumberValue("next_offset", generationChunkPage.nextOffset);
+}
+/**
+ * Serializes information the current object
+ * @param GenerationEnrichments The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeGenerationEnrichments(writer: SerializationWriter, generationEnrichments: Partial<GenerationEnrichments> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!generationEnrichments || isSerializingDerivedType) { return; }
+    writer.writeCollectionOfObjectValues<GenerationEnrichments_enrichments>("enrichments", generationEnrichments.enrichments, serializeGenerationEnrichments_enrichments);
+}
+/**
+ * Serializes information the current object
+ * @param GenerationEnrichments_enrichments The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeGenerationEnrichments_enrichments(writer: SerializationWriter, generationEnrichments_enrichments: Partial<GenerationEnrichments_enrichments> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!generationEnrichments_enrichments || isSerializingDerivedType) { return; }
+    writer.writeNumberValue("ordinal", generationEnrichments_enrichments.ordinal);
+    writer.writeStringValue("part", generationEnrichments_enrichments.part);
+    writer.writeStringValue("text", generationEnrichments_enrichments.text);
 }
 /**
  * Serializes information the current object
@@ -7916,6 +9012,23 @@ export function serializeOperationPage(writer: SerializationWriter, operationPag
 /**
  * Serializes information the current object
  * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param OptimizeImage The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeOptimizeImage(writer: SerializationWriter, optimizeImage: Partial<OptimizeImage> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!optimizeImage || isSerializingDerivedType) { return; }
+    writer.writeNumberValue("file_version", optimizeImage.fileVersion);
+    writer.writeNumberValue("max_analysis_dimension", optimizeImage.maxAnalysisDimension);
+    writer.writeNumberValue("min_confidence", optimizeImage.minConfidence);
+    writer.writeNumberValue("minimum_scale", optimizeImage.minimumScale);
+    writer.writeNumberValue("percentile", optimizeImage.percentile);
+    writer.writeNumberValue("quality", optimizeImage.quality);
+    writer.writeNumberValue("target_height", optimizeImage.targetHeight);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
  * @param Permissions The instance to serialize from.
  * @param writer Serialization writer to use to serialize this model
  */
@@ -8080,6 +9193,19 @@ export function serializeProblem_existing_item(writer: SerializationWriter, prob
 /**
  * Serializes information the current object
  * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param PromotedFile The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializePromotedFile(writer: SerializationWriter, promotedFile: Partial<PromotedFile> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!promotedFile || isSerializingDerivedType) { return; }
+    writer.writeStringValue("blob_id", promotedFile.blobId);
+    writer.writeNumberValue("file_version", promotedFile.fileVersion);
+    writer.writeStringValue("item_id", promotedFile.itemId);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
  * @param PromoteKeyword The instance to serialize from.
  * @param writer Serialization writer to use to serialize this model
  */
@@ -8088,6 +9214,17 @@ export function serializePromoteKeyword(writer: SerializationWriter, promoteKeyw
     if (!promoteKeyword || isSerializingDerivedType) { return; }
     writer.writeStringValue("parent_id", promoteKeyword.parentId);
     writer.writeStringValue("term_set_id", promoteKeyword.termSetId);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param PromoteStagedFile The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializePromoteStagedFile(writer: SerializationWriter, promoteStagedFile: Partial<PromoteStagedFile> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!promoteStagedFile || isSerializingDerivedType) { return; }
+    writer.writeBooleanValue("recycle_sources", promoteStagedFile.recycleSources);
 }
 /**
  * Serializes information the current object
@@ -8203,6 +9340,32 @@ export function serializeReadText(writer: SerializationWriter, readText: Partial
     writer.writeStringValue("languages", readText.languages);
     writer.writeNumberValue("max_pages", readText.maxPages);
     writer.writeEnumValue<ReadText_ocr>("ocr", readText.ocr);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param ReclaimedFileVersion The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeReclaimedFileVersion(writer: SerializationWriter, reclaimedFileVersion: Partial<ReclaimedFileVersion> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!reclaimedFileVersion || isSerializingDerivedType) { return; }
+    writer.writeStringValue("availability", reclaimedFileVersion.availability);
+    writer.writeStringValue("blob_id", reclaimedFileVersion.blobId);
+    writer.writeBooleanValue("deferred", reclaimedFileVersion.deferred);
+    writer.writeStringValue("reason", reclaimedFileVersion.reason);
+    writer.writeDateValue("reclaim_after", reclaimedFileVersion.reclaimAfter);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param ReclaimFileVersion The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeReclaimFileVersion(writer: SerializationWriter, reclaimFileVersion: Partial<ReclaimFileVersion> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!reclaimFileVersion || isSerializingDerivedType) { return; }
+    writer.writeStringValue("blob_id", reclaimFileVersion.blobId);
 }
 /**
  * Serializes information the current object
@@ -8652,6 +9815,29 @@ export function serializeSearchStatus_embeddings(writer: SerializationWriter, se
     writer.writeNumberValue("memory_bytes", searchStatus_embeddings.memoryBytes);
     writer.writeNumberValue("pending", searchStatus_embeddings.pending);
     writer.writeNumberValue("vectors", searchStatus_embeddings.vectors);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param SearchSync The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeSearchSync(writer: SerializationWriter, searchSync: Partial<SearchSync> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!searchSync || isSerializingDerivedType) { return; }
+    writer.writeCollectionOfPrimitiveValues<string>("resource_ids", searchSync.resourceIds);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param SearchSyncResult The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeSearchSyncResult(writer: SerializationWriter, searchSyncResult: Partial<SearchSyncResult> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!searchSyncResult || isSerializingDerivedType) { return; }
+    writer.writeNumberValue("removed", searchSyncResult.removed);
+    writer.writeNumberValue("written", searchSyncResult.written);
 }
 /**
  * Serializes information the current object
@@ -9178,6 +10364,66 @@ export function serializeTaskResponseInput_input(writer: SerializationWriter, ta
 /**
  * Serializes information the current object
  * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param TaxonomyDecisionRequest The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeTaxonomyDecisionRequest(writer: SerializationWriter, taxonomyDecisionRequest: Partial<TaxonomyDecisionRequest> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!taxonomyDecisionRequest || isSerializingDerivedType) { return; }
+    writer.writeStringValue("blob_id", taxonomyDecisionRequest.blobId);
+    writer.writeObjectValue<TaxonomyDecisionRequest_context>("context", taxonomyDecisionRequest.context, serializeTaxonomyDecisionRequest_context);
+    writer.writeObjectValue<TaxonomyDecisionRequest_data>("data", taxonomyDecisionRequest.data, serializeTaxonomyDecisionRequest_data);
+    writer.writeCollectionOfObjectValues<TaxonomyDecisionRequest_description_overrides>("description_overrides", taxonomyDecisionRequest.descriptionOverrides, serializeTaxonomyDecisionRequest_description_overrides);
+    writer.writeStringValue("input", taxonomyDecisionRequest.input);
+    writer.writeStringValue("item_id", taxonomyDecisionRequest.itemId);
+    writer.writeBooleanValue("leaf_only", taxonomyDecisionRequest.leafOnly);
+    writer.writeStringValue("other_text", taxonomyDecisionRequest.otherText);
+    writer.writeStringValue("question", taxonomyDecisionRequest.question);
+    writer.writeStringValue("root_term_id", taxonomyDecisionRequest.rootTermId);
+    writer.writeEnumValue<TaxonomyDecisionRequest_selection>("selection", taxonomyDecisionRequest.selection);
+    writer.writeCollectionOfPrimitiveValues<string>("term_ids", taxonomyDecisionRequest.termIds);
+    writer.writeStringValue("term_set_id", taxonomyDecisionRequest.termSetId);
+    writer.writeStringValue("text_id", taxonomyDecisionRequest.textId);
+    writer.writeNumberValue("threshold", taxonomyDecisionRequest.threshold);
+    writer.writeStringValue("workspace_id", taxonomyDecisionRequest.workspaceId);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param TaxonomyDecisionRequest_context The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeTaxonomyDecisionRequest_context(writer: SerializationWriter, taxonomyDecisionRequest_context: Partial<TaxonomyDecisionRequest_context> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!taxonomyDecisionRequest_context || isSerializingDerivedType) { return; }
+    writer.writeAdditionalData(taxonomyDecisionRequest_context.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param TaxonomyDecisionRequest_data The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeTaxonomyDecisionRequest_data(writer: SerializationWriter, taxonomyDecisionRequest_data: Partial<TaxonomyDecisionRequest_data> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!taxonomyDecisionRequest_data || isSerializingDerivedType) { return; }
+    writer.writeAdditionalData(taxonomyDecisionRequest_data.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param TaxonomyDecisionRequest_description_overrides The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeTaxonomyDecisionRequest_description_overrides(writer: SerializationWriter, taxonomyDecisionRequest_description_overrides: Partial<TaxonomyDecisionRequest_description_overrides> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!taxonomyDecisionRequest_description_overrides || isSerializingDerivedType) { return; }
+    writer.writeStringValue("term_id", taxonomyDecisionRequest_description_overrides.termId);
+    writer.writeStringValue("text", taxonomyDecisionRequest_description_overrides.text);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
  * @param TaxonomyImportResult The instance to serialize from.
  * @param writer Serialization writer to use to serialize this model
  */
@@ -9270,6 +10516,18 @@ export function serializeTerm(writer: SerializationWriter, term: Partial<Term> |
 export function serializeTerm_labels(writer: SerializationWriter, term_labels: Partial<Term_labels> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!term_labels || isSerializingDerivedType) { return; }
     writer.writeAdditionalData(term_labels.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param TermEntries The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeTermEntries(writer: SerializationWriter, termEntries: Partial<TermEntries> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!termEntries || isSerializingDerivedType) { return; }
+    writer.writeCollectionOfPrimitiveValues<string>("items", termEntries.items);
+    writer.writeStringValue("next", termEntries.next);
 }
 /**
  * Serializes information the current object
@@ -10432,6 +11690,96 @@ export interface TaskResponseInput extends Parsable {
  */
 export interface TaskResponseInput_input extends AdditionalDataHolder, Parsable {
 }
+/**
+ * Picks active terms of an organization term set for text, data or a document.
+ */
+export interface TaxonomyDecisionRequest extends Parsable {
+    /**
+     * The blob_id property
+     */
+    blobId?: string | null;
+    /**
+     * With text_id: document context shown with the text.
+     */
+    context?: TaxonomyDecisionRequest_context | null;
+    /**
+     * JSON data to decide about.
+     */
+    data?: TaxonomyDecisionRequest_data | null;
+    /**
+     * The description_overrides property
+     */
+    descriptionOverrides?: TaxonomyDecisionRequest_description_overrides[] | null;
+    /**
+     * Text to decide about.
+     */
+    input?: string | null;
+    /**
+     * The item_id property
+     */
+    itemId?: string | null;
+    /**
+     * The leaf_only property
+     */
+    leafOnly?: boolean | null;
+    /**
+     * The other_text property
+     */
+    otherText?: string | null;
+    /**
+     * The question property
+     */
+    question?: string | null;
+    /**
+     * The root_term_id property
+     */
+    rootTermId?: string | null;
+    /**
+     * multiple (the default) compares each term independently; single makes one joint choice.
+     */
+    selection?: TaxonomyDecisionRequest_selection | null;
+    /**
+     * The term_ids property
+     */
+    termIds?: string[] | null;
+    /**
+     * The term_set_id property
+     */
+    termSetId?: string | null;
+    /**
+     * A text read from the item's current file version blob_id.
+     */
+    textId?: string | null;
+    /**
+     * Probability a term needs, 0.8 when omitted. Experimental scores, not calibrated confidence.
+     */
+    threshold?: number | null;
+    /**
+     * Where a decision on input or data is made.
+     */
+    workspaceId?: string | null;
+}
+/**
+ * With text_id: document context shown with the text.
+ */
+export interface TaxonomyDecisionRequest_context extends AdditionalDataHolder, Parsable {
+}
+/**
+ * JSON data to decide about.
+ */
+export interface TaxonomyDecisionRequest_data extends AdditionalDataHolder, Parsable {
+}
+export interface TaxonomyDecisionRequest_description_overrides extends Parsable {
+    /**
+     * The term_id property
+     */
+    termId?: string | null;
+    /**
+     * The text property
+     */
+    text?: string | null;
+}
+export type TaxonomyDecisionRequest_selection = (typeof TaxonomyDecisionRequest_selectionObject)[keyof typeof TaxonomyDecisionRequest_selectionObject];
 export interface TaxonomyImportResult extends Parsable {
     /**
      * The groups_created property
@@ -10584,6 +11932,16 @@ export interface Term extends Parsable {
     version?: number | null;
 }
 export interface Term_labels extends AdditionalDataHolder, Parsable {
+}
+export interface TermEntries extends Parsable {
+    /**
+     * The items property
+     */
+    items?: string[] | null;
+    /**
+     * The after of the next page; omitted on the last.
+     */
+    next?: string | null;
 }
 export interface TermGroup extends Parsable {
     /**
@@ -11108,6 +12466,24 @@ export const CalendarQuery_surfaceObject = {
     Published: "published",
 } as const;
 /**
+ * window (the default): overlapping windows of each page; pages: a chunk per page; paragraphs: paragraphs merged up to the size; headings: sections, each starting with its heading; whole: the whole text as one chunk.
+ */
+export const ChunkText_chunkerObject = {
+    Window: "window",
+    Pages: "pages",
+    Paragraphs: "paragraphs",
+    Headings: "headings",
+    Whole: "whole",
+} as const;
+/**
+ * content when omitted.
+ */
+export const ChunkText_kindObject = {
+    Content: "content",
+    Summary: "summary",
+    Extract: "extract",
+} as const;
+/**
  * Libraries only. Default warn. Compares hashes against current documents visible to the caller across libraries and workspaces. Allow suppresses warnings; block rejects duplicates with 409 duplicate_file.
  */
 export const CollectionTemplate_duplicate_policyObject = {
@@ -11125,6 +12501,13 @@ export const CollectionTemplate_kindObject = {
 export const CollectionTemplate_versioningObject = {
     Off: "off",
     Major: "major",
+} as const;
+/**
+ * immediate calls the model now; batch sends the request in a provider batch, which its worker admits in groups per queue. The deployment's default when omitted.
+ */
+export const CompletionRequest_executionObject = {
+    Immediate: "immediate",
+    Batch: "batch",
 } as const;
 export const CreateCatalogField_typeObject = {
     Text: "text",
@@ -11182,6 +12565,14 @@ export const CreateResource_kindObject = {
 export const CreateResource_versioningObject = {
     Off: "off",
     Major: "major",
+} as const;
+/**
+ * choice selects an option; noul returns the true probability; score is the expected zero-based ordinal level.
+ */
+export const DecisionRequest_questions_typeObject = {
+    Choice: "choice",
+    Noul: "noul",
+    Score: "score",
 } as const;
 export const DeltaPage_valueMember1_Removed_reasonObject = {
     Deleted: "deleted",
@@ -11562,6 +12953,13 @@ export const TaskOutcome_styleObject = {
     Primary: "primary",
     Danger: "danger",
     DefaultEscaped: "default",
+} as const;
+/**
+ * multiple (the default) compares each term independently; single makes one joint choice.
+ */
+export const TaxonomyDecisionRequest_selectionObject = {
+    Multiple: "multiple",
+    Single: "single",
 } as const;
 export const TemplateField_typeObject = {
     Text: "text",
