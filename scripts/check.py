@@ -15,8 +15,8 @@ import time
 ROOT = Path(__file__).resolve().parent.parent
 # Suites whose tests open databases through internal/dal/daltest, which run on
 # PostgreSQL with --postgres.
-POSTGRES_PACKAGES = ['./internal/dal/...', './internal/dms', './internal/httpapi', './internal/identity', './internal/runner',
-                     './internal/webdav', './internal/workflow', './internal/workflowai', './internal/backup']
+POSTGRES_PACKAGES = ['./internal/dal/...', './internal/dms', './internal/httpapi', './internal/identity', './internal/scriptrun',
+                     './internal/webdav', './internal/workflow', './internal/aiops', './internal/worker', './internal/documenttext', './internal/documentpreview', './internal/documentfiles', './internal/searchcontent', './internal/backup']
 
 
 def analyzed_packages():
@@ -183,7 +183,7 @@ def main():
             flags += ['-race', '-count=1']
         if args.native:
             os.environ.update(PAPERGO_REQUIRE_DECISION='1', PAPERGO_REQUIRE_EMBEDDING='1', PAPERGO_REQUIRE_OCR='1')
-            packages = ['./internal/onnx', './internal/decision', './internal/embedding', './internal/ocr/paddle', './internal/runner']
+            packages = ['./internal/onnx', './internal/decision', './internal/embedding', './internal/ocr/paddle', './internal/scriptrun']
         if args.run is not None:
             flags += ['-run', args.run]
         run(sys.executable, 'scripts/go-test.py', '--output', '.cache/checks/go-tests', '--', *flags, *packages)

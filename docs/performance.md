@@ -324,20 +324,3 @@ The service fixtures do not run the workflow dispatcher. In particular,
 repeated-edit throughput is a backlog stress case. Use the HTTP extended edit
 stages, which run the dispatcher, for a closer estimate of normal server edits.
 Allocation `B/op` is bytes allocated per operation, not retained process RAM.
-
-For a repeatable storage comparison against a Git revision, run:
-
-```sh
-python3 scripts/native.py
-python3 scripts/compare-storage.py --base origin/main --repeats 3
-```
-
-The [comparison harness](../scripts/compare-storage.py) builds the same
-[durable workflow benchmark](../internal/runner/storage_benchmark_test.go) in
-the current working tree and a disposable copy of the baseline revision. It
-alternates execution order, creates fresh databases for each sample, and writes
-raw measurements and a Markdown report under `reports/storage-efficiency-comparison`.
-It measures main-file growth, step allocation and payloads, retained WAL, workflow
-completion, run inspection and maintenance retention. Run it without other test
-or load processes. The workload and measurement limits are recorded in the report;
-timing improvements are observations rather than assertions in the test suite.

@@ -117,7 +117,7 @@ jobs:
       - name: Test the application on PostgreSQL
         env:
           PAPERGO_TEST_POSTGRES_DSN: postgres://papergo:papergo-test@localhost:5432/papergo?sslmode=disable
-        run: go test ./internal/dms ./internal/httpapi ./internal/identity ./internal/runner ./internal/webdav ./internal/workflow ./internal/workflowai -count=1 -timeout 40m
+        run: go test ./internal/dms ./internal/httpapi ./internal/identity ./internal/scriptrun ./internal/webdav ./internal/workflow ./internal/aiops ./internal/worker ./internal/documenttext ./internal/documentpreview ./internal/documentfiles ./internal/searchcontent -count=1 -timeout 40m
 
   frontend:
     name: Build embedded frontend
@@ -355,7 +355,7 @@ jobs:
       - name: Service, HTTP and workflow parity
         env:
           PAPERGO_TEST_SEARCH_STORE: zvec
-        run: go test -race ./internal/dms ./internal/httpapi ./internal/runner -run '(Search|Content|Receipt|Contract|AIComplete|Prefix|SmartFolder|View|Listing|Query)'
+        run: go test -race ./internal/dms ./internal/httpapi ./internal/scriptrun -run '(Search|Content|Receipt|Contract|AIComplete|Prefix|SmartFolder|View|Listing|Query)'
       - name: Real dimensions soak
         env:
           PAPERGO_ZVEC_SOAK: '1'
