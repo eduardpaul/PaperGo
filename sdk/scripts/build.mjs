@@ -14,6 +14,12 @@ await build({
   globalName: "__papergoSdk",
   platform: "neutral",
   mainFields: ["module", "main"],
+  // Kiota's tracing has no exporter in the engine (src/otel.ts), and its
+  // templates need only a small expander (src/uritemplate.ts).
+  alias: {
+    "@opentelemetry/api": join(sdk, "src", "otel.ts"),
+    "@std-uritemplate/std-uritemplate": join(sdk, "src", "stduritemplate.ts"),
+  },
   target: "es2020",
   minify: true,
   legalComments: "eof",

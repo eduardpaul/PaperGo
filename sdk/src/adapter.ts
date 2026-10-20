@@ -18,12 +18,15 @@ import {
   type RequestInformation,
   InMemoryBackingStoreFactory,
 } from "@microsoft/kiota-abstractions";
+import { JsonParseNode } from "@microsoft/kiota-serialization-json";
 import { host, type HostResponse } from "./host.js";
+import { expand } from "./uritemplate.js";
 
 /** The origin request builders put in front of every path; the engine strips it. */
 export const baseUrl = "http://papergo.workflow";
 
 const textType = /^(application\/([\w.+-]*\+)?json|text\/[\w.+-]+|application\/x-www-form-urlencoded)$/;
+const jsonType = /^application\/([\w.+-]*\+)?json$/;
 
 function mediaType(contentType: string | undefined): string {
   return (contentType ?? "").split(";")[0].trim().toLowerCase();
@@ -118,13 +121,24 @@ export class HostRequestAdapter implements RequestAdapter {
         encoded = true;
       }
     }
-    return host.request(info.httpMethod ?? "GET", info.URL, headers, body, encoded);
+    // RequestInformation.URL expands with std-uritemplate; see uritemplate.ts.
+    const raw = info.pathParameters["request-raw-url"];
+    const url = typeof raw === "string" ? raw : expand(info.urlTemplate ?? "", { ...info.queryParameters, ...info.pathParameters });
+    return host.request(info.httpMethod ?? "GET", url, headers, body, encoded);
   }
 
   private content(response: HostResponse, errors: ErrorMappings | undefined): ParseNode | undefined {
     this.check(response, errors);
     if (isEmpty(response)) return undefined;
-    return this.parseNodes.getRootParseNode(mediaType(response.headers["content-type"]), bytes(response));
+    return this.parse(response);
+  }
+
+  // JSON text goes straight to Kiota's JSON parse node; encoding it to bytes
+  // for the factory and decoding it again costs more than the parse.
+  private parse(response: HostResponse): ParseNode {
+    const type = mediaType(response.headers["content-type"]);
+    if (!response.base64 && jsonType.test(type)) return new JsonParseNode(JSON.parse(response.body), this.store);
+    return this.parseNodes.getRootParseNode(type, bytes(response));
   }
 
   private check(response: HostResponse, errors: ErrorMappings | undefined): void {
@@ -137,7 +151,7 @@ export class HostRequestAdapter implements RequestAdapter {
       errors?.XXX;
     let error: Error & { responseStatusCode?: number; responseHeaders?: Record<string, string[]> };
     if (factory && !isEmpty(response)) {
-      const node = this.parseNodes.getRootParseNode(mediaType(response.headers["content-type"]), bytes(response));
+      const node = this.parse(response);
       const problem = node.getObjectValue(factory) as unknown as Error & { code?: string; detail?: string };
       error = problem instanceof Error ? problem : Object.assign(new DefaultApiError(), problem);
       // A problem's detail says what was wrong; Kiota leaves the message empty.
