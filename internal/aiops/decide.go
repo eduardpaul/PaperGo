@@ -46,12 +46,12 @@ type TaxonomyDecisionRequest struct {
 	// Selection is multiple (default) or single.
 	Selection string `json:"selection,omitempty"`
 	// Threshold, above 0.5 and at most 1 (default 0.8), includes a term.
-	Threshold            float64                 `json:"threshold,omitempty"`
-	Question             string                  `json:"question,omitempty"`
-	OtherText            string                  `json:"other_text,omitempty"`
-	RootTermID           string                  `json:"root_term_id,omitempty"`
-	TermIDs              []string                `json:"term_ids,omitempty"`
-	LeafOnly             bool                    `json:"leaf_only,omitempty"`
+	Threshold            float64                `json:"threshold,omitempty"`
+	Question             string                 `json:"question,omitempty"`
+	OtherText            string                 `json:"other_text,omitempty"`
+	RootTermID           string                 `json:"root_term_id,omitempty"`
+	TermIDs              []string               `json:"term_ids,omitempty"`
+	LeafOnly             bool                   `json:"leaf_only,omitempty"`
 	DescriptionOverrides []dms.DecisionOverride `json:"description_overrides,omitempty"`
 }
 
