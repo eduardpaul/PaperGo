@@ -33,13 +33,13 @@ type Task struct {
 	// OperationID the operation its answer ends, which the run waits on.
 	WorkflowID, RunID, OperationID string
 	Status                         Status
-	Outcome, CompletedBy        string
-	CompletedAt                 *time.Time
-	Comment                     string
-	Input                       json.RawMessage
-	CreatedBy                   string
-	CreatedAt, UpdatedAt        time.Time
-	Version                     int64
+	Outcome, CompletedBy           string
+	CompletedAt                    *time.Time
+	Comment                        string
+	Input                          json.RawMessage
+	CreatedBy                      string
+	CreatedAt, UpdatedAt           time.Time
+	Version                        int64
 }
 
 // Response is one assignee entry's answer to a task.
@@ -52,16 +52,16 @@ type Response struct {
 // CreateInput contains the resolved task settings. Authorization, forms and
 // staged-file review checks belong to the application transaction that calls it.
 type CreateInput struct {
-	ID, WorkspaceID, ItemID     string
-	Kind                        Kind
-	Key, Title, Description     string
-	Assignees                   []string
-	Completion                  Completion
-	Outcomes                    []model.TaskOutcome
-	InputSchema, Values, Review map[string]any
-	Priority                    Priority
-	DueAt                       *time.Time
-	Source                      Source
+	ID, WorkspaceID, ItemID        string
+	Kind                           Kind
+	Key, Title, Description        string
+	Assignees                      []string
+	Completion                     Completion
+	Outcomes                       []model.TaskOutcome
+	InputSchema, Values, Review    map[string]any
+	Priority                       Priority
+	DueAt                          *time.Time
+	Source                         Source
 	WorkflowID, RunID, OperationID string
 	CreatedBy                      string
 }

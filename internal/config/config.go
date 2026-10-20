@@ -107,7 +107,7 @@ type Config struct {
 	// An action's execution input overrides it. Empty is treated as immediate.
 	AIExecution string
 	// BatchDeadline is how long a parked batch request waits.
-	BatchDeadline time.Duration
+	BatchDeadline     time.Duration
 	ProxySecret       string
 	ProxyTrustedCIDRs []netip.Prefix
 	// AdminPassword is the local administrator's initial password. It is
