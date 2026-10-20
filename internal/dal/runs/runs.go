@@ -87,6 +87,7 @@ type Filter struct {
 type Queries interface {
 	refs.Queries
 	live.Queries
+	StepQueries
 	VersionExists(ctx context.Context, workflowID string, number int64) (bool, error)
 	WorkflowRun(ctx context.Context, id string) (Run, error)
 	WorkflowRunExists(ctx context.Context, workflowID, eventID string) (bool, error)

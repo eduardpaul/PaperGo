@@ -62,6 +62,7 @@ type workflowRunR struct {
 	RunWorkflowRunItems  WorkflowRunItemSlice  // workflow_run_items.workflow_run_items_run_id_fkey
 	Workflow             *Workflow             // workflow_runs.workflow_runs_workflow_id_fkey
 	WorkspaceResource    *Resource             // workflow_runs.workflow_runs_workspace_id_fkey
+	RunWorkflowSteps     WorkflowStepSlice     // workflow_steps.workflow_steps_run_id_fkey
 	RunWorkflowWaits     WorkflowWaitSlice     // workflow_waits.workflow_waits_run_id_fkey
 	// Loaded reports whether each relationship has been loaded.
 	// A relationship's bool is set by Load*, Preload, ThenLoad, factory builds,
@@ -78,6 +79,7 @@ type workflowRunRLoaded struct {
 	RunWorkflowRunItems  bool // workflow_run_items.workflow_run_items_run_id_fkey
 	Workflow             bool // workflow_runs.workflow_runs_workflow_id_fkey
 	WorkspaceResource    bool // workflow_runs.workflow_runs_workspace_id_fkey
+	RunWorkflowSteps     bool // workflow_steps.workflow_steps_run_id_fkey
 	RunWorkflowWaits     bool // workflow_waits.workflow_waits_run_id_fkey
 }
 
@@ -932,6 +934,29 @@ func (os WorkflowRunSlice) WorkspaceResource(mods ...bob.Mod[*dialect.SelectQuer
 	)...)
 }
 
+// RunWorkflowSteps starts a query for related objects on workflow_steps
+func (o *WorkflowRun) RunWorkflowSteps(mods ...bob.Mod[*dialect.SelectQuery]) WorkflowStepsQuery {
+	return WorkflowSteps.Query(append(mods,
+		sm.Where(WorkflowSteps.Columns.RunID.EQ(psql.Arg(o.ID))),
+	)...)
+}
+
+func (os WorkflowRunSlice) RunWorkflowSteps(mods ...bob.Mod[*dialect.SelectQuery]) WorkflowStepsQuery {
+	pkID := make(pgtypes.Array[string], 0, len(os))
+
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		pkID = append(pkID, o.ID)
+	}
+	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkID), "text[]"))
+
+	return WorkflowSteps.Query(append(mods,
+		sm.Where(WorkflowSteps.Columns.RunID.EQ(PKArgExpr)),
+	)...)
+}
+
 // RunWorkflowWaits starts a query for related objects on workflow_waits
 func (o *WorkflowRun) RunWorkflowWaits(mods ...bob.Mod[*dialect.SelectQuery]) WorkflowWaitsQuery {
 	return WorkflowWaits.Query(append(mods,
@@ -1352,6 +1377,67 @@ func (workflowRun0 *WorkflowRun) AttachWorkspaceResource(ctx context.Context, ex
 	return nil
 }
 
+func insertWorkflowRunRunWorkflowSteps0(ctx context.Context, exec bob.Executor, workflowSteps1 []*WorkflowStepSetter, workflowRun0 *WorkflowRun) (WorkflowStepSlice, error) {
+	for i := range workflowSteps1 {
+		workflowSteps1[i].RunID = omit.From(workflowRun0.ID)
+	}
+
+	ret, err := WorkflowSteps.Insert(bob.ToMods(workflowSteps1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertWorkflowRunRunWorkflowSteps0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachWorkflowRunRunWorkflowSteps0(ctx context.Context, exec bob.Executor, count int, workflowSteps1 WorkflowStepSlice, workflowRun0 *WorkflowRun) (WorkflowStepSlice, error) {
+	setter := &WorkflowStepSetter{
+		RunID: omit.From(workflowRun0.ID),
+	}
+
+	err := workflowSteps1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachWorkflowRunRunWorkflowSteps0: %w", err)
+	}
+
+	return workflowSteps1, nil
+}
+
+func (workflowRun0 *WorkflowRun) InsertRunWorkflowSteps(ctx context.Context, exec bob.Executor, related ...*WorkflowStepSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	workflowSteps1, err := insertWorkflowRunRunWorkflowSteps0(ctx, exec, related, workflowRun0)
+	if err != nil {
+		return err
+	}
+
+	workflowRun0.R.RunWorkflowSteps = append(workflowRun0.R.RunWorkflowSteps, workflowSteps1...)
+
+	return nil
+}
+
+func (workflowRun0 *WorkflowRun) AttachRunWorkflowSteps(ctx context.Context, exec bob.Executor, related ...*WorkflowStep) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	workflowSteps1 := WorkflowStepSlice(related)
+
+	_, err = attachWorkflowRunRunWorkflowSteps0(ctx, exec, len(related), workflowSteps1, workflowRun0)
+	if err != nil {
+		return err
+	}
+
+	workflowRun0.R.RunWorkflowSteps = append(workflowRun0.R.RunWorkflowSteps, workflowSteps1...)
+
+	return nil
+}
+
 func insertWorkflowRunRunWorkflowWaits0(ctx context.Context, exec bob.Executor, workflowWaits1 []*WorkflowWaitSetter, workflowRun0 *WorkflowRun) (WorkflowWaitSlice, error) {
 	for i := range workflowWaits1 {
 		workflowWaits1[i].RunID = omit.From(workflowRun0.ID)
@@ -1555,6 +1641,20 @@ func (w workflowRunWhereR[Q]) HasWorkspaceResource(filters ...bob.Mod[*dialect.S
 		sm.Columns(psql.Raw("1")),
 		sm.From(Resources.NameExpr()),
 		sm.Where(Resources.Columns.ID.EQ(w.cols.WorkspaceID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: psql.Exists(q)}
+}
+
+// HasRunWorkflowSteps filters parents that have a matching RunWorkflowSteps using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to WorkflowSteps).
+func (w workflowRunWhereR[Q]) HasRunWorkflowSteps(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := psql.Select(
+		sm.Columns(psql.Raw("1")),
+		sm.From(WorkflowSteps.NameExpr()),
+		sm.Where(WorkflowSteps.Columns.RunID.EQ(w.cols.ID)),
 	)
 	q.Apply(filters...)
 	return mods.Where[Q]{E: psql.Exists(q)}

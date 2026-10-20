@@ -21,6 +21,7 @@ sql:
     sync_tokens: []
     workflow_run_items: []
     runner_step_results: []
+    workflow_steps: []
     workflow_triggers: []
     operations: []
     operation_items: []

@@ -20,6 +20,7 @@ sql:
     sync_tokens: []
     workflow_run_items: []
     runner_step_results: []
+    workflow_steps: []
     workflow_triggers: []
     operations: []
     operation_items: []
@@ -149,6 +150,10 @@ replacements:
   - tables: ["workflow_waits"]
     match:
       name: "/^(data|completion)$/"
+    replace: "types.JSON[json.RawMessage]"
+  - tables: ["workflow_steps"]
+    match:
+      name: "input"
     replace: "types.JSON[json.RawMessage]"
   - tables: ["sync_tokens"]
     match:

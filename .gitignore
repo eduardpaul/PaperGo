@@ -11,3 +11,4 @@ coverage.out
 dist/
 __pycache__/
 /deploy/secrets/
+sdk/node_modules/
