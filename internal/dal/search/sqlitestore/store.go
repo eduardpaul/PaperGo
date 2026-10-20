@@ -126,7 +126,7 @@ func Open(ctx context.Context, path string, opts Options) (*Store, error) {
 }
 
 func open(ctx context.Context, abs string, stem *search.Stemmer) (*Store, error) {
-	db, err := sql.Open("sqlite", database.DSN(abs, database.DefaultOptions))
+	db, err := database.OpenSQLite(database.DSN(abs, database.DefaultOptions))
 	if err != nil {
 		return nil, err
 	}
