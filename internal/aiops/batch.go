@@ -80,7 +80,7 @@ func (a *Assistant) submit(ctx context.Context, s *dms.Service, ops []*operation
 			}
 			continue
 		}
-		cached, found, err := a.findAnswer(ctx, c.Key)
+		cached, found, err := a.findAnswer(ctx, s, c.Key)
 		if err != nil {
 			return err
 		}

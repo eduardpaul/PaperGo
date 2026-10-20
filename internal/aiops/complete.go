@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"papergo/internal/ai"
 	"papergo/internal/dal/operations"
+	"papergo/internal/dal/resultcache"
 	"papergo/internal/dms"
 	"papergo/internal/doctext"
 	"papergo/internal/forms"
@@ -196,15 +198,12 @@ func (a *Assistant) StartCompletion(ctx context.Context, s *dms.Service, subject
 		parts = append(parts, image.ObjectKey, image.ContentType)
 	}
 	c.Key = ai.CacheKey(c.ModelKey, parts...)
+	var cached cachedAnswer
+	var found bool
 	if kind == KindBatch {
-		// A batch request answered before is answered from the cache at
-		// once, without waiting for its queue's next batch.
-		_, found, err := a.findAnswer(ctx, c.Key)
+		cached, found, err = a.findAnswer(ctx, s, c.Key)
 		if err != nil {
 			return nil, err
-		}
-		if found {
-			kind = KindComplete
 		}
 	}
 	payload, err := json.Marshal(c)
@@ -215,6 +214,28 @@ func (a *Assistant) StartCompletion(ctx context.Context, s *dms.Service, subject
 	err = s.Write(ctx, func(t *dms.Service) error {
 		var err error
 		if out, err = t.EnqueueOperation(ctx, subject, container, kind, payload); err != nil || out.Replayed {
+			return err
+		}
+		if kind == KindBatch && found {
+			// Cache state changes execution, not the operation's identity.
+			// Complete a cache hit in this acceptance transaction so it does
+			// not wait for the batch worker's admission policy.
+			now := time.Now()
+			claimed, err := t.DAL.Operations().Claim(ctx, operations.ClaimRequest{
+				Ready:  operations.Ready{Kinds: []string{kind}, IDs: []string{out.ID}, Now: now, Limit: 1},
+				Holder: "ai.cache", TTL: time.Minute,
+			})
+			if err != nil {
+				return err
+			}
+			if len(claimed) != 1 {
+				return operations.ErrClaimLost
+			}
+			claimed[0].StartedAt = &now
+			if err = succeed(ctx, t, &claimed[0], cached.answer(c.ModelKey, true)); err != nil {
+				return err
+			}
+			out, err = t.Operation(ctx, subject, out.ID)
 			return err
 		}
 		if len(c.Blobs) == 0 {
@@ -259,7 +280,7 @@ func (a *Assistant) complete(ctx context.Context, s *dms.Service, op *operations
 	if err := json.Unmarshal(op.Payload, &c); err != nil {
 		return err
 	}
-	if cached, found, err := a.findAnswer(ctx, c.Key); err != nil || found {
+	if cached, found, err := a.findAnswer(ctx, s, c.Key); err != nil || found {
 		if err != nil {
 			return err
 		}
@@ -325,12 +346,16 @@ func (a *Assistant) images(ctx context.Context, refs []imageRef) ([]ai.Image, er
 	return out, nil
 }
 
-func (a *Assistant) findAnswer(ctx context.Context, key string) (cachedAnswer, bool, error) {
+func (a *Assistant) findAnswer(ctx context.Context, s *dms.Service, key string) (cachedAnswer, bool, error) {
 	var answer cachedAnswer
 	if err := a.cacheReady(); err != nil {
 		return answer, false, err
 	}
-	raw, err := a.Results.Get(ctx, KindComplete, answerScope, key)
+	cache := a.Results
+	if _, database := cache.(*resultcache.Store); database && s.SQLTx() != nil {
+		cache = resultcache.NewTx(s.SQLTx())
+	}
+	raw, err := cache.Get(ctx, KindComplete, answerScope, key)
 	if err != nil || raw == nil {
 		return answer, false, err
 	}

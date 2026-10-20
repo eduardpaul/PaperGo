@@ -183,11 +183,8 @@ func TestBatchCompletion(t *testing.T) {
 	}
 	// A request answered before does not wait for the next batch.
 	again := f.start(t, "/v1/ai/completions", `{"prompt":"Classify","input":"one","workspace_id":"`+f.ws+`","execution":"batch","queue":"receipts"}`)
-	if again.Kind != aiops.KindComplete {
+	if again.Kind != aiops.KindBatch || again.Status != operations.StatusSucceeded {
 		t.Fatalf("a cached request was queued: %+v", again)
-	}
-	if worked, err := f.s.RunOperation(ctx, []string{aiops.KindComplete}); err != nil || !worked {
-		t.Fatal(worked, err)
 	}
 	if op := f.operation(t, again.ID); op.Status != operations.StatusSucceeded || json.Unmarshal(op.Result, &answer) != nil || !answer.Cached || f.chat.calls() != 0 {
 		t.Fatalf("%+v %+v", op, answer)
@@ -196,6 +193,65 @@ func TestBatchCompletion(t *testing.T) {
 
 // Decisions run on the local engine; a document decision fails when the
 // item's file changed while it ran.
+func TestBatchIdempotencySurvivesCacheChanges(t *testing.T) {
+	ctx := context.Background()
+	f := setup(t)
+	body := `{"prompt":"Classify","input":"one","workspace_id":"` + f.ws + `","execution":"batch"}`
+	call := func(key string, want int) dms.OperationView {
+		t.Helper()
+		r := httptest.NewRequest("POST", "/v1/ai/completions", strings.NewReader(body))
+		r.Header.Set("Authorization", "Bearer "+token)
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("Idempotency-Key", key)
+		w := httptest.NewRecorder()
+		f.h.ServeHTTP(w, r)
+		var op dms.OperationView
+		if w.Code != want || json.Unmarshal(w.Body.Bytes(), &op) != nil {
+			t.Fatalf("%s: %d %s", key, w.Code, w.Body.String())
+		}
+		return op
+	}
+	first := call("cold", http.StatusAccepted)
+	if replay := call("cold", http.StatusOK); replay.ID != first.ID {
+		t.Fatal("pending request was not replayed")
+	}
+	if worked, err := f.s.RunOperationGroup(ctx, aiops.KindBatch, "shared", nil, 20); err != nil || !worked {
+		t.Fatal(worked, err)
+	}
+	f.batch.finish()
+	if err := f.a.Poll(ctx, time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if replay := call("cold", http.StatusOK); replay.ID != first.ID || replay.Status != operations.StatusSucceeded {
+		t.Fatalf("cache warming changed identity: %+v", replay)
+	}
+	warm := call("warm", http.StatusAccepted)
+	if warm.Kind != aiops.KindBatch || warm.Status != operations.StatusSucceeded {
+		t.Fatalf("cache hit was not completed at acceptance: %+v", warm)
+	}
+	// Workflow requests already own a transaction; cache lookup and
+	// completion must use that same transaction.
+	err := f.s.Write(ctx, func(s *dms.Service) error {
+		op, err := f.a.StartCompletion(ctx, s, "alice", aiops.CompletionRequest{Prompt: "Classify", Input: "one", WorkspaceID: f.ws, Execution: "batch"})
+		if err == nil && (op.Kind != aiops.KindBatch || op.Status != operations.StatusSucceeded) {
+			t.Fatalf("transactional cache hit: %+v", op)
+		}
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.a.Collect(ctx, time.Now().Add(2*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if replay := call("warm", http.StatusOK); replay.ID != warm.ID || replay.Status != operations.StatusSucceeded {
+		t.Fatalf("cache expiry changed identity: %+v", replay)
+	}
+	if len(f.batch.batches) != 1 || f.chat.calls() != 0 {
+		t.Fatal("replays or cache hits called a provider")
+	}
+}
+
 func TestBatchRetriesExhaustAttempts(t *testing.T) {
 	ctx := context.Background()
 	f := setup(t)
