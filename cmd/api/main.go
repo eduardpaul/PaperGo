@@ -25,6 +25,7 @@ import (
 	"papergo/internal/doctext/pdfium"
 	"papergo/internal/documentfiles"
 	"papergo/internal/documentpreview"
+	"papergo/internal/documentsearch"
 	"papergo/internal/documenttext"
 	"papergo/internal/httpapi"
 	"papergo/internal/identity"
@@ -33,7 +34,6 @@ import (
 	"papergo/internal/readiness"
 	"papergo/internal/scriptrun"
 	"papergo/internal/search"
-	"papergo/internal/searchcontent"
 	"papergo/internal/storage"
 	"papergo/internal/webdav"
 	"papergo/internal/workflow"
@@ -143,37 +143,28 @@ func run(log *slog.Logger) error {
 	}
 	service.ConfigureIntegrations(secrets)
 
-	var index interface {
-		search.Store
-		Fresh() bool
-	}
-	if c.SearchStore == "zvec" {
+	// Search is an extension: without a store PaperGo runs without it, and
+	// listings match search text by name.
+	var index search.Store
+	switch c.SearchStore {
+	case config.SearchZvec:
 		index, err = zvecstore.Open(startup, c.ZvecPath, zvecstore.Options{Languages: c.SearchLanguages, KeywordCandidates: c.ZvecKeywordCandidates})
-	} else {
+	case config.SearchSQLite:
 		index, err = sqlitestore.Open(startup, c.SearchPath, sqlitestore.Options{Languages: c.SearchLanguages})
 	}
 	if err != nil {
 		return fmt.Errorf("open the search store: %w", err)
 	}
-	defer index.Close()
-	service.SetSearch(index)
-	embeddings, err := ai.NewEmbedder(c.Embeddings, nil)
-	if err != nil {
-		return fmt.Errorf("configure embeddings: %w", err)
-	}
-	if embeddings != nil {
-		defer embeddings.Close()
-		service.SetEmbeddings(embeddings)
-		log.Info("semantic search enabled", "provider", c.Embeddings.Provider, "model", c.Embeddings.Model)
-	}
-	if index.Fresh() {
-		// A new or recreated store: rebuild it from the database.
-		err = service.RebuildSearch(startup)
-	} else {
-		err = service.ResumeSearchRebuild(startup)
-	}
-	if err != nil {
-		return fmt.Errorf("start the search index: %w", err)
+	var embeddings ai.Embedder
+	if index != nil {
+		defer index.Close()
+		if embeddings, err = ai.NewEmbedder(c.Embeddings, nil); err != nil {
+			return fmt.Errorf("configure embeddings: %w", err)
+		}
+		if embeddings != nil {
+			defer embeddings.Close()
+			log.Info("semantic search enabled", "provider", c.Embeddings.Provider, "model", c.Embeddings.Model)
+		}
 	}
 	if err = service.Directory().Initialize(startup, c.AdminSubject, c.AdminGroup); err != nil {
 		return fmt.Errorf("initialize organization directory: %w", err)
@@ -236,7 +227,6 @@ func run(log *slog.Logger) error {
 	feats := features{
 		text:    &documenttext.Reader{Storage: store, PDF: pdf, OCR: reader, Languages: c.SearchLanguages},
 		preview: &documentpreview.Renderer{Storage: store, PDF: pdf},
-		search:  &searchcontent.Indexer{Storage: store, Search: index, Embeddings: embeddings},
 		ai: &aiops.Assistant{Storage: store, Chat: chat, Batch: batch, Results: resultcache.New(db.SQL), ResultTTL: c.ResultCacheTTL,
 			Records: activitystore.New(db.SQL), DefaultExecution: c.AIExecution, BatchDeadline: c.BatchDeadline},
 		files: &documentfiles.Maker{Storage: store, OCR: reader, MaxFileBytes: c.MaxUpload},
@@ -244,8 +234,16 @@ func run(log *slog.Logger) error {
 	if decisions != nil {
 		feats.ai.Decisions = decisions
 	}
+	if index != nil {
+		feats.search = &documentsearch.Search{Storage: store, Store: index, Embeddings: embeddings}
+	}
 	if err = feats.register(service); err != nil {
 		return err
+	}
+	if feats.search != nil {
+		if err = feats.search.Start(startup); err != nil {
+			return fmt.Errorf("start the search index: %w", err)
+		}
 	}
 	if err = workflows.SyncBuiltIns(startup); err != nil {
 		return fmt.Errorf("update built-in workflows: %w", err)

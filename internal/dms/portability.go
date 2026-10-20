@@ -651,11 +651,10 @@ func (s *Service) importCorePackage(ctx context.Context, store storage.Store, su
 	if err != nil || in.DryRun {
 		return result, err
 	}
-	// Imported entries raised no change events: rebuild the search index,
-	// file content included (the imported text is reused, not read again).
-	if s.search != nil {
-		raw, _ := json.Marshal(searchReindexPayload{Content: true})
-		if _, _, err = s.accept(ctx, operations.Operation{Kind: OperationKindSearchReindex, CreatedBy: systemSubject, Payload: raw}, false); err != nil {
+	// Imported entries raised no change events: extensions that derive
+	// state from them rebuild it.
+	for _, hook := range s.ext.imported {
+		if err = hook(ctx, s); err != nil {
 			return result, err
 		}
 	}

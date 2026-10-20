@@ -69,14 +69,14 @@ func (s *Service) Browse(ctx context.Context, subject string, in Browse) (Page[*
 	}
 	if in.Keyword != "" {
 		var err error
-		in.Keyword, err = s.keywordFilter(ctx, in.Keyword)
+		in.Keyword, err = s.CanonicalKeyword(ctx, in.Keyword)
 		if err != nil {
 			return Page[*resources.Resource]{}, err
 		}
 	}
 	b := content.Browse{Reader: principal(ctx, subject), Surface: in.Surface, Kind: refs.ResourceKind(in.Kind), Keyword: in.Keyword, AfterID: in.After, Limit: pageSize(in.Limit) + 1}
-	// Search text matches items and folders in the search store, within the
-	// parent's collection or the workspace, and other resources by name.
+	// Search text matches items and folders through the text matcher, within
+	// the parent's collection or the workspace, and other resources by name.
 	var matchCollection, matchWorkspace string
 	if in.ParentID != "" {
 		parent, err := s.authorize(ctx, subject, in.ParentID, "read")
@@ -114,12 +114,10 @@ func (s *Service) Browse(ctx context.Context, subject string, in Browse) (Page[*
 	}
 	capped := false
 	if strings.TrimSpace(in.Search) != "" {
-		head, published, matchCapped, err := s.searchMatches(ctx, subject, matchCollection, matchWorkspace, in.Search)
-		if err != nil {
+		var err error
+		if b.Search, capped, err = s.matchText(ctx, subject, matchCollection, matchWorkspace, in.Search); err != nil {
 			return Page[*resources.Resource]{}, err
 		}
-		capped = matchCapped
-		b.Search = &content.SearchMatch{Name: strings.ToLower(strings.TrimSpace(in.Search)), Head: head, Published: published}
 	}
 	ids, err := s.DAL.Content().BrowseIDs(ctx, b)
 	if err != nil {

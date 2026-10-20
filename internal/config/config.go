@@ -30,7 +30,8 @@ type Config struct {
 	// SearchPath is the search store's SQLite file (SEARCH_DATABASE_PATH),
 	// by default search.db next to the database.
 	SearchPath string
-	// SearchStore selects sqlite (default) or the optional native zvec store.
+	// SearchStore is the search extension's store (SEARCH_STORE): zvec
+	// (default), sqlite, or none to run without search.
 	SearchStore           string
 	ZvecPath              string
 	ZvecKeywordCandidates int
@@ -119,6 +120,15 @@ type Config struct {
 	AdminPasswordOmitted bool
 }
 
+// Search stores (SEARCH_STORE).
+const (
+	SearchZvec   = "zvec"
+	SearchSQLite = "sqlite"
+	// SearchNone runs PaperGo without its search extension: listings match
+	// search text by name.
+	SearchNone = "none"
+)
+
 // Load reads config.yaml from PAPERGO_CONFIG or ./config.yaml, then applies
 // environment variables. Environment variables win when they are non-empty.
 func Load() (Config, error) {
@@ -167,9 +177,9 @@ func loadFrom(getenv func(string) string, yamlText, directory string) (Config, e
 		}
 	}
 	c.SearchPath = value("SEARCH_DATABASE_PATH", filepath.Join(filepath.Dir(c.DatabasePath), "search.db"))
-	c.SearchStore = value("SEARCH_STORE", "zvec")
-	if c.SearchStore != "sqlite" && c.SearchStore != "zvec" {
-		return c, fmt.Errorf("SEARCH_STORE must be sqlite or zvec")
+	c.SearchStore = value("SEARCH_STORE", SearchZvec)
+	if c.SearchStore != SearchSQLite && c.SearchStore != SearchZvec && c.SearchStore != SearchNone {
+		return c, fmt.Errorf("SEARCH_STORE must be zvec, sqlite or none")
 	}
 	c.ZvecPath = value("SEARCH_ZVEC_PATH", filepath.Join(filepath.Dir(c.DatabasePath), "search", "zvec"))
 	c.ZvecKeywordCandidates = 10000
@@ -180,13 +190,15 @@ func loadFrom(getenv func(string) string, yamlText, directory string) (Config, e
 		}
 		c.ZvecKeywordCandidates = n
 	}
-	if c.SearchStore == "zvec" {
+	if c.SearchStore == SearchZvec {
 		if err := distinctZvecPath(c.ZvecPath, c.DatabasePath, c.BlobPath, c.SearchPath); err != nil {
 			return c, err
 		}
 	}
-	if err := distinctSearchPath(c.DatabasePath, c.SearchPath); err != nil {
-		return c, err
+	if c.SearchStore == SearchSQLite {
+		if err := distinctSearchPath(c.DatabasePath, c.SearchPath); err != nil {
+			return c, err
+		}
 	}
 	if languages := strings.ToLower(strings.TrimSpace(value("SEARCH_LANGUAGES", "english"))); languages != "none" {
 		for _, l := range strings.Split(languages, ",") {

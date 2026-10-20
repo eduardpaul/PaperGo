@@ -89,7 +89,7 @@ func TestOperationCancellation(t *testing.T) {
 		t.Fatal("cancelled operation ran", worked, err)
 	}
 	// PaperGo's own work completes what scheduled it.
-	rebuild, _, err := s.DAL.Operations().Accept(testContext, operations.Operation{Kind: OperationKindSearchReindex, CreatedBy: systemSubject}, time.Now())
+	rebuild, _, err := s.DAL.Operations().Accept(testContext, operations.Operation{Kind: OperationKindBulkUpdate, CreatedBy: SystemSubject}, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -380,6 +380,7 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 	var validation *dms.ValidationError
 	var identityValidation *identity.ValidationError
 	var max *http.MaxBytesError
+	var moduleProblem *Problem
 	switch {
 	case errors.As(err, &moveConflict):
 		w.Header().Set("Content-Type", "application/problem+json")
@@ -411,10 +412,8 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 		problem(422, "validation_failed", validation.Error())
 	case errors.Is(err, dms.ErrNoText):
 		problem(404, "text_not_read", "The file's text has not been read; a workflow with document.read_text reads it.")
-	case errors.Is(err, dms.ErrSearchOff):
-		problem(400, "search_off", "Search is turned off for this collection: its search.index workflow is disabled.")
-	case errors.Is(err, dms.ErrSearchUnavailable):
-		problem(503, "search_unavailable", "Search is unavailable while the search index is rebuilt; try again shortly.")
+	case errors.As(err, &moduleProblem):
+		problem(moduleProblem.Status, moduleProblem.Code, moduleProblem.Detail)
 	case errors.Is(err, dms.ErrLiveExpired):
 		problem(410, "live_cursor_expired", err.Error())
 	case errors.Is(err, dms.ErrDeltaExpired):

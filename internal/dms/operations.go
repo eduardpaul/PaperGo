@@ -467,7 +467,7 @@ type OperationView struct {
 // field index builds and the operations PaperGo starts itself act for no
 // one.
 func actsForSomeone(op *operations.Operation) bool {
-	return op.Kind != OperationKindFieldIndex && op.CreatedBy != systemSubject
+	return op.Kind != OperationKindFieldIndex && op.CreatedBy != SystemSubject
 }
 
 func viewOperation(op operations.Operation, now time.Time) *OperationView {
@@ -496,4 +496,25 @@ func viewOperation(op operations.Operation, now time.Time) *OperationView {
 		v.Waiting = WaitingQueued
 	}
 	return v
+}
+
+// SystemSubject is the creator of operations PaperGo starts itself.
+const SystemSubject = "papergo"
+
+// EnsureSystemOperation queues an operation of kind that PaperGo starts
+// itself, unless one is pending: maintenance hands expensive work to the
+// kind's worker this way, so the worker's window, concurrency and retries
+// govern it.
+func (s *Service) EnsureSystemOperation(ctx context.Context, kind string, payload json.RawMessage) error {
+	if payload == nil {
+		payload = json.RawMessage(`{}`)
+	}
+	return s.write(ctx, func(t *Service) error {
+		pending, err := t.DAL.Operations().Exists(ctx, operations.Filter{Kinds: []string{kind}, Statuses: []operations.Status{operations.StatusPending}, CreatedBy: SystemSubject})
+		if err != nil || pending {
+			return err
+		}
+		_, _, err = t.accept(ctx, operations.Operation{Kind: kind, CreatedBy: SystemSubject, Payload: payload}, false)
+		return err
+	})
 }

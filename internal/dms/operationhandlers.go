@@ -92,7 +92,6 @@ func builtInOperationHandlers() map[string]OperationHandler {
 			}
 			return err
 		}},
-		OperationKindSearchReindex: searchReindexHandler(),
 		OperationKindBulkUpdate: {Scope: "list.write", Step: func(ctx context.Context, s *Service, op *operations.Operation) error {
 			return s.bulkUpdateStep(ctx, op)
 		}, Failed: func(ctx context.Context, s *Service, op *operations.Operation, cause error) error {
@@ -596,7 +595,7 @@ func (s *Service) CancelOperation(ctx context.Context, subject, id string) (out 
 		// them.
 		// External operations end with what they stand for, such as a task.
 		handler, startable := t.ops.handlers[op.Kind]
-		if !startable || handler.External || handler.Validate == nil && op.Kind != OperationKindBulkUpdate || op.CreatedBy == systemSubject {
+		if !startable || handler.External || handler.Validate == nil && op.Kind != OperationKindBulkUpdate || op.CreatedBy == SystemSubject {
 			return ErrForbidden
 		}
 		if op.CreatedBy != subject {

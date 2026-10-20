@@ -137,7 +137,7 @@ func (a *API) routes() (api *router, err error) {
 	a.registerIntegrations(api)
 	a.registerSmartFolders(api)
 	a.registerWorkflows(api)
-	a.registerSearch(api)
+	a.registerSearchFields(api)
 	a.registerStorage(api)
 	a.registerTasks(api)
 	a.registerResources(api)
@@ -150,6 +150,16 @@ func (a *API) routes() (api *router, err error) {
 	api.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { a.problem(w, r, 404, "not_found", "route not found") })
 	return api, nil
 }
+
+// Problem is an error a module route answers with its own problem status
+// and code, such as 503 when a store it needs is unavailable.
+type Problem struct {
+	Status int
+	Code   string
+	Detail string
+}
+
+func (p *Problem) Error() string { return p.Detail }
 
 // Respond writes body as the JSON response with status.
 func Respond(w http.ResponseWriter, r *http.Request, status int, body any) {

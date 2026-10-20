@@ -16324,7 +16324,7 @@
         ],
         "operationId": "search",
         "summary": "Search items and folders across readable workspaces",
-        "description": "Keyword search over the search index, trimmed to what the caller reads now and on the surface they read; every hit is rechecked against current permissions. File text participates in matching and snippets only with document.read; otherwise metadata is searched. Facets are omitted if any matching source fails current authorization. Indexing is asynchronous (the search.index workflow). See docs/search.md.",
+        "description": "Keyword search over the search index, trimmed to what the caller reads now and on the surface they read; every hit is rechecked against current permissions. File text participates in matching and snippets only with document.read; otherwise metadata is searched. Facets are omitted if any matching source fails current authorization. Indexing is asynchronous (the search.index workflow). See docs/search.md. Served when the deployment runs search (SEARCH_STORE is not none).",
         "x-required-scopes": [
           "list.read"
         ],
@@ -16517,7 +16517,7 @@
             "$ref": "#/components/responses/Problem"
           },
           "503": {
-            "description": "search_unavailable: no search store, or it is being rebuilt.",
+            "description": "search_unavailable: the search index is being rebuilt.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -16534,7 +16534,7 @@
         ],
         "operationId": "searchWithFilter",
         "summary": "Search items and folders with field filters",
-        "description": "Keyword search over the search index, trimmed to what the caller reads now and on the surface they read; every hit is rechecked against current permissions. File text participates in matching and snippets only with document.read; otherwise metadata is searched. Facets are omitted if any matching source fails current authorization. Indexing is asynchronous (the search.index workflow). See docs/search.md. The JSON body takes the GET parameters (kind as an array) and a filter on search fields; $top and $skiptoken stay in the URL, and a next page repeats the body.",
+        "description": "Keyword search over the search index, trimmed to what the caller reads now and on the surface they read; every hit is rechecked against current permissions. File text participates in matching and snippets only with document.read; otherwise metadata is searched. Facets are omitted if any matching source fails current authorization. Indexing is asynchronous (the search.index workflow). See docs/search.md. The JSON body takes the GET parameters (kind as an array) and a filter on search fields; $top and $skiptoken stay in the URL, and a next page repeats the body. Served when the deployment runs search (SEARCH_STORE is not none).",
         "x-required-scopes": [
           "list.read"
         ],
@@ -16585,7 +16585,7 @@
             "$ref": "#/components/responses/Problem"
           },
           "503": {
-            "description": "search_unavailable: no search store, or it is being rebuilt.",
+            "description": "search_unavailable: the search index is being rebuilt.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -16614,7 +16614,7 @@
         ],
         "operationId": "reindexSearch",
         "summary": "Rewrite every search document",
-        "description": "Rewrites the documents of every live item and folder in batches and removes documents of entries that no longer exist. With content, the workflow filling search.content reads, chunks and publishes again the current file of items whose file has no content (all of them with force); text read before is reused. Search keeps answering meanwhile.",
+        "description": "Rewrites the documents of every live item and folder in batches and removes documents of entries that no longer exist. With content, the workflow filling search.content reads, chunks and publishes again the current file of items whose file has no content (all of them with force); text read before is reused. Search keeps answering meanwhile. Served when the deployment runs search (SEARCH_STORE is not none).",
         "x-required-scopes": [
           "organization.manage"
         ],
@@ -16759,7 +16759,8 @@
           "503": {
             "$ref": "#/components/responses/Problem"
           }
-        }
+        },
+        "description": "Served when the deployment runs search (SEARCH_STORE is not none)."
       }
     },
     "/v1/search/fields": {
@@ -18912,10 +18913,10 @@
           "Search"
         ],
         "operationId": "syncSearch",
-        "summary": "Bring search entries up to date",
-        "description": "Rewrites the search documents of resources of the workspace from their current state, and removes those of resources that are gone. Syncing again is harmless. Requires read access to the workspace; a resource of another workspace is refused.",
+        "summary": "Queue search entries to be brought up to date",
+        "description": "Queues a search.sync operation that rewrites the search documents of resources of the workspace from their current state, and removes those of resources that are gone. The search worker runs queued syncs together, up to 200 at a time, outside any database transaction; syncing again is harmless. Its result counts what the batch wrote and removed (SearchSyncResult). Requires write access to the workspace; a resource of another workspace is refused. Served when the deployment runs search.",
         "x-required-scopes": [
-          "workspace.read"
+          "list.read"
         ],
         "parameters": [
           {
@@ -18939,11 +18940,44 @@
         },
         "responses": {
           "200": {
-            "description": "Success",
+            "description": "An Idempotency-Key returned the operation this request accepted earlier.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              },
+              "Idempotent-Replayed": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SearchSyncResult"
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Queued operation. Follow Location; its result is a SearchSyncResult.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
                 }
               }
             }
@@ -22055,7 +22089,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 64,
-            "description": "Registered operation kind; field_index, bulk_update and search_reindex are built in."
+            "description": "Registered operation kind; field_index and bulk_update are built in, and extensions register others, such as search.reindex."
           },
           "status": {
             "type": "string",
@@ -23839,42 +23873,42 @@
         ],
         "additionalProperties": false
       },
-        "WorkflowTestRun": {
-          "type": "object",
-          "properties": {
-            "item_ids": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "maxItems": 100,
-              "description": "Items of the workflow's workspace to test on, in order; duplicates are dropped. None starts a run without an item."
-            },
-            "primary_item_id": {
-              "type": "string",
-              "description": "The run's item when several are given; must be one of item_ids. Default: the first."
-            },
-            "inputs": {
-              "type": "object",
-              "additionalProperties": true,
-              "description": "Launch form values, checked against the version's input_schema."
-            }
-          },
-          "required": [],
-          "additionalProperties": false
-        },
-        "WorkflowTestStarted": {
-          "type": "object",
-          "properties": {
-            "run_id": {
+      "WorkflowTestRun": {
+        "type": "object",
+        "properties": {
+          "item_ids": {
+            "type": "array",
+            "items": {
               "type": "string"
-            }
+            },
+            "maxItems": 100,
+            "description": "Items of the workflow's workspace to test on, in order; duplicates are dropped. None starts a run without an item."
           },
-          "required": [
-            "run_id"
-          ],
-          "additionalProperties": false
+          "primary_item_id": {
+            "type": "string",
+            "description": "The run's item when several are given; must be one of item_ids. Default: the first."
+          },
+          "inputs": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Launch form values, checked against the version's input_schema."
+          }
         },
+        "required": [],
+        "additionalProperties": false
+      },
+      "WorkflowTestStarted": {
+        "type": "object",
+        "properties": {
+          "run_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id"
+        ],
+        "additionalProperties": false
+      },
       "WorkflowBuiltIn": {
         "type": "object",
         "properties": {
@@ -27179,18 +27213,6 @@
               "additionalProperties": false
             }
           },
-          "search_store": {
-            "type": "string",
-            "description": "sqlite or zvec, or an empty string when search is not configured."
-          },
-          "search_bytes": {
-            "type": "integer",
-            "description": "Bytes reported by the search store. Zero when search is not configured."
-          },
-          "search_documents": {
-            "type": "integer",
-            "description": "Documents reported by the search store. Zero when search is not configured."
-          },
           "blob_bytes": {
             "type": "integer",
             "description": "Sum of distinct available blob sizes, one per SHA-256. File content is stored outside the database."
@@ -27269,6 +27291,13 @@
               "publications"
             ],
             "additionalProperties": false
+          },
+          "extensions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StorageUsage"
+            },
+            "description": "What extensions keep outside the database, such as the search index."
           }
         },
         "required": [
@@ -27289,13 +27318,11 @@
           "unused_bytes",
           "accounted_bytes",
           "tables",
-          "search_store",
-          "search_bytes",
-          "search_documents",
           "blob_bytes",
           "runs",
           "expired",
-          "retained"
+          "retained",
+          "extensions"
         ],
         "additionalProperties": false
       },
@@ -28963,6 +28990,35 @@
           "blob_id",
           "availability",
           "deferred"
+        ],
+        "additionalProperties": false
+      },
+      "StorageUsage": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The extension, such as search."
+          },
+          "store": {
+            "type": "string",
+            "description": "Its store, such as zvec or sqlite."
+          },
+          "bytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "entries": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Entries the store holds, such as search documents."
+          }
+        },
+        "required": [
+          "name",
+          "store",
+          "bytes",
+          "entries"
         ],
         "additionalProperties": false
       }

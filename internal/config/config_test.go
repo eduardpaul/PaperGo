@@ -62,6 +62,7 @@ func TestSearchDatabasePathRejectsApplicationDatabase(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "search.db")
 	t.Setenv("DATABASE_PATH", path)
+	t.Setenv("SEARCH_STORE", SearchSQLite)
 	t.Setenv("SEARCH_DATABASE_PATH", "")
 	if _, err := Load(); err == nil {
 		t.Fatal("default search path overlaps the application database")

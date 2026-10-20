@@ -11,9 +11,9 @@ import (
 	"papergo/internal/dms"
 	"papergo/internal/documentfiles"
 	"papergo/internal/documentpreview"
+	"papergo/internal/documentsearch"
 	"papergo/internal/documenttext"
 	"papergo/internal/scriptrun"
-	"papergo/internal/searchcontent"
 	"papergo/internal/storage"
 	"papergo/internal/worker"
 )
@@ -21,14 +21,13 @@ import (
 // workers returns the runtime of the operations this executable runs: one
 // worker per kind of work, so long OCR never holds up index builds, bulk
 // edits or previews, and the maintenance that keeps retention and cleanup
-// going even with empty queues.
+// going even with empty queues. Search's workers run only with search.
 func workers(service *dms.Service, store storage.Store, f features, runs *scriptrun.Runner, log *slog.Logger) *worker.Runtime {
 	rt := worker.New(service, log)
-	rt.Add(worker.Definition{Name: "maintenance", Kinds: []string{dms.OperationKindFieldIndex, dms.OperationKindBulkUpdate, dms.OperationKindSearchReindex, dms.OperationKindExport, dms.OperationKindImport}})
+	rt.Add(worker.Definition{Name: "maintenance", Kinds: []string{dms.OperationKindFieldIndex, dms.OperationKindBulkUpdate, dms.OperationKindExport, dms.OperationKindImport}})
 	rt.Add(worker.Definition{Name: "integrations", Kinds: []string{dms.OperationKindIntegrationRefresh}, Concurrency: 2})
 	rt.Add(worker.Definition{Name: "documents", Kinds: []string{documenttext.Kind, documentfiles.KindOptimize, documentfiles.KindCompose}})
 	rt.Add(worker.Definition{Name: "previews", Kinds: []string{documentpreview.Kind}})
-	rt.Add(worker.Definition{Name: "search", Kinds: []string{searchcontent.KindChunk, searchcontent.KindEmbed, searchcontent.KindPublish, searchcontent.KindSweep}})
 	rt.Add(worker.Definition{Name: "ai", Kinds: []string{aiops.KindComplete}, Concurrency: 2})
 	// Batch completions go to the provider in groups of 20, and whatever
 	// waits goes once a day.
@@ -38,6 +37,14 @@ func workers(service *dms.Service, store storage.Store, f features, runs *script
 	// Workflow runs execute a slice of script at a time, so short slices of
 	// many runs interleave.
 	rt.Add(worker.Definition{Name: "workflows", Kinds: []string{dms.OperationKindRun}, Concurrency: 4})
+	if f.search != nil {
+		rt.Add(worker.Definition{Name: "search", Kinds: []string{documentsearch.KindChunk, documentsearch.KindEmbed, documentsearch.KindPublish, documentsearch.KindSweep, documentsearch.KindReindex}})
+		// Entries that changed are written to the index together: whatever
+		// is queued, up to 200 at a time, so syncs that arrive while a
+		// batch runs make the next one.
+		rt.Add(worker.Definition{Name: "search-sync", Kinds: []string{documentsearch.KindSync}, Admission: worker.Admission{Policy: worker.Threshold, Threshold: 1, Batch: 200}})
+		rt.Maintain(worker.Maintenance{Name: "embedding sweep", Every: 15 * time.Minute, Run: f.search.Sweep})
+	}
 	for _, m := range []worker.Maintenance{
 		{Name: "operation retention", Every: time.Hour, Run: service.CollectExpiredOperations},
 		{Name: "operation deadlines", Every: time.Minute, Run: service.ExpireOperations},
@@ -47,7 +54,6 @@ func workers(service *dms.Service, store storage.Store, f features, runs *script
 		{Name: "unreferenced objects", Every: time.Minute, Run: func(ctx context.Context, now time.Time) error { return service.CollectObjects(ctx, store, now) }},
 		{Name: "reclaimed files", Every: time.Minute, Run: func(ctx context.Context, now time.Time) error { return service.SweepReclaims(ctx, store, now) }},
 		{Name: "artifact retention", Every: time.Hour, Run: service.CollectArtifacts},
-		{Name: "embedding sweep", Every: 15 * time.Minute, Run: f.search.Sweep},
 		{Name: "AI batches", Every: time.Minute, Run: f.ai.Poll},
 		{Name: "AI records", Every: time.Hour, Run: f.ai.Collect},
 		{Name: "integration refreshes", Every: 15 * time.Minute, Run: service.RefreshIntegrations},

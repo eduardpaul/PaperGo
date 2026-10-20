@@ -76,7 +76,7 @@ type PermissionTarget struct {
 // The rows are read as they are now, so later changes are reflected.
 func (s *Service) PermissionTargets(ctx context.Context, e Event, after string, limit int) ([]PermissionTarget, error) {
 	action, _ := e.Data["action"].(string)
-	f := resources.Filter{Kinds: contentKinds, State: resources.Live, AfterID: after, Limit: limit}
+	f := resources.Filter{Kinds: ContentKinds, State: resources.Live, AfterID: after, Limit: limit}
 	switch {
 	case action == "member.set" || action == "member.remove":
 		f.WorkspaceID = e.WorkspaceID

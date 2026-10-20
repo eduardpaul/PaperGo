@@ -1,4 +1,4 @@
-package httpapi
+package documentsearch
 
 import (
 	"context"
@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"papergo/internal/auth"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
 	"papergo/internal/model"
@@ -96,7 +95,7 @@ func TestSearchTrimsByPermissionsAndSurfaces(t *testing.T) {
 		t.Fatal(err)
 	}
 	indexSearch(t, s)
-	bob := (&API{DMS: s, Auth: auth.Development{Token: testToken, Subject: "bob"}, Logger: slog.Default()}).Handler()
+	bob := handlerAs(t, s, "bob")
 
 	all := searchAs(t, h, "/v1/search?q=budget", 200)
 	if all.Total != 3 || len(all.Value) != 3 || !strings.Contains(all.names(), "Budget plan@head") || !strings.Contains(all.names(), "Budget report@head") || !strings.Contains(all.names(), "Budget cuts@") {
@@ -192,7 +191,7 @@ func TestSearchReindexAndRebuild(t *testing.T) {
 	if got := searchAs(t, h, "/v1/search?q=invoice", 200); len(got.Value) != 0 {
 		t.Fatal("indexed without the workflow:", got.names())
 	}
-	bob := (&API{DMS: s, Auth: auth.Development{Token: testToken, Subject: "bob"}, Logger: slog.Default()}).Handler()
+	bob := handlerAs(t, s, "bob")
 	if res := request(bob, "POST", "/v1/search/reindex", "", testToken, "", ""); res.Code != 403 {
 		t.Fatal("reindex without organization.manage", res.Code, res.Body.String())
 	}
@@ -205,7 +204,7 @@ func TestSearchReindexAndRebuild(t *testing.T) {
 	t.Cleanup(func() { cancel(); <-stopped })
 	res := request(h, "POST", "/v1/search/reindex", "", testToken, "", "")
 	var op dms.OperationView
-	if res.Code != 202 || json.Unmarshal(res.Body.Bytes(), &op) != nil || op.Kind != dms.OperationKindSearchReindex || res.Header().Get("Location") != "/v1/operations/"+op.ID {
+	if res.Code != 202 || json.Unmarshal(res.Body.Bytes(), &op) != nil || op.Kind != KindReindex || res.Header().Get("Location") != "/v1/operations/"+op.ID {
 		t.Fatal(res.Code, res.Body.String())
 	}
 	waitOperation(t, h, op.ID)
@@ -213,7 +212,7 @@ func TestSearchReindexAndRebuild(t *testing.T) {
 		t.Fatal("after reindex:", got.names())
 	}
 	res = request(h, "GET", "/v1/search/status", "", testToken, "", "")
-	var status dms.SearchStatus
+	var status Status
 	expectedStore := os.Getenv("PAPERGO_TEST_SEARCH_STORE")
 	if expectedStore == "" {
 		expectedStore = "sqlite"
@@ -229,15 +228,19 @@ func TestSearchReindexAndRebuild(t *testing.T) {
 	// in global search and in searches inside collections.
 	cancel()
 	<-stopped
-	if err = s.RebuildSearch(ctx); err != nil {
+	raw, _ := json.Marshal(reindexPayload{Rebuild: true, Content: true})
+	if err = s.EnsureSystemOperation(ctx, KindReindex, raw); err != nil {
 		t.Fatal(err)
 	}
-	searchAs(t, h, "/v1/search?q=invoice", 503)
-	if res = request(h, "GET", "/v1/resources/"+list.ID+"/children?q=invoice", "", testToken, "", ""); res.Code != 503 || !strings.Contains(res.Body.String(), "search_unavailable") {
+	if err = extension(t, s).Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if res = request(h, "GET", "/v1/search?q=invoice", "", testToken, "", ""); res.Code != 503 || !strings.Contains(res.Body.String(), "search_unavailable") {
 		t.Fatal(res.Code, res.Body.String())
 	}
-	if res = request(h, "GET", "/v1/resources/"+list.ID+"/children", "", testToken, "", ""); res.Code != 200 {
-		t.Fatal("listing without a search", res.Code)
+	// Listings match names meanwhile.
+	if res = request(h, "GET", "/v1/resources/"+list.ID+"/children?q=march", "", testToken, "", ""); res.Code != 200 || !strings.Contains(res.Body.String(), "Invoice March") {
+		t.Fatal(res.Code, res.Body.String())
 	}
 	rebuildCtx, stopRebuild := context.WithCancel(ctx)
 	rebuilt := make(chan struct{})
@@ -364,7 +367,7 @@ func TestSearchFieldsFiltersWeightsAndStems(t *testing.T) {
 		t.Fatal(err)
 	}
 	indexSearch(t, s)
-	bob := (&API{DMS: s, Auth: auth.Development{Token: testToken, Subject: "bob"}, Logger: slog.Default()}).Handler()
+	bob := handlerAs(t, s, "bob")
 
 	// Fields of the lists each caller reads; notes are text, not filters.
 	fields := func(h http.Handler) map[string]dms.SearchField {

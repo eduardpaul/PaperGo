@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # Suites whose tests open databases through internal/dal/daltest, which run on
 # PostgreSQL with --postgres.
 POSTGRES_PACKAGES = ['./internal/dal/...', './internal/dms', './internal/httpapi', './internal/identity', './internal/scriptrun',
-                     './internal/webdav', './internal/workflow', './internal/aiops', './internal/worker', './internal/documenttext', './internal/documentpreview', './internal/documentfiles', './internal/searchcontent', './internal/backup']
+                     './internal/webdav', './internal/workflow', './internal/aiops', './internal/worker', './internal/documenttext', './internal/documentpreview', './internal/documentfiles', './internal/documentsearch', './internal/backup']
 
 
 def analyzed_packages():

@@ -14,6 +14,7 @@ import (
 	"papergo/internal/dal/operations"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
+	"papergo/internal/storage"
 )
 
 type testModule struct{ routes []Route }
@@ -70,18 +71,25 @@ func TestModuleRoutes(t *testing.T) {
 }
 
 func TestOperationRequestsAreIdempotentCancellableAndBounded(t *testing.T) {
-	h, s, _ := setup(t)
+	h, s, path := setup(t)
+	files, err := storage.NewLocal(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.RegisterPortability(files); err != nil {
+		t.Fatal(err)
+	}
 	directory := s.Directory()
-	role, err := directory.SaveRole(t.Context(), "organization-admin", "", 0, identity.RoleInput{Name: "Search administrator", Scopes: []string{"organization.manage"}})
+	role, err := directory.SaveRole(t.Context(), "organization-admin", "", 0, identity.RoleInput{Name: "Exporter", Scopes: []string{"organization.manage"}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err = directory.SetAssignment(t.Context(), "organization-admin", role.ID, identity.Principal{Type: directorydomain.PrincipalUser, ID: "alice"}, false); err != nil {
 		t.Fatal(err)
 	}
-	reindex := func(key, body string) (*http.Response, dms.OperationView) {
+	export := func(key, body string) (*http.Response, dms.OperationView) {
 		t.Helper()
-		r, _ := http.NewRequest("POST", "/v1/search/reindex", strings.NewReader(body))
+		r, _ := http.NewRequest("POST", "/v1/portability/exports", strings.NewReader(body))
 		r.Header.Set("Authorization", "Bearer "+testToken)
 		if body != "" {
 			r.Header.Set("Content-Type", "application/json")
@@ -95,18 +103,18 @@ func TestOperationRequestsAreIdempotentCancellableAndBounded(t *testing.T) {
 		_ = json.Unmarshal(w.Body.Bytes(), &op)
 		return w.Result(), op
 	}
-	res, first := reindex("retry-1", "")
+	res, first := export("retry-1", "")
 	if res.StatusCode != 202 || res.Header.Get("Location") != "/v1/operations/"+first.ID {
 		t.Fatal(res.StatusCode, first)
 	}
-	res, again := reindex("retry-1", "")
+	res, again := export("retry-1", "")
 	if res.StatusCode != 200 || res.Header.Get("Idempotent-Replayed") != "true" || again.ID != first.ID {
 		t.Fatal("replay", res.StatusCode, again)
 	}
-	if res, _ = reindex("retry-1", `{"content":true}`); res.StatusCode != 409 {
+	if res, _ = export("retry-1", `{"include_data":false}`); res.StatusCode != 409 {
 		t.Fatal("changed request with the same key", res.StatusCode)
 	}
-	if res, _ = reindex("not valid", ""); res.StatusCode != 400 {
+	if res, _ = export("not valid", ""); res.StatusCode != 400 {
 		t.Fatal("invalid key", res.StatusCode)
 	}
 	cancel := request(h, "POST", "/v1/operations/"+first.ID+"/cancel", "", testToken, "", "")
@@ -118,10 +126,10 @@ func TestOperationRequestsAreIdempotentCancellableAndBounded(t *testing.T) {
 		t.Fatal("cancelled twice", cancel.Code)
 	}
 	s.SetOperationQuotas(dms.OperationQuotas{PerCreator: 1})
-	if res, _ = reindex("", ""); res.StatusCode != 202 {
+	if res, _ = export("", ""); res.StatusCode != 202 {
 		t.Fatal(res.StatusCode)
 	}
-	res, _ = reindex("", "")
+	res, _ = export("", "")
 	if res.StatusCode != 429 || res.Header.Get("Retry-After") != "60" {
 		t.Fatal("quota", res.StatusCode)
 	}

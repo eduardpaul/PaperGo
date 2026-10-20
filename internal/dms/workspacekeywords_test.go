@@ -112,11 +112,6 @@ func TestSharedKeywordFolksonomyAcrossIntrinsicAndCustomFields(t *testing.T) {
 	if _, err = s.UnclassifySmartFolder(testContext, "alice", folder.ID, added.ID, folder.Version, added.Version); err != nil {
 		t.Fatal(err)
 	}
-	indexSearch(t, s)
-	found, err := s.Search(testContext, "alice", SearchRequest{Keyword: finance, Facets: true})
-	if err != nil || len(found.Hits) != 2 || found.Facets == nil || len(found.Facets.Keyword) != 2 {
-		t.Fatal("search must index the shared vocabulary", found, err)
-	}
 	popular, err := s.PopularKeywords(testContext, "alice", 10)
 	if err != nil || len(popular) < 1 || popular[0].Term.ID != finance || popular[0].Count != 2 {
 		t.Fatal("popularity must include both assignment paths", popular, err)
@@ -185,11 +180,6 @@ func TestMergedIntrinsicKeywordsKeepFilteringAndCanonicalizeOnWrite(t *testing.T
 	vocabulary, err := s.WorkspaceKeywords(testContext, "alice", w.ID, WorkspaceKeywordsQuery{})
 	if err != nil || len(vocabulary.Data) != 1 || vocabulary.Data[0].Keyword != target.ID {
 		t.Fatal(vocabulary, err)
-	}
-	indexSearch(t, s)
-	found, err := s.Search(testContext, "alice", SearchRequest{Keyword: target.ID})
-	if err != nil || len(found.Hits) != 1 {
-		t.Fatal(found, err)
 	}
 	item = latest(t, s, item.ID)
 	item, err = s.Update(testContext, "alice", item.ID, item.Version, UpdateResource{Name: ptr("Renamed")})

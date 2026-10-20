@@ -1,22 +1,4 @@
-// Package searchcontent makes the text of files searchable through the
-// API, in steps a workflow can recompose:
-//
-//   - POST /v1/items/{id}/search/chunks splits text read by
-//     POST /v1/items/{id}/text, or text given directly, into chunks and
-//     stages them in the search store under a generation. A generation is
-//     identified by the operation that started it; a later chunk request
-//     can add to it.
-//   - GET /v1/search/generations/{id}/chunks reads a generation's chunks,
-//     and PUT /v1/search/generations/{id}/enrichments sets model-written
-//     context on them.
-//   - POST /v1/search/generations/{id}/embeddings embeds them for semantic
-//     search, and POST /v1/search/generations/{id}/publish makes the
-//     generation the searchable content of its file.
-//
-// It also keeps entries current: POST /v1/workspaces/{id}/search/sync
-// rewrites the search documents of resources, and
-// GET /v1/workspaces/{id}/search/term-entries lists those holding terms.
-package searchcontent
+package documentsearch
 
 import (
 	"context"
@@ -32,33 +14,7 @@ import (
 	"papergo/internal/dms"
 	"papergo/internal/doctext"
 	"papergo/internal/search"
-	"papergo/internal/storage"
 )
-
-// Operation kinds.
-const (
-	KindChunk   = "search.chunk"
-	KindEmbed   = "search.embed"
-	KindPublish = "search.publish"
-	// KindSweep embeds published chunks that lack vectors; PaperGo queues
-	// it itself.
-	KindSweep = "search.sweep"
-)
-
-// ErrNoSearch refuses content requests in a deployment without a search
-// store.
-var ErrNoSearch = errors.New("search is not available in this deployment")
-
-// Indexer writes file content to the deployment's search store.
-type Indexer struct {
-	Storage storage.Store
-	// Search is nil when search is not configured.
-	Search search.Store
-	// Embeddings is nil when semantic search is off.
-	Embeddings ai.Embedder
-
-	svc *dms.Service
-}
 
 // maxText bounds text given to a chunk request directly.
 const maxText = 1 << 20
@@ -70,22 +26,6 @@ const (
 	sweepLimit     = 2000
 	vectorKeepTime = 7 * 24 * time.Hour
 )
-
-// Register makes s run the operations.
-func (x *Indexer) Register(s *dms.Service) error {
-	x.svc = s
-	for kind, h := range map[string]dms.OperationHandler{
-		KindChunk:   {Scope: "document.write", Validate: x.validateChunk, Execute: x.chunk},
-		KindEmbed:   {Scope: "document.write", Validate: x.validateGeneration, Execute: x.embed},
-		KindPublish: {Scope: "document.write", Validate: x.validateGeneration, Execute: x.publish},
-		KindSweep:   {Scope: "organization.manage", Validate: refuseSweep, Execute: x.sweep},
-	} {
-		if err := s.RegisterOperationHandler(kind, h); err != nil {
-			return err
-		}
-	}
-	return nil
-}
 
 // ChunkRequest says what text to chunk and how.
 type ChunkRequest struct {
@@ -131,10 +71,7 @@ type chunkJob struct {
 }
 
 // StartChunk stages chunks of the item's file text as subject.
-func (x *Indexer) StartChunk(ctx context.Context, s *dms.Service, subject, itemID string, in ChunkRequest) (*dms.OperationView, error) {
-	if x.Search == nil {
-		return nil, dms.Invalid(ErrNoSearch.Error())
-	}
+func (x *Search) StartChunk(ctx context.Context, s *dms.Service, subject, itemID string, in ChunkRequest) (*dms.OperationView, error) {
 	j := chunkJob{ItemID: itemID, Chunker: in.Chunker, Kind: in.Kind, Text: in.Text,
 		Options: search.ChunkOptions{MaxChars: in.MaxChars, Overlap: search.DefaultOverlap, MaxChunks: in.MaxChunks}}
 	if j.Chunker == "" {
@@ -209,7 +146,7 @@ func (x *Indexer) StartChunk(ctx context.Context, s *dms.Service, subject, itemI
 
 // validateChunk runs in the accepting transaction: a generation added to
 // must be one the caller started for the same file version.
-func (x *Indexer) validateChunk(ctx context.Context, t *dms.Service, subject, itemID string, payload json.RawMessage) error {
+func (x *Search) validateChunk(ctx context.Context, t *dms.Service, subject, itemID string, payload json.RawMessage) error {
 	var j chunkJob
 	if err := json.Unmarshal(payload, &j); err != nil || j.ItemID != itemID {
 		return dms.Invalid("invalid chunk payload")
@@ -229,10 +166,7 @@ func (x *Indexer) validateChunk(ctx context.Context, t *dms.Service, subject, it
 
 // chunk splits the text and stages the chunks under the generation,
 // replacing those this operation staged before.
-func (x *Indexer) chunk(ctx context.Context, s *dms.Service, op *operations.Operation) error {
-	if x.Search == nil {
-		return ErrNoSearch
-	}
+func (x *Search) chunk(ctx context.Context, s *dms.Service, op *operations.Operation) error {
 	var j chunkJob
 	if err := json.Unmarshal(op.Payload, &j); err != nil {
 		return err
@@ -269,7 +203,7 @@ func (x *Indexer) chunk(ctx context.Context, s *dms.Service, op *operations.Oper
 	for i := range chunks {
 		chunks[i].Part, chunks[i].Language = op.ID, j.Language
 	}
-	if err = x.Search.StageContent(ctx, j.ItemID, j.BlobID, j.Generation, chunks); err != nil {
+	if err = x.Store.StageContent(ctx, j.ItemID, j.BlobID, j.Generation, chunks); err != nil {
 		return err
 	}
 	return finish(ctx, s, op, ChunkResult{Generation: j.Generation, Chunks: len(chunks), Truncated: truncated, ItemID: j.ItemID, BlobID: j.BlobID})
@@ -317,10 +251,7 @@ type generationJob struct {
 
 // StartGeneration starts an embed or publish operation on a generation the
 // caller started.
-func (x *Indexer) StartGeneration(ctx context.Context, s *dms.Service, subject, kind, id string) (*dms.OperationView, error) {
-	if x.Search == nil {
-		return nil, dms.Invalid(ErrNoSearch.Error())
-	}
+func (x *Search) StartGeneration(ctx context.Context, s *dms.Service, subject, kind, id string) (*dms.OperationView, error) {
 	g, err := generationOf(ctx, s, subject, id)
 	if err != nil {
 		return nil, err
@@ -340,7 +271,7 @@ func (x *Indexer) StartGeneration(ctx context.Context, s *dms.Service, subject, 
 	return out, err
 }
 
-func (x *Indexer) validateGeneration(ctx context.Context, t *dms.Service, subject, itemID string, payload json.RawMessage) error {
+func (x *Search) validateGeneration(ctx context.Context, t *dms.Service, subject, itemID string, payload json.RawMessage) error {
 	var j generationJob
 	if err := json.Unmarshal(payload, &j); err != nil || j.ItemID != itemID {
 		return dms.Invalid("invalid generation payload")
@@ -371,7 +302,7 @@ type EmbedResult struct {
 // attempts left, keeping the vectors stored so far; otherwise a provider
 // failure is a result, not an error: the sweep embeds the chunks once they
 // are published.
-func (x *Indexer) embed(ctx context.Context, s *dms.Service, op *operations.Operation) error {
+func (x *Search) embed(ctx context.Context, s *dms.Service, op *operations.Operation) error {
 	var j generationJob
 	if err := json.Unmarshal(op.Payload, &j); err != nil {
 		return err
@@ -390,7 +321,7 @@ func (x *Indexer) embed(ctx context.Context, s *dms.Service, op *operations.Oper
 		return finish(ctx, s, op, res)
 	}
 	res.Model = model
-	todo, inputs, err := x.Search.GenerationToEmbed(ctx, model, j.Generation)
+	todo, inputs, err := x.Store.GenerationToEmbed(ctx, model, j.Generation)
 	if err != nil {
 		return err
 	}
@@ -410,7 +341,7 @@ func (x *Indexer) embed(ctx context.Context, s *dms.Service, op *operations.Oper
 
 // embedInputs embeds chunk inputs in batches and stores each batch's
 // vectors, so a failure keeps what was done; it reports how many were.
-func (x *Indexer) embedInputs(ctx context.Context, model string, todo []search.ChunkToEmbed) (int, error) {
+func (x *Search) embedInputs(ctx context.Context, model string, todo []search.ChunkToEmbed) (int, error) {
 	done := 0
 	for start := 0; start < len(todo); start += embedBatch {
 		batch := todo[start:min(len(todo), start+embedBatch)]
@@ -426,7 +357,7 @@ func (x *Indexer) embedInputs(ctx context.Context, model string, todo []search.C
 		for i, c := range batch {
 			pairs[i] = search.HashVector{InputHash: c.InputHash, Vector: vectors[i]}
 		}
-		if err = x.Search.SetVectors(ctx, model, pairs); err != nil {
+		if err = x.Store.SetVectors(ctx, model, pairs); err != nil {
 			return done, err
 		}
 		done += len(batch)
@@ -438,15 +369,15 @@ func (x *Indexer) embedInputs(ctx context.Context, model string, todo []search.C
 // vector of the current model, unless one is pending, so the search
 // worker's window and concurrency govern the embedding; then it deletes
 // vectors no chunk has used for a week. It is a maintenance task.
-func (x *Indexer) Sweep(ctx context.Context, _ time.Time) error {
-	if x.Search == nil || x.Embeddings == nil || x.svc == nil {
+func (x *Search) Sweep(ctx context.Context, _ time.Time) error {
+	if x.Embeddings == nil {
 		return nil
 	}
 	model, err := x.Embeddings.Key(ctx)
 	if err != nil {
 		return err
 	}
-	todo, err := x.Search.ChunksToEmbed(ctx, model, 1)
+	todo, err := x.Store.ChunksToEmbed(ctx, model, 1)
 	if err != nil {
 		return err
 	}
@@ -455,16 +386,16 @@ func (x *Indexer) Sweep(ctx context.Context, _ time.Time) error {
 			return err
 		}
 	}
-	_, err = x.Search.CollectVectors(ctx, model, time.Now(), vectorKeepTime)
+	_, err = x.Store.CollectVectors(ctx, model, time.Now(), vectorKeepTime)
 	return err
 }
 
 // sweep embeds up to 2,000 published chunks without a vector of the
 // current model. A busy provider defers it, keeping the vectors stored so
 // far; the next maintenance pass queues another sweep for what remains.
-func (x *Indexer) sweep(ctx context.Context, s *dms.Service, op *operations.Operation) error {
+func (x *Search) sweep(ctx context.Context, s *dms.Service, op *operations.Operation) error {
 	res := SweepResult{}
-	if x.Search == nil || x.Embeddings == nil {
+	if x.Embeddings == nil {
 		return finish(ctx, s, op, res)
 	}
 	model, err := x.Embeddings.Key(ctx)
@@ -473,7 +404,7 @@ func (x *Indexer) sweep(ctx context.Context, s *dms.Service, op *operations.Oper
 	}
 	res.Model = model
 	for res.Embedded < sweepLimit {
-		todo, err := x.Search.ChunksToEmbed(ctx, model, min(embedBatch, sweepLimit-res.Embedded))
+		todo, err := x.Store.ChunksToEmbed(ctx, model, min(embedBatch, sweepLimit-res.Embedded))
 		if err != nil {
 			return err
 		}
@@ -516,7 +447,7 @@ type PublishResult struct {
 	Reason     string `json:"reason,omitempty"`
 }
 
-func (x *Indexer) publish(ctx context.Context, s *dms.Service, op *operations.Operation) error {
+func (x *Search) publish(ctx context.Context, s *dms.Service, op *operations.Operation) error {
 	var j generationJob
 	if err := json.Unmarshal(op.Payload, &j); err != nil {
 		return err
@@ -534,7 +465,7 @@ func (x *Indexer) publish(ctx context.Context, s *dms.Service, op *operations.Op
 	default:
 		// Publishing again, or after a newer generation, is safe: the
 		// store refuses a generation older than the published one.
-		err = x.Search.PublishContent(ctx, j.ItemID, j.BlobID, j.Generation)
+		err = x.Store.PublishContent(ctx, j.ItemID, j.BlobID, j.Generation)
 		switch {
 		case errors.Is(err, search.ErrSuperseded):
 			res.Reason = "A newer generation of the file's content is published."
@@ -584,10 +515,7 @@ const pageText = 200_000
 
 // Chunks returns up to limit chunks of a generation from offset, in part
 // and ordinal order.
-func (x *Indexer) Chunks(ctx context.Context, s *dms.Service, subject, id string, offset, limit int) (ChunkPage, error) {
-	if x.Search == nil {
-		return ChunkPage{}, dms.Invalid(ErrNoSearch.Error())
-	}
+func (x *Search) Chunks(ctx context.Context, s *dms.Service, subject, id string, offset, limit int) (ChunkPage, error) {
 	if offset < 0 || limit < 1 || limit > 100 {
 		return ChunkPage{}, dms.Invalid("offset must not be negative and limit must be from 1 to 100")
 	}
@@ -598,7 +526,7 @@ func (x *Indexer) Chunks(ctx context.Context, s *dms.Service, subject, id string
 	if _, err = s.GetBlob(ctx, subject, g.ItemID, g.BlobID); err != nil {
 		return ChunkPage{}, err
 	}
-	staged, err := x.Search.GenerationChunks(ctx, g.ID)
+	staged, err := x.Store.GenerationChunks(ctx, g.ID)
 	if err != nil {
 		return ChunkPage{}, err
 	}
@@ -627,10 +555,7 @@ type Enrichment struct {
 
 // Enrich sets the enrichment of chunks of a generation the caller started.
 // Enrichment changes a chunk's embedding input, so embed after enriching.
-func (x *Indexer) Enrich(ctx context.Context, s *dms.Service, subject, id string, in []Enrichment) error {
-	if x.Search == nil {
-		return dms.Invalid(ErrNoSearch.Error())
-	}
+func (x *Search) Enrich(ctx context.Context, s *dms.Service, subject, id string, in []Enrichment) error {
 	if len(in) == 0 || len(in) > 2000 {
 		return dms.Invalid("give 1 to 2000 enrichments")
 	}
@@ -648,5 +573,5 @@ func (x *Indexer) Enrich(ctx context.Context, s *dms.Service, subject, id string
 	if _, err = s.GetBlob(ctx, subject, g.ItemID, g.BlobID); err != nil {
 		return err
 	}
-	return x.Search.SetEnrichments(ctx, g.ID, out)
+	return x.Store.SetEnrichments(ctx, g.ID, out)
 }

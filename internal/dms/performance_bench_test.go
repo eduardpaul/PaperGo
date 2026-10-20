@@ -111,7 +111,6 @@ func BenchmarkCollectionQuery(b *testing.B) {
 		{"selective-filter/modified", "alice", "head", QuerySpec{Sort: []SortSpec{{Field: "$modified_at"}}, Filter: &FilterExpr{Field: "n", Value: []byte(`77`)}}, false},
 		{"search/name", "reader", "auto", QuerySpec{Sort: []SortSpec{{Field: "$name"}}, Search: "Item"}, false},
 	}
-	indexSearch(b, s)
 	for _, c := range cases {
 		b.Run(c.name, func(b *testing.B) {
 			in := QueryRequest{Query: c.spec, Surface: c.surface}

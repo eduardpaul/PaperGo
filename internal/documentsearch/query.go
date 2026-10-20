@@ -1,4 +1,4 @@
-package dms
+package documentsearch
 
 import (
 	"context"
@@ -7,11 +7,13 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"papergo/internal/dms"
+	"papergo/internal/httpapi"
 	"papergo/internal/search"
 )
 
-// SearchRequest is a search across the workspaces the caller may read.
-type SearchRequest struct {
+// Request is a search across the workspaces the caller may read.
+type Request struct {
 	// Q uses search syntax (see search.Parse); empty lists the filtered
 	// entries, newest first.
 	Q string
@@ -31,8 +33,8 @@ type SearchRequest struct {
 	ModifiedFrom time.Time
 	ModifiedTo   time.Time
 	// Filter filters on fields of the lists and libraries the caller may
-	// read (SearchFields), in the collection query filter language.
-	Filter *FilterExpr
+	// read (dms.SearchFields), in the collection query filter language.
+	Filter *dms.FilterExpr
 	// Offset is a position in the store's results (SearchResult.NextOffset).
 	Offset int
 	Limit  int
@@ -43,8 +45,8 @@ type SearchRequest struct {
 	model  string
 }
 
-// SearchHit is an entry the caller may read that matches.
-type SearchHit struct {
+// Hit is an entry the caller may read that matches.
+type Hit struct {
 	ID            string `json:"id"`
 	Kind          string `json:"kind"`
 	Surface       string `json:"surface"`
@@ -63,11 +65,11 @@ type SearchHit struct {
 	ModifiedBy string    `json:"modified_by"`
 }
 
-// SearchResult is a page of hits. Total counts the store's matches;
+// Result is a page of hits. Total counts the store's matches;
 // TotalEstimated reports a bounded candidate set or entries left out because
 // the caller may no longer read them as indexed. NextOffset continues, or is -1.
-type SearchResult struct {
-	Hits           []SearchHit    `json:"value"`
+type Result struct {
+	Hits           []Hit          `json:"value"`
 	Total          int            `json:"total"`
 	TotalEstimated bool           `json:"total_estimated,omitempty"`
 	Facets         *search.Facets `json:"facets,omitempty"`
@@ -75,8 +77,8 @@ type SearchResult struct {
 	NextOffset     int            `json:"-"`
 }
 
-// MaxSearchLimit bounds a page of search hits.
-const MaxSearchLimit = 100
+// MaxLimit bounds a page of search hits.
+const MaxLimit = 100
 
 // searchRounds is how many times a page asks the store for more when hits
 // were left out.
@@ -86,50 +88,50 @@ const searchRounds = 3
 // read. The store trims by permission scope; every hit is then checked
 // against the database, so an index that lags never shows what the caller
 // may no longer read.
-func (s *Service) Search(ctx context.Context, subject string, in SearchRequest) (SearchResult, error) {
-	if !s.transaction {
-		if err := s.RequireScope(ctx, subject, "list.read"); err != nil {
-			return SearchResult{}, err
-		}
-		if err := s.embedSearch(ctx, &in); err != nil {
-			return SearchResult{}, err
-		}
-		return read(ctx, s, func(t *Service) (SearchResult, error) { return t.Search(ctx, subject, in) })
-	}
+func (x *Search) Search(ctx context.Context, s *dms.Service, subject string, in Request) (Result, error) {
 	if err := s.RequireScope(ctx, subject, "list.read"); err != nil {
-		return SearchResult{}, err
+		return Result{}, err
 	}
-	if s.search == nil || s.searchRebuild.Load() {
-		return SearchResult{}, ErrSearchUnavailable
+	if x.rebuilding.Load() {
+		return Result{}, errUnavailable
 	}
-	if in.Mode == "" || in.Mode != search.ModeKeyword && in.vector == nil {
-		// Only the outer call embeds: inside a transaction, search by words.
+	if err := x.embedSearch(ctx, &in); err != nil {
+		return Result{}, err
+	}
+	return dms.Read(ctx, s, func(t *dms.Service) (Result, error) { return x.search(ctx, t, subject, in) })
+}
+
+// errUnavailable answers searches while the store is rebuilt.
+var errUnavailable = &httpapi.Problem{Status: 503, Code: "search_unavailable", Detail: "Search is unavailable while the search index is rebuilt; try again shortly."}
+
+func (x *Search) search(ctx context.Context, s *dms.Service, subject string, in Request) (Result, error) {
+	if in.Mode != search.ModeKeyword && in.vector == nil {
 		in.Mode = search.ModeKeyword
 	}
 	if in.Surface == "" {
 		in.Surface = search.SurfaceAuto
 	}
 	if in.Surface != search.SurfaceAuto && in.Surface != search.SurfaceHead && in.Surface != search.SurfacePublished {
-		return SearchResult{}, invalid("surface must be auto, head or published")
+		return Result{}, dms.Invalid("surface must be auto, head or published")
 	}
 	for _, k := range in.Kinds {
 		if k != "item" && k != "folder" {
-			return SearchResult{}, invalid("kind must be item or folder")
+			return Result{}, dms.Invalid("kind must be item or folder")
 		}
 	}
 	if in.Limit <= 0 {
 		in.Limit = 25
 	}
-	if in.Limit > MaxSearchLimit {
-		in.Limit = MaxSearchLimit
+	if in.Limit > MaxLimit {
+		in.Limit = MaxLimit
 	}
 	if in.Offset < 0 {
-		return SearchResult{}, invalid("invalid page position")
+		return Result{}, dms.Invalid("invalid page position")
 	}
 	var keywordErr error
-	in.Keyword, keywordErr = s.keywordFilter(ctx, in.Keyword)
+	in.Keyword, keywordErr = s.CanonicalKeyword(ctx, in.Keyword)
 	if keywordErr != nil {
-		return SearchResult{}, keywordErr
+		return Result{}, keywordErr
 	}
 	q := search.Query{Mode: in.Mode, Vector: in.vector, Model: in.model, Filter: search.Filter{Surface: in.Surface, Kinds: in.Kinds, WorkspaceID: in.WorkspaceID, CollectionID: in.CollectionID, ContentTypeID: in.ContentTypeID,
 		Keyword: in.Keyword, CreatedBy: in.CreatedBy, ModifiedBy: in.ModifiedBy, ModifiedFrom: in.ModifiedFrom, ModifiedTo: in.ModifiedTo}, Facets: in.Facets}
@@ -138,15 +140,15 @@ func (s *Service) Search(ctx context.Context, subject string, in SearchRequest) 
 		// A semantic search needs no keyword syntax: exclusions alone are
 		// meaning enough.
 		if q.Text, err = search.Parse(in.Q); err != nil && in.Mode != search.ModeSemantic {
-			return SearchResult{}, invalid(err.Error())
+			return Result{}, dms.Invalid(err.Error())
 		}
 	} else if in.WorkspaceID == "" && in.CollectionID == "" && in.ContentTypeID == "" && in.TermID == "" && in.Keyword == "" && in.CreatedBy == "" && in.ModifiedBy == "" && in.Filter == nil {
-		return SearchResult{}, invalid("enter words to search for, or at least one filter")
+		return Result{}, dms.Invalid("enter words to search for, or at least one filter")
 	}
 	if in.TermID != "" {
-		terms, err := s.SearchTerms(ctx, in.TermID)
+		terms, err := s.TermFamily(ctx, in.TermID)
 		if err != nil {
-			return SearchResult{}, err
+			return Result{}, err
 		}
 		if len(terms) == 0 {
 			terms = []string{in.TermID}
@@ -154,40 +156,33 @@ func (s *Service) Search(ctx context.Context, subject string, in SearchRequest) 
 		q.Filter.TermIDs = terms
 	}
 	if in.Filter != nil {
-		fields, err := read(ctx, s, func(t *Service) (*search.FieldFilter, error) {
-			defs, err := t.searchFieldDefinitions(ctx, subject, in.WorkspaceID, in.CollectionID)
-			if err != nil {
-				return nil, err
-			}
-			nodes := 0
-			return t.searchFilter(ctx, in.Filter, defs, 0, &nodes)
-		})
+		fields, err := s.CompileIndexFilter(ctx, subject, in.WorkspaceID, in.CollectionID, in.Filter)
 		if err != nil {
-			return SearchResult{}, err
+			return Result{}, err
 		}
-		q.Filter.Fields = fields
+		q.Filter.Fields = fieldFilter(fields)
 	}
-	access, err := s.SearchScopes(ctx, subject)
+	access, err := scopes(ctx, s, subject)
 	if err != nil {
-		return SearchResult{}, err
+		return Result{}, err
 	}
 	q.Filter.Access = access
-	if q.Content, err = s.searchContentAllowed(ctx, subject); err != nil {
-		return SearchResult{}, err
+	if q.Content, err = contentAllowed(ctx, s, subject); err != nil {
+		return Result{}, err
 	}
 	q.VerifyFacets = func(ctx context.Context, keys []search.Key) (bool, error) {
-		visible, err := s.SearchVisible(ctx, subject, in.Surface, keys)
+		shown, err := visible(ctx, s, subject, in.Surface, keys)
 		if err != nil {
 			return false, err
 		}
 		for _, key := range keys {
-			if !visible[key] {
+			if !shown[key] {
 				return false, nil
 			}
 		}
 		return true, nil
 	}
-	out := SearchResult{Hits: []SearchHit{}, Mode: in.Mode, NextOffset: -1}
+	out := Result{Hits: []Hit{}, Mode: in.Mode, NextOffset: -1}
 	var tokens []string
 	if q.Text != nil {
 		tokens = q.Text.Positive()
@@ -196,9 +191,9 @@ func (s *Service) Search(ctx context.Context, subject string, in SearchRequest) 
 	for round := 0; round < searchRounds && len(out.Hits) < in.Limit; round++ {
 		q.Offset, q.Limit = offset, in.Limit-len(out.Hits)
 		q.Facets = in.Facets && round == 0
-		res, err := s.search.Search(ctx, q)
+		res, err := x.Store.Search(ctx, q)
 		if err != nil {
-			return SearchResult{}, err
+			return Result{}, err
 		}
 		if round == 0 {
 			out.Total, out.Facets = res.Total, res.Facets
@@ -208,17 +203,17 @@ func (s *Service) Search(ctx context.Context, subject string, in SearchRequest) 
 		for i, h := range res.Hits {
 			keys[i] = search.Key{ResourceID: h.ResourceID, Surface: h.Surface}
 		}
-		visible, err := s.SearchVisible(ctx, subject, in.Surface, keys)
+		shown, err := visible(ctx, s, subject, in.Surface, keys)
 		if err != nil {
-			return SearchResult{}, err
+			return Result{}, err
 		}
 		for i, h := range res.Hits {
 			offset++
-			if !visible[keys[i]] {
+			if !shown[keys[i]] {
 				out.TotalEstimated = true
 				continue
 			}
-			hit := SearchHit{ID: h.ResourceID, Kind: h.Kind, Surface: h.Surface, WorkspaceID: h.WorkspaceID, CollectionID: h.CollectionID, ContentTypeID: h.ContentTypeID,
+			hit := Hit{ID: h.ResourceID, Kind: h.Kind, Surface: h.Surface, WorkspaceID: h.WorkspaceID, CollectionID: h.CollectionID, ContentTypeID: h.ContentTypeID,
 				Name: h.Name, MatchedBy: h.MatchedBy, Rank: h.Rank, ModifiedAt: h.ModifiedAt, ModifiedBy: h.ModifiedBy, Page: h.Page}
 			if hit.MatchedBy == nil {
 				hit.MatchedBy = []string{}
@@ -239,34 +234,34 @@ func (s *Service) Search(ctx context.Context, subject string, in SearchRequest) 
 // embedSearch settles the request's mode and, for semantic and hybrid
 // searches, embeds its words. A semantic or hybrid search without an
 // embedding model is invalid; an embedding failure falls back to keyword.
-func (s *Service) embedSearch(ctx context.Context, in *SearchRequest) error {
+func (x *Search) embedSearch(ctx context.Context, in *Request) error {
 	words := strings.TrimSpace(in.Q) != ""
 	switch in.Mode {
 	case "":
 		in.Mode = search.ModeKeyword
-		if s.embeddings != nil && words {
+		if x.Embeddings != nil && words {
 			in.Mode = search.ModeHybrid
 		}
 	case search.ModeKeyword:
 	case search.ModeSemantic, search.ModeHybrid:
-		if s.embeddings == nil {
-			return invalid("mode: semantic and hybrid search need an embedding model (AI_EMBEDDINGS_PROVIDER)")
+		if x.Embeddings == nil {
+			return dms.Invalid("mode: semantic and hybrid search need an embedding model (AI_EMBEDDINGS_PROVIDER)")
 		}
 		if !words {
-			return invalid("mode: semantic and hybrid search need words to search for")
+			return dms.Invalid("mode: semantic and hybrid search need words to search for")
 		}
 	default:
-		return invalid("mode must be keyword, semantic or hybrid")
+		return dms.Invalid("mode must be keyword, semantic or hybrid")
 	}
 	if in.Mode == search.ModeKeyword {
 		return nil
 	}
 	if len(in.Q) > search.MaxQueryBytes {
-		return invalid("a search is at most 256 bytes")
+		return dms.Invalid("a search is at most 256 bytes")
 	}
-	model, err := s.embeddings.Key(ctx)
+	model, err := x.Embeddings.Key(ctx)
 	if err == nil {
-		in.vector, err = s.embeddings.EmbedQuery(ctx, search.SemanticText(in.Q))
+		in.vector, err = x.Embeddings.EmbedQuery(ctx, search.SemanticText(in.Q))
 	}
 	if err != nil {
 		if ctx.Err() != nil {
@@ -333,4 +328,67 @@ func snippet(text string, tokens []string) (string, [][2]int) {
 		}
 	}
 	return out, marks
+}
+
+// fieldFilter is a compiled field filter in the store's terms.
+func fieldFilter(f *dms.IndexFilter) *search.FieldFilter {
+	if f == nil {
+		return nil
+	}
+	out := &search.FieldFilter{Key: f.Key, Type: f.Type, Scale: f.Scale, Op: f.Op, Not: fieldFilter(f.Not)}
+	for _, v := range f.Values {
+		out.Values = append(out.Values, search.FieldValue{Text: v.Text, Int: v.Int})
+	}
+	for i := range f.And {
+		out.And = append(out.And, *fieldFilter(&f.And[i]))
+	}
+	for i := range f.Or {
+		out.Or = append(out.Or, *fieldFilter(&f.Or[i]))
+	}
+	return out
+}
+
+// scopes decides, once per permission scope of the organization's items
+// and folders, whether the subject reads drafts there or published content:
+// what search trims to. Permissions depend only on a row's scope, its
+// workspace and whether it is content, so one live row stands for each
+// scope, as in collection queries.
+func scopes(ctx context.Context, s *dms.Service, subject string) (search.Access, error) {
+	draft, readable, err := s.DAL.Content().SearchScopes(ctx, dms.Principal(ctx, subject))
+	return search.Access{Draft: draft, Read: readable}, err
+}
+
+// visible reports which documents the subject may be shown now, on the
+// surface asked, whatever the search store holds: entries that are gone, no
+// longer readable, or read on the other surface are left out.
+func visible(ctx context.Context, s *dms.Service, subject, surface string, keys []search.Key) (map[search.Key]bool, error) {
+	out := map[search.Key]bool{}
+	ids := make([]string, 0, len(keys))
+	for _, k := range keys {
+		ids = append(ids, k.ResourceID)
+	}
+	states, err := s.DAL.Content().SearchStates(ctx, dms.Principal(ctx, subject), ids)
+	if err != nil {
+		return nil, err
+	}
+	for _, k := range keys {
+		st, ok := states[k.ResourceID]
+		if !ok {
+			continue
+		}
+		head := k.Surface == search.SurfaceHead
+		if head && !st.Head || !head && !st.Published {
+			continue
+		}
+		switch surface {
+		case search.SurfaceHead:
+			// Without publishing the published surface holds the head.
+			out[k] = st.Draft && head == st.Publishes
+		case search.SurfacePublished:
+			out[k] = !head && (st.Read || st.Draft)
+		default:
+			out[k] = st.Draft && head == st.Publishes || !st.Draft && st.Read && !head
+		}
+	}
+	return out, nil
 }

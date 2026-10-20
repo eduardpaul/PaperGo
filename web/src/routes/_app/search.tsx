@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { api } from '@/api/http';
 import { SearchRelationships } from '@/features/search/search-relationships';
 import { useApiPages } from '@/api/pages';
-import { workspacesQuery } from '@/api/queries';
+import { workflowCatalogQuery, workspacesQuery } from '@/api/queries';
 import { searchRequest } from '@/api/requests';
 import type { SearchFacetValue, SearchHit, SearchPage } from '@/api/types';
 import { Page, PageHeader } from '@/components/page';
@@ -33,8 +33,23 @@ export const Route = createFileRoute('/_app/search')({
     keyword: textParam(search.keyword),
     kind: (['item', 'folder', 'all'] as const).find((kind) => kind === search.kind),
   }),
-  component: SearchPage,
+  component: SearchRoute,
 });
+
+// SearchRoute searches when the deployment runs search, which is optional.
+function SearchRoute() {
+  const catalog = useQuery(workflowCatalogQuery);
+  if (catalog.isPending) return <Page><Skeleton className="h-40" /></Page>;
+  if (catalog.data?.roles?.some((role) => role.key === 'search.index')) return <SearchPage />;
+  return (
+    <Page>
+      <PageHeader icon={SearchIcon} title="Search" />
+      <EmptyState icon={SearchIcon} title="Search is not set up">
+        This PaperGo runs without search. Lists and libraries still find items by name.
+      </EmptyState>
+    </Page>
+  );
+}
 
 function SearchPage() {
   const params = Route.useSearch();

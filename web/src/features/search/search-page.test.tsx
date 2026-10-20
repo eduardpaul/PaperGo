@@ -18,6 +18,7 @@ vi.mock('@tanstack/react-router', async (original) => ({
 
 afterEach(() => {
   cleanup();
+  catalogRoles = ['search.index'];
   navigation.search = {};
   navigation.navigate.mockReset();
   vi.unstubAllGlobals();
@@ -39,6 +40,10 @@ function hit(id: string, name: string, extra: Partial<SearchHit> = {}): SearchHi
   };
 }
 
+// catalogRoles are the workflow roles the deployment registers: search's
+// when it runs search.
+let catalogRoles = ['search.index'];
+
 function stub(search: (url: URL) => unknown) {
   const fetch = vi.fn(async (input: URL | string, init: RequestInit = {}) => {
     const url = new URL(String(input), window.location.origin);
@@ -51,6 +56,7 @@ function stub(search: (url: URL) => unknown) {
         ],
       };
     else if (url.pathname === '/v1/terms') body = { value: [{ id: 'paid', name: 'Paid' }] };
+    else if (url.pathname === '/v1/workflow-catalog') body = { roles: catalogRoles.map((key) => ({ key })) };
     else if (url.pathname === '/v1/search/content-types') body = [{ id: 'invoice', name: 'Invoice type' }];
     else if (url.pathname.endsWith('/relationships')) body = { value: [{ id: 'link', source_id: 'a', target_id: 'other', type_id: 'rel', directed: true, related_item: { id: 'other', name: 'Related contract', workspace_id: 'ws1', container_id: 'col1' } }] };
     else if (url.pathname === '/v1/relationship-types') body = { value: [{ id: 'rel', term: { name: 'Contract' } }] };
@@ -80,6 +86,14 @@ function show() {
     </QueryClientProvider>,
   );
 }
+
+it('says so when the deployment runs without search', async () => {
+  catalogRoles = [];
+  const fetch = stub(() => ({ value: [] }));
+  show();
+  expect(await screen.findByText('Search is not set up')).toBeTruthy();
+  expect(fetch.mock.calls.some(([input]) => new URL(String(input)).pathname === '/v1/search')).toBe(false);
+});
 
 it('asks for words or a filter before searching', async () => {
   const fetch = stub(() => ({ value: [] }));

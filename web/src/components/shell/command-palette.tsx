@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import { collectionChildren, smartFoldersQuery, workspacesQuery } from '@/api/queries';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { useSearchAvailable } from '@/lib/search';
 
 interface Palette {
   open: () => void;
@@ -53,6 +54,7 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
 
 function PaletteBody({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
+  const searchAvailable = useSearchAvailable();
   const workspaces = useQuery(workspacesQuery);
   const folders = useQuery(smartFoldersQuery);
   const [workspaceId, setWorkspaceId] = useState<string>();
@@ -71,9 +73,9 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
     <Command>
       <CommandInput placeholder="Search or jump to…" autoFocus />
       <CommandList>
-        <CommandEmpty>No matches. Press enter on Search to look through items.</CommandEmpty>
+        <CommandEmpty>{searchAvailable ? 'No matches. Press enter on Search to look through items.' : 'No matches.'}</CommandEmpty>
         <CommandGroup heading="Go to">
-          {jumps.map((jump) => (
+          {jumps.filter((jump) => jump.to !== '/search' || searchAvailable).map((jump) => (
             <CommandItem key={jump.to} onSelect={() => go(jump.to)}>
               {jump.label}
             </CommandItem>

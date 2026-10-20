@@ -35,20 +35,12 @@ func TestFolderFieldsSearchAndLiveReaderVisibility(t *testing.T) {
 	if err != nil || got.Values["notes"] != "archival" {
 		t.Fatal("folder must be live in publishing collection", got, err)
 	}
-	for _, text := range []string{"archival", "Falcon", "Research"} {
-		indexSearch(t, s)
-		page, e := s.Browse(testContext, "reader", Browse{WorkspaceID: w.ID, Search: text})
-		if e != nil || len(page.Data) != 1 || page.Data[0].ID != f.ID {
-			t.Fatal(text, page, e)
-		}
-	}
 	q, err := s.Query(testContext, "reader", c.ID, QueryRequest{IncludeTotal: true, Query: QuerySpec{Filter: &FilterExpr{Field: "notes", Value: json.RawMessage(`"archival"`)}}})
 	if err != nil || counted(q.Total) != 1 || q.Data[0].ID != f.ID {
 		t.Fatal("typed folder query", q, err)
 	}
 	selectFields := []string{"notes"}
-	indexSearch(t, s)
-	q, err = s.Query(testContext, "reader", c.ID, QueryRequest{Select: selectFields, Query: QuerySpec{Search: "Research"}})
+	q, err = s.Query(testContext, "reader", c.ID, QueryRequest{Select: selectFields, Query: QuerySpec{Search: "folder"}})
 	if err != nil || len(q.Data) != 1 || len(q.Data[0].Values) != 1 {
 		t.Fatal("folder selection", q, err)
 	}

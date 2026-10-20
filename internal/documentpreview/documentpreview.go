@@ -9,6 +9,7 @@ package documentpreview
 import (
 	"bytes"
 	"context"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"io"
@@ -19,10 +20,12 @@ import (
 	"papergo/internal/dal/operations"
 	"papergo/internal/dms"
 	"papergo/internal/doctext"
+	"papergo/internal/forms"
 	"papergo/internal/httpapi"
 	"papergo/internal/ocr"
 	"papergo/internal/preview"
 	"papergo/internal/storage"
+	"papergo/internal/workflow"
 )
 
 // Kind is the operation kind.
@@ -55,8 +58,19 @@ type job struct {
 	ContentType string `json:"content_type"`
 }
 
-// Register makes s run the operation.
+// Role is the workflow role whose filler renders previews.
+const Role = "file.preview"
+
+//go:embed builtin/documents.preview.ts
+var builtinSource string
+
+// Register makes s run the operation, and adds the documents.preview
+// built-in workflow, which every collection runs by default, filling Role.
 func (r *Renderer) Register(s *dms.Service) error {
+	workflow.RegisterRole(&workflow.Role{Key: Role, Name: "File previews", Description: "Generates lightweight first-page previews asynchronously."})
+	workflow.RegisterBuiltIn(&workflow.BuiltIn{Key: "documents.preview", Name: "Generate file previews", Role: Role, Default: true, System: true,
+		Description:      "Generates bounded WebP previews when files are added or replaced. Also runs on demand.",
+		ParametersSchema: forms.MustParse(`{"type": "object", "properties": {}}`), Source: builtinSource})
 	return s.RegisterOperationHandler(Kind, dms.OperationHandler{Scope: "document.write", Validate: validate, Execute: r.execute})
 }
 

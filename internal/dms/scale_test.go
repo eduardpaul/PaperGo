@@ -150,7 +150,6 @@ func TestBrowseCandidateAndScanPathsAgree(t *testing.T) {
 			in.After = page.NextCursor
 		}
 	}
-	indexSearch(t, s)
 	for _, subject := range []string{"alice", "reader"} {
 		for _, surface := range []string{"auto", "head", "published"} {
 			for i, in := range queries {

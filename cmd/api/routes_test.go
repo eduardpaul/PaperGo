@@ -20,7 +20,7 @@ func TestMain(m *testing.M) { daltest.Main(m) }
 // exactly the operations api/openapi.json describes.
 func TestRoutesMatchOpenAPI(t *testing.T) {
 	db := daltest.Database(t)
-	a := &httpapi.API{DMS: dms.NewService(db.SQL), Auth: auth.Local{DAL: db.DAL}, Logger: slog.Default(), Modules: testFeatures().modules()}
+	a := &httpapi.API{DMS: dms.NewService(db.SQL), Auth: auth.Local{DAL: db.DAL}, Logger: slog.Default(), Modules: testFeatures(true).modules()}
 	served, err := a.Routes()
 	if err != nil {
 		t.Fatal(err)

@@ -43,7 +43,7 @@ export interface SearchRequestBuilder extends BaseRequestBuilder<SearchRequestBu
      */
     get status(): StatusRequestBuilder;
     /**
-     * Keyword search over the search index, trimmed to what the caller reads now and on the surface they read; every hit is rechecked against current permissions. File text participates in matching and snippets only with document.read; otherwise metadata is searched. Facets are omitted if any matching source fails current authorization. Indexing is asynchronous (the search.index workflow). See docs/search.md.
+     * Keyword search over the search index, trimmed to what the caller reads now and on the surface they read; every hit is rechecked against current permissions. File text participates in matching and snippets only with document.read; otherwise metadata is searched. Facets are omitted if any matching source fails current authorization. Indexing is asynchronous (the search.index workflow). See docs/search.md. Served when the deployment runs search (SEARCH_STORE is not none).
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<SearchPage>}
      * @throws {Problem} error when the service returns a 400 status code
@@ -54,7 +54,7 @@ export interface SearchRequestBuilder extends BaseRequestBuilder<SearchRequestBu
      */
      get(requestConfiguration?: RequestConfiguration<SearchRequestBuilderGetQueryParameters> | undefined) : Promise<SearchPage | undefined>;
     /**
-     * Keyword search over the search index, trimmed to what the caller reads now and on the surface they read; every hit is rechecked against current permissions. File text participates in matching and snippets only with document.read; otherwise metadata is searched. Facets are omitted if any matching source fails current authorization. Indexing is asynchronous (the search.index workflow). See docs/search.md. The JSON body takes the GET parameters (kind as an array) and a filter on search fields; $top and $skiptoken stay in the URL, and a next page repeats the body.
+     * Keyword search over the search index, trimmed to what the caller reads now and on the surface they read; every hit is rechecked against current permissions. File text participates in matching and snippets only with document.read; otherwise metadata is searched. Facets are omitted if any matching source fails current authorization. Indexing is asynchronous (the search.index workflow). See docs/search.md. The JSON body takes the GET parameters (kind as an array) and a filter on search fields; $top and $skiptoken stay in the URL, and a next page repeats the body. Served when the deployment runs search (SEARCH_STORE is not none).
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<SearchPage>}
@@ -66,13 +66,13 @@ export interface SearchRequestBuilder extends BaseRequestBuilder<SearchRequestBu
      */
      post(body: SearchRequest, requestConfiguration?: RequestConfiguration<SearchRequestBuilderPostQueryParameters> | undefined) : Promise<SearchPage | undefined>;
     /**
-     * Keyword search over the search index, trimmed to what the caller reads now and on the surface they read; every hit is rechecked against current permissions. File text participates in matching and snippets only with document.read; otherwise metadata is searched. Facets are omitted if any matching source fails current authorization. Indexing is asynchronous (the search.index workflow). See docs/search.md.
+     * Keyword search over the search index, trimmed to what the caller reads now and on the surface they read; every hit is rechecked against current permissions. File text participates in matching and snippets only with document.read; otherwise metadata is searched. Facets are omitted if any matching source fails current authorization. Indexing is asynchronous (the search.index workflow). See docs/search.md. Served when the deployment runs search (SEARCH_STORE is not none).
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */
      toGetRequestInformation(requestConfiguration?: RequestConfiguration<SearchRequestBuilderGetQueryParameters> | undefined) : RequestInformation;
     /**
-     * Keyword search over the search index, trimmed to what the caller reads now and on the surface they read; every hit is rechecked against current permissions. File text participates in matching and snippets only with document.read; otherwise metadata is searched. Facets are omitted if any matching source fails current authorization. Indexing is asynchronous (the search.index workflow). See docs/search.md. The JSON body takes the GET parameters (kind as an array) and a filter on search fields; $top and $skiptoken stay in the URL, and a next page repeats the body.
+     * Keyword search over the search index, trimmed to what the caller reads now and on the surface they read; every hit is rechecked against current permissions. File text participates in matching and snippets only with document.read; otherwise metadata is searched. Facets are omitted if any matching source fails current authorization. Indexing is asynchronous (the search.index workflow). See docs/search.md. The JSON body takes the GET parameters (kind as an array) and a filter on search fields; $top and $skiptoken stay in the URL, and a next page repeats the body. Served when the deployment runs search (SEARCH_STORE is not none).
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
@@ -80,7 +80,7 @@ export interface SearchRequestBuilder extends BaseRequestBuilder<SearchRequestBu
      toPostRequestInformation(body: SearchRequest, requestConfiguration?: RequestConfiguration<SearchRequestBuilderPostQueryParameters> | undefined) : RequestInformation;
 }
 /**
- * Keyword search over the search index, trimmed to what the caller reads now and on the surface they read; every hit is rechecked against current permissions. File text participates in matching and snippets only with document.read; otherwise metadata is searched. Facets are omitted if any matching source fails current authorization. Indexing is asynchronous (the search.index workflow). See docs/search.md.
+ * Keyword search over the search index, trimmed to what the caller reads now and on the surface they read; every hit is rechecked against current permissions. File text participates in matching and snippets only with document.read; otherwise metadata is searched. Facets are omitted if any matching source fails current authorization. Indexing is asynchronous (the search.index workflow). See docs/search.md. Served when the deployment runs search (SEARCH_STORE is not none).
  */
 export interface SearchRequestBuilderGetQueryParameters {
     /**
@@ -149,7 +149,7 @@ export interface SearchRequestBuilderGetQueryParameters {
     workspaceId?: string;
 }
 /**
- * Keyword search over the search index, trimmed to what the caller reads now and on the surface they read; every hit is rechecked against current permissions. File text participates in matching and snippets only with document.read; otherwise metadata is searched. Facets are omitted if any matching source fails current authorization. Indexing is asynchronous (the search.index workflow). See docs/search.md. The JSON body takes the GET parameters (kind as an array) and a filter on search fields; $top and $skiptoken stay in the URL, and a next page repeats the body.
+ * Keyword search over the search index, trimmed to what the caller reads now and on the surface they read; every hit is rechecked against current permissions. File text participates in matching and snippets only with document.read; otherwise metadata is searched. Facets are omitted if any matching source fails current authorization. Indexing is asynchronous (the search.index workflow). See docs/search.md. The JSON body takes the GET parameters (kind as an array) and a filter on search fields; $top and $skiptoken stay in the URL, and a next page repeats the body. Served when the deployment runs search (SEARCH_STORE is not none).
  */
 export interface SearchRequestBuilderPostQueryParameters {
     /**

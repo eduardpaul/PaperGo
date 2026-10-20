@@ -7,7 +7,6 @@ import (
 	"io"
 	"log/slog"
 	"papergo/internal/worker"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -20,7 +19,6 @@ import (
 	"papergo/internal/httpapi"
 	"papergo/internal/script"
 	"papergo/internal/storage"
-	"papergo/internal/testutil/searchstore"
 
 	"github.com/google/uuid"
 )
@@ -84,7 +82,6 @@ func setup(t *testing.T, configure ...func(*httpapi.API)) *fixture {
 	}
 	s := dms.NewService(db.SQL)
 	s.OnOperationsFinished(ReleaseWaits(s, slog.New(slog.NewTextHandler(io.Discard, nil))))
-	s.SetSearch(searchstore.Open(t, filepath.Join(t.TempDir(), "search.db"), []string{"english"}))
 	api := &httpapi.API{DMS: s, Storage: blobs, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	for _, c := range configure {
 		c(api)

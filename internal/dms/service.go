@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"papergo/internal/ai"
 	"papergo/internal/dal"
 	"papergo/internal/dal/access"
 	"papergo/internal/dal/blobs"
@@ -20,9 +19,7 @@ import (
 	"papergo/internal/identity"
 	"papergo/internal/model"
 	"papergo/internal/requestmeta"
-	"papergo/internal/search"
 	"strings"
-	"sync/atomic"
 
 	"github.com/google/uuid"
 )
@@ -52,19 +49,13 @@ type Service struct {
 	pendingIntegrationData *IntegrationData
 	// batch is set while one request applies many operations in a transaction.
 	batch *batchCache
-	// search is the search store, set with SetSearch.
-	search search.Store
-	// embeddings embeds searches for semantic and hybrid search; nil when
-	// no embedding model is configured.
-	embeddings ai.Embedder
-	// searchRebuild is set while the search store is rebuilt from scratch:
-	// searches answer ErrSearchUnavailable until it is done.
-	searchRebuild *atomic.Bool
+	// ext holds what extensions plug into the service.
+	ext *extensions
 }
 
 // NewService serves the PaperGo database db.
 func NewService(db *sql.DB) *Service {
-	return &Service{DAL: dal.NewStore(db), db: db, writer: newWriterSlot(), collectionTemplates: builtInCollectionTemplates(), ops: &operationRuntime{handlers: builtInOperationHandlers(), holder: "operations/" + uuid.NewString()}, searchRebuild: &atomic.Bool{}}
+	return &Service{DAL: dal.NewStore(db), db: db, writer: newWriterSlot(), collectionTemplates: builtInCollectionTemplates(), ops: &operationRuntime{handlers: builtInOperationHandlers(), holder: "operations/" + uuid.NewString()}, ext: &extensions{}}
 }
 
 // OnCommit calls f after each committed write that recorded domain events,
@@ -124,7 +115,7 @@ func (s *Service) write(ctx context.Context, fn func(*Service) error) error {
 func (s *Service) inTx(ctx context.Context, tx *sql.Tx, finished *[]string, accepted *bool, fn func(*Service) error) (int, error) {
 	ctx = requestmeta.EnsureTrace(ctx)
 	var pending []Event
-	t := &Service{DAL: s.DAL.WithTx(tx), db: s.db, writer: s.writer, transaction: true, tx: tx, pending: &pending, finished: finished, accepted: accepted, collectionTemplates: s.collectionTemplates, ops: s.ops, search: s.search, embeddings: s.embeddings, searchRebuild: s.searchRebuild}
+	t := &Service{DAL: s.DAL.WithTx(tx), db: s.db, writer: s.writer, transaction: true, tx: tx, pending: &pending, finished: finished, accepted: accepted, collectionTemplates: s.collectionTemplates, ops: s.ops, ext: s.ext}
 	t.integrations = s.integrations
 	t.traceID = requestmeta.Trace(ctx)
 	t.auditProperties = map[string]map[string]bool{}
@@ -157,7 +148,7 @@ func read[T any](ctx context.Context, s *Service, fn func(*Service) (T, error)) 
 			return err
 		}
 		defer tx.Rollback()
-		if out, err = fn(&Service{DAL: s.DAL.WithTx(tx), db: s.db, writer: s.writer, transaction: true, tx: tx, collectionTemplates: s.collectionTemplates, ops: s.ops, integrations: s.integrations, search: s.search, embeddings: s.embeddings, searchRebuild: s.searchRebuild}); err != nil {
+		if out, err = fn(&Service{DAL: s.DAL.WithTx(tx), db: s.db, writer: s.writer, transaction: true, tx: tx, collectionTemplates: s.collectionTemplates, ops: s.ops, integrations: s.integrations, ext: s.ext}); err != nil {
 			return err
 		}
 		return tx.Commit()

@@ -434,7 +434,7 @@ func (s *Service) publishRevision(ctx context.Context, actor string, r *resource
 func (s *Service) addHeadSurfaces(ctx context.Context, c *resources.Resource) error {
 	schemas := map[string]*catalog.SchemaRevision{}
 	for after := ""; ; {
-		rows, err := s.DAL.Resources().Resources(ctx, resources.Filter{ContainerID: c.ID, Kinds: contentKinds, State: resources.Live, WithHead: true, AfterID: after, Limit: surfaceBatch})
+		rows, err := s.DAL.Resources().Resources(ctx, resources.Filter{ContainerID: c.ID, Kinds: ContentKinds, State: resources.Live, WithHead: true, AfterID: after, Limit: surfaceBatch})
 		if err != nil {
 			return err
 		}

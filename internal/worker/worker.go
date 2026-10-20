@@ -293,21 +293,62 @@ func sleep(ctx context.Context, wake <-chan struct{}, d time.Duration) {
 }
 
 // Drain runs every operation that is ready now, of every kind, one after
-// another, and returns when none is left: for tools and tests that need
-// queued work done without running workers.
+// another, and kinds that run in groups a ready group at a time, whatever
+// their admission policy, and returns when none is left: for tools and
+// tests that need queued work done without running workers.
 func Drain(ctx context.Context, svc *dms.Service) error {
+	var single, grouped []string
+	for _, kind := range svc.OperationKinds() {
+		if svc.OperationRunsInGroups(kind) {
+			grouped = append(grouped, kind)
+		} else {
+			single = append(single, kind)
+		}
+	}
 	for {
-		worked, err := svc.RunOperation(ctx, svc.OperationKinds())
-		if err != nil || !worked {
+		worked, err := svc.RunOperation(ctx, single)
+		if err != nil {
 			return err
+		}
+		if worked {
+			continue
+		}
+		if len(grouped) == 0 {
+			return nil
+		}
+		groups, err := svc.ReadyOperationGroups(ctx, grouped)
+		if err != nil {
+			return err
+		}
+		for _, g := range groups {
+			ran, err := svc.RunOperationGroup(ctx, g.Kind, g.Key, nil, 100)
+			if err != nil {
+				return err
+			}
+			worked = worked || ran
+		}
+		if !worked {
+			return nil
 		}
 	}
 }
 
 // Single returns a runtime whose one worker runs every operation kind svc
-// knows, one at a time, without maintenance: for tools and tests.
+// knows, one at a time, and another every ready group of the kinds that
+// run in groups, without maintenance: for tools and tests.
 func Single(svc *dms.Service, log *slog.Logger) *Runtime {
 	rt := New(svc, log)
-	rt.Add(Definition{Name: "all", Kinds: svc.OperationKinds()})
+	var single, grouped []string
+	for _, kind := range svc.OperationKinds() {
+		if svc.OperationRunsInGroups(kind) {
+			grouped = append(grouped, kind)
+		} else {
+			single = append(single, kind)
+		}
+	}
+	rt.Add(Definition{Name: "all", Kinds: single})
+	if len(grouped) > 0 {
+		rt.Add(Definition{Name: "groups", Kinds: grouped, Admission: Admission{Policy: Threshold, Threshold: 1, Batch: 100}})
+	}
 	return rt
 }

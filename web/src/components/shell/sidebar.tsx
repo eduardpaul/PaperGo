@@ -11,6 +11,7 @@ import { SmartFolderDialog } from '@/features/smart-folders/editor-dialog';
 import { useHasScope } from '@/features/admin/common';
 import { PlaceContextMenu } from '@/features/workspaces/place-context-menu';
 import { CollectionIcon } from '@/features/lists/collection-icon';
+import { useSearchAvailable } from '@/lib/search';
 import { cn } from '@/lib/utils';
 
 const itemClass =
@@ -25,6 +26,7 @@ const navigation = [
 ] as const;
 
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
+  const searchAvailable = useSearchAvailable();
   return (
     <nav aria-label="Main" className="flex h-full flex-col border-r bg-sidebar">
       <div className="flex h-14 items-center px-4">
@@ -34,7 +36,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       </div>
       <div className="flex-1 overflow-y-auto px-2 pb-4">
         <ul className="flex flex-col gap-0.5">
-          {navigation.map((entry) => (
+          {navigation.filter((entry) => entry.to !== '/search' || searchAvailable).map((entry) => (
             <li key={entry.to}>
               <Link to={entry.to} onClick={onNavigate} className={itemClass} activeProps={{ className: activeClass }} activeOptions={{ exact: entry.exact }}>
                 <entry.icon />

@@ -3,6 +3,7 @@ package dms
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,10 +12,8 @@ import (
 	"papergo/internal/dal/operations"
 	"papergo/internal/dal/relationships"
 	"papergo/internal/dal/resources"
-	"papergo/internal/dal/search/sqlitestore"
 	"papergo/internal/identity"
 	"papergo/internal/storage"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -197,12 +196,11 @@ func TestCorePackageConfigurationContentDryRunAndAtomicImport(t *testing.T) {
 	if n, _ := countResources(target, resources.Filter{}); n != 0 {
 		t.Fatal("dry run wrote content", n)
 	}
-	index, err := sqlitestore.Open(ctx, filepath.Join(t.TempDir(), "search.db"), sqlitestore.Options{Languages: []string{"english"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer index.Close()
-	target.SetSearch(index)
+	imported := 0
+	target.OnImport(func(context.Context, *Service) error {
+		imported++
+		return nil
+	})
 	hash, err := auth.HashPassword("destination-password")
 	if err != nil {
 		t.Fatal(err)
@@ -252,14 +250,9 @@ func TestCorePackageConfigurationContentDryRunAndAtomicImport(t *testing.T) {
 	if n, _ := target.DAL.Relationships().Count(ctx, relationships.Filter{}); n != 1 {
 		t.Fatal("relationship not restored", n)
 	}
-	// The import queued a reindex, which the same worker ran.
-	reindexed, err := target.DAL.Operations().List(ctx, operations.Filter{Kinds: []string{OperationKindSearchReindex}})
-	if err != nil || len(reindexed) != 1 || reindexed[0].Status != operations.StatusSucceeded {
-		t.Fatal("no search reindex after the import", reindexed, err)
-	}
-	found, err := target.Search(ctx, admin, SearchRequest{Q: "invoice", Kinds: []string{"item"}})
-	if err != nil || len(found.Hits) == 0 {
-		t.Fatal("imported items are not searchable", found, err)
+	// Extensions learn of the import, which raised no change events.
+	if imported != 1 {
+		t.Fatal("import hooks ran", imported, "times")
 	}
 	if n, _ := countHistory(target); n == 0 {
 		t.Fatal("history not restored")

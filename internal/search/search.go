@@ -331,6 +331,9 @@ type Content struct {
 // harmless.
 type Store interface {
 	Name() string
+	// Fresh reports that the store was created empty when it opened, so it
+	// must be rebuilt from the database.
+	Fresh() bool
 	// UpsertDocuments writes documents, each replacing the document of its
 	// key, with the stamp of the write (a reindex deletes older stamps).
 	UpsertDocuments(ctx context.Context, docs []Document, stamp int64) error

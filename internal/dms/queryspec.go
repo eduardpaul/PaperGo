@@ -334,7 +334,7 @@ func (s *Service) collectionPlan(ctx context.Context, subject string, c *resourc
 		return content.Plan{}, compiledQuery{}, invalid("search or keyword exceeds size limit")
 	}
 	var keywordErr error
-	in.Query.Keyword, keywordErr = s.keywordFilter(ctx, in.Query.Keyword)
+	in.Query.Keyword, keywordErr = s.CanonicalKeyword(ctx, in.Query.Keyword)
 	if keywordErr != nil {
 		return content.Plan{}, compiledQuery{}, keywordErr
 	}
@@ -437,12 +437,9 @@ func (s *Service) collectionPlan(ctx context.Context, subject string, c *resourc
 	plan.Keyword = in.Query.Keyword
 	searchCapped := false
 	if strings.TrimSpace(in.Query.Search) != "" {
-		head, published, capped, e := s.searchMatches(ctx, subject, c.ID, "", in.Query.Search)
-		if e != nil {
+		if plan.Search, searchCapped, e = s.matchText(ctx, subject, c.ID, "", in.Query.Search); e != nil {
 			return content.Plan{}, compiledQuery{}, e
 		}
-		plan.Search = &content.SearchMatch{Head: head, Published: published}
-		searchCapped = capped
 	}
 	fingerprint, _ := json.Marshal(struct {
 		Subject, Collection, Surface, Schema string

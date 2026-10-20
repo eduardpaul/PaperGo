@@ -171,7 +171,6 @@ func TestDeleteFolderTreeRequiresExplicitIntentAndPermissions(t *testing.T) {
 			t.Fatalf("deleted history readable: %v", err)
 		}
 	}
-	indexSearch(t, s)
 	page, err := s.Browse(testContext, "alice", Browse{WorkspaceID: w.ID, Search: "Plan"})
 	if err != nil || len(page.Data) != 0 {
 		t.Fatalf("deleted item searchable: %+v %v", page, err)

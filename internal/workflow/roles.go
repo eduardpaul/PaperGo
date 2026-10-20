@@ -42,8 +42,12 @@ func Roles() []*Role {
 
 // fills checks that def can fill the role: its output schema has every
 // output of the role with the same type, and requires what the role
-// requires.
+// requires. A role no extension registered in this deployment, such as
+// search's without search, asks nothing.
 func (r *Role) fills(def Definition) error {
+	if r == nil {
+		return nil
+	}
 	want, _ := r.OutputSchema["properties"].(map[string]any)
 	if len(want) == 0 {
 		return nil

@@ -53,8 +53,10 @@ type BuiltIn struct {
 var builtinSources embed.FS
 
 var (
-	builtins  = map[string]*BuiltIn{}
-	described sync.Once
+	builtins = map[string]*BuiltIn{}
+	// describing guards describe, which reads the triggers of built-ins
+	// registered since the catalog was last listed.
+	describing sync.Mutex
 )
 
 // RegisterBuiltIn adds a built-in to the release catalog, with its script
@@ -78,10 +80,15 @@ func RegisterBuiltIn(b *BuiltIn) {
 // is turned on for, when the catalog describes it.
 const describedCollection = "00000000-0000-0000-0000-000000000000"
 
-// describe reads every built-in's triggers from its script with its
-// default parameters, for the catalog.
+// describe reads the triggers of every built-in not yet described from
+// its script with its default parameters, for the catalog.
 func describe() {
+	describing.Lock()
+	defer describing.Unlock()
 	for _, b := range builtins {
+		if b.AutomaticTriggers != nil {
+			continue
+		}
 		b.ManualMode, b.AutomaticTriggers = "none", []Trigger{}
 		params := forms.Defaults(b.ParametersSchema)
 		if b.PerCollection || b.Role != "" {
@@ -118,7 +125,7 @@ func systemWorkflow(key string) bool {
 
 // BuiltIns returns the release catalog, sorted by key.
 func BuiltIns() []*BuiltIn {
-	described.Do(describe)
+	describe()
 	out := make([]*BuiltIn, 0, len(builtins))
 	for _, b := range builtins {
 		out = append(out, b)

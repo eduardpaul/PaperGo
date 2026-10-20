@@ -42,7 +42,7 @@ export interface ReindexPostRequestBody extends Parsable {
  */
 export interface ReindexRequestBuilder extends BaseRequestBuilder<ReindexRequestBuilder> {
     /**
-     * Rewrites the documents of every live item and folder in batches and removes documents of entries that no longer exist. With content, the workflow filling search.content reads, chunks and publishes again the current file of items whose file has no content (all of them with force); text read before is reused. Search keeps answering meanwhile.
+     * Rewrites the documents of every live item and folder in batches and removes documents of entries that no longer exist. With content, the workflow filling search.content reads, chunks and publishes again the current file of items whose file has no content (all of them with force); text read before is reused. Search keeps answering meanwhile. Served when the deployment runs search (SEARCH_STORE is not none).
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<Operation>}
@@ -56,7 +56,7 @@ export interface ReindexRequestBuilder extends BaseRequestBuilder<ReindexRequest
      */
      post(body: ReindexPostRequestBody, requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<Operation | undefined>;
     /**
-     * Rewrites the documents of every live item and folder in batches and removes documents of entries that no longer exist. With content, the workflow filling search.content reads, chunks and publishes again the current file of items whose file has no content (all of them with force); text read before is reused. Search keeps answering meanwhile.
+     * Rewrites the documents of every live item and folder in batches and removes documents of entries that no longer exist. With content, the workflow filling search.content reads, chunks and publishes again the current file of items whose file has no content (all of them with force); text read before is reused. Search keeps answering meanwhile. Served when the deployment runs search (SEARCH_STORE is not none).
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}

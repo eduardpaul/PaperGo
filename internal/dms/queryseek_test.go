@@ -74,7 +74,6 @@ func TestSeekPagesMatchSortedEligibleRows(t *testing.T) {
 		{Search: "item"},
 	}
 	sorts := []string{"", "$name", "$modified_at", "$created_by", "n", "label", "x"}
-	indexSearch(t, s)
 	if out, err := s.Query(testContext, "alice", list.ID, QueryRequest{Query: unicodeFilter}); err != nil || len(out.Data) == 0 {
 		t.Fatalf("Unicode case-insensitive filter matched no rows: %+v %v", out, err)
 	}

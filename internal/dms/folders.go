@@ -10,9 +10,6 @@ func contentKind(kind refs.ResourceKind) bool {
 	return kind == refs.KindItem || kind == refs.KindFolder
 }
 
-// contentKinds selects folders and items.
-var contentKinds = []refs.ResourceKind{refs.KindItem, refs.KindFolder}
-
 // Folders use collection content types, but do not require item fields or
 // receive creation defaults. Other field constraints and comparison rules apply.
 func resourceDefinitions(kind refs.ResourceKind, defs []*catalog.FieldDefinition, rules []model.ValidationRule) ([]*catalog.FieldDefinition, []model.ValidationRule) {

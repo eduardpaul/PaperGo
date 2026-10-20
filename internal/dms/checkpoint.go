@@ -43,25 +43,25 @@ type StorageRetained struct {
 }
 
 // StorageStatus is the operator view of database allocation, the journal,
-// search and blob bytes, runs, and cleanup. It carries counts and schema
+// extension and blob bytes, runs, and cleanup. It carries counts and schema
 // object names, not document text, file bytes, or credentials.
 type StorageStatus struct {
 	database.Checkpoint
-	DatabaseBytes   int64                      `json:"database_bytes"`
-	PageSize        int                        `json:"page_size"`
-	PageCount       int                        `json:"page_count"`
-	FreelistCount   int                        `json:"freelist_count"`
-	FreelistBytes   int64                      `json:"freelist_bytes"`
-	UnusedBytes     int64                      `json:"unused_bytes"`
-	AccountedBytes  int64                      `json:"accounted_bytes"`
-	Tables          []database.TableAllocation `json:"tables"`
-	SearchStore     string                     `json:"search_store"`
-	SearchBytes     int64                      `json:"search_bytes"`
-	SearchDocuments int64                      `json:"search_documents"`
-	BlobBytes       int64                      `json:"blob_bytes"`
-	Runs            []StorageRunCount          `json:"runs"`
-	Expired         StorageExpired             `json:"expired"`
-	Retained        StorageRetained            `json:"retained"`
+	DatabaseBytes  int64                      `json:"database_bytes"`
+	PageSize       int                        `json:"page_size"`
+	PageCount      int                        `json:"page_count"`
+	FreelistCount  int                        `json:"freelist_count"`
+	FreelistBytes  int64                      `json:"freelist_bytes"`
+	UnusedBytes    int64                      `json:"unused_bytes"`
+	AccountedBytes int64                      `json:"accounted_bytes"`
+	Tables         []database.TableAllocation `json:"tables"`
+	// Extensions is what extensions keep outside the database, such as a
+	// search index.
+	Extensions []StorageUsage    `json:"extensions"`
+	BlobBytes  int64             `json:"blob_bytes"`
+	Runs       []StorageRunCount `json:"runs"`
+	Expired    StorageExpired    `json:"expired"`
+	Retained   StorageRetained   `json:"retained"`
 }
 
 // StorageStatus reports allocation and a passive checkpoint for an organization
@@ -89,14 +89,13 @@ func (s *Service) StorageStatus(ctx context.Context, subject string) (StorageSta
 	if out.Tables == nil {
 		out.Tables = []database.TableAllocation{}
 	}
-	if s.search != nil {
-		stats, err := s.search.Stats(ctx)
+	out.Extensions = []StorageUsage{}
+	for _, report := range s.ext.storage {
+		usage, err := report(ctx)
 		if err != nil {
 			return StorageStatus{}, err
 		}
-		out.SearchStore = s.search.Name()
-		out.SearchBytes = stats.Bytes
-		out.SearchDocuments = stats.Documents
+		out.Extensions = append(out.Extensions, usage)
 	}
 	if out.BlobBytes, err = s.DAL.Blobs().StoredBytes(ctx); err != nil {
 		return StorageStatus{}, err

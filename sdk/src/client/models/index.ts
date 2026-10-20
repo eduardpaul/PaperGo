@@ -2035,15 +2035,6 @@ export function createSearchSyncFromDiscriminatorValue(parseNode: ParseNode | un
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
- * @returns {SearchSyncResult}
- */
-// @ts-ignore
-export function createSearchSyncResultFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
-    return deserializeIntoSearchSyncResult;
-}
-/**
- * Creates a new instance of the appropriate class based on discriminator value
- * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {SetWorkspaceMember}
  */
 // @ts-ignore
@@ -4874,18 +4865,6 @@ export function deserializeIntoSearchSync(searchSync: Partial<SearchSync> | unde
 }
 /**
  * The deserialization information for the current model
- * @param SearchSyncResult The instance to deserialize into.
- * @returns {Record<string, (node: ParseNode) => void>}
- */
-// @ts-ignore
-export function deserializeIntoSearchSyncResult(searchSyncResult: Partial<SearchSyncResult> | undefined = {}) : Record<string, (node: ParseNode) => void> {
-    return {
-        "removed": n => { searchSyncResult.removed = n.getNumberValue(); },
-        "written": n => { searchSyncResult.written = n.getNumberValue(); },
-    }
-}
-/**
- * The deserialization information for the current model
  * @param SetWorkspaceMember The instance to deserialize into.
  * @returns {Record<string, (node: ParseNode) => void>}
  */
@@ -6692,7 +6671,7 @@ export interface Operation extends AdditionalDataHolder, Parsable {
      */
     id?: string | null;
     /**
-     * Registered operation kind; field_index, bulk_update and search_reindex are built in.
+     * Registered operation kind; field_index and bulk_update are built in, and extensions register others, such as search.reindex.
      */
     kind?: string | null;
     /**
@@ -8007,16 +7986,6 @@ export interface SearchSync extends Parsable {
      * The resource_ids property
      */
     resourceIds?: string[] | null;
-}
-export interface SearchSyncResult extends Parsable {
-    /**
-     * The removed property
-     */
-    removed?: number | null;
-    /**
-     * The written property
-     */
-    written?: number | null;
 }
 /**
  * Serializes information the current object
@@ -10054,18 +10023,6 @@ export function serializeSearchStatus_embeddings(writer: SerializationWriter, se
 export function serializeSearchSync(writer: SerializationWriter, searchSync: Partial<SearchSync> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!searchSync || isSerializingDerivedType) { return; }
     writer.writeCollectionOfPrimitiveValues<string>("resource_ids", searchSync.resourceIds);
-}
-/**
- * Serializes information the current object
- * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
- * @param SearchSyncResult The instance to serialize from.
- * @param writer Serialization writer to use to serialize this model
- */
-// @ts-ignore
-export function serializeSearchSyncResult(writer: SerializationWriter, searchSyncResult: Partial<SearchSyncResult> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
-    if (!searchSyncResult || isSerializingDerivedType) { return; }
-    writer.writeNumberValue("removed", searchSyncResult.removed);
-    writer.writeNumberValue("written", searchSyncResult.written);
 }
 /**
  * Serializes information the current object

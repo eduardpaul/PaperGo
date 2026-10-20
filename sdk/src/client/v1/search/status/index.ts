@@ -11,7 +11,7 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface StatusRequestBuilder extends BaseRequestBuilder<StatusRequestBuilder> {
     /**
-     * Search store state
+     * Served when the deployment runs search (SEARCH_STORE is not none).
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<SearchStatus>}
      * @throws {Problem} error when the service returns a 401 status code
@@ -20,7 +20,7 @@ export interface StatusRequestBuilder extends BaseRequestBuilder<StatusRequestBu
      */
      get(requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<SearchStatus | undefined>;
     /**
-     * Search store state
+     * Served when the deployment runs search (SEARCH_STORE is not none).
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */

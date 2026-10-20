@@ -1,6 +1,6 @@
 # Workflow extensions
 
-Compiled features expose authenticated routes through `httpapi.Module` and describe them in `api/openapi.json`. The executable registers each module and its operation handlers before starting the API and workers. `internal/aiops`, `internal/documenttext` and `internal/searchcontent` provide examples.
+Compiled features expose authenticated routes through `httpapi.Module` and describe them in `api/openapi.json`. The executable registers each module and its operation handlers before starting the API and workers. `internal/aiops`, `internal/documenttext`, `internal/documentpreview` and `internal/documentsearch` provide examples. An extension that needs a workflow role, such as previews or search, registers the role and its built-in workflow itself when it registers, so a deployment without the extension has neither; search also plugs into the core's extension points (`dms.SetTextMatcher`, `dms.AddStorageReporter`, `dms.OnImport`).
 
 A module handler uses `httpapi.Request.DMS` and `Subject` for its calls. Workflow requests use the same handlers in-process, bound to the transaction that records the script step. Modules must use that supplied service so their writes commit with the recorded response. `Request.Run` identifies the workflow run for features such as staged files and tasks.
 

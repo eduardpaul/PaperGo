@@ -124,14 +124,40 @@ func TestAutomaticRulesAreLibraryScopedAndIndividuallyControllable(t *testing.T)
 	}
 }
 
+// indexRole registers a role and a default system built-in filling it, as
+// an extension such as search does, for the test.
+func indexRole(t *testing.T) string {
+	t.Helper()
+	const key = "test.index"
+	RegisterRole(&Role{Key: key, Name: "Test index"})
+	b := &BuiltIn{Key: key, Name: "Test index", Role: key, Default: true, System: true, ParametersSchema: map[string]any{"type": "object", "properties": map[string]any{}},
+		Source: `import { workflow } from "@papergo/workflow";
+export default workflow<unknown, unknown, { collection: string }>({
+  triggers: (p) => [
+    { type: "item.created", collection_id: p.collection },
+    { type: "manual", collection_id: p.collection, selection: "per_item" },
+  ],
+  concurrency: "coalesce",
+  run: () => ({}),
+});
+`}
+	RegisterBuiltIn(b)
+	t.Cleanup(func() {
+		delete(builtins, key)
+		delete(roles, key)
+	})
+	return key
+}
+
 func TestManualSystemFeatureDoesNotConsultAutomaticProvider(t *testing.T) {
+	index := indexRole(t)
 	s, ws, a, _, item := policyFixture(t)
 	ctx := t.Context()
-	root, err := s.UpdateBuiltIn(ctx, "alice", ws.ID, "search.index", SetBuiltIn{AutomaticEnabled: false})
+	root, err := s.UpdateBuiltIn(ctx, "alice", ws.ID, index, SetBuiltIn{AutomaticEnabled: false})
 	if err != nil {
 		t.Fatal(err)
 	}
-	local, err := s.UpdateBuiltIn(ctx, "alice", ws.ID, "search.index", SetBuiltIn{CollectionID: a.ID, AutomaticEnabled: false})
+	local, err := s.UpdateBuiltIn(ctx, "alice", ws.ID, index, SetBuiltIn{CollectionID: a.ID, AutomaticEnabled: false})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +172,7 @@ func TestManualSystemFeatureDoesNotConsultAutomaticProvider(t *testing.T) {
 	if runs := started(t, s, []dms.Event{{ID: event.ID, Type: TriggerManual, WorkspaceID: ws.ID, CollectionID: a.ID, ResourceID: item.ID, Actor: "alice", Data: event.Data}}); len(runs) != 1 {
 		t.Fatalf("manual request silently suppressed: %+v", runs)
 	}
-	copy, err := s.CopyBuiltIn(ctx, "alice", ws.ID, "search.index", CopyBuiltIn{Name: "Custom index", CollectionID: a.ID})
+	copy, err := s.CopyBuiltIn(ctx, "alice", ws.ID, index, CopyBuiltIn{Name: "Custom index", CollectionID: a.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +183,7 @@ func TestManualSystemFeatureDoesNotConsultAutomaticProvider(t *testing.T) {
 	if err != nil || unchanged.Version != local.Version {
 		t.Fatal("copy changed existing automatic settings", unchanged, err)
 	}
-	if _, err = s.UpdateBuiltIn(ctx, "alice", ws.ID, "search.index", SetBuiltIn{AutomaticEnabled: true, Version: root.Version}); err == nil {
+	if _, err = s.UpdateBuiltIn(ctx, "alice", ws.ID, index, SetBuiltIn{AutomaticEnabled: true, Version: root.Version}); err == nil {
 		t.Fatal("workspace-wide automatic built-in accepted")
 	}
 }
@@ -202,8 +228,9 @@ export default workflow<unknown, unknown, { collection: string }>({
 }
 
 func TestPublishingPreparedDraftClaimsOnlyItsCollection(t *testing.T) {
+	index := indexRole(t)
 	s, ws, lib, _, _ := policyFixture(t)
-	copy, err := s.CopyBuiltIn(t.Context(), "alice", ws.ID, "search.index", CopyBuiltIn{Name: "Custom search", CollectionID: lib.ID})
+	copy, err := s.CopyBuiltIn(t.Context(), "alice", ws.ID, index, CopyBuiltIn{Name: "Custom search", CollectionID: lib.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +245,7 @@ func TestPublishingPreparedDraftClaimsOnlyItsCollection(t *testing.T) {
 	if _, err = s.Update(t.Context(), "alice", copy.ID, published.Version, Save{Name: copy.Name, Source: copy.Source, State: "archived"}); err != nil {
 		t.Fatal(err)
 	}
-	active, err := s.UpdateBuiltIn(t.Context(), "alice", ws.ID, "search.index", SetBuiltIn{CollectionID: lib.ID, AutomaticEnabled: true})
+	active, err := s.UpdateBuiltIn(t.Context(), "alice", ws.ID, index, SetBuiltIn{CollectionID: lib.ID, AutomaticEnabled: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,12 +254,12 @@ func TestPublishingPreparedDraftClaimsOnlyItsCollection(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, role := range roles {
-		if role.Role.Key == "search.index" {
+		if role.Role.Key == index {
 			if !role.AutomaticEnabled || role.Workflow == nil || role.Workflow.ID != active.ID {
 				t.Fatal(role)
 			}
 			return
 		}
 	}
-	t.Fatal("search role missing")
+	t.Fatal("role missing")
 }

@@ -1,4 +1,4 @@
-package httpapi
+package documentsearch
 
 import (
 	"context"
@@ -44,13 +44,13 @@ func TestSearchDoesNotExposeUnpublishedContent(t *testing.T) {
 		t.Fatalf("unpublished item: %v", err)
 	}
 	for _, surface := range []string{"auto", "published"} {
-		out, err := s.Search(ctx, "bob", dms.SearchRequest{Q: "secret", Surface: surface, Facets: true})
+		out, err := extension(t, s).Search(ctx, s, "bob", Request{Q: "secret", Surface: surface, Facets: true})
 		if err != nil || len(out.Hits) != 0 || out.Facets != nil || !out.TotalEstimated {
 			t.Fatalf("unpublished %s: %+v %v", surface, out, err)
 		}
 	}
 	// Draft readers retain access to the head while the index catches up.
-	out, err := s.Search(ctx, "alice", dms.SearchRequest{Q: "secret"})
+	out, err := extension(t, s).Search(ctx, s, "alice", Request{Q: "secret"})
 	if err != nil || len(out.Hits) != 1 || out.Hits[0].Surface != "head" {
 		t.Fatalf("draft: %+v %v", out, err)
 	}
@@ -83,12 +83,12 @@ func TestSearchFacetsVerifySourcesOutsideTheHitPage(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Filter-only results sort newest first: the stale source is off this page.
-	out, err := s.Search(ctx, "bob", dms.SearchRequest{CollectionID: list.ID, Limit: 1, Facets: true})
+	out, err := extension(t, s).Search(ctx, s, "bob", Request{CollectionID: list.ID, Limit: 1, Facets: true})
 	if err != nil || len(out.Hits) != 1 || out.Hits[0].ID != public.ID || out.Facets != nil || !out.TotalEstimated {
 		t.Fatalf("unsafe facets: %+v %v", out, err)
 	}
 	indexSearch(t, s)
-	out, err = s.Search(ctx, "bob", dms.SearchRequest{CollectionID: list.ID, Limit: 1, Facets: true})
+	out, err = extension(t, s).Search(ctx, s, "bob", Request{CollectionID: list.ID, Limit: 1, Facets: true})
 	if err != nil || out.Facets == nil || len(out.Facets.Keyword) != 0 || out.Total != 1 || out.TotalEstimated {
 		t.Fatalf("settled facets: %+v %v", out, err)
 	}
@@ -114,7 +114,7 @@ func TestSearchFileContentRequiresDocumentRead(t *testing.T) {
 		t.Fatal(err)
 	}
 	indexSearch(t, s)
-	store := s.SearchStore()
+	store := extension(t, s).Store
 	if err = store.StageContent(ctx, item.ID, b.ID, "generation", []search.Chunk{{Text: "Highly confidential file merger", Page: 1}}); err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +129,7 @@ func TestSearchFileContentRequiresDocumentRead(t *testing.T) {
 		q    string
 		want int
 	}{{"confidential", 0}, {"file confidential", 0}, {"file", 1}, {"file -confidential", 1}} {
-		out, err := s.Search(limited, "alice", dms.SearchRequest{Q: tc.q, Facets: true})
+		out, err := extension(t, s).Search(limited, s, "alice", Request{Q: tc.q, Facets: true})
 		if err != nil || len(out.Hits) != tc.want || out.Total != tc.want {
 			t.Fatalf("limited %q: %+v %v", tc.q, out, err)
 		}
@@ -153,7 +153,7 @@ func TestSearchFileContentRequiresDocumentRead(t *testing.T) {
 			t.Fatalf("query %s: %+v %v", text, query, err)
 		}
 	}
-	out, err := s.Search(ctx, "alice", dms.SearchRequest{Q: "confidential"})
+	out, err := extension(t, s).Search(ctx, s, "alice", Request{Q: "confidential"})
 	if err != nil || len(out.Hits) != 1 || out.Hits[0].Page != 1 || !strings.Contains(out.Hits[0].Snippet, "confidential") {
 		t.Fatalf("authorized file text: %+v %v", out, err)
 	}

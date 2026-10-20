@@ -151,6 +151,14 @@ export const templatesQuery = queryOptions({
   queryFn: async () => listOf((await api<Page<CollectionTemplate> | CollectionTemplate[]>('/v1/collection-templates')).data),
 });
 
+// The workflow catalog. Search's roles are in it when the deployment runs
+// search.
+export const workflowCatalogQuery = queryOptions({
+  queryKey: ['workflow-catalog'],
+  queryFn: async () => (await api<{ roles: { key: string }[] }>('/v1/workflow-catalog')).data,
+  staleTime: Infinity,
+});
+
 export const smartFoldersQuery = queryOptions({
   queryKey: keys.smartFolders,
   queryFn: async () => listOf((await api<Page<SmartFolder>>('/v1/smart-folders', { query: { $top: 200 } })).data),

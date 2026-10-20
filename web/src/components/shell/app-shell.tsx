@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Kbd } from '@/components/ui/feedback';
 import { UploadsProvider } from '@/features/documents/uploads';
 import { rememberWorkspace } from '@/lib/recent-workspace';
+import { useSearchAvailable } from '@/lib/search';
 import { CommandPaletteProvider, useCommandPalette } from './command-palette';
 import { Sidebar } from './sidebar';
 import { UserMenu } from './user-menu';
@@ -47,6 +48,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 function TopBar({ onMenu }: { onMenu: () => void }) {
   const palette = useCommandPalette();
   const navigate = useNavigate();
+  const searchAvailable = useSearchAvailable();
   const mac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
   useEffect(() => {
@@ -60,7 +62,7 @@ function TopBar({ onMenu }: { onMenu: () => void }) {
       }
       if (prefix) {
         prefix = false;
-        const path = event.key === 'h' ? '/' : event.key === 'i' ? '/inbox' : event.key === 's' ? '/search' : '';
+        const path = event.key === 'h' ? '/' : event.key === 'i' ? '/inbox' : event.key === 's' && searchAvailable ? '/search' : '';
         if (path) {
           event.preventDefault();
           void navigate({ to: path });
@@ -69,7 +71,7 @@ function TopBar({ onMenu }: { onMenu: () => void }) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [navigate]);
+  }, [navigate, searchAvailable]);
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-background/85 px-3 backdrop-blur sm:px-4">

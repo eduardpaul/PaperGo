@@ -1,4 +1,4 @@
-package searchcontent_test
+package documentsearch_test
 
 import (
 	"context"
@@ -19,9 +19,9 @@ import (
 	"papergo/internal/dal/operations"
 	"papergo/internal/dal/search/sqlitestore"
 	"papergo/internal/dms"
+	"papergo/internal/documentsearch"
 	"papergo/internal/httpapi"
 	"papergo/internal/search"
-	"papergo/internal/searchcontent"
 	"papergo/internal/storage"
 	"papergo/internal/worker"
 )
@@ -57,8 +57,7 @@ func TestContentSteps(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer index.Close()
-	s.SetSearch(index)
-	x := &searchcontent.Indexer{Storage: store, Search: index}
+	x := &documentsearch.Search{Storage: store, Store: index}
 	if err = x.Register(s); err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +109,7 @@ func TestContentSteps(t *testing.T) {
 		t.Fatal("chunked nothing:", res.Code, res.Body.String())
 	}
 	staged := accepted(chunks, `{"text":"Quarterly invoice from Northwind for printer paper","chunker":"whole"}`)
-	var result searchcontent.ChunkResult
+	var result documentsearch.ChunkResult
 	if json.Unmarshal(staged.Result, &result) != nil || result.Generation != staged.ID || result.Chunks != 1 {
 		t.Fatalf("%s", staged.Result)
 	}
@@ -118,7 +117,7 @@ func TestContentSteps(t *testing.T) {
 	// A second part adds to the generation.
 	accepted(chunks, `{"text":"Summary: paper supplies","kind":"summary","generation":"`+result.Generation+`"}`)
 	res := call(t, h, "GET", gen+"/chunks?limit=10", "")
-	var page searchcontent.ChunkPage
+	var page documentsearch.ChunkPage
 	if res.Code != 200 || json.Unmarshal(res.Body.Bytes(), &page) != nil || len(page.Chunks) != 2 || page.More {
 		t.Fatal(res.Code, res.Body.String())
 	}
@@ -126,19 +125,17 @@ func TestContentSteps(t *testing.T) {
 	if res = call(t, h, "PUT", gen+"/enrichments", enrich); res.Code != 204 {
 		t.Fatal(res.Code, res.Body.String())
 	}
-	var embedded searchcontent.EmbedResult
+	var embedded documentsearch.EmbedResult
 	if op := accepted(gen+"/embeddings", ""); json.Unmarshal(op.Result, &embedded) != nil || embedded.Reason == "" {
 		t.Fatalf("embedding without a model: %s", op.Result)
 	}
-	var published searchcontent.PublishResult
+	var published documentsearch.PublishResult
 	if op := accepted(gen+"/publish", ""); json.Unmarshal(op.Result, &published) != nil || !published.Published {
 		t.Fatalf("%s", op.Result)
 	}
 	// Entries are written by syncing them.
-	if res = call(t, h, "POST", "/v1/workspaces/"+ws.ID+"/search/sync", `{"resource_ids":["`+item.ID+`"]}`); res.Code != 200 {
-		t.Fatal(res.Code, res.Body.String())
-	}
-	found, err := s.Search(ctx, "alice", dms.SearchRequest{Q: "northwind"})
+	accepted("/v1/workspaces/"+ws.ID+"/search/sync", `{"resource_ids":["`+item.ID+`"]}`)
+	found, err := x.Search(ctx, s, "alice", documentsearch.Request{Q: "northwind"})
 	if err != nil || len(found.Hits) != 1 {
 		t.Fatalf("%+v %v", found, err)
 	}
@@ -153,9 +150,9 @@ func TestContentSteps(t *testing.T) {
 		t.Fatal(res.Code, res.Body.String())
 	}
 
-	var sync searchcontent.SyncResult
-	if res = call(t, h, "POST", "/v1/workspaces/"+ws.ID+"/search/sync", `{"resource_ids":["`+item.ID+`","gone"]}`); res.Code != 200 || json.Unmarshal(res.Body.Bytes(), &sync) != nil {
-		t.Fatal(res.Code, res.Body.String())
+	var sync documentsearch.SyncResult
+	if op := accepted("/v1/workspaces/"+ws.ID+"/search/sync", `{"resource_ids":["`+item.ID+`","gone"]}`); json.Unmarshal(op.Result, &sync) != nil || sync.Written != 1 {
+		t.Fatalf("%s", op.Result)
 	}
 	other, err := s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Other"})
 	if err != nil {
@@ -213,7 +210,7 @@ func TestSweepQueuesEmbedding(t *testing.T) {
 	}
 	defer index.Close()
 	model := &busyEmbedder{busy: 1}
-	x := &searchcontent.Indexer{Search: index, Embeddings: model}
+	x := &documentsearch.Search{Store: index, Embeddings: model}
 	if err = x.Register(s); err != nil {
 		t.Fatal(err)
 	}
@@ -225,7 +222,7 @@ func TestSweepQueuesEmbedding(t *testing.T) {
 	}
 	sweeps := func() []operations.Operation {
 		t.Helper()
-		ops, err := s.DAL.Operations().List(ctx, operations.Filter{Kinds: []string{searchcontent.KindSweep}})
+		ops, err := s.DAL.Operations().List(ctx, operations.Filter{Kinds: []string{documentsearch.KindSweep}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -239,14 +236,14 @@ func TestSweepQueuesEmbedding(t *testing.T) {
 	if ops := sweeps(); len(ops) != 1 || model.calls != 0 {
 		t.Fatalf("%d sweeps queued, %d embedding calls", len(ops), model.calls)
 	}
-	if worked, err := s.RunOperation(ctx, []string{searchcontent.KindSweep}); err != nil || !worked {
+	if worked, err := s.RunOperation(ctx, []string{documentsearch.KindSweep}); err != nil || !worked {
 		t.Fatal(worked, err)
 	}
 	deferred := sweeps()[0]
 	if deferred.Status != operations.StatusPending || !deferred.AttemptAt.After(time.Now().Add(50*time.Second)) || !strings.Contains(deferred.Error, "busy") {
 		t.Fatalf("a busy provider did not defer the sweep: %+v", deferred)
 	}
-	if worked, err := s.RunOperation(ctx, []string{searchcontent.KindSweep}); err != nil || worked {
+	if worked, err := s.RunOperation(ctx, []string{documentsearch.KindSweep}); err != nil || worked {
 		t.Fatal("the deferred sweep ran before its time", worked, err)
 	}
 }
