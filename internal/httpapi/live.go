@@ -61,7 +61,7 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 		}
 		after = &position
 	}
-	position, err := a.DMS.LivePosition(r.Context(), after)
+	position, err := a.dms(r).LivePosition(r.Context(), after)
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -92,11 +92,11 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 	defer end.Stop()
 	known := map[string]bool{}
 	for {
-		if err = identity.RequireCredential(r.Context(), dal.NewStore(a.DMS.Directory().DB), subject(r)); err != nil {
+		if err = identity.RequireCredential(r.Context(), dal.NewStore(a.dms(r).Directory().DB), subject(r)); err != nil {
 			_ = frame("reauthenticate", position, map[string]any{})
 			return
 		}
-		changes, e := a.DMS.LiveChanges(r.Context(), position)
+		changes, e := a.dms(r).LiveChanges(r.Context(), position)
 		if e != nil {
 			return
 		}
@@ -111,7 +111,7 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 			last[key(change.Kind, change.EntityID)] = i
 		}
 		for i, change := range changes {
-			if err = identity.RequireCredential(r.Context(), dal.NewStore(a.DMS.Directory().DB), subject(r)); err != nil {
+			if err = identity.RequireCredential(r.Context(), dal.NewStore(a.dms(r).Directory().DB), subject(r)); err != nil {
 				_ = frame("reauthenticate", position, map[string]any{})
 				return
 			}
@@ -125,7 +125,7 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 			case live.KindItem:
-				item, e := a.DMS.Get(r.Context(), subject(r), change.EntityID)
+				item, e := a.dms(r).Get(r.Context(), subject(r), change.EntityID)
 				if e == nil {
 					known[item.ID] = true
 					if err = frame("item", position, map[string]any{"id": item.ID, "action": change.Action, "item": item}); err != nil {
@@ -160,7 +160,7 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 				if change.Kind == live.KindRun {
 					continue
 				}
-				op, e := a.DMS.Operation(r.Context(), subject(r), change.EntityID)
+				op, e := a.dms(r).Operation(r.Context(), subject(r), change.EntityID)
 				if e == nil {
 					if err = frame("operation", position, op); err != nil {
 						return

@@ -24,6 +24,7 @@ import (
 	"papergo/web"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -48,6 +49,12 @@ type API struct {
 	BrowserSignIn *BrowserSignIn
 	// Modules contribute feature routes; Validate checks they compose.
 	Modules []Module
+
+	loopback struct {
+		once   sync.Once
+		routes *router
+		err    error
+	}
 }
 
 // BrowserSignIn describes the public OIDC client of the web frontend
@@ -85,10 +92,10 @@ func (a *API) registerResources(api *router) {
 	api.HandleFunc("PUT /v1/resources/{id}/permissions", a.setPermissions)
 	api.HandleFunc("GET /v1/items/{id}/relationships", a.relationships)
 	api.HandleFunc("POST /v1/resources/{id}/move-selection", foundationMutation(a, 200, false, func(r *http.Request, in dms.MoveSelection, _ int) (any, error) {
-		return a.DMS.MoveSelection(r.Context(), subject(r), r.PathValue("id"), in)
+		return a.dms(r).MoveSelection(r.Context(), subject(r), r.PathValue("id"), in)
 	}))
 	api.HandleFunc("POST /v1/items/{id}/move", foundationMutation(a, 200, true, func(r *http.Request, in dms.MoveItem, version int) (any, error) {
-		return a.DMS.MoveItem(r.Context(), subject(r), r.PathValue("id"), version, in)
+		return a.dms(r).MoveItem(r.Context(), subject(r), r.PathValue("id"), version, in)
 	}))
 	api.HandleFunc("POST /v1/items/{id}/relationships", a.link)
 	api.HandleFunc("DELETE /v1/items/{id}/relationships/{linkID}", a.unlink)
@@ -121,22 +128,33 @@ type runKey struct{}
 // clients.
 func runOf(r *http.Request) string { v, _ := r.Context().Value(runKey{}).(string); return v }
 
+// serviceKey carries the service an in-process request runs on.
+type serviceKey struct{}
+
+// dms is the service a request runs on: the one bound to the caller's
+// transaction for an in-process request, otherwise the API's.
+func (a *API) dms(r *http.Request) *dms.Service {
+	if t, ok := r.Context().Value(serviceKey{}).(*dms.Service); ok {
+		return t
+	}
+	return a.DMS
+}
+
 // Loopback serves the /v1 API in-process to the workflow run run, acting
 // as subject. Its handlers, module routes included, run on t, a service bound
 // to the caller's transaction, so a request's writes commit or roll back
 // with the step that records it. It neither authenticates nor rate-limits.
+// The routes are built once and shared by every in-process request.
 func (a *API) Loopback(t *dms.Service, subject, run string) http.Handler {
-	scoped := *a
-	scoped.DMS = t
-	routes, err := scoped.routes()
-	if err != nil {
+	a.loopback.once.Do(func() { a.loopback.routes, a.loopback.err = a.routes() })
+	if a.loopback.err != nil {
 		// Validate reports this before the API serves.
-		panic(err)
+		panic(a.loopback.err)
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.WithValue(context.WithValue(context.WithValue(r.Context(), subjectKey{}, subject), runKey{}, run), serviceKey{}, t)
 		// What the run's requests start belongs to the run.
-		ctx := dms.WithParentOperation(context.WithValue(context.WithValue(r.Context(), subjectKey{}, subject), runKey{}, run), run)
-		routes.ServeHTTP(w, r.WithContext(ctx))
+		a.loopback.routes.ServeHTTP(w, r.WithContext(dms.WithParentOperation(ctx, run)))
 	})
 }
 
@@ -513,7 +531,7 @@ func (a *API) workspace(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &in) {
 		return
 	}
-	out, err := a.DMS.Create(r.Context(), subject(r), "", dms.CreateResource{Kind: "workspace", Name: in.Name, Description: in.Description, Keywords: in.Keywords})
+	out, err := a.dms(r).Create(r.Context(), subject(r), "", dms.CreateResource{Kind: "workspace", Name: in.Name, Description: in.Description, Keywords: in.Keywords})
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -527,7 +545,7 @@ func (a *API) create(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &in) {
 		return
 	}
-	out, created, err := a.DMS.CreateWithStatus(r.Context(), subject(r), r.PathValue("id"), in)
+	out, created, err := a.dms(r).CreateWithStatus(r.Context(), subject(r), r.PathValue("id"), in)
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -541,7 +559,7 @@ func (a *API) create(w http.ResponseWriter, r *http.Request) {
 	respond(w, r, status, out)
 }
 func (a *API) get(w http.ResponseWriter, r *http.Request) {
-	out, err := a.DMS.GetSurface(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("surface"))
+	out, err := a.dms(r).GetSurface(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("surface"))
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -556,7 +574,7 @@ type resourceWithAccess struct {
 }
 
 func (a *API) respondWithAccess(w http.ResponseWriter, r *http.Request, out *resources.Resource) {
-	access, err := a.DMS.Access(r.Context(), subject(r), out)
+	access, err := a.dms(r).Access(r.Context(), subject(r), out)
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -573,7 +591,7 @@ func (a *API) update(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &in) {
 		return
 	}
-	out, err := a.DMS.Update(r.Context(), subject(r), r.PathValue("id"), version, in)
+	out, err := a.dms(r).Update(r.Context(), subject(r), r.PathValue("id"), version, in)
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -593,7 +611,7 @@ func (a *API) delete(w http.ResponseWriter, r *http.Request) {
 		}
 		options.Recursive = values[0] == "true"
 	}
-	if err := a.DMS.Delete(r.Context(), subject(r), r.PathValue("id"), version, options); err != nil {
+	if err := a.dms(r).Delete(r.Context(), subject(r), r.PathValue("id"), version, options); err != nil {
 		a.failure(w, r, err)
 		return
 	}
@@ -612,7 +630,7 @@ func (a *API) browse(w http.ResponseWriter, r *http.Request) {
 	a.list(w, r, in)
 }
 func (a *API) list(w http.ResponseWriter, r *http.Request, in dms.Browse) {
-	out, err := a.DMS.Browse(r.Context(), subject(r), in)
+	out, err := a.dms(r).Browse(r.Context(), subject(r), in)
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -620,7 +638,7 @@ func (a *API) list(w http.ResponseWriter, r *http.Request, in dms.Browse) {
 	respond(w, r, 200, out)
 }
 func (a *API) fields(w http.ResponseWriter, r *http.Request) {
-	out, err := a.DMS.Fields(r.Context(), subject(r), r.PathValue("id"))
+	out, err := a.dms(r).Fields(r.Context(), subject(r), r.PathValue("id"))
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -632,7 +650,7 @@ func (a *API) createField(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &in) {
 		return
 	}
-	out, err := a.DMS.CreateField(r.Context(), subject(r), r.PathValue("id"), in)
+	out, err := a.dms(r).CreateField(r.Context(), subject(r), r.PathValue("id"), in)
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -640,7 +658,7 @@ func (a *API) createField(w http.ResponseWriter, r *http.Request) {
 	respond(w, r, 201, out)
 }
 func (a *API) permissions(w http.ResponseWriter, r *http.Request) {
-	out, err := a.DMS.Permissions(r.Context(), subject(r), r.PathValue("id"))
+	out, err := a.dms(r).Permissions(r.Context(), subject(r), r.PathValue("id"))
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -656,7 +674,7 @@ func (a *API) setPermissions(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &in) {
 		return
 	}
-	out, err := a.DMS.SetPermissions(r.Context(), subject(r), r.PathValue("id"), version, in)
+	out, err := a.dms(r).SetPermissions(r.Context(), subject(r), r.PathValue("id"), version, in)
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -669,7 +687,7 @@ func (a *API) link(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &in) {
 		return
 	}
-	out, err := a.DMS.Link(r.Context(), subject(r), r.PathValue("id"), in)
+	out, err := a.dms(r).Link(r.Context(), subject(r), r.PathValue("id"), in)
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -679,7 +697,7 @@ func (a *API) link(w http.ResponseWriter, r *http.Request) {
 }
 func (a *API) relationships(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	out, err := a.DMS.Relationships(r.Context(), subject(r), r.PathValue("id"), q.Get("direction"), q.Get("type"), q.Get("$skiptoken"), queryInt(r, "$top"))
+	out, err := a.dms(r).Relationships(r.Context(), subject(r), r.PathValue("id"), q.Get("direction"), q.Get("type"), q.Get("$skiptoken"), queryInt(r, "$top"))
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -687,7 +705,7 @@ func (a *API) relationships(w http.ResponseWriter, r *http.Request) {
 	respond(w, r, 200, out)
 }
 func (a *API) unlink(w http.ResponseWriter, r *http.Request) {
-	if err := a.DMS.Unlink(r.Context(), subject(r), r.PathValue("id"), r.PathValue("linkID")); err != nil {
+	if err := a.dms(r).Unlink(r.Context(), subject(r), r.PathValue("id"), r.PathValue("linkID")); err != nil {
 		a.failure(w, r, err)
 		return
 	}
@@ -698,7 +716,7 @@ func (a *API) publish(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	out, err := a.DMS.Publish(r.Context(), subject(r), r.PathValue("id"), version)
+	out, err := a.dms(r).Publish(r.Context(), subject(r), r.PathValue("id"), version)
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -707,7 +725,7 @@ func (a *API) publish(w http.ResponseWriter, r *http.Request) {
 	respond(w, r, 201, out)
 }
 func (a *API) fileVersions(w http.ResponseWriter, r *http.Request) {
-	out, err := a.DMS.FileVersions(r.Context(), subject(r), r.PathValue("id"), queryInt(r, "$skiptoken"), queryInt(r, "$top"))
+	out, err := a.dms(r).FileVersions(r.Context(), subject(r), r.PathValue("id"), queryInt(r, "$skiptoken"), queryInt(r, "$top"))
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -715,7 +733,7 @@ func (a *API) fileVersions(w http.ResponseWriter, r *http.Request) {
 	respond(w, r, 200, out)
 }
 func (a *API) publications(w http.ResponseWriter, r *http.Request) {
-	out, err := a.DMS.Publications(r.Context(), subject(r), r.PathValue("id"), queryInt(r, "$skiptoken"), queryInt(r, "$top"))
+	out, err := a.dms(r).Publications(r.Context(), subject(r), r.PathValue("id"), queryInt(r, "$skiptoken"), queryInt(r, "$top"))
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -727,7 +745,7 @@ func (a *API) upload(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := a.DMS.CanUpload(r.Context(), subject(r), r.PathValue("id"), version); err != nil {
+	if err := a.dms(r).CanUpload(r.Context(), subject(r), r.PathValue("id"), version); err != nil {
 		a.failure(w, r, err)
 		return
 	}
@@ -747,7 +765,7 @@ func (a *API) upload(w http.ResponseWriter, r *http.Request) {
 		a.failure(w, r, err)
 		return
 	}
-	out, err := a.DMS.AttachBlob(r.Context(), subject(r), r.PathValue("id"), version, dms.BlobInput{ObjectKey: object.Key, Filename: filename, ContentType: detected, Size: object.Size, SHA256: object.SHA256, Languages: strings.TrimSpace(r.Header.Get("X-OCR-Languages"))})
+	out, err := a.dms(r).AttachBlob(r.Context(), subject(r), r.PathValue("id"), version, dms.BlobInput{ObjectKey: object.Key, Filename: filename, ContentType: detected, Size: object.Size, SHA256: object.SHA256, Languages: strings.TrimSpace(r.Header.Get("X-OCR-Languages"))})
 	if err != nil {
 		if cleanupErr := a.Storage.Delete(context.Background(), object.Key); cleanupErr != nil {
 			a.Logger.Error("orphan cleanup failed", "object_key", object.Key, "error", cleanupErr)
@@ -761,7 +779,7 @@ func (a *API) upload(w http.ResponseWriter, r *http.Request) {
 	respond(w, r, 201, result)
 }
 func (a *API) download(w http.ResponseWriter, r *http.Request) {
-	b, err := a.DMS.GetBlob(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("blob_id"))
+	b, err := a.dms(r).GetBlob(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("blob_id"))
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -784,7 +802,7 @@ func (a *API) authenticate(next http.Handler) http.Handler {
 		var err error
 		parts := strings.Fields(r.Header.Get("Authorization"))
 		if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") && strings.HasPrefix(parts[1], identity.AccessTokenPrefix) {
-			token, e := a.DMS.Directory().AuthenticateAccessToken(r.Context(), parts[1])
+			token, e := a.dms(r).Directory().AuthenticateAccessToken(r.Context(), parts[1])
 			if e != nil || (a.Auth.Kind() == auth.TrustedProxy && !token.Integration) {
 				err = auth.ErrUnauthenticated
 			} else {
@@ -803,12 +821,12 @@ func (a *API) authenticate(next http.Handler) http.Handler {
 			return
 		}
 		if _, token := identity.AccessTokenContext(r.Context()); !token && (a.Auth.Kind() == auth.TrustedProxy || a.Auth.Kind() == auth.LocalMode) {
-			if err = a.DMS.Directory().EnsureUser(r.Context(), ident.Subject); err != nil {
+			if err = a.dms(r).Directory().EnsureUser(r.Context(), ident.Subject); err != nil {
 				a.failure(w, r, err)
 				return
 			}
 		} else if _, personal := identity.AccessTokenContext(r.Context()); !personal {
-			if err = a.DMS.Directory().SyncUser(r.Context(), identity.UserIdentity{
+			if err = a.dms(r).Directory().SyncUser(r.Context(), identity.UserIdentity{
 				Subject:           ident.Subject,
 				Name:              ident.Name,
 				PreferredUsername: ident.PreferredUsername,
@@ -820,7 +838,7 @@ func (a *API) authenticate(next http.Handler) http.Handler {
 				return
 			}
 		}
-		if err = identity.RequireActive(r.Context(), dal.NewStore(a.DMS.Directory().DB), ident.Subject); err != nil {
+		if err = identity.RequireActive(r.Context(), dal.NewStore(a.dms(r).Directory().DB), ident.Subject); err != nil {
 			a.failure(w, r, err)
 			return
 		}
@@ -878,7 +896,7 @@ func (a *API) observe(next http.Handler) http.Handler {
 func (a *API) keywords(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	limit := queryInt(r, "$top")
-	out, err := a.DMS.WorkspaceKeywords(r.Context(), subject(r), r.PathValue("id"), dms.WorkspaceKeywordsQuery{CollectionID: q.Get("collection_id"), Prefix: q.Get("prefix"), After: q.Get("$skiptoken"), Limit: limit})
+	out, err := a.dms(r).WorkspaceKeywords(r.Context(), subject(r), r.PathValue("id"), dms.WorkspaceKeywordsQuery{CollectionID: q.Get("collection_id"), Prefix: q.Get("prefix"), After: q.Get("$skiptoken"), Limit: limit})
 	if err != nil {
 		a.failure(w, r, err)
 		return

@@ -145,7 +145,7 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 			in.Mode = c.Mode
 		}
 	}
-	out, err := a.DMS.Search(r.Context(), subject(r), in)
+	out, err := a.dms(r).Search(r.Context(), subject(r), in)
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -161,7 +161,7 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 // searchFields lists the fields search can filter on for the caller.
 func (a *API) searchFields(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	out, err := a.DMS.SearchFields(r.Context(), subject(r), q.Get("workspace_id"), q.Get("collection_id"))
+	out, err := a.dms(r).SearchFields(r.Context(), subject(r), q.Get("workspace_id"), q.Get("collection_id"))
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -177,7 +177,7 @@ func (a *API) reindexSearch(w http.ResponseWriter, r *http.Request) {
 	if r.ContentLength != 0 && !a.decode(w, r, &in) {
 		return
 	}
-	op, err := a.DMS.StartSearchReindex(r.Context(), subject(r), in)
+	op, err := a.dms(r).StartSearchReindex(r.Context(), subject(r), in)
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -186,7 +186,7 @@ func (a *API) reindexSearch(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) searchStatus(w http.ResponseWriter, r *http.Request) {
-	out, err := a.DMS.SearchStatus(r.Context(), subject(r))
+	out, err := a.dms(r).SearchStatus(r.Context(), subject(r))
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -195,7 +195,7 @@ func (a *API) searchStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) searchContentTypes(w http.ResponseWriter, r *http.Request) {
-	out, err := a.DMS.SearchContentTypes(r.Context(), subject(r), r.URL.Query().Get("workspace_id"), r.URL.Query().Get("collection_id"))
+	out, err := a.dms(r).SearchContentTypes(r.Context(), subject(r), r.URL.Query().Get("workspace_id"), r.URL.Query().Get("collection_id"))
 	if err != nil {
 		a.failure(w, r, err)
 		return

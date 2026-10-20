@@ -229,6 +229,9 @@ type Queries interface {
 	FindResource(ctx context.Context, id string) (Resource, error)
 	FindResources(ctx context.Context, f Filter) ([]Resource, error)
 	ResourceIDs(ctx context.Context, f Filter) ([]string, error)
+	// ResourceActions reports which of the access actions the principal may
+	// take on a resource, in one statement.
+	ResourceActions(ctx context.Context, id string, p access.Principal) (Actions, error)
 	CountResources(ctx context.Context, f Filter) (int, error)
 	// InsertResource stores r with the values JSON, ignoring r.Values.
 	InsertResource(ctx context.Context, r Resource, values json.RawMessage) error
@@ -312,6 +315,17 @@ func (r *Repo) IDs(ctx context.Context, f Filter) ([]string, error) {
 		return []string{}, nil
 	}
 	return r.read.ResourceIDs(ctx, f)
+}
+
+// Actions are the access actions a principal may take on a resource.
+type Actions struct {
+	Read, ReadDraft, Write, Publish, Manage bool
+}
+
+// Actions reports which access actions the principal may take on the
+// resource id, as Rows would answer for each, in one statement.
+func (r *Repo) Actions(ctx context.Context, id string, p access.Principal) (Actions, error) {
+	return r.read.ResourceActions(ctx, id, p)
 }
 
 // Count counts the resources f selects.

@@ -13,7 +13,7 @@ func (a *API) revision(w http.ResponseWriter, r *http.Request) {
 		a.failure(w, r, dms.ErrNotFound)
 		return
 	}
-	out, err := a.DMS.Revision(r.Context(), subject(r), r.PathValue("id"), number)
+	out, err := a.dms(r).Revision(r.Context(), subject(r), r.PathValue("id"), number)
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -31,7 +31,7 @@ func (a *API) restoreRevision(w http.ResponseWriter, r *http.Request) {
 		a.failure(w, r, dms.ErrNotFound)
 		return
 	}
-	out, err := a.DMS.RestoreRevision(r.Context(), subject(r), r.PathValue("id"), number, version)
+	out, err := a.dms(r).RestoreRevision(r.Context(), subject(r), r.PathValue("id"), number, version)
 	if err != nil {
 		a.failure(w, r, err)
 		return

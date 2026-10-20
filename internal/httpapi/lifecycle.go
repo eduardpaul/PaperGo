@@ -10,7 +10,7 @@ func (a *API) unpublish(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	out, err := a.DMS.Unpublish(r.Context(), subject(r), r.PathValue("id"), version)
+	out, err := a.dms(r).Unpublish(r.Context(), subject(r), r.PathValue("id"), version)
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -19,7 +19,7 @@ func (a *API) unpublish(w http.ResponseWriter, r *http.Request) {
 	respond(w, r, 200, out)
 }
 func (a *API) revisions(w http.ResponseWriter, r *http.Request) {
-	out, err := a.DMS.RevisionHistory(r.Context(), subject(r), r.PathValue("id"), queryInt(r, "$skiptoken"), queryInt(r, "$top"))
+	out, err := a.dms(r).RevisionHistory(r.Context(), subject(r), r.PathValue("id"), queryInt(r, "$skiptoken"), queryInt(r, "$top"))
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -27,7 +27,7 @@ func (a *API) revisions(w http.ResponseWriter, r *http.Request) {
 	respond(w, r, 200, out)
 }
 func (a *API) schemas(w http.ResponseWriter, r *http.Request) {
-	out, err := a.DMS.Schemas(r.Context(), subject(r), r.PathValue("id"), queryInt(r, "$skiptoken"), queryInt(r, "$top"))
+	out, err := a.dms(r).Schemas(r.Context(), subject(r), r.PathValue("id"), queryInt(r, "$skiptoken"), queryInt(r, "$top"))
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -35,7 +35,7 @@ func (a *API) schemas(w http.ResponseWriter, r *http.Request) {
 	respond(w, r, 200, out)
 }
 func (a *API) itemSchema(w http.ResponseWriter, r *http.Request) {
-	out, err := a.DMS.ItemSchema(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("surface"))
+	out, err := a.dms(r).ItemSchema(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("surface"))
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -51,7 +51,7 @@ func (a *API) updateField(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &in) {
 		return
 	}
-	out, err := a.DMS.UpdateField(r.Context(), subject(r), r.PathValue("id"), r.PathValue("fieldID"), version, in)
+	out, err := a.dms(r).UpdateField(r.Context(), subject(r), r.PathValue("id"), r.PathValue("fieldID"), version, in)
 	if err != nil {
 		a.failure(w, r, err)
 		return

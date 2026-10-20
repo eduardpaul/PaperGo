@@ -6,7 +6,7 @@ import (
 )
 
 func (a *API) workspaceMembers(w http.ResponseWriter, r *http.Request) {
-	members, err := a.DMS.WorkspaceMembers(r.Context(), subject(r), r.PathValue("id"))
+	members, err := a.dms(r).WorkspaceMembers(r.Context(), subject(r), r.PathValue("id"))
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -19,7 +19,7 @@ func (a *API) setWorkspaceMember(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &in) {
 		return
 	}
-	if err := a.DMS.SetWorkspaceMember(r.Context(), subject(r), r.PathValue("id"), in); err != nil {
+	if err := a.dms(r).SetWorkspaceMember(r.Context(), subject(r), r.PathValue("id"), in); err != nil {
 		a.failure(w, r, err)
 		return
 	}
@@ -27,7 +27,7 @@ func (a *API) setWorkspaceMember(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) removeWorkspaceMember(w http.ResponseWriter, r *http.Request) {
-	if err := a.DMS.RemoveWorkspaceMember(r.Context(), subject(r), r.PathValue("id"), r.PathValue("member")); err != nil {
+	if err := a.dms(r).RemoveWorkspaceMember(r.Context(), subject(r), r.PathValue("id"), r.PathValue("member")); err != nil {
 		a.failure(w, r, err)
 		return
 	}

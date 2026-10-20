@@ -22,7 +22,7 @@ func (a *API) registerPortability(m *router) {
 				return
 			}
 		}
-		op, err := a.DMS.StartExport(r.Context(), subject(r), options)
+		op, err := a.dms(r).StartExport(r.Context(), subject(r), options)
 		if err != nil {
 			a.failure(w, r, err)
 			return
@@ -30,7 +30,7 @@ func (a *API) registerPortability(m *router) {
 		Accepted(w, r, op)
 	}))
 	m.HandleFunc("POST /v1/portability/imports", a.idempotent(func(w http.ResponseWriter, r *http.Request) {
-		if err := a.DMS.RequireScope(r.Context(), subject(r), "organization.manage"); err != nil {
+		if err := a.dms(r).RequireScope(r.Context(), subject(r), "organization.manage"); err != nil {
 			a.failure(w, r, err)
 			return
 		}
@@ -56,7 +56,7 @@ func (a *API) registerPortability(m *router) {
 			a.failure(w, r, err)
 			return
 		}
-		op, err := a.DMS.StartImport(r.Context(), subject(r), object.Key, dryRun, r.URL.Query().Get("workspace_name"))
+		op, err := a.dms(r).StartImport(r.Context(), subject(r), object.Key, dryRun, r.URL.Query().Get("workspace_name"))
 		if err != nil {
 			a.failure(w, r, err)
 			return
@@ -68,7 +68,7 @@ func (a *API) registerPortability(m *router) {
 			a.problem(w, r, 503, "storage_unavailable", "package storage is unavailable")
 			return
 		}
-		result, err := a.DMS.ExportPackage(r.Context(), subject(r), r.PathValue("id"))
+		result, err := a.dms(r).ExportPackage(r.Context(), subject(r), r.PathValue("id"))
 		if err != nil {
 			a.failure(w, r, err)
 			return

@@ -150,6 +150,25 @@ func (q Queries) ResourceIDs(ctx context.Context, f resources.Filter) ([]string,
 	return ids, dberr.Translate(err)
 }
 
+func (q Queries) ResourceActions(ctx context.Context, id string, p access.Principal) (resources.Actions, error) {
+	columns := make([]string, 0, 5)
+	var args []any
+	for _, action := range []access.Action{access.Read, access.ReadDraft, access.Write, access.Publish, access.Manage} {
+		allowed, actionArgs := access.SQLite.Rows(`"resources"`, p, action)
+		columns = append(columns, allowed+` AS "`+string(action)+`"`)
+		args = append(args, actionArgs...)
+	}
+	type row struct {
+		Read      bool `db:"read"`
+		ReadDraft bool `db:"read_draft"`
+		Write     bool `db:"write"`
+		Publish   bool `db:"publish"`
+		Manage    bool `db:"manage"`
+	}
+	a, err := bob.One(ctx, q.exec, sqlite.RawQuery(`SELECT `+strings.Join(columns, ", ")+` FROM resources "resources" WHERE "resources".id = ?`, append(args, id)...), scan.StructMapper[row]())
+	return resources.Actions{Read: a.Read, ReadDraft: a.ReadDraft, Write: a.Write, Publish: a.Publish, Manage: a.Manage}, dberr.Translate(err)
+}
+
 func (q Queries) CountResources(ctx context.Context, f resources.Filter) (int, error) {
 	n, err := models.Resources.Query(resourceWhere(f)...).Count(ctx, q.exec)
 	return int(n), dberr.Translate(err)

@@ -7,7 +7,7 @@ func (a *API) registerStorage(api *router) {
 }
 
 func (a *API) storageStatus(w http.ResponseWriter, r *http.Request) {
-	out, err := a.DMS.StorageStatus(r.Context(), subject(r))
+	out, err := a.dms(r).StorageStatus(r.Context(), subject(r))
 	if err != nil {
 		a.failure(w, r, err)
 		return

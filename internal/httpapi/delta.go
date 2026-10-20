@@ -4,7 +4,7 @@ import "net/http"
 
 func (a *API) delta(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	out, err := a.DMS.Delta(r.Context(), subject(r), r.PathValue("id"), q.Get("$deltatoken"), q.Get("$skiptoken"), queryInt(r, "$top"))
+	out, err := a.dms(r).Delta(r.Context(), subject(r), r.PathValue("id"), q.Get("$deltatoken"), q.Get("$skiptoken"), queryInt(r, "$top"))
 	if err != nil {
 		a.failure(w, r, err)
 		return

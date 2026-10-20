@@ -85,7 +85,7 @@ func (a *API) registerModules(m *router) error {
 
 func (a *API) moduleHandler(route Route) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if err := route.Handle(w, r, Request{Subject: subject(r), Run: runOf(r), DMS: a.DMS, api: a}); err != nil {
+		if err := route.Handle(w, r, Request{Subject: subject(r), Run: runOf(r), DMS: a.dms(r), api: a}); err != nil {
 			a.failure(w, r, err)
 		}
 	}

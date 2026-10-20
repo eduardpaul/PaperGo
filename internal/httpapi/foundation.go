@@ -94,43 +94,43 @@ func foundationRead(a *API, fn func(*http.Request) (any, error)) http.HandlerFun
 }
 func (a *API) registerFoundation(m *router) {
 	m.HandleFunc("GET /v1/collection-templates", foundationRead(a, func(r *http.Request) (any, error) {
-		return a.DMS.CollectionTemplates(r.Context(), subject(r))
+		return a.dms(r).CollectionTemplates(r.Context(), subject(r))
 	}))
-	m.HandleFunc("GET /v1/content-types", foundationRead(a, func(r *http.Request) (any, error) { return a.DMS.CatalogContentTypes(r.Context(), subject(r)) }))
+	m.HandleFunc("GET /v1/content-types", foundationRead(a, func(r *http.Request) (any, error) { return a.dms(r).CatalogContentTypes(r.Context(), subject(r)) }))
 	m.HandleFunc("POST /v1/content-types", foundationMutation(a, 201, false, func(r *http.Request, in dms.ContentTypeInput, v int) (any, error) {
-		return a.DMS.CreateContentType(r.Context(), subject(r), in)
+		return a.dms(r).CreateContentType(r.Context(), subject(r), in)
 	}))
-	m.HandleFunc("GET /v1/fields", foundationRead(a, func(r *http.Request) (any, error) { return a.DMS.CatalogFields(r.Context(), subject(r)) }))
+	m.HandleFunc("GET /v1/fields", foundationRead(a, func(r *http.Request) (any, error) { return a.dms(r).CatalogFields(r.Context(), subject(r)) }))
 	m.HandleFunc("POST /v1/fields", foundationMutation(a, 201, false, func(r *http.Request, in dms.CreateField, v int) (any, error) {
-		return a.DMS.CreateCatalogField(r.Context(), subject(r), in)
+		return a.dms(r).CreateCatalogField(r.Context(), subject(r), in)
 	}))
 
 	m.HandleFunc("PATCH /v1/fields/{id}", foundationMutation(a, 200, true, func(r *http.Request, in dms.UpdateField, v int) (any, error) {
-		return a.DMS.UpdateCatalogField(r.Context(), subject(r), r.PathValue("id"), v, in)
+		return a.dms(r).UpdateCatalogField(r.Context(), subject(r), r.PathValue("id"), v, in)
 	}))
 	m.HandleFunc("DELETE /v1/fields/{id}", func(w http.ResponseWriter, r *http.Request) {
 		v, ok := a.version(w, r)
 		if !ok {
 			return
 		}
-		if e := a.DMS.DeleteCatalogField(r.Context(), subject(r), r.PathValue("id"), v); e != nil {
+		if e := a.dms(r).DeleteCatalogField(r.Context(), subject(r), r.PathValue("id"), v); e != nil {
 			a.failure(w, r, e)
 			return
 		}
 		w.WriteHeader(204)
 	})
 	m.HandleFunc("GET /v1/resources/{id}/content-types", foundationRead(a, func(r *http.Request) (any, error) {
-		return a.DMS.CollectionContentTypes(r.Context(), subject(r), r.PathValue("id"))
+		return a.dms(r).CollectionContentTypes(r.Context(), subject(r), r.PathValue("id"))
 	}))
 	m.HandleFunc("POST /v1/resources/{id}/content-types", foundationMutation(a, 201, true, func(r *http.Request, in dms.AttachContentTypeInput, v int) (any, error) {
-		return a.DMS.AttachContentType(r.Context(), subject(r), r.PathValue("id"), v, in)
+		return a.dms(r).AttachContentType(r.Context(), subject(r), r.PathValue("id"), v, in)
 	}))
 	m.HandleFunc("DELETE /v1/resources/{id}/content-types/{typeID}", func(w http.ResponseWriter, r *http.Request) {
 		v, ok := a.version(w, r)
 		if !ok {
 			return
 		}
-		out, err := a.DMS.DetachContentType(r.Context(), subject(r), r.PathValue("id"), r.PathValue("typeID"), v)
+		out, err := a.dms(r).DetachContentType(r.Context(), subject(r), r.PathValue("id"), r.PathValue("typeID"), v)
 		if err != nil {
 			a.failure(w, r, err)
 			return
@@ -139,17 +139,17 @@ func (a *API) registerFoundation(m *router) {
 		w.WriteHeader(204)
 	})
 	m.HandleFunc("GET /v1/content-types/{id}", foundationRead(a, func(r *http.Request) (any, error) {
-		return a.DMS.GetContentType(r.Context(), subject(r), r.PathValue("id"))
+		return a.dms(r).GetContentType(r.Context(), subject(r), r.PathValue("id"))
 	}))
 	m.HandleFunc("PUT /v1/content-types/{id}", foundationMutation(a, 200, true, func(r *http.Request, in dms.ContentTypeInput, v int) (any, error) {
-		return a.DMS.UpdateContentType(r.Context(), subject(r), r.PathValue("id"), v, in)
+		return a.dms(r).UpdateContentType(r.Context(), subject(r), r.PathValue("id"), v, in)
 	}))
 	m.HandleFunc("DELETE /v1/resources/{id}/fields/{fieldID}", func(w http.ResponseWriter, r *http.Request) {
 		v, ok := a.version(w, r)
 		if !ok {
 			return
 		}
-		if err := a.DMS.DeleteField(r.Context(), subject(r), r.PathValue("id"), r.PathValue("fieldID"), v); err != nil {
+		if err := a.dms(r).DeleteField(r.Context(), subject(r), r.PathValue("id"), r.PathValue("fieldID"), v); err != nil {
 			a.failure(w, r, err)
 			return
 		}
@@ -157,33 +157,37 @@ func (a *API) registerFoundation(m *router) {
 		w.WriteHeader(204)
 	})
 	m.HandleFunc("POST /v1/resources/{id}/bulk", foundationMutation(a, 200, false, func(r *http.Request, in dms.BulkRequest, v int) (any, error) {
-		return a.DMS.Bulk(r.Context(), subject(r), r.PathValue("id"), in)
+		return a.dms(r).Bulk(r.Context(), subject(r), r.PathValue("id"), in)
 	}))
 	m.HandleFunc("GET /v1/workspaces/{id}/templates", foundationRead(a, func(r *http.Request) (any, error) {
-		return a.DMS.Templates(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("$skiptoken"), queryInt(r, "$top"))
+		return a.dms(r).Templates(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("$skiptoken"), queryInt(r, "$top"))
 	}))
 	m.HandleFunc("POST /v1/workspaces/{id}/templates", foundationMutation(a, 201, false, func(r *http.Request, in dms.TemplateInput, v int) (any, error) {
-		return a.DMS.CreateTemplate(r.Context(), subject(r), r.PathValue("id"), in)
+		return a.dms(r).CreateTemplate(r.Context(), subject(r), r.PathValue("id"), in)
 	}))
-	m.HandleFunc("GET /v1/templates/{id}", foundationRead(a, func(r *http.Request) (any, error) { return a.DMS.Template(r.Context(), subject(r), r.PathValue("id")) }))
+	m.HandleFunc("GET /v1/templates/{id}", foundationRead(a, func(r *http.Request) (any, error) {
+		return a.dms(r).Template(r.Context(), subject(r), r.PathValue("id"))
+	}))
 	m.HandleFunc("PUT /v1/templates/{id}", foundationMutation(a, 200, true, func(r *http.Request, in dms.TemplateInput, v int) (any, error) {
-		return a.DMS.UpdateTemplate(r.Context(), subject(r), r.PathValue("id"), v, in)
+		return a.dms(r).UpdateTemplate(r.Context(), subject(r), r.PathValue("id"), v, in)
 	}))
 	m.HandleFunc("POST /v1/resources/{id}/templates/{templateID}/apply", foundationMutation(a, 200, true, func(r *http.Request, in dms.ApplyTemplateInput, v int) (any, error) {
-		return a.DMS.ApplyTemplate(r.Context(), subject(r), r.PathValue("id"), r.PathValue("templateID"), v, in.TemplateVersion, in.ContentTypeID)
+		return a.dms(r).ApplyTemplate(r.Context(), subject(r), r.PathValue("id"), r.PathValue("templateID"), v, in.TemplateVersion, in.ContentTypeID)
 	}))
 	m.HandleFunc("POST /v1/resources/{id}/query", foundationMutation(a, 200, false, func(r *http.Request, in dms.QueryRequest, v int) (any, error) {
-		return a.DMS.Query(r.Context(), subject(r), r.PathValue("id"), in)
+		return a.dms(r).Query(r.Context(), subject(r), r.PathValue("id"), in)
 	}))
 	m.HandleFunc("POST /v1/resources/{id}/query/groups", foundationMutation(a, 200, false, func(r *http.Request, in dms.QueryRequest, v int) (any, error) {
-		return a.DMS.QueryGroups(r.Context(), subject(r), r.PathValue("id"), in)
+		return a.dms(r).QueryGroups(r.Context(), subject(r), r.PathValue("id"), in)
 	}))
 	m.HandleFunc("GET /v1/resources/{id}/operations", foundationRead(a, func(r *http.Request) (any, error) {
-		return a.DMS.Operations(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("$skiptoken"), queryInt(r, "$top"))
+		return a.dms(r).Operations(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("$skiptoken"), queryInt(r, "$top"))
 	}))
-	m.HandleFunc("GET /v1/operations/{id}", foundationRead(a, func(r *http.Request) (any, error) { return a.DMS.Operation(r.Context(), subject(r), r.PathValue("id")) }))
+	m.HandleFunc("GET /v1/operations/{id}", foundationRead(a, func(r *http.Request) (any, error) {
+		return a.dms(r).Operation(r.Context(), subject(r), r.PathValue("id"))
+	}))
 	m.HandleFunc("POST /v1/operations/{id}/cancel", func(w http.ResponseWriter, r *http.Request) {
-		op, err := a.DMS.CancelOperation(r.Context(), subject(r), r.PathValue("id"))
+		op, err := a.dms(r).CancelOperation(r.Context(), subject(r), r.PathValue("id"))
 		if err != nil {
 			a.failure(w, r, err)
 			return
@@ -195,7 +199,7 @@ func (a *API) registerFoundation(m *router) {
 		if !a.decode(w, r, &in) {
 			return
 		}
-		op, e := a.DMS.StartBulkUpdate(r.Context(), subject(r), r.PathValue("id"), in)
+		op, e := a.dms(r).StartBulkUpdate(r.Context(), subject(r), r.PathValue("id"), in)
 		if e != nil {
 			a.failure(w, r, e)
 			return
@@ -203,47 +207,47 @@ func (a *API) registerFoundation(m *router) {
 		Accepted(w, r, op)
 	}))
 	m.HandleFunc("GET /v1/resources/{id}/views", foundationRead(a, func(r *http.Request) (any, error) {
-		return a.DMS.Views(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("$skiptoken"), queryInt(r, "$top"))
+		return a.dms(r).Views(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("$skiptoken"), queryInt(r, "$top"))
 	}))
 	m.HandleFunc("POST /v1/resources/{id}/views", foundationMutation(a, 201, false, func(r *http.Request, in dms.ViewInput, v int) (any, error) {
-		return a.DMS.CreateView(r.Context(), subject(r), r.PathValue("id"), in)
+		return a.dms(r).CreateView(r.Context(), subject(r), r.PathValue("id"), in)
 	}))
-	m.HandleFunc("GET /v1/views/{id}", foundationRead(a, func(r *http.Request) (any, error) { return a.DMS.View(r.Context(), subject(r), r.PathValue("id")) }))
+	m.HandleFunc("GET /v1/views/{id}", foundationRead(a, func(r *http.Request) (any, error) { return a.dms(r).View(r.Context(), subject(r), r.PathValue("id")) }))
 	m.HandleFunc("PUT /v1/views/{id}", foundationMutation(a, 200, true, func(r *http.Request, in dms.ViewInput, v int) (any, error) {
-		return a.DMS.UpdateView(r.Context(), subject(r), r.PathValue("id"), v, in)
+		return a.dms(r).UpdateView(r.Context(), subject(r), r.PathValue("id"), v, in)
 	}))
 	m.HandleFunc("POST /v1/views/{id}/query", foundationMutation(a, 200, false, func(r *http.Request, in dms.ViewQueryRequest, v int) (any, error) {
-		return a.DMS.QueryView(r.Context(), subject(r), r.PathValue("id"), in)
+		return a.dms(r).QueryView(r.Context(), subject(r), r.PathValue("id"), in)
 	}))
 	m.HandleFunc("POST /v1/views/{id}/query/groups", foundationMutation(a, 200, false, func(r *http.Request, in dms.ViewQueryRequest, v int) (any, error) {
-		return a.DMS.QueryViewGroups(r.Context(), subject(r), r.PathValue("id"), in)
+		return a.dms(r).QueryViewGroups(r.Context(), subject(r), r.PathValue("id"), in)
 	}))
 	a.registerTaxonomy(m)
 	m.HandleFunc("GET /v1/relationship-types", foundationRead(a, func(r *http.Request) (any, error) {
-		return a.DMS.RelationshipTypes(r.Context(), subject(r), r.URL.Query().Get("$skiptoken"), queryInt(r, "$top"))
+		return a.dms(r).RelationshipTypes(r.Context(), subject(r), r.URL.Query().Get("$skiptoken"), queryInt(r, "$top"))
 	}))
 	m.HandleFunc("POST /v1/relationship-types", foundationMutation(a, 201, false, func(r *http.Request, in dms.RelationshipTypeInput, v int) (any, error) {
-		return a.DMS.CreateRelationshipType(r.Context(), subject(r), in)
+		return a.dms(r).CreateRelationshipType(r.Context(), subject(r), in)
 	}))
 	m.HandleFunc("GET /v1/relationship-types/{id}", foundationRead(a, func(r *http.Request) (any, error) {
-		return a.DMS.RelationshipType(r.Context(), subject(r), r.PathValue("id"))
+		return a.dms(r).RelationshipType(r.Context(), subject(r), r.PathValue("id"))
 	}))
 	m.HandleFunc("GET /v1/items/{id}/relationships/{linkID}", foundationRead(a, func(r *http.Request) (any, error) {
-		return a.DMS.Relationship(r.Context(), subject(r), r.PathValue("id"), r.PathValue("linkID"))
+		return a.dms(r).Relationship(r.Context(), subject(r), r.PathValue("id"), r.PathValue("linkID"))
 	}))
 	m.HandleFunc("GET /v1/workspaces/{id}/relationships", a.workspaceRelationships)
 	m.HandleFunc("GET /v1/workspaces/{id}/relationships/types", a.workspaceRelationshipTypes)
 	m.HandleFunc("GET /v1/workspaces/{id}/relationships/items", a.workspaceRelationshipItems)
 	m.HandleFunc("GET /v1/workspaces/{id}/relationships/neighborhood", a.workspaceRelationshipNeighborhood)
 	m.HandleFunc("PATCH /v1/items/{id}/relationships/{linkID}", foundationMutation(a, 200, true, func(r *http.Request, in dms.UpdateRelationship, v int) (any, error) {
-		return a.DMS.UpdateRelationship(r.Context(), subject(r), r.PathValue("id"), r.PathValue("linkID"), v, in)
+		return a.dms(r).UpdateRelationship(r.Context(), subject(r), r.PathValue("id"), r.PathValue("linkID"), v, in)
 	}))
 	m.HandleFunc("DELETE /v1/views/{id}", func(w http.ResponseWriter, r *http.Request) {
 		v, ok := a.version(w, r)
 		if !ok {
 			return
 		}
-		if e := a.DMS.DeleteView(r.Context(), subject(r), r.PathValue("id"), v); e != nil {
+		if e := a.dms(r).DeleteView(r.Context(), subject(r), r.PathValue("id"), v); e != nil {
 			a.failure(w, r, e)
 			return
 		}
