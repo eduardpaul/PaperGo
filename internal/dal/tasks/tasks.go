@@ -75,7 +75,7 @@ type ResponseInput struct {
 type Filter struct {
 	Status                                   Status
 	Kind                                     Kind
-	Key, WorkspaceID, ItemID, RunID, Subject string
+	Key, WorkspaceID, ItemID, OperationID, Subject string
 	Groups                                   []string
 	AssignedOnly, Waiting                    bool
 	Offset, Limit                            int

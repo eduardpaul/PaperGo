@@ -131,7 +131,7 @@ func (a *API) reassignTask(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) cancelTask(w http.ResponseWriter, r *http.Request) {
-	out, err := a.tasks().Cancel(r.Context(), subject(r), runOf(r), r.PathValue("id"))
+	out, err := a.tasks().Cancel(r.Context(), subject(r), r.PathValue("id"))
 	if err != nil {
 		a.failure(w, r, err)
 		return

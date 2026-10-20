@@ -11,7 +11,7 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface CancelRequestBuilder extends BaseRequestBuilder<CancelRequestBuilder> {
     /**
-     * Cancels an open task a person or the system created; its creator or a workspace owner may. A workflow's task ends with its run.
+     * Cancels an open task; its creator or a workspace owner may. A run waiting for a workflow's task gets the cancellation as the outcome of its wait.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<Task>}
      * @throws {Problem} error when the service returns a 400 status code
@@ -26,7 +26,7 @@ export interface CancelRequestBuilder extends BaseRequestBuilder<CancelRequestBu
      */
      post(requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<Task | undefined>;
     /**
-     * Cancels an open task a person or the system created; its creator or a workspace owner may. A workflow's task ends with its run.
+     * Cancels an open task; its creator or a workspace owner may. A run waiting for a workflow's task gets the cancellation as the outcome of its wait.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */

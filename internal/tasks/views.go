@@ -408,12 +408,11 @@ func (s *Service) Reassign(ctx context.Context, subject, id string, assignees []
 	return out, err
 }
 
-// Cancel cancels an open task: a person's or the system's, or a
-// workflow's when its run asks.
-func (s *Service) Cancel(ctx context.Context, subject, run, id string) (View, error) {
+// Cancel cancels an open task.
+func (s *Service) Cancel(ctx context.Context, subject, id string) (View, error) {
 	var out View
 	err := s.DMS.Write(ctx, func(t *dms.Service) error {
-		tk, err := Cancel(ctx, t, subject, run, id)
+		tk, err := Cancel(ctx, t, subject, id)
 		if err != nil {
 			return err
 		}

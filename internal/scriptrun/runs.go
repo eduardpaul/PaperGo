@@ -164,7 +164,7 @@ func complete(ctx context.Context, t *dms.Service, op *operations.Operation, p w
 	if err := t.DiscardRunStagedFiles(ctx, op.ID); err != nil {
 		return err
 	}
-	return finished(ctx, t, op.ID, p)
+	return finished(ctx, t, p)
 }
 
 // fail ends a run's operation with message: the script threw or broke a
@@ -181,7 +181,7 @@ func fail(ctx context.Context, t *dms.Service, op *operations.Operation, message
 // ended cleans up after a run that did not complete: failed with message,
 // or cancelled without one. A failed run keeps its staged files for a
 // retry to use; a cancelled one discards them and cancels the work its
-// requests started.
+// requests started and the operations it waited for, such as tasks.
 func ended(ctx context.Context, t *dms.Service, op *operations.Operation, message string) error {
 	var p workflow.RunPayload
 	if err := json.Unmarshal(op.Payload, &p); err != nil {
@@ -201,15 +201,12 @@ func ended(ctx context.Context, t *dms.Service, op *operations.Operation, messag
 			return err
 		}
 	}
-	return finished(ctx, t, op.ID, p)
+	return finished(ctx, t, p)
 }
 
-// finished cancels the open tasks of a run that ended, and lets the next
-// run of a coalescing workflow on its item start.
-func finished(ctx context.Context, t *dms.Service, runID string, p workflow.RunPayload) error {
-	if err := tasks.CancelRun(ctx, t, runID); err != nil {
-		return err
-	}
+// finished lets the next run of a coalescing workflow on a run's item start
+// once the run ended. The tasks the run created outlive it.
+func finished(ctx context.Context, t *dms.Service, p workflow.RunPayload) error {
 	if p.Serial == "" {
 		return nil
 	}

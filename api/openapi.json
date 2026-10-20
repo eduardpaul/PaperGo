@@ -15312,7 +15312,7 @@
       "post": {
         "summary": "Cancel Task",
         "operationId": "cancelTask",
-        "description": "Cancels an open task a person or the system created; its creator or a workspace owner may. A workflow's task ends with its run.",
+        "description": "Cancels an open task; its creator or a workspace owner may. A run waiting for a workflow's task gets the cancellation as the outcome of its wait.",
         "parameters": [
           {
             "name": "id",

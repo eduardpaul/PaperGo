@@ -273,6 +273,28 @@ export default workflow({
 			t.Fatalf("a cancelled run left its task open: %+v", open)
 		}
 	}
+
+	// A task a run does not wait for outlives it.
+	followUp := r.workflow(t, "Follow up", `import { workflow } from "@papergo/workflow";
+
+export default workflow({
+  triggers: [{ type: "manual", collection_id: "`+r.list+`" }],
+  async run(ctx) {
+    await ctx.api.v1.workspaces.byId(ctx.run.workspace_id).tasks.post({ itemId: ctx.itemId, title: "Look again" });
+  },
+});
+`)
+	r.await(t, r.start(t, followUp, nil, itemID), runstore.StatusCompleted)
+	r.call(t, "GET", "/v1/items/"+itemID+"/tasks", "", 200, &open)
+	still := 0
+	for _, task := range open.Value {
+		if task.Status == "open" {
+			still++
+		}
+	}
+	if still != 1 {
+		t.Fatalf("the follow-up task did not outlive its run: %+v", open)
+	}
 }
 
 func TestFailedRunsRetryFromTheirLastRequest(t *testing.T) {

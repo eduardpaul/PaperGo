@@ -63,8 +63,8 @@ func (q Queries) Tasks(ctx context.Context, f tasks.Filter) ([]tasks.Task, error
 	if f.ItemID != "" {
 		query.Apply(w.ItemID.EQ(f.ItemID))
 	}
-	if f.RunID != "" {
-		query.Apply(w.RunID.EQ(f.RunID))
+	if f.OperationID != "" {
+		query.Apply(w.OperationID.EQ(f.OperationID))
 	}
 	c := models.Tasks.Columns
 	if f.Status == tasks.StatusOpen {
