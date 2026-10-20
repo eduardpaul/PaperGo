@@ -43,8 +43,8 @@ export default workflow({
   },
 });
 `)}
-	if out, err := e.Execute(context.Background(), run); err != nil || string(out.Output) != "100" {
-		b.Fatal(out, err)
+	if out := execute(b, e, run); string(out.Output) != "100" {
+		b.Fatal(out)
 	}
 	b.ReportAllocs()
 	for b.Loop() {
@@ -78,8 +78,8 @@ export default workflow({
   },
 });
 `)}
-	if out, err := e.Execute(context.Background(), run); err != nil || string(out.Output) != "100" {
-		b.Fatal(out, err)
+	if out := execute(b, e, run); string(out.Output) != "100" {
+		b.Fatal(out)
 	}
 	b.ReportAllocs()
 	for b.Loop() {

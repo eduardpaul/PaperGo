@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"reflect"
 	"strconv"
@@ -39,7 +40,9 @@ type host struct {
 	recorded []runs.Step
 	next     int
 	unsaved  []runs.Step
-	logs     []Log
+	// unsavedBytes is the size of the unsaved steps' outputs.
+	unsavedBytes int
+	logs         []Log
 	// suspended is set when the run waits for operations or sleeps, until
 	// until; abort when the slice must stop for another reason. Either
 	// interrupts the runtime, which JavaScript cannot catch.
@@ -122,7 +125,7 @@ func (h *host) replay(kind runs.StepKind, name, hash string) (*runs.Step, error)
 }
 
 func (h *host) newStep(kind runs.StepKind, name, hash string) runs.Step {
-	return runs.Step{RunID: h.run.ID, Seq: h.next, Kind: kind, Name: name, InputHash: hash, Status: runs.StepCompleted}
+	return runs.Step{RunID: h.run.ID, Seq: h.next, Kind: kind, Name: name, InputHash: hash, Status: runs.StepCompleted, StartedAt: time.Now().UTC()}
 }
 
 // value replays or records a value step: a clock reading or random value.
@@ -143,9 +146,39 @@ func (h *host) value(name string, generate func() json.RawMessage) (json.RawMess
 	step := h.newStep(runs.StepValue, name, hash)
 	step.Seq = h.next - 1
 	step.Output = generate()
-	h.unsaved = append(h.unsaved, step)
+	h.observe(step)
 	return step.Output, true
 }
+
+// Unsaved steps are recorded once they hold this many steps or bytes of
+// output, so a long run of reads does not keep its journal in memory.
+const (
+	maxUnsavedSteps = 256
+	maxUnsavedBytes = 4 << 20
+)
+
+// observe keeps a value or read step, which completed now, until the next
+// durable step records it, recording it early when too much is kept.
+func (h *host) observe(step runs.Step) {
+	completed := time.Now().UTC()
+	step.CompletedAt = &completed
+	h.unsaved = append(h.unsaved, step)
+	h.unsavedBytes += len(step.Output)
+	if h.manifest || len(h.unsaved) < maxUnsavedSteps && h.unsavedBytes < maxUnsavedBytes {
+		return
+	}
+	h.watch.pause()
+	err := h.effects.Record(h.ctx, h.run, h.unsaved)
+	h.watch.resume()
+	if err != nil {
+		h.stop(err)
+		return
+	}
+	h.saved()
+}
+
+// saved forgets the unsaved steps once a durable step recorded them.
+func (h *host) saved() { h.unsaved, h.unsavedBytes = nil, 0 }
 
 func (h *host) now() time.Time {
 	out, ok := h.value("now", func() json.RawMessage {
@@ -245,9 +278,25 @@ func (h *host) request(method, rawURL string, headers map[string]string, body go
 		return h.stop(err)
 	}
 	var output json.RawMessage
-	if recorded != nil {
+	switch {
+	case recorded != nil:
 		output = recorded.Output
-	} else {
+	case method == http.MethodGet || method == http.MethodHead:
+		// A read changes nothing, so it needs no transaction of its own:
+		// its step is recorded with the next durable one.
+		h.watch.pause()
+		response, err := h.effects.Read(h.ctx, h.run, Request{Method: method, URL: target, Header: headers})
+		h.watch.resume()
+		if err != nil {
+			return h.stop(err)
+		}
+		step := h.newStep(runs.StepRequest, name, hash)
+		step.Output = ResponseOutput(response)
+		output = step.Output
+		if h.observe(step); h.abort != nil {
+			return goja.Undefined()
+		}
+	default:
 		step := h.newStep(runs.StepRequest, name, hash)
 		h.watch.pause()
 		response, err := h.effects.Request(h.ctx, h.run, h.unsaved, step, Request{Method: method, URL: target, Header: headers, Body: content})
@@ -255,7 +304,7 @@ func (h *host) request(method, rawURL string, headers map[string]string, body go
 		if err != nil {
 			return h.stop(err)
 		}
-		h.unsaved = nil
+		h.saved()
 		output = ResponseOutput(response)
 	}
 	h.next++
@@ -319,7 +368,7 @@ func (h *host) wait(ids []string) goja.Value {
 		if err != nil {
 			return h.stop(err)
 		}
-		h.unsaved = nil
+		h.saved()
 		h.next++
 		if done {
 			return goja.Undefined()
@@ -370,7 +419,7 @@ func (h *host) sleep(untilMillis int64) goja.Value {
 		if err = h.effects.Sleep(h.ctx, h.run, h.unsaved, step); err != nil {
 			return h.stop(err)
 		}
-		h.unsaved = nil
+		h.saved()
 	} else if recorded.Status == runs.StepPending && due {
 		if err = h.effects.Wake(h.ctx, h.run, recorded.Seq); err != nil {
 			return h.stop(err)

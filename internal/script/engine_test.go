@@ -45,6 +45,27 @@ func (m *memory) record(steps ...runs.Step) {
 func (m *memory) Request(_ context.Context, _ Run, unsaved []runs.Step, step runs.Step, req Request) (Response, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	response := m.respond(req)
+	step.Output = ResponseOutput(response)
+	m.record(append(unsaved, step)...)
+	return response, nil
+}
+
+func (m *memory) Read(_ context.Context, _ Run, req Request) (Response, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.respond(req), nil
+}
+
+func (m *memory) Record(_ context.Context, _ Run, unsaved []runs.Step) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.record(unsaved...)
+	return nil
+}
+
+// respond answers a request; the caller holds m.mu.
+func (m *memory) respond(req Request) Response {
 	m.requests = append(m.requests, req)
 	var response Response
 	switch {
@@ -63,9 +84,7 @@ func (m *memory) Request(_ context.Context, _ Run, unsaved []runs.Step, step run
 	default:
 		response = m.answer(req)
 	}
-	step.Output = ResponseOutput(response)
-	m.record(append(unsaved, step)...)
-	return response, nil
+	return response
 }
 
 func (m *memory) over(step runs.Step) bool {
@@ -141,10 +160,15 @@ func bundle(t *testing.T, source string) Artifact {
 	return a
 }
 
-func execute(t *testing.T, e *Engine, run Run) Outcome {
+// execute runs a slice and, as the runner does, records the steps a
+// finished run left unsaved.
+func execute(t testing.TB, e *Engine, run Run) Outcome {
 	t.Helper()
 	out, err := e.Execute(context.Background(), run)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err = e.effects.Record(context.Background(), run, out.Unsaved); err != nil {
 		t.Fatal(err)
 	}
 	return out
@@ -793,5 +817,44 @@ export default workflow<{note: string}>({
 				t.Fatal("manual context fetched resources", m.requests)
 			}
 		})
+	}
+}
+
+// Reads are recorded with the next durable step, early once many wait,
+// and with the outcome of a finished run; replaying repeats none of them.
+func TestReadsAreRecordedWithTheNextDurableStep(t *testing.T) {
+	m := newMemory(func(req Request) Response {
+		return jsonResponse(200, `{"id":"5f0c8b8e-6d0a-4f1e-9a52-6a9a7c1f0a11","kind":"item","name":"Invoice 7"}`)
+	})
+	e := New(m, 0)
+	run := Run{ID: "run-reads", Artifact: bundle(t, `
+import { workflow } from "@papergo/workflow";
+export default workflow({
+  async run(ctx) {
+    const item = ctx.api.v1.resources.byId("0b0e3e2a-6f39-4a39-9a0e-2a7b5d1c9f01");
+    for (let i = 0; i < 300; i++) await item.get();
+    await item.children.post({ kind: "item", name: "After" });
+    await item.get();
+    return 1;
+  },
+});
+`)}
+	out, err := e.Execute(context.Background(), run)
+	if err != nil || out.Status != Completed {
+		t.Fatal(out, err)
+	}
+	steps, _ := m.Steps(context.Background(), run)
+	if len(steps) != 301 || steps[300].Name != "POST /v1/resources/0b0e3e2a-6f39-4a39-9a0e-2a7b5d1c9f01/children" {
+		t.Fatalf("%d steps recorded before the run ended", len(steps))
+	}
+	if len(out.Unsaved) != 1 || out.Unsaved[0].Seq != 301 || out.Unsaved[0].CompletedAt == nil {
+		t.Fatalf("unsaved: %+v", out.Unsaved)
+	}
+	if err = m.Record(context.Background(), run, out.Unsaved); err != nil {
+		t.Fatal(err)
+	}
+	requests := len(m.requests)
+	if out = execute(t, e, run); out.Status != Completed || len(m.requests) != requests {
+		t.Fatalf("the replay made %d requests: %+v", len(m.requests)-requests, out)
 	}
 }

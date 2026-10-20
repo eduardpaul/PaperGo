@@ -1,7 +1,8 @@
 // Package scriptrun performs workflow script effects on PaperGo. A script's
-// API requests run in-process through the API as the run's author, in the
-// transaction that records them, and its waits are steps linked to the
-// operations they wait for.
+// API requests run in-process through the API as the run's author: a
+// request that may change something in the transaction that records it, a
+// read like an API client's, recorded with the next durable step. Its
+// waits are steps linked to the operations they wait for.
 package scriptrun
 
 import (
@@ -84,6 +85,27 @@ func (e *Effects) Request(ctx context.Context, run script.Run, unsaved []runs.St
 		})
 	}
 	return response, err
+}
+
+// Read runs a GET or HEAD as the run's author outside any transaction of
+// the run, as an API client's read runs: it changes nothing, so the engine
+// records its step with the next durable one. A 5xx response is an error,
+// so the slice fails and the read runs again when the run resumes.
+func (e *Effects) Read(ctx context.Context, run script.Run, req script.Request) (script.Response, error) {
+	response, err := serve(ctx, e.API.Loopback(e.DMS, run.Author, run.ID), req)
+	if err == nil && response.Status >= 500 {
+		err = fmt.Errorf("%s %s: the API answered %d: %s", req.Method, req.URL, response.Status, response.Body)
+	}
+	return response, err
+}
+
+// Record records value and read steps the script observed, while this
+// execution still owns the run.
+func (e *Effects) Record(ctx context.Context, run script.Run, unsaved []runs.Step) error {
+	if len(unsaved) == 0 {
+		return nil
+	}
+	return e.write(ctx, run, func(t *dms.Service) error { return t.DAL.Runs().RecordSteps(ctx, unsaved) })
 }
 
 func serve(ctx context.Context, handler http.Handler, req script.Request) (script.Response, error) {

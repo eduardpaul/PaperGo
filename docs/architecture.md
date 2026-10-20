@@ -40,7 +40,7 @@ Database effects are transactional: a write's rows, its audit and domain events,
 | Batch AI completions | A provider batch | A submission record and the members' parking commit before the batch is created, so a crash leaves the members with their batch. Polling finds an unconfirmed batch by its submission tag before anything is sent again; see [AI batches](ai.md#batches). |
 | Embeddings and decisions | Local or provider computation | Results are written idempotently (vectors by input hash, decisions as the operation's result); a repeat recomputes. |
 | List integrations | Fetching a remote calendar | Reading is repeatable; reconciliation commits in one transaction. |
-| Workflow requests | API calls of a script | The request's database writes and its step commit together: a replay answers from the journal. Work a request starts runs as its own operation under the protocols above. |
+| Workflow requests | API calls of a script | A request's database writes and its step commit together: a replay answers from the journal. Reads are recorded with the next durable step, so a crash only repeats them. Work a request starts runs as its own operation under the protocols above. |
 
 ## Search stores
 

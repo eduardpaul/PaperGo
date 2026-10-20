@@ -52,6 +52,14 @@ type Effects interface {
 	// request's writes. A failed request records its response but none of
 	// its writes.
 	Request(ctx context.Context, run Run, unsaved []runs.Step, step runs.Step, req Request) (Response, error)
+	// Read performs a request that changes nothing, a GET or HEAD, as the
+	// run's author, outside any transaction of the run. Its step is recorded
+	// later, with the next durable step: a crash before then only repeats
+	// the read.
+	Read(ctx context.Context, run Run, req Request) (Response, error)
+	// Record records value and read steps the script observed since the
+	// last durable step, so a long run of reads keeps its journal.
+	Record(ctx context.Context, run Run, unsaved []runs.Step) error
 	// Wait records the wait step for step.Operations, which the author must
 	// be able to read: completed when none of them is pending, else pending
 	// until the last one finishes. It reports whether the wait is over.
@@ -89,6 +97,10 @@ type Outcome struct {
 	Until *time.Time
 	// Logs are the entries this slice wrote after replaying earlier ones.
 	Logs []Log
+	// Unsaved are the value and read steps a completed or failed run
+	// observed after its last durable step, for the caller to record with
+	// the outcome.
+	Unsaved []runs.Step
 }
 
 // Log is one console or ctx.log entry.
@@ -181,7 +193,11 @@ func (e *Engine) Execute(ctx context.Context, run Run) (Outcome, error) {
 		}
 		return main(goja.Undefined(), rt.ToValue(string(raw)))
 	}()
-	return h.outcome(value, err)
+	out, err := h.outcome(value, err)
+	if out.Status == Completed || out.Status == Failed {
+		out.Unsaved = h.unsaved
+	}
+	return out, err
 }
 
 // manifestSlice bounds the JavaScript a manifest evaluation runs.

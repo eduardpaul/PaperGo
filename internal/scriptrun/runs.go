@@ -98,6 +98,12 @@ func (r *Runner) slice(ctx context.Context, s *dms.Service, op *operations.Opera
 		if err := t.DAL.Runs().AddLogs(ctx, op.ID, logs(out.Logs)); err != nil {
 			return err
 		}
+		// A finished run's last reads and values are its journal's end.
+		if len(out.Unsaved) > 0 {
+			if err := t.DAL.Runs().RecordSteps(ctx, out.Unsaved); err != nil {
+				return err
+			}
+		}
 		switch {
 		case out.Status == script.Completed:
 			output, err := checkOutput(def, out.Output)

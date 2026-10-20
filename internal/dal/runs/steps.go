@@ -91,8 +91,11 @@ func (r *Repo) RecordSteps(ctx context.Context, steps []Step) error {
 	}
 	return r.write(ctx, func(q Queries) error {
 		for _, s := range steps {
-			s.StartedAt = at
-			if s.Status != StepPending {
+			// A step the engine kept until a durable step keeps its time.
+			if s.StartedAt.IsZero() {
+				s.StartedAt = at
+			}
+			if s.Status != StepPending && s.CompletedAt == nil {
 				s.CompletedAt = &at
 			}
 			if err := q.InsertRunStep(ctx, s); err != nil {
