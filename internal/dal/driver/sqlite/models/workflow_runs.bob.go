@@ -54,7 +54,7 @@ type WorkflowRunsQuery = *sqlite.ViewQuery[*WorkflowRun, WorkflowRunSlice]
 
 // workflowRunR is where relationships are stored.
 type workflowRunR struct {
-	RunBlobLeases        BlobLeaseSlice        // fk_blob_leases_1
+	RunBlobLeases        BlobLeaseSlice        // fk_blob_leases_2
 	RunRunnerStepResults RunnerStepResultSlice // fk_runner_step_results_0
 	RunStagedFiles       StagedFileSlice       // fk_staged_files_0
 	RunTasks             TaskSlice             // fk_tasks_0
@@ -70,7 +70,7 @@ type workflowRunR struct {
 
 // workflowRunRLoaded tracks which relationships on WorkflowRun have been loaded.
 type workflowRunRLoaded struct {
-	RunBlobLeases        bool // fk_blob_leases_1
+	RunBlobLeases        bool // fk_blob_leases_2
 	RunRunnerStepResults bool // fk_runner_step_results_0
 	RunStagedFiles       bool // fk_staged_files_0
 	RunTasks             bool // fk_tasks_0
@@ -919,7 +919,7 @@ func (os WorkflowRunSlice) RunWorkflowWaits(mods ...bob.Mod[*dialect.SelectQuery
 
 func insertWorkflowRunRunBlobLeases0(ctx context.Context, exec bob.Executor, blobLeases1 []*BlobLeaseSetter, workflowRun0 *WorkflowRun) (BlobLeaseSlice, error) {
 	for i := range blobLeases1 {
-		blobLeases1[i].RunID = omit.From(workflowRun0.ID)
+		blobLeases1[i].RunID = omitnull.From(workflowRun0.ID)
 	}
 
 	ret, err := BlobLeases.Insert(bob.ToMods(blobLeases1...)).All(ctx, exec)
@@ -932,7 +932,7 @@ func insertWorkflowRunRunBlobLeases0(ctx context.Context, exec bob.Executor, blo
 
 func attachWorkflowRunRunBlobLeases0(ctx context.Context, exec bob.Executor, count int, blobLeases1 BlobLeaseSlice, workflowRun0 *WorkflowRun) (BlobLeaseSlice, error) {
 	setter := &BlobLeaseSetter{
-		RunID: omit.From(workflowRun0.ID),
+		RunID: omitnull.From(workflowRun0.ID),
 	}
 
 	err := blobLeases1.UpdateAll(ctx, exec, *setter)

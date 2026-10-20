@@ -178,7 +178,7 @@ func putManifest(step workflow.Step, key string, payload json.RawMessage) error 
 	if err := store.PutImmutable(step.Context(), activitystore.Record{Namespace: "ai.enrich.manifest", Scope: answerScope, Key: key, Payload: payload, ExpiresAt: &until}); err != nil {
 		return err
 	}
-	return store.Reference(step.Context(), step.RunID(), activitystore.ID("ai.enrich.manifest", answerScope, key))
+	return store.Reference(step.Context(), activitystore.RunOwner(step.RunID()), activitystore.ID("ai.enrich.manifest", answerScope, key))
 }
 func loadManifest(step workflow.Step, key string) (json.RawMessage, error) {
 	record, err := step.Tools().Records.WithTx(step.DMS().SQLTx()).Get(step.Context(), "ai.enrich.manifest", answerScope, key)
@@ -312,7 +312,7 @@ func saveResponse(ctx context.Context, tools workflow.Tools, key, responseKey st
 		if request == nil {
 			return nil
 		}
-		return store.Reference(ctx, request.ID, activitystore.ID("ai.response", answerScope, responseKey))
+		return store.Reference(ctx, activitystore.RecordOwner(request.ID), activitystore.ID("ai.response", answerScope, responseKey))
 	})
 }
 func responseStep(step workflow.Step, key string) (cachedAnswer, error) {

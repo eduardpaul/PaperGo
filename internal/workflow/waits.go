@@ -287,7 +287,7 @@ func CloseRunWaits(ctx context.Context, t *dms.Service, runID string) error {
 	if err := store.ReleaseLeases(ctx, runID); err != nil {
 		return err
 	}
-	if err := store.Release(ctx, runID); err != nil {
+	if err := store.Release(ctx, activitystore.RunOwner(runID)); err != nil {
 		return err
 	}
 	rows, err := t.DAL.Waits().List(ctx, waitstore.Filter{RunID: runID})
@@ -519,7 +519,7 @@ func retainWait(ctx context.Context, t *dms.Service, w Wait, id string) error {
 		return err
 	}
 	if w.PayloadID != "" {
-		return activitystore.NewTx(t.SQLTx()).Reference(ctx, id, w.PayloadID)
+		return activitystore.NewTx(t.SQLTx()).Reference(ctx, activitystore.WaitOwner(id), w.PayloadID)
 	}
 	return nil
 }
@@ -531,5 +531,5 @@ func releaseWait(ctx context.Context, t *dms.Service, kind, key string) error {
 	if err = t.ReleaseBlobLeases(ctx, row.ID); err != nil {
 		return err
 	}
-	return activitystore.NewTx(t.SQLTx()).Release(ctx, row.ID)
+	return activitystore.NewTx(t.SQLTx()).Release(ctx, activitystore.WaitOwner(row.ID))
 }

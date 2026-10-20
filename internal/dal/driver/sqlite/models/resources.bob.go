@@ -96,7 +96,8 @@ type resourceR struct {
 	ContainerListIntegrations     ListIntegrationSlice // fk_list_integrations_0
 	ContainerListViews            ListViewSlice        // fk_list_views_0
 	ItemOperationItems            OperationItemSlice   // fk_operation_items_0
-	ContainerOperations           OperationSlice       // fk_operations_0
+	WorkspaceOperations           OperationSlice       // fk_operations_0
+	ContainerOperations           OperationSlice       // fk_operations_1
 	ItemPublications              PublicationSlice     // fk_publications_1
 	TargetRelationships           RelationshipSlice    // fk_relationships_1
 	SourceRelationships           RelationshipSlice    // fk_relationships_2
@@ -156,7 +157,8 @@ type resourceRLoaded struct {
 	ContainerListIntegrations     bool // fk_list_integrations_0
 	ContainerListViews            bool // fk_list_views_0
 	ItemOperationItems            bool // fk_operation_items_0
-	ContainerOperations           bool // fk_operations_0
+	WorkspaceOperations           bool // fk_operations_0
+	ContainerOperations           bool // fk_operations_1
 	ItemPublications              bool // fk_publications_1
 	TargetRelationships           bool // fk_relationships_1
 	SourceRelationships           bool // fk_relationships_2
@@ -1759,6 +1761,25 @@ func (os ResourceSlice) ItemOperationItems(mods ...bob.Mod[*dialect.SelectQuery]
 
 	return OperationItems.Query(append(mods,
 		sm.Where(sqlite.Group(OperationItems.Columns.ItemID).OP("IN", PKArgExpr)),
+	)...)
+}
+
+// WorkspaceOperations starts a query for related objects on operations
+func (o *Resource) WorkspaceOperations(mods ...bob.Mod[*dialect.SelectQuery]) OperationsQuery {
+	return Operations.Query(append(mods,
+		sm.Where(Operations.Columns.WorkspaceID.EQ(sqlite.Arg(o.ID))),
+	)...)
+}
+
+func (os ResourceSlice) WorkspaceOperations(mods ...bob.Mod[*dialect.SelectQuery]) OperationsQuery {
+	PKArgSlice := make([]bob.Expression, len(os))
+	for i, o := range os {
+		PKArgSlice[i] = sqlite.ArgGroup(o.ID)
+	}
+	PKArgExpr := sqlite.Group(PKArgSlice...)
+
+	return Operations.Query(append(mods,
+		sm.Where(sqlite.Group(Operations.Columns.WorkspaceID).OP("IN", PKArgExpr)),
 	)...)
 }
 
@@ -3540,6 +3561,67 @@ func (resource0 *Resource) AttachItemOperationItems(ctx context.Context, exec bo
 	}
 
 	resource0.R.ItemOperationItems = append(resource0.R.ItemOperationItems, operationItems1...)
+
+	return nil
+}
+
+func insertResourceWorkspaceOperations0(ctx context.Context, exec bob.Executor, operations1 []*OperationSetter, resource0 *Resource) (OperationSlice, error) {
+	for i := range operations1 {
+		operations1[i].WorkspaceID = omitnull.From(resource0.ID)
+	}
+
+	ret, err := Operations.Insert(bob.ToMods(operations1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertResourceWorkspaceOperations0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachResourceWorkspaceOperations0(ctx context.Context, exec bob.Executor, count int, operations1 OperationSlice, resource0 *Resource) (OperationSlice, error) {
+	setter := &OperationSetter{
+		WorkspaceID: omitnull.From(resource0.ID),
+	}
+
+	err := operations1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachResourceWorkspaceOperations0: %w", err)
+	}
+
+	return operations1, nil
+}
+
+func (resource0 *Resource) InsertWorkspaceOperations(ctx context.Context, exec bob.Executor, related ...*OperationSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	operations1, err := insertResourceWorkspaceOperations0(ctx, exec, related, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.WorkspaceOperations = append(resource0.R.WorkspaceOperations, operations1...)
+
+	return nil
+}
+
+func (resource0 *Resource) AttachWorkspaceOperations(ctx context.Context, exec bob.Executor, related ...*Operation) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	operations1 := OperationSlice(related)
+
+	_, err = attachResourceWorkspaceOperations0(ctx, exec, len(related), operations1, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.WorkspaceOperations = append(resource0.R.WorkspaceOperations, operations1...)
 
 	return nil
 }
@@ -5771,6 +5853,20 @@ func (w resourceWhereR[Q]) HasItemOperationItems(filters ...bob.Mod[*dialect.Sel
 		sm.Columns(sqlite.Raw("1")),
 		sm.From(OperationItems.NameExpr()),
 		sm.Where(OperationItems.Columns.ItemID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: sqlite.Exists(q)}
+}
+
+// HasWorkspaceOperations filters parents that have a matching WorkspaceOperations using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Operations).
+func (w resourceWhereR[Q]) HasWorkspaceOperations(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := sqlite.Select(
+		sm.Columns(sqlite.Raw("1")),
+		sm.From(Operations.NameExpr()),
+		sm.Where(Operations.Columns.WorkspaceID.EQ(w.cols.ID)),
 	)
 	q.Apply(filters...)
 	return mods.Where[Q]{E: sqlite.Exists(q)}

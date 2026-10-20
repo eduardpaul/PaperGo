@@ -238,7 +238,7 @@ func prepareCoordinate(step workflow.Step, in map[string]any) (workflow.Prepared
 			return workflow.Prepared{}, err
 		}
 		for _, hash := range hashes {
-			if err = store.Reference(step.Context(), activitystore.ID(kindFlight, flightScope(queue, runtime(tools).Batch.Connection(), runtime(tools).Batch.Key()), tag), activitystore.ID(requestCache, answerScope, hash)); err != nil {
+			if err = store.Reference(step.Context(), activitystore.RecordOwner(activitystore.ID(kindFlight, flightScope(queue, runtime(tools).Batch.Connection(), runtime(tools).Batch.Key()), tag)), activitystore.ID(requestCache, answerScope, hash)); err != nil {
 				return workflow.Prepared{}, err
 			}
 		}
@@ -249,7 +249,7 @@ func prepareCoordinate(step workflow.Step, in map[string]any) (workflow.Prepared
 	if err = store.Put(step.Context(), activitystore.Record{Namespace: "ai.coordinate.result", Scope: queue, Key: step.ExecutionID(), Payload: json.RawMessage(`{}`), ExpiresAt: &until}); err != nil {
 		return workflow.Prepared{}, err
 	}
-	if err = store.Reference(step.Context(), step.RunID(), resultID); err != nil {
+	if err = store.Reference(step.Context(), activitystore.RunOwner(step.RunID()), resultID); err != nil {
 		return workflow.Prepared{}, err
 	}
 	job, err := json.Marshal(coordinateJob{
@@ -710,7 +710,7 @@ func commitCoordinate(step workflow.Step, rawJob, rawResult json.RawMessage) (wo
 	if err = json.Unmarshal(record.Payload, &result); err != nil {
 		return workflow.Prepared{}, err
 	}
-	if err = store.Unreference(step.Context(), step.RunID(), record.ID); err != nil {
+	if err = store.Unreference(step.Context(), activitystore.RunOwner(step.RunID()), record.ID); err != nil {
 		return workflow.Prepared{}, err
 	}
 	counts := map[string]int{"submitted": 0, "polled": 0, "completed": job.Completed, "released": 0}
@@ -896,7 +896,7 @@ func saveFlight(step workflow.Step, job coordinateJob, tag string, data flightDa
 		return err
 	}
 	if record.State == "completed" {
-		return store.Release(step.Context(), activitystore.ID(kindFlight, scope, tag))
+		return store.Release(step.Context(), activitystore.RecordOwner(activitystore.ID(kindFlight, scope, tag)))
 	}
 	return nil
 }
@@ -990,7 +990,7 @@ func resolveJoins(step workflow.Step, tools workflow.Tools, queue string) error 
 		if err = putManifest(step, answersKey, answers); err != nil {
 			return err
 		}
-		if err = tools.Records.WithTx(step.DMS().SQLTx()).Reference(step.Context(), join.ID, activitystore.ID("ai.enrich.manifest", answerScope, answersKey)); err != nil {
+		if err = tools.Records.WithTx(step.DMS().SQLTx()).Reference(step.Context(), activitystore.WaitOwner(join.ID), activitystore.ID("ai.enrich.manifest", answerScope, answersKey)); err != nil {
 			return err
 		}
 		payload, err := json.Marshal(map[string]any{

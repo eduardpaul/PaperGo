@@ -49,7 +49,7 @@ func snapshotChunks(ctx context.Context, store *activitystore.Store, runID, item
 			if err = tx.PutImmutable(ctx, activitystore.Record{Namespace: "workflow.chunk", Scope: runID, Key: key, Payload: payload, ExpiresAt: &until}); err != nil {
 				return err
 			}
-			if err = tx.Reference(ctx, runID, activitystore.ID("workflow.chunk", runID, key)); err != nil {
+			if err = tx.Reference(ctx, activitystore.RunOwner(runID), activitystore.ID("workflow.chunk", runID, key)); err != nil {
 				return err
 			}
 			keys = append(keys, key)
@@ -61,7 +61,7 @@ func snapshotChunks(ctx context.Context, store *activitystore.Store, runID, item
 		if err = tx.Put(ctx, activitystore.Record{Namespace: "workflow.chunk.parts", Scope: generation, Key: part, Payload: manifest, ExpiresAt: &until}); err != nil {
 			return err
 		}
-		return tx.Reference(ctx, runID, activitystore.ID("workflow.chunk.parts", generation, part))
+		return tx.Reference(ctx, activitystore.RunOwner(runID), activitystore.ID("workflow.chunk.parts", generation, part))
 	})
 }
 

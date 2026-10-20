@@ -149,7 +149,7 @@ func (s *Service) RebuildSearch(ctx context.Context) error {
 			return err
 		}
 		raw, _ := json.Marshal(searchReindexPayload{Stamp: time.Now().UnixNano(), Rebuild: true, Content: true})
-		if _, err = t.DAL.Operations().Enqueue(ctx, operations.Operation{Kind: OperationKindSearchReindex, CreatedBy: systemSubject, Payload: raw, TraceID: t.traceID}); err != nil {
+		if _, _, err = t.accept(ctx, operations.Operation{Kind: OperationKindSearchReindex, CreatedBy: systemSubject, Payload: raw}, false); err != nil {
 			return err
 		}
 		s.searchRebuild.Store(true)
@@ -224,13 +224,13 @@ func (s *Service) searchReindexStep(ctx context.Context, op *operations.Operatio
 	op.Processed += len(ids)
 	if len(ids) == searchReindexBatch {
 		op.AfterItemID = ids[len(ids)-1]
-		return s.DAL.Operations().Save(ctx, op)
+		return s.SaveOperation(ctx, op)
 	}
 	if err = s.search.DeleteDocuments(ctx, search.Selection{Before: p.Stamp}); err != nil {
 		return err
 	}
 	op.Status, op.Progress = operations.StatusSucceeded, 100
-	if err = s.DAL.Operations().Save(ctx, op); err != nil {
+	if err = s.SaveOperation(ctx, op); err != nil {
 		return err
 	}
 	if p.Rebuild {

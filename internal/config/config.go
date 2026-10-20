@@ -61,6 +61,9 @@ type Config struct {
 	// ResultCacheTTL is the idle lifetime of reusable activity answers.
 	// It is independent of RunRetention.
 	ResultCacheTTL time.Duration
+	// OperationQuotas bound the pending operations people may queue
+	// (OPERATION_QUOTA_*); zero leaves a bound off.
+	OperationQuotas OperationQuotas
 	// PublicURL is the scheme and host clients use, for example behind a
 	// TLS-terminating reverse proxy. Nil uses each request's own.
 	PublicURL *url.URL
@@ -244,6 +247,26 @@ func loadFrom(getenv func(string) string, yamlText, directory string) (Config, e
 			return c, fmt.Errorf("%s must be a duration between 1h and 87600h", setting.key)
 		}
 		*setting.dst = d
+	}
+	c.OperationQuotas = OperationQuotas{PerCreator: 1000, PerWorkspace: 5000, Installation: 50000, WorkspacePayloadBytes: 256 << 20}
+	for _, setting := range []struct {
+		key string
+		dst *int64
+	}{
+		{"OPERATION_QUOTA_PER_CREATOR", &c.OperationQuotas.PerCreator},
+		{"OPERATION_QUOTA_PER_WORKSPACE", &c.OperationQuotas.PerWorkspace},
+		{"OPERATION_QUOTA_INSTALLATION", &c.OperationQuotas.Installation},
+		{"OPERATION_QUOTA_WORKSPACE_PAYLOAD_BYTES", &c.OperationQuotas.WorkspacePayloadBytes},
+	} {
+		v := lookup(setting.key)
+		if v == "" {
+			continue
+		}
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || n < 0 {
+			return c, fmt.Errorf("%s must be zero (no bound) or a positive count", setting.key)
+		}
+		*setting.dst = n
 	}
 	c.OCRLibrary, c.OCRThreads = lookup("ONNXRUNTIME_LIB"), 1
 	if c.OCRLibrary == "" {
@@ -607,6 +630,12 @@ func (c *Config) loadChat() error {
 	}
 	c.Chat = chat
 	return nil
+}
+
+// OperationQuotas bound pending operations per creator, per workspace and
+// for the installation, and the payload bytes of a workspace.
+type OperationQuotas struct {
+	PerCreator, PerWorkspace, Installation, WorkspacePayloadBytes int64
 }
 
 // loadBatch reads AI_BATCH_*: an independent provider, endpoint, model and

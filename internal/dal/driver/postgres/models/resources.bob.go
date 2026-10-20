@@ -98,6 +98,7 @@ type resourceR struct {
 	ContainerListViews            ListViewSlice        // list_views.list_views_container_id_fkey
 	ItemOperationItems            OperationItemSlice   // operation_items.operation_items_item_id_fkey
 	ContainerOperations           OperationSlice       // operations.operations_container_id_fkey
+	WorkspaceOperations           OperationSlice       // operations.operations_workspace_id_fkey
 	ItemPublications              PublicationSlice     // publications.publications_item_id_fkey
 	SourceRelationships           RelationshipSlice    // relationships.relationships_source_id_fkey
 	TargetRelationships           RelationshipSlice    // relationships.relationships_target_id_fkey
@@ -158,6 +159,7 @@ type resourceRLoaded struct {
 	ContainerListViews            bool // list_views.list_views_container_id_fkey
 	ItemOperationItems            bool // operation_items.operation_items_item_id_fkey
 	ContainerOperations           bool // operations.operations_container_id_fkey
+	WorkspaceOperations           bool // operations.operations_workspace_id_fkey
 	ItemPublications              bool // publications.publications_item_id_fkey
 	SourceRelationships           bool // relationships.relationships_source_id_fkey
 	TargetRelationships           bool // relationships.relationships_target_id_fkey
@@ -1808,6 +1810,29 @@ func (os ResourceSlice) ContainerOperations(mods ...bob.Mod[*dialect.SelectQuery
 
 	return Operations.Query(append(mods,
 		sm.Where(Operations.Columns.ContainerID.EQ(PKArgExpr)),
+	)...)
+}
+
+// WorkspaceOperations starts a query for related objects on operations
+func (o *Resource) WorkspaceOperations(mods ...bob.Mod[*dialect.SelectQuery]) OperationsQuery {
+	return Operations.Query(append(mods,
+		sm.Where(Operations.Columns.WorkspaceID.EQ(psql.Arg(o.ID))),
+	)...)
+}
+
+func (os ResourceSlice) WorkspaceOperations(mods ...bob.Mod[*dialect.SelectQuery]) OperationsQuery {
+	pkID := make(pgtypes.Array[string], 0, len(os))
+
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		pkID = append(pkID, o.ID)
+	}
+	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkID), "text[]"))
+
+	return Operations.Query(append(mods,
+		sm.Where(Operations.Columns.WorkspaceID.EQ(PKArgExpr)),
 	)...)
 }
 
@@ -3822,6 +3847,67 @@ func (resource0 *Resource) AttachContainerOperations(ctx context.Context, exec b
 	}
 
 	resource0.R.ContainerOperations = append(resource0.R.ContainerOperations, operations1...)
+
+	return nil
+}
+
+func insertResourceWorkspaceOperations0(ctx context.Context, exec bob.Executor, operations1 []*OperationSetter, resource0 *Resource) (OperationSlice, error) {
+	for i := range operations1 {
+		operations1[i].WorkspaceID = omitnull.From(resource0.ID)
+	}
+
+	ret, err := Operations.Insert(bob.ToMods(operations1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertResourceWorkspaceOperations0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachResourceWorkspaceOperations0(ctx context.Context, exec bob.Executor, count int, operations1 OperationSlice, resource0 *Resource) (OperationSlice, error) {
+	setter := &OperationSetter{
+		WorkspaceID: omitnull.From(resource0.ID),
+	}
+
+	err := operations1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachResourceWorkspaceOperations0: %w", err)
+	}
+
+	return operations1, nil
+}
+
+func (resource0 *Resource) InsertWorkspaceOperations(ctx context.Context, exec bob.Executor, related ...*OperationSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	operations1, err := insertResourceWorkspaceOperations0(ctx, exec, related, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.WorkspaceOperations = append(resource0.R.WorkspaceOperations, operations1...)
+
+	return nil
+}
+
+func (resource0 *Resource) AttachWorkspaceOperations(ctx context.Context, exec bob.Executor, related ...*Operation) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	operations1 := OperationSlice(related)
+
+	_, err = attachResourceWorkspaceOperations0(ctx, exec, len(related), operations1, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.WorkspaceOperations = append(resource0.R.WorkspaceOperations, operations1...)
 
 	return nil
 }
@@ -6006,6 +6092,20 @@ func (w resourceWhereR[Q]) HasContainerOperations(filters ...bob.Mod[*dialect.Se
 		sm.Columns(psql.Raw("1")),
 		sm.From(Operations.NameExpr()),
 		sm.Where(Operations.Columns.ContainerID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: psql.Exists(q)}
+}
+
+// HasWorkspaceOperations filters parents that have a matching WorkspaceOperations using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Operations).
+func (w resourceWhereR[Q]) HasWorkspaceOperations(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := psql.Select(
+		sm.Columns(psql.Raw("1")),
+		sm.From(Operations.NameExpr()),
+		sm.Where(Operations.Columns.WorkspaceID.EQ(w.cols.ID)),
 	)
 	q.Apply(filters...)
 	return mods.Where[Q]{E: psql.Exists(q)}

@@ -126,6 +126,7 @@ func run(log *slog.Logger) error {
 		}
 	}
 	service := dms.NewService(db.SQL)
+	service.SetOperationQuotas(dms.OperationQuotas(c.OperationQuotas))
 	configuredIntegrations, err := db.DAL.Integrations().Exists(startup, integrations.Filter{})
 	if err != nil {
 		return err
@@ -245,6 +246,8 @@ func run(log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	// Workflows waiting on an operation reconcile as soon as it ends.
+	service.OnOperationsFinished(func([]string) { run.Wake() })
 	if err = run.Launch(startup); err != nil {
 		return err
 	}

@@ -41,19 +41,17 @@ func (s *Service) StartBulkUpdate(ctx context.Context, subject, collectionID str
 		if e != nil {
 			return e
 		}
-		op, e := t.enqueue(ctx, operations.Operation{ContainerID: c.ID, Kind: OperationKindBulkUpdate, CreatedBy: subject, Payload: payload})
+		op, replayed, e := t.enqueue(ctx, operations.Operation{ContainerID: c.ID, Kind: OperationKindBulkUpdate, CreatedBy: subject, Payload: payload})
 		if e != nil {
 			return e
 		}
-		out = viewOperation(op)
+		out = viewOperation(op, time.Now())
+		out.Replayed = replayed
+		if replayed {
+			return nil
+		}
 		return t.audit(ctx, subject, "bulk_update.start", c, map[string]any{"operation_id": out.ID})
 	})
-	if err == nil {
-		select {
-		case s.operations <- struct{}{}:
-		default:
-		}
-	}
 	return
 }
 
@@ -88,7 +86,7 @@ func (s *Service) bulkUpdateStep(ctx context.Context, op *operations.Operation) 
 		if matched == 0 {
 			op.Status, op.Progress = operations.StatusSucceeded, 100
 		}
-		return s.DAL.Operations().Save(ctx, op)
+		return s.SaveOperation(ctx, op)
 	}
 	rows, e := s.DAL.Operations().Items(ctx, op.ID, bulkStepItems)
 	if e != nil {
@@ -96,7 +94,7 @@ func (s *Service) bulkUpdateStep(ctx context.Context, op *operations.Operation) 
 	}
 	if len(rows) == 0 {
 		op.Status, op.Progress = operations.StatusSucceeded, 100
-		return s.DAL.Operations().Save(ctx, op)
+		return s.SaveOperation(ctx, op)
 	}
 	// One transaction edits a batch of items, each under its own savepoint;
 	// the time budget keeps other writers from waiting long behind it.
@@ -130,7 +128,7 @@ func (s *Service) bulkUpdateStep(ctx context.Context, op *operations.Operation) 
 	if processed == op.Matched {
 		op.Status = operations.StatusSucceeded
 	}
-	return s.DAL.Operations().Save(ctx, op)
+	return s.SaveOperation(ctx, op)
 }
 
 // Each bulk update step edits at most bulkStepItems items, and stops early

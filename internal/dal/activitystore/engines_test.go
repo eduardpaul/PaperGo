@@ -69,10 +69,14 @@ func runActivityStoreSuite(t *testing.T, newStore func(testing.TB) *dal.Store) {
 			t.Fatal(err)
 		}
 		id := activitystore.ID(in.Namespace, in.Scope, in.Key)
-		if err := s.Reference(ctx, "wait", id); err != nil {
+		holder := activitystore.RecordOwner(activitystore.ID("test", "scope", "holder"))
+		if err := s.Put(ctx, activitystore.Record{Namespace: "test", Scope: "scope", Key: "holder", Payload: []byte(`{}`)}); err != nil {
 			t.Fatal(err)
 		}
-		if err := s.Reference(ctx, "wait", id); err != nil {
+		if err := s.Reference(ctx, holder, id); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.Reference(ctx, holder, id); err != nil {
 			t.Fatal(err)
 		}
 		token, ok, err := s.Claim(ctx, in.Namespace, in.Scope, in.Key, "first", time.Minute)
@@ -104,7 +108,7 @@ func runActivityStoreSuite(t *testing.T, newStore func(testing.TB) *dal.Store) {
 		if got, err := s.Get(ctx, in.Namespace, in.Scope, in.Key); err != nil || got == nil {
 			t.Fatalf("reference lost: %+v %v", got, err)
 		}
-		if err := s.Release(ctx, "wait"); err != nil {
+		if err := s.Release(ctx, holder); err != nil {
 			t.Fatal(err)
 		}
 		if err := s.ReleaseLeases(ctx, "second"); err != nil {
@@ -114,7 +118,8 @@ func runActivityStoreSuite(t *testing.T, newStore func(testing.TB) *dal.Store) {
 			t.Fatal(err)
 		}
 		var n int
-		if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM activity_records`).Scan(&n); err != nil || n != 0 {
+		// Only the unexpired holder remains.
+		if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM activity_records`).Scan(&n); err != nil || n != 1 {
 			t.Fatalf("retention left %d records: %v", n, err)
 		}
 	})

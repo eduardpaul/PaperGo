@@ -22,7 +22,7 @@ func checkpointHandler() OperationHandler {
 		} else {
 			op.Progress = 50
 		}
-		return s.DAL.Operations().Save(ctx, op)
+		return s.SaveOperation(ctx, op)
 	}}
 }
 
@@ -75,15 +75,16 @@ func TestRegisteredOperationsResumeAndExpire(t *testing.T) {
 
 func TestOperationUnknownHandlerAndRevokedCredential(t *testing.T) {
 	s, _, list := fixture(t)
-	queued, err := s.DAL.Operations().Enqueue(testContext, operations.Operation{Kind: "unknown", ContainerID: list.ID, CreatedBy: "alice"})
+	// A process claims only the kinds it runs.
+	queued, _, err := s.DAL.Operations().Accept(testContext, operations.Operation{Kind: "unknown", ContainerID: list.ID, CreatedBy: "alice"}, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if worked, err := s.operationStep(testContext); !worked || !errors.Is(err, errUnknownOperation) {
+	if worked, err := s.operationStep(testContext); worked || err != nil {
 		t.Fatal(worked, err)
 	}
 	unknown, err := s.Operation(testContext, "alice", queued.ID)
-	if err != nil || unknown.Status != operations.StatusFailed || unknown.CompletedAt == nil {
+	if err != nil || unknown.Status != operations.StatusPending || unknown.Waiting != WaitingQueued {
 		t.Fatal(unknown, err)
 	}
 	if err = s.RegisterOperationHandler("checkpoint", checkpointHandler()); err != nil {
@@ -105,7 +106,7 @@ func TestOperationUnknownHandlerAndRevokedCredential(t *testing.T) {
 		t.Fatal(worked, err)
 	}
 	op, err = s.Operation(testContext, "alice", op.ID)
-	if err != nil || op.Status != operations.StatusFailed || op.Processed != 0 {
+	if err != nil || op.Status != operations.StatusFailed || op.ErrorCode != operations.ErrorForbidden || op.Processed != 0 || op.Attempts != 1 {
 		t.Fatal(op, err)
 	}
 	if _, err = s.EnqueueOperation(testContext, "alice", list.ID, "unknown", json.RawMessage(`{}`)); err == nil {

@@ -163,5 +163,5 @@ func findOperation(s *Service, id string) (*OperationView, error) {
 	if err != nil {
 		return nil, err
 	}
-	return viewOperation(op), nil
+	return viewOperation(op, time.Now()), nil
 }

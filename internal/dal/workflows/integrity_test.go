@@ -49,13 +49,18 @@ func TestWorkflowsOperationsAndLiveChangesPruning(t *testing.T) {
 			t.Fatalf("observe run: %v", err)
 		}
 
-		op, err := s.Operations().Enqueue(ctx, operations.Operation{Kind: "reindex", TraceID: "trace-1", CreatedBy: "u1"})
-		if err != nil {
-			t.Fatalf("enqueue operation: %v", err)
+		now := time.Now()
+		if _, _, err := s.Operations().Accept(ctx, operations.Operation{Kind: "reindex", TraceID: "trace-1", CreatedBy: "u1"}, now); err != nil {
+			t.Fatalf("accept operation: %v", err)
 		}
-		op.Status, op.Progress, op.Processed = operations.StatusSucceeded, 100, 10
-		if err := s.Operations().Save(ctx, &op); err != nil {
-			t.Fatalf("save operation: %v", err)
+		claimed, err := s.Operations().Claim(ctx, operations.ClaimRequest{Ready: operations.Ready{Kinds: []string{"reindex"}, Now: now, Limit: 1}, Holder: "test", TTL: time.Minute})
+		if err != nil || len(claimed) != 1 {
+			t.Fatalf("claim operation: %v %v", claimed, err)
+		}
+		op := claimed[0]
+		op.Status, op.Processed = operations.StatusSucceeded, 10
+		if err := s.Operations().Finish(ctx, &op, now); err != nil {
+			t.Fatalf("finish operation: %v", err)
 		}
 
 		if _, err := s.Audit().Append(ctx, audit.Event{WorkspaceID: ws.ID, Subject: "u1", Action: "permissions.replace", EntityType: "resource", EntityID: ws.ID, TraceID: "trace-1"}); err != nil {

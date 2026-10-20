@@ -957,7 +957,7 @@ func (os WorkflowRunSlice) RunWorkflowWaits(mods ...bob.Mod[*dialect.SelectQuery
 
 func insertWorkflowRunRunBlobLeases0(ctx context.Context, exec bob.Executor, blobLeases1 []*BlobLeaseSetter, workflowRun0 *WorkflowRun) (BlobLeaseSlice, error) {
 	for i := range blobLeases1 {
-		blobLeases1[i].RunID = omit.From(workflowRun0.ID)
+		blobLeases1[i].RunID = omitnull.From(workflowRun0.ID)
 	}
 
 	ret, err := BlobLeases.Insert(bob.ToMods(blobLeases1...)).All(ctx, exec)
@@ -970,7 +970,7 @@ func insertWorkflowRunRunBlobLeases0(ctx context.Context, exec bob.Executor, blo
 
 func attachWorkflowRunRunBlobLeases0(ctx context.Context, exec bob.Executor, count int, blobLeases1 BlobLeaseSlice, workflowRun0 *WorkflowRun) (BlobLeaseSlice, error) {
 	setter := &BlobLeaseSetter{
-		RunID: omit.From(workflowRun0.ID),
+		RunID: omitnull.From(workflowRun0.ID),
 	}
 
 	err := blobLeases1.UpdateAll(ctx, exec, *setter)

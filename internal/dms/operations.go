@@ -11,6 +11,7 @@ import (
 	"papergo/internal/dal/refs"
 	"papergo/internal/dal/surfaces"
 	"papergo/internal/model"
+	"slices"
 	"time"
 )
 
@@ -24,9 +25,11 @@ import (
 // enqueueFieldIndex supersedes the field's earlier operation and queues one
 // that converges its index rows. A collection without items needs no rows.
 func (s *Service) enqueueFieldIndex(ctx context.Context, subject string, d *catalog.FieldDefinition) error {
-	if err := s.DAL.Operations().Supersede(ctx, operations.Filter{FieldID: d.ID}); err != nil {
+	ended, err := s.DAL.Operations().Supersede(ctx, operations.Filter{FieldID: d.ID}, time.Now())
+	if err != nil {
 		return err
 	}
+	s.operationsFinished(ended...)
 	collections, err := s.fieldCollections(ctx, d.ID)
 	if err != nil {
 		return err
@@ -40,7 +43,7 @@ func (s *Service) enqueueFieldIndex(ctx context.Context, subject string, d *cata
 		if !populated {
 			continue
 		}
-		if _, e = s.DAL.Operations().Enqueue(ctx, operations.Operation{ContainerID: c.ID, FieldID: d.ID, Kind: OperationKindFieldIndex, CreatedBy: subject, TraceID: s.traceID}); e != nil {
+		if _, _, e = s.accept(ctx, operations.Operation{ContainerID: c.ID, FieldID: d.ID, Kind: OperationKindFieldIndex, CreatedBy: subject}, false); e != nil {
 			return e
 		}
 		queued = true
@@ -49,17 +52,12 @@ func (s *Service) enqueueFieldIndex(ctx context.Context, subject string, d *cata
 	if queued {
 		status = catalog.IndexBuilding
 	}
-	if err = s.DAL.Catalog().SetIndexStatus(ctx, []string{d.ID}, status); err != nil {
-		return err
-	}
-	// The runner's batch waits for this transaction's writer slot, so it
-	// sees the operation once this commits.
-	select {
-	case s.operations <- struct{}{}:
-	default:
-	}
-	return nil
+	return s.DAL.Catalog().SetIndexStatus(ctx, []string{d.ID}, status)
 }
+
+// operationClaim is how long an execution owns an operation between
+// renewals; an execution renews at a third of it.
+const operationClaim = 2 * time.Minute
 
 // RunOperations processes pending operations until ctx ends, resuming any left
 // by an earlier process.
@@ -78,6 +76,9 @@ func (s *Service) RunOperations(ctx context.Context, log *slog.Logger) {
 			}
 			nextCleanup = now.Add(time.Hour)
 		}
+		if err := s.ExpireOperations(ctx, time.Now()); err != nil && ctx.Err() == nil {
+			log.Error("operation deadlines failed", "error", err)
+		}
 		worked, err := s.operationStep(ctx)
 		if ctx.Err() != nil {
 			return
@@ -94,16 +95,20 @@ func (s *Service) RunOperations(ctx context.Context, log *slog.Logger) {
 		if worked {
 			continue
 		}
+		wait := time.Minute
+		if next, e := s.DAL.Operations().NextAttempt(ctx, s.operationKinds(), time.Now()); e == nil && next != nil {
+			wait = min(wait, max(time.Until(*next), 0))
+		}
 		select {
 		case <-ctx.Done():
 			return
 		case <-s.operations:
-		case <-time.After(time.Minute):
+		case <-time.After(wait):
 		}
 	}
 }
 
-// runOperations drains every pending operation.
+// runOperations drains every pending operation that is ready now.
 func (s *Service) runOperations(ctx context.Context) error {
 	for {
 		worked, err := s.operationStep(ctx)
@@ -113,25 +118,31 @@ func (s *Service) runOperations(ctx context.Context) error {
 	}
 }
 
-// operationStep advances the oldest pending operation by one index batch or
-// bulk item. An operation error fails it; item errors are bulk results.
+// operationKinds lists the kinds this process runs.
+func (s *Service) operationKinds() []string {
+	kinds := make([]string, 0, len(s.ops.handlers))
+	for kind := range s.ops.handlers {
+		kinds = append(kinds, kind)
+	}
+	slices.Sort(kinds)
+	return kinds
+}
+
+// operationStep claims the oldest ready operation and advances it by one
+// index batch or bulk item in the claim's transaction, or claims it for an
+// execution outside the writer. An operation error fails it; item errors are
+// bulk results; a Retry error defers it.
 func (s *Service) operationStep(ctx context.Context) (bool, error) {
 	var op *operations.Operation
-	var external func(context.Context, *Service, *operations.Operation) error
+	var execute func(context.Context, *Service, *operations.Operation) error
 	err := s.write(ctx, func(t *Service) error {
-		next, e := t.DAL.Operations().Next(ctx)
-		if dberr.IsNotFound(e) {
+		claimed, e := t.DAL.Operations().Claim(ctx, operations.ClaimRequest{Ready: operations.Ready{Kinds: t.operationKinds(), Now: time.Now(), Limit: 1}, Holder: t.ops.holder, TTL: operationClaim})
+		if e != nil || len(claimed) == 0 {
 			op = nil
-			return nil
-		}
-		if e != nil {
 			return e
 		}
-		op = &next
-		handler, exists := t.operationHandlers[op.Kind]
-		if !exists {
-			return errUnknownOperation
-		}
+		op = &claimed[0]
+		handler := t.ops.handlers[op.Kind]
 		ctx, e = t.operationContext(ctx, op)
 		if e != nil {
 			return e
@@ -146,12 +157,12 @@ func (s *Service) operationStep(ctx context.Context) (bool, error) {
 		if op.StartedAt == nil {
 			started := time.Now().UTC()
 			op.StartedAt = &started
-			if e = t.DAL.Operations().Save(ctx, op); e != nil {
+			if e = t.SaveOperation(ctx, op); e != nil {
 				return e
 			}
 		}
-		if handler.ExternalStep != nil {
-			external = handler.ExternalStep
+		if handler.Execute != nil {
+			execute = handler.Execute
 			return nil
 		}
 		previousState := operationCheckpoint(op)
@@ -163,29 +174,122 @@ func (s *Service) operationStep(ctx context.Context) (bool, error) {
 			return e
 		}
 		if current.Status != operations.StatusPending {
-			completed := time.Now().UTC()
-			current.CompletedAt = &completed
-			if current.Status == operations.StatusSucceeded {
-				current.Progress = 100
-			}
-			return t.DAL.Operations().Save(ctx, &current)
+			return nil
 		}
 		if operationCheckpoint(&current) == previousState {
 			return invalid("operation handler did not persist progress")
 		}
-		return nil
+		// The next batch is claimed again, so other work can go between.
+		return t.DAL.Operations().Release(ctx, op.ID, op.Claim, time.Now())
 	})
-	if err == nil && external != nil {
-		err = executeExternalOperation(ctx, s, external, op)
-		if errors.Is(err, ErrIntegrationBusy) {
-			return false, nil
-		}
-	}
-	if op == nil || err == nil || ctx.Err() != nil {
+	if op == nil || err == nil && execute == nil {
 		return op != nil, err
 	}
-	failed := s.failOperation(ctx, op, err)
-	return true, errors.Join(err, failed)
+	// A failed claim transaction rolled its claim back with the step.
+	committed := err == nil
+	if committed {
+		err = s.executeClaimed(ctx, execute, op)
+	}
+	if err == nil {
+		return true, nil
+	}
+	return true, s.endAttempt(ctx, op, committed, err)
+}
+
+// executeClaimed runs an execution outside the writer, renewing its claim
+// until it returns. A lost claim cancels it.
+func (s *Service) executeClaimed(ctx context.Context, execute func(context.Context, *Service, *operations.Operation) error, op *operations.Operation) error {
+	run, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		ticker := time.NewTicker(operationClaim / 3)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				now := time.Now()
+				until := now.Add(operationClaim)
+				if err := s.write(run, func(t *Service) error { return t.DAL.Operations().Renew(run, op.ID, op.Claim, until, now) }); err != nil {
+					if errors.Is(err, operations.ErrClaimLost) {
+						cancel(err)
+						return
+					}
+					continue
+				}
+				op.Claim.Until = operations.UTC(until)
+			}
+		}
+	}()
+	err := executeExternalOperation(run, s, execute, op)
+	if cause := context.Cause(run); errors.Is(cause, operations.ErrClaimLost) {
+		return cause
+	}
+	return err
+}
+
+// endAttempt settles an attempt that returned err: it gives a cancelled
+// execution's claim back, defers a retry and fails anything else, with the
+// handler's failure cleanup. An attempt whose claim rolled back claims the
+// operation again first; an execution that lost its claim leaves the
+// operation to its new owner.
+func (s *Service) endAttempt(ctx context.Context, op *operations.Operation, committed bool, err error) error {
+	if errors.Is(err, operations.ErrClaimLost) {
+		return nil
+	}
+	cancelled := ctx.Err() != nil
+	if cancelled {
+		if !committed {
+			return nil
+		}
+		release, stop := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer stop()
+		ctx = release
+	}
+	settled := s.write(ctx, func(t *Service) error {
+		now := time.Now()
+		current := *op
+		if !committed {
+			claimed, e := t.DAL.Operations().Claim(ctx, operations.ClaimRequest{Ready: operations.Ready{Kinds: []string{op.Kind}, IDs: []string{op.ID}, Now: now, Limit: 1}, Holder: t.ops.holder, TTL: operationClaim})
+			if e != nil || len(claimed) == 0 {
+				return e
+			}
+			current = claimed[0]
+		}
+		if cancelled {
+			return t.DAL.Operations().Release(ctx, op.ID, current.Claim, now)
+		}
+		var retry *retryError
+		if errors.As(err, &retry) {
+			return t.DAL.Operations().Defer(ctx, op.ID, current.Claim, now.Add(retry.after), retry.Error(), now)
+		}
+		completed := now.UTC()
+		current.Status, current.CompletedAt, current.Error = operations.StatusFailed, &completed, err.Error()
+		if errors.Is(err, ErrForbidden) {
+			current.ErrorCode = operations.ErrorForbidden
+		}
+		if current.StartedAt == nil {
+			current.StartedAt = op.StartedAt
+		}
+		if e := t.SaveOperation(ctx, &current); e != nil {
+			return e
+		}
+		if handler := t.ops.handlers[op.Kind]; handler.Failed != nil {
+			return handler.Failed(ctx, t, &current, err)
+		}
+		return nil
+	})
+	if cancelled || errors.Is(settled, operations.ErrClaimLost) {
+		return nil
+	}
+	var retry *retryError
+	if settled != nil || errors.As(err, &retry) {
+		return settled
+	}
+	return err
 }
 
 // operationBatch is the surfaces one background batch reindexes while holding
@@ -200,7 +304,7 @@ func (s *Service) fieldIndexBatch(ctx context.Context, op *operations.Operation)
 	d, err := s.DAL.Catalog().Field(ctx, op.FieldID)
 	if dberr.IsNotFound(err) {
 		op.Status = operations.StatusSuperseded
-		return s.DAL.Operations().Save(ctx, op)
+		return s.SaveOperation(ctx, op)
 	}
 	if err != nil {
 		return err
@@ -218,13 +322,13 @@ func (s *Service) fieldIndexBatch(ctx context.Context, op *operations.Operation)
 	switch {
 	case len(projections) == operationBatch:
 		op.AfterItemID = projections[len(projections)-1].ItemID
-		return s.DAL.Operations().Save(ctx, op)
+		return s.SaveOperation(ctx, op)
 	case op.Surface == refs.SurfaceHead:
 		op.Surface, op.AfterItemID = refs.SurfacePublished, ""
-		return s.DAL.Operations().Save(ctx, op)
+		return s.SaveOperation(ctx, op)
 	}
 	op.Status = operations.StatusSucceeded
-	if err = s.DAL.Operations().Save(ctx, op); err != nil {
+	if err = s.SaveOperation(ctx, op); err != nil {
 		return err
 	}
 	pending, err := s.DAL.Operations().Exists(ctx, operations.Filter{FieldID: d.ID, Statuses: []operations.Status{operations.StatusPending, operations.StatusFailed}})
@@ -245,8 +349,9 @@ func (s *Service) Operations(ctx context.Context, subject, containerID, after st
 		}
 		rows, e := t.DAL.Operations().List(ctx, operations.Filter{ContainerID: containerID, AfterID: after, OwnedBy: subject, SharedKinds: []string{OperationKindFieldIndex}, Limit: pageSize(limit) + 1})
 		views := make([]*OperationView, len(rows))
+		now := time.Now()
 		for i, row := range rows {
-			views[i] = viewOperation(row)
+			views[i] = viewOperation(row, now)
 		}
 		return entityPage(views, limit, func(v *OperationView) string { return v.ID }), e
 	})
@@ -269,13 +374,19 @@ func (s *Service) Operation(ctx context.Context, subject, id string) (*Operation
 			if e = t.RequireScope(ctx, subject, "organization.manage"); e != nil {
 				return nil, e
 			}
-			return viewOperation(op), nil
+			return viewOperation(op, time.Now()), nil
 		}
 		if _, e = t.authorize(ctx, subject, op.ContainerID, "read"); e != nil {
 			return nil, e
 		}
-		return viewOperation(op), nil
+		return viewOperation(op, time.Now()), nil
 	})
+}
+
+// FinishedOperations returns those of ids that ended, for consumers that
+// reconcile what they wait for.
+func (s *Service) FinishedOperations(ctx context.Context, ids []string) ([]operations.Operation, error) {
+	return s.DAL.Operations().Finished(ctx, ids)
 }
 
 // queryable reports whether queries may filter, sort or group by a field.
@@ -291,35 +402,74 @@ func unqueryable(key string, d *catalog.FieldDefinition) error {
 	return invalid("query fields must exist and be indexed: " + key)
 }
 
+// OperationWaiting is why a pending operation has not finished.
+type OperationWaiting string
+
+const (
+	WaitingQueued    OperationWaiting = "queued"
+	WaitingRunning   OperationWaiting = "running"
+	WaitingRetry     OperationWaiting = "retry"
+	WaitingScheduled OperationWaiting = "scheduled"
+	WaitingRemote    OperationWaiting = "remote"
+)
+
 // OperationView is an operation as the API shows it. Payloads, credential
-// constraints and resume points stay private.
+// constraints, claims and resume points stay private.
 type OperationView struct {
-	ID          string                   `json:"id"`
-	CreatedAt   time.Time                `json:"created_at"`
-	UpdatedAt   time.Time                `json:"updated_at"`
-	ContainerID string                   `json:"container_id,omitempty"`
-	FieldID     string                   `json:"field_id"`
-	Kind        string                   `json:"kind"`
-	TraceID     string                   `json:"trace_id,omitempty"`
-	Status      operations.Status        `json:"status"`
-	Result      json.RawMessage          `json:"result,omitempty"`
-	StartedAt   *time.Time               `json:"started_at,omitempty"`
-	CompletedAt *time.Time               `json:"completed_at,omitempty"`
-	Processed   int                      `json:"processed,omitempty"`
-	Matched     int                      `json:"matched,omitempty"`
-	Updated     int                      `json:"updated,omitempty"`
-	Failed      int                      `json:"failed,omitempty"`
-	Progress    int                      `json:"progress,omitempty"`
-	Failures    []model.OperationFailure `json:"failures,omitempty"`
-	Error       string                   `json:"error,omitempty"`
-	CreatedBy   string                   `json:"created_by,omitempty"`
+	ID            string                   `json:"id"`
+	CreatedAt     time.Time                `json:"created_at"`
+	UpdatedAt     time.Time                `json:"updated_at"`
+	ContainerID   string                   `json:"container_id,omitempty"`
+	WorkspaceID   string                   `json:"workspace_id,omitempty"`
+	FieldID       string                   `json:"field_id"`
+	Kind          string                   `json:"kind"`
+	TraceID       string                   `json:"trace_id,omitempty"`
+	Status        operations.Status        `json:"status"`
+	Waiting       OperationWaiting         `json:"waiting,omitempty"`
+	Attempts      int                      `json:"attempts,omitempty"`
+	NextAttemptAt *time.Time               `json:"next_attempt_at,omitempty"`
+	Deadline      *time.Time               `json:"deadline,omitempty"`
+	Result        json.RawMessage          `json:"result,omitempty"`
+	StartedAt     *time.Time               `json:"started_at,omitempty"`
+	CompletedAt   *time.Time               `json:"completed_at,omitempty"`
+	Processed     int                      `json:"processed,omitempty"`
+	Matched       int                      `json:"matched,omitempty"`
+	Updated       int                      `json:"updated,omitempty"`
+	Failed        int                      `json:"failed,omitempty"`
+	Progress      int                      `json:"progress,omitempty"`
+	Failures      []model.OperationFailure `json:"failures,omitempty"`
+	Error         string                   `json:"error,omitempty"`
+	ErrorCode     operations.ErrorCode     `json:"error_code,omitempty"`
+	CreatedBy     string                   `json:"created_by,omitempty"`
+	// Replayed is set when an idempotency key returned an operation
+	// accepted earlier.
+	Replayed bool `json:"-"`
 }
 
-func viewOperation(op operations.Operation) *OperationView {
-	return &OperationView{
-		ID: op.ID, CreatedAt: op.CreatedAt, UpdatedAt: op.UpdatedAt, ContainerID: op.ContainerID, FieldID: op.FieldID, Kind: op.Kind,
-		TraceID: op.TraceID, Status: op.Status, Result: op.Result, StartedAt: op.StartedAt, CompletedAt: op.CompletedAt,
+func viewOperation(op operations.Operation, now time.Time) *OperationView {
+	v := &OperationView{
+		ID: op.ID, CreatedAt: op.CreatedAt, UpdatedAt: op.UpdatedAt, ContainerID: op.ContainerID, WorkspaceID: op.WorkspaceID, FieldID: op.FieldID, Kind: op.Kind,
+		TraceID: op.TraceID, Status: op.Status, Attempts: op.Attempts, Deadline: op.Deadline, Result: op.Result, StartedAt: op.StartedAt, CompletedAt: op.CompletedAt,
 		Processed: op.Processed, Matched: op.Matched, Updated: op.Updated, Failed: op.Failed, Progress: op.Progress,
-		Failures: op.Failures, Error: op.Error, CreatedBy: op.CreatedBy,
+		Failures: op.Failures, Error: op.Error, ErrorCode: op.ErrorCode, CreatedBy: op.CreatedBy,
 	}
+	if op.Status != operations.StatusPending {
+		return v
+	}
+	switch {
+	case op.ExecutionID != "":
+		v.Waiting = WaitingRemote
+	case op.Claim.Token != "" && op.Claim.Until.After(now):
+		v.Waiting = WaitingRunning
+	case op.AttemptAt.After(now):
+		v.Waiting = WaitingScheduled
+		if op.Attempts > 0 {
+			v.Waiting = WaitingRetry
+		}
+		next := op.AttemptAt
+		v.NextAttemptAt = &next
+	default:
+		v.Waiting = WaitingQueued
+	}
+	return v
 }

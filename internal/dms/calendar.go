@@ -114,7 +114,7 @@ func (s *Service) refreshIntegrationOperation(ctx context.Context, op *operation
 			return e
 		}
 		if e = t.checkIntegrationLease(&found); e != nil {
-			return e
+			return Retry(e, time.Until(*found.LeaseUntil))
 		}
 		attempt := time.Now().UTC()
 		until := attempt.Add(integrationLease)
@@ -171,7 +171,7 @@ func (s *Service) refreshIntegrationOperation(ctx context.Context, op *operation
 		}
 		// A worker whose lease expired cannot apply a stale feed.
 		if row.LeaseToken != lease || row.Version != source.Version || row.LeaseUntil == nil || !row.LeaseUntil.After(time.Now().UTC()) {
-			return ErrIntegrationBusy
+			return Retry(ErrIntegrationBusy, time.Minute)
 		}
 		current, e := t.DAL.Operations().Find(ctx, op.ID)
 		if e != nil {
@@ -198,8 +198,9 @@ func (s *Service) refreshIntegrationOperation(ctx context.Context, op *operation
 		}
 		result, _ := json.Marshal(map[string]any{"integration_id": id, "item_count": count, "not_modified": downloaded.NotModified})
 		completed := time.Now().UTC()
+		current.Claim = op.Claim
 		current.Status, current.Progress, current.CompletedAt, current.Result = operations.StatusSucceeded, 100, &completed, result
-		return t.DAL.Operations().Save(ctx, &current)
+		return t.SaveOperation(ctx, &current)
 	})
 	return err
 }

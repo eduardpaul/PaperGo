@@ -324,7 +324,9 @@ func (s *Service) RemoveIntegration(ctx context.Context, subject, list, id strin
 	})
 }
 func (s *Service) supersedeIntegrationRefreshes(ctx context.Context, id string) error {
-	return s.DAL.Operations().Supersede(ctx, operations.Filter{Kinds: []string{OperationKindIntegrationRefresh}, PayloadField: "integration_id", PayloadValue: id})
+	ended, err := s.DAL.Operations().Supersede(ctx, operations.Filter{Kinds: []string{OperationKindIntegrationRefresh}, PayloadField: "integration_id", PayloadValue: id}, time.Now())
+	s.operationsFinished(ended...)
+	return err
 }
 
 type integrationRefreshPayload struct {
@@ -344,7 +346,7 @@ func (s *Service) enqueueIntegrationRefresh(ctx context.Context, subject string,
 		return nil, err
 	}
 	if len(pending) > 0 {
-		return viewOperation(pending[0]), nil
+		return viewOperation(pending[0], time.Now()), nil
 	}
 	// Validate and enqueue through the operation registry for the caller's live
 	// scopes and collection ACL. Deduplication never reveals another actor's job.
@@ -383,7 +385,7 @@ func validateIntegrationRefresh(ctx context.Context, t *Service, subject, list s
 	return nil
 }
 func integrationOperationHandler() OperationHandler {
-	return OperationHandler{Scope: "list.write", Validate: validateIntegrationRefresh, ExternalStep: func(ctx context.Context, s *Service, op *operations.Operation) error {
+	return OperationHandler{Scope: "list.write", Validate: validateIntegrationRefresh, Execute: func(ctx context.Context, s *Service, op *operations.Operation) error {
 		return s.refreshIntegrationOperation(ctx, op)
 	}, Failed: func(ctx context.Context, t *Service, op *operations.Operation, cause error) error {
 		id, err := decodeIntegrationRefresh(op.Payload)

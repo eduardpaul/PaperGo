@@ -55,11 +55,12 @@ type Deletion struct {
 	CreatedAt     time.Time
 }
 
-// Lease keeps a blob's bytes for an owner, such as a wait, until the owner
-// releases it or its run is deleted.
+// Lease keeps a blob's bytes for an owner, such as a wait or an operation,
+// until the owner releases it or the run or operation it belongs to ends or
+// is deleted. Exactly one of RunID and OperationID is set.
 type Lease struct {
-	ID, OwnerID, RunID, BlobID string
-	CreatedAt                  time.Time
+	ID, OwnerID, RunID, OperationID, BlobID string
+	CreatedAt                               time.Time
 }
 
 // Packages names the operation kinds whose payload or result holds a stored
@@ -202,6 +203,22 @@ func (r *Repo) Lease(ctx context.Context, ownerID, runID string, blobIDs []strin
 	return r.write(ctx, func(q Queries) error {
 		for _, id := range blobIDs {
 			if err := q.InsertBlobLease(ctx, Lease{ID: uuid.NewString(), OwnerID: ownerID, RunID: runID, BlobID: id, CreatedAt: at}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// LeaseOperation keeps blobs for an operation until it ends.
+func (r *Repo) LeaseOperation(ctx context.Context, operationID string, blobIDs []string) error {
+	if len(blobIDs) == 0 {
+		return nil
+	}
+	at := now()
+	return r.write(ctx, func(q Queries) error {
+		for _, id := range blobIDs {
+			if err := q.InsertBlobLease(ctx, Lease{ID: uuid.NewString(), OwnerID: operationID, OperationID: operationID, BlobID: id, CreatedAt: at}); err != nil {
 				return err
 			}
 		}

@@ -153,18 +153,60 @@ func (s *Store) List(ctx context.Context, namespace, scope, state, after string,
 	}
 	return out, nil
 }
-func (s *Store) Reference(ctx context.Context, owner, recordID string) error {
-	_, err := s.q.ExecContext(ctx, `INSERT INTO activity_references(id,created_at,owner_id,record_id) VALUES($1,$2,$3,$4) ON CONFLICT(owner_id,record_id) DO NOTHING`, uuid.NewString(), time.Now().UTC(), owner, recordID)
+
+// OwnerKind is what holds a reference, which decides when retention may
+// drop it.
+type OwnerKind string
+
+const (
+	OwnerRun       OwnerKind = "run"
+	OwnerWait      OwnerKind = "wait"
+	OwnerRecord    OwnerKind = "record"
+	OwnerOperation OwnerKind = "operation"
+)
+
+func (k OwnerKind) Valid() bool {
+	switch k {
+	case OwnerRun, OwnerWait, OwnerRecord, OwnerOperation:
+		return true
+	}
+	return false
+}
+
+// Owner holds references: a workflow run, a workflow wait, another activity
+// record or an operation, by ID.
+type Owner struct {
+	Kind OwnerKind
+	ID   string
+}
+
+func RunOwner(id string) Owner       { return Owner{OwnerRun, id} }
+func WaitOwner(id string) Owner      { return Owner{OwnerWait, id} }
+func RecordOwner(id string) Owner    { return Owner{OwnerRecord, id} }
+func OperationOwner(id string) Owner { return Owner{OwnerOperation, id} }
+
+func (o Owner) valid() error {
+	if !o.Kind.Valid() || o.ID == "" {
+		return errors.New("a reference needs a typed owner")
+	}
+	return nil
+}
+
+func (s *Store) Reference(ctx context.Context, owner Owner, recordID string) error {
+	if err := owner.valid(); err != nil {
+		return err
+	}
+	_, err := s.q.ExecContext(ctx, `INSERT INTO activity_references(id,created_at,owner_kind,owner_id,record_id) VALUES($1,$2,$3,$4,$5) ON CONFLICT(owner_kind,owner_id,record_id) DO NOTHING`, uuid.NewString(), time.Now().UTC(), string(owner.Kind), owner.ID, recordID)
 	return err
 }
 
 // Unreference releases one payload without affecting the owner's other work.
-func (s *Store) Unreference(ctx context.Context, owner, recordID string) error {
-	_, err := s.q.ExecContext(ctx, `DELETE FROM activity_references WHERE owner_id=$1 AND record_id=$2`, owner, recordID)
+func (s *Store) Unreference(ctx context.Context, owner Owner, recordID string) error {
+	_, err := s.q.ExecContext(ctx, `DELETE FROM activity_references WHERE owner_kind=$1 AND owner_id=$2 AND record_id=$3`, string(owner.Kind), owner.ID, recordID)
 	return err
 }
-func (s *Store) Release(ctx context.Context, owner string) error {
-	_, err := s.q.ExecContext(ctx, `DELETE FROM activity_references WHERE owner_id=$1`, owner)
+func (s *Store) Release(ctx context.Context, owner Owner) error {
+	_, err := s.q.ExecContext(ctx, `DELETE FROM activity_references WHERE owner_kind=$1 AND owner_id=$2`, string(owner.Kind), owner.ID)
 	return err
 }
 func (s *Store) Claim(ctx context.Context, namespace, scope, key, holder string, ttl time.Duration) (string, bool, error) {
@@ -173,7 +215,7 @@ func (s *Store) Claim(ctx context.Context, namespace, scope, key, holder string,
 	}
 	now := time.Now().UTC()
 	token := uuid.NewString()
-	result, err := s.q.ExecContext(ctx, `UPDATE activity_records SET lease_owner=$1,lease_token=$2,lease_until=$3 WHERE id=$4 AND (lease_owner IS NULL OR lease_owner=$5 OR lease_until<=$6 OR EXISTS(SELECT 1 FROM workflow_runs WHERE id=lease_owner AND live_status IN ('completed','failed','cancelled')))`, holder, token, now.Add(ttl), ID(namespace, scope, key), holder, now)
+	result, err := s.q.ExecContext(ctx, `UPDATE activity_records SET lease_owner=$1,lease_token=$2,lease_until=$3 WHERE id=$4 AND (lease_owner IS NULL OR lease_owner=$5 OR lease_until<=$6)`, holder, token, now.Add(ttl), ID(namespace, scope, key), holder, now)
 	if err != nil {
 		return "", false, err
 	}
@@ -218,7 +260,7 @@ func (s *Store) CompareAndSwap(ctx context.Context, id string, previous, next js
 	return n == 1, err
 }
 
-// ReleaseLeases drops a terminal run's executor claims.
+// ReleaseLeases drops the claims of a holder that ended, such as a run.
 func (s *Store) ReleaseLeases(ctx context.Context, holder string) error {
 	_, err := s.q.ExecContext(ctx, `UPDATE activity_records SET lease_owner=NULL,lease_token=NULL,lease_until=NULL WHERE lease_owner=$1`, holder)
 	return err
@@ -236,12 +278,21 @@ func (s *Store) Purge(ctx context.Context, now time.Time) error {
 		}
 		return tx.Commit()
 	}
-	// A cancelled worker may finish an artifact write after terminal
-	// cleanup. Retention also drops any late run-owned references.
-	if _, err := s.q.ExecContext(ctx, `DELETE FROM activity_references WHERE owner_id IN (SELECT id FROM workflow_runs WHERE live_status IN ('completed','failed','cancelled'))`); err != nil {
-		return err
+	// Owners release their references when they end. A cancelled worker
+	// may still write after that cleanup, so retention also drops the
+	// references of owners that ended or no longer exist: finished or
+	// deleted runs, closed or deleted waits, ended or deleted operations,
+	// and expired or deleted records.
+	for _, statement := range []string{
+		`DELETE FROM activity_references WHERE owner_kind='run' AND NOT EXISTS(SELECT 1 FROM workflow_runs r WHERE r.id=activity_references.owner_id AND r.live_status NOT IN ('completed','failed','cancelled'))`,
+		`DELETE FROM activity_references WHERE owner_kind='wait' AND NOT EXISTS(SELECT 1 FROM workflow_waits w WHERE w.id=activity_references.owner_id AND w.status<>'closed')`,
+		`DELETE FROM activity_references WHERE owner_kind='operation' AND NOT EXISTS(SELECT 1 FROM operations o WHERE o.id=activity_references.owner_id AND o.status='pending')`,
+	} {
+		if _, err := s.q.ExecContext(ctx, statement); err != nil {
+			return err
+		}
 	}
-	if _, err := s.q.ExecContext(ctx, `DELETE FROM activity_references WHERE owner_id IN (SELECT id FROM activity_records WHERE expires_at<=$1 AND NOT EXISTS(SELECT 1 FROM activity_references WHERE record_id=activity_records.id) AND (lease_until IS NULL OR lease_until<=$2))`, now, now); err != nil {
+	if _, err := s.q.ExecContext(ctx, `DELETE FROM activity_references WHERE owner_kind='record' AND (owner_id IN (SELECT id FROM activity_records WHERE expires_at<=$1 AND NOT EXISTS(SELECT 1 FROM activity_references WHERE record_id=activity_records.id) AND (lease_until IS NULL OR lease_until<=$2)) OR NOT EXISTS(SELECT 1 FROM activity_records r WHERE r.id=activity_references.owner_id))`, now, now); err != nil {
 		return err
 	}
 

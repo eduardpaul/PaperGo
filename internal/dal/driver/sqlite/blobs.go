@@ -12,6 +12,7 @@ import (
 	"github.com/stephenafamo/scan"
 	"papergo/internal/dal/blobs"
 	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/driver/nullable"
 	"papergo/internal/dal/driver/sqlite/models"
 )
 
@@ -96,7 +97,7 @@ func (q Queries) DeleteDeletion(ctx context.Context, id string) error {
 
 func (q Queries) InsertBlobLease(ctx context.Context, l blobs.Lease) error {
 	_, err := models.BlobLeases.Insert(&models.BlobLeaseSetter{
-		ID: omit.From(l.ID), CreatedAt: omit.From(l.CreatedAt), OwnerID: omit.From(l.OwnerID), RunID: omit.From(l.RunID), BlobID: omit.From(l.BlobID),
+		ID: omit.From(l.ID), CreatedAt: omit.From(l.CreatedAt), OwnerID: omit.From(l.OwnerID), RunID: nullable.String(l.RunID), OperationID: nullable.String(l.OperationID), BlobID: omit.From(l.BlobID),
 	}, im.OnConflict("owner_id", "blob_id").DoNothing()).Exec(ctx, q.exec)
 	return dberr.Translate(err)
 }

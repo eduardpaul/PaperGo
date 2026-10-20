@@ -653,7 +653,7 @@ CREATE TABLE operations (
     result TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(result)),
     started_at DATETIME,
     completed_at DATETIME,
-    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'succeeded', 'failed', 'superseded')),
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'succeeded', 'failed', 'superseded', 'cancelled')),
     surface TEXT NOT NULL DEFAULT 'head' CHECK (surface IN ('head', 'published')),
     after_item_id TEXT NOT NULL DEFAULT '',
     processed INTEGER NOT NULL DEFAULT 0 CHECK (processed >= 0),
@@ -665,11 +665,31 @@ CREATE TABLE operations (
     updated INTEGER NOT NULL DEFAULT 0 CHECK (updated >= 0),
     failed INTEGER NOT NULL DEFAULT 0 CHECK (failed >= 0),
     progress INTEGER NOT NULL DEFAULT 0 CHECK (progress BETWEEN 0 AND 100),
-    failures TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(failures) AND json_type(failures) = 'array')
+    failures TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(failures) AND json_type(failures) = 'array'),
+    workspace_id TEXT REFERENCES resources(id) ON DELETE CASCADE,
+    attempt_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+    claim_holder TEXT,
+    claim_token TEXT,
+    claim_until DATETIME,
+    execution_id TEXT NOT NULL DEFAULT '',
+    group_key TEXT NOT NULL DEFAULT '' CHECK (length(group_key) <= 128),
+    input_key TEXT NOT NULL DEFAULT '' CHECK (length(input_key) <= 128),
+    deadline DATETIME,
+    idempotency_key TEXT NOT NULL DEFAULT '' CHECK (length(idempotency_key) <= 128),
+    payload_digest TEXT NOT NULL DEFAULT '',
+    error_code TEXT NOT NULL DEFAULT '' CHECK (error_code IN ('', 'deadline_exceeded', 'retries_exhausted', 'forbidden')),
+    CHECK ((claim_token IS NULL) = (claim_until IS NULL) AND (claim_token IS NULL) = (claim_holder IS NULL))
 );
 CREATE INDEX operation_status_created_at ON operations(status, created_at);
 CREATE INDEX operation_status_updated_at ON operations(status, updated_at);
 CREATE INDEX operation_container_id_id ON operations(container_id, id);
+CREATE INDEX operation_ready ON operations(kind, workspace_id, attempt_at) WHERE status = 'pending';
+CREATE INDEX operation_group ON operations(kind, group_key, created_at) WHERE status = 'pending';
+CREATE INDEX operation_pending_workspace ON operations(workspace_id) WHERE status = 'pending';
+CREATE INDEX operation_pending_creator ON operations(created_by) WHERE status = 'pending';
+CREATE INDEX operation_execution_id ON operations(execution_id) WHERE execution_id <> '';
+CREATE UNIQUE INDEX operation_idempotency ON operations(created_by, kind, COALESCE(container_id, ''), idempotency_key) WHERE idempotency_key <> '';
 
 CREATE TABLE operation_items (
     id TEXT PRIMARY KEY NOT NULL,
@@ -929,22 +949,26 @@ CREATE INDEX activityrecord_expires_at ON activity_records(expires_at);
 CREATE TABLE activity_references (
     id TEXT PRIMARY KEY NOT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    owner_kind TEXT NOT NULL CHECK (owner_kind IN ('run', 'wait', 'record', 'operation')),
     owner_id TEXT NOT NULL,
     record_id TEXT NOT NULL REFERENCES activity_records(id) ON DELETE CASCADE
 );
-CREATE UNIQUE INDEX activityreference_owner_id_record_id ON activity_references(owner_id, record_id);
+CREATE UNIQUE INDEX activityreference_owner_record ON activity_references(owner_kind, owner_id, record_id);
 CREATE INDEX activityreference_record_id ON activity_references(record_id);
 
 CREATE TABLE blob_leases (
     id TEXT PRIMARY KEY NOT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     owner_id TEXT NOT NULL,
-    run_id TEXT NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE,
-    blob_id TEXT NOT NULL REFERENCES blobs(id) ON DELETE CASCADE
+    run_id TEXT REFERENCES workflow_runs(id) ON DELETE CASCADE,
+    operation_id TEXT REFERENCES operations(id) ON DELETE CASCADE,
+    blob_id TEXT NOT NULL REFERENCES blobs(id) ON DELETE CASCADE,
+    CHECK ((run_id IS NULL) <> (operation_id IS NULL))
 );
 CREATE UNIQUE INDEX bloblease_owner_id_blob_id ON blob_leases(owner_id, blob_id);
 CREATE INDEX bloblease_blob_id ON blob_leases(blob_id);
 CREATE INDEX bloblease_run_id ON blob_leases(run_id);
+CREATE INDEX bloblease_operation_id ON blob_leases(operation_id);
 
 CREATE TABLE sync_views (
     id TEXT PRIMARY KEY NOT NULL,

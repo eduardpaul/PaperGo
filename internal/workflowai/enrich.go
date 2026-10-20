@@ -343,7 +343,7 @@ func resumeEnrich(step workflow.Step, c workflow.Completion) (workflow.Prepared,
 	if err = json.Unmarshal(raw, &m); err != nil {
 		return workflow.Prepared{}, err
 	}
-	if err = step.Tools().Records.WithTx(step.DMS().SQLTx()).Reference(step.Context(), step.RunID(), activitystore.ID("ai.enrich.manifest", answerScope, key)); err != nil {
+	if err = step.Tools().Records.WithTx(step.DMS().SQLTx()).Reference(step.Context(), activitystore.RunOwner(step.RunID()), activitystore.ID("ai.enrich.manifest", answerScope, key)); err != nil {
 		return workflow.Prepared{}, err
 	}
 	job, err := json.Marshal(enrichJob{ManifestKey: key, Generation: m.Generation, Model: m.Model})
