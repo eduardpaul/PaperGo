@@ -23,6 +23,30 @@ both modified workflows. These are local measurements; the GitHub matrix,
 PowerShell execution and the complete `--full` check have not been run for this
 change.
 
+## Status: stages and one toolchain image (2026-10-21)
+
+Implemented on `claude/ci-simplify`:
+
+- `scripts/check.py` has named stages (`quick`, `lint`, `test`, `race`, `web`,
+  `native`, `zvec`, `release`, `docker`, `vuln`); every CI job runs exactly one,
+  with package lists and flags defined only there. The race-shard script and
+  release rehearsal script became the `race --shard` and `release`/`docker`
+  stages.
+- The devcontainer image is the single pinned toolchain, now including the
+  native SDKs and the PostgreSQL client. CI publishes it to GHCR under a hash of
+  its inputs and runs the Linux jobs in it; `scripts/ci.sh` runs the same stages
+  locally in the same image on a clean snapshot, with PostgreSQL beside it.
+- Pull requests run `lint` and `test` (ordinary Go suite in two shards,
+  PostgreSQL, frontend). The race suite, real models, zvec, packaging,
+  container image, devcontainer and dependency scan run on `main`, nightly and
+  releases, as recommended below.
+- Bob's PostgreSQL models are generated from a database on the test server
+  instead of a testcontainers container, so no stage needs Docker inside Docker.
+
+Still open from this plan: test-cost reductions (step 2), fixture work and
+parallelism (step 3), duration-aware sharding (step 4) and input-based routing
+of specialized lanes on pull requests (step 5).
+
 ## Recommendation
 
 Make the normal development check incremental and cached. Run the ordinary Go

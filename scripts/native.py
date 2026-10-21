@@ -105,7 +105,8 @@ def environment(output, system):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--directory', default=str(ROOT / '.tools/native'))
+    # The toolchain image installs the SDKs once, outside the checkout.
+    parser.add_argument('--directory', default=os.environ.get('PAPERGO_NATIVE_DIR') or str(ROOT / '.tools/native'))
     parser.add_argument('--cmake', default='cmake')
     parser.add_argument('--github-env', action='store_true')
     parser.add_argument('--check', action='store_true', help='require current installed SDKs without downloading or building')
@@ -176,6 +177,9 @@ def main():
         (pkg / 'pdfium.pc').write_text(f'Name: PDFium\nDescription: PDFium\nVersion: 8076\nLibs: -L{(output / "lib").as_posix()} -lpdfium\nCflags: -I{(output / "include").as_posix()}\n')
         (pkg / 'libwebp.pc').write_text(f'Name: libwebp\nDescription: libwebp\nVersion: 1.6.0\nLibs: -L{(output / "lib").as_posix()} -lwebp -lsharpyuv -lm\nCflags: -I{(output / "include").as_posix()}\n')
         stamp.write_text(json.dumps(fingerprint))
+    if args.check:
+        print(f'Native SDKs are current: {output}')
+        return
     env = environment(output, system)
     (output / 'native.env').write_text(''.join(f'{name}={value}\n' for name, value in env.items()))
     (output / 'env.sh').write_text(''.join(f'export {name}={shlex.quote(value)}\n' for name, value in env.items()))

@@ -1,4 +1,9 @@
 name: verify
+# Every job runs one stage of scripts/check.py; scripts/ci.sh runs the same
+# stages locally in the same toolchain image. Pull requests run the lint and
+# test stages. Pushes to main, the nightly schedule and releases also run the
+# race suite, real models, native search, packaging, the container image,
+# the devcontainer and the dependency scan.
 on:
   workflow_call:
     inputs:
@@ -9,23 +14,158 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    - cron: '23 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
+  packages: write
 concurrency:
   group: papergo-verify-${{ github.workflow }}-${{ github.event_name }}-${{ inputs.ref || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/')) }}
+env:
+  PAPERGO_TEST_POSTGRES_DSN: postgres://papergo:papergo@postgres:5432/papergo?sslmode=disable
 jobs:
+  toolchain:
+    name: Toolchain image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      image: ${{ steps.tag.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - id: tag
+        run: echo "image=ghcr.io/eduardpaul/papergo-ci:$(bash scripts/ci.sh tag)" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: published
+        run: |
+          if docker manifest inspect "${{ steps.tag.outputs.image }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: docker/setup-buildx-action@v3
+        if: steps.published.outputs.exists != 'true'
+      - name: Build and publish the toolchain image
+        if: steps.published.outputs.exists != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: .devcontainer/Dockerfile
+          push: true
+          tags: ${{ steps.tag.outputs.image }}
+          cache-from: type=gha,scope=toolchain
+          cache-to: type=gha,mode=max,scope=toolchain
+
+  lint:
+    name: Lint
+    needs: toolchain
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container: &toolchain
+      image: ${{ needs.toolchain.outputs.image }}
+      options: --user root
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    services: &postgres
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: papergo
+          POSTGRES_PASSWORD: papergo
+          POSTGRES_DB: papergo
+        options: >-
+          --health-cmd "pg_isready -U papergo -d papergo"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/cache@v4
+        with: &caches
+          path: |
+            /home/vscode/go/pkg/mod
+            /home/vscode/.cache/go-build
+            /home/vscode/.cache/npm
+          key: toolchain-${{ github.job }}-${{ hashFiles('go.sum', 'web/package-lock.json', 'sdk/package-lock.json') }}-${{ github.run_id }}
+          restore-keys: toolchain-${{ github.job }}-${{ hashFiles('go.sum', 'web/package-lock.json', 'sdk/package-lock.json') }}-
+      - run: python3 scripts/check.py lint --setup
+
+  test:
+    name: Test (${{ matrix.name }})
+    needs: toolchain
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container: *toolchain
+    services: *postgres
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: Go 1/2, arguments: --only go --shard 1/2 }
+          - { name: Go 2/2, arguments: --only go --shard 2/2 }
+          - { name: PostgreSQL, arguments: --only postgres }
+          - { name: frontend, arguments: --only web }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/cache@v4
+        with: *caches
+      - run: python3 scripts/check.py test ${{ matrix.arguments }} --setup
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-reports-${{ strategy.job-index }}
+          path: .cache/checks
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # Everything below runs on main, nightly and for releases.
+  race:
+    name: Race (${{ matrix.shard }})
+    if: github.event_name != 'pull_request'
+    needs: toolchain
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container: *toolchain
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ['1/3', '2/3', '3/3']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/cache@v4
+        with: *caches
+      - run: python3 scripts/check.py race --shard ${{ matrix.shard }} --setup
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: race-reports-${{ strategy.job-index }}
+          path: .cache/checks
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 14
+
   models:
-    name: Prepare offline model presets
+    name: Model presets
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref || github.ref }}
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
       - uses: actions/cache@v4
         with:
           path: |
@@ -43,374 +183,91 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 7
-  dal:
-    name: DAL (SQLite and PostgreSQL 17)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_USER: papergo
-          POSTGRES_PASSWORD: papergo-test
-          POSTGRES_DB: papergo
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U papergo -d papergo"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref || github.ref }}
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.27.2'
-          cache: true
-      - name: Verify generated Bob models
-        env:
-          TESTCONTAINERS_RYUK_DISABLED: 'true'
-        run: |
-          go tool bobgen-sql -c internal/dal/driver/sqlite/bobgen.yaml
-          go tool bobgen-sql -c internal/dal/driver/postgres/bobgen.yaml
-          git add -N internal/dal/driver/sqlite/models internal/dal/driver/postgres/models
-          git diff --exit-code -- internal/dal/driver/sqlite/models internal/dal/driver/postgres/models
-      - name: Verify both database engines
-        env:
-          TEST_POSTGRES_DSN: postgres://papergo:papergo-test@localhost:5432/papergo?sslmode=disable
-        run: go test -race $(go list ./internal/dal/... | grep -v -e /search/ -e /releaseplan) -count=1 -timeout 10m
 
-  postgres:
-    needs: frontend
-    name: Application on PostgreSQL 17
+  native:
+    name: Native (${{ matrix.stage }})
+    if: github.event_name != 'pull_request'
+    needs: [toolchain, models]
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_USER: papergo
-          POSTGRES_PASSWORD: papergo-test
-          POSTGRES_DB: papergo
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U papergo -d papergo"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
+    timeout-minutes: 40
+    container: *toolchain
+    strategy:
+      fail-fast: false
+      matrix:
+        stage: [native, zvec, release, vuln]
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref || github.ref }}
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.27.2'
-          cache: true
-      - uses: ./.github/actions/native
+      - uses: actions/cache@v4
+        with: *caches
       - uses: actions/download-artifact@v4
         with:
-          name: embedded-frontend
-          path: web/dist
-      - name: Test the application on PostgreSQL
-        env:
-          PAPERGO_TEST_POSTGRES_DSN: postgres://papergo:papergo-test@localhost:5432/papergo?sslmode=disable
-        run: go test ./internal/dms ./internal/httpapi ./internal/identity ./internal/scriptrun ./internal/webdav ./internal/workflow ./internal/aiops ./internal/worker ./internal/documenttext ./internal/documentpreview ./internal/documentfiles ./internal/documentsearch -count=1 -timeout 40m
+          name: model-presets
+          path: .tools
+      - run: python3 scripts/check.py ${{ matrix.stage }} --setup
 
-  frontend:
-    name: Build embedded frontend
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+  platforms:
+    name: Native ${{ matrix.stage }} (${{ matrix.runner }})
+    if: github.event_name != 'pull_request'
+    needs: models
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macOS release builds are temporarily disabled.
+          - { runner: windows-2025, stage: release }
+          - { runner: ubuntu-24.04-arm, stage: zvec }
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/setup-go@v5
+        with:
+          # The toolchain image pins the same Go for the other jobs.
+          go-version: '1.27.2'
+          cache: true
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - name: Build and typecheck
-        run: npm ci --prefix web && npm --prefix web run build
-      - uses: actions/upload-artifact@v4
+      - uses: ./.github/actions/native
+      - uses: ./.github/actions/sqlite3def
+        if: matrix.stage == 'release'
+      - uses: actions/download-artifact@v4
         with:
-          name: embedded-frontend
-          path: web/dist
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 14
-  workflow-sdk:
-    name: Workflow SDK
+          name: model-presets
+          path: .tools
+      - shell: bash
+        run: python scripts/check.py ${{ matrix.stage }} --setup
+
+  docker:
+    name: Container image
+    if: github.event_name != 'pull_request'
+    needs: models
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref || github.ref }}
-      - uses: actions/setup-node@v4
+      - uses: actions/download-artifact@v4
         with:
-          node-version: '24'
-          cache: npm
-          cache-dependency-path: sdk/package-lock.json
-      - name: Verify the generated client and bundle
-        run: |
-          npm ci --prefix sdk
-          npm --prefix sdk run generate
-          npm --prefix sdk run typecheck
-          npm --prefix sdk test
-          npm --prefix sdk run build
-          git add -N sdk
-          git diff --exit-code -- sdk
+          name: model-presets
+          path: .tools
+      - run: python3 scripts/check.py docker
+
   devcontainer:
     name: Development container
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref || github.ref }}
-      - name: Build and smoke test the development environment
-        uses: devcontainers/ci@v0.3
+      - uses: devcontainers/ci@v0.3
         with:
           push: never
           runCmd: bash .devcontainer/smoke-test.sh
-  staticcheck:
-    needs: frontend
-    name: Staticcheck
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref || github.ref }}
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.27.2'
-          cache: true
-      - uses: ./.github/actions/native
-      - uses: actions/download-artifact@v4
-        with:
-          name: embedded-frontend
-          path: web/dist
-      - name: Install Staticcheck
-        # This upstream revision supports Go 1.27.2's export format.
-        run: go install honnef.co/go/tools/cmd/staticcheck@v0.7.0-0.dev.0.20261009230814-452d5bb86b45
-      - name: Analyze code and tests
-        # Generated Bob models assign hook contexts they do not use.
-        run: staticcheck $(go list ./... | grep -v -E '/internal/dal/driver/[^/]+/models$')
-  docker-smoke:
-    needs: models
-    name: Docker build and startup
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref || github.ref }}
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - uses: actions/download-artifact@v4
-        with:
-          name: model-presets
-          path: .tools
-      - name: Build image and test production startup and persistence
-        run: |
-          python3 scripts/build-assets.py --output-dir container-assets/assets
-          docker build --build-context model-assets=./container-assets --tag papergo:ci-smoke .
-          python3 scripts/docker-smoke.py --image papergo:ci-smoke
-  verify:
-    needs: [frontend, models]
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref || github.ref }}
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.27.2'
-          cache: true
-      - uses: ./.github/actions/native
-      - uses: ./.github/actions/sqlite3def
-      - uses: actions/download-artifact@v4
-        with:
-          name: embedded-frontend
-          path: web/dist
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - name: Check frontend
-        run: npm ci --prefix web && npm --prefix web run lint && npm --prefix web test -- --maxWorkers=2
-      - name: Check verification and release scripts
-        run: python3 -m unittest discover -s scripts/tests -v
-      - name: Check NPM sample setup
-        run: python3 -m unittest discover -s samples/npm -p 'test_*.py' -v
-      - name: Check authentik sample setup
-        run: python3 -m unittest discover -s samples/authentik -p 'test_*.py' -v
-      - name: Verify module checksums
-        run: go mod verify
-      - name: Verify formatting
-        run: test -z "$(gofmt -l cmd internal web/*.go)"
-      - name: Vet
-        run: go vet ./...
-      - uses: actions/download-artifact@v4
-        with:
-          name: model-presets
-          path: .tools
-      - name: Build application
-        run: |
-          python scripts/build-binaries.py
-          python scripts/build-assets.py
-          python scripts/release-smoke.py --bin-dir bin
-  embeddings:
-    name: Local embedding engines
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref || github.ref }}
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.27.2'
-          cache: true
-      - uses: ./.github/actions/native
-      - uses: actions/cache@v4
-        with:
-          path: .tools/embedding/models
-          key: embedding-q4-daa72c51243991df-e4daffa011e666dc
-      - name: Install pinned runtimes and text models
-        run: |
-          python3 scripts/fetch-embedding-models.py all
-          echo "EMBEDDING_MODELS_ROOT=$PWD/.tools/embedding/models" >> "$GITHUB_ENV"
-      - name: Check native embeddings, cancellation and shared OCR runtime
-        env:
-          PAPERGO_REQUIRE_EMBEDDING: '1'
-        run: go test -race ./internal/embedding ./internal/onnx ./cmd/embed
-  race:
-    needs: frontend
-    name: Race tests (${{ matrix.shard }}/3)
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3]
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref || github.ref }}
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.27.2'
-          cache: true
-      - uses: ./.github/actions/native
-      - uses: ./.github/actions/sqlite3def
-      - uses: actions/download-artifact@v4
-        with:
-          name: embedded-frontend
-          path: web/dist
-      - name: Test with race detection
-        env:
-          PAPERGO_REQUIRE_OCR: '1'
-        run: python3 scripts/test-race.py --shard ${{ matrix.shard }} --shards 3
-      - name: Upload race test timings and events
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: race-timings-${{ matrix.shard }}
-          path: .cache/checks/race-${{ matrix.shard }}.*
-          include-hidden-files: true
-          if-no-files-found: warn
-          retention-days: 14
-
-  zvec:
-    needs: frontend
-    name: Native zvec (${{ matrix.runner }})
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 25
-    strategy:
-      fail-fast: false
-      matrix:
-        runner: [ubuntu-latest, ubuntu-24.04-arm]
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref || github.ref }}
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.27.2'
-          cache: true
-      - uses: ./.github/actions/native
-      - uses: actions/download-artifact@v4
-        with:
-          name: embedded-frontend
-          path: web/dist
-      - name: Native conformance, lifecycle, backup and offline copy
-        run: go test -race ./internal/dal/search/zvecstore ./internal/backup ./cmd/admin
-      - name: Service, HTTP and workflow parity
-        env:
-          PAPERGO_TEST_SEARCH_STORE: zvec
-        run: go test -race ./internal/dms ./internal/httpapi ./internal/scriptrun -run '(Search|Content|Receipt|Contract|AIComplete|Prefix|SmartFolder|View|Listing|Query)'
-      - name: Real dimensions soak
-        env:
-          PAPERGO_ZVEC_SOAK: '1'
-        run: go test ./internal/dal/search/zvecstore -run '^TestRealDimensionsSoak$' -count=1 -v
-      - name: Fuzz native query builders
-        run: |
-          go test ./internal/dal/search/zvecstore -run '^$' -fuzz '^FuzzNativeFilter$' -fuzztime=10s -parallel=2
-          go test ./internal/dal/search/zvecstore -run '^$' -fuzz '^FuzzNativeText$' -fuzztime=10s -parallel=2
-      - uses: actions/upload-artifact@v4
-        with:
-          name: zvec-${{ runner.os }}-${{ runner.arch }}
-          path: .tools/native/installed.json
-
-  native-platforms:
-    needs: [frontend, models]
-    name: Native SDK smoke (${{ matrix.runner }})
-    strategy:
-      fail-fast: false
-      matrix:
-        runner:
-          # - macos-15
-          - windows-2025
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 50
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref || github.ref }}
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.27.2'
-          cache: true
-      - uses: ./.github/actions/native
-      - uses: ./.github/actions/sqlite3def
-      - uses: actions/download-artifact@v4
-        with:
-          name: embedded-frontend
-          path: web/dist
-      - name: Build executables
-        shell: bash
-        run: |
-          go build ./cmd/api ./cmd/admin ./cmd/embed ./cmd/ocr
-      - name: Exercise native search, PDFs, images and OCR
-        shell: bash
-        run: go test ./internal/onnx ./internal/ocr/paddle ./internal/imaging ./internal/doctext/pdfium ./internal/dal/search/zvecstore -run 'TestNativeABI|TestReadAndRender|TestRecognize$|TestDecode|TestWebPRoundTripAndResize|TestIdle|TestConcurrentIdle'
-      - uses: actions/download-artifact@v4
-        with:
-          name: model-presets
-          path: .tools
-      - name: Verify the packaged executable and library paths
-        shell: bash
-        run: |
-          go run ./cmd/release --version v0.0.0-rc.1
-          python scripts/build-binaries.py --ldflags='-s -w -X papergo/internal/buildinfo.Version=v0.0.0-rc.1'
-          python scripts/build-assets.py --archive dist/papergo_v0.0.0-rc.1_assets.zip
-          python scripts/release-package.py --version v0.0.0-rc.1 --os "$(go env GOOS)" --arch "$(go env GOARCH)"
-          python scripts/release-smoke.py --assets dist/papergo_v0.0.0-rc.1_assets.zip

@@ -16,17 +16,17 @@ concurrency:
   cancel-in-progress: false
 jobs:
   verify:
+    # Publishes the CI toolchain image when the tag's inputs are new.
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/ci.yml
-    with:
-      ref: ${{ inputs.tag || github.ref_name }}
-  dependencies:
-    uses: ./.github/workflows/vulnerabilities.yml
     with:
       ref: ${{ inputs.tag || github.ref_name }}
   prepare:
     permissions:
       contents: write
-    needs: [verify, dependencies]
+    needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:

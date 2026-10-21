@@ -258,8 +258,9 @@ PAPERGO_TEST_POSTGRES_DSN='postgres://user:pass@localhost:55433/papergo?sslmode=
   go test ./internal/dms ./internal/httpapi ./internal/scriptrun -count=1
 ```
 
-`bash scripts/check.sh --postgres` runs the DAL and application suites this way
-on the disposable server of `scripts/postgres.sh`.
+`bash scripts/check.sh test --only postgres` runs the DAL and application suites
+this way on the disposable server of `scripts/postgres.sh`; `scripts/ci.sh test`
+runs them as CI does.
 
 Tests seed and inspect rows through `daltest` (`Insert`, `Count`, `Values`,
 `Update`, `Delete`, `Reject`), which run on either engine; tests outside DAL

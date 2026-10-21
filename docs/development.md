@@ -1,8 +1,9 @@
 # Development environment
 
 PaperGo's [devcontainer](../.devcontainer/devcontainer.json) provides Go 1.27.2,
-Node.js 24.15.0 with npm, Python 3, SQLite's CLI, sqlite3def 3.11.26 and a C
-compiler, pkg-config and CMake 3.31.10. Go matches CI and the application Docker build; Node uses the same
+Node.js 24.15.0 with npm, Python 3, SQLite's CLI, the PostgreSQL client,
+sqlite3def 3.11.26, the pinned native SDKs, and a C compiler, pkg-config and
+CMake 3.31.10. The same image is CI's toolchain image. Go matches CI and the application Docker build; Node uses the same
 major version.
 The image also pins gopls 0.23.0, Delve 1.27.2, the CI Staticcheck revision
 and govulncheck 1.9.0. It supports Linux amd64 and arm64 through the upstream
@@ -95,79 +96,87 @@ debugger.
 
 ## Check changes
 
-Run **PaperGo: check** or:
+`scripts/check.py` holds every check, in stages. Each CI job runs exactly one
+stage, so a failing job names the command that reproduces it.
+
+| Stage | What it checks |
+| --- | --- |
+| `quick` (default) | Go formatting and the Go suite with Go's test-result cache: the edit/check loop |
+| `lint` | Formatting, module checksums, generated Bob models and workflow SDK, vet, Staticcheck, frontend typecheck and lint, Python tests |
+| `test` | Uncached Go suite on SQLite, the database suites on PostgreSQL 17, frontend tests |
+| `race` | The Go suite with race detection |
+| `web` | Frontend typecheck, lint and tests |
+| `native` | Real decision, embedding and OCR models |
+| `zvec` | Native search store conformance, parity, soak and fuzzing |
+| `release` | Builds, packages and runs the release executables with the shared assets |
+| `docker` | Builds the container image and runs its smoke test |
+| `vuln` | Reachable Go dependency vulnerabilities |
+
+### Edit and check
+
+Run **PaperGo: check**, or select the packages you are working on:
 
 ```sh
 bash scripts/check.sh
-```
-
-The default checks Go formatting and runs the ordinary Go suite with Go's
-test-result cache enabled. For the edit/check loop, select the packages you are
-working on, or check the frontend separately:
-
-```sh
 bash scripts/check.sh --packages ./internal/dms
 bash scripts/check.sh --packages ./internal/dms --run '^TestSeekPagesMatchSortedEligibleRows$'
-bash scripts/check.sh --web
+bash scripts/check.sh web
+bash scripts/check.sh test --only postgres --packages ./internal/dms
 ```
-
-`--postgres` runs the suites that open databases on PostgreSQL 17 instead of
-SQLite: the DAL packages, which test both engines, and the application suites.
-It uses the server `PAPERGO_TEST_POSTGRES_DSN` names, or starts the one of
-`scripts/postgres.sh`. Combine it with `--packages` to choose the packages.
-Tests create and drop their own databases; `bash scripts/postgres.sh clean`
-drops the ones an interrupted run left behind.
-
-```sh
-bash scripts/check.sh --postgres
-bash scripts/check.sh --postgres --packages ./internal/dms --run '^TestReceipts'
-```
-
-`bash scripts/release-rehearsal.sh` packages and runs the release executables as
-the release workflow does: it generates the embedded database history, builds the
-executables, shared assets and platform ZIP into `bin/` and `dist/`, and runs the
-packaged executables. `--image` also builds the container image and runs its
-smoke test. It needs the model presets in `.tools`, sqlite3def and, for the
-image, Docker, and restores the release history placeholder afterwards.
 
 Package selection is explicit: include affected callers when changing shared
-code. There is no automatic reverse-dependency selection. An unscoped check runs
-all Go packages. `--web` runs typechecking, lint and all frontend tests without
-requiring native SDKs; for repeated frontend edits use
-`npm --prefix web test -- --watch`.
+code. `test --only go|postgres|web` runs one part of the test stage;
+`--shard 1/2` runs half of the Go suite, as CI does. The database suites use the
+server `PAPERGO_TEST_POSTGRES_DSN` names, or start the one of `scripts/postgres.sh`;
+tests create and drop their own databases, and `bash scripts/postgres.sh clean`
+drops the ones an interrupted run left behind. For repeated frontend edits use
+`npm --prefix web test -- --watch`. The PowerShell entry point takes the same
+arguments: `./scripts/check.ps1 --packages ./internal/dms`.
 
-Checks require installed dependencies and never download SDKs or run `npm ci`.
-Run setup after dependency changes, or use `python3 scripts/native.py` and
-`npm ci --prefix web` to refresh just those dependencies. Go checks build the
-embedded frontend on the first check, then reuse it only while both the source
-and generated asset hashes match. Frontend edits or missing/changed assets
-trigger a rebuild. Reports live in `.cache/checks`: raw Go JSON events, structured
-package/test timings and a Markdown summary.
+Checks use the installed dependencies and never download them; `--setup` first
+runs `npm ci` where the installed packages do not match the lockfile, as CI does.
+Go checks build the embedded frontend on the first check, then reuse it only
+while both the source and generated asset hashes match. Reports live in
+`.cache/checks`: raw Go JSON events, structured package/test timings and a
+Markdown summary.
 
-Use `bash scripts/check.sh --full` for frontend build/lint/tests, Python tests,
-module verification, Bob generation/drift check, Go formatting, vet, Staticcheck,
-uncached ordinary Go tests and the application build. Staticcheck must be
-installed, as it is in the devcontainer. `--race` runs the entire Go suite with
-race detection and forced execution. `--native` requires `DECISION_MODELS_PATH`
-and `EMBEDDING_MODELS_ROOT`, then runs real decision, embedding, OCR and workflow
-tests with race detection; missing required assets fail. The PowerShell entry
-point accepts the same arguments, for example
-`./scripts/check.ps1 --packages ./internal/dms`. `govulncheck ./...` runs a
-dependency scan separately.
+### Run checks as CI does
 
-The verification workflow builds and typechecks the embedded frontend once,
-then distributes the real assets to its Go jobs. Docker and devcontainer smoke
-checks exercise their own builds. Frontend lint/tests and backend verification
-retain their own checks. CI runs the full Go suite with race detection across
-three jobs.
-Each job discovers the tests, fuzz seeds and examples, then runs a distinct shard
-with a 15-minute timeout per package. Raw events and timing reports are uploaded
-even if test execution fails; discovery duration is recorded separately from the
-execution command. Superseded branch/PR runs are canceled; release validation
-retains its serialized publication policy. Run a shard locally with
-`python3 scripts/test-race.py --shard 1 --shards 3`, repeating with shards 2 and 3
-for the complete suite. Race instrumentation makes the pure-Go SQLite driver
-substantially slower, so allow for a longer run on a development machine.
+`scripts/ci.sh` runs stages in CI's toolchain image, the devcontainer image,
+which pins Go, Node, Python, the native SDKs, Staticcheck, govulncheck,
+sqlite3def and the PostgreSQL client. It needs only Docker, Python 3 and Git:
+
+```sh
+scripts/ci.sh                         # the pull request gate: lint, then test
+scripts/ci.sh test --only go --shard 1/2
+scripts/ci.sh race
+scripts/ci.sh release                 # also: native, zvec, docker, vuln
+```
+
+It copies a clean snapshot of the checkout into the container: tracked and new
+files, without ignored ones, so local build outputs cannot hide a failure. A
+disposable PostgreSQL 17 runs beside it in memory. Go modules, build and npm
+caches, `node_modules` and the frontend build persist in Docker volumes, so
+repeated runs only recompile what changed. The image is tagged with a hash of
+its inputs (`.devcontainer/Dockerfile` and the native SDK pins), the tag CI
+publishes to `ghcr.io/eduardpaul/papergo-ci`; it is pulled from there when you
+can read it, otherwise built locally once. `native`, `release` and `docker`
+first prepare the model presets in `.tools` with
+`scripts/prepare-preset-models.py`, which needs Docker for Laya; `docker` runs
+on the host. `scripts/ci.sh clean` removes the database, network and cache
+volumes.
+
+### Continuous integration
+
+Pull requests run `lint` and `test`: Go in two shards, PostgreSQL and the
+frontend, about ten minutes on warm caches. Pushes to `main`, a nightly
+schedule and releases also run `race` in three shards, `native`, `zvec`,
+`release` and `vuln` in the toolchain image, `release` on Windows and `zvec` on
+Linux arm64 with natively installed SDKs, `docker`, and the devcontainer smoke
+test. The first job of each run publishes the toolchain image when its inputs
+changed. Go test reports are uploaded even when tests fail. Superseded branch
+and pull request runs are cancelled; release validation keeps its serialized
+publication policy.
 
 The devcontainer CI job builds the actual configuration and runs
 `bash .devcontainer/smoke-test.sh` as the non-root user. The smoke test uses its
@@ -187,9 +196,11 @@ npx --yes @devcontainers/cli@0.89.0 exec --workspace-folder . bash .devcontainer
 
 Edit `internal/dal/schema/sqlite.sql` and `internal/dal/schema/postgres.sql`
 directly, then regenerate both drivers' Bob models with
-`bash scripts/generate-models.sh` (**PaperGo: generate Bob models**); the
-PostgreSQL ones are generated in a temporary container, so Docker must be
-available.
+`bash scripts/generate-models.sh` (**PaperGo: generate Bob models**). The
+PostgreSQL models are read from a temporary database holding the schema, on the
+server `PAPERGO_TEST_POSTGRES_DSN` names or that of `scripts/postgres.sh`; `psql`
+must be installed, as it is in the toolchain image. The `lint` stage regenerates
+both and fails when that changes a file.
 
 Release planning uses sqlite3def 3.11.26, installed in the development container.
 Outside the container, `bash scripts/sqlite3def.sh` installs the pinned executable

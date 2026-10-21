@@ -162,7 +162,7 @@ def exercise(binary, admin, directory, expected_version=None, model='embeddingge
     for name in ('ONNXRUNTIME_LIB', 'OCR_MODELS', 'AI_DECISION_MODELS_PATH', 'AI_EMBEDDINGS_MODELS_PATH',
                  'PAPERGO_CONFIG', 'LD_LIBRARY_PATH', 'DYLD_LIBRARY_PATH'):
         env.pop(name, None)
-    excluded = {os.path.normcase(str(ROOT / '.tools/native/lib'))}
+    excluded = {os.path.normcase(str(Path(os.environ.get('PAPERGO_NATIVE_DIR') or ROOT / '.tools/native') / 'lib'))}
     compiler = Path(os.environ.get('CC', ''))
     if compiler.is_absolute():
         excluded.add(os.path.normcase(str(compiler.parent)))

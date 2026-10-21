@@ -67,7 +67,7 @@ def runtime_files(native, system, env):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output-dir', type=Path, default=ROOT / 'bin')
-    parser.add_argument('--native-dir', type=Path, default=ROOT / '.tools/native')
+    parser.add_argument('--native-dir', type=Path, default=Path(os.environ.get('PAPERGO_NATIVE_DIR') or ROOT / '.tools/native'))
     parser.add_argument('--ldflags', default='-s -w')
     args = parser.parse_args()
     system = platform.system().lower()

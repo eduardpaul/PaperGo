@@ -1,11 +1,13 @@
 # syntax=docker/dockerfile:1
-# Keep Go and Node aligned with .github/workflows/ci.yml and the runtime build.
+# The one pinned PaperGo toolchain: the devcontainer, every CI job that runs
+# in a container and scripts/ci.sh use this image. Build it from the
+# repository root. Keep Go and Node aligned with the runtime build.
 FROM node:24.15.0-bookworm-slim AS node
 
 FROM golang:1.27.2-bookworm
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl git python3 python3-pip pkg-config sqlite3 sudo \
+    && apt-get install -y --no-install-recommends ca-certificates curl git libicu72 postgresql-client python3 python3-pip pkg-config sqlite3 sudo \
     && rm -rf /var/lib/apt/lists/*
 
 # The release planner is a build tool, never a production runtime dependency.
@@ -28,6 +30,14 @@ RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
 
 RUN pip3 install --break-system-packages --no-cache-dir cmake==3.31.10
 
+# The pinned cgo SDKs, built once here instead of in every checkout or CI job.
+# Setup in a checkout rewrites their environment files for that checkout.
+COPY scripts/native.py scripts/native.json /opt/papergo/native-src/scripts/
+COPY scripts/native-notices /opt/papergo/native-src/scripts/native-notices
+RUN python3 /opt/papergo/native-src/scripts/native.py --directory /opt/papergo/native \
+    && rm -rf /opt/papergo/native/sdk /opt/papergo/native-src/.tools
+ENV PAPERGO_NATIVE_DIR=/opt/papergo/native
+
 # Install editor and CI tools in the image; opening a checkout never installs latest.
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
@@ -41,7 +51,10 @@ RUN groupadd --gid 1000 vscode \
     && printf 'vscode ALL=(root) NOPASSWD:ALL\n' > /etc/sudoers.d/vscode \
     && chmod 0440 /etc/sudoers.d/vscode \
     && mkdir -p /home/vscode/go/pkg/mod /home/vscode/.cache \
-    && chown -R vscode:vscode /home/vscode
+    # scripts/ci.sh copies a checkout to /work; its cache volumes start out
+    # owned by vscode because these directories are.
+    && mkdir -p /work/web/node_modules /work/web/dist /work/sdk/node_modules /work/.cache/checks \
+    && chown -R vscode:vscode /home/vscode /opt/papergo/native /work
 
 ENV GOPATH=/home/vscode/go \
     GOMODCACHE=/home/vscode/go/pkg/mod \
