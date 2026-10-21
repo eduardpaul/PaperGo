@@ -45,7 +45,7 @@ RELEASE_VERSION = 'v0.0.0-rc.1'
 def analyzed_packages():
     """Go packages Staticcheck analyzes: generated Bob models are left out,
     as their hook plumbing assigns contexts it does not use."""
-    listed = subprocess.run(['go', 'list', './...'], cwd=ROOT, check=True, capture_output=True, text=True).stdout.split()
+    listed = subprocess.run(['go', 'list', './...'], cwd=ROOT, check=True, stdout=subprocess.PIPE, text=True).stdout.split()
     return [package for package in listed if not re.search(r'/internal/dal/driver/[^/]+/models$', package)]
 
 
@@ -146,7 +146,7 @@ def prepare_go():
 def postgres_packages():
     """The database suites, with every DAL package but the native search
     store and the SQLite release planner, which use no database fixture."""
-    listed = subprocess.run(['go', 'list', './internal/dal/...'], cwd=ROOT, check=True, capture_output=True, text=True).stdout.split()
+    listed = subprocess.run(['go', 'list', './internal/dal/...'], cwd=ROOT, check=True, stdout=subprocess.PIPE, text=True).stdout.split()
     return [package for package in listed if not re.search(r'/internal/dal/(search|releaseplan)(/|$)', package)] + POSTGRES_PACKAGES
 
 

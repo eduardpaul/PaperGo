@@ -30,6 +30,10 @@ RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
 
 RUN pip3 install --break-system-packages --no-cache-dir cmake==3.31.10
 
+# CI jobs run as root on a checkout another user owns; Git, and the VCS
+# stamping of go list and go build, would otherwise refuse the repository.
+RUN git config --system --add safe.directory '*'
+
 # The pinned cgo SDKs, built once here instead of in every checkout or CI job.
 # Setup in a checkout rewrites their environment files for that checkout.
 COPY scripts/native.py scripts/native.json /opt/papergo/native-src/scripts/
