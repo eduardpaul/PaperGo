@@ -119,13 +119,14 @@ class DevelopmentChecksTests(unittest.TestCase):
 
     def test_test_stage_runs_go_postgres_and_web_on_the_configured_server(self):
         dsn = 'postgres://user:secret@localhost:5432/papergo'
-        run, tests, start = self.stage('test', environ={'PAPERGO_TEST_POSTGRES_DSN': dsn})
+        with patch.object(checks, 'postgres_packages', return_value=['./internal/dal/x', *checks.POSTGRES_PACKAGES]):
+            run, tests, start = self.stage('test', environ={'PAPERGO_TEST_POSTGRES_DSN': dsn})
         start.assert_not_called()
         (go, postgres) = [call.args for call in tests.call_args_list]
         self.assertEqual((go[0], go[2]), ('test', ['./...']))
         self.assertIn('-count=1', go[1])
         self.assertEqual(tests.call_args_list[0].args[4]['PAPERGO_REQUIRE_OCR'], '1')
-        self.assertEqual((postgres[0], postgres[2]), ('postgres', checks.POSTGRES_PACKAGES))
+        self.assertEqual((postgres[0], postgres[2]), ('postgres', ['./internal/dal/x', *checks.POSTGRES_PACKAGES]))
         run.assert_any_call('npm', '--prefix', 'web', 'test', '--', '--maxWorkers=2')
 
     def test_test_parts_and_shards_select_one_job(self):

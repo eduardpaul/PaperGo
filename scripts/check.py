@@ -31,8 +31,8 @@ import time
 ROOT = Path(__file__).resolve().parent.parent
 STAGES = ['quick', 'lint', 'test', 'race', 'web', 'native', 'zvec', 'release', 'docker', 'vuln']
 # Suites whose tests open databases through internal/dal/daltest, which run on
-# PostgreSQL in the test stage.
-POSTGRES_PACKAGES = ['./internal/dal/...', './internal/dms', './internal/httpapi', './internal/identity', './internal/scriptrun',
+# PostgreSQL in the test stage, with the DAL packages postgres_packages adds.
+POSTGRES_PACKAGES = ['./internal/dms', './internal/httpapi', './internal/identity', './internal/scriptrun',
                      './internal/webdav', './internal/workflow', './internal/aiops', './internal/worker', './internal/documenttext',
                      './internal/documentpreview', './internal/documentfiles', './internal/documentsearch', './internal/backup']
 NATIVE_PACKAGES = ['./internal/onnx', './internal/decision', './internal/embedding', './internal/ocr/paddle', './internal/scriptrun', './cmd/embed']
@@ -141,6 +141,13 @@ def prepare_go():
     planner = ROOT / '.tools/bin/sqlite3def'
     if planner.is_file() and not shutil.which('sqlite3def'):
         os.environ.setdefault('SQLITE3DEF', str(planner))
+
+
+def postgres_packages():
+    """The database suites, with every DAL package but the native search
+    store and the SQLite release planner, which use no database fixture."""
+    listed = subprocess.run(['go', 'list', './internal/dal/...'], cwd=ROOT, check=True, capture_output=True, text=True).stdout.split()
+    return [package for package in listed if not re.search(r'/internal/dal/(search|releaseplan)(/|$)', package)] + POSTGRES_PACKAGES
 
 
 def prepare_postgres():
@@ -278,7 +285,7 @@ def stage_test(args):
                  args.packages or ['./...'], args.shard, environment(PAPERGO_REQUIRE_OCR='1'))
     if 'postgres' in parts:
         prepare_postgres()
-        go_tests('postgres', ['-count=1', '-timeout=40m', *run_flags(args)], args.packages or POSTGRES_PACKAGES)
+        go_tests('postgres', ['-count=1', '-timeout=40m', *run_flags(args)], args.packages or postgres_packages())
 
 
 def stage_race(args):
