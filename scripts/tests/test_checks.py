@@ -22,6 +22,10 @@ class DevelopmentChecksTests(unittest.TestCase):
         self.root = Path(temporary.name)
         self.web = self.root / 'web'
         self.web.mkdir()
+        # The frontend bundles the workflow SDK's declarations.
+        self.declarations = self.root / 'sdk/dist/workflow.d.ts'
+        self.declarations.parent.mkdir(parents=True)
+        self.declarations.write_text('export {};')
         self.patch = patch.object(checks, 'ROOT', self.root)
         self.patch.start()
         self.addCleanup(self.patch.stop)
@@ -71,14 +75,17 @@ class DevelopmentChecksTests(unittest.TestCase):
             source.write_text('second')
             checks.prepare_frontend()
             self.assertEqual(run.call_count, 2)
-            (self.web / 'dist/index.html').write_text('tampered')
+            self.declarations.write_text('export declare const changed: true;')
             checks.prepare_frontend()
             self.assertEqual(run.call_count, 3)
-            (self.web / 'dist/index.html').unlink()
+            (self.web / 'dist/index.html').write_text('tampered')
             checks.prepare_frontend()
             self.assertEqual(run.call_count, 4)
-            checks.prepare_frontend(force=True)
+            (self.web / 'dist/index.html').unlink()
+            checks.prepare_frontend()
             self.assertEqual(run.call_count, 5)
+            checks.prepare_frontend(force=True)
+            self.assertEqual(run.call_count, 6)
 
     def test_default_and_scoped_checks_are_cached_and_skip_full_validation(self):
         for args, packages in [([], ['./...']), (['--packages', './internal/dms', '--run', '^TestExample$'], ['./internal/dms'])]:
