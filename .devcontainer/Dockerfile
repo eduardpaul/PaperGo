@@ -60,9 +60,12 @@ RUN groupadd --gid 1000 vscode \
     && mkdir -p /work/web/node_modules /work/web/dist /work/sdk/node_modules /work/.cache/checks \
     && chown -R vscode:vscode /home/vscode /opt/papergo/native /work
 
+# Every tool cache, Staticcheck's included, stays under /home/vscode/.cache,
+# whichever user runs the container.
 ENV GOPATH=/home/vscode/go \
     GOMODCACHE=/home/vscode/go/pkg/mod \
     GOCACHE=/home/vscode/.cache/go-build \
+    XDG_CACHE_HOME=/home/vscode/.cache \
     npm_config_cache=/home/vscode/.cache/npm \
     PATH=/usr/local/go/bin:/home/vscode/go/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
 USER vscode

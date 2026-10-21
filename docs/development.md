@@ -174,7 +174,9 @@ schedule and releases also run `race` in three shards, `native`, `zvec`,
 `release` and `vuln` in the toolchain image, `release` on Windows and `zvec` on
 Linux arm64 with natively installed SDKs, `docker`, and the devcontainer smoke
 test. The first job of each run publishes the toolchain image when its inputs
-changed. Go test reports are uploaded even when tests fail. Superseded branch
+changed. Jobs restore the Go, npm and Staticcheck caches that runs on `main`
+save; pull requests only read them. Go test reports are uploaded even when tests
+fail. Superseded branch
 and pull request runs are cancelled; release validation keeps its serialized
 publication policy.
 
