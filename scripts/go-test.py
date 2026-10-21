@@ -88,7 +88,7 @@ def main():
             report = summarize(events, time.monotonic() - started, args.preparation_seconds, exit_code)
             report['command'] = ['go', 'test', '-json', *flags]
             report['go_version'] = subprocess.check_output(['go', 'version'], text=True).strip()
-            native = Path('.tools/native/installed.json')
+            native = Path(os.environ.get('PAPERGO_NATIVE_DIR') or '.tools/native') / 'installed.json'
             report['native'] = json.loads(native.read_text()) if native.is_file() else None
             args.output.with_suffix('.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
             rendered = markdown(report)

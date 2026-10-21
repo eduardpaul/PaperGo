@@ -44,9 +44,9 @@ covers the pinned toolchain, automatic setup, hot reload, debugging and checks.
 For rootless Docker on Linux, use **Dev Containers: Clone Repository in Container Volume**.
 With tools installed on Linux or macOS, run `bash scripts/setup-dev.sh`, then
 `bash scripts/dev.sh`; `bash scripts/check.sh --packages ./internal/dms` runs
-cached checks for a selected Go package. Use `--web` for frontend checks or
-`--full` for the complete validation and production build. See
-[development checks](docs/development.md#check-changes) for all modes.
+cached checks for a selected Go package. `scripts/ci.sh` runs the pull request
+checks exactly as CI does, in its toolchain image, with only Docker installed. See
+[development checks](docs/development.md#check-changes) for every stage.
 
 PowerShell, from the repository root:
 
@@ -62,7 +62,7 @@ With globally installed tools, run `npm ci --prefix web` and `npm --prefix web r
 ./scripts/check.ps1
 ```
 
-Tests initialize temporary databases from the DAL schema masters and verify repository invariants on SQLite and PostgreSQL. CI also runs frontend checks, the Go race detector, Bob generation checks, and Staticcheck. Dependency vulnerability scans run on pushes, pull requests, and weekly. The Docker smoke test runs the built image directly with production authentication, a persistent data volume and a read-only root filesystem, and checks the UI, health, graceful shutdown, native search, PDFs, OCR, Laya and both embedding presets. Run `docker build -t papergo:local .` then `python3 scripts/docker-smoke.py --image papergo:local` with Docker and Python installed.
+Tests initialize temporary databases from the DAL schema masters and verify repository invariants on SQLite and PostgreSQL. Pull requests run the lint and test stages; pushes to main, a nightly schedule and releases add the Go race detector, real models, native search, packaging, the container image and the dependency vulnerability scan. The Docker smoke test runs the built image directly with production authentication, a persistent data volume and a read-only root filesystem, and checks the UI, health, graceful shutdown, native search, PDFs, OCR, Laya and both embedding presets. `scripts/ci.sh docker` builds the image and runs it.
 
 The machine-readable REST contract is in [`api/openapi.json`](api/openapi.json).
 

@@ -1,6 +1,6 @@
 {
   "name": "PaperGo",
-  "build": { "dockerfile": "Dockerfile", "context": "." },
+  "build": { "dockerfile": "Dockerfile", "context": ".." },
   "remoteUser": "vscode",
   "containerUser": "vscode",
   "init": true,

@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 python3 scripts/native.py
-source .tools/native/env.sh
+source "${PAPERGO_NATIVE_DIR:-.tools/native}/env.sh"
 
 go mod download
 # The release planner tests need sqlite3def; the devcontainer provides it.
