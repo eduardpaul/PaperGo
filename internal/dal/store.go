@@ -300,14 +300,6 @@ func (s *Store) Tx() *sql.Tx {
 	return s.tx
 }
 
-// execContext executes a SQL statement on the active transaction (if bound via WithTx) or on the underlying *sql.DB.
-func (s *Store) execContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
-	if s.tx != nil {
-		return s.tx.ExecContext(ctx, query, args...)
-	}
-	return s.sqlDB.ExecContext(ctx, query, args...)
-}
-
 // queryRowContext executes a single-row SQL query on the active transaction (if bound via WithTx) or on the underlying *sql.DB.
 func (s *Store) queryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
 	if s.tx != nil {

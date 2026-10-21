@@ -48,6 +48,28 @@ def upload(base, library, name, data):
         return json.load(response)['item']['id']
 
 
+# A manual script workflow whose run asks the local decision model one
+# question, as workflows in a deployment do.
+DECISION_WORKFLOW = """import { json, plain, workflow } from "@papergo/workflow";
+
+export default workflow<Record<string, never>, { kind: string }>({
+  triggers: [{ type: "manual" }],
+  async run(ctx) {
+    const decided = await ctx.wait((await ctx.api.v1.ai.decisions.post({
+      workspaceId: ctx.run.workspace_id,
+      data: json({ document: "An invoice for office supplies." }),
+      questions: [{
+        key: "kind", type: "choice", instructions: "Which category describes this document?",
+        options: [{ key: "invoice", text: "Invoice" }, { key: "other", text: "Other document" }],
+      }],
+    }))!);
+    const answers = (plain(decided.result) as { answers: Record<string, { selected: string }> }).answers;
+    return { kind: answers.kind.selected };
+  },
+});
+"""
+
+
 def exercise_native(base, workspace):
     library = json.loads(request(base, f'/v1/resources/{workspace}/children', {'kind': 'library', 'name': 'Scans'}))['id']
     # PDFium and statically linked WebP must render a PDF preview.
@@ -94,19 +116,15 @@ def exercise_native(base, workspace):
         raise RuntimeError(f'PDF text was not searchable with the selected preset: {result}')
     # Laya must execute an actual decision from the shared assets directory.
     flow = json.loads(request(base, f'/v1/workspaces/{workspace}/workflows', {
-        'name': 'Offline decision', 'definition': {'triggers': [{'type': 'manual', 'collection_id': library}],
-        'flow': {'start': 'decide', 'nodes': {'decide': {'activity': 'ai.decide', 'inputs': {
-            'data': {'document': 'An invoice for office supplies.'},
-            'questions': [{'key': 'kind', 'instructions': 'Which category describes this document?',
-                           'options': [{'key': 'invoice', 'text': 'Invoice'}, {'key': 'other', 'text': 'Other document'}]}],
-        }}}}},
+        'name': 'Offline decision', 'source': DECISION_WORKFLOW,
     }))
-    started = json.loads(request(base, f'/v1/workflows/{flow["id"]}/runs', {'item_ids': [item]}))
+    started = json.loads(request(base, f'/v1/workflows/{flow["id"]}/runs', {}))
     for _ in range(240):
         run = json.loads(request(base, '/v1/workflow-runs/' + started['run_ids'][0]))
         if run['status'] == 'completed':
+            assert run['result']['kind'] in ('invoice', 'other'), run
             break
-        if run['status'] == 'failed':
+        if run['status'] in ('failed', 'cancelled'):
             raise RuntimeError(f'shared Laya failed: {run}')
         time.sleep(.25)
     else:
