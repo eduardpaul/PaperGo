@@ -569,7 +569,9 @@ CREATE TABLE list_views (
     system_key TEXT NOT NULL DEFAULT '' CHECK (system_key IN ('', 'archived')),
     columns JSONB NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(columns) = 'array'),
     "query" JSONB NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof("query") = 'object'),
-    layout TEXT NOT NULL DEFAULT 'table' CHECK (layout IN ('table', 'board', 'calendar', 'gallery')),
+    layout TEXT NOT NULL DEFAULT 'table' CHECK (layout IN ('table', 'board', 'calendar', 'gallery', 'navigation')),
+    -- settings configures the layout, such as the field a navigation view browses.
+    settings JSONB NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(settings) = 'object'),
     is_default BOOLEAN NOT NULL DEFAULT FALSE,
     version BIGINT NOT NULL DEFAULT 1 CHECK (version > 0)
 );

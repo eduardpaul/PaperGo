@@ -4707,6 +4707,157 @@
         "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
       }
     },
+    "/v1/views/{id}/navigation": {
+      "post": {
+        "summary": "Navigate a View",
+        "operationId": "viewNavigation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "$top",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            }
+          },
+          {
+            "in": "query",
+            "name": "$skiptoken",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Continuation from @odata.nextLink; resend the same query body."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NavigationPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NavigationRequest"
+              }
+            }
+          }
+        },
+        "x-module-scopes": [
+          "list.read",
+          "taxonomy.read"
+        ],
+        "description": "Lists one level of a navigation view: the terms of its field below parent_id (or the roots), in term order, each with the items of the view it lists and those at or below it. Counts follow the view's query, the caller's access and the surface read, and cover items, not folders. Required module scopes: list.read, taxonomy.read. Resource ACLs and any additional use-case checks also apply."
+      }
+    },
     "/v1/relationship-types/{id}": {
       "get": {
         "summary": "Relationship Type",
@@ -21946,7 +22097,7 @@
         },
         "required": [],
         "additionalProperties": false,
-        "description": "One condition or AND/OR/NOT group; maximum 32 nodes and depth 6. Custom fields must be indexed. $id/$name are system fields; $keywords supports equality. Multi-valued eq matches any member; ne requires present with no equal member. Collection and smart-folder rules also accept $file_type for the MIME type of the visible file revision."
+        "description": "One condition or AND/OR/NOT group; maximum 32 nodes and depth 6. Custom fields must be indexed. $id/$name are system fields; $keywords supports eq, ne, missing and present. Multi-valued eq matches any member; ne requires present with no equal member. Collection and smart-folder rules also accept $file_type for the MIME type of the visible file revision."
       },
       "SortSpec": {
         "type": "object",
@@ -22069,6 +22220,14 @@
               "type": "string"
             },
             "description": "Selected custom fields and optional $keywords; system columns are accepted and the resource metadata envelope remains present. Omitted returns full values on direct queries and saved columns on views; an empty array returns no custom values. Selected fields need not be indexed. Cursors bind this selection."
+          },
+          "term_id": {
+            "type": "string",
+            "description": "Navigation views only: lists the items the view shows at this term of its term set, with or without the items below it as the view's settings say. Exactly one of term_id and no_value."
+          },
+          "no_value": {
+            "type": "boolean",
+            "description": "Navigation views only: lists the items holding no term in the view's field."
           }
         },
         "required": [],
@@ -22099,9 +22258,13 @@
               "table",
               "board",
               "calendar",
-              "gallery"
+              "gallery",
+              "navigation"
             ],
             "default": "table"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/ViewSettings"
           },
           "is_default": {
             "type": "boolean"
@@ -22111,7 +22274,7 @@
           "name"
         ],
         "additionalProperties": false,
-        "description": "Collection-managed saved view. Columns use field keys and $id/$name/$keywords; empty columns default to $name. PUT replaces the definition. Layout is a client hint."
+        "description": "Collection-managed saved view. Columns use field keys and $id/$name/$keywords; empty columns default to $name. PUT replaces the definition. Layout is a client hint; a navigation view browses the terms of settings.field as folders (POST /v1/views/{id}/navigation) and lists the items of a term through POST /v1/views/{id}/query with term_id or no_value."
       },
       "QueryResult": {
         "type": "object",
@@ -22284,6 +22447,9 @@
           },
           "layout": {
             "type": "string"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/ViewSettings"
           },
           "is_default": {
             "type": "boolean"
@@ -29628,6 +29794,126 @@
           "name",
           "version"
         ]
+      },
+      "ViewSettings": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string",
+            "description": "The field a navigation view browses: $keywords or an indexed term or keywords field of the collection."
+          },
+          "include_subterms": {
+            "type": "boolean",
+            "description": "Lists, at a term, the items holding a term below it too. Omitted follows the field: item keywords and fields with apply_parents always do; other fields list the items holding the term. false is rejected where parents apply."
+          },
+          "hide_empty": {
+            "type": "boolean",
+            "default": false,
+            "description": "Leaves out the terms no item of the view holds at or below them."
+          }
+        },
+        "required": [],
+        "additionalProperties": false,
+        "description": "Layout settings. Only navigation views take settings; other layouts take an empty object."
+      },
+      "NavigationRequest": {
+        "type": "object",
+        "properties": {
+          "parent_id": {
+            "type": "string",
+            "description": "Opens this term of the view's term set; omitted lists the roots."
+          },
+          "surface": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "head",
+              "published"
+            ],
+            "default": "auto"
+          }
+        },
+        "required": [],
+        "additionalProperties": false,
+        "description": "Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink."
+      },
+      "NavigationNode": {
+        "type": "object",
+        "properties": {
+          "term_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "has_children": {
+            "type": "boolean",
+            "description": "Opening the node lists terms; with hide_empty, terms that hold items."
+          },
+          "count": {
+            "type": "integer",
+            "description": "Items the node lists: holding the term, or one below it where subterms are included."
+          },
+          "subtree_count": {
+            "type": "integer",
+            "description": "Items holding the term or one below it."
+          }
+        },
+        "required": [
+          "term_id",
+          "name",
+          "has_children",
+          "count",
+          "subtree_count"
+        ],
+        "additionalProperties": false
+      },
+      "NavigationPage": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NavigationNode"
+            }
+          },
+          "@odata.nextLink": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Absolute continuation URL, or null on the final page. Repeat the request method and body."
+          },
+          "field": {
+            "type": "string"
+          },
+          "term_set_id": {
+            "type": "string"
+          },
+          "include_subterms": {
+            "type": "boolean",
+            "description": "Whether nodes list the items below them too."
+          },
+          "hide_empty": {
+            "type": "boolean"
+          },
+          "parent_id": {
+            "type": "string"
+          },
+          "no_value_count": {
+            "type": "integer",
+            "description": "At the roots, on the first page: items holding no term."
+          }
+        },
+        "required": [
+          "value",
+          "@odata.nextLink",
+          "field",
+          "term_set_id",
+          "include_subterms",
+          "hide_empty"
+        ],
+        "additionalProperties": false
       }
     },
     "parameters": {

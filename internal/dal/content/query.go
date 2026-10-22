@@ -274,6 +274,13 @@ func (r *Repo) filter(f *Filter) (string, []any) {
 func marks(n int) string { return strings.TrimPrefix(strings.Repeat(",?", n), ",") }
 
 func (r *Repo) condition(c *Condition) (string, []any) {
+	if c.Field.Key == "$keywords" && c.Field.Def == nil && (c.Op == FilterMissing || c.Op == FilterPresent) {
+		text := "(EXISTS(SELECT 1 FROM item_surface_keywords k WHERE k.surface_id=p.id) OR EXISTS(SELECT 1 FROM field_values f WHERE f.surface_id=p.id AND " + keywordValue + "))"
+		if c.Op == FilterMissing {
+			text = "NOT " + text
+		}
+		return text, nil
+	}
 	if c.Field.Key == "$keywords" && c.Field.Def == nil {
 		keyword := c.Values[0]
 		text := "p.id IN (" + r.keywordSurfaces("coalesce((SELECT merged_into_id FROM terms WHERE id=?),?)") + ")"

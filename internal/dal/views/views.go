@@ -24,11 +24,14 @@ const (
 	LayoutBoard    Layout = "board"
 	LayoutCalendar Layout = "calendar"
 	LayoutGallery  Layout = "gallery"
+	// LayoutNavigation browses the terms of a taxonomy or keywords field as
+	// folders; Settings names the field.
+	LayoutNavigation Layout = "navigation"
 )
 
 func (l Layout) Valid() bool {
 	switch l {
-	case LayoutTable, LayoutBoard, LayoutCalendar, LayoutGallery:
+	case LayoutTable, LayoutBoard, LayoutCalendar, LayoutGallery, LayoutNavigation:
 		return true
 	}
 	return false
@@ -51,9 +54,11 @@ type ListView struct {
 	Columns     []string        `json:"columns,omitempty"`
 	Query       json.RawMessage `json:"query,omitempty"`
 	Layout      Layout          `json:"layout,omitempty"`
-	IsDefault   bool            `json:"is_default,omitempty"`
-	Version     int             `json:"version,omitempty"`
-	UpdatedAt   time.Time       `json:"updated_at,omitempty"`
+	// Settings configures the layout; an empty object for most.
+	Settings  json.RawMessage `json:"settings,omitempty"`
+	IsDefault bool            `json:"is_default,omitempty"`
+	Version   int             `json:"version,omitempty"`
+	UpdatedAt time.Time       `json:"updated_at,omitempty"`
 }
 
 // SmartFolder gathers items across collections. A personal folder has an
@@ -184,6 +189,9 @@ func (r *Repo) CreateListView(ctx context.Context, v ListView) (ListView, error)
 		if len(v.Query) == 0 {
 			v.Query = json.RawMessage(`{}`)
 		}
+		if len(v.Settings) == 0 {
+			v.Settings = json.RawMessage(`{}`)
+		}
 		v.CreatedAt = time.Now().UTC()
 		v.UpdatedAt, v.Version = v.CreatedAt, 1
 		if v.IsDefault {
@@ -215,12 +223,15 @@ func (r *Repo) UpdateListView(ctx context.Context, v ListView, version int) (Lis
 			return fmt.Errorf("%w: built-in views cannot be changed", dberr.ErrCheckViolation)
 		}
 		out = old
-		out.Name, out.Columns, out.Query, out.Layout, out.IsDefault = v.Name, v.Columns, v.Query, v.Layout, v.IsDefault
+		out.Name, out.Columns, out.Query, out.Layout, out.Settings, out.IsDefault = v.Name, v.Columns, v.Query, v.Layout, v.Settings, v.IsDefault
 		if out.Columns == nil {
 			out.Columns = []string{}
 		}
 		if len(out.Query) == 0 {
 			out.Query = json.RawMessage(`{}`)
+		}
+		if len(out.Settings) == 0 {
+			out.Settings = json.RawMessage(`{}`)
 		}
 		out.Version, out.UpdatedAt = version+1, time.Now().UTC()
 		if out.IsDefault {

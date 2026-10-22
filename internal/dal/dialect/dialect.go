@@ -128,6 +128,14 @@ func (d Dialect) PathIDs(path, alias string) string {
 	return `json_each('["'||replace(trim(` + path + `,'/'),'/','","')||'"]') ` + alias
 }
 
+// FirstSegment is the text before the first '/' of text.
+func (d Dialect) FirstSegment(text string) string {
+	if d.Postgres {
+		return `split_part(` + text + `, '/', 1)`
+	}
+	return `substr(` + text + `,1,instr(` + text + `,'/')-1)`
+}
+
 // Prefix is the leading size characters of text; a timestamp is read as
 // UTC text first.
 func (d Dialect) Prefix(text string, size int, timestamp bool) string {

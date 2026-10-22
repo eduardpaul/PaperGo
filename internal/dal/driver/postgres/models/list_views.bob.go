@@ -35,6 +35,7 @@ type ListView struct {
 	Columns     types.JSON[[]string]        `db:"columns" `
 	Query       types.JSON[json.RawMessage] `db:"query" `
 	Layout      string                      `db:"layout" `
+	Settings    types.JSON[json.RawMessage] `db:"settings" `
 	IsDefault   bool                        `db:"is_default" `
 	Version     int64                       `db:"version" `
 
@@ -67,7 +68,7 @@ type listViewRLoaded struct {
 
 func buildListViewColumns(tableName string) listViewColumns {
 	columnsExpr := expr.NewColumnsExpr(
-		"id", "created_at", "updated_at", "container_id", "name", "system_key", "columns", "query", "layout", "is_default", "version",
+		"id", "created_at", "updated_at", "container_id", "name", "system_key", "columns", "query", "layout", "settings", "is_default", "version",
 	)
 
 	if tableName != "" {
@@ -86,6 +87,7 @@ func buildListViewColumns(tableName string) listViewColumns {
 		Columns:     buildListViewColumn(tableName, "columns"),
 		Query:       buildListViewColumn(tableName, "query"),
 		Layout:      buildListViewColumn(tableName, "layout"),
+		Settings:    buildListViewColumn(tableName, "settings"),
 		IsDefault:   buildListViewColumn(tableName, "is_default"),
 		Version:     buildListViewColumn(tableName, "version"),
 	}
@@ -103,6 +105,7 @@ type listViewColumns struct {
 	Columns     listViewColumn
 	Query       listViewColumn
 	Layout      listViewColumn
+	Settings    listViewColumn
 	IsDefault   listViewColumn
 	Version     listViewColumn
 }
@@ -159,12 +162,13 @@ type ListViewSetter struct {
 	Columns     omit.Val[types.JSON[[]string]]        `db:"columns" `
 	Query       omit.Val[types.JSON[json.RawMessage]] `db:"query" `
 	Layout      omit.Val[string]                      `db:"layout" `
+	Settings    omit.Val[types.JSON[json.RawMessage]] `db:"settings" `
 	IsDefault   omit.Val[bool]                        `db:"is_default" `
 	Version     omit.Val[int64]                       `db:"version" `
 }
 
 func (s ListViewSetter) SetColumns() []string {
-	vals := make([]string, 0, 11)
+	vals := make([]string, 0, 12)
 	if s.ID.IsValue() {
 		vals = append(vals, "id")
 	}
@@ -191,6 +195,9 @@ func (s ListViewSetter) SetColumns() []string {
 	}
 	if s.Layout.IsValue() {
 		vals = append(vals, "layout")
+	}
+	if s.Settings.IsValue() {
+		vals = append(vals, "settings")
 	}
 	if s.IsDefault.IsValue() {
 		vals = append(vals, "is_default")
@@ -228,6 +235,9 @@ func (s ListViewSetter) Overwrite(t *ListView) {
 	}
 	if s.Layout.IsValue() {
 		t.Layout = s.Layout.MustGet()
+	}
+	if s.Settings.IsValue() {
+		t.Settings = s.Settings.MustGet()
 	}
 	if s.IsDefault.IsValue() {
 		t.IsDefault = s.IsDefault.MustGet()
@@ -289,6 +299,11 @@ func (s *ListViewSetter) Apply(q *dialect.InsertQuery) {
 			}
 			return psql.Arg(s.Layout.MustGet()).WriteSQL(ctx, w, d, start)
 		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.Settings.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.Settings.MustGet()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
 			if s.IsDefault.IsUnset() {
 				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
 			}
@@ -306,7 +321,7 @@ func (s ListViewSetter) UpdateMod() bob.Mod[*dialect.UpdateQuery] {
 }
 
 func (s ListViewSetter) Expressions(prefix ...string) []bob.Expression {
-	exprs := make([]bob.Expression, 0, 11)
+	exprs := make([]bob.Expression, 0, 12)
 
 	if s.ID.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
@@ -371,6 +386,13 @@ func (s ListViewSetter) Expressions(prefix ...string) []bob.Expression {
 		}})
 	}
 
+	if s.Settings.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "settings")...),
+			psql.Arg(s.Settings),
+		}})
+	}
+
 	if s.IsDefault.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
 			psql.Quote(append(prefix, "is_default")...),
@@ -395,7 +417,7 @@ func listViewScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc, fu
 		idx int
 		dst func(o *ListView) any
 	}
-	targets := make([]target, 0, 11)
+	targets := make([]target, 0, 12)
 	for i, col := range cols {
 		switch col {
 		case "id":
@@ -416,6 +438,8 @@ func listViewScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc, fu
 			targets = append(targets, target{i, func(o *ListView) any { return &o.Query }})
 		case "layout":
 			targets = append(targets, target{i, func(o *ListView) any { return &o.Layout }})
+		case "settings":
+			targets = append(targets, target{i, func(o *ListView) any { return &o.Settings }})
 		case "is_default":
 			targets = append(targets, target{i, func(o *ListView) any { return &o.IsDefault }})
 		case "version":
@@ -782,6 +806,7 @@ type listViewWhere[Q psql.Filterable] struct {
 	Columns     psql.WhereMod[Q, types.JSON[[]string]]
 	Query       psql.WhereMod[Q, types.JSON[json.RawMessage]]
 	Layout      psql.WhereMod[Q, string]
+	Settings    psql.WhereMod[Q, types.JSON[json.RawMessage]]
 	IsDefault   psql.WhereMod[Q, bool]
 	Version     psql.WhereMod[Q, int64]
 	R           listViewWhereR[Q]
@@ -803,6 +828,7 @@ func buildListViewWhere[Q psql.Filterable](cols listViewColumns) listViewWhere[Q
 		Columns:     psql.Where[Q, types.JSON[[]string]](cols.Columns.Expression),
 		Query:       psql.Where[Q, types.JSON[json.RawMessage]](cols.Query.Expression),
 		Layout:      psql.Where[Q, string](cols.Layout.Expression),
+		Settings:    psql.Where[Q, types.JSON[json.RawMessage]](cols.Settings.Expression),
 		IsDefault:   psql.Where[Q, bool](cols.IsDefault.Expression),
 		Version:     psql.Where[Q, int64](cols.Version.Expression),
 		R:           listViewWhereR[Q]{cols: cols},

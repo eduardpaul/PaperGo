@@ -134,8 +134,9 @@ func (a *Scopes) Uniform(surface string) (string, bool) {
 	return "", false
 }
 
-// eligible returns the statement selecting q's eligible rows and its
-// arguments, a fresh slice the caller may extend.
+// eligible returns the statement selecting q's eligible rows, with the ID
+// of the surface each is read on, and its arguments, a fresh slice the
+// caller may extend.
 func (r *Repo) eligible(ctx context.Context, q *Query) (string, []any, error) {
 	if !q.built {
 		scopes, err := r.Scopes(ctx, q.collection, q.reader)
@@ -152,7 +153,7 @@ func (r *Repo) eligible(ctx context.Context, q *Query) (string, []any, error) {
 				// Without publishing, head content is the published surface.
 				selected, scopeArgs[0] = "'published'", nil
 			}
-			q.sql = "SELECT r.id," + q.ranks + " FROM resources r JOIN item_surfaces p ON p.item_id=r.id AND p.surface=" + selected + " WHERE r.container_id=? AND r.kind IN ('item','folder') AND r.deleted_at IS NULL AND " + readable + q.conds
+			q.sql = "SELECT r.id,p.id AS surface_id," + q.ranks + " FROM resources r JOIN item_surfaces p ON p.item_id=r.id AND p.surface=" + selected + " WHERE r.container_id=? AND r.kind IN ('item','folder') AND r.deleted_at IS NULL AND " + readable + q.conds
 			q.args = append(append(append(append(append([]any{}, q.rankArgs...), scopeArgs[0]...), q.collection), scopeArgs[1]...), q.condArgs...)
 		}
 		q.built = true
@@ -171,7 +172,7 @@ func (r *Repo) rowsIn(q *Query, collections []any) (string, []any) {
 	selected, surfaceArgs := r.acl.Surface("r.id", q.reader, q.surface)
 	args := append(append(append([]any{}, q.rankArgs...), surfaceArgs...), collections...)
 	var text strings.Builder
-	text.WriteString("SELECT r.id," + q.ranks + " FROM resources r JOIN item_surfaces p ON p.item_id=r.id AND p.surface=" + selected + " WHERE r.container_id IN (" + marks(len(collections)) + ") AND r.kind IN ('item','folder')" + q.conds)
+	text.WriteString("SELECT r.id,p.id AS surface_id," + q.ranks + " FROM resources r JOIN item_surfaces p ON p.item_id=r.id AND p.surface=" + selected + " WHERE r.container_id IN (" + marks(len(collections)) + ") AND r.kind IN ('item','folder')" + q.conds)
 	args = append(args, q.condArgs...)
 	// Cheap index filters come first, so the ACL probe runs only on rows
 	// that already match.
