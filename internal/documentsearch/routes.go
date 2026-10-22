@@ -319,10 +319,11 @@ func Holders(ctx context.Context, s *dms.Service, subject, workspaceID, collecti
 		return TermEntries{}, err
 	}
 	// Retained values keep merged source IDs; their words come from the
-	// target, so their entries change too.
+	// target, so their entries change too. Holders of a term below one of
+	// terms carry its words and keywords where they apply parents.
 	var aliases []string
 	for _, id := range terms {
-		expanded, err := s.TermFamily(ctx, id)
+		expanded, err := s.TermAliases(ctx, id)
 		if err != nil {
 			return TermEntries{}, err
 		}
@@ -332,7 +333,7 @@ func Holders(ctx context.Context, s *dms.Service, subject, workspaceID, collecti
 			}
 		}
 	}
-	items, err := s.EntriesWithTerms(ctx, workspaceID, collectionID, nil, aliases, after, termBatch)
+	items, err := s.EntriesWithTerms(ctx, workspaceID, collectionID, nil, aliases, terms, after, termBatch)
 	if err != nil {
 		return TermEntries{}, err
 	}

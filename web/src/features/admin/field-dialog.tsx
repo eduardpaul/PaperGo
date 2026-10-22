@@ -120,13 +120,15 @@ export function FieldDialog({
     options: { ...effectiveOptions, default_value: undefined },
   };
   const patchOptions = (patch: Partial<FieldOptions>) => setOptions((current) => ({ ...current, ...patch }));
+  // Keywords fields and fields that apply parent terms are always indexed.
+  const alwaysIndexed = type === 'keywords' || !!effectiveOptions.apply_parents;
   const save = useMutation({
     mutationFn: () => {
       const normalizedDefault = hasDefault ? valuesPatch([draft], {}, { [key]: defaultValue })?.[key] : undefined;
       const body = {
         label: label.trim(),
         required,
-        indexed: indexed || type === 'keywords',
+        indexed: indexed || alwaysIndexed,
         choices: type === 'choice' ? draft.choices : undefined,
         options: { ...effectiveOptions, default_value: normalizedDefault },
       };
@@ -345,11 +347,11 @@ export function FieldDialog({
         </label>
         <label className="flex gap-2">
           <Checkbox
-            checked={indexed || type === 'keywords'}
-            disabled={type === 'keywords'}
+            checked={indexed || alwaysIndexed}
+            disabled={alwaysIndexed}
             onChange={(event) => setIndexed(event.target.checked)}
           />
-          Use for filtering, sorting and grouping in views{type === 'keywords' ? ' (always on for keywords)' : ''}
+          Use for filtering, sorting and grouping in views{alwaysIndexed ? ' (always on for keywords and parent terms)' : ''}
         </label>
         <label className="flex gap-2">
           <Checkbox checked={!!options.unique} onChange={(event) => patchOptions({ unique: event.target.checked })} />

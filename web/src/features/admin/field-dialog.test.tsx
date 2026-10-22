@@ -94,7 +94,9 @@ it('sends apply_parents for taxonomy fields only', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Save field' }));
   await waitFor(() => expect(fetch.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(true));
   const [, init] = fetch.mock.calls.find(([, init]) => init?.method === 'POST')!;
-  expect(JSON.parse(String(init?.body)).options.apply_parents).toBe(true);
+  const body = JSON.parse(String(init?.body));
+  expect(body.options.apply_parents).toBe(true);
+  expect(body.indexed).toBe(true);
   fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'text' } });
   expect(screen.queryByLabelText(/Apply parent terms/)).toBeNull();
   client.clear();

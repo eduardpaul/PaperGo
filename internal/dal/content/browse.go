@@ -120,26 +120,43 @@ func (r *Repo) selective(ctx context.Context, c candidate) (bool, error) {
 	return n <= CandidateDriveLimit, err
 }
 
-// surfaceKeywords selects the canonical keywords that apply to the item
-// surface aliased p: its own keywords, which apply their parent terms too,
-// and its keyword and keyword-term field values, which do when their field
-// applies parents.
-func (r *Repo) surfaceKeywords() string {
-	return r.appliedTerms("SELECT keyword AS term,TRUE AS lineage FROM item_surface_keywords WHERE surface_id=p.id UNION ALL SELECT value_text,applies_parents FROM field_values WHERE surface_id=p.id AND (field_type='keywords' OR field_type='term' AND value_text IN (SELECT t.id FROM terms t JOIN term_sets ts ON ts.id=t.term_set_id WHERE ts.is_keywords OR t.available_as_keyword))")
+// keywordValue tests that the field value aliased f holds a keyword: a
+// keywords field value, or a term field value that is a keyword.
+const keywordValue = "(f.field_type='keywords' OR f.field_type='term' AND f.value_text IN (SELECT t.id FROM terms t JOIN term_sets ts ON ts.id=t.term_set_id WHERE ts.is_keywords OR t.available_as_keyword))"
+
+// surfaceKeywords selects the keyword sources of the item surface aliased
+// p, rows of a term and whether it applies its ancestors: its own keywords
+// do, its keyword field values do when their field applies parents.
+const surfaceKeywords = "SELECT keyword AS term,TRUE AS lineage FROM item_surface_keywords WHERE surface_id=p.id UNION ALL SELECT f.value_text,f.applies_parents FROM field_values f WHERE f.surface_id=p.id AND " + keywordValue
+
+// resourceKeywords selects the keyword sources of the resource aliased r:
+// its keywords, which apply their ancestors.
+const resourceKeywords = "SELECT keyword AS term,TRUE AS lineage FROM resource_keywords WHERE resource_id=r.id"
+
+// surfaceKeywordRows selects the keyword sources of the item surfaces p
+// that from and where select, as rows of owner, term and lineage. where
+// appears twice, so its arguments are given twice.
+func surfaceKeywordRows(owner, from, where string) string {
+	return "SELECT " + owner + " AS owner,k.keyword AS term,TRUE AS lineage " + from + " JOIN item_surface_keywords k ON k.surface_id=p.id WHERE " + where +
+		" UNION ALL SELECT " + owner + ",f.value_text,f.applies_parents " + from + " JOIN field_values f ON f.surface_id=p.id WHERE " + where + " AND " + keywordValue
 }
 
-// resourceKeywords selects the canonical keywords that apply to the
-// resource whose ID is the expression resource: its keywords and their
-// parent terms.
-func (r *Repo) resourceKeywords(resource string) string {
-	return r.appliedTerms("SELECT keyword AS term,TRUE AS lineage FROM resource_keywords WHERE resource_id=" + resource)
+// appliesKeyword tests that sources, rows of a term and whether it applies
+// its ancestors, apply the canonical term the expression keyword names: a
+// row holds it, or applies its ancestors and holds a term below it. A
+// merged term counts as the term it was merged into. Comparing paths keeps
+// to the term index, where listing each row's ancestors would not.
+func (r *Repo) appliesKeyword(sources, keyword string) string {
+	return "EXISTS(SELECT 1 FROM (" + sources + ") s JOIN terms t ON t.id=s.term JOIN terms c ON c.id=coalesce(t.merged_into_id,t.id) JOIN terms x ON x.id=" + keyword + " WHERE c.id=x.id OR s.lineage AND " + r.d.Below("c.path", "x.path") + ")"
 }
 
-// appliedTerms selects, once each, the canonical terms of sources, rows of
-// a term ID and whether it applies its ancestors: a merged term counts as
-// the term it was merged into, and that term's path lists its ancestors.
-func (r *Repo) appliedTerms(sources string) string {
-	return "SELECT DISTINCT a.value FROM (" + sources + ") s JOIN terms t ON t.id=s.term JOIN terms c ON c.id=coalesce(t.merged_into_id,t.id) CROSS JOIN " + r.d.PathIDs("c.path", "a") + " WHERE s.lineage OR a.value=c.id"
+// appliedKeywords selects each owner and canonical keyword that rows of
+// owner, term and lineage apply: a merged term counts as the term it was
+// merged into, and that term's path lists the ancestors a row applies. An
+// owner may repeat a keyword. Rows are joined, not correlated per owner, so
+// each term's ancestors are listed once per row.
+func (r *Repo) appliedKeywords(rows string) string {
+	return "SELECT s.owner,a.value AS keyword FROM (" + rows + ") s JOIN terms t ON t.id=s.term JOIN terms c ON c.id=coalesce(t.merged_into_id,t.id) CROSS JOIN " + r.d.PathIDs("c.path", "a") + " WHERE s.lineage OR a.value=c.id"
 }
 
 // family selects a term, its descendants and the terms merged into those:
@@ -255,7 +272,7 @@ func (r *Repo) BrowseIDs(ctx context.Context, b Browse) ([]string, error) {
 	add(visible, visibleArgs...)
 	if b.Keyword != "" {
 		selected, selectedArgs := r.acl.Surface("r.id", b.Reader, b.Surface)
-		cond := "(r.kind NOT IN ('item','folder') AND ? IN (" + r.resourceKeywords("r.id") + ") OR r.kind IN ('item','folder') AND EXISTS (SELECT 1 FROM item_surfaces p WHERE p.item_id=r.id AND p.surface=" + selected + " AND ? IN (" + r.surfaceKeywords() + ")))"
+		cond := "(r.kind NOT IN ('item','folder') AND " + r.appliesKeyword(resourceKeywords, "?") + " OR r.kind IN ('item','folder') AND EXISTS (SELECT 1 FROM item_surfaces p WHERE p.item_id=r.id AND p.surface=" + selected + " AND " + r.appliesKeyword(surfaceKeywords, "?") + "))"
 		a := append([]any{b.Keyword}, selectedArgs...)
 		add(cond, append(a, b.Keyword)...)
 	}

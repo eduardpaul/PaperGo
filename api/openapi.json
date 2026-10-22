@@ -21747,7 +21747,7 @@
           "apply_parents": {
             "type": "boolean",
             "default": false,
-            "description": "Term and keywords fields only, immutable. A value also applies its parent terms: eq, in and ne match values at or below a term, as under does, and keyword filters, keyword counts and search keywords include the parents. Values store only the picked terms. Item keywords always apply their parents."
+            "description": "Indexed term and keywords fields only, immutable. A value also applies its parent terms: eq, in and ne match values at or below a term, as under does, and keyword filters, keyword counts and search keywords include the parents. Values store only the picked terms. Item keywords always apply their parents."
           },
           "unique": {
             "type": "boolean",

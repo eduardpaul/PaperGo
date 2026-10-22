@@ -325,8 +325,8 @@ func validateFieldDefinition(d *catalog.FieldDefinition) error {
 	if (typ == "lookup") != (o.LookupContainerID != "") || (typ == "term") != (o.TermSetID != "") {
 		return invalid("reference fields require their matching reference scope")
 	}
-	if o.ApplyParents && !typ.Terms() {
-		return invalid("apply_parents requires a term or keywords field")
+	if o.ApplyParents && (!typ.Terms() || !d.Indexed) {
+		return invalid("apply_parents requires an indexed term or keywords field")
 	}
 	if typ == "keywords" && !d.Indexed {
 		return invalid("keywords fields must be indexed")

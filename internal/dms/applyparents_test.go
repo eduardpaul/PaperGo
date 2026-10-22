@@ -27,6 +27,9 @@ func TestTermFieldsApplyParents(t *testing.T) {
 	if _, err = s.CreateField(testContext, "alice", l.ID, CreateField{Key: "code", Label: "Code", Type: "text", Options: model.FieldOptions{ApplyParents: true}}); err == nil {
 		t.Fatal("apply_parents on a text field")
 	}
+	if _, err = s.CreateField(testContext, "alice", l.ID, CreateField{Key: "loose", Label: "Loose", Type: "term", Options: model.FieldOptions{TermSetID: regions.ID, ApplyParents: true}}); err == nil {
+		t.Fatal("apply_parents on an unindexed field")
+	}
 	for _, f := range []CreateField{
 		{Key: "places", Label: "Places", Type: "term", Indexed: true, Options: model.FieldOptions{TermSetID: regions.ID, Multiple: true, ApplyParents: true}},
 		{Key: "region", Label: "Region", Type: "term", Indexed: true, Options: model.FieldOptions{TermSetID: regions.ID}},

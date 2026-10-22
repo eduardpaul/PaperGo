@@ -18,11 +18,10 @@ import (
 // a managed set. Each item holds two leaf keywords of its own, two leaves in
 // places (multiple, apply_parents) and one in region (plain).
 type taxonomyBench struct {
-	s                         *Service
-	workspace, list           string
-	keywordRoot, keywordLeaf  string
-	placeRoot, placeLeaf      string
-	keywordRootFamily, leafID []string
+	s                        *Service
+	workspace, list          string
+	keywordRoot, keywordLeaf string
+	placeRoot, placeLeaf     string
 }
 
 func newTaxonomyBench(b *testing.B) *taxonomyBench {
@@ -102,12 +101,8 @@ func newTaxonomyBench(b *testing.B) *taxonomyBench {
 			b.Fatal(err)
 		}
 	}
-	family, err := s.TermFamily(ctx, keywordRoots[0])
-	if err != nil {
-		b.Fatal(err)
-	}
 	return &taxonomyBench{s: s, workspace: w.ID, list: l.ID, keywordRoot: keywordRoots[0], keywordLeaf: keywordLeaves[0],
-		placeRoot: placeRoots[0], placeLeaf: placeLeaves[0], keywordRootFamily: family, leafID: []string{keywordLeaves[0]}}
+		placeRoot: placeRoots[0], placeLeaf: placeLeaves[0]}
 }
 
 // BenchmarkTaxonomyReads times the reads parent terms change: keyword and
@@ -167,11 +162,11 @@ func BenchmarkTaxonomyReads(b *testing.B) {
 			}
 		}
 	})
-	for name, ids := range map[string][]string{"root-family": x.keywordRootFamily, "leaf": x.leafID} {
+	for name, term := range map[string]string{"root": x.keywordRoot, "leaf": x.keywordLeaf} {
 		b.Run("term-holders/"+name, func(b *testing.B) {
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
-				if _, err := x.s.EntriesWithTerms(ctx, x.workspace, "", nil, ids, "", 500); err != nil {
+				if _, err := x.s.EntriesWithTerms(ctx, x.workspace, "", nil, []string{term}, []string{term}, "", 500); err != nil {
 					b.Fatal(err)
 				}
 			}
