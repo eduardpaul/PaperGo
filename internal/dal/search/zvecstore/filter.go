@@ -60,7 +60,9 @@ func nativeFilter(f search.Filter) (string, error) {
 	if f.Archive == refs.ArchiveActive {
 		parts = append(parts, "archived = 0")
 	}
-	if f.Archive == refs.ArchiveArchived {
+	// Active documents store archived_at as 0, so a date bound also selects
+	// archived documents.
+	if f.Archive == refs.ArchiveArchived || !f.ArchivedFrom.IsZero() || !f.ArchivedTo.IsZero() {
 		parts = append(parts, "archived = 1")
 	}
 	if f.ArchivedBy != "" {

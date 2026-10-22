@@ -652,4 +652,14 @@ func archiveFiltering(t *testing.T, s search.Store) {
 	if err != nil || result.Total != 0 {
 		t.Fatal("archive date filter", result, err)
 	}
+	// A date bound matches only archived documents, whatever the selection.
+	for _, f := range []search.Filter{{ArchivedTo: later}, {ArchivedFrom: epoch.Add(-time.Hour)}} {
+		f.Archive, f.Access = refs.ArchiveAll, everyone
+		for _, text := range []*search.FullTextQuery{nil, search.Literal("invoice")} {
+			result, err = s.Search(ctx, search.Query{Filter: f, Text: text, Limit: 50})
+			if err != nil || result.Total != 1 || result.Hits[0].ResourceID != "archived" {
+				t.Fatal("archive date bound", f, text, result, err)
+			}
+		}
+	}
 }
