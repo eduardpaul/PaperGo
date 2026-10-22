@@ -7,7 +7,7 @@ source "${PAPERGO_NATIVE_DIR:-.tools/native}/env.sh"
 
 go mod download
 # The release planner tests need sqlite3def; the devcontainer provides it.
-if ! command -v sqlite3def >/dev/null && ! bash scripts/sqlite3def.sh; then
+if ! command -v sqlite3def >/dev/null && ! python3 scripts/sqlite3def.py; then
     printf 'sqlite3def could not be installed; release planner tests will fail until it is.\n' >&2
 fi
 npm ci --prefix web

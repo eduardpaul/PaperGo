@@ -1,5 +1,19 @@
 # syntax=docker/dockerfile:1
-FROM --platform=$BUILDPLATFORM node:24-alpine AS frontend
+# PaperGo's one Dockerfile, and the one place its toolchain is pinned:
+#   toolchain    Go, Node, Python, compilers, native SDKs, sqlite3def and the
+#                PostgreSQL client; the application is built in it
+#   development  the toolchain with editor and analysis tools: the
+#                devcontainer, CI's container jobs and scripts/ci.sh
+#   (default)    the production image
+# CI jobs that run outside the image read these versions with
+# scripts/toolchain-versions.py.
+ARG GO_VERSION=1.27.3
+ARG NODE_VERSION=24.15.0
+ARG CMAKE_VERSION=3.31.10
+
+FROM node:${NODE_VERSION}-bookworm-slim AS node
+
+FROM --platform=$BUILDPLATFORM node:${NODE_VERSION}-bookworm-slim AS frontend
 WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
@@ -40,32 +54,73 @@ COPY --from=laya-model / /src/.tools/decision/model/
 RUN --mount=type=cache,target=/src/.tools/embedding/models \
     python3 scripts/build-assets.py --output-dir /assets
 
-# Install the native SDKs once, including headers and license notices. Only
-# WebP is compiled here; zvec, PDFium, ONNX and tokenizers use pinned binaries.
-FROM python:3.12-slim-bookworm AS native
-RUN apt-get update && apt-get install -y --no-install-recommends gcc g++ make pkg-config \
-    && rm -rf /var/lib/apt/lists/* \
-    && pip install --no-cache-dir cmake==3.31.10
-WORKDIR /src
-COPY scripts/native.py scripts/native.json scripts/
-COPY scripts/native-notices scripts/native-notices
-RUN --mount=type=cache,target=/src/.tools/native-downloads python3 scripts/native.py
-
-FROM golang:1.27.3-bookworm AS build
-RUN apt-get update && apt-get install -y --no-install-recommends python3 \
+FROM golang:${GO_VERSION}-bookworm AS toolchain
+ARG CMAKE_VERSION
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl git libicu72 postgresql-client python3 python3-pip pkg-config sqlite3 sudo \
     && rm -rf /var/lib/apt/lists/*
+COPY --from=node /usr/local/bin/node /usr/local/bin/node
+COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+    && ln -s /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
+    && pip3 install --break-system-packages --no-cache-dir cmake==${CMAKE_VERSION}
+# The release planner is a build tool, never a production runtime dependency.
+COPY scripts/sqlite3def.py /opt/papergo/tools/
+RUN python3 /opt/papergo/tools/sqlite3def.py --directory /usr/local/bin
+# CI jobs run as root on a checkout another user owns; Git, and the VCS
+# stamping of go list and go build, would otherwise refuse the repository.
+RUN git config --system --add safe.directory '*'
+# The pinned cgo SDKs: headers, libraries and license notices. Only WebP is
+# compiled; zvec, PDFium, ONNX Runtime and tokenizers use pinned binaries.
+# Setup in a checkout rewrites their environment files for that checkout.
+COPY scripts/native.py scripts/native.json /opt/papergo/native-src/scripts/
+COPY scripts/native-notices /opt/papergo/native-src/scripts/native-notices
+RUN python3 /opt/papergo/native-src/scripts/native.py --directory /opt/papergo/native \
+    && rm -rf /opt/papergo/native/sdk /opt/papergo/native-src/.tools
+ENV PAPERGO_NATIVE_DIR=/opt/papergo/native
+
+FROM toolchain AS development
+# Editor and CI tools are part of the image; opening a checkout never
+# installs a newer one.
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    GOBIN=/usr/local/bin go install -p 2 golang.org/x/tools/gopls@v0.23.0 \
+    && GOBIN=/usr/local/bin go install -p 2 github.com/go-delve/delve/cmd/dlv@v1.27.2 \
+    && GOBIN=/usr/local/bin go install -p 2 honnef.co/go/tools/cmd/staticcheck@v0.7.0-0.dev.0.20261009230814-452d5bb86b45 \
+    && GOBIN=/usr/local/bin go install -p 2 golang.org/x/vuln/cmd/govulncheck@v1.9.0
+RUN groupadd --gid 1000 vscode \
+    && useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash vscode \
+    && printf 'vscode ALL=(root) NOPASSWD:ALL\n' > /etc/sudoers.d/vscode \
+    && chmod 0440 /etc/sudoers.d/vscode \
+    && mkdir -p /home/vscode/go/pkg/mod /home/vscode/.cache \
+    # scripts/ci.sh copies a checkout to /work; its cache volumes start out
+    # owned by vscode because these directories are.
+    && mkdir -p /work/web/node_modules /work/web/dist /work/sdk/node_modules /work/.cache/checks \
+    && chown -R vscode:vscode /home/vscode /work \
+    # The devcontainer can renumber vscode to the host user; setup in any
+    # checkout rewrites the SDK's environment files for that checkout.
+    && chmod -R a+rwX /opt/papergo/native
+# Every tool cache, Staticcheck's included, stays under /home/vscode/.cache,
+# whichever user runs the container.
+ENV GOPATH=/home/vscode/go \
+    GOMODCACHE=/home/vscode/go/pkg/mod \
+    GOCACHE=/home/vscode/.cache/go-build \
+    XDG_CACHE_HOME=/home/vscode/.cache \
+    npm_config_cache=/home/vscode/.cache/npm \
+    PATH=/usr/local/go/bin:/home/vscode/go/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
+USER vscode
+
+FROM toolchain AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-COPY --from=native /src/.tools/native /src/.tools/native
 COPY --from=frontend /src/web/dist ./web/dist
 ARG VERSION=development
 ARG COMMIT=unknown
 ARG BUILD_DATE=unknown
 RUN --mount=type=cache,target=/root/.cache/go-build \
-    . .tools/native/env.sh \
-    && python3 scripts/build-binaries.py --output-dir /out/bin \
+    python3 scripts/build-binaries.py --output-dir /out/bin \
        --ldflags="-s -w -X papergo/internal/buildinfo.Version=$VERSION -X papergo/internal/buildinfo.Commit=$COMMIT -X papergo/internal/buildinfo.Date=$BUILD_DATE" \
     && mkdir -p /state/blobs
 

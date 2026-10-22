@@ -29,7 +29,7 @@ volumes=(papergo-ci-go-mod:/home/vscode/go/pkg/mod papergo-ci-cache:/home/vscode
 
 # The tag CI computes the same way: a hash of every toolchain image input.
 tag() {
-    find .devcontainer/Dockerfile scripts/native.py scripts/native.json scripts/native-notices -type f -print0 \
+    find Dockerfile scripts/native.py scripts/native.json scripts/native-notices scripts/sqlite3def.py -type f -print0 \
         | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -c1-16
 }
 
@@ -41,7 +41,7 @@ image() {
             docker tag "$registry:$(tag)" "$local_tag"
         else
             printf 'Building the toolchain image %s...\n' "$local_tag" >&2
-            docker build --file .devcontainer/Dockerfile --tag "$local_tag" . >&2
+            docker build --target development --tag "$local_tag" . >&2
         fi
     fi
     printf '%s\n' "$local_tag"

@@ -117,7 +117,7 @@
     },
     {
       "label": "PaperGo: install sqlite3def",
-      "type": "process", "command": "bash", "args": ["scripts/sqlite3def.sh"],
+      "type": "process", "command": "python3", "args": ["scripts/sqlite3def.py"],
       "problemMatcher": [], "options": { "cwd": "${workspaceFolder}" }
     },
     {
