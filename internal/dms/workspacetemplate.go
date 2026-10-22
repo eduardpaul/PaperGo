@@ -40,7 +40,7 @@ func (s *Service) bindWorkspaceTemplate(ctx context.Context, p *corePackage, sub
 		} else {
 			for _, row := range data.Rows {
 				for i, column := range data.Columns {
-					identity := column == "created_by" || column == "updated_by" || column == "modified_by" || column == "owner_id"
+					identity := column == "created_by" || column == "updated_by" || column == "modified_by" || column == "archived_by" || column == "owner_id"
 					if column == "principal_id" {
 						for j, key := range data.Columns {
 							if key == "principal_type" && row[j] == "user" {
