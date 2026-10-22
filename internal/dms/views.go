@@ -43,13 +43,15 @@ func (s *Service) validateView(ctx context.Context, subject, containerID string,
 	if e != nil {
 		return e
 	}
-	known := map[string]bool{"$archived_at": true, "$archived_by": true, "$id": true, "$name": true, "$keywords": true, "$created_at": true, "$created_by": true, "$modified_at": true, "$modified_by": true}
+	known := map[string]bool{}
 	for _, d := range defs {
 		known[d.Key] = true
 	}
 	seen := map[string]bool{}
 	for _, col := range in.Columns {
-		if !known[col] || seen[col] {
+		// $file_type only filters: items carry no file type to show.
+		builtin := builtinColumn(col) && col != "$file_type"
+		if !known[col] && !builtin || seen[col] {
 			return invalid("view columns must be unique known fields")
 		}
 		seen[col] = true

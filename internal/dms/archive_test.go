@@ -307,3 +307,15 @@ func TestArchiveItemsRangeComparesInstants(t *testing.T) {
 		}
 	}
 }
+
+func TestViewColumnsAcceptBuiltinFields(t *testing.T) {
+	s, _, c := fixture(t)
+	if _, err := s.CreateView(testContext, "alice", c.ID, ViewInput{Name: "Archive columns", Columns: []string{"$name", "$archived_at", "$archived_by", "$keywords"}}); err != nil {
+		t.Fatal(err)
+	}
+	for _, column := range []string{"$file_type", "$unknown"} {
+		if _, err := s.CreateView(testContext, "alice", c.ID, ViewInput{Name: column, Columns: []string{column}}); err == nil {
+			t.Fatal("accepted view column", column)
+		}
+	}
+}
