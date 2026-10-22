@@ -4,6 +4,8 @@
 // @ts-ignore
 import { createListViewFromDiscriminatorValue, createProblemFromDiscriminatorValue, serializeListView, serializeViewInput, type ListView, type Problem, type ViewInput } from '../../../models/index.js';
 // @ts-ignore
+import { NavigationRequestBuilderRequestsMetadata, type NavigationRequestBuilder } from './navigation/index.js';
+// @ts-ignore
 import { QueryRequestBuilderNavigationMetadata, QueryRequestBuilderRequestsMetadata, type QueryRequestBuilder } from './query/index.js';
 // @ts-ignore
 import { type BaseRequestBuilder, type KeysToExcludeForNavigationMetadata, type NavigationMetadata, type Parsable, type ParsableFactory, type RequestConfiguration, type RequestInformation, type RequestsMetadata } from '@microsoft/kiota-abstractions';
@@ -12,6 +14,10 @@ import { type BaseRequestBuilder, type KeysToExcludeForNavigationMetadata, type 
  * Builds and executes requests for operations under /v1/views/{id}
  */
 export interface ViewsItemRequestBuilder extends BaseRequestBuilder<ViewsItemRequestBuilder> {
+    /**
+     * The navigation property
+     */
+    get navigation(): NavigationRequestBuilder;
     /**
      * The query property
      */
@@ -39,7 +45,7 @@ export interface ViewsItemRequestBuilder extends BaseRequestBuilder<ViewsItemReq
      get(requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<ListView | undefined>;
     /**
      *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
-     * @param body Collection-managed saved view. Columns use field keys and $id/$name/$keywords; empty columns default to $name. PUT replaces the definition. Layout is a client hint.
+     * @param body Collection-managed saved view. Columns use field keys and $id/$name/$keywords; empty columns default to $name. PUT replaces the definition. Layout is a client hint; a navigation view browses the terms of settings.field as folders (POST /v1/views/{id}/navigation) and lists the items of a term through POST /v1/views/{id}/query with term_id or no_value.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<ListView>}
      * @throws {Problem} error when the service returns a 400 status code
@@ -69,7 +75,7 @@ export interface ViewsItemRequestBuilder extends BaseRequestBuilder<ViewsItemReq
      toGetRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined) : RequestInformation;
     /**
      *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
-     * @param body Collection-managed saved view. Columns use field keys and $id/$name/$keywords; empty columns default to $name. PUT replaces the definition. Layout is a client hint.
+     * @param body Collection-managed saved view. Columns use field keys and $id/$name/$keywords; empty columns default to $name. PUT replaces the definition. Layout is a client hint; a navigation view browses the terms of settings.field as folders (POST /v1/views/{id}/navigation) and lists the items of a term through POST /v1/views/{id}/query with term_id or no_value.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */
@@ -83,6 +89,9 @@ export const ViewsItemRequestBuilderUriTemplate = "{+baseurl}/v1/views/{id}";
  * Metadata for all the navigation properties in the request builder.
  */
 export const ViewsItemRequestBuilderNavigationMetadata: Record<Exclude<keyof ViewsItemRequestBuilder, KeysToExcludeForNavigationMetadata>, NavigationMetadata> = {
+    navigation: {
+        requestsMetadata: NavigationRequestBuilderRequestsMetadata,
+    },
     query: {
         requestsMetadata: QueryRequestBuilderRequestsMetadata,
         navigationMetadata: QueryRequestBuilderNavigationMetadata,

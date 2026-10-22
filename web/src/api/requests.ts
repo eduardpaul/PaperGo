@@ -115,6 +115,24 @@ export function viewRowsRequest(collectionId: string, view: ViewLike, extra: Fil
   };
 }
 
+/** One level of a navigation view's terms: the roots, or the children of a term. */
+export function navigationRequest(viewId: string, parentId?: string): ApiCall {
+  return { path: `/v1/views/${viewId}/navigation`, method: 'POST', query: { $top: 200 }, body: parentId ? { parent_id: parentId } : {} };
+}
+
+/** The items a navigation view lists at a term, or with `none` those holding no term. */
+export function navigationItemsRequest(viewId: string, term: string, top = 50): ApiCall {
+  return {
+    path: `/v1/views/${viewId}/query`,
+    method: 'POST',
+    query: { $top: top },
+    body: term === noTerm ? { no_value: true } : { term_id: term },
+  };
+}
+
+/** The URL value of a navigation view's "No value" node. */
+export const noTerm = 'none';
+
 /** How many items of a view fall in each value of its grouping field (board column counts). */
 export function viewGroupsRequest(collectionId: string, view: ViewLike): ApiCall {
   const { sort: _sort, ...query } = view.query ?? {};

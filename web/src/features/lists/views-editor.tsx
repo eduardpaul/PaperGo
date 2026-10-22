@@ -5,7 +5,7 @@ import { api } from '@/api/http';
 import { allPages } from '@/api/pages';
 import { keys } from '@/api/queries';
 import { useAccess } from './access';
-import type { ContentType, FieldDefinition, ListView, QuerySpec } from '@/api/types';
+import type { ContentType, FieldDefinition, ListView, QuerySpec, ViewSettings } from '@/api/types';
 import { FormDialog } from '@/components/form-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -124,6 +124,7 @@ function ViewDialog({
   const [layout, setLayout] = useState(view?.layout ?? 'table');
   const [isDefault, setIsDefault] = useState(!!view?.is_default);
   const [query, setQuery] = useState<QuerySpec>(view?.query ?? {});
+  const [settings, setSettings] = useState<ViewSettings>(view?.settings ?? {});
   const queryable = [
     ...systemFields,
     ...fields.filter((field) => field.indexed && (!field.index_status || field.index_status === 'ready')),
@@ -135,7 +136,18 @@ function ViewDialog({
       : layout === 'calendar'
         ? sortable.filter((field) => ['date', 'datetime'].includes(field.type))
         : sortable;
-  const validLayout = !['board', 'calendar'].includes(layout) || grouping.some((field) => field.key === query.group_by);
+  // A navigation view browses item keywords or a taxonomy or keywords column as folders.
+  const navigable = [
+    { key: '$keywords', label: 'Keywords', type: 'keywords', options: { apply_parents: true } } as FieldDefinition,
+    ...queryable.filter((field) => field.type === 'term' || field.type === 'keywords'),
+  ];
+  const navigated = navigable.find((field) => field.key === settings.field);
+  // Items tagged below a term hold the term itself where parents apply, so subterms always count.
+  const parentsApply = !!navigated?.options?.apply_parents;
+  const validLayout =
+    layout === 'navigation'
+      ? !!navigated
+      : !['board', 'calendar'].includes(layout) || grouping.some((field) => field.key === query.group_by);
   const patchQuery = (patch: Partial<QuerySpec>) => setQuery((current) => ({ ...current, ...patch }));
   const save = useMutation({
     mutationFn: () =>
@@ -146,6 +158,7 @@ function ViewDialog({
           name: name.trim(),
           columns,
           layout,
+          settings: layout === 'navigation' ? settings : {},
           is_default: isDefault,
           query: { ...query, filter: normalizeFilter(query.filter, queryable) },
         },
@@ -189,6 +202,7 @@ function ViewDialog({
             ['board', 'Board (cards grouped by a choice column)'],
             ['calendar', 'Calendar (by a date column)'],
             ['gallery', 'Gallery (cards)'],
+            ['navigation', 'Navigation (browse a taxonomy as folders)'],
           ].map(([value, label]) => (
             <option key={value} value={value}>
               {label}
@@ -262,19 +276,65 @@ function ViewDialog({
             </option>
           ))}
         </Select>
-        <Label htmlFor="view-group">Group or calendar field</Label>
-        <Select
-          id="view-group"
-          value={query.group_by ?? ''}
-          onChange={(event) => patchQuery({ group_by: event.target.value || undefined })}
-        >
-          <option value="">None</option>
-          {grouping.map((field) => (
-            <option key={field.key} value={field.key}>
-              {field.label}
-            </option>
-          ))}
-        </Select>
+        {layout === 'navigation' ? (
+          <fieldset className="grid gap-2 rounded-lg border p-3">
+            <legend className="px-1 font-medium">Navigation</legend>
+            <Label htmlFor="view-navigate">Navigate by</Label>
+            <Select
+              id="view-navigate"
+              required
+              value={settings.field ?? ''}
+              onChange={(event) => setSettings((current) => ({ ...current, field: event.target.value || undefined, include_subterms: undefined }))}
+            >
+              <option value="">Choose a taxonomy or keywords column…</option>
+              {navigable.map((field) => (
+                <option key={field.key} value={field.key}>
+                  {field.label}
+                </option>
+              ))}
+            </Select>
+            <label className="flex gap-2">
+              <Checkbox
+                checked={parentsApply || !!settings.include_subterms}
+                disabled={!navigated || parentsApply}
+                onChange={(event) => setSettings((current) => ({ ...current, include_subterms: event.target.checked || undefined }))}
+              />
+              Show items of subterms at each term
+            </label>
+            <p className="text-xs text-muted">
+              {!navigated
+                ? 'Each term becomes a folder of the items tagged with it.'
+                : parentsApply
+                  ? `${navigated.label} applies parent terms, so a term always shows the items tagged below it (Fiscal shows Fiscal > Q1).`
+                  : settings.include_subterms
+                    ? `A term shows the items tagged with it or any term below it (Fiscal shows Fiscal > Q1).`
+                    : `A term shows only the items tagged with it; items tagged with a subterm appear when you open that subterm.`}
+            </p>
+            <label className="flex gap-2">
+              <Checkbox
+                checked={!!settings.hide_empty}
+                onChange={(event) => setSettings((current) => ({ ...current, hide_empty: event.target.checked || undefined }))}
+              />
+              Hide terms without items
+            </label>
+          </fieldset>
+        ) : (
+          <>
+            <Label htmlFor="view-group">Group or calendar field</Label>
+            <Select
+              id="view-group"
+              value={query.group_by ?? ''}
+              onChange={(event) => patchQuery({ group_by: event.target.value || undefined })}
+            >
+              <option value="">None</option>
+              {grouping.map((field) => (
+                <option key={field.key} value={field.key}>
+                  {field.label}
+                </option>
+              ))}
+            </Select>
+          </>
+        )}
         <fieldset>
           <legend className="mb-2 font-medium">Sort</legend>
           {(query.sort ?? []).map((sort, index) => (

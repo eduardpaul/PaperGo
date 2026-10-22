@@ -158,9 +158,38 @@ export interface ListView {
   name: string;
   columns?: string[] | null;
   layout?: string;
+  /** Layout settings: the field a navigation view browses. */
+  settings?: ViewSettings;
   is_default?: boolean;
   version: number;
   query?: QuerySpec;
+}
+
+export interface ViewSettings {
+  /** `$keywords` or a term or keywords field. */
+  field?: string;
+  /** Items below a term show at it too; unset follows the field. */
+  include_subterms?: boolean;
+  /** Leave out terms no item holds at or below them. */
+  hide_empty?: boolean;
+}
+
+/** A term of a navigation view's level with the items it lists and those at or below it. */
+export interface NavigationNode {
+  term_id: string;
+  name: string;
+  has_children: boolean;
+  count: number;
+  subtree_count: number;
+}
+
+export interface NavigationPage extends Page<NavigationNode> {
+  field: string;
+  term_set_id: string;
+  include_subterms: boolean;
+  hide_empty: boolean;
+  parent_id?: string;
+  no_value_count?: number;
 }
 
 export interface FilterExpr {
@@ -328,6 +357,7 @@ export interface Term {
   id: string;
   name: string;
   term_set_id?: string;
+  parent_id?: string | null;
   path?: string;
 }
 
