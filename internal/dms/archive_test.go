@@ -282,3 +282,28 @@ func TestArchiveTimeFiltersCompareInstants(t *testing.T) {
 		}
 	}
 }
+
+func TestArchiveItemsRangeComparesInstants(t *testing.T) {
+	s, _, c := fixture(t)
+	item := create(t, s, c.ID, "item", "Dated", nil)
+	archived, err := s.SetArchived(testContext, "alice", item.ID, item.Version, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := archived.ArchivedAt.UTC()
+	zone := time.FixedZone("ahead", 2*60*60)
+	for _, tc := range []struct {
+		in   ArchiveQuery
+		want int
+	}{
+		{ArchiveQuery{From: at.Add(-time.Minute).In(zone)}, 1},
+		{ArchiveQuery{From: at.Add(time.Minute).In(zone)}, 0},
+		{ArchiveQuery{To: at.Add(time.Minute).In(zone)}, 1},
+		{ArchiveQuery{To: at.Add(-time.Minute).In(zone)}, 0},
+	} {
+		out, err := s.ArchiveItems(testContext, "alice", tc.in)
+		if err != nil || len(out.Data) != tc.want {
+			t.Fatalf("archive range %+v: %+v %v", tc.in, out, err)
+		}
+	}
+}

@@ -140,13 +140,13 @@ func (r *Repo) BrowseIDs(ctx context.Context, b Browse) ([]string, error) {
 		add("r.archived_by=?", b.ArchivedBy)
 	}
 	if !b.ArchivedFrom.IsZero() {
-		add("r.archived_at>=?", b.ArchivedFrom)
+		add("r.archived_at>=?", b.ArchivedFrom.UTC())
 	}
 	if !b.ArchivedTo.IsZero() {
-		add("r.archived_at<=?", b.ArchivedTo)
+		add("r.archived_at<=?", b.ArchivedTo.UTC())
 	}
 	if !b.BeforeArchivedAt.IsZero() {
-		add("(r.archived_at,r.id)<(?,?)", b.BeforeArchivedAt, b.BeforeArchivedID)
+		add("(r.archived_at,r.id)<(?,?)", b.BeforeArchivedAt.UTC(), b.BeforeArchivedID)
 	}
 	if b.Kind != "" {
 		add("r.kind=?", string(b.Kind))
