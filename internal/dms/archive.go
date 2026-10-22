@@ -94,7 +94,7 @@ func (s *Service) archiveItems(ctx context.Context, subject string, in ArchiveQu
 		}{subject, normalized})
 		sum := sha256.Sum256(raw)
 		fingerprint := hex.EncodeToString(sum[:])
-		b := content.Browse{Reader: principal(ctx, subject), Surface: "auto", GlobalItems: true, WorkspaceID: in.WorkspaceID, CollectionID: in.CollectionID, ContentTypeID: in.ContentTypeID, Archive: refs.ArchiveArchived, Keyword: keyword, ArchivedBy: in.ArchivedBy, ArchivedFrom: in.From, ArchivedTo: in.To, Limit: pageSize(in.Limit) + 1}
+		b := content.Browse{Reader: principal(ctx, subject), Surface: "auto", GlobalItems: true, Order: content.NewestArchived, WorkspaceID: in.WorkspaceID, CollectionID: in.CollectionID, ContentTypeID: in.ContentTypeID, Archive: refs.ArchiveArchived, Keyword: keyword, ArchivedBy: in.ArchivedBy, ArchivedFrom: in.From, ArchivedTo: in.To, Limit: pageSize(in.Limit) + 1}
 		if strings.TrimSpace(in.Search) != "" {
 			b.Search = &content.SearchMatch{ByName: true, Name: refs.FoldName(strings.TrimSpace(in.Search))}
 		}

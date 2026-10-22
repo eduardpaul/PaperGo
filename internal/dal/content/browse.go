@@ -3,6 +3,7 @@ package content
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -13,16 +14,21 @@ import (
 )
 
 // Browse selects the live resources a reader lists below a parent, in a
-// workspace or, with neither, the workspaces, in ID order.
+// workspace or, with neither, the workspaces, in Order.
 type Browse struct {
-	Archive                                    refs.ArchiveSelection
-	GlobalItems                                bool
-	CollectionID, ContentTypeID, ArchivedBy    string
-	ArchivedFrom, ArchivedTo, BeforeArchivedAt time.Time
-	BeforeArchivedID                           string
-	Reader                                     access.Principal
-	ParentID, WorkspaceID                      string
-	Kind                                       refs.ResourceKind
+	Archive refs.ArchiveSelection
+	// GlobalItems selects items in every collection, or in WorkspaceID.
+	GlobalItems                             bool
+	CollectionID, ContentTypeID, ArchivedBy string
+	ArchivedFrom, ArchivedTo                time.Time
+	// BeforeArchivedAt and BeforeArchivedID page NewestArchived: items
+	// archived before BeforeArchivedAt, or then with a smaller ID.
+	BeforeArchivedAt      time.Time
+	BeforeArchivedID      string
+	Order                 BrowseOrder
+	Reader                access.Principal
+	ParentID, WorkspaceID string
+	Kind                  refs.ResourceKind
 	// Surface is head, published or auto: the surface the reader reads,
 	// auto being the head when they may read drafts.
 	Surface string
@@ -33,6 +39,16 @@ type Browse struct {
 	AfterID string
 	Limit   int
 }
+
+// BrowseOrder sorts browsed resources.
+type BrowseOrder uint8
+
+const (
+	BrowseByID BrowseOrder = iota
+	// NewestArchived sorts archived items by archive time, newest first,
+	// then by ID descending.
+	NewestArchived
+)
 
 // SearchMatch matches workspaces and collections whose folded name
 // contains Name, and the items and folders a text matcher found on each
@@ -110,6 +126,12 @@ const SurfaceKeywords = "SELECT keyword FROM item_surface_keywords WHERE surface
 
 // BrowseIDs returns the IDs of the resources b selects.
 func (r *Repo) BrowseIDs(ctx context.Context, b Browse) ([]string, error) {
+	if b.Order == NewestArchived && b.Archive != refs.ArchiveArchived {
+		return nil, fmt.Errorf("archive order needs archived resources, not %q", b.Archive)
+	}
+	if !b.BeforeArchivedAt.IsZero() && b.Order != NewestArchived {
+		return nil, errors.New("an archive cursor needs archive order")
+	}
 	where := []string{"r.deleted_at IS NULL"}
 	args := []any{}
 	add := func(cond string, a ...any) {
@@ -231,7 +253,7 @@ func (r *Repo) BrowseIDs(ctx context.Context, b Browse) ([]string, error) {
 		add(cond, append(a, f.Key, string(f.Type), f.Scale, f.Value)...)
 	}
 	order := "r.id"
-	if b.GlobalItems {
+	if b.Order == NewestArchived {
 		order = "r.archived_at DESC,r.id DESC"
 	}
 	query := "SELECT r.id FROM resources r WHERE " + strings.Join(where, " AND ") + " ORDER BY " + order
