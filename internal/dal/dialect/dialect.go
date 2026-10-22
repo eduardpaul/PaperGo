@@ -112,11 +112,10 @@ func (d Dialect) JSONText(column, key string) string {
 }
 
 // Below tests that the materialized path child lies in the subtree rooted
-// at path root, the root included. Paths end with a separator.
+// at path root, the root included. Paths end with a separator and compare
+// as bytes, so the subtree is one range of the path index: '0' is the byte
+// after '/'.
 func (d Dialect) Below(child, root string) string {
-	if d.Postgres {
-		return `starts_with(` + child + `, ` + root + `)`
-	}
 	return child + `>=` + root + ` AND ` + child + `<substr(` + root + `,1,length(` + root + `)-1)||'0'`
 }
 

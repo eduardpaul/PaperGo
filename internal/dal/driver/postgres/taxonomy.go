@@ -183,8 +183,9 @@ func (q Queries) TermParents(ctx context.Context, ids []string) ([]string, error
 }
 
 func (q Queries) SubtreeDepth(ctx context.Context, path string) (int, error) {
-	rows, err := directoryRows(ctx, q.exec, `SELECT coalesce(max(length(path) - length(replace(path, '/', ''))), 0) FROM terms WHERE starts_with(path, $1) AND path <> $1`,
-		func(r scan.Rows) (int, error) { var n int; err := r.Scan(&n); return n, err }, path)
+	lo, hi := subtree(path)
+	rows, err := directoryRows(ctx, q.exec, `SELECT coalesce(max(length(path) - length(replace(path, '/', ''))), 0) FROM terms WHERE path > $1 AND path < $2`,
+		func(r scan.Rows) (int, error) { var n int; err := r.Scan(&n); return n, err }, lo, hi)
 	if err != nil || len(rows) == 0 || rows[0] == 0 {
 		return 0, err
 	}
@@ -207,7 +208,8 @@ func (q Queries) UpdateTerm(ctx context.Context, t taxonomy.Term) (bool, error) 
 }
 
 func (q Queries) MoveSubtree(ctx context.Context, from, to, set string, at time.Time) error {
-	_, err := q.exec.ExecContext(ctx, `UPDATE terms SET path = $1::text || substr(path, $2::integer), term_set_id = $3, updated_at = $4 WHERE starts_with(path, $5) AND path <> $5`, to, len(from)+1, set, at, from)
+	lo, hi := subtree(from)
+	_, err := q.exec.ExecContext(ctx, `UPDATE terms SET path = $1::text || substr(path, $2::integer), term_set_id = $3, updated_at = $4 WHERE path > $5 AND path < $6`, to, len(from)+1, set, at, lo, hi)
 	return dberr.Translate(err)
 }
 
@@ -223,12 +225,12 @@ func (q Queries) MatchTerms(ctx context.Context, terms, values []string) ([]stri
 	return directoryRows(ctx, q.exec, `SELECT DISTINCT j.value FROM jsonb_array_elements_text($1::jsonb) j(value)
 JOIN terms r ON r.id = coalesce((SELECT merged_into_id FROM terms WHERE id = j.value), j.value)
 CROSS JOIN jsonb_array_elements_text($2::jsonb) v(value) JOIN terms t ON t.id = coalesce((SELECT merged_into_id FROM terms WHERE id = v.value), v.value)
-WHERE starts_with(t.path, r.path)`,
+WHERE t.path >= r.path AND t.path < substr(r.path, 1, length(r.path) - 1) || '0'`,
 		func(r scan.Rows) (string, error) { var id string; err := r.Scan(&id); return id, err }, string(roots), string(held))
 }
 
 func (q Queries) TermFamily(ctx context.Context, id string) ([]string, error) {
-	subtree := `terms r JOIN terms t ON starts_with(t.path, r.path) WHERE r.id = $1`
+	subtree := `terms r JOIN terms t ON t.path >= r.path AND t.path < substr(r.path, 1, length(r.path) - 1) || '0' WHERE r.id = $1`
 	return directoryRows(ctx, q.exec, `SELECT t.id FROM `+subtree+` UNION SELECT m.id FROM terms m WHERE m.merged_into_id IN (SELECT t.id FROM `+subtree+`)`,
 		func(r scan.Rows) (string, error) { var v string; err := r.Scan(&v); return v, err }, id)
 }
@@ -263,6 +265,11 @@ func (q Queries) TagSurface(ctx context.Context, surfaceID string, termIDs []str
 	return dberr.Translate(err)
 }
 
+// subtree bounds the paths strictly below path: every descendant's path
+// starts with path, and paths compare as bytes, where '0' is the byte after
+// '/'.
+func subtree(path string) (lo, hi string) { return path, path[:len(path)-1] + "0" }
+
 func termWhere(f taxonomy.TermFilter) bob.Expression {
 	c := models.Terms.Columns
 	where := []bob.Expression{psql.Raw("TRUE")}
@@ -279,13 +286,14 @@ func termWhere(f taxonomy.TermFilter) bob.Expression {
 		where = append(where, c.ParentID.IsNull())
 	}
 	if f.Under != "" {
-		// starts_with compares bytes; path ranges would follow the collation.
-		where = append(where, psql.Raw(`starts_with("terms"."path", ?)`, f.Under), c.Path.NE(psql.Arg(f.Under)))
+		lo, hi := subtree(f.Under)
+		where = append(where, c.Path.GT(psql.Arg(lo)), c.Path.LT(psql.Arg(hi)))
 	}
 	if s := f.Scope; s != nil {
 		either := []bob.Expression{psql.Raw("FALSE")}
 		if s.Path != "" {
-			either = append(either, psql.Raw(`starts_with("terms"."path", ?)`, s.Path))
+			_, hi := subtree(s.Path)
+			either = append(either, psql.And(c.Path.GTE(psql.Arg(s.Path)), c.Path.LT(psql.Arg(hi))))
 		}
 		if len(s.IDs) > 0 {
 			either = append(either, c.ID.In(psql.Arg(anys(s.IDs)...)))

@@ -124,15 +124,6 @@ func (r *Repo) selective(ctx context.Context, c candidate) (bool, error) {
 // keywords field value, or a term field value that is a keyword.
 const keywordValue = "(f.field_type='keywords' OR f.field_type='term' AND f.value_text IN (SELECT t.id FROM terms t JOIN term_sets ts ON ts.id=t.term_set_id WHERE ts.is_keywords OR t.available_as_keyword))"
 
-// surfaceKeywords selects the keyword sources of the item surface aliased
-// p, rows of a term and whether it applies its ancestors: its own keywords
-// do, its keyword field values do when their field applies parents.
-const surfaceKeywords = "SELECT keyword AS term,TRUE AS lineage FROM item_surface_keywords WHERE surface_id=p.id UNION ALL SELECT f.value_text,f.applies_parents FROM field_values f WHERE f.surface_id=p.id AND " + keywordValue
-
-// resourceKeywords selects the keyword sources of the resource aliased r:
-// its keywords, which apply their ancestors.
-const resourceKeywords = "SELECT keyword AS term,TRUE AS lineage FROM resource_keywords WHERE resource_id=r.id"
-
 // surfaceKeywordRows selects the keyword sources of the item surfaces in
 // the table scope, of columns owner and surface, as rows of owner, term
 // and lineage. Name scope in a WITH clause: it is read twice.
@@ -141,13 +132,28 @@ func surfaceKeywordRows(scope string) string {
 		" UNION ALL SELECT o.owner,f.value_text,f.applies_parents FROM " + scope + " o JOIN field_values f ON f.surface_id=o.surface WHERE " + keywordValue
 }
 
-// appliesKeyword tests that sources, rows of a term and whether it applies
-// its ancestors, apply the canonical term the expression keyword names: a
-// row holds it, or applies its ancestors and holds a term below it. A
-// merged term counts as the term it was merged into. Comparing paths keeps
-// to the term index, where listing each row's ancestors would not.
-func (r *Repo) appliesKeyword(sources, keyword string) string {
-	return "EXISTS(SELECT 1 FROM (" + sources + ") s JOIN terms t ON t.id=s.term JOIN terms c ON c.id=coalesce(t.merged_into_id,t.id) JOIN terms x ON x.id=" + keyword + " WHERE c.id=x.id OR s.lineage AND " + r.d.Below("c.path", "x.path") + ")"
+// keywordTerms selects from the terms whose holders take on the canonical
+// term the expression keyword names, x: as t, the term, one below it as c,
+// or one merged into either, joined with holders. Terms below x apply it
+// only where their source applies parents. x and its subtree are one range
+// of the path index, so holders are found from the keyword.
+func (r *Repo) keywordTerms(holders, keyword string) string {
+	return "terms x JOIN terms c ON c.id=x.id OR " + r.d.Below("c.path", "x.path") + " JOIN terms t ON t.id=c.id OR t.merged_into_id=c.id " + holders + " WHERE x.id=" + keyword
+}
+
+// keywordSurfaces selects the item surfaces that the canonical term the
+// expression keyword names applies to: their own keywords hold it or a
+// term below it, or a keyword field value holds it, or a term below it
+// where the field applies parents. keyword appears twice.
+func (r *Repo) keywordSurfaces(keyword string) string {
+	return "SELECT k.surface_id FROM " + r.keywordTerms("JOIN item_surface_keywords k ON k.keyword=t.id", keyword) +
+		" UNION ALL SELECT f.surface_id FROM " + r.keywordTerms("JOIN field_values f ON f.value_text=t.id AND f.field_type IN ('term','keywords')", keyword) + " AND (c.id=x.id OR f.applies_parents) AND " + keywordValue
+}
+
+// keywordResources selects the resources whose own keywords hold the
+// canonical term the expression keyword names, or a term below it.
+func (r *Repo) keywordResources(keyword string) string {
+	return "SELECT k.resource_id FROM " + r.keywordTerms("JOIN resource_keywords k ON k.keyword=t.id", keyword)
 }
 
 // appliedKeywords selects each owner and canonical keyword that rows of
@@ -272,9 +278,9 @@ func (r *Repo) BrowseIDs(ctx context.Context, b Browse) ([]string, error) {
 	add(visible, visibleArgs...)
 	if b.Keyword != "" {
 		selected, selectedArgs := r.acl.Surface("r.id", b.Reader, b.Surface)
-		cond := "(r.kind NOT IN ('item','folder') AND " + r.appliesKeyword(resourceKeywords, "?") + " OR r.kind IN ('item','folder') AND EXISTS (SELECT 1 FROM item_surfaces p WHERE p.item_id=r.id AND p.surface=" + selected + " AND " + r.appliesKeyword(surfaceKeywords, "?") + "))"
+		cond := "(r.kind NOT IN ('item','folder') AND r.id IN (" + r.keywordResources("?") + ") OR r.kind IN ('item','folder') AND EXISTS (SELECT 1 FROM item_surfaces p WHERE p.item_id=r.id AND p.surface=" + selected + " AND p.id IN (" + r.keywordSurfaces("?") + ")))"
 		a := append([]any{b.Keyword}, selectedArgs...)
-		add(cond, append(a, b.Keyword)...)
+		add(cond, append(a, b.Keyword, b.Keyword)...)
 	}
 	if b.Search != nil {
 		selected, selectedArgs := r.acl.Surface("r.id", b.Reader, b.Surface)

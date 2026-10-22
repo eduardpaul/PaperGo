@@ -276,11 +276,11 @@ func marks(n int) string { return strings.TrimPrefix(strings.Repeat(",?", n), ",
 func (r *Repo) condition(c *Condition) (string, []any) {
 	if c.Field.Key == "$keywords" && c.Field.Def == nil {
 		keyword := c.Values[0]
-		text := r.appliesKeyword(surfaceKeywords, "coalesce((SELECT merged_into_id FROM terms WHERE id=?),?)")
+		text := "p.id IN (" + r.keywordSurfaces("coalesce((SELECT merged_into_id FROM terms WHERE id=?),?)") + ")"
 		if c.Op == FilterNE {
 			text = "NOT (" + text + ")"
 		}
-		return text, []any{keyword, keyword}
+		return text, []any{keyword, keyword, keyword, keyword}
 	}
 	d := c.Field.Def
 	builtin := d == nil
@@ -400,7 +400,7 @@ func (r *Repo) Compile(p Plan) *Query {
 		add("("+text+")", args...)
 	}
 	if p.Keyword != "" {
-		add(r.appliesKeyword(surfaceKeywords, "coalesce((SELECT merged_into_id FROM terms WHERE id=?),?)"), p.Keyword, p.Keyword)
+		add("p.id IN ("+r.keywordSurfaces("coalesce((SELECT merged_into_id FROM terms WHERE id=?),?)")+")", p.Keyword, p.Keyword, p.Keyword, p.Keyword)
 	}
 	if p.Search != nil && p.Search.ByName {
 		// p is the surface the reader reads: match its name.

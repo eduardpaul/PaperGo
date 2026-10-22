@@ -158,7 +158,8 @@ CREATE TABLE terms (
     description TEXT NOT NULL DEFAULT '',
     color TEXT CHECK (color IS NULL OR color ~ '^#[0-9a-f]{6}$'),
     sort_order BIGINT NOT NULL DEFAULT 0,
-    path TEXT NOT NULL CHECK (path LIKE '/%/'),
+    -- Byte order keeps a subtree one range of the path index.
+    path TEXT COLLATE "C" NOT NULL CHECK (path LIKE '/%/'),
     merged_into_id TEXT REFERENCES terms(id) ON DELETE SET NULL DEFERRABLE,
     available_as_keyword BOOLEAN NOT NULL DEFAULT FALSE,
     deprecated BOOLEAN NOT NULL DEFAULT FALSE,
