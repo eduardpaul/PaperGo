@@ -2,10 +2,6 @@ package dms
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"papergo/internal/dal/content"
 	"papergo/internal/dal/refs"
@@ -63,10 +59,10 @@ type ArchiveQuery struct {
 	Limit         int
 }
 
-type archiveCursor struct {
-	Fingerprint string    `json:"query"`
-	At          time.Time `json:"at"`
-	ID          string    `json:"id"`
+// archivePosition is the last item of an archive page, in archive order.
+type archivePosition struct {
+	At time.Time `json:"at"`
+	ID string    `json:"id"`
 }
 
 func (s *Service) archiveItems(ctx context.Context, subject string, in ArchiveQuery) (Page[*resources.Resource], error) {
@@ -88,23 +84,17 @@ func (s *Service) archiveItems(ctx context.Context, subject string, in ArchiveQu
 		in.Keyword = keyword
 		normalized := in
 		normalized.After, normalized.Limit = "", 0
-		raw, _ := json.Marshal(struct {
+		fingerprint := queryFingerprint(struct {
 			Subject string
 			Query   ArchiveQuery
 		}{subject, normalized})
-		sum := sha256.Sum256(raw)
-		fingerprint := hex.EncodeToString(sum[:])
 		b := content.Browse{Reader: principal(ctx, subject), Surface: "auto", GlobalItems: true, Order: content.NewestArchived, WorkspaceID: in.WorkspaceID, CollectionID: in.CollectionID, ContentTypeID: in.ContentTypeID, Archive: refs.ArchiveArchived, Keyword: keyword, ArchivedBy: in.ArchivedBy, ArchivedFrom: in.From, ArchivedTo: in.To, Limit: pageSize(in.Limit) + 1}
 		if strings.TrimSpace(in.Search) != "" {
 			b.Search = &content.SearchMatch{ByName: true, Name: refs.FoldName(strings.TrimSpace(in.Search))}
 		}
-		if len(in.After) > 4096 {
-			return out, invalid("invalid archive cursor")
-		}
 		if in.After != "" {
-			var c archiveCursor
-			raw, e := base64.RawURLEncoding.DecodeString(in.After)
-			if e != nil || json.Unmarshal(raw, &c) != nil || c.Fingerprint != fingerprint || c.ID == "" || c.At.IsZero() {
+			c, ok := decodePageCursor[archivePosition](in.After, "a1.", fingerprint)
+			if !ok || c.ID == "" || c.At.IsZero() {
 				return out, invalid("archive cursor does not match this query or caller")
 			}
 			b.BeforeArchivedAt, b.BeforeArchivedID = c.At, c.ID
@@ -129,8 +119,7 @@ func (s *Service) archiveItems(ctx context.Context, subject string, in ArchiveQu
 		if len(out.Data) > pageSize(in.Limit) {
 			out.Data = out.Data[:pageSize(in.Limit)]
 			last := out.Data[len(out.Data)-1]
-			raw, _ = json.Marshal(archiveCursor{fingerprint, *last.ArchivedAt, last.ID})
-			out.NextCursor = base64.RawURLEncoding.EncodeToString(raw)
+			out.NextCursor = encodePageCursor("a1.", fingerprint, archivePosition{*last.ArchivedAt, last.ID})
 		}
 		_, err = t.overlayPage(ctx, subject, "auto", out.Data, nil)
 		return out, err

@@ -2,10 +2,6 @@ package dms
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/hex"
-	"encoding/json"
 	"maps"
 	"papergo/internal/dal/content"
 	"papergo/internal/dal/refs"
@@ -136,19 +132,16 @@ func (s *Service) Browse(ctx context.Context, subject string, in Browse) (Page[*
 	normalized := in
 	normalized.After, normalized.Limit = "", 0
 	normalized.Archive = in.Archive.Default()
-	raw, _ := json.Marshal(struct {
+	fingerprint := queryFingerprint(struct {
 		Subject string
 		Query   Browse
 	}{subject, normalized})
-	sum := sha256.Sum256(raw)
-	fingerprint := hex.EncodeToString(sum[:])
 	if in.After != "" {
-		var c browseCursor
-		raw, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(in.After, "b1."))
-		if len(in.After) > 4096 || !strings.HasPrefix(in.After, "b1.") || err != nil || json.Unmarshal(raw, &c) != nil || c.Query != fingerprint || c.ID == "" {
+		id, ok := decodePageCursor[string](in.After, "b1.", fingerprint)
+		if !ok || id == "" {
 			return Page[*resources.Resource]{}, invalid("browse cursor does not match query or caller")
 		}
-		b.AfterID = c.ID
+		b.AfterID = id
 	}
 	ids, err := s.DAL.Content().BrowseIDs(ctx, b)
 	if err != nil {
@@ -159,8 +152,7 @@ func (s *Service) Browse(ctx context.Context, subject string, in Browse) (Page[*
 		return Page[*resources.Resource]{}, err
 	}
 	out := entityPage(rows, in.Limit, func(v *resources.Resource) string {
-		raw, _ := json.Marshal(browseCursor{fingerprint, v.ID})
-		return "b1." + base64.RawURLEncoding.EncodeToString(raw)
+		return encodePageCursor("b1.", fingerprint, v.ID)
 	})
 	out.SearchCapped = capped
 	if _, err = s.overlayPage(ctx, subject, in.Surface, out.Data, nil); err != nil {
@@ -281,9 +273,4 @@ func (s *Service) overlayPage(ctx context.Context, subject, surface string, rows
 		}
 	}
 	return selectedRevisions, nil
-}
-
-type browseCursor struct {
-	Query string `json:"q"`
-	ID    string `json:"id"`
 }

@@ -2,10 +2,6 @@ package dms
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/hex"
-	"encoding/json"
 	"papergo/internal/dal/content"
 	"papergo/internal/dal/refs"
 	"strings"
@@ -58,19 +54,16 @@ func (s *Service) WorkspaceKeywords(ctx context.Context, subject, workspaceID st
 	normalized := in
 	normalized.After, normalized.Limit = "", 0
 	normalized.Archive = in.Archive.Default()
-	raw, _ := json.Marshal(struct {
+	fingerprint := queryFingerprint(struct {
 		Subject, Workspace string
 		Query              WorkspaceKeywordsQuery
 	}{subject, workspaceID, normalized})
-	sum := sha256.Sum256(raw)
-	fingerprint := hex.EncodeToString(sum[:])
 	if in.After != "" {
-		var c browseCursor
-		raw, e := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(in.After, "kw1."))
-		if len(in.After) > 4096 || !strings.HasPrefix(in.After, "kw1.") || e != nil || json.Unmarshal(raw, &c) != nil || c.Query != fingerprint {
+		position, ok := decodePageCursor[keywordPosition](in.After, "kw1.", fingerprint)
+		if !ok {
 			return Page[WorkspaceKeywordCount]{}, invalid("keyword cursor does not match query or caller")
 		}
-		query.AfterName, query.AfterID, _ = strings.Cut(c.ID, "\x1f")
+		query.AfterName, query.AfterID = position.Name, position.Keyword
 	}
 	counts, err := s.DAL.Content().WorkspaceKeywords(ctx, query)
 	if err != nil {
@@ -81,7 +74,12 @@ func (s *Service) WorkspaceKeywords(ctx context.Context, subject, workspaceID st
 		out[i] = WorkspaceKeywordCount{Keyword: c.ID, Name: c.Name, Count: c.Count}
 	}
 	return entityPage(out, in.Limit, func(entry WorkspaceKeywordCount) string {
-		raw, _ := json.Marshal(browseCursor{fingerprint, strings.ToLower(entry.Name) + "\x1f" + entry.Keyword})
-		return "kw1." + base64.RawURLEncoding.EncodeToString(raw)
+		return encodePageCursor("kw1.", fingerprint, keywordPosition{strings.ToLower(entry.Name), entry.Keyword})
 	}), nil
+}
+
+// keywordPosition is the last keyword of a page, in name then ID order.
+type keywordPosition struct {
+	Name    string `json:"name"`
+	Keyword string `json:"keyword"`
 }
