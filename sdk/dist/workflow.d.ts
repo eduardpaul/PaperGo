@@ -6384,6 +6384,10 @@ export interface ViewQueryRequest extends Parsable {
 	 * The surface property
 	 */
 	surface?: ViewQueryRequest_surface | null;
+	/**
+	 * Count matches up to this many before pagination; more matches set total_capped and report the limit as total.
+	 */
+	totalLimit?: number | null;
 }
 export type ViewQueryRequest_surface = (typeof ViewQueryRequest_surfaceObject)[keyof typeof ViewQueryRequest_surfaceObject];
 /**

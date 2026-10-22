@@ -5,7 +5,7 @@ import { api } from '@/api/http';
 import { useApiPages } from '@/api/pages';
 import { termsById } from '@/api/queries';
 import { navigationItemsRequest, navigationRequest, navigationSelection, noTerm } from '@/api/requests';
-import type { FieldDefinition, ListView, NavigationNode, NavigationPage, NavigationSelection, Resource, Term } from '@/api/types';
+import type { FieldDefinition, ListView, NavigationMatch, NavigationNode, NavigationPage, NavigationSelection, Resource, Term } from '@/api/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState, Skeleton } from '@/components/ui/feedback';
@@ -99,7 +99,11 @@ function TreeLevel({
               ) : (
                 <span className="w-5" />
               )}
-              <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => onSelect(node.term_id)}>
+              <button
+                type="button"
+                className={cn('flex min-w-0 flex-1 items-center gap-2 text-left', node.subtree_count === 0 && selected !== node.term_id && 'text-muted')}
+                onClick={() => onSelect(node.term_id)}
+              >
                 {selected === node.term_id ? <FolderOpen className="size-4 shrink-0" /> : <Folder className="size-4 shrink-0" />}
                 <span className="truncate">{node.name}</span>
                 <Count node={node} subterms={subterms} />
@@ -164,9 +168,12 @@ function FieldTree({ tree, selection, onOpen }: { tree: Tree; selection?: Naviga
     if (id && id !== noTerm) setOverrides((current) => new Map(current).set(id, true));
   };
   const subterms = !!info?.include_subterms;
+  // Narrow screens stack the trees above the items, so trees start closed there; the header names the opened term.
+  const [initiallyOpen] = useState(() => typeof window.matchMedia !== 'function' || window.matchMedia('(min-width: 768px)').matches);
+  const opened = selection?.no_value ? `No ${tree.label.toLowerCase()}` : path.data?.at(-1)?.name;
   return (
-    <details open className="group rounded-lg border bg-surface p-2 text-sm">
-      <summary className="mb-1 flex cursor-pointer list-none items-center gap-2 px-1">
+    <details open={initiallyOpen} className="group rounded-lg border bg-surface p-2 text-sm">
+      <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 px-1">
         <ChevronRight className="size-4 text-muted transition-transform group-open:rotate-90" />
         <Tags className="size-4 text-muted" />
         <span className="font-medium">{tree.label}</span>
@@ -175,15 +182,24 @@ function FieldTree({ tree, selection, onOpen }: { tree: Tree; selection?: Naviga
             {subterms ? 'Includes subterms' : 'This term only'}
           </Badge>
         )}
+        {selection && (
+          <span className="flex w-full items-center gap-2 pl-6 text-xs">
+            <span className="truncate font-medium text-accent">{opened ?? '…'}</span>
+            <button
+              type="button"
+              aria-label={`Clear ${tree.label}`}
+              className="ml-auto text-muted hover:text-foreground hover:underline"
+              onClick={(event) => {
+                event.preventDefault();
+                select(undefined);
+              }}
+            >
+              Clear
+            </button>
+          </span>
+        )}
       </summary>
-      <nav aria-label={`${tree.label} navigation`}>
-        <button
-          type="button"
-          className={cn('mb-1 flex w-full items-center gap-2 rounded px-2 py-0.5 text-left', !term && 'bg-accent-soft text-accent')}
-          onClick={() => select(undefined)}
-        >
-          <FolderOpen className="size-4" /> All terms
-        </button>
+      <nav aria-label={`${tree.label} navigation`} className="mt-1">
         {roots.isError ? (
           <QueryFeedback query={roots} />
         ) : (
@@ -252,14 +268,14 @@ function SelectionNote({ tree, selection }: { tree: Tree; selection: NavigationS
   const current = path.data?.at(-1);
   const parent = useLevel(tree, path.data && path.data.length > 1 ? path.data.at(-2)!.id : undefined, !!current && !subterms);
   const self = parent.items.find((entry) => entry.term_id === selection.term_id);
-  if (selection.no_value) return <li>Items without a {tree.label.toLowerCase()}.</li>;
+  if (selection.no_value) return <li>No {tree.label.toLowerCase()}: the items without a {tree.label.toLowerCase()}.</li>;
   if (!current) return null;
+  const below = !subterms && self ? self.subtree_count - self.count : 0;
   return (
     <li>
-      {subterms ? `Items tagged ${current.name} or any term below it` : `Items tagged ${current.name}`}
-      {!subterms && self && self.subtree_count > self.count && (
-        <> · {self.subtree_count - self.count} more are tagged with terms below it; open a subterm to see them.</>
-      )}
+      <span className="font-medium text-foreground">{current.name}</span>
+      {subterms ? ': its items and those tagged with any term below it.' : ': only the items tagged with it'}
+      {!subterms && (below > 0 ? `; ${below} more ${below === 1 ? 'is' : 'are'} tagged below it, open a subterm to see ${below === 1 ? 'it' : 'them'}.` : '.')}
     </li>
   );
 }
@@ -283,12 +299,14 @@ function Folders({ tree, parentId, onOpen }: { tree: Tree; parentId?: string; on
     );
   }
   return (
-    <ul aria-label={parentId ? 'Subterms' : `${tree.label} terms`} className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="mb-4">
+      <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">{parentId ? 'Subterms' : `Browse by ${tree.label.toLowerCase()}`}</h3>
+      <ul aria-label={parentId ? 'Subterms' : `${tree.label} terms`} className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
       {level.items.map((entry) => (
         <li key={entry.term_id}>
           <button
             type="button"
-            className="flex w-full items-center gap-2 rounded-lg border bg-surface px-3 py-2 text-left hover:bg-surface-muted"
+            className={cn('flex w-full items-center gap-2 rounded-lg border bg-surface px-3 py-2 text-left hover:bg-surface-muted', entry.subtree_count === 0 && 'text-muted')}
             onClick={() => onOpen(entry.term_id)}
           >
             <Folder className="size-4 shrink-0 text-muted" />
@@ -310,13 +328,17 @@ function Folders({ tree, parentId, onOpen }: { tree: Tree; parentId?: string; on
           </button>
         </li>
       )}
-    </ul>
+      </ul>
+      {!parentId && <p className="mt-3 text-sm text-muted">Open a term to see its items.</p>}
+    </div>
   );
 }
 
 function NodeItems({
   view,
   selected,
+  match,
+  onBack,
   fields,
   columns,
   publishing,
@@ -326,6 +348,9 @@ function NodeItems({
 }: {
   view: ListView;
   selected: NavigationSelection[];
+  match: NavigationMatch;
+  /** Closes the latest opened term. */
+  onBack: () => void;
   fields: FieldDefinition[];
   columns: string[];
   publishing: boolean;
@@ -341,9 +366,29 @@ function NodeItems({
   const names = useValueNames(fields, items.items);
   if (items.isPending) return <Skeleton className="h-24" />;
   if (items.isError) return <QueryFeedback query={items} />;
-  if (items.items.length === 0) return <p className="text-sm text-muted">No items here.</p>;
+  const first = items.data?.pages[0];
+  if (items.items.length === 0) {
+    return (
+      <Card>
+        <EmptyState icon={FolderOpen} title={selected.length > 1 && match === 'all' ? 'No items have all of these terms' : 'No items here'}>
+          {selected.length > 1 && match === 'all' ? 'Remove a term to see more items.' : 'Open another term to see its items.'}
+          <div className="mt-3">
+            <Button size="sm" onClick={onBack}>
+              {selected.length > 1 ? 'Remove the last opened term' : 'Clear term'}
+            </Button>
+          </div>
+        </EmptyState>
+      </Card>
+    );
+  }
   return (
     <>
+      {first?.total !== undefined && (
+        <p role="status" className="mb-2 text-xs text-muted">
+          {first.total}
+          {first.total_capped ? '+' : ''} {first.total === 1 && !first.total_capped ? 'item' : 'items'}
+        </p>
+      )}
       <ItemsTable
         renderRow={renderItem}
         rows={items.items}
@@ -432,8 +477,13 @@ export function ItemsNavigation({
                   );
                 })}
               </ul>
+              {opened.length > 1 && (
+                <Button size="sm" variant="ghost" onClick={() => onSelect([])}>
+                  Clear all
+                </Button>
+              )}
             </div>
-            <ul className="text-muted">
+            <ul className="grid gap-0.5 text-muted">
               {opened.map((selection) => (
                 <SelectionNote key={selection.field} tree={trees.find((entry) => entry.field === selection.field)!} selection={selection} />
               ))}
@@ -447,6 +497,8 @@ export function ItemsNavigation({
           <NodeItems
             view={view}
             selected={opened}
+            match={match}
+            onBack={() => onSelect(opened.slice(0, -1))}
             fields={fields}
             columns={columns}
             publishing={publishing}
@@ -454,9 +506,7 @@ export function ItemsNavigation({
             renderItem={renderItem}
             onOpen={onOpen}
           />
-        ) : (
-          <p className="text-sm text-muted">Open a term to see its items.</p>
-        )}
+        ) : null}
       </section>
     </div>
   );

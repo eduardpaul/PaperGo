@@ -22212,6 +22212,12 @@
             "default": false,
             "description": "Count every authorized match before pagination. An exact total evaluates the whole result set, so it is returned only when requested."
           },
+          "total_limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000,
+            "description": "Count matches up to this many before pagination; more matches set total_capped and report the limit as total."
+          },
           "select": {
             "type": "array",
             "maxItems": 50,

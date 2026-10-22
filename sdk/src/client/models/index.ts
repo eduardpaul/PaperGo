@@ -6305,6 +6305,7 @@ export function deserializeIntoViewQueryRequest(viewQueryRequest: Partial<ViewQu
         "select": n => { viewQueryRequest.select = n.getCollectionOfPrimitiveValues<string>("string"); },
         "selected": n => { viewQueryRequest.selected = n.getCollectionOfObjectValues<NavigationSelection>(createNavigationSelectionFromDiscriminatorValue); },
         "surface": n => { viewQueryRequest.surface = n.getEnumValue<ViewQueryRequest_surface>(ViewQueryRequest_surfaceObject) ?? ViewQueryRequest_surfaceObject.Auto; },
+        "total_limit": n => { viewQueryRequest.totalLimit = n.getNumberValue(); },
     }
 }
 /**
@@ -11829,6 +11830,7 @@ export function serializeViewQueryRequest(writer: SerializationWriter, viewQuery
     writer.writeCollectionOfPrimitiveValues<string>("select", viewQueryRequest.select);
     writer.writeCollectionOfObjectValues<NavigationSelection>("selected", viewQueryRequest.selected, serializeNavigationSelection);
     writer.writeEnumValue<ViewQueryRequest_surface>("surface", viewQueryRequest.surface);
+    writer.writeNumberValue("total_limit", viewQueryRequest.totalLimit);
 }
 /**
  * Serializes information the current object
@@ -13379,6 +13381,10 @@ export interface ViewQueryRequest extends Parsable {
      * The surface property
      */
     surface?: ViewQueryRequest_surface | null;
+    /**
+     * Count matches up to this many before pagination; more matches set total_capped and report the limit as total.
+     */
+    totalLimit?: number | null;
 }
 export type ViewQueryRequest_surface = (typeof ViewQueryRequest_surfaceObject)[keyof typeof ViewQueryRequest_surfaceObject];
 /**

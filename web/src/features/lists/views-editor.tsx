@@ -255,9 +255,9 @@ function ViewDialog({
                     </label>
                     <p className="text-xs text-muted">
                       {parentsApply
-                        ? `${label} applies parent terms, so a term always shows the items tagged below it (Fiscal shows Fiscal > Q1).`
+                        ? `${label} applies parent terms, so a term always shows the items tagged with it or any term below it.`
                         : entry.include_subterms
-                          ? 'A term shows the items tagged with it or any term below it (Fiscal shows Fiscal > Q1).'
+                          ? 'A term shows the items tagged with it or any term below it.'
                           : 'A term shows only the items tagged with it; items tagged with a subterm appear when you open that subterm.'}
                     </p>
                   </li>

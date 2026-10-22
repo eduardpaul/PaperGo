@@ -126,9 +126,9 @@ export function navigationRequest(viewId: string, field: string, parentId?: stri
   return { path: `/v1/views/${viewId}/navigation`, method: 'POST', query: { $top: 200 }, body };
 }
 
-/** The items a navigation view lists at the terms opened in its trees. */
+/** The items a navigation view lists at the terms opened in its trees, counted up to a thousand. */
 export function navigationItemsRequest(viewId: string, selected: NavigationSelection[], top = 50): ApiCall {
-  return { path: `/v1/views/${viewId}/query`, method: 'POST', query: { $top: top }, body: { selected } };
+  return { path: `/v1/views/${viewId}/query`, method: 'POST', query: { $top: top }, body: { selected, total_limit: 1000 } };
 }
 
 /** The URL value of a navigation tree's "No value" node. */
