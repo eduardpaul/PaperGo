@@ -278,7 +278,9 @@ func (r *Repo) BrowseIDs(ctx context.Context, b Browse) ([]string, error) {
 	add(visible, visibleArgs...)
 	if b.Keyword != "" {
 		selected, selectedArgs := r.acl.Surface("r.id", b.Reader, b.Surface)
-		cond := "(r.kind NOT IN ('item','folder') AND r.id IN (" + r.keywordResources("?") + ") OR r.kind IN ('item','folder') AND EXISTS (SELECT 1 FROM item_surfaces p WHERE p.item_id=r.id AND p.surface=" + selected + " AND p.id IN (" + r.keywordSurfaces("?") + ")))"
+		// The holders are one uncorrelated set of item and surface, matched
+		// against the surface each entry is read on, so it is found once.
+		cond := "(r.kind NOT IN ('item','folder') AND r.id IN (" + r.keywordResources("?") + ") OR r.kind IN ('item','folder') AND (r.id," + selected + ") IN (SELECT h.item_id,h.surface FROM item_surfaces h WHERE h.id IN (" + r.keywordSurfaces("?") + ")))"
 		a := append([]any{b.Keyword}, selectedArgs...)
 		add(cond, append(a, b.Keyword, b.Keyword)...)
 	}
