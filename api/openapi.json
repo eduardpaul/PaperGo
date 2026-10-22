@@ -4855,7 +4855,7 @@
           "list.read",
           "taxonomy.read"
         ],
-        "description": "Lists one level of a navigation view: the terms of its field below parent_id (or the roots), in term order, each with the items of the view it lists and those at or below it. Counts follow the view's query, the caller's access and the surface read, and cover items, not folders. Required module scopes: list.read, taxonomy.read. Resource ACLs and any additional use-case checks also apply."
+        "description": "Lists one level of a field of a navigation view: the terms of field below parent_id (or the roots), in term order, each with the items of the view it lists and those at or below it. Counts follow the view's query, the caller's access and the surface read, and cover items, not folders. Required module scopes: list.read, taxonomy.read. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/relationship-types/{id}": {
@@ -22221,13 +22221,13 @@
             },
             "description": "Selected custom fields and optional $keywords; system columns are accepted and the resource metadata envelope remains present. Omitted returns full values on direct queries and saved columns on views; an empty array returns no custom values. Selected fields need not be indexed. Cursors bind this selection."
           },
-          "term_id": {
-            "type": "string",
-            "description": "Navigation views only: lists the items the view shows at this term of its term set, with or without the items below it as the view's settings say. Exactly one of term_id and no_value."
-          },
-          "no_value": {
-            "type": "boolean",
-            "description": "Navigation views only: lists the items holding no term in the view's field."
+          "selected": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "$ref": "#/components/schemas/NavigationSelection"
+            },
+            "description": "Navigation views only, required there: lists the items at the terms opened in the view's fields, combined as the view's settings.match says."
           }
         },
         "required": [],
@@ -22274,7 +22274,7 @@
           "name"
         ],
         "additionalProperties": false,
-        "description": "Collection-managed saved view. Columns use field keys and $id/$name/$keywords; empty columns default to $name. PUT replaces the definition. Layout is a client hint; a navigation view browses the terms of settings.field as folders (POST /v1/views/{id}/navigation) and lists the items of a term through POST /v1/views/{id}/query with term_id or no_value."
+        "description": "Collection-managed saved view. Columns use field keys and $id/$name/$keywords; empty columns default to $name. PUT replaces the definition. Layout is a client hint; a navigation view browses the terms of each of settings.fields as folders (POST /v1/views/{id}/navigation) and lists the items at the opened terms through POST /v1/views/{id}/query with selected."
       },
       "QueryResult": {
         "type": "object",
@@ -29798,13 +29798,23 @@
       "ViewSettings": {
         "type": "object",
         "properties": {
-          "field": {
-            "type": "string",
-            "description": "The field a navigation view browses: $keywords or an indexed term or keywords field of the collection."
+          "fields": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 5,
+            "items": {
+              "$ref": "#/components/schemas/NavigationFieldSetting"
+            },
+            "description": "The fields a navigation view browses, each as a tree of terms; keys are unique."
           },
-          "include_subterms": {
-            "type": "boolean",
-            "description": "Lists, at a term, the items holding a term below it too. Omitted follows the field: item keywords and fields with apply_parents always do; other fields list the items holding the term. false is rejected where parents apply."
+          "match": {
+            "type": "string",
+            "enum": [
+              "all",
+              "any"
+            ],
+            "default": "all",
+            "description": "How the terms opened in different fields combine: all lists the items of every opened term, and each field's counts follow the terms opened in the others; any lists the items of any opened term, and counts cover the view."
           },
           "hide_empty": {
             "type": "boolean",
@@ -29819,6 +29829,10 @@
       "NavigationRequest": {
         "type": "object",
         "properties": {
+          "field": {
+            "type": "string",
+            "description": "The view's field whose terms are listed."
+          },
           "parent_id": {
             "type": "string",
             "description": "Opens this term of the view's term set; omitted lists the roots."
@@ -29831,9 +29845,19 @@
               "published"
             ],
             "default": "auto"
+          },
+          "selected": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "$ref": "#/components/schemas/NavigationSelection"
+            },
+            "description": "The terms opened in the view's fields. Where the view matches all, counts follow those of the other fields; the listed field's own selection is ignored."
           }
         },
-        "required": [],
+        "required": [
+          "field"
+        ],
         "additionalProperties": false,
         "description": "Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink."
       },
@@ -29914,6 +29938,45 @@
           "hide_empty"
         ],
         "additionalProperties": false
+      },
+      "NavigationFieldSetting": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string",
+            "description": "$keywords or an indexed term or keywords field of the collection."
+          },
+          "include_subterms": {
+            "type": "boolean",
+            "description": "Lists, at a term, the items holding a term below it too. Omitted follows the field: item keywords and fields with apply_parents always do; other fields list the items holding the term. false is rejected where parents apply."
+          }
+        },
+        "required": [
+          "field"
+        ],
+        "additionalProperties": false
+      },
+      "NavigationSelection": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string",
+            "description": "One of the view's fields, at most once per request."
+          },
+          "term_id": {
+            "type": "string",
+            "description": "A term of the field's term set: the items the view shows at it."
+          },
+          "no_value": {
+            "type": "boolean",
+            "description": "The items holding no term in the field."
+          }
+        },
+        "required": [
+          "field"
+        ],
+        "additionalProperties": false,
+        "description": "A term opened in one field of a navigation view; exactly one of term_id and no_value."
       }
     },
     "parameters": {

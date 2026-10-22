@@ -179,14 +179,13 @@ func (s *Service) DeleteView(ctx context.Context, subject, id string, version in
 type ViewQueryRequest struct {
 	Select  []string `json:"select,omitempty"`
 	Surface string   `json:"surface,omitempty"`
-	// TermID lists the items a navigation view shows at a term; NoValue
-	// those holding no term.
-	TermID       string `json:"term_id,omitempty"`
-	NoValue      bool   `json:"no_value,omitempty"`
-	After        string `json:"-"`
-	Limit        int    `json:"-"`
-	IncludeTotal bool   `json:"include_total,omitempty"`
-	TotalLimit   int    `json:"total_limit,omitempty"`
+	// Selected lists the items a navigation view shows at the terms opened
+	// in its fields, combined as the view matches them.
+	Selected     []NavigationSelection `json:"selected,omitempty"`
+	After        string                `json:"-"`
+	Limit        int                   `json:"-"`
+	IncludeTotal bool                  `json:"include_total,omitempty"`
+	TotalLimit   int                   `json:"total_limit,omitempty"`
 }
 
 func (s *Service) QueryView(ctx context.Context, subject, id string, in ViewQueryRequest) (QueryResult, error) {
@@ -208,20 +207,19 @@ func (s *Service) QueryView(ctx context.Context, subject, id string, in ViewQuer
 			if e = t.requireTaxonomy(ctx, subject, "read"); e != nil {
 				return QueryResult{}, e
 			}
-			settings, field, e := t.viewNavigation(ctx, v)
+			settings, fields, e := t.viewNavigation(ctx, v)
 			if e != nil {
 				return QueryResult{}, e
 			}
-			if (in.TermID == "") == !in.NoValue {
-				return QueryResult{}, invalid("a navigation view lists the items of term_id or of no_value")
+			if len(in.Selected) == 0 {
+				return QueryResult{}, invalid("a navigation view lists the items of selected terms")
 			}
-			node := navigationFilter(settings, field, in.TermID)
-			if spec.Filter != nil {
-				node = FilterExpr{And: []FilterExpr{*spec.Filter, node}}
+			if request.Query.Filter, e = selectionFilter(spec.Filter, settings.Match, fields, in.Selected, ""); e != nil {
+				return QueryResult{}, e
 			}
-			request.Query.Filter, request.itemsOnly = &node, true
-		} else if in.TermID != "" || in.NoValue {
-			return QueryResult{}, invalid("term_id and no_value belong to navigation views")
+			request.itemsOnly = true
+		} else if len(in.Selected) > 0 {
+			return QueryResult{}, invalid("selected belongs to navigation views")
 		}
 		if request.Surface == "" {
 			request.Surface = "auto"

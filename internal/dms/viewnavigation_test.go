@@ -2,6 +2,7 @@ package dms
 
 import (
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -20,6 +21,8 @@ func TestNavigationViews(t *testing.T) {
 	q1 := mustTerm(t, s, periods.ID, TermInput{Name: "Q1", ParentID: &fiscal.ID})
 	mustTerm(t, s, periods.ID, TermInput{Name: "Q2", ParentID: &fiscal.ID})
 	mustTerm(t, s, periods.ID, TermInput{Name: "Calendar"})
+	finance := mustTerm(t, s, taxonomy.KeywordsSetID, TermInput{Name: "Finance"})
+	invoices := mustTerm(t, s, taxonomy.KeywordsSetID, TermInput{Name: "Invoices", ParentID: &finance.ID})
 	for _, f := range []CreateField{
 		{Key: "period", Label: "Period", Type: "term", Indexed: true, Options: model.FieldOptions{TermSetID: periods.ID}},
 		{Key: "periods", Label: "Periods", Type: "term", Indexed: true, Options: model.FieldOptions{TermSetID: periods.ID, Multiple: true, ApplyParents: true}},
@@ -28,19 +31,28 @@ func TestNavigationViews(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for name, values := range map[string]map[string]any{
-		"Budget": {"period": fiscal.ID, "periods": []any{fiscal.ID}},
-		"Report": {"period": q1.ID, "periods": []any{q1.ID}},
-		"Loose":  {},
+	for _, in := range []CreateResource{
+		{Name: "Budget", Values: map[string]any{"period": fiscal.ID, "periods": []any{fiscal.ID}}, Keywords: []string{invoices.ID}},
+		{Name: "Report", Values: map[string]any{"period": q1.ID, "periods": []any{q1.ID}}, Keywords: []string{finance.ID}},
+		{Name: "Memo", Keywords: []string{invoices.ID}},
+		{Name: "Loose"},
 	} {
-		if _, err = s.Create(testContext, "alice", l.ID, CreateResource{Kind: "item", Name: name, Values: values}); err != nil {
-			t.Fatal(name, err)
+		in.Kind = "item"
+		if _, err = s.Create(testContext, "alice", l.ID, in); err != nil {
+			t.Fatal(in.Name, err)
 		}
 	}
 	if _, err = s.Create(testContext, "alice", l.ID, CreateResource{Kind: "folder", Name: "Archive"}); err != nil {
 		t.Fatal(err)
 	}
 	yes, no := true, false
+	fields := func(keys ...string) []NavigationFieldSetting {
+		out := []NavigationFieldSetting{}
+		for _, key := range keys {
+			out = append(out, NavigationFieldSetting{Field: key})
+		}
+		return out
+	}
 	view := func(name string, settings ViewSettings) *viewstore.ListView {
 		t.Helper()
 		v, err := s.CreateView(testContext, "alice", l.ID, ViewInput{Name: name, Layout: viewstore.LayoutNavigation, Settings: settings})
@@ -49,17 +61,25 @@ func TestNavigationViews(t *testing.T) {
 		}
 		return v
 	}
-	for _, bad := range []ViewSettings{{}, {Field: "missing"}, {Field: "periods", IncludeSubterms: &no}, {Field: "$keywords", IncludeSubterms: &no}} {
+	for _, bad := range []ViewSettings{
+		{},
+		{Fields: fields("missing")},
+		{Fields: fields("period", "period")},
+		{Fields: fields("period", "periods", "$keywords", "period", "periods", "$keywords")},
+		{Fields: fields("period"), Match: "some"},
+		{Fields: []NavigationFieldSetting{{Field: "periods", IncludeSubterms: &no}}},
+		{Fields: []NavigationFieldSetting{{Field: "$keywords", IncludeSubterms: &no}}},
+	} {
 		if _, err = s.CreateView(testContext, "alice", l.ID, ViewInput{Name: "Bad", Layout: viewstore.LayoutNavigation, Settings: bad}); err == nil {
 			t.Fatal("invalid settings", bad)
 		}
 	}
-	if _, err = s.CreateView(testContext, "alice", l.ID, ViewInput{Name: "Bad", Settings: ViewSettings{Field: "period"}}); err == nil {
+	if _, err = s.CreateView(testContext, "alice", l.ID, ViewInput{Name: "Bad", Settings: ViewSettings{Fields: fields("period")}}); err == nil {
 		t.Fatal("settings on a table view")
 	}
-	level := func(v *viewstore.ListView, parent string) (string, *int) {
+	level := func(v *viewstore.ListView, field, parent string, selected ...NavigationSelection) (string, *int) {
 		t.Helper()
-		nav, err := s.ViewNavigation(testContext, "alice", v.ID, NavigationRequest{ParentID: parent})
+		nav, err := s.ViewNavigation(testContext, "alice", v.ID, NavigationRequest{Field: field, ParentID: parent, Selected: selected})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -69,13 +89,13 @@ func TestNavigationViews(t *testing.T) {
 			if n.HasChildren {
 				children = "+"
 			}
-			out = append(out, n.Name+children+":"+string(rune('0'+n.Count))+"/"+string(rune('0'+n.SubtreeCount)))
+			out = append(out, n.Name+children+":"+strconv.Itoa(n.Count)+"/"+strconv.Itoa(n.SubtreeCount))
 		}
 		return strings.Join(out, ","), nav.NoValueCount
 	}
-	items := func(v *viewstore.ListView, in ViewQueryRequest) string {
+	items := func(v *viewstore.ListView, selected ...NavigationSelection) string {
 		t.Helper()
-		page, err := s.QueryView(testContext, "alice", v.ID, in)
+		page, err := s.QueryView(testContext, "alice", v.ID, ViewQueryRequest{Selected: selected})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -86,62 +106,85 @@ func TestNavigationViews(t *testing.T) {
 		slices.Sort(names)
 		return strings.Join(names, ",")
 	}
+	term := func(field, id string) NavigationSelection { return NavigationSelection{Field: field, TermID: id} }
+	none := func(field string) NavigationSelection { return NavigationSelection{Field: field, NoValue: true} }
 
-	// A field without apply_parents lists the items holding the term.
-	exact := view("Exact", ViewSettings{Field: "period"})
-	if got, none := level(exact, ""); got != "Calendar:0/0,Fiscal+:1/2" || none == nil || *none != 1 {
-		t.Fatal("roots", got, none)
+	// A field without apply_parents lists the items holding the term; the
+	// view's keywords apply their parents.
+	all := view("All", ViewSettings{Fields: fields("period", "$keywords")})
+	if got, n := level(all, "period", ""); got != "Calendar:0/0,Fiscal+:1/2" || n == nil || *n != 2 {
+		t.Fatal("period roots", got, n)
 	}
-	if got, _ := level(exact, fiscal.ID); got != "Q1:1/1,Q2:0/0" {
-		t.Fatal("children", got)
+	if got, _ := level(all, "period", fiscal.ID); got != "Q1:1/1,Q2:0/0" {
+		t.Fatal("period children", got)
 	}
-	if got := items(exact, ViewQueryRequest{TermID: fiscal.ID}); got != "Budget" {
+	if got, n := level(all, "$keywords", ""); got != "Finance+:3/3" || *n != 1 {
+		t.Fatal("keyword roots", got, *n)
+	}
+	if got := items(all, term("period", fiscal.ID)); got != "Budget" {
 		t.Fatal("exact items", got)
 	}
 	// No value lists items only, not folders.
-	if got := items(exact, ViewQueryRequest{NoValue: true}); got != "Loose" {
+	if got := items(all, none("period")); got != "Loose,Memo" {
 		t.Fatal("no value", got)
 	}
 
-	// The view can include subterms; hiding empty terms drops Calendar and Q2.
-	rolled := view("Rolled", ViewSettings{Field: "period", IncludeSubterms: &yes, HideEmpty: true})
-	if got, _ := level(rolled, ""); got != "Fiscal+:2/2" {
-		t.Fatal("rolled roots", got)
+	// Matching all, a field's counts follow the terms opened in the others.
+	if got, n := level(all, "$keywords", "", term("period", fiscal.ID)); got != "Finance+:1/1" || *n != 0 {
+		t.Fatal("narrowed keyword roots", got, *n)
 	}
-	if got := items(rolled, ViewQueryRequest{TermID: fiscal.ID}); got != "Budget,Report" {
-		t.Fatal("rolled items", got)
+	if got, _ := level(all, "period", "", term("$keywords", invoices.ID), term("period", q1.ID)); got != "Calendar:0/0,Fiscal+:1/1" {
+		t.Fatal("a field's own selection does not narrow it", got)
+	}
+	if got := items(all, term("period", fiscal.ID), term("$keywords", finance.ID)); got != "Budget" {
+		t.Fatal("all items", got)
+	}
+	if got := items(all, none("period"), term("$keywords", finance.ID)); got != "Memo" {
+		t.Fatal("no value and a term", got)
 	}
 
+	// Matching any, the opened terms add items and counts cover the view.
+	anyOf := view("Any", ViewSettings{Fields: fields("period", "$keywords"), Match: MatchAny})
+	if got := items(anyOf, term("period", q1.ID), term("$keywords", invoices.ID)); got != "Budget,Memo,Report" {
+		t.Fatal("any items", got)
+	}
+	if got, _ := level(anyOf, "$keywords", "", term("period", fiscal.ID)); got != "Finance+:3/3" {
+		t.Fatal("any counts", got)
+	}
+
+	// The view can include subterms per field; hiding empty terms drops
+	// Calendar and Q2.
+	rolled := view("Rolled", ViewSettings{Fields: []NavigationFieldSetting{{Field: "period", IncludeSubterms: &yes}}, HideEmpty: true})
+	if got, _ := level(rolled, "period", ""); got != "Fiscal+:2/2" {
+		t.Fatal("rolled roots", got)
+	}
+	if got := items(rolled, term("period", fiscal.ID)); got != "Budget,Report" {
+		t.Fatal("rolled items", got)
+	}
 	// A field that applies parents always includes subterms.
-	applied := view("Applied", ViewSettings{Field: "periods", HideEmpty: true})
-	if got, _ := level(applied, fiscal.ID); got != "Q1:1/1" {
+	applied := view("Applied", ViewSettings{Fields: fields("periods"), HideEmpty: true})
+	if got, _ := level(applied, "periods", fiscal.ID); got != "Q1:1/1" {
 		t.Fatal("applied children", got)
 	}
-	if got := items(applied, ViewQueryRequest{TermID: fiscal.ID}); got != "Budget,Report" {
+	if got := items(applied, term("periods", fiscal.ID)); got != "Budget,Report" {
 		t.Fatal("applied items", got)
 	}
 
-	// Item keywords navigate the keywords set and apply their parents.
-	finance := mustTerm(t, s, taxonomy.KeywordsSetID, TermInput{Name: "Finance"})
-	invoices := mustTerm(t, s, taxonomy.KeywordsSetID, TermInput{Name: "Invoices", ParentID: &finance.ID})
-	if _, err = s.Create(testContext, "alice", l.ID, CreateResource{Kind: "item", Name: "Invoice", Keywords: []string{invoices.ID}}); err != nil {
-		t.Fatal(err)
+	for _, bad := range [][]NavigationSelection{
+		nil,
+		{term("periods", fiscal.ID)},
+		{term("period", fiscal.ID), term("period", q1.ID)},
+		{{Field: "period"}},
+		{{Field: "period", TermID: fiscal.ID, NoValue: true}},
+	} {
+		if _, err = s.QueryView(testContext, "alice", all.ID, ViewQueryRequest{Selected: bad}); err == nil {
+			t.Fatal("invalid selection", bad)
+		}
 	}
-	keywords := view("Keywords", ViewSettings{Field: "$keywords", HideEmpty: true})
-	if got, none := level(keywords, ""); got != "Finance+:1/1" || *none != 3 {
-		t.Fatal("keyword roots", got, *none)
+	if _, err = s.ViewNavigation(testContext, "alice", all.ID, NavigationRequest{Field: "periods"}); err == nil {
+		t.Fatal("a field the view does not browse")
 	}
-	if got := items(keywords, ViewQueryRequest{TermID: finance.ID}); got != "Invoice" {
-		t.Fatal("keyword items", got)
-	}
-	if got := items(keywords, ViewQueryRequest{NoValue: true}); got != "Budget,Loose,Report" {
-		t.Fatal("keyword no value", got)
-	}
-
-	if _, err = s.QueryView(testContext, "alice", exact.ID, ViewQueryRequest{}); err == nil {
-		t.Fatal("a navigation view lists a node")
-	}
-	if _, err = s.ViewNavigation(testContext, "alice", exact.ID, NavigationRequest{ParentID: finance.ID}); err == nil {
+	if _, err = s.ViewNavigation(testContext, "alice", all.ID, NavigationRequest{Field: "period", ParentID: finance.ID}); err == nil {
 		t.Fatal("parent from another set")
 	}
 }
