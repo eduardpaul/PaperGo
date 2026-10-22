@@ -120,9 +120,34 @@ func (r *Repo) selective(ctx context.Context, c candidate) (bool, error) {
 	return n <= CandidateDriveLimit, err
 }
 
-// SurfaceKeywords selects the keywords of the item surface aliased p: its
-// own keywords and its keyword and keyword-term field values.
-const SurfaceKeywords = "SELECT keyword FROM item_surface_keywords WHERE surface_id=p.id UNION SELECT value_text FROM field_values WHERE surface_id=p.id AND (field_type='keywords' OR field_type='term' AND value_text IN (SELECT t.id FROM terms t JOIN term_sets ts ON ts.id=t.term_set_id WHERE ts.is_keywords OR t.available_as_keyword))"
+// surfaceKeywords selects the canonical keywords that apply to the item
+// surface aliased p: its own keywords, which apply their parent terms too,
+// and its keyword and keyword-term field values, which do when their field
+// applies parents.
+func (r *Repo) surfaceKeywords() string {
+	return r.appliedTerms("SELECT keyword AS term,TRUE AS lineage FROM item_surface_keywords WHERE surface_id=p.id UNION ALL SELECT value_text,applies_parents FROM field_values WHERE surface_id=p.id AND (field_type='keywords' OR field_type='term' AND value_text IN (SELECT t.id FROM terms t JOIN term_sets ts ON ts.id=t.term_set_id WHERE ts.is_keywords OR t.available_as_keyword))")
+}
+
+// resourceKeywords selects the canonical keywords that apply to the
+// resource whose ID is the expression resource: its keywords and their
+// parent terms.
+func (r *Repo) resourceKeywords(resource string) string {
+	return r.appliedTerms("SELECT keyword AS term,TRUE AS lineage FROM resource_keywords WHERE resource_id=" + resource)
+}
+
+// appliedTerms selects, once each, the canonical terms of sources, rows of
+// a term ID and whether it applies its ancestors: a merged term counts as
+// the term it was merged into, and that term's path lists its ancestors.
+func (r *Repo) appliedTerms(sources string) string {
+	return "SELECT DISTINCT a.value FROM (" + sources + ") s JOIN terms t ON t.id=s.term JOIN terms c ON c.id=coalesce(t.merged_into_id,t.id) CROSS JOIN " + r.d.PathIDs("c.path", "a") + " WHERE s.lineage OR a.value=c.id"
+}
+
+// family selects a term, its descendants and the terms merged into those:
+// the terms whose holders a parent-applying source tags with the term.
+func (r *Repo) family() string {
+	subtree := "SELECT t.id FROM terms x JOIN terms t ON " + r.d.Below("t.path", "x.path") + " WHERE x.id=?"
+	return subtree + " UNION ALL SELECT m.id FROM terms m WHERE m.merged_into_id IN (" + subtree + ")"
+}
 
 // BrowseIDs returns the IDs of the resources b selects.
 func (r *Repo) BrowseIDs(ctx context.Context, b Browse) ([]string, error) {
@@ -188,9 +213,10 @@ func (r *Repo) BrowseIDs(ctx context.Context, b Browse) ([]string, error) {
 		})
 	}
 	if b.Keyword != "" {
-		aliases := "SELECT id FROM terms WHERE id=? OR merged_into_id=?"
+		// Holders of a descendant apply the keyword when they apply parents.
+		family := r.family()
 		candidates = append(candidates, candidate{
-			"SELECT resource_id AS id FROM resource_keywords WHERE keyword IN (" + aliases + ") UNION ALL SELECT p.item_id FROM item_surface_keywords k JOIN item_surfaces p ON p.id=k.surface_id WHERE k.keyword IN (" + aliases + ") UNION ALL SELECT item_id FROM field_values WHERE field_type IN ('keywords','term') AND value_text IN (" + aliases + ")",
+			"SELECT resource_id AS id FROM resource_keywords WHERE keyword IN (" + family + ") UNION ALL SELECT p.item_id FROM item_surface_keywords k JOIN item_surfaces p ON p.id=k.surface_id WHERE k.keyword IN (" + family + ") UNION ALL SELECT item_id FROM field_values WHERE field_type IN ('keywords','term') AND value_text IN (" + family + ")",
 			[]any{b.Keyword, b.Keyword, b.Keyword, b.Keyword, b.Keyword, b.Keyword},
 		})
 	}
@@ -229,7 +255,7 @@ func (r *Repo) BrowseIDs(ctx context.Context, b Browse) ([]string, error) {
 	add(visible, visibleArgs...)
 	if b.Keyword != "" {
 		selected, selectedArgs := r.acl.Surface("r.id", b.Reader, b.Surface)
-		cond := "(r.kind NOT IN ('item','folder') AND EXISTS(SELECT 1 FROM resource_keywords k JOIN terms kt ON kt.id=k.keyword WHERE k.resource_id=r.id AND coalesce(kt.merged_into_id,kt.id)=?) OR r.kind IN ('item','folder') AND EXISTS (SELECT 1 FROM item_surfaces p WHERE p.item_id=r.id AND p.surface=" + selected + " AND EXISTS(SELECT 1 FROM (" + SurfaceKeywords + ") k JOIN terms kt ON kt.id=k.keyword WHERE coalesce(kt.merged_into_id,kt.id)=?)))"
+		cond := "(r.kind NOT IN ('item','folder') AND ? IN (" + r.resourceKeywords("r.id") + ") OR r.kind IN ('item','folder') AND EXISTS (SELECT 1 FROM item_surfaces p WHERE p.item_id=r.id AND p.surface=" + selected + " AND ? IN (" + r.surfaceKeywords() + ")))"
 		a := append([]any{b.Keyword}, selectedArgs...)
 		add(cond, append(a, b.Keyword)...)
 	}

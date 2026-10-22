@@ -3940,6 +3940,7 @@ export function deserializeIntoFieldDefinition(fieldDefinition: Partial<FieldDef
 // @ts-ignore
 export function deserializeIntoFieldOptions(fieldOptions: Partial<FieldOptions> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
+        "apply_parents": n => { fieldOptions.applyParents = n.getBooleanValue() ?? false; },
         "currency_code": n => { fieldOptions.currencyCode = n.getStringValue(); },
         "default_value": n => { fieldOptions.defaultValue = n.getObjectValue<UntypedNode>(createUntypedNodeFromDiscriminatorValue); },
         "description": n => { fieldOptions.description = n.getStringValue(); },
@@ -6401,6 +6402,10 @@ export interface FieldDefinition extends AdditionalDataHolder, Parsable {
 export type FieldDefinition_index_status = (typeof FieldDefinition_index_statusObject)[keyof typeof FieldDefinition_index_statusObject];
 export type FieldDefinition_type = (typeof FieldDefinition_typeObject)[keyof typeof FieldDefinition_typeObject];
 export interface FieldOptions extends Parsable {
+    /**
+     * Term and keywords fields only, immutable. A value also applies its parent terms: eq, in and ne match values at or below a term, as under does, and keyword filters, keyword counts and search keywords include the parents. Values store only the picked terms. Item keywords always apply their parents.
+     */
+    applyParents?: boolean | null;
     /**
      * Required for currency fields only. Three uppercase letters, such as EUR. Currency and number values are exact JSON decimals with a 96-bit coefficient and scale 0..28; excess fractional precision rounds to nearest, ties to even.
      */
@@ -9227,6 +9232,7 @@ export function serializeFieldDefinition(writer: SerializationWriter, fieldDefin
 // @ts-ignore
 export function serializeFieldOptions(writer: SerializationWriter, fieldOptions: Partial<FieldOptions> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!fieldOptions || isSerializingDerivedType) { return; }
+    writer.writeBooleanValue("apply_parents", fieldOptions.applyParents);
     writer.writeStringValue("currency_code", fieldOptions.currencyCode);
     writer.writeObjectValue("default_value", fieldOptions.defaultValue);
     writer.writeStringValue("description", fieldOptions.description);
@@ -12863,7 +12869,7 @@ export interface UpdateField extends Parsable {
      */
     label?: string | null;
     /**
-     * Complete replacement of options; multiple and reference scope are immutable.
+     * Complete replacement of options; multiple, reference scope and apply_parents are immutable.
      */
     options?: FieldOptions | null;
     /**

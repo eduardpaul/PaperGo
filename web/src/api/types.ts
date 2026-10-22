@@ -111,6 +111,8 @@ export interface FieldOptions {
   multiple?: boolean;
   lookup_container_id?: string;
   term_set_id?: string;
+  /** Picking a term also applies its parent terms (term and keywords fields). */
+  apply_parents?: boolean;
   /** Where the field's text goes in search; empty is normal. */
   search_weight?: 'none' | 'normal' | 'high';
 }

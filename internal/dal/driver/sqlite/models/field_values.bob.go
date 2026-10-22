@@ -26,20 +26,21 @@ import (
 
 // FieldValue is an object representing the database table.
 type FieldValue struct {
-	ID           string                    `db:"id,pk" `
-	CreatedAt    time.Time                 `db:"created_at" `
-	SurfaceID    string                    `db:"surface_id" `
-	ContainerID  string                    `db:"container_id" `
-	ItemID       string                    `db:"item_id" `
-	Surface      string                    `db:"surface" `
-	FieldKey     string                    `db:"field_key" `
-	FieldType    string                    `db:"field_type" `
-	Scale        int64                     `db:"scale" `
-	Ordinal      int64                     `db:"ordinal" `
-	ValueText    null.Val[string]          `db:"value_text" `
-	ValueInteger null.Val[int64]           `db:"value_integer" `
-	ValueNumeric null.Val[decimal.Decimal] `db:"value_numeric" `
-	ValueBoolean null.Val[bool]            `db:"value_boolean" `
+	ID             string                    `db:"id,pk" `
+	CreatedAt      time.Time                 `db:"created_at" `
+	SurfaceID      string                    `db:"surface_id" `
+	ContainerID    string                    `db:"container_id" `
+	ItemID         string                    `db:"item_id" `
+	Surface        string                    `db:"surface" `
+	FieldKey       string                    `db:"field_key" `
+	FieldType      string                    `db:"field_type" `
+	Scale          int64                     `db:"scale" `
+	Ordinal        int64                     `db:"ordinal" `
+	ValueText      null.Val[string]          `db:"value_text" `
+	ValueInteger   null.Val[int64]           `db:"value_integer" `
+	ValueNumeric   null.Val[decimal.Decimal] `db:"value_numeric" `
+	ValueBoolean   null.Val[bool]            `db:"value_boolean" `
+	AppliesParents bool                      `db:"applies_parents" `
 
 	R fieldValueR `db:"-" `
 }
@@ -74,7 +75,7 @@ type fieldValueRLoaded struct {
 
 func buildFieldValueColumns(tableName string) fieldValueColumns {
 	columnsExpr := expr.NewColumnsExpr(
-		"id", "created_at", "surface_id", "container_id", "item_id", "surface", "field_key", "field_type", "scale", "ordinal", "value_text", "value_integer", "value_numeric", "value_boolean",
+		"id", "created_at", "surface_id", "container_id", "item_id", "surface", "field_key", "field_type", "scale", "ordinal", "value_text", "value_integer", "value_numeric", "value_boolean", "applies_parents",
 	)
 
 	if tableName != "" {
@@ -82,42 +83,44 @@ func buildFieldValueColumns(tableName string) fieldValueColumns {
 	}
 
 	return fieldValueColumns{
-		ColumnsExpr:  columnsExpr,
-		tableAlias:   tableName,
-		ID:           buildFieldValueColumn(tableName, "id"),
-		CreatedAt:    buildFieldValueColumn(tableName, "created_at"),
-		SurfaceID:    buildFieldValueColumn(tableName, "surface_id"),
-		ContainerID:  buildFieldValueColumn(tableName, "container_id"),
-		ItemID:       buildFieldValueColumn(tableName, "item_id"),
-		Surface:      buildFieldValueColumn(tableName, "surface"),
-		FieldKey:     buildFieldValueColumn(tableName, "field_key"),
-		FieldType:    buildFieldValueColumn(tableName, "field_type"),
-		Scale:        buildFieldValueColumn(tableName, "scale"),
-		Ordinal:      buildFieldValueColumn(tableName, "ordinal"),
-		ValueText:    buildFieldValueColumn(tableName, "value_text"),
-		ValueInteger: buildFieldValueColumn(tableName, "value_integer"),
-		ValueNumeric: buildFieldValueColumn(tableName, "value_numeric"),
-		ValueBoolean: buildFieldValueColumn(tableName, "value_boolean"),
+		ColumnsExpr:    columnsExpr,
+		tableAlias:     tableName,
+		ID:             buildFieldValueColumn(tableName, "id"),
+		CreatedAt:      buildFieldValueColumn(tableName, "created_at"),
+		SurfaceID:      buildFieldValueColumn(tableName, "surface_id"),
+		ContainerID:    buildFieldValueColumn(tableName, "container_id"),
+		ItemID:         buildFieldValueColumn(tableName, "item_id"),
+		Surface:        buildFieldValueColumn(tableName, "surface"),
+		FieldKey:       buildFieldValueColumn(tableName, "field_key"),
+		FieldType:      buildFieldValueColumn(tableName, "field_type"),
+		Scale:          buildFieldValueColumn(tableName, "scale"),
+		Ordinal:        buildFieldValueColumn(tableName, "ordinal"),
+		ValueText:      buildFieldValueColumn(tableName, "value_text"),
+		ValueInteger:   buildFieldValueColumn(tableName, "value_integer"),
+		ValueNumeric:   buildFieldValueColumn(tableName, "value_numeric"),
+		ValueBoolean:   buildFieldValueColumn(tableName, "value_boolean"),
+		AppliesParents: buildFieldValueColumn(tableName, "applies_parents"),
 	}
 }
 
 type fieldValueColumns struct {
 	expr.ColumnsExpr
-	tableAlias   string
-	ID           fieldValueColumn
-	CreatedAt    fieldValueColumn
-	SurfaceID    fieldValueColumn
-	ContainerID  fieldValueColumn
-	ItemID       fieldValueColumn
-	Surface      fieldValueColumn
-	FieldKey     fieldValueColumn
-	FieldType    fieldValueColumn
-	Scale        fieldValueColumn
-	Ordinal      fieldValueColumn
-	ValueText    fieldValueColumn
-	ValueInteger fieldValueColumn
-	ValueNumeric fieldValueColumn
-	ValueBoolean fieldValueColumn
+	tableAlias     string
+	ID             fieldValueColumn
+	CreatedAt      fieldValueColumn
+	SurfaceID      fieldValueColumn
+	ContainerID    fieldValueColumn
+	ItemID         fieldValueColumn
+	Surface        fieldValueColumn
+	FieldKey       fieldValueColumn
+	FieldType      fieldValueColumn
+	Scale          fieldValueColumn
+	Ordinal        fieldValueColumn
+	ValueText      fieldValueColumn
+	ValueInteger   fieldValueColumn
+	ValueNumeric   fieldValueColumn
+	ValueBoolean   fieldValueColumn
+	AppliesParents fieldValueColumn
 }
 
 // Alias returns the current table alias for the columns set.
@@ -163,24 +166,25 @@ func (c fieldValueColumn) ShouldOmitParens() bool {
 // All values are optional, and do not have to be set
 // Generated columns are not included
 type FieldValueSetter struct {
-	ID           omit.Val[string]              `db:"id,pk" `
-	CreatedAt    omit.Val[time.Time]           `db:"created_at" `
-	SurfaceID    omit.Val[string]              `db:"surface_id" `
-	ContainerID  omit.Val[string]              `db:"container_id" `
-	ItemID       omit.Val[string]              `db:"item_id" `
-	Surface      omit.Val[string]              `db:"surface" `
-	FieldKey     omit.Val[string]              `db:"field_key" `
-	FieldType    omit.Val[string]              `db:"field_type" `
-	Scale        omit.Val[int64]               `db:"scale" `
-	Ordinal      omit.Val[int64]               `db:"ordinal" `
-	ValueText    omitnull.Val[string]          `db:"value_text" `
-	ValueInteger omitnull.Val[int64]           `db:"value_integer" `
-	ValueNumeric omitnull.Val[decimal.Decimal] `db:"value_numeric" `
-	ValueBoolean omitnull.Val[bool]            `db:"value_boolean" `
+	ID             omit.Val[string]              `db:"id,pk" `
+	CreatedAt      omit.Val[time.Time]           `db:"created_at" `
+	SurfaceID      omit.Val[string]              `db:"surface_id" `
+	ContainerID    omit.Val[string]              `db:"container_id" `
+	ItemID         omit.Val[string]              `db:"item_id" `
+	Surface        omit.Val[string]              `db:"surface" `
+	FieldKey       omit.Val[string]              `db:"field_key" `
+	FieldType      omit.Val[string]              `db:"field_type" `
+	Scale          omit.Val[int64]               `db:"scale" `
+	Ordinal        omit.Val[int64]               `db:"ordinal" `
+	ValueText      omitnull.Val[string]          `db:"value_text" `
+	ValueInteger   omitnull.Val[int64]           `db:"value_integer" `
+	ValueNumeric   omitnull.Val[decimal.Decimal] `db:"value_numeric" `
+	ValueBoolean   omitnull.Val[bool]            `db:"value_boolean" `
+	AppliesParents omit.Val[bool]                `db:"applies_parents" `
 }
 
 func (s FieldValueSetter) SetColumns() []string {
-	vals := make([]string, 0, 14)
+	vals := make([]string, 0, 15)
 	if s.ID.IsValue() {
 		vals = append(vals, "id")
 	}
@@ -222,6 +226,9 @@ func (s FieldValueSetter) SetColumns() []string {
 	}
 	if s.ValueBoolean.IsValue() || s.ValueBoolean.IsNull() {
 		vals = append(vals, "value_boolean")
+	}
+	if s.AppliesParents.IsValue() {
+		vals = append(vals, "applies_parents")
 	}
 	return vals
 }
@@ -268,6 +275,9 @@ func (s FieldValueSetter) Overwrite(t *FieldValue) {
 	}
 	if s.ValueBoolean.IsValue() || s.ValueBoolean.IsNull() {
 		t.ValueBoolean = s.ValueBoolean.MustGetNull()
+	}
+	if s.AppliesParents.IsValue() {
+		t.AppliesParents = s.AppliesParents.MustGet()
 	}
 }
 
@@ -385,6 +395,13 @@ func (s *FieldValueSetter) Apply(q *dialect.InsertQuery) {
 				}
 				return sqlite.Arg(s.ValueBoolean.MustGetNull()).WriteSQL(ctx, w, d, start)
 			}))
+		case "applies_parents":
+			vals = append(vals, bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+				if s.AppliesParents.IsUnset() {
+					return sqlite.Arg(nil).WriteSQL(ctx, w, d, start)
+				}
+				return sqlite.Arg(s.AppliesParents.MustGet()).WriteSQL(ctx, w, d, start)
+			}))
 		}
 	}
 
@@ -396,7 +413,7 @@ func (s FieldValueSetter) UpdateMod() bob.Mod[*dialect.UpdateQuery] {
 }
 
 func (s FieldValueSetter) Expressions(prefix ...string) []bob.Expression {
-	exprs := make([]bob.Expression, 0, 14)
+	exprs := make([]bob.Expression, 0, 15)
 
 	if s.ID.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
@@ -496,6 +513,13 @@ func (s FieldValueSetter) Expressions(prefix ...string) []bob.Expression {
 		}})
 	}
 
+	if s.AppliesParents.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			sqlite.Quote(append(prefix, "applies_parents")...),
+			sqlite.Arg(s.AppliesParents),
+		}})
+	}
+
 	return exprs
 }
 
@@ -506,7 +530,7 @@ func fieldValueScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc, 
 		idx int
 		dst func(o *FieldValue) any
 	}
-	targets := make([]target, 0, 14)
+	targets := make([]target, 0, 15)
 	for i, col := range cols {
 		switch col {
 		case "id":
@@ -537,6 +561,8 @@ func fieldValueScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc, 
 			targets = append(targets, target{i, func(o *FieldValue) any { return &o.ValueNumeric }})
 		case "value_boolean":
 			targets = append(targets, target{i, func(o *FieldValue) any { return &o.ValueBoolean }})
+		case "applies_parents":
+			targets = append(targets, target{i, func(o *FieldValue) any { return &o.AppliesParents }})
 		}
 	}
 
@@ -978,22 +1004,23 @@ func (fieldValue0 *FieldValue) AttachSurfaceItemSurface(ctx context.Context, exe
 }
 
 type fieldValueWhere[Q sqlite.Filterable] struct {
-	cols         fieldValueColumns
-	ID           sqlite.WhereMod[Q, string]
-	CreatedAt    sqlite.WhereMod[Q, time.Time]
-	SurfaceID    sqlite.WhereMod[Q, string]
-	ContainerID  sqlite.WhereMod[Q, string]
-	ItemID       sqlite.WhereMod[Q, string]
-	Surface      sqlite.WhereMod[Q, string]
-	FieldKey     sqlite.WhereMod[Q, string]
-	FieldType    sqlite.WhereMod[Q, string]
-	Scale        sqlite.WhereMod[Q, int64]
-	Ordinal      sqlite.WhereMod[Q, int64]
-	ValueText    sqlite.WhereNullMod[Q, string]
-	ValueInteger sqlite.WhereNullMod[Q, int64]
-	ValueNumeric sqlite.WhereNullMod[Q, decimal.Decimal]
-	ValueBoolean sqlite.WhereNullMod[Q, bool]
-	R            fieldValueWhereR[Q]
+	cols           fieldValueColumns
+	ID             sqlite.WhereMod[Q, string]
+	CreatedAt      sqlite.WhereMod[Q, time.Time]
+	SurfaceID      sqlite.WhereMod[Q, string]
+	ContainerID    sqlite.WhereMod[Q, string]
+	ItemID         sqlite.WhereMod[Q, string]
+	Surface        sqlite.WhereMod[Q, string]
+	FieldKey       sqlite.WhereMod[Q, string]
+	FieldType      sqlite.WhereMod[Q, string]
+	Scale          sqlite.WhereMod[Q, int64]
+	Ordinal        sqlite.WhereMod[Q, int64]
+	ValueText      sqlite.WhereNullMod[Q, string]
+	ValueInteger   sqlite.WhereNullMod[Q, int64]
+	ValueNumeric   sqlite.WhereNullMod[Q, decimal.Decimal]
+	ValueBoolean   sqlite.WhereNullMod[Q, bool]
+	AppliesParents sqlite.WhereMod[Q, bool]
+	R              fieldValueWhereR[Q]
 }
 
 func (fieldValueWhere[Q]) AliasedAs(alias string) fieldValueWhere[Q] {
@@ -1002,22 +1029,23 @@ func (fieldValueWhere[Q]) AliasedAs(alias string) fieldValueWhere[Q] {
 
 func buildFieldValueWhere[Q sqlite.Filterable](cols fieldValueColumns) fieldValueWhere[Q] {
 	return fieldValueWhere[Q]{
-		cols:         cols,
-		ID:           sqlite.Where[Q, string](cols.ID.Expression),
-		CreatedAt:    sqlite.Where[Q, time.Time](cols.CreatedAt.Expression),
-		SurfaceID:    sqlite.Where[Q, string](cols.SurfaceID.Expression),
-		ContainerID:  sqlite.Where[Q, string](cols.ContainerID.Expression),
-		ItemID:       sqlite.Where[Q, string](cols.ItemID.Expression),
-		Surface:      sqlite.Where[Q, string](cols.Surface.Expression),
-		FieldKey:     sqlite.Where[Q, string](cols.FieldKey.Expression),
-		FieldType:    sqlite.Where[Q, string](cols.FieldType.Expression),
-		Scale:        sqlite.Where[Q, int64](cols.Scale.Expression),
-		Ordinal:      sqlite.Where[Q, int64](cols.Ordinal.Expression),
-		ValueText:    sqlite.WhereNull[Q, string](cols.ValueText.Expression),
-		ValueInteger: sqlite.WhereNull[Q, int64](cols.ValueInteger.Expression),
-		ValueNumeric: sqlite.WhereNull[Q, decimal.Decimal](cols.ValueNumeric.Expression),
-		ValueBoolean: sqlite.WhereNull[Q, bool](cols.ValueBoolean.Expression),
-		R:            fieldValueWhereR[Q]{cols: cols},
+		cols:           cols,
+		ID:             sqlite.Where[Q, string](cols.ID.Expression),
+		CreatedAt:      sqlite.Where[Q, time.Time](cols.CreatedAt.Expression),
+		SurfaceID:      sqlite.Where[Q, string](cols.SurfaceID.Expression),
+		ContainerID:    sqlite.Where[Q, string](cols.ContainerID.Expression),
+		ItemID:         sqlite.Where[Q, string](cols.ItemID.Expression),
+		Surface:        sqlite.Where[Q, string](cols.Surface.Expression),
+		FieldKey:       sqlite.Where[Q, string](cols.FieldKey.Expression),
+		FieldType:      sqlite.Where[Q, string](cols.FieldType.Expression),
+		Scale:          sqlite.Where[Q, int64](cols.Scale.Expression),
+		Ordinal:        sqlite.Where[Q, int64](cols.Ordinal.Expression),
+		ValueText:      sqlite.WhereNull[Q, string](cols.ValueText.Expression),
+		ValueInteger:   sqlite.WhereNull[Q, int64](cols.ValueInteger.Expression),
+		ValueNumeric:   sqlite.WhereNull[Q, decimal.Decimal](cols.ValueNumeric.Expression),
+		ValueBoolean:   sqlite.WhereNull[Q, bool](cols.ValueBoolean.Expression),
+		AppliesParents: sqlite.Where[Q, bool](cols.AppliesParents.Expression),
+		R:              fieldValueWhereR[Q]{cols: cols},
 	}
 }
 

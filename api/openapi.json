@@ -785,7 +785,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "Shared keyword term ID or label; includes intrinsic keywords and keywords fields."
+            "description": "Shared keyword term ID or label; includes intrinsic keywords and keywords fields, and the parents that item keywords and fields with apply_parents apply."
           },
           {
             "schema": {
@@ -1138,7 +1138,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "Shared keyword term ID or label; includes intrinsic keywords and keywords fields."
+            "description": "Shared keyword term ID or label; includes intrinsic keywords and keywords fields, and the parents that item keywords and fields with apply_parents apply."
           },
           {
             "name": "kind",
@@ -10027,7 +10027,7 @@
       "post": {
         "summary": "Move Term",
         "operationId": "moveTerm",
-        "description": "Moves the term and its subtree in its set. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.",
+        "description": "Moves the term and its subtree in its set. Raises term.moved. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.",
         "parameters": [
           {
             "name": "id",
@@ -10733,7 +10733,7 @@
       "post": {
         "summary": "Promote Keyword",
         "operationId": "promoteKeyword",
-        "description": "Moves a keyword into a managed set, available as a keyword, or merges it into the set's term with the same name, label or synonym. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.",
+        "description": "Moves a keyword into a managed set, available as a keyword, or merges it into the set's term with the same name, label or synonym. Raises term.moved or term.merged. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.",
         "parameters": [
           {
             "name": "id",
@@ -16435,7 +16435,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "Shared keyword term ID or label; includes intrinsic keywords and keywords fields."
+            "description": "Shared keyword term ID or label; includes intrinsic keywords and keywords fields, and the parents that item keywords and fields with apply_parents apply."
           },
           {
             "name": "created_by",
@@ -21519,7 +21519,7 @@
           },
           "options": {
             "$ref": "#/components/schemas/FieldOptions",
-            "description": "Complete replacement of options; multiple and reference scope are immutable."
+            "description": "Complete replacement of options; multiple, reference scope and apply_parents are immutable."
           }
         }
       },
@@ -21743,6 +21743,11 @@
           },
           "term_set_id": {
             "type": "string"
+          },
+          "apply_parents": {
+            "type": "boolean",
+            "default": false,
+            "description": "Term and keywords fields only, immutable. A value also applies its parent terms: eq, in and ne match values at or below a term, as under does, and keyword filters, keyword counts and search keywords include the parents. Values store only the picked terms. Item keywords always apply their parents."
           },
           "unique": {
             "type": "boolean",
@@ -23803,11 +23808,11 @@
         "properties": {
           "type": {
             "type": "string",
-            "description": "item.created, item.updated, item.published, item.unpublished, item.deleted, item.restored, item.purged, file.added, file.updated, folder.created, folder.updated, folder.deleted, folder.restored, folder.purged, permissions.changed, task.created, task.completed, task.cancelled, schedule, manual, term.merged, term.changed, or wf.{key}.{event}. Folder triggers take collection_id and content_type_id and no condition. permissions.changed is delivered per affected item and folder, takes collection_id, content_type_id, actions and a condition; term.changed and term.merged take no options or item conditions. term.changed subscriptions require taxonomy.read; dispatch and every executing node recheck the workflow version author's current scope."
+            "description": "item.created, item.updated, item.published, item.unpublished, item.deleted, item.restored, item.purged, file.added, file.updated, folder.created, folder.updated, folder.deleted, folder.restored, folder.purged, permissions.changed, task.created, task.completed, task.cancelled, schedule, manual, term.merged, term.moved, term.changed, or wf.{key}.{event}. Folder triggers take collection_id and content_type_id and no condition. permissions.changed is delivered per affected item and folder, takes collection_id, content_type_id, actions and a condition; term.changed, term.merged and term.moved take no options or item conditions. term.changed subscriptions require taxonomy.read; dispatch and every executing node recheck the workflow version author's current scope."
           },
           "collection_id": {
             "type": "string",
-            "description": "Limits item, workflow-event, task and permission triggers to a collection; permission events include the collection itself and its folders/items. Not supported for term.changed or term.merged."
+            "description": "Limits item, workflow-event, task and permission triggers to a collection; permission events include the collection itself and its folders/items. Not supported for term.changed, term.merged or term.moved."
           },
           "content_type_id": {
             "type": "string"

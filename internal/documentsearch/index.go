@@ -47,6 +47,10 @@ func document(ctx context.Context, s *dms.Service, e dms.IndexEntry) (search.Doc
 	var body, keywords, terms, wordTerms []string
 	var fields []search.Field
 	keywordIDs := append([]string{}, e.Keywords...)
+	// An item's own keywords apply their parent terms, and so do the values
+	// of fields that apply parents.
+	keywordLineage := append([]string{}, e.Keywords...)
+	var termLineage, wordLineage []string
 	for _, f := range e.Fields {
 		d := f.Definition
 		if len(f.Indexed) > 0 {
@@ -67,6 +71,15 @@ func document(ctx context.Context, s *dms.Service, e dms.IndexEntry) (search.Doc
 					if d.Type == catalog.FieldKeywords {
 						keywordIDs = append(keywordIDs, id)
 					}
+					if d.Options.ApplyParents {
+						termLineage = append(termLineage, id)
+						if f.Weight != "none" {
+							wordLineage = append(wordLineage, id)
+						}
+						if d.Type == catalog.FieldKeywords {
+							keywordLineage = append(keywordLineage, id)
+						}
+					}
 				}
 			case catalog.FieldLookup, catalog.FieldPerson, catalog.FieldDate, catalog.FieldDatetime, catalog.FieldBoolean:
 			default:
@@ -81,6 +94,22 @@ func document(ctx context.Context, s *dms.Service, e dms.IndexEntry) (search.Doc
 			}
 		}
 	}
+	parents, err := ancestors(ctx, s, slices.Concat(keywordLineage, termLineage, wordLineage))
+	if err != nil {
+		return search.Document{}, err
+	}
+	for _, id := range keywordLineage {
+		keywordIDs = append(keywordIDs, parents[id]...)
+	}
+	terms = append(terms, e.Keywords...)
+	wordTerms = append(wordTerms, e.Keywords...)
+	for _, id := range slices.Concat(termLineage, e.Keywords) {
+		terms = append(terms, parents[id]...)
+	}
+	for _, id := range slices.Concat(wordLineage, e.Keywords) {
+		wordTerms = append(wordTerms, parents[id]...)
+	}
+	terms = sortedUnique(terms)
 	if len(keywordIDs) > 0 {
 		found, err := s.DAL.Taxonomy().Terms(ctx, taxonomy.TermFilter{IDs: keywordIDs})
 		if err != nil {
@@ -96,9 +125,7 @@ func document(ctx context.Context, s *dms.Service, e dms.IndexEntry) (search.Doc
 		}
 		keywordIDs = slices.Sorted(maps.Keys(canonical))
 	}
-	terms = append(terms, e.Keywords...)
-	wordTerms = append(wordTerms, e.Keywords...)
-	words, err := termWords(ctx, s, wordTerms)
+	words, err := termWords(ctx, s, sortedUnique(wordTerms))
 	if err != nil {
 		return search.Document{}, err
 	}
@@ -126,6 +153,50 @@ func document(ctx context.Context, s *dms.Service, e dms.IndexEntry) (search.Doc
 		d.ArchivedBy = *r.ArchivedBy
 	}
 	return d, nil
+}
+
+// ancestors maps term IDs to the parent terms of the terms they stand for
+// now: a merged term's are those of the term it was merged into.
+func ancestors(ctx context.Context, s *dms.Service, ids []string) (map[string][]string, error) {
+	out := map[string][]string{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	found, err := s.DAL.Taxonomy().Terms(ctx, taxonomy.TermFilter{IDs: sortedUnique(ids)})
+	if err != nil {
+		return nil, err
+	}
+	canonical := map[string]string{}
+	byID := map[string]taxonomy.Term{}
+	var targets []string
+	for _, t := range found {
+		byID[t.ID] = t
+		canonical[t.ID] = t.ID
+		if t.Merged() {
+			canonical[t.ID] = t.MergedIntoID
+			targets = append(targets, t.MergedIntoID)
+		}
+	}
+	if len(targets) > 0 {
+		merged, err := s.DAL.Taxonomy().Terms(ctx, taxonomy.TermFilter{IDs: sortedUnique(targets)})
+		if err != nil {
+			return nil, err
+		}
+		for _, t := range merged {
+			byID[t.ID] = t
+		}
+	}
+	for id, target := range canonical {
+		if t, ok := byID[target]; ok {
+			lineage := t.Lineage()
+			out[id] = lineage[:len(lineage)-1]
+		}
+	}
+	return out, nil
+}
+
+func sortedUnique(ids []string) []string {
+	return slices.Compact(slices.Sorted(slices.Values(ids)))
 }
 
 // termWords are the names, labels and synonyms of terms, and of the terms

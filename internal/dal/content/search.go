@@ -99,11 +99,10 @@ func (r *Repo) TermHolders(ctx context.Context, h TermHolders) ([]string, error)
 		raw, _ := json.Marshal(h.Skip)
 		conds, args = append(conds, "p.container_id NOT IN (SELECT value FROM "+r.d.Elements(r.d.JSONArg(), "skipped")+")"), append(args, string(raw))
 	}
-	held := make([]string, len(h.TermIDs))
-	for i, id := range h.TermIDs {
-		held[i] = r.d.Contains(r.d.Text("p.payload"), "?")
-		args = append(args, `"`+id+`"`)
-	}
-	conds = append(conds, "("+strings.Join(held, " OR ")+")")
+	// Values and keywords hold term IDs as JSON strings.
+	held, _ := json.Marshal(h.TermIDs)
+	quoted := "'\"'||h.value||'\"'"
+	conds = append(conds, "EXISTS(SELECT 1 FROM "+r.d.Elements(r.d.JSONArg(), "h")+" WHERE "+r.d.Contains(r.d.Text("p.payload"), quoted)+" OR "+r.d.Contains(r.d.Text("p.keywords"), quoted)+")")
+	args = append(args, string(held))
 	return r.strings(ctx, `SELECT DISTINCT p.item_id FROM item_surfaces p WHERE `+strings.Join(conds, " AND ")+` ORDER BY p.item_id LIMIT ?`, append(args, h.Limit)...)
 }

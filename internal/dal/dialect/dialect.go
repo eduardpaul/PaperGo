@@ -120,6 +120,15 @@ func (d Dialect) Below(child, root string) string {
 	return child + `>=` + root + ` AND ` + child + `<substr(` + root + `,1,length(` + root + `)-1)||'0'`
 }
 
+// PathIDs is a table expression of the IDs in the materialized path path,
+// root first, named alias with one column, value.
+func (d Dialect) PathIDs(path, alias string) string {
+	if d.Postgres {
+		return `unnest(string_to_array(trim(both '/' from ` + path + `), '/')) AS ` + alias + `(value)`
+	}
+	return `json_each('["'||replace(trim(` + path + `,'/'),'/','","')||'"]') ` + alias
+}
+
 // Prefix is the leading size characters of text; a timestamp is read as
 // UTC text first.
 func (d Dialect) Prefix(text string, size int, timestamp bool) string {

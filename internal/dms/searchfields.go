@@ -296,11 +296,12 @@ func (s *Service) indexCondition(ctx context.Context, d *catalog.FieldDefinition
 	if d.Type != catalog.FieldTerm && d.Type != catalog.FieldKeywords {
 		return c, nil
 	}
-	// A term matches the terms merged into it; under also its descendants.
+	// A term matches the terms merged into it; under also its descendants,
+	// and so does every comparison on a field whose values apply parents.
 	var ids []string
 	for _, v := range c.Values {
 		expand := s.TermAliases
-		if op == "under" {
+		if op == "under" || d.Options.ApplyParents {
 			expand = s.TermFamily
 		}
 		expanded, err := expand(ctx, v.Text)

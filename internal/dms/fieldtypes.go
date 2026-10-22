@@ -325,6 +325,9 @@ func validateFieldDefinition(d *catalog.FieldDefinition) error {
 	if (typ == "lookup") != (o.LookupContainerID != "") || (typ == "term") != (o.TermSetID != "") {
 		return invalid("reference fields require their matching reference scope")
 	}
+	if o.ApplyParents && !typ.Terms() {
+		return invalid("apply_parents requires a term or keywords field")
+	}
 	if typ == "keywords" && !d.Indexed {
 		return invalid("keywords fields must be indexed")
 	}
@@ -379,7 +382,7 @@ func fieldFromInput(in CreateField) *catalog.FieldDefinition {
 	return &catalog.FieldDefinition{Key: in.Key, Label: in.Label, Type: in.Type, Required: in.Required, Choices: in.Choices, Indexed: in.Indexed, Scale: in.Scale, Options: in.Options}
 }
 func optionsIdentityEqual(a, b model.FieldOptions) bool {
-	return a.Multiple == b.Multiple && a.LookupContainerID == b.LookupContainerID && a.TermSetID == b.TermSetID
+	return a.Multiple == b.Multiple && a.LookupContainerID == b.LookupContainerID && a.TermSetID == b.TermSetID && a.ApplyParents == b.ApplyParents
 }
 
 func (s *Service) validateReferenceScopes(ctx context.Context, subject string, d *catalog.FieldDefinition) error {

@@ -55,6 +55,8 @@ type FieldValue struct {
 	ValueInteger *int64
 	ValueNumeric *decimal.Decimal
 	ValueBoolean *bool
+	// AppliesParents makes a term value also apply the term's ancestors.
+	AppliesParents bool
 }
 
 // GroupCount counts the live items of a collection's surface, all of them

@@ -28,7 +28,7 @@ func (r *Repo) PopularKeywords(ctx context.Context, keywordsSetID string, top in
 		out = append(out, c)
 		return nil
 	}, `WITH usage AS (
- SELECT p.item_id,coalesce(t.merged_into_id,t.id) AS keyword FROM item_surfaces p JOIN resources c ON c.id=p.container_id AND c.deleted_at IS NULL JOIN resources r ON r.id=p.item_id AND r.deleted_at IS NULL JOIN terms t ON t.id IN (`+SurfaceKeywords+`) WHERE p.surface=CASE WHEN c.publishing_enabled THEN 'head' ELSE 'published' END
+ SELECT p.item_id,t.id AS keyword FROM item_surfaces p JOIN resources c ON c.id=p.container_id AND c.deleted_at IS NULL JOIN resources r ON r.id=p.item_id AND r.deleted_at IS NULL JOIN terms t ON t.id IN (`+r.surfaceKeywords()+`) WHERE p.surface=CASE WHEN c.publishing_enabled THEN 'head' ELSE 'published' END
  ) SELECT u.keyword,count(DISTINCT u.item_id) AS n FROM usage u JOIN terms t ON t.id=u.keyword WHERE NOT t.deprecated AND (t.term_set_id=? OR t.available_as_keyword) GROUP BY u.keyword ORDER BY n DESC,u.keyword LIMIT ?`, keywordsSetID, top)
 	return out, err
 }
@@ -58,10 +58,10 @@ func (r *Repo) WorkspaceKeywords(ctx context.Context, w WorkspaceKeywords) ([]Ke
 	readable, readArgs := r.acl.Resource("r.id", w.Reader, access.Read)
 	selected, surfaceArgs := r.acl.Surface("r.id", w.Reader, "auto")
 	query := `WITH usage AS (
- SELECT r.id,coalesce(t.merged_into_id,t.id) AS keyword FROM resources r JOIN resource_keywords k ON k.resource_id=r.id JOIN terms t ON t.id=k.keyword
+ SELECT r.id,t.id AS keyword FROM resources r JOIN terms t ON t.id IN (` + r.resourceKeywords("r.id") + `)
  WHERE r.kind NOT IN ('item','folder') AND r.deleted_at IS NULL AND ` + scope + ` AND ` + readable + `
  UNION
- SELECT r.id,coalesce(t.merged_into_id,t.id) FROM resources r JOIN item_surfaces p ON p.item_id=r.id JOIN terms t ON t.id IN (` + SurfaceKeywords + `)
+ SELECT r.id,t.id FROM resources r JOIN item_surfaces p ON p.item_id=r.id JOIN terms t ON t.id IN (` + r.surfaceKeywords() + `)
  WHERE r.deleted_at IS NULL AND ` + scope + ` AND p.surface=` + selected + ` AND ` + readable + `
  ) SELECT t.id,t.name,count(*) FROM usage u JOIN terms t ON t.id=u.keyword WHERE TRUE`
 	values := append(append([]any{}, args...), readArgs...)

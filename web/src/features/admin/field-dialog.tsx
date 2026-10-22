@@ -67,6 +67,7 @@ export function keyFromLabel(label: string) {
 }
 
 const multipleTypes = new Set(['choice', 'person', 'lookup', 'term', 'keywords']);
+const termTypes = new Set(['term', 'keywords']);
 
 /** Shared organization field editor, adapted from PaperDotNet's content type editor. */
 export function FieldDialog({
@@ -101,7 +102,11 @@ export function FieldDialog({
   const workspace = useQuery({ ...resourceQuery(collection?.workspace_id ?? ''), enabled: !field && !!collection?.workspace_id });
   const organization = useQuery({ ...organizationPreferencesQuery, enabled: !field });
   const currencyCode = options.currency_code ?? (workspace.data?.default_currency || organization.data?.default_currency || 'USD');
-  const effectiveOptions = type === 'currency' ? { ...options, currency_code: currencyCode } : options;
+  const effectiveOptions = {
+    ...options,
+    currency_code: type === 'currency' ? currencyCode : options.currency_code,
+    apply_parents: termTypes.has(type) ? options.apply_parents : undefined,
+  };
   const draft: FieldDefinition = {
     id: field?.id ?? 'new',
     key,
@@ -361,6 +366,16 @@ export function FieldDialog({
               }}
             />
             Allow multiple values
+          </label>
+        )}
+        {termTypes.has(type) && (
+          <label className="flex gap-2">
+            <Checkbox
+              checked={!!options.apply_parents}
+              disabled={!!field}
+              onChange={(event) => patchOptions({ apply_parents: event.target.checked })}
+            />
+            Apply parent terms (picking a term also tags its parents)
           </label>
         )}
         <label className="flex gap-2">

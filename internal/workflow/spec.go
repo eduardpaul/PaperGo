@@ -322,7 +322,7 @@ func (d Definition) validate() error {
 			if t.Cron != "" || t.TimeZone != "" {
 				return dms.Invalid(at + "cron and time_zone belong to schedule triggers")
 			}
-		case t.Type == dms.EventTermMerged || t.Type == dms.EventTermChanged:
+		case t.Type == dms.EventTermMerged || t.Type == dms.EventTermMoved || t.Type == dms.EventTermChanged:
 			if t.CollectionID != "" || t.ContentTypeID != "" || t.Cron != "" || t.TimeZone != "" {
 				return dms.Invalid(at + t.Type + " triggers take no options")
 			}

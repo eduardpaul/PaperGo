@@ -458,6 +458,10 @@ CREATE TABLE field_values (
     value_integer INTEGER,
     value_numeric NUMERIC,
     value_boolean BOOLEAN,
+    -- applies_parents copies the immutable apply_parents option of a term
+    -- or keywords field: its value also applies the term's ancestors.
+    applies_parents BOOLEAN NOT NULL DEFAULT FALSE CHECK (applies_parents IN (0, 1)),
+    CHECK (field_type IN ('term', 'keywords') OR NOT applies_parents),
     CHECK (
         (CASE WHEN value_text IS NOT NULL THEN 1 ELSE 0 END) +
         (CASE WHEN value_integer IS NOT NULL THEN 1 ELSE 0 END) +

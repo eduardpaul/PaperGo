@@ -2662,6 +2662,10 @@ export type FieldDefinition_index_status = (typeof FieldDefinition_index_statusO
 export type FieldDefinition_type = (typeof FieldDefinition_typeObject)[keyof typeof FieldDefinition_typeObject];
 export interface FieldOptions extends Parsable {
 	/**
+	 * Term and keywords fields only, immutable. A value also applies its parent terms: eq, in and ne match values at or below a term, as under does, and keyword filters, keyword counts and search keywords include the parents. Values store only the picked terms. Item keywords always apply their parents.
+	 */
+	applyParents?: boolean | null;
+	/**
 	 * Required for currency fields only. Three uppercase letters, such as EUR. Currency and number values are exact JSON decimals with a 96-bit coefficient and scale 0..28; excess fractional precision rounds to nearest, ties to even.
 	 */
 	currencyCode?: string | null;
@@ -6082,7 +6086,7 @@ export interface UpdateField extends Parsable {
 	 */
 	label?: string | null;
 	/**
-	 * Complete replacement of options; multiple and reference scope are immutable.
+	 * Complete replacement of options; multiple, reference scope and apply_parents are immutable.
 	 */
 	options?: FieldOptions | null;
 	/**
@@ -8203,7 +8207,7 @@ export interface ItemsRequestBuilder extends BaseRequestBuilder<ItemsRequestBuil
  */
 export interface PromoteRequestBuilder extends BaseRequestBuilder<PromoteRequestBuilder> {
 	/**
-	 * Moves a keyword into a managed set, available as a keyword, or merges it into the set's term with the same name, label or synonym. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.
+	 * Moves a keyword into a managed set, available as a keyword, or merges it into the set's term with the same name, label or synonym. Raises term.moved or term.merged. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Term>}
@@ -8220,7 +8224,7 @@ export interface PromoteRequestBuilder extends BaseRequestBuilder<PromoteRequest
 	 */
 	post(body: PromoteKeyword, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Term | undefined>;
 	/**
-	 * Moves a keyword into a managed set, available as a keyword, or merges it into the set's term with the same name, label or synonym. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.
+	 * Moves a keyword into a managed set, available as a keyword, or merges it into the set's term with the same name, label or synonym. Raises term.moved or term.merged. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -8703,7 +8707,7 @@ export interface ChildrenRequestBuilderGetQueryParameters {
 	 */
 	filterValue?: string;
 	/**
-	 * Shared keyword term ID or label; includes intrinsic keywords and keywords fields.
+	 * Shared keyword term ID or label; includes intrinsic keywords and keywords fields, and the parents that item keywords and fields with apply_parents apply.
 	 */
 	keyword?: string;
 	/**
@@ -9669,7 +9673,7 @@ export interface ResourcesRequestBuilderGetQueryParameters {
 	 */
 	filterValue?: string;
 	/**
-	 * Shared keyword term ID or label; includes intrinsic keywords and keywords fields.
+	 * Shared keyword term ID or label; includes intrinsic keywords and keywords fields, and the parents that item keywords and fields with apply_parents apply.
 	 */
 	keyword?: string;
 	/**
@@ -10049,7 +10053,7 @@ export interface SearchRequestBuilderGetQueryParameters {
 	 */
 	facets?: boolean;
 	/**
-	 * Shared keyword term ID or label; includes intrinsic keywords and keywords fields.
+	 * Shared keyword term ID or label; includes intrinsic keywords and keywords fields, and the parents that item keywords and fields with apply_parents apply.
 	 */
 	keyword?: string;
 	/**
@@ -10905,7 +10909,7 @@ export interface MergeRequestBuilder extends BaseRequestBuilder<MergeRequestBuil
 }
 interface MoveRequestBuilder$1 extends BaseRequestBuilder<MoveRequestBuilder$1> {
 	/**
-	 * Moves the term and its subtree in its set. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.
+	 * Moves the term and its subtree in its set. Raises term.moved. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Term>}
@@ -10922,7 +10926,7 @@ interface MoveRequestBuilder$1 extends BaseRequestBuilder<MoveRequestBuilder$1> 
 	 */
 	post(body: MoveTerm, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Term | undefined>;
 	/**
-	 * Moves the term and its subtree in its set. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.
+	 * Moves the term and its subtree in its set. Raises term.moved. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
