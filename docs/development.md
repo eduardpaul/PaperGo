@@ -1,6 +1,6 @@
 # Development environment
 
-PaperGo's [devcontainer](../.devcontainer/devcontainer.json) provides Go 1.27.2,
+PaperGo's [devcontainer](../.devcontainer/devcontainer.json) provides Go 1.27.3,
 Node.js 24.15.0 with npm, Python 3, SQLite's CLI, the PostgreSQL client,
 sqlite3def 3.11.26, the pinned native SDKs, and a C compiler, pkg-config and
 CMake 3.31.10. The same image is CI's toolchain image. Go matches CI and the application Docker build; Node uses the same

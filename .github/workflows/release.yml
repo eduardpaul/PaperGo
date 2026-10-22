@@ -48,7 +48,7 @@ jobs:
           sparse-checkout: scripts
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.27.2'
+          go-version: '1.27.3'
           cache: true
       - uses: ./.github/actions/native
       - uses: ./.github/actions/sqlite3def
@@ -181,7 +181,7 @@ jobs:
           ref: ${{ needs.prepare.outputs.commit }}
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.27.2'
+          go-version: '1.27.3'
           cache: true
       - uses: ./.github/actions/native
       - uses: actions/setup-node@v4

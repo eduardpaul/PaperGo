@@ -51,7 +51,7 @@ COPY scripts/native.py scripts/native.json scripts/
 COPY scripts/native-notices scripts/native-notices
 RUN --mount=type=cache,target=/src/.tools/native-downloads python3 scripts/native.py
 
-FROM golang:1.27.2-bookworm AS build
+FROM golang:1.27.3-bookworm AS build
 RUN apt-get update && apt-get install -y --no-install-recommends python3 \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /src

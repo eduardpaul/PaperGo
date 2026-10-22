@@ -146,6 +146,18 @@ class DevelopmentChecksTests(unittest.TestCase):
             with self.subTest(argv=argv), patch('sys.stderr'), self.assertRaises(SystemExit):
                 checks.main(argv)
 
+    def test_native_libraries_go_first_on_the_current_search_path(self):
+        native = self.root / 'native'
+        native.mkdir()
+        loader = 'PATH' if os.name == 'nt' else 'LD_LIBRARY_PATH'
+        (native / 'native.env').write_text(f'CGO_ENABLED=1\n{loader}=/stale\n')
+        with patch.dict('os.environ', {'PAPERGO_NATIVE_DIR': str(native), loader: '/added/later'}, clear=True), \
+                patch.object(checks, 'run'):
+            checks.prepare_go()
+            self.assertEqual(os.environ['CGO_ENABLED'], '1')
+            self.assertEqual(os.environ[loader], os.pathsep.join([str(native / 'lib'), '/added/later']))
+            self.assertEqual(os.environ['OCR_MODELS'], str(self.root / 'models/paddleocr'))
+
     def test_native_stage_requires_models_before_preparing_anything(self):
         with patch.dict('os.environ', {}, clear=True), patch.object(checks, 'prepare_go') as prepare:
             with self.assertRaisesRegex(ValueError, 'DECISION_MODELS_PATH'):

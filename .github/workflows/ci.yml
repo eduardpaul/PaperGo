@@ -23,8 +23,6 @@ permissions:
 concurrency:
   group: papergo-verify-${{ github.workflow }}-${{ github.event_name }}-${{ inputs.ref || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/')) }}
-env:
-  PAPERGO_TEST_POSTGRES_DSN: postgres://papergo:papergo@postgres:5432/papergo?sslmode=disable
 jobs:
   toolchain:
     name: Toolchain image
@@ -66,6 +64,8 @@ jobs:
     needs: toolchain
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env: &postgres-dsn
+      PAPERGO_TEST_POSTGRES_DSN: postgres://papergo:papergo@postgres:5432/papergo?sslmode=disable
     container: &toolchain
       image: ${{ needs.toolchain.outputs.image }}
       options: --user root
@@ -111,6 +111,7 @@ jobs:
     needs: toolchain
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env: *postgres-dsn
     container: *toolchain
     services: *postgres
     strategy:
@@ -242,7 +243,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           # The toolchain image pins the same Go for the other jobs.
-          go-version: '1.27.2'
+          go-version: '1.27.3'
           cache: true
       - uses: actions/setup-node@v4
         with:

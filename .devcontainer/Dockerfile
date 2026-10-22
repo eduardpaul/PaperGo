@@ -4,7 +4,7 @@
 # repository root. Keep Go and Node aligned with the runtime build.
 FROM node:24.15.0-bookworm-slim AS node
 
-FROM golang:1.27.2-bookworm
+FROM golang:1.27.3-bookworm
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl git libicu72 postgresql-client python3 python3-pip pkg-config sqlite3 sudo \
@@ -58,7 +58,10 @@ RUN groupadd --gid 1000 vscode \
     # scripts/ci.sh copies a checkout to /work; its cache volumes start out
     # owned by vscode because these directories are.
     && mkdir -p /work/web/node_modules /work/web/dist /work/sdk/node_modules /work/.cache/checks \
-    && chown -R vscode:vscode /home/vscode /opt/papergo/native /work
+    && chown -R vscode:vscode /home/vscode /work \
+    # The devcontainer can renumber vscode to the host user; setup in any
+    # checkout rewrites the SDK's environment files for that checkout.
+    && chmod -R a+rwX /opt/papergo/native
 
 # Every tool cache, Staticcheck's included, stays under /home/vscode/.cache,
 # whichever user runs the container.

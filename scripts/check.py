@@ -133,9 +133,15 @@ def prepare_go():
             os.environ[key] = str(ROOT / '.cache' / directory)
     native = native_directory()
     run(sys.executable, 'scripts/native.py', '--check', '--directory', native)
+    loaders = ('LD_LIBRARY_PATH', 'DYLD_LIBRARY_PATH', 'PATH')
     for line in (native / 'native.env').read_text().splitlines():
         key, value = line.split('=', 1)
-        os.environ[key] = value
+        if key not in loaders:
+            os.environ[key] = value
+    # The library directory goes first on the current search path: the copy
+    # in native.env would undo later changes, such as tools added to PATH.
+    loader = {'nt': 'PATH'}.get(os.name, 'DYLD_LIBRARY_PATH' if sys.platform == 'darwin' else 'LD_LIBRARY_PATH')
+    os.environ[loader] = os.pathsep.join(filter(None, [str(native / 'lib'), os.environ.get(loader)]))
     # The models ship in this checkout, wherever the SDKs were installed.
     os.environ['OCR_MODELS'] = str(ROOT / 'models/paddleocr')
     planner = ROOT / '.tools/bin/sqlite3def'
@@ -257,6 +263,13 @@ def environment(**values):
     return {**os.environ, **values}
 
 
+def sqlite_environment(**values):
+    """The environment of tests that run on SQLite, without a PostgreSQL
+    server that PAPERGO_TEST_POSTGRES_DSN or TEST_POSTGRES_DSN would name."""
+    return {key: value for key, value in environment(**values).items()
+            if key not in ('PAPERGO_TEST_POSTGRES_DSN', 'TEST_POSTGRES_DSN')}
+
+
 def stage_lint(args):
     prepare_go()
     check_formatting()
@@ -282,7 +295,7 @@ def stage_test(args):
         prepare_frontend(args.setup)
     if 'go' in parts:
         go_tests('test' + (f'-{args.shard[0]}' if args.shard else ''), ['-count=1', '-timeout=15m', *run_flags(args)],
-                 args.packages or ['./...'], args.shard, environment(PAPERGO_REQUIRE_OCR='1'))
+                 args.packages or ['./...'], args.shard, sqlite_environment(PAPERGO_REQUIRE_OCR='1'))
     if 'postgres' in parts:
         prepare_postgres()
         go_tests('postgres', ['-count=1', '-timeout=40m', *run_flags(args)], args.packages or postgres_packages())
@@ -292,7 +305,7 @@ def stage_race(args):
     prepare_go()
     prepare_frontend(args.setup)
     go_tests('race' + (f'-{args.shard[0]}' if args.shard else ''), ['-race', '-count=1', '-timeout=15m', *run_flags(args)],
-             args.packages or ['./...'], args.shard, environment(PAPERGO_REQUIRE_OCR='1'))
+             args.packages or ['./...'], args.shard, sqlite_environment(PAPERGO_REQUIRE_OCR='1'))
 
 
 def stage_native(args):
@@ -300,17 +313,17 @@ def stage_native(args):
     prepare_go()
     prepare_frontend(args.setup)
     go_tests('native', ['-race', '-count=1', '-timeout=15m', *run_flags(args)], args.packages or NATIVE_PACKAGES,
-             env=environment(PAPERGO_REQUIRE_DECISION='1', PAPERGO_REQUIRE_EMBEDDING='1', PAPERGO_REQUIRE_OCR='1'))
+             env=sqlite_environment(PAPERGO_REQUIRE_DECISION='1', PAPERGO_REQUIRE_EMBEDDING='1', PAPERGO_REQUIRE_OCR='1'))
 
 
 def stage_zvec(args):
     prepare_go()
     prepare_frontend(args.setup)
-    go_tests('zvec', ['-race', '-count=1'], ['./internal/dal/search/zvecstore', './internal/backup', './cmd/admin'])
+    go_tests('zvec', ['-race', '-count=1'], ['./internal/dal/search/zvecstore', './internal/backup', './cmd/admin'], env=sqlite_environment())
     go_tests('zvec-parity', ['-race', '-count=1', '-run', '(Search|Content|Receipt|Contract|AIComplete|Prefix|SmartFolder|View|Listing|Query)'],
-             ['./internal/dms', './internal/httpapi', './internal/scriptrun'], env=environment(PAPERGO_TEST_SEARCH_STORE='zvec'))
+             ['./internal/dms', './internal/httpapi', './internal/scriptrun'], env=sqlite_environment(PAPERGO_TEST_SEARCH_STORE='zvec'))
     go_tests('zvec-soak', ['-count=1', '-run', '^TestRealDimensionsSoak$', '-v'], ['./internal/dal/search/zvecstore'],
-             env=environment(PAPERGO_ZVEC_SOAK='1'))
+             env=sqlite_environment(PAPERGO_ZVEC_SOAK='1'))
     for target in ('FuzzNativeFilter', 'FuzzNativeText'):
         run('go', 'test', './internal/dal/search/zvecstore', '-run', '^$', '-fuzz', f'^{target}$', '-fuzztime=10s', '-parallel=2')
 
@@ -322,7 +335,7 @@ def stage_release(args):
     prepare_models()
     prepare_go()
     prepare_frontend(args.setup, force=True)
-    go_tests('native-abi', ['-count=1', '-run', NATIVE_ABI[1]], NATIVE_ABI[0])
+    go_tests('native-abi', ['-count=1', '-run', NATIVE_ABI[1]], NATIVE_ABI[0], env=sqlite_environment())
     # Extracted packages and assets take several GiB; keep them off a small /tmp.
     temporary = ROOT / '.cache/tmp'
     temporary.mkdir(parents=True, exist_ok=True)
