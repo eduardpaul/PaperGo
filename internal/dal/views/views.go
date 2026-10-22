@@ -34,13 +34,14 @@ func (l Layout) Valid() bool {
 	return false
 }
 
-// ListView is a saved query of a collection with the columns it shows. At
-// most one view of a collection is its default.
 // SystemKey identifies a protected built-in collection view.
 type SystemKey string
 
 const SystemArchived SystemKey = "archived"
 
+// ListView is a saved query of a collection with the columns it shows. At
+// most one view of a collection is its default. A view with a SystemKey is
+// built in: it cannot be changed or deleted.
 type ListView struct {
 	SystemKey   SystemKey       `json:"system_key,omitempty"`
 	ID          string          `json:"id,omitempty"`

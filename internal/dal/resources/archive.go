@@ -27,7 +27,7 @@ func (r *Repo) SetArchived(ctx context.Context, id string, version int, actor st
 		if (row.ArchivedAt != nil) == archived {
 			return nil
 		}
-		state := &Deletion{}
+		state := &Archival{}
 		if archived {
 			state.At, state.By = now(), actor
 		}

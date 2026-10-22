@@ -197,9 +197,10 @@ type Set struct {
 	DuplicatePolicy                                            *DuplicatePolicy
 	Keywords, TemplateKeys                                     *[]string
 	Values                                                     json.RawMessage
+	// Archived archives an item; a zero At returns it to active.
+	Archived *Archival
 	// Deleted marks a tombstone; a zero At restores the resource.
-	Archived *Deletion
-	Deleted  *Deletion
+	Deleted *Deletion
 	// Version is the version the write stores; 0 keeps it.
 	Version   int
 	UpdatedBy *string
@@ -208,6 +209,12 @@ type Set struct {
 
 // Deletion is when and by whom a resource was deleted.
 type Deletion struct {
+	At time.Time
+	By string
+}
+
+// Archival is when and by whom an item was archived.
+type Archival struct {
 	At time.Time
 	By string
 }
