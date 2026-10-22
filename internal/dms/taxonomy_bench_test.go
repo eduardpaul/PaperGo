@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
 	"strconv"
 	"testing"
 
@@ -18,10 +19,12 @@ import (
 // a managed set. Each item holds two leaf keywords of its own, two leaves in
 // places (multiple, apply_parents) and one in region (plain).
 type taxonomyBench struct {
-	s                        *Service
-	workspace, list          string
-	keywordRoot, keywordLeaf string
-	placeRoot, placeLeaf     string
+	s                          *Service
+	workspace, list            string
+	keywordRoot, keywordLeaf   string
+	placeRoot, placeLeaf       string
+	keywordLeaves, placeLeaves []string
+	placeRoots, placeMids      []string
 }
 
 func newTaxonomyBench(b *testing.B) *taxonomyBench {
@@ -47,7 +50,7 @@ func newTaxonomyBench(b *testing.B) *taxonomyBench {
 	if err != nil {
 		b.Fatal(err)
 	}
-	tree := func(setID, prefix string) (roots []string, leaves []string) {
+	tree := func(setID, prefix string) (roots, mids, leaves []string) {
 		for i := range 10 {
 			root, err := s.CreateTerm(ctx, "alice", setID, TermInput{Name: fmt.Sprintf("%s%d", prefix, i)})
 			if err != nil {
@@ -59,6 +62,7 @@ func newTaxonomyBench(b *testing.B) *taxonomyBench {
 				if err != nil {
 					b.Fatal(err)
 				}
+				mids = append(mids, mid.ID)
 				for k := range 10 {
 					leaf, err := s.CreateTerm(ctx, "alice", setID, TermInput{Name: fmt.Sprintf("%s%d.%d.%d", prefix, i, j, k), ParentID: &mid.ID})
 					if err != nil {
@@ -68,10 +72,10 @@ func newTaxonomyBench(b *testing.B) *taxonomyBench {
 				}
 			}
 		}
-		return roots, leaves
+		return roots, mids, leaves
 	}
-	keywordRoots, keywordLeaves := tree(taxonomy.KeywordsSetID, "k")
-	placeRoots, placeLeaves := tree(set.ID, "p")
+	keywordRoots, _, keywordLeaves := tree(taxonomy.KeywordsSetID, "k")
+	placeRoots, placeMids, placeLeaves := tree(set.ID, "p")
 	// Decoded at run time so the benchmark builds where the option is unknown.
 	var places model.FieldOptions
 	if err = json.Unmarshal([]byte(`{"term_set_id":"`+set.ID+`","multiple":true,"apply_parents":true}`), &places); err != nil {
@@ -102,7 +106,7 @@ func newTaxonomyBench(b *testing.B) *taxonomyBench {
 		}
 	}
 	return &taxonomyBench{s: s, workspace: w.ID, list: l.ID, keywordRoot: keywordRoots[0], keywordLeaf: keywordLeaves[0],
-		placeRoot: placeRoots[0], placeLeaf: placeLeaves[0]}
+		placeRoot: placeRoots[0], placeLeaf: placeLeaves[0], keywordLeaves: keywordLeaves, placeLeaves: placeLeaves, placeRoots: placeRoots, placeMids: placeMids}
 }
 
 // BenchmarkTaxonomyReads times the reads parent terms change: keyword and
@@ -172,4 +176,62 @@ func BenchmarkTaxonomyReads(b *testing.B) {
 			}
 		})
 	}
+}
+
+// BenchmarkTaxonomyWrites times the writes parent terms touch: an item
+// edit of its keywords and term values, a 100-item bulk create, and moving
+// a term with ten children between roots.
+func BenchmarkTaxonomyWrites(b *testing.B) {
+	x := newTaxonomyBench(b)
+	ctx := context.Background()
+	page, err := x.s.Query(ctx, "alice", x.list, QueryRequest{Limit: 500})
+	if err != nil {
+		b.Fatal(err)
+	}
+	items := page.Data
+	b.Run("update", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			r := items[i%len(items)]
+			current, err := x.s.Get(ctx, "alice", r.ID)
+			if err != nil {
+				b.Fatal(err)
+			}
+			keywords := []string{x.keywordLeaves[(i*11)%1000], x.keywordLeaves[(i*17+1)%1000]}
+			values := map[string]any{"places": []any{x.placeLeaves[(i*19)%1000], x.placeLeaves[(i*23+2)%1000]}, "region": x.placeLeaves[(i*29)%1000]}
+			if _, err = x.s.Update(ctx, "alice", r.ID, current.Version, UpdateResource{Keywords: &keywords, Values: &values}); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+	b.Run("bulk-create-100", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			ops := make([]BulkOperation, 100)
+			for j := range ops {
+				n := i*100 + j
+				ops[j] = BulkOperation{Action: "create", Create: &BulkCreate{Name: fmt.Sprintf("Bulk %d", n),
+					Keywords: []string{x.keywordLeaves[n%1000]},
+					Values:   map[string]any{"places": []any{x.placeLeaves[(n*7)%1000]}, "region": x.placeLeaves[(n*3)%1000]}}}
+			}
+			if _, err := x.s.Bulk(ctx, "alice", x.list, BulkRequest{Operations: ops}); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+	b.Run("move-term", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			mid := x.placeMids[i%len(x.placeMids)]
+			term, err := x.s.Term(ctx, "alice", mid)
+			if err != nil {
+				b.Fatal(err)
+			}
+			// Under the next root, so the subtree's paths change every time.
+			parent := x.placeRoots[(slices.Index(x.placeRoots, *term.ParentID)+1)%len(x.placeRoots)]
+			if _, err = x.s.MoveTerm(ctx, "alice", mid, term.Version, MoveTermInput{ParentID: &parent}); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
 }
