@@ -95,26 +95,21 @@ func (s *Service) LibraryFolder(ctx context.Context, subject, libraryID string, 
 		entries []*File
 	}
 	out, err := read(ctx, s, func(t *Service) (listing, error) {
-		lib, f, err := t.resolveFile(ctx, subject, libraryID, path)
+		_, f, err := t.resolveFile(ctx, subject, libraryID, path)
 		if err != nil || !f.Collection() {
 			return listing{folder: f}, err
 		}
-		entries, err := t.visibleFiles(ctx, subject, resources.Filter{ParentID: f.ID, Archive: refs.ArchiveActive})
+		// Archived entries keep their paths, so they take part in choosing
+		// each name's entry; only active entries are listed.
+		entries, err := t.visibleFiles(ctx, subject, resources.Filter{ParentID: f.ID})
 		if err != nil {
 			return listing{}, err
 		}
 		shown := []*File{}
 		for _, entry := range uniqueNames(entries) {
-			if !ownsName(entry, nameKey(entry.Name)) {
-				resolved, e := t.fileChild(ctx, subject, lib, f.ID, entry.Name)
-				if e != nil {
-					return listing{}, e
-				}
-				if resolved == nil || resolved.ID != entry.ID {
-					continue
-				}
+			if !entry.Archived {
+				shown = append(shown, entry)
 			}
-			shown = append(shown, entry)
 		}
 		return listing{f, shown}, nil
 	})
