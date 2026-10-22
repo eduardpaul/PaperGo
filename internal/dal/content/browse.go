@@ -133,12 +133,12 @@ const surfaceKeywords = "SELECT keyword AS term,TRUE AS lineage FROM item_surfac
 // its keywords, which apply their ancestors.
 const resourceKeywords = "SELECT keyword AS term,TRUE AS lineage FROM resource_keywords WHERE resource_id=r.id"
 
-// surfaceKeywordRows selects the keyword sources of the item surfaces p
-// that from and where select, as rows of owner, term and lineage. where
-// appears twice, so its arguments are given twice.
-func surfaceKeywordRows(owner, from, where string) string {
-	return "SELECT " + owner + " AS owner,k.keyword AS term,TRUE AS lineage " + from + " JOIN item_surface_keywords k ON k.surface_id=p.id WHERE " + where +
-		" UNION ALL SELECT " + owner + ",f.value_text,f.applies_parents " + from + " JOIN field_values f ON f.surface_id=p.id WHERE " + where + " AND " + keywordValue
+// surfaceKeywordRows selects the keyword sources of the item surfaces in
+// the table scope, of columns owner and surface, as rows of owner, term
+// and lineage. Name scope in a WITH clause: it is read twice.
+func surfaceKeywordRows(scope string) string {
+	return "SELECT o.owner,k.keyword AS term,TRUE AS lineage FROM " + scope + " o JOIN item_surface_keywords k ON k.surface_id=o.surface" +
+		" UNION ALL SELECT o.owner,f.value_text,f.applies_parents FROM " + scope + " o JOIN field_values f ON f.surface_id=o.surface WHERE " + keywordValue
 }
 
 // appliesKeyword tests that sources, rows of a term and whether it applies

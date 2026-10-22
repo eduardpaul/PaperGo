@@ -27,9 +27,10 @@ func (r *Repo) PopularKeywords(ctx context.Context, keywordsSetID string, top in
 		}
 		out = append(out, c)
 		return nil
-	}, `WITH usage AS (`+r.appliedKeywords(surfaceKeywordRows("p.item_id",
-		"FROM item_surfaces p JOIN resources c ON c.id=p.container_id AND c.deleted_at IS NULL JOIN resources r ON r.id=p.item_id AND r.deleted_at IS NULL",
-		"p.surface=CASE WHEN c.publishing_enabled THEN 'head' ELSE 'published' END"))+`
+	}, `WITH current(owner,surface) AS (
+ SELECT p.item_id,p.id FROM item_surfaces p JOIN resources c ON c.id=p.container_id AND c.deleted_at IS NULL JOIN resources r ON r.id=p.item_id AND r.deleted_at IS NULL
+ WHERE p.surface=CASE WHEN c.publishing_enabled THEN 'head' ELSE 'published' END
+ ), usage AS (`+r.appliedKeywords(surfaceKeywordRows("current"))+`
  ) SELECT u.keyword,count(DISTINCT u.owner) AS n FROM usage u JOIN terms t ON t.id=u.keyword WHERE NOT t.deprecated AND (t.term_set_id=? OR t.available_as_keyword) GROUP BY u.keyword ORDER BY n DESC,u.keyword LIMIT ?`, keywordsSetID, top)
 	return out, err
 }
@@ -58,16 +59,15 @@ func (r *Repo) WorkspaceKeywords(ctx context.Context, w WorkspaceKeywords) ([]Ke
 	scope += " AND " + w.Archive.Predicate("r")
 	readable, readArgs := r.acl.Resource("r.id", w.Reader, access.Read)
 	selected, surfaceArgs := r.acl.Surface("r.id", w.Reader, "auto")
+	// The readable surfaces are found once for both keyword sources.
 	resourceRows := "SELECT r.id AS owner,k.keyword AS term,TRUE AS lineage FROM resources r JOIN resource_keywords k ON k.resource_id=r.id WHERE r.kind NOT IN ('item','folder') AND r.deleted_at IS NULL AND " + scope + " AND " + readable
-	itemRows := surfaceKeywordRows("r.id", "FROM resources r JOIN item_surfaces p ON p.item_id=r.id", "r.deleted_at IS NULL AND "+scope+" AND p.surface="+selected+" AND "+readable)
-	query := `WITH usage AS (` + r.appliedKeywords(resourceRows) + ` UNION ` + r.appliedKeywords(itemRows) + `
+	query := `WITH readable(owner,surface) AS (
+ SELECT r.id,p.id FROM resources r JOIN item_surfaces p ON p.item_id=r.id WHERE r.deleted_at IS NULL AND ` + scope + ` AND p.surface=` + selected + ` AND ` + readable + `
+ ), usage AS (` + r.appliedKeywords(resourceRows) + ` UNION ` + r.appliedKeywords(surfaceKeywordRows("readable")) + `
  ) SELECT t.id,t.name,count(*) FROM usage u JOIN terms t ON t.id=u.keyword WHERE TRUE`
-	values := append(append([]any{}, args...), readArgs...)
-	for range 2 {
-		values = append(values, args...)
-		values = append(values, surfaceArgs...)
-		values = append(values, readArgs...)
-	}
+	values := append(append(append([]any{}, args...), surfaceArgs...), readArgs...)
+	values = append(values, args...)
+	values = append(values, readArgs...)
 	if w.Prefix != "" {
 		query += " AND " + r.d.HasPrefix("t.normalized_name", "?")
 		values = append(values, strings.ToLower(w.Prefix))

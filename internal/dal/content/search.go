@@ -108,7 +108,8 @@ func (r *Repo) TermHolders(ctx context.Context, h TermHolders) ([]string, error)
 		raw, _ := json.Marshal(h.Skip)
 		conds, args = append(conds, "p.container_id NOT IN (SELECT value FROM "+r.d.Elements(r.d.JSONArg(), "skipped")+")"), append(args, string(raw))
 	}
-	held := []string{"p.id IN (SELECT k.surface_id FROM item_surface_keywords k JOIN family ON family.id=k.keyword)", "p.item_id IN (SELECT f.item_id FROM field_values f JOIN family ON family.id=f.value_text WHERE f.field_type IN ('term','keywords') AND f.applies_parents)"}
+	// IN, not a join, so each family term drives the keyword and value indexes.
+	held := []string{"p.id IN (SELECT k.surface_id FROM item_surface_keywords k WHERE k.keyword IN (SELECT id FROM family))", "p.item_id IN (SELECT f.item_id FROM field_values f WHERE f.field_type IN ('term','keywords') AND f.value_text IN (SELECT id FROM family) AND f.applies_parents)"}
 	for _, id := range h.TermIDs {
 		held = append(held, r.d.Contains(r.d.Text("p.payload"), "?"))
 		args = append(args, `"`+id+`"`)
