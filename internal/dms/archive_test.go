@@ -1,6 +1,7 @@
 package dms
 
 import (
+	"encoding/json"
 	"errors"
 	"papergo/internal/dal/refs"
 	"papergo/internal/dal/resources"
@@ -8,6 +9,7 @@ import (
 	"papergo/internal/storage"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestArchiveLifecycleAndDiscovery(t *testing.T) {
@@ -256,5 +258,27 @@ func TestArchiveWebDAVPublishedAliasCannotExposeDifferentPathTarget(t *testing.T
 	direct, err := s.LibraryFile(testContext, "bob", library.ID, []string{"Report.pdf"})
 	if err != nil || direct.ID != owner.ID {
 		t.Fatal("archived direct path lost", direct, err)
+	}
+}
+
+func TestArchiveTimeFiltersCompareInstants(t *testing.T) {
+	s, _, c := fixture(t)
+	item := create(t, s, c.ID, "item", "Dated", nil)
+	archived, err := s.SetArchived(testContext, "alice", item.ID, item.Version, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := archived.ArchivedAt.UTC()
+	day := at.Truncate(24 * time.Hour)
+	for _, tc := range []struct {
+		op    string
+		value time.Time
+		want  int
+	}{{"gte", day, 1}, {"lte", day, 0}, {"gte", at.Add(time.Minute), 0}, {"lte", at.Add(time.Minute), 1}} {
+		raw, _ := json.Marshal(tc.value)
+		out, err := s.Query(testContext, "alice", c.ID, QueryRequest{IncludeTotal: true, Query: QuerySpec{Archive: refs.ArchiveArchived, Filter: &FilterExpr{Field: "$archived_at", Op: tc.op, Value: raw}}})
+		if err != nil || counted(out.Total) != tc.want {
+			t.Fatalf("$archived_at %s %s: %+v %v", tc.op, raw, out, err)
+		}
 	}
 }

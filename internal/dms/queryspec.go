@@ -256,7 +256,7 @@ func (q *queryCompiler) filter(f *FilterExpr, depth int) (*content.Filter, error
 		if err != nil {
 			return nil, err
 		}
-		if builtin && (f.Field == "$created_at" || f.Field == "$modified_at") {
+		if builtin && d.Type == catalog.FieldDatetime {
 			stamp, err := time.Parse(time.RFC3339Nano, literal.(string))
 			if err != nil {
 				return nil, err
