@@ -4,6 +4,8 @@
 // @ts-ignore
 import { AiRequestBuilderNavigationMetadata, type AiRequestBuilder } from './ai/index.js';
 // @ts-ignore
+import { ArchiveRequestBuilderRequestsMetadata, type ArchiveRequestBuilder } from './archive/index.js';
+// @ts-ignore
 import { ArtifactsRequestBuilderNavigationMetadata, type ArtifactsRequestBuilder } from './artifacts/index.js';
 // @ts-ignore
 import { AuditRequestBuilderRequestsMetadata, type AuditRequestBuilder } from './audit/index.js';
@@ -58,6 +60,10 @@ export interface V1RequestBuilder extends BaseRequestBuilder<V1RequestBuilder> {
      * The ai property
      */
     get ai(): AiRequestBuilder;
+    /**
+     * The archive property
+     */
+    get archive(): ArchiveRequestBuilder;
     /**
      * The artifacts property
      */
@@ -157,6 +163,9 @@ export const V1RequestBuilderUriTemplate = "{+baseurl}/v1";
 export const V1RequestBuilderNavigationMetadata: Record<Exclude<keyof V1RequestBuilder, KeysToExcludeForNavigationMetadata>, NavigationMetadata> = {
     ai: {
         navigationMetadata: AiRequestBuilderNavigationMetadata,
+    },
+    archive: {
+        requestsMetadata: ArchiveRequestBuilderRequestsMetadata,
     },
     artifacts: {
         navigationMetadata: ArtifactsRequestBuilderNavigationMetadata,

@@ -9,6 +9,7 @@ package search
 import (
 	"context"
 	"errors"
+	"papergo/internal/dal/refs"
 	"time"
 )
 
@@ -31,6 +32,9 @@ const (
 
 // Document is the searchable metadata of one surface of an item or folder.
 type Document struct {
+	Archived      bool
+	ArchivedAt    *time.Time
+	ArchivedBy    string
 	ResourceID    string
 	Kind          string // item or folder
 	Surface       string // head or published
@@ -116,7 +120,10 @@ type Access struct {
 
 // Filter narrows a search. Access and Surface always apply.
 type Filter struct {
-	Access Access
+	Archive                  refs.ArchiveSelection
+	ArchivedBy               string
+	ArchivedFrom, ArchivedTo time.Time
+	Access                   Access
 	// Surface is auto (drafts where the caller may, else published), head
 	// (drafts only) or published.
 	Surface       string
@@ -186,6 +193,9 @@ type Query struct {
 
 // Hit is a matching document. Text is the text to cut a snippet from.
 type Hit struct {
+	Archived      bool
+	ArchivedAt    *time.Time
+	ArchivedBy    string
 	ResourceID    string
 	Kind          string
 	Surface       string
@@ -239,6 +249,7 @@ type Result struct {
 // whose text matches, for collection queries and listings, which authorize,
 // filter, sort and page the candidates themselves.
 type MatchQuery struct {
+	Archive      refs.ArchiveSelection
 	CollectionID string
 	WorkspaceID  string
 	Text         *FullTextQuery

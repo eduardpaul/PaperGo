@@ -111,7 +111,7 @@ func document(ctx context.Context, s *dms.Service, e dms.IndexEntry) (search.Doc
 		// Without publishing the published surface is the head too.
 		views |= search.ViewHead
 	}
-	d := search.Document{ResourceID: r.ID, Kind: string(r.Kind), Surface: string(e.Surface), Views: views, WorkspaceID: r.WorkspaceID,
+	d := search.Document{Archived: r.Archived, ArchivedAt: r.ArchivedAt, ResourceID: r.ID, Kind: string(r.Kind), Surface: string(e.Surface), Views: views, WorkspaceID: r.WorkspaceID,
 		CollectionID: *r.ContainerID, ContentTypeID: e.ContentTypeID, RevisionID: e.RevisionID, Name: e.Name, KeywordIDs: keywordIDs,
 		Keywords: strings.TrimSpace(strings.Join(slices.Concat(keywords, []string{words}), " ")), Body: strings.Join(body, "\n"),
 		TermIDs: terms, Fields: fields, BlobID: e.BlobID,
@@ -121,6 +121,9 @@ func document(ctx context.Context, s *dms.Service, e dms.IndexEntry) (search.Doc
 	}
 	if r.ScopeID != nil {
 		d.ScopeID = *r.ScopeID
+	}
+	if r.ArchivedBy != nil {
+		d.ArchivedBy = *r.ArchivedBy
 	}
 	return d, nil
 }
@@ -425,7 +428,7 @@ func (x *Search) MatchText(ctx context.Context, s *dms.Service, subject string, 
 	if err != nil {
 		return dms.TextMatches{}, err
 	}
-	m, err := x.Store.Match(ctx, search.MatchQuery{CollectionID: in.CollectionID, WorkspaceID: in.WorkspaceID, Text: q, Content: content, Limit: matchLimit})
+	m, err := x.Store.Match(ctx, search.MatchQuery{Archive: in.Archive, CollectionID: in.CollectionID, WorkspaceID: in.WorkspaceID, Text: q, Content: content, Limit: matchLimit})
 	if errors.Is(err, search.ErrUnavailable) {
 		return dms.TextMatches{}, dms.ErrNoTextMatch
 	}

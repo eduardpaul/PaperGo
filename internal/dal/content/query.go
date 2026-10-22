@@ -7,6 +7,7 @@ import (
 
 	"papergo/internal/dal/access"
 	"papergo/internal/dal/catalog"
+	"papergo/internal/dal/refs"
 )
 
 // Kind is how a sort column's values compare.
@@ -27,6 +28,8 @@ var systemFields = map[string]struct {
 	column string
 	typ    catalog.FieldType
 }{
+	"$archived_at": {"r.archived_at", catalog.FieldDatetime},
+	"$archived_by": {"r.archived_by", catalog.FieldText},
 	"$file_type":   {"(SELECT b.content_type FROM item_revisions fr JOIN blobs b ON b.id=fr.blob_id WHERE fr.id=p.revision_id)", catalog.FieldChoice},
 	"$id":          {"r.id", catalog.FieldText},
 	"$name":        {"p.name", catalog.FieldText},
@@ -142,6 +145,7 @@ type TermMatch struct {
 // on Surface: head, published or auto. The caller has authorized the
 // collection, parent and ancestor and validated every field.
 type Plan struct {
+	Archive      refs.ArchiveSelection
 	Reader       access.Principal
 	CollectionID string
 	// Publishes is whether the collection keeps a head surface apart from
@@ -379,6 +383,7 @@ func (r *Repo) Compile(p Plan) *Query {
 		conds.WriteString(" AND " + text)
 		q.condArgs = append(q.condArgs, args...)
 	}
+	add(p.Archive.Predicate("r"))
 	if p.ContentTypeID != "" {
 		add("r.content_type_id=?", p.ContentTypeID)
 	}

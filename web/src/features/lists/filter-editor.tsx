@@ -14,6 +14,8 @@ export const systemFields: FieldDefinition[] = [
   ['$modified_at', 'Modified', 'datetime'],
   ['$created_by', 'Created by', 'person'],
   ['$modified_by', 'Modified by', 'person'],
+  ['$archived_at', 'Archived', 'datetime'],
+  ['$archived_by', 'Archived by', 'person'],
 ].map(([key, label, type]) => ({ id: key, key, label, type, indexed: true, options: key === '$keywords' ? { multiple: true } : undefined }));
 
 export const comparisonLabels: Record<string, string> = { eq: 'is', ne: 'is not', in: 'is one of', missing: 'is empty', present: 'has a value', gt: 'is after / greater than', gte: 'is on or after / at least', lt: 'is before / less than', lte: 'is on or before / at most', contains: 'contains', under: 'is in this topic' };

@@ -43,6 +43,7 @@ SELECT coalesce(scope,''), `+draftSQL+`, `+readSQL+` FROM reps WHERE rep IS NOT 
 
 // SearchState is what a reader may see of a live item or folder.
 type SearchState struct {
+	Archived bool
 	// Publishes is whether its collection keeps a separate head surface.
 	Publishes bool
 	// Head and Published are whether it has those surfaces.
@@ -63,12 +64,12 @@ func (r *Repo) SearchStates(ctx context.Context, reader access.Principal, ids []
 	err := r.each(ctx, func(rows scan.Rows) error {
 		var id string
 		var st SearchState
-		if err := rows.Scan(&id, &st.Publishes, &st.Head, &st.Published, &st.Draft, &st.Read); err != nil {
+		if err := rows.Scan(&id, &st.Archived, &st.Publishes, &st.Head, &st.Published, &st.Draft, &st.Read); err != nil {
 			return err
 		}
 		out[id] = st
 		return nil
-	}, `SELECT r.id, c.publishing_enabled,
+	}, `SELECT r.id, r.archived_at IS NOT NULL, c.publishing_enabled,
  EXISTS(SELECT 1 FROM item_surfaces p WHERE p.item_id=r.id AND p.surface='head'),
  EXISTS(SELECT 1 FROM item_surfaces p WHERE p.item_id=r.id AND p.surface='published'), `+draftSQL+`, `+readSQL+` FROM resources r JOIN resources c ON c.id=r.container_id
  WHERE r.id IN (SELECT value FROM `+r.d.Elements(r.d.JSONArg(), "ids")+`) AND r.kind IN ('item','folder') AND r.deleted_at IS NULL`, append(append(draftArgs, readArgs...), string(raw))...)

@@ -70,6 +70,7 @@ export function ItemsGallery({ items, fields, names, onOpen, renderItem, provena
             <span className="flex items-center gap-2 font-medium">
               {item.kind === 'folder' ? <Folder className="size-4" /> : <File className="size-4" />}
               {item.name}
+              {item.archived && <Badge>Archived</Badge>}
               {provenance?.get(item.id) && <Badge>{provenance.get(item.id)}</Badge>}
             </span>
             {previewItems?.has(item.id) && item.kind === 'item' && <FilePreview itemId={item.id} version={item.version} alt="" className="h-36" />}

@@ -14,6 +14,9 @@ export function SystemProperties({ item, file, keywords = [], contentType }: { i
   const searchAvailable = useSearchAvailable();
   const properties = [
     ['Name', 'Text', item?.name],
+    ['Archive status', 'Status', item?.archived ? 'Archived' : 'Active'],
+    ['Archived', 'Date and time', item?.archived_at ? format.dateTime(item.archived_at) : undefined],
+    ['Archived by', 'Person', item?.archived_by ? people.get(item.archived_by) ?? item.archived_by : undefined],
     ['File name', 'Text', file?.filename],
     ['File size', 'Bytes', file ? format.fileSize(file.size) : undefined],
     ['File type', 'Media type', file?.content_type],

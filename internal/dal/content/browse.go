@@ -3,8 +3,10 @@ package content
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"papergo/internal/dal/access"
 	"papergo/internal/dal/catalog"
@@ -12,8 +14,18 @@ import (
 )
 
 // Browse selects the live resources a reader lists below a parent, in a
-// workspace or, with neither, the workspaces, in ID order.
+// workspace or, with neither, the workspaces, in Order.
 type Browse struct {
+	Archive refs.ArchiveSelection
+	// GlobalItems selects items in every collection, or in WorkspaceID.
+	GlobalItems                             bool
+	CollectionID, ContentTypeID, ArchivedBy string
+	ArchivedFrom, ArchivedTo                time.Time
+	// BeforeArchivedAt and BeforeArchivedID page NewestArchived: items
+	// archived before BeforeArchivedAt, or then with a smaller ID.
+	BeforeArchivedAt      time.Time
+	BeforeArchivedID      string
+	Order                 BrowseOrder
 	Reader                access.Principal
 	ParentID, WorkspaceID string
 	Kind                  refs.ResourceKind
@@ -27,6 +39,16 @@ type Browse struct {
 	AfterID string
 	Limit   int
 }
+
+// BrowseOrder sorts browsed resources.
+type BrowseOrder uint8
+
+const (
+	BrowseByID BrowseOrder = iota
+	// NewestArchived sorts archived items by archive time, newest first,
+	// then by ID descending.
+	NewestArchived
+)
 
 // SearchMatch matches workspaces and collections whose folded name
 // contains Name, and the items and folders a text matcher found on each
@@ -104,6 +126,12 @@ const SurfaceKeywords = "SELECT keyword FROM item_surface_keywords WHERE surface
 
 // BrowseIDs returns the IDs of the resources b selects.
 func (r *Repo) BrowseIDs(ctx context.Context, b Browse) ([]string, error) {
+	if b.Order == NewestArchived && b.Archive != refs.ArchiveArchived {
+		return nil, fmt.Errorf("archive order needs archived resources, not %q", b.Archive)
+	}
+	if !b.BeforeArchivedAt.IsZero() && b.Order != NewestArchived {
+		return nil, errors.New("an archive cursor needs archive order")
+	}
 	where := []string{"r.deleted_at IS NULL"}
 	args := []any{}
 	add := func(cond string, a ...any) {
@@ -111,12 +139,36 @@ func (r *Repo) BrowseIDs(ctx context.Context, b Browse) ([]string, error) {
 		args = append(args, a...)
 	}
 	switch {
+	case b.GlobalItems:
+		add("r.kind='item'")
+		if b.WorkspaceID != "" {
+			add("r.workspace_id=?", b.WorkspaceID)
+		}
 	case b.ParentID != "":
 		add("r.parent_id=?", b.ParentID)
 	case b.WorkspaceID != "":
 		add("r.workspace_id=?", b.WorkspaceID)
 	default:
 		add("r.kind='workspace'")
+	}
+	add(b.Archive.Predicate("r"))
+	if b.CollectionID != "" {
+		add("r.container_id=?", b.CollectionID)
+	}
+	if b.ContentTypeID != "" {
+		add("r.content_type_id=?", b.ContentTypeID)
+	}
+	if b.ArchivedBy != "" {
+		add("r.archived_by=?", b.ArchivedBy)
+	}
+	if !b.ArchivedFrom.IsZero() {
+		add("r.archived_at>=?", b.ArchivedFrom.UTC())
+	}
+	if !b.ArchivedTo.IsZero() {
+		add("r.archived_at<=?", b.ArchivedTo.UTC())
+	}
+	if !b.BeforeArchivedAt.IsZero() {
+		add("(r.archived_at,r.id)<(?,?)", b.BeforeArchivedAt.UTC(), b.BeforeArchivedID)
 	}
 	if b.Kind != "" {
 		add("r.kind=?", string(b.Kind))
@@ -200,7 +252,11 @@ func (r *Repo) BrowseIDs(ctx context.Context, b Browse) ([]string, error) {
 		a := append([]any{f.ContainerID}, selectedArgs...)
 		add(cond, append(a, f.Key, string(f.Type), f.Scale, f.Value)...)
 	}
-	query := "SELECT r.id FROM resources r WHERE " + strings.Join(where, " AND ") + " ORDER BY r.id"
+	order := "r.id"
+	if b.Order == NewestArchived {
+		order = "r.archived_at DESC,r.id DESC"
+	}
+	query := "SELECT r.id FROM resources r WHERE " + strings.Join(where, " AND ") + " ORDER BY " + order
 	if b.Limit > 0 {
 		query += " LIMIT ?"
 		args = append(args, b.Limit)

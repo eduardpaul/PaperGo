@@ -62,7 +62,7 @@ func createCollection(path string, dimensions int) (*zvec.Collection, error) {
 		{"row_kind", typeString, 10}, {"resource_id", typeString, 10}, {"surface", typeString, 10}, {"scope_id", typeString, 10},
 		{"workspace_id", typeString, 10}, {"collection_id", typeString, 10}, {"content_type_id", typeString, 10},
 		{"created_by", typeString, 10}, {"modified_by", typeString, 10}, {"kind", typeString, 10},
-		{"views", typeInt64, 10}, {"modified_at", typeInt64, 10}, {"tokens", typeStrings, 10},
+		{"archived", typeInt64, 10}, {"archived_at", typeInt64, 10}, {"archived_by", typeString, 10}, {"views", typeInt64, 10}, {"modified_at", typeInt64, 10}, {"tokens", typeStrings, 10},
 		{"payload", typeString, 0}, {"content", typeString, 11}, {"metadata", typeString, 11},
 	}
 	if dimensions > 0 {

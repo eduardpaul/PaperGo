@@ -10,7 +10,7 @@ const entries = ["created", "updated", "deleted", "restored", "purged"];
 
 export default workflow<unknown, unknown, Params>({
   triggers: (p) => [
-    ...["item.published", "item.unpublished", ...entries.map((e) => `item.${e}`), ...entries.map((e) => `folder.${e}`)].map((type) => ({ type, collection_id: p.collection })),
+    ...["item.archived", "item.unarchived", "item.published", "item.unpublished", ...entries.map((e) => `item.${e}`), ...entries.map((e) => `folder.${e}`)].map((type) => ({ type, collection_id: p.collection })),
     { type: "permissions.changed", collection_id: p.collection, actions: ["replace", "move"] },
     { type: "term.changed" },
     { type: "term.merged" },

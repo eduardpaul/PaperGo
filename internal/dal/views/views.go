@@ -34,9 +34,16 @@ func (l Layout) Valid() bool {
 	return false
 }
 
+// SystemKey identifies a protected built-in collection view.
+type SystemKey string
+
+const SystemArchived SystemKey = "archived"
+
 // ListView is a saved query of a collection with the columns it shows. At
-// most one view of a collection is its default.
+// most one view of a collection is its default. A view with a SystemKey is
+// built in: it cannot be changed or deleted.
 type ListView struct {
+	SystemKey   SystemKey       `json:"system_key,omitempty"`
 	ID          string          `json:"id,omitempty"`
 	CreatedAt   time.Time       `json:"created_at,omitempty"`
 	ContainerID string          `json:"container_id,omitempty"`
@@ -139,6 +146,12 @@ func (r *Repo) ListViews(ctx context.Context, f ViewFilter) ([]ListView, error) 
 }
 
 func validView(v ListView) error {
+	if v.SystemKey != "" && v.SystemKey != SystemArchived {
+		return fmt.Errorf("%w: invalid view system key", dberr.ErrCheckViolation)
+	}
+	if v.SystemKey == SystemArchived && v.IsDefault {
+		return fmt.Errorf("%w: Archived cannot be the opening default", dberr.ErrCheckViolation)
+	}
 	if !v.Layout.Valid() {
 		return fmt.Errorf("%w: invalid view layout %q", dberr.ErrCheckViolation, v.Layout)
 	}
@@ -198,6 +211,9 @@ func (r *Repo) UpdateListView(ctx context.Context, v ListView, version int) (Lis
 		if old.Version != version {
 			return dberr.ErrConcurrentUpdate
 		}
+		if old.SystemKey != "" {
+			return fmt.Errorf("%w: built-in views cannot be changed", dberr.ErrCheckViolation)
+		}
 		out = old
 		out.Name, out.Columns, out.Query, out.Layout, out.IsDefault = v.Name, v.Columns, v.Query, v.Layout, v.IsDefault
 		if out.Columns == nil {
@@ -230,6 +246,9 @@ func (r *Repo) DeleteListView(ctx context.Context, id string, version int) error
 		}
 		if v.Version != version {
 			return dberr.ErrConcurrentUpdate
+		}
+		if v.SystemKey != "" {
+			return fmt.Errorf("%w: built-in views cannot be deleted", dberr.ErrCheckViolation)
 		}
 		return q.DeleteListView(ctx, id)
 	})

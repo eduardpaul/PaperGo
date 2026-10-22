@@ -257,14 +257,20 @@ CREATE TABLE resources (
     name_key TEXT,
     deleted_at TIMESTAMPTZ,
     deleted_by TEXT,
+    archived_at TIMESTAMPTZ,
+    archived_by TEXT,
     created_by TEXT NOT NULL DEFAULT '',
     updated_by TEXT NOT NULL DEFAULT '',
     content_type_id TEXT REFERENCES content_types(id) ON DELETE RESTRICT DEFERRABLE,
     template_keys JSONB NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(template_keys) = 'array' AND jsonb_array_length(template_keys) <= 100 AND (kind IN ('list', 'library') OR jsonb_array_length(template_keys) = 0)),
+    CHECK ((archived_at IS NULL) = (archived_by IS NULL)),
+    CHECK (archived_at IS NULL OR kind = 'item'),
     CHECK (deleted_at IS NULL OR name_key IS NULL),
     CHECK ((kind IN ('item', 'folder')) = (content_type_id IS NOT NULL)),
     CHECK (kind <> 'workspace' OR (workspace_id = id AND parent_id IS NULL AND container_id IS NULL AND NOT inherit_permissions))
 );
+CREATE INDEX resource_archived_at_id ON resources(archived_at DESC, id DESC) WHERE archived_at IS NOT NULL AND deleted_at IS NULL;
+CREATE INDEX resource_container_id_archived_at_id ON resources(container_id, archived_at, id);
 CREATE INDEX resource_workspace_id_kind_id ON resources(workspace_id, kind, id);
 CREATE INDEX resource_workspace_id_id_scope_id ON resources(workspace_id, id, scope_id);
 CREATE INDEX resource_kind_id_workspace_id_scope_id ON resources(kind, id, workspace_id, scope_id);
@@ -555,12 +561,14 @@ CREATE TABLE list_views (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     container_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE DEFERRABLE,
     name TEXT NOT NULL,
+    system_key TEXT NOT NULL DEFAULT '' CHECK (system_key IN ('', 'archived')),
     columns JSONB NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(columns) = 'array'),
     "query" JSONB NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof("query") = 'object'),
     layout TEXT NOT NULL DEFAULT 'table' CHECK (layout IN ('table', 'board', 'calendar', 'gallery')),
     is_default BOOLEAN NOT NULL DEFAULT FALSE,
     version BIGINT NOT NULL DEFAULT 1 CHECK (version > 0)
 );
+CREATE UNIQUE INDEX listview_container_id_system_key ON list_views(container_id, system_key) WHERE system_key <> '';
 CREATE UNIQUE INDEX listview_container_id_name ON list_views(container_id, name);
 CREATE INDEX listview_container_id_id ON list_views(container_id, id);
 CREATE UNIQUE INDEX listview_one_default ON list_views(container_id) WHERE is_default = TRUE;

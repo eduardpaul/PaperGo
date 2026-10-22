@@ -17,6 +17,154 @@ export interface ApplyTemplateInput extends Parsable {
      */
     templateVersion?: number | null;
 }
+export interface ArchiveEntry extends AdditionalDataHolder, Parsable {
+    /**
+     * Lists and libraries only: permits creating physical folders. Disabling retains existing folders. Changes require manage access.
+     */
+    allowFolders?: boolean | null;
+    /**
+     * The archived property
+     */
+    archived?: boolean | null;
+    /**
+     * The archived_at property
+     */
+    archivedAt?: Date | null;
+    /**
+     * The archived_by property
+     */
+    archivedBy?: string | null;
+    /**
+     * The can_write property
+     */
+    canWrite?: boolean | null;
+    /**
+     * The container_id property
+     */
+    containerId?: Guid | null;
+    /**
+     * Items and folders: an attached collection content type. Creation selects the default when omitted. PATCH changes type, keeps shared fields and removes fields absent from the destination type. Folder required fields and creation defaults do not apply.
+     */
+    contentTypeId?: Guid | null;
+    /**
+     * The created_at property
+     */
+    createdAt?: Date | null;
+    /**
+     * Creation actor or selected content revision modification actor.
+     */
+    createdBy?: string | null;
+    /**
+     * Workspace only. Empty inherits the organization default. Changing this affects newly created currency fields, not existing definitions.
+     */
+    defaultCurrency?: string | null;
+    /**
+     * Workspace or collection description, limited to 2000 UTF-16 code units. Changes require manage access.
+     */
+    description?: string | null;
+    /**
+     * Libraries only. Default warn. Compares hashes against current documents visible to the caller across libraries and workspaces. Allow suppresses warnings; block rejects duplicates with 409 duplicate_file.
+     */
+    duplicatePolicy?: ArchiveEntry_duplicate_policy | null;
+    /**
+     * Omitted from published read surfaces.
+     */
+    headRevisionId?: Guid | null;
+    /**
+     * The id property
+     */
+    id?: Guid | null;
+    /**
+     * The inherit_permissions property
+     */
+    inheritPermissions?: boolean | null;
+    /**
+     * Shared folksonomy keywords. Responses contain term IDs. Writes accept existing IDs or trimmed labels; new labels create terms in the organization Keywords term set. Keywords fields use the same vocabulary.
+     */
+    keywords?: string[] | null;
+    /**
+     * The kind property
+     */
+    kind?: ArchiveEntry_kind | null;
+    /**
+     * History entries kept per item, trimmed on each new recorded version. Defaults to 50.
+     */
+    maxVersions?: number | null;
+    /**
+     * Item and folder titles contain at most 1024 UTF-16 units before trimming. Workspace and collection names allow 200 units. Library names also exclude path separators and control characters and are unique among live siblings ignoring case.
+     */
+    name?: string | null;
+    /**
+     * Internal content counter; omitted from published read surfaces.
+     */
+    nextRevisionNumber?: number | null;
+    /**
+     * The parent_id property
+     */
+    parentId?: Guid | null;
+    /**
+     * Owner of a personal Home workspace; membership is fixed.
+     */
+    personalOwnerId?: string | null;
+    /**
+     * The published_revision_id property
+     */
+    publishedRevisionId?: Guid | null;
+    /**
+     * Lists/libraries only. False publishes content changes immediately. Changing policy requires manage access; disabling publishes all current heads atomically.
+     */
+    publishingEnabled?: boolean | null;
+    /**
+     * The schema_head_id property
+     */
+    schemaHeadId?: Guid | null;
+    /**
+     * Protected default Home library identity.
+     */
+    systemKey?: ArchiveEntry_system_key | null;
+    /**
+     * Template keys adopted into a collection; used by smart folder selectors.
+     */
+    templateKeys?: string[] | null;
+    /**
+     * For items, creation timestamp of the selected content revision.
+     */
+    updatedAt?: Date | null;
+    /**
+     * Creation actor or selected content revision modification actor.
+     */
+    updatedBy?: string | null;
+    /**
+     * Custom fields on items and folders, validated against their attached collection content type. Folder fields are optional and receive no creation defaults. Folder edits are immediately visible; items follow publishing settings.
+     */
+    values?: ArchiveEntry_values | null;
+    /**
+     * Optimistic resource lock version, independent of content revision_number and blob version.
+     */
+    version?: number | null;
+    /**
+     * Collections only. Lists and libraries default to off. Off stops recording new history; retained entries remain available. Replacing a file while off queues its previous bytes for reclamation after the one-hour grace period, subject to current/published file, staged-use and workflow-lease protection.
+     */
+    versioning?: ArchiveEntry_versioning | null;
+    /**
+     * Libraries only. Serves the library's folders and files at /webdav/{id}/.
+     */
+    webdavEnabled?: boolean | null;
+    /**
+     * The workspace_id property
+     */
+    workspaceId?: Guid | null;
+}
+export type ArchiveEntry_duplicate_policy = (typeof ArchiveEntry_duplicate_policyObject)[keyof typeof ArchiveEntry_duplicate_policyObject];
+export type ArchiveEntry_kind = (typeof ArchiveEntry_kindObject)[keyof typeof ArchiveEntry_kindObject];
+export type ArchiveEntry_system_key = (typeof ArchiveEntry_system_keyObject)[keyof typeof ArchiveEntry_system_keyObject];
+/**
+ * Custom fields on items and folders, validated against their attached collection content type. Folder fields are optional and receive no creation defaults. Folder edits are immediately visible; items follow publishing settings.
+ */
+export interface ArchiveEntry_values extends AdditionalDataHolder, Parsable {
+}
+export type ArchiveEntry_versioning = (typeof ArchiveEntry_versioningObject)[keyof typeof ArchiveEntry_versioningObject];
+export type ArchiveSelection = (typeof ArchiveSelectionObject)[keyof typeof ArchiveSelectionObject];
 /**
  * A file an operation made from file versions for an item, kept for reuse and staging until expires_at, and longer while a staged file holds it.
  */
@@ -212,7 +360,7 @@ export interface BulkCreate extends Parsable {
 }
 export interface BulkCreate_values extends AdditionalDataHolder, Parsable {
 }
-export type BulkOperation = BulkOperationMember1 | BulkOperationMember2 | BulkOperationMember3 | BulkOperationMember4 | BulkOperationMember5;
+export type BulkOperation = BulkOperationMember1 | BulkOperationMember2 | BulkOperationMember3 | BulkOperationMember4 | BulkOperationMember5 | BulkOperationMember6 | BulkOperationMember7;
 export interface BulkOperationMember1 extends Parsable {
     /**
      * The action property
@@ -287,11 +435,39 @@ export interface BulkOperationMember5 extends Parsable {
      */
     version?: number | null;
 }
+export interface BulkOperationMember6 extends Parsable {
+    /**
+     * The action property
+     */
+    action?: string | null;
+    /**
+     * Item in this collection. Each existing item may occur only once.
+     */
+    id?: string | null;
+    /**
+     * Current resource lock version; stale versions roll back the entire batch.
+     */
+    version?: number | null;
+}
+export interface BulkOperationMember7 extends Parsable {
+    /**
+     * The action property
+     */
+    action?: string | null;
+    /**
+     * Item in this collection. Each existing item may occur only once.
+     */
+    id?: string | null;
+    /**
+     * Current resource lock version; stale versions roll back the entire batch.
+     */
+    version?: number | null;
+}
 export interface BulkRequest extends Parsable {
     /**
      * The operations property
      */
-    operations?: (BulkOperationMember1 | BulkOperationMember2 | BulkOperationMember3 | BulkOperationMember4 | BulkOperationMember5)[] | null;
+    operations?: (BulkOperationMember1 | BulkOperationMember2 | BulkOperationMember3 | BulkOperationMember4 | BulkOperationMember5 | BulkOperationMember6 | BulkOperationMember7)[] | null;
 }
 export interface BulkResponse extends Parsable {
     /**
@@ -378,7 +554,7 @@ export interface CalendarQuery extends Parsable {
      */
     from?: Date | null;
     /**
-     * Collection query over visible surfaces. System fields: $id, $name, $keywords, $created_at, $created_by, $modified_at, $modified_by. Times are RFC3339 UTC and modification metadata follows the selected revision.
+     * Collection query over visible surfaces. System fields: $id, $name, $keywords, $created_at, $created_by, $modified_at, $modified_by. Times are RFC3339 UTC and modification metadata follows the selected revision. Archive filters apply before paging, counts, and grouping. $archived_at and $archived_by are system fields usable in columns, filters, and sorting.
      */
     query?: QuerySpec | null;
     /**
@@ -633,6 +809,24 @@ export function createApplyTemplateInputFromDiscriminatorValue(parseNode: ParseN
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {ArchiveEntry_values}
+ */
+// @ts-ignore
+export function createArchiveEntry_valuesFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoArchiveEntry_values;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {ArchiveEntry}
+ */
+// @ts-ignore
+export function createArchiveEntryFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoArchiveEntry;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {Artifact_metrics}
  */
 // @ts-ignore
@@ -723,7 +917,7 @@ export function createBulkCreateFromDiscriminatorValue(parseNode: ParseNode | un
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
- * @returns {BulkOperationMember1 | BulkOperationMember2 | BulkOperationMember3 | BulkOperationMember4 | BulkOperationMember5}
+ * @returns {BulkOperationMember1 | BulkOperationMember2 | BulkOperationMember3 | BulkOperationMember4 | BulkOperationMember5 | BulkOperationMember6 | BulkOperationMember7}
  */
 // @ts-ignore
 export function createBulkOperationFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
@@ -773,6 +967,24 @@ export function createBulkOperationMember4FromDiscriminatorValue(parseNode: Pars
 // @ts-ignore
 export function createBulkOperationMember5FromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoBulkOperationMember5;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {BulkOperationMember6}
+ */
+// @ts-ignore
+export function createBulkOperationMember6FromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoBulkOperationMember6;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {BulkOperationMember7}
+ */
+// @ts-ignore
+export function createBulkOperationMember7FromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoBulkOperationMember7;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -2875,6 +3087,60 @@ export function deserializeIntoApplyTemplateInput(applyTemplateInput: Partial<Ap
 }
 /**
  * The deserialization information for the current model
+ * @param ArchiveEntry The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoArchiveEntry(archiveEntry: Partial<ArchiveEntry> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "allow_folders": n => { archiveEntry.allowFolders = n.getBooleanValue() ?? true; },
+        "archived": n => { archiveEntry.archived = n.getBooleanValue(); },
+        "archived_at": n => { archiveEntry.archivedAt = n.getDateValue(); },
+        "archived_by": n => { archiveEntry.archivedBy = n.getStringValue(); },
+        "can_write": n => { archiveEntry.canWrite = n.getBooleanValue(); },
+        "container_id": n => { archiveEntry.containerId = n.getGuidValue(); },
+        "content_type_id": n => { archiveEntry.contentTypeId = n.getGuidValue(); },
+        "created_at": n => { archiveEntry.createdAt = n.getDateValue(); },
+        "created_by": n => { archiveEntry.createdBy = n.getStringValue(); },
+        "default_currency": n => { archiveEntry.defaultCurrency = n.getStringValue(); },
+        "description": n => { archiveEntry.description = n.getStringValue(); },
+        "duplicate_policy": n => { archiveEntry.duplicatePolicy = n.getEnumValue<ArchiveEntry_duplicate_policy>(ArchiveEntry_duplicate_policyObject); },
+        "head_revision_id": n => { archiveEntry.headRevisionId = n.getGuidValue(); },
+        "id": n => { archiveEntry.id = n.getGuidValue(); },
+        "inherit_permissions": n => { archiveEntry.inheritPermissions = n.getBooleanValue(); },
+        "keywords": n => { archiveEntry.keywords = n.getCollectionOfPrimitiveValues<string>("string"); },
+        "kind": n => { archiveEntry.kind = n.getEnumValue<ArchiveEntry_kind>(ArchiveEntry_kindObject); },
+        "max_versions": n => { archiveEntry.maxVersions = n.getNumberValue(); },
+        "name": n => { archiveEntry.name = n.getStringValue(); },
+        "next_revision_number": n => { archiveEntry.nextRevisionNumber = n.getNumberValue(); },
+        "parent_id": n => { archiveEntry.parentId = n.getGuidValue(); },
+        "personal_owner_id": n => { archiveEntry.personalOwnerId = n.getStringValue(); },
+        "published_revision_id": n => { archiveEntry.publishedRevisionId = n.getGuidValue(); },
+        "publishing_enabled": n => { archiveEntry.publishingEnabled = n.getBooleanValue() ?? false; },
+        "schema_head_id": n => { archiveEntry.schemaHeadId = n.getGuidValue(); },
+        "system_key": n => { archiveEntry.systemKey = n.getEnumValue<ArchiveEntry_system_key>(ArchiveEntry_system_keyObject); },
+        "template_keys": n => { archiveEntry.templateKeys = n.getCollectionOfPrimitiveValues<string>("string"); },
+        "updated_at": n => { archiveEntry.updatedAt = n.getDateValue(); },
+        "updated_by": n => { archiveEntry.updatedBy = n.getStringValue(); },
+        "values": n => { archiveEntry.values = n.getObjectValue<ArchiveEntry_values>(createArchiveEntry_valuesFromDiscriminatorValue); },
+        "version": n => { archiveEntry.version = n.getNumberValue(); },
+        "versioning": n => { archiveEntry.versioning = n.getEnumValue<ArchiveEntry_versioning>(ArchiveEntry_versioningObject); },
+        "webdav_enabled": n => { archiveEntry.webdavEnabled = n.getBooleanValue() ?? false; },
+        "workspace_id": n => { archiveEntry.workspaceId = n.getGuidValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param ArchiveEntry_values The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoArchiveEntry_values(archiveEntry_values: Partial<ArchiveEntry_values> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+    }
+}
+/**
+ * The deserialization information for the current model
  * @param Artifact The instance to deserialize into.
  * @returns {Record<string, (node: ParseNode) => void>}
  */
@@ -3021,13 +3287,15 @@ export function deserializeIntoBulkCreate_values(bulkCreate_values: Partial<Bulk
  * @returns {Record<string, (node: ParseNode) => void>}
  */
 // @ts-ignore
-export function deserializeIntoBulkOperation(bulkOperation: Partial<BulkOperationMember1 | BulkOperationMember2 | BulkOperationMember3 | BulkOperationMember4 | BulkOperationMember5> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+export function deserializeIntoBulkOperation(bulkOperation: Partial<BulkOperationMember1 | BulkOperationMember2 | BulkOperationMember3 | BulkOperationMember4 | BulkOperationMember5 | BulkOperationMember6 | BulkOperationMember7> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
         ...deserializeIntoBulkOperationMember1(bulkOperation as BulkOperationMember1),
         ...deserializeIntoBulkOperationMember2(bulkOperation as BulkOperationMember2),
         ...deserializeIntoBulkOperationMember3(bulkOperation as BulkOperationMember3),
         ...deserializeIntoBulkOperationMember4(bulkOperation as BulkOperationMember4),
         ...deserializeIntoBulkOperationMember5(bulkOperation as BulkOperationMember5),
+        ...deserializeIntoBulkOperationMember6(bulkOperation as BulkOperationMember6),
+        ...deserializeIntoBulkOperationMember7(bulkOperation as BulkOperationMember7),
     }
 }
 /**
@@ -3098,13 +3366,39 @@ export function deserializeIntoBulkOperationMember5(bulkOperationMember5: Partia
 }
 /**
  * The deserialization information for the current model
+ * @param BulkOperationMember6 The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoBulkOperationMember6(bulkOperationMember6: Partial<BulkOperationMember6> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "action": n => { bulkOperationMember6.action = n.getStringValue(); },
+        "id": n => { bulkOperationMember6.id = n.getStringValue(); },
+        "version": n => { bulkOperationMember6.version = n.getNumberValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param BulkOperationMember7 The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoBulkOperationMember7(bulkOperationMember7: Partial<BulkOperationMember7> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "action": n => { bulkOperationMember7.action = n.getStringValue(); },
+        "id": n => { bulkOperationMember7.id = n.getStringValue(); },
+        "version": n => { bulkOperationMember7.version = n.getNumberValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
  * @param BulkRequest The instance to deserialize into.
  * @returns {Record<string, (node: ParseNode) => void>}
  */
 // @ts-ignore
 export function deserializeIntoBulkRequest(bulkRequest: Partial<BulkRequest> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
-        "operations": n => { bulkRequest.operations = n.getCollectionOfObjectValues<BulkOperationMember1>(createBulkOperationMember1FromDiscriminatorValue) ?? n.getCollectionOfObjectValues<BulkOperationMember2>(createBulkOperationMember2FromDiscriminatorValue) ?? n.getCollectionOfObjectValues<BulkOperationMember3>(createBulkOperationMember3FromDiscriminatorValue) ?? n.getCollectionOfObjectValues<BulkOperationMember4>(createBulkOperationMember4FromDiscriminatorValue) ?? n.getCollectionOfObjectValues<BulkOperationMember5>(createBulkOperationMember5FromDiscriminatorValue); },
+        "operations": n => { bulkRequest.operations = n.getCollectionOfObjectValues<BulkOperationMember1>(createBulkOperationMember1FromDiscriminatorValue) ?? n.getCollectionOfObjectValues<BulkOperationMember2>(createBulkOperationMember2FromDiscriminatorValue) ?? n.getCollectionOfObjectValues<BulkOperationMember3>(createBulkOperationMember3FromDiscriminatorValue) ?? n.getCollectionOfObjectValues<BulkOperationMember4>(createBulkOperationMember4FromDiscriminatorValue) ?? n.getCollectionOfObjectValues<BulkOperationMember5>(createBulkOperationMember5FromDiscriminatorValue) ?? n.getCollectionOfObjectValues<BulkOperationMember6>(createBulkOperationMember6FromDiscriminatorValue) ?? n.getCollectionOfObjectValues<BulkOperationMember7>(createBulkOperationMember7FromDiscriminatorValue); },
     }
 }
 /**
@@ -3931,6 +4225,7 @@ export function deserializeIntoListView(listView: Partial<ListView> | undefined 
         "layout": n => { listView.layout = n.getStringValue(); },
         "name": n => { listView.name = n.getStringValue(); },
         "query": n => { listView.query = n.getObjectValue<QuerySpec>(createQuerySpecFromDiscriminatorValue); },
+        "system_key": n => { listView.systemKey = n.getEnumValue<ListView_system_key>(ListView_system_keyObject); },
         "updated_at": n => { listView.updatedAt = n.getDateValue(); },
         "version": n => { listView.version = n.getNumberValue(); },
     }
@@ -4136,6 +4431,7 @@ export function deserializeIntoPortableSmartFolder(portableSmartFolder: Partial<
 // @ts-ignore
 export function deserializeIntoPortableSmartFolderDefinition(portableSmartFolderDefinition: Partial<PortableSmartFolderDefinition> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
+        "archive": n => { portableSmartFolderDefinition.archive = n.getEnumValue<ArchiveSelection>(ArchiveSelectionObject) ?? ArchiveSelectionObject.Active; },
         "collection_kind": n => { portableSmartFolderDefinition.collectionKind = n.getEnumValue<PortableSmartFolderDefinition_collection_kind>(PortableSmartFolderDefinition_collection_kindObject); },
         "collections": n => { portableSmartFolderDefinition.collections = n.getCollectionOfPrimitiveValues<string>("string"); },
         "content_types": n => { portableSmartFolderDefinition.contentTypes = n.getCollectionOfPrimitiveValues<string>("string"); },
@@ -4364,6 +4660,7 @@ export function deserializeIntoQueryResult(queryResult: Partial<QueryResult> | u
 // @ts-ignore
 export function deserializeIntoQuerySpec(querySpec: Partial<QuerySpec> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
+        "archive": n => { querySpec.archive = n.getEnumValue<ArchiveSelection>(ArchiveSelectionObject) ?? ArchiveSelectionObject.Active; },
         "content_type_id": n => { querySpec.contentTypeId = n.getGuidValue(); },
         "filter": n => { querySpec.filter = n.getObjectValue<FilterExpr>(createFilterExprFromDiscriminatorValue); },
         "group_by": n => { querySpec.groupBy = n.getStringValue(); },
@@ -4572,6 +4869,9 @@ export function deserializeIntoRelationshipView(relationshipView: Partial<Relati
 export function deserializeIntoResource(resource: Partial<Resource> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
         "allow_folders": n => { resource.allowFolders = n.getBooleanValue() ?? true; },
+        "archived": n => { resource.archived = n.getBooleanValue(); },
+        "archived_at": n => { resource.archivedAt = n.getDateValue(); },
+        "archived_by": n => { resource.archivedBy = n.getStringValue(); },
         "container_id": n => { resource.containerId = n.getGuidValue(); },
         "content_type_id": n => { resource.contentTypeId = n.getGuidValue(); },
         "created_at": n => { resource.createdAt = n.getDateValue(); },
@@ -4765,6 +5065,9 @@ export function deserializeIntoSearchField(searchField: Partial<SearchField> | u
 // @ts-ignore
 export function deserializeIntoSearchHit(searchHit: Partial<SearchHit> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
+        "archived": n => { searchHit.archived = n.getBooleanValue(); },
+        "archived_at": n => { searchHit.archivedAt = n.getDateValue(); },
+        "archived_by": n => { searchHit.archivedBy = n.getStringValue(); },
         "collection_id": n => { searchHit.collectionId = n.getGuidValue(); },
         "content_type_id": n => { searchHit.contentTypeId = n.getStringValue(); },
         "highlights": n => { searchHit.highlights = n.getObjectValue<UntypedNode>(createUntypedNodeFromDiscriminatorValue); },
@@ -4805,6 +5108,10 @@ export function deserializeIntoSearchPage(searchPage: Partial<SearchPage> | unde
 // @ts-ignore
 export function deserializeIntoSearchRequest(searchRequest: Partial<SearchRequest> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
+        "archive": n => { searchRequest.archive = n.getEnumValue<ArchiveSelection>(ArchiveSelectionObject) ?? ArchiveSelectionObject.Active; },
+        "archived_by": n => { searchRequest.archivedBy = n.getStringValue(); },
+        "archived_from": n => { searchRequest.archivedFrom = n.getDateValue(); },
+        "archived_to": n => { searchRequest.archivedTo = n.getDateValue(); },
         "collection_id": n => { searchRequest.collectionId = n.getStringValue(); },
         "content_type_id": n => { searchRequest.contentTypeId = n.getStringValue(); },
         "created_by": n => { searchRequest.createdBy = n.getStringValue(); },
@@ -4904,6 +5211,7 @@ export function deserializeIntoSmartFolder(smartFolder: Partial<SmartFolder> | u
 // @ts-ignore
 export function deserializeIntoSmartFolderDefinition(smartFolderDefinition: Partial<SmartFolderDefinition> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
+        "archive": n => { smartFolderDefinition.archive = n.getEnumValue<ArchiveSelection>(ArchiveSelectionObject) ?? ArchiveSelectionObject.Active; },
         "collection_kind": n => { smartFolderDefinition.collectionKind = n.getEnumValue<SmartFolderDefinition_collection_kind>(SmartFolderDefinition_collection_kindObject); },
         "collections": n => { smartFolderDefinition.collections = n.getCollectionOfPrimitiveValues<string>("string"); },
         "content_types": n => { smartFolderDefinition.contentTypes = n.getCollectionOfPrimitiveValues<string>("string"); },
@@ -6199,7 +6507,7 @@ export interface FilteredBulkUpdate extends Parsable {
      */
     name?: string | null;
     /**
-     * Collection query over visible surfaces. System fields: $id, $name, $keywords, $created_at, $created_by, $modified_at, $modified_by. Times are RFC3339 UTC and modification metadata follows the selected revision.
+     * Collection query over visible surfaces. System fields: $id, $name, $keywords, $created_at, $created_by, $modified_at, $modified_by. Times are RFC3339 UTC and modification metadata follows the selected revision. Archive filters apply before paging, counts, and grouping. $archived_at and $archived_by are system fields usable in columns, filters, and sorting.
      */
     query?: QuerySpec | null;
     /**
@@ -6560,9 +6868,13 @@ export interface ListView extends Parsable {
      */
     name?: string | null;
     /**
-     * Collection query over visible surfaces. System fields: $id, $name, $keywords, $created_at, $created_by, $modified_at, $modified_by. Times are RFC3339 UTC and modification metadata follows the selected revision.
+     * Collection query over visible surfaces. System fields: $id, $name, $keywords, $created_at, $created_by, $modified_at, $modified_by. Times are RFC3339 UTC and modification metadata follows the selected revision. Archive filters apply before paging, counts, and grouping. $archived_at and $archived_by are system fields usable in columns, filters, and sorting.
      */
     query?: QuerySpec | null;
+    /**
+     * Protected built-in view; cannot be modified, deleted, or selected as the opening default.
+     */
+    systemKey?: ListView_system_key | null;
     /**
      * The updated_at property
      */
@@ -6572,6 +6884,7 @@ export interface ListView extends Parsable {
      */
     version?: number | null;
 }
+export type ListView_system_key = (typeof ListView_system_keyObject)[keyof typeof ListView_system_keyObject];
 export interface ListViewPage extends Parsable {
     /**
      * Absolute continuation URL, or null on the final page. Repeat the request method and body.
@@ -6866,6 +7179,10 @@ export interface PortableSmartFolder extends Parsable {
  */
 export interface PortableSmartFolderDefinition extends Parsable {
     /**
+     * Discovery state. Omitted selects active items; archive status is independent of publication and deletion.
+     */
+    archive?: ArchiveSelection | null;
+    /**
      * Omit to search both lists and libraries.
      */
     collectionKind?: PortableSmartFolderDefinition_collection_kind | null;
@@ -7147,7 +7464,7 @@ export interface QueryRequest extends Parsable {
      */
     includeTotal?: boolean | null;
     /**
-     * Collection query over visible surfaces. System fields: $id, $name, $keywords, $created_at, $created_by, $modified_at, $modified_by. Times are RFC3339 UTC and modification metadata follows the selected revision.
+     * Collection query over visible surfaces. System fields: $id, $name, $keywords, $created_at, $created_by, $modified_at, $modified_by. Times are RFC3339 UTC and modification metadata follows the selected revision. Archive filters apply before paging, counts, and grouping. $archived_at and $archived_by are system fields usable in columns, filters, and sorting.
      */
     query?: QuerySpec | null;
     /**
@@ -7183,9 +7500,13 @@ export interface QueryResult extends Parsable {
     value?: Resource[] | null;
 }
 /**
- * Collection query over visible surfaces. System fields: $id, $name, $keywords, $created_at, $created_by, $modified_at, $modified_by. Times are RFC3339 UTC and modification metadata follows the selected revision.
+ * Collection query over visible surfaces. System fields: $id, $name, $keywords, $created_at, $created_by, $modified_at, $modified_by. Times are RFC3339 UTC and modification metadata follows the selected revision. Archive filters apply before paging, counts, and grouping. $archived_at and $archived_by are system fields usable in columns, filters, and sorting.
  */
 export interface QuerySpec extends Parsable {
+    /**
+     * Discovery state. Omitted selects active items; archive status is independent of publication and deletion.
+     */
+    archive?: ArchiveSelection | null;
     /**
      * Optional collection content type filter. Field filters, sorting and grouping must use fields assigned to that type.
      */
@@ -7454,6 +7775,18 @@ export interface Resource extends AdditionalDataHolder, Parsable {
      * Lists and libraries only: permits creating physical folders. Disabling retains existing folders. Changes require manage access.
      */
     allowFolders?: boolean | null;
+    /**
+     * The archived property
+     */
+    archived?: boolean | null;
+    /**
+     * The archived_at property
+     */
+    archivedAt?: Date | null;
+    /**
+     * The archived_by property
+     */
+    archivedBy?: string | null;
     /**
      * The container_id property
      */
@@ -7786,6 +8119,18 @@ export interface SearchField extends Parsable {
 export type SearchField_operators = (typeof SearchField_operatorsObject)[keyof typeof SearchField_operatorsObject];
 export interface SearchHit extends Parsable {
     /**
+     * The archived property
+     */
+    archived?: boolean | null;
+    /**
+     * The archived_at property
+     */
+    archivedAt?: Date | null;
+    /**
+     * The archived_by property
+     */
+    archivedBy?: string | null;
+    /**
      * The collection_id property
      */
     collectionId?: Guid | null;
@@ -7873,6 +8218,22 @@ export interface SearchPage extends Parsable {
 }
 export type SearchPage_mode = (typeof SearchPage_modeObject)[keyof typeof SearchPage_modeObject];
 export interface SearchRequest extends Parsable {
+    /**
+     * Discovery state. Omitted selects active items; archive status is independent of publication and deletion.
+     */
+    archive?: ArchiveSelection | null;
+    /**
+     * The archived_by property
+     */
+    archivedBy?: string | null;
+    /**
+     * The archived_from property
+     */
+    archivedFrom?: Date | null;
+    /**
+     * The archived_to property
+     */
+    archivedTo?: Date | null;
     /**
      * The collection_id property
      */
@@ -7998,6 +8359,52 @@ export function serializeApplyTemplateInput(writer: SerializationWriter, applyTe
     if (!applyTemplateInput || isSerializingDerivedType) { return; }
     writer.writeGuidValue("content_type_id", applyTemplateInput.contentTypeId);
     writer.writeNumberValue("template_version", applyTemplateInput.templateVersion);
+}
+/**
+ * Serializes information the current object
+ * @param ArchiveEntry The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeArchiveEntry(writer: SerializationWriter, archiveEntry: Partial<ArchiveEntry> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!archiveEntry || isSerializingDerivedType) { return; }
+    writer.writeBooleanValue("allow_folders", archiveEntry.allowFolders);
+    writer.writeGuidValue("container_id", archiveEntry.containerId);
+    writer.writeDateValue("created_at", archiveEntry.createdAt);
+    writer.writeStringValue("default_currency", archiveEntry.defaultCurrency);
+    writer.writeStringValue("description", archiveEntry.description);
+    writer.writeEnumValue<ArchiveEntry_duplicate_policy>("duplicate_policy", archiveEntry.duplicatePolicy);
+    writer.writeGuidValue("head_revision_id", archiveEntry.headRevisionId);
+    writer.writeGuidValue("id", archiveEntry.id);
+    writer.writeBooleanValue("inherit_permissions", archiveEntry.inheritPermissions);
+    writer.writeCollectionOfPrimitiveValues<string>("keywords", archiveEntry.keywords);
+    writer.writeEnumValue<ArchiveEntry_kind>("kind", archiveEntry.kind);
+    writer.writeNumberValue("max_versions", archiveEntry.maxVersions);
+    writer.writeStringValue("name", archiveEntry.name);
+    writer.writeNumberValue("next_revision_number", archiveEntry.nextRevisionNumber);
+    writer.writeGuidValue("parent_id", archiveEntry.parentId);
+    writer.writeGuidValue("published_revision_id", archiveEntry.publishedRevisionId);
+    writer.writeBooleanValue("publishing_enabled", archiveEntry.publishingEnabled);
+    writer.writeGuidValue("schema_head_id", archiveEntry.schemaHeadId);
+    writer.writeDateValue("updated_at", archiveEntry.updatedAt);
+    writer.writeObjectValue<ArchiveEntry_values>("values", archiveEntry.values, serializeArchiveEntry_values);
+    writer.writeNumberValue("version", archiveEntry.version);
+    writer.writeEnumValue<ArchiveEntry_versioning>("versioning", archiveEntry.versioning);
+    writer.writeBooleanValue("webdav_enabled", archiveEntry.webdavEnabled);
+    writer.writeGuidValue("workspace_id", archiveEntry.workspaceId);
+    writer.writeAdditionalData(archiveEntry.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param ArchiveEntry_values The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeArchiveEntry_values(writer: SerializationWriter, archiveEntry_values: Partial<ArchiveEntry_values> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!archiveEntry_values || isSerializingDerivedType) { return; }
+    writer.writeAdditionalData(archiveEntry_values.additionalData);
 }
 /**
  * Serializes information the current object
@@ -8155,12 +8562,14 @@ export function serializeBulkCreate_values(writer: SerializationWriter, bulkCrea
  * @param writer Serialization writer to use to serialize this model
  */
 // @ts-ignore
-export function serializeBulkOperation(writer: SerializationWriter, bulkOperation: Partial<BulkOperationMember1 | BulkOperationMember2 | BulkOperationMember3 | BulkOperationMember4 | BulkOperationMember5> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+export function serializeBulkOperation(writer: SerializationWriter, bulkOperation: Partial<BulkOperationMember1 | BulkOperationMember2 | BulkOperationMember3 | BulkOperationMember4 | BulkOperationMember5 | BulkOperationMember6 | BulkOperationMember7> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     serializeBulkOperationMember1(writer, bulkOperation as BulkOperationMember1);
     serializeBulkOperationMember2(writer, bulkOperation as BulkOperationMember2);
     serializeBulkOperationMember3(writer, bulkOperation as BulkOperationMember3);
     serializeBulkOperationMember4(writer, bulkOperation as BulkOperationMember4);
     serializeBulkOperationMember5(writer, bulkOperation as BulkOperationMember5);
+    serializeBulkOperationMember6(writer, bulkOperation as BulkOperationMember6);
+    serializeBulkOperationMember7(writer, bulkOperation as BulkOperationMember7);
 }
 /**
  * Serializes information the current object
@@ -8230,6 +8639,32 @@ export function serializeBulkOperationMember5(writer: SerializationWriter, bulkO
 }
 /**
  * Serializes information the current object
+ * @param BulkOperationMember6 The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeBulkOperationMember6(writer: SerializationWriter, bulkOperationMember6: Partial<BulkOperationMember6> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!bulkOperationMember6 || isSerializingDerivedType) { return; }
+    writer.writeStringValue("action", bulkOperationMember6.action);
+    writer.writeStringValue("id", bulkOperationMember6.id);
+    writer.writeNumberValue("version", bulkOperationMember6.version);
+}
+/**
+ * Serializes information the current object
+ * @param BulkOperationMember7 The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeBulkOperationMember7(writer: SerializationWriter, bulkOperationMember7: Partial<BulkOperationMember7> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!bulkOperationMember7 || isSerializingDerivedType) { return; }
+    writer.writeStringValue("action", bulkOperationMember7.action);
+    writer.writeStringValue("id", bulkOperationMember7.id);
+    writer.writeNumberValue("version", bulkOperationMember7.version);
+}
+/**
+ * Serializes information the current object
  * @param BulkRequest The instance to serialize from.
  * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
  * @param writer Serialization writer to use to serialize this model
@@ -8237,7 +8672,7 @@ export function serializeBulkOperationMember5(writer: SerializationWriter, bulkO
 // @ts-ignore
 export function serializeBulkRequest(writer: SerializationWriter, bulkRequest: Partial<BulkRequest> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!bulkRequest || isSerializingDerivedType) { return; }
-    writer.writeCollectionOfObjectValues<BulkOperationMember1 | BulkOperationMember2 | BulkOperationMember3 | BulkOperationMember4 | BulkOperationMember5>("operations", bulkRequest.operations, serializeBulkOperation);
+    writer.writeCollectionOfObjectValues<BulkOperationMember1 | BulkOperationMember2 | BulkOperationMember3 | BulkOperationMember4 | BulkOperationMember5 | BulkOperationMember6 | BulkOperationMember7>("operations", bulkRequest.operations, serializeBulkOperation);
 }
 /**
  * Serializes information the current object
@@ -9286,6 +9721,7 @@ export function serializePortableSmartFolder(writer: SerializationWriter, portab
 // @ts-ignore
 export function serializePortableSmartFolderDefinition(writer: SerializationWriter, portableSmartFolderDefinition: Partial<PortableSmartFolderDefinition> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!portableSmartFolderDefinition || isSerializingDerivedType) { return; }
+    writer.writeEnumValue<ArchiveSelection>("archive", portableSmartFolderDefinition.archive);
     writer.writeEnumValue<PortableSmartFolderDefinition_collection_kind>("collection_kind", portableSmartFolderDefinition.collectionKind);
     writer.writeCollectionOfPrimitiveValues<string>("collections", portableSmartFolderDefinition.collections);
     writer.writeCollectionOfPrimitiveValues<string>("content_types", portableSmartFolderDefinition.contentTypes);
@@ -9517,6 +9953,7 @@ export function serializeQueryResult(writer: SerializationWriter, queryResult: P
 // @ts-ignore
 export function serializeQuerySpec(writer: SerializationWriter, querySpec: Partial<QuerySpec> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!querySpec || isSerializingDerivedType) { return; }
+    writer.writeEnumValue<ArchiveSelection>("archive", querySpec.archive);
     writer.writeGuidValue("content_type_id", querySpec.contentTypeId);
     writer.writeObjectValue<FilterExpr>("filter", querySpec.filter, serializeFilterExpr);
     writer.writeStringValue("group_by", querySpec.groupBy);
@@ -9966,6 +10403,10 @@ export function serializeSearchPage(writer: SerializationWriter, searchPage: Par
 // @ts-ignore
 export function serializeSearchRequest(writer: SerializationWriter, searchRequest: Partial<SearchRequest> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!searchRequest || isSerializingDerivedType) { return; }
+    writer.writeEnumValue<ArchiveSelection>("archive", searchRequest.archive);
+    writer.writeStringValue("archived_by", searchRequest.archivedBy);
+    writer.writeDateValue("archived_from", searchRequest.archivedFrom);
+    writer.writeDateValue("archived_to", searchRequest.archivedTo);
     writer.writeStringValue("collection_id", searchRequest.collectionId);
     writer.writeStringValue("content_type_id", searchRequest.contentTypeId);
     writer.writeStringValue("created_by", searchRequest.createdBy);
@@ -10067,6 +10508,7 @@ export function serializeSmartFolder(writer: SerializationWriter, smartFolder: P
 // @ts-ignore
 export function serializeSmartFolderDefinition(writer: SerializationWriter, smartFolderDefinition: Partial<SmartFolderDefinition> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!smartFolderDefinition || isSerializingDerivedType) { return; }
+    writer.writeEnumValue<ArchiveSelection>("archive", smartFolderDefinition.archive);
     writer.writeEnumValue<SmartFolderDefinition_collection_kind>("collection_kind", smartFolderDefinition.collectionKind);
     writer.writeCollectionOfPrimitiveValues<string>("collections", smartFolderDefinition.collections);
     writer.writeCollectionOfPrimitiveValues<string>("content_types", smartFolderDefinition.contentTypes);
@@ -11227,6 +11669,10 @@ export interface SmartFolder extends AdditionalDataHolder, Parsable {
  * Live query across at most 100 readable collections. Name/key selectors ignore case. Terms include descendants and can occupy different term fields. Incompatible collection filters are skipped; none compatible returns validation. Metadata navigation is scalar and indexed, with compatible field types/scopes across collections. Physical folders have content types and optional custom fields, and participate in taxonomy/content-type selectors when include_folders is true. Equivalent collection predicates share one SQL branch; distinct shapes use UNION ALL. Queries are bounded to 30,000 SQL parameters. Mode is explicit. Results can be read directly without supplying a group path. $file_type filters the MIME type on the authorized visible revision.
  */
 export interface SmartFolderDefinition extends Parsable {
+    /**
+     * Discovery state. Omitted selects active items; archive status is independent of publication and deletion.
+     */
+    archive?: ArchiveSelection | null;
     /**
      * Omit to search both lists and libraries.
      */
@@ -12559,7 +13005,7 @@ export interface ViewInput extends Parsable {
      */
     name?: string | null;
     /**
-     * Collection query over visible surfaces. System fields: $id, $name, $keywords, $created_at, $created_by, $modified_at, $modified_by. Times are RFC3339 UTC and modification metadata follows the selected revision.
+     * Collection query over visible surfaces. System fields: $id, $name, $keywords, $created_at, $created_by, $modified_at, $modified_by. Times are RFC3339 UTC and modification metadata follows the selected revision. Archive filters apply before paging, counts, and grouping. $archived_at and $archived_by are system fields usable in columns, filters, and sorting.
      */
     query?: QuerySpec | null;
 }
@@ -12705,6 +13151,44 @@ export interface WorkspaceRelationshipView extends AdditionalDataHolder, Parsabl
      */
     typeName?: string | null;
 }
+/**
+ * Libraries only. Default warn. Compares hashes against current documents visible to the caller across libraries and workspaces. Allow suppresses warnings; block rejects duplicates with 409 duplicate_file.
+ */
+export const ArchiveEntry_duplicate_policyObject = {
+    Allow: "allow",
+    Warn: "warn",
+    Block: "block",
+} as const;
+export const ArchiveEntry_kindObject = {
+    Workspace: "workspace",
+    List: "list",
+    Library: "library",
+    Folder: "folder",
+    Item: "item",
+} as const;
+/**
+ * Protected default Home library identity.
+ */
+export const ArchiveEntry_system_keyObject = {
+    HomeDocuments: "home.documents",
+    HomeInbox: "home.inbox",
+    OpenapiJsonNullSentinelValue2BF936000FE44250987AE5DDB203E464: "openapi-json-null-sentinel-value-2BF93600-0FE4-4250-987A-E5DDB203E464",
+} as const;
+/**
+ * Collections only. Lists and libraries default to off. Off stops recording new history; retained entries remain available. Replacing a file while off queues its previous bytes for reclamation after the one-hour grace period, subject to current/published file, staged-use and workflow-lease protection.
+ */
+export const ArchiveEntry_versioningObject = {
+    Off: "off",
+    Major: "major",
+} as const;
+/**
+ * Discovery state. Omitted selects active items; archive status is independent of publication and deletion.
+ */
+export const ArchiveSelectionObject = {
+    Active: "active",
+    Archived: "archived",
+    All: "all",
+} as const;
 export const Blob_content_typeObject = {
     ApplicationPdf: "application/pdf",
     ImageTiff: "image/tiff",
@@ -12718,6 +13202,8 @@ export const BulkResult_actionObject = {
     Publish: "publish",
     Unpublish: "unpublish",
     Delete: "delete",
+    Archive: "archive",
+    Unarchive: "unarchive",
 } as const;
 export const CalendarQuery_surfaceObject = {
     Auto: "auto",
@@ -12911,6 +13397,12 @@ export const FilterExpr_value_refObject = {
 } as const;
 export const ListIntegration_kindObject = {
     Ical_https: "ical_https",
+} as const;
+/**
+ * Protected built-in view; cannot be modified, deleted, or selected as the opening default.
+ */
+export const ListView_system_keyObject = {
+    Archived: "archived",
 } as const;
 /**
  * Why a failed operation failed, when the reason is one clients act on: its deadline passed, its retries ran out, or its creator lost permission.

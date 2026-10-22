@@ -99,8 +99,19 @@ func (s *Service) LibraryFolder(ctx context.Context, subject, libraryID string, 
 		if err != nil || !f.Collection() {
 			return listing{folder: f}, err
 		}
+		// Archived entries keep their paths, so they take part in choosing
+		// each name's entry; only active entries are listed.
 		entries, err := t.visibleFiles(ctx, subject, resources.Filter{ParentID: f.ID})
-		return listing{f, uniqueNames(entries)}, err
+		if err != nil {
+			return listing{}, err
+		}
+		shown := []*File{}
+		for _, entry := range uniqueNames(entries) {
+			if !entry.Archived {
+				shown = append(shown, entry)
+			}
+		}
+		return listing{f, shown}, nil
 	})
 	return out.folder, out.entries, err
 }

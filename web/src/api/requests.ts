@@ -1,5 +1,5 @@
 import { stringifyJSON } from './json';
-import type { FilterExpr, QuerySpec } from './types';
+import type { ArchiveSelection, FilterExpr, QuerySpec } from './types';
 
 /** Shapes of `/v1` calls the screens share. Tests assert these paths and bodies. */
 
@@ -154,12 +154,13 @@ export function bulkUpdateRequests(
     const ids = target.ids.slice(start, start + bulkIdsPerRequest);
     const parts: FilterExpr[] = [];
     for (let at = 0; at < ids.length; at += 50) parts.push({ field: '$id', op: 'in', value: ids.slice(at, at + 50) });
-    calls.push(call({ filter: parts.length === 1 ? parts[0] : { or: parts } }));
+    calls.push(call({ archive: 'all', filter: parts.length === 1 ? parts[0] : { or: parts } }));
   }
   return calls;
 }
 
 export interface SearchParams {
+  archive?: ArchiveSelection;
   contentTypeId?: string;
   q?: string;
   workspaceId?: string;
@@ -174,6 +175,7 @@ export function searchRequest(params: SearchParams): ApiCall {
     path: '/v1/search',
     method: 'GET',
     query: {
+      archive: params.archive,
       q: params.q,
       workspace_id: params.workspaceId,
       collection_id: params.collectionId,

@@ -566,7 +566,7 @@ func TestWorkspacePackageTemplateTypesAndLiteralDefaults(t *testing.T) {
 				t.Fatal("template type not reused", copiedTypes, err)
 			}
 			views, err := target.Views(ctx, "alice", copied.ID, "", 50)
-			if err != nil || len(views.Data) != 1 || !views.Data[0].IsDefault {
+			if err != nil || len(views.Data) != 2 || !hasDefaultView(views.Data, 4) {
 				t.Fatal("template view not copied", views, err)
 			}
 		})

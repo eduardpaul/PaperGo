@@ -1,3 +1,4 @@
+import { useArchiveActions } from './archive-actions';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import {
@@ -106,7 +107,7 @@ export function CollectionPage({
     enabled: !!search.folder,
     queryFn: () => folderCrumbs(search.folder!, listId),
   });
-  const viewId = search.view === 'none' ? undefined : (search.view ?? views.data?.find((view) => view.is_default)?.id);
+  const viewId = search.view === 'none' ? undefined : (search.view === 'archived' ? views.data?.find(view => view.system_key === 'archived')?.id : (search.view ?? views.data?.find((view) => view.is_default)?.id));
   const view = views.data?.find((entry) => entry.id === viewId);
   const layout = !search.folder && !search.q ? (view?.layout ?? 'table') : 'table';
   const sortable = sortableColumns(fields.data ?? []);
@@ -134,6 +135,7 @@ export function CollectionPage({
   const [next, setNext] = useState<string | null>(listing.data?.next ?? null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [selected, setSelected] = useState<Map<string, Resource>>(new Map());
+  const archive = useArchiveActions(completed => setSelected(current => new Map([...current].filter(([id]) => !completed.includes(id)))));
   // Everything the listing matches, beyond the loaded rows (for bulk edits).
   const [allMatching, setAllMatching] = useState(false);
   const folderMoves = useFolderMoves(collection.data, selected, items => { setSelected(new Map(items.map(item => [item.id, item]))); setAllMatching(false); });
@@ -393,12 +395,12 @@ export function CollectionPage({
         {(views.data?.length ?? 0) > 0 && (
           <div role="tablist" aria-label="Views" className="flex max-w-full overflow-x-auto rounded-md bg-surface-muted p-0.5">
             {views.data?.map((entry) => (
-              <ViewTab key={entry.id} active={entry.id === viewId} onClick={() => onSearch({ view: entry.id, q: undefined, sort: undefined, cols: undefined })}>
+              <ViewTab key={entry.id} active={entry.id === viewId} onClick={() => onSearch({ view: entry.id, folder: undefined, q: undefined, sort: undefined, cols: undefined })}>
                 {entry.name}
               </ViewTab>
             ))}
             <ViewTab active={!viewId} onClick={() => onSearch({ view: 'none', q: undefined, sort: undefined, cols: undefined })}>
-              All items
+              Active items
             </ViewTab>
           </div>
         )}
@@ -481,6 +483,10 @@ export function CollectionPage({
           {!allMatching && canEdit && items.length === selected.size && (
             <RunWorkflowAction workspaceId={workspaceId} collectionId={listId} items={items} />
           )}
+          {!allMatching && canEdit && items.length === selected.size && <>
+            {items.some(item => !item.archived) && <Button size="sm" disabled={archive.isPending || items.length > 100} onClick={() => archive.mutate({ items, archived: true })}>Archive selected</Button>}
+            {items.some(item => item.archived) && <Button size="sm" disabled={archive.isPending || items.length > 100} onClick={() => archive.mutate({ items, archived: false })}>Unarchive selected</Button>}
+          </>}
           {!allMatching && <Button size="sm" disabled={selected.size > 100} onClick={() => setMoving(true)}>Move selected…</Button>}
           {!allMatching && (
             <Button size="sm" disabled={remove.isPending} onClick={() => setConfirmingDelete(true)}>

@@ -1,11 +1,15 @@
 package dms
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"papergo/internal/dal/catalog"
 	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/refs"
 	viewstore "papergo/internal/dal/views"
+	"slices"
+	"strings"
 )
 
 type ViewInput struct {
@@ -17,6 +21,9 @@ type ViewInput struct {
 }
 
 func (s *Service) validateView(ctx context.Context, subject, containerID string, in *ViewInput) error {
+	if strings.EqualFold(strings.TrimSpace(in.Name), "Archived") {
+		return invalid("Archived is reserved for the built-in view")
+	}
 	if e := validateName(in.Name); e != nil {
 		return e
 	}
@@ -36,13 +43,15 @@ func (s *Service) validateView(ctx context.Context, subject, containerID string,
 	if e != nil {
 		return e
 	}
-	known := map[string]bool{"$id": true, "$name": true, "$keywords": true, "$created_at": true, "$created_by": true, "$modified_at": true, "$modified_by": true}
+	known := map[string]bool{}
 	for _, d := range defs {
 		known[d.Key] = true
 	}
 	seen := map[string]bool{}
 	for _, col := range in.Columns {
-		if !known[col] || seen[col] {
+		// $file_type only filters: items carry no file type to show.
+		builtin := builtinColumn(col) && col != "$file_type"
+		if !known[col] && !builtin || seen[col] {
 			return invalid("view columns must be unique known fields")
 		}
 		seen[col] = true
@@ -112,6 +121,9 @@ func (s *Service) UpdateView(ctx context.Context, subject, id string, version in
 		if e != nil {
 			return e
 		}
+		if v.SystemKey != "" {
+			return invalid("built-in views cannot be changed or deleted")
+		}
 		if v.Version != version {
 			return ErrPreconditionFailed
 		}
@@ -144,6 +156,9 @@ func (s *Service) DeleteView(ctx context.Context, subject, id string, version in
 		c, e := t.authorize(ctx, subject, v.ContainerID, "manage")
 		if e != nil {
 			return e
+		}
+		if v.SystemKey != "" {
+			return invalid("built-in views cannot be changed or deleted")
 		}
 		if v.Version != version {
 			return ErrPreconditionFailed
@@ -211,4 +226,39 @@ func (s *Service) QueryViewGroups(ctx context.Context, subject, id string, in Vi
 		}
 		return t.QueryGroups(ctx, subject, v.ContainerID, QueryRequest{Query: spec, Surface: in.Surface, After: in.After, Limit: in.Limit, Select: in.Select})
 	})
+}
+
+// provisionArchivedView runs in the collection's creation transaction.
+func (s *Service) provisionArchivedView(ctx context.Context, collectionID string) error {
+	query, _ := json.Marshal(archivedViewQuery())
+	_, err := s.DAL.Views().CreateListView(ctx, viewstore.ListView{ContainerID: collectionID, Name: "Archived", SystemKey: viewstore.SystemArchived, Layout: viewstore.LayoutTable, Columns: []string{"$name", "$archived_at", "$archived_by"}, Query: query})
+	return err
+}
+
+func archivedViewQuery() QuerySpec {
+	return QuerySpec{Archive: refs.ArchiveArchived, Sort: []SortSpec{{Field: "$archived_at", Direction: "desc"}}}
+}
+
+// Importing content also provisions and validates each live collection's system view.
+func (s *Service) ensureArchivedView(ctx context.Context, collectionID string) error {
+	views, err := s.DAL.Views().ListViews(ctx, viewstore.ViewFilter{ContainerID: collectionID})
+	if err != nil {
+		return err
+	}
+	for _, v := range views {
+		if v.SystemKey != viewstore.SystemArchived {
+			continue
+		}
+		var spec QuerySpec
+		if err = json.Unmarshal(v.Query, &spec); err != nil {
+			return invalid("invalid built-in Archived view")
+		}
+		actual, _ := json.Marshal(spec)
+		expected, _ := json.Marshal(archivedViewQuery())
+		if v.Name != "Archived" || v.Layout != viewstore.LayoutTable || v.IsDefault || !slices.Equal(v.Columns, []string{"$name", "$archived_at", "$archived_by"}) || !bytes.Equal(actual, expected) {
+			return invalid("built-in Archived view must retain its provisioned definition")
+		}
+		return nil
+	}
+	return s.provisionArchivedView(ctx, collectionID)
 }

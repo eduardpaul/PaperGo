@@ -444,6 +444,11 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 			}
 		}
 	}
+	if out.Collection() {
+		if e = s.provisionArchivedView(ctx, out.ID); e != nil {
+			return nil, e
+		}
+	}
 	details := map[string]any{"kind": in.Kind}
 	if contentKind(out.Kind) {
 		var file *blobs.Blob

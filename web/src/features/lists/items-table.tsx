@@ -250,6 +250,7 @@ export function ItemsTable({
                         >
                           {resource.kind === 'folder' && <Folder className="size-4 shrink-0 text-muted" />}
                           <span className="truncate">{resource.name}</span>
+                          {resource.archived && <Badge>Archived</Badge>}
                           {provenance?.get(resource.id) && <Badge>{provenance.get(resource.id)}</Badge>}
                           {state && <Badge tone={state === 'Published' ? 'success' : 'warning'}>{state}</Badge>}
                         </button>
@@ -293,6 +294,8 @@ function Cell({
   formatDate: (value: string) => string;
 }) {
   if (column === '$keywords') return <span className="text-muted">{(resource.keywords ?? []).map(id => names.get(id) ?? id).join(', ') || '—'}</span>;
+  if (column === '$archived_at') return <>{resource.archived_at ? formatDate(resource.archived_at) : '—'}</>;
+  if (column === '$archived_by') return <>{resource.archived_by ? names.get(resource.archived_by) ?? resource.archived_by : '—'}</>;
   if (column === '$modified_at' || column === '$created_at') {
     const value = column === '$modified_at' ? resource.updated_at : resource.created_at;
     return <span className="whitespace-nowrap text-muted">{value ? formatDate(value) : '—'}</span>;

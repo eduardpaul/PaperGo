@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"papergo/internal/dal/refs"
 	"papergo/internal/search"
 )
 
@@ -52,7 +53,27 @@ func nativeFilter(f search.Filter) (string, error) {
 	} else {
 		visibility = strings.ReplaceAll(visibility, "NOT ("+draft+")", strings.Replace(draft, " IN ", " NOT IN ", 1))
 	}
+	if !f.Archive.Valid() {
+		return "", errors.New("invalid archive selector")
+	}
 	parts := []string{visibility}
+	if f.Archive == refs.ArchiveActive {
+		parts = append(parts, "archived = 0")
+	}
+	// Active documents store archived_at as 0, so a date bound also selects
+	// archived documents.
+	if f.Archive == refs.ArchiveArchived || !f.ArchivedFrom.IsZero() || !f.ArchivedTo.IsZero() {
+		parts = append(parts, "archived = 1")
+	}
+	if f.ArchivedBy != "" {
+		parts = append(parts, equal("archived_by", encode(f.ArchivedBy)))
+	}
+	if !f.ArchivedFrom.IsZero() {
+		parts = append(parts, "archived_at >= "+strconv.FormatInt(f.ArchivedFrom.UnixNano(), 10))
+	}
+	if !f.ArchivedTo.IsZero() {
+		parts = append(parts, "archived_at <= "+strconv.FormatInt(f.ArchivedTo.UnixNano(), 10))
+	}
 	if len(f.Kinds) > 0 {
 		parts = append(parts, in("kind", encoded(f.Kinds)))
 	}

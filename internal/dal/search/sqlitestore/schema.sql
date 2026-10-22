@@ -4,6 +4,7 @@ PRAGMA application_id = 1346851657; -- PGSI: PaperGo search index
 CREATE TABLE state (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE documents (
  rowid INTEGER PRIMARY KEY,
+ archived BOOLEAN NOT NULL DEFAULT FALSE, archived_at INTEGER, archived_by TEXT NOT NULL DEFAULT '',
  resource_id TEXT NOT NULL, surface TEXT NOT NULL, kind TEXT NOT NULL, views INTEGER NOT NULL,
  workspace_id TEXT NOT NULL, collection_id TEXT NOT NULL, parent_id TEXT NOT NULL, content_type_id TEXT NOT NULL,
  scope_id TEXT NOT NULL, revision_id TEXT NOT NULL, blob_id TEXT NOT NULL,

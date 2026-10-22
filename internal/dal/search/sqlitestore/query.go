@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 
+	"papergo/internal/dal/refs"
 	"papergo/internal/search"
 )
 
@@ -97,6 +98,27 @@ func where(f search.Filter) (string, []any, error) {
 		// Drafts where the caller reads them, else what is published.
 		conds = append(conds, "((d.views & 1) <> 0 AND d.scope_id IN (SELECT value FROM json_each(?)) OR (d.views & 2) <> 0 AND d.scope_id IN (SELECT value FROM json_each(?)) AND d.scope_id NOT IN (SELECT value FROM json_each(?)))")
 		args = append(args, draft, read, draft)
+	}
+	if !f.Archive.Valid() {
+		return "", nil, errors.New("invalid archive selector")
+	}
+	if f.Archive == refs.ArchiveActive {
+		conds = append(conds, "NOT d.archived")
+	}
+	if f.Archive == refs.ArchiveArchived {
+		conds = append(conds, "d.archived")
+	}
+	if f.ArchivedBy != "" {
+		conds = append(conds, "d.archived_by=?")
+		args = append(args, f.ArchivedBy)
+	}
+	if !f.ArchivedFrom.IsZero() {
+		conds = append(conds, "d.archived_at>=?")
+		args = append(args, f.ArchivedFrom.UnixNano())
+	}
+	if !f.ArchivedTo.IsZero() {
+		conds = append(conds, "d.archived_at<=?")
+		args = append(args, f.ArchivedTo.UnixNano())
 	}
 	if len(f.Kinds) > 0 {
 		conds = append(conds, "d.kind IN (SELECT value FROM json_each(?))")
@@ -298,12 +320,14 @@ func (s *Store) Search(ctx context.Context, q search.Query) (search.Result, erro
 }
 
 // hitColumns are the document columns scanHit reads.
-const hitColumns = "d.rowid, d.resource_id, d.kind, d.surface, d.workspace_id, d.collection_id, d.content_type_id, d.revision_id, d.name, d.keywords, d.body, d.modified_by, d.modified_at"
+const hitColumns = "d.archived,d.archived_at,d.archived_by,d.rowid, d.resource_id, d.kind, d.surface, d.workspace_id, d.collection_id, d.content_type_id, d.revision_id, d.name, d.keywords, d.body, d.modified_by, d.modified_at"
 
 func scanHit(rows *sql.Rows, h *search.Hit, rowid *int64, extra ...any) error {
 	var keywords, body string
 	var modified int64
-	err := rows.Scan(append([]any{rowid, &h.ResourceID, &h.Kind, &h.Surface, &h.WorkspaceID, &h.CollectionID, &h.ContentTypeID, &h.RevisionID, &h.Name, &keywords, &body, &h.ModifiedBy, &modified}, extra...)...)
+	var archived sql.NullInt64
+	err := rows.Scan(append([]any{&h.Archived, &archived, &h.ArchivedBy, rowid, &h.ResourceID, &h.Kind, &h.Surface, &h.WorkspaceID, &h.CollectionID, &h.ContentTypeID, &h.RevisionID, &h.Name, &keywords, &body, &h.ModifiedBy, &modified}, extra...)...)
+	h.ArchivedAt = archiveTime(archived)
 	h.ModifiedAt, h.Text = fromNanos(modified), body
 	if h.Text == "" {
 		h.Text = keywords
@@ -527,6 +551,12 @@ func (s *Store) Match(ctx context.Context, q search.MatchQuery) (search.Matches,
 	scope, value := "d.collection_id=?", q.CollectionID
 	if q.CollectionID == "" {
 		scope, value = "d.workspace_id=?", q.WorkspaceID
+	}
+	if q.Archive == refs.ArchiveActive {
+		scope += " AND NOT d.archived"
+	}
+	if q.Archive == refs.ArchiveArchived {
+		scope += " AND d.archived"
 	}
 	rows, err := s.db.QueryContext(ctx, `SELECT d.resource_id, d.views FROM doc_fts JOIN documents d ON d.rowid=doc_fts.rowid
  WHERE doc_fts MATCH ? AND `+scope+` LIMIT ?`, renderOn(q.Text, nil, documentColumns(q.Content)), value, limit+1)

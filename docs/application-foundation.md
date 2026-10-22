@@ -331,3 +331,7 @@ size mismatches are rejected. Packages use the current PaperGo core contract.
 REST raw uploads, multipart creation, WebDAV PUT and content-package imports accept PDF (`%PDF-`), TIFF (both byte orders), JPEG, PNG and WebP (RIFF/WEBP). The first 12 bytes decide the canonical stored media type, independently of the filename and declared MIME type. Empty, unsupported or truncated signatures return 415. Size limits apply while streaming, before signature acceptance, and rejected uploads create no metadata/revision and remove their temporary bytes. WebDAV LOCK can create an empty item with no blob; its later PUT must contain a supported file.
 
 Relationship DELETE identifies the incident edge by ID and requires write access to both endpoints without an ETag precondition. Relationship PATCH continues to require the current edge ETag.
+
+## Archive discovery
+
+Every collection includes a protected Archived saved view spanning its subfolders. Its `system_key` is `archived`; it cannot be edited, deleted, or made the opening default. Saved view queries and smart-folder definitions accept `archive: "active" | "archived" | "all"` (default active). `$archived_at` and `$archived_by` are intrinsic query fields. Archive actions change lifecycle metadata and the resource lock version without creating content revisions. See [archiving](archiving.md).

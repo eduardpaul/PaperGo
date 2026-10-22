@@ -848,6 +848,11 @@ func (s *Service) applyCorePackage(ctx context.Context, subject string, p corePa
 	for _, row := range packageResources {
 		if row["kind"] == "list" || row["kind"] == "library" {
 			collections = append(collections, fmt.Sprint(row["id"]))
+			if row["deleted_at"] == nil {
+				if err := s.ensureArchivedView(ctx, fmt.Sprint(row["id"])); err != nil {
+					return err
+				}
+			}
 		}
 	}
 	projections, err := s.DAL.Surfaces().Surfaces(ctx, surfaces.Filter{ContainerIDs: collections})

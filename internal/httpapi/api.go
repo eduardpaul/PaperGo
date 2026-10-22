@@ -13,6 +13,7 @@ import (
 	"papergo/internal/auth"
 	"papergo/internal/dal"
 	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/refs"
 	"papergo/internal/dal/resources"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
@@ -105,6 +106,9 @@ func (a *API) registerResources(api *router) {
 	api.HandleFunc("GET /v1/items/{id}/revisions", a.revisions)
 	api.HandleFunc("GET /v1/items/{id}/revisions/{number}", a.revision)
 	api.HandleFunc("POST /v1/items/{id}/revisions/{number}/restore", a.restoreRevision)
+	api.HandleFunc("GET /v1/archive", a.archiveItems)
+	api.HandleFunc("POST /v1/items/{id}/archive", a.archiveAction(true))
+	api.HandleFunc("POST /v1/items/{id}/unarchive", a.archiveAction(false))
 	api.HandleFunc("GET /v1/resources/{id}/recycle-bin", a.recycleBin)
 	api.HandleFunc("POST /v1/resources/{id}/recycle-bin/{itemID}/restore", a.restoreDeleted)
 	api.HandleFunc("DELETE /v1/resources/{id}/recycle-bin/{itemID}", a.purgeDeleted)
@@ -618,11 +622,11 @@ func (a *API) delete(w http.ResponseWriter, r *http.Request) {
 }
 func (a *API) children(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	a.list(w, r, dms.Browse{ParentID: r.PathValue("id"), Search: q.Get("q"), Keyword: q.Get("keyword"), After: q.Get("$skiptoken"), Limit: queryInt(r, "$top"), Surface: q.Get("surface"), FilterField: q.Get("filter_field"), FilterOp: q.Get("filter_op"), FilterValue: q.Get("filter_value"), Kind: q.Get("kind")})
+	a.list(w, r, dms.Browse{Archive: refs.ArchiveSelection(q.Get("archive")), ParentID: r.PathValue("id"), Search: q.Get("q"), Keyword: q.Get("keyword"), After: q.Get("$skiptoken"), Limit: queryInt(r, "$top"), Surface: q.Get("surface"), FilterField: q.Get("filter_field"), FilterOp: q.Get("filter_op"), FilterValue: q.Get("filter_value"), Kind: q.Get("kind")})
 }
 func (a *API) browse(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	in := dms.Browse{WorkspaceID: q.Get("workspace_id"), ParentID: q.Get("parent_id"), Search: q.Get("q"), Keyword: q.Get("keyword"), After: q.Get("$skiptoken"), Limit: queryInt(r, "$top"), Surface: q.Get("surface"), FilterField: q.Get("filter_field"), FilterOp: q.Get("filter_op"), FilterValue: q.Get("filter_value"), Kind: q.Get("kind")}
+	in := dms.Browse{Archive: refs.ArchiveSelection(q.Get("archive")), WorkspaceID: q.Get("workspace_id"), ParentID: q.Get("parent_id"), Search: q.Get("q"), Keyword: q.Get("keyword"), After: q.Get("$skiptoken"), Limit: queryInt(r, "$top"), Surface: q.Get("surface"), FilterField: q.Get("filter_field"), FilterOp: q.Get("filter_op"), FilterValue: q.Get("filter_value"), Kind: q.Get("kind")}
 	if r.URL.Path == "/v1/workspaces" {
 		in = dms.Browse{After: q.Get("$skiptoken"), Limit: queryInt(r, "$top")}
 	}
@@ -895,7 +899,7 @@ func (a *API) observe(next http.Handler) http.Handler {
 func (a *API) keywords(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	limit := queryInt(r, "$top")
-	out, err := a.dms(r).WorkspaceKeywords(r.Context(), subject(r), r.PathValue("id"), dms.WorkspaceKeywordsQuery{CollectionID: q.Get("collection_id"), Prefix: q.Get("prefix"), After: q.Get("$skiptoken"), Limit: limit})
+	out, err := a.dms(r).WorkspaceKeywords(r.Context(), subject(r), r.PathValue("id"), dms.WorkspaceKeywordsQuery{Archive: refs.ArchiveSelection(q.Get("archive")), CollectionID: q.Get("collection_id"), Prefix: q.Get("prefix"), After: q.Get("$skiptoken"), Limit: limit})
 	if err != nil {
 		a.failure(w, r, err)
 		return

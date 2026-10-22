@@ -57,7 +57,7 @@ func TestKeywordVocabularyFollowsAccessAndSurfaces(t *testing.T) {
 		t.Fatalf("prefix in collection: %s", got)
 	}
 	page, err := s.WorkspaceKeywords(testContext, "alice", w.ID, WorkspaceKeywordsQuery{Limit: 2})
-	if err != nil || len(page.Data) != 2 || !strings.HasPrefix(page.NextCursor, "elsewhere\x1f") {
+	if err != nil || len(page.Data) != 2 || page.NextCursor == "" || page.Data[1].Name != "elsewhere" {
 		t.Fatalf("first page: %+v %v", page, err)
 	}
 	if got := vocab("alice", WorkspaceKeywordsQuery{After: page.NextCursor, Limit: 2}); got != "finance:2,legal:1" {
