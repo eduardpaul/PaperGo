@@ -34,7 +34,7 @@ STAGES = ['quick', 'lint', 'test', 'race', 'web', 'native', 'zvec', 'release', '
 # PostgreSQL in the test stage, with the DAL packages postgres_packages adds.
 POSTGRES_PACKAGES = ['./internal/dms', './internal/httpapi', './internal/identity', './internal/scriptrun',
                      './internal/webdav', './internal/workflow', './internal/aiops', './internal/worker', './internal/documenttext',
-                     './internal/documentpreview', './internal/documentfiles', './internal/documentsearch', './internal/backup']
+                     './internal/documentpreview', './internal/documentfiles', './internal/documentsearch']
 NATIVE_PACKAGES = ['./internal/onnx', './internal/decision', './internal/embedding', './internal/ocr/paddle', './internal/scriptrun', './cmd/embed']
 # Native libraries the release executables load, exercised before packaging.
 NATIVE_ABI = (['./internal/onnx', './internal/ocr/paddle', './internal/imaging', './internal/doctext/pdfium', './internal/dal/search/zvecstore'],
@@ -150,10 +150,10 @@ def prepare_go():
 
 
 def postgres_packages():
-    """The database suites, with every DAL package but the native search
-    store and the SQLite release planner, which use no database fixture."""
+    """The portable database suites. SQLite file/upgrade tests and native
+    search are covered in their own stages, not rerun against PostgreSQL."""
     listed = subprocess.run(['go', 'list', './internal/dal/...'], cwd=ROOT, check=True, stdout=subprocess.PIPE, text=True).stdout.split()
-    return [package for package in listed if not re.search(r'/internal/dal/(search|releaseplan)(/|$)', package)] + POSTGRES_PACKAGES
+    return [package for package in listed if not re.search(r'/internal/dal/(search|releaseplan|database|migrations)(/|$)', package)] + POSTGRES_PACKAGES
 
 
 def prepare_postgres():

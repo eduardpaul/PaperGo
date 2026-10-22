@@ -1,13 +1,20 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { liveRefreshInterval, useLiveEvents } from './live';
+import { keys } from '@/api/queries';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
 it('refreshes once for a burst of item events', async () => {
+  vi.useFakeTimers();
   const frames = Array.from({ length: 50 }, (_, i) => `id: ${i}\nevent: item\ndata: {}\n\n`).join('');
   let served = false;
   vi.stubGlobal(
@@ -22,9 +29,14 @@ it('refreshes once for a burst of item events', async () => {
   const invalidate = vi.spyOn(client, 'invalidateQueries');
   const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
   const { unmount } = renderHook(() => useLiveEvents(), { wrapper });
-  await waitFor(() => expect(invalidate).toHaveBeenCalled(), { timeout: liveRefreshInterval * 3 });
-  await new Promise((resolve) => setTimeout(resolve, liveRefreshInterval * 1.5));
-  // Resources, home and inboxes, once.
+  await act(async () => {});
+  await act(async () => { await vi.advanceTimersByTimeAsync(liveRefreshInterval - 1); });
+  expect(invalidate).not.toHaveBeenCalled();
+  await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+  for (const queryKey of [keys.resources, keys.home, keys.inboxes]) {
+    expect(invalidate).toHaveBeenCalledWith({ queryKey });
+  }
+  await act(async () => { await vi.advanceTimersByTimeAsync(liveRefreshInterval); });
   expect(invalidate).toHaveBeenCalledTimes(3);
   unmount();
   client.clear();

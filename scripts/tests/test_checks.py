@@ -140,6 +140,15 @@ class DevelopmentChecksTests(unittest.TestCase):
                                  environ={'PAPERGO_TEST_POSTGRES_DSN': 'postgres://localhost/papergo'})
         self.assertEqual(tests.call_args.args[2], ['./internal/dms'])
 
+    def test_postgres_packages_keep_portable_suites_without_sqlite_only_repeats(self):
+        portable = ['papergo/internal/dal', 'papergo/internal/dal/catalog', 'papergo/internal/dal/resources']
+        sqlite_only = ['papergo/internal/dal/database', 'papergo/internal/dal/migrations', 'papergo/internal/dal/releaseplan']
+        native = ['papergo/internal/dal/search/sqlitestore', 'papergo/internal/dal/search/zvecstore']
+        with patch.object(checks.subprocess, 'run') as run:
+            run.return_value.stdout = '\n'.join([*portable, *sqlite_only, *native])
+            self.assertEqual(checks.postgres_packages(), [*portable, *checks.POSTGRES_PACKAGES])
+        self.assertNotIn('./internal/backup', checks.POSTGRES_PACKAGES)
+
     def test_invalid_combinations_are_rejected(self):
         for argv in (['--run', 'X'], ['lint', '--packages', './x'], ['race', '--only', 'go'], ['test', '--shard', '1/2'],
                      ['race', '--shard', '3/2'], ['race', '--shard', '1/2', '--packages', './x'], ['nope']):

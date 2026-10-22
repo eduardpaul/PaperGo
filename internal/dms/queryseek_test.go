@@ -188,12 +188,8 @@ func TestViewRowsProjectTheirColumns(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for _, columns := range [][]string{{"$name"}, {"$name", "amount", "labels", "done", "missing_key"}, {"$keywords", "serial"}} {
+	for _, columns := range [][]string{{"$name"}, {"$name", "amount", "labels", "done"}, {"$keywords", "serial"}} {
 		view, err := s.CreateView(testContext, "alice", list.ID, ViewInput{Name: fmt.Sprint(columns), Columns: columns})
-		if err != nil && columns[len(columns)-1] == "missing_key" {
-			columns = columns[:len(columns)-1]
-			view, err = s.CreateView(testContext, "alice", list.ID, ViewInput{Name: fmt.Sprint(columns), Columns: columns})
-		}
 		if err != nil {
 			t.Fatal(err)
 		}

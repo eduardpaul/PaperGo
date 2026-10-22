@@ -138,13 +138,28 @@ func TestProductionRejectsDevelopmentAuth(t *testing.T) {
 		t.Fatal("production accepted development auth")
 	}
 }
-func TestConfigurationFailsClosed(t *testing.T) {
-	t.Setenv("APP_ENV", "test")
-	t.Setenv("AUTH_MODE", "oidc")
-	t.Setenv("OIDC_ISSUER", "")
-	t.Setenv("OIDC_AUDIENCE", "")
-	if _, err := Load(); err == nil {
-		t.Fatal("missing OIDC settings accepted")
+
+func TestOIDCRequiresIssuerAndAudience(t *testing.T) {
+	for _, tc := range []struct {
+		name, issuer, audience string
+		valid                  bool
+	}{
+		{"valid", "https://issuer.example", "papergo", true},
+		{"missing issuer", "", "papergo", false},
+		{"missing audience", "https://issuer.example", "", false},
+		{"both missing", "", "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			env := map[string]string{"APP_ENV": "test", "AUTH_MODE": "oidc", "ADMIN_SUBJECT": "configured-admin", "OIDC_ISSUER": tc.issuer, "OIDC_AUDIENCE": tc.audience}
+			_, err := LoadFrom(func(key string) string { return env[key] }, "")
+			if tc.valid {
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else if err == nil || err.Error() != "OIDC_ISSUER and OIDC_AUDIENCE are required" {
+				t.Fatalf("expected missing OIDC settings error, got %v", err)
+			}
+		})
 	}
 }
 func TestRetentionSettingsAreIndependent(t *testing.T) {

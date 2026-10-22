@@ -155,6 +155,11 @@ func TestMultiSortViewsAndSelectionValidation(t *testing.T) {
 			t.Fatal("invalid query accepted", in, e)
 		}
 	}
+	for _, columns := range [][]string{{"unknown"}, {"n", "n"}} {
+		if _, e = s.CreateView(testContext, "alice", l.ID, ViewInput{Name: "Invalid", Columns: columns}); !isValidation(e) {
+			t.Fatal("invalid view columns accepted", columns, e)
+		}
+	}
 	if e = s.DeleteField(testContext, "alice", l.ID, field.ID, latest(t, s, l.ID).Version); !isValidation(e) {
 		t.Fatal("saved multi-key dependency removed", e)
 	}

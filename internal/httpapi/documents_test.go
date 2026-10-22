@@ -2,13 +2,14 @@ package httpapi
 
 import (
 	"encoding/json"
-	"errors"
+	"log/slog"
 	"os"
 	"papergo/internal/dal/blobs"
 	"strconv"
 	"strings"
 	"testing"
 
+	"papergo/internal/auth"
 	"papergo/internal/dms"
 )
 
@@ -58,8 +59,10 @@ func TestRestoreFileVersionAPI(t *testing.T) {
 	if err = s.SetWorkspaceMember(ctx, "alice", w.ID, dms.WorkspaceMember{Subject: "reader", Role: "visitor"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.RestoreBlob(ctx, "reader", item.ID, 1, item.Version); !errors.Is(err, dms.ErrForbidden) {
-		t.Fatal("reader restored file", err)
+	reader := (&API{DMS: s, Auth: auth.Development{Token: testToken, Subject: "reader"}, Logger: slog.Default()}).Handler()
+	res = request(reader, "POST", restore, "", testToken, strconv.Quote(strconv.Itoa(item.Version)), "")
+	if res.Code != 403 {
+		t.Fatal("reader restored file", res.Code, res.Body.String())
 	}
 	res = request(h, "POST", endpoint+"/versions/99/restore", "", testToken, `"5"`, "")
 	if res.Code != 404 {

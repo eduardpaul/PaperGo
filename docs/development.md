@@ -137,6 +137,10 @@ drops the ones an interrupted run left behind. For repeated frontend edits use
 `npm --prefix web test -- --watch`. The PowerShell entry point takes the same
 arguments: `./scripts/check.ps1 --packages ./internal/dms`.
 
+The Go stage covers SQLite. The PostgreSQL stage selects PostgreSQL for the
+shared fixtures and skips explicit SQLite contracts, schema-file tests and
+SQLite backups, so they run once per test stage.
+
 Checks use the installed dependencies and never download them; `--setup` first
 runs `npm ci` where the installed packages do not match the lockfile, as CI does.
 Go checks build the embedded frontend on the first check, then reuse it only

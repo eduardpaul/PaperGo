@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -52,7 +51,7 @@ func acceptRuns(t *testing.T, s *dms.Service) {
 
 func setupWorkflows(t *testing.T) (http.Handler, *dms.Service) {
 	t.Helper()
-	db := daltest.DatabaseAt(t, filepath.Join(t.TempDir(), "test.db"))
+	db := daltest.Database(t)
 	store, err := storage.NewLocal(t.TempDir())
 	if err != nil {
 		t.Fatal(err)

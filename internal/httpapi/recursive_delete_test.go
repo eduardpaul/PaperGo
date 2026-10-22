@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestExplicitRecursiveFolderDelete(t *testing.T) {
+func TestFolderDeleteRequiresRecursiveIntentUnlessEmpty(t *testing.T) {
 	for _, kind := range []string{"list", "library"} {
 		t.Run(kind, func(t *testing.T) {
 			h, s, _ := setup(t)
@@ -73,6 +73,28 @@ func TestExplicitRecursiveFolderDelete(t *testing.T) {
 			}
 			if response = request(h, "GET", "/v1/resources/"+outside.ID, "", testToken, "", ""); response.Code != 200 {
 				t.Fatal("recursive deletion affected sibling", response.Code, response.Body.String())
+			}
+			// Removing an empty child makes its parent deletable without recursion.
+			emptyParent, err := s.Create(ctx, "alice", collection.ID, dms.CreateResource{Kind: "folder", Name: "Empty parent"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			emptyChild, err := s.Create(ctx, "alice", emptyParent.ID, dms.CreateResource{Kind: "folder", Name: "Empty child"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			response = request(h, "DELETE", "/v1/resources/"+emptyParent.ID, "", testToken, `"1"`, "")
+			if response.Code != 409 {
+				t.Fatal("ordinary delete ignored an empty child folder", response.Code, response.Body.String())
+			}
+			for _, id := range []string{emptyChild.ID, emptyParent.ID} {
+				response = request(h, "DELETE", "/v1/resources/"+id, "", testToken, `"1"`, "")
+				if response.Code != 204 {
+					t.Fatal("empty folder required recursion", response.Code, response.Body.String())
+				}
+				if response = request(h, "GET", "/v1/resources/"+id, "", testToken, "", ""); response.Code != 404 {
+					t.Fatal("deleted empty folder remained visible", response.Code, response.Body.String())
+				}
 			}
 		})
 	}

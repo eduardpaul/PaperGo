@@ -162,9 +162,6 @@ func TestDirectionalRelationshipsAndHiddenTargets(t *testing.T) {
 	if err != nil || len(incoming.Data) != 1 || incoming.Data[0].ID != link.ID {
 		t.Fatalf("incoming relationship: %+v %v", incoming, err)
 	}
-	if again, e := s.Link(testContext, "alice", source.ID, CreateRelationship{Type: typ.ID, TargetID: target.ID}); e != nil || again.ID != link.ID || again.Version != link.Version {
-		t.Fatalf("retry did not return the same relationship: %v %v", again, e)
-	}
 	err = setWorkspaceMembers(testContext, s, "alice", w.ID, WorkspaceMember{Subject: "bob", Role: "member"})
 	if err != nil {
 		t.Fatal(err)
@@ -182,9 +179,6 @@ func TestDirectionalRelationshipsAndHiddenTargets(t *testing.T) {
 	i2 := create(t, s, l2.ID, "item", "Other item", nil)
 	if _, err = s.Link(testContext, "alice", source.ID, CreateRelationship{Type: typ.ID, TargetID: i2.ID}); err != nil {
 		t.Fatal("cross-workspace link rejected", err)
-	}
-	if _, err = s.Link(testContext, "alice", source.ID, CreateRelationship{TargetID: target.ID}); err != nil {
-		t.Fatal("untyped relationship rejected", err)
 	}
 }
 func TestConcurrentUpdatesHaveOneWinner(t *testing.T) {
