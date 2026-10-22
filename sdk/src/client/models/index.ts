@@ -1644,6 +1644,15 @@ export function createMoveTermFromDiscriminatorValue(parseNode: ParseNode | unde
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {NavigationFieldSetting}
+ */
+// @ts-ignore
+export function createNavigationFieldSettingFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoNavigationFieldSetting;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {NavigationNode}
  */
 // @ts-ignore
@@ -1667,6 +1676,15 @@ export function createNavigationPageFromDiscriminatorValue(parseNode: ParseNode 
 // @ts-ignore
 export function createNavigationRequestFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoNavigationRequest;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {NavigationSelection}
+ */
+// @ts-ignore
+export function createNavigationSelectionFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoNavigationSelection;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -4330,6 +4348,18 @@ export function deserializeIntoMoveTerm(moveTerm: Partial<MoveTerm> | undefined 
 }
 /**
  * The deserialization information for the current model
+ * @param NavigationFieldSetting The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoNavigationFieldSetting(navigationFieldSetting: Partial<NavigationFieldSetting> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "field": n => { navigationFieldSetting.field = n.getStringValue(); },
+        "include_subterms": n => { navigationFieldSetting.includeSubterms = n.getBooleanValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
  * @param NavigationNode The instance to deserialize into.
  * @returns {Record<string, (node: ParseNode) => void>}
  */
@@ -4369,8 +4399,23 @@ export function deserializeIntoNavigationPage(navigationPage: Partial<Navigation
 // @ts-ignore
 export function deserializeIntoNavigationRequest(navigationRequest: Partial<NavigationRequest> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
+        "field": n => { navigationRequest.field = n.getStringValue(); },
         "parent_id": n => { navigationRequest.parentId = n.getStringValue(); },
+        "selected": n => { navigationRequest.selected = n.getCollectionOfObjectValues<NavigationSelection>(createNavigationSelectionFromDiscriminatorValue); },
         "surface": n => { navigationRequest.surface = n.getEnumValue<NavigationRequest_surface>(NavigationRequest_surfaceObject) ?? NavigationRequest_surfaceObject.Auto; },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param NavigationSelection The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoNavigationSelection(navigationSelection: Partial<NavigationSelection> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "field": n => { navigationSelection.field = n.getStringValue(); },
+        "no_value": n => { navigationSelection.noValue = n.getBooleanValue(); },
+        "term_id": n => { navigationSelection.termId = n.getStringValue(); },
     }
 }
 /**
@@ -6257,10 +6302,9 @@ export function deserializeIntoViewInput(viewInput: Partial<ViewInput> | undefin
 export function deserializeIntoViewQueryRequest(viewQueryRequest: Partial<ViewQueryRequest> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
         "include_total": n => { viewQueryRequest.includeTotal = n.getBooleanValue() ?? false; },
-        "no_value": n => { viewQueryRequest.noValue = n.getBooleanValue(); },
         "select": n => { viewQueryRequest.select = n.getCollectionOfPrimitiveValues<string>("string"); },
+        "selected": n => { viewQueryRequest.selected = n.getCollectionOfObjectValues<NavigationSelection>(createNavigationSelectionFromDiscriminatorValue); },
         "surface": n => { viewQueryRequest.surface = n.getEnumValue<ViewQueryRequest_surface>(ViewQueryRequest_surfaceObject) ?? ViewQueryRequest_surfaceObject.Auto; },
-        "term_id": n => { viewQueryRequest.termId = n.getStringValue(); },
     }
 }
 /**
@@ -6271,9 +6315,9 @@ export function deserializeIntoViewQueryRequest(viewQueryRequest: Partial<ViewQu
 // @ts-ignore
 export function deserializeIntoViewSettings(viewSettings: Partial<ViewSettings> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
-        "field": n => { viewSettings.field = n.getStringValue(); },
+        "fields": n => { viewSettings.fields = n.getCollectionOfObjectValues<NavigationFieldSetting>(createNavigationFieldSettingFromDiscriminatorValue); },
         "hide_empty": n => { viewSettings.hideEmpty = n.getBooleanValue() ?? false; },
-        "include_subterms": n => { viewSettings.includeSubterms = n.getBooleanValue(); },
+        "match": n => { viewSettings.match = n.getEnumValue<ViewSettings_match>(ViewSettings_matchObject) ?? ViewSettings_matchObject.All; },
     }
 }
 /**
@@ -7038,6 +7082,16 @@ export interface MoveTerm extends Parsable {
      */
     parentId?: string | null;
 }
+export interface NavigationFieldSetting extends Parsable {
+    /**
+     * $keywords or an indexed term or keywords field of the collection.
+     */
+    field?: string | null;
+    /**
+     * Lists, at a term, the items holding a term below it too. Omitted follows the field: item keywords and fields with apply_parents always do; other fields list the items holding the term. false is rejected where parents apply.
+     */
+    includeSubterms?: boolean | null;
+}
 export interface NavigationNode extends Parsable {
     /**
      * Items the node lists: holding the term, or one below it where subterms are included.
@@ -7099,15 +7153,40 @@ export interface NavigationPage extends Parsable {
  */
 export interface NavigationRequest extends Parsable {
     /**
+     * The view's field whose terms are listed.
+     */
+    field?: string | null;
+    /**
      * Opens this term of the view's term set; omitted lists the roots.
      */
     parentId?: string | null;
+    /**
+     * The terms opened in the view's fields. Where the view matches all, counts follow those of the other fields; the listed field's own selection is ignored.
+     */
+    selected?: NavigationSelection[] | null;
     /**
      * The surface property
      */
     surface?: NavigationRequest_surface | null;
 }
 export type NavigationRequest_surface = (typeof NavigationRequest_surfaceObject)[keyof typeof NavigationRequest_surfaceObject];
+/**
+ * A term opened in one field of a navigation view; exactly one of term_id and no_value.
+ */
+export interface NavigationSelection extends Parsable {
+    /**
+     * One of the view's fields, at most once per request.
+     */
+    field?: string | null;
+    /**
+     * The items holding no term in the field.
+     */
+    noValue?: boolean | null;
+    /**
+     * A term of the field's term set: the items the view shows at it.
+     */
+    termId?: string | null;
+}
 /**
  * Tracked operation executed by a registered handler, in bounded transactional batches or outside the database writer under a renewed claim. Field indexing and filtered bulk edits are built in. Payloads, credential constraints and claims are private; progress and results are visible through operation reads. Pending work resumes after restart: an execution that stops gives its claim back or lets it expire, and transient failures retry later. Terminal records expire after 30 days without an update.
  */
@@ -9761,6 +9840,18 @@ export function serializeMoveTerm(writer: SerializationWriter, moveTerm: Partial
 /**
  * Serializes information the current object
  * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param NavigationFieldSetting The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeNavigationFieldSetting(writer: SerializationWriter, navigationFieldSetting: Partial<NavigationFieldSetting> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!navigationFieldSetting || isSerializingDerivedType) { return; }
+    writer.writeStringValue("field", navigationFieldSetting.field);
+    writer.writeBooleanValue("include_subterms", navigationFieldSetting.includeSubterms);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
  * @param NavigationNode The instance to serialize from.
  * @param writer Serialization writer to use to serialize this model
  */
@@ -9800,8 +9891,23 @@ export function serializeNavigationPage(writer: SerializationWriter, navigationP
 // @ts-ignore
 export function serializeNavigationRequest(writer: SerializationWriter, navigationRequest: Partial<NavigationRequest> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!navigationRequest || isSerializingDerivedType) { return; }
+    writer.writeStringValue("field", navigationRequest.field);
     writer.writeStringValue("parent_id", navigationRequest.parentId);
+    writer.writeCollectionOfObjectValues<NavigationSelection>("selected", navigationRequest.selected, serializeNavigationSelection);
     writer.writeEnumValue<NavigationRequest_surface>("surface", navigationRequest.surface);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param NavigationSelection The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeNavigationSelection(writer: SerializationWriter, navigationSelection: Partial<NavigationSelection> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!navigationSelection || isSerializingDerivedType) { return; }
+    writer.writeStringValue("field", navigationSelection.field);
+    writer.writeBooleanValue("no_value", navigationSelection.noValue);
+    writer.writeStringValue("term_id", navigationSelection.termId);
 }
 /**
  * Serializes information the current object
@@ -11720,10 +11826,9 @@ export function serializeViewInput(writer: SerializationWriter, viewInput: Parti
 export function serializeViewQueryRequest(writer: SerializationWriter, viewQueryRequest: Partial<ViewQueryRequest> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!viewQueryRequest || isSerializingDerivedType) { return; }
     writer.writeBooleanValue("include_total", viewQueryRequest.includeTotal);
-    writer.writeBooleanValue("no_value", viewQueryRequest.noValue);
     writer.writeCollectionOfPrimitiveValues<string>("select", viewQueryRequest.select);
+    writer.writeCollectionOfObjectValues<NavigationSelection>("selected", viewQueryRequest.selected, serializeNavigationSelection);
     writer.writeEnumValue<ViewQueryRequest_surface>("surface", viewQueryRequest.surface);
-    writer.writeStringValue("term_id", viewQueryRequest.termId);
 }
 /**
  * Serializes information the current object
@@ -11734,9 +11839,9 @@ export function serializeViewQueryRequest(writer: SerializationWriter, viewQuery
 // @ts-ignore
 export function serializeViewSettings(writer: SerializationWriter, viewSettings: Partial<ViewSettings> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!viewSettings || isSerializingDerivedType) { return; }
-    writer.writeStringValue("field", viewSettings.field);
+    writer.writeCollectionOfObjectValues<NavigationFieldSetting>("fields", viewSettings.fields, serializeNavigationFieldSetting);
     writer.writeBooleanValue("hide_empty", viewSettings.hideEmpty);
-    writer.writeBooleanValue("include_subterms", viewSettings.includeSubterms);
+    writer.writeEnumValue<ViewSettings_match>("match", viewSettings.match);
 }
 /**
  * Serializes information the current object
@@ -13225,7 +13330,7 @@ export interface ValidationRuleMember2 extends AdditionalDataHolder, Parsable {
 }
 export type ValidationRuleMember2_op = (typeof ValidationRuleMember2_opObject)[keyof typeof ValidationRuleMember2_opObject];
 /**
- * Collection-managed saved view. Columns use field keys and $id/$name/$keywords; empty columns default to $name. PUT replaces the definition. Layout is a client hint; a navigation view browses the terms of settings.field as folders (POST /v1/views/{id}/navigation) and lists the items of a term through POST /v1/views/{id}/query with term_id or no_value.
+ * Collection-managed saved view. Columns use field keys and $id/$name/$keywords; empty columns default to $name. PUT replaces the definition. Layout is a client hint; a navigation view browses the terms of each of settings.fields as folders (POST /v1/views/{id}/navigation) and lists the items at the opened terms through POST /v1/views/{id}/query with selected.
  */
 export interface ViewInput extends Parsable {
     /**
@@ -13263,21 +13368,17 @@ export interface ViewQueryRequest extends Parsable {
      */
     includeTotal?: boolean | null;
     /**
-     * Navigation views only: lists the items holding no term in the view's field.
-     */
-    noValue?: boolean | null;
-    /**
      * Selected custom fields and optional $keywords; system columns are accepted and the resource metadata envelope remains present. Omitted returns full values on direct queries and saved columns on views; an empty array returns no custom values. Selected fields need not be indexed. Cursors bind this selection.
      */
     select?: string[] | null;
     /**
+     * Navigation views only, required there: lists the items at the terms opened in the view's fields, combined as the view's settings.match says.
+     */
+    selected?: NavigationSelection[] | null;
+    /**
      * The surface property
      */
     surface?: ViewQueryRequest_surface | null;
-    /**
-     * Navigation views only: lists the items the view shows at this term of its term set, with or without the items below it as the view's settings say. Exactly one of term_id and no_value.
-     */
-    termId?: string | null;
 }
 export type ViewQueryRequest_surface = (typeof ViewQueryRequest_surfaceObject)[keyof typeof ViewQueryRequest_surfaceObject];
 /**
@@ -13285,18 +13386,19 @@ export type ViewQueryRequest_surface = (typeof ViewQueryRequest_surfaceObject)[k
  */
 export interface ViewSettings extends Parsable {
     /**
-     * The field a navigation view browses: $keywords or an indexed term or keywords field of the collection.
+     * The fields a navigation view browses, each as a tree of terms; keys are unique.
      */
-    field?: string | null;
+    fields?: NavigationFieldSetting[] | null;
     /**
      * Leaves out the terms no item of the view holds at or below them.
      */
     hideEmpty?: boolean | null;
     /**
-     * Lists, at a term, the items holding a term below it too. Omitted follows the field: item keywords and fields with apply_parents always do; other fields list the items holding the term. false is rejected where parents apply.
+     * How the terms opened in different fields combine: all lists the items of every opened term, and each field's counts follow the terms opened in the others; any lists the items of any opened term, and counts cover the view.
      */
-    includeSubterms?: boolean | null;
+    match?: ViewSettings_match | null;
 }
+export type ViewSettings_match = (typeof ViewSettings_matchObject)[keyof typeof ViewSettings_matchObject];
 /**
  * A JSON Schema form (draft-07 subset; see docs/workflows.md#forms): type, title, description, default, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, uniqueItems, items, properties, required, additionalProperties (boolean or a schema; objects are closed by default). x-papergo on a property makes it a domain picker (item, collection, relationship, terms, keywords, people). The terms picker selects term IDs by default; select: sets selects term-set IDs, optionally narrowed by group_id.
  */
@@ -14042,6 +14144,13 @@ export const ViewQueryRequest_surfaceObject = {
     Auto: "auto",
     Head: "head",
     Published: "published",
+} as const;
+/**
+ * How the terms opened in different fields combine: all lists the items of every opened term, and each field's counts follow the terms opened in the others; any lists the items of any opened term, and counts cover the view.
+ */
+export const ViewSettings_matchObject = {
+    All: "all",
+    Any: "any",
 } as const;
 /**
  * Owner manages the workspace and all descendants; member contributes; visitor reads published content.

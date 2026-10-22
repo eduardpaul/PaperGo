@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowDown, ArrowUp, Pencil, Plus } from 'lucide-react';
+import { ArrowDown, ArrowUp, Pencil, Plus, X } from 'lucide-react';
 import { useState } from 'react';
 import { api } from '@/api/http';
 import { allPages } from '@/api/pages';
 import { keys } from '@/api/queries';
 import { useAccess } from './access';
-import type { ContentType, FieldDefinition, ListView, QuerySpec, ViewSettings } from '@/api/types';
+import type { ContentType, FieldDefinition, ListView, NavigationFieldSetting, NavigationMatch, QuerySpec, ViewSettings } from '@/api/types';
 import { FormDialog } from '@/components/form-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,17 @@ import { QueryFeedback } from '@/features/admin/common';
 import { ConfirmDialog, SettingsSection } from '@/features/settings/section';
 import { columnLabel } from './schema';
 import { FilterEditor, normalizeFilter, systemFields } from './filter-editor';
+
+/** The most fields a navigation view browses. */
+const maxBrowsed = 5;
+
+/** The list with the entry at index moved by the given offset. */
+function moved<T>(list: T[], index: number, by: number) {
+  const next = [...list];
+  const [entry] = next.splice(index, 1);
+  next.splice(index + by, 0, entry);
+  return next;
+}
 
 export function ViewsEditor({
   collectionId,
@@ -141,12 +152,11 @@ function ViewDialog({
     { key: '$keywords', label: 'Keywords', type: 'keywords', options: { apply_parents: true } } as FieldDefinition,
     ...queryable.filter((field) => field.key !== '$keywords' && (field.type === 'term' || field.type === 'keywords')),
   ];
-  const navigated = navigable.find((field) => field.key === settings.field);
-  // Items tagged below a term hold the term itself where parents apply, so subterms always count.
-  const parentsApply = !!navigated?.options?.apply_parents;
+  const browsed = settings.fields ?? [];
+  const setBrowsed = (next: NavigationFieldSetting[]) => setSettings((current) => ({ ...current, fields: next }));
   const validLayout =
     layout === 'navigation'
-      ? !!navigated
+      ? browsed.length > 0
       : !['board', 'calendar'].includes(layout) || grouping.some((field) => field.key === query.group_by);
   const patchQuery = (patch: Partial<QuerySpec>) => setQuery((current) => ({ ...current, ...patch }));
   const save = useMutation({
@@ -158,7 +168,8 @@ function ViewDialog({
           name: name.trim(),
           columns,
           layout,
-          settings: layout === 'navigation' ? settings : {},
+          // Matching only combines the terms of several trees.
+          settings: layout === 'navigation' ? { ...settings, match: browsed.length > 1 ? settings.match : undefined } : {},
           is_default: isDefault,
           query: { ...query, filter: normalizeFilter(query.filter, queryable) },
         },
@@ -168,13 +179,7 @@ function ViewDialog({
       onClose();
     },
   });
-  const move = (index: number, by: number) =>
-    setColumns((current) => {
-      const next = [...current];
-      const [column] = next.splice(index, 1);
-      next.splice(index + by, 0, column);
-      return next;
-    });
+  const move = (index: number, by: number) => setColumns((current) => moved(current, index, by));
   return (
     <FormDialog
       open
@@ -212,37 +217,87 @@ function ViewDialog({
         {layout === 'navigation' && (
           <fieldset className="grid gap-2 rounded-lg border p-3">
             <legend className="px-1 font-medium">Navigation</legend>
-            <Label htmlFor="view-navigate">Navigate by</Label>
-            <Select
-              id="view-navigate"
-              required
-              value={settings.field ?? ''}
-              onChange={(event) => setSettings((current) => ({ ...current, field: event.target.value || undefined, include_subterms: undefined }))}
-            >
-              <option value="">Choose a taxonomy or keywords column…</option>
-              {navigable.map((field) => (
-                <option key={field.key} value={field.key}>
-                  {field.label}
-                </option>
-              ))}
-            </Select>
-            <label className="flex gap-2">
-              <Checkbox
-                checked={parentsApply || !!settings.include_subterms}
-                disabled={!navigated || parentsApply}
-                onChange={(event) => setSettings((current) => ({ ...current, include_subterms: event.target.checked || undefined }))}
-              />
-              Show items of subterms at each term
-            </label>
-            <p className="text-xs text-muted">
-              {!navigated
-                ? 'Each term becomes a folder of the items tagged with it.'
-                : parentsApply
-                  ? `${navigated.label} applies parent terms, so a term always shows the items tagged below it (Fiscal shows Fiscal > Q1).`
-                  : settings.include_subterms
-                    ? `A term shows the items tagged with it or any term below it (Fiscal shows Fiscal > Q1).`
-                    : `A term shows only the items tagged with it; items tagged with a subterm appear when you open that subterm.`}
-            </p>
+            <p className="text-xs text-muted">Each column becomes a tree of folders; a term lists the items tagged with it.</p>
+            <ul aria-label="Browsed columns" className="grid gap-2">
+              {browsed.map((entry, index) => {
+                const field = navigable.find((candidate) => candidate.key === entry.field);
+                const label = field?.label ?? entry.field;
+                // Items tagged below a term hold the term itself where parents apply, so subterms always count.
+                const parentsApply = !!field?.options?.apply_parents;
+                const patch = (next: Partial<NavigationFieldSetting>) =>
+                  setBrowsed(browsed.map((current, i) => (i === index ? { ...current, ...next } : current)));
+                return (
+                  <li key={entry.field} aria-label={label} className="grid gap-1 rounded border p-2">
+                    <div className="flex items-center gap-2">
+                      <span className="flex-1 font-medium">{label}</span>
+                      <Button size="icon" aria-label={`Move ${label} up`} disabled={index === 0} onClick={() => setBrowsed(moved(browsed, index, -1))}>
+                        <ArrowUp />
+                      </Button>
+                      <Button
+                        size="icon"
+                        aria-label={`Move ${label} down`}
+                        disabled={index === browsed.length - 1}
+                        onClick={() => setBrowsed(moved(browsed, index, 1))}
+                      >
+                        <ArrowDown />
+                      </Button>
+                      <Button size="icon" aria-label={`Remove ${label}`} onClick={() => setBrowsed(browsed.filter((_, i) => i !== index))}>
+                        <X />
+                      </Button>
+                    </div>
+                    <label className="flex gap-2">
+                      <Checkbox
+                        checked={parentsApply || !!entry.include_subterms}
+                        disabled={parentsApply}
+                        onChange={(event) => patch({ include_subterms: event.target.checked || undefined })}
+                      />
+                      Show items of subterms at each term
+                    </label>
+                    <p className="text-xs text-muted">
+                      {parentsApply
+                        ? `${label} applies parent terms, so a term always shows the items tagged below it (Fiscal shows Fiscal > Q1).`
+                        : entry.include_subterms
+                          ? 'A term shows the items tagged with it or any term below it (Fiscal shows Fiscal > Q1).'
+                          : 'A term shows only the items tagged with it; items tagged with a subterm appear when you open that subterm.'}
+                    </p>
+                  </li>
+                );
+              })}
+            </ul>
+            {browsed.length < maxBrowsed && (
+              <Select
+                aria-label="Add a column to browse"
+                value=""
+                onChange={(event) => event.target.value && setBrowsed([...browsed, { field: event.target.value }])}
+              >
+                <option value="">{browsed.length ? 'Add another taxonomy or keywords column…' : 'Choose a taxonomy or keywords column…'}</option>
+                {navigable
+                  .filter((field) => !browsed.some((entry) => entry.field === field.key))
+                  .map((field) => (
+                    <option key={field.key} value={field.key}>
+                      {field.label}
+                    </option>
+                  ))}
+              </Select>
+            )}
+            {browsed.length > 1 && (
+              <>
+                <Label htmlFor="view-match">Show items that match</Label>
+                <Select
+                  id="view-match"
+                  value={settings.match ?? 'all'}
+                  onChange={(event) => setSettings((current) => ({ ...current, match: event.target.value as NavigationMatch }))}
+                >
+                  <option value="all">All opened terms</option>
+                  <option value="any">Any opened term</option>
+                </Select>
+                <p className="text-xs text-muted">
+                  {settings.match === 'any'
+                    ? 'Opening Q1 and Finance shows the items tagged with either; each tree counts all items of the view.'
+                    : "Opening Q1 and Finance shows the items tagged with both; each tree counts within the other trees' terms."}
+                </p>
+              </>
+            )}
             <label className="flex gap-2">
               <Checkbox
                 checked={!!settings.hide_empty}

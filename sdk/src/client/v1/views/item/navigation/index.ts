@@ -11,7 +11,7 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface NavigationRequestBuilder extends BaseRequestBuilder<NavigationRequestBuilder> {
     /**
-     * Lists one level of a navigation view: the terms of its field below parent_id (or the roots), in term order, each with the items of the view it lists and those at or below it. Counts follow the view's query, the caller's access and the surface read, and cover items, not folders. Required module scopes: list.read, taxonomy.read. Resource ACLs and any additional use-case checks also apply.
+     * Lists one level of a field of a navigation view: the terms of field below parent_id (or the roots), in term order, each with the items of the view it lists and those at or below it. Counts follow the view's query, the caller's access and the surface read, and cover items, not folders. Required module scopes: list.read, taxonomy.read. Resource ACLs and any additional use-case checks also apply.
      * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<NavigationPage>}
@@ -27,7 +27,7 @@ export interface NavigationRequestBuilder extends BaseRequestBuilder<NavigationR
      */
      post(body: NavigationRequest, requestConfiguration?: RequestConfiguration<NavigationRequestBuilderPostQueryParameters> | undefined) : Promise<NavigationPage | undefined>;
     /**
-     * Lists one level of a navigation view: the terms of its field below parent_id (or the roots), in term order, each with the items of the view it lists and those at or below it. Counts follow the view's query, the caller's access and the surface read, and cover items, not folders. Required module scopes: list.read, taxonomy.read. Resource ACLs and any additional use-case checks also apply.
+     * Lists one level of a field of a navigation view: the terms of field below parent_id (or the roots), in term order, each with the items of the view it lists and those at or below it. Counts follow the view's query, the caller's access and the surface read, and cover items, not folders. Required module scopes: list.read, taxonomy.read. Resource ACLs and any additional use-case checks also apply.
      * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
@@ -35,7 +35,7 @@ export interface NavigationRequestBuilder extends BaseRequestBuilder<NavigationR
      toPostRequestInformation(body: NavigationRequest, requestConfiguration?: RequestConfiguration<NavigationRequestBuilderPostQueryParameters> | undefined) : RequestInformation;
 }
 /**
- * Lists one level of a navigation view: the terms of its field below parent_id (or the roots), in term order, each with the items of the view it lists and those at or below it. Counts follow the view's query, the caller's access and the surface read, and cover items, not folders. Required module scopes: list.read, taxonomy.read. Resource ACLs and any additional use-case checks also apply.
+ * Lists one level of a field of a navigation view: the terms of field below parent_id (or the roots), in term order, each with the items of the view it lists and those at or below it. Counts follow the view's query, the caller's access and the surface read, and cover items, not folders. Required module scopes: list.read, taxonomy.read. Resource ACLs and any additional use-case checks also apply.
  */
 export interface NavigationRequestBuilderPostQueryParameters {
     /**

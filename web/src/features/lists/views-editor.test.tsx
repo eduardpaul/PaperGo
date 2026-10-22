@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { parseJSON, stringifyJSON } from '@/api/json';
 import type { FieldDefinition } from '@/api/types';
@@ -40,26 +40,37 @@ function setup() {
   return posts;
 }
 
-it('saves a navigation view by a taxonomy column and explains subterms', async () => {
+it('saves a navigation view browsing several columns and explains subterms', async () => {
   const posts = setup();
   fireEvent.click(await screen.findByRole('button', { name: /New view/ }));
-  fireEvent.change(screen.getByLabelText('Name', { selector: '#view-name' }), { target: { value: 'By period' } });
+  fireEvent.change(screen.getByLabelText('Name', { selector: '#view-name' }), { target: { value: 'Browse' } });
   fireEvent.change(screen.getByLabelText('Layout'), { target: { value: 'navigation' } });
   const save = screen.getByRole<HTMLButtonElement>('button', { name: 'Save view' });
   expect(save.disabled).toBe(true);
-  const navigate = screen.getByLabelText<HTMLSelectElement>('Navigate by');
+  const add = () => screen.getByLabelText<HTMLSelectElement>('Add a column to browse');
   // Item keywords and taxonomy columns, not other columns.
-  expect([...navigate.options].map((option) => option.value)).toEqual(['', '$keywords', 'period', 'tags']);
+  expect([...add().options].map((option) => option.value)).toEqual(['', '$keywords', 'period', 'tags']);
+  fireEvent.change(add(), { target: { value: 'tags' } });
+  fireEvent.change(add(), { target: { value: 'period' } });
+  expect([...add().options].map((option) => option.value)).toEqual(['', '$keywords']);
   // A column that applies parent terms always shows the items of subterms.
-  fireEvent.change(navigate, { target: { value: 'tags' } });
-  const subterms = screen.getByLabelText<HTMLInputElement>('Show items of subterms at each term');
-  expect(subterms.checked && subterms.disabled).toBe(true);
-  expect(screen.getByText(/applies parent terms/)).toBeTruthy();
-  fireEvent.change(navigate, { target: { value: 'period' } });
-  expect(subterms.checked || subterms.disabled).toBe(false);
-  fireEvent.click(subterms);
+  const tags = within(screen.getByRole('listitem', { name: 'Tags' }));
+  const tagSubterms = tags.getByLabelText<HTMLInputElement>('Show items of subterms at each term');
+  expect(tagSubterms.checked && tagSubterms.disabled).toBe(true);
+  expect(tags.getByText(/applies parent terms/)).toBeTruthy();
+  const period = within(screen.getByRole('listitem', { name: 'Period' }));
+  const periodSubterms = period.getByLabelText<HTMLInputElement>('Show items of subterms at each term');
+  expect(periodSubterms.checked || periodSubterms.disabled).toBe(false);
+  fireEvent.click(periodSubterms);
+  fireEvent.click(period.getByRole('button', { name: 'Move Period up' }));
+  fireEvent.change(screen.getByLabelText('Show items that match'), { target: { value: 'any' } });
+  expect(screen.getByText(/tagged with either/)).toBeTruthy();
   fireEvent.click(screen.getByLabelText('Hide terms without items'));
   fireEvent.click(save);
   await waitFor(() => expect(posts).toHaveLength(1));
-  expect(posts[0]).toMatchObject({ name: 'By period', layout: 'navigation', settings: { field: 'period', include_subterms: true, hide_empty: true } });
+  expect(posts[0]).toMatchObject({
+    name: 'Browse',
+    layout: 'navigation',
+    settings: { fields: [{ field: 'period', include_subterms: true }, { field: 'tags' }], match: 'any', hide_empty: true },
+  });
 });

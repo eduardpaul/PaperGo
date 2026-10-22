@@ -1,5 +1,5 @@
 import { stringifyJSON } from './json';
-import type { ArchiveSelection, FilterExpr, QuerySpec } from './types';
+import type { ArchiveSelection, FilterExpr, NavigationSelection, QuerySpec } from './types';
 
 /** Shapes of `/v1` calls the screens share. Tests assert these paths and bodies. */
 
@@ -115,23 +115,49 @@ export function viewRowsRequest(collectionId: string, view: ViewLike, extra: Fil
   };
 }
 
-/** One level of a navigation view's terms: the roots, or the children of a term. */
-export function navigationRequest(viewId: string, parentId?: string): ApiCall {
-  return { path: `/v1/views/${viewId}/navigation`, method: 'POST', query: { $top: 200 }, body: parentId ? { parent_id: parentId } : {} };
+/**
+ * One level of a navigation view's tree for a field: its roots, or the children of a term. Counts cover the view's
+ * items holding the terms opened in the other trees.
+ */
+export function navigationRequest(viewId: string, field: string, parentId?: string, selected: NavigationSelection[] = []): ApiCall {
+  const body: Record<string, unknown> = { field };
+  if (parentId) body.parent_id = parentId;
+  if (selected.length > 0) body.selected = selected;
+  return { path: `/v1/views/${viewId}/navigation`, method: 'POST', query: { $top: 200 }, body };
 }
 
-/** The items a navigation view lists at a term, or with `none` those holding no term. */
-export function navigationItemsRequest(viewId: string, term: string, top = 50): ApiCall {
-  return {
-    path: `/v1/views/${viewId}/query`,
-    method: 'POST',
-    query: { $top: top },
-    body: term === noTerm ? { no_value: true } : { term_id: term },
-  };
+/** The items a navigation view lists at the terms opened in its trees. */
+export function navigationItemsRequest(viewId: string, selected: NavigationSelection[], top = 50): ApiCall {
+  return { path: `/v1/views/${viewId}/query`, method: 'POST', query: { $top: top }, body: { selected } };
 }
 
-/** The URL value of a navigation view's "No value" node. */
+/** The URL value of a navigation tree's "No value" node. */
 export const noTerm = 'none';
+
+/** A field's opened term as a selection; `none` stands for the items without a term. */
+export function navigationSelection(field: string, term: string): NavigationSelection {
+  return term === noTerm ? { field, no_value: true } : { field, term_id: term };
+}
+
+/** Reads a navigation view's opened terms from the URL: `field~term` pairs joined by commas, the latest last. */
+export function parseNavigation(value?: string): NavigationSelection[] {
+  const seen = new Set<string>();
+  const out: NavigationSelection[] = [];
+  for (const pair of value?.split(',') ?? []) {
+    const at = pair.lastIndexOf('~');
+    const field = pair.slice(0, at);
+    const term = pair.slice(at + 1);
+    if (at <= 0 || !term || seen.has(field)) continue;
+    seen.add(field);
+    out.push(navigationSelection(field, term));
+  }
+  return out;
+}
+
+/** Writes a navigation view's opened terms for the URL, or nothing when none is open. */
+export function formatNavigation(selected: NavigationSelection[]): string | undefined {
+  return selected.map((entry) => `${entry.field}~${entry.no_value ? noTerm : entry.term_id}`).join(',') || undefined;
+}
 
 /** How many items of a view fall in each value of its grouping field (board column counts). */
 export function viewGroupsRequest(collectionId: string, view: ViewLike): ApiCall {

@@ -158,7 +158,7 @@ export interface ListView {
   name: string;
   columns?: string[] | null;
   layout?: string;
-  /** Layout settings: the field a navigation view browses. */
+  /** Layout settings: the fields a navigation view browses. */
   settings?: ViewSettings;
   is_default?: boolean;
   version: number;
@@ -166,12 +166,28 @@ export interface ListView {
 }
 
 export interface ViewSettings {
-  /** `$keywords` or a term or keywords field. */
-  field?: string;
-  /** Items below a term show at it too; unset follows the field. */
-  include_subterms?: boolean;
+  /** The fields a navigation view browses, one tree each. */
+  fields?: NavigationFieldSetting[];
+  /** Whether items match every term opened in the trees or any of them; unset matches all. */
+  match?: NavigationMatch;
   /** Leave out terms no item holds at or below them. */
   hide_empty?: boolean;
+}
+
+export type NavigationMatch = 'all' | 'any';
+
+export interface NavigationFieldSetting {
+  /** `$keywords` or a term or keywords field. */
+  field: string;
+  /** Items below a term show at it too; unset follows the field. */
+  include_subterms?: boolean;
+}
+
+/** A term opened in one of a navigation view's trees, or the items holding none of its terms. */
+export interface NavigationSelection {
+  field: string;
+  term_id?: string;
+  no_value?: boolean;
 }
 
 /** A term of a navigation view's level with the items it lists and those at or below it. */
