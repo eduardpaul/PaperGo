@@ -27,9 +27,13 @@ func documents(ctx context.Context, s *dms.Service, ids []string) ([]search.Docu
 	if err != nil {
 		return nil, nil, err
 	}
+	terms, err := loadTerms(ctx, s, entries)
+	if err != nil {
+		return nil, nil, err
+	}
 	docs := make([]search.Document, 0, len(entries))
 	for _, e := range entries {
-		d, err := document(ctx, s, e)
+		d, err := document(e, terms)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -43,7 +47,7 @@ func documents(ctx context.Context, s *dms.Service, ids []string) ([]search.Docu
 // are now. Notes are text only; dates and booleans filters only. A field's
 // search_weight puts its text with the name's weight (high), in the body,
 // or nowhere (none).
-func document(ctx context.Context, s *dms.Service, e dms.IndexEntry) (search.Document, error) {
+func document(e dms.IndexEntry, cache termCache) (search.Document, error) {
 	var body, keywords, terms, wordTerms []string
 	var fields []search.Field
 	keywordIDs := append([]string{}, e.Keywords...)
@@ -94,41 +98,25 @@ func document(ctx context.Context, s *dms.Service, e dms.IndexEntry) (search.Doc
 			}
 		}
 	}
-	parents, err := ancestors(ctx, s, slices.Concat(keywordLineage, termLineage, wordLineage))
-	if err != nil {
-		return search.Document{}, err
-	}
 	for _, id := range keywordLineage {
-		keywordIDs = append(keywordIDs, parents[id]...)
+		keywordIDs = append(keywordIDs, cache.parents(id)...)
 	}
 	terms = append(terms, e.Keywords...)
 	wordTerms = append(wordTerms, e.Keywords...)
 	for _, id := range slices.Concat(termLineage, e.Keywords) {
-		terms = append(terms, parents[id]...)
+		terms = append(terms, cache.parents(id)...)
 	}
 	for _, id := range slices.Concat(wordLineage, e.Keywords) {
-		wordTerms = append(wordTerms, parents[id]...)
+		wordTerms = append(wordTerms, cache.parents(id)...)
 	}
 	terms = sortedUnique(terms)
-	if len(keywordIDs) > 0 {
-		found, err := s.DAL.Taxonomy().Terms(ctx, taxonomy.TermFilter{IDs: keywordIDs})
-		if err != nil {
-			return search.Document{}, err
+	for i, id := range keywordIDs {
+		if t, ok := cache.canonical(id); ok {
+			keywordIDs[i] = t.ID
 		}
-		canonical := map[string]bool{}
-		for _, t := range found {
-			if t.MergedIntoID != "" {
-				canonical[t.MergedIntoID] = true
-			} else {
-				canonical[t.ID] = true
-			}
-		}
-		keywordIDs = slices.Sorted(maps.Keys(canonical))
 	}
-	words, err := termWords(ctx, s, sortedUnique(wordTerms))
-	if err != nil {
-		return search.Document{}, err
-	}
+	keywordIDs = sortedUnique(keywordIDs)
+	words := cache.words(sortedUnique(wordTerms))
 	r := e.Resource
 	views := search.ViewPublished
 	switch {
@@ -155,77 +143,103 @@ func document(ctx context.Context, s *dms.Service, e dms.IndexEntry) (search.Doc
 	return d, nil
 }
 
-// ancestors maps term IDs to the parent terms of the terms they stand for
-// now: a merged term's are those of the term it was merged into.
-func ancestors(ctx context.Context, s *dms.Service, ids []string) (map[string][]string, error) {
-	out := map[string][]string{}
-	if len(ids) == 0 {
-		return out, nil
-	}
-	found, err := s.DAL.Taxonomy().Terms(ctx, taxonomy.TermFilter{IDs: sortedUnique(ids)})
-	if err != nil {
-		return nil, err
-	}
-	canonical := map[string]string{}
-	byID := map[string]taxonomy.Term{}
-	var targets []string
-	for _, t := range found {
-		byID[t.ID] = t
-		canonical[t.ID] = t.ID
-		if t.Merged() {
-			canonical[t.ID] = t.MergedIntoID
-			targets = append(targets, t.MergedIntoID)
+// termCache holds the terms a batch of documents reads, loaded together:
+// the terms entries hold, the terms they were merged into, and the
+// ancestors of those.
+type termCache map[string]taxonomy.Term
+
+// termBatchIDs bounds the term IDs one lookup binds.
+const termBatchIDs = 1000
+
+func loadTerms(ctx context.Context, s *dms.Service, entries []dms.IndexEntry) (termCache, error) {
+	var ids []string
+	for _, e := range entries {
+		ids = append(ids, e.Keywords...)
+		for _, f := range e.Fields {
+			if f.Definition.Type.Terms() {
+				for _, x := range f.Values {
+					if id, ok := x.(string); ok {
+						ids = append(ids, id)
+					}
+				}
+			}
 		}
 	}
-	if len(targets) > 0 {
-		merged, err := s.DAL.Taxonomy().Terms(ctx, taxonomy.TermFilter{IDs: sortedUnique(targets)})
-		if err != nil {
-			return nil, err
+	c := termCache{}
+	// Each round loads the merge targets and ancestors the last one found.
+	for len(ids) > 0 {
+		ids = sortedUnique(ids)
+		var found []taxonomy.Term
+		for chunk := range slices.Chunk(ids, termBatchIDs) {
+			rows, err := s.DAL.Taxonomy().Terms(ctx, taxonomy.TermFilter{IDs: chunk})
+			if err != nil {
+				return nil, err
+			}
+			found = append(found, rows...)
 		}
-		for _, t := range merged {
-			byID[t.ID] = t
+		ids = nil
+		for _, t := range found {
+			c[t.ID] = t
+		}
+		for _, t := range found {
+			next := t.Lineage()
+			if t.Merged() {
+				next = []string{t.MergedIntoID}
+			}
+			for _, id := range next {
+				if _, ok := c[id]; !ok {
+					ids = append(ids, id)
+				}
+			}
 		}
 	}
-	for id, target := range canonical {
-		if t, ok := byID[target]; ok {
-			lineage := t.Lineage()
-			out[id] = lineage[:len(lineage)-1]
-		}
-	}
-	return out, nil
+	return c, nil
 }
 
-func sortedUnique(ids []string) []string {
-	return slices.Compact(slices.Sorted(slices.Values(ids)))
+// canonical is the term an ID stands for now: the term it was merged into,
+// or itself.
+func (c termCache) canonical(id string) (taxonomy.Term, bool) {
+	t, ok := c[id]
+	if ok && t.Merged() {
+		t, ok = c[t.MergedIntoID]
+	}
+	return t, ok
 }
 
-// termWords are the names, labels and synonyms of terms, and of the terms
-// they were merged into, as they are now.
-func termWords(ctx context.Context, s *dms.Service, ids []string) (string, error) {
-	if len(ids) == 0 {
-		return "", nil
+// parents are the ancestors of the term an ID stands for now.
+func (c termCache) parents(id string) []string {
+	t, ok := c.canonical(id)
+	if !ok {
+		return nil
 	}
-	rows, err := s.DAL.Taxonomy().Terms(ctx, taxonomy.TermFilter{IDs: ids})
-	if err != nil {
-		return "", err
-	}
+	lineage := t.Lineage()
+	return lineage[:len(lineage)-1]
+}
+
+// words are the names, labels and synonyms of terms, and of the terms they
+// were merged into, as they are now.
+func (c termCache) words(ids []string) string {
 	words := []string{}
 	add := func(t taxonomy.Term) {
 		words = append(words, t.Name)
 		words = append(words, slices.Sorted(maps.Values(t.Labels))...)
 		words = append(words, t.Synonyms...)
 	}
-	for _, t := range rows {
+	for _, id := range ids {
+		t, ok := c[id]
+		if !ok {
+			continue
+		}
 		add(t)
-		if t.Merged() {
-			target, err := s.DAL.Taxonomy().Term(ctx, t.MergedIntoID)
-			if err != nil {
-				return "", err
-			}
+		if target, ok := c.canonical(id); ok && t.Merged() {
 			add(target)
 		}
 	}
-	return strings.Join(words, " "), nil
+	return strings.Join(words, " ")
+}
+
+func sortedUnique(ids []string) []string {
+	return slices.Compact(slices.Sorted(slices.Values(ids)))
 }
 
 // syncEntries brings the search documents of items and folders to their
