@@ -42,7 +42,7 @@ func TestChoiceCardinalityIsImmutableAPI(t *testing.T) {
 				t.Fatal(err)
 			}
 			response := request(h, "PATCH", "/v1/resources/"+list.ID+"/fields/"+field.ID, fmt.Sprintf(`{"options":{"multiple":%t}}`, !multiple), testToken, fmt.Sprintf(`"%d"`, list.Version), "application/json")
-			if response.Code != 422 || !strings.Contains(response.Body.String(), "cardinality and reference scope are immutable") {
+			if response.Code != 422 || !strings.Contains(response.Body.String(), "cardinality, reference scope and apply_parents are immutable") {
 				t.Fatal(response.Code, response.Body.String())
 			}
 			change := *field

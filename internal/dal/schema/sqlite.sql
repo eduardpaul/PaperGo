@@ -458,6 +458,10 @@ CREATE TABLE field_values (
     value_integer INTEGER,
     value_numeric NUMERIC,
     value_boolean BOOLEAN,
+    -- applies_parents copies the immutable apply_parents option of a term
+    -- or keywords field: its value also applies the term's ancestors.
+    applies_parents BOOLEAN NOT NULL DEFAULT FALSE CHECK (applies_parents IN (0, 1)),
+    CHECK (field_type IN ('term', 'keywords') OR NOT applies_parents),
     CHECK (
         (CASE WHEN value_text IS NOT NULL THEN 1 ELSE 0 END) +
         (CASE WHEN value_integer IS NOT NULL THEN 1 ELSE 0 END) +
@@ -561,7 +565,9 @@ CREATE TABLE list_views (
     system_key TEXT NOT NULL DEFAULT '' CHECK (system_key IN ('', 'archived')),
     columns TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(columns) AND json_type(columns) = 'array'),
     "query" TEXT NOT NULL DEFAULT '{}' CHECK (json_valid("query") AND json_type("query") = 'object'),
-    layout TEXT NOT NULL DEFAULT 'table' CHECK (layout IN ('table', 'board', 'calendar', 'gallery')),
+    layout TEXT NOT NULL DEFAULT 'table' CHECK (layout IN ('table', 'board', 'calendar', 'gallery', 'navigation')),
+    -- settings configures the layout, such as the field a navigation view browses.
+    settings TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(settings) AND json_type(settings) = 'object'),
     is_default BOOLEAN NOT NULL DEFAULT FALSE CHECK (is_default IN (0, 1)),
     version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0)
 );

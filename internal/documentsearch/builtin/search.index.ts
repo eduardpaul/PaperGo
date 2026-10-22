@@ -1,5 +1,6 @@
 // Keeps items and folders searchable: on every change, permission change
-// and term relabel, re-reads the entry and writes it to the search index.
+// and term relabel, move or merge, re-reads the entry and writes it to the
+// search index.
 import { workflow } from "@papergo/workflow";
 
 interface Params {
@@ -14,6 +15,7 @@ export default workflow<unknown, unknown, Params>({
     { type: "permissions.changed", collection_id: p.collection, actions: ["replace", "move"] },
     { type: "term.changed" },
     { type: "term.merged" },
+    { type: "term.moved" },
     { type: "manual", collection_id: p.collection, selection: "per_item" },
   ],
   concurrency: "coalesce",
@@ -25,12 +27,15 @@ export default workflow<unknown, unknown, Params>({
       if (id) await sync.post({ resourceIds: [id] });
       return;
     }
-    // A relabel or merge changes the words of every entry holding the term.
+    // A relabel, move or merge changes the words and keywords of every entry
+    // holding the term, or below it where values apply their parents.
     const data = event.data;
     const terms: string[] = [];
     if (event.type === "term.changed") {
       const changed = (data.changed_fields as string[] | undefined) ?? [];
       if (changed.some((f) => f === "name" || f === "labels" || f === "synonyms")) terms.push(data.term_id as string);
+    } else if (event.type === "term.moved") {
+      terms.push(data.term_id as string);
     } else {
       terms.push(data.source_term_id as string, data.target_term_id as string);
     }

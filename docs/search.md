@@ -11,7 +11,7 @@ The index holds one **document** per item or folder and surface. A collection wi
 | Part | From |
 | --- | --- |
 | Name | the surface's name |
-| Keywords | the names, localized labels and synonyms of the terms in its term and keywords fields; matches here and in the name rank highest |
+| Keywords | the names, localized labels and synonyms of the terms in its keywords and term and keywords fields, and of the parent terms that its keywords and fields with `apply_parents` apply; matches here and in the name rank highest |
 | Body | the text of the surface's text, note, email, URL, choice and number fields. Dates, booleans, people and lookups are not text; term and keywords fields give their words to keywords. A field's `search_weight` moves its text to keywords (`high`) or leaves it out (`none`) |
 | Stems | the words of the name, keywords and body as their stems in each of `SEARCH_LANGUAGES` |
 | Fields | every field value except notes, typed as collection queries index them, for [field filters](#field-filters) |
@@ -28,7 +28,7 @@ The text of files is indexed too, as [file content](#file-content), separately f
 
 The **`search.index`** [built-in workflow](workflows.md#built-in-workflows) fills the `search.index` [role](workflows.md#roles). It is on by default in every collection and `coalesce`s: a burst of changes to one entry costs at most two runs, and the last one sees the final state.
 
-- **Triggers.** Item and folder changes (`created`, `updated`, `published`, `unpublished`, `deleted`, `restored`, `purged`), `permissions.changed` (once per affected entry, for `replace` and `move`), `term.changed` and `term.merged`, and `manual`.
+- **Triggers.** Item and folder changes (`created`, `updated`, `published`, `unpublished`, `deleted`, `restored`, `purged`), `permissions.changed` (once per affected entry, for `replace` and `move`), `term.changed`, `term.merged` and `term.moved` (entries holding the term or a term below it), and `manual`.
 - **`POST /v1/workspaces/{id}/search/sync`** with `resource_ids` queues a `search.sync` operation (202). The `search-sync` worker runs queued syncs together, up to 200 at a time: it re-reads each entry and writes its documents, or removes them when it is gone, outside any database transaction, so a busy store never holds the database's writer. It reads state, not the event, so running it again, late or out of order is harmless.
 - **Terms.** A term whose name, labels or synonyms change, and both terms of a merge, are re-read for every item that holds them or an alias merged into them: `GET /v1/workspaces/{id}/search/term-entries` lists them a page at a time for the sync. Each provider refreshes only its own collection.
 - **Turning it off.** `PUT /v1/workspaces/{id}/workflow-builtins/search.index` with a `collection_id` and `"automatic_enabled": false` pauses the collection's automatic provider. Searching inside that collection then matches names only, because its documents would go stale; global search keeps its entries as last indexed, still trimmed by current permissions. Duplicating creates a draft; explicitly publishing and enabling that copy replaces the automatic provider in that collection.
@@ -84,7 +84,7 @@ A revoked permission or membership therefore applies to the next search at once,
 | `kind` | `item` (default), `folder`, or both comma-separated |
 | `workspace_id`, `collection_id`, `content_type_id` | restrict to one |
 | `term_id` | items holding the term, a descendant of it, or a term merged into it |
-| `keyword` | shared keyword term ID or label; matches intrinsic keywords and keywords fields |
+| `keyword` | shared keyword term ID or label; matches intrinsic keywords and keywords fields, and the parent terms intrinsic keywords and keywords fields with `apply_parents` apply |
 | `created_by`, `modified_by` | exact values |
 | `modified_from`, `modified_to` | RFC 3339 times |
 | `facets` | `false` leaves out the facet counts |
@@ -116,7 +116,7 @@ With an embedding model, search also finds file content close in meaning to `q`,
 | --- | --- |
 | text, email, URL, integer, decimal, number, currency, date, datetime | `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `in`, `present`, `missing` |
 | choice, boolean, person, lookup | `eq`, `ne`, `in`, `present`, `missing` |
-| term, keywords | `eq`, `ne`, `in`, `under` (the term and its descendants), `present`, `missing`; terms merged into a term count as it |
+| term, keywords | `eq`, `ne`, `in`, `under` (the term and its descendants), `present`, `missing`; terms merged into a term count as it, and on a field with `apply_parents` `eq`, `ne` and `in` also match the term's descendants |
 
 - `ne` means the field is present and no value equals, as in collection queries; `missing` that the entry does not have the field.
 - A key names the field in every list and library the caller may read (narrowed by `workspace_id` or `collection_id`); a key with several types or scales matches each. An unknown key, an operator the field does not take, or a value of the wrong type answers `422`.

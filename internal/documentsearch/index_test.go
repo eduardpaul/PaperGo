@@ -10,6 +10,7 @@ import (
 	"papergo/internal/dal/daltest"
 	"papergo/internal/dal/operations"
 	"papergo/internal/dal/resources"
+	"papergo/internal/dal/taxonomy"
 	"papergo/internal/dms"
 	"papergo/internal/model"
 	"papergo/internal/testutil/searchstore"
@@ -172,6 +173,77 @@ func TestGlobalSearchFindsKeywords(t *testing.T) {
 	found, err = x.Search(ctx, s, "alice", Request{Keyword: target.ID, Kinds: []string{"item"}})
 	if err != nil || len(found.Hits) != 1 {
 		t.Fatal("merged keyword", found, err)
+	}
+}
+
+// Item keywords and fields with apply_parents give search their parent
+// terms: as keywords, words and field matches; a move resyncs their holders.
+func TestParentTermsAreSearchable(t *testing.T) {
+	ctx, s, x, list := fixture(t)
+	finance, err := s.CreateTerm(ctx, "alice", taxonomy.KeywordsSetID, dms.TermInput{Name: "Finance"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	invoices, err := s.CreateTerm(ctx, "alice", taxonomy.KeywordsSetID, dms.TermInput{Name: "Invoices", ParentID: &finance.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	group, err := s.CreateTermGroup(ctx, "alice", dms.TermGroupInput{Name: "Classification"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	set, err := s.CreateTermSet(ctx, "alice", dms.TermSetInput{GroupID: group.ID, Key: "regions", Name: "Regions"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	europe, err := s.CreateTerm(ctx, "alice", set.ID, dms.TermInput{Name: "Europe"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	spain, err := s.CreateTerm(ctx, "alice", set.ID, dms.TermInput{Name: "Spain", ParentID: &europe.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []dms.CreateField{
+		{Key: "places", Label: "Places", Type: "term", Indexed: true, Options: model.FieldOptions{TermSetID: set.ID, ApplyParents: true}},
+		{Key: "region", Label: "Region", Type: "term", Indexed: true, Options: model.FieldOptions{TermSetID: set.ID}},
+	} {
+		if _, err = s.CreateField(ctx, "alice", list.ID, f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tagged, err := s.Create(ctx, "alice", list.ID, dms.CreateResource{Kind: "item", Name: "Tagged", Keywords: []string{invoices.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	madrid := item(t, s, list.ID, "Madrid", map[string]any{"places": spain.ID})
+	item(t, s, list.ID, "Valencia", map[string]any{"region": spain.ID})
+	indexAll(t, s, x)
+	names := func(r Result) []string {
+		out := []string{}
+		for _, h := range r.Hits {
+			out = append(out, h.Name)
+		}
+		slices.Sort(out)
+		return out
+	}
+	found, err := x.Search(ctx, s, "alice", Request{Keyword: finance.ID, Kinds: []string{"item"}})
+	if err != nil || !slices.Equal(names(found), []string{"Tagged"}) {
+		t.Fatal("parent keyword", found, err)
+	}
+	if q, err := s.Query(ctx, "alice", list.ID, dms.QueryRequest{Query: dms.QuerySpec{Search: "europe"}}); err != nil || len(q.Data) != 1 || q.Data[0].ID != madrid.ID {
+		t.Fatal("parent words", q, err)
+	}
+	for field, want := range map[string][]string{"places": {"Madrid"}, "region": {}} {
+		filter := &dms.FilterExpr{Field: field, Op: "eq", Value: json.RawMessage(`"` + europe.ID + `"`)}
+		found, err = x.Search(ctx, s, "alice", Request{Filter: filter, Kinds: []string{"item"}})
+		if err != nil || !slices.Equal(names(found), want) {
+			t.Fatal(field, "field filter", found, err)
+		}
+	}
+	holders, err := Holders(ctx, s, "alice", list.WorkspaceID, "", []string{finance.ID}, "")
+	if err != nil || !slices.Equal(holders.Items, []string{tagged.ID}) {
+		t.Fatal("a move resyncs the holders of descendants", holders, err)
 	}
 }
 

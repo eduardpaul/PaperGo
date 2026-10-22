@@ -104,7 +104,7 @@ export interface SearchRequestBuilderGetQueryParameters {
      */
     facets?: boolean;
     /**
-     * Shared keyword term ID or label; includes intrinsic keywords and keywords fields.
+     * Shared keyword term ID or label; includes intrinsic keywords and keywords fields, and the parents that item keywords and fields with apply_parents apply.
      */
     keyword?: string;
     /**

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bulkUpdateRequests, countRequest, documentUploadRequest, downloadContentPath, listingQuery, listingRequest, replaceContentRequest, searchRequest, smartFolderQueryRequest, viewGroupsRequest, viewRowsRequest } from './requests';
+import { bulkUpdateRequests, countRequest, documentUploadRequest, formatNavigation, navigationRequest, downloadContentPath, listingQuery, listingRequest, parseNavigation, replaceContentRequest, searchRequest, smartFolderQueryRequest, viewGroupsRequest, viewRowsRequest } from './requests';
 
 describe('listing and search requests', () => {
   it('browses the open folder when no view, sort or search applies', () => {
@@ -147,5 +147,29 @@ describe('board and calendar requests', () => {
       },
     });
     expect(viewGroupsRequest('col', view).body).toEqual({ query: { filter: view.query.filter, group_by: 'status' } });
+  });
+});
+
+describe('navigation requests', () => {
+  it('keeps the opened terms in the URL, the latest last', () => {
+    const selected = [
+      { field: 'period', term_id: 'q1' },
+      { field: '$keywords', no_value: true },
+    ];
+    expect(formatNavigation(selected)).toBe('period~q1,$keywords~none');
+    expect(parseNavigation('period~q1,$keywords~none')).toEqual(selected);
+    // A field opens one term; malformed pairs are ignored.
+    expect(parseNavigation('period~q1,period~q2,~x,bare,tags~')).toEqual([{ field: 'period', term_id: 'q1' }]);
+    expect(formatNavigation([])).toBeUndefined();
+    expect(parseNavigation(undefined)).toEqual([]);
+  });
+
+  it('counts a tree within the terms opened in the others', () => {
+    expect(navigationRequest('v', 'period').body).toEqual({ field: 'period' });
+    expect(navigationRequest('v', 'period', 'fiscal', [{ field: 'tags', term_id: 't' }]).body).toEqual({
+      field: 'period',
+      parent_id: 'fiscal',
+      selected: [{ field: 'tags', term_id: 't' }],
+    });
   });
 });

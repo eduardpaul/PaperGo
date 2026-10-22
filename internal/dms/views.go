@@ -17,6 +17,7 @@ type ViewInput struct {
 	Columns   []string         `json:"columns"`
 	Query     QuerySpec        `json:"query"`
 	Layout    viewstore.Layout `json:"layout"`
+	Settings  ViewSettings     `json:"settings"`
 	IsDefault bool             `json:"is_default"`
 }
 
@@ -56,6 +57,9 @@ func (s *Service) validateView(ctx context.Context, subject, containerID string,
 		}
 		seen[col] = true
 	}
+	if e = validateViewSettings(in.Layout, in.Settings, defs); e != nil {
+		return e
+	}
 	return s.validateQuery(ctx, subject, containerID, in.Query)
 }
 func (s *Service) CreateView(ctx context.Context, subject, containerID string, in ViewInput) (out *viewstore.ListView, err error) {
@@ -68,7 +72,8 @@ func (s *Service) CreateView(ctx context.Context, subject, containerID string, i
 			return e
 		}
 		raw, _ := json.Marshal(in.Query)
-		v, e := t.DAL.Views().CreateListView(ctx, viewstore.ListView{ContainerID: containerID, Name: in.Name, Columns: in.Columns, Query: raw, Layout: in.Layout, IsDefault: in.IsDefault})
+		settings, _ := json.Marshal(in.Settings)
+		v, e := t.DAL.Views().CreateListView(ctx, viewstore.ListView{ContainerID: containerID, Name: in.Name, Columns: in.Columns, Query: raw, Layout: in.Layout, Settings: settings, IsDefault: in.IsDefault})
 		if e != nil {
 			return e
 		}
@@ -131,16 +136,17 @@ func (s *Service) UpdateView(ctx context.Context, subject, id string, version in
 			return e
 		}
 		raw, _ := json.Marshal(in.Query)
+		settings, _ := json.Marshal(in.Settings)
 		before, e := json.Marshal(v)
 		if e != nil {
 			return e
 		}
-		updated, e := t.DAL.Views().UpdateListView(ctx, viewstore.ListView{ID: id, Name: in.Name, Columns: in.Columns, Query: raw, Layout: in.Layout, IsDefault: in.IsDefault}, version)
+		updated, e := t.DAL.Views().UpdateListView(ctx, viewstore.ListView{ID: id, Name: in.Name, Columns: in.Columns, Query: raw, Layout: in.Layout, Settings: settings, IsDefault: in.IsDefault}, version)
 		if e != nil {
 			return e
 		}
 		out = &updated
-		if e = t.trackAuditProperties(id, before, out, "name", "columns", "query", "layout", "is_default"); e != nil {
+		if e = t.trackAuditProperties(id, before, out, "name", "columns", "query", "layout", "settings", "is_default"); e != nil {
 			return e
 		}
 		return t.audit(ctx, subject, "view.update", c, map[string]any{"view_id": id})
@@ -171,12 +177,15 @@ func (s *Service) DeleteView(ctx context.Context, subject, id string, version in
 }
 
 type ViewQueryRequest struct {
-	Select       []string `json:"select,omitempty"`
-	Surface      string   `json:"surface,omitempty"`
-	After        string   `json:"-"`
-	Limit        int      `json:"-"`
-	IncludeTotal bool     `json:"include_total,omitempty"`
-	TotalLimit   int      `json:"total_limit,omitempty"`
+	Select  []string `json:"select,omitempty"`
+	Surface string   `json:"surface,omitempty"`
+	// Selected lists the items a navigation view shows at the terms opened
+	// in its fields, combined as the view matches them.
+	Selected     []NavigationSelection `json:"selected,omitempty"`
+	After        string                `json:"-"`
+	Limit        int                   `json:"-"`
+	IncludeTotal bool                  `json:"include_total,omitempty"`
+	TotalLimit   int                   `json:"total_limit,omitempty"`
 }
 
 func (s *Service) QueryView(ctx context.Context, subject, id string, in ViewQueryRequest) (QueryResult, error) {
@@ -194,6 +203,24 @@ func (s *Service) QueryView(ctx context.Context, subject, id string, in ViewQuer
 			selection = v.Columns
 		}
 		request := QueryRequest{Query: spec, Surface: in.Surface, After: in.After, Limit: in.Limit, IncludeTotal: in.IncludeTotal, TotalLimit: in.TotalLimit, Select: selection}
+		if v.Layout == viewstore.LayoutNavigation {
+			if e = t.requireTaxonomy(ctx, subject, "read"); e != nil {
+				return QueryResult{}, e
+			}
+			settings, fields, e := t.viewNavigation(ctx, v)
+			if e != nil {
+				return QueryResult{}, e
+			}
+			if len(in.Selected) == 0 {
+				return QueryResult{}, invalid("a navigation view lists the items of selected terms")
+			}
+			if request.Query.Filter, e = selectionFilter(spec.Filter, settings.Match, fields, in.Selected, ""); e != nil {
+				return QueryResult{}, e
+			}
+			request.itemsOnly = true
+		} else if len(in.Selected) > 0 {
+			return QueryResult{}, invalid("selected belongs to navigation views")
+		}
 		if request.Surface == "" {
 			request.Surface = "auto"
 		}

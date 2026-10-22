@@ -307,9 +307,10 @@ func (m module) termEntries(w http.ResponseWriter, r *http.Request, in httpapi.R
 }
 
 // Holders lists, 500 at a time, the resources of a workspace, or of one of
-// its collections, holding any of terms or the terms merged into them,
-// whose search entries a relabel or merge changes. The caller needs manage
-// access to the workspace.
+// its collections, holding any of terms, their descendants or the terms
+// merged into those, whose search entries a relabel, move or merge changes:
+// values that apply parents carry their ancestors' words and keywords. The
+// caller needs manage access to the workspace.
 func Holders(ctx context.Context, s *dms.Service, subject, workspaceID, collectionID string, terms []string, after string) (TermEntries, error) {
 	if len(terms) == 0 || len(terms) > 20 {
 		return TermEntries{}, dms.Invalid("give 1 to 20 term_id values")
@@ -318,7 +319,8 @@ func Holders(ctx context.Context, s *dms.Service, subject, workspaceID, collecti
 		return TermEntries{}, err
 	}
 	// Retained values keep merged source IDs; their words come from the
-	// target, so their entries change too.
+	// target, so their entries change too. Holders of a term below one of
+	// terms carry its words and keywords where they apply parents.
 	var aliases []string
 	for _, id := range terms {
 		expanded, err := s.TermAliases(ctx, id)
@@ -331,7 +333,7 @@ func Holders(ctx context.Context, s *dms.Service, subject, workspaceID, collecti
 			}
 		}
 	}
-	items, err := s.EntriesWithTerms(ctx, workspaceID, collectionID, nil, aliases, after, termBatch)
+	items, err := s.EntriesWithTerms(ctx, workspaceID, collectionID, nil, aliases, terms, after, termBatch)
 	if err != nil {
 		return TermEntries{}, err
 	}

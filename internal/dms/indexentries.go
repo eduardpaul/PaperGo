@@ -219,13 +219,14 @@ func (s *Service) TermFamily(ctx context.Context, id string) ([]string, error) {
 }
 
 // EntriesWithTerms lists, after an ID and in ID order, the live items of a
-// workspace whose surfaces hold any of the terms, optionally in one
+// workspace whose surfaces hold any of the terms in their values, or apply
+// one of below as a parent or hold it as a keyword, optionally in one
 // collection or outside some: an index re-reads them when a term changes.
-func (s *Service) EntriesWithTerms(ctx context.Context, workspaceID, collectionID string, skip []string, termIDs []string, after string, limit int) ([]string, error) {
-	if len(termIDs) == 0 {
+func (s *Service) EntriesWithTerms(ctx context.Context, workspaceID, collectionID string, skip, termIDs, below []string, after string, limit int) ([]string, error) {
+	if len(termIDs) == 0 && len(below) == 0 {
 		return nil, nil
 	}
-	return s.DAL.Content().TermHolders(ctx, content.TermHolders{WorkspaceID: workspaceID, CollectionID: collectionID, Skip: skip, TermIDs: termIDs, AfterID: after, Limit: limit})
+	return s.DAL.Content().TermHolders(ctx, content.TermHolders{WorkspaceID: workspaceID, CollectionID: collectionID, Skip: skip, TermIDs: termIDs, Below: below, AfterID: after, Limit: limit})
 }
 
 // ReprocessFiles raises file.updated, with the reindex source, for the

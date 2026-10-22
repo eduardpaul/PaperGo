@@ -785,7 +785,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "Shared keyword term ID or label; includes intrinsic keywords and keywords fields."
+            "description": "Shared keyword term ID or label; includes intrinsic keywords and keywords fields, and the parents that item keywords and fields with apply_parents apply."
           },
           {
             "schema": {
@@ -1138,7 +1138,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "Shared keyword term ID or label; includes intrinsic keywords and keywords fields."
+            "description": "Shared keyword term ID or label; includes intrinsic keywords and keywords fields, and the parents that item keywords and fields with apply_parents apply."
           },
           {
             "name": "kind",
@@ -4705,6 +4705,157 @@
           "list.read"
         ],
         "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
+      }
+    },
+    "/v1/views/{id}/navigation": {
+      "post": {
+        "summary": "Navigate a View",
+        "operationId": "viewNavigation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "$top",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            }
+          },
+          {
+            "in": "query",
+            "name": "$skiptoken",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Continuation from @odata.nextLink; resend the same query body."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NavigationPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NavigationRequest"
+              }
+            }
+          }
+        },
+        "x-module-scopes": [
+          "list.read",
+          "taxonomy.read"
+        ],
+        "description": "Lists one level of a field of a navigation view: the terms of field below parent_id (or the roots), in term order, each with the items of the view it lists and those at or below it. Counts follow the view's query, the caller's access and the surface read, and cover items, not folders. Required module scopes: list.read, taxonomy.read. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/relationship-types/{id}": {
@@ -10027,7 +10178,7 @@
       "post": {
         "summary": "Move Term",
         "operationId": "moveTerm",
-        "description": "Moves the term and its subtree in its set. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.",
+        "description": "Moves the term and its subtree in its set. Raises term.moved. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.",
         "parameters": [
           {
             "name": "id",
@@ -10733,7 +10884,7 @@
       "post": {
         "summary": "Promote Keyword",
         "operationId": "promoteKeyword",
-        "description": "Moves a keyword into a managed set, available as a keyword, or merges it into the set's term with the same name, label or synonym. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.",
+        "description": "Moves a keyword into a managed set, available as a keyword, or merges it into the set's term with the same name, label or synonym. Raises term.moved or term.merged. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.",
         "parameters": [
           {
             "name": "id",
@@ -16435,7 +16586,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "Shared keyword term ID or label; includes intrinsic keywords and keywords fields."
+            "description": "Shared keyword term ID or label; includes intrinsic keywords and keywords fields, and the parents that item keywords and fields with apply_parents apply."
           },
           {
             "name": "created_by",
@@ -21519,7 +21670,7 @@
           },
           "options": {
             "$ref": "#/components/schemas/FieldOptions",
-            "description": "Complete replacement of options; multiple and reference scope are immutable."
+            "description": "Complete replacement of options; multiple, reference scope and apply_parents are immutable."
           }
         }
       },
@@ -21744,6 +21895,11 @@
           "term_set_id": {
             "type": "string"
           },
+          "apply_parents": {
+            "type": "boolean",
+            "default": false,
+            "description": "Indexed term and keywords fields only, immutable. A value also applies its parent terms: eq, in and ne match values at or below a term, as under does, and keyword filters, keyword counts and search keywords include the parents. Values store only the picked terms. Item keywords always apply their parents."
+          },
           "unique": {
             "type": "boolean",
             "default": false,
@@ -21941,7 +22097,7 @@
         },
         "required": [],
         "additionalProperties": false,
-        "description": "One condition or AND/OR/NOT group; maximum 32 nodes and depth 6. Custom fields must be indexed. $id/$name are system fields; $keywords supports equality. Multi-valued eq matches any member; ne requires present with no equal member. Collection and smart-folder rules also accept $file_type for the MIME type of the visible file revision."
+        "description": "One condition or AND/OR/NOT group; maximum 32 nodes and depth 6. Custom fields must be indexed. $id/$name are system fields; $keywords supports eq, ne, missing and present. Multi-valued eq matches any member; ne requires present with no equal member. Collection and smart-folder rules also accept $file_type for the MIME type of the visible file revision."
       },
       "SortSpec": {
         "type": "object",
@@ -22056,6 +22212,12 @@
             "default": false,
             "description": "Count every authorized match before pagination. An exact total evaluates the whole result set, so it is returned only when requested."
           },
+          "total_limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000,
+            "description": "Count matches up to this many before pagination; more matches set total_capped and report the limit as total."
+          },
           "select": {
             "type": "array",
             "maxItems": 50,
@@ -22064,6 +22226,14 @@
               "type": "string"
             },
             "description": "Selected custom fields and optional $keywords; system columns are accepted and the resource metadata envelope remains present. Omitted returns full values on direct queries and saved columns on views; an empty array returns no custom values. Selected fields need not be indexed. Cursors bind this selection."
+          },
+          "selected": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "$ref": "#/components/schemas/NavigationSelection"
+            },
+            "description": "Navigation views only, required there: lists the items at the terms opened in the view's fields, combined as the view's settings.match says."
           }
         },
         "required": [],
@@ -22094,9 +22264,13 @@
               "table",
               "board",
               "calendar",
-              "gallery"
+              "gallery",
+              "navigation"
             ],
             "default": "table"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/ViewSettings"
           },
           "is_default": {
             "type": "boolean"
@@ -22106,7 +22280,7 @@
           "name"
         ],
         "additionalProperties": false,
-        "description": "Collection-managed saved view. Columns use field keys and $id/$name/$keywords; empty columns default to $name. PUT replaces the definition. Layout is a client hint."
+        "description": "Collection-managed saved view. Columns use field keys and $id/$name/$keywords; empty columns default to $name. PUT replaces the definition. Layout is a client hint; a navigation view browses the terms of each of settings.fields as folders (POST /v1/views/{id}/navigation) and lists the items at the opened terms through POST /v1/views/{id}/query with selected."
       },
       "QueryResult": {
         "type": "object",
@@ -22279,6 +22453,9 @@
           },
           "layout": {
             "type": "string"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/ViewSettings"
           },
           "is_default": {
             "type": "boolean"
@@ -23803,11 +23980,11 @@
         "properties": {
           "type": {
             "type": "string",
-            "description": "item.created, item.updated, item.published, item.unpublished, item.deleted, item.restored, item.purged, file.added, file.updated, folder.created, folder.updated, folder.deleted, folder.restored, folder.purged, permissions.changed, task.created, task.completed, task.cancelled, schedule, manual, term.merged, term.changed, or wf.{key}.{event}. Folder triggers take collection_id and content_type_id and no condition. permissions.changed is delivered per affected item and folder, takes collection_id, content_type_id, actions and a condition; term.changed and term.merged take no options or item conditions. term.changed subscriptions require taxonomy.read; dispatch and every executing node recheck the workflow version author's current scope."
+            "description": "item.created, item.updated, item.published, item.unpublished, item.deleted, item.restored, item.purged, file.added, file.updated, folder.created, folder.updated, folder.deleted, folder.restored, folder.purged, permissions.changed, task.created, task.completed, task.cancelled, schedule, manual, term.merged, term.moved, term.changed, or wf.{key}.{event}. Folder triggers take collection_id and content_type_id and no condition. permissions.changed is delivered per affected item and folder, takes collection_id, content_type_id, actions and a condition; term.changed, term.merged and term.moved take no options or item conditions. term.changed subscriptions require taxonomy.read; dispatch and every executing node recheck the workflow version author's current scope."
           },
           "collection_id": {
             "type": "string",
-            "description": "Limits item, workflow-event, task and permission triggers to a collection; permission events include the collection itself and its folders/items. Not supported for term.changed or term.merged."
+            "description": "Limits item, workflow-event, task and permission triggers to a collection; permission events include the collection itself and its folders/items. Not supported for term.changed, term.merged or term.moved."
           },
           "content_type_id": {
             "type": "string"
@@ -29623,6 +29800,189 @@
           "name",
           "version"
         ]
+      },
+      "ViewSettings": {
+        "type": "object",
+        "properties": {
+          "fields": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 5,
+            "items": {
+              "$ref": "#/components/schemas/NavigationFieldSetting"
+            },
+            "description": "The fields a navigation view browses, each as a tree of terms; keys are unique."
+          },
+          "match": {
+            "type": "string",
+            "enum": [
+              "all",
+              "any"
+            ],
+            "default": "all",
+            "description": "How the terms opened in different fields combine: all lists the items of every opened term, and each field's counts follow the terms opened in the others; any lists the items of any opened term, and counts cover the view."
+          },
+          "hide_empty": {
+            "type": "boolean",
+            "default": false,
+            "description": "Leaves out the terms no item of the view holds at or below them."
+          }
+        },
+        "required": [],
+        "additionalProperties": false,
+        "description": "Layout settings. Only navigation views take settings; other layouts take an empty object."
+      },
+      "NavigationRequest": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string",
+            "description": "The view's field whose terms are listed."
+          },
+          "parent_id": {
+            "type": "string",
+            "description": "Opens this term of the view's term set; omitted lists the roots."
+          },
+          "surface": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "head",
+              "published"
+            ],
+            "default": "auto"
+          },
+          "selected": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "$ref": "#/components/schemas/NavigationSelection"
+            },
+            "description": "The terms opened in the view's fields. Where the view matches all, counts follow those of the other fields; the listed field's own selection is ignored."
+          }
+        },
+        "required": [
+          "field"
+        ],
+        "additionalProperties": false,
+        "description": "Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink."
+      },
+      "NavigationNode": {
+        "type": "object",
+        "properties": {
+          "term_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "has_children": {
+            "type": "boolean",
+            "description": "Opening the node lists terms; with hide_empty, terms that hold items."
+          },
+          "count": {
+            "type": "integer",
+            "description": "Items the node lists: holding the term, or one below it where subterms are included."
+          },
+          "subtree_count": {
+            "type": "integer",
+            "description": "Items holding the term or one below it."
+          }
+        },
+        "required": [
+          "term_id",
+          "name",
+          "has_children",
+          "count",
+          "subtree_count"
+        ],
+        "additionalProperties": false
+      },
+      "NavigationPage": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NavigationNode"
+            }
+          },
+          "@odata.nextLink": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Absolute continuation URL, or null on the final page. Repeat the request method and body."
+          },
+          "field": {
+            "type": "string"
+          },
+          "term_set_id": {
+            "type": "string"
+          },
+          "include_subterms": {
+            "type": "boolean",
+            "description": "Whether nodes list the items below them too."
+          },
+          "hide_empty": {
+            "type": "boolean"
+          },
+          "parent_id": {
+            "type": "string"
+          },
+          "no_value_count": {
+            "type": "integer",
+            "description": "At the roots, on the first page: items holding no term."
+          }
+        },
+        "required": [
+          "value",
+          "@odata.nextLink",
+          "field",
+          "term_set_id",
+          "include_subterms",
+          "hide_empty"
+        ],
+        "additionalProperties": false
+      },
+      "NavigationFieldSetting": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string",
+            "description": "$keywords or an indexed term or keywords field of the collection."
+          },
+          "include_subterms": {
+            "type": "boolean",
+            "description": "Lists, at a term, the items holding a term below it too. Omitted follows the field: item keywords and fields with apply_parents always do; other fields list the items holding the term. false is rejected where parents apply."
+          }
+        },
+        "required": [
+          "field"
+        ],
+        "additionalProperties": false
+      },
+      "NavigationSelection": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string",
+            "description": "One of the view's fields, at most once per request."
+          },
+          "term_id": {
+            "type": "string",
+            "description": "A term of the field's term set: the items the view shows at it."
+          },
+          "no_value": {
+            "type": "boolean",
+            "description": "The items holding no term in the field."
+          }
+        },
+        "required": [
+          "field"
+        ],
+        "additionalProperties": false,
+        "description": "A term opened in one field of a navigation view; exactly one of term_id and no_value."
       }
     },
     "parameters": {

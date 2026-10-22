@@ -265,7 +265,7 @@ replacements:
     replace: "types.JSON[json.RawMessage]"
   - tables: ["list_views"]
     match:
-      name: "query"
+      name: "/^(query|settings)$/"
     replace: "types.JSON[json.RawMessage]"
   - tables: ["smart_folders"]
     match:

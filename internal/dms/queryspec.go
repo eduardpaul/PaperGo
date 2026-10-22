@@ -54,6 +54,8 @@ type QueryRequest struct {
 	// rowACL checks permissions row by row, so queries over several
 	// collections share one SQL shape (smart folders).
 	rowACL bool
+	// itemsOnly leaves folders out (navigation views).
+	itemsOnly bool
 }
 type QueryResult struct {
 	Data       []*resources.Resource `json:"value"`
@@ -213,8 +215,14 @@ func (q *queryCompiler) filter(f *FilterExpr, depth int) (*content.Filter, error
 	if builtin {
 		// System metadata belongs to the selected immutable content surface.
 	} else if f.Field == "$keywords" {
+		if op == content.FilterMissing || op == content.FilterPresent {
+			if len(f.Value) > 0 {
+				return nil, invalid("missing and present take no value")
+			}
+			return &content.Filter{Cond: &content.Condition{Field: field, Op: op}}, nil
+		}
 		if op != content.FilterEQ && op != content.FilterNE {
-			return nil, invalid("keywords support eq and ne")
+			return nil, invalid("keywords support eq, ne, missing and present")
 		}
 		v, e := decodeValue(f.Value)
 		if e != nil {
@@ -454,6 +462,7 @@ func (s *Service) collectionPlan(ctx context.Context, subject string, c *resourc
 		}
 	}
 	plan.Keyword = in.Query.Keyword
+	plan.ItemsOnly = in.itemsOnly
 	searchCapped := false
 	if strings.TrimSpace(in.Query.Search) != "" {
 		if plan.Search, searchCapped, e = s.matchText(ctx, subject, c.ID, "", in.Query.Search, in.Query.Archive.Default()); e != nil {
@@ -463,9 +472,9 @@ func (s *Service) collectionPlan(ctx context.Context, subject string, c *resourc
 	fingerprint, _ := json.Marshal(struct {
 		Subject, Collection, Surface, Schema string
 		Query                                QuerySpec
-		Grouped                              bool
+		Grouped, ItemsOnly                   bool
 		Select                               []string
-	}{subject, c.ID, in.Surface, *c.SchemaHeadID, in.Query, grouped, in.Select})
+	}{subject, c.ID, in.Surface, *c.SchemaHeadID, in.Query, grouped, in.itemsOnly, in.Select})
 	sum := sha256.Sum256(fingerprint)
 	return plan, compiledQuery{fingerprint: hex.EncodeToString(sum[:]), projection: projection, includeKeywords: includeKeywords, searchCapped: searchCapped}, nil
 }

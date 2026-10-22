@@ -158,7 +158,8 @@ CREATE TABLE terms (
     description TEXT NOT NULL DEFAULT '',
     color TEXT CHECK (color IS NULL OR color ~ '^#[0-9a-f]{6}$'),
     sort_order BIGINT NOT NULL DEFAULT 0,
-    path TEXT NOT NULL CHECK (path LIKE '/%/'),
+    -- Byte order keeps a subtree one range of the path index.
+    path TEXT COLLATE "C" NOT NULL CHECK (path LIKE '/%/'),
     merged_into_id TEXT REFERENCES terms(id) ON DELETE SET NULL DEFERRABLE,
     available_as_keyword BOOLEAN NOT NULL DEFAULT FALSE,
     deprecated BOOLEAN NOT NULL DEFAULT FALSE,
@@ -466,6 +467,10 @@ CREATE TABLE field_values (
     value_integer BIGINT,
     value_numeric NUMERIC(38, 9),
     value_boolean BOOLEAN,
+    -- applies_parents copies the immutable apply_parents option of a term
+    -- or keywords field: its value also applies the term's ancestors.
+    applies_parents BOOLEAN NOT NULL DEFAULT FALSE,
+    CHECK (field_type IN ('term', 'keywords') OR NOT applies_parents),
     CHECK (num_nonnulls(value_text, value_integer, value_numeric, value_boolean) = 1),
     CHECK (
         (field_type IN ('text','note','email','url','date','lookup','person','term','keywords','choice','datetime') AND value_text IS NOT NULL)
@@ -564,7 +569,9 @@ CREATE TABLE list_views (
     system_key TEXT NOT NULL DEFAULT '' CHECK (system_key IN ('', 'archived')),
     columns JSONB NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(columns) = 'array'),
     "query" JSONB NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof("query") = 'object'),
-    layout TEXT NOT NULL DEFAULT 'table' CHECK (layout IN ('table', 'board', 'calendar', 'gallery')),
+    layout TEXT NOT NULL DEFAULT 'table' CHECK (layout IN ('table', 'board', 'calendar', 'gallery', 'navigation')),
+    -- settings configures the layout, such as the field a navigation view browses.
+    settings JSONB NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(settings) = 'object'),
     is_default BOOLEAN NOT NULL DEFAULT FALSE,
     version BIGINT NOT NULL DEFAULT 1 CHECK (version > 0)
 );

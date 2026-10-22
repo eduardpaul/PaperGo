@@ -100,7 +100,7 @@ func (s *Service) updateCatalogField(ctx context.Context, subject string, d *cat
 		candidate.Options = *in.Options
 	}
 	if !optionsIdentityEqual(d.Options, candidate.Options) {
-		return nil, invalid("cardinality and reference scope are immutable")
+		return nil, invalid("cardinality, reference scope and apply_parents are immutable")
 	}
 	if e = validateFieldDefinition(&candidate); e != nil {
 		return nil, e

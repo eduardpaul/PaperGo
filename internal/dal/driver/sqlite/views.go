@@ -51,7 +51,7 @@ func (q Queries) InsertListView(ctx context.Context, v views.ListView) error {
 	_, err := models.ListViews.Insert(&models.ListViewSetter{
 		SystemKey: omit.From(string(v.SystemKey)), ID: omit.From(v.ID), CreatedAt: omit.From(v.CreatedAt), UpdatedAt: omit.From(v.UpdatedAt), ContainerID: omit.From(v.ContainerID),
 		Name: omit.From(v.Name), Columns: omit.From(types.NewJSON(v.Columns)), Query: omit.From(types.NewJSON(v.Query)),
-		Layout: omit.From(string(v.Layout)), IsDefault: omit.From(v.IsDefault), Version: omit.From(int64(v.Version)),
+		Layout: omit.From(string(v.Layout)), Settings: omit.From(types.NewJSON(v.Settings)), IsDefault: omit.From(v.IsDefault), Version: omit.From(int64(v.Version)),
 	}).Exec(ctx, q.exec)
 	return dberr.Translate(err)
 }
@@ -59,7 +59,7 @@ func (q Queries) InsertListView(ctx context.Context, v views.ListView) error {
 func (q Queries) UpdateListView(ctx context.Context, v views.ListView) (bool, error) {
 	set := &models.ListViewSetter{
 		Name: omit.From(v.Name), Columns: omit.From(types.NewJSON(v.Columns)), Query: omit.From(types.NewJSON(v.Query)), Layout: omit.From(string(v.Layout)),
-		IsDefault: omit.From(v.IsDefault), UpdatedAt: omit.From(v.UpdatedAt), Version: omit.From(int64(v.Version)),
+		Settings: omit.From(types.NewJSON(v.Settings)), IsDefault: omit.From(v.IsDefault), UpdatedAt: omit.From(v.UpdatedAt), Version: omit.From(int64(v.Version)),
 	}
 	w := models.UpdateWhere.ListViews
 	n, err := models.ListViews.Update(set.UpdateMod(), w.ID.EQ(v.ID), w.Version.EQ(int64(v.Version-1))).Exec(ctx, q.exec)
@@ -159,7 +159,7 @@ func (q Queries) DeleteSmartFolder(ctx context.Context, id string) error {
 func listViewRecord(r *models.ListView) views.ListView {
 	return views.ListView{
 		SystemKey: views.SystemKey(r.SystemKey), ID: r.ID, CreatedAt: r.CreatedAt.UTC(), ContainerID: r.ContainerID, Name: r.Name, Columns: r.Columns.Val, Query: r.Query.Val,
-		Layout: views.Layout(r.Layout), IsDefault: r.IsDefault, Version: int(r.Version), UpdatedAt: r.UpdatedAt.UTC(),
+		Layout: views.Layout(r.Layout), Settings: r.Settings.Val, IsDefault: r.IsDefault, Version: int(r.Version), UpdatedAt: r.UpdatedAt.UTC(),
 	}
 }
 

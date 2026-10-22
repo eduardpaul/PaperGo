@@ -13,6 +13,12 @@ import (
 // source_term_id, target_term_id and term_set_id (the target's set).
 const EventTermMerged = "term.merged"
 
+// EventTermMoved is raised when a term moves under another parent or into
+// another set, which changes the parents it applies; data has term_id,
+// term_set_id, previous_term_set_id, parent_id and previous_parent_id
+// (empty at the root).
+const EventTermMoved = "term.moved"
+
 type MoveTermInput struct {
 	// ParentID is the new parent in the same set; null moves the term to the root.
 	ParentID *string `json:"parent_id"`
@@ -21,7 +27,7 @@ type MoveTermInput struct {
 // MoveTerm moves a term and its subtree under another parent of its set.
 func (s *Service) MoveTerm(ctx context.Context, subject, id string, version int, in MoveTermInput) (out TermView, err error) {
 	err = s.write(ctx, func(t *Service) error {
-		_, set, e := t.termForChange(ctx, subject, id, version)
+		before, set, e := t.termForChange(ctx, subject, id, version)
 		if e != nil {
 			return e
 		}
@@ -32,6 +38,9 @@ func (s *Service) MoveTerm(ctx context.Context, subject, id string, version int,
 		moved, e := t.DAL.Taxonomy().Move(ctx, id, version, set.ID, parent, false)
 		if e != nil {
 			return taxonomyError(e)
+		}
+		if e = t.emitTermMoved(ctx, subject, before, moved); e != nil {
+			return e
 		}
 		views, e := t.termViews(ctx, []taxonomy.Term{moved})
 		if e != nil {
@@ -78,6 +87,20 @@ func (s *Service) MergeTerm(ctx context.Context, subject, id string, version int
 		return t.auditTaxonomy(ctx, subject, "term.merge", map[string]any{"term_id": id, "target_term_id": target.ID})
 	})
 	return
+}
+
+// emitTermMoved delivers a move to every live workspace's subscriptions.
+func (s *Service) emitTermMoved(ctx context.Context, subject string, before, after taxonomy.Term) error {
+	workspaces, err := s.DAL.Resources().IDs(ctx, resources.Filter{Kinds: []refs.ResourceKind{refs.KindWorkspace}, State: resources.Live})
+	if err != nil {
+		return err
+	}
+	for _, workspaceID := range workspaces {
+		s.emit(ctx, EventTermMoved, subject, workspaceID, nil, "", map[string]any{
+			"term_id": after.ID, "term_set_id": after.SetID, "previous_term_set_id": before.SetID, "parent_id": after.ParentID, "previous_parent_id": before.ParentID,
+		})
+	}
+	return nil
 }
 
 // mergeInto merges source into target with the relationship types they

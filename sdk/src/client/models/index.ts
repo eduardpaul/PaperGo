@@ -1644,6 +1644,51 @@ export function createMoveTermFromDiscriminatorValue(parseNode: ParseNode | unde
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {NavigationFieldSetting}
+ */
+// @ts-ignore
+export function createNavigationFieldSettingFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoNavigationFieldSetting;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {NavigationNode}
+ */
+// @ts-ignore
+export function createNavigationNodeFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoNavigationNode;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {NavigationPage}
+ */
+// @ts-ignore
+export function createNavigationPageFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoNavigationPage;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {NavigationRequest}
+ */
+// @ts-ignore
+export function createNavigationRequestFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoNavigationRequest;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {NavigationSelection}
+ */
+// @ts-ignore
+export function createNavigationSelectionFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoNavigationSelection;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {OperationFailure}
  */
 // @ts-ignore
@@ -2886,6 +2931,15 @@ export function createViewQueryRequestFromDiscriminatorValue(parseNode: ParseNod
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {ViewSettings}
+ */
+// @ts-ignore
+export function createViewSettingsFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoViewSettings;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {WorkflowForm}
  */
 // @ts-ignore
@@ -3940,6 +3994,7 @@ export function deserializeIntoFieldDefinition(fieldDefinition: Partial<FieldDef
 // @ts-ignore
 export function deserializeIntoFieldOptions(fieldOptions: Partial<FieldOptions> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
+        "apply_parents": n => { fieldOptions.applyParents = n.getBooleanValue() ?? false; },
         "currency_code": n => { fieldOptions.currencyCode = n.getStringValue(); },
         "default_value": n => { fieldOptions.defaultValue = n.getObjectValue<UntypedNode>(createUntypedNodeFromDiscriminatorValue); },
         "description": n => { fieldOptions.description = n.getStringValue(); },
@@ -4225,6 +4280,7 @@ export function deserializeIntoListView(listView: Partial<ListView> | undefined 
         "layout": n => { listView.layout = n.getStringValue(); },
         "name": n => { listView.name = n.getStringValue(); },
         "query": n => { listView.query = n.getObjectValue<QuerySpec>(createQuerySpecFromDiscriminatorValue); },
+        "settings": n => { listView.settings = n.getObjectValue<ViewSettings>(createViewSettingsFromDiscriminatorValue); },
         "system_key": n => { listView.systemKey = n.getEnumValue<ListView_system_key>(ListView_system_keyObject); },
         "updated_at": n => { listView.updatedAt = n.getDateValue(); },
         "version": n => { listView.version = n.getNumberValue(); },
@@ -4288,6 +4344,78 @@ export function deserializeIntoMoveItem(moveItem: Partial<MoveItem> | undefined 
 export function deserializeIntoMoveTerm(moveTerm: Partial<MoveTerm> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
         "parent_id": n => { moveTerm.parentId = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param NavigationFieldSetting The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoNavigationFieldSetting(navigationFieldSetting: Partial<NavigationFieldSetting> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "field": n => { navigationFieldSetting.field = n.getStringValue(); },
+        "include_subterms": n => { navigationFieldSetting.includeSubterms = n.getBooleanValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param NavigationNode The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoNavigationNode(navigationNode: Partial<NavigationNode> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "count": n => { navigationNode.count = n.getNumberValue(); },
+        "has_children": n => { navigationNode.hasChildren = n.getBooleanValue(); },
+        "name": n => { navigationNode.name = n.getStringValue(); },
+        "subtree_count": n => { navigationNode.subtreeCount = n.getNumberValue(); },
+        "term_id": n => { navigationNode.termId = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param NavigationPage The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoNavigationPage(navigationPage: Partial<NavigationPage> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "field": n => { navigationPage.field = n.getStringValue(); },
+        "hide_empty": n => { navigationPage.hideEmpty = n.getBooleanValue(); },
+        "include_subterms": n => { navigationPage.includeSubterms = n.getBooleanValue(); },
+        "no_value_count": n => { navigationPage.noValueCount = n.getNumberValue(); },
+        "@odata.nextLink": n => { navigationPage.odataNextLink = n.getStringValue(); },
+        "parent_id": n => { navigationPage.parentId = n.getStringValue(); },
+        "term_set_id": n => { navigationPage.termSetId = n.getStringValue(); },
+        "value": n => { navigationPage.value = n.getCollectionOfObjectValues<NavigationNode>(createNavigationNodeFromDiscriminatorValue); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param NavigationRequest The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoNavigationRequest(navigationRequest: Partial<NavigationRequest> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "field": n => { navigationRequest.field = n.getStringValue(); },
+        "parent_id": n => { navigationRequest.parentId = n.getStringValue(); },
+        "selected": n => { navigationRequest.selected = n.getCollectionOfObjectValues<NavigationSelection>(createNavigationSelectionFromDiscriminatorValue); },
+        "surface": n => { navigationRequest.surface = n.getEnumValue<NavigationRequest_surface>(NavigationRequest_surfaceObject) ?? NavigationRequest_surfaceObject.Auto; },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param NavigationSelection The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoNavigationSelection(navigationSelection: Partial<NavigationSelection> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "field": n => { navigationSelection.field = n.getStringValue(); },
+        "no_value": n => { navigationSelection.noValue = n.getBooleanValue(); },
+        "term_id": n => { navigationSelection.termId = n.getStringValue(); },
     }
 }
 /**
@@ -6162,6 +6290,7 @@ export function deserializeIntoViewInput(viewInput: Partial<ViewInput> | undefin
         "layout": n => { viewInput.layout = n.getEnumValue<ViewInput_layout>(ViewInput_layoutObject) ?? ViewInput_layoutObject.Table; },
         "name": n => { viewInput.name = n.getStringValue(); },
         "query": n => { viewInput.query = n.getObjectValue<QuerySpec>(createQuerySpecFromDiscriminatorValue); },
+        "settings": n => { viewInput.settings = n.getObjectValue<ViewSettings>(createViewSettingsFromDiscriminatorValue); },
     }
 }
 /**
@@ -6174,7 +6303,22 @@ export function deserializeIntoViewQueryRequest(viewQueryRequest: Partial<ViewQu
     return {
         "include_total": n => { viewQueryRequest.includeTotal = n.getBooleanValue() ?? false; },
         "select": n => { viewQueryRequest.select = n.getCollectionOfPrimitiveValues<string>("string"); },
+        "selected": n => { viewQueryRequest.selected = n.getCollectionOfObjectValues<NavigationSelection>(createNavigationSelectionFromDiscriminatorValue); },
         "surface": n => { viewQueryRequest.surface = n.getEnumValue<ViewQueryRequest_surface>(ViewQueryRequest_surfaceObject) ?? ViewQueryRequest_surfaceObject.Auto; },
+        "total_limit": n => { viewQueryRequest.totalLimit = n.getNumberValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param ViewSettings The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoViewSettings(viewSettings: Partial<ViewSettings> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "fields": n => { viewSettings.fields = n.getCollectionOfObjectValues<NavigationFieldSetting>(createNavigationFieldSettingFromDiscriminatorValue); },
+        "hide_empty": n => { viewSettings.hideEmpty = n.getBooleanValue() ?? false; },
+        "match": n => { viewSettings.match = n.getEnumValue<ViewSettings_match>(ViewSettings_matchObject) ?? ViewSettings_matchObject.All; },
     }
 }
 /**
@@ -6402,6 +6546,10 @@ export type FieldDefinition_index_status = (typeof FieldDefinition_index_statusO
 export type FieldDefinition_type = (typeof FieldDefinition_typeObject)[keyof typeof FieldDefinition_typeObject];
 export interface FieldOptions extends Parsable {
     /**
+     * Indexed term and keywords fields only, immutable. A value also applies its parent terms: eq, in and ne match values at or below a term, as under does, and keyword filters, keyword counts and search keywords include the parents. Values store only the picked terms. Item keywords always apply their parents.
+     */
+    applyParents?: boolean | null;
+    /**
      * Required for currency fields only. Three uppercase letters, such as EUR. Currency and number values are exact JSON decimals with a 96-bit coefficient and scale 0..28; excess fractional precision rounds to nearest, ties to even.
      */
     currencyCode?: string | null;
@@ -6521,7 +6669,7 @@ export interface FilteredBulkUpdate extends Parsable {
 export interface FilteredBulkUpdate_values extends AdditionalDataHolder, Parsable {
 }
 /**
- * One condition or AND/OR/NOT group; maximum 32 nodes and depth 6. Custom fields must be indexed. $id/$name are system fields; $keywords supports equality. Multi-valued eq matches any member; ne requires present with no equal member. Collection and smart-folder rules also accept $file_type for the MIME type of the visible file revision.
+ * One condition or AND/OR/NOT group; maximum 32 nodes and depth 6. Custom fields must be indexed. $id/$name are system fields; $keywords supports eq, ne, missing and present. Multi-valued eq matches any member; ne requires present with no equal member. Collection and smart-folder rules also accept $file_type for the MIME type of the visible file revision.
  */
 export interface FilterExpr extends Parsable {
     /**
@@ -6533,7 +6681,7 @@ export interface FilterExpr extends Parsable {
      */
     field?: string | null;
     /**
-     * One condition or AND/OR/NOT group; maximum 32 nodes and depth 6. Custom fields must be indexed. $id/$name are system fields; $keywords supports equality. Multi-valued eq matches any member; ne requires present with no equal member. Collection and smart-folder rules also accept $file_type for the MIME type of the visible file revision.
+     * One condition or AND/OR/NOT group; maximum 32 nodes and depth 6. Custom fields must be indexed. $id/$name are system fields; $keywords supports eq, ne, missing and present. Multi-valued eq matches any member; ne requires present with no equal member. Collection and smart-folder rules also accept $file_type for the MIME type of the visible file revision.
      */
     not?: FilterExpr | null;
     /**
@@ -6872,6 +7020,10 @@ export interface ListView extends Parsable {
      */
     query?: QuerySpec | null;
     /**
+     * Layout settings. Only navigation views take settings; other layouts take an empty object.
+     */
+    settings?: ViewSettings | null;
+    /**
      * Protected built-in view; cannot be modified, deleted, or selected as the opening default.
      */
     systemKey?: ListView_system_key | null;
@@ -6930,6 +7082,111 @@ export interface MoveTerm extends Parsable {
      * New parent in the same set; null moves the term to the root.
      */
     parentId?: string | null;
+}
+export interface NavigationFieldSetting extends Parsable {
+    /**
+     * $keywords or an indexed term or keywords field of the collection.
+     */
+    field?: string | null;
+    /**
+     * Lists, at a term, the items holding a term below it too. Omitted follows the field: item keywords and fields with apply_parents always do; other fields list the items holding the term. false is rejected where parents apply.
+     */
+    includeSubterms?: boolean | null;
+}
+export interface NavigationNode extends Parsable {
+    /**
+     * Items the node lists: holding the term, or one below it where subterms are included.
+     */
+    count?: number | null;
+    /**
+     * Opening the node lists terms; with hide_empty, terms that hold items.
+     */
+    hasChildren?: boolean | null;
+    /**
+     * The name property
+     */
+    name?: string | null;
+    /**
+     * Items holding the term or one below it.
+     */
+    subtreeCount?: number | null;
+    /**
+     * The term_id property
+     */
+    termId?: string | null;
+}
+export interface NavigationPage extends Parsable {
+    /**
+     * The field property
+     */
+    field?: string | null;
+    /**
+     * The hide_empty property
+     */
+    hideEmpty?: boolean | null;
+    /**
+     * Whether nodes list the items below them too.
+     */
+    includeSubterms?: boolean | null;
+    /**
+     * At the roots, on the first page: items holding no term.
+     */
+    noValueCount?: number | null;
+    /**
+     * Absolute continuation URL, or null on the final page. Repeat the request method and body.
+     */
+    odataNextLink?: string | null;
+    /**
+     * The parent_id property
+     */
+    parentId?: string | null;
+    /**
+     * The term_set_id property
+     */
+    termSetId?: string | null;
+    /**
+     * The value property
+     */
+    value?: NavigationNode[] | null;
+}
+/**
+ * Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
+ */
+export interface NavigationRequest extends Parsable {
+    /**
+     * The view's field whose terms are listed.
+     */
+    field?: string | null;
+    /**
+     * Opens this term of the view's term set; omitted lists the roots.
+     */
+    parentId?: string | null;
+    /**
+     * The terms opened in the view's fields. Where the view matches all, counts follow those of the other fields; the listed field's own selection is ignored.
+     */
+    selected?: NavigationSelection[] | null;
+    /**
+     * The surface property
+     */
+    surface?: NavigationRequest_surface | null;
+}
+export type NavigationRequest_surface = (typeof NavigationRequest_surfaceObject)[keyof typeof NavigationRequest_surfaceObject];
+/**
+ * A term opened in one field of a navigation view; exactly one of term_id and no_value.
+ */
+export interface NavigationSelection extends Parsable {
+    /**
+     * One of the view's fields, at most once per request.
+     */
+    field?: string | null;
+    /**
+     * The items holding no term in the field.
+     */
+    noValue?: boolean | null;
+    /**
+     * A term of the field's term set: the items the view shows at it.
+     */
+    termId?: string | null;
 }
 /**
  * Tracked operation executed by a registered handler, in bounded transactional batches or outside the database writer under a renewed claim. Field indexing and filtered bulk edits are built in. Payloads, credential constraints and claims are private; progress and results are visible through operation reads. Pending work resumes after restart: an execution that stops gives its claim back or lets it expire, and transient failures retry later. Terminal records expire after 30 days without an update.
@@ -7195,7 +7452,7 @@ export interface PortableSmartFolderDefinition extends Parsable {
      */
     contentTypes?: string[] | null;
     /**
-     * One condition or AND/OR/NOT group; maximum 32 nodes and depth 6. Custom fields must be indexed. $id/$name are system fields; $keywords supports equality. Multi-valued eq matches any member; ne requires present with no equal member. Collection and smart-folder rules also accept $file_type for the MIME type of the visible file revision.
+     * One condition or AND/OR/NOT group; maximum 32 nodes and depth 6. Custom fields must be indexed. $id/$name are system fields; $keywords supports eq, ne, missing and present. Multi-valued eq matches any member; ne requires present with no equal member. Collection and smart-folder rules also accept $file_type for the MIME type of the visible file revision.
      */
     filter?: FilterExpr | null;
     /**
@@ -7512,7 +7769,7 @@ export interface QuerySpec extends Parsable {
      */
     contentTypeId?: Guid | null;
     /**
-     * One condition or AND/OR/NOT group; maximum 32 nodes and depth 6. Custom fields must be indexed. $id/$name are system fields; $keywords supports equality. Multi-valued eq matches any member; ne requires present with no equal member. Collection and smart-folder rules also accept $file_type for the MIME type of the visible file revision.
+     * One condition or AND/OR/NOT group; maximum 32 nodes and depth 6. Custom fields must be indexed. $id/$name are system fields; $keywords supports eq, ne, missing and present. Multi-valued eq matches any member; ne requires present with no equal member. Collection and smart-folder rules also accept $file_type for the MIME type of the visible file revision.
      */
     filter?: FilterExpr | null;
     /**
@@ -9227,6 +9484,7 @@ export function serializeFieldDefinition(writer: SerializationWriter, fieldDefin
 // @ts-ignore
 export function serializeFieldOptions(writer: SerializationWriter, fieldOptions: Partial<FieldOptions> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!fieldOptions || isSerializingDerivedType) { return; }
+    writer.writeBooleanValue("apply_parents", fieldOptions.applyParents);
     writer.writeStringValue("currency_code", fieldOptions.currencyCode);
     writer.writeObjectValue("default_value", fieldOptions.defaultValue);
     writer.writeStringValue("description", fieldOptions.description);
@@ -9516,6 +9774,7 @@ export function serializeListView(writer: SerializationWriter, listView: Partial
     writer.writeStringValue("layout", listView.layout);
     writer.writeStringValue("name", listView.name);
     writer.writeObjectValue<QuerySpec>("query", listView.query, serializeQuerySpec);
+    writer.writeObjectValue<ViewSettings>("settings", listView.settings, serializeViewSettings);
     writer.writeDateValue("updated_at", listView.updatedAt);
     writer.writeNumberValue("version", listView.version);
 }
@@ -9578,6 +9837,78 @@ export function serializeMoveItem(writer: SerializationWriter, moveItem: Partial
 export function serializeMoveTerm(writer: SerializationWriter, moveTerm: Partial<MoveTerm> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!moveTerm || isSerializingDerivedType) { return; }
     writer.writeStringValue("parent_id", moveTerm.parentId);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param NavigationFieldSetting The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeNavigationFieldSetting(writer: SerializationWriter, navigationFieldSetting: Partial<NavigationFieldSetting> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!navigationFieldSetting || isSerializingDerivedType) { return; }
+    writer.writeStringValue("field", navigationFieldSetting.field);
+    writer.writeBooleanValue("include_subterms", navigationFieldSetting.includeSubterms);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param NavigationNode The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeNavigationNode(writer: SerializationWriter, navigationNode: Partial<NavigationNode> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!navigationNode || isSerializingDerivedType) { return; }
+    writer.writeNumberValue("count", navigationNode.count);
+    writer.writeBooleanValue("has_children", navigationNode.hasChildren);
+    writer.writeStringValue("name", navigationNode.name);
+    writer.writeNumberValue("subtree_count", navigationNode.subtreeCount);
+    writer.writeStringValue("term_id", navigationNode.termId);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param NavigationPage The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeNavigationPage(writer: SerializationWriter, navigationPage: Partial<NavigationPage> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!navigationPage || isSerializingDerivedType) { return; }
+    writer.writeStringValue("field", navigationPage.field);
+    writer.writeBooleanValue("hide_empty", navigationPage.hideEmpty);
+    writer.writeBooleanValue("include_subterms", navigationPage.includeSubterms);
+    writer.writeNumberValue("no_value_count", navigationPage.noValueCount);
+    writer.writeStringValue("@odata.nextLink", navigationPage.odataNextLink);
+    writer.writeStringValue("parent_id", navigationPage.parentId);
+    writer.writeStringValue("term_set_id", navigationPage.termSetId);
+    writer.writeCollectionOfObjectValues<NavigationNode>("value", navigationPage.value, serializeNavigationNode);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param NavigationRequest The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeNavigationRequest(writer: SerializationWriter, navigationRequest: Partial<NavigationRequest> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!navigationRequest || isSerializingDerivedType) { return; }
+    writer.writeStringValue("field", navigationRequest.field);
+    writer.writeStringValue("parent_id", navigationRequest.parentId);
+    writer.writeCollectionOfObjectValues<NavigationSelection>("selected", navigationRequest.selected, serializeNavigationSelection);
+    writer.writeEnumValue<NavigationRequest_surface>("surface", navigationRequest.surface);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param NavigationSelection The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeNavigationSelection(writer: SerializationWriter, navigationSelection: Partial<NavigationSelection> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!navigationSelection || isSerializingDerivedType) { return; }
+    writer.writeStringValue("field", navigationSelection.field);
+    writer.writeBooleanValue("no_value", navigationSelection.noValue);
+    writer.writeStringValue("term_id", navigationSelection.termId);
 }
 /**
  * Serializes information the current object
@@ -11484,6 +11815,7 @@ export function serializeViewInput(writer: SerializationWriter, viewInput: Parti
     writer.writeEnumValue<ViewInput_layout>("layout", viewInput.layout);
     writer.writeStringValue("name", viewInput.name);
     writer.writeObjectValue<QuerySpec>("query", viewInput.query, serializeQuerySpec);
+    writer.writeObjectValue<ViewSettings>("settings", viewInput.settings, serializeViewSettings);
 }
 /**
  * Serializes information the current object
@@ -11496,7 +11828,22 @@ export function serializeViewQueryRequest(writer: SerializationWriter, viewQuery
     if (!viewQueryRequest || isSerializingDerivedType) { return; }
     writer.writeBooleanValue("include_total", viewQueryRequest.includeTotal);
     writer.writeCollectionOfPrimitiveValues<string>("select", viewQueryRequest.select);
+    writer.writeCollectionOfObjectValues<NavigationSelection>("selected", viewQueryRequest.selected, serializeNavigationSelection);
     writer.writeEnumValue<ViewQueryRequest_surface>("surface", viewQueryRequest.surface);
+    writer.writeNumberValue("total_limit", viewQueryRequest.totalLimit);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param ViewSettings The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeViewSettings(writer: SerializationWriter, viewSettings: Partial<ViewSettings> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!viewSettings || isSerializingDerivedType) { return; }
+    writer.writeCollectionOfObjectValues<NavigationFieldSetting>("fields", viewSettings.fields, serializeNavigationFieldSetting);
+    writer.writeBooleanValue("hide_empty", viewSettings.hideEmpty);
+    writer.writeEnumValue<ViewSettings_match>("match", viewSettings.match);
 }
 /**
  * Serializes information the current object
@@ -11686,7 +12033,7 @@ export interface SmartFolderDefinition extends Parsable {
      */
     contentTypes?: string[] | null;
     /**
-     * One condition or AND/OR/NOT group; maximum 32 nodes and depth 6. Custom fields must be indexed. $id/$name are system fields; $keywords supports equality. Multi-valued eq matches any member; ne requires present with no equal member. Collection and smart-folder rules also accept $file_type for the MIME type of the visible file revision.
+     * One condition or AND/OR/NOT group; maximum 32 nodes and depth 6. Custom fields must be indexed. $id/$name are system fields; $keywords supports eq, ne, missing and present. Multi-valued eq matches any member; ne requires present with no equal member. Collection and smart-folder rules also accept $file_type for the MIME type of the visible file revision.
      */
     filter?: FilterExpr | null;
     /**
@@ -12863,7 +13210,7 @@ export interface UpdateField extends Parsable {
      */
     label?: string | null;
     /**
-     * Complete replacement of options; multiple and reference scope are immutable.
+     * Complete replacement of options; multiple, reference scope and apply_parents are immutable.
      */
     options?: FieldOptions | null;
     /**
@@ -12985,7 +13332,7 @@ export interface ValidationRuleMember2 extends AdditionalDataHolder, Parsable {
 }
 export type ValidationRuleMember2_op = (typeof ValidationRuleMember2_opObject)[keyof typeof ValidationRuleMember2_opObject];
 /**
- * Collection-managed saved view. Columns use field keys and $id/$name/$keywords; empty columns default to $name. PUT replaces the definition. Layout is a client hint.
+ * Collection-managed saved view. Columns use field keys and $id/$name/$keywords; empty columns default to $name. PUT replaces the definition. Layout is a client hint; a navigation view browses the terms of each of settings.fields as folders (POST /v1/views/{id}/navigation) and lists the items at the opened terms through POST /v1/views/{id}/query with selected.
  */
 export interface ViewInput extends Parsable {
     /**
@@ -13008,6 +13355,10 @@ export interface ViewInput extends Parsable {
      * Collection query over visible surfaces. System fields: $id, $name, $keywords, $created_at, $created_by, $modified_at, $modified_by. Times are RFC3339 UTC and modification metadata follows the selected revision. Archive filters apply before paging, counts, and grouping. $archived_at and $archived_by are system fields usable in columns, filters, and sorting.
      */
     query?: QuerySpec | null;
+    /**
+     * Layout settings. Only navigation views take settings; other layouts take an empty object.
+     */
+    settings?: ViewSettings | null;
 }
 export type ViewInput_layout = (typeof ViewInput_layoutObject)[keyof typeof ViewInput_layoutObject];
 /**
@@ -13023,11 +13374,37 @@ export interface ViewQueryRequest extends Parsable {
      */
     select?: string[] | null;
     /**
+     * Navigation views only, required there: lists the items at the terms opened in the view's fields, combined as the view's settings.match says.
+     */
+    selected?: NavigationSelection[] | null;
+    /**
      * The surface property
      */
     surface?: ViewQueryRequest_surface | null;
+    /**
+     * Count matches up to this many before pagination; more matches set total_capped and report the limit as total.
+     */
+    totalLimit?: number | null;
 }
 export type ViewQueryRequest_surface = (typeof ViewQueryRequest_surfaceObject)[keyof typeof ViewQueryRequest_surfaceObject];
+/**
+ * Layout settings. Only navigation views take settings; other layouts take an empty object.
+ */
+export interface ViewSettings extends Parsable {
+    /**
+     * The fields a navigation view browses, each as a tree of terms; keys are unique.
+     */
+    fields?: NavigationFieldSetting[] | null;
+    /**
+     * Leaves out the terms no item of the view holds at or below them.
+     */
+    hideEmpty?: boolean | null;
+    /**
+     * How the terms opened in different fields combine: all lists the items of every opened term, and each field's counts follow the terms opened in the others; any lists the items of any opened term, and counts cover the view.
+     */
+    match?: ViewSettings_match | null;
+}
+export type ViewSettings_match = (typeof ViewSettings_matchObject)[keyof typeof ViewSettings_matchObject];
 /**
  * A JSON Schema form (draft-07 subset; see docs/workflows.md#forms): type, title, description, default, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, uniqueItems, items, properties, required, additionalProperties (boolean or a schema; objects are closed by default). x-papergo on a property makes it a domain picker (item, collection, relationship, terms, keywords, people). The terms picker selects term IDs by default; select: sets selects term-set IDs, optionally narrowed by group_id.
  */
@@ -13404,6 +13781,11 @@ export const ListIntegration_kindObject = {
 export const ListView_system_keyObject = {
     Archived: "archived",
 } as const;
+export const NavigationRequest_surfaceObject = {
+    Auto: "auto",
+    Head: "head",
+    Published: "published",
+} as const;
 /**
  * Why a failed operation failed, when the reason is one clients act on: its deadline passed, its retries ran out, or its creator lost permission.
  */
@@ -13762,11 +14144,19 @@ export const ViewInput_layoutObject = {
     Board: "board",
     Calendar: "calendar",
     Gallery: "gallery",
+    Navigation: "navigation",
 } as const;
 export const ViewQueryRequest_surfaceObject = {
     Auto: "auto",
     Head: "head",
     Published: "published",
+} as const;
+/**
+ * How the terms opened in different fields combine: all lists the items of every opened term, and each field's counts follow the terms opened in the others; any lists the items of any opened term, and counts cover the view.
+ */
+export const ViewSettings_matchObject = {
+    All: "all",
+    Any: "any",
 } as const;
 /**
  * Owner manages the workspace and all descendants; member contributes; visitor reads published content.

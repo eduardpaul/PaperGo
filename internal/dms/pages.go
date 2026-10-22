@@ -34,6 +34,16 @@ func (p QueryResult) APIPage() (map[string]any, string) {
 	}
 	return result, p.NextCursor
 }
+func (p Navigation) APIPage() (map[string]any, string) {
+	result := map[string]any{"value": p.Data, "field": p.Field, "term_set_id": p.TermSetID, "include_subterms": p.IncludeSubterms, "hide_empty": p.HideEmpty}
+	if p.ParentID != "" {
+		result["parent_id"] = p.ParentID
+	}
+	if p.NoValueCount != nil {
+		result["no_value_count"] = *p.NoValueCount
+	}
+	return result, p.NextCursor
+}
 func (p SmartFolderResult) APIPage() (map[string]any, string) {
 	result := map[string]any{"value": p.Data}
 	if p.TotalCapped {
