@@ -2662,7 +2662,7 @@ export type FieldDefinition_index_status = (typeof FieldDefinition_index_statusO
 export type FieldDefinition_type = (typeof FieldDefinition_typeObject)[keyof typeof FieldDefinition_typeObject];
 export interface FieldOptions extends Parsable {
 	/**
-	 * Term and keywords fields only, immutable. A value also applies its parent terms: eq, in and ne match values at or below a term, as under does, and keyword filters, keyword counts and search keywords include the parents. Values store only the picked terms. Item keywords always apply their parents.
+	 * Indexed term and keywords fields only, immutable. A value also applies its parent terms: eq, in and ne match values at or below a term, as under does, and keyword filters, keyword counts and search keywords include the parents. Values store only the picked terms. Item keywords always apply their parents.
 	 */
 	applyParents?: boolean | null;
 	/**
