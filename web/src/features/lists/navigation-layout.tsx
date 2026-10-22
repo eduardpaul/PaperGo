@@ -325,6 +325,19 @@ export function ItemsNavigation({
                 </button>
               </li>
             ))}
+            {!term && !!info?.no_value_count && (
+              <li>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-lg border border-dashed bg-surface px-3 py-2 text-left text-muted hover:bg-surface-muted"
+                  onClick={() => select(noTerm)}
+                >
+                  <Folder className="size-4 shrink-0" />
+                  <span className="truncate">No {field?.toLowerCase() ?? 'value'}</span>
+                  <Badge className="ml-auto">{info.no_value_count}</Badge>
+                </button>
+              </li>
+            )}
           </ul>
         )}
         {term ? (

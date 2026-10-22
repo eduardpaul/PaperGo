@@ -72,7 +72,9 @@ it('browses terms as folders and explains what a term shows', async () => {
   expect(screen.getByText('This term only')).toBeTruthy();
   // A child-only view says how many more items are tagged below a term.
   expect(within(tree).getByText('+2 below')).toBeTruthy();
-  expect(screen.getByText('No period')).toBeTruthy();
+  expect(within(screen.getByRole('navigation', { name: 'Period navigation' })).getByText('No period')).toBeTruthy();
+  // The top level shows the terms, and the items without one, as folders.
+  expect(within(screen.getByRole('list', { name: 'Subterms' })).getByText('No period')).toBeTruthy();
   fireEvent.click(within(tree).getByRole('button', { name: 'Expand Fiscal' }));
   expect(await within(tree).findByText('Q1')).toBeTruthy();
   expect(calls.some((call) => call.path === '/v1/views/v/navigation' && call.body.parent_id === 'fiscal')).toBe(true);

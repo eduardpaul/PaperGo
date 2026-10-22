@@ -139,7 +139,7 @@ function ViewDialog({
   // A navigation view browses item keywords or a taxonomy or keywords column as folders.
   const navigable = [
     { key: '$keywords', label: 'Keywords', type: 'keywords', options: { apply_parents: true } } as FieldDefinition,
-    ...queryable.filter((field) => field.type === 'term' || field.type === 'keywords'),
+    ...queryable.filter((field) => field.key !== '$keywords' && (field.type === 'term' || field.type === 'keywords')),
   ];
   const navigated = navigable.find((field) => field.key === settings.field);
   // Items tagged below a term hold the term itself where parents apply, so subterms always count.
@@ -209,6 +209,49 @@ function ViewDialog({
             </option>
           ))}
         </Select>
+        {layout === 'navigation' && (
+          <fieldset className="grid gap-2 rounded-lg border p-3">
+            <legend className="px-1 font-medium">Navigation</legend>
+            <Label htmlFor="view-navigate">Navigate by</Label>
+            <Select
+              id="view-navigate"
+              required
+              value={settings.field ?? ''}
+              onChange={(event) => setSettings((current) => ({ ...current, field: event.target.value || undefined, include_subterms: undefined }))}
+            >
+              <option value="">Choose a taxonomy or keywords column…</option>
+              {navigable.map((field) => (
+                <option key={field.key} value={field.key}>
+                  {field.label}
+                </option>
+              ))}
+            </Select>
+            <label className="flex gap-2">
+              <Checkbox
+                checked={parentsApply || !!settings.include_subterms}
+                disabled={!navigated || parentsApply}
+                onChange={(event) => setSettings((current) => ({ ...current, include_subterms: event.target.checked || undefined }))}
+              />
+              Show items of subterms at each term
+            </label>
+            <p className="text-xs text-muted">
+              {!navigated
+                ? 'Each term becomes a folder of the items tagged with it.'
+                : parentsApply
+                  ? `${navigated.label} applies parent terms, so a term always shows the items tagged below it (Fiscal shows Fiscal > Q1).`
+                  : settings.include_subterms
+                    ? `A term shows the items tagged with it or any term below it (Fiscal shows Fiscal > Q1).`
+                    : `A term shows only the items tagged with it; items tagged with a subterm appear when you open that subterm.`}
+            </p>
+            <label className="flex gap-2">
+              <Checkbox
+                checked={!!settings.hide_empty}
+                onChange={(event) => setSettings((current) => ({ ...current, hide_empty: event.target.checked || undefined }))}
+              />
+              Hide terms without items
+            </label>
+          </fieldset>
+        )}
         <Label htmlFor="view-archive">Items</Label>
         <Select id="view-archive" value={query.archive ?? 'active'} onChange={event => patchQuery({ archive: event.target.value as QuerySpec['archive'] })}>
           <option value="active">Active</option><option value="archived">Archived</option><option value="all">All</option>
@@ -276,49 +319,7 @@ function ViewDialog({
             </option>
           ))}
         </Select>
-        {layout === 'navigation' ? (
-          <fieldset className="grid gap-2 rounded-lg border p-3">
-            <legend className="px-1 font-medium">Navigation</legend>
-            <Label htmlFor="view-navigate">Navigate by</Label>
-            <Select
-              id="view-navigate"
-              required
-              value={settings.field ?? ''}
-              onChange={(event) => setSettings((current) => ({ ...current, field: event.target.value || undefined, include_subterms: undefined }))}
-            >
-              <option value="">Choose a taxonomy or keywords column…</option>
-              {navigable.map((field) => (
-                <option key={field.key} value={field.key}>
-                  {field.label}
-                </option>
-              ))}
-            </Select>
-            <label className="flex gap-2">
-              <Checkbox
-                checked={parentsApply || !!settings.include_subterms}
-                disabled={!navigated || parentsApply}
-                onChange={(event) => setSettings((current) => ({ ...current, include_subterms: event.target.checked || undefined }))}
-              />
-              Show items of subterms at each term
-            </label>
-            <p className="text-xs text-muted">
-              {!navigated
-                ? 'Each term becomes a folder of the items tagged with it.'
-                : parentsApply
-                  ? `${navigated.label} applies parent terms, so a term always shows the items tagged below it (Fiscal shows Fiscal > Q1).`
-                  : settings.include_subterms
-                    ? `A term shows the items tagged with it or any term below it (Fiscal shows Fiscal > Q1).`
-                    : `A term shows only the items tagged with it; items tagged with a subterm appear when you open that subterm.`}
-            </p>
-            <label className="flex gap-2">
-              <Checkbox
-                checked={!!settings.hide_empty}
-                onChange={(event) => setSettings((current) => ({ ...current, hide_empty: event.target.checked || undefined }))}
-              />
-              Hide terms without items
-            </label>
-          </fieldset>
-        ) : (
+        {layout !== 'navigation' && (
           <>
             <Label htmlFor="view-group">Group or calendar field</Label>
             <Select
