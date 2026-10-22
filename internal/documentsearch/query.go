@@ -377,8 +377,9 @@ func scopes(ctx context.Context, s *dms.Service, subject string) (search.Access,
 
 // visible reports which documents the subject may be shown now, on the
 // surface asked, whatever the search store holds: entries that are gone, no
-// longer readable, or read on the other surface are left out.
-func visible(ctx context.Context, s *dms.Service, subject, surface string, keys []search.Key, archive ...refs.ArchiveSelection) (map[search.Key]bool, error) {
+// longer readable, read on the other surface, or outside the archive
+// selection are left out.
+func visible(ctx context.Context, s *dms.Service, subject, surface string, keys []search.Key, archive refs.ArchiveSelection) (map[search.Key]bool, error) {
 	out := map[search.Key]bool{}
 	ids := make([]string, 0, len(keys))
 	for _, k := range keys {
@@ -393,7 +394,7 @@ func visible(ctx context.Context, s *dms.Service, subject, surface string, keys 
 		if !ok {
 			continue
 		}
-		if len(archive) > 0 && !archive[0].Matches(st.Archived) {
+		if !archive.Matches(st.Archived) {
 			continue
 		}
 		head := k.Surface == search.SurfaceHead
