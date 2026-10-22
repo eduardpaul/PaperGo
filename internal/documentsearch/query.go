@@ -7,6 +7,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"papergo/internal/dal/refs"
 	"papergo/internal/dms"
 	"papergo/internal/httpapi"
 	"papergo/internal/search"
@@ -14,6 +15,9 @@ import (
 
 // Request is a search across the workspaces the caller may read.
 type Request struct {
+	Archive                  refs.ArchiveSelection
+	ArchivedBy               string
+	ArchivedFrom, ArchivedTo time.Time
 	// Q uses search syntax (see search.Parse); empty lists the filtered
 	// entries, newest first.
 	Q string
@@ -47,14 +51,17 @@ type Request struct {
 
 // Hit is an entry the caller may read that matches.
 type Hit struct {
-	ID            string `json:"id"`
-	Kind          string `json:"kind"`
-	Surface       string `json:"surface"`
-	WorkspaceID   string `json:"workspace_id"`
-	CollectionID  string `json:"collection_id"`
-	ContentTypeID string `json:"content_type_id,omitempty"`
-	Name          string `json:"name"`
-	Snippet       string `json:"snippet,omitempty"`
+	Archived      bool       `json:"archived"`
+	ArchivedAt    *time.Time `json:"archived_at,omitempty"`
+	ArchivedBy    string     `json:"archived_by,omitempty"`
+	ID            string     `json:"id"`
+	Kind          string     `json:"kind"`
+	Surface       string     `json:"surface"`
+	WorkspaceID   string     `json:"workspace_id"`
+	CollectionID  string     `json:"collection_id"`
+	ContentTypeID string     `json:"content_type_id,omitempty"`
+	Name          string     `json:"name"`
+	Snippet       string     `json:"snippet,omitempty"`
 	// Page is the page of the file the snippet is on, when the file's text
 	// matched.
 	Page       int       `json:"page,omitempty"`
@@ -108,6 +115,13 @@ func (x *Search) Search(ctx context.Context, s *dms.Service, subject string, in 
 var errUnavailable = &httpapi.Problem{Status: 503, Code: "search_unavailable", Detail: "Search is unavailable while the search index is rebuilt; try again shortly."}
 
 func (x *Search) search(ctx context.Context, s *dms.Service, subject string, in Request) (Result, error) {
+	if !in.Archive.Valid() {
+		return Result{}, dms.Invalid("archive must be active, archived or all")
+	}
+	in.Archive = in.Archive.Default()
+	if !in.ArchivedFrom.IsZero() && !in.ArchivedTo.IsZero() && in.ArchivedFrom.After(in.ArchivedTo) {
+		return Result{}, dms.Invalid("archived_from must not follow archived_to")
+	}
 	if in.Mode != search.ModeKeyword && in.vector == nil {
 		in.Mode = search.ModeKeyword
 	}
@@ -136,7 +150,7 @@ func (x *Search) search(ctx context.Context, s *dms.Service, subject string, in 
 	if keywordErr != nil {
 		return Result{}, keywordErr
 	}
-	q := search.Query{Mode: in.Mode, Vector: in.vector, Model: in.model, Filter: search.Filter{Surface: in.Surface, Kinds: in.Kinds, WorkspaceID: in.WorkspaceID, CollectionID: in.CollectionID, ContentTypeID: in.ContentTypeID,
+	q := search.Query{Mode: in.Mode, Vector: in.vector, Model: in.model, Filter: search.Filter{Archive: in.Archive, ArchivedBy: in.ArchivedBy, ArchivedFrom: in.ArchivedFrom, ArchivedTo: in.ArchivedTo, Surface: in.Surface, Kinds: in.Kinds, WorkspaceID: in.WorkspaceID, CollectionID: in.CollectionID, ContentTypeID: in.ContentTypeID,
 		Keyword: in.Keyword, CreatedBy: in.CreatedBy, ModifiedBy: in.ModifiedBy, ModifiedFrom: in.ModifiedFrom, ModifiedTo: in.ModifiedTo}, Facets: in.Facets}
 	if strings.TrimSpace(in.Q) != "" {
 		var err error
@@ -145,7 +159,7 @@ func (x *Search) search(ctx context.Context, s *dms.Service, subject string, in 
 		if q.Text, err = search.Parse(in.Q); err != nil && in.Mode != search.ModeSemantic {
 			return Result{}, dms.Invalid(err.Error())
 		}
-	} else if in.WorkspaceID == "" && in.CollectionID == "" && in.ContentTypeID == "" && in.TermID == "" && in.Keyword == "" && in.CreatedBy == "" && in.ModifiedBy == "" && in.Filter == nil {
+	} else if in.Archive != refs.ArchiveArchived && in.WorkspaceID == "" && in.CollectionID == "" && in.ContentTypeID == "" && in.TermID == "" && in.Keyword == "" && in.CreatedBy == "" && in.ModifiedBy == "" && in.Filter == nil {
 		return Result{}, dms.Invalid("enter words to search for, or at least one filter")
 	}
 	if in.TermID != "" {
@@ -174,7 +188,7 @@ func (x *Search) search(ctx context.Context, s *dms.Service, subject string, in 
 		return Result{}, err
 	}
 	q.VerifyFacets = func(ctx context.Context, keys []search.Key) (bool, error) {
-		shown, err := visible(ctx, s, subject, in.Surface, keys)
+		shown, err := visible(ctx, s, subject, in.Surface, keys, in.Archive)
 		if err != nil {
 			return false, err
 		}
@@ -206,7 +220,7 @@ func (x *Search) search(ctx context.Context, s *dms.Service, subject string, in 
 		for i, h := range res.Hits {
 			keys[i] = search.Key{ResourceID: h.ResourceID, Surface: h.Surface}
 		}
-		shown, err := visible(ctx, s, subject, in.Surface, keys)
+		shown, err := visible(ctx, s, subject, in.Surface, keys, in.Archive)
 		if err != nil {
 			return Result{}, err
 		}
@@ -216,7 +230,7 @@ func (x *Search) search(ctx context.Context, s *dms.Service, subject string, in 
 				out.TotalEstimated = true
 				continue
 			}
-			hit := Hit{ID: h.ResourceID, Kind: h.Kind, Surface: h.Surface, WorkspaceID: h.WorkspaceID, CollectionID: h.CollectionID, ContentTypeID: h.ContentTypeID,
+			hit := Hit{Archived: h.Archived, ArchivedAt: h.ArchivedAt, ArchivedBy: h.ArchivedBy, ID: h.ResourceID, Kind: h.Kind, Surface: h.Surface, WorkspaceID: h.WorkspaceID, CollectionID: h.CollectionID, ContentTypeID: h.ContentTypeID,
 				Name: h.Name, MatchedBy: h.MatchedBy, Rank: h.Rank, ModifiedAt: h.ModifiedAt, ModifiedBy: h.ModifiedBy, Page: h.Page}
 			if hit.MatchedBy == nil {
 				hit.MatchedBy = []string{}
@@ -364,7 +378,7 @@ func scopes(ctx context.Context, s *dms.Service, subject string) (search.Access,
 // visible reports which documents the subject may be shown now, on the
 // surface asked, whatever the search store holds: entries that are gone, no
 // longer readable, or read on the other surface are left out.
-func visible(ctx context.Context, s *dms.Service, subject, surface string, keys []search.Key) (map[search.Key]bool, error) {
+func visible(ctx context.Context, s *dms.Service, subject, surface string, keys []search.Key, archive ...refs.ArchiveSelection) (map[search.Key]bool, error) {
 	out := map[search.Key]bool{}
 	ids := make([]string, 0, len(keys))
 	for _, k := range keys {
@@ -377,6 +391,9 @@ func visible(ctx context.Context, s *dms.Service, subject, surface string, keys 
 	for _, k := range keys {
 		st, ok := states[k.ResourceID]
 		if !ok {
+			continue
+		}
+		if len(archive) > 0 && !archive[0].Matches(st.Archived) {
 			continue
 		}
 		head := k.Surface == search.SurfaceHead

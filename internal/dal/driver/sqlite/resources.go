@@ -70,6 +70,12 @@ func resourceWhere(f resources.Filter) []bob.Mod[*dialect.SelectQuery] {
 	if f.Below != "" {
 		where(sqlite.Raw(`"resources"."id" IN (WITH RECURSIVE subtree(id) AS (SELECT ? UNION ALL SELECT c.id FROM resources c JOIN subtree ON c.parent_id = subtree.id) SELECT id FROM subtree)`, f.Below))
 	}
+	if f.Archive == refs.ArchiveActive {
+		where(c.ArchivedAt.IsNull())
+	}
+	if f.Archive == refs.ArchiveArchived {
+		where(c.ArchivedAt.IsNotNull())
+	}
 	switch f.State {
 	case resources.Live:
 		where(c.DeletedAt.IsNull())
@@ -176,6 +182,7 @@ func (q Queries) CountResources(ctx context.Context, f resources.Filter) (int, e
 
 func (q Queries) InsertResource(ctx context.Context, r resources.Resource, values json.RawMessage) error {
 	set := &models.ResourceSetter{
+		ArchivedAt: omitnull.FromPtr(r.ArchivedAt), ArchivedBy: omitnull.FromPtr(r.ArchivedBy),
 		ID: omit.From(r.ID), CreatedAt: omit.From(r.CreatedAt), WorkspaceID: omit.From(r.WorkspaceID), PersonalOwnerID: omitnull.FromPtr(r.PersonalOwnerID),
 		Kind: omit.From(string(r.Kind)), Name: omit.From(r.Name), DefaultCurrency: omit.From(r.DefaultCurrency), Description: omit.From(r.Description),
 		AllowFolders: omit.From(r.AllowFolders), Keywords: omit.From(types.NewJSON(r.Keywords)), Values: omit.From(types.NewJSON(values)),
@@ -242,6 +249,13 @@ func resourceSetter(s resources.Set) *models.ResourceSetter {
 	if s.Values != nil {
 		set.Values = omit.From(types.NewJSON(s.Values))
 	}
+	if s.Archived != nil {
+		if s.Archived.At.IsZero() {
+			set.ArchivedAt, set.ArchivedBy = omitnull.FromPtr[time.Time](nil), omitnull.FromPtr[string](nil)
+		} else {
+			set.ArchivedAt, set.ArchivedBy = omitnull.From(s.Archived.At), nullable.String(s.Archived.By)
+		}
+	}
 	if s.Deleted != nil {
 		if s.Deleted.At.IsZero() {
 			set.DeletedAt, set.DeletedBy = omitnull.FromPtr[time.Time](nil), omitnull.FromPtr[string](nil)
@@ -302,6 +316,7 @@ func (q Queries) MoveItemRuns(ctx context.Context, itemID, workspaceID string) e
 
 func resourceRecord(r *models.Resource) (resources.Resource, error) {
 	out := resources.Resource{
+		Archived: r.ArchivedAt.Ptr() != nil, ArchivedAt: nullable.UTC(r.ArchivedAt), ArchivedBy: r.ArchivedBy.Ptr(),
 		ID: r.ID, CreatedAt: r.CreatedAt.UTC(), WorkspaceID: r.WorkspaceID, PersonalOwnerID: r.PersonalOwnerID.Ptr(), ParentID: r.ParentID.Ptr(),
 		ContainerID: r.ContainerID.Ptr(), ContentTypeID: r.ContentTypeID.Ptr(), Kind: refs.ResourceKind(r.Kind), Name: r.Name, Description: r.Description,
 		DefaultCurrency: r.DefaultCurrency, AllowFolders: r.AllowFolders, Keywords: r.Keywords.Val, TemplateKeys: r.TemplateKeys.Val,

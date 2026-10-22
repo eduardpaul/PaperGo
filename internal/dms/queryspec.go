@@ -29,11 +29,12 @@ type SortSpec struct {
 	Direction string `json:"direction,omitempty"`
 }
 type QuerySpec struct {
-	ContentTypeID string      `json:"content_type_id,omitempty"`
-	Filter        *FilterExpr `json:"filter,omitempty"`
-	Sort          []SortSpec  `json:"sort,omitempty"`
-	GroupBy       string      `json:"group_by,omitempty"`
-	ParentID      string      `json:"parent_id,omitempty"`
+	Archive       refs.ArchiveSelection `json:"archive,omitempty"`
+	ContentTypeID string                `json:"content_type_id,omitempty"`
+	Filter        *FilterExpr           `json:"filter,omitempty"`
+	Sort          []SortSpec            `json:"sort,omitempty"`
+	GroupBy       string                `json:"group_by,omitempty"`
+	ParentID      string                `json:"parent_id,omitempty"`
 	// AncestorID keeps what is anywhere below a folder: in it or its subfolders.
 	AncestorID string `json:"ancestor_id,omitempty"`
 	Search     string `json:"search,omitempty"`
@@ -314,7 +315,7 @@ func (s *Service) compileQuery(ctx context.Context, subject, containerID string,
 
 // matchQueryText matches the search text of a query of a collection the
 // subject may read before its read transaction opens.
-func (s *Service) matchQueryText(ctx context.Context, subject, collectionID, text string) (context.Context, error) {
+func (s *Service) matchQueryText(ctx context.Context, subject, collectionID, text string, archive refs.ArchiveSelection) (context.Context, error) {
 	if s.transaction || strings.TrimSpace(text) == "" {
 		return ctx, nil
 	}
@@ -323,7 +324,7 @@ func (s *Service) matchQueryText(ctx context.Context, subject, collectionID, tex
 		// The query reports what is wrong.
 		return ctx, nil
 	}
-	return s.matchFirst(ctx, subject, collectionID, "", text)
+	return s.matchFirst(ctx, subject, collectionID, "", text, archive)
 }
 
 // The caller has authorized c in the current snapshot.
@@ -366,7 +367,10 @@ func (s *Service) collectionPlan(ctx context.Context, subject string, c *resourc
 	for _, d := range defs {
 		compiler.defs[d.Key] = d
 	}
-	plan := content.Plan{Reader: principal(ctx, subject), CollectionID: c.ID, Publishes: c.PublishingEnabled, Surface: in.Surface, RowACL: in.rowACL}
+	if !in.Query.Archive.Valid() {
+		return content.Plan{}, compiledQuery{}, invalid("archive must be active, archived or all")
+	}
+	plan := content.Plan{Archive: in.Query.Archive.Default(), Reader: principal(ctx, subject), CollectionID: c.ID, Publishes: c.PublishingEnabled, Surface: in.Surface, RowACL: in.rowACL}
 	if in.Query.ContentTypeID != "" {
 		typ, e := s.contentType(ctx, c.ID, in.Query.ContentTypeID)
 		if e != nil {
@@ -452,7 +456,7 @@ func (s *Service) collectionPlan(ctx context.Context, subject string, c *resourc
 	plan.Keyword = in.Query.Keyword
 	searchCapped := false
 	if strings.TrimSpace(in.Query.Search) != "" {
-		if plan.Search, searchCapped, e = s.matchText(ctx, subject, c.ID, "", in.Query.Search); e != nil {
+		if plan.Search, searchCapped, e = s.matchText(ctx, subject, c.ID, "", in.Query.Search, in.Query.Archive.Default()); e != nil {
 			return content.Plan{}, compiledQuery{}, e
 		}
 	}
@@ -564,7 +568,7 @@ func (s *Service) Query(ctx context.Context, subject, containerID string, in Que
 	if in.Surface == "" {
 		in.Surface = "auto"
 	}
-	ctx, err := s.matchQueryText(ctx, subject, containerID, in.Query.Search)
+	ctx, err := s.matchQueryText(ctx, subject, containerID, in.Query.Search, in.Query.Archive.Default())
 	if err != nil {
 		return QueryResult{}, err
 	}
@@ -648,7 +652,7 @@ func (s *Service) queryCompiled(ctx context.Context, subject string, in QueryReq
 	})
 }
 func (s *Service) QueryGroups(ctx context.Context, subject, containerID string, in QueryRequest) (Page[QueryGroup], error) {
-	ctx, err := s.matchQueryText(ctx, subject, containerID, in.Query.Search)
+	ctx, err := s.matchQueryText(ctx, subject, containerID, in.Query.Search, in.Query.Archive.Default())
 	if err != nil {
 		return Page[QueryGroup]{}, err
 	}

@@ -179,3 +179,7 @@ For the other direction, use `--from zvec --to sqlite`. `--database`, `--sqlite`
 These routes, and the [content steps](#content-steps), are served when the deployment runs search. `GET /v1/search/fields` and `GET /v1/search/content-types` belong to the core, since smart folders filter on the same fields: they list the fields the caller can filter on, and the content types of readable collections.
 
 The search page offers a content-type selector and matching type facets. `GET /v1/search/content-types` lists IDs, keys and names attached to readable collections, optionally narrowed by `workspace_id` and `collection_id`; pass `content_type_id` to `/v1/search` to filter. Expand Relationships on a result to load its authorized incoming/outgoing links and open a related item.
+
+## Archived items
+
+Search and collection text matching default to active items. Pass `archive=archived` for archived items or `archive=all` for both; POST search takes the same `archive` property. `archived_by`, `archived_from`, and `archived_to` narrow archive provenance. Archive bounds are inclusive RFC3339 timestamps. Archive filtering applies before ranking, candidate caps, counts, and facets in both stores. Search rechecks current database state, so stale index entries cannot appear under the wrong selection. The Archive page uses database browsing for immediate results and offers full-text mode when search is available. See [archiving](archiving.md).

@@ -70,7 +70,7 @@ func validateBulk(in BulkRequest) error {
 			if op.Create == nil || op.Update != nil || op.ID != "" || op.Version != 0 {
 				err = invalid("create requires create and permits only an optional parent_id")
 			}
-		case "update", "publish", "unpublish", "delete":
+		case "update", "publish", "unpublish", "delete", "archive", "unarchive":
 			if op.ID == "" || op.Version < 1 {
 				err = invalid("existing items require id and a positive current version")
 			} else if op.Create != nil || op.ParentID != "" || (op.Action == "update") != (op.Update != nil) {
@@ -80,7 +80,7 @@ func validateBulk(in BulkRequest) error {
 			}
 			seen[op.ID] = true
 		default:
-			err = invalid("bulk action must be create, update, publish, unpublish or delete")
+			err = invalid("bulk action must be create, update, publish, unpublish, delete, archive or unarchive")
 		}
 		if err != nil {
 			return &BulkError{Index: i, Err: err}
@@ -161,6 +161,12 @@ func (s *Service) bulkOperation(ctx context.Context, subject, collectionID strin
 		return result, invalid("bulk targets must be items or folders in this collection")
 	}
 	switch op.Action {
+	case "archive", "unarchive":
+		updated, e := s.SetArchived(ctx, subject, op.ID, op.Version, op.Action == "archive")
+		err = e
+		if e == nil {
+			result.Version = updated.Version
+		}
 	case "update":
 		_, err = s.update(ctx, subject, op.ID, op.Version, UpdateResource{Name: op.Update.Name, Keywords: op.Update.Keywords, Values: op.Update.Values, ParentID: op.Update.ParentID, ContentTypeID: op.Update.ContentTypeID})
 	case "publish":

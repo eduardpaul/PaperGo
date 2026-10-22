@@ -30,7 +30,7 @@ import (
 
 const Name = "zvec"
 const format = "papergo-zvec/1"
-const layout = 2
+const layout = 3
 
 // Keep elapsed activity times monotonic without allocating on every read.
 var activityEpoch = time.Now()
@@ -615,6 +615,17 @@ func (s *Store) metadata(r *row, d search.Document, key string) {
 	for column, value := range map[string]string{"resource_id": d.ResourceID, "surface": d.Surface, "scope_id": d.ScopeID, "workspace_id": d.WorkspaceID, "collection_id": d.CollectionID, "content_type_id": d.ContentTypeID, "created_by": d.CreatedBy, "modified_by": d.ModifiedBy, "kind": d.Kind} {
 		r.text(column, encode(value))
 	}
+	archived := int64(0)
+	if d.Archived {
+		archived = 1
+	}
+	r.number("archived", archived)
+	archivedAt := int64(0)
+	if d.ArchivedAt != nil {
+		archivedAt = d.ArchivedAt.UnixNano()
+	}
+	r.number("archived_at", archivedAt)
+	r.text("archived_by", encode(d.ArchivedBy))
 	r.number("views", int64(d.Views))
 	r.number("modified_at", d.ModifiedAt.UnixNano())
 	tokens := []string{}

@@ -566,3 +566,7 @@ PaperGo code that should happen after a change or on a schedule:
 3. Never reacts to changes in hidden code paths.
 
 Relationship creation, attribute updates, deletion and taxonomy merges emit `item.updated` for each live endpoint. These writes advance both item ETags and modification timestamps without adding metadata history. Their data includes `relationship_id`, `relationship_action`, `peer_id`, `changed_fields: ["$relationships"]`, the head `revision_id` and `content_type_id`. Term filters can match present terms; added/removed term filters do not fire for relationship-only changes. Duplicate link requests leave both endpoints unchanged. Purging an item emits relationship changes for surviving peers.
+
+## Archive events
+
+`item.archived` and `item.unarchived` identify the affected item and collection and carry `data.archived` (`true` or `false`). They commit with the transition and its audit entry, without a content revision or file event. The search-index built-in subscribes to both. Workflows may call `POST /v1/items/{id}/archive` and `/unarchive` with the current `If-Match`, or use collection bulk archive actions. No automatic archive policy runs unless configured in a workflow.

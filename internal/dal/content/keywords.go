@@ -6,6 +6,7 @@ import (
 
 	"github.com/stephenafamo/scan"
 	"papergo/internal/dal/access"
+	"papergo/internal/dal/refs"
 )
 
 // KeywordCount is how many resources hold a keyword.
@@ -37,6 +38,7 @@ func (r *Repo) PopularKeywords(ctx context.Context, keywordsSetID string, top in
 // keyword: collections and workspaces by their keywords, items and
 // folders on the surface the reader reads.
 type WorkspaceKeywords struct {
+	Archive                   refs.ArchiveSelection
 	Reader                    access.Principal
 	WorkspaceID, CollectionID string
 	// Prefix starts the normalized names of the keywords.
@@ -52,6 +54,7 @@ func (r *Repo) WorkspaceKeywords(ctx context.Context, w WorkspaceKeywords) ([]Ke
 	if w.CollectionID != "" {
 		scope, args = "r.container_id=?", []any{w.CollectionID}
 	}
+	scope += " AND " + w.Archive.Predicate("r")
 	readable, readArgs := r.acl.Resource("r.id", w.Reader, access.Read)
 	selected, surfaceArgs := r.acl.Surface("r.id", w.Reader, "auto")
 	query := `WITH usage AS (

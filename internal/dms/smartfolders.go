@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/refs"
 	"papergo/internal/dal/resources"
 	"papergo/internal/dal/taxonomy"
 	viewstore "papergo/internal/dal/views"
@@ -22,16 +23,17 @@ type SmartFolderGroupBy struct {
 }
 
 type SmartFolderDefinition struct {
-	Mode           string               `json:"mode"`
-	CollectionKind string               `json:"collection_kind,omitempty"`
-	Collections    []string             `json:"collections,omitempty"`
-	Templates      []string             `json:"templates,omitempty"`
-	ContentTypes   []string             `json:"content_types,omitempty"`
-	Terms          []string             `json:"terms,omitempty"`
-	TermMatch      string               `json:"term_match,omitempty"`
-	Filter         *FilterExpr          `json:"filter,omitempty"`
-	GroupBy        []SmartFolderGroupBy `json:"group_by,omitempty"`
-	IncludeFolders bool                 `json:"include_folders,omitempty"`
+	Archive        refs.ArchiveSelection `json:"archive,omitempty"`
+	Mode           string                `json:"mode"`
+	CollectionKind string                `json:"collection_kind,omitempty"`
+	Collections    []string              `json:"collections,omitempty"`
+	Templates      []string              `json:"templates,omitempty"`
+	ContentTypes   []string              `json:"content_types,omitempty"`
+	Terms          []string              `json:"terms,omitempty"`
+	TermMatch      string                `json:"term_match,omitempty"`
+	Filter         *FilterExpr           `json:"filter,omitempty"`
+	GroupBy        []SmartFolderGroupBy  `json:"group_by,omitempty"`
+	IncludeFolders bool                  `json:"include_folders,omitempty"`
 }
 
 type SmartFolderInput struct {
@@ -74,6 +76,9 @@ func (s *Service) validateSmartFolder(ctx context.Context, subject string, in Sm
 		}
 	}
 	d := in.Definition
+	if !d.Archive.Valid() {
+		return invalid("archive must be active, archived or all")
+	}
 	if d.Mode != "query" && d.Mode != "classification" {
 		return invalid("mode must be query or classification")
 	}

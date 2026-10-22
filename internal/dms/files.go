@@ -95,12 +95,28 @@ func (s *Service) LibraryFolder(ctx context.Context, subject, libraryID string, 
 		entries []*File
 	}
 	out, err := read(ctx, s, func(t *Service) (listing, error) {
-		_, f, err := t.resolveFile(ctx, subject, libraryID, path)
+		lib, f, err := t.resolveFile(ctx, subject, libraryID, path)
 		if err != nil || !f.Collection() {
 			return listing{folder: f}, err
 		}
-		entries, err := t.visibleFiles(ctx, subject, resources.Filter{ParentID: f.ID})
-		return listing{f, uniqueNames(entries)}, err
+		entries, err := t.visibleFiles(ctx, subject, resources.Filter{ParentID: f.ID, Archive: refs.ArchiveActive})
+		if err != nil {
+			return listing{}, err
+		}
+		shown := []*File{}
+		for _, entry := range uniqueNames(entries) {
+			if !ownsName(entry, nameKey(entry.Name)) {
+				resolved, e := t.fileChild(ctx, subject, lib, f.ID, entry.Name)
+				if e != nil {
+					return listing{}, e
+				}
+				if resolved == nil || resolved.ID != entry.ID {
+					continue
+				}
+			}
+			shown = append(shown, entry)
+		}
+		return listing{f, shown}, nil
 	})
 	return out.folder, out.entries, err
 }

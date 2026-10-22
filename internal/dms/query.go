@@ -2,6 +2,10 @@ package dms
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
 	"maps"
 	"papergo/internal/dal/content"
 	"papergo/internal/dal/refs"
@@ -20,6 +24,7 @@ type Page[T any] struct {
 	SearchCapped bool `json:"search_capped,omitempty"`
 }
 type Browse struct {
+	Archive     refs.ArchiveSelection
 	ParentID    string
 	WorkspaceID string
 	Search      string
@@ -48,7 +53,7 @@ func (s *Service) Browse(ctx context.Context, subject string, in Browse) (Page[*
 	if !s.transaction {
 		if collection, workspace, ok := s.browseMatchScope(ctx, subject, in); ok {
 			var err error
-			if ctx, err = s.matchFirst(ctx, subject, collection, workspace, in.Search); err != nil {
+			if ctx, err = s.matchFirst(ctx, subject, collection, workspace, in.Search, in.Archive.Default()); err != nil {
 				return Page[*resources.Resource]{}, err
 			}
 		}
@@ -80,7 +85,10 @@ func (s *Service) Browse(ctx context.Context, subject string, in Browse) (Page[*
 			return Page[*resources.Resource]{}, err
 		}
 	}
-	b := content.Browse{Reader: principal(ctx, subject), Surface: in.Surface, Kind: refs.ResourceKind(in.Kind), Keyword: in.Keyword, AfterID: in.After, Limit: pageSize(in.Limit) + 1}
+	if !in.Archive.Valid() {
+		return Page[*resources.Resource]{}, invalid("archive must be active, archived or all")
+	}
+	b := content.Browse{Archive: in.Archive.Default(), Reader: principal(ctx, subject), Surface: in.Surface, Kind: refs.ResourceKind(in.Kind), Keyword: in.Keyword, Limit: pageSize(in.Limit) + 1}
 	// Search text matches items and folders through the text matcher, within
 	// the parent's collection or the workspace, and other resources by name.
 	var matchCollection, matchWorkspace string
@@ -121,9 +129,26 @@ func (s *Service) Browse(ctx context.Context, subject string, in Browse) (Page[*
 	capped := false
 	if strings.TrimSpace(in.Search) != "" {
 		var err error
-		if b.Search, capped, err = s.matchText(ctx, subject, matchCollection, matchWorkspace, in.Search); err != nil {
+		if b.Search, capped, err = s.matchText(ctx, subject, matchCollection, matchWorkspace, in.Search, in.Archive.Default()); err != nil {
 			return Page[*resources.Resource]{}, err
 		}
+	}
+	normalized := in
+	normalized.After, normalized.Limit = "", 0
+	normalized.Archive = in.Archive.Default()
+	raw, _ := json.Marshal(struct {
+		Subject string
+		Query   Browse
+	}{subject, normalized})
+	sum := sha256.Sum256(raw)
+	fingerprint := hex.EncodeToString(sum[:])
+	if in.After != "" {
+		var c browseCursor
+		raw, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(in.After, "b1."))
+		if len(in.After) > 4096 || !strings.HasPrefix(in.After, "b1.") || err != nil || json.Unmarshal(raw, &c) != nil || c.Query != fingerprint || c.ID == "" {
+			return Page[*resources.Resource]{}, invalid("browse cursor does not match query or caller")
+		}
+		b.AfterID = c.ID
 	}
 	ids, err := s.DAL.Content().BrowseIDs(ctx, b)
 	if err != nil {
@@ -133,7 +158,10 @@ func (s *Service) Browse(ctx context.Context, subject string, in Browse) (Page[*
 	if err != nil {
 		return Page[*resources.Resource]{}, err
 	}
-	out := entityPage(rows, in.Limit, func(v *resources.Resource) string { return v.ID })
+	out := entityPage(rows, in.Limit, func(v *resources.Resource) string {
+		raw, _ := json.Marshal(browseCursor{fingerprint, v.ID})
+		return "b1." + base64.RawURLEncoding.EncodeToString(raw)
+	})
 	out.SearchCapped = capped
 	if _, err = s.overlayPage(ctx, subject, in.Surface, out.Data, nil); err != nil {
 		return out, err
@@ -253,4 +281,9 @@ func (s *Service) overlayPage(ctx context.Context, subject, surface string, rows
 		}
 	}
 	return selectedRevisions, nil
+}
+
+type browseCursor struct {
+	Query string `json:"q"`
+	ID    string `json:"id"`
 }

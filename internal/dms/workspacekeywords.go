@@ -2,6 +2,10 @@ package dms
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
 	"papergo/internal/dal/content"
 	"papergo/internal/dal/refs"
 	"strings"
@@ -15,6 +19,7 @@ type WorkspaceKeywordCount struct {
 }
 
 type WorkspaceKeywordsQuery struct {
+	Archive      refs.ArchiveSelection
 	CollectionID string
 	Prefix       string
 	After        string
@@ -36,7 +41,10 @@ func (s *Service) WorkspaceKeywords(ctx context.Context, subject, workspaceID st
 	if w.Kind != refs.KindWorkspace {
 		return Page[WorkspaceKeywordCount]{}, invalid("keywords belong to a workspace")
 	}
-	query := content.WorkspaceKeywords{Reader: principal(ctx, subject), WorkspaceID: workspaceID, Prefix: in.Prefix, Limit: pageSize(in.Limit) + 1}
+	if !in.Archive.Valid() {
+		return Page[WorkspaceKeywordCount]{}, invalid("archive must be active, archived or all")
+	}
+	query := content.WorkspaceKeywords{Archive: in.Archive.Default(), Reader: principal(ctx, subject), WorkspaceID: workspaceID, Prefix: in.Prefix, Limit: pageSize(in.Limit) + 1}
 	if in.CollectionID != "" {
 		c, err := s.authorize(ctx, subject, in.CollectionID, "read")
 		if err != nil {
@@ -47,8 +55,22 @@ func (s *Service) WorkspaceKeywords(ctx context.Context, subject, workspaceID st
 		}
 		query.CollectionID = in.CollectionID
 	}
+	normalized := in
+	normalized.After, normalized.Limit = "", 0
+	normalized.Archive = in.Archive.Default()
+	raw, _ := json.Marshal(struct {
+		Subject, Workspace string
+		Query              WorkspaceKeywordsQuery
+	}{subject, workspaceID, normalized})
+	sum := sha256.Sum256(raw)
+	fingerprint := hex.EncodeToString(sum[:])
 	if in.After != "" {
-		query.AfterName, query.AfterID, _ = strings.Cut(in.After, "\x1f")
+		var c browseCursor
+		raw, e := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(in.After, "kw1."))
+		if len(in.After) > 4096 || !strings.HasPrefix(in.After, "kw1.") || e != nil || json.Unmarshal(raw, &c) != nil || c.Query != fingerprint {
+			return Page[WorkspaceKeywordCount]{}, invalid("keyword cursor does not match query or caller")
+		}
+		query.AfterName, query.AfterID, _ = strings.Cut(c.ID, "\x1f")
 	}
 	counts, err := s.DAL.Content().WorkspaceKeywords(ctx, query)
 	if err != nil {
@@ -58,5 +80,8 @@ func (s *Service) WorkspaceKeywords(ctx context.Context, subject, workspaceID st
 	for i, c := range counts {
 		out[i] = WorkspaceKeywordCount{Keyword: c.ID, Name: c.Name, Count: c.Count}
 	}
-	return entityPage(out, in.Limit, func(entry WorkspaceKeywordCount) string { return strings.ToLower(entry.Name) + "\x1f" + entry.Keyword }), nil
+	return entityPage(out, in.Limit, func(entry WorkspaceKeywordCount) string {
+		raw, _ := json.Marshal(browseCursor{fingerprint, strings.ToLower(entry.Name) + "\x1f" + entry.Keyword})
+		return "kw1." + base64.RawURLEncoding.EncodeToString(raw)
+	}), nil
 }

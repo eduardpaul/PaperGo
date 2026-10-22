@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from '@tanstack/react-router';
-import { Briefcase, ChevronRight, ClipboardCheck, House, Inbox, Plus, Search } from 'lucide-react';
+import { Archive, Briefcase, ChevronRight, ClipboardCheck, House, Inbox, Plus, Search } from 'lucide-react';
 import { Collapsible } from 'radix-ui';
 import { useState } from 'react';
 import { collectionChildren, smartFoldersQuery, workspacesQuery } from '@/api/queries';
@@ -23,6 +23,7 @@ const navigation = [
   { to: '/inbox', label: 'Inbox', icon: Inbox, exact: false },
   { to: '/tasks', label: 'Tasks', icon: ClipboardCheck, exact: false },
   { to: '/search', label: 'Search', icon: Search, exact: false },
+  { to: '/archive', label: 'Archive', icon: Archive, exact: false },
 ] as const;
 
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {

@@ -293,7 +293,7 @@ func (s *Service) compileSmartFolder(ctx context.Context, subject string, f *vie
 	collections := []string{}
 	schemas := []string{}
 	for _, c := range candidates {
-		spec := QuerySpec{Filter: d.Filter, Sort: []SortSpec{order}}
+		spec := QuerySpec{Archive: d.Archive, Filter: d.Filter, Sort: []SortSpec{order}}
 		plan, _, err := s.collectionPlan(ctx, subject, c.collection, c.defs, QueryRequest{Query: spec, Surface: in.Surface, rowACL: true}, false)
 		if err != nil {
 			var validation *ValidationError

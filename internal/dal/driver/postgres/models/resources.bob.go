@@ -58,6 +58,8 @@ type Resource struct {
 	NameKey             null.Val[string]            `db:"name_key" `
 	DeletedAt           null.Val[time.Time]         `db:"deleted_at" `
 	DeletedBy           null.Val[string]            `db:"deleted_by" `
+	ArchivedAt          null.Val[time.Time]         `db:"archived_at" `
+	ArchivedBy          null.Val[string]            `db:"archived_by" `
 	CreatedBy           string                      `db:"created_by" `
 	UpdatedBy           string                      `db:"updated_by" `
 	ContentTypeID       null.Val[string]            `db:"content_type_id" `
@@ -198,7 +200,7 @@ type resourceRLoaded struct {
 
 func buildResourceColumns(tableName string) resourceColumns {
 	columnsExpr := expr.NewColumnsExpr(
-		"id", "created_at", "workspace_id", "personal_owner_id", "system_key", "kind", "name", "default_currency", "description", "allow_folders", "keywords", "values", "inherit_permissions", "version", "updated_at", "scope_id", "parent_id", "container_id", "head_revision_id", "published_revision_id", "schema_head_id", "next_revision_number", "publishing_enabled", "versioning", "max_versions", "webdav_enabled", "duplicate_policy", "name_key", "deleted_at", "deleted_by", "created_by", "updated_by", "content_type_id", "template_keys",
+		"id", "created_at", "workspace_id", "personal_owner_id", "system_key", "kind", "name", "default_currency", "description", "allow_folders", "keywords", "values", "inherit_permissions", "version", "updated_at", "scope_id", "parent_id", "container_id", "head_revision_id", "published_revision_id", "schema_head_id", "next_revision_number", "publishing_enabled", "versioning", "max_versions", "webdav_enabled", "duplicate_policy", "name_key", "deleted_at", "deleted_by", "archived_at", "archived_by", "created_by", "updated_by", "content_type_id", "template_keys",
 	)
 
 	if tableName != "" {
@@ -238,6 +240,8 @@ func buildResourceColumns(tableName string) resourceColumns {
 		NameKey:             buildResourceColumn(tableName, "name_key"),
 		DeletedAt:           buildResourceColumn(tableName, "deleted_at"),
 		DeletedBy:           buildResourceColumn(tableName, "deleted_by"),
+		ArchivedAt:          buildResourceColumn(tableName, "archived_at"),
+		ArchivedBy:          buildResourceColumn(tableName, "archived_by"),
 		CreatedBy:           buildResourceColumn(tableName, "created_by"),
 		UpdatedBy:           buildResourceColumn(tableName, "updated_by"),
 		ContentTypeID:       buildResourceColumn(tableName, "content_type_id"),
@@ -278,6 +282,8 @@ type resourceColumns struct {
 	NameKey             resourceColumn
 	DeletedAt           resourceColumn
 	DeletedBy           resourceColumn
+	ArchivedAt          resourceColumn
+	ArchivedBy          resourceColumn
 	CreatedBy           resourceColumn
 	UpdatedBy           resourceColumn
 	ContentTypeID       resourceColumn
@@ -357,6 +363,8 @@ type ResourceSetter struct {
 	NameKey             omitnull.Val[string]                  `db:"name_key" `
 	DeletedAt           omitnull.Val[time.Time]               `db:"deleted_at" `
 	DeletedBy           omitnull.Val[string]                  `db:"deleted_by" `
+	ArchivedAt          omitnull.Val[time.Time]               `db:"archived_at" `
+	ArchivedBy          omitnull.Val[string]                  `db:"archived_by" `
 	CreatedBy           omit.Val[string]                      `db:"created_by" `
 	UpdatedBy           omit.Val[string]                      `db:"updated_by" `
 	ContentTypeID       omitnull.Val[string]                  `db:"content_type_id" `
@@ -364,7 +372,7 @@ type ResourceSetter struct {
 }
 
 func (s ResourceSetter) SetColumns() []string {
-	vals := make([]string, 0, 34)
+	vals := make([]string, 0, 36)
 	if s.ID.IsValue() {
 		vals = append(vals, "id")
 	}
@@ -454,6 +462,12 @@ func (s ResourceSetter) SetColumns() []string {
 	}
 	if s.DeletedBy.IsValue() || s.DeletedBy.IsNull() {
 		vals = append(vals, "deleted_by")
+	}
+	if s.ArchivedAt.IsValue() || s.ArchivedAt.IsNull() {
+		vals = append(vals, "archived_at")
+	}
+	if s.ArchivedBy.IsValue() || s.ArchivedBy.IsNull() {
+		vals = append(vals, "archived_by")
 	}
 	if s.CreatedBy.IsValue() {
 		vals = append(vals, "created_by")
@@ -560,6 +574,12 @@ func (s ResourceSetter) Overwrite(t *Resource) {
 	}
 	if s.DeletedBy.IsValue() || s.DeletedBy.IsNull() {
 		t.DeletedBy = s.DeletedBy.MustGetNull()
+	}
+	if s.ArchivedAt.IsValue() || s.ArchivedAt.IsNull() {
+		t.ArchivedAt = s.ArchivedAt.MustGetNull()
+	}
+	if s.ArchivedBy.IsValue() || s.ArchivedBy.IsNull() {
+		t.ArchivedBy = s.ArchivedBy.MustGetNull()
 	}
 	if s.CreatedBy.IsValue() {
 		t.CreatedBy = s.CreatedBy.MustGet()
@@ -732,6 +752,16 @@ func (s *ResourceSetter) Apply(q *dialect.InsertQuery) {
 			}
 			return psql.Arg(s.DeletedBy.MustGetNull()).WriteSQL(ctx, w, d, start)
 		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.ArchivedAt.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.ArchivedAt.MustGetNull()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.ArchivedBy.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.ArchivedBy.MustGetNull()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
 			if s.CreatedBy.IsUnset() {
 				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
 			}
@@ -759,7 +789,7 @@ func (s ResourceSetter) UpdateMod() bob.Mod[*dialect.UpdateQuery] {
 }
 
 func (s ResourceSetter) Expressions(prefix ...string) []bob.Expression {
-	exprs := make([]bob.Expression, 0, 34)
+	exprs := make([]bob.Expression, 0, 36)
 
 	if s.ID.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
@@ -971,6 +1001,20 @@ func (s ResourceSetter) Expressions(prefix ...string) []bob.Expression {
 		}})
 	}
 
+	if s.ArchivedAt.IsValue() || s.ArchivedAt.IsNull() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "archived_at")...),
+			psql.Arg(s.ArchivedAt),
+		}})
+	}
+
+	if s.ArchivedBy.IsValue() || s.ArchivedBy.IsNull() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "archived_by")...),
+			psql.Arg(s.ArchivedBy),
+		}})
+	}
+
 	if s.CreatedBy.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
 			psql.Quote(append(prefix, "created_by")...),
@@ -1009,7 +1053,7 @@ func resourceScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc, fu
 		idx int
 		dst func(o *Resource) any
 	}
-	targets := make([]target, 0, 34)
+	targets := make([]target, 0, 36)
 	for i, col := range cols {
 		switch col {
 		case "id":
@@ -1072,6 +1116,10 @@ func resourceScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc, fu
 			targets = append(targets, target{i, func(o *Resource) any { return &o.DeletedAt }})
 		case "deleted_by":
 			targets = append(targets, target{i, func(o *Resource) any { return &o.DeletedBy }})
+		case "archived_at":
+			targets = append(targets, target{i, func(o *Resource) any { return &o.ArchivedAt }})
+		case "archived_by":
+			targets = append(targets, target{i, func(o *Resource) any { return &o.ArchivedBy }})
 		case "created_by":
 			targets = append(targets, target{i, func(o *Resource) any { return &o.CreatedBy }})
 		case "updated_by":
@@ -5844,6 +5892,8 @@ type resourceWhere[Q psql.Filterable] struct {
 	NameKey             psql.WhereNullMod[Q, string]
 	DeletedAt           psql.WhereNullMod[Q, time.Time]
 	DeletedBy           psql.WhereNullMod[Q, string]
+	ArchivedAt          psql.WhereNullMod[Q, time.Time]
+	ArchivedBy          psql.WhereNullMod[Q, string]
 	CreatedBy           psql.WhereMod[Q, string]
 	UpdatedBy           psql.WhereMod[Q, string]
 	ContentTypeID       psql.WhereNullMod[Q, string]
@@ -5888,6 +5938,8 @@ func buildResourceWhere[Q psql.Filterable](cols resourceColumns) resourceWhere[Q
 		NameKey:             psql.WhereNull[Q, string](cols.NameKey.Expression),
 		DeletedAt:           psql.WhereNull[Q, time.Time](cols.DeletedAt.Expression),
 		DeletedBy:           psql.WhereNull[Q, string](cols.DeletedBy.Expression),
+		ArchivedAt:          psql.WhereNull[Q, time.Time](cols.ArchivedAt.Expression),
+		ArchivedBy:          psql.WhereNull[Q, string](cols.ArchivedBy.Expression),
 		CreatedBy:           psql.Where[Q, string](cols.CreatedBy.Expression),
 		UpdatedBy:           psql.Where[Q, string](cols.UpdatedBy.Expression),
 		ContentTypeID:       psql.WhereNull[Q, string](cols.ContentTypeID.Expression),

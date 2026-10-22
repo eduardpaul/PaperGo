@@ -7,6 +7,7 @@ import (
 	"slices"
 	"sort"
 
+	"papergo/internal/dal/refs"
 	"papergo/internal/search"
 )
 
@@ -68,6 +69,18 @@ func visible(d search.Document, f search.Filter) bool {
 	}
 }
 func scalarMatch(d search.Document, f search.Filter) bool {
+	if !f.Archive.Matches(d.Archived) {
+		return false
+	}
+	if f.ArchivedBy != "" && d.ArchivedBy != f.ArchivedBy {
+		return false
+	}
+	if !f.ArchivedFrom.IsZero() && (d.ArchivedAt == nil || d.ArchivedAt.Before(f.ArchivedFrom)) {
+		return false
+	}
+	if !f.ArchivedTo.IsZero() && (d.ArchivedAt == nil || d.ArchivedAt.After(f.ArchivedTo)) {
+		return false
+	}
 	if !visible(d, f) || len(f.Kinds) > 0 && !slices.Contains(f.Kinds, d.Kind) {
 		return false
 	}
@@ -395,7 +408,7 @@ func (s *Store) Search(ctx context.Context, q search.Query) (out search.Result, 
 		offset := min(max(q.Offset, 0), len(matches))
 		for _, m := range matches[offset:min(offset+limit, len(matches))] {
 			d := s.documents[m.key].Document
-			h := search.Hit{ResourceID: d.ResourceID, Kind: d.Kind, Surface: d.Surface, WorkspaceID: d.WorkspaceID, CollectionID: d.CollectionID, ContentTypeID: d.ContentTypeID, RevisionID: d.RevisionID, Name: d.Name, Text: d.Body, Rank: m.rank, MatchedBy: m.by, ModifiedBy: d.ModifiedBy, ModifiedAt: d.ModifiedAt}
+			h := search.Hit{Archived: d.Archived, ArchivedAt: d.ArchivedAt, ArchivedBy: d.ArchivedBy, ResourceID: d.ResourceID, Kind: d.Kind, Surface: d.Surface, WorkspaceID: d.WorkspaceID, CollectionID: d.CollectionID, ContentTypeID: d.ContentTypeID, RevisionID: d.RevisionID, Name: d.Name, Text: d.Body, Rank: m.rank, MatchedBy: m.by, ModifiedBy: d.ModifiedBy, ModifiedAt: d.ModifiedAt}
 			if m.chunk != nil {
 				h.Text = m.chunk.Chunk.Text
 				h.Page = m.chunk.Chunk.Page
@@ -463,6 +476,12 @@ func (s *Store) Match(ctx context.Context, q search.MatchQuery) (out search.Matc
 		}
 		limit = min(limit, s.limit)
 		parts := []string{"row_kind = 'doc'"}
+		if q.Archive == refs.ArchiveActive {
+			parts = append(parts, "archived = 0")
+		}
+		if q.Archive == refs.ArchiveArchived {
+			parts = append(parts, "archived = 1")
+		}
 		if q.CollectionID != "" {
 			parts = append(parts, equal("collection_id", encode(q.CollectionID)))
 		}

@@ -1,3 +1,4 @@
+import { useArchiveActions } from './archive-actions';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
 import { useState } from 'react';
@@ -29,6 +30,7 @@ export function ItemContextMenu({ item, collection, selection = [item], onSelect
   const items = bulk ? selection.map(item => item.id === fresh.id ? fresh : item) : [fresh];
   const definitions = useQuery({ queryKey: ['workflow-actions', item.workspace_id, items.map(item => [item.id, item.version])], queryFn: async () => (await api<{value: WorkflowAction[]}>(`/v1/workspaces/${item.workspace_id}/workflow-actions`, { method: 'POST', body: {item_ids: items.map(item => item.id)} })).data.value, enabled: open && writable && items.every(item => item.kind === 'item') });
   const choices = definitions.data ?? [];
+  const archive = useArchiveActions();
   const remove = useMutation({
     meta: { silent: true },
     mutationFn: () => batch(items.map(item => ({ id: item.id, method: 'DELETE', url: `/v1/resources/${item.id}${item.kind === 'folder' ? '?recursive=true' : ''}`, headers: { 'If-Match': `"${item.version}"` } }))),
@@ -44,6 +46,10 @@ export function ItemContextMenu({ item, collection, selection = [item], onSelect
         {!bulk && <ContextMenuItem onSelect={() => onDetails(fresh)}>Details</ContextMenuItem>}
         {!bulk && collection.kind === 'library' && item.kind === 'item' && <ContextMenuItem onSelect={() => void downloadContent(item.id, item.name)}>Download</ContextMenuItem>}
         {writable && <>
+          {items.every(item => item.kind === 'item') && <>
+            {items.some(item => !item.archived) && <ContextMenuItem disabled={archive.isPending || items.length > 100} onSelect={() => archive.mutate({ items, archived: true })}>Archive{bulk ? ' selected' : ''}</ContextMenuItem>}
+            {items.some(item => item.archived) && <ContextMenuItem disabled={archive.isPending || items.length > 100} onSelect={() => archive.mutate({ items, archived: false })}>Unarchive{bulk ? ' selected' : ''}</ContextMenuItem>}
+          </>}
           {!bulk && <ContextMenuItem onSelect={() => setDialog('rename')}>Rename…</ContextMenuItem>}
           <ContextMenuItem disabled={items.length > 100} onSelect={() => setDialog('move')}>{bulk ? 'Move selected…' : 'Move…'}</ContextMenuItem>
           {items.every(item => item.kind === 'item') && <ContextMenuSub>

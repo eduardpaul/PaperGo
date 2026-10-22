@@ -50,6 +50,7 @@ function Editor({ folder, onClose, onSaved }: { folder?: SmartFolder; onClose: (
   const [contentTypes, setContentTypes] = useState(initial?.content_types ?? []);
   const [terms, setTerms] = useState(initial?.terms ?? []);
   const [termMatch, setTermMatch] = useState(initial?.term_match ?? 'all');
+  const [archive, setArchive] = useState<SmartFolderDefinition['archive']>(initial?.archive ?? 'active');
   const [includeFolders, setIncludeFolders] = useState(!!initial?.include_folders);
   const [filter, setFilter] = useState<FilterExpr | undefined>(initial?.filter);
   const [groups, setGroups] = useState(initial?.group_by ?? []);
@@ -64,7 +65,7 @@ function Editor({ folder, onClose, onSaved }: { folder?: SmartFolder; onClose: (
   let definition: SmartFolderDefinition;
   let invalid: string | undefined;
   try {
-    definition = { mode, collection_kind: kind ? kind as 'list' | 'library' : undefined, collections, templates, content_types: contentTypes, terms, term_match: termMatch, include_folders: includeFolders, filter: normalizeFilter(filter, fields), group_by: groups };
+    definition = { archive, mode, collection_kind: kind ? kind as 'list' | 'library' : undefined, collections, templates, content_types: contentTypes, terms, term_match: termMatch, include_folders: includeFolders, filter: normalizeFilter(filter, fields), group_by: groups };
   } catch (error) {
     invalid = problemMessage(error);
     definition = { mode };
@@ -102,6 +103,7 @@ function Editor({ folder, onClose, onSaved }: { folder?: SmartFolder; onClose: (
       {workspaces.data?.filter(workspace => personal || !workspace.personal_owner_id).map(workspace => <option key={workspace.id} value={workspace.id}>{workspace.personal_owner_id ? 'Home' : workspace.name}</option>)}
     </Select>
     {!personal && workspaceId && !can(workspace.data, 'manage') && <p className="text-xs text-muted">Workspace managers can save shared smart folders.</p>}
+    <Label htmlFor="smart-archive">Items</Label><Select id="smart-archive" value={archive} onChange={event => setArchive(event.target.value as SmartFolderDefinition['archive'])}><option value="active">Active</option><option value="archived">Archived</option><option value="all">All</option></Select>
     <Label htmlFor="smart-kind">Collection type</Label><Select id="smart-kind" value={kind} onChange={event => setKind(event.target.value)}><option value="">Lists and libraries</option><option value="list">Lists</option><option value="library">Libraries</option></Select>
     {workspaceId && <><Label id="smart-collections-label">Collections (optional)</Label><Combobox aria-labelledby="smart-collections-label" multiple selected={collections.map(value => ({ value, label: value }))} options={[...new Set((places.data ?? []).filter(place => !kind || place.kind === kind).map(place => place.name))].map(value => ({ value, label: value }))} onChange={options => setCollections(options.map(option => option.value))} /></>}
     <Label id="smart-types-label">Content types (optional)</Label><Combobox aria-labelledby="smart-types-label" multiple selected={contentTypes.map(value => typeOptions.find(option => option.value.toLowerCase() === value.toLowerCase()) ?? { value, label: value })} options={typeOptions} onChange={options => setContentTypes(options.map(option => option.value))} />

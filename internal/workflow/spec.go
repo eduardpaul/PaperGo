@@ -29,7 +29,7 @@ const (
 )
 
 // ItemTriggers are the trigger types raised by item writes.
-var ItemTriggers = []string{dms.EventItemCreated, dms.EventItemUpdated, dms.EventItemPublished, dms.EventItemUnpublished, dms.EventItemDeleted, dms.EventItemRestored, dms.EventItemPurged, dms.EventFileAdded, dms.EventFileUpdated}
+var ItemTriggers = []string{dms.EventItemArchived, dms.EventItemUnarchived, dms.EventItemCreated, dms.EventItemUpdated, dms.EventItemPublished, dms.EventItemUnpublished, dms.EventItemDeleted, dms.EventItemRestored, dms.EventItemPurged, dms.EventFileAdded, dms.EventFileUpdated}
 
 // FolderTriggers are the trigger types raised by folder writes.
 var FolderTriggers = []string{dms.EventFolderCreated, dms.EventFolderUpdated, dms.EventFolderDeleted, dms.EventFolderRestored, dms.EventFolderPurged}

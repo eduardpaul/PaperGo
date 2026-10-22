@@ -20,12 +20,13 @@ import { useFormat } from '@/lib/preferences';
 import { textParam } from '@/lib/search';
 import { useDebounced } from '@/lib/use-debounced';
 
-interface SearchRouteParams { q?: string; workspace?: string; collection?: string; keyword?: string; content_type?: string; kind?: Kind }
+interface SearchRouteParams { archive?: 'active' | 'archived' | 'all'; q?: string; workspace?: string; collection?: string; keyword?: string; content_type?: string; kind?: Kind }
 
 type Kind = 'item' | 'folder' | 'all';
 
 export const Route = createFileRoute('/_app/search')({
   validateSearch: (search: Record<string, unknown>): SearchRouteParams => ({
+    archive: (['active', 'archived', 'all'] as const).find(value => value === search.archive),
     content_type: textParam(search.content_type),
     q: textParam(search.q),
     workspace: textParam(search.workspace),
@@ -54,6 +55,7 @@ function SearchRoute() {
 function SearchPage() {
   const params = Route.useSearch();
   const { q, workspace, collection, keyword, content_type } = params;
+  const archive = params.archive ?? 'active';
   const types = useQuery({ queryKey: ['search', 'content-types', workspace, collection], queryFn: async () => (await api<{ id: string; name: string }[]>('/v1/search/content-types', { query: { workspace_id: workspace, collection_id: collection } })).data });
   const kind: Kind = params.kind ?? 'item';
   const navigate = useNavigate({ from: Route.fullPath });
@@ -71,7 +73,7 @@ function SearchPage() {
     const entry = workspaces.data?.find((candidate) => candidate.id === id);
     return entry?.personal_owner_id ? 'Home' : (entry?.name ?? 'Workspace');
   };
-  const filtered = !!(workspace || collection || keyword || content_type);
+  const filtered = archive === 'archived' || !!(workspace || collection || keyword || content_type);
   // Workspaces are not in the search index: their names match here.
   const places = q
     ? (workspaces.data ?? []).filter((entry) => workspaceName(entry.id).toLowerCase().includes(q.toLowerCase())).slice(0, 8)
@@ -101,6 +103,7 @@ function SearchPage() {
             onChange={(event) => setText(event.target.value)}
           />
         </div>
+        <div className="w-40"><Label htmlFor="search-archive">Items</Label><Select id="search-archive" value={archive} onChange={event => void navigate({ search: current => ({ ...current, archive: event.target.value as 'active' | 'archived' | 'all' }) })}><option value="active">Active</option><option value="archived">Archived</option><option value="all">All</option></Select></div>
         <div className="w-48">
           <Label htmlFor="search-kind">Find</Label>
           <Select
@@ -152,13 +155,14 @@ function SearchPage() {
           word and - to leave a word out.
         </EmptyState>
       ) : (
-        <Results contentType={content_type} typeNames={new Map((types.data ?? []).map(type => [type.id, type.name]))} q={q} workspace={workspace} collection={collection} keyword={keyword} kind={kind} workspaceName={workspaceName} />
+        <Results archive={archive} contentType={content_type} typeNames={new Map((types.data ?? []).map(type => [type.id, type.name]))} q={q} workspace={workspace} collection={collection} keyword={keyword} kind={kind} workspaceName={workspaceName} />
       )}
     </Page>
   );
 }
 
 function Results({
+  archive,
   contentType,
   typeNames,
   q,
@@ -168,6 +172,7 @@ function Results({
   kind,
   workspaceName,
 }: {
+  archive: 'active' | 'archived' | 'all';
   contentType?: string;
   typeNames: Map<string, string>;
   q?: string;
@@ -179,6 +184,7 @@ function Results({
 }) {
   const navigate = useNavigate({ from: Route.fullPath });
   const request = searchRequest({
+    archive,
     q,
     workspaceId: workspace,
     collectionId: collection,
@@ -186,7 +192,7 @@ function Results({
     keyword,
     kind,
   });
-  const results = useApiPages<SearchHit>(['search', q, workspace, collection, keyword, kind, contentType], request.path, { query: request.query });
+  const results = useApiPages<SearchHit>(['search', archive, q, workspace, collection, keyword, kind, contentType], request.path, { query: request.query });
   const first = results.data?.pages[0] as SearchPage | undefined;
   const facets = first?.facets;
   const keywordNames = useTermNames([...new Set([...(facets?.keyword ?? []).map(entry => entry.value), ...(keyword ? [keyword] : [])])]);
@@ -318,7 +324,7 @@ export function Hit({ hit, where }: { hit: SearchHit; where: string }) {
     void navigate({
       to: '/w/$workspaceId/l/$listId',
       params: { workspaceId: hit.workspace_id, listId: hit.collection_id },
-      search: hit.kind === 'folder' ? { folder: hit.id } : { item: hit.id },
+      search: hit.kind === 'folder' ? { folder: hit.id } : { item: hit.id, ...(hit.archived ? { view: 'archived' } : {}) },
     });
   return (
     <div><button type="button" className="flex w-full items-start gap-3 px-4 py-2.5 text-left hover:bg-surface-muted" onClick={open}>
@@ -326,6 +332,7 @@ export function Hit({ hit, where }: { hit: SearchHit; where: string }) {
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2">
           <span className="truncate text-sm font-medium">{hit.name}</span>
+          {hit.archived && <span className="rounded bg-surface-muted px-1.5 text-[11px] text-muted">Archived</span>}
           {hit.surface === 'head' && <span className="rounded bg-surface-muted px-1.5 text-[11px] text-muted">Draft</span>}
         </span>
         <span className="block text-xs text-muted">

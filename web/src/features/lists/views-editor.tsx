@@ -68,9 +68,9 @@ export function ViewsEditor({
                 {view.is_default && <Badge className="ml-2">Default</Badge>}
               </span>
               <Button size="sm" variant="ghost" onClick={() => setEditing(view)}>
-                <Pencil /> {canManage ? 'Edit' : 'View'}
+                <Pencil /> {canManage && !view.system_key ? 'Edit' : 'View'}
               </Button>
-              {canManage && (
+              {canManage && !view.system_key && (
                 <Button size="sm" variant="ghost" onClick={() => setDeleting(view)}>
                   Delete
                 </Button>
@@ -85,7 +85,7 @@ export function ViewsEditor({
           fields={fields}
           contentTypes={contentTypes}
           view={editing === 'new' ? undefined : editing}
-          canManage={canManage}
+          canManage={canManage && (editing === 'new' || !editing.system_key)}
           onClose={() => setEditing(undefined)}
         />
       )}
@@ -194,6 +194,10 @@ function ViewDialog({
               {label}
             </option>
           ))}
+        </Select>
+        <Label htmlFor="view-archive">Items</Label>
+        <Select id="view-archive" value={query.archive ?? 'active'} onChange={event => patchQuery({ archive: event.target.value as QuerySpec['archive'] })}>
+          <option value="active">Active</option><option value="archived">Archived</option><option value="all">All</option>
         </Select>
         <label className="flex gap-2">
           <Checkbox checked={isDefault} onChange={(event) => setIsDefault(event.target.checked)} />

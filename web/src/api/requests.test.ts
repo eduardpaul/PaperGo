@@ -116,7 +116,7 @@ describe('bulk updates', () => {
     expect(first.query.filter.or).toHaveLength(31);
     expect(first.query.filter.or.every((part) => part.value.length === 50)).toBe(true);
     expect(first.values).toEqual({ status: 'Paid' });
-    expect(calls[1].body).toEqual({ query: { filter: { field: '$id', op: 'in', value: ids.slice(1550, 1600) } }, values: { status: 'Paid' } });
+    expect(calls[1].body).toEqual({ query: { archive: 'all', filter: { field: '$id', op: 'in', value: ids.slice(1550, 1600) } }, values: { status: 'Paid' } });
   });
 
   it('updates everything a view matches without its sort or grouping', () => {

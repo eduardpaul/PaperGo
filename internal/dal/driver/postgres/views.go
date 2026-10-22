@@ -49,7 +49,7 @@ func (q Queries) ListViews(ctx context.Context, f views.ViewFilter) ([]views.Lis
 
 func (q Queries) InsertListView(ctx context.Context, v views.ListView) error {
 	_, err := models.ListViews.Insert(&models.ListViewSetter{
-		ID: omit.From(v.ID), CreatedAt: omit.From(v.CreatedAt), UpdatedAt: omit.From(v.UpdatedAt), ContainerID: omit.From(v.ContainerID),
+		SystemKey: omit.From(string(v.SystemKey)), ID: omit.From(v.ID), CreatedAt: omit.From(v.CreatedAt), UpdatedAt: omit.From(v.UpdatedAt), ContainerID: omit.From(v.ContainerID),
 		Name: omit.From(v.Name), Columns: omit.From(types.NewJSON(v.Columns)), Query: omit.From(types.NewJSON(v.Query)),
 		Layout: omit.From(string(v.Layout)), IsDefault: omit.From(v.IsDefault), Version: omit.From(int64(v.Version)),
 	}).Exec(ctx, q.exec)
@@ -158,7 +158,7 @@ func (q Queries) DeleteSmartFolder(ctx context.Context, id string) error {
 
 func listViewRecord(r *models.ListView) views.ListView {
 	return views.ListView{
-		ID: r.ID, CreatedAt: r.CreatedAt.UTC(), ContainerID: r.ContainerID, Name: r.Name, Columns: r.Columns.Val, Query: r.Query.Val,
+		SystemKey: views.SystemKey(r.SystemKey), ID: r.ID, CreatedAt: r.CreatedAt.UTC(), ContainerID: r.ContainerID, Name: r.Name, Columns: r.Columns.Val, Query: r.Query.Val,
 		Layout: views.Layout(r.Layout), IsDefault: r.IsDefault, Version: int(r.Version), UpdatedAt: r.UpdatedAt.UTC(),
 	}
 }

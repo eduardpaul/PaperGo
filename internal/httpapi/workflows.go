@@ -41,6 +41,8 @@ var triggerTypes = []map[string]string{
 	{"type": dms.EventFolderCreated, "description": "A folder was created; data has revision_id, revision_number and content_type_id, and the run has the folder as its item."},
 	{"type": dms.EventFolderUpdated, "description": "A folder was renamed, retagged or moved; data has revision_id, revision_number and content_type_id for content changes, or from_parent_id and parent_id for a move. The run has the folder as its item."},
 	{"type": dms.EventFolderDeleted, "description": "A folder was deleted, alone or with a parent folder; the run has no item."},
+	{"type": dms.EventItemArchived, "description": "An item was archived."},
+	{"type": dms.EventItemUnarchived, "description": "An item was unarchived."},
 	{"type": dms.EventFolderRestored, "description": "A folder was restored from the recycle bin; the run has the folder as its item."},
 	{"type": dms.EventFolderPurged, "description": "A deleted folder was permanently purged; the run has no item."},
 	{"type": dms.EventFileAdded, "description": "An item received its first file attachment; data has source (upload, webdav, restore or workflow), file_version, blob_id, content_type, size, revision_id and content_type_id. sources limits the sources; the default is all but workflow."},

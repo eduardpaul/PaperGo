@@ -193,6 +193,8 @@ func checkImportedSampleSource(t *testing.T, s *dms.Service, w workflow.Workflow
 // artifacts use this helper; installing either sample needs just the ZIP.
 func buildSamplePackage(t *testing.T, receipt bool, path string) {
 	t.Helper()
+	// Sample workflows fill this extension role; generating a package needs no search store.
+	workflow.RegisterRole(&workflow.Role{Key: "search.content", Name: "File content in search"})
 	db, err := database.Open(t.Context(), filepath.Join(t.TempDir(), "source.db"))
 	if err != nil {
 		t.Fatal(err)

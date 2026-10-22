@@ -1,6 +1,8 @@
 import type { Trigger } from '@/features/workflows/model';
 import type { FormSchema } from '@/features/workflows/model';
 
+export type ArchiveSelection = 'active' | 'archived' | 'all';
+
 export type Kind = 'workspace' | 'list' | 'library' | 'folder' | 'item';
 
 export type AccessAction = 'read' | 'read_draft' | 'write' | 'publish' | 'manage';
@@ -16,6 +18,9 @@ export interface Page<T> {
 }
 
 export interface Resource {
+  archived?: boolean;
+  archived_at?: string;
+  archived_by?: string;
   id: string;
   workspace_id: string;
   personal_owner_id?: string;
@@ -52,6 +57,9 @@ export interface Resource {
 
 /** A hit of global search (GET /v1/search). */
 export interface SearchHit {
+  archived?: boolean;
+  archived_at?: string;
+  archived_by?: string;
   id: string;
   kind: 'item' | 'folder';
   surface: 'head' | 'published';
@@ -142,6 +150,7 @@ export interface ValidationRule {
 }
 
 export interface ListView {
+  system_key?: 'archived';
   id: string;
   container_id: string;
   name: string;
@@ -162,6 +171,7 @@ export interface FilterExpr {
   value_ref?: string;
 }
 export interface QuerySpec {
+  archive?: ArchiveSelection;
   filter?: FilterExpr;
   sort?: { field: string; direction: string }[];
   group_by?: string;
@@ -278,6 +288,7 @@ export interface SmartFolder {
 }
 
 export interface SmartFolderDefinition {
+  archive?: ArchiveSelection;
   mode: 'query' | 'classification';
   collection_kind?: 'list' | 'library';
   collections?: string[];

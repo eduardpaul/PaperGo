@@ -160,7 +160,7 @@ export function ColumnPicker({
                     Reset
                   </Button>
                 )}
-                {canManage && (changed || !!sort) && view && (view.layout ?? 'table') === 'table' && (
+                {canManage && (changed || !!sort) && view && !view.system_key && (view.layout ?? 'table') === 'table' && (
                   <Button size="sm" disabled={save.isPending} onClick={() => save.mutate('view')}>
                     Save to “{view.name}”
                   </Button>

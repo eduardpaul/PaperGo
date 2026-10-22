@@ -59,6 +59,9 @@ func (k SystemKey) Valid() bool { return k == SystemDocuments || k == SystemInbo
 // carry the content of their head revision; the deletion columns mark a
 // tombstone in the recycle bin.
 type Resource struct {
+	Archived            bool              `json:"archived"`
+	ArchivedAt          *time.Time        `json:"archived_at,omitempty"`
+	ArchivedBy          *string           `json:"archived_by,omitempty"`
 	ID                  string            `json:"id,omitempty"`
 	CreatedAt           time.Time         `json:"created_at,omitempty"`
 	WorkspaceID         string            `json:"workspace_id,omitempty"`
@@ -122,6 +125,7 @@ type Reader struct {
 // Filter selects resources in ID order. A nil list does not filter; an
 // empty one selects nothing. Zero fields do not filter.
 type Filter struct {
+	Archive                            refs.ArchiveSelection
 	IDs                                []string
 	Kinds                              []refs.ResourceKind
 	WorkspaceID, ParentID, ContainerID string
@@ -194,7 +198,8 @@ type Set struct {
 	Keywords, TemplateKeys                                     *[]string
 	Values                                                     json.RawMessage
 	// Deleted marks a tombstone; a zero At restores the resource.
-	Deleted *Deletion
+	Archived *Deletion
+	Deleted  *Deletion
 	// Version is the version the write stores; 0 keeps it.
 	Version   int
 	UpdatedBy *string

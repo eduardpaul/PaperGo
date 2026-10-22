@@ -843,7 +843,7 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event) (started []s
 		}
 		// Purge removes revision payloads. Older queued content events must not
 		// block dispatch or start actions against an item that no longer exists.
-		if e.ResourceID != "" && (e.Type == dms.EventItemCreated || e.Type == dms.EventItemUpdated || e.Type == dms.EventItemPublished || e.Type == dms.EventItemUnpublished || e.Type == dms.EventItemRestored || e.Type == dms.EventFileAdded || e.Type == dms.EventFileUpdated || e.Type == dms.EventPermissionsChanged ||
+		if e.ResourceID != "" && (e.Type == dms.EventItemArchived || e.Type == dms.EventItemUnarchived || e.Type == dms.EventItemCreated || e.Type == dms.EventItemUpdated || e.Type == dms.EventItemPublished || e.Type == dms.EventItemUnpublished || e.Type == dms.EventItemRestored || e.Type == dms.EventFileAdded || e.Type == dms.EventFileUpdated || e.Type == dms.EventPermissionsChanged ||
 			e.Type == dms.EventFolderCreated || e.Type == dms.EventFolderUpdated || e.Type == dms.EventFolderRestored) {
 			exists, err := t.DAL.Resources().Exists(ctx, resources.Filter{IDs: []string{e.ResourceID}})
 			if err != nil {
