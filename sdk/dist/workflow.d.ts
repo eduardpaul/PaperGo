@@ -1688,6 +1688,189 @@ export interface CollectionTemplate extends AdditionalDataHolder, Parsable {
 export type CollectionTemplate_duplicate_policy = (typeof CollectionTemplate_duplicate_policyObject)[keyof typeof CollectionTemplate_duplicate_policyObject];
 export type CollectionTemplate_kind = (typeof CollectionTemplate_kindObject)[keyof typeof CollectionTemplate_kindObject];
 export type CollectionTemplate_versioning = (typeof CollectionTemplate_versioningObject)[keyof typeof CollectionTemplate_versioningObject];
+export interface Comment extends AdditionalDataHolder, Parsable {
+	/**
+	 * The author property
+	 */
+	author?: CommentPerson | null;
+	/**
+	 * Plain text; <@user:subject> mentions a person. Empty once deleted.
+	 */
+	body?: string | null;
+	/**
+	 * The can_delete property
+	 */
+	canDelete?: boolean | null;
+	/**
+	 * The can_edit property
+	 */
+	canEdit?: boolean | null;
+	/**
+	 * The can_resolve property
+	 */
+	canResolve?: boolean | null;
+	/**
+	 * The created_at property
+	 */
+	createdAt?: Date | null;
+	/**
+	 * The deleted property
+	 */
+	deleted?: boolean | null;
+	/**
+	 * The edited_at property
+	 */
+	editedAt?: Date | null;
+	/**
+	 * The id property
+	 */
+	id?: string | null;
+	/**
+	 * The item_id property
+	 */
+	itemId?: string | null;
+	/**
+	 * The mentions property
+	 */
+	mentions?: CommentPerson[] | null;
+	/**
+	 * The resolved_at property
+	 */
+	resolvedAt?: Date | null;
+	/**
+	 * The resolved_by property
+	 */
+	resolvedBy?: CommentPerson | null;
+	/**
+	 * The source property
+	 */
+	source?: Comment_source | null;
+	/**
+	 * The thread's first comment; equal to id for it.
+	 */
+	threadId?: string | null;
+	/**
+	 * The updated_at property
+	 */
+	updatedAt?: Date | null;
+	/**
+	 * The version property
+	 */
+	version?: number | null;
+	/**
+	 * The workflow_id property
+	 */
+	workflowId?: string | null;
+}
+export type Comment_source = (typeof Comment_sourceObject)[keyof typeof Comment_sourceObject];
+export interface CommentCounts extends AdditionalDataHolder, Parsable {
+	/**
+	 * The counts property
+	 */
+	counts?: CommentCounts_counts | null;
+}
+export interface CommentCounts_counts extends AdditionalDataHolder, Parsable {
+}
+export interface CommentCountsRequest extends Parsable {
+	/**
+	 * The item_ids property
+	 */
+	itemIds?: string[] | null;
+}
+export interface CommentCreate extends Parsable {
+	/**
+	 * The body property
+	 */
+	body?: string | null;
+	/**
+	 * The thread to answer; none starts one.
+	 */
+	threadId?: string | null;
+}
+export interface CommentEdit extends Parsable {
+	/**
+	 * The body property
+	 */
+	body?: string | null;
+}
+export interface CommentPerson extends AdditionalDataHolder, Parsable {
+	/**
+	 * The name property
+	 */
+	name?: string | null;
+	/**
+	 * The subject property
+	 */
+	subject?: string | null;
+}
+export interface CommentSettings extends AdditionalDataHolder, Parsable {
+	/**
+	 * The effective property
+	 */
+	effective?: CommentSettings_effective | null;
+	/**
+	 * The place's own mode; null inherits.
+	 */
+	mode?: CommentSettings_mode | null;
+	/**
+	 * The version property
+	 */
+	version?: number | null;
+}
+export interface CommentSettings_effective extends AdditionalDataHolder, Parsable {
+	/**
+	 * The from property
+	 */
+	from?: CommentSettings_effective_from | null;
+	/**
+	 * The mode property
+	 */
+	mode?: CommentSettings_effective_mode | null;
+}
+export type CommentSettings_effective_from = (typeof CommentSettings_effective_fromObject)[keyof typeof CommentSettings_effective_fromObject];
+export type CommentSettings_effective_mode = (typeof CommentSettings_effective_modeObject)[keyof typeof CommentSettings_effective_modeObject];
+export type CommentSettings_mode = (typeof CommentSettings_modeObject)[keyof typeof CommentSettings_modeObject];
+export interface CommentSettingsInput extends Parsable {
+	/**
+	 * The mode property
+	 */
+	mode?: CommentSettingsInput_mode | null;
+}
+export type CommentSettingsInput_mode = (typeof CommentSettingsInput_modeObject)[keyof typeof CommentSettingsInput_modeObject];
+export interface CommentThread extends Comment, Parsable {
+	/**
+	 * The replies property
+	 */
+	replies?: Comment[] | null;
+}
+export interface CommentThreadList extends AdditionalDataHolder, Parsable {
+	/**
+	 * The can_post property
+	 */
+	canPost?: boolean | null;
+	/**
+	 * The can_read property
+	 */
+	canRead?: boolean | null;
+	/**
+	 * The mode property
+	 */
+	mode?: CommentThreadList_mode | null;
+	/**
+	 * The mode_from property
+	 */
+	modeFrom?: CommentThreadList_mode_from | null;
+	/**
+	 * The OdataNextLink property
+	 */
+	odataNextLink?: string | null;
+	/**
+	 * The value property
+	 */
+	value?: CommentThread[] | null;
+}
+export type CommentThreadList_mode = (typeof CommentThreadList_modeObject)[keyof typeof CommentThreadList_modeObject];
+export type CommentThreadList_mode_from = (typeof CommentThreadList_mode_fromObject)[keyof typeof CommentThreadList_mode_fromObject];
 /**
  * A completion. Give item_id with text_id or image_blob_id, else workspace_id.
  */
@@ -1883,6 +2066,18 @@ export type CreateCatalogField_type = (typeof CreateCatalogField_typeObject)[key
 declare function createChunkTextFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createCollectionContentTypeFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createCollectionTemplateFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
+declare function createCommentCounts_countsFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
+declare function createCommentCountsFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
+declare function createCommentCountsRequestFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
+declare function createCommentCreateFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
+declare function createCommentEditFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
+declare function createCommentFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
+declare function createCommentPersonFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
+declare function createCommentSettings_effectiveFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
+declare function createCommentSettingsFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
+declare function createCommentSettingsInputFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
+declare function createCommentThreadFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
+declare function createCommentThreadListFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createCompletionRequest_output_schemaFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createCompletionRequestFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createComposePDFFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
@@ -1995,6 +2190,8 @@ declare function createListIntegrationFromDiscriminatorValue(parseNode: ParseNod
 declare function createListViewFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createListViewPageFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createLocatedItemFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
+declare function createMentionCandidateList_valueFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
+declare function createMentionCandidateListFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createMergeTermFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createMoveItemFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createMoveTermFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
@@ -2003,6 +2200,8 @@ declare function createNavigationNodeFromDiscriminatorValue(parseNode: ParseNode
 declare function createNavigationPageFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createNavigationRequestFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createNavigationSelectionFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
+declare function createNotificationSendFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
+declare function createNotificationSendResultFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createOperationFailureFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createOperationFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createOperationPageFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
@@ -2380,6 +2579,18 @@ declare function deserializeIntoCalendarQuery(calendarQuery?: Partial<CalendarQu
 declare function deserializeIntoChunkText(chunkText?: Partial<ChunkText> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoCollectionContentType(collectionContentType?: Partial<CollectionContentType> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoCollectionTemplate(collectionTemplate?: Partial<CollectionTemplate> | undefined): Record<string, (node: ParseNode) => void>;
+declare function deserializeIntoComment(comment?: Partial<Comment> | undefined): Record<string, (node: ParseNode) => void>;
+declare function deserializeIntoCommentCounts(commentCounts?: Partial<CommentCounts> | undefined): Record<string, (node: ParseNode) => void>;
+declare function deserializeIntoCommentCounts_counts(commentCounts_counts?: Partial<CommentCounts_counts> | undefined): Record<string, (node: ParseNode) => void>;
+declare function deserializeIntoCommentCountsRequest(commentCountsRequest?: Partial<CommentCountsRequest> | undefined): Record<string, (node: ParseNode) => void>;
+declare function deserializeIntoCommentCreate(commentCreate?: Partial<CommentCreate> | undefined): Record<string, (node: ParseNode) => void>;
+declare function deserializeIntoCommentEdit(commentEdit?: Partial<CommentEdit> | undefined): Record<string, (node: ParseNode) => void>;
+declare function deserializeIntoCommentPerson(commentPerson?: Partial<CommentPerson> | undefined): Record<string, (node: ParseNode) => void>;
+declare function deserializeIntoCommentSettings(commentSettings?: Partial<CommentSettings> | undefined): Record<string, (node: ParseNode) => void>;
+declare function deserializeIntoCommentSettings_effective(commentSettings_effective?: Partial<CommentSettings_effective> | undefined): Record<string, (node: ParseNode) => void>;
+declare function deserializeIntoCommentSettingsInput(commentSettingsInput?: Partial<CommentSettingsInput> | undefined): Record<string, (node: ParseNode) => void>;
+declare function deserializeIntoCommentThread(commentThread?: Partial<CommentThread> | undefined): Record<string, (node: ParseNode) => void>;
+declare function deserializeIntoCommentThreadList(commentThreadList?: Partial<CommentThreadList> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoCompletionRequest(completionRequest?: Partial<CompletionRequest> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoCompletionRequest_output_schema(completionRequest_output_schema?: Partial<CompletionRequest_output_schema> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoComposePDF(composePDF?: Partial<ComposePDF> | undefined): Record<string, (node: ParseNode) => void>;
@@ -2430,6 +2641,8 @@ declare function deserializeIntoListIntegration(listIntegration?: Partial<ListIn
 declare function deserializeIntoListView(listView?: Partial<ListView> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoListViewPage(listViewPage?: Partial<ListViewPage> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoLocatedItem(locatedItem?: Partial<LocatedItem> | undefined): Record<string, (node: ParseNode) => void>;
+declare function deserializeIntoMentionCandidateList(mentionCandidateList?: Partial<MentionCandidateList> | undefined): Record<string, (node: ParseNode) => void>;
+declare function deserializeIntoMentionCandidateList_value(mentionCandidateList_value?: Partial<MentionCandidateList_value> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoMergeTerm(mergeTerm?: Partial<MergeTerm> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoMoveItem(moveItem?: Partial<MoveItem> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoMoveTerm(moveTerm?: Partial<MoveTerm> | undefined): Record<string, (node: ParseNode) => void>;
@@ -2438,6 +2651,8 @@ declare function deserializeIntoNavigationNode(navigationNode?: Partial<Navigati
 declare function deserializeIntoNavigationPage(navigationPage?: Partial<NavigationPage> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoNavigationRequest(navigationRequest?: Partial<NavigationRequest> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoNavigationSelection(navigationSelection?: Partial<NavigationSelection> | undefined): Record<string, (node: ParseNode) => void>;
+declare function deserializeIntoNotificationSend(notificationSend?: Partial<NotificationSend> | undefined): Record<string, (node: ParseNode) => void>;
+declare function deserializeIntoNotificationSendResult(notificationSendResult?: Partial<NotificationSendResult> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoOperation(operation?: Partial<Operation> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoOperationFailure(operationFailure?: Partial<OperationFailure> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoOperationPage(operationPage?: Partial<OperationPage> | undefined): Record<string, (node: ParseNode) => void>;
@@ -3231,6 +3446,26 @@ export interface LocatedItem extends Parsable, Resource {
 	 */
 	workspaceName?: string | null;
 }
+export interface MentionCandidateList extends AdditionalDataHolder, Parsable {
+	/**
+	 * The value property
+	 */
+	value?: MentionCandidateList_value[] | null;
+}
+export interface MentionCandidateList_value extends AdditionalDataHolder, Parsable {
+	/**
+	 * The can_see property
+	 */
+	canSee?: boolean | null;
+	/**
+	 * The name property
+	 */
+	name?: string | null;
+	/**
+	 * The subject property
+	 */
+	subject?: string | null;
+}
 export interface MergeTerm extends Parsable {
 	/**
 	 * The target_term_id property
@@ -3357,6 +3592,42 @@ export interface NavigationSelection extends Parsable {
 	 * A term of the field's term set: the items the view shows at it.
 	 */
 	termId?: string | null;
+}
+export interface NotificationSend extends Parsable {
+	/**
+	 * The body property
+	 */
+	body?: string | null;
+	/**
+	 * Sends to each person once: a later send with the same key, from the same sender in the same workspace, reaches only people who do not have it.
+	 */
+	dedupKey?: string | null;
+	/**
+	 * An item of the workspace the notification opens.
+	 */
+	itemId?: string | null;
+	/**
+	 * People, group:<id>, role:owners, role:members, creator, actor or field:<key>, as task assignees; at most 500 people once expanded.
+	 */
+	recipients?: string[] | null;
+	/**
+	 * The title property
+	 */
+	title?: string | null;
+}
+export interface NotificationSendResult extends AdditionalDataHolder, Parsable {
+	/**
+	 * People who already had the dedup key.
+	 */
+	deduplicated?: number | null;
+	/**
+	 * The sent property
+	 */
+	sent?: number | null;
+	/**
+	 * People who cannot read the item or workspace.
+	 */
+	skipped?: number | null;
 }
 /**
  * Tracked operation executed by a registered handler, in bounded transactional batches or outside the database writer under a renewed claim. Field indexing and filtered bulk edits are built in. Payloads, credential constraints and claims are private; progress and results are visible through operation reads. Pending work resumes after restart: an execution that stops gives its claim back or lets it expire, and transient failures retry later. Terminal records expire after 30 days without an update.
@@ -4811,6 +5082,18 @@ declare function serializeCalendarQuery(writer: SerializationWriter, calendarQue
 declare function serializeChunkText(writer: SerializationWriter, chunkText?: Partial<ChunkText> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeCollectionContentType(writer: SerializationWriter, collectionContentType?: Partial<CollectionContentType> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeCollectionTemplate(writer: SerializationWriter, collectionTemplate?: Partial<CollectionTemplate> | undefined | null, isSerializingDerivedType?: boolean): void;
+declare function serializeComment(writer: SerializationWriter, comment?: Partial<Comment> | undefined | null, isSerializingDerivedType?: boolean): void;
+declare function serializeCommentCounts(writer: SerializationWriter, commentCounts?: Partial<CommentCounts> | undefined | null, isSerializingDerivedType?: boolean): void;
+declare function serializeCommentCounts_counts(writer: SerializationWriter, commentCounts_counts?: Partial<CommentCounts_counts> | undefined | null, isSerializingDerivedType?: boolean): void;
+declare function serializeCommentCountsRequest(writer: SerializationWriter, commentCountsRequest?: Partial<CommentCountsRequest> | undefined | null, isSerializingDerivedType?: boolean): void;
+declare function serializeCommentCreate(writer: SerializationWriter, commentCreate?: Partial<CommentCreate> | undefined | null, isSerializingDerivedType?: boolean): void;
+declare function serializeCommentEdit(writer: SerializationWriter, commentEdit?: Partial<CommentEdit> | undefined | null, isSerializingDerivedType?: boolean): void;
+declare function serializeCommentPerson(writer: SerializationWriter, commentPerson?: Partial<CommentPerson> | undefined | null, isSerializingDerivedType?: boolean): void;
+declare function serializeCommentSettings(writer: SerializationWriter, commentSettings?: Partial<CommentSettings> | undefined | null, isSerializingDerivedType?: boolean): void;
+declare function serializeCommentSettings_effective(writer: SerializationWriter, commentSettings_effective?: Partial<CommentSettings_effective> | undefined | null, isSerializingDerivedType?: boolean): void;
+declare function serializeCommentSettingsInput(writer: SerializationWriter, commentSettingsInput?: Partial<CommentSettingsInput> | undefined | null, isSerializingDerivedType?: boolean): void;
+declare function serializeCommentThread(writer: SerializationWriter, commentThread?: Partial<CommentThread> | undefined | null, isSerializingDerivedType?: boolean): void;
+declare function serializeCommentThreadList(writer: SerializationWriter, commentThreadList?: Partial<CommentThreadList> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeCompletionRequest(writer: SerializationWriter, completionRequest?: Partial<CompletionRequest> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeCompletionRequest_output_schema(writer: SerializationWriter, completionRequest_output_schema?: Partial<CompletionRequest_output_schema> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeComposePDF(writer: SerializationWriter, composePDF?: Partial<ComposePDF> | undefined | null, isSerializingDerivedType?: boolean): void;
@@ -4861,6 +5144,8 @@ declare function serializeListIntegration(writer: SerializationWriter, listInteg
 declare function serializeListView(writer: SerializationWriter, listView?: Partial<ListView> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeListViewPage(writer: SerializationWriter, listViewPage?: Partial<ListViewPage> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeLocatedItem(writer: SerializationWriter, locatedItem?: Partial<LocatedItem> | undefined | null, isSerializingDerivedType?: boolean): void;
+declare function serializeMentionCandidateList(writer: SerializationWriter, mentionCandidateList?: Partial<MentionCandidateList> | undefined | null, isSerializingDerivedType?: boolean): void;
+declare function serializeMentionCandidateList_value(writer: SerializationWriter, mentionCandidateList_value?: Partial<MentionCandidateList_value> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeMergeTerm(writer: SerializationWriter, mergeTerm?: Partial<MergeTerm> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeMoveItem(writer: SerializationWriter, moveItem?: Partial<MoveItem> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeMoveTerm(writer: SerializationWriter, moveTerm?: Partial<MoveTerm> | undefined | null, isSerializingDerivedType?: boolean): void;
@@ -4869,6 +5154,8 @@ declare function serializeNavigationNode(writer: SerializationWriter, navigation
 declare function serializeNavigationPage(writer: SerializationWriter, navigationPage?: Partial<NavigationPage> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeNavigationRequest(writer: SerializationWriter, navigationRequest?: Partial<NavigationRequest> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeNavigationSelection(writer: SerializationWriter, navigationSelection?: Partial<NavigationSelection> | undefined | null, isSerializingDerivedType?: boolean): void;
+declare function serializeNotificationSend(writer: SerializationWriter, notificationSend?: Partial<NotificationSend> | undefined | null, isSerializingDerivedType?: boolean): void;
+declare function serializeNotificationSendResult(writer: SerializationWriter, notificationSendResult?: Partial<NotificationSendResult> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeOperation(writer: SerializationWriter, operation?: Partial<Operation> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeOperationFailure(writer: SerializationWriter, operationFailure?: Partial<OperationFailure> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeOperationPage(writer: SerializationWriter, operationPage?: Partial<OperationPage> | undefined | null, isSerializingDerivedType?: boolean): void;
@@ -6651,6 +6938,44 @@ declare const CollectionTemplate_versioningObject: {
 	readonly Off: "off";
 	readonly Major: "major";
 };
+declare const Comment_sourceObject: {
+	readonly User: "user";
+	readonly Workflow: "workflow";
+};
+declare const CommentSettings_effective_fromObject: {
+	readonly Deployment: "deployment";
+	readonly Organization: "organization";
+	readonly Workspace: "workspace";
+	readonly Collection: "collection";
+	readonly DefaultEscaped: "default";
+};
+declare const CommentSettings_effective_modeObject: {
+	readonly Off: "off";
+	readonly Collaborators: "collaborators";
+	readonly Readers: "readers";
+};
+declare const CommentSettings_modeObject: {
+	readonly Off: "off";
+	readonly Collaborators: "collaborators";
+	readonly Readers: "readers";
+};
+declare const CommentSettingsInput_modeObject: {
+	readonly Off: "off";
+	readonly Collaborators: "collaborators";
+	readonly Readers: "readers";
+};
+declare const CommentThreadList_mode_fromObject: {
+	readonly Deployment: "deployment";
+	readonly Organization: "organization";
+	readonly Workspace: "workspace";
+	readonly Collection: "collection";
+	readonly DefaultEscaped: "default";
+};
+declare const CommentThreadList_modeObject: {
+	readonly Off: "off";
+	readonly Collaborators: "collaborators";
+	readonly Readers: "readers";
+};
 declare const CompletionRequest_executionObject: {
 	readonly Immediate: "immediate";
 	readonly Batch: "batch";
@@ -7392,6 +7717,178 @@ export interface CollectionTemplatesRequestBuilder extends BaseRequestBuilder<Co
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 }
 /**
+ * Builds and executes requests for operations under /v1/comments/counts
+ */
+export interface CountsRequestBuilder extends BaseRequestBuilder<CountsRequestBuilder> {
+	/**
+	 * Open and resolved thread counts of up to 200 items whose discussions the caller may read; others are left out.
+	 * @param body The request body
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {Promise<CommentCounts>}
+	 * @throws {Problem} error when the service returns a 400 status code
+	 * @throws {Problem} error when the service returns a 401 status code
+	 * @throws {Problem} error when the service returns a 403 status code
+	 * @throws {Problem} error when the service returns a 404 status code
+	 * @throws {Problem} error when the service returns a 409 status code
+	 * @throws {Problem} error when the service returns a 413 status code
+	 * @throws {Problem} error when the service returns a 415 status code
+	 * @throws {Problem} error when the service returns a 422 status code
+	 * @throws {Problem} error when the service returns a 500 status code
+	 */
+	post(body: CommentCountsRequest, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<CommentCounts | undefined>;
+	/**
+	 * Open and resolved thread counts of up to 200 items whose discussions the caller may read; others are left out.
+	 * @param body The request body
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {RequestInformation}
+	 */
+	toPostRequestInformation(body: CommentCountsRequest, requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
+}
+/**
+ * Builds and executes requests for operations under /v1/comments/{id}/reopen
+ */
+export interface ReopenRequestBuilder extends BaseRequestBuilder<ReopenRequestBuilder> {
+	/**
+	 * Opens a resolved thread again.
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {Promise<Comment>}
+	 * @throws {Problem} error when the service returns a 400 status code
+	 * @throws {Problem} error when the service returns a 401 status code
+	 * @throws {Problem} error when the service returns a 403 status code
+	 * @throws {Problem} error when the service returns a 404 status code
+	 * @throws {Problem} error when the service returns a 409 status code
+	 * @throws {Problem} error when the service returns a 413 status code
+	 * @throws {Problem} error when the service returns a 415 status code
+	 * @throws {Problem} error when the service returns a 422 status code
+	 * @throws {Problem} error when the service returns a 500 status code
+	 */
+	post(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Comment | undefined>;
+	/**
+	 * Opens a resolved thread again.
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {RequestInformation}
+	 */
+	toPostRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
+}
+/**
+ * Builds and executes requests for operations under /v1/comments/{id}/resolve
+ */
+export interface ResolveRequestBuilder extends BaseRequestBuilder<ResolveRequestBuilder> {
+	/**
+	 * Marks the thread a first comment starts resolved: its author, people who may change the item, and its managers may.
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {Promise<Comment>}
+	 * @throws {Problem} error when the service returns a 400 status code
+	 * @throws {Problem} error when the service returns a 401 status code
+	 * @throws {Problem} error when the service returns a 403 status code
+	 * @throws {Problem} error when the service returns a 404 status code
+	 * @throws {Problem} error when the service returns a 409 status code
+	 * @throws {Problem} error when the service returns a 413 status code
+	 * @throws {Problem} error when the service returns a 415 status code
+	 * @throws {Problem} error when the service returns a 422 status code
+	 * @throws {Problem} error when the service returns a 500 status code
+	 */
+	post(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Comment | undefined>;
+	/**
+	 * Marks the thread a first comment starts resolved: its author, people who may change the item, and its managers may.
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {RequestInformation}
+	 */
+	toPostRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
+}
+/**
+ * Builds and executes requests for operations under /v1/comments/{id}
+ */
+export interface CommentsItemRequestBuilder extends BaseRequestBuilder<CommentsItemRequestBuilder> {
+	/**
+	 * The reopen property
+	 */
+	get reopen(): ReopenRequestBuilder;
+	/**
+	 * The resolve property
+	 */
+	get resolve(): ResolveRequestBuilder;
+	/**
+	 * Empties a comment: the author's own, or any for the item's managers. A thread whose first comment is deleted stays while it has replies.
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @throws {Problem} error when the service returns a 400 status code
+	 * @throws {Problem} error when the service returns a 401 status code
+	 * @throws {Problem} error when the service returns a 403 status code
+	 * @throws {Problem} error when the service returns a 404 status code
+	 * @throws {Problem} error when the service returns a 409 status code
+	 * @throws {Problem} error when the service returns a 413 status code
+	 * @throws {Problem} error when the service returns a 415 status code
+	 * @throws {Problem} error when the service returns a 422 status code
+	 * @throws {Problem} error when the service returns a 500 status code
+	 */
+	delete(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<void>;
+	/**
+	 * Get Comment
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {Promise<Comment>}
+	 * @throws {Problem} error when the service returns a 400 status code
+	 * @throws {Problem} error when the service returns a 401 status code
+	 * @throws {Problem} error when the service returns a 403 status code
+	 * @throws {Problem} error when the service returns a 404 status code
+	 * @throws {Problem} error when the service returns a 409 status code
+	 * @throws {Problem} error when the service returns a 413 status code
+	 * @throws {Problem} error when the service returns a 415 status code
+	 * @throws {Problem} error when the service returns a 422 status code
+	 * @throws {Problem} error when the service returns a 500 status code
+	 */
+	get(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Comment | undefined>;
+	/**
+	 * Replaces the text of the caller's comment. People it newly mentions are notified.
+	 * @param body The request body
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {Promise<Comment>}
+	 * @throws {Problem} error when the service returns a 400 status code
+	 * @throws {Problem} error when the service returns a 401 status code
+	 * @throws {Problem} error when the service returns a 403 status code
+	 * @throws {Problem} error when the service returns a 404 status code
+	 * @throws {Problem} error when the service returns a 409 status code
+	 * @throws {Problem} error when the service returns a 413 status code
+	 * @throws {Problem} error when the service returns a 415 status code
+	 * @throws {Problem} error when the service returns a 422 status code
+	 * @throws {Problem} error when the service returns a 500 status code
+	 */
+	patch(body: CommentEdit, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Comment | undefined>;
+	/**
+	 * Empties a comment: the author's own, or any for the item's managers. A thread whose first comment is deleted stays while it has replies.
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {RequestInformation}
+	 */
+	toDeleteRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
+	/**
+	 * Get Comment
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {RequestInformation}
+	 */
+	toGetRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
+	/**
+	 * Replaces the text of the caller's comment. People it newly mentions are notified.
+	 * @param body The request body
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {RequestInformation}
+	 */
+	toPatchRequestInformation(body: CommentEdit, requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
+}
+/**
+ * Builds and executes requests for operations under /v1/comments
+ */
+export interface CommentsRequestBuilder extends BaseRequestBuilder<CommentsRequestBuilder> {
+	/**
+	 * The counts property
+	 */
+	get counts(): CountsRequestBuilder;
+	/**
+	 * Gets an item from the PaperGo.v1.comments.item collection
+	 * @param id Unique identifier of the item
+	 * @returns {CommentsItemRequestBuilder}
+	 */
+	byId(id: string): CommentsItemRequestBuilder;
+}
+/**
  * Builds and executes requests for operations under /v1/content-types/{id}
  */
 export interface ContentTypesItemRequestBuilder extends BaseRequestBuilder<ContentTypesItemRequestBuilder> {
@@ -7552,6 +8049,69 @@ interface ArchiveRequestBuilder$1 extends BaseRequestBuilder<ArchiveRequestBuild
 	 */
 	toPostRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 }
+interface CommentsRequestBuilder$1 extends BaseRequestBuilder<CommentsRequestBuilder$1> {
+	/**
+	 * The item's threads, oldest first, each with its replies, and what the caller may do in the discussion. Where the collection's mode turns comments off or the caller may not read the discussion, it lists none; mode, mode_from and can_read say why. status selects open (default), resolved or all threads.
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {Promise<CommentThreadList>}
+	 * @throws {Problem} error when the service returns a 400 status code
+	 * @throws {Problem} error when the service returns a 401 status code
+	 * @throws {Problem} error when the service returns a 403 status code
+	 * @throws {Problem} error when the service returns a 404 status code
+	 * @throws {Problem} error when the service returns a 409 status code
+	 * @throws {Problem} error when the service returns a 413 status code
+	 * @throws {Problem} error when the service returns a 415 status code
+	 * @throws {Problem} error when the service returns a 422 status code
+	 * @throws {Problem} error when the service returns a 500 status code
+	 */
+	get(requestConfiguration?: RequestConfiguration<CommentsRequestBuilderGetQueryParameters> | undefined): Promise<CommentThreadList | undefined>;
+	/**
+	 * Starts a thread on the item, or answers one with thread_id. <@user:subject> mentions a person, who is notified when they may read the discussion; the thread's participants are notified of replies. Needs the comment.write scope; an archived item's discussion is read only. A workflow's request comments as the workflow.
+	 * @param body The request body
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {Promise<Comment>}
+	 * @throws {Problem} error when the service returns a 400 status code
+	 * @throws {Problem} error when the service returns a 401 status code
+	 * @throws {Problem} error when the service returns a 403 status code
+	 * @throws {Problem} error when the service returns a 404 status code
+	 * @throws {Problem} error when the service returns a 409 status code
+	 * @throws {Problem} error when the service returns a 413 status code
+	 * @throws {Problem} error when the service returns a 415 status code
+	 * @throws {Problem} error when the service returns a 422 status code
+	 * @throws {Problem} error when the service returns a 500 status code
+	 */
+	post(body: CommentCreate, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Comment | undefined>;
+	/**
+	 * The item's threads, oldest first, each with its replies, and what the caller may do in the discussion. Where the collection's mode turns comments off or the caller may not read the discussion, it lists none; mode, mode_from and can_read say why. status selects open (default), resolved or all threads.
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {RequestInformation}
+	 */
+	toGetRequestInformation(requestConfiguration?: RequestConfiguration<CommentsRequestBuilderGetQueryParameters> | undefined): RequestInformation;
+	/**
+	 * Starts a thread on the item, or answers one with thread_id. <@user:subject> mentions a person, who is notified when they may read the discussion; the thread's participants are notified of replies. Needs the comment.write scope; an archived item's discussion is read only. A workflow's request comments as the workflow.
+	 * @param body The request body
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {RequestInformation}
+	 */
+	toPostRequestInformation(body: CommentCreate, requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
+}
+/**
+ * The item's threads, oldest first, each with its replies, and what the caller may do in the discussion. Where the collection's mode turns comments off or the caller may not read the discussion, it lists none; mode, mode_from and can_read say why. status selects open (default), resolved or all threads.
+ */
+export interface CommentsRequestBuilderGetQueryParameters {
+	/**
+	 * Opaque continuation token supplied by @odata.nextLink.
+	 */
+	skiptoken?: string;
+	status?: GetStatusQueryParameterType;
+	top?: number;
+}
+export type GetStatusQueryParameterType = (typeof GetStatusQueryParameterTypeObject)[keyof typeof GetStatusQueryParameterTypeObject];
+declare const GetStatusQueryParameterTypeObject: {
+	readonly Open: "open";
+	readonly Resolved: "resolved";
+	readonly All: "all";
+};
 /**
  * Builds and executes requests for operations under /v1/items/{id}/compose-pdf
  */
@@ -7738,6 +8298,38 @@ export interface IntegrationRequestBuilder extends BaseRequestBuilder<Integratio
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
+}
+/**
+ * Builds and executes requests for operations under /v1/items/{id}/mentionable
+ */
+export interface MentionableRequestBuilder extends BaseRequestBuilder<MentionableRequestBuilder> {
+	/**
+	 * The people the item is shared with, in person or through a group, on it, its folders, its collection or its workspace, whose subject, name or email contains q, at most 20, each with whether they may read the item's discussion. A mention never shares the item.
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {Promise<MentionCandidateList>}
+	 * @throws {Problem} error when the service returns a 400 status code
+	 * @throws {Problem} error when the service returns a 401 status code
+	 * @throws {Problem} error when the service returns a 403 status code
+	 * @throws {Problem} error when the service returns a 404 status code
+	 * @throws {Problem} error when the service returns a 409 status code
+	 * @throws {Problem} error when the service returns a 413 status code
+	 * @throws {Problem} error when the service returns a 415 status code
+	 * @throws {Problem} error when the service returns a 422 status code
+	 * @throws {Problem} error when the service returns a 500 status code
+	 */
+	get(requestConfiguration?: RequestConfiguration<MentionableRequestBuilderGetQueryParameters> | undefined): Promise<MentionCandidateList | undefined>;
+	/**
+	 * The people the item is shared with, in person or through a group, on it, its folders, its collection or its workspace, whose subject, name or email contains q, at most 20, each with whether they may read the item's discussion. A mention never shares the item.
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {RequestInformation}
+	 */
+	toGetRequestInformation(requestConfiguration?: RequestConfiguration<MentionableRequestBuilderGetQueryParameters> | undefined): RequestInformation;
+}
+/**
+ * The people the item is shared with, in person or through a group, on it, its folders, its collection or its workspace, whose subject, name or email contains q, at most 20, each with whether they may read the item's discussion. A mention never shares the item.
+ */
+export interface MentionableRequestBuilderGetQueryParameters {
+	q?: string;
 }
 /**
  * Builds and executes requests for operations under /v1/items/{id}/move
@@ -8200,7 +8792,7 @@ export interface SearchRequestBuilder extends BaseRequestBuilder<SearchRequestBu
 	get chunks(): ChunksRequestBuilder;
 }
 export type GetKindQueryParameterType = (typeof GetKindQueryParameterTypeObject)[keyof typeof GetKindQueryParameterTypeObject];
-export type GetStatusQueryParameterType = (typeof GetStatusQueryParameterTypeObject)[keyof typeof GetStatusQueryParameterTypeObject];
+type GetStatusQueryParameterType$1 = (typeof GetStatusQueryParameterTypeObject$1)[keyof typeof GetStatusQueryParameterTypeObject$1];
 /**
  * Builds and executes requests for operations under /v1/items/{id}/tasks
  */
@@ -8237,14 +8829,14 @@ export interface TasksRequestBuilderGetQueryParameters {
 	 * Opaque continuation token supplied by @odata.nextLink.
 	 */
 	skiptoken?: string;
-	status?: GetStatusQueryParameterType;
+	status?: GetStatusQueryParameterType$1;
 	top?: number;
 }
 declare const GetKindQueryParameterTypeObject: {
 	readonly Task: "task";
 	readonly Approval: "approval";
 };
-declare const GetStatusQueryParameterTypeObject: {
+declare const GetStatusQueryParameterTypeObject$1: {
 	readonly Open: "open";
 	readonly Completed: "completed";
 	readonly Cancelled: "cancelled";
@@ -8363,6 +8955,10 @@ export interface ItemsItemRequestBuilder extends BaseRequestBuilder<ItemsItemReq
 	 */
 	get archive(): ArchiveRequestBuilder$1;
 	/**
+	 * The comments property
+	 */
+	get comments(): CommentsRequestBuilder$1;
+	/**
 	 * The composePdf property
 	 */
 	get composePdf(): ComposePdfRequestBuilder;
@@ -8374,6 +8970,10 @@ export interface ItemsItemRequestBuilder extends BaseRequestBuilder<ItemsItemReq
 	 * The integration property
 	 */
 	get integration(): IntegrationRequestBuilder;
+	/**
+	 * The mentionable property
+	 */
+	get mentionable(): MentionableRequestBuilder;
 	/**
 	 * The move property
 	 */
@@ -9595,6 +10195,61 @@ export interface SchemasRequestBuilderGetQueryParameters {
 	 */
 	top?: number;
 }
+interface CommentsRequestBuilder$2 extends BaseRequestBuilder<CommentsRequestBuilder$2> {
+	/**
+	 * A workspace's, list's or library's own comment mode and the mode that applies there, with the level it comes from.
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {Promise<CommentSettings>}
+	 * @throws {Problem} error when the service returns a 400 status code
+	 * @throws {Problem} error when the service returns a 401 status code
+	 * @throws {Problem} error when the service returns a 403 status code
+	 * @throws {Problem} error when the service returns a 404 status code
+	 * @throws {Problem} error when the service returns a 409 status code
+	 * @throws {Problem} error when the service returns a 413 status code
+	 * @throws {Problem} error when the service returns a 415 status code
+	 * @throws {Problem} error when the service returns a 422 status code
+	 * @throws {Problem} error when the service returns a 500 status code
+	 */
+	get(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<CommentSettings | undefined>;
+	/**
+	 * Sets the place's mode, or with null inherits it: a collection inherits its workspace's, a workspace the organization's. Needs manage access to the place.
+	 * @param body The request body
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {Promise<CommentSettings>}
+	 * @throws {Problem} error when the service returns a 400 status code
+	 * @throws {Problem} error when the service returns a 401 status code
+	 * @throws {Problem} error when the service returns a 403 status code
+	 * @throws {Problem} error when the service returns a 404 status code
+	 * @throws {Problem} error when the service returns a 409 status code
+	 * @throws {Problem} error when the service returns a 413 status code
+	 * @throws {Problem} error when the service returns a 415 status code
+	 * @throws {Problem} error when the service returns a 422 status code
+	 * @throws {Problem} error when the service returns a 500 status code
+	 */
+	put(body: CommentSettingsInput, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<CommentSettings | undefined>;
+	/**
+	 * A workspace's, list's or library's own comment mode and the mode that applies there, with the level it comes from.
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {RequestInformation}
+	 */
+	toGetRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
+	/**
+	 * Sets the place's mode, or with null inherits it: a collection inherits its workspace's, a workspace the organization's. Needs manage access to the place.
+	 * @param body The request body
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {RequestInformation}
+	 */
+	toPutRequestInformation(body: CommentSettingsInput, requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
+}
+/**
+ * Builds and executes requests for operations under /v1/resources/{id}/settings
+ */
+export interface SettingsRequestBuilder extends BaseRequestBuilder<SettingsRequestBuilder> {
+	/**
+	 * The comments property
+	 */
+	get comments(): CommentsRequestBuilder$2;
+}
 /**
  * Builds and executes requests for operations under /v1/resources/{id}/templates/{templateID}/apply
  */
@@ -9772,6 +10427,10 @@ export interface ResourcesItemRequestBuilder extends BaseRequestBuilder<Resource
 	 * The schemas property
 	 */
 	get schemas(): SchemasRequestBuilder;
+	/**
+	 * The settings property
+	 */
+	get settings(): SettingsRequestBuilder;
 	/**
 	 * The templates property
 	 */
@@ -11771,6 +12430,34 @@ export interface MembersRequestBuilder extends BaseRequestBuilder<MembersRequest
 	 */
 	toPostRequestInformation(body: SetWorkspaceMember, requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 }
+/**
+ * Builds and executes requests for operations under /v1/workspaces/{id}/notifications
+ */
+export interface NotificationsRequestBuilder extends BaseRequestBuilder<NotificationsRequestBuilder> {
+	/**
+	 * Sends a message to the people the recipients name who can read a revision of its item, or else the workspace; the others are skipped and counted. The caller needs read access to the workspace and the item, and the item.write scope. A workflow's request sends it from the workflow. A dedup key sends it to each person once; it belongs to the workspace and the sender, apart from other senders' keys and PaperGo's own.
+	 * @param body The request body
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {Promise<NotificationSendResult>}
+	 * @throws {Problem} error when the service returns a 400 status code
+	 * @throws {Problem} error when the service returns a 401 status code
+	 * @throws {Problem} error when the service returns a 403 status code
+	 * @throws {Problem} error when the service returns a 404 status code
+	 * @throws {Problem} error when the service returns a 409 status code
+	 * @throws {Problem} error when the service returns a 413 status code
+	 * @throws {Problem} error when the service returns a 415 status code
+	 * @throws {Problem} error when the service returns a 422 status code
+	 * @throws {Problem} error when the service returns a 500 status code
+	 */
+	post(body: NotificationSend, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<NotificationSendResult | undefined>;
+	/**
+	 * Sends a message to the people the recipients name who can read a revision of its item, or else the workspace; the others are skipped and counted. The caller needs read access to the workspace and the item, and the item.write scope. A workflow's request sends it from the workflow. A dedup key sends it to each person once; it belongs to the workspace and the sender, apart from other senders' keys and PaperGo's own.
+	 * @param body The request body
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {RequestInformation}
+	 */
+	toPostRequestInformation(body: NotificationSend, requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
+}
 export type GetScopeQueryParameterType = (typeof GetScopeQueryParameterTypeObject)[keyof typeof GetScopeQueryParameterTypeObject];
 interface ItemsRequestBuilder$2 extends BaseRequestBuilder<ItemsRequestBuilder$2> {
 	/**
@@ -12131,7 +12818,7 @@ interface SmartFoldersRequestBuilder$1 extends BaseRequestBuilder<SmartFoldersRe
 	get importEscaped(): ImportRequestBuilder$2;
 }
 type GetKindQueryParameterType$3 = (typeof GetKindQueryParameterTypeObject$3)[keyof typeof GetKindQueryParameterTypeObject$3];
-type GetStatusQueryParameterType$1 = (typeof GetStatusQueryParameterTypeObject$1)[keyof typeof GetStatusQueryParameterTypeObject$1];
+type GetStatusQueryParameterType$2 = (typeof GetStatusQueryParameterTypeObject$2)[keyof typeof GetStatusQueryParameterTypeObject$2];
 interface TasksRequestBuilder$2 extends BaseRequestBuilder<TasksRequestBuilder$2> {
 	/**
 	 * A workspace's tasks, for its owners.
@@ -12149,7 +12836,7 @@ interface TasksRequestBuilder$2 extends BaseRequestBuilder<TasksRequestBuilder$2
 	 */
 	get(requestConfiguration?: RequestConfiguration<TasksRequestBuilderGetQueryParameters$1> | undefined): Promise<TaskList | undefined>;
 	/**
-	 * Creates a task. The creator needs read access to the workspace, and write access to the item when it concerns one. Assignees are recipient entries; none means the workspace's owners. Unknown recipients fail with their names. A task a workflow run creates is that workflow's: its operation_id is the operation its answer ends, which the run waits on, it may review a staged file of the run, and it is cancelled with the run.
+	 * Creates a task. The creator needs read access to the workspace, and write access to the item when it concerns one. Assignees are recipient entries; none means the workspace's owners. Unknown recipients fail with their names. A task a workflow run creates is that workflow's: its operation_id is the operation its answer ends, which the run waits on, it may review a staged file of the run, and it is cancelled with the run. Needs the item.write scope.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Task>}
@@ -12171,7 +12858,7 @@ interface TasksRequestBuilder$2 extends BaseRequestBuilder<TasksRequestBuilder$2
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<TasksRequestBuilderGetQueryParameters$1> | undefined): RequestInformation;
 	/**
-	 * Creates a task. The creator needs read access to the workspace, and write access to the item when it concerns one. Assignees are recipient entries; none means the workspace's owners. Unknown recipients fail with their names. A task a workflow run creates is that workflow's: its operation_id is the operation its answer ends, which the run waits on, it may review a staged file of the run, and it is cancelled with the run.
+	 * Creates a task. The creator needs read access to the workspace, and write access to the item when it concerns one. Assignees are recipient entries; none means the workspace's owners. Unknown recipients fail with their names. A task a workflow run creates is that workflow's: its operation_id is the operation its answer ends, which the run waits on, it may review a staged file of the run, and it is cancelled with the run. Needs the item.write scope.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -12185,14 +12872,14 @@ interface TasksRequestBuilderGetQueryParameters$1 {
 	 * Opaque continuation token supplied by @odata.nextLink.
 	 */
 	skiptoken?: string;
-	status?: GetStatusQueryParameterType$1;
+	status?: GetStatusQueryParameterType$2;
 	top?: number;
 }
 declare const GetKindQueryParameterTypeObject$3: {
 	readonly Task: "task";
 	readonly Approval: "approval";
 };
-declare const GetStatusQueryParameterTypeObject$1: {
+declare const GetStatusQueryParameterTypeObject$2: {
 	readonly Open: "open";
 	readonly Completed: "completed";
 	readonly Cancelled: "cancelled";
@@ -12269,6 +12956,10 @@ export interface WorkspacesItemRequestBuilder extends BaseRequestBuilder<Workspa
 	 * The members property
 	 */
 	get members(): MembersRequestBuilder;
+	/**
+	 * The notifications property
+	 */
+	get notifications(): NotificationsRequestBuilder;
 	/**
 	 * The relationships property
 	 */
@@ -12390,6 +13081,10 @@ export interface V1RequestBuilder extends BaseRequestBuilder<V1RequestBuilder> {
 	 * The collectionTemplates property
 	 */
 	get collectionTemplates(): CollectionTemplatesRequestBuilder;
+	/**
+	 * The comments property
+	 */
+	get comments(): CommentsRequestBuilder;
 	/**
 	 * The contentTypes property
 	 */
@@ -12658,7 +13353,7 @@ export declare function __start(definition: unknown, run: string): Promise<strin
 export declare function __manifest(definition: unknown, params: string): string;
 
 declare namespace models {
-	export { ApplyTemplateInput, ArchiveEntry, ArchiveEntry_duplicate_policy, ArchiveEntry_duplicate_policyObject, ArchiveEntry_kind, ArchiveEntry_kindObject, ArchiveEntry_system_key, ArchiveEntry_system_keyObject, ArchiveEntry_values, ArchiveEntry_versioning, ArchiveEntry_versioningObject, ArchiveSelection, ArchiveSelectionObject, Artifact, Artifact_metrics, Artifact_sources, AttachContentTypeInput, AuditEvent, AuditEvent_credential, AuditEvent_details, AuditPage, Blob, Blob_content_type, Blob_content_typeObject, BulkCreate, BulkCreate_values, BulkOperation, BulkOperationMember1, BulkOperationMember2, BulkOperationMember3, BulkOperationMember4, BulkOperationMember5, BulkOperationMember6, BulkOperationMember7, BulkRequest, BulkResponse, BulkResult, BulkResult_action, BulkResult_actionObject, BulkUpdate, BulkUpdate_values, CalendarOccurrence, CalendarQuery, CalendarQuery_surface, CalendarQuery_surfaceObject, ChunkText, ChunkText_chunker, ChunkText_chunkerObject, ChunkText_kind, ChunkText_kindObject, CollectionContentType, CollectionTemplate, CollectionTemplate_duplicate_policy, CollectionTemplate_duplicate_policyObject, CollectionTemplate_kind, CollectionTemplate_kindObject, CollectionTemplate_versioning, CollectionTemplate_versioningObject, CompletionRequest, CompletionRequest_execution, CompletionRequest_executionObject, CompletionRequest_output_schema, ComposePDF, ContentType, ContentTypeInput, CreateCatalogField, CreateCatalogField_type, CreateCatalogField_typeObject, CreateField, CreateField_type, CreateField_typeObject, CreateListIntegration, CreateListIntegration_configuration, CreateRelationship, CreateRelationship_metadata, CreateResource, CreateResource_duplicate_policy, CreateResource_duplicate_policyObject, CreateResource_kind, CreateResource_kindObject, CreateResource_values, CreateResource_versioning, CreateResource_versioningObject, DecisionRequest, DecisionRequest_context, DecisionRequest_data, DecisionRequest_questions, DecisionRequest_questions_options, DecisionRequest_questions_type, DecisionRequest_questions_typeObject, DeletedResource, DeltaPage, DeltaPage_value, DeltaPage_valueMember1, DeltaPage_valueMember1_Removed, DeltaPage_valueMember1_Removed_reason, DeltaPage_valueMember1_Removed_reasonObject, DocumentMetadata, DocumentMetadata_values, DocumentUpload, DuplicateDocument, FieldDefinition, FieldDefinition_index_status, FieldDefinition_index_statusObject, FieldDefinition_type, FieldDefinition_typeObject, FieldOptions, FieldOptions_search_weight, FieldOptions_search_weightObject, FileVersion, FileVersion_availability, FileVersion_availabilityObject, FilterExpr, FilterExpr_op, FilterExpr_opObject, FilterExpr_value_ref, FilterExpr_value_refObject, FilteredBulkUpdate, FilteredBulkUpdate_values, GenerationChunk, GenerationChunkPage, GenerationEnrichments, GenerationEnrichments_enrichments, ItemIntegration, ItemRevision, ItemRevision_payload, ItemText, ItemText_next, ItemText_pages, KeywordCount, KeywordCountList, KeywordInput, ListIntegration, ListIntegration_kind, ListIntegration_kindObject, ListView, ListViewPage, ListView_system_key, ListView_system_keyObject, LocatedItem, MergeTerm, MoveItem, MoveTerm, NavigationFieldSetting, NavigationNode, NavigationPage, NavigationRequest, NavigationRequest_surface, NavigationRequest_surfaceObject, NavigationSelection, Operation, OperationFailure, OperationPage, Operation_error_code, Operation_error_codeObject, Operation_status, Operation_statusObject, Operation_waiting, Operation_waitingObject, OptimizeImage, Permissions, Permissions_effective_grants, Permissions_effective_grants_action, Permissions_effective_grants_actionObject, Permissions_effective_grants_effect, Permissions_effective_grants_effectObject, Permissions_effective_grants_principal_type, Permissions_effective_grants_principal_typeObject, Permissions_grants, Permissions_grants_action, Permissions_grants_actionObject, Permissions_grants_effect, Permissions_grants_effectObject, Permissions_grants_principal_type, Permissions_grants_principal_typeObject, PortableSmartFolder, PortableSmartFolderDefinition, PortableSmartFolderDefinition_collection_kind, PortableSmartFolderDefinition_collection_kindObject, PortableSmartFolderDefinition_mode, PortableSmartFolderDefinition_modeObject, PortableSmartFolderDefinition_term_match, PortableSmartFolderDefinition_term_matchObject, PortableTerm, PortableTermGroup, PortableTermSet, PortableTerm_labels, Problem, Problem_existing_item, PromoteKeyword, PromoteStagedFile, PromotedFile, Publication, Publication_action, Publication_actionObject, Publication_snapshot, QueryGroup, QueryGroupPage, QueryRequest, QueryRequest_surface, QueryRequest_surfaceObject, QueryResult, QuerySpec, ReadText, ReadText_ocr, ReadText_ocrObject, ReclaimFileVersion, ReclaimedFileVersion, RecycleBinPage, Relationship, RelationshipEndpoint, RelationshipEndpointPage, RelationshipNeighborhood, RelationshipType, RelationshipTypeInput, RelationshipTypePage, RelationshipType_attributes, RelationshipView, Relationship_metadata, Resource, ResourceAccess, ResourceAccess_access, ResourceAccess_accessObject, Resource_duplicate_policy, Resource_duplicate_policyObject, Resource_kind, Resource_kindObject, Resource_system_key, Resource_system_keyObject, Resource_values, Resource_versioning, Resource_versioningObject, SchemaRevision, SchemaRevision_definition, SchemaRevision_definition_fields, SchemaRevision_definition_fields_type, SchemaRevision_definition_fields_typeObject, SchemaTemplate, SchemaTemplatePage, SchemaTemplate_definition, SearchFacetValue, SearchFacets, SearchField, SearchField_operators, SearchField_operatorsObject, SearchHit, SearchHit_kind, SearchHit_kindObject, SearchHit_matched_by, SearchHit_matched_byObject, SearchHit_surface, SearchHit_surfaceObject, SearchPage, SearchPage_mode, SearchPage_modeObject, SearchRequest, SearchRequest_kind, SearchRequest_kindObject, SearchRequest_mode, SearchRequest_modeObject, SearchRequest_surface, SearchRequest_surfaceObject, SearchStatus, SearchStatus_embeddings, SearchSync, SetWorkspaceMember, SetWorkspaceMember_role, SetWorkspaceMember_roleObject, SmartFolder, SmartFolderDefinition, SmartFolderDefinition_collection_kind, SmartFolderDefinition_collection_kindObject, SmartFolderDefinition_mode, SmartFolderDefinition_modeObject, SmartFolderDefinition_term_match, SmartFolderDefinition_term_matchObject, SmartFolderDrop, SmartFolderEntry, SmartFolderEntry_collection_kind, SmartFolderEntry_collection_kindObject, SmartFolderGroup, SmartFolderGroupBy, SmartFolderGroupBy_by, SmartFolderGroupBy_byObject, SmartFolderGroupsResult, SmartFolderImportResult, SmartFolderInput, SmartFolderPackage, SmartFolderPage, SmartFolderPreview, SmartFolderQueryRequest, SmartFolderQueryRequest_sort, SmartFolderQueryRequest_sort_direction, SmartFolderQueryRequest_sort_directionObject, SmartFolderQueryRequest_sort_field, SmartFolderQueryRequest_sort_fieldObject, SmartFolderQueryRequest_surface, SmartFolderQueryRequest_surfaceObject, SmartFolderResult, SmartFolderTermRef, SmartFolderUnclassify, SortSpec, SortSpec_direction, SortSpec_directionObject, StagedArtifact, StagedFile, StagedFile_metrics, StagedFile_sources, StagedFile_state, StagedFile_stateObject, Task, TaskAnswer, TaskAnswer_input, TaskCreate, TaskCreate_completion, TaskCreate_completionObject, TaskCreate_kind, TaskCreate_kindObject, TaskCreate_priority, TaskCreate_priorityObject, TaskCreate_review, TaskCreate_review_type, TaskCreate_review_typeObject, TaskCreate_values, TaskList, TaskOutcome, TaskOutcome_comment, TaskOutcome_commentObject, TaskOutcome_style, TaskOutcome_styleObject, TaskReassign, TaskResponseInput, TaskResponseInput_input, Task_completion, Task_completionObject, Task_input, Task_kind, Task_kindObject, Task_priority, Task_priorityObject, Task_review, Task_review_type, Task_review_typeObject, Task_source, Task_sourceObject, Task_status, Task_statusObject, Task_values, TaxonomyDecisionRequest, TaxonomyDecisionRequest_context, TaxonomyDecisionRequest_data, TaxonomyDecisionRequest_description_overrides, TaxonomyDecisionRequest_selection, TaxonomyDecisionRequest_selectionObject, TaxonomyImportResult, TaxonomyPackage, TemplateField, TemplateField_type, TemplateField_typeObject, TemplateInput, Term, TermEntries, TermGroup, TermGroupInput, TermGroupPage, TermImportResult, TermInput, TermInput_labels, TermList, TermPage, TermSet, TermSetInput, TermSetPage, Term_labels, UpdateField, UpdateListIntegration, UpdateListIntegration_configuration, UpdateRelationship, UpdateRelationship_metadata, UpdateResource, UpdateResource_duplicate_policy, UpdateResource_duplicate_policyObject, UpdateResource_values, UpdateResource_versioning, UpdateResource_versioningObject, ValidationRule, ValidationRuleMember1, ValidationRuleMember2, ValidationRuleMember2_op, ValidationRuleMember2_opObject, ViewInput, ViewInput_layout, ViewInput_layoutObject, ViewQueryRequest, ViewQueryRequest_surface, ViewQueryRequest_surfaceObject, ViewSettings, ViewSettings_match, ViewSettings_matchObject, WorkflowForm, WorkspaceKeywordCount, WorkspaceKeywordCountPage, WorkspaceMember, WorkspaceMember_role, WorkspaceMember_roleObject, WorkspaceRelationshipPage, WorkspaceRelationshipType, WorkspaceRelationshipTypePage, WorkspaceRelationshipView, createApplyTemplateInputFromDiscriminatorValue, createArchiveEntryFromDiscriminatorValue, createArchiveEntry_valuesFromDiscriminatorValue, createArtifactFromDiscriminatorValue, createArtifact_metricsFromDiscriminatorValue, createArtifact_sourcesFromDiscriminatorValue, createAttachContentTypeInputFromDiscriminatorValue, createAuditEventFromDiscriminatorValue, createAuditEvent_credentialFromDiscriminatorValue, createAuditEvent_detailsFromDiscriminatorValue, createAuditPageFromDiscriminatorValue, createBlobFromDiscriminatorValue, createBulkCreateFromDiscriminatorValue, createBulkCreate_valuesFromDiscriminatorValue, createBulkOperationFromDiscriminatorValue, createBulkOperationMember1FromDiscriminatorValue, createBulkOperationMember2FromDiscriminatorValue, createBulkOperationMember3FromDiscriminatorValue, createBulkOperationMember4FromDiscriminatorValue, createBulkOperationMember5FromDiscriminatorValue, createBulkOperationMember6FromDiscriminatorValue, createBulkOperationMember7FromDiscriminatorValue, createBulkRequestFromDiscriminatorValue, createBulkResponseFromDiscriminatorValue, createBulkResultFromDiscriminatorValue, createBulkUpdateFromDiscriminatorValue, createBulkUpdate_valuesFromDiscriminatorValue, createCalendarOccurrenceFromDiscriminatorValue, createCalendarQueryFromDiscriminatorValue, createChunkTextFromDiscriminatorValue, createCollectionContentTypeFromDiscriminatorValue, createCollectionTemplateFromDiscriminatorValue, createCompletionRequestFromDiscriminatorValue, createCompletionRequest_output_schemaFromDiscriminatorValue, createComposePDFFromDiscriminatorValue, createContentTypeFromDiscriminatorValue, createContentTypeInputFromDiscriminatorValue, createCreateCatalogFieldFromDiscriminatorValue, createCreateFieldFromDiscriminatorValue, createCreateListIntegrationFromDiscriminatorValue, createCreateListIntegration_configurationFromDiscriminatorValue, createCreateRelationshipFromDiscriminatorValue, createCreateRelationship_metadataFromDiscriminatorValue, createCreateResourceFromDiscriminatorValue, createCreateResource_valuesFromDiscriminatorValue, createDecisionRequestFromDiscriminatorValue, createDecisionRequest_contextFromDiscriminatorValue, createDecisionRequest_dataFromDiscriminatorValue, createDecisionRequest_questionsFromDiscriminatorValue, createDecisionRequest_questions_optionsFromDiscriminatorValue, createDeletedResourceFromDiscriminatorValue, createDeltaPageFromDiscriminatorValue, createDeltaPage_valueFromDiscriminatorValue, createDeltaPage_valueMember1FromDiscriminatorValue, createDeltaPage_valueMember1_RemovedFromDiscriminatorValue, createDocumentMetadataFromDiscriminatorValue, createDocumentMetadata_valuesFromDiscriminatorValue, createDocumentUploadFromDiscriminatorValue, createDuplicateDocumentFromDiscriminatorValue, createFieldDefinitionFromDiscriminatorValue, createFieldOptionsFromDiscriminatorValue, createFileVersionFromDiscriminatorValue, createFilterExprFromDiscriminatorValue, createFilteredBulkUpdateFromDiscriminatorValue, createFilteredBulkUpdate_valuesFromDiscriminatorValue, createGenerationChunkFromDiscriminatorValue, createGenerationChunkPageFromDiscriminatorValue, createGenerationEnrichmentsFromDiscriminatorValue, createGenerationEnrichments_enrichmentsFromDiscriminatorValue, createItemIntegrationFromDiscriminatorValue, createItemRevisionFromDiscriminatorValue, createItemRevision_payloadFromDiscriminatorValue, createItemTextFromDiscriminatorValue, createItemText_nextFromDiscriminatorValue, createItemText_pagesFromDiscriminatorValue, createKeywordCountFromDiscriminatorValue, createKeywordCountListFromDiscriminatorValue, createKeywordInputFromDiscriminatorValue, createListIntegrationFromDiscriminatorValue, createListViewFromDiscriminatorValue, createListViewPageFromDiscriminatorValue, createLocatedItemFromDiscriminatorValue, createMergeTermFromDiscriminatorValue, createMoveItemFromDiscriminatorValue, createMoveTermFromDiscriminatorValue, createNavigationFieldSettingFromDiscriminatorValue, createNavigationNodeFromDiscriminatorValue, createNavigationPageFromDiscriminatorValue, createNavigationRequestFromDiscriminatorValue, createNavigationSelectionFromDiscriminatorValue, createOperationFailureFromDiscriminatorValue, createOperationFromDiscriminatorValue, createOperationPageFromDiscriminatorValue, createOptimizeImageFromDiscriminatorValue, createPermissionsFromDiscriminatorValue, createPermissions_effective_grantsFromDiscriminatorValue, createPermissions_grantsFromDiscriminatorValue, createPortableSmartFolderDefinitionFromDiscriminatorValue, createPortableSmartFolderFromDiscriminatorValue, createPortableTermFromDiscriminatorValue, createPortableTermGroupFromDiscriminatorValue, createPortableTermSetFromDiscriminatorValue, createPortableTerm_labelsFromDiscriminatorValue, createProblemFromDiscriminatorValue, createProblem_existing_itemFromDiscriminatorValue, createPromoteKeywordFromDiscriminatorValue, createPromoteStagedFileFromDiscriminatorValue, createPromotedFileFromDiscriminatorValue, createPublicationFromDiscriminatorValue, createPublication_snapshotFromDiscriminatorValue, createQueryGroupFromDiscriminatorValue, createQueryGroupPageFromDiscriminatorValue, createQueryRequestFromDiscriminatorValue, createQueryResultFromDiscriminatorValue, createQuerySpecFromDiscriminatorValue, createReadTextFromDiscriminatorValue, createReclaimFileVersionFromDiscriminatorValue, createReclaimedFileVersionFromDiscriminatorValue, createRecycleBinPageFromDiscriminatorValue, createRelationshipEndpointFromDiscriminatorValue, createRelationshipEndpointPageFromDiscriminatorValue, createRelationshipFromDiscriminatorValue, createRelationshipNeighborhoodFromDiscriminatorValue, createRelationshipTypeFromDiscriminatorValue, createRelationshipTypeInputFromDiscriminatorValue, createRelationshipTypePageFromDiscriminatorValue, createRelationshipType_attributesFromDiscriminatorValue, createRelationshipViewFromDiscriminatorValue, createRelationship_metadataFromDiscriminatorValue, createResourceAccessFromDiscriminatorValue, createResourceFromDiscriminatorValue, createResource_valuesFromDiscriminatorValue, createSchemaRevisionFromDiscriminatorValue, createSchemaRevision_definitionFromDiscriminatorValue, createSchemaRevision_definition_fieldsFromDiscriminatorValue, createSchemaTemplateFromDiscriminatorValue, createSchemaTemplatePageFromDiscriminatorValue, createSchemaTemplate_definitionFromDiscriminatorValue, createSearchFacetValueFromDiscriminatorValue, createSearchFacetsFromDiscriminatorValue, createSearchFieldFromDiscriminatorValue, createSearchHitFromDiscriminatorValue, createSearchPageFromDiscriminatorValue, createSearchRequestFromDiscriminatorValue, createSearchStatusFromDiscriminatorValue, createSearchStatus_embeddingsFromDiscriminatorValue, createSearchSyncFromDiscriminatorValue, createSetWorkspaceMemberFromDiscriminatorValue, createSmartFolderDefinitionFromDiscriminatorValue, createSmartFolderDropFromDiscriminatorValue, createSmartFolderEntryFromDiscriminatorValue, createSmartFolderFromDiscriminatorValue, createSmartFolderGroupByFromDiscriminatorValue, createSmartFolderGroupFromDiscriminatorValue, createSmartFolderGroupsResultFromDiscriminatorValue, createSmartFolderImportResultFromDiscriminatorValue, createSmartFolderInputFromDiscriminatorValue, createSmartFolderPackageFromDiscriminatorValue, createSmartFolderPageFromDiscriminatorValue, createSmartFolderPreviewFromDiscriminatorValue, createSmartFolderQueryRequestFromDiscriminatorValue, createSmartFolderQueryRequest_sortFromDiscriminatorValue, createSmartFolderResultFromDiscriminatorValue, createSmartFolderTermRefFromDiscriminatorValue, createSmartFolderUnclassifyFromDiscriminatorValue, createSortSpecFromDiscriminatorValue, createStagedArtifactFromDiscriminatorValue, createStagedFileFromDiscriminatorValue, createStagedFile_metricsFromDiscriminatorValue, createStagedFile_sourcesFromDiscriminatorValue, createTaskAnswerFromDiscriminatorValue, createTaskAnswer_inputFromDiscriminatorValue, createTaskCreateFromDiscriminatorValue, createTaskCreate_reviewFromDiscriminatorValue, createTaskCreate_valuesFromDiscriminatorValue, createTaskFromDiscriminatorValue, createTaskListFromDiscriminatorValue, createTaskOutcomeFromDiscriminatorValue, createTaskReassignFromDiscriminatorValue, createTaskResponseInputFromDiscriminatorValue, createTaskResponseInput_inputFromDiscriminatorValue, createTask_inputFromDiscriminatorValue, createTask_reviewFromDiscriminatorValue, createTask_valuesFromDiscriminatorValue, createTaxonomyDecisionRequestFromDiscriminatorValue, createTaxonomyDecisionRequest_contextFromDiscriminatorValue, createTaxonomyDecisionRequest_dataFromDiscriminatorValue, createTaxonomyDecisionRequest_description_overridesFromDiscriminatorValue, createTaxonomyImportResultFromDiscriminatorValue, createTaxonomyPackageFromDiscriminatorValue, createTemplateFieldFromDiscriminatorValue, createTemplateInputFromDiscriminatorValue, createTermEntriesFromDiscriminatorValue, createTermFromDiscriminatorValue, createTermGroupFromDiscriminatorValue, createTermGroupInputFromDiscriminatorValue, createTermGroupPageFromDiscriminatorValue, createTermImportResultFromDiscriminatorValue, createTermInputFromDiscriminatorValue, createTermInput_labelsFromDiscriminatorValue, createTermListFromDiscriminatorValue, createTermPageFromDiscriminatorValue, createTermSetFromDiscriminatorValue, createTermSetInputFromDiscriminatorValue, createTermSetPageFromDiscriminatorValue, createTerm_labelsFromDiscriminatorValue, createUpdateFieldFromDiscriminatorValue, createUpdateListIntegrationFromDiscriminatorValue, createUpdateListIntegration_configurationFromDiscriminatorValue, createUpdateRelationshipFromDiscriminatorValue, createUpdateRelationship_metadataFromDiscriminatorValue, createUpdateResourceFromDiscriminatorValue, createUpdateResource_valuesFromDiscriminatorValue, createValidationRuleFromDiscriminatorValue, createValidationRuleMember1FromDiscriminatorValue, createValidationRuleMember2FromDiscriminatorValue, createViewInputFromDiscriminatorValue, createViewQueryRequestFromDiscriminatorValue, createViewSettingsFromDiscriminatorValue, createWorkflowFormFromDiscriminatorValue, createWorkspaceKeywordCountFromDiscriminatorValue, createWorkspaceKeywordCountPageFromDiscriminatorValue, createWorkspaceMemberFromDiscriminatorValue, createWorkspaceRelationshipPageFromDiscriminatorValue, createWorkspaceRelationshipTypeFromDiscriminatorValue, createWorkspaceRelationshipTypePageFromDiscriminatorValue, createWorkspaceRelationshipViewFromDiscriminatorValue, deserializeIntoApplyTemplateInput, deserializeIntoArchiveEntry, deserializeIntoArchiveEntry_values, deserializeIntoArtifact, deserializeIntoArtifact_metrics, deserializeIntoArtifact_sources, deserializeIntoAttachContentTypeInput, deserializeIntoAuditEvent, deserializeIntoAuditEvent_credential, deserializeIntoAuditEvent_details, deserializeIntoAuditPage, deserializeIntoBlob, deserializeIntoBulkCreate, deserializeIntoBulkCreate_values, deserializeIntoBulkOperation, deserializeIntoBulkOperationMember1, deserializeIntoBulkOperationMember2, deserializeIntoBulkOperationMember3, deserializeIntoBulkOperationMember4, deserializeIntoBulkOperationMember5, deserializeIntoBulkOperationMember6, deserializeIntoBulkOperationMember7, deserializeIntoBulkRequest, deserializeIntoBulkResponse, deserializeIntoBulkResult, deserializeIntoBulkUpdate, deserializeIntoBulkUpdate_values, deserializeIntoCalendarOccurrence, deserializeIntoCalendarQuery, deserializeIntoChunkText, deserializeIntoCollectionContentType, deserializeIntoCollectionTemplate, deserializeIntoCompletionRequest, deserializeIntoCompletionRequest_output_schema, deserializeIntoComposePDF, deserializeIntoContentType, deserializeIntoContentTypeInput, deserializeIntoCreateCatalogField, deserializeIntoCreateField, deserializeIntoCreateListIntegration, deserializeIntoCreateListIntegration_configuration, deserializeIntoCreateRelationship, deserializeIntoCreateRelationship_metadata, deserializeIntoCreateResource, deserializeIntoCreateResource_values, deserializeIntoDecisionRequest, deserializeIntoDecisionRequest_context, deserializeIntoDecisionRequest_data, deserializeIntoDecisionRequest_questions, deserializeIntoDecisionRequest_questions_options, deserializeIntoDeletedResource, deserializeIntoDeltaPage, deserializeIntoDeltaPage_value, deserializeIntoDeltaPage_valueMember1, deserializeIntoDeltaPage_valueMember1_Removed, deserializeIntoDocumentMetadata, deserializeIntoDocumentMetadata_values, deserializeIntoDocumentUpload, deserializeIntoDuplicateDocument, deserializeIntoFieldDefinition, deserializeIntoFieldOptions, deserializeIntoFileVersion, deserializeIntoFilterExpr, deserializeIntoFilteredBulkUpdate, deserializeIntoFilteredBulkUpdate_values, deserializeIntoGenerationChunk, deserializeIntoGenerationChunkPage, deserializeIntoGenerationEnrichments, deserializeIntoGenerationEnrichments_enrichments, deserializeIntoItemIntegration, deserializeIntoItemRevision, deserializeIntoItemRevision_payload, deserializeIntoItemText, deserializeIntoItemText_next, deserializeIntoItemText_pages, deserializeIntoKeywordCount, deserializeIntoKeywordCountList, deserializeIntoKeywordInput, deserializeIntoListIntegration, deserializeIntoListView, deserializeIntoListViewPage, deserializeIntoLocatedItem, deserializeIntoMergeTerm, deserializeIntoMoveItem, deserializeIntoMoveTerm, deserializeIntoNavigationFieldSetting, deserializeIntoNavigationNode, deserializeIntoNavigationPage, deserializeIntoNavigationRequest, deserializeIntoNavigationSelection, deserializeIntoOperation, deserializeIntoOperationFailure, deserializeIntoOperationPage, deserializeIntoOptimizeImage, deserializeIntoPermissions, deserializeIntoPermissions_effective_grants, deserializeIntoPermissions_grants, deserializeIntoPortableSmartFolder, deserializeIntoPortableSmartFolderDefinition, deserializeIntoPortableTerm, deserializeIntoPortableTermGroup, deserializeIntoPortableTermSet, deserializeIntoPortableTerm_labels, deserializeIntoProblem, deserializeIntoProblem_existing_item, deserializeIntoPromoteKeyword, deserializeIntoPromoteStagedFile, deserializeIntoPromotedFile, deserializeIntoPublication, deserializeIntoPublication_snapshot, deserializeIntoQueryGroup, deserializeIntoQueryGroupPage, deserializeIntoQueryRequest, deserializeIntoQueryResult, deserializeIntoQuerySpec, deserializeIntoReadText, deserializeIntoReclaimFileVersion, deserializeIntoReclaimedFileVersion, deserializeIntoRecycleBinPage, deserializeIntoRelationship, deserializeIntoRelationshipEndpoint, deserializeIntoRelationshipEndpointPage, deserializeIntoRelationshipNeighborhood, deserializeIntoRelationshipType, deserializeIntoRelationshipTypeInput, deserializeIntoRelationshipTypePage, deserializeIntoRelationshipType_attributes, deserializeIntoRelationshipView, deserializeIntoRelationship_metadata, deserializeIntoResource, deserializeIntoResourceAccess, deserializeIntoResource_values, deserializeIntoSchemaRevision, deserializeIntoSchemaRevision_definition, deserializeIntoSchemaRevision_definition_fields, deserializeIntoSchemaTemplate, deserializeIntoSchemaTemplatePage, deserializeIntoSchemaTemplate_definition, deserializeIntoSearchFacetValue, deserializeIntoSearchFacets, deserializeIntoSearchField, deserializeIntoSearchHit, deserializeIntoSearchPage, deserializeIntoSearchRequest, deserializeIntoSearchStatus, deserializeIntoSearchStatus_embeddings, deserializeIntoSearchSync, deserializeIntoSetWorkspaceMember, deserializeIntoSmartFolder, deserializeIntoSmartFolderDefinition, deserializeIntoSmartFolderDrop, deserializeIntoSmartFolderEntry, deserializeIntoSmartFolderGroup, deserializeIntoSmartFolderGroupBy, deserializeIntoSmartFolderGroupsResult, deserializeIntoSmartFolderImportResult, deserializeIntoSmartFolderInput, deserializeIntoSmartFolderPackage, deserializeIntoSmartFolderPage, deserializeIntoSmartFolderPreview, deserializeIntoSmartFolderQueryRequest, deserializeIntoSmartFolderQueryRequest_sort, deserializeIntoSmartFolderResult, deserializeIntoSmartFolderTermRef, deserializeIntoSmartFolderUnclassify, deserializeIntoSortSpec, deserializeIntoStagedArtifact, deserializeIntoStagedFile, deserializeIntoStagedFile_metrics, deserializeIntoStagedFile_sources, deserializeIntoTask, deserializeIntoTaskAnswer, deserializeIntoTaskAnswer_input, deserializeIntoTaskCreate, deserializeIntoTaskCreate_review, deserializeIntoTaskCreate_values, deserializeIntoTaskList, deserializeIntoTaskOutcome, deserializeIntoTaskReassign, deserializeIntoTaskResponseInput, deserializeIntoTaskResponseInput_input, deserializeIntoTask_input, deserializeIntoTask_review, deserializeIntoTask_values, deserializeIntoTaxonomyDecisionRequest, deserializeIntoTaxonomyDecisionRequest_context, deserializeIntoTaxonomyDecisionRequest_data, deserializeIntoTaxonomyDecisionRequest_description_overrides, deserializeIntoTaxonomyImportResult, deserializeIntoTaxonomyPackage, deserializeIntoTemplateField, deserializeIntoTemplateInput, deserializeIntoTerm, deserializeIntoTermEntries, deserializeIntoTermGroup, deserializeIntoTermGroupInput, deserializeIntoTermGroupPage, deserializeIntoTermImportResult, deserializeIntoTermInput, deserializeIntoTermInput_labels, deserializeIntoTermList, deserializeIntoTermPage, deserializeIntoTermSet, deserializeIntoTermSetInput, deserializeIntoTermSetPage, deserializeIntoTerm_labels, deserializeIntoUpdateField, deserializeIntoUpdateListIntegration, deserializeIntoUpdateListIntegration_configuration, deserializeIntoUpdateRelationship, deserializeIntoUpdateRelationship_metadata, deserializeIntoUpdateResource, deserializeIntoUpdateResource_values, deserializeIntoValidationRule, deserializeIntoValidationRuleMember1, deserializeIntoValidationRuleMember2, deserializeIntoViewInput, deserializeIntoViewQueryRequest, deserializeIntoViewSettings, deserializeIntoWorkflowForm, deserializeIntoWorkspaceKeywordCount, deserializeIntoWorkspaceKeywordCountPage, deserializeIntoWorkspaceMember, deserializeIntoWorkspaceRelationshipPage, deserializeIntoWorkspaceRelationshipType, deserializeIntoWorkspaceRelationshipTypePage, deserializeIntoWorkspaceRelationshipView, serializeApplyTemplateInput, serializeArchiveEntry, serializeArchiveEntry_values, serializeArtifact, serializeArtifact_metrics, serializeArtifact_sources, serializeAttachContentTypeInput, serializeAuditEvent, serializeAuditEvent_credential, serializeAuditEvent_details, serializeAuditPage, serializeBlob, serializeBulkCreate, serializeBulkCreate_values, serializeBulkOperation, serializeBulkOperationMember1, serializeBulkOperationMember2, serializeBulkOperationMember3, serializeBulkOperationMember4, serializeBulkOperationMember5, serializeBulkOperationMember6, serializeBulkOperationMember7, serializeBulkRequest, serializeBulkResponse, serializeBulkResult, serializeBulkUpdate, serializeBulkUpdate_values, serializeCalendarOccurrence, serializeCalendarQuery, serializeChunkText, serializeCollectionContentType, serializeCollectionTemplate, serializeCompletionRequest, serializeCompletionRequest_output_schema, serializeComposePDF, serializeContentType, serializeContentTypeInput, serializeCreateCatalogField, serializeCreateField, serializeCreateListIntegration, serializeCreateListIntegration_configuration, serializeCreateRelationship, serializeCreateRelationship_metadata, serializeCreateResource, serializeCreateResource_values, serializeDecisionRequest, serializeDecisionRequest_context, serializeDecisionRequest_data, serializeDecisionRequest_questions, serializeDecisionRequest_questions_options, serializeDeletedResource, serializeDeltaPage, serializeDeltaPage_value, serializeDeltaPage_valueMember1, serializeDeltaPage_valueMember1_Removed, serializeDocumentMetadata, serializeDocumentMetadata_values, serializeDocumentUpload, serializeDuplicateDocument, serializeFieldDefinition, serializeFieldOptions, serializeFileVersion, serializeFilterExpr, serializeFilteredBulkUpdate, serializeFilteredBulkUpdate_values, serializeGenerationChunk, serializeGenerationChunkPage, serializeGenerationEnrichments, serializeGenerationEnrichments_enrichments, serializeItemIntegration, serializeItemRevision, serializeItemRevision_payload, serializeItemText, serializeItemText_next, serializeItemText_pages, serializeKeywordCount, serializeKeywordCountList, serializeKeywordInput, serializeListIntegration, serializeListView, serializeListViewPage, serializeLocatedItem, serializeMergeTerm, serializeMoveItem, serializeMoveTerm, serializeNavigationFieldSetting, serializeNavigationNode, serializeNavigationPage, serializeNavigationRequest, serializeNavigationSelection, serializeOperation, serializeOperationFailure, serializeOperationPage, serializeOptimizeImage, serializePermissions, serializePermissions_effective_grants, serializePermissions_grants, serializePortableSmartFolder, serializePortableSmartFolderDefinition, serializePortableTerm, serializePortableTermGroup, serializePortableTermSet, serializePortableTerm_labels, serializeProblem, serializeProblem_existing_item, serializePromoteKeyword, serializePromoteStagedFile, serializePromotedFile, serializePublication, serializePublication_snapshot, serializeQueryGroup, serializeQueryGroupPage, serializeQueryRequest, serializeQueryResult, serializeQuerySpec, serializeReadText, serializeReclaimFileVersion, serializeReclaimedFileVersion, serializeRecycleBinPage, serializeRelationship, serializeRelationshipEndpoint, serializeRelationshipEndpointPage, serializeRelationshipNeighborhood, serializeRelationshipType, serializeRelationshipTypeInput, serializeRelationshipTypePage, serializeRelationshipType_attributes, serializeRelationshipView, serializeRelationship_metadata, serializeResource, serializeResourceAccess, serializeResource_values, serializeSchemaRevision, serializeSchemaRevision_definition, serializeSchemaRevision_definition_fields, serializeSchemaTemplate, serializeSchemaTemplatePage, serializeSchemaTemplate_definition, serializeSearchFacetValue, serializeSearchFacets, serializeSearchField, serializeSearchHit, serializeSearchPage, serializeSearchRequest, serializeSearchStatus, serializeSearchStatus_embeddings, serializeSearchSync, serializeSetWorkspaceMember, serializeSmartFolder, serializeSmartFolderDefinition, serializeSmartFolderDrop, serializeSmartFolderEntry, serializeSmartFolderGroup, serializeSmartFolderGroupBy, serializeSmartFolderGroupsResult, serializeSmartFolderImportResult, serializeSmartFolderInput, serializeSmartFolderPackage, serializeSmartFolderPage, serializeSmartFolderPreview, serializeSmartFolderQueryRequest, serializeSmartFolderQueryRequest_sort, serializeSmartFolderResult, serializeSmartFolderTermRef, serializeSmartFolderUnclassify, serializeSortSpec, serializeStagedArtifact, serializeStagedFile, serializeStagedFile_metrics, serializeStagedFile_sources, serializeTask, serializeTaskAnswer, serializeTaskAnswer_input, serializeTaskCreate, serializeTaskCreate_review, serializeTaskCreate_values, serializeTaskList, serializeTaskOutcome, serializeTaskReassign, serializeTaskResponseInput, serializeTaskResponseInput_input, serializeTask_input, serializeTask_review, serializeTask_values, serializeTaxonomyDecisionRequest, serializeTaxonomyDecisionRequest_context, serializeTaxonomyDecisionRequest_data, serializeTaxonomyDecisionRequest_description_overrides, serializeTaxonomyImportResult, serializeTaxonomyPackage, serializeTemplateField, serializeTemplateInput, serializeTerm, serializeTermEntries, serializeTermGroup, serializeTermGroupInput, serializeTermGroupPage, serializeTermImportResult, serializeTermInput, serializeTermInput_labels, serializeTermList, serializeTermPage, serializeTermSet, serializeTermSetInput, serializeTermSetPage, serializeTerm_labels, serializeUpdateField, serializeUpdateListIntegration, serializeUpdateListIntegration_configuration, serializeUpdateRelationship, serializeUpdateRelationship_metadata, serializeUpdateResource, serializeUpdateResource_values, serializeValidationRule, serializeValidationRuleMember1, serializeValidationRuleMember2, serializeViewInput, serializeViewQueryRequest, serializeViewSettings, serializeWorkflowForm, serializeWorkspaceKeywordCount, serializeWorkspaceKeywordCountPage, serializeWorkspaceMember, serializeWorkspaceRelationshipPage, serializeWorkspaceRelationshipType, serializeWorkspaceRelationshipTypePage, serializeWorkspaceRelationshipView };
+	export { ApplyTemplateInput, ArchiveEntry, ArchiveEntry_duplicate_policy, ArchiveEntry_duplicate_policyObject, ArchiveEntry_kind, ArchiveEntry_kindObject, ArchiveEntry_system_key, ArchiveEntry_system_keyObject, ArchiveEntry_values, ArchiveEntry_versioning, ArchiveEntry_versioningObject, ArchiveSelection, ArchiveSelectionObject, Artifact, Artifact_metrics, Artifact_sources, AttachContentTypeInput, AuditEvent, AuditEvent_credential, AuditEvent_details, AuditPage, Blob, Blob_content_type, Blob_content_typeObject, BulkCreate, BulkCreate_values, BulkOperation, BulkOperationMember1, BulkOperationMember2, BulkOperationMember3, BulkOperationMember4, BulkOperationMember5, BulkOperationMember6, BulkOperationMember7, BulkRequest, BulkResponse, BulkResult, BulkResult_action, BulkResult_actionObject, BulkUpdate, BulkUpdate_values, CalendarOccurrence, CalendarQuery, CalendarQuery_surface, CalendarQuery_surfaceObject, ChunkText, ChunkText_chunker, ChunkText_chunkerObject, ChunkText_kind, ChunkText_kindObject, CollectionContentType, CollectionTemplate, CollectionTemplate_duplicate_policy, CollectionTemplate_duplicate_policyObject, CollectionTemplate_kind, CollectionTemplate_kindObject, CollectionTemplate_versioning, CollectionTemplate_versioningObject, Comment, CommentCounts, CommentCountsRequest, CommentCounts_counts, CommentCreate, CommentEdit, CommentPerson, CommentSettings, CommentSettingsInput, CommentSettingsInput_mode, CommentSettingsInput_modeObject, CommentSettings_effective, CommentSettings_effective_from, CommentSettings_effective_fromObject, CommentSettings_effective_mode, CommentSettings_effective_modeObject, CommentSettings_mode, CommentSettings_modeObject, CommentThread, CommentThreadList, CommentThreadList_mode, CommentThreadList_modeObject, CommentThreadList_mode_from, CommentThreadList_mode_fromObject, Comment_source, Comment_sourceObject, CompletionRequest, CompletionRequest_execution, CompletionRequest_executionObject, CompletionRequest_output_schema, ComposePDF, ContentType, ContentTypeInput, CreateCatalogField, CreateCatalogField_type, CreateCatalogField_typeObject, CreateField, CreateField_type, CreateField_typeObject, CreateListIntegration, CreateListIntegration_configuration, CreateRelationship, CreateRelationship_metadata, CreateResource, CreateResource_duplicate_policy, CreateResource_duplicate_policyObject, CreateResource_kind, CreateResource_kindObject, CreateResource_values, CreateResource_versioning, CreateResource_versioningObject, DecisionRequest, DecisionRequest_context, DecisionRequest_data, DecisionRequest_questions, DecisionRequest_questions_options, DecisionRequest_questions_type, DecisionRequest_questions_typeObject, DeletedResource, DeltaPage, DeltaPage_value, DeltaPage_valueMember1, DeltaPage_valueMember1_Removed, DeltaPage_valueMember1_Removed_reason, DeltaPage_valueMember1_Removed_reasonObject, DocumentMetadata, DocumentMetadata_values, DocumentUpload, DuplicateDocument, FieldDefinition, FieldDefinition_index_status, FieldDefinition_index_statusObject, FieldDefinition_type, FieldDefinition_typeObject, FieldOptions, FieldOptions_search_weight, FieldOptions_search_weightObject, FileVersion, FileVersion_availability, FileVersion_availabilityObject, FilterExpr, FilterExpr_op, FilterExpr_opObject, FilterExpr_value_ref, FilterExpr_value_refObject, FilteredBulkUpdate, FilteredBulkUpdate_values, GenerationChunk, GenerationChunkPage, GenerationEnrichments, GenerationEnrichments_enrichments, ItemIntegration, ItemRevision, ItemRevision_payload, ItemText, ItemText_next, ItemText_pages, KeywordCount, KeywordCountList, KeywordInput, ListIntegration, ListIntegration_kind, ListIntegration_kindObject, ListView, ListViewPage, ListView_system_key, ListView_system_keyObject, LocatedItem, MentionCandidateList, MentionCandidateList_value, MergeTerm, MoveItem, MoveTerm, NavigationFieldSetting, NavigationNode, NavigationPage, NavigationRequest, NavigationRequest_surface, NavigationRequest_surfaceObject, NavigationSelection, NotificationSend, NotificationSendResult, Operation, OperationFailure, OperationPage, Operation_error_code, Operation_error_codeObject, Operation_status, Operation_statusObject, Operation_waiting, Operation_waitingObject, OptimizeImage, Permissions, Permissions_effective_grants, Permissions_effective_grants_action, Permissions_effective_grants_actionObject, Permissions_effective_grants_effect, Permissions_effective_grants_effectObject, Permissions_effective_grants_principal_type, Permissions_effective_grants_principal_typeObject, Permissions_grants, Permissions_grants_action, Permissions_grants_actionObject, Permissions_grants_effect, Permissions_grants_effectObject, Permissions_grants_principal_type, Permissions_grants_principal_typeObject, PortableSmartFolder, PortableSmartFolderDefinition, PortableSmartFolderDefinition_collection_kind, PortableSmartFolderDefinition_collection_kindObject, PortableSmartFolderDefinition_mode, PortableSmartFolderDefinition_modeObject, PortableSmartFolderDefinition_term_match, PortableSmartFolderDefinition_term_matchObject, PortableTerm, PortableTermGroup, PortableTermSet, PortableTerm_labels, Problem, Problem_existing_item, PromoteKeyword, PromoteStagedFile, PromotedFile, Publication, Publication_action, Publication_actionObject, Publication_snapshot, QueryGroup, QueryGroupPage, QueryRequest, QueryRequest_surface, QueryRequest_surfaceObject, QueryResult, QuerySpec, ReadText, ReadText_ocr, ReadText_ocrObject, ReclaimFileVersion, ReclaimedFileVersion, RecycleBinPage, Relationship, RelationshipEndpoint, RelationshipEndpointPage, RelationshipNeighborhood, RelationshipType, RelationshipTypeInput, RelationshipTypePage, RelationshipType_attributes, RelationshipView, Relationship_metadata, Resource, ResourceAccess, ResourceAccess_access, ResourceAccess_accessObject, Resource_duplicate_policy, Resource_duplicate_policyObject, Resource_kind, Resource_kindObject, Resource_system_key, Resource_system_keyObject, Resource_values, Resource_versioning, Resource_versioningObject, SchemaRevision, SchemaRevision_definition, SchemaRevision_definition_fields, SchemaRevision_definition_fields_type, SchemaRevision_definition_fields_typeObject, SchemaTemplate, SchemaTemplatePage, SchemaTemplate_definition, SearchFacetValue, SearchFacets, SearchField, SearchField_operators, SearchField_operatorsObject, SearchHit, SearchHit_kind, SearchHit_kindObject, SearchHit_matched_by, SearchHit_matched_byObject, SearchHit_surface, SearchHit_surfaceObject, SearchPage, SearchPage_mode, SearchPage_modeObject, SearchRequest, SearchRequest_kind, SearchRequest_kindObject, SearchRequest_mode, SearchRequest_modeObject, SearchRequest_surface, SearchRequest_surfaceObject, SearchStatus, SearchStatus_embeddings, SearchSync, SetWorkspaceMember, SetWorkspaceMember_role, SetWorkspaceMember_roleObject, SmartFolder, SmartFolderDefinition, SmartFolderDefinition_collection_kind, SmartFolderDefinition_collection_kindObject, SmartFolderDefinition_mode, SmartFolderDefinition_modeObject, SmartFolderDefinition_term_match, SmartFolderDefinition_term_matchObject, SmartFolderDrop, SmartFolderEntry, SmartFolderEntry_collection_kind, SmartFolderEntry_collection_kindObject, SmartFolderGroup, SmartFolderGroupBy, SmartFolderGroupBy_by, SmartFolderGroupBy_byObject, SmartFolderGroupsResult, SmartFolderImportResult, SmartFolderInput, SmartFolderPackage, SmartFolderPage, SmartFolderPreview, SmartFolderQueryRequest, SmartFolderQueryRequest_sort, SmartFolderQueryRequest_sort_direction, SmartFolderQueryRequest_sort_directionObject, SmartFolderQueryRequest_sort_field, SmartFolderQueryRequest_sort_fieldObject, SmartFolderQueryRequest_surface, SmartFolderQueryRequest_surfaceObject, SmartFolderResult, SmartFolderTermRef, SmartFolderUnclassify, SortSpec, SortSpec_direction, SortSpec_directionObject, StagedArtifact, StagedFile, StagedFile_metrics, StagedFile_sources, StagedFile_state, StagedFile_stateObject, Task, TaskAnswer, TaskAnswer_input, TaskCreate, TaskCreate_completion, TaskCreate_completionObject, TaskCreate_kind, TaskCreate_kindObject, TaskCreate_priority, TaskCreate_priorityObject, TaskCreate_review, TaskCreate_review_type, TaskCreate_review_typeObject, TaskCreate_values, TaskList, TaskOutcome, TaskOutcome_comment, TaskOutcome_commentObject, TaskOutcome_style, TaskOutcome_styleObject, TaskReassign, TaskResponseInput, TaskResponseInput_input, Task_completion, Task_completionObject, Task_input, Task_kind, Task_kindObject, Task_priority, Task_priorityObject, Task_review, Task_review_type, Task_review_typeObject, Task_source, Task_sourceObject, Task_status, Task_statusObject, Task_values, TaxonomyDecisionRequest, TaxonomyDecisionRequest_context, TaxonomyDecisionRequest_data, TaxonomyDecisionRequest_description_overrides, TaxonomyDecisionRequest_selection, TaxonomyDecisionRequest_selectionObject, TaxonomyImportResult, TaxonomyPackage, TemplateField, TemplateField_type, TemplateField_typeObject, TemplateInput, Term, TermEntries, TermGroup, TermGroupInput, TermGroupPage, TermImportResult, TermInput, TermInput_labels, TermList, TermPage, TermSet, TermSetInput, TermSetPage, Term_labels, UpdateField, UpdateListIntegration, UpdateListIntegration_configuration, UpdateRelationship, UpdateRelationship_metadata, UpdateResource, UpdateResource_duplicate_policy, UpdateResource_duplicate_policyObject, UpdateResource_values, UpdateResource_versioning, UpdateResource_versioningObject, ValidationRule, ValidationRuleMember1, ValidationRuleMember2, ValidationRuleMember2_op, ValidationRuleMember2_opObject, ViewInput, ViewInput_layout, ViewInput_layoutObject, ViewQueryRequest, ViewQueryRequest_surface, ViewQueryRequest_surfaceObject, ViewSettings, ViewSettings_match, ViewSettings_matchObject, WorkflowForm, WorkspaceKeywordCount, WorkspaceKeywordCountPage, WorkspaceMember, WorkspaceMember_role, WorkspaceMember_roleObject, WorkspaceRelationshipPage, WorkspaceRelationshipType, WorkspaceRelationshipTypePage, WorkspaceRelationshipView, createApplyTemplateInputFromDiscriminatorValue, createArchiveEntryFromDiscriminatorValue, createArchiveEntry_valuesFromDiscriminatorValue, createArtifactFromDiscriminatorValue, createArtifact_metricsFromDiscriminatorValue, createArtifact_sourcesFromDiscriminatorValue, createAttachContentTypeInputFromDiscriminatorValue, createAuditEventFromDiscriminatorValue, createAuditEvent_credentialFromDiscriminatorValue, createAuditEvent_detailsFromDiscriminatorValue, createAuditPageFromDiscriminatorValue, createBlobFromDiscriminatorValue, createBulkCreateFromDiscriminatorValue, createBulkCreate_valuesFromDiscriminatorValue, createBulkOperationFromDiscriminatorValue, createBulkOperationMember1FromDiscriminatorValue, createBulkOperationMember2FromDiscriminatorValue, createBulkOperationMember3FromDiscriminatorValue, createBulkOperationMember4FromDiscriminatorValue, createBulkOperationMember5FromDiscriminatorValue, createBulkOperationMember6FromDiscriminatorValue, createBulkOperationMember7FromDiscriminatorValue, createBulkRequestFromDiscriminatorValue, createBulkResponseFromDiscriminatorValue, createBulkResultFromDiscriminatorValue, createBulkUpdateFromDiscriminatorValue, createBulkUpdate_valuesFromDiscriminatorValue, createCalendarOccurrenceFromDiscriminatorValue, createCalendarQueryFromDiscriminatorValue, createChunkTextFromDiscriminatorValue, createCollectionContentTypeFromDiscriminatorValue, createCollectionTemplateFromDiscriminatorValue, createCommentCountsFromDiscriminatorValue, createCommentCountsRequestFromDiscriminatorValue, createCommentCounts_countsFromDiscriminatorValue, createCommentCreateFromDiscriminatorValue, createCommentEditFromDiscriminatorValue, createCommentFromDiscriminatorValue, createCommentPersonFromDiscriminatorValue, createCommentSettingsFromDiscriminatorValue, createCommentSettingsInputFromDiscriminatorValue, createCommentSettings_effectiveFromDiscriminatorValue, createCommentThreadFromDiscriminatorValue, createCommentThreadListFromDiscriminatorValue, createCompletionRequestFromDiscriminatorValue, createCompletionRequest_output_schemaFromDiscriminatorValue, createComposePDFFromDiscriminatorValue, createContentTypeFromDiscriminatorValue, createContentTypeInputFromDiscriminatorValue, createCreateCatalogFieldFromDiscriminatorValue, createCreateFieldFromDiscriminatorValue, createCreateListIntegrationFromDiscriminatorValue, createCreateListIntegration_configurationFromDiscriminatorValue, createCreateRelationshipFromDiscriminatorValue, createCreateRelationship_metadataFromDiscriminatorValue, createCreateResourceFromDiscriminatorValue, createCreateResource_valuesFromDiscriminatorValue, createDecisionRequestFromDiscriminatorValue, createDecisionRequest_contextFromDiscriminatorValue, createDecisionRequest_dataFromDiscriminatorValue, createDecisionRequest_questionsFromDiscriminatorValue, createDecisionRequest_questions_optionsFromDiscriminatorValue, createDeletedResourceFromDiscriminatorValue, createDeltaPageFromDiscriminatorValue, createDeltaPage_valueFromDiscriminatorValue, createDeltaPage_valueMember1FromDiscriminatorValue, createDeltaPage_valueMember1_RemovedFromDiscriminatorValue, createDocumentMetadataFromDiscriminatorValue, createDocumentMetadata_valuesFromDiscriminatorValue, createDocumentUploadFromDiscriminatorValue, createDuplicateDocumentFromDiscriminatorValue, createFieldDefinitionFromDiscriminatorValue, createFieldOptionsFromDiscriminatorValue, createFileVersionFromDiscriminatorValue, createFilterExprFromDiscriminatorValue, createFilteredBulkUpdateFromDiscriminatorValue, createFilteredBulkUpdate_valuesFromDiscriminatorValue, createGenerationChunkFromDiscriminatorValue, createGenerationChunkPageFromDiscriminatorValue, createGenerationEnrichmentsFromDiscriminatorValue, createGenerationEnrichments_enrichmentsFromDiscriminatorValue, createItemIntegrationFromDiscriminatorValue, createItemRevisionFromDiscriminatorValue, createItemRevision_payloadFromDiscriminatorValue, createItemTextFromDiscriminatorValue, createItemText_nextFromDiscriminatorValue, createItemText_pagesFromDiscriminatorValue, createKeywordCountFromDiscriminatorValue, createKeywordCountListFromDiscriminatorValue, createKeywordInputFromDiscriminatorValue, createListIntegrationFromDiscriminatorValue, createListViewFromDiscriminatorValue, createListViewPageFromDiscriminatorValue, createLocatedItemFromDiscriminatorValue, createMentionCandidateListFromDiscriminatorValue, createMentionCandidateList_valueFromDiscriminatorValue, createMergeTermFromDiscriminatorValue, createMoveItemFromDiscriminatorValue, createMoveTermFromDiscriminatorValue, createNavigationFieldSettingFromDiscriminatorValue, createNavigationNodeFromDiscriminatorValue, createNavigationPageFromDiscriminatorValue, createNavigationRequestFromDiscriminatorValue, createNavigationSelectionFromDiscriminatorValue, createNotificationSendFromDiscriminatorValue, createNotificationSendResultFromDiscriminatorValue, createOperationFailureFromDiscriminatorValue, createOperationFromDiscriminatorValue, createOperationPageFromDiscriminatorValue, createOptimizeImageFromDiscriminatorValue, createPermissionsFromDiscriminatorValue, createPermissions_effective_grantsFromDiscriminatorValue, createPermissions_grantsFromDiscriminatorValue, createPortableSmartFolderDefinitionFromDiscriminatorValue, createPortableSmartFolderFromDiscriminatorValue, createPortableTermFromDiscriminatorValue, createPortableTermGroupFromDiscriminatorValue, createPortableTermSetFromDiscriminatorValue, createPortableTerm_labelsFromDiscriminatorValue, createProblemFromDiscriminatorValue, createProblem_existing_itemFromDiscriminatorValue, createPromoteKeywordFromDiscriminatorValue, createPromoteStagedFileFromDiscriminatorValue, createPromotedFileFromDiscriminatorValue, createPublicationFromDiscriminatorValue, createPublication_snapshotFromDiscriminatorValue, createQueryGroupFromDiscriminatorValue, createQueryGroupPageFromDiscriminatorValue, createQueryRequestFromDiscriminatorValue, createQueryResultFromDiscriminatorValue, createQuerySpecFromDiscriminatorValue, createReadTextFromDiscriminatorValue, createReclaimFileVersionFromDiscriminatorValue, createReclaimedFileVersionFromDiscriminatorValue, createRecycleBinPageFromDiscriminatorValue, createRelationshipEndpointFromDiscriminatorValue, createRelationshipEndpointPageFromDiscriminatorValue, createRelationshipFromDiscriminatorValue, createRelationshipNeighborhoodFromDiscriminatorValue, createRelationshipTypeFromDiscriminatorValue, createRelationshipTypeInputFromDiscriminatorValue, createRelationshipTypePageFromDiscriminatorValue, createRelationshipType_attributesFromDiscriminatorValue, createRelationshipViewFromDiscriminatorValue, createRelationship_metadataFromDiscriminatorValue, createResourceAccessFromDiscriminatorValue, createResourceFromDiscriminatorValue, createResource_valuesFromDiscriminatorValue, createSchemaRevisionFromDiscriminatorValue, createSchemaRevision_definitionFromDiscriminatorValue, createSchemaRevision_definition_fieldsFromDiscriminatorValue, createSchemaTemplateFromDiscriminatorValue, createSchemaTemplatePageFromDiscriminatorValue, createSchemaTemplate_definitionFromDiscriminatorValue, createSearchFacetValueFromDiscriminatorValue, createSearchFacetsFromDiscriminatorValue, createSearchFieldFromDiscriminatorValue, createSearchHitFromDiscriminatorValue, createSearchPageFromDiscriminatorValue, createSearchRequestFromDiscriminatorValue, createSearchStatusFromDiscriminatorValue, createSearchStatus_embeddingsFromDiscriminatorValue, createSearchSyncFromDiscriminatorValue, createSetWorkspaceMemberFromDiscriminatorValue, createSmartFolderDefinitionFromDiscriminatorValue, createSmartFolderDropFromDiscriminatorValue, createSmartFolderEntryFromDiscriminatorValue, createSmartFolderFromDiscriminatorValue, createSmartFolderGroupByFromDiscriminatorValue, createSmartFolderGroupFromDiscriminatorValue, createSmartFolderGroupsResultFromDiscriminatorValue, createSmartFolderImportResultFromDiscriminatorValue, createSmartFolderInputFromDiscriminatorValue, createSmartFolderPackageFromDiscriminatorValue, createSmartFolderPageFromDiscriminatorValue, createSmartFolderPreviewFromDiscriminatorValue, createSmartFolderQueryRequestFromDiscriminatorValue, createSmartFolderQueryRequest_sortFromDiscriminatorValue, createSmartFolderResultFromDiscriminatorValue, createSmartFolderTermRefFromDiscriminatorValue, createSmartFolderUnclassifyFromDiscriminatorValue, createSortSpecFromDiscriminatorValue, createStagedArtifactFromDiscriminatorValue, createStagedFileFromDiscriminatorValue, createStagedFile_metricsFromDiscriminatorValue, createStagedFile_sourcesFromDiscriminatorValue, createTaskAnswerFromDiscriminatorValue, createTaskAnswer_inputFromDiscriminatorValue, createTaskCreateFromDiscriminatorValue, createTaskCreate_reviewFromDiscriminatorValue, createTaskCreate_valuesFromDiscriminatorValue, createTaskFromDiscriminatorValue, createTaskListFromDiscriminatorValue, createTaskOutcomeFromDiscriminatorValue, createTaskReassignFromDiscriminatorValue, createTaskResponseInputFromDiscriminatorValue, createTaskResponseInput_inputFromDiscriminatorValue, createTask_inputFromDiscriminatorValue, createTask_reviewFromDiscriminatorValue, createTask_valuesFromDiscriminatorValue, createTaxonomyDecisionRequestFromDiscriminatorValue, createTaxonomyDecisionRequest_contextFromDiscriminatorValue, createTaxonomyDecisionRequest_dataFromDiscriminatorValue, createTaxonomyDecisionRequest_description_overridesFromDiscriminatorValue, createTaxonomyImportResultFromDiscriminatorValue, createTaxonomyPackageFromDiscriminatorValue, createTemplateFieldFromDiscriminatorValue, createTemplateInputFromDiscriminatorValue, createTermEntriesFromDiscriminatorValue, createTermFromDiscriminatorValue, createTermGroupFromDiscriminatorValue, createTermGroupInputFromDiscriminatorValue, createTermGroupPageFromDiscriminatorValue, createTermImportResultFromDiscriminatorValue, createTermInputFromDiscriminatorValue, createTermInput_labelsFromDiscriminatorValue, createTermListFromDiscriminatorValue, createTermPageFromDiscriminatorValue, createTermSetFromDiscriminatorValue, createTermSetInputFromDiscriminatorValue, createTermSetPageFromDiscriminatorValue, createTerm_labelsFromDiscriminatorValue, createUpdateFieldFromDiscriminatorValue, createUpdateListIntegrationFromDiscriminatorValue, createUpdateListIntegration_configurationFromDiscriminatorValue, createUpdateRelationshipFromDiscriminatorValue, createUpdateRelationship_metadataFromDiscriminatorValue, createUpdateResourceFromDiscriminatorValue, createUpdateResource_valuesFromDiscriminatorValue, createValidationRuleFromDiscriminatorValue, createValidationRuleMember1FromDiscriminatorValue, createValidationRuleMember2FromDiscriminatorValue, createViewInputFromDiscriminatorValue, createViewQueryRequestFromDiscriminatorValue, createViewSettingsFromDiscriminatorValue, createWorkflowFormFromDiscriminatorValue, createWorkspaceKeywordCountFromDiscriminatorValue, createWorkspaceKeywordCountPageFromDiscriminatorValue, createWorkspaceMemberFromDiscriminatorValue, createWorkspaceRelationshipPageFromDiscriminatorValue, createWorkspaceRelationshipTypeFromDiscriminatorValue, createWorkspaceRelationshipTypePageFromDiscriminatorValue, createWorkspaceRelationshipViewFromDiscriminatorValue, deserializeIntoApplyTemplateInput, deserializeIntoArchiveEntry, deserializeIntoArchiveEntry_values, deserializeIntoArtifact, deserializeIntoArtifact_metrics, deserializeIntoArtifact_sources, deserializeIntoAttachContentTypeInput, deserializeIntoAuditEvent, deserializeIntoAuditEvent_credential, deserializeIntoAuditEvent_details, deserializeIntoAuditPage, deserializeIntoBlob, deserializeIntoBulkCreate, deserializeIntoBulkCreate_values, deserializeIntoBulkOperation, deserializeIntoBulkOperationMember1, deserializeIntoBulkOperationMember2, deserializeIntoBulkOperationMember3, deserializeIntoBulkOperationMember4, deserializeIntoBulkOperationMember5, deserializeIntoBulkOperationMember6, deserializeIntoBulkOperationMember7, deserializeIntoBulkRequest, deserializeIntoBulkResponse, deserializeIntoBulkResult, deserializeIntoBulkUpdate, deserializeIntoBulkUpdate_values, deserializeIntoCalendarOccurrence, deserializeIntoCalendarQuery, deserializeIntoChunkText, deserializeIntoCollectionContentType, deserializeIntoCollectionTemplate, deserializeIntoComment, deserializeIntoCommentCounts, deserializeIntoCommentCountsRequest, deserializeIntoCommentCounts_counts, deserializeIntoCommentCreate, deserializeIntoCommentEdit, deserializeIntoCommentPerson, deserializeIntoCommentSettings, deserializeIntoCommentSettingsInput, deserializeIntoCommentSettings_effective, deserializeIntoCommentThread, deserializeIntoCommentThreadList, deserializeIntoCompletionRequest, deserializeIntoCompletionRequest_output_schema, deserializeIntoComposePDF, deserializeIntoContentType, deserializeIntoContentTypeInput, deserializeIntoCreateCatalogField, deserializeIntoCreateField, deserializeIntoCreateListIntegration, deserializeIntoCreateListIntegration_configuration, deserializeIntoCreateRelationship, deserializeIntoCreateRelationship_metadata, deserializeIntoCreateResource, deserializeIntoCreateResource_values, deserializeIntoDecisionRequest, deserializeIntoDecisionRequest_context, deserializeIntoDecisionRequest_data, deserializeIntoDecisionRequest_questions, deserializeIntoDecisionRequest_questions_options, deserializeIntoDeletedResource, deserializeIntoDeltaPage, deserializeIntoDeltaPage_value, deserializeIntoDeltaPage_valueMember1, deserializeIntoDeltaPage_valueMember1_Removed, deserializeIntoDocumentMetadata, deserializeIntoDocumentMetadata_values, deserializeIntoDocumentUpload, deserializeIntoDuplicateDocument, deserializeIntoFieldDefinition, deserializeIntoFieldOptions, deserializeIntoFileVersion, deserializeIntoFilterExpr, deserializeIntoFilteredBulkUpdate, deserializeIntoFilteredBulkUpdate_values, deserializeIntoGenerationChunk, deserializeIntoGenerationChunkPage, deserializeIntoGenerationEnrichments, deserializeIntoGenerationEnrichments_enrichments, deserializeIntoItemIntegration, deserializeIntoItemRevision, deserializeIntoItemRevision_payload, deserializeIntoItemText, deserializeIntoItemText_next, deserializeIntoItemText_pages, deserializeIntoKeywordCount, deserializeIntoKeywordCountList, deserializeIntoKeywordInput, deserializeIntoListIntegration, deserializeIntoListView, deserializeIntoListViewPage, deserializeIntoLocatedItem, deserializeIntoMentionCandidateList, deserializeIntoMentionCandidateList_value, deserializeIntoMergeTerm, deserializeIntoMoveItem, deserializeIntoMoveTerm, deserializeIntoNavigationFieldSetting, deserializeIntoNavigationNode, deserializeIntoNavigationPage, deserializeIntoNavigationRequest, deserializeIntoNavigationSelection, deserializeIntoNotificationSend, deserializeIntoNotificationSendResult, deserializeIntoOperation, deserializeIntoOperationFailure, deserializeIntoOperationPage, deserializeIntoOptimizeImage, deserializeIntoPermissions, deserializeIntoPermissions_effective_grants, deserializeIntoPermissions_grants, deserializeIntoPortableSmartFolder, deserializeIntoPortableSmartFolderDefinition, deserializeIntoPortableTerm, deserializeIntoPortableTermGroup, deserializeIntoPortableTermSet, deserializeIntoPortableTerm_labels, deserializeIntoProblem, deserializeIntoProblem_existing_item, deserializeIntoPromoteKeyword, deserializeIntoPromoteStagedFile, deserializeIntoPromotedFile, deserializeIntoPublication, deserializeIntoPublication_snapshot, deserializeIntoQueryGroup, deserializeIntoQueryGroupPage, deserializeIntoQueryRequest, deserializeIntoQueryResult, deserializeIntoQuerySpec, deserializeIntoReadText, deserializeIntoReclaimFileVersion, deserializeIntoReclaimedFileVersion, deserializeIntoRecycleBinPage, deserializeIntoRelationship, deserializeIntoRelationshipEndpoint, deserializeIntoRelationshipEndpointPage, deserializeIntoRelationshipNeighborhood, deserializeIntoRelationshipType, deserializeIntoRelationshipTypeInput, deserializeIntoRelationshipTypePage, deserializeIntoRelationshipType_attributes, deserializeIntoRelationshipView, deserializeIntoRelationship_metadata, deserializeIntoResource, deserializeIntoResourceAccess, deserializeIntoResource_values, deserializeIntoSchemaRevision, deserializeIntoSchemaRevision_definition, deserializeIntoSchemaRevision_definition_fields, deserializeIntoSchemaTemplate, deserializeIntoSchemaTemplatePage, deserializeIntoSchemaTemplate_definition, deserializeIntoSearchFacetValue, deserializeIntoSearchFacets, deserializeIntoSearchField, deserializeIntoSearchHit, deserializeIntoSearchPage, deserializeIntoSearchRequest, deserializeIntoSearchStatus, deserializeIntoSearchStatus_embeddings, deserializeIntoSearchSync, deserializeIntoSetWorkspaceMember, deserializeIntoSmartFolder, deserializeIntoSmartFolderDefinition, deserializeIntoSmartFolderDrop, deserializeIntoSmartFolderEntry, deserializeIntoSmartFolderGroup, deserializeIntoSmartFolderGroupBy, deserializeIntoSmartFolderGroupsResult, deserializeIntoSmartFolderImportResult, deserializeIntoSmartFolderInput, deserializeIntoSmartFolderPackage, deserializeIntoSmartFolderPage, deserializeIntoSmartFolderPreview, deserializeIntoSmartFolderQueryRequest, deserializeIntoSmartFolderQueryRequest_sort, deserializeIntoSmartFolderResult, deserializeIntoSmartFolderTermRef, deserializeIntoSmartFolderUnclassify, deserializeIntoSortSpec, deserializeIntoStagedArtifact, deserializeIntoStagedFile, deserializeIntoStagedFile_metrics, deserializeIntoStagedFile_sources, deserializeIntoTask, deserializeIntoTaskAnswer, deserializeIntoTaskAnswer_input, deserializeIntoTaskCreate, deserializeIntoTaskCreate_review, deserializeIntoTaskCreate_values, deserializeIntoTaskList, deserializeIntoTaskOutcome, deserializeIntoTaskReassign, deserializeIntoTaskResponseInput, deserializeIntoTaskResponseInput_input, deserializeIntoTask_input, deserializeIntoTask_review, deserializeIntoTask_values, deserializeIntoTaxonomyDecisionRequest, deserializeIntoTaxonomyDecisionRequest_context, deserializeIntoTaxonomyDecisionRequest_data, deserializeIntoTaxonomyDecisionRequest_description_overrides, deserializeIntoTaxonomyImportResult, deserializeIntoTaxonomyPackage, deserializeIntoTemplateField, deserializeIntoTemplateInput, deserializeIntoTerm, deserializeIntoTermEntries, deserializeIntoTermGroup, deserializeIntoTermGroupInput, deserializeIntoTermGroupPage, deserializeIntoTermImportResult, deserializeIntoTermInput, deserializeIntoTermInput_labels, deserializeIntoTermList, deserializeIntoTermPage, deserializeIntoTermSet, deserializeIntoTermSetInput, deserializeIntoTermSetPage, deserializeIntoTerm_labels, deserializeIntoUpdateField, deserializeIntoUpdateListIntegration, deserializeIntoUpdateListIntegration_configuration, deserializeIntoUpdateRelationship, deserializeIntoUpdateRelationship_metadata, deserializeIntoUpdateResource, deserializeIntoUpdateResource_values, deserializeIntoValidationRule, deserializeIntoValidationRuleMember1, deserializeIntoValidationRuleMember2, deserializeIntoViewInput, deserializeIntoViewQueryRequest, deserializeIntoViewSettings, deserializeIntoWorkflowForm, deserializeIntoWorkspaceKeywordCount, deserializeIntoWorkspaceKeywordCountPage, deserializeIntoWorkspaceMember, deserializeIntoWorkspaceRelationshipPage, deserializeIntoWorkspaceRelationshipType, deserializeIntoWorkspaceRelationshipTypePage, deserializeIntoWorkspaceRelationshipView, serializeApplyTemplateInput, serializeArchiveEntry, serializeArchiveEntry_values, serializeArtifact, serializeArtifact_metrics, serializeArtifact_sources, serializeAttachContentTypeInput, serializeAuditEvent, serializeAuditEvent_credential, serializeAuditEvent_details, serializeAuditPage, serializeBlob, serializeBulkCreate, serializeBulkCreate_values, serializeBulkOperation, serializeBulkOperationMember1, serializeBulkOperationMember2, serializeBulkOperationMember3, serializeBulkOperationMember4, serializeBulkOperationMember5, serializeBulkOperationMember6, serializeBulkOperationMember7, serializeBulkRequest, serializeBulkResponse, serializeBulkResult, serializeBulkUpdate, serializeBulkUpdate_values, serializeCalendarOccurrence, serializeCalendarQuery, serializeChunkText, serializeCollectionContentType, serializeCollectionTemplate, serializeComment, serializeCommentCounts, serializeCommentCountsRequest, serializeCommentCounts_counts, serializeCommentCreate, serializeCommentEdit, serializeCommentPerson, serializeCommentSettings, serializeCommentSettingsInput, serializeCommentSettings_effective, serializeCommentThread, serializeCommentThreadList, serializeCompletionRequest, serializeCompletionRequest_output_schema, serializeComposePDF, serializeContentType, serializeContentTypeInput, serializeCreateCatalogField, serializeCreateField, serializeCreateListIntegration, serializeCreateListIntegration_configuration, serializeCreateRelationship, serializeCreateRelationship_metadata, serializeCreateResource, serializeCreateResource_values, serializeDecisionRequest, serializeDecisionRequest_context, serializeDecisionRequest_data, serializeDecisionRequest_questions, serializeDecisionRequest_questions_options, serializeDeletedResource, serializeDeltaPage, serializeDeltaPage_value, serializeDeltaPage_valueMember1, serializeDeltaPage_valueMember1_Removed, serializeDocumentMetadata, serializeDocumentMetadata_values, serializeDocumentUpload, serializeDuplicateDocument, serializeFieldDefinition, serializeFieldOptions, serializeFileVersion, serializeFilterExpr, serializeFilteredBulkUpdate, serializeFilteredBulkUpdate_values, serializeGenerationChunk, serializeGenerationChunkPage, serializeGenerationEnrichments, serializeGenerationEnrichments_enrichments, serializeItemIntegration, serializeItemRevision, serializeItemRevision_payload, serializeItemText, serializeItemText_next, serializeItemText_pages, serializeKeywordCount, serializeKeywordCountList, serializeKeywordInput, serializeListIntegration, serializeListView, serializeListViewPage, serializeLocatedItem, serializeMentionCandidateList, serializeMentionCandidateList_value, serializeMergeTerm, serializeMoveItem, serializeMoveTerm, serializeNavigationFieldSetting, serializeNavigationNode, serializeNavigationPage, serializeNavigationRequest, serializeNavigationSelection, serializeNotificationSend, serializeNotificationSendResult, serializeOperation, serializeOperationFailure, serializeOperationPage, serializeOptimizeImage, serializePermissions, serializePermissions_effective_grants, serializePermissions_grants, serializePortableSmartFolder, serializePortableSmartFolderDefinition, serializePortableTerm, serializePortableTermGroup, serializePortableTermSet, serializePortableTerm_labels, serializeProblem, serializeProblem_existing_item, serializePromoteKeyword, serializePromoteStagedFile, serializePromotedFile, serializePublication, serializePublication_snapshot, serializeQueryGroup, serializeQueryGroupPage, serializeQueryRequest, serializeQueryResult, serializeQuerySpec, serializeReadText, serializeReclaimFileVersion, serializeReclaimedFileVersion, serializeRecycleBinPage, serializeRelationship, serializeRelationshipEndpoint, serializeRelationshipEndpointPage, serializeRelationshipNeighborhood, serializeRelationshipType, serializeRelationshipTypeInput, serializeRelationshipTypePage, serializeRelationshipType_attributes, serializeRelationshipView, serializeRelationship_metadata, serializeResource, serializeResourceAccess, serializeResource_values, serializeSchemaRevision, serializeSchemaRevision_definition, serializeSchemaRevision_definition_fields, serializeSchemaTemplate, serializeSchemaTemplatePage, serializeSchemaTemplate_definition, serializeSearchFacetValue, serializeSearchFacets, serializeSearchField, serializeSearchHit, serializeSearchPage, serializeSearchRequest, serializeSearchStatus, serializeSearchStatus_embeddings, serializeSearchSync, serializeSetWorkspaceMember, serializeSmartFolder, serializeSmartFolderDefinition, serializeSmartFolderDrop, serializeSmartFolderEntry, serializeSmartFolderGroup, serializeSmartFolderGroupBy, serializeSmartFolderGroupsResult, serializeSmartFolderImportResult, serializeSmartFolderInput, serializeSmartFolderPackage, serializeSmartFolderPage, serializeSmartFolderPreview, serializeSmartFolderQueryRequest, serializeSmartFolderQueryRequest_sort, serializeSmartFolderResult, serializeSmartFolderTermRef, serializeSmartFolderUnclassify, serializeSortSpec, serializeStagedArtifact, serializeStagedFile, serializeStagedFile_metrics, serializeStagedFile_sources, serializeTask, serializeTaskAnswer, serializeTaskAnswer_input, serializeTaskCreate, serializeTaskCreate_review, serializeTaskCreate_values, serializeTaskList, serializeTaskOutcome, serializeTaskReassign, serializeTaskResponseInput, serializeTaskResponseInput_input, serializeTask_input, serializeTask_review, serializeTask_values, serializeTaxonomyDecisionRequest, serializeTaxonomyDecisionRequest_context, serializeTaxonomyDecisionRequest_data, serializeTaxonomyDecisionRequest_description_overrides, serializeTaxonomyImportResult, serializeTaxonomyPackage, serializeTemplateField, serializeTemplateInput, serializeTerm, serializeTermEntries, serializeTermGroup, serializeTermGroupInput, serializeTermGroupPage, serializeTermImportResult, serializeTermInput, serializeTermInput_labels, serializeTermList, serializeTermPage, serializeTermSet, serializeTermSetInput, serializeTermSetPage, serializeTerm_labels, serializeUpdateField, serializeUpdateListIntegration, serializeUpdateListIntegration_configuration, serializeUpdateRelationship, serializeUpdateRelationship_metadata, serializeUpdateResource, serializeUpdateResource_values, serializeValidationRule, serializeValidationRuleMember1, serializeValidationRuleMember2, serializeViewInput, serializeViewQueryRequest, serializeViewSettings, serializeWorkflowForm, serializeWorkspaceKeywordCount, serializeWorkspaceKeywordCountPage, serializeWorkspaceMember, serializeWorkspaceRelationshipPage, serializeWorkspaceRelationshipType, serializeWorkspaceRelationshipTypePage, serializeWorkspaceRelationshipView };
 }
 
 export {

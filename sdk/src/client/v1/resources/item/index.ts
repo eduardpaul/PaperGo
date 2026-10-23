@@ -34,6 +34,8 @@ import { RecycleBinRequestBuilderNavigationMetadata, RecycleBinRequestBuilderReq
 // @ts-ignore
 import { SchemasRequestBuilderRequestsMetadata, type SchemasRequestBuilder } from './schemas/index.js';
 // @ts-ignore
+import { SettingsRequestBuilderNavigationMetadata, type SettingsRequestBuilder } from './settings/index.js';
+// @ts-ignore
 import { TemplatesRequestBuilderNavigationMetadata, type TemplatesRequestBuilder } from './templates/index.js';
 // @ts-ignore
 import { type ViewsRequestBuilder, ViewsRequestBuilderRequestsMetadata } from './views/index.js';
@@ -105,6 +107,10 @@ export interface ResourcesItemRequestBuilder extends BaseRequestBuilder<Resource
      * The schemas property
      */
     get schemas(): SchemasRequestBuilder;
+    /**
+     * The settings property
+     */
+    get settings(): SettingsRequestBuilder;
     /**
      * The templates property
      */
@@ -236,6 +242,9 @@ export const ResourcesItemRequestBuilderNavigationMetadata: Record<Exclude<keyof
     },
     schemas: {
         requestsMetadata: SchemasRequestBuilderRequestsMetadata,
+    },
+    settings: {
+        navigationMetadata: SettingsRequestBuilderNavigationMetadata,
     },
     templates: {
         navigationMetadata: TemplatesRequestBuilderNavigationMetadata,

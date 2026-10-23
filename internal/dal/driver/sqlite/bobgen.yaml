@@ -9,6 +9,11 @@ sql:
   only:
     tasks: []
     task_responses: []
+    notifications: []
+    notification_comments: []
+    settings: []
+    comments: []
+    comment_mentions: []
     domain_events: []
     audit_events: []
     live_changes: []
@@ -88,6 +93,12 @@ plugins:
 
 no_tests: true
 no_back_referencing: true
+
+# A comment reaches notifications directly and through notification_comments.
+aliases:
+  comments:
+    relationships:
+      fk_notification_comments_0fk_notification_comments_1: "CountingNotifications"
 
 types:
   "types.JSON[[]model.ArtifactSource]":
@@ -212,6 +223,10 @@ replacements:
   - tables: ["identity_preferences"]
     match:
       name: "values"
+    replace: "types.JSON[json.RawMessage]"
+  - tables: ["settings"]
+    match:
+      name: "value"
     replace: "types.JSON[json.RawMessage]"
   - tables: ["terms"]
     match:

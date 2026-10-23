@@ -7,9 +7,12 @@ import (
 	"net/http"
 	"papergo/internal/dal"
 	"papergo/internal/dal/live"
+	"papergo/internal/dal/notifications"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
+	"papergo/internal/notify"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -91,6 +94,9 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 	end := time.NewTimer(30 * time.Minute)
 	defer end.Stop()
 	known := map[string]bool{}
+	mine := notifications.RecipientKey(subject(r))
+	notes := map[string]bool{}
+	_, token := identity.AccessTokenContext(r.Context())
 	for {
 		if err = identity.RequireCredential(r.Context(), dal.NewStore(a.dms(r).Directory().DB), subject(r)); err != nil {
 			_ = frame("reauthenticate", position, map[string]any{})
@@ -109,6 +115,20 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 		}
 		for i, change := range changes {
 			last[key(change.Kind, change.EntityID)] = i
+		}
+		// One unread count serves a batch's notification frames, and one
+		// check of each item its comment frames: each would read the same.
+		unread := int64(-1)
+		readable := map[string]bool{}
+		count := func() (int64, error) {
+			if unread < 0 {
+				n, err := a.notifications(r).Unread(r.Context(), subject(r))
+				if err != nil {
+					return 0, err
+				}
+				unread = n
+			}
+			return unread, nil
 		}
 		for i, change := range changes {
 			if err = identity.RequireCredential(r.Context(), dal.NewStore(a.dms(r).Directory().DB), subject(r)); err != nil {
@@ -144,6 +164,60 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 					}
 				} else {
 					return
+				}
+			case live.KindNotification:
+				// Only the recipient hears of a notification, a deletion
+				// included: the change names the recipient's digest.
+				owner, id, _ := strings.Cut(change.EntityID, ":")
+				if owner != mine {
+					continue
+				}
+				// A stream signed in hears of every deletion, so all of a
+				// person's devices stay current; an access token's, which
+				// may not see every notification, only of those it showed.
+				if change.Action == live.ActionDeleted {
+					if token && !notes[id] {
+						continue
+					}
+					delete(notes, id)
+					if err = notificationFrame(frame, count, position, id, change.Action, nil); err != nil {
+						return
+					}
+					continue
+				}
+				// A change of the whole inbox, such as marking everything
+				// read, names no notification.
+				if id == "" {
+					if err = notificationFrame(frame, count, position, "", change.Action, nil); err != nil {
+						return
+					}
+					continue
+				}
+				note, e := a.notifications(r).Get(r.Context(), subject(r), id)
+				if errors.Is(e, dms.ErrNotFound) {
+					continue
+				}
+				if e != nil {
+					return
+				}
+				notes[note.ID] = true
+				if err = notificationFrame(frame, count, position, note.ID, change.Action, &note); err != nil {
+					return
+				}
+			case live.KindComment:
+				// A comment frame names what changed for people who may read
+				// its discussion; clients read the thread again.
+				if a.CommentsOff {
+					continue
+				}
+				c, visible, e := a.comments(r).Visible(r.Context(), subject(r), change.EntityID, readable)
+				if e != nil {
+					return
+				}
+				if visible {
+					if err = frame("comment", position, map[string]any{"id": c.ID, "item_id": c.ItemID, "thread_id": c.ThreadID, "action": change.Action}); err != nil {
+						return
+					}
 				}
 			case live.KindOperation, live.KindRun:
 				// A run is an operation: its manager follows it as a run.
@@ -189,4 +263,22 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 		case <-ticker.C:
 		}
 	}
+}
+
+// notificationFrame sends a notification frame with the recipient's unread
+// count, which a bell shows. A frame without an id tells of a change to the
+// whole inbox.
+func notificationFrame(frame func(string, int64, any) error, count func() (int64, error), position int64, id string, action live.Action, note *notify.View) error {
+	unread, err := count()
+	if err != nil {
+		return err
+	}
+	value := map[string]any{"action": action, "unread": unread}
+	if id != "" {
+		value["id"] = id
+	}
+	if note != nil {
+		value["notification"] = note
+	}
+	return frame("notification", position, value)
 }

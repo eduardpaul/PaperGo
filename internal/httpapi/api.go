@@ -45,6 +45,9 @@ type API struct {
 	// MCPURL, when set, is where AI assistants reach papergo-mcp; the web
 	// app learns it from /auth/config.
 	MCPURL *url.URL
+	// CommentsOff runs the deployment without discussions (COMMENTS=off):
+	// their routes are gone and the web app shows none.
+	CommentsOff bool
 	// PublicURL, when set, supplies the scheme and host of absolute links, so
 	// they are correct behind a TLS-terminating reverse proxy.
 	PublicURL *url.URL
@@ -191,15 +194,24 @@ func (a *API) root() (*router, error) {
 		if mode == auth.Bearer {
 			signIn = a.BrowserSignIn
 		}
-		var mcpURL string
+		// Features tells the web app which optional parts the deployment
+		// runs.
+		type mcp struct {
+			URL string `json:"url"`
+		}
+		type features struct {
+			Comments bool `json:"comments"`
+			MCP      *mcp `json:"mcp,omitempty"`
+		}
+		f := features{Comments: !a.CommentsOff}
 		if a.MCPURL != nil {
-			mcpURL = a.MCPURL.String()
+			f.MCP = &mcp{URL: a.MCPURL.String()}
 		}
 		respond(w, r, 200, struct {
-			Mode auth.Kind      `json:"mode"`
-			OIDC *BrowserSignIn `json:"oidc,omitempty"`
-			MCP  string         `json:"mcp_url,omitempty"`
-		}{mode, signIn, mcpURL})
+			Mode     auth.Kind      `json:"mode"`
+			OIDC     *BrowserSignIn `json:"oidc,omitempty"`
+			Features features       `json:"features"`
+		}{mode, signIn, f})
 	})
 	if local, ok := a.Auth.(auth.Local); ok {
 		root.HandleFunc("POST /auth/login", a.localLogin(local))

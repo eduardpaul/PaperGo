@@ -911,6 +911,105 @@ CREATE TABLE task_responses (
 );
 CREATE UNIQUE INDEX taskresponse_task_id_assignee ON task_responses(task_id, assignee);
 
+-- A setting is a feature's value for the organization (no resource) or for
+-- one resource; lower levels inherit what they leave unset.
+CREATE TABLE settings (
+    id TEXT PRIMARY KEY NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    resource_id TEXT REFERENCES resources(id) ON DELETE CASCADE,
+    "key" TEXT NOT NULL CHECK ("key" IN ('comments')),
+    "value" TEXT NOT NULL CHECK (json_valid("value") AND json_type("value") = 'object'),
+    version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0),
+    updated_by TEXT NOT NULL DEFAULT ''
+);
+CREATE UNIQUE INDEX setting_resource_key ON settings(resource_id, "key") WHERE resource_id IS NOT NULL;
+CREATE UNIQUE INDEX setting_organization_key ON settings("key") WHERE resource_id IS NULL;
+
+-- A comment discusses an item. A thread is a root comment (thread_id = id)
+-- and its replies, one level deep.
+CREATE TABLE comments (
+    id TEXT PRIMARY KEY NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0),
+    item_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
+    thread_id TEXT NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
+    author TEXT NOT NULL CHECK (length(author) BETWEEN 1 AND 255),
+    source TEXT NOT NULL CHECK (source IN ('user', 'workflow')),
+    workflow_id TEXT REFERENCES workflows(id) ON DELETE SET NULL,
+    body TEXT NOT NULL CHECK (length(body) <= 10000),
+    edited_at DATETIME,
+    deleted_at DATETIME,
+    deleted_by TEXT,
+    resolved_at DATETIME,
+    resolved_by TEXT,
+    CHECK ((deleted_at IS NULL) = (deleted_by IS NULL)),
+    CHECK ((resolved_at IS NULL) = (resolved_by IS NULL)),
+    CHECK (resolved_at IS NULL OR thread_id = id),
+    CHECK (deleted_at IS NOT NULL OR length(body) >= 1)
+);
+CREATE INDEX comment_item_created ON comments(item_id, created_at, id);
+CREATE INDEX comment_thread_created ON comments(thread_id, created_at, id);
+
+-- The people a comment mentions, for their notifications and for telling
+-- an edit's new mentions from those already told.
+CREATE TABLE comment_mentions (
+    comment_id TEXT NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
+    subject TEXT NOT NULL REFERENCES identity_users(id) ON DELETE CASCADE,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (comment_id, subject)
+);
+CREATE INDEX comment_mention_subject ON comment_mentions(subject);
+
+-- A notification is one message to one person: their inbox. It never starts
+-- a workflow and raises no domain event, so notifications cannot loop.
+CREATE TABLE notifications (
+    id TEXT PRIMARY KEY NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    recipient TEXT NOT NULL REFERENCES identity_users(id) ON DELETE CASCADE,
+    workspace_id TEXT REFERENCES resources(id) ON DELETE CASCADE,
+    type TEXT NOT NULL CHECK (type IN ('message', 'task.assigned', 'task.completed', 'workflow.failed', 'comment.mentioned', 'comment.replied')),
+    title TEXT NOT NULL CHECK (length(title) BETWEEN 1 AND 300),
+    body TEXT NOT NULL DEFAULT '' CHECK (length(body) <= 4000),
+    -- The link opens one item, task or run; a purged item or task takes its
+    -- notifications with it, a run past retention leaves them unlinked.
+    item_id TEXT REFERENCES resources(id) ON DELETE CASCADE,
+    task_id TEXT REFERENCES tasks(id) ON DELETE CASCADE,
+    run_id TEXT REFERENCES workflow_runs(id) ON DELETE SET NULL,
+    -- A comment's notification also opens its thread on its item.
+    comment_id TEXT REFERENCES comments(id) ON DELETE CASCADE,
+    source TEXT NOT NULL CHECK (source IN ('workflow', 'user', 'system')),
+    sender TEXT NOT NULL DEFAULT '',
+    workflow_id TEXT REFERENCES workflows(id) ON DELETE SET NULL,
+    dedup_key TEXT CHECK (dedup_key IS NULL OR length(dedup_key) BETWEEN 1 AND 200),
+    -- An unread notification with a coalesce key takes the next one with
+    -- that key instead of a new row, counting how many it stands for.
+    coalesce_key TEXT CHECK (coalesce_key IS NULL OR length(coalesce_key) BETWEEN 1 AND 200),
+    "count" INTEGER NOT NULL DEFAULT 1 CHECK ("count" >= 1),
+    read_at DATETIME,
+    CHECK ((item_id IS NULL OR task_id IS NULL) AND (run_id IS NULL OR (item_id IS NULL AND task_id IS NULL))),
+    CHECK (comment_id IS NULL OR item_id IS NOT NULL)
+);
+CREATE INDEX notification_recipient_created ON notifications(recipient, created_at, id);
+CREATE INDEX notification_recipient_unread ON notifications(recipient) WHERE read_at IS NULL;
+CREATE UNIQUE INDEX notification_recipient_dedup ON notifications(recipient, dedup_key) WHERE dedup_key IS NOT NULL;
+CREATE INDEX notification_item_id ON notifications(item_id);
+CREATE INDEX notification_task_id ON notifications(task_id);
+CREATE INDEX notification_run_id ON notifications(run_id);
+CREATE INDEX notification_comment_id ON notifications(comment_id);
+CREATE UNIQUE INDEX notification_recipient_coalesce ON notifications(recipient, coalesce_key) WHERE coalesce_key IS NOT NULL AND read_at IS NULL;
+
+-- The comments a notification tells of: the one it names, or every reply
+-- folded into it, so deleting a reply takes it out of each notification
+-- that counts it.
+CREATE TABLE notification_comments (
+    notification_id TEXT NOT NULL REFERENCES notifications(id) ON DELETE CASCADE,
+    comment_id TEXT NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
+    PRIMARY KEY (notification_id, comment_id)
+);
+CREATE INDEX notification_comment_comment ON notification_comments(comment_id);
+
 CREATE TABLE workflow_steps (
     run_id TEXT NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE,
     seq INTEGER NOT NULL CHECK (seq >= 0),
@@ -1060,7 +1159,7 @@ INSERT INTO live_change_position (id, position) VALUES (1, 0);
 CREATE TABLE live_changes (
     id INTEGER PRIMARY KEY NOT NULL CHECK (id > 0),
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    kind TEXT NOT NULL CHECK (kind IN ('item', 'operation', 'run', 'access')),
+    kind TEXT NOT NULL CHECK (kind IN ('item', 'operation', 'run', 'access', 'notification', 'comment')),
     entity_id TEXT NOT NULL CHECK (length(entity_id) BETWEEN 1 AND 200),
     action TEXT NOT NULL
 );

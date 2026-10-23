@@ -465,3 +465,21 @@ func TestDecisionConfiguration(t *testing.T) {
 		})
 	}
 }
+
+func TestCommentsSwitch(t *testing.T) {
+	t.Setenv("APP_ENV", "test")
+	t.Setenv("AUTH_MODE", "development")
+	t.Setenv("DEV_TOKEN", "0123456789abcdef0123456789abcdef")
+	t.Setenv("DATABASE_PATH", filepath.Join(t.TempDir(), "papergo.db"))
+	for value, want := range map[string]bool{"": true, "on": true, "off": false} {
+		t.Setenv("COMMENTS", value)
+		c, err := Load()
+		if err != nil || c.Comments != want {
+			t.Fatalf("COMMENTS=%q: %v %v", value, c.Comments, err)
+		}
+	}
+	t.Setenv("COMMENTS", "maybe")
+	if _, err := Load(); err == nil {
+		t.Fatal("COMMENTS=maybe was accepted")
+	}
+}

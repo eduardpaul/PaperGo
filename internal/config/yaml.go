@@ -34,7 +34,8 @@ type yamlConfig struct {
 		Store    string `yaml:"store"`
 		ZvecPath string `yaml:"zvec_path"`
 	} `yaml:"search"`
-	Storage struct {
+	Comments string `yaml:"comments"`
+	Storage  struct {
 		BlobPath    string `yaml:"blob_path"`
 		MaxUploadMB *int   `yaml:"max_upload_mb"`
 	} `yaml:"storage"`
@@ -126,7 +127,7 @@ func parseYAML(text string) (yamlFile, error) {
 		"PUBLIC_URL": in.Server.PublicURL, "MCP_PUBLIC_URL": in.MCP.PublicURL, "DATABASE_URL": in.Database.URL, "AUTH_MODE": in.Auth.Mode,
 		"ADMIN_SUBJECT": in.Auth.AdminUser, "ADMIN_GROUP": in.Auth.AdminGroup,
 		"PROXY_SECRET_FILE": in.Auth.ProxySecretFile, "PROXY_TRUSTED_CIDRS": strings.Join(in.Auth.ProxyTrustedCIDRs, ","),
-		"SEARCH_STORE": in.Search.Store, "SEARCH_ZVEC_PATH": in.Search.ZvecPath, "BLOB_PATH": in.Storage.BlobPath,
+		"SEARCH_STORE": in.Search.Store, "SEARCH_ZVEC_PATH": in.Search.ZvecPath, "BLOB_PATH": in.Storage.BlobPath, "COMMENTS": in.Comments,
 		"OIDC_ISSUER": in.OIDC.Issuer, "OIDC_AUDIENCE": in.OIDC.Audience,
 		"OIDC_CLIENT_ID": in.OIDC.ClientID, "OIDC_CLIENT_SCOPES": in.OIDC.ClientScopes,
 		"OIDC_GROUPS_CLAIM": in.OIDC.GroupsClaim, "OIDC_GROUPS_PREFIX": in.OIDC.GroupsPrefix,

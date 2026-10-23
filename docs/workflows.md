@@ -343,7 +343,7 @@ Saving a workflow checks that collections and relationship types belong to the w
 
 ## Tasks
 
-A task asks people to do something and say so: approve, confirm data, fill in a form. Scripts and people create tasks with `POST /v1/workspaces/{id}/tasks`; people also use the web app's Tasks screen. An approval is a task of kind `approval`. The model and its rules live in `internal/tasks`, shared by workflows, the API and PaperGo itself.
+A task asks people to do something and say so: approve, confirm data, fill in a form. Scripts and people create tasks with `POST /v1/workspaces/{id}/tasks`, which needs the `item.write` scope; people also use the web app's Tasks screen. An approval is a task of kind `approval`. The model and its rules live in `internal/tasks`, shared by workflows, the API and PaperGo itself.
 
 The Tasks screen offers Waiting for me, Approvals, Completed and All views. **Load more** appends the next page of the selected view while keeping the current task open.
 
@@ -387,6 +387,8 @@ const answer = plain((await ctx.wait(task!.operationId!)).result) as { outcome: 
 - **Other fields:** `key` (a lowercase name triggers and lists filter on), `priority` (`low`, `normal`, `high`) and `due_at`. A due date describes the task; it does not cancel it.
 
 Answers and their form values stay on the task after it completes, and completed tasks are kept when their runs are deleted. Creating and answering tasks are recorded in the workspace's audit trail (`task.create`, `task.respond`).
+
+Assignees are [notified](notifications.md) when a task is created or reassigned to them, and the creator of a person's task when it is answered. A script tells people anything else with `ctx.api.v1.workspaces.byId(id).notifications.post(...)`; a failed run notifies the author of its workflow version.
 
 ## Selection runs
 

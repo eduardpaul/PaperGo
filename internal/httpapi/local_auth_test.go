@@ -63,7 +63,7 @@ func TestLocalAdminBasicAndSession(t *testing.T) {
 	service := dms.NewService(db.SQL)
 	handler := (&API{DMS: service, Auth: auth.Local{DAL: db.DAL}, Logger: slog.Default(), Ready: db.SQL.PingContext}).Handler()
 	config := request(handler, "GET", "/auth/config", "", "", "", "")
-	if config.Code != 200 || strings.TrimSpace(config.Body.String()) != `{"mode":"local"}` {
+	if config.Code != 200 || strings.TrimSpace(config.Body.String()) != `{"mode":"local","features":{"comments":true}}` {
 		t.Fatal(config.Code, config.Body.String())
 	}
 	basic := httptest.NewRequest(http.MethodGet, "/v1/storage/status", nil)

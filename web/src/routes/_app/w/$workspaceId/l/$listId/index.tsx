@@ -9,6 +9,7 @@ export const Route = createFileRoute('/_app/w/$workspaceId/l/$listId/')({
     view: textParam(search.view),
     item: textParam(search.item),
     tab: textParam(search.tab),
+    comment: textParam(search.comment),
     q: textParam(search.q),
     sort: textParam(search.sort),
     cols: textParam(search.cols),

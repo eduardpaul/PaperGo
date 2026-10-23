@@ -86,6 +86,7 @@ type resourceR struct {
 	ContainerBusinessKeys         BusinessKeySlice     // business_keys.business_keys_container_id_fkey
 	ItemBusinessKeys              BusinessKeySlice     // business_keys.business_keys_item_id_fkey
 	ContainerCollectionTypes      CollectionTypeSlice  // collection_types.collection_types_container_id_fkey
+	ItemComments                  CommentSlice         // comments.comments_item_id_fkey
 	ContainerFieldValues          FieldValueSlice      // field_values.field_values_container_id_fkey
 	ItemFieldValues               FieldValueSlice      // field_values.field_values_item_id_fkey
 	Grants                        GrantSlice           // grants.grants_resource_id_fkey
@@ -100,6 +101,8 @@ type resourceR struct {
 	WorkspaceItemSurfaces         ItemSurfaceSlice     // item_surfaces.item_surfaces_workspace_id_fkey
 	ContainerListIntegrations     ListIntegrationSlice // list_integrations.list_integrations_container_id_fkey
 	ContainerListViews            ListViewSlice        // list_views.list_views_container_id_fkey
+	ItemNotifications             NotificationSlice    // notifications.notifications_item_id_fkey
+	WorkspaceNotifications        NotificationSlice    // notifications.notifications_workspace_id_fkey
 	ItemOperationItems            OperationItemSlice   // operation_items.operation_items_item_id_fkey
 	ContainerOperations           OperationSlice       // operations.operations_container_id_fkey
 	WorkspaceOperations           OperationSlice       // operations.operations_workspace_id_fkey
@@ -122,6 +125,7 @@ type resourceR struct {
 	ReverseWorkspaces             ResourceSlice        // resources.resources_workspace_id_fkey__self_join_reverse
 	ContainerSchemaRevisions      SchemaRevisionSlice  // schema_revisions.schema_revisions_container_id_fkey
 	WorkspaceSchemaTemplates      SchemaTemplateSlice  // schema_templates.schema_templates_workspace_id_fkey
+	Settings                      SettingSlice         // settings.settings_resource_id_fkey
 	WorkspaceSmartFolders         SmartFolderSlice     // smart_folders.smart_folders_workspace_id_fkey
 	ItemStagedFiles               StagedFileSlice      // staged_files.staged_files_item_id_fkey
 	WorkspaceStagedFiles          StagedFileSlice      // staged_files.staged_files_workspace_id_fkey
@@ -148,6 +152,7 @@ type resourceRLoaded struct {
 	ContainerBusinessKeys         bool // business_keys.business_keys_container_id_fkey
 	ItemBusinessKeys              bool // business_keys.business_keys_item_id_fkey
 	ContainerCollectionTypes      bool // collection_types.collection_types_container_id_fkey
+	ItemComments                  bool // comments.comments_item_id_fkey
 	ContainerFieldValues          bool // field_values.field_values_container_id_fkey
 	ItemFieldValues               bool // field_values.field_values_item_id_fkey
 	Grants                        bool // grants.grants_resource_id_fkey
@@ -162,6 +167,8 @@ type resourceRLoaded struct {
 	WorkspaceItemSurfaces         bool // item_surfaces.item_surfaces_workspace_id_fkey
 	ContainerListIntegrations     bool // list_integrations.list_integrations_container_id_fkey
 	ContainerListViews            bool // list_views.list_views_container_id_fkey
+	ItemNotifications             bool // notifications.notifications_item_id_fkey
+	WorkspaceNotifications        bool // notifications.notifications_workspace_id_fkey
 	ItemOperationItems            bool // operation_items.operation_items_item_id_fkey
 	ContainerOperations           bool // operations.operations_container_id_fkey
 	WorkspaceOperations           bool // operations.operations_workspace_id_fkey
@@ -184,6 +191,7 @@ type resourceRLoaded struct {
 	ReverseWorkspaces             bool // resources.resources_workspace_id_fkey__self_join_reverse
 	ContainerSchemaRevisions      bool // schema_revisions.schema_revisions_container_id_fkey
 	WorkspaceSchemaTemplates      bool // schema_templates.schema_templates_workspace_id_fkey
+	Settings                      bool // settings.settings_resource_id_fkey
 	WorkspaceSmartFolders         bool // smart_folders.smart_folders_workspace_id_fkey
 	ItemStagedFiles               bool // staged_files.staged_files_item_id_fkey
 	WorkspaceStagedFiles          bool // staged_files.staged_files_workspace_id_fkey
@@ -1541,6 +1549,29 @@ func (os ResourceSlice) ContainerCollectionTypes(mods ...bob.Mod[*dialect.Select
 	)...)
 }
 
+// ItemComments starts a query for related objects on comments
+func (o *Resource) ItemComments(mods ...bob.Mod[*dialect.SelectQuery]) CommentsQuery {
+	return Comments.Query(append(mods,
+		sm.Where(Comments.Columns.ItemID.EQ(psql.Arg(o.ID))),
+	)...)
+}
+
+func (os ResourceSlice) ItemComments(mods ...bob.Mod[*dialect.SelectQuery]) CommentsQuery {
+	pkID := make(pgtypes.Array[string], 0, len(os))
+
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		pkID = append(pkID, o.ID)
+	}
+	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkID), "text[]"))
+
+	return Comments.Query(append(mods,
+		sm.Where(Comments.Columns.ItemID.EQ(PKArgExpr)),
+	)...)
+}
+
 // ContainerFieldValues starts a query for related objects on field_values
 func (o *Resource) ContainerFieldValues(mods ...bob.Mod[*dialect.SelectQuery]) FieldValuesQuery {
 	return FieldValues.Query(append(mods,
@@ -1860,6 +1891,52 @@ func (os ResourceSlice) ContainerListViews(mods ...bob.Mod[*dialect.SelectQuery]
 
 	return ListViews.Query(append(mods,
 		sm.Where(ListViews.Columns.ContainerID.EQ(PKArgExpr)),
+	)...)
+}
+
+// ItemNotifications starts a query for related objects on notifications
+func (o *Resource) ItemNotifications(mods ...bob.Mod[*dialect.SelectQuery]) NotificationsQuery {
+	return Notifications.Query(append(mods,
+		sm.Where(Notifications.Columns.ItemID.EQ(psql.Arg(o.ID))),
+	)...)
+}
+
+func (os ResourceSlice) ItemNotifications(mods ...bob.Mod[*dialect.SelectQuery]) NotificationsQuery {
+	pkID := make(pgtypes.Array[string], 0, len(os))
+
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		pkID = append(pkID, o.ID)
+	}
+	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkID), "text[]"))
+
+	return Notifications.Query(append(mods,
+		sm.Where(Notifications.Columns.ItemID.EQ(PKArgExpr)),
+	)...)
+}
+
+// WorkspaceNotifications starts a query for related objects on notifications
+func (o *Resource) WorkspaceNotifications(mods ...bob.Mod[*dialect.SelectQuery]) NotificationsQuery {
+	return Notifications.Query(append(mods,
+		sm.Where(Notifications.Columns.WorkspaceID.EQ(psql.Arg(o.ID))),
+	)...)
+}
+
+func (os ResourceSlice) WorkspaceNotifications(mods ...bob.Mod[*dialect.SelectQuery]) NotificationsQuery {
+	pkID := make(pgtypes.Array[string], 0, len(os))
+
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		pkID = append(pkID, o.ID)
+	}
+	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkID), "text[]"))
+
+	return Notifications.Query(append(mods,
+		sm.Where(Notifications.Columns.WorkspaceID.EQ(PKArgExpr)),
 	)...)
 }
 
@@ -2434,6 +2511,29 @@ func (os ResourceSlice) WorkspaceSchemaTemplates(mods ...bob.Mod[*dialect.Select
 
 	return SchemaTemplates.Query(append(mods,
 		sm.Where(SchemaTemplates.Columns.WorkspaceID.EQ(PKArgExpr)),
+	)...)
+}
+
+// Settings starts a query for related objects on settings
+func (o *Resource) Settings(mods ...bob.Mod[*dialect.SelectQuery]) SettingsQuery {
+	return Settings.Query(append(mods,
+		sm.Where(Settings.Columns.ResourceID.EQ(psql.Arg(o.ID))),
+	)...)
+}
+
+func (os ResourceSlice) Settings(mods ...bob.Mod[*dialect.SelectQuery]) SettingsQuery {
+	pkID := make(pgtypes.Array[string], 0, len(os))
+
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		pkID = append(pkID, o.ID)
+	}
+	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkID), "text[]"))
+
+	return Settings.Query(append(mods,
+		sm.Where(Settings.Columns.ResourceID.EQ(PKArgExpr)),
 	)...)
 }
 
@@ -3075,6 +3175,67 @@ func (resource0 *Resource) AttachContainerCollectionTypes(ctx context.Context, e
 	}
 
 	resource0.R.ContainerCollectionTypes = append(resource0.R.ContainerCollectionTypes, collectionTypes1...)
+
+	return nil
+}
+
+func insertResourceItemComments0(ctx context.Context, exec bob.Executor, comments1 []*CommentSetter, resource0 *Resource) (CommentSlice, error) {
+	for i := range comments1 {
+		comments1[i].ItemID = omit.From(resource0.ID)
+	}
+
+	ret, err := Comments.Insert(bob.ToMods(comments1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertResourceItemComments0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachResourceItemComments0(ctx context.Context, exec bob.Executor, count int, comments1 CommentSlice, resource0 *Resource) (CommentSlice, error) {
+	setter := &CommentSetter{
+		ItemID: omit.From(resource0.ID),
+	}
+
+	err := comments1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachResourceItemComments0: %w", err)
+	}
+
+	return comments1, nil
+}
+
+func (resource0 *Resource) InsertItemComments(ctx context.Context, exec bob.Executor, related ...*CommentSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	comments1, err := insertResourceItemComments0(ctx, exec, related, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.ItemComments = append(resource0.R.ItemComments, comments1...)
+
+	return nil
+}
+
+func (resource0 *Resource) AttachItemComments(ctx context.Context, exec bob.Executor, related ...*Comment) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	comments1 := CommentSlice(related)
+
+	_, err = attachResourceItemComments0(ctx, exec, len(related), comments1, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.ItemComments = append(resource0.R.ItemComments, comments1...)
 
 	return nil
 }
@@ -3920,6 +4081,128 @@ func (resource0 *Resource) AttachContainerListViews(ctx context.Context, exec bo
 	}
 
 	resource0.R.ContainerListViews = append(resource0.R.ContainerListViews, listViews1...)
+
+	return nil
+}
+
+func insertResourceItemNotifications0(ctx context.Context, exec bob.Executor, notifications1 []*NotificationSetter, resource0 *Resource) (NotificationSlice, error) {
+	for i := range notifications1 {
+		notifications1[i].ItemID = omitnull.From(resource0.ID)
+	}
+
+	ret, err := Notifications.Insert(bob.ToMods(notifications1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertResourceItemNotifications0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachResourceItemNotifications0(ctx context.Context, exec bob.Executor, count int, notifications1 NotificationSlice, resource0 *Resource) (NotificationSlice, error) {
+	setter := &NotificationSetter{
+		ItemID: omitnull.From(resource0.ID),
+	}
+
+	err := notifications1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachResourceItemNotifications0: %w", err)
+	}
+
+	return notifications1, nil
+}
+
+func (resource0 *Resource) InsertItemNotifications(ctx context.Context, exec bob.Executor, related ...*NotificationSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	notifications1, err := insertResourceItemNotifications0(ctx, exec, related, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.ItemNotifications = append(resource0.R.ItemNotifications, notifications1...)
+
+	return nil
+}
+
+func (resource0 *Resource) AttachItemNotifications(ctx context.Context, exec bob.Executor, related ...*Notification) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	notifications1 := NotificationSlice(related)
+
+	_, err = attachResourceItemNotifications0(ctx, exec, len(related), notifications1, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.ItemNotifications = append(resource0.R.ItemNotifications, notifications1...)
+
+	return nil
+}
+
+func insertResourceWorkspaceNotifications0(ctx context.Context, exec bob.Executor, notifications1 []*NotificationSetter, resource0 *Resource) (NotificationSlice, error) {
+	for i := range notifications1 {
+		notifications1[i].WorkspaceID = omitnull.From(resource0.ID)
+	}
+
+	ret, err := Notifications.Insert(bob.ToMods(notifications1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertResourceWorkspaceNotifications0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachResourceWorkspaceNotifications0(ctx context.Context, exec bob.Executor, count int, notifications1 NotificationSlice, resource0 *Resource) (NotificationSlice, error) {
+	setter := &NotificationSetter{
+		WorkspaceID: omitnull.From(resource0.ID),
+	}
+
+	err := notifications1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachResourceWorkspaceNotifications0: %w", err)
+	}
+
+	return notifications1, nil
+}
+
+func (resource0 *Resource) InsertWorkspaceNotifications(ctx context.Context, exec bob.Executor, related ...*NotificationSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	notifications1, err := insertResourceWorkspaceNotifications0(ctx, exec, related, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.WorkspaceNotifications = append(resource0.R.WorkspaceNotifications, notifications1...)
+
+	return nil
+}
+
+func (resource0 *Resource) AttachWorkspaceNotifications(ctx context.Context, exec bob.Executor, related ...*Notification) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	notifications1 := NotificationSlice(related)
+
+	_, err = attachResourceWorkspaceNotifications0(ctx, exec, len(related), notifications1, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.WorkspaceNotifications = append(resource0.R.WorkspaceNotifications, notifications1...)
 
 	return nil
 }
@@ -5128,6 +5411,67 @@ func (resource0 *Resource) AttachWorkspaceSchemaTemplates(ctx context.Context, e
 	return nil
 }
 
+func insertResourceSettings0(ctx context.Context, exec bob.Executor, settings1 []*SettingSetter, resource0 *Resource) (SettingSlice, error) {
+	for i := range settings1 {
+		settings1[i].ResourceID = omitnull.From(resource0.ID)
+	}
+
+	ret, err := Settings.Insert(bob.ToMods(settings1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertResourceSettings0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachResourceSettings0(ctx context.Context, exec bob.Executor, count int, settings1 SettingSlice, resource0 *Resource) (SettingSlice, error) {
+	setter := &SettingSetter{
+		ResourceID: omitnull.From(resource0.ID),
+	}
+
+	err := settings1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachResourceSettings0: %w", err)
+	}
+
+	return settings1, nil
+}
+
+func (resource0 *Resource) InsertSettings(ctx context.Context, exec bob.Executor, related ...*SettingSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	settings1, err := insertResourceSettings0(ctx, exec, related, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.Settings = append(resource0.R.Settings, settings1...)
+
+	return nil
+}
+
+func (resource0 *Resource) AttachSettings(ctx context.Context, exec bob.Executor, related ...*Setting) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	settings1 := SettingSlice(related)
+
+	_, err = attachResourceSettings0(ctx, exec, len(related), settings1, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.Settings = append(resource0.R.Settings, settings1...)
+
+	return nil
+}
+
 func insertResourceWorkspaceSmartFolders0(ctx context.Context, exec bob.Executor, smartFolders1 []*SmartFolderSetter, resource0 *Resource) (SmartFolderSlice, error) {
 	for i := range smartFolders1 {
 		smartFolders1[i].WorkspaceID = omitnull.From(resource0.ID)
@@ -6039,6 +6383,20 @@ func (w resourceWhereR[Q]) HasContainerCollectionTypes(filters ...bob.Mod[*diale
 	return mods.Where[Q]{E: psql.Exists(q)}
 }
 
+// HasItemComments filters parents that have a matching ItemComments using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Comments).
+func (w resourceWhereR[Q]) HasItemComments(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := psql.Select(
+		sm.Columns(psql.Raw("1")),
+		sm.From(Comments.NameExpr()),
+		sm.Where(Comments.Columns.ItemID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: psql.Exists(q)}
+}
+
 // HasContainerFieldValues filters parents that have a matching ContainerFieldValues using a
 // correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
 // multiply parent rows, so no DISTINCT is needed. The optional filters are
@@ -6230,6 +6588,34 @@ func (w resourceWhereR[Q]) HasContainerListViews(filters ...bob.Mod[*dialect.Sel
 		sm.Columns(psql.Raw("1")),
 		sm.From(ListViews.NameExpr()),
 		sm.Where(ListViews.Columns.ContainerID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: psql.Exists(q)}
+}
+
+// HasItemNotifications filters parents that have a matching ItemNotifications using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Notifications).
+func (w resourceWhereR[Q]) HasItemNotifications(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := psql.Select(
+		sm.Columns(psql.Raw("1")),
+		sm.From(Notifications.NameExpr()),
+		sm.Where(Notifications.Columns.ItemID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: psql.Exists(q)}
+}
+
+// HasWorkspaceNotifications filters parents that have a matching WorkspaceNotifications using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Notifications).
+func (w resourceWhereR[Q]) HasWorkspaceNotifications(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := psql.Select(
+		sm.Columns(psql.Raw("1")),
+		sm.From(Notifications.NameExpr()),
+		sm.Where(Notifications.Columns.WorkspaceID.EQ(w.cols.ID)),
 	)
 	q.Apply(filters...)
 	return mods.Where[Q]{E: psql.Exists(q)}
@@ -6548,6 +6934,20 @@ func (w resourceWhereR[Q]) HasWorkspaceSchemaTemplates(filters ...bob.Mod[*diale
 		sm.Columns(psql.Raw("1")),
 		sm.From(SchemaTemplates.NameExpr()),
 		sm.Where(SchemaTemplates.Columns.WorkspaceID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: psql.Exists(q)}
+}
+
+// HasSettings filters parents that have a matching Settings using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Settings).
+func (w resourceWhereR[Q]) HasSettings(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := psql.Select(
+		sm.Columns(psql.Raw("1")),
+		sm.From(Settings.NameExpr()),
+		sm.Where(Settings.Columns.ResourceID.EQ(w.cols.ID)),
 	)
 	q.Apply(filters...)
 	return mods.Where[Q]{E: psql.Exists(q)}

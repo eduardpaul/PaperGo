@@ -85,6 +85,7 @@ type resourceR struct {
 	ItemBusinessKeys              BusinessKeySlice     // fk_business_keys_0
 	ContainerBusinessKeys         BusinessKeySlice     // fk_business_keys_1
 	ContainerCollectionTypes      CollectionTypeSlice  // fk_collection_types_1
+	ItemComments                  CommentSlice         // fk_comments_2
 	ItemFieldValues               FieldValueSlice      // fk_field_values_0
 	ContainerFieldValues          FieldValueSlice      // fk_field_values_1
 	Grants                        GrantSlice           // fk_grants_0
@@ -99,6 +100,8 @@ type resourceR struct {
 	ItemItemSurfaces              ItemSurfaceSlice     // fk_item_surfaces_3
 	ContainerListIntegrations     ListIntegrationSlice // fk_list_integrations_0
 	ContainerListViews            ListViewSlice        // fk_list_views_0
+	ItemNotifications             NotificationSlice    // fk_notifications_4
+	WorkspaceNotifications        NotificationSlice    // fk_notifications_5
 	ItemOperationItems            OperationItemSlice   // fk_operation_items_0
 	WorkspaceOperations           OperationSlice       // fk_operations_1
 	ContainerOperations           OperationSlice       // fk_operations_2
@@ -121,6 +124,7 @@ type resourceR struct {
 	ReverseWorkspaces             ResourceSlice        // fk_resources_8__self_join_reverse
 	ContainerSchemaRevisions      SchemaRevisionSlice  // fk_schema_revisions_0
 	WorkspaceSchemaTemplates      SchemaTemplateSlice  // fk_schema_templates_0
+	Settings                      SettingSlice         // fk_settings_0
 	WorkspaceSmartFolders         SmartFolderSlice     // fk_smart_folders_1
 	ItemStagedFiles               StagedFileSlice      // fk_staged_files_2
 	WorkspaceStagedFiles          StagedFileSlice      // fk_staged_files_3
@@ -147,6 +151,7 @@ type resourceRLoaded struct {
 	ItemBusinessKeys              bool // fk_business_keys_0
 	ContainerBusinessKeys         bool // fk_business_keys_1
 	ContainerCollectionTypes      bool // fk_collection_types_1
+	ItemComments                  bool // fk_comments_2
 	ItemFieldValues               bool // fk_field_values_0
 	ContainerFieldValues          bool // fk_field_values_1
 	Grants                        bool // fk_grants_0
@@ -161,6 +166,8 @@ type resourceRLoaded struct {
 	ItemItemSurfaces              bool // fk_item_surfaces_3
 	ContainerListIntegrations     bool // fk_list_integrations_0
 	ContainerListViews            bool // fk_list_views_0
+	ItemNotifications             bool // fk_notifications_4
+	WorkspaceNotifications        bool // fk_notifications_5
 	ItemOperationItems            bool // fk_operation_items_0
 	WorkspaceOperations           bool // fk_operations_1
 	ContainerOperations           bool // fk_operations_2
@@ -183,6 +190,7 @@ type resourceRLoaded struct {
 	ReverseWorkspaces             bool // fk_resources_8__self_join_reverse
 	ContainerSchemaRevisions      bool // fk_schema_revisions_0
 	WorkspaceSchemaTemplates      bool // fk_schema_templates_0
+	Settings                      bool // fk_settings_0
 	WorkspaceSmartFolders         bool // fk_smart_folders_1
 	ItemStagedFiles               bool // fk_staged_files_2
 	WorkspaceStagedFiles          bool // fk_staged_files_3
@@ -1571,6 +1579,25 @@ func (os ResourceSlice) ContainerCollectionTypes(mods ...bob.Mod[*dialect.Select
 	)...)
 }
 
+// ItemComments starts a query for related objects on comments
+func (o *Resource) ItemComments(mods ...bob.Mod[*dialect.SelectQuery]) CommentsQuery {
+	return Comments.Query(append(mods,
+		sm.Where(Comments.Columns.ItemID.EQ(sqlite.Arg(o.ID))),
+	)...)
+}
+
+func (os ResourceSlice) ItemComments(mods ...bob.Mod[*dialect.SelectQuery]) CommentsQuery {
+	PKArgSlice := make([]bob.Expression, len(os))
+	for i, o := range os {
+		PKArgSlice[i] = sqlite.ArgGroup(o.ID)
+	}
+	PKArgExpr := sqlite.Group(PKArgSlice...)
+
+	return Comments.Query(append(mods,
+		sm.Where(sqlite.Group(Comments.Columns.ItemID).OP("IN", PKArgExpr)),
+	)...)
+}
+
 // ItemFieldValues starts a query for related objects on field_values
 func (o *Resource) ItemFieldValues(mods ...bob.Mod[*dialect.SelectQuery]) FieldValuesQuery {
 	return FieldValues.Query(append(mods,
@@ -1834,6 +1861,44 @@ func (os ResourceSlice) ContainerListViews(mods ...bob.Mod[*dialect.SelectQuery]
 
 	return ListViews.Query(append(mods,
 		sm.Where(sqlite.Group(ListViews.Columns.ContainerID).OP("IN", PKArgExpr)),
+	)...)
+}
+
+// ItemNotifications starts a query for related objects on notifications
+func (o *Resource) ItemNotifications(mods ...bob.Mod[*dialect.SelectQuery]) NotificationsQuery {
+	return Notifications.Query(append(mods,
+		sm.Where(Notifications.Columns.ItemID.EQ(sqlite.Arg(o.ID))),
+	)...)
+}
+
+func (os ResourceSlice) ItemNotifications(mods ...bob.Mod[*dialect.SelectQuery]) NotificationsQuery {
+	PKArgSlice := make([]bob.Expression, len(os))
+	for i, o := range os {
+		PKArgSlice[i] = sqlite.ArgGroup(o.ID)
+	}
+	PKArgExpr := sqlite.Group(PKArgSlice...)
+
+	return Notifications.Query(append(mods,
+		sm.Where(sqlite.Group(Notifications.Columns.ItemID).OP("IN", PKArgExpr)),
+	)...)
+}
+
+// WorkspaceNotifications starts a query for related objects on notifications
+func (o *Resource) WorkspaceNotifications(mods ...bob.Mod[*dialect.SelectQuery]) NotificationsQuery {
+	return Notifications.Query(append(mods,
+		sm.Where(Notifications.Columns.WorkspaceID.EQ(sqlite.Arg(o.ID))),
+	)...)
+}
+
+func (os ResourceSlice) WorkspaceNotifications(mods ...bob.Mod[*dialect.SelectQuery]) NotificationsQuery {
+	PKArgSlice := make([]bob.Expression, len(os))
+	for i, o := range os {
+		PKArgSlice[i] = sqlite.ArgGroup(o.ID)
+	}
+	PKArgExpr := sqlite.Group(PKArgSlice...)
+
+	return Notifications.Query(append(mods,
+		sm.Where(sqlite.Group(Notifications.Columns.WorkspaceID).OP("IN", PKArgExpr)),
 	)...)
 }
 
@@ -2257,6 +2322,25 @@ func (os ResourceSlice) WorkspaceSchemaTemplates(mods ...bob.Mod[*dialect.Select
 
 	return SchemaTemplates.Query(append(mods,
 		sm.Where(sqlite.Group(SchemaTemplates.Columns.WorkspaceID).OP("IN", PKArgExpr)),
+	)...)
+}
+
+// Settings starts a query for related objects on settings
+func (o *Resource) Settings(mods ...bob.Mod[*dialect.SelectQuery]) SettingsQuery {
+	return Settings.Query(append(mods,
+		sm.Where(Settings.Columns.ResourceID.EQ(sqlite.Arg(o.ID))),
+	)...)
+}
+
+func (os ResourceSlice) Settings(mods ...bob.Mod[*dialect.SelectQuery]) SettingsQuery {
+	PKArgSlice := make([]bob.Expression, len(os))
+	for i, o := range os {
+		PKArgSlice[i] = sqlite.ArgGroup(o.ID)
+	}
+	PKArgExpr := sqlite.Group(PKArgSlice...)
+
+	return Settings.Query(append(mods,
+		sm.Where(sqlite.Group(Settings.Columns.ResourceID).OP("IN", PKArgExpr)),
 	)...)
 }
 
@@ -2850,6 +2934,67 @@ func (resource0 *Resource) AttachContainerCollectionTypes(ctx context.Context, e
 	}
 
 	resource0.R.ContainerCollectionTypes = append(resource0.R.ContainerCollectionTypes, collectionTypes1...)
+
+	return nil
+}
+
+func insertResourceItemComments0(ctx context.Context, exec bob.Executor, comments1 []*CommentSetter, resource0 *Resource) (CommentSlice, error) {
+	for i := range comments1 {
+		comments1[i].ItemID = omit.From(resource0.ID)
+	}
+
+	ret, err := Comments.Insert(bob.ToMods(comments1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertResourceItemComments0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachResourceItemComments0(ctx context.Context, exec bob.Executor, count int, comments1 CommentSlice, resource0 *Resource) (CommentSlice, error) {
+	setter := &CommentSetter{
+		ItemID: omit.From(resource0.ID),
+	}
+
+	err := comments1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachResourceItemComments0: %w", err)
+	}
+
+	return comments1, nil
+}
+
+func (resource0 *Resource) InsertItemComments(ctx context.Context, exec bob.Executor, related ...*CommentSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	comments1, err := insertResourceItemComments0(ctx, exec, related, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.ItemComments = append(resource0.R.ItemComments, comments1...)
+
+	return nil
+}
+
+func (resource0 *Resource) AttachItemComments(ctx context.Context, exec bob.Executor, related ...*Comment) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	comments1 := CommentSlice(related)
+
+	_, err = attachResourceItemComments0(ctx, exec, len(related), comments1, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.ItemComments = append(resource0.R.ItemComments, comments1...)
 
 	return nil
 }
@@ -3695,6 +3840,128 @@ func (resource0 *Resource) AttachContainerListViews(ctx context.Context, exec bo
 	}
 
 	resource0.R.ContainerListViews = append(resource0.R.ContainerListViews, listViews1...)
+
+	return nil
+}
+
+func insertResourceItemNotifications0(ctx context.Context, exec bob.Executor, notifications1 []*NotificationSetter, resource0 *Resource) (NotificationSlice, error) {
+	for i := range notifications1 {
+		notifications1[i].ItemID = omitnull.From(resource0.ID)
+	}
+
+	ret, err := Notifications.Insert(bob.ToMods(notifications1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertResourceItemNotifications0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachResourceItemNotifications0(ctx context.Context, exec bob.Executor, count int, notifications1 NotificationSlice, resource0 *Resource) (NotificationSlice, error) {
+	setter := &NotificationSetter{
+		ItemID: omitnull.From(resource0.ID),
+	}
+
+	err := notifications1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachResourceItemNotifications0: %w", err)
+	}
+
+	return notifications1, nil
+}
+
+func (resource0 *Resource) InsertItemNotifications(ctx context.Context, exec bob.Executor, related ...*NotificationSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	notifications1, err := insertResourceItemNotifications0(ctx, exec, related, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.ItemNotifications = append(resource0.R.ItemNotifications, notifications1...)
+
+	return nil
+}
+
+func (resource0 *Resource) AttachItemNotifications(ctx context.Context, exec bob.Executor, related ...*Notification) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	notifications1 := NotificationSlice(related)
+
+	_, err = attachResourceItemNotifications0(ctx, exec, len(related), notifications1, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.ItemNotifications = append(resource0.R.ItemNotifications, notifications1...)
+
+	return nil
+}
+
+func insertResourceWorkspaceNotifications0(ctx context.Context, exec bob.Executor, notifications1 []*NotificationSetter, resource0 *Resource) (NotificationSlice, error) {
+	for i := range notifications1 {
+		notifications1[i].WorkspaceID = omitnull.From(resource0.ID)
+	}
+
+	ret, err := Notifications.Insert(bob.ToMods(notifications1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertResourceWorkspaceNotifications0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachResourceWorkspaceNotifications0(ctx context.Context, exec bob.Executor, count int, notifications1 NotificationSlice, resource0 *Resource) (NotificationSlice, error) {
+	setter := &NotificationSetter{
+		WorkspaceID: omitnull.From(resource0.ID),
+	}
+
+	err := notifications1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachResourceWorkspaceNotifications0: %w", err)
+	}
+
+	return notifications1, nil
+}
+
+func (resource0 *Resource) InsertWorkspaceNotifications(ctx context.Context, exec bob.Executor, related ...*NotificationSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	notifications1, err := insertResourceWorkspaceNotifications0(ctx, exec, related, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.WorkspaceNotifications = append(resource0.R.WorkspaceNotifications, notifications1...)
+
+	return nil
+}
+
+func (resource0 *Resource) AttachWorkspaceNotifications(ctx context.Context, exec bob.Executor, related ...*Notification) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	notifications1 := NotificationSlice(related)
+
+	_, err = attachResourceWorkspaceNotifications0(ctx, exec, len(related), notifications1, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.WorkspaceNotifications = append(resource0.R.WorkspaceNotifications, notifications1...)
 
 	return nil
 }
@@ -4903,6 +5170,67 @@ func (resource0 *Resource) AttachWorkspaceSchemaTemplates(ctx context.Context, e
 	return nil
 }
 
+func insertResourceSettings0(ctx context.Context, exec bob.Executor, settings1 []*SettingSetter, resource0 *Resource) (SettingSlice, error) {
+	for i := range settings1 {
+		settings1[i].ResourceID = omitnull.From(resource0.ID)
+	}
+
+	ret, err := Settings.Insert(bob.ToMods(settings1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertResourceSettings0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachResourceSettings0(ctx context.Context, exec bob.Executor, count int, settings1 SettingSlice, resource0 *Resource) (SettingSlice, error) {
+	setter := &SettingSetter{
+		ResourceID: omitnull.From(resource0.ID),
+	}
+
+	err := settings1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachResourceSettings0: %w", err)
+	}
+
+	return settings1, nil
+}
+
+func (resource0 *Resource) InsertSettings(ctx context.Context, exec bob.Executor, related ...*SettingSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	settings1, err := insertResourceSettings0(ctx, exec, related, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.Settings = append(resource0.R.Settings, settings1...)
+
+	return nil
+}
+
+func (resource0 *Resource) AttachSettings(ctx context.Context, exec bob.Executor, related ...*Setting) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	settings1 := SettingSlice(related)
+
+	_, err = attachResourceSettings0(ctx, exec, len(related), settings1, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.Settings = append(resource0.R.Settings, settings1...)
+
+	return nil
+}
+
 func insertResourceWorkspaceSmartFolders0(ctx context.Context, exec bob.Executor, smartFolders1 []*SmartFolderSetter, resource0 *Resource) (SmartFolderSlice, error) {
 	for i := range smartFolders1 {
 		smartFolders1[i].WorkspaceID = omitnull.From(resource0.ID)
@@ -5814,6 +6142,20 @@ func (w resourceWhereR[Q]) HasContainerCollectionTypes(filters ...bob.Mod[*diale
 	return mods.Where[Q]{E: sqlite.Exists(q)}
 }
 
+// HasItemComments filters parents that have a matching ItemComments using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Comments).
+func (w resourceWhereR[Q]) HasItemComments(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := sqlite.Select(
+		sm.Columns(sqlite.Raw("1")),
+		sm.From(Comments.NameExpr()),
+		sm.Where(Comments.Columns.ItemID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: sqlite.Exists(q)}
+}
+
 // HasItemFieldValues filters parents that have a matching ItemFieldValues using a
 // correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
 // multiply parent rows, so no DISTINCT is needed. The optional filters are
@@ -6005,6 +6347,34 @@ func (w resourceWhereR[Q]) HasContainerListViews(filters ...bob.Mod[*dialect.Sel
 		sm.Columns(sqlite.Raw("1")),
 		sm.From(ListViews.NameExpr()),
 		sm.Where(ListViews.Columns.ContainerID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: sqlite.Exists(q)}
+}
+
+// HasItemNotifications filters parents that have a matching ItemNotifications using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Notifications).
+func (w resourceWhereR[Q]) HasItemNotifications(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := sqlite.Select(
+		sm.Columns(sqlite.Raw("1")),
+		sm.From(Notifications.NameExpr()),
+		sm.Where(Notifications.Columns.ItemID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: sqlite.Exists(q)}
+}
+
+// HasWorkspaceNotifications filters parents that have a matching WorkspaceNotifications using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Notifications).
+func (w resourceWhereR[Q]) HasWorkspaceNotifications(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := sqlite.Select(
+		sm.Columns(sqlite.Raw("1")),
+		sm.From(Notifications.NameExpr()),
+		sm.Where(Notifications.Columns.WorkspaceID.EQ(w.cols.ID)),
 	)
 	q.Apply(filters...)
 	return mods.Where[Q]{E: sqlite.Exists(q)}
@@ -6323,6 +6693,20 @@ func (w resourceWhereR[Q]) HasWorkspaceSchemaTemplates(filters ...bob.Mod[*diale
 		sm.Columns(sqlite.Raw("1")),
 		sm.From(SchemaTemplates.NameExpr()),
 		sm.Where(SchemaTemplates.Columns.WorkspaceID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: sqlite.Exists(q)}
+}
+
+// HasSettings filters parents that have a matching Settings using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Settings).
+func (w resourceWhereR[Q]) HasSettings(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := sqlite.Select(
+		sm.Columns(sqlite.Raw("1")),
+		sm.From(Settings.NameExpr()),
+		sm.Where(Settings.Columns.ResourceID.EQ(w.cols.ID)),
 	)
 	q.Apply(filters...)
 	return mods.Where[Q]{E: sqlite.Exists(q)}

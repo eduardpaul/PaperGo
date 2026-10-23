@@ -4,11 +4,15 @@
 // @ts-ignore
 import { ArchiveRequestBuilderRequestsMetadata, type ArchiveRequestBuilder } from './archive/index.js';
 // @ts-ignore
+import { CommentsRequestBuilderRequestsMetadata, type CommentsRequestBuilder } from './comments/index.js';
+// @ts-ignore
 import { ComposePdfRequestBuilderRequestsMetadata, type ComposePdfRequestBuilder } from './composePdf/index.js';
 // @ts-ignore
 import { ContentRequestBuilderNavigationMetadata, ContentRequestBuilderRequestsMetadata, type ContentRequestBuilder } from './content/index.js';
 // @ts-ignore
 import { IntegrationRequestBuilderRequestsMetadata, type IntegrationRequestBuilder } from './integration/index.js';
+// @ts-ignore
+import { MentionableRequestBuilderRequestsMetadata, type MentionableRequestBuilder } from './mentionable/index.js';
 // @ts-ignore
 import { MoveRequestBuilderRequestsMetadata, type MoveRequestBuilder } from './move/index.js';
 // @ts-ignore
@@ -45,6 +49,10 @@ export interface ItemsItemRequestBuilder extends BaseRequestBuilder<ItemsItemReq
      */
     get archive(): ArchiveRequestBuilder;
     /**
+     * The comments property
+     */
+    get comments(): CommentsRequestBuilder;
+    /**
      * The composePdf property
      */
     get composePdf(): ComposePdfRequestBuilder;
@@ -56,6 +64,10 @@ export interface ItemsItemRequestBuilder extends BaseRequestBuilder<ItemsItemReq
      * The integration property
      */
     get integration(): IntegrationRequestBuilder;
+    /**
+     * The mentionable property
+     */
+    get mentionable(): MentionableRequestBuilder;
     /**
      * The move property
      */
@@ -116,6 +128,9 @@ export const ItemsItemRequestBuilderNavigationMetadata: Record<Exclude<keyof Ite
     archive: {
         requestsMetadata: ArchiveRequestBuilderRequestsMetadata,
     },
+    comments: {
+        requestsMetadata: CommentsRequestBuilderRequestsMetadata,
+    },
     composePdf: {
         requestsMetadata: ComposePdfRequestBuilderRequestsMetadata,
     },
@@ -125,6 +140,9 @@ export const ItemsItemRequestBuilderNavigationMetadata: Record<Exclude<keyof Ite
     },
     integration: {
         requestsMetadata: IntegrationRequestBuilderRequestsMetadata,
+    },
+    mentionable: {
+        requestsMetadata: MentionableRequestBuilderRequestsMetadata,
     },
     move: {
         requestsMetadata: MoveRequestBuilderRequestsMetadata,

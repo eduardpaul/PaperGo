@@ -5,6 +5,7 @@ import { useNavigate, useParams } from '@tanstack/react-router';
 import { Button } from '@/components/ui/button';
 import { Kbd } from '@/components/ui/feedback';
 import { UploadsProvider } from '@/features/documents/uploads';
+import { NotificationBell } from '@/features/notifications/notifications';
 import { rememberWorkspace } from '@/lib/recent-workspace';
 import { useSearchAvailable } from '@/lib/search';
 import { CommandPaletteProvider, useCommandPalette } from './command-palette';
@@ -62,7 +63,7 @@ function TopBar({ onMenu }: { onMenu: () => void }) {
       }
       if (prefix) {
         prefix = false;
-        const path = event.key === 'h' ? '/' : event.key === 'i' ? '/inbox' : event.key === 's' && searchAvailable ? '/search' : '';
+        const path = event.key === 'h' ? '/' : event.key === 'i' ? '/inbox' : event.key === 'n' ? '/notifications' : event.key === 's' && searchAvailable ? '/search' : '';
         if (path) {
           event.preventDefault();
           void navigate({ to: path });
@@ -88,6 +89,7 @@ function TopBar({ onMenu }: { onMenu: () => void }) {
         <Kbd className="hidden sm:inline">{mac ? '⌘K' : 'Ctrl K'}</Kbd>
       </button>
       <div className="ml-auto flex items-center gap-1">
+        <NotificationBell />
         <UserMenu />
       </div>
     </header>

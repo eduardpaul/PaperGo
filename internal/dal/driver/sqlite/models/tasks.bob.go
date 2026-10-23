@@ -73,6 +73,7 @@ type TasksQuery = *sqlite.ViewQuery[*Task, TaskSlice]
 
 // taskR is where relationships are stored.
 type taskR struct {
+	Notifications     NotificationSlice // fk_notifications_3
 	TaskResponses     TaskResponseSlice // fk_task_responses_0
 	Operation         *Operation        // fk_tasks_0
 	RunWorkflowRun    *WorkflowRun      // fk_tasks_1
@@ -87,6 +88,7 @@ type taskR struct {
 
 // taskRLoaded tracks which relationships on Task have been loaded.
 type taskRLoaded struct {
+	Notifications     bool // fk_notifications_3
 	TaskResponses     bool // fk_task_responses_0
 	Operation         bool // fk_tasks_0
 	RunWorkflowRun    bool // fk_tasks_1
@@ -1180,6 +1182,25 @@ func (o TaskSlice) ReloadAll(ctx context.Context, exec bob.Executor) error {
 	return nil
 }
 
+// Notifications starts a query for related objects on notifications
+func (o *Task) Notifications(mods ...bob.Mod[*dialect.SelectQuery]) NotificationsQuery {
+	return Notifications.Query(append(mods,
+		sm.Where(Notifications.Columns.TaskID.EQ(sqlite.Arg(o.ID))),
+	)...)
+}
+
+func (os TaskSlice) Notifications(mods ...bob.Mod[*dialect.SelectQuery]) NotificationsQuery {
+	PKArgSlice := make([]bob.Expression, len(os))
+	for i, o := range os {
+		PKArgSlice[i] = sqlite.ArgGroup(o.ID)
+	}
+	PKArgExpr := sqlite.Group(PKArgSlice...)
+
+	return Notifications.Query(append(mods,
+		sm.Where(sqlite.Group(Notifications.Columns.TaskID).OP("IN", PKArgExpr)),
+	)...)
+}
+
 // TaskResponses starts a query for related objects on task_responses
 func (o *Task) TaskResponses(mods ...bob.Mod[*dialect.SelectQuery]) TaskResponsesQuery {
 	return TaskResponses.Query(append(mods,
@@ -1292,6 +1313,67 @@ func (os TaskSlice) WorkspaceResource(mods ...bob.Mod[*dialect.SelectQuery]) Res
 	return Resources.Query(append(mods,
 		sm.Where(sqlite.Group(Resources.Columns.ID).OP("IN", PKArgExpr)),
 	)...)
+}
+
+func insertTaskNotifications0(ctx context.Context, exec bob.Executor, notifications1 []*NotificationSetter, task0 *Task) (NotificationSlice, error) {
+	for i := range notifications1 {
+		notifications1[i].TaskID = omitnull.From(task0.ID)
+	}
+
+	ret, err := Notifications.Insert(bob.ToMods(notifications1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertTaskNotifications0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachTaskNotifications0(ctx context.Context, exec bob.Executor, count int, notifications1 NotificationSlice, task0 *Task) (NotificationSlice, error) {
+	setter := &NotificationSetter{
+		TaskID: omitnull.From(task0.ID),
+	}
+
+	err := notifications1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachTaskNotifications0: %w", err)
+	}
+
+	return notifications1, nil
+}
+
+func (task0 *Task) InsertNotifications(ctx context.Context, exec bob.Executor, related ...*NotificationSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	notifications1, err := insertTaskNotifications0(ctx, exec, related, task0)
+	if err != nil {
+		return err
+	}
+
+	task0.R.Notifications = append(task0.R.Notifications, notifications1...)
+
+	return nil
+}
+
+func (task0 *Task) AttachNotifications(ctx context.Context, exec bob.Executor, related ...*Notification) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	notifications1 := NotificationSlice(related)
+
+	_, err = attachTaskNotifications0(ctx, exec, len(related), notifications1, task0)
+	if err != nil {
+		return err
+	}
+
+	task0.R.Notifications = append(task0.R.Notifications, notifications1...)
+
+	return nil
 }
 
 func insertTaskTaskResponses0(ctx context.Context, exec bob.Executor, taskResponses1 []*TaskResponseSetter, task0 *Task) (TaskResponseSlice, error) {
@@ -1664,6 +1746,20 @@ func buildTaskWhere[Q sqlite.Filterable](cols taskColumns) taskWhere[Q] {
 // R struct — so they cannot collide with column-based filter fields.
 type taskWhereR[Q sqlite.Filterable] struct {
 	cols taskColumns
+}
+
+// HasNotifications filters parents that have a matching Notifications using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Notifications).
+func (w taskWhereR[Q]) HasNotifications(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := sqlite.Select(
+		sm.Columns(sqlite.Raw("1")),
+		sm.From(Notifications.NameExpr()),
+		sm.Where(Notifications.Columns.TaskID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: sqlite.Exists(q)}
 }
 
 // HasTaskResponses filters parents that have a matching TaskResponses using a

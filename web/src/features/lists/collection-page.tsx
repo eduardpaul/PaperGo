@@ -67,6 +67,8 @@ export interface CollectionSearch {
   view?: string;
   item?: string;
   tab?: string;
+  /** The comment a notification points at, shown on the Discussion tab. */
+  comment?: string;
   q?: string;
   /** A column key, "-" first for descending. */
   sort?: string;
@@ -712,8 +714,9 @@ export function CollectionPage({
           fields={fieldList}
           contentTypes={typeList}
           tab={search.tab ?? 'details'}
-          onTab={(tab) => onSearch({ tab: tab === 'details' ? undefined : tab }, true)}
-          onClose={() => onSearch({ item: undefined, tab: undefined })}
+          comment={search.comment}
+          onTab={(tab) => onSearch({ tab: tab === 'details' ? undefined : tab, comment: undefined }, true)}
+          onClose={() => onSearch({ item: undefined, tab: undefined, comment: undefined })}
           onMoved={onMoved}
         />
       )}

@@ -3,6 +3,7 @@ package tasks
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"slices"
 	"strconv"
 	"time"
@@ -11,6 +12,7 @@ import (
 	taskstore "papergo/internal/dal/tasks"
 
 	"papergo/internal/dms"
+	"papergo/internal/identity"
 	"papergo/internal/model"
 )
 
@@ -351,9 +353,16 @@ func view(ctx context.Context, t *dms.Service, tk taskstore.Task, subject string
 }
 
 // Create creates a task as subject: a workflow's task when the workflow
-// run run creates it, else a standalone task.
+// run run creates it, else a standalone task. A task asks people to act
+// and tells them so, which needs the item.write scope.
 func (s *Service) Create(ctx context.Context, subject, run string, in Input) (View, error) {
 	var out View
+	if err := identity.RequireScope(ctx, s.DMS.DAL, subject, "item.write"); err != nil {
+		if errors.Is(err, identity.ErrForbidden) {
+			return out, dms.ErrForbidden
+		}
+		return out, err
+	}
 	err := s.DMS.Write(ctx, func(t *dms.Service) error {
 		in.Workflow, in.System = nil, false
 		if run != "" {

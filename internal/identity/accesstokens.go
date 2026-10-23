@@ -30,7 +30,7 @@ const MaxTokenResources = 50
 // LimitableScopes are the scopes a token limited to some places may hold:
 // reading and changing content, and the organization catalogs content needs.
 // Scopes that act across the organization stay with unlimited tokens.
-var LimitableScopes = []string{"workspace.read", "item.read", "item.write", "document.read", "document.write", "contentType.read", "taxonomy.read", "user.read", "group.read"}
+var LimitableScopes = []string{"workspace.read", "item.read", "item.write", "comment.write", "document.read", "document.write", "contentType.read", "taxonomy.read", "user.read", "group.read"}
 
 type AccessToken struct {
 	Subject     string     `json:"subject"`
@@ -81,6 +81,13 @@ func WithAccessToken(ctx context.Context, token AccessTokenIdentity) context.Con
 	return audit.WithCredential(context.WithValue(ctx, accessTokenContextKey{}, token), token.ID)
 }
 
+// WithoutAccessToken runs ctx without the request's access token, so a
+// check of what another person may do sees their own access rather than
+// the token's limits.
+func WithoutAccessToken(ctx context.Context) context.Context {
+	return context.WithValue(ctx, accessTokenContextKey{}, nil)
+}
+
 func AccessTokenContext(ctx context.Context) (AccessTokenIdentity, bool) {
 	token, limited := ctx.Value(accessTokenContextKey{}).(AccessTokenIdentity)
 	return token, limited
@@ -121,6 +128,11 @@ func RequireCredential(ctx context.Context, store *dal.Store, subject string) er
 	}
 	return nil
 }
+
+// CredentialAllows reports whether the request's access token, if any,
+// holds scope; a request without one is not narrowed.
+func CredentialAllows(ctx context.Context, scope string) bool { return credentialAllows(ctx, scope) }
+
 func credentialAllows(ctx context.Context, scope string) bool {
 	token, limited := ctx.Value(accessTokenContextKey{}).(AccessTokenIdentity)
 	if !limited {

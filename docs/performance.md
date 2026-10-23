@@ -321,6 +321,13 @@ PAPERGO_BENCH_ITEMS=2000 .cache/performance/dms.test -test.run='^$' -test.bench=
 PAPERGO_BENCH_ITEMS=20000 .cache/performance/dms.test -test.run='^$' -test.bench='^BenchmarkCollectionQuery$' -test.benchtime=20x -test.benchmem
 ```
 
+`--collaboration` adds stages for tasks, comments and notifications after the
+standard ones: tasks assigned to a group of 20 members, comments with two
+mentions with and without four open live streams, a page of 50 threads with
+replies, an inbox of 2,000 unread notifications read by page and by count, and
+marking them all read with four streams open. Run against a build without
+comments, it measures only the task stages.
+
 The service fixtures do not run the workflow dispatcher. In particular,
 `BenchmarkItemUpdates` accumulates undispatched events and revisions, so its
 repeated-edit throughput is a backlog stress case. Use the HTTP extended edit

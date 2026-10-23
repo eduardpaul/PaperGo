@@ -9,6 +9,7 @@ import { Input, Textarea } from '@/components/ui/input';
 import { QueryFeedback, useHasScope } from '@/features/admin/common';
 import { PreferencesForm } from '@/features/settings/preferences-form';
 import { SettingRow, SettingsSection } from '@/features/settings/section';
+import { OrganizationCommentSettingsForm } from '@/features/comments/settings';
 
 interface Organization {
   id: string;
@@ -32,6 +33,7 @@ function OrganizationPage() {
         <OrganizationForm key={organization.data.version} organization={organization.data} canEdit={canEdit} />
       )}
       <PreferencesForm organization canEdit={canEdit} />
+      <OrganizationCommentSettingsForm canEdit={canEdit} />
     </>
   );
 }

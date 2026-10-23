@@ -25,6 +25,11 @@ search:
   store: zvec
   zvec_path: ./data/search/zvec
 
+# Discussions on items: "on" (the default) or "off". Off keeps existing
+# comments but serves none of them; organizations, workspaces and
+# collections turn comments on and off in the app.
+comments: "on"
+
 storage:
   blob_path: ./data/blobs
   max_upload_mb: 100
