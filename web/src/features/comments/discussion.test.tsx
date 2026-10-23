@@ -213,3 +213,39 @@ it('finds the comment a notification points at, in a resolved thread on a later 
   expect(screen.getByRole('tab', { name: 'All' }).getAttribute('aria-selected')).toBe('true');
   expect(asked[0]).toContain('status=all');
 });
+
+it('never reads a mention it just wrote as someone else’s label', () => {
+  const chosen = [
+    { subject: 'bob2', name: 'Bob', label: 'Bob (bob2)' },
+    { subject: 'u1', name: 'user', label: 'user' },
+  ];
+  expect(toTokens('@Bob (bob2) and @user', chosen)).toBe('<@user:bob2> and <@user:u1>');
+});
+
+it('stops following pages to a notified comment when a page fails', async () => {
+  const asked: string[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: URL) => {
+      asked.push(url.search);
+      if (url.searchParams.has('$skiptoken')) {
+        // A network's latency lets the page show that it is loading.
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return new Response(stringifyJSON({ detail: 'Denied' }), { status: 403 });
+      }
+      return new Response(
+        stringifyJSON(
+          page([{ ...comment('open'), replies: [] }], {
+            '@odata.nextLink': '/v1/items/item/comments?status=all&$skiptoken=next',
+          }),
+        ),
+      );
+    }),
+  );
+  showFocused('elsewhere');
+  expect((await screen.findByRole('alert')).textContent).toBe('Denied');
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  expect(asked.filter((q) => q.includes('skiptoken'))).toHaveLength(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Load more threads' }));
+  await waitFor(() => expect(asked.filter((q) => q.includes('skiptoken'))).toHaveLength(2));
+});

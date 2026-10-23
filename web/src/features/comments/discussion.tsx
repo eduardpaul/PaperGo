@@ -38,13 +38,9 @@ function escape(text: string) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/** Matches @label as a whole mention, not the start of a longer word. */
-function mention(label: string, flags = 'u') {
-  return new RegExp(`${escape(`@${label}`)}(?![\\p{L}\\p{N}_])`, flags);
-}
-
+/** Whether text holds @label as a whole mention, not the start of a longer word. */
 function holds(text: string, label: string) {
-  return mention(label).test(text);
+  return new RegExp(`${escape(`@${label}`)}(?![\\p{L}\\p{N}_])`, 'u').test(text);
 }
 
 /** Writes a comment's mentions as @label for editing, from the people it mentions. */
@@ -56,13 +52,16 @@ export function fromTokens(body: string, mentions: CommentPerson[]): string {
   );
 }
 
-/** Turns each chosen person's @label back into a mention, longest labels first. */
+/**
+ * Turns each chosen person's @label back into a mention in one pass, so a
+ * mention just written is never read again as someone else's label. At each
+ * place the longest label wins.
+ */
 export function toTokens(text: string, chosen: Mention[]): string {
-  let out = text;
-  for (const person of [...chosen].sort((a, b) => b.label.length - a.label.length)) {
-    out = out.replace(mention(person.label, 'gu'), `<@user:${person.subject}>`);
-  }
-  return out;
+  if (chosen.length === 0) return text;
+  const sorted = [...chosen].sort((a, b) => b.label.length - a.label.length);
+  const labels = new RegExp(`(?:${sorted.map((p) => escape(`@${p.label}`)).join('|')})(?![\\p{L}\\p{N}_])`, 'gu');
+  return text.replace(labels, (found) => `<@user:${sorted.find((p) => `@${p.label}` === found)!.subject}>`);
 }
 
 /** A comment's text with its mentions shown as names. */
@@ -369,10 +368,12 @@ export function Discussion({ itemId, focus }: { itemId: string; focus?: string }
   const pages = useInfiniteQuery(commentsQuery(itemId, status));
   const threads = pages.data?.pages.flatMap((page) => page.value ?? []) ?? [];
   const target = focus ? threads.find((t) => t.id === focus || t.replies.some((r) => r.id === focus)) : undefined;
-  const { hasNextPage, isFetchingNextPage, fetchNextPage } = pages;
+  // A page that failed is not asked for again on its own: the error shows,
+  // and Load more threads tries it again.
+  const { hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage } = pages;
   useEffect(() => {
-    if (focus && !target && hasNextPage && !isFetchingNextPage) void fetchNextPage();
-  }, [focus, target, hasNextPage, isFetchingNextPage, fetchNextPage]);
+    if (focus && !target && hasNextPage && !isFetchingNextPage && !isFetchNextPageError) void fetchNextPage();
+  }, [focus, target, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage]);
   const start = useMutation({
     mutationFn: (body: string) => api<Comment>(`/v1/items/${itemId}/comments`, { method: 'POST', body: { body } }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.comments }),
