@@ -36,6 +36,7 @@ const aliceToken = "0123456789abcdef0123456789abcdef"
 // env is a PaperGo API on a fixture database and papergo-mcp in front of it.
 type env struct {
 	svc    *dms.Service
+	files  storage.Store
 	search *documentsearch.Search
 	api    *httptest.Server
 	mcp    *httptest.Server
@@ -54,6 +55,8 @@ type options struct {
 	configure     func(*server.Config)
 	contributions []mcp.Contribution
 	enabled       []string
+	// app is the web app's origin results link to.
+	app *url.URL
 }
 
 func setup(t *testing.T, o options) *env {
@@ -63,7 +66,7 @@ func setup(t *testing.T, o options) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	e := &env{svc: dms.NewService(db.SQL), logs: &bytes.Buffer{}, logsMu: &sync.Mutex{}}
+	e := &env{svc: dms.NewService(db.SQL), files: files, logs: &bytes.Buffer{}, logsMu: &sync.Mutex{}}
 	a := &httpapi.API{DMS: e.svc, Auth: auth.Development{Token: aliceToken, Subject: "alice"}, Storage: files,
 		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), Ready: db.SQL.PingContext, MaxUpload: 1 << 20}
 	if o.search {
@@ -92,7 +95,7 @@ func setup(t *testing.T, o options) *env {
 	if o.configure != nil {
 		o.configure(&cfg)
 	}
-	registry, err := mcp.NewRegistry(builtin.Tools(), o.contributions, o.enabled)
+	registry, err := mcp.NewRegistry(builtin.Tools(builtin.Options{AppURL: o.app}), o.contributions, o.enabled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -279,6 +282,32 @@ func post(t *testing.T, e *env, body string, header map[string]string) *http.Res
 	}
 	t.Cleanup(func() { res.Body.Close() })
 	return res
+}
+
+// rest calls the PaperGo API as alice and returns its JSON answer; ifMatch,
+// when set, is the version a write requires.
+func rest(t *testing.T, e *env, method, path, body, ifMatch string) map[string]any {
+	t.Helper()
+	req, err := http.NewRequestWithContext(t.Context(), method, e.api.URL+path, strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+aliceToken)
+	req.Header.Set("Content-Type", "application/json")
+	if ifMatch != "" {
+		req.Header.Set("If-Match", `"`+ifMatch+`"`)
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	raw, _ := io.ReadAll(res.Body)
+	out := map[string]any{}
+	if res.StatusCode/100 != 2 || len(raw) > 0 && json.Unmarshal(raw, &out) != nil {
+		t.Fatalf("%s %s: %d %s", method, path, res.StatusCode, raw)
+	}
+	return out
 }
 
 func create(t *testing.T, s *dms.Service, subject, parent string, in dms.CreateResource) string {

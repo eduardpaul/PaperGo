@@ -169,7 +169,7 @@ func (s *Server) endpoint() http.Handler {
 			return
 		case errors.Is(err, errInvalidToken):
 			w.Header().Set("WWW-Authenticate", `Bearer realm="PaperGo", error="invalid_token"`)
-			http.Error(w, "the bearer credential is not valid", http.StatusUnauthorized)
+			http.Error(w, "the bearer credential is not valid: it may have expired or been revoked; create a new access token in PaperGo under Settings, Access tokens", http.StatusUnauthorized)
 			return
 		case errors.Is(err, errForbidden):
 			http.Error(w, "PaperGo does not admit this caller", http.StatusForbidden)

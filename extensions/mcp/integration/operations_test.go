@@ -219,7 +219,7 @@ func TestSearch(t *testing.T) {
 		}
 		for _, hit := range page["value"].([]any) {
 			h := hit.(map[string]any)
-			if h["collection_id"] != f.list || h["workspace_id"] != f.workspace {
+			if h["collection_id"] != f.list || h["workspace_id"] != f.workspace || h["collection_name"] != "Invoices" || h["workspace_name"] != "Operations" || h["highlights"] != nil {
 				t.Fatalf("hit %v", h)
 			}
 			names = append(names, str(h["name"]))

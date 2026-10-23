@@ -109,6 +109,30 @@ func ParsePublicURL(raw string) (*url.URL, error) {
 	return u, nil
 }
 
+// ParseAppURL checks the web app's origin, which links point to: an http
+// or https origin, plain http only to a loopback, private or single-label
+// host.
+func ParseAppURL(raw string) (*url.URL, error) {
+	u, err := parseOrigin(raw)
+	if err != nil {
+		return nil, fmt.Errorf("app URL: %w", err)
+	}
+	if u.Path != "" && u.Path != "/" {
+		return nil, errors.New("app URL: give the web app's origin, without a path")
+	}
+	u.Path = ""
+	if u.Scheme == "http" && !private(u.Hostname()) {
+		return nil, errors.New("app URL: use https, or http only to a loopback, private or single-label host")
+	}
+	return u, nil
+}
+
+// AppOrigin is the origin of a public endpoint URL: where the web app is
+// when one host serves both.
+func AppOrigin(public *url.URL) *url.URL {
+	return &url.URL{Scheme: public.Scheme, Host: public.Host}
+}
+
 // ParseOrigins checks a comma-separated list of browser origins.
 func ParseOrigins(raw string) ([]string, error) {
 	var out []string

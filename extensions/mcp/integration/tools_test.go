@@ -79,9 +79,9 @@ func TestToolsAndProtocol(t *testing.T) {
 	// Search is optional: without it the API has no search, and the tool is
 	// neither listed nor callable. Search's workflow roles are registered
 	// process-wide, so this holds until TestSearch registers them.
-	want := "create_item,get_collection_schema,get_item,list_collections,list_workspaces,query_items,update_item"
+	want := "create_item,get_collection_schema,get_item,get_item_text,list_collections,list_terms,list_workspaces,query_items,update_item"
 	if searchRegistered() {
-		want = "create_item,get_collection_schema,get_item,list_collections,list_workspaces,query_items,search,update_item"
+		want = "create_item,get_collection_schema,get_item,get_item_text,list_collections,list_terms,list_workspaces,query_items,search,update_item"
 	} else {
 		unknown(t, s, "search")
 	}

@@ -17,13 +17,23 @@ func environment(values map[string]string) func(string) string {
 }
 
 func TestConfigure(t *testing.T) {
-	cfg, listen, enabled, err := configure(environment(map[string]string{
+	cfg, tools, listen, enabled, err := configure(environment(map[string]string{
 		"PAPERGO_MCP_BACKEND_URL": "http://papergo:8080", "PAPERGO_MCP_PUBLIC_URL": "https://papergo.example/v1/mcp",
 		"PAPERGO_MCP_ALLOWED_ORIGINS": "https://app.example", "PAPERGO_MCP_ENABLED_EXTENSIONS": "acme.crm, other",
 	}))
 	if err != nil || cfg.BackendURL.String() != "http://papergo:8080" || cfg.PublicURL.Host != "papergo.example" || listen != "127.0.0.1:8081" ||
-		strings.Join(enabled, ",") != "acme.crm,other" || strings.Join(cfg.AllowedOrigins, ",") != "https://app.example" {
-		t.Fatalf("%+v %s %v %v", cfg, listen, enabled, err)
+		strings.Join(enabled, ",") != "acme.crm,other" || strings.Join(cfg.AllowedOrigins, ",") != "https://app.example" ||
+		tools.AppURL.String() != "https://papergo.example" {
+		t.Fatalf("%+v %+v %s %v %v", cfg, tools, listen, enabled, err)
+	}
+	// Links follow the endpoint's host unless the web app is elsewhere.
+	_, tools, _, _, err = configure(environment(map[string]string{"PAPERGO_MCP_BACKEND_URL": "http://papergo:8080",
+		"PAPERGO_MCP_PUBLIC_URL": "https://mcp.example/v1/mcp", "PAPERGO_MCP_APP_URL": "https://papergo.example/"}))
+	if err != nil || tools.AppURL.String() != "https://papergo.example" {
+		t.Fatalf("%+v %v", tools, err)
+	}
+	if _, tools, _, _, err = configure(environment(map[string]string{"PAPERGO_MCP_BACKEND_URL": "http://papergo:8080"})); err != nil || tools.AppURL != nil {
+		t.Fatalf("%+v %v", tools, err)
 	}
 	for name, values := range map[string]map[string]string{
 		"no backend":       {},
@@ -32,8 +42,10 @@ func TestConfigure(t *testing.T) {
 		"public URL path":  {"PAPERGO_MCP_BACKEND_URL": "http://papergo", "PAPERGO_MCP_PUBLIC_URL": "https://papergo.example/mcp"},
 		"origin with path": {"PAPERGO_MCP_BACKEND_URL": "http://papergo", "PAPERGO_MCP_ALLOWED_ORIGINS": "https://app.example/x"},
 		"listen":           {"PAPERGO_MCP_BACKEND_URL": "http://papergo", "PAPERGO_MCP_LISTEN": "8081"},
+		"app URL path":     {"PAPERGO_MCP_BACKEND_URL": "http://papergo", "PAPERGO_MCP_APP_URL": "https://papergo.example/app"},
+		"public http app":  {"PAPERGO_MCP_BACKEND_URL": "http://papergo", "PAPERGO_MCP_APP_URL": "http://papergo.example"},
 	} {
-		if _, _, _, err := configure(environment(values)); err == nil {
+		if _, _, _, _, err := configure(environment(values)); err == nil {
 			t.Errorf("%s accepted", name)
 		}
 	}

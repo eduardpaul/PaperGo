@@ -3,6 +3,7 @@ package builtin
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/url"
 
 	"papergo/extensions/mcp"
@@ -42,7 +43,7 @@ func listing(ctx context.Context, c mcp.Caller, tool string, args json.RawMessag
 	return out, next, err
 }
 
-func listWorkspaces() mcp.Tool {
+func listWorkspaces(l links) mcp.Tool {
 	const name = "list_workspaces"
 	return mcp.Tool{
 		Name:  name,
@@ -67,14 +68,14 @@ func listWorkspaces() mcp.Tool {
 			}
 			out := list[workspace]{Value: make([]workspace, 0, len(rs)), NextCursor: next}
 			for _, r := range rs {
-				out.Value = append(out.Value, r.workspace())
+				out.Value = append(out.Value, r.workspace(l))
 			}
 			return encode(out)
 		},
 	}
 }
 
-func listCollections() mcp.Tool {
+func listCollections(l links) mcp.Tool {
 	const name = "list_collections"
 	return mcp.Tool{
 		Name:  name,
@@ -110,26 +111,27 @@ func listCollections() mcp.Tool {
 			}
 			out := list[collection]{Value: make([]collection, 0, len(rs)), NextCursor: next}
 			for _, r := range rs {
-				out.Value = append(out.Value, r.collection())
+				out.Value = append(out.Value, r.collection(l))
 			}
 			return encode(out)
 		},
 	}
 }
 
-func getCollectionSchema() mcp.Tool {
+func getCollectionSchema(l links) mcp.Tool {
 	return mcp.Tool{
 		Name:  "get_collection_schema",
 		Title: "Get a collection's schema",
 		Description: "Describes a list or library as new and updated entries must fit it: its settings, the fields entries may hold (key, label, type, " +
-			"whether required, choices, decimal scale, whether indexed for query_items filters and sorts), and the content types attached to it " +
-			"with the field IDs each uses, its validation rules and which is the default for new entries. Published entries may still hold " +
-			"values of an earlier schema.",
+			"whether required, choices, decimal scale, whether indexed for query_items filters and sorts), the content types attached to it " +
+			"with the field IDs each uses, its validation rules and which is the default for new entries, and its saved views: the ways people " +
+			"look at it, such as \"My open invoices\", which query_items runs with view_id. Published entries may still hold values of an earlier schema.",
 		InputSchema: object([]string{"collection_id"}, property("collection_id", idProperty("The list or library."))),
-		OutputSchema: json.RawMessage(`{"type": "object", "required": ["collection", "fields", "content_types"], "properties": {
+		OutputSchema: json.RawMessage(`{"type": "object", "required": ["collection", "fields", "content_types", "views"], "properties": {
 			"collection": ` + collectionSchema + `,
 			"fields": {"type": "array", "items": {"type": "object"}, "description": "Field definitions, as PaperGo's FieldDefinition."},
-			"content_types": {"type": "array", "items": {"type": "object"}, "description": "Attached content types, as PaperGo's CollectionContentType, with is_default."}}}`),
+			"content_types": {"type": "array", "items": {"type": "object"}, "description": "Attached content types, as PaperGo's CollectionContentType, with is_default."},
+			"views": {"type": "array", "items": {"type": "object"}, "description": "Saved views, as PaperGo's ListView: id, name, layout, columns, query, is_default."}}}`),
 		Scopes:      []string{scopeListRead, scopeContentTypeRead},
 		Annotations: mcp.Annotations{ReadOnly: true, Idempotent: true},
 		Call: func(ctx context.Context, c mcp.Caller, args json.RawMessage) (json.RawMessage, error) {
@@ -154,6 +156,10 @@ func getCollectionSchema() mcp.Tool {
 			if err := get(ctx, c, resourcePath(in.CollectionID, "content-types"), nil, &types); err != nil {
 				return nil, err
 			}
+			var views page
+			if err := get(ctx, c, resourcePath(in.CollectionID, "views"), url.Values{"$top": {fmt.Sprint(maxLimit)}}, &views); err != nil {
+				return nil, err
+			}
 			after, err := readResource(ctx, c, in.CollectionID, "")
 			if err != nil {
 				return nil, err
@@ -165,7 +171,8 @@ func getCollectionSchema() mcp.Tool {
 				Collection   collection        `json:"collection"`
 				Fields       []json.RawMessage `json:"fields"`
 				ContentTypes []json.RawMessage `json:"content_types"`
-			}{after.collection(), nonNil(fields.Value), nonNil(types)})
+				Views        []json.RawMessage `json:"views"`
+			}{after.collection(l), nonNil(fields.Value), nonNil(types), nonNil(views.Value)})
 		},
 	}
 }
@@ -188,10 +195,12 @@ type workspace struct {
 	Version     int      `json:"version"`
 	CreatedAt   string   `json:"created_at"`
 	UpdatedAt   string   `json:"updated_at"`
+	URL         *string  `json:"url,omitempty"`
 }
 
-func (r resource) workspace() workspace {
-	out := workspace{ID: r.ID, Name: r.Name, Description: r.Description, Keywords: r.Keywords, Version: r.Version, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
+func (r resource) workspace(l links) workspace {
+	out := workspace{ID: r.ID, Name: r.Name, Description: r.Description, Keywords: r.Keywords, Version: r.Version, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+		URL: l.workspace(r.ID)}
 	if out.Keywords == nil {
 		out.Keywords = []string{}
 	}

@@ -3,26 +3,30 @@ package builtin
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"papergo/extensions/mcp"
 	"papergo/internal/dal/refs"
 )
 
-const queryDescription = `Queries the items and folders of a list or library the caller can read, newest revision first on the chosen surface.
+const queryDescription = `Queries the items and folders of a list or library the caller can read, on the chosen surface. Archived entries are left out unless query.archive asks for them.
 
 query narrows and orders them:
-- filter: one condition {"field", "op", "value"} or a group {"and": [...]}, {"or": [...]}, {"not": {...}}; at most 32 nodes, 6 deep. Custom fields must be indexed (see get_collection_schema). System fields: $id, $name, $keywords, $created_at, $created_by, $modified_at, $modified_by. op is eq, ne, gt, gte, lt, lte, in (value is an array), contains, under (a term and its descendants), missing or present (no value). value_ref instead of value: me, today, yesterday, tomorrow, weekStart, weekEnd, monthStart, monthEnd, last7Days, next7Days, last30Days, next30Days.
+- filter: one condition {"field", "op", "value"} or a group {"and": [...]}, {"or": [...]}, {"not": {...}}; at most 32 nodes, 6 deep. Custom fields must be indexed (see get_collection_schema); for words in fields that are not, use search. System fields: $id, $name, $keywords, $created_at, $created_by, $modified_at, $modified_by, $archived_at, $archived_by. op is eq, ne, gt, gte, lt, lte, in (value is an array of up to 50), contains, under (a term and its descendants), missing or present (no value). Term and keywords values are term IDs; list_terms finds them. value_ref instead of value: me, today, yesterday, tomorrow, weekStart, weekEnd, monthStart, monthEnd, last7Days, next7Days, last30Days, next30Days.
 - sort: up to 8 {"field", "direction": "asc" | "desc"}; custom fields must be indexed. Default $id ascending.
-- content_type_id, parent_id (directly in a folder; the collection's id for its top level), ancestor_id (anywhere below a folder), search (words in names and searchable values), keyword (a keyword term ID or label).
+- content_type_id, parent_id (directly in a folder; the collection's id for its top level), ancestor_id (anywhere below a folder), search (words in names and searchable values), keyword (a keyword term ID or label), archive (active, the default; archived; or all).
 
 Examples:
 {"filter": {"and": [{"field": "status", "op": "eq", "value": "Open"}, {"field": "amount", "op": "gte", "value": 12345678901234567890.25}]}, "sort": [{"field": "$modified_at", "direction": "desc"}]}
 {"filter": {"field": "assignee", "op": "eq", "value_ref": "me"}}
 {"filter": {"field": "due", "op": "lt", "value_ref": "today"}, "parent_id": "<folder id>"}
 
-select limits the custom values returned to these field keys ($keywords for keywords); [] returns none. Values keep every digit. Pass next_cursor as cursor, with the same other arguments, for the next page.`
+view_id runs one of the collection's saved views (get_collection_schema lists them) instead of query: its filter, sort and columns, as people see it in PaperGo. Navigation views browse terms and cannot be run here; filter with under instead.
+
+select limits the custom values returned to these field keys ($keywords for keywords); [] returns none. Values keep every digit, and labels names the terms, people and linked items they refer to. Pass next_cursor as cursor, with the same other arguments, for the next page.`
 
 var queryItemsSchema = json.RawMessage(`{"type": "object", "additionalProperties": false, "required": ["collection_id"],
 	"$defs": {"filter": {"type": "object", "additionalProperties": false, "properties": {
@@ -43,13 +47,19 @@ var queryItemsSchema = json.RawMessage(`{"type": "object", "additionalProperties
 			"parent_id": ` + idProperty("Only entries directly in this folder, or at the collection's top level when it is the collection.") + `,
 			"ancestor_id": ` + idProperty("Only entries anywhere below this folder. Not with parent_id.") + `,
 			"search": {"type": "string", "minLength": 1, "maxLength": 256, "description": "Words the entries match."},
-			"keyword": {"type": "string", "minLength": 1, "maxLength": 64, "description": "A keyword term ID or label."}}},
+			"keyword": {"type": "string", "minLength": 1, "maxLength": 64, "description": "A keyword term ID or label."},
+			"archive": {"type": "string", "enum": ["active", "archived", "all"], "default": "active", "description": "Archived entries, which are left out by default."}}},
+		"view_id": ` + idProperty("A saved view of the collection to run instead of query.") + `,
 		"select": {"type": "array", "maxItems": 50, "uniqueItems": true, "items": {"type": "string", "minLength": 1}, "description": "Field keys whose values to return; [] returns none, omitted all."},
 		"surface": ` + surfaceProperty + `,
 		"limit": ` + limitProperty(maxLimit, defaultLimit) + `,
 		"cursor": ` + cursorProperty + `}}`)
 
-func queryItems() mcp.Tool {
+// navigationLayout is the layout of views that browse terms, which need
+// the terms to open and so cannot run as a plain query.
+const navigationLayout = "navigation"
+
+func queryItems(l links) mcp.Tool {
 	const name = "query_items"
 	return mcp.Tool{
 		Name:         name,
@@ -63,6 +73,7 @@ func queryItems() mcp.Tool {
 			var in struct {
 				CollectionID string          `json:"collection_id"`
 				Query        json.RawMessage `json:"query"`
+				ViewID       string          `json:"view_id"`
 				Select       json.RawMessage `json:"select"`
 				Surface      string          `json:"surface"`
 				Limit        *int            `json:"limit"`
@@ -70,6 +81,9 @@ func queryItems() mcp.Tool {
 			}
 			if err := decode(args, &in); err != nil {
 				return nil, err
+			}
+			if in.ViewID != "" && in.Query != nil {
+				return nil, mcp.Fail(mcp.CodeInvalidArguments, "give query or view_id, not both")
 			}
 			p, err := newPaging(name, c, args)
 			if err != nil {
@@ -86,6 +100,12 @@ func queryItems() mcp.Tool {
 			if !isCollection(col.Kind) {
 				return nil, wrongKind(in.CollectionID, col.Kind, string(refs.KindList), string(refs.KindLibrary))
 			}
+			path := resourcePath(in.CollectionID, "query")
+			if in.ViewID != "" {
+				if path, err = viewPath(ctx, c, in.ViewID, in.CollectionID); err != nil {
+					return nil, err
+				}
+			}
 			body, err := encode(struct {
 				Query   json.RawMessage `json:"query,omitempty"`
 				Select  json.RawMessage `json:"select,omitempty"`
@@ -94,14 +114,13 @@ func queryItems() mcp.Tool {
 			if err != nil {
 				return nil, err
 			}
-			path := resourcePath(in.CollectionID, "query")
 			query := url.Values{"$top": {limit(in.Limit, defaultLimit)}}
 			if token != "" {
 				query.Set("$skiptoken", token)
 			}
 			res, err := c.Backend().Do(ctx, mcp.Request{Method: http.MethodPost, Path: path, Query: query, Body: body})
 			if err != nil {
-				return nil, err
+				return nil, unindexed(ctx, c, in.CollectionID, err)
 			}
 			var result struct {
 				page
@@ -123,21 +142,65 @@ func queryItems() mcp.Tool {
 				SearchCapped bool `json:"search_capped,omitempty"`
 			}{list[item]{Value: make([]item, 0, len(rs)), NextCursor: next}, result.SearchCapped}
 			for _, r := range rs {
-				out.Value = append(out.Value, r.item(false))
+				out.Value = append(out.Value, r.item(l, false))
+			}
+			if err := label(ctx, c, &in.CollectionID, out.Value); err != nil {
+				return nil, err
 			}
 			return encode(out)
 		},
 	}
 }
 
+// viewPath is where a saved view of the collection runs.
+func viewPath(ctx context.Context, c mcp.Caller, viewID, collectionID string) (string, error) {
+	var view struct {
+		ContainerID string `json:"container_id"`
+		Layout      string `json:"layout"`
+	}
+	if err := get(ctx, c, "/v1/views/"+url.PathEscape(viewID), nil, &view); err != nil {
+		return "", err
+	}
+	switch {
+	case view.ContainerID != collectionID:
+		return "", mcp.Fail(mcp.CodeInvalidArguments, "view_id is a view of another collection; get_collection_schema lists this one's views")
+	case view.Layout == navigationLayout:
+		return "", mcp.Fail(mcp.CodeInvalidArguments, "this view browses terms; filter its fields with the under operator instead")
+	}
+	return "/v1/views/" + url.PathEscape(viewID) + "/query", nil
+}
+
+// unindexed adds to a refused query which fields it may use instead.
+func unindexed(ctx context.Context, c mcp.Caller, collectionID string, err error) error {
+	var api *mcp.APIError
+	if !errors.As(err, &api) || !strings.Contains(api.Detail, "be indexed") && !strings.Contains(api.Detail, "field index is") {
+		return err
+	}
+	f := mcp.FailureOf(err)
+	if f.Code != mcp.CodeInvalidArguments {
+		return err
+	}
+	fs, ferr := fields(ctx, c, collectionID)
+	if ferr != nil {
+		return f
+	}
+	if keys := queryable(fs); len(keys) > 0 {
+		f.Message += ". Fields that filters and sorts can use: " + strings.Join(keys, ", ") + "; for words in other fields, use query.search"
+	} else {
+		f.Message += ". No custom field can be filtered or sorted yet; use query.search for words, or the system fields"
+	}
+	return f
+}
+
 func isEntryResource(r resource) bool { return isEntry(r.Kind) }
 
-func getItem() mcp.Tool {
+func getItem(l links) mcp.Tool {
 	return mcp.Tool{
 		Name:  "get_item",
 		Title: "Get an item",
-		Description: "Reads one item or folder with all its custom values and what the caller may do with it (access). " +
-			"Its version is what update_item requires.",
+		Description: "Reads one item or folder with all its custom values, the names of the terms, people and linked items they refer to (labels), " +
+			"what the caller may do with it (access) and where it opens in PaperGo (url). Its version is what update_item requires. " +
+			"For the text of a document's file, use get_item_text.",
 		InputSchema: object([]string{"item_id"},
 			property("item_id", idProperty("The item or folder.")), property("surface", surfaceProperty)),
 		OutputSchema: json.RawMessage(itemSchema),
@@ -158,17 +221,22 @@ func getItem() mcp.Tool {
 			if !isEntry(r.Kind) {
 				return nil, wrongKind(in.ItemID, r.Kind, string(refs.KindItem), string(refs.KindFolder))
 			}
-			return encode(r.item(true))
+			out := r.item(l, true)
+			if err := label(ctx, c, r.ContainerID, []item{out}); err != nil {
+				return nil, err
+			}
+			return encode(out)
 		},
 	}
 }
 
-func createItem() mcp.Tool {
+func createItem(l links) mcp.Tool {
 	return mcp.Tool{
 		Name:  "create_item",
 		Title: "Create an item",
 		Description: "Creates an item in a list, a library or a folder of one, with custom values that must fit its content type (see get_collection_schema). " +
-			"Without content_type_id the collection's default type applies. In a collection with publishing, the item starts as a draft. " +
+			"Without content_type_id the collection's default type applies. In a collection with publishing, the item starts as a draft (draft is true): " +
+			"tell the person that others see it only once it is published in PaperGo. " +
 			"Give an id of your own to make the call safe to repeat: when an item with that id already exists there, it is returned unchanged with created false " +
 			"and the new arguments are not applied. Creates no file content.",
 		InputSchema: object([]string{"parent_id", "name"},
@@ -221,22 +289,26 @@ func createItem() mcp.Tool {
 			if err := unmarshal(res.Body, &r); err != nil {
 				return nil, err
 			}
+			out := []item{r.item(l, false)}
+			if err := label(ctx, c, r.ContainerID, out); err != nil {
+				return nil, err
+			}
 			return encode(struct {
 				item
 				Created bool `json:"created"`
-			}{r.item(false), res.Status == http.StatusCreated})
+			}{out[0], res.Status == http.StatusCreated})
 		},
 	}
 }
 
-func updateItem() mcp.Tool {
+func updateItem(l links) mcp.Tool {
 	return mcp.Tool{
 		Name:  "update_item",
 		Title: "Update an item",
 		Description: "Changes an item's or folder's name, custom values or keywords; give at least one. values changes only the fields it names, and null clears a field. " +
 			"keywords replaces every keyword. version is the entry's version from get_item, query_items or an earlier update; when the entry changed since, " +
 			"the update fails with version_conflict and changes nothing: read it again and decide whether to apply the change to the new version. " +
-			"In a collection with publishing, the change is a draft until published.",
+			"In a collection with publishing, the change is a draft until published (draft is true): tell the person that others see it only once it is published in PaperGo.",
 		InputSchema: object([]string{"item_id", "version"},
 			property("item_id", idProperty("The item or folder.")),
 			property("version", `{"type": "integer", "minimum": 1, "description": "The entry's version the change applies to."}`),
@@ -283,7 +355,11 @@ func updateItem() mcp.Tool {
 			if err := unmarshal(res.Body, &updated); err != nil {
 				return nil, err
 			}
-			return encode(updated.item(true))
+			out := updated.item(l, true)
+			if err := label(ctx, c, updated.ContainerID, []item{out}); err != nil {
+				return nil, err
+			}
+			return encode(out)
 		},
 	}
 }

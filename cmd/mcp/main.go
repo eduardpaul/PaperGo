@@ -47,12 +47,12 @@ func main() {
 // run serves until ctx ends, then drains requests in flight. ready, when
 // set, receives the listening address.
 func run(ctx context.Context, env func(string) string, log *slog.Logger, ready func(net.Addr)) error {
-	cfg, listen, enabled, err := configure(env)
+	cfg, tools, listen, enabled, err := configure(env)
 	if err != nil {
 		return err
 	}
 	cfg.Logger, cfg.Version = log, buildinfo.Version
-	registry, err := mcp.NewRegistry(builtin.Tools(), contributions, enabled)
+	registry, err := mcp.NewRegistry(builtin.Tools(tools), contributions, enabled)
 	if err != nil {
 		return err
 	}
@@ -92,29 +92,39 @@ func run(ctx context.Context, env func(string) string, log *slog.Logger, ready f
 }
 
 // configure reads the PAPERGO_MCP_* settings.
-func configure(env func(string) string) (cfg server.Config, listen string, enabled []string, err error) {
+func configure(env func(string) string) (cfg server.Config, tools builtin.Options, listen string, enabled []string, err error) {
+	fail := func(setting string, err error) (server.Config, builtin.Options, string, []string, error) {
+		return cfg, tools, "", nil, fmt.Errorf("%s: %w", setting, err)
+	}
 	raw := env("PAPERGO_MCP_BACKEND_URL")
 	if raw == "" {
-		return cfg, "", nil, errors.New("PAPERGO_MCP_BACKEND_URL is required: the PaperGo API's origin, such as http://papergo:8080")
+		return cfg, tools, "", nil, errors.New("PAPERGO_MCP_BACKEND_URL is required: the PaperGo API's origin, such as http://papergo:8080")
 	}
 	if cfg.BackendURL, err = server.ParseBackendURL(raw); err != nil {
-		return cfg, "", nil, fmt.Errorf("PAPERGO_MCP_BACKEND_URL: %w", err)
+		return fail("PAPERGO_MCP_BACKEND_URL", err)
 	}
 	if raw := env("PAPERGO_MCP_PUBLIC_URL"); raw != "" {
 		if cfg.PublicURL, err = server.ParsePublicURL(raw); err != nil {
-			return cfg, "", nil, fmt.Errorf("PAPERGO_MCP_PUBLIC_URL: %w", err)
+			return fail("PAPERGO_MCP_PUBLIC_URL", err)
+		}
+		// One host usually serves the endpoint and the web app.
+		tools.AppURL = server.AppOrigin(cfg.PublicURL)
+	}
+	if raw := env("PAPERGO_MCP_APP_URL"); raw != "" {
+		if tools.AppURL, err = server.ParseAppURL(raw); err != nil {
+			return fail("PAPERGO_MCP_APP_URL", err)
 		}
 	}
 	if cfg.AllowedOrigins, err = server.ParseOrigins(env("PAPERGO_MCP_ALLOWED_ORIGINS")); err != nil {
-		return cfg, "", nil, fmt.Errorf("PAPERGO_MCP_ALLOWED_ORIGINS: %w", err)
+		return fail("PAPERGO_MCP_ALLOWED_ORIGINS", err)
 	}
 	listen = env("PAPERGO_MCP_LISTEN")
 	if listen == "" {
 		listen = "127.0.0.1:8081"
 	}
 	if _, _, err := net.SplitHostPort(listen); err != nil {
-		return cfg, "", nil, fmt.Errorf("PAPERGO_MCP_LISTEN: %w", err)
+		return fail("PAPERGO_MCP_LISTEN", err)
 	}
 	enabled = strings.FieldsFunc(env("PAPERGO_MCP_ENABLED_EXTENSIONS"), func(r rune) bool { return r == ',' || r == ' ' })
-	return cfg, listen, enabled, nil
+	return cfg, tools, listen, enabled, nil
 }

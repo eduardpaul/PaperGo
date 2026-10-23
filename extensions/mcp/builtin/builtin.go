@@ -1,7 +1,8 @@
 // Package builtin holds the MCP tools papergo-mcp always serves: discovery
-// of workspaces and collections, collection schemas, structured queries,
-// item reads, creates and updates, and search. Each acts through the
-// PaperGo API as its caller, so the API decides what they see and change.
+// of workspaces and collections, collection schemas and views, structured
+// queries, item reads, file text, terms, creates and updates, and search.
+// Each acts through the PaperGo API as its caller, so the API decides what
+// they see and change.
 // Custom values and filter literals stay raw JSON from end to end, so
 // integers and decimals keep every digit.
 package builtin
@@ -28,6 +29,9 @@ const (
 	scopeListRead        = "list.read"
 	scopeListWrite       = "list.write"
 	scopeContentTypeRead = "contentType.read"
+	scopeDocumentRead    = "document.read"
+	scopeTaxonomyRead    = "taxonomy.read"
+	scopeUserRead        = "user.read"
 )
 
 // Page bounds.
@@ -39,9 +43,18 @@ const (
 	maxCursorBytes     = 4096
 )
 
+// Options configure the built-in tools.
+type Options struct {
+	// AppURL is the origin of the PaperGo web app the tools link to. Without
+	// it, results carry no links.
+	AppURL *url.URL
+}
+
 // Tools are the built-in tools.
-func Tools() []mcp.Tool {
-	return []mcp.Tool{listWorkspaces(), listCollections(), getCollectionSchema(), queryItems(), getItem(), createItem(), updateItem(), search()}
+func Tools(o Options) []mcp.Tool {
+	l := links{o.AppURL}
+	return []mcp.Tool{listWorkspaces(l), listCollections(l), getCollectionSchema(l), queryItems(l), getItem(l), getItemText(), listTerms(),
+		createItem(l), updateItem(l), search(l)}
 }
 
 // decode reads validated arguments into dst, keeping numbers exact.
@@ -215,6 +228,9 @@ type resource struct {
 	AllowFolders      bool              `json:"allow_folders"`
 	Version           int               `json:"version"`
 	SchemaHeadID      *string           `json:"schema_head_id"`
+	HeadRevisionID    *string           `json:"head_revision_id"`
+	PublishedRevision *string           `json:"published_revision_id"`
+	Archived          bool              `json:"archived"`
 	CreatedAt         string            `json:"created_at"`
 	CreatedBy         string            `json:"created_by"`
 	UpdatedAt         string            `json:"updated_at"`
@@ -238,12 +254,22 @@ type item struct {
 	UpdatedBy     string            `json:"updated_by"`
 	Keywords      []string          `json:"keywords"`
 	Values        json.RawMessage   `json:"values"`
-	Access        []string          `json:"access,omitempty"`
+	// Labels names the IDs the entry holds; see label.
+	Labels   map[string]string `json:"labels"`
+	Draft    bool              `json:"draft"`
+	Archived bool              `json:"archived"`
+	URL      *string           `json:"url,omitempty"`
+	Access   []string          `json:"access,omitempty"`
 }
 
-func (r resource) item(withAccess bool) item {
+// item is the entry r as the tools return it, without labels.
+func (r resource) item(l links, withAccess bool) item {
 	out := item{ID: r.ID, Kind: r.Kind, WorkspaceID: r.WorkspaceID, CollectionID: r.ContainerID, ParentID: r.ParentID, Name: r.Name, ContentTypeID: r.ContentTypeID,
-		Version: r.Version, CreatedAt: r.CreatedAt, CreatedBy: r.CreatedBy, UpdatedAt: r.UpdatedAt, UpdatedBy: r.UpdatedBy, Keywords: r.Keywords, Values: r.Values}
+		Version: r.Version, CreatedAt: r.CreatedAt, CreatedBy: r.CreatedBy, UpdatedAt: r.UpdatedAt, UpdatedBy: r.UpdatedBy, Keywords: r.Keywords, Values: r.Values,
+		Labels: map[string]string{}, Archived: r.Archived, URL: l.entry(r)}
+	// A head that is not the published revision holds unpublished changes.
+	// Published surfaces leave the head out.
+	out.Draft = r.HeadRevisionID != nil && (r.PublishedRevision == nil || *r.HeadRevisionID != *r.PublishedRevision)
 	if out.Keywords == nil {
 		out.Keywords = []string{}
 	}
@@ -272,11 +298,13 @@ type collection struct {
 	Version           int               `json:"version"`
 	CreatedAt         string            `json:"created_at"`
 	UpdatedAt         string            `json:"updated_at"`
+	URL               *string           `json:"url,omitempty"`
 }
 
-func (r resource) collection() collection {
+func (r resource) collection(l links) collection {
 	out := collection{ID: r.ID, Kind: r.Kind, WorkspaceID: r.WorkspaceID, Name: r.Name, Description: r.Description, TemplateKeys: r.TemplateKeys,
-		PublishingEnabled: r.PublishingEnabled, AllowFolders: r.AllowFolders, Version: r.Version, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
+		PublishingEnabled: r.PublishingEnabled, AllowFolders: r.AllowFolders, Version: r.Version, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+		URL: l.collection(r.WorkspaceID, r.ID)}
 	if out.TemplateKeys == nil {
 		out.TemplateKeys = []string{}
 	}

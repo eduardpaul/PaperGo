@@ -20,7 +20,7 @@ func tool(name string) mcp.Tool {
 }
 
 func TestBuiltinsRegister(t *testing.T) {
-	r, err := mcp.NewRegistry(builtin.Tools(), nil, nil)
+	r, err := mcp.NewRegistry(builtin.Tools(builtin.Options{}), nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,7 +28,7 @@ func TestBuiltinsRegister(t *testing.T) {
 	for _, tool := range r.Tools() {
 		names = append(names, tool.Name)
 	}
-	if got := strings.Join(names, ","); got != "create_item,get_collection_schema,get_item,list_collections,list_workspaces,query_items,search,update_item" {
+	if got := strings.Join(names, ","); got != "create_item,get_collection_schema,get_item,get_item_text,list_collections,list_terms,list_workspaces,query_items,search,update_item" {
 		t.Fatalf("tools %s", got)
 	}
 }
