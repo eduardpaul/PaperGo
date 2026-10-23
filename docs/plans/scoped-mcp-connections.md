@@ -88,7 +88,10 @@ Simple first:
 
 Read only maps to `workspace.read`, `list.read`, `contentType.read`,
 `document.read`, `taxonomy.read` and `user.read`; read and write adds
-`list.write`. Scopes the person does not hold are left out. Tokens have no
+`list.write`, which changes items and folders but not the places
+themselves: creating, configuring, sharing and deleting workspaces, lists
+and libraries needs `list.manage`, which connections never request. Scopes
+the person does not hold are left out. Tokens have no
 kind, so **Your connections** lists every personal token that reads lists:
 any of them can connect an assistant.
 

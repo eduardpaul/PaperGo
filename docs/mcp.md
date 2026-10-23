@@ -92,7 +92,7 @@ A credential's scopes decide which tools its holder sees and may call; the API's
 Two scope sets cover most assistants:
 
 - **Read:** `workspace.read`, `list.read`, `contentType.read`, `document.read`, `taxonomy.read` and `user.read`. `taxonomy.read` and `user.read` also let results name terms and people (see [Results](#results)).
-- **Read and write:** the same plus `list.write`.
+- **Read and write:** the same plus `list.write`, which adds, edits, moves and deletes items and folders (deleted ones go to the recycle bin). It cannot create, configure, share or delete workspaces, lists or libraries: that needs `list.manage`, which assistant connections never get.
 
 Members hold all of these by default. A tool the caller lacks the scopes for is not listed, and calling it by name fails as an unknown tool. Give each assistant its own token, named after it, so revoking one leaves the others working. An assistant's changes are recorded as its token holder's, with the token's name beside them in the audit log (Administration → Audit), so they can be told from the holder's own. Tokens expire (90 days unless set otherwise); the client then gets `401` until it is given a new one.
 

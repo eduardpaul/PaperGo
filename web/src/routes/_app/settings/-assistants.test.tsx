@@ -100,6 +100,7 @@ it('connects a read-only assistant to everything, then checks the connection', a
   const summary = screen.getByLabelText('This connection');
   expect(summary.textContent).toContain('Read only');
   expect(summary.textContent).toContain('Everything you can access');
+  expect(screen.getByText(/Neither creates, configures, shares or deletes/)).toBeTruthy();
   const create = screen.getByRole('button', { name: 'Create connection' }) as HTMLButtonElement;
   await waitFor(() => expect(create.disabled).toBe(false));
   fireEvent.click(create);

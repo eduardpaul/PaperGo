@@ -200,7 +200,11 @@ function Connect({ endpoint }: { endpoint: string }) {
         <SettingRow id="assistant-name" label="Name" hint="So you recognise it later, such as the assistant it is for.">
           <Input id="assistant-name" value={name} onChange={(event) => setName(event.target.value)} />
         </SettingRow>
-        <SettingRow id="assistant-access" label="Access">
+        <SettingRow
+          id="assistant-access"
+          label="Access"
+          hint="Neither creates, configures, shares or deletes workspaces, lists or libraries."
+        >
           <div role="radiogroup" aria-labelledby="assistant-access-label" className="flex flex-col gap-1.5">
             <label className="flex items-center gap-2 text-[13px]">
               <input type="radio" name="assistant-access" checked={!write} onChange={() => setWrite(false)} />
@@ -214,7 +218,7 @@ function Connect({ endpoint }: { endpoint: string }) {
                 disabled={!canWrite}
                 onChange={() => setWrite(true)}
               />
-              Read and write: also create and edit items
+              Read and write: also add, edit and delete items
             </label>
           </div>
         </SettingRow>

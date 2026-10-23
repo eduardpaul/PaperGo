@@ -978,11 +978,11 @@
             }
           }
         },
-        "description": "Workspace and collection metadata changes require manage access. Items and folders require write access. If-Match is required."
+        "description": "Workspace and collection metadata changes require manage access and list.manage. Items and folders require write access. If-Match is required."
       },
       "delete": {
         "summary": "Delete a resource, optionally including folder contents",
-        "description": "Deletes an item or empty folder with write access and the current If-Match. For a folder, recursive=true deletes the folder and all live descendants atomically, requiring write access to every descendant. Without recursive=true, any live child, including a hidden item or nested folder, returns 409 with code folder_not_empty. Deleted children do not prevent ordinary deletion. Permission failures and stale versions leave the entire tree unchanged. Workspace and collection deletion require manage access and remove the entire live resource tree independently of recursive; collection managers may delete the entire collection regardless of descendant ACLs. Tombstones, revisions and audit history are retained. Read projections and live relationships are removed, and each deleted item emits item.deleted. Workflows bound to a deleted workspace or collection are disabled and deleted.",
+        "description": "Deletes an item or empty folder with write access and the current If-Match. For a folder, recursive=true deletes the folder and all live descendants atomically, requiring write access to every descendant. Without recursive=true, any live child, including a hidden item or nested folder, returns 409 with code folder_not_empty. Deleted children do not prevent ordinary deletion. Permission failures and stale versions leave the entire tree unchanged. Workspace and collection deletion require manage access and list.manage and remove the entire live resource tree independently of recursive; collection managers may delete the entire collection regardless of descendant ACLs. Tombstones, revisions and audit history are retained. Read projections and live relationships are removed, and each deleted item emits item.deleted. Workflows bound to a deleted workspace or collection are disabled and deleted.",
         "responses": {
           "204": {
             "description": "Deleted"
@@ -1228,7 +1228,7 @@
             }
           }
         },
-        "description": "First create returns 201. Retrying an item/folder create with the same caller ID returns the current readable live entry unchanged with 200 and its current ETag, regardless of new body fields. Requires list.write module scope; an existing retry requires read access rather than create ACL access. Conflicting IDs, including deleted, different-collection and inaccessible entries, return 409 without content. All retry checks and the initial insertion are serialized in one write transaction; retries append no revisions, audit or events."
+        "description": "First create returns 201. Retrying an item/folder create with the same caller ID returns the current readable live entry unchanged with 200 and its current ETag, regardless of new body fields. Requires list.write module scope, and a list or library list.manage and workspace manage access; an existing retry requires read access rather than create ACL access. Conflicting IDs, including deleted, different-collection and inaccessible entries, return 409 without content. All retry checks and the initial insertion are serialized in one write transaction; retries append no revisions, audit or events."
       }
     },
     "/v1/resources/{id}/fields": {
@@ -1399,9 +1399,9 @@
             }
           }
         },
-        "description": "Break, copy or reset inheritance using typed user, group and workspace role principals. Copied group grants retain group IDs and resolve current nested memberships. Copying workspace inheritance retains dynamic visitor/member/owner role principals. Workspace owners and workspace.manage holders retain control. A permission change that removes the caller's manage access rolls back. list.write and resource manage access are required. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. ACL changes deliver permissions.changed (action=replace) to the resource and every item and folder that inherits from it, with previous_scope_id and current_scope_id; the root event, with previous/current permission snapshots (inherit, grants, scope_id, effective_grants), commits with the write and audit, and the dispatcher delivers it in batches. Unchanged ACLs raise no event.",
+        "description": "Break, copy or reset inheritance using typed user, group and workspace role principals. Copied group grants retain group IDs and resolve current nested memberships. Copying workspace inheritance retains dynamic visitor/member/owner role principals. Workspace owners and workspace.manage holders retain control. A permission change that removes the caller's manage access rolls back. list.manage and resource manage access are required. Required module scopes: list.manage. Resource ACLs and any additional use-case checks also apply. ACL changes deliver permissions.changed (action=replace) to the resource and every item and folder that inherits from it, with previous_scope_id and current_scope_id; the root event, with previous/current permission snapshots (inherit, grants, scope_id, effective_grants), commits with the write and audit, and the dispatcher delivers it in batches. Unchanged ACLs raise no event.",
         "x-module-scopes": [
-          "list.write"
+          "list.manage"
         ]
       }
     },
@@ -4081,9 +4081,9 @@
           }
         },
         "x-module-scopes": [
-          "list.write"
+          "list.manage"
         ],
-        "description": " Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply."
+        "description": " Requires collection manage access. Required module scopes: list.manage. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/views/{id}": {
@@ -4372,9 +4372,9 @@
           }
         },
         "x-module-scopes": [
-          "list.write"
+          "list.manage"
         ],
-        "description": " Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply."
+        "description": " Requires collection manage access. Required module scopes: list.manage. Resource ACLs and any additional use-case checks also apply."
       },
       "delete": {
         "summary": "Delete saved view",
@@ -4413,9 +4413,9 @@
           }
         },
         "x-module-scopes": [
-          "list.write"
+          "list.manage"
         ],
-        "description": " Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply."
+        "description": " Requires collection manage access. Required module scopes: list.manage. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/views/{id}/query": {
@@ -5159,10 +5159,10 @@
           }
         },
         "x-module-scopes": [
-          "list.write",
+          "list.manage",
           "contentType.read"
         ],
-        "description": "Requires list.write, contentType.read and manage ACL on the collection. The shared definition is not copied. Returns the collection and its new ETag."
+        "description": "Requires list.manage, contentType.read and manage ACL on the collection. The shared definition is not copied. Returns the collection and its new ETag."
       }
     },
     "/v1/content-types/{id}": {
@@ -5357,7 +5357,7 @@
         "x-module-scopes": [
           "list.write"
         ],
-        "description": " Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: list.write; shared smart folders also need list.manage and workspace manage access. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/smart-folders/{id}": {
@@ -5457,7 +5457,7 @@
         "x-module-scopes": [
           "list.write"
         ],
-        "description": " Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: list.write; shared smart folders also need list.manage and workspace manage access. Resource ACLs and any additional use-case checks also apply."
       },
       "delete": {
         "operationId": "deleteSmartFolder",
@@ -5487,7 +5487,7 @@
         "x-module-scopes": [
           "list.write"
         ],
-        "description": " Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: list.write; shared smart folders also need list.manage and workspace manage access. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/smart-folders/{id}/query": {
@@ -13233,7 +13233,7 @@
       "delete": {
         "operationId": "purgeDeletedResource",
         "summary": "Permanently purge deleted content",
-        "description": "Requires list.write and manage access to every purged entry. recursive=true explicitly purges deleted folder descendants. Deletes retained revisions, publications, blob references and grants; audit/run records retain stable IDs. Object deletion is queued durably and retried after storage failures or restart. Only deleted entries in live collections can be purged. No If-Match is required.",
+        "description": "Requires list.manage and manage access to every purged entry. recursive=true explicitly purges deleted folder descendants. Deletes retained revisions, publications, blob references and grants; audit/run records retain stable IDs. Object deletion is queued durably and retried after storage failures or restart. Only deleted entries in live collections can be purged. No If-Match is required.",
         "parameters": [
           {
             "name": "recursive",
@@ -13339,9 +13339,9 @@
       "delete": {
         "operationId": "detachContentType",
         "summary": "Detach an unused collection content type",
-        "description": "Requires collection manage access and the current collection If-Match. Rejects the last attachment, a type used by live items, and dependent saved views. Chooses a remaining default when necessary. Updates the effective schema and business keys atomically; organization catalog types and frozen revisions remain. Deleted items with a detached type require reattachment before restoration.",
+        "description": "Requires list.manage, collection manage access and the current collection If-Match. Rejects the last attachment, a type used by live items, and dependent saved views. Chooses a remaining default when necessary. Updates the effective schema and business keys atomically; organization catalog types and frozen revisions remain. Deleted items with a detached type require reattachment before restoration.",
         "x-module-scopes": [
-          "list.write"
+          "list.manage"
         ],
         "parameters": [
           {
@@ -16017,7 +16017,7 @@
       "post": {
         "operationId": "createListIntegration",
         "summary": "Configure an HTTPS iCalendar integration on a list",
-        "description": "Requires list Manage access and list.read/list.write scopes. Automatically attaches the Event content type without requiring contentType.read, queues a first refresh, and activates the workspace refresh workflow once. Same-list duplicate URLs are rejected; separate lists and sources have independent identities.",
+        "description": "Requires list manage access and the list.read and list.manage scopes; its refreshes keep needing them. Automatically attaches the Event content type without requiring contentType.read, queues a first refresh, and activates the workspace refresh workflow once. Same-list duplicate URLs are rejected; separate lists and sources have independent identities.",
         "requestBody": {
           "required": true,
           "content": {
@@ -16169,7 +16169,7 @@
       "post": {
         "operationId": "refreshListIntegration",
         "summary": "Queue a refresh of this integration only",
-        "description": "Requires list Manage and list.write; paused integrations must be resumed. The durable operation carries only the integration ID.",
+        "description": "Requires list manage access and list.manage; paused integrations must be resumed. The durable operation carries only the integration ID.",
         "responses": {
           "200": {
             "description": "An Idempotency-Key returned the operation this request accepted earlier.",
@@ -26710,7 +26710,7 @@
                     "manage"
                   ]
                 },
-                "description": "Allowed actions, in the order read, read_draft, write, publish, manage. Workspace ACLs and the caller's module scopes both apply: write and publish below a workspace also need list.write. On a workspace, manage means owner; on a list or library, write means adding and editing content and manage means changing settings, fields, views and permissions."
+                "description": "Allowed actions, in the order read, read_draft, write, publish, manage. Workspace ACLs and the caller's module scopes both apply: write and publish below a workspace also need list.write, and manage needs list.manage. On a workspace, manage means owner; on a list or library, write means adding and editing content and manage means changing settings, fields, views and permissions."
               }
             }
           }

@@ -30,7 +30,7 @@ type Scope struct {
 // caller can access; workspace.manage is the explicit organization-wide override.
 var Catalog = []Scope{
 	{"workspace.read", true}, {"workspace.create", true}, {"workspace.manage", false},
-	{"list.read", true}, {"list.write", true},
+	{"list.read", true}, {"list.write", true}, {"list.manage", true},
 	{"document.read", true}, {"document.write", true},
 	{"contentType.read", true}, {"contentType.manage", false},
 	{"taxonomy.read", true}, {"taxonomy.manage", false},

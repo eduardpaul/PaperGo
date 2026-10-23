@@ -4349,7 +4349,7 @@ export type Resource_versioning = (typeof Resource_versioningObject)[keyof typeo
  */
 export interface ResourceAccess extends Parsable, Resource {
 	/**
-	 * Allowed actions, in the order read, read_draft, write, publish, manage. Workspace ACLs and the caller's module scopes both apply: write and publish below a workspace also need list.write. On a workspace, manage means owner; on a list or library, write means adding and editing content and manage means changing settings, fields, views and permissions.
+	 * Allowed actions, in the order read, read_draft, write, publish, manage. Workspace ACLs and the caller's module scopes both apply: write and publish below a workspace also need list.write, and manage needs list.manage. On a workspace, manage means owner; on a list or library, write means adding and editing content and manage means changing settings, fields, views and permissions.
 	 */
 	access?: ResourceAccess_access[] | null;
 }
@@ -8900,7 +8900,7 @@ export interface ChildrenRequestBuilder extends BaseRequestBuilder<ChildrenReque
 	 */
 	get(requestConfiguration?: RequestConfiguration<ChildrenRequestBuilderGetQueryParameters> | undefined): Promise<ChildrenGetResponse | undefined>;
 	/**
-	 * First create returns 201. Retrying an item/folder create with the same caller ID returns the current readable live entry unchanged with 200 and its current ETag, regardless of new body fields. Requires list.write module scope; an existing retry requires read access rather than create ACL access. Conflicting IDs, including deleted, different-collection and inaccessible entries, return 409 without content. All retry checks and the initial insertion are serialized in one write transaction; retries append no revisions, audit or events.
+	 * First create returns 201. Retrying an item/folder create with the same caller ID returns the current readable live entry unchanged with 200 and its current ETag, regardless of new body fields. Requires list.write module scope, and a list or library list.manage and workspace manage access; an existing retry requires read access rather than create ACL access. Conflicting IDs, including deleted, different-collection and inaccessible entries, return 409 without content. All retry checks and the initial insertion are serialized in one write transaction; retries append no revisions, audit or events.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Resource>}
@@ -8914,7 +8914,7 @@ export interface ChildrenRequestBuilder extends BaseRequestBuilder<ChildrenReque
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<ChildrenRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 	/**
-	 * First create returns 201. Retrying an item/folder create with the same caller ID returns the current readable live entry unchanged with 200 and its current ETag, regardless of new body fields. Requires list.write module scope; an existing retry requires read access rather than create ACL access. Conflicting IDs, including deleted, different-collection and inaccessible entries, return 409 without content. All retry checks and the initial insertion are serialized in one write transaction; retries append no revisions, audit or events.
+	 * First create returns 201. Retrying an item/folder create with the same caller ID returns the current readable live entry unchanged with 200 and its current ETag, regardless of new body fields. Requires list.write module scope, and a list or library list.manage and workspace manage access; an existing retry requires read access rather than create ACL access. Conflicting IDs, including deleted, different-collection and inaccessible entries, return 409 without content. All retry checks and the initial insertion are serialized in one write transaction; retries append no revisions, audit or events.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -8987,14 +8987,14 @@ declare const GetSurfaceQueryParameterTypeObject$2: {
  */
 export interface WithTypeItemRequestBuilder extends BaseRequestBuilder<WithTypeItemRequestBuilder> {
 	/**
-	 * Requires collection manage access and the current collection If-Match. Rejects the last attachment, a type used by live items, and dependent saved views. Chooses a remaining default when necessary. Updates the effective schema and business keys atomically; organization catalog types and frozen revisions remain. Deleted items with a detached type require reattachment before restoration.
+	 * Requires list.manage, collection manage access and the current collection If-Match. Rejects the last attachment, a type used by live items, and dependent saved views. Chooses a remaining default when necessary. Updates the effective schema and business keys atomically; organization catalog types and frozen revisions remain. Deleted items with a detached type require reattachment before restoration.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @throws {Problem} error when the service returns a 412 status code
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	delete(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<void>;
 	/**
-	 * Requires collection manage access and the current collection If-Match. Rejects the last attachment, a type used by live items, and dependent saved views. Chooses a remaining default when necessary. Updates the effective schema and business keys atomically; organization catalog types and frozen revisions remain. Deleted items with a detached type require reattachment before restoration.
+	 * Requires list.manage, collection manage access and the current collection If-Match. Rejects the last attachment, a type used by live items, and dependent saved views. Chooses a remaining default when necessary. Updates the effective schema and business keys atomically; organization catalog types and frozen revisions remain. Deleted items with a detached type require reattachment before restoration.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -9015,7 +9015,7 @@ interface ContentTypesRequestBuilder$1 extends BaseRequestBuilder<ContentTypesRe
 	 */
 	get(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<CollectionContentType[] | undefined>;
 	/**
-	 * Requires list.write, contentType.read and manage ACL on the collection. The shared definition is not copied. Returns the collection and its new ETag.
+	 * Requires list.manage, contentType.read and manage ACL on the collection. The shared definition is not copied. Returns the collection and its new ETag.
 	 * @param body Attach the organization definition by ID without copying. At most 32 types per collection. Selecting a default affects only this collection. Conflicting field keys are rejected; types that share a key must reference the same catalog field ID.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Resource>}
@@ -9030,7 +9030,7 @@ interface ContentTypesRequestBuilder$1 extends BaseRequestBuilder<ContentTypesRe
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 	/**
-	 * Requires list.write, contentType.read and manage ACL on the collection. The shared definition is not copied. Returns the collection and its new ETag.
+	 * Requires list.manage, contentType.read and manage ACL on the collection. The shared definition is not copied. Returns the collection and its new ETag.
 	 * @param body Attach the organization definition by ID without copying. At most 32 types per collection. Selecting a default affects only this collection. Conflicting field keys are rejected; types that share a key must reference the same catalog field ID.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -9178,7 +9178,7 @@ interface FieldsRequestBuilder$1 extends BaseRequestBuilder<FieldsRequestBuilder
  */
 export interface RefreshRequestBuilder extends BaseRequestBuilder<RefreshRequestBuilder> {
 	/**
-	 * Requires list Manage and list.write; paused integrations must be resumed. The durable operation carries only the integration ID.
+	 * Requires list manage access and list.manage; paused integrations must be resumed. The durable operation carries only the integration ID.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Operation>}
 	 * @throws {Problem} error when the service returns a 400 status code
@@ -9188,7 +9188,7 @@ export interface RefreshRequestBuilder extends BaseRequestBuilder<RefreshRequest
 	 */
 	post(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Operation | undefined>;
 	/**
-	 * Requires list Manage and list.write; paused integrations must be resumed. The durable operation carries only the integration ID.
+	 * Requires list manage access and list.manage; paused integrations must be resumed. The durable operation carries only the integration ID.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -9248,7 +9248,7 @@ export interface IntegrationsRequestBuilder extends BaseRequestBuilder<Integrati
 	 */
 	get(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<ListIntegration[] | undefined>;
 	/**
-	 * Requires list Manage access and list.read/list.write scopes. Automatically attaches the Event content type without requiring contentType.read, queues a first refresh, and activates the workspace refresh workflow once. Same-list duplicate URLs are rejected; separate lists and sources have independent identities.
+	 * Requires list manage access and the list.read and list.manage scopes; its refreshes keep needing them. Automatically attaches the Event content type without requiring contentType.read, queues a first refresh, and activates the workspace refresh workflow once. Same-list duplicate URLs are rejected; separate lists and sources have independent identities.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<ListIntegration>}
@@ -9262,7 +9262,7 @@ export interface IntegrationsRequestBuilder extends BaseRequestBuilder<Integrati
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 	/**
-	 * Requires list Manage access and list.read/list.write scopes. Automatically attaches the Event content type without requiring contentType.read, queues a first refresh, and activates the workspace refresh workflow once. Same-list duplicate URLs are rejected; separate lists and sources have independent identities.
+	 * Requires list manage access and the list.read and list.manage scopes; its refreshes keep needing them. Automatically attaches the Event content type without requiring contentType.read, queues a first refresh, and activates the workspace refresh workflow once. Same-list duplicate URLs are rejected; separate lists and sources have independent identities.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -9367,7 +9367,7 @@ export interface PermissionsRequestBuilder extends BaseRequestBuilder<Permission
 	 */
 	get(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Permissions | undefined>;
 	/**
-	 * Break, copy or reset inheritance using typed user, group and workspace role principals. Copied group grants retain group IDs and resolve current nested memberships. Copying workspace inheritance retains dynamic visitor/member/owner role principals. Workspace owners and workspace.manage holders retain control. A permission change that removes the caller's manage access rolls back. list.write and resource manage access are required. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. ACL changes deliver permissions.changed (action=replace) to the resource and every item and folder that inherits from it, with previous_scope_id and current_scope_id; the root event, with previous/current permission snapshots (inherit, grants, scope_id, effective_grants), commits with the write and audit, and the dispatcher delivers it in batches. Unchanged ACLs raise no event.
+	 * Break, copy or reset inheritance using typed user, group and workspace role principals. Copied group grants retain group IDs and resolve current nested memberships. Copying workspace inheritance retains dynamic visitor/member/owner role principals. Workspace owners and workspace.manage holders retain control. A permission change that removes the caller's manage access rolls back. list.manage and resource manage access are required. Required module scopes: list.manage. Resource ACLs and any additional use-case checks also apply. ACL changes deliver permissions.changed (action=replace) to the resource and every item and folder that inherits from it, with previous_scope_id and current_scope_id; the root event, with previous/current permission snapshots (inherit, grants, scope_id, effective_grants), commits with the write and audit, and the dispatcher delivers it in batches. Unchanged ACLs raise no event.
 	 * @param body SharePoint-style exclusive scopes. An inherited resource has no local grants. Grants at the nearest exclusive ancestor apply; ancestors beyond it do not. Grants within a scope are additive. Reset with inherit=true and no grants. Denies are rejected.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Resource>}
@@ -9382,7 +9382,7 @@ export interface PermissionsRequestBuilder extends BaseRequestBuilder<Permission
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 	/**
-	 * Break, copy or reset inheritance using typed user, group and workspace role principals. Copied group grants retain group IDs and resolve current nested memberships. Copying workspace inheritance retains dynamic visitor/member/owner role principals. Workspace owners and workspace.manage holders retain control. A permission change that removes the caller's manage access rolls back. list.write and resource manage access are required. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. ACL changes deliver permissions.changed (action=replace) to the resource and every item and folder that inherits from it, with previous_scope_id and current_scope_id; the root event, with previous/current permission snapshots (inherit, grants, scope_id, effective_grants), commits with the write and audit, and the dispatcher delivers it in batches. Unchanged ACLs raise no event.
+	 * Break, copy or reset inheritance using typed user, group and workspace role principals. Copied group grants retain group IDs and resolve current nested memberships. Copying workspace inheritance retains dynamic visitor/member/owner role principals. Workspace owners and workspace.manage holders retain control. A permission change that removes the caller's manage access rolls back. list.manage and resource manage access are required. Required module scopes: list.manage. Resource ACLs and any additional use-case checks also apply. ACL changes deliver permissions.changed (action=replace) to the resource and every item and folder that inherits from it, with previous_scope_id and current_scope_id; the root event, with previous/current permission snapshots (inherit, grants, scope_id, effective_grants), commits with the write and audit, and the dispatcher delivers it in batches. Unchanged ACLs raise no event.
 	 * @param body SharePoint-style exclusive scopes. An inherited resource has no local grants. Grants at the nearest exclusive ancestor apply; ancestors beyond it do not. Grants within a scope are additive. Reset with inherit=true and no grants. Denies are rejected.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -9499,20 +9499,20 @@ export interface WithItemItemRequestBuilder extends BaseRequestBuilder<WithItemI
 	 */
 	get restore(): RestoreRequestBuilder$2;
 	/**
-	 * Requires list.write and manage access to every purged entry. recursive=true explicitly purges deleted folder descendants. Deletes retained revisions, publications, blob references and grants; audit/run records retain stable IDs. Object deletion is queued durably and retried after storage failures or restart. Only deleted entries in live collections can be purged. No If-Match is required.
+	 * Requires list.manage and manage access to every purged entry. recursive=true explicitly purges deleted folder descendants. Deletes retained revisions, publications, blob references and grants; audit/run records retain stable IDs. Object deletion is queued durably and retried after storage failures or restart. Only deleted entries in live collections can be purged. No If-Match is required.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	delete(requestConfiguration?: RequestConfiguration<WithItemItemRequestBuilderDeleteQueryParameters> | undefined): Promise<void>;
 	/**
-	 * Requires list.write and manage access to every purged entry. recursive=true explicitly purges deleted folder descendants. Deletes retained revisions, publications, blob references and grants; audit/run records retain stable IDs. Object deletion is queued durably and retried after storage failures or restart. Only deleted entries in live collections can be purged. No If-Match is required.
+	 * Requires list.manage and manage access to every purged entry. recursive=true explicitly purges deleted folder descendants. Deletes retained revisions, publications, blob references and grants; audit/run records retain stable IDs. Object deletion is queued durably and retried after storage failures or restart. Only deleted entries in live collections can be purged. No If-Match is required.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toDeleteRequestInformation(requestConfiguration?: RequestConfiguration<WithItemItemRequestBuilderDeleteQueryParameters> | undefined): RequestInformation;
 }
 /**
- * Requires list.write and manage access to every purged entry. recursive=true explicitly purges deleted folder descendants. Deletes retained revisions, publications, blob references and grants; audit/run records retain stable IDs. Object deletion is queued durably and retried after storage failures or restart. Only deleted entries in live collections can be purged. No If-Match is required.
+ * Requires list.manage and manage access to every purged entry. recursive=true explicitly purges deleted folder descendants. Deletes retained revisions, publications, blob references and grants; audit/run records retain stable IDs. Object deletion is queued durably and retried after storage failures or restart. Only deleted entries in live collections can be purged. No If-Match is required.
  */
 export interface WithItemItemRequestBuilderDeleteQueryParameters {
 	recursive?: boolean;
@@ -9665,7 +9665,7 @@ export interface ViewsRequestBuilder extends BaseRequestBuilder<ViewsRequestBuil
 	 */
 	get(requestConfiguration?: RequestConfiguration<ViewsRequestBuilderGetQueryParameters> | undefined): Promise<ListViewPage | undefined>;
 	/**
-	 *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
+	 *  Requires collection manage access. Required module scopes: list.manage. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Collection-managed saved view. Columns use field keys and $id/$name/$keywords; empty columns default to $name. PUT replaces the definition. Layout is a client hint; a navigation view browses the terms of each of settings.fields as folders (POST /v1/views/{id}/navigation) and lists the items at the opened terms through POST /v1/views/{id}/query with selected.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<ListView>}
@@ -9687,7 +9687,7 @@ export interface ViewsRequestBuilder extends BaseRequestBuilder<ViewsRequestBuil
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<ViewsRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 	/**
-	 *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
+	 *  Requires collection manage access. Required module scopes: list.manage. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Collection-managed saved view. Columns use field keys and $id/$name/$keywords; empty columns default to $name. PUT replaces the definition. Layout is a client hint; a navigation view browses the terms of each of settings.fields as folders (POST /v1/views/{id}/navigation) and lists the items at the opened terms through POST /v1/views/{id}/query with selected.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -9781,7 +9781,7 @@ export interface ResourcesItemRequestBuilder extends BaseRequestBuilder<Resource
 	 */
 	get views(): ViewsRequestBuilder;
 	/**
-	 * Deletes an item or empty folder with write access and the current If-Match. For a folder, recursive=true deletes the folder and all live descendants atomically, requiring write access to every descendant. Without recursive=true, any live child, including a hidden item or nested folder, returns 409 with code folder_not_empty. Deleted children do not prevent ordinary deletion. Permission failures and stale versions leave the entire tree unchanged. Workspace and collection deletion require manage access and remove the entire live resource tree independently of recursive; collection managers may delete the entire collection regardless of descendant ACLs. Tombstones, revisions and audit history are retained. Read projections and live relationships are removed, and each deleted item emits item.deleted. Workflows bound to a deleted workspace or collection are disabled and deleted.
+	 * Deletes an item or empty folder with write access and the current If-Match. For a folder, recursive=true deletes the folder and all live descendants atomically, requiring write access to every descendant. Without recursive=true, any live child, including a hidden item or nested folder, returns 409 with code folder_not_empty. Deleted children do not prevent ordinary deletion. Permission failures and stale versions leave the entire tree unchanged. Workspace and collection deletion require manage access and list.manage and remove the entire live resource tree independently of recursive; collection managers may delete the entire collection regardless of descendant ACLs. Tombstones, revisions and audit history are retained. Read projections and live relationships are removed, and each deleted item emits item.deleted. Workflows bound to a deleted workspace or collection are disabled and deleted.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @throws {Problem} error when the service returns a 412 status code
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
@@ -9795,7 +9795,7 @@ export interface ResourcesItemRequestBuilder extends BaseRequestBuilder<Resource
 	 */
 	get(requestConfiguration?: RequestConfiguration<ResourcesItemRequestBuilderGetQueryParameters> | undefined): Promise<ResourceAccess | undefined>;
 	/**
-	 * Workspace and collection metadata changes require manage access. Items and folders require write access. If-Match is required.
+	 * Workspace and collection metadata changes require manage access and list.manage. Items and folders require write access. If-Match is required.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<ResourceAccess>}
@@ -9804,7 +9804,7 @@ export interface ResourcesItemRequestBuilder extends BaseRequestBuilder<Resource
 	 */
 	patch(body: UpdateResource, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<ResourceAccess | undefined>;
 	/**
-	 * Deletes an item or empty folder with write access and the current If-Match. For a folder, recursive=true deletes the folder and all live descendants atomically, requiring write access to every descendant. Without recursive=true, any live child, including a hidden item or nested folder, returns 409 with code folder_not_empty. Deleted children do not prevent ordinary deletion. Permission failures and stale versions leave the entire tree unchanged. Workspace and collection deletion require manage access and remove the entire live resource tree independently of recursive; collection managers may delete the entire collection regardless of descendant ACLs. Tombstones, revisions and audit history are retained. Read projections and live relationships are removed, and each deleted item emits item.deleted. Workflows bound to a deleted workspace or collection are disabled and deleted.
+	 * Deletes an item or empty folder with write access and the current If-Match. For a folder, recursive=true deletes the folder and all live descendants atomically, requiring write access to every descendant. Without recursive=true, any live child, including a hidden item or nested folder, returns 409 with code folder_not_empty. Deleted children do not prevent ordinary deletion. Permission failures and stale versions leave the entire tree unchanged. Workspace and collection deletion require manage access and list.manage and remove the entire live resource tree independently of recursive; collection managers may delete the entire collection regardless of descendant ACLs. Tombstones, revisions and audit history are retained. Read projections and live relationships are removed, and each deleted item emits item.deleted. Workflows bound to a deleted workspace or collection are disabled and deleted.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -9816,7 +9816,7 @@ export interface ResourcesItemRequestBuilder extends BaseRequestBuilder<Resource
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<ResourcesItemRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 	/**
-	 * Workspace and collection metadata changes require manage access. Items and folders require write access. If-Match is required.
+	 * Workspace and collection metadata changes require manage access and list.manage. Items and folders require write access. If-Match is required.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -9824,7 +9824,7 @@ export interface ResourcesItemRequestBuilder extends BaseRequestBuilder<Resource
 	toPatchRequestInformation(body: UpdateResource, requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 }
 /**
- * Deletes an item or empty folder with write access and the current If-Match. For a folder, recursive=true deletes the folder and all live descendants atomically, requiring write access to every descendant. Without recursive=true, any live child, including a hidden item or nested folder, returns 409 with code folder_not_empty. Deleted children do not prevent ordinary deletion. Permission failures and stale versions leave the entire tree unchanged. Workspace and collection deletion require manage access and remove the entire live resource tree independently of recursive; collection managers may delete the entire collection regardless of descendant ACLs. Tombstones, revisions and audit history are retained. Read projections and live relationships are removed, and each deleted item emits item.deleted. Workflows bound to a deleted workspace or collection are disabled and deleted.
+ * Deletes an item or empty folder with write access and the current If-Match. For a folder, recursive=true deletes the folder and all live descendants atomically, requiring write access to every descendant. Without recursive=true, any live child, including a hidden item or nested folder, returns 409 with code folder_not_empty. Deleted children do not prevent ordinary deletion. Permission failures and stale versions leave the entire tree unchanged. Workspace and collection deletion require manage access and list.manage and remove the entire live resource tree independently of recursive; collection managers may delete the entire collection regardless of descendant ACLs. Tombstones, revisions and audit history are retained. Read projections and live relationships are removed, and each deleted item emits item.deleted. Workflows bound to a deleted workspace or collection are disabled and deleted.
  */
 export interface ResourcesItemRequestBuilderDeleteQueryParameters {
 	/**
@@ -10462,7 +10462,7 @@ export interface SmartFoldersItemRequestBuilder extends BaseRequestBuilder<Smart
 	 */
 	get query(): QueryRequestBuilder$1;
 	/**
-	 *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: list.write; shared smart folders also need list.manage and workspace manage access. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @throws {Problem} error when the service returns a 412 status code
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
@@ -10476,7 +10476,7 @@ export interface SmartFoldersItemRequestBuilder extends BaseRequestBuilder<Smart
 	 */
 	get(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<SmartFolder | undefined>;
 	/**
-	 *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: list.write; shared smart folders also need list.manage and workspace manage access. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Personal folders are owner-only and may span all readable workspaces. Shared folders require workspace_id and workspace manage permission. Ownership and workspace are immutable on PUT; PUT replaces the definition. At most 100 shared folders per workspace. Shared mutations advance the workspace version; personal mutations do not.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<SmartFolder>}
@@ -10485,7 +10485,7 @@ export interface SmartFoldersItemRequestBuilder extends BaseRequestBuilder<Smart
 	 */
 	put(body: SmartFolderInput, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<SmartFolder | undefined>;
 	/**
-	 *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: list.write; shared smart folders also need list.manage and workspace manage access. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -10497,7 +10497,7 @@ export interface SmartFoldersItemRequestBuilder extends BaseRequestBuilder<Smart
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 	/**
-	 *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: list.write; shared smart folders also need list.manage and workspace manage access. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Personal folders are owner-only and may span all readable workspaces. Shared folders require workspace_id and workspace manage permission. Ownership and workspace are immutable on PUT; PUT replaces the definition. At most 100 shared folders per workspace. Shared mutations advance the workspace version; personal mutations do not.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -10543,7 +10543,7 @@ export interface SmartFoldersRequestBuilder extends BaseRequestBuilder<SmartFold
 	 */
 	get(requestConfiguration?: RequestConfiguration<SmartFoldersRequestBuilderGetQueryParameters> | undefined): Promise<SmartFolderPage | undefined>;
 	/**
-	 *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: list.write; shared smart folders also need list.manage and workspace manage access. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Personal folders are owner-only and may span all readable workspaces. Shared folders require workspace_id and workspace manage permission. Ownership and workspace are immutable on PUT; PUT replaces the definition. At most 100 shared folders per workspace. Shared mutations advance the workspace version; personal mutations do not.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<SmartFolder>}
@@ -10557,7 +10557,7 @@ export interface SmartFoldersRequestBuilder extends BaseRequestBuilder<SmartFold
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<SmartFoldersRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 	/**
-	 *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: list.write; shared smart folders also need list.manage and workspace manage access. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Personal folders are owner-only and may span all readable workspaces. Shared folders require workspace_id and workspace manage permission. Ownership and workspace are immutable on PUT; PUT replaces the definition. At most 100 shared folders per workspace. Shared mutations advance the workspace version; personal mutations do not.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -11598,7 +11598,7 @@ export interface ViewsItemRequestBuilder extends BaseRequestBuilder<ViewsItemReq
 	 */
 	get query(): QueryRequestBuilder$2;
 	/**
-	 *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
+	 *  Requires collection manage access. Required module scopes: list.manage. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @throws {Problem} error when the service returns a 412 status code
 	 */
@@ -11619,7 +11619,7 @@ export interface ViewsItemRequestBuilder extends BaseRequestBuilder<ViewsItemReq
 	 */
 	get(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<ListView | undefined>;
 	/**
-	 *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
+	 *  Requires collection manage access. Required module scopes: list.manage. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Collection-managed saved view. Columns use field keys and $id/$name/$keywords; empty columns default to $name. PUT replaces the definition. Layout is a client hint; a navigation view browses the terms of each of settings.fields as folders (POST /v1/views/{id}/navigation) and lists the items at the opened terms through POST /v1/views/{id}/query with selected.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<ListView>}
@@ -11637,7 +11637,7 @@ export interface ViewsItemRequestBuilder extends BaseRequestBuilder<ViewsItemReq
 	 */
 	put(body: ViewInput, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<ListView | undefined>;
 	/**
-	 *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
+	 *  Requires collection manage access. Required module scopes: list.manage. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -11649,7 +11649,7 @@ export interface ViewsItemRequestBuilder extends BaseRequestBuilder<ViewsItemReq
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 	/**
-	 *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
+	 *  Requires collection manage access. Required module scopes: list.manage. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Collection-managed saved view. Columns use field keys and $id/$name/$keywords; empty columns default to $name. PUT replaces the definition. Layout is a client hint; a navigation view browses the terms of each of settings.fields as folders (POST /v1/views/{id}/navigation) and lists the items at the opened terms through POST /v1/views/{id}/query with selected.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}

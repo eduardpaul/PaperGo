@@ -60,7 +60,7 @@ func (s *Service) integrationList(ctx context.Context, subject, id, action strin
 		return nil, err
 	}
 	if action == "manage" {
-		if err := s.RequireScope(ctx, subject, "list.write"); err != nil {
+		if err := s.RequireScope(ctx, subject, "list.manage"); err != nil {
 			return nil, err
 		}
 	}

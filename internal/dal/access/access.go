@@ -158,11 +158,16 @@ func marks(action Action) (string, []any) {
 
 // module tests the organization scope an action on content of a kind needs:
 // reading a workspace needs workspace.read and reading anything else
-// list.read; changing, publishing or managing anything, a workspace, list
-// or library included, needs list.write, so a credential without it cannot
-// change content in any way.
+// list.read; changing or publishing anything needs list.write, so a
+// credential without it cannot change content in any way; and managing
+// anything (creating, configuring, sharing and deleting workspaces, lists
+// and libraries among it) needs list.manage, so a credential that may only
+// change content leaves its places as they are.
 func (d Dialect) module(kindColumn string, p Principal, action Action) (string, []any) {
-	if action != Read && action != ReadDraft {
+	switch action {
+	case Manage:
+		return d.ScopeExpression(p, `'list.manage'`)
+	case Write, Publish:
 		return d.ScopeExpression(p, `'list.write'`)
 	}
 	return d.ScopeExpression(p, `CASE WHEN `+kindColumn+`='workspace' THEN 'workspace.read' ELSE 'list.read' END`)
