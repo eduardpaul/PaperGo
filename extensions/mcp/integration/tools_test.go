@@ -68,7 +68,8 @@ func TestToolsAndProtocol(t *testing.T) {
 		names = append(names, tool.Name)
 		readOnly := tool.Annotations.ReadOnlyHint
 		write := tool.Name == "create_item" || tool.Name == "update_item"
-		if readOnly == write || *tool.Annotations.DestructiveHint || *tool.Annotations.OpenWorldHint || tool.Annotations.IdempotentHint == write {
+		// Updates overwrite and clear values; creates only add.
+		if readOnly == write || *tool.Annotations.DestructiveHint != (tool.Name == "update_item") || *tool.Annotations.OpenWorldHint || tool.Annotations.IdempotentHint == write {
 			t.Errorf("%s annotations %+v", tool.Name, tool.Annotations)
 		}
 		schema, _ := json.Marshal(tool.InputSchema)

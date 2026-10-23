@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"papergo/extensions/mcp/server"
 	"papergo/internal/dal/blobs"
 	"papergo/internal/dms"
 )
@@ -215,16 +216,18 @@ func TestArchiveAndText(t *testing.T) {
 			p := p.(map[string]any)
 			got = append(got, fmt.Sprintf("%v:%d:%v", p["page"], len(str(p["text"])), p["partial"] == true))
 		}
-		return strings.Join(got, " "), out["next_page"]
+		return strings.Join(got, " "), fmt.Sprintf("%v+%v", out["next_page"], out["next_offset"])
 	}
-	if got, next := read(`"max_chars": 1000`); got != "1:800:false" || fmt.Sprint(next) != "2" {
-		t.Fatalf("first %s %v", got, next)
-	}
-	if got, next := read(`"page": 2, "max_chars": 1600`); got != "2:800:false 3:800:false" || fmt.Sprint(next) != "4" {
-		t.Fatalf("second %s %v", got, next)
-	}
-	if got, next := read(`"page": 4, "max_chars": 1000`); got != "4:1000:true" || next != nil {
-		t.Fatalf("partial %s %v", got, next)
+	// Reads fill max_chars and resume where they stopped, inside a page too.
+	for _, c := range []struct{ args, want, next string }{
+		{`"max_chars": 1000`, "1:800:false 2:200:true", "2+200"},
+		{`"page": 2, "offset": 200, "max_chars": 1600`, "2:600:true 3:800:false 4:200:true", "4+200"},
+		{`"page": 4, "offset": 200, "max_chars": 1000`, "4:1000:true", "4+1200"},
+		{`"page": 4, "offset": 1200, "max_chars": 1000`, "4:300:true", "<nil>+0"},
+	} {
+		if got, next := read(c.args); got != c.want || next != c.next {
+			t.Fatalf("%s: %s next %s, want %s next %s", c.args, got, next, c.want, c.next)
+		}
 	}
 	fails(t, s, "get_item_text", `{"item_id": "`+doc+`", "max_chars": 10}`, "invalid_arguments")
 }
@@ -239,5 +242,37 @@ func saveText(t *testing.T, e *env, sha string, pages []byte) {
 	if _, err := e.svc.DAL.Blobs().SaveText(context.Background(), blobs.TextInput{SHA256: sha, Settings: "test", ObjectKey: obj.Key, ObjectSize: obj.Size,
 		ObjectSHA256: obj.SHA256, Pages: 4, Chars: 3900, Language: "english", Extractor: "test"}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// A document whose whole text exceeds the server's answer limit is still
+// read in parts: PaperGo cuts the range, so only the part asked for
+// travels.
+func TestLargeTextIsReadInParts(t *testing.T) {
+	e := setup(t, options{configure: func(c *server.Config) { c.MaxBackendBytes = 64 << 10 }})
+	f := seed(t, e)
+	s := e.connect(t, aliceToken)
+	doc := create(t, e.svc, "alice", f.library, dms.CreateResource{Kind: "item", Name: "Archive scan"})
+	req, _ := http.NewRequestWithContext(t.Context(), "PUT", e.api.URL+"/v1/items/"+doc+"/content", strings.NewReader("%PDF-scan"))
+	req.Header.Set("Authorization", "Bearer "+aliceToken)
+	req.Header.Set("Content-Type", "application/pdf")
+	req.Header.Set("X-Filename", "scan.pdf")
+	req.Header.Set("If-Match", `"1"`)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var blob struct {
+		Sha256 string `json:"sha256"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&blob); err != nil || res.StatusCode != 201 {
+		t.Fatal(res.StatusCode, err)
+	}
+	res.Body.Close()
+	stored, _ := json.Marshal(map[string]any{"pages": []map[string]any{{"page": 1, "text": strings.Repeat("a", 200<<10)}}})
+	saveText(t, e, blob.Sha256, stored)
+	out := ok(t, s, "get_item_text", `{"item_id": "`+doc+`", "max_chars": 1000}`)
+	if page := out["pages"].([]any)[0].(map[string]any); len(str(page["text"])) != 1000 || fmt.Sprint(out["next_offset"]) != "1000" {
+		t.Fatalf("part %v next %v+%v", len(str(page["text"])), out["next_page"], out["next_offset"])
 	}
 }

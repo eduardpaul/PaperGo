@@ -303,6 +303,8 @@ func updateItem(l links) mcp.Tool {
 	return mcp.Tool{
 		Name:  "update_item",
 		Title: "Update an item",
+		// It overwrites the values it names, clears nulls and replaces every
+		// keyword: earlier values are gone from the current item.
 		Description: "Changes an item's or folder's name, custom values or keywords; give at least one. values changes only the fields it names, and null clears a field. " +
 			"keywords replaces every keyword. version is the entry's version from get_item, query_items or an earlier update; when the entry changed since, " +
 			"the update fails with version_conflict and changes nothing: read it again and decide whether to apply the change to the new version. " +
@@ -315,7 +317,7 @@ func updateItem(l links) mcp.Tool {
 			property("keywords", keywordsProperty)),
 		OutputSchema: json.RawMessage(itemSchema),
 		Scopes:       []string{scopeListRead, scopeListWrite},
-		Annotations:  mcp.Annotations{},
+		Annotations:  mcp.Annotations{Destructive: true},
 		Call: func(ctx context.Context, c mcp.Caller, args json.RawMessage) (json.RawMessage, error) {
 			var in struct {
 				ItemID   string          `json:"item_id"`

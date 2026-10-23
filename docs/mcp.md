@@ -148,7 +148,7 @@ Treat the token as a password: the client stores it, and it acts as you.
 | `update_item` | Changes an item's or folder's name, values or keywords. |
 | `search` | Searches items across workspaces by relevance. Listed only while the deployment runs [search](search.md). |
 
-Every tool declares its input and output JSON Schemas. Arguments are checked against them before anything runs: unknown properties, wrong types, malformed IDs and out-of-range limits fail as `invalid_arguments`. Read tools are marked read-only; `create_item` and `update_item` are marked neither read-only nor idempotent. These hints are advisory; the scopes and the API decide. There is no tool to delete, move, archive or publish.
+Every tool declares its input and output JSON Schemas. Arguments are checked against them before anything runs: unknown properties, wrong types, malformed IDs and out-of-range limits fail as `invalid_arguments`. Read tools are marked read-only; `create_item` and `update_item` are marked neither read-only nor idempotent, and `update_item`, which overwrites values, clears fields and replaces keywords, is marked destructive. These hints are advisory; the scopes and the API decide. There is no tool to delete, move, archive or publish.
 
 ### Results
 
@@ -183,7 +183,7 @@ Filters and sorts on custom fields need the field indexed; a query that names an
 
 ### Documents and terms
 
-`get_item_text` returns the text PaperGo read from a document's current file: pages from `page` (default 1) up to `max_chars` characters (default 20,000, at most 100,000), and `next_page` to continue from. A page longer than `max_chars` is cut and marked `partial`. A file whose text has not been read yet, because no [workflow](workflows.md) with `document.read_text` ran for it, fails as `not_found`.
+`get_item_text` returns the text PaperGo read from a document's current file: up to `max_chars` characters (default 20,000, at most 100,000) from `page` (default 1), starting `offset` characters into it, and `next_page` and `next_offset` to continue from, so any file is read in parts whatever its size; PaperGo cuts the range, so only that part travels. Pages cut short are marked `partial`. A file whose text has not been read yet, because no [workflow](workflows.md) with `document.read_text` ran for it, fails as `not_found`.
 
 `list_terms` lists terms so assistants use existing ones instead of guessing labels: for a term or keywords field (`collection_id` and `field_key`, `$keywords` for the keywords every entry has) or a `term_set_id`. Without `search` or `parent_id` it lists top-level terms; `parent_id` lists a term's children and `search` matches names, labels and synonyms.
 

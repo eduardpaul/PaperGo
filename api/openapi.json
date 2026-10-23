@@ -17037,7 +17037,7 @@
         ],
         "operationId": "itemText",
         "summary": "Text read from an item's file",
-        "description": "The page texts a workflow with document.read_text read from the file version the caller may read: the current one, or blob_id. 404 text_not_read before it was read.",
+        "description": "The page texts a workflow with document.read_text read from the file version the caller may read: the current one, or blob_id. 404 text_not_read before it was read. page, offset and max_chars read part of the text: pages from page, starting offset characters (Unicode code points) into it, up to max_chars characters; next is where the following part starts, and null after the end. Without them the whole text is returned.",
         "x-required-scopes": [
           "document.read"
         ],
@@ -17057,6 +17057,39 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "description": "The first page to return."
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            },
+            "description": "Characters to skip into the first page."
+          },
+          {
+            "name": "max_chars",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            },
+            "description": "At most this many characters; 0 returns everything from the start position."
           }
         ],
         "responses": {
@@ -28145,6 +28178,10 @@
                 },
                 "ocr": {
                   "type": "boolean"
+                },
+                "partial": {
+                  "type": "boolean",
+                  "description": "A ranged read returned only part of the page."
                 }
               },
               "required": [
@@ -28176,6 +28213,26 @@
           "read_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "next": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "page": {
+                "type": "integer"
+              },
+              "offset": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "page",
+              "offset"
+            ],
+            "additionalProperties": false,
+            "description": "Where the next part of a ranged read starts; null after the end."
           }
         },
         "required": [
@@ -28189,7 +28246,8 @@
           "ocr_pages",
           "skipped_pages",
           "truncated",
-          "read_at"
+          "read_at",
+          "next"
         ],
         "additionalProperties": false
       },

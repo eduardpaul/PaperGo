@@ -2,7 +2,7 @@ package builtin
 
 import "testing"
 
-func TestMarkAndCut(t *testing.T) {
+func TestMark(t *testing.T) {
 	for _, c := range []struct {
 		snippet string
 		ranges  [][2]int
@@ -16,11 +16,5 @@ func TestMarkAndCut(t *testing.T) {
 		if got := mark(c.snippet, c.ranges); got != c.want {
 			t.Errorf("mark(%q, %v) = %q, want %q", c.snippet, c.ranges, got, c.want)
 		}
-	}
-	if got := cut("één", 2); got != "éé" {
-		t.Fatalf("cut %q", got)
-	}
-	if got := cut("ab", 5); got != "ab" {
-		t.Fatalf("cut %q", got)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"papergo/internal/dal/blobs"
 	"strings"
@@ -103,5 +104,39 @@ func TestItemTextAPI(t *testing.T) {
 	}
 	if _, err = store.Open(ctx, row.ObjectKey); err == nil {
 		t.Fatal("the text object is kept")
+	}
+}
+
+// Ranged reads return text within a character budget and say where to
+// resume, inside a page when one is longer than the budget.
+func TestTextRange(t *testing.T) {
+	pages := []textPage{{Page: 1, Text: "ééééé"}, {Page: 2, Text: "abc"}, {Page: 3, Text: "xyz"}}
+	render := func(out []textPage, next *textPosition) string {
+		var b strings.Builder
+		for _, p := range out {
+			fmt.Fprintf(&b, "%d:%s:%v ", p.Page, p.Text, p.Partial)
+		}
+		if next != nil {
+			fmt.Fprintf(&b, "next %d+%d", next.Page, next.Offset)
+		}
+		return strings.TrimSpace(b.String())
+	}
+	for _, c := range []struct {
+		from  textPosition
+		limit int
+		want  string
+	}{
+		{textPosition{Page: 1}, 0, "1:ééééé:false 2:abc:false 3:xyz:false"},
+		{textPosition{Page: 1}, 2, "1:éé:true next 1+2"},
+		{textPosition{Page: 1, Offset: 2}, 2, "1:éé:true next 1+4"},
+		{textPosition{Page: 1, Offset: 4}, 2, "1:é:true 2:a:true next 2+1"},
+		{textPosition{Page: 1}, 8, "1:ééééé:false 2:abc:false next 3+0"},
+		{textPosition{Page: 2, Offset: 1}, 0, "2:bc:true 3:xyz:false"},
+		{textPosition{Page: 3}, 3, "3:xyz:false"},
+		{textPosition{Page: 9}, 3, ""},
+	} {
+		if got := render(textRange(pages, c.from, c.limit)); got != c.want {
+			t.Errorf("from %+v limit %d: %q, want %q", c.from, c.limit, got, c.want)
+		}
 	}
 }
