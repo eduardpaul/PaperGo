@@ -1000,6 +1000,16 @@ CREATE INDEX notification_run_id ON notifications(run_id);
 CREATE INDEX notification_comment_id ON notifications(comment_id);
 CREATE UNIQUE INDEX notification_recipient_coalesce ON notifications(recipient, coalesce_key) WHERE coalesce_key IS NOT NULL AND read_at IS NULL;
 
+-- The comments a notification tells of: the one it names, or every reply
+-- folded into it, so deleting a reply takes it out of each notification
+-- that counts it.
+CREATE TABLE notification_comments (
+    notification_id TEXT NOT NULL REFERENCES notifications(id) ON DELETE CASCADE,
+    comment_id TEXT NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
+    PRIMARY KEY (notification_id, comment_id)
+);
+CREATE INDEX notification_comment_comment ON notification_comments(comment_id);
+
 CREATE TABLE workflow_steps (
     run_id TEXT NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE,
     seq INTEGER NOT NULL CHECK (seq >= 0),

@@ -601,11 +601,7 @@ func (s *Service) Edit(ctx context.Context, subject, id string, version int64, b
 		if err = t.Record(ctx, subject, "comment.edit", a.item, map[string]any{"comment_id": c.ID, "previous": previous}); err != nil {
 			return err
 		}
-		text, err := plain(ctx, t, c.Body)
-		if err != nil {
-			return err
-		}
-		if err = t.DAL.Notifications().Retext(ctx, c.ID, notify.Clip(text, notifications.MaxBody)); err != nil {
+		if err = s.retext(ctx, t, a, c); err != nil {
 			return err
 		}
 		if err = s.tell(ctx, t, a, c, added, false); err != nil {
@@ -635,7 +631,7 @@ func (s *Service) Delete(ctx context.Context, subject, id string, version int64)
 		if _, err = t.DAL.Comments().Delete(ctx, id, version, subject); err != nil {
 			return commentError(err)
 		}
-		if err = t.DAL.Notifications().Withdraw(ctx, c.ID, c.ThreadID); err != nil {
+		if err = s.withdraw(ctx, t, a, c, subject); err != nil {
 			return err
 		}
 		return t.Record(ctx, subject, "comment.delete", a.item, map[string]any{"comment_id": c.ID, "author": c.Author, "body": c.Body})
@@ -694,10 +690,6 @@ func (s *Service) tell(ctx context.Context, t *dms.Service, a access, c comments
 	if len(mentioned) == 0 && !reply {
 		return nil
 	}
-	n, err := names(ctx, t, append([]string{c.Author}, mentioned...))
-	if err != nil {
-		return err
-	}
 	place, err := s.itemName(ctx, t, a, c.Author)
 	if err != nil {
 		return err
@@ -706,18 +698,14 @@ func (s *Service) tell(ctx context.Context, t *dms.Service, a access, c comments
 	allowed := func(ctx context.Context, t *dms.Service, subject string) (bool, error) {
 		return reads(ctx, t, subject, c.ItemID, a.mode.Mode)
 	}
-	body, err := plain(ctx, t, c.Body)
-	if err != nil {
-		return err
-	}
-	base := notify.Message{WorkspaceID: a.item.WorkspaceID, Body: notify.Clip(body, notifications.MaxBody), ItemID: c.ItemID, CommentID: c.ID,
-		Source: notifications.SourceUser, Sender: c.Author, WorkflowID: c.WorkflowID, Actor: c.Author, Allowed: allowed}
-	if c.Source == commentstore.SourceWorkflow {
-		base.Source = notifications.SourceWorkflow
-	}
+	base := notify.Message{WorkspaceID: a.item.WorkspaceID, ItemID: c.ItemID, CommentID: c.ID,
+		Source: sourceOf(c), Sender: c.Author, WorkflowID: c.WorkflowID, Actor: c.Author, Allowed: allowed}
 	if len(mentioned) > 0 {
 		m := base
-		m.Type, m.Title = notifications.TypeCommentMentioned, notify.Clip(n[c.Author]+" mentioned you on "+place, notifications.MaxTitle)
+		m.Type = notifications.TypeCommentMentioned
+		if m.Title, m.Body, err = notice(ctx, t, c, place, m.Type); err != nil {
+			return err
+		}
 		m.DedupKey = "comment:" + c.ID + ":mention"
 		if _, err = notify.Send(ctx, t, m, mentioned); err != nil {
 			return err
@@ -742,10 +730,138 @@ func (s *Service) tell(ctx context.Context, t *dms.Service, a access, c comments
 	}
 	participants = slices.DeleteFunc(participants, func(p string) bool { return slices.Contains(mentioned, p) })
 	m := base
-	m.Type, m.Title = notifications.TypeCommentReplied, notify.Clip(n[c.Author]+" replied on "+place, notifications.MaxTitle)
+	m.Type = notifications.TypeCommentReplied
+	if m.Title, m.Body, err = notice(ctx, t, c, place, m.Type); err != nil {
+		return err
+	}
 	m.CoalesceKey = "comment:thread:" + c.ThreadID
 	_, err = notify.Send(ctx, t, m, participants)
 	return err
+}
+
+// notice is what a notification of typ about c says: who wrote it where,
+// and its text with mentions as names.
+func notice(ctx context.Context, t *dms.Service, c commentstore.Comment, place string, typ notifications.Type) (title, body string, err error) {
+	n, err := names(ctx, t, []string{c.Author})
+	if err != nil {
+		return "", "", err
+	}
+	verb := " replied on "
+	if typ == notifications.TypeCommentMentioned {
+		verb = " mentioned you on "
+	}
+	if body, err = plain(ctx, t, c.Body); err != nil {
+		return "", "", err
+	}
+	return notify.Clip(n[c.Author]+verb+place, notifications.MaxTitle), notify.Clip(body, notifications.MaxBody), nil
+}
+
+func sourceOf(c commentstore.Comment) notifications.Source {
+	if c.Source == commentstore.SourceWorkflow {
+		return notifications.SourceWorkflow
+	}
+	return notifications.SourceUser
+}
+
+// retext gives the notifications that show c its edited text. Someone who
+// may no longer read the discussion gets no text instead: an edit tells
+// nobody what they may not read now.
+func (s *Service) retext(ctx context.Context, t *dms.Service, a access, c commentstore.Comment) error {
+	rows, err := t.DAL.Notifications().ForComment(ctx, c.ID)
+	if err != nil || len(rows) == 0 {
+		return err
+	}
+	text, err := plain(ctx, t, c.Body)
+	if err != nil {
+		return err
+	}
+	as := identity.WithoutAccessToken(ctx)
+	for _, n := range rows {
+		// A fold shows its latest reply's text, whichever of its replies
+		// changed.
+		if n.CommentID != c.ID {
+			continue
+		}
+		ok, err := reads(as, t, n.Recipient, c.ItemID, a.mode.Mode)
+		if err != nil {
+			return err
+		}
+		n.Body = ""
+		if ok {
+			n.Body = notify.Clip(text, notifications.MaxBody)
+		}
+		if err = t.DAL.Notifications().Revise(ctx, n, ""); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// withdraw takes deleted c out of the notifications that tell of it. One
+// that tells of nothing else is deleted. One that folds other replies counts
+// only those, and when it showed c, it shows the latest of them instead, as
+// if c had never been written; its text only to people who may still read
+// the discussion. subject deleted c.
+func (s *Service) withdraw(ctx context.Context, t *dms.Service, a access, c commentstore.Comment, subject string) error {
+	rows, err := t.DAL.Notifications().ForComment(ctx, c.ID)
+	if err != nil || len(rows) == 0 {
+		return err
+	}
+	var replies []commentstore.Comment
+	place := ""
+	as := identity.WithoutAccessToken(ctx)
+	for _, n := range rows {
+		told, err := t.DAL.Notifications().Comments(ctx, n.ID)
+		if err != nil {
+			return err
+		}
+		rest := slices.DeleteFunc(told, func(id string) bool { return id == c.ID })
+		if len(rest) == 0 {
+			if err = t.DAL.Notifications().Delete(ctx, n.Recipient, n.ID); err != nil {
+				return err
+			}
+			continue
+		}
+		n.Count = int64(len(rest))
+		if n.CommentID == c.ID {
+			if replies == nil {
+				if replies, err = t.DAL.Comments().Replies(ctx, []string{c.ThreadID}); err != nil {
+					return err
+				}
+				if place, err = s.itemName(ctx, t, a, subject); err != nil {
+					return err
+				}
+			}
+			// Replies come oldest first: the fold shows the latest left.
+			var latest *commentstore.Comment
+			for i := range replies {
+				if slices.Contains(rest, replies[i].ID) && replies[i].DeletedAt == nil {
+					latest = &replies[i]
+				}
+			}
+			if latest == nil {
+				if err = t.DAL.Notifications().Delete(ctx, n.Recipient, n.ID); err != nil {
+					return err
+				}
+				continue
+			}
+			if n.Title, n.Body, err = notice(ctx, t, *latest, place, n.Type); err != nil {
+				return err
+			}
+			ok, err := reads(as, t, n.Recipient, c.ItemID, a.mode.Mode)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				n.Body = ""
+			}
+			n.CommentID, n.Sender, n.Source, n.WorkflowID = latest.ID, latest.Author, sourceOf(*latest), latest.WorkflowID
+		}
+		if err = t.DAL.Notifications().Revise(ctx, n, c.ID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // itemName is the item's name that everyone told about its discussion can

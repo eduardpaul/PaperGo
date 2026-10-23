@@ -60,6 +60,7 @@ type NotificationsQuery = *psql.ViewQuery[*Notification, NotificationSlice]
 
 // notificationR is where relationships are stored.
 type notificationR struct {
+	Comments              CommentSlice  // notification_comments.notification_comments_comment_id_fkeynotification_comments.notification_comments_notification_id_fkey
 	Comment               *Comment      // notifications.notifications_comment_id_fkey
 	ItemResource          *Resource     // notifications.notifications_item_id_fkey
 	RecipientIdentityUser *IdentityUser // notifications.notifications_recipient_fkey
@@ -75,6 +76,7 @@ type notificationR struct {
 
 // notificationRLoaded tracks which relationships on Notification have been loaded.
 type notificationRLoaded struct {
+	Comments              bool // notification_comments.notification_comments_comment_id_fkeynotification_comments.notification_comments_notification_id_fkey
 	Comment               bool // notifications.notifications_comment_id_fkey
 	ItemResource          bool // notifications.notifications_item_id_fkey
 	RecipientIdentityUser bool // notifications.notifications_recipient_fkey
@@ -875,6 +877,34 @@ func (o NotificationSlice) ReloadAll(ctx context.Context, exec bob.Executor) err
 	return nil
 }
 
+// Comments starts a query for related objects on comments
+func (o *Notification) Comments(mods ...bob.Mod[*dialect.SelectQuery]) CommentsQuery {
+	return Comments.Query(append(mods,
+		sm.InnerJoin(NotificationComments.NameAsExpr()).On(
+			Comments.Columns.ID.EQ(NotificationComments.Columns.CommentID)),
+		sm.Where(NotificationComments.Columns.NotificationID.EQ(psql.Arg(o.ID))),
+	)...)
+}
+
+func (os NotificationSlice) Comments(mods ...bob.Mod[*dialect.SelectQuery]) CommentsQuery {
+	pkID := make(pgtypes.Array[string], 0, len(os))
+
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		pkID = append(pkID, o.ID)
+	}
+	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkID), "text[]"))
+
+	return Comments.Query(append(mods,
+		sm.InnerJoin(NotificationComments.NameAsExpr()).On(
+			Comments.Columns.ID.EQ(NotificationComments.Columns.CommentID),
+		),
+		sm.Where(NotificationComments.Columns.NotificationID.EQ(PKArgExpr)),
+	)...)
+}
+
 // Comment starts a query for related objects on comments
 func (o *Notification) Comment(mods ...bob.Mod[*dialect.SelectQuery]) CommentsQuery {
 	return Comments.Query(append(mods,
@@ -1083,6 +1113,64 @@ func (os NotificationSlice) WorkspaceResource(mods ...bob.Mod[*dialect.SelectQue
 	return Resources.Query(append(mods,
 		sm.Where(Resources.Columns.ID.EQ(PKArgExpr)),
 	)...)
+}
+
+func attachNotificationComments0(ctx context.Context, exec bob.Executor, count int, notification0 *Notification, comments2 CommentSlice) (NotificationCommentSlice, error) {
+	setters := make([]*NotificationCommentSetter, count)
+	for i := range count {
+		setters[i] = &NotificationCommentSetter{
+			NotificationID: omit.From(notification0.ID),
+			CommentID:      omit.From(comments2[i].ID),
+		}
+	}
+
+	notificationComments1, err := NotificationComments.Insert(bob.ToMods(setters...)).All(ctx, exec)
+	if err != nil {
+		return nil, fmt.Errorf("attachNotificationComments0: %w", err)
+	}
+
+	return notificationComments1, nil
+}
+
+func (notification0 *Notification) InsertComments(ctx context.Context, exec bob.Executor, related ...*CommentSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	inserted, err := Comments.Insert(bob.ToMods(related...)).All(ctx, exec)
+	if err != nil {
+		return fmt.Errorf("inserting related objects: %w", err)
+	}
+	comments2 := CommentSlice(inserted)
+
+	_, err = attachNotificationComments0(ctx, exec, len(related), notification0, comments2)
+	if err != nil {
+		return err
+	}
+
+	notification0.R.Comments = append(notification0.R.Comments, comments2...)
+
+	return nil
+}
+
+func (notification0 *Notification) AttachComments(ctx context.Context, exec bob.Executor, related ...*Comment) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	comments2 := CommentSlice(related)
+
+	_, err = attachNotificationComments0(ctx, exec, len(related), notification0, comments2)
+	if err != nil {
+		return err
+	}
+
+	notification0.R.Comments = append(notification0.R.Comments, comments2...)
+
+	return nil
 }
 
 func attachNotificationComment0(ctx context.Context, exec bob.Executor, count int, notification0 *Notification, comment1 *Comment) (*Notification, error) {
@@ -1559,6 +1647,23 @@ func (w notificationWhereR[Q]) HasWorkspaceResource(filters ...bob.Mod[*dialect.
 		sm.Columns(psql.Raw("1")),
 		sm.From(Resources.NameExpr()),
 		sm.Where(Resources.Columns.ID.EQ(w.cols.WorkspaceID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: psql.Exists(q)}
+}
+
+// HasComments filters parents that have a matching Comments (a
+// many-to-many relationship) using a correlated EXISTS subquery instead of
+// INNER JOINs, so the parent rows are not multiplied. The optional filters are
+// applied to the subquery (i.e. to Comments).
+func (w notificationWhereR[Q]) HasComments(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := psql.Select(
+		sm.Columns(psql.Raw("1")),
+		sm.From(NotificationComments.NameExpr()),
+		sm.InnerJoin(Comments.NameExpr()).On(
+			Comments.Columns.ID.EQ(NotificationComments.Columns.CommentID),
+		),
+		sm.Where(NotificationComments.Columns.NotificationID.EQ(w.cols.ID)),
 	)
 	q.Apply(filters...)
 	return mods.Where[Q]{E: psql.Exists(q)}

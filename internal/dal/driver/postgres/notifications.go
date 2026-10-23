@@ -133,9 +133,44 @@ func (q Queries) MarkAllRead(ctx context.Context, recipient string, before, at t
 	return n, dberr.Translate(err)
 }
 
-// CommentNotifications returns the notifications that show a comment.
+// LinkNotificationComment records that a notification tells of a comment.
+func (q Queries) LinkNotificationComment(ctx context.Context, notificationID, commentID string) error {
+	_, err := models.NotificationComments.Insert(&models.NotificationCommentSetter{
+		NotificationID: omit.From(notificationID), CommentID: omit.From(commentID),
+	}, im.OnConflict().DoNothing()).Exec(ctx, q.exec)
+	return dberr.Translate(err)
+}
+
+func (q Queries) UnlinkNotificationComment(ctx context.Context, notificationID, commentID string) error {
+	w := models.DeleteWhere.NotificationComments
+	_, err := models.NotificationComments.Delete(w.NotificationID.EQ(notificationID), w.CommentID.EQ(commentID)).Exec(ctx, q.exec)
+	return dberr.Translate(err)
+}
+
+// NotificationComments returns the comments a notification tells of.
+func (q Queries) NotificationComments(ctx context.Context, notificationID string) ([]string, error) {
+	rows, err := models.NotificationComments.Query(models.SelectWhere.NotificationComments.NotificationID.EQ(notificationID)).All(ctx, q.exec)
+	if err != nil {
+		return nil, dberr.Translate(err)
+	}
+	out := make([]string, len(rows))
+	for i, row := range rows {
+		out[i] = row.CommentID
+	}
+	return out, nil
+}
+
+// CommentNotifications returns the notifications that tell of a comment.
 func (q Queries) CommentNotifications(ctx context.Context, commentID string) ([]notifications.Notification, error) {
-	rows, err := models.Notifications.Query(models.SelectWhere.Notifications.CommentID.EQ(commentID)).All(ctx, q.exec)
+	links, err := models.NotificationComments.Query(models.SelectWhere.NotificationComments.CommentID.EQ(commentID)).All(ctx, q.exec)
+	if err != nil || len(links) == 0 {
+		return nil, dberr.Translate(err)
+	}
+	ids := make([]string, len(links))
+	for i, link := range links {
+		ids[i] = link.NotificationID
+	}
+	rows, err := models.Notifications.Query(models.SelectWhere.Notifications.ID.In(ids...)).All(ctx, q.exec)
 	if err != nil {
 		return nil, dberr.Translate(err)
 	}
@@ -146,9 +181,13 @@ func (q Queries) CommentNotifications(ctx context.Context, commentID string) ([]
 	return out, nil
 }
 
-// ReviseNotification stores n's body, comment and count.
+// ReviseNotification stores what n says and links: its title, text,
+// comment, sender, source, workflow and count.
 func (q Queries) ReviseNotification(ctx context.Context, n notifications.Notification) error {
-	set := &models.NotificationSetter{Body: omit.From(n.Body), CommentID: nullable.String(n.CommentID), Count: omit.From(n.Count)}
+	set := &models.NotificationSetter{
+		Title: omit.From(n.Title), Body: omit.From(n.Body), CommentID: nullable.String(n.CommentID),
+		Sender: omit.From(n.Sender), Source: omit.From(string(n.Source)), WorkflowID: nullable.String(n.WorkflowID), Count: omit.From(n.Count),
+	}
 	_, err := models.Notifications.Update(set.UpdateMod(), models.UpdateWhere.Notifications.ID.EQ(n.ID)).Exec(ctx, q.exec)
 	return dberr.Translate(err)
 }

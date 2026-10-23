@@ -57,12 +57,13 @@ type CommentsQuery = *psql.ViewQuery[*Comment, CommentSlice]
 
 // commentR is where relationships are stored.
 type commentR struct {
-	CommentMentions CommentMentionSlice // comment_mentions.comment_mentions_comment_id_fkey
-	ItemResource    *Resource           // comments.comments_item_id_fkey
-	Thread          *Comment            // comments.comments_thread_id_fkey
-	ReverseThreads  CommentSlice        // comments.comments_thread_id_fkey__self_join_reverse
-	Workflow        *Workflow           // comments.comments_workflow_id_fkey
-	Notifications   NotificationSlice   // notifications.notifications_comment_id_fkey
+	CommentMentions       CommentMentionSlice // comment_mentions.comment_mentions_comment_id_fkey
+	ItemResource          *Resource           // comments.comments_item_id_fkey
+	Thread                *Comment            // comments.comments_thread_id_fkey
+	ReverseThreads        CommentSlice        // comments.comments_thread_id_fkey__self_join_reverse
+	Workflow              *Workflow           // comments.comments_workflow_id_fkey
+	CountingNotifications NotificationSlice   // notification_comments.notification_comments_comment_id_fkeynotification_comments.notification_comments_notification_id_fkey
+	Notifications         NotificationSlice   // notifications.notifications_comment_id_fkey
 	// Loaded reports whether each relationship has been loaded.
 	// A relationship's bool is set by Load*, Preload, ThenLoad, factory builds,
 	// and to-one Attach/Insert operations. To-many Attach/Insert operations leave it unchanged.
@@ -71,12 +72,13 @@ type commentR struct {
 
 // commentRLoaded tracks which relationships on Comment have been loaded.
 type commentRLoaded struct {
-	CommentMentions bool // comment_mentions.comment_mentions_comment_id_fkey
-	ItemResource    bool // comments.comments_item_id_fkey
-	Thread          bool // comments.comments_thread_id_fkey
-	ReverseThreads  bool // comments.comments_thread_id_fkey__self_join_reverse
-	Workflow        bool // comments.comments_workflow_id_fkey
-	Notifications   bool // notifications.notifications_comment_id_fkey
+	CommentMentions       bool // comment_mentions.comment_mentions_comment_id_fkey
+	ItemResource          bool // comments.comments_item_id_fkey
+	Thread                bool // comments.comments_thread_id_fkey
+	ReverseThreads        bool // comments.comments_thread_id_fkey__self_join_reverse
+	Workflow              bool // comments.comments_workflow_id_fkey
+	CountingNotifications bool // notification_comments.notification_comments_comment_id_fkeynotification_comments.notification_comments_notification_id_fkey
+	Notifications         bool // notifications.notifications_comment_id_fkey
 }
 
 func buildCommentColumns(tableName string) commentColumns {
@@ -937,6 +939,34 @@ func (os CommentSlice) Workflow(mods ...bob.Mod[*dialect.SelectQuery]) Workflows
 	)...)
 }
 
+// CountingNotifications starts a query for related objects on notifications
+func (o *Comment) CountingNotifications(mods ...bob.Mod[*dialect.SelectQuery]) NotificationsQuery {
+	return Notifications.Query(append(mods,
+		sm.InnerJoin(NotificationComments.NameAsExpr()).On(
+			Notifications.Columns.ID.EQ(NotificationComments.Columns.NotificationID)),
+		sm.Where(NotificationComments.Columns.CommentID.EQ(psql.Arg(o.ID))),
+	)...)
+}
+
+func (os CommentSlice) CountingNotifications(mods ...bob.Mod[*dialect.SelectQuery]) NotificationsQuery {
+	pkID := make(pgtypes.Array[string], 0, len(os))
+
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		pkID = append(pkID, o.ID)
+	}
+	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkID), "text[]"))
+
+	return Notifications.Query(append(mods,
+		sm.InnerJoin(NotificationComments.NameAsExpr()).On(
+			Notifications.Columns.ID.EQ(NotificationComments.Columns.NotificationID),
+		),
+		sm.Where(NotificationComments.Columns.CommentID.EQ(PKArgExpr)),
+	)...)
+}
+
 // Notifications starts a query for related objects on notifications
 func (o *Comment) Notifications(mods ...bob.Mod[*dialect.SelectQuery]) NotificationsQuery {
 	return Notifications.Query(append(mods,
@@ -1220,6 +1250,64 @@ func (comment0 *Comment) AttachWorkflow(ctx context.Context, exec bob.Executor, 
 	return nil
 }
 
+func attachCommentCountingNotifications0(ctx context.Context, exec bob.Executor, count int, comment0 *Comment, notifications2 NotificationSlice) (NotificationCommentSlice, error) {
+	setters := make([]*NotificationCommentSetter, count)
+	for i := range count {
+		setters[i] = &NotificationCommentSetter{
+			CommentID:      omit.From(comment0.ID),
+			NotificationID: omit.From(notifications2[i].ID),
+		}
+	}
+
+	notificationComments1, err := NotificationComments.Insert(bob.ToMods(setters...)).All(ctx, exec)
+	if err != nil {
+		return nil, fmt.Errorf("attachCommentCountingNotifications0: %w", err)
+	}
+
+	return notificationComments1, nil
+}
+
+func (comment0 *Comment) InsertCountingNotifications(ctx context.Context, exec bob.Executor, related ...*NotificationSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	inserted, err := Notifications.Insert(bob.ToMods(related...)).All(ctx, exec)
+	if err != nil {
+		return fmt.Errorf("inserting related objects: %w", err)
+	}
+	notifications2 := NotificationSlice(inserted)
+
+	_, err = attachCommentCountingNotifications0(ctx, exec, len(related), comment0, notifications2)
+	if err != nil {
+		return err
+	}
+
+	comment0.R.CountingNotifications = append(comment0.R.CountingNotifications, notifications2...)
+
+	return nil
+}
+
+func (comment0 *Comment) AttachCountingNotifications(ctx context.Context, exec bob.Executor, related ...*Notification) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	notifications2 := NotificationSlice(related)
+
+	_, err = attachCommentCountingNotifications0(ctx, exec, len(related), comment0, notifications2)
+	if err != nil {
+		return err
+	}
+
+	comment0.R.CountingNotifications = append(comment0.R.CountingNotifications, notifications2...)
+
+	return nil
+}
+
 func insertCommentNotifications0(ctx context.Context, exec bob.Executor, notifications1 []*NotificationSetter, comment0 *Comment) (NotificationSlice, error) {
 	for i := range notifications1 {
 		notifications1[i].CommentID = omitnull.From(comment0.ID)
@@ -1419,6 +1507,23 @@ func (w commentWhereR[Q]) HasNotifications(filters ...bob.Mod[*dialect.SelectQue
 		sm.Columns(psql.Raw("1")),
 		sm.From(Notifications.NameExpr()),
 		sm.Where(Notifications.Columns.CommentID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: psql.Exists(q)}
+}
+
+// HasCountingNotifications filters parents that have a matching CountingNotifications (a
+// many-to-many relationship) using a correlated EXISTS subquery instead of
+// INNER JOINs, so the parent rows are not multiplied. The optional filters are
+// applied to the subquery (i.e. to Notifications).
+func (w commentWhereR[Q]) HasCountingNotifications(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := psql.Select(
+		sm.Columns(psql.Raw("1")),
+		sm.From(NotificationComments.NameExpr()),
+		sm.InnerJoin(Notifications.NameExpr()).On(
+			Notifications.Columns.ID.EQ(NotificationComments.Columns.NotificationID),
+		),
+		sm.Where(NotificationComments.Columns.CommentID.EQ(w.cols.ID)),
 	)
 	q.Apply(filters...)
 	return mods.Where[Q]{E: psql.Exists(q)}

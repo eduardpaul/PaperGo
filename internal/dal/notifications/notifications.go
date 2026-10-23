@@ -95,9 +95,16 @@ type Queries interface {
 	// DeleteNotification deletes the recipient's notification and reports
 	// whether there was one.
 	DeleteNotification(ctx context.Context, recipient, id string) (bool, error)
-	// CommentNotifications returns the notifications that show a comment.
+	// LinkNotificationComment records that a notification tells of a
+	// comment; UnlinkNotificationComment forgets it.
+	LinkNotificationComment(ctx context.Context, notificationID, commentID string) error
+	UnlinkNotificationComment(ctx context.Context, notificationID, commentID string) error
+	// NotificationComments returns the comments a notification tells of.
+	NotificationComments(ctx context.Context, notificationID string) ([]string, error)
+	// CommentNotifications returns the notifications that tell of a comment.
 	CommentNotifications(ctx context.Context, commentID string) ([]Notification, error)
-	// ReviseNotification stores a notification's body, comment and count.
+	// ReviseNotification stores a notification's title, body, comment,
+	// sender, source, workflow and count.
 	ReviseNotification(ctx context.Context, n Notification) error
 }
 
@@ -174,10 +181,16 @@ func (r *Repo) Create(ctx context.Context, n Notification) (Notification, bool, 
 				action = live.ActionUpdated
 			}
 			n.ID, n.Count, created = id, count, true
+			if err = link(ctx, q, n); err != nil {
+				return err
+			}
 			return live.Notify(ctx, q, live.KindNotification, LiveID(n.Recipient, n.ID), action)
 		}
 		var err error
 		if created, err = q.InsertNotification(ctx, n); err != nil || !created {
+			return err
+		}
+		if err = link(ctx, q, n); err != nil {
 			return err
 		}
 		return live.Notify(ctx, q, live.KindNotification, LiveID(n.Recipient, n.ID), live.ActionCreated)
@@ -186,6 +199,15 @@ func (r *Repo) Create(ctx context.Context, n Notification) (Notification, bool, 
 		return Notification{}, false, err
 	}
 	return n, true, nil
+}
+
+// link records the comment a notification tells of, which a fold adds to
+// those it already counts.
+func link(ctx context.Context, q Queries, n Notification) error {
+	if n.CommentID == "" {
+		return nil
+	}
+	return q.LinkNotificationComment(ctx, n.ID, n.CommentID)
 }
 
 // MaxMarked bounds the notifications one MarkRead statement names.
@@ -244,53 +266,33 @@ func (r *Repo) Delete(ctx context.Context, recipient, id string) error {
 	})
 }
 
-// Retext gives the notifications that show a comment its edited text and
-// tells their live streams.
-func (r *Repo) Retext(ctx context.Context, commentID, body string) error {
-	return r.write(ctx, func(q Queries) error {
-		rows, err := q.CommentNotifications(ctx, commentID)
-		if err != nil {
-			return err
-		}
-		for _, n := range rows {
-			n.Body = body
-			if err = q.ReviseNotification(ctx, n); err != nil {
-				return err
-			}
-			if err = live.Notify(ctx, q, live.KindNotification, LiveID(n.Recipient, n.ID), live.ActionUpdated); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+// ForComment returns the notifications that tell of a comment: those that
+// name it, and those that fold it with other replies.
+func (r *Repo) ForComment(ctx context.Context, commentID string) ([]Notification, error) {
+	return r.read.CommentNotifications(ctx, commentID)
 }
 
-// Withdraw takes a deleted comment out of the notifications that show it,
-// so its text stays nowhere: one that stands for it alone is deleted, and
-// one that folds several replies counts one fewer and opens the thread,
-// threadID, without its text.
-func (r *Repo) Withdraw(ctx context.Context, commentID, threadID string) error {
+// Comments returns the comments a notification tells of.
+func (r *Repo) Comments(ctx context.Context, id string) ([]string, error) {
+	return r.read.NotificationComments(ctx, id)
+}
+
+// Revise stores what a notification says, the comment it names and how many
+// it stands for, without commentID, which it no longer tells of when set,
+// and tells its recipient's live streams.
+func (r *Repo) Revise(ctx context.Context, n Notification, without string) error {
+	if n.Title == "" || utf8.RuneCountInString(n.Title) > MaxTitle || utf8.RuneCountInString(n.Body) > MaxBody || n.Count < 1 || !n.Source.Valid() {
+		return fmt.Errorf("%w: a notification needs a title of up to %d characters, a body of up to %d and a count", dberr.ErrCheckViolation, MaxTitle, MaxBody)
+	}
 	return r.write(ctx, func(q Queries) error {
-		rows, err := q.CommentNotifications(ctx, commentID)
-		if err != nil {
+		if without != "" {
+			if err := q.UnlinkNotificationComment(ctx, n.ID, without); err != nil {
+				return err
+			}
+		}
+		if err := q.ReviseNotification(ctx, n); err != nil {
 			return err
 		}
-		for _, n := range rows {
-			action := live.ActionUpdated
-			if n.Count > 1 && threadID != commentID {
-				n.Body, n.CommentID, n.Count = "", threadID, n.Count-1
-				err = q.ReviseNotification(ctx, n)
-			} else {
-				action = live.ActionDeleted
-				_, err = q.DeleteNotification(ctx, n.Recipient, n.ID)
-			}
-			if err != nil {
-				return err
-			}
-			if err = live.Notify(ctx, q, live.KindNotification, LiveID(n.Recipient, n.ID), action); err != nil {
-				return err
-			}
-		}
-		return nil
+		return live.Notify(ctx, q, live.KindNotification, LiveID(n.Recipient, n.ID), live.ActionUpdated)
 	})
 }

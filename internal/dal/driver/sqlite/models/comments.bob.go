@@ -56,12 +56,13 @@ type CommentsQuery = *sqlite.ViewQuery[*Comment, CommentSlice]
 
 // commentR is where relationships are stored.
 type commentR struct {
-	CommentMentions CommentMentionSlice // fk_comment_mentions_1
-	Workflow        *Workflow           // fk_comments_0
-	Thread          *Comment            // fk_comments_1
-	ReverseThreads  CommentSlice        // fk_comments_1__self_join_reverse
-	ItemResource    *Resource           // fk_comments_2
-	Notifications   NotificationSlice   // fk_notifications_1
+	CommentMentions       CommentMentionSlice // fk_comment_mentions_1
+	Workflow              *Workflow           // fk_comments_0
+	Thread                *Comment            // fk_comments_1
+	ReverseThreads        CommentSlice        // fk_comments_1__self_join_reverse
+	ItemResource          *Resource           // fk_comments_2
+	CountingNotifications NotificationSlice   // fk_notification_comments_0fk_notification_comments_1
+	Notifications         NotificationSlice   // fk_notifications_1
 	// Loaded reports whether each relationship has been loaded.
 	// A relationship's bool is set by Load*, Preload, ThenLoad, factory builds,
 	// and to-one Attach/Insert operations. To-many Attach/Insert operations leave it unchanged.
@@ -70,12 +71,13 @@ type commentR struct {
 
 // commentRLoaded tracks which relationships on Comment have been loaded.
 type commentRLoaded struct {
-	CommentMentions bool // fk_comment_mentions_1
-	Workflow        bool // fk_comments_0
-	Thread          bool // fk_comments_1
-	ReverseThreads  bool // fk_comments_1__self_join_reverse
-	ItemResource    bool // fk_comments_2
-	Notifications   bool // fk_notifications_1
+	CommentMentions       bool // fk_comment_mentions_1
+	Workflow              bool // fk_comments_0
+	Thread                bool // fk_comments_1
+	ReverseThreads        bool // fk_comments_1__self_join_reverse
+	ItemResource          bool // fk_comments_2
+	CountingNotifications bool // fk_notification_comments_0fk_notification_comments_1
+	Notifications         bool // fk_notifications_1
 }
 
 func buildCommentColumns(tableName string) commentColumns {
@@ -908,6 +910,30 @@ func (os CommentSlice) ItemResource(mods ...bob.Mod[*dialect.SelectQuery]) Resou
 	)...)
 }
 
+// CountingNotifications starts a query for related objects on notifications
+func (o *Comment) CountingNotifications(mods ...bob.Mod[*dialect.SelectQuery]) NotificationsQuery {
+	return Notifications.Query(append(mods,
+		sm.InnerJoin(NotificationComments.NameAsExpr()).On(
+			Notifications.Columns.ID.EQ(NotificationComments.Columns.NotificationID)),
+		sm.Where(NotificationComments.Columns.CommentID.EQ(sqlite.Arg(o.ID))),
+	)...)
+}
+
+func (os CommentSlice) CountingNotifications(mods ...bob.Mod[*dialect.SelectQuery]) NotificationsQuery {
+	PKArgSlice := make([]bob.Expression, len(os))
+	for i, o := range os {
+		PKArgSlice[i] = sqlite.ArgGroup(o.ID)
+	}
+	PKArgExpr := sqlite.Group(PKArgSlice...)
+
+	return Notifications.Query(append(mods,
+		sm.InnerJoin(NotificationComments.NameAsExpr()).On(
+			Notifications.Columns.ID.EQ(NotificationComments.Columns.NotificationID),
+		),
+		sm.Where(sqlite.Group(NotificationComments.Columns.CommentID).OP("IN", PKArgExpr)),
+	)...)
+}
+
 // Notifications starts a query for related objects on notifications
 func (o *Comment) Notifications(mods ...bob.Mod[*dialect.SelectQuery]) NotificationsQuery {
 	return Notifications.Query(append(mods,
@@ -1187,6 +1213,64 @@ func (comment0 *Comment) AttachItemResource(ctx context.Context, exec bob.Execut
 	return nil
 }
 
+func attachCommentCountingNotifications0(ctx context.Context, exec bob.Executor, count int, comment0 *Comment, notifications2 NotificationSlice) (NotificationCommentSlice, error) {
+	setters := make([]*NotificationCommentSetter, count)
+	for i := range count {
+		setters[i] = &NotificationCommentSetter{
+			CommentID:      omit.From(comment0.ID),
+			NotificationID: omit.From(notifications2[i].ID),
+		}
+	}
+
+	notificationComments1, err := NotificationComments.Insert(bob.ToMods(setters...)).All(ctx, exec)
+	if err != nil {
+		return nil, fmt.Errorf("attachCommentCountingNotifications0: %w", err)
+	}
+
+	return notificationComments1, nil
+}
+
+func (comment0 *Comment) InsertCountingNotifications(ctx context.Context, exec bob.Executor, related ...*NotificationSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	inserted, err := Notifications.Insert(bob.ToMods(related...)).All(ctx, exec)
+	if err != nil {
+		return fmt.Errorf("inserting related objects: %w", err)
+	}
+	notifications2 := NotificationSlice(inserted)
+
+	_, err = attachCommentCountingNotifications0(ctx, exec, len(related), comment0, notifications2)
+	if err != nil {
+		return err
+	}
+
+	comment0.R.CountingNotifications = append(comment0.R.CountingNotifications, notifications2...)
+
+	return nil
+}
+
+func (comment0 *Comment) AttachCountingNotifications(ctx context.Context, exec bob.Executor, related ...*Notification) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	notifications2 := NotificationSlice(related)
+
+	_, err = attachCommentCountingNotifications0(ctx, exec, len(related), comment0, notifications2)
+	if err != nil {
+		return err
+	}
+
+	comment0.R.CountingNotifications = append(comment0.R.CountingNotifications, notifications2...)
+
+	return nil
+}
+
 func insertCommentNotifications0(ctx context.Context, exec bob.Executor, notifications1 []*NotificationSetter, comment0 *Comment) (NotificationSlice, error) {
 	for i := range notifications1 {
 		notifications1[i].CommentID = omitnull.From(comment0.ID)
@@ -1386,6 +1470,23 @@ func (w commentWhereR[Q]) HasNotifications(filters ...bob.Mod[*dialect.SelectQue
 		sm.Columns(sqlite.Raw("1")),
 		sm.From(Notifications.NameExpr()),
 		sm.Where(Notifications.Columns.CommentID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: sqlite.Exists(q)}
+}
+
+// HasCountingNotifications filters parents that have a matching CountingNotifications (a
+// many-to-many relationship) using a correlated EXISTS subquery instead of
+// INNER JOINs, so the parent rows are not multiplied. The optional filters are
+// applied to the subquery (i.e. to Notifications).
+func (w commentWhereR[Q]) HasCountingNotifications(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := sqlite.Select(
+		sm.Columns(sqlite.Raw("1")),
+		sm.From(NotificationComments.NameExpr()),
+		sm.InnerJoin(Notifications.NameExpr()).On(
+			Notifications.Columns.ID.EQ(NotificationComments.Columns.NotificationID),
+		),
+		sm.Where(NotificationComments.Columns.CommentID.EQ(w.cols.ID)),
 	)
 	q.Apply(filters...)
 	return mods.Where[Q]{E: sqlite.Exists(q)}

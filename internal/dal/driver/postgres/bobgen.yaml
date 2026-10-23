@@ -8,6 +8,7 @@ psql:
     tasks: []
     task_responses: []
     notifications: []
+    notification_comments: []
     settings: []
     comments: []
     comment_mentions: []
@@ -90,6 +91,12 @@ plugins:
 
 no_tests: true
 no_back_referencing: true
+
+# A comment reaches notifications directly and through notification_comments.
+aliases:
+  comments:
+    relationships:
+      notification_comments.notification_comments_comment_id_fkeynotification_comments.notification_comments_notification_id_fkey: "CountingNotifications"
 
 types:
   "types.JSON[[]model.ArtifactSource]":

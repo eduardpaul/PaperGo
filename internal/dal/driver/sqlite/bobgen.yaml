@@ -10,6 +10,7 @@ sql:
     tasks: []
     task_responses: []
     notifications: []
+    notification_comments: []
     settings: []
     comments: []
     comment_mentions: []
@@ -92,6 +93,12 @@ plugins:
 
 no_tests: true
 no_back_referencing: true
+
+# A comment reaches notifications directly and through notification_comments.
+aliases:
+  comments:
+    relationships:
+      fk_notification_comments_0fk_notification_comments_1: "CountingNotifications"
 
 types:
   "types.JSON[[]model.ArtifactSource]":

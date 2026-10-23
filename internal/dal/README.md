@@ -1,7 +1,7 @@
 # Data access layer
 
 `internal/dal` owns transactional database invariants using Bob v0.50.0.
-`schema/sqlite.sql` and `schema/postgres.sql` define the same 68 tables with
+`schema/sqlite.sql` and `schema/postgres.sql` define the same 69 tables with
 native SQLite and PostgreSQL types. Both schemas use declarative constraints;
 repository methods maintain cross-table invariants and derived data in Go.
 SQLite JSON columns use TEXT affinity with JSON checks to preserve numeric

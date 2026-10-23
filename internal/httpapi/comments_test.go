@@ -349,18 +349,82 @@ func TestCommentNotificationsFollowTheComment(t *testing.T) {
 		t.Fatalf("a deleted comment's mention remains: %+v", got)
 	}
 
-	// A fold of replies drops the deleted one and opens the thread.
+	// A fold counts the replies left and shows the latest of them; with
+	// none left, it goes.
 	thread := post("bob", "Who signs?", "")
-	post("alice", "Carol", thread.ID)
+	first := post("alice", "Carol", thread.ID)
 	second := post("alice", "No, Dave", thread.ID)
-	if got := inbox(notifications.TypeCommentReplied); len(got) != 1 || got[0].Count != 2 || got[0].Body != "No, Dave" {
+	third := post("alice", "Or Erin", thread.ID)
+	if got := inbox(notifications.TypeCommentReplied); len(got) != 1 || got[0].Count != 3 || got[0].Body != "Or Erin" {
 		t.Fatalf("folded replies: %+v", got)
 	}
 	if err = svc.Delete(ctx, "alice", second.ID, second.Version); err != nil {
 		t.Fatal(err)
 	}
+	if got := inbox(notifications.TypeCommentReplied); len(got) != 1 || got[0].Count != 2 || got[0].Body != "Or Erin" || *got[0].CommentID != third.ID {
+		t.Fatalf("a fold without an older reply: %+v", got)
+	}
+	if err = svc.Delete(ctx, "alice", third.ID, third.Version); err != nil {
+		t.Fatal(err)
+	}
 	got := inbox(notifications.TypeCommentReplied)
-	if len(got) != 1 || got[0].Count != 1 || got[0].Body != "" || got[0].CommentID == nil || *got[0].CommentID != thread.ID {
-		t.Fatalf("a fold without its deleted reply: %+v", got)
+	if len(got) != 1 || got[0].Count != 1 || got[0].Body != "Carol" || *got[0].CommentID != first.ID || got[0].Title != "alice replied on Lease" {
+		t.Fatalf("a fold without its latest reply: %+v", got)
+	}
+	if err = svc.Delete(ctx, "alice", first.ID, first.Version); err != nil {
+		t.Fatal(err)
+	}
+	if got = inbox(notifications.TypeCommentReplied); len(got) != 0 {
+		t.Fatalf("a fold of deleted replies remains: %+v", got)
+	}
+
+}
+
+// An edit tells nobody what they may no longer read.
+func TestCommentEditsReachOnlyReaders(t *testing.T) {
+	_, s := setupWorkflows(t)
+	ctx := t.Context()
+	ws, err := s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Legal"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, err := s.Create(ctx, "alice", ws.ID, dms.CreateResource{Kind: "list", Name: "Contracts"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	item, err := s.Create(ctx, "alice", list.ID, dms.CreateResource{Kind: "item", Name: "Lease"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.SetWorkspaceMember(ctx, "alice", ws.ID, dms.WorkspaceMember{Subject: "bob", Role: "member"}); err != nil {
+		t.Fatal(err)
+	}
+	svc := &comments.Service{DMS: s, Enabled: true}
+	post := func(subject, body, thread string) comments.View {
+		t.Helper()
+		v, err := svc.Create(ctx, subject, "", item.ID, comments.Input{Body: body, ThreadID: thread})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return v
+	}
+	inbox := func(typ notifications.Type) []notify.View {
+		t.Helper()
+		page, err := (&notify.Service{DMS: s}).Inbox(ctx, "bob", notify.Filter{Type: typ})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return page.Data
+	}
+
+	secret := post("alice", "Draft terms, <@user:bob>", "")
+	if err = s.RemoveWorkspaceMember(ctx, "alice", ws.ID, "bob"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = svc.Edit(ctx, "alice", secret.ID, secret.Version, "Final terms: 2% fee, <@user:bob>"); err != nil {
+		t.Fatal(err)
+	}
+	if got := inbox(notifications.TypeCommentMentioned); len(got) != 1 || got[0].Body != "" {
+		t.Fatalf("an edit reached someone who lost access: %+v", got)
 	}
 }
