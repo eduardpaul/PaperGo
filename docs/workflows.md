@@ -388,6 +388,8 @@ const answer = plain((await ctx.wait(task!.operationId!)).result) as { outcome: 
 
 Answers and their form values stay on the task after it completes, and completed tasks are kept when their runs are deleted. Creating and answering tasks are recorded in the workspace's audit trail (`task.create`, `task.respond`).
 
+Assignees are [notified](notifications.md) when a task is created or reassigned to them, and the creator of a person's task when it is answered. A script tells people anything else with `ctx.api.v1.workspaces.byId(id).notifications.post(...)`; a failed run notifies the author of its workflow version.
+
 ## Selection runs
 
 A manual trigger with `"selection": "selection"` starts one run over several items. `POST /v1/workflows/{id}/runs` then takes:

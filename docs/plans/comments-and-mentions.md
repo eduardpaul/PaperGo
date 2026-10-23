@@ -1,6 +1,6 @@
 # Comments and mentions (plan)
 
-Status: **phase 0 (notifications core) in progress**. Comments are a **core** building block, like tasks: they are coupled to the DMS, tasks and notifications, so `internal/comments` names them directly instead of plugging in through registries. The [open decisions](#open-decisions) are taken with the recommended answers unless changed before phase 1.
+Status: **phase 0 (notifications core) implemented**, documented in [notifications](../notifications.md); coalescing arrives in phase 1 with replies, its first user. Comments are a **core** building block, like tasks: they are coupled to the DMS, tasks and notifications, so `internal/comments` names them directly instead of plugging in through registries. The [open decisions](#open-decisions) are taken with the recommended answers unless changed before phase 1.
 
 The goal is a collaborative DMS. People can discuss a document or list item where it lives, pull a colleague in with an @mention, and turn a discussion into a task. Mentions, replies and resolved threads reach people through the same inbox as tasks.
 
@@ -260,7 +260,7 @@ The code lives in `web/src/features/comments`, and the item page renders feature
 Each phase ships with its tests (SQLite and PostgreSQL), OpenAPI, SDK, docs and web screens.
 
 0. **Notifications core** (phase 2 of the [tasks plan](tasks-and-notifications.md#phases)):
-   - the `notifications` table and `internal/notify`, with access at send time, no notification about your own action, deduplication, coalescing and bounded fan-out;
+   - the `notifications` table and `internal/notify`, with access at send time, no notification about your own action, deduplication and bounded fan-out;
    - the inbox API, `notification` live frames, the bell and the Notifications view;
    - sending from workflows and people (`POST /v1/workspaces/{id}/notifications`);
    - system notifications: `task.assigned`, `task.completed` and `workflow.failed`.

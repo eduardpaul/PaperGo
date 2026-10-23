@@ -285,7 +285,7 @@ Requests that start an operation (bulk update, search reindex, package export an
 
 ## Live API updates
 
-`GET /v1/events` streams server-sent events using the deployment's configured authentication mode. `item`, `operation` and `run` frames contain the current authorized view; operation payloads and run inputs/results are private. Item removal frames contain only an ID already delivered on that connection. Changes to access emit a `resync` frame without entity details. Clients reconcile item state with the delta API and refresh operation/run lists after `connected` or `resync`.
+`GET /v1/events` streams server-sent events using the deployment's configured authentication mode. `item`, `operation` and `run` frames contain the current authorized view; operation payloads and run inputs/results are private. `notification` frames reach only the notification's recipient and carry their unread count ([notifications](notifications.md#live-updates)). Item removal frames contain only an ID already delivered on that connection. Changes to access emit a `resync` frame without entity details. Clients reconcile item state with the delta API and refresh operation/run lists after `connected` or `resync`.
 
 Each frame carries a durable numeric `id`. Reconnect with `Last-Event-ID` to replay retained changes; the journal retains seven days and an expired cursor returns 410. A new connection starts at the current position. Repeated changes to the same entity may be coalesced, so this stream is a notification API, not an audit feed. Keepalive frames advance the cursor even when intervening changes are hidden by permissions.
 
