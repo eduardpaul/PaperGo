@@ -82,7 +82,7 @@ class Server:
             status, body, _ = self.request(conn, method, path, data)
         if not 200 <= status < 300:
             raise RuntimeError(f"{method} {path}: {status} {body[:1000]!r}")
-        return json.loads(body)
+        return json.loads(body) if body else None
 
     def measure(self, name, action=None, concurrency=1, seconds=10, count=None):
         samples, latencies, statuses, byte_counts = [], [], [], []
@@ -159,6 +159,98 @@ class Server:
         return result
 
 
+def open_streams(server, count):
+    """Opens live streams and reads them on threads, as browsers would."""
+    streams, readers = [], []
+    for _ in range(count):
+        conn = server.connection()
+        conn.request("GET", "/v1/events", headers={"Authorization": f"Bearer {TOKEN}"})
+        response = conn.getresponse()
+        if response.status != 200:
+            raise RuntimeError("SSE stream failed")
+
+        def read(response=response):
+            try:
+                while response.readline():
+                    pass
+            except (OSError, ValueError, AttributeError, http.client.HTTPException):
+                pass
+
+        reader = threading.Thread(target=read, daemon=True)
+        reader.start()
+        streams.append(conn)
+        readers.append(reader)
+    return streams
+
+
+def collaboration(server, workspace, collection, seconds):
+    """Measures the paths tasks, comments and notifications add. Tasks run on
+    any build; the rest only where the server offers comments."""
+    people = [f"perf-user-{i:02d}" for i in range(20)]
+    for subject in people:
+        server.json("POST", "/v1/identity/users", {"subject": subject, "display_name": subject.title()})
+        server.json("POST", f"/v1/workspaces/{workspace}/members", {"subject": subject, "role": "member"})
+    group = server.json("POST", "/v1/identity/groups", {"name": "Performance reviewers"})["id"]
+    for subject in people:
+        server.json("PUT", f"/v1/identity/groups/{group}/members/user/{subject}")
+    target = server.json("POST", f"/v1/resources/{collection}/children", {"kind": "item", "name": "Task target"})["id"]
+    for concurrency in [1, 8]:
+        server.measure(f"task-create-group20-c{concurrency}", lambda c, w, i: server.request(
+            c, "POST", f"/v1/workspaces/{workspace}/tasks",
+            {"item_id": target, "title": f"Review {w}-{i}", "assignees": [f"group:{group}"]}), concurrency, seconds)
+    features = server.json("GET", "/auth/config").get("features", {})
+    if not features.get("comments"):
+        return
+
+    busy = server.json("POST", f"/v1/resources/{collection}/children", {"kind": "item", "name": "Busy discussion"})["id"]
+
+    def post(conn, worker, iteration):
+        mentions = " ".join(f"<@user:{people[(worker + iteration + k) % len(people)]}>" for k in range(2))
+        return server.request(conn, "POST", f"/v1/items/{busy}/comments", {"body": f"Please check {mentions}"})
+
+    for concurrency in [1, 8]:
+        server.measure(f"comment-post-2mentions-c{concurrency}", post, concurrency, seconds)
+    streams = open_streams(server, 4)
+    try:
+        server.measure("idle-four-live-streams-comments", seconds=seconds)
+        server.measure("comment-post-2mentions-c8-four-streams", post, 8, seconds)
+    finally:
+        for stream in streams:
+            stream.close()
+
+    discussed = server.json("POST", f"/v1/resources/{collection}/children", {"kind": "item", "name": "Long discussion"})["id"]
+    for i in range(200):
+        root = server.json("POST", f"/v1/items/{discussed}/comments", {"body": f"Thread {i}"})["id"]
+        for k in range(2):
+            server.json("POST", f"/v1/items/{discussed}/comments", {"body": f"Reply {k}", "thread_id": root})
+    threads = f"/v1/items/{discussed}/comments?status=all&$top=50"
+    for concurrency in [1, 8]:
+        server.measure(f"comment-threads-50-c{concurrency}", lambda c, w, i: server.request(c, "GET", threads),
+                       concurrency, seconds)
+
+    # Naming oneself sends to oneself: an inbox of 2,000 unread messages.
+    def message(conn, worker, iteration):
+        return server.request(conn, "POST", f"/v1/workspaces/{workspace}/notifications",
+                              {"recipients": ["actor"], "title": f"Message {worker}-{iteration}"})
+
+    sent = server.measure("notification-send-c4", message, 4, count=500)
+    if sent["successes"] != 2000:
+        raise RuntimeError("notification seeding failed")
+    for concurrency in [1, 8]:
+        server.measure(f"inbox-page-50-c{concurrency}",
+                       lambda c, w, i: server.request(c, "GET", "/v1/me/notifications?$top=50"), concurrency, seconds)
+        server.measure(f"unread-count-c{concurrency}",
+                       lambda c, w, i: server.request(c, "GET", "/v1/me/notifications/unread-count"), concurrency, seconds)
+    streams = open_streams(server, 4)
+    try:
+        server.measure("mark-all-2000-read-four-streams",
+                       lambda c, w, i: server.request(c, "POST", "/v1/me/notifications/read", {}), count=1)
+        server.measure("idle-after-mark-all-four-streams", seconds=seconds)
+    finally:
+        for stream in streams:
+            stream.close()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", type=Path, default=ROOT / "bin/papergo")
@@ -169,6 +261,8 @@ def main():
     parser.add_argument("--concurrency", type=int, nargs="+", default=[1, 8, 32])
     parser.add_argument("--extended", action="store_true", help="also measure 500-row pages and repeated edits")
     parser.add_argument("--search-store", choices=["sqlite", "zvec"], default="sqlite")
+    parser.add_argument("--collaboration", action="store_true",
+                        help="also measure tasks, comments, notifications and live streams under comment load")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if platform.system() != "Linux":
@@ -308,6 +402,8 @@ def main():
                                    lambda c, w, i: server.request(c, "GET", f"/v1/items/{documents[w]['id']}/content", stream=True),
                                    concurrency, args.seconds)
                 server.measure("idle-after-load", seconds=args.idle_seconds)
+                if args.collaboration:
+                    collaboration(server, workspace, collection, args.seconds)
                 with sqlite3.connect(dbpath) as db:
                     counts = {table: db.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
                               for table in ["resources", "item_revisions", "audit_events", "domain_events", "workflow_runs", "blobs"]}
@@ -319,6 +415,7 @@ def main():
                     "binary_bytes": args.binary.stat().st_size, "initial_items": args.items,
                     "configuration": {"auth_mode": "development", "max_in_flight": 32, "request_timeout": "30s",
                                       "max_upload_mib": 64, "extended": args.extended,
+                                      "collaboration": args.collaboration,
                                       "search_store": args.search_store},
                     "fixture_storage": fixture,
                     "startup_ready_s": ready_s, "stages": server.results, "final_table_rows": counts,
