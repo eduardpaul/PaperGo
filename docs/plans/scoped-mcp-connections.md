@@ -1,6 +1,7 @@
 # Scoped AI assistant connections
 
-Status: approved 2026-10-23; in progress on `claude/mcp-server`.
+Status: implemented on `claude/mcp-server` (2026-10-23). Tested on SQLite;
+the PostgreSQL suites run in CI.
 
 ## Story
 
