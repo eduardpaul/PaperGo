@@ -1056,19 +1056,43 @@ func (s *Service) SetOrganization(ctx context.Context, subject string, version i
 }
 
 // Visible reads a comment and reports whether subject may read its
-// discussion, for live updates.
-func (s *Service) Visible(ctx context.Context, subject, id string) (commentstore.Comment, bool, error) {
+// discussion, for live updates. Every open stream asks this of every
+// comment change, so it checks only reading: the item's mode and the
+// person's access to its draft or a revision. readable keeps the answer
+// for each item, as a stream does across a batch of changes.
+func (s *Service) Visible(ctx context.Context, subject, id string, readable map[string]bool) (commentstore.Comment, bool, error) {
 	type result struct {
 		c  commentstore.Comment
 		ok bool
 	}
 	r, err := dms.Read(ctx, s.DMS, func(t *dms.Service) (result, error) {
-		c, _, err := s.load(ctx, t, subject, id)
-		var invalid *dms.ValidationError
-		if errors.Is(err, dms.ErrNotFound) || errors.As(err, &invalid) {
+		c, err := t.DAL.Comments().Head(ctx, id)
+		if dberr.IsNotFound(err) {
 			return result{}, nil
 		}
-		return result{c, err == nil}, err
+		if err != nil {
+			return result{}, err
+		}
+		if ok, seen := readable[c.ItemID]; seen {
+			return result{c, ok}, nil
+		}
+		item, err := t.DAL.Resources().Resource(ctx, c.ItemID)
+		if dberr.IsNotFound(err) {
+			return result{}, nil
+		}
+		if err != nil {
+			return result{}, err
+		}
+		mode, err := s.effective(ctx, t, item)
+		if err != nil {
+			return result{}, err
+		}
+		ok, err := reads(ctx, t, subject, c.ItemID, mode.Mode)
+		if err != nil {
+			return result{}, err
+		}
+		readable[c.ItemID] = ok
+		return result{c, ok}, nil
 	})
 	return r.c, r.ok, err
 }

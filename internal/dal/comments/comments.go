@@ -117,6 +117,11 @@ func (r *Repo) Find(ctx context.Context, id string) (Comment, error) {
 	return c, err
 }
 
+// Head reads a comment without its mentions.
+func (r *Repo) Head(ctx context.Context, id string) (Comment, error) {
+	return r.read.Comment(ctx, id)
+}
+
 // Roots returns an item's thread roots with their mentions.
 func (r *Repo) Roots(ctx context.Context, f Threads) ([]Comment, error) {
 	rows, err := r.read.Roots(ctx, f)

@@ -297,6 +297,30 @@ func TestLiveCommentFrames(t *testing.T) {
 		}
 		break
 	}
+	// A burst on both items, read as one batch, still shows only the
+	// discussion the stream may read.
+	var last comments.View
+	for i := range 3 {
+		if _, err = svc.Create(ctx, "bob", "", hidden, comments.Input{Body: "Private"}); err != nil {
+			t.Fatal(err)
+		}
+		if last, err = svc.Create(ctx, "alice", "", shown, comments.Input{Body: fmt.Sprint("Shared ", i)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for seen := 0; seen < 3; {
+		frame := readFrame(t, reader)
+		if frame.kind == "keepalive" || frame.kind == "item" {
+			continue
+		}
+		if frame.kind != "comment" || !strings.Contains(frame.data, shown) || strings.Contains(frame.data, hidden) {
+			t.Fatalf("comment frame in a burst: %+v", frame)
+		}
+		seen++
+		if seen == 3 && !strings.Contains(frame.data, last.ID) {
+			t.Fatalf("the burst's last frame: %+v", frame)
+		}
+	}
 }
 
 // A stream opened with an access token hears only of deletions of

@@ -116,9 +116,10 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 		for i, change := range changes {
 			last[key(change.Kind, change.EntityID)] = i
 		}
-		// One unread count serves a batch's notification frames: each would
-		// read the same inbox.
+		// One unread count serves a batch's notification frames, and one
+		// check of each item its comment frames: each would read the same.
 		unread := int64(-1)
+		readable := map[string]bool{}
 		count := func() (int64, error) {
 			if unread < 0 {
 				n, err := a.notifications(r).Unread(r.Context(), subject(r))
@@ -209,7 +210,7 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 				if a.CommentsOff {
 					continue
 				}
-				c, visible, e := a.comments(r).Visible(r.Context(), subject(r), change.EntityID)
+				c, visible, e := a.comments(r).Visible(r.Context(), subject(r), change.EntityID, readable)
 				if e != nil {
 					return
 				}
