@@ -468,6 +468,8 @@ export interface AccessToken {
   name: string;
   prefix: string;
   scopes?: string[] | null;
+  /** Workspaces, lists and libraries the token is limited to; empty reaches everything. */
+  resources?: string[] | null;
   created_at: string;
   expires_at: string | null;
   last_used_at?: string;

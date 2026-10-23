@@ -31,6 +31,7 @@ import { Route as AppAdminTokensRouteImport } from './routes/_app/admin/tokens'
 import { Route as AppAdminUsersRouteImport } from './routes/_app/admin/users'
 import { Route as AppFFolderIdRouteImport } from './routes/_app/f/$folderId'
 import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings/index'
+import { Route as AppSettingsAssistantsRouteImport } from './routes/_app/settings/assistants'
 import { Route as AppSettingsPreferencesRouteImport } from './routes/_app/settings/preferences'
 import { Route as AppSettingsTokensRouteImport } from './routes/_app/settings/tokens'
 import { Route as AppSettingsWebdavRouteImport } from './routes/_app/settings/webdav'
@@ -161,6 +162,11 @@ const AppFFolderIdRoute = AppFFolderIdRouteImport.update({
 const AppSettingsIndexRoute = AppSettingsIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AppSettingsRoute,
+} as any)
+const AppSettingsAssistantsRoute = AppSettingsAssistantsRouteImport.update({
+  id: '/assistants',
+  path: '/assistants',
   getParentRoute: () => AppSettingsRoute,
 } as any)
 const AppSettingsPreferencesRoute = AppSettingsPreferencesRouteImport.update({
@@ -303,6 +309,7 @@ export interface FileRoutesByFullPath {
   '/admin/tokens': typeof AppAdminTokensRoute
   '/admin/users': typeof AppAdminUsersRoute
   '/f/$folderId': typeof AppFFolderIdRoute
+  '/settings/assistants': typeof AppSettingsAssistantsRoute
   '/settings/preferences': typeof AppSettingsPreferencesRoute
   '/settings/tokens': typeof AppSettingsTokensRoute
   '/settings/webdav': typeof AppSettingsWebdavRoute
@@ -345,6 +352,7 @@ export interface FileRoutesByTo {
   '/admin/tokens': typeof AppAdminTokensRoute
   '/admin/users': typeof AppAdminUsersRoute
   '/f/$folderId': typeof AppFFolderIdRoute
+  '/settings/assistants': typeof AppSettingsAssistantsRoute
   '/settings/preferences': typeof AppSettingsPreferencesRoute
   '/settings/tokens': typeof AppSettingsTokensRoute
   '/settings/webdav': typeof AppSettingsWebdavRoute
@@ -389,6 +397,7 @@ export interface FileRoutesById {
   '/_app/admin/tokens': typeof AppAdminTokensRoute
   '/_app/admin/users': typeof AppAdminUsersRoute
   '/_app/f/$folderId': typeof AppFFolderIdRoute
+  '/_app/settings/assistants': typeof AppSettingsAssistantsRoute
   '/_app/settings/preferences': typeof AppSettingsPreferencesRoute
   '/_app/settings/tokens': typeof AppSettingsTokensRoute
   '/_app/settings/webdav': typeof AppSettingsWebdavRoute
@@ -435,6 +444,7 @@ export interface FileRouteTypes {
     | '/admin/tokens'
     | '/admin/users'
     | '/f/$folderId'
+    | '/settings/assistants'
     | '/settings/preferences'
     | '/settings/tokens'
     | '/settings/webdav'
@@ -477,6 +487,7 @@ export interface FileRouteTypes {
     | '/admin/tokens'
     | '/admin/users'
     | '/f/$folderId'
+    | '/settings/assistants'
     | '/settings/preferences'
     | '/settings/tokens'
     | '/settings/webdav'
@@ -520,6 +531,7 @@ export interface FileRouteTypes {
     | '/_app/admin/tokens'
     | '/_app/admin/users'
     | '/_app/f/$folderId'
+    | '/_app/settings/assistants'
     | '/_app/settings/preferences'
     | '/_app/settings/tokens'
     | '/_app/settings/webdav'
@@ -707,6 +719,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsIndexRouteImport
       parentRoute: typeof AppSettingsRoute
     }
+    '/_app/settings/assistants': {
+      id: '/_app/settings/assistants'
+      path: '/assistants'
+      fullPath: '/settings/assistants'
+      preLoaderRoute: typeof AppSettingsAssistantsRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
     '/_app/settings/preferences': {
       id: '/_app/settings/preferences'
       path: '/preferences'
@@ -888,6 +907,7 @@ const AppAdminRouteWithChildren = AppAdminRoute._addFileChildren(
 )
 
 interface AppSettingsRouteChildren {
+  AppSettingsAssistantsRoute: typeof AppSettingsAssistantsRoute
   AppSettingsPreferencesRoute: typeof AppSettingsPreferencesRoute
   AppSettingsTokensRoute: typeof AppSettingsTokensRoute
   AppSettingsWebdavRoute: typeof AppSettingsWebdavRoute
@@ -895,6 +915,7 @@ interface AppSettingsRouteChildren {
 }
 
 const AppSettingsRouteChildren: AppSettingsRouteChildren = {
+  AppSettingsAssistantsRoute: AppSettingsAssistantsRoute,
   AppSettingsPreferencesRoute: AppSettingsPreferencesRoute,
   AppSettingsTokensRoute: AppSettingsTokensRoute,
   AppSettingsWebdavRoute: AppSettingsWebdavRoute,

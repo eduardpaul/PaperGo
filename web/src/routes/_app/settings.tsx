@@ -1,5 +1,5 @@
 import { createFileRoute, Outlet } from '@tanstack/react-router';
-import { KeyRound, Settings, SlidersHorizontal, UserRound, HardDrive } from 'lucide-react';
+import { Bot, KeyRound, Settings, SlidersHorizontal, UserRound, HardDrive } from 'lucide-react';
 import { Page, PageHeader } from '@/components/page';
 import { SubNav, SubNavLayout, SubNavLink } from '@/components/sub-nav';
 import { authenticationMode } from '@/api/auth';
@@ -19,6 +19,11 @@ function SettingsLayout() {
             <SubNavLink to="/settings/preferences">
               <SlidersHorizontal /> Preferences
             </SubNavLink>
+            {authenticationMode() !== 'proxy' && (
+              <SubNavLink to="/settings/assistants">
+                <Bot /> AI assistants
+              </SubNavLink>
+            )}
             {authenticationMode() === 'bearer' && (
               <SubNavLink to="/settings/tokens">
                 <KeyRound /> Access tokens
