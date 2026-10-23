@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"papergo/internal/dal/refs"
+	"papergo/internal/dal/resources"
 	"papergo/internal/dms"
 	"papergo/internal/httpapi"
 	"papergo/internal/search"
@@ -96,7 +97,7 @@ const searchRounds = 3
 // against the database, so an index that lags never shows what the caller
 // may no longer read.
 func (x *Search) Search(ctx context.Context, s *dms.Service, subject string, in Request) (Result, error) {
-	if err := s.RequireScope(ctx, subject, "list.read"); err != nil {
+	if err := s.RequireScope(ctx, subject, "item.read"); err != nil {
 		return Result{}, err
 	}
 	if x.rebuilding.Load() {
@@ -184,6 +185,9 @@ func (x *Search) search(ctx context.Context, s *dms.Service, subject string, in 
 		return Result{}, err
 	}
 	q.Filter.Access = access
+	if q.Filter.Within, err = within(ctx, s, subject); err != nil {
+		return Result{}, err
+	}
 	if q.Content, err = contentAllowed(ctx, s, subject); err != nil {
 		return Result{}, err
 	}
@@ -369,10 +373,44 @@ func fieldFilter(f *dms.IndexFilter) *search.FieldFilter {
 // and folders, whether the subject reads drafts there or published content:
 // what search trims to. Permissions depend only on a row's scope, its
 // workspace and whether it is content, so one live row stands for each
-// scope, as in collection queries.
+// scope, as in collection queries. A token's resource limit does not: a
+// scope can span collections in and out of it, so scopes are decided
+// without it, the index keeps to its places (within), and every hit is
+// rechecked with it.
 func scopes(ctx context.Context, s *dms.Service, subject string) (search.Access, error) {
-	draft, readable, err := s.DAL.Content().SearchScopes(ctx, dms.Principal(ctx, subject))
+	p := dms.Principal(ctx, subject)
+	if p.Credential.Limited() {
+		unlimited := *p.Credential
+		unlimited.Resources = nil
+		p.Credential = &unlimited
+	}
+	draft, readable, err := s.DAL.Content().SearchScopes(ctx, p)
 	return search.Access{Draft: draft, Read: readable}, err
+}
+
+// within keeps a search inside the places the request's access token is
+// limited to, in the index itself, so results, totals, facets and pages
+// never count what lies outside it. It is nil without a limit.
+func within(ctx context.Context, s *dms.Service, subject string) (*search.Within, error) {
+	p := dms.Principal(ctx, subject)
+	if !p.Credential.Limited() {
+		return nil, nil
+	}
+	places, err := s.DAL.Resources().Resources(ctx, resources.Filter{IDs: p.Credential.Resources})
+	if err != nil {
+		return nil, err
+	}
+	out := &search.Within{Workspaces: []string{}, Collections: []string{}}
+	for _, r := range places {
+		switch {
+		case r.DeletedAt != nil:
+		case r.Kind == refs.KindWorkspace:
+			out.Workspaces = append(out.Workspaces, r.ID)
+		default:
+			out.Collections = append(out.Collections, r.ID)
+		}
+	}
+	return out, nil
 }
 
 // visible reports which documents the subject may be shown now, on the

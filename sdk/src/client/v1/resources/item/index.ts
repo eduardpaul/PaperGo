@@ -114,7 +114,7 @@ export interface ResourcesItemRequestBuilder extends BaseRequestBuilder<Resource
      */
     get views(): ViewsRequestBuilder;
     /**
-     * Deletes an item or empty folder with write access and the current If-Match. For a folder, recursive=true deletes the folder and all live descendants atomically, requiring write access to every descendant. Without recursive=true, any live child, including a hidden item or nested folder, returns 409 with code folder_not_empty. Deleted children do not prevent ordinary deletion. Permission failures and stale versions leave the entire tree unchanged. Workspace and collection deletion require manage access and remove the entire live resource tree independently of recursive; collection managers may delete the entire collection regardless of descendant ACLs. Tombstones, revisions and audit history are retained. Read projections and live relationships are removed, and each deleted item emits item.deleted. Workflows bound to a deleted workspace or collection are disabled and deleted.
+     * Deletes an item or empty folder with write access and the current If-Match. For a folder, recursive=true deletes the folder and all live descendants atomically, requiring write access to every descendant. Without recursive=true, any live child, including a hidden item or nested folder, returns 409 with code folder_not_empty. Deleted children do not prevent ordinary deletion. Permission failures and stale versions leave the entire tree unchanged. Workspace and collection deletion require manage access and list.manage and remove the entire live resource tree independently of recursive; collection managers may delete the entire collection regardless of descendant ACLs. Tombstones, revisions and audit history are retained. Read projections and live relationships are removed, and each deleted item emits item.deleted. Workflows bound to a deleted workspace or collection are disabled and deleted.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @throws {Problem} error when the service returns a 412 status code
      * @throws {Problem} error when the service returns a 4XX or 5XX status code
@@ -128,7 +128,7 @@ export interface ResourcesItemRequestBuilder extends BaseRequestBuilder<Resource
      */
      get(requestConfiguration?: RequestConfiguration<ResourcesItemRequestBuilderGetQueryParameters> | undefined) : Promise<ResourceAccess | undefined>;
     /**
-     * Workspace and collection metadata changes require manage access. Items and folders require write access. If-Match is required.
+     * Workspace and collection metadata changes require manage access and list.manage. Items and folders require write access. If-Match is required.
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<ResourceAccess>}
@@ -137,7 +137,7 @@ export interface ResourcesItemRequestBuilder extends BaseRequestBuilder<Resource
      */
      patch(body: UpdateResource, requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<ResourceAccess | undefined>;
     /**
-     * Deletes an item or empty folder with write access and the current If-Match. For a folder, recursive=true deletes the folder and all live descendants atomically, requiring write access to every descendant. Without recursive=true, any live child, including a hidden item or nested folder, returns 409 with code folder_not_empty. Deleted children do not prevent ordinary deletion. Permission failures and stale versions leave the entire tree unchanged. Workspace and collection deletion require manage access and remove the entire live resource tree independently of recursive; collection managers may delete the entire collection regardless of descendant ACLs. Tombstones, revisions and audit history are retained. Read projections and live relationships are removed, and each deleted item emits item.deleted. Workflows bound to a deleted workspace or collection are disabled and deleted.
+     * Deletes an item or empty folder with write access and the current If-Match. For a folder, recursive=true deletes the folder and all live descendants atomically, requiring write access to every descendant. Without recursive=true, any live child, including a hidden item or nested folder, returns 409 with code folder_not_empty. Deleted children do not prevent ordinary deletion. Permission failures and stale versions leave the entire tree unchanged. Workspace and collection deletion require manage access and list.manage and remove the entire live resource tree independently of recursive; collection managers may delete the entire collection regardless of descendant ACLs. Tombstones, revisions and audit history are retained. Read projections and live relationships are removed, and each deleted item emits item.deleted. Workflows bound to a deleted workspace or collection are disabled and deleted.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */
@@ -149,7 +149,7 @@ export interface ResourcesItemRequestBuilder extends BaseRequestBuilder<Resource
      */
      toGetRequestInformation(requestConfiguration?: RequestConfiguration<ResourcesItemRequestBuilderGetQueryParameters> | undefined) : RequestInformation;
     /**
-     * Workspace and collection metadata changes require manage access. Items and folders require write access. If-Match is required.
+     * Workspace and collection metadata changes require manage access and list.manage. Items and folders require write access. If-Match is required.
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
@@ -157,7 +157,7 @@ export interface ResourcesItemRequestBuilder extends BaseRequestBuilder<Resource
      toPatchRequestInformation(body: UpdateResource, requestConfiguration?: RequestConfiguration<object> | undefined) : RequestInformation;
 }
 /**
- * Deletes an item or empty folder with write access and the current If-Match. For a folder, recursive=true deletes the folder and all live descendants atomically, requiring write access to every descendant. Without recursive=true, any live child, including a hidden item or nested folder, returns 409 with code folder_not_empty. Deleted children do not prevent ordinary deletion. Permission failures and stale versions leave the entire tree unchanged. Workspace and collection deletion require manage access and remove the entire live resource tree independently of recursive; collection managers may delete the entire collection regardless of descendant ACLs. Tombstones, revisions and audit history are retained. Read projections and live relationships are removed, and each deleted item emits item.deleted. Workflows bound to a deleted workspace or collection are disabled and deleted.
+ * Deletes an item or empty folder with write access and the current If-Match. For a folder, recursive=true deletes the folder and all live descendants atomically, requiring write access to every descendant. Without recursive=true, any live child, including a hidden item or nested folder, returns 409 with code folder_not_empty. Deleted children do not prevent ordinary deletion. Permission failures and stale versions leave the entire tree unchanged. Workspace and collection deletion require manage access and list.manage and remove the entire live resource tree independently of recursive; collection managers may delete the entire collection regardless of descendant ACLs. Tombstones, revisions and audit history are retained. Read projections and live relationships are removed, and each deleted item emits item.deleted. Workflows bound to a deleted workspace or collection are disabled and deleted.
  */
 export interface ResourcesItemRequestBuilderDeleteQueryParameters {
     /**

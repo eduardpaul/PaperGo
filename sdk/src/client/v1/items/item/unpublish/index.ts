@@ -11,7 +11,7 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface UnpublishRequestBuilder extends BaseRequestBuilder<UnpublishRequestBuilder> {
     /**
-     *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
+     *  Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<Resource>}
      * @throws {Problem} error when the service returns a 412 status code
@@ -19,7 +19,7 @@ export interface UnpublishRequestBuilder extends BaseRequestBuilder<UnpublishReq
      */
      post(requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<Resource | undefined>;
     /**
-     *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
+     *  Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */

@@ -1,7 +1,7 @@
 // Package access builds the SQL expressions that decide what a principal may
 // see and change: resource grants at the nearest exclusive scope, workspace
-// ownership, organization roles and the scopes of the credential a request
-// runs with. Drivers and content queries embed the expressions; every
+// ownership, organization roles and the scopes and resource limit of the
+// credential a request runs with. Drivers and content queries embed the expressions; every
 // expression uses ? placeholders and returns its arguments in order.
 package access
 
@@ -14,11 +14,18 @@ import (
 )
 
 // Credential is the access token a request runs with. Its scopes cap what
-// the principal's roles allow.
+// the principal's roles allow, and its resources, when any, the content it
+// reaches.
 type Credential struct {
 	ID     string
 	Scopes []string
+	// Resources limits content to these workspaces, lists and libraries:
+	// what is in them, and them. Empty is unlimited.
+	Resources []string
 }
+
+// Limited reports whether the credential reaches only some content.
+func (c *Credential) Limited() bool { return c != nil && len(c.Resources) > 0 }
 
 // Principal is who asks: a user and, for token requests, the credential.
 type Principal struct {
@@ -149,15 +156,21 @@ func marks(action Action) (string, []any) {
 	return strings.Join(out, ","), args
 }
 
-// module tests the organization scope that content of a kind needs: reading
-// workspaces needs workspace.read, changing items and folders list.write and
-// everything else list.read.
+// module tests the organization scope an action on content of a kind needs:
+// reading a workspace needs workspace.read and reading anything else
+// item.read; changing or publishing anything needs item.write, so a
+// credential without it cannot change content in any way; and managing
+// anything (creating, configuring, sharing and deleting workspaces, lists
+// and libraries among it) needs list.manage, so a credential that may only
+// change content leaves its places as they are.
 func (d Dialect) module(kindColumn string, p Principal, action Action) (string, []any) {
-	scope := "list.read"
-	if action == Write || action == Publish {
-		scope = "list.write"
+	switch action {
+	case Manage:
+		return d.ScopeExpression(p, `'list.manage'`)
+	case Write, Publish:
+		return d.ScopeExpression(p, `'item.write'`)
 	}
-	return d.ScopeExpression(p, `CASE WHEN `+kindColumn+`='workspace' THEN 'workspace.read' WHEN `+kindColumn+` IN ('item','folder') THEN '`+scope+`' ELSE 'list.read' END`)
+	return d.ScopeExpression(p, `CASE WHEN `+kindColumn+`='workspace' THEN 'workspace.read' ELSE 'item.read' END`)
 }
 
 // Resource tests that the principal may take action on the live resource
@@ -169,13 +182,40 @@ func (d Dialect) Resource(idColumn string, p Principal, action Action) (string, 
 	args = append(args, actionArgs...)
 	admin, adminArgs := d.Scope(p, "workspace.manage")
 	module, moduleArgs := d.module("acl.kind", p, action)
+	limit, limitArgs := within("acl", p, action)
 	query := `EXISTS (SELECT 1 FROM resources acl JOIN resources workspace ON workspace.id=acl.workspace_id AND workspace.deleted_at IS NULL
  WHERE acl.id=` + idColumn + ` AND acl.deleted_at IS NULL AND (EXISTS(SELECT 1 FROM grants g WHERE g.resource_id=acl.scope_id AND ` + grantee + ` AND g.effect='allow' AND g.action IN (` + actions + `))
  OR EXISTS(SELECT 1 FROM grants owner WHERE owner.resource_id=acl.workspace_id AND owner.principal_type='user' AND owner.principal_id=? AND owner.action='manage' AND owner.effect='allow')
- OR ` + admin + `) AND ` + module + `)`
+ OR ` + admin + `) AND ` + module + limit + `)`
 	args = append(args, p.Subject)
 	args = append(args, adminArgs...)
-	return query, append(args, moduleArgs...)
+	args = append(args, moduleArgs...)
+	return query, append(args, limitArgs...)
+}
+
+// within tests that the resources row alias is inside the credential's
+// resource limit: a listed workspace, list or library, or what they hold. A
+// listed collection's workspace may be read, so clients can reach the
+// collection through it, but nothing more. It is empty without a limit.
+func within(alias string, p Principal, action Action) (string, []any) {
+	if !p.Credential.Limited() {
+		return "", nil
+	}
+	marks := make([]string, len(p.Credential.Resources))
+	ids := make([]any, len(p.Credential.Resources))
+	for i, id := range p.Credential.Resources {
+		marks[i], ids[i] = "?", id
+	}
+	set := `(` + strings.Join(marks, ",") + `)`
+	// Workspaces have no container: coalesce keeps the test false, not null,
+	// where it is selected as a flag.
+	query := ` AND COALESCE(` + alias + `.workspace_id IN ` + set + ` OR ` + alias + `.container_id IN ` + set + ` OR ` + alias + `.id IN ` + set
+	args := append(append(append([]any{}, ids...), ids...), ids...)
+	if action == Read {
+		query += ` OR (` + alias + `.kind='workspace' AND ` + alias + `.id IN (SELECT limited.workspace_id FROM resources limited WHERE limited.id IN ` + set + `))`
+		args = append(args, ids...)
+	}
+	return query + `, FALSE)`, args
 }
 
 // Rows tests that the principal may take action on the resources row alias.
@@ -191,7 +231,9 @@ func (d Dialect) Rows(alias string, p Principal, action Action) (string, []any) 
 	args = append(args, adminArgs...)
 	module, moduleArgs := d.module(alias+".kind", p, action)
 	args = append(args, moduleArgs...)
-	return `((` + alias + `.scope_id IN (SELECT g.resource_id FROM grants g WHERE ` + grantee + ` AND g.effect='allow' AND g.action IN (` + actions + `)) OR ` + alias + `.workspace_id IN (SELECT g.resource_id FROM grants g JOIN resources w ON w.id=g.resource_id WHERE g.principal_type='user' AND g.principal_id=? AND g.effect='allow' AND g.action='manage' AND w.kind='workspace' AND w.deleted_at IS NULL) OR ` + admin + `) AND ` + module + `)`, args
+	limit, limitArgs := within(alias, p, action)
+	args = append(args, limitArgs...)
+	return `((` + alias + `.scope_id IN (SELECT g.resource_id FROM grants g WHERE ` + grantee + ` AND g.effect='allow' AND g.action IN (` + actions + `)) OR ` + alias + `.workspace_id IN (SELECT g.resource_id FROM grants g JOIN resources w ON w.id=g.resource_id WHERE g.principal_type='user' AND g.principal_id=? AND g.effect='allow' AND g.action='manage' AND w.kind='workspace' AND w.deleted_at IS NULL) OR ` + admin + `) AND ` + module + limit + `)`, args
 }
 
 // Publishes tests whether the collection of the content row idColumn names

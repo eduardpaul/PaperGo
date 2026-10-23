@@ -203,7 +203,7 @@ describe('reviewed frontend flows', () => {
   ])('creates a smart-folder comparison with a %s literal', async (type, input, literal) => {
     let body: Record<string, unknown> | undefined;
     mockAPI((url, init) => {
-      if (url.pathname === '/v1/identity/me') return { subject: 'alice', scopes: ['list.read', 'list.write'] };
+      if (url.pathname === '/v1/identity/me') return { subject: 'alice', scopes: ['item.read', 'item.write'] };
       if (url.pathname === '/v1/search/fields') return { value: [{ key: 'status', label: 'Status', type, queryable: true }] };
       if (url.pathname === '/v1/search/content-types' || url.pathname === '/v1/collection-templates') return [];
       if (init.method === 'POST' && url.pathname === '/v1/smart-folders') {

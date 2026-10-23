@@ -11,7 +11,7 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface RefreshRequestBuilder extends BaseRequestBuilder<RefreshRequestBuilder> {
     /**
-     * Requires list Manage and list.write; paused integrations must be resumed. The durable operation carries only the integration ID.
+     * Requires list manage access and list.manage; paused integrations must be resumed. The durable operation carries only the integration ID.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<Operation>}
      * @throws {Problem} error when the service returns a 400 status code
@@ -21,7 +21,7 @@ export interface RefreshRequestBuilder extends BaseRequestBuilder<RefreshRequest
      */
      post(requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<Operation | undefined>;
     /**
-     * Requires list Manage and list.write; paused integrations must be resumed. The durable operation carries only the integration ID.
+     * Requires list manage access and list.manage; paused integrations must be resumed. The durable operation carries only the integration ID.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */

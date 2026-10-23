@@ -11,21 +11,21 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface RestoreRequestBuilder extends BaseRequestBuilder<RestoreRequestBuilder> {
     /**
-     * Requires list.write and write access to the retained scope and destination. Returns to the active original folder, otherwise the collection root. Restores head/published content, history and indexes atomically. recursive=true restores folder descendants from the same deletion only. Name or business-key conflicts roll back the entire restore. Retained relationships become visible when both endpoints are active and readable. No If-Match is required.
+     * Requires item.write and write access to the retained scope and destination. Returns to the active original folder, otherwise the collection root. Restores head/published content, history and indexes atomically. recursive=true restores folder descendants from the same deletion only. Name or business-key conflicts roll back the entire restore. Retained relationships become visible when both endpoints are active and readable. No If-Match is required.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<Resource>}
      * @throws {Problem} error when the service returns a 4XX or 5XX status code
      */
      post(requestConfiguration?: RequestConfiguration<RestoreRequestBuilderPostQueryParameters> | undefined) : Promise<Resource | undefined>;
     /**
-     * Requires list.write and write access to the retained scope and destination. Returns to the active original folder, otherwise the collection root. Restores head/published content, history and indexes atomically. recursive=true restores folder descendants from the same deletion only. Name or business-key conflicts roll back the entire restore. Retained relationships become visible when both endpoints are active and readable. No If-Match is required.
+     * Requires item.write and write access to the retained scope and destination. Returns to the active original folder, otherwise the collection root. Restores head/published content, history and indexes atomically. recursive=true restores folder descendants from the same deletion only. Name or business-key conflicts roll back the entire restore. Retained relationships become visible when both endpoints are active and readable. No If-Match is required.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */
      toPostRequestInformation(requestConfiguration?: RequestConfiguration<RestoreRequestBuilderPostQueryParameters> | undefined) : RequestInformation;
 }
 /**
- * Requires list.write and write access to the retained scope and destination. Returns to the active original folder, otherwise the collection root. Restores head/published content, history and indexes atomically. recursive=true restores folder descendants from the same deletion only. Name or business-key conflicts roll back the entire restore. Retained relationships become visible when both endpoints are active and readable. No If-Match is required.
+ * Requires item.write and write access to the retained scope and destination. Returns to the active original folder, otherwise the collection root. Restores head/published content, history and indexes atomically. recursive=true restores folder descendants from the same deletion only. Name or business-key conflicts roll back the entire restore. Retained relationships become visible when both endpoints are active and readable. No If-Match is required.
  */
 export interface RestoreRequestBuilderPostQueryParameters {
     recursive?: boolean;

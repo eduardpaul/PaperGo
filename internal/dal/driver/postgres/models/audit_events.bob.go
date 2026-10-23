@@ -24,17 +24,18 @@ import (
 
 // AuditEvent is an object representing the database table.
 type AuditEvent struct {
-	ID          string                     `db:"id,pk" `
-	CreatedAt   time.Time                  `db:"created_at" `
-	WorkspaceID null.Val[string]           `db:"workspace_id" `
-	ResourceID  null.Val[string]           `db:"resource_id" `
-	Subject     string                     `db:"subject" `
-	Action      string                     `db:"action" `
-	EntityType  string                     `db:"entity_type" `
-	EntityID    null.Val[string]           `db:"entity_id" `
-	Properties  types.JSON[[]string]       `db:"properties" `
-	TraceID     string                     `db:"trace_id" `
-	Details     types.JSON[map[string]any] `db:"details" `
+	ID           string                     `db:"id,pk" `
+	CreatedAt    time.Time                  `db:"created_at" `
+	WorkspaceID  null.Val[string]           `db:"workspace_id" `
+	ResourceID   null.Val[string]           `db:"resource_id" `
+	Subject      string                     `db:"subject" `
+	Action       string                     `db:"action" `
+	EntityType   string                     `db:"entity_type" `
+	EntityID     null.Val[string]           `db:"entity_id" `
+	Properties   types.JSON[[]string]       `db:"properties" `
+	TraceID      string                     `db:"trace_id" `
+	Details      types.JSON[map[string]any] `db:"details" `
+	CredentialID null.Val[string]           `db:"credential_id" `
 }
 
 // AuditEventSlice is an alias for a slice of pointers to AuditEvent.
@@ -49,7 +50,7 @@ type AuditEventsQuery = *psql.ViewQuery[*AuditEvent, AuditEventSlice]
 
 func buildAuditEventColumns(tableName string) auditEventColumns {
 	columnsExpr := expr.NewColumnsExpr(
-		"id", "created_at", "workspace_id", "resource_id", "subject", "action", "entity_type", "entity_id", "properties", "trace_id", "details",
+		"id", "created_at", "workspace_id", "resource_id", "subject", "action", "entity_type", "entity_id", "properties", "trace_id", "details", "credential_id",
 	)
 
 	if tableName != "" {
@@ -57,36 +58,38 @@ func buildAuditEventColumns(tableName string) auditEventColumns {
 	}
 
 	return auditEventColumns{
-		ColumnsExpr: columnsExpr,
-		tableAlias:  tableName,
-		ID:          buildAuditEventColumn(tableName, "id"),
-		CreatedAt:   buildAuditEventColumn(tableName, "created_at"),
-		WorkspaceID: buildAuditEventColumn(tableName, "workspace_id"),
-		ResourceID:  buildAuditEventColumn(tableName, "resource_id"),
-		Subject:     buildAuditEventColumn(tableName, "subject"),
-		Action:      buildAuditEventColumn(tableName, "action"),
-		EntityType:  buildAuditEventColumn(tableName, "entity_type"),
-		EntityID:    buildAuditEventColumn(tableName, "entity_id"),
-		Properties:  buildAuditEventColumn(tableName, "properties"),
-		TraceID:     buildAuditEventColumn(tableName, "trace_id"),
-		Details:     buildAuditEventColumn(tableName, "details"),
+		ColumnsExpr:  columnsExpr,
+		tableAlias:   tableName,
+		ID:           buildAuditEventColumn(tableName, "id"),
+		CreatedAt:    buildAuditEventColumn(tableName, "created_at"),
+		WorkspaceID:  buildAuditEventColumn(tableName, "workspace_id"),
+		ResourceID:   buildAuditEventColumn(tableName, "resource_id"),
+		Subject:      buildAuditEventColumn(tableName, "subject"),
+		Action:       buildAuditEventColumn(tableName, "action"),
+		EntityType:   buildAuditEventColumn(tableName, "entity_type"),
+		EntityID:     buildAuditEventColumn(tableName, "entity_id"),
+		Properties:   buildAuditEventColumn(tableName, "properties"),
+		TraceID:      buildAuditEventColumn(tableName, "trace_id"),
+		Details:      buildAuditEventColumn(tableName, "details"),
+		CredentialID: buildAuditEventColumn(tableName, "credential_id"),
 	}
 }
 
 type auditEventColumns struct {
 	expr.ColumnsExpr
-	tableAlias  string
-	ID          auditEventColumn
-	CreatedAt   auditEventColumn
-	WorkspaceID auditEventColumn
-	ResourceID  auditEventColumn
-	Subject     auditEventColumn
-	Action      auditEventColumn
-	EntityType  auditEventColumn
-	EntityID    auditEventColumn
-	Properties  auditEventColumn
-	TraceID     auditEventColumn
-	Details     auditEventColumn
+	tableAlias   string
+	ID           auditEventColumn
+	CreatedAt    auditEventColumn
+	WorkspaceID  auditEventColumn
+	ResourceID   auditEventColumn
+	Subject      auditEventColumn
+	Action       auditEventColumn
+	EntityType   auditEventColumn
+	EntityID     auditEventColumn
+	Properties   auditEventColumn
+	TraceID      auditEventColumn
+	Details      auditEventColumn
+	CredentialID auditEventColumn
 }
 
 // Alias returns the current table alias for the columns set.
@@ -132,21 +135,22 @@ func (c auditEventColumn) ShouldOmitParens() bool {
 // All values are optional, and do not have to be set
 // Generated columns are not included
 type AuditEventSetter struct {
-	ID          omit.Val[string]                     `db:"id,pk" `
-	CreatedAt   omit.Val[time.Time]                  `db:"created_at" `
-	WorkspaceID omitnull.Val[string]                 `db:"workspace_id" `
-	ResourceID  omitnull.Val[string]                 `db:"resource_id" `
-	Subject     omit.Val[string]                     `db:"subject" `
-	Action      omit.Val[string]                     `db:"action" `
-	EntityType  omit.Val[string]                     `db:"entity_type" `
-	EntityID    omitnull.Val[string]                 `db:"entity_id" `
-	Properties  omit.Val[types.JSON[[]string]]       `db:"properties" `
-	TraceID     omit.Val[string]                     `db:"trace_id" `
-	Details     omit.Val[types.JSON[map[string]any]] `db:"details" `
+	ID           omit.Val[string]                     `db:"id,pk" `
+	CreatedAt    omit.Val[time.Time]                  `db:"created_at" `
+	WorkspaceID  omitnull.Val[string]                 `db:"workspace_id" `
+	ResourceID   omitnull.Val[string]                 `db:"resource_id" `
+	Subject      omit.Val[string]                     `db:"subject" `
+	Action       omit.Val[string]                     `db:"action" `
+	EntityType   omit.Val[string]                     `db:"entity_type" `
+	EntityID     omitnull.Val[string]                 `db:"entity_id" `
+	Properties   omit.Val[types.JSON[[]string]]       `db:"properties" `
+	TraceID      omit.Val[string]                     `db:"trace_id" `
+	Details      omit.Val[types.JSON[map[string]any]] `db:"details" `
+	CredentialID omitnull.Val[string]                 `db:"credential_id" `
 }
 
 func (s AuditEventSetter) SetColumns() []string {
-	vals := make([]string, 0, 11)
+	vals := make([]string, 0, 12)
 	if s.ID.IsValue() {
 		vals = append(vals, "id")
 	}
@@ -179,6 +183,9 @@ func (s AuditEventSetter) SetColumns() []string {
 	}
 	if s.Details.IsValue() {
 		vals = append(vals, "details")
+	}
+	if s.CredentialID.IsValue() || s.CredentialID.IsNull() {
+		vals = append(vals, "credential_id")
 	}
 	return vals
 }
@@ -216,6 +223,9 @@ func (s AuditEventSetter) Overwrite(t *AuditEvent) {
 	}
 	if s.Details.IsValue() {
 		t.Details = s.Details.MustGet()
+	}
+	if s.CredentialID.IsValue() || s.CredentialID.IsNull() {
+		t.CredentialID = s.CredentialID.MustGetNull()
 	}
 }
 
@@ -280,6 +290,11 @@ func (s *AuditEventSetter) Apply(q *dialect.InsertQuery) {
 				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
 			}
 			return psql.Arg(s.Details.MustGet()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.CredentialID.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.CredentialID.MustGetNull()).WriteSQL(ctx, w, d, start)
 		}))
 }
 
@@ -288,7 +303,7 @@ func (s AuditEventSetter) UpdateMod() bob.Mod[*dialect.UpdateQuery] {
 }
 
 func (s AuditEventSetter) Expressions(prefix ...string) []bob.Expression {
-	exprs := make([]bob.Expression, 0, 11)
+	exprs := make([]bob.Expression, 0, 12)
 
 	if s.ID.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
@@ -367,6 +382,13 @@ func (s AuditEventSetter) Expressions(prefix ...string) []bob.Expression {
 		}})
 	}
 
+	if s.CredentialID.IsValue() || s.CredentialID.IsNull() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "credential_id")...),
+			psql.Arg(s.CredentialID),
+		}})
+	}
+
 	return exprs
 }
 
@@ -377,7 +399,7 @@ func auditEventScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc, 
 		idx int
 		dst func(o *AuditEvent) any
 	}
-	targets := make([]target, 0, 11)
+	targets := make([]target, 0, 12)
 	for i, col := range cols {
 		switch col {
 		case "id":
@@ -402,6 +424,8 @@ func auditEventScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc, 
 			targets = append(targets, target{i, func(o *AuditEvent) any { return &o.TraceID }})
 		case "details":
 			targets = append(targets, target{i, func(o *AuditEvent) any { return &o.Details }})
+		case "credential_id":
+			targets = append(targets, target{i, func(o *AuditEvent) any { return &o.CredentialID }})
 		}
 	}
 
@@ -677,18 +701,19 @@ func (o AuditEventSlice) ReloadAll(ctx context.Context, exec bob.Executor) error
 }
 
 type auditEventWhere[Q psql.Filterable] struct {
-	cols        auditEventColumns
-	ID          psql.WhereMod[Q, string]
-	CreatedAt   psql.WhereMod[Q, time.Time]
-	WorkspaceID psql.WhereNullMod[Q, string]
-	ResourceID  psql.WhereNullMod[Q, string]
-	Subject     psql.WhereMod[Q, string]
-	Action      psql.WhereMod[Q, string]
-	EntityType  psql.WhereMod[Q, string]
-	EntityID    psql.WhereNullMod[Q, string]
-	Properties  psql.WhereMod[Q, types.JSON[[]string]]
-	TraceID     psql.WhereMod[Q, string]
-	Details     psql.WhereMod[Q, types.JSON[map[string]any]]
+	cols         auditEventColumns
+	ID           psql.WhereMod[Q, string]
+	CreatedAt    psql.WhereMod[Q, time.Time]
+	WorkspaceID  psql.WhereNullMod[Q, string]
+	ResourceID   psql.WhereNullMod[Q, string]
+	Subject      psql.WhereMod[Q, string]
+	Action       psql.WhereMod[Q, string]
+	EntityType   psql.WhereMod[Q, string]
+	EntityID     psql.WhereNullMod[Q, string]
+	Properties   psql.WhereMod[Q, types.JSON[[]string]]
+	TraceID      psql.WhereMod[Q, string]
+	Details      psql.WhereMod[Q, types.JSON[map[string]any]]
+	CredentialID psql.WhereNullMod[Q, string]
 }
 
 func (auditEventWhere[Q]) AliasedAs(alias string) auditEventWhere[Q] {
@@ -697,17 +722,18 @@ func (auditEventWhere[Q]) AliasedAs(alias string) auditEventWhere[Q] {
 
 func buildAuditEventWhere[Q psql.Filterable](cols auditEventColumns) auditEventWhere[Q] {
 	return auditEventWhere[Q]{
-		cols:        cols,
-		ID:          psql.Where[Q, string](cols.ID.Expression),
-		CreatedAt:   psql.Where[Q, time.Time](cols.CreatedAt.Expression),
-		WorkspaceID: psql.WhereNull[Q, string](cols.WorkspaceID.Expression),
-		ResourceID:  psql.WhereNull[Q, string](cols.ResourceID.Expression),
-		Subject:     psql.Where[Q, string](cols.Subject.Expression),
-		Action:      psql.Where[Q, string](cols.Action.Expression),
-		EntityType:  psql.Where[Q, string](cols.EntityType.Expression),
-		EntityID:    psql.WhereNull[Q, string](cols.EntityID.Expression),
-		Properties:  psql.Where[Q, types.JSON[[]string]](cols.Properties.Expression),
-		TraceID:     psql.Where[Q, string](cols.TraceID.Expression),
-		Details:     psql.Where[Q, types.JSON[map[string]any]](cols.Details.Expression),
+		cols:         cols,
+		ID:           psql.Where[Q, string](cols.ID.Expression),
+		CreatedAt:    psql.Where[Q, time.Time](cols.CreatedAt.Expression),
+		WorkspaceID:  psql.WhereNull[Q, string](cols.WorkspaceID.Expression),
+		ResourceID:   psql.WhereNull[Q, string](cols.ResourceID.Expression),
+		Subject:      psql.Where[Q, string](cols.Subject.Expression),
+		Action:       psql.Where[Q, string](cols.Action.Expression),
+		EntityType:   psql.Where[Q, string](cols.EntityType.Expression),
+		EntityID:     psql.WhereNull[Q, string](cols.EntityID.Expression),
+		Properties:   psql.Where[Q, types.JSON[[]string]](cols.Properties.Expression),
+		TraceID:      psql.Where[Q, string](cols.TraceID.Expression),
+		Details:      psql.Where[Q, types.JSON[map[string]any]](cols.Details.Expression),
+		CredentialID: psql.WhereNull[Q, string](cols.CredentialID.Expression),
 	}
 }

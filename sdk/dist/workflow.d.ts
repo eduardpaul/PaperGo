@@ -1251,6 +1251,10 @@ export interface AuditEvent extends AdditionalDataHolder, Parsable {
 	 */
 	createdAt?: Date | null;
 	/**
+	 * The access token the action was taken with, beside the person in subject; absent for actions taken after signing in.
+	 */
+	credential?: AuditEvent_credential | null;
+	/**
 	 * The details property
 	 */
 	details?: AuditEvent_details | null;
@@ -1286,6 +1290,19 @@ export interface AuditEvent extends AdditionalDataHolder, Parsable {
 	 * The workspace_id property
 	 */
 	workspaceId?: string | null;
+}
+/**
+ * The access token the action was taken with, beside the person in subject; absent for actions taken after signing in.
+ */
+export interface AuditEvent_credential extends Parsable {
+	/**
+	 * The id property
+	 */
+	id?: Guid | null;
+	/**
+	 * The token's name, such as an AI assistant connection's; absent once the token is gone.
+	 */
+	name?: string | null;
 }
 export interface AuditEvent_details extends AdditionalDataHolder, Parsable {
 }
@@ -1806,6 +1823,7 @@ declare function createArtifact_metricsFromDiscriminatorValue(parseNode: ParseNo
 declare function createArtifact_sourcesFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createArtifactFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createAttachContentTypeInputFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
+declare function createAuditEvent_credentialFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createAuditEvent_detailsFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createAuditEventFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createAuditPageFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
@@ -1944,6 +1962,7 @@ declare function createGenerationEnrichmentsFromDiscriminatorValue(parseNode: Pa
 declare function createItemIntegrationFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createItemRevision_payloadFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createItemRevisionFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
+declare function createItemText_nextFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createItemText_pagesFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createItemTextFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createKeywordCountFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
@@ -2337,6 +2356,7 @@ declare function deserializeIntoArtifact_metrics(artifact_metrics?: Partial<Arti
 declare function deserializeIntoArtifact_sources(artifact_sources?: Partial<Artifact_sources> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoAttachContentTypeInput(attachContentTypeInput?: Partial<AttachContentTypeInput> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoAuditEvent(auditEvent?: Partial<AuditEvent> | undefined): Record<string, (node: ParseNode) => void>;
+declare function deserializeIntoAuditEvent_credential(auditEvent_credential?: Partial<AuditEvent_credential> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoAuditEvent_details(auditEvent_details?: Partial<AuditEvent_details> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoAuditPage(auditPage?: Partial<AuditPage> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoBlob(blob?: Partial<Blob> | undefined): Record<string, (node: ParseNode) => void>;
@@ -2401,6 +2421,7 @@ declare function deserializeIntoItemIntegration(itemIntegration?: Partial<ItemIn
 declare function deserializeIntoItemRevision(itemRevision?: Partial<ItemRevision> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoItemRevision_payload(itemRevision_payload?: Partial<ItemRevision_payload> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoItemText(itemText?: Partial<ItemText> | undefined): Record<string, (node: ParseNode) => void>;
+declare function deserializeIntoItemText_next(itemText_next?: Partial<ItemText_next> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoItemText_pages(itemText_pages?: Partial<ItemText_pages> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoKeywordCount(keywordCount?: Partial<KeywordCount> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoKeywordCountList(keywordCountList?: Partial<KeywordCountList> | undefined): Record<string, (node: ParseNode) => void>;
@@ -2995,6 +3016,10 @@ export interface ItemText extends Parsable {
 	 */
 	language?: string | null;
 	/**
+	 * Where the next part of a ranged read starts; null after the end.
+	 */
+	next?: ItemText_next | null;
+	/**
 	 * The ocr_pages property
 	 */
 	ocrPages?: number | null;
@@ -3023,6 +3048,19 @@ export interface ItemText extends Parsable {
 	 */
 	truncated?: boolean | null;
 }
+/**
+ * Where the next part of a ranged read starts; null after the end.
+ */
+export interface ItemText_next extends Parsable {
+	/**
+	 * The offset property
+	 */
+	offset?: number | null;
+	/**
+	 * The page property
+	 */
+	page?: number | null;
+}
 export interface ItemText_pages extends Parsable {
 	/**
 	 * The ocr property
@@ -3032,6 +3070,10 @@ export interface ItemText_pages extends Parsable {
 	 * The page property
 	 */
 	page?: number | null;
+	/**
+	 * A ranged read returned only part of the page.
+	 */
+	partial?: boolean | null;
 	/**
 	 * The text property
 	 */
@@ -3889,6 +3931,10 @@ export interface QueryResult extends Parsable {
  */
 export interface QuerySpec extends Parsable {
 	/**
+	 * Keeps what is anywhere below a folder: in it or its subfolders; the collection itself means everything. Cannot be combined with parent_id.
+	 */
+	ancestorId?: Guid | null;
+	/**
 	 * Discovery state. Omitted selects active items; archive status is independent of publication and deletion.
 	 */
 	archive?: ArchiveSelection | null;
@@ -4303,7 +4349,7 @@ export type Resource_versioning = (typeof Resource_versioningObject)[keyof typeo
  */
 export interface ResourceAccess extends Parsable, Resource {
 	/**
-	 * Allowed actions, in the order read, read_draft, write, publish, manage. Workspace ACLs and the caller's module scopes both apply: write and publish below a workspace also need list.write. On a workspace, manage means owner; on a list or library, write means adding and editing content and manage means changing settings, fields, views and permissions.
+	 * Allowed actions, in the order read, read_draft, write, publish, manage. Workspace ACLs and the caller's module scopes both apply: write and publish below a workspace also need item.write, and manage needs list.manage. On a workspace, manage means owner; on a list or library, write means adding and editing content and manage means changing settings, fields, views and permissions.
 	 */
 	access?: ResourceAccess_access[] | null;
 }
@@ -4741,6 +4787,7 @@ declare function serializeArtifact_metrics(writer: SerializationWriter, artifact
 declare function serializeArtifact_sources(writer: SerializationWriter, artifact_sources?: Partial<Artifact_sources> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeAttachContentTypeInput(writer: SerializationWriter, attachContentTypeInput?: Partial<AttachContentTypeInput> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeAuditEvent(writer: SerializationWriter, auditEvent?: Partial<AuditEvent> | undefined | null, isSerializingDerivedType?: boolean): void;
+declare function serializeAuditEvent_credential(writer: SerializationWriter, auditEvent_credential?: Partial<AuditEvent_credential> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeAuditEvent_details(writer: SerializationWriter, auditEvent_details?: Partial<AuditEvent_details> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeAuditPage(writer: SerializationWriter, auditPage?: Partial<AuditPage> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeBlob(writer: SerializationWriter, blob?: Partial<Blob> | undefined | null, isSerializingDerivedType?: boolean): void;
@@ -4805,6 +4852,7 @@ declare function serializeItemIntegration(writer: SerializationWriter, itemInteg
 declare function serializeItemRevision(writer: SerializationWriter, itemRevision?: Partial<ItemRevision> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeItemRevision_payload(writer: SerializationWriter, itemRevision_payload?: Partial<ItemRevision_payload> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeItemText(writer: SerializationWriter, itemText?: Partial<ItemText> | undefined | null, isSerializingDerivedType?: boolean): void;
+declare function serializeItemText_next(writer: SerializationWriter, itemText_next?: Partial<ItemText_next> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeItemText_pages(writer: SerializationWriter, itemText_pages?: Partial<ItemText_pages> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeKeywordCount(writer: SerializationWriter, keywordCount?: Partial<KeywordCount> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeKeywordCountList(writer: SerializationWriter, keywordCountList?: Partial<KeywordCountList> | undefined | null, isSerializingDerivedType?: boolean): void;
@@ -7171,21 +7219,21 @@ export interface ArchiveGetResponse extends Parsable {
  */
 export interface ArchiveRequestBuilder extends BaseRequestBuilder<ArchiveRequestBuilder> {
 	/**
-	 * Database-backed name search and filters; newest archived first with keyset pagination. Works without a search service. Requires list.read. Archive date bounds are inclusive.
+	 * Database-backed name search and filters; newest archived first with keyset pagination. Works without a search service. Requires item.read. Archive date bounds are inclusive.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<ArchiveGetResponse>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	get(requestConfiguration?: RequestConfiguration<ArchiveRequestBuilderGetQueryParameters> | undefined): Promise<ArchiveGetResponse | undefined>;
 	/**
-	 * Database-backed name search and filters; newest archived first with keyset pagination. Works without a search service. Requires list.read. Archive date bounds are inclusive.
+	 * Database-backed name search and filters; newest archived first with keyset pagination. Works without a search service. Requires item.read. Archive date bounds are inclusive.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<ArchiveRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 }
 /**
- * Database-backed name search and filters; newest archived first with keyset pagination. Works without a search service. Requires list.read. Archive date bounds are inclusive.
+ * Database-backed name search and filters; newest archived first with keyset pagination. Works without a search service. Requires item.read. Archive date bounds are inclusive.
  */
 export interface ArchiveRequestBuilderGetQueryParameters {
 	archivedBy?: string;
@@ -7331,13 +7379,13 @@ export interface AuditRequestBuilderGetQueryParameters {
  */
 export interface CollectionTemplatesRequestBuilder extends BaseRequestBuilder<CollectionTemplatesRequestBuilder> {
 	/**
-	 * Requires list.read. Built-in Documents and Contacts and templates registered by modules. Create a collection with template_key to provision it.
+	 * Requires item.read. Built-in Documents and Contacts and templates registered by modules. Create a collection with template_key to provision it.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<CollectionTemplate[]>}
 	 */
 	get(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<CollectionTemplate[] | undefined>;
 	/**
-	 * Requires list.read. Built-in Documents and Contacts and templates registered by modules. Create a collection with template_key to provision it.
+	 * Requires item.read. Built-in Documents and Contacts and templates registered by modules. Create a collection with template_key to provision it.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -7491,14 +7539,14 @@ export interface FieldsRequestBuilder extends BaseRequestBuilder<FieldsRequestBu
 }
 interface ArchiveRequestBuilder$1 extends BaseRequestBuilder<ArchiveRequestBuilder$1> {
 	/**
-	 * Requires item write access and list.write scope. Applies immediately to head and published content. Changes the lock version without a content revision. Repeating with the current version is a no-op.
+	 * Requires item write access and item.write scope. Applies immediately to head and published content. Changes the lock version without a content revision. Repeating with the current version is a no-op.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<ResourceAccess>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	post(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<ResourceAccess | undefined>;
 	/**
-	 * Requires item write access and list.write scope. Applies immediately to head and published content. Changes the lock version without a content revision. Repeating with the current version is a no-op.
+	 * Requires item write access and item.write scope. Applies immediately to head and published content. Changes the lock version without a content revision. Repeating with the current version is a no-op.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -7559,7 +7607,7 @@ export interface ReclaimRequestBuilder extends BaseRequestBuilder<ReclaimRequest
  */
 export interface RestoreRequestBuilder extends BaseRequestBuilder<RestoreRequestBuilder> {
 	/**
-	 * Requires list.write and document.write, item write access and the current numeric If-Match. Restores file bytes and filename while retaining current metadata. Creates a new blob sequence number and content revision; automatic publishing follows library settings. Explicit publication remains unchanged. Earlier versions remain immutable. The source version must belong to this item.
+	 * Requires item.write and document.write, item write access and the current numeric If-Match. Restores file bytes and filename while retaining current metadata. Creates a new blob sequence number and content revision; automatic publishing follows library settings. Explicit publication remains unchanged. Earlier versions remain immutable. The source version must belong to this item.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Blob>}
 	 * @throws {Problem} error when the service returns a 412 status code
@@ -7567,7 +7615,7 @@ export interface RestoreRequestBuilder extends BaseRequestBuilder<RestoreRequest
 	 */
 	post(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Blob | undefined>;
 	/**
-	 * Requires list.write and document.write, item write access and the current numeric If-Match. Restores file bytes and filename while retaining current metadata. Creates a new blob sequence number and content revision; automatic publishing follows library settings. Explicit publication remains unchanged. Earlier versions remain immutable. The source version must belong to this item.
+	 * Requires item.write and document.write, item write access and the current numeric If-Match. Restores file bytes and filename while retaining current metadata. Creates a new blob sequence number and content revision; automatic publishing follows library settings. Explicit publication remains unchanged. Earlier versions remain immutable. The source version must belong to this item.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -7603,21 +7651,21 @@ export interface VersionsRequestBuilder extends BaseRequestBuilder<VersionsReque
 	 */
 	byNumber(number: number): WithNumberItemRequestBuilder;
 	/**
-	 * Retained files of a library item, newest first. Draft readers see every version; ordinary readers see only the published file. `is_current` marks the file of the caller's visible revision, `created_by` who uploaded or restored that version, and `availability` whether the bytes are still stored. A reclaimed version keeps its id, version, filename, content type, size and checksum; downloading or restoring it reports that the content is unavailable. Restore a version that still has its bytes with POST /v1/items/{id}/content/versions/{number}/restore. Required module scopes: list.read, document.read. Resource ACLs and any additional use-case checks also apply.
+	 * Retained files of a library item, newest first. Draft readers see every version; ordinary readers see only the published file. `is_current` marks the file of the caller's visible revision, `created_by` who uploaded or restored that version, and `availability` whether the bytes are still stored. A reclaimed version keeps its id, version, filename, content type, size and checksum; downloading or restoring it reports that the content is unavailable. Restore a version that still has its bytes with POST /v1/items/{id}/content/versions/{number}/restore. Required module scopes: item.read, document.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<VersionsGetResponse>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	get(requestConfiguration?: RequestConfiguration<VersionsRequestBuilderGetQueryParameters> | undefined): Promise<VersionsGetResponse | undefined>;
 	/**
-	 * Retained files of a library item, newest first. Draft readers see every version; ordinary readers see only the published file. `is_current` marks the file of the caller's visible revision, `created_by` who uploaded or restored that version, and `availability` whether the bytes are still stored. A reclaimed version keeps its id, version, filename, content type, size and checksum; downloading or restoring it reports that the content is unavailable. Restore a version that still has its bytes with POST /v1/items/{id}/content/versions/{number}/restore. Required module scopes: list.read, document.read. Resource ACLs and any additional use-case checks also apply.
+	 * Retained files of a library item, newest first. Draft readers see every version; ordinary readers see only the published file. `is_current` marks the file of the caller's visible revision, `created_by` who uploaded or restored that version, and `availability` whether the bytes are still stored. A reclaimed version keeps its id, version, filename, content type, size and checksum; downloading or restoring it reports that the content is unavailable. Restore a version that still has its bytes with POST /v1/items/{id}/content/versions/{number}/restore. Required module scopes: item.read, document.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<VersionsRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 }
 /**
- * Retained files of a library item, newest first. Draft readers see every version; ordinary readers see only the published file. `is_current` marks the file of the caller's visible revision, `created_by` who uploaded or restored that version, and `availability` whether the bytes are still stored. A reclaimed version keeps its id, version, filename, content type, size and checksum; downloading or restoring it reports that the content is unavailable. Restore a version that still has its bytes with POST /v1/items/{id}/content/versions/{number}/restore. Required module scopes: list.read, document.read. Resource ACLs and any additional use-case checks also apply.
+ * Retained files of a library item, newest first. Draft readers see every version; ordinary readers see only the published file. `is_current` marks the file of the caller's visible revision, `created_by` who uploaded or restored that version, and `availability` whether the bytes are still stored. A reclaimed version keeps its id, version, filename, content type, size and checksum; downloading or restoring it reports that the content is unavailable. Restore a version that still has its bytes with POST /v1/items/{id}/content/versions/{number}/restore. Required module scopes: item.read, document.read. Resource ACLs and any additional use-case checks also apply.
  */
 export interface VersionsRequestBuilderGetQueryParameters {
 	/**
@@ -7639,13 +7687,13 @@ interface ContentRequestBuilder$1 extends BaseRequestBuilder<ContentRequestBuild
 	 */
 	get versions(): VersionsRequestBuilder;
 	/**
-	 * Ordinary readers can download only the current published blob, including with blob_id. Draft readers default to head and may request retained historical blobs. Required module scopes: list.read and document.read. Resource ACLs and any additional use-case checks also apply.
+	 * Ordinary readers can download only the current published blob, including with blob_id. Draft readers default to head and may request retained historical blobs. Required module scopes: item.read and document.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	get(requestConfiguration?: RequestConfiguration<ContentRequestBuilderGetQueryParameters> | undefined): Promise<void>;
 	/**
-	 * Checks the library duplicate policy in the same transaction as the new file revision. Warn returns duplicates; block returns 409 duplicate_file and stores no revision. Self, deleted items, historical files and inaccessible content do not count. Requires list.write and document.write and item write access with current If-Match. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts only PDF, TIFF, JPEG, PNG and WebP detected from file signatures; filenames and declared MIME types do not determine stored content_type. Unsupported bytes return 415 without item/revision changes. Size limits apply while streaming.
+	 * Checks the library duplicate policy in the same transaction as the new file revision. Warn returns duplicates; block returns 409 duplicate_file and stores no revision. Self, deleted items, historical files and inaccessible content do not count. Requires item.write and document.write and item write access with current If-Match. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts only PDF, TIFF, JPEG, PNG and WebP detected from file signatures; filenames and declared MIME types do not determine stored content_type. Unsupported bytes return 415 without item/revision changes. Size limits apply while streaming.
 	 * @param body Binary request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Blob>}
@@ -7654,13 +7702,13 @@ interface ContentRequestBuilder$1 extends BaseRequestBuilder<ContentRequestBuild
 	 */
 	put(body: ArrayBuffer | undefined, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Blob | undefined>;
 	/**
-	 * Ordinary readers can download only the current published blob, including with blob_id. Draft readers default to head and may request retained historical blobs. Required module scopes: list.read and document.read. Resource ACLs and any additional use-case checks also apply.
+	 * Ordinary readers can download only the current published blob, including with blob_id. Draft readers default to head and may request retained historical blobs. Required module scopes: item.read and document.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<ContentRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 	/**
-	 * Checks the library duplicate policy in the same transaction as the new file revision. Warn returns duplicates; block returns 409 duplicate_file and stores no revision. Self, deleted items, historical files and inaccessible content do not count. Requires list.write and document.write and item write access with current If-Match. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts only PDF, TIFF, JPEG, PNG and WebP detected from file signatures; filenames and declared MIME types do not determine stored content_type. Unsupported bytes return 415 without item/revision changes. Size limits apply while streaming.
+	 * Checks the library duplicate policy in the same transaction as the new file revision. Warn returns duplicates; block returns 409 duplicate_file and stores no revision. Self, deleted items, historical files and inaccessible content do not count. Requires item.write and document.write and item write access with current If-Match. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts only PDF, TIFF, JPEG, PNG and WebP detected from file signatures; filenames and declared MIME types do not determine stored content_type. Unsupported bytes return 415 without item/revision changes. Size limits apply while streaming.
 	 * @param body Binary request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -7668,7 +7716,7 @@ interface ContentRequestBuilder$1 extends BaseRequestBuilder<ContentRequestBuild
 	toPutRequestInformation(body: ArrayBuffer | undefined, requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 }
 /**
- * Ordinary readers can download only the current published blob, including with blob_id. Draft readers default to head and may request retained historical blobs. Required module scopes: list.read and document.read. Resource ACLs and any additional use-case checks also apply.
+ * Ordinary readers can download only the current published blob, including with blob_id. Draft readers default to head and may request retained historical blobs. Required module scopes: item.read and document.read. Resource ACLs and any additional use-case checks also apply.
  */
 export interface ContentRequestBuilderGetQueryParameters {
 	blobId?: Guid;
@@ -7696,7 +7744,7 @@ export interface IntegrationRequestBuilder extends BaseRequestBuilder<Integratio
  */
 export interface MoveRequestBuilder extends BaseRequestBuilder<MoveRequestBuilder> {
 	/**
-	 * Requires list.write, source write access, destination collection read access and destination parent write access. If-Match validates the current item version. Cross-collection moves support content items only, require matching collection kinds and an attached matching content type, and revalidate all current values and references. Identity, blobs, history and relationships survive. Source item grants are removed and the item inherits destination permissions. Search indexes and business keys move atomically; name/unique-value collisions roll back the move. Explicit publications retain frozen snapshots; automatic publishing exposes the head. Historical revisions retain their original schema/container provenance. Workflow run location metadata follows the item. Same-collection moves retain exclusive permissions.
+	 * Requires item.write, source write access, destination collection read access and destination parent write access. If-Match validates the current item version. Cross-collection moves support content items only, require matching collection kinds and an attached matching content type, and revalidate all current values and references. Identity, blobs, history and relationships survive. Source item grants are removed and the item inherits destination permissions. Search indexes and business keys move atomically; name/unique-value collisions roll back the move. Explicit publications retain frozen snapshots; automatic publishing exposes the head. Historical revisions retain their original schema/container provenance. Workflow run location metadata follows the item. Same-collection moves retain exclusive permissions.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Resource>}
@@ -7705,7 +7753,7 @@ export interface MoveRequestBuilder extends BaseRequestBuilder<MoveRequestBuilde
 	 */
 	post(body: MoveItem, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Resource | undefined>;
 	/**
-	 * Requires list.write, source write access, destination collection read access and destination parent write access. If-Match validates the current item version. Cross-collection moves support content items only, require matching collection kinds and an attached matching content type, and revalidate all current values and references. Identity, blobs, history and relationships survive. Source item grants are removed and the item inherits destination permissions. Search indexes and business keys move atomically; name/unique-value collisions roll back the move. Explicit publications retain frozen snapshots; automatic publishing exposes the head. Historical revisions retain their original schema/container provenance. Workflow run location metadata follows the item. Same-collection moves retain exclusive permissions.
+	 * Requires item.write, source write access, destination collection read access and destination parent write access. If-Match validates the current item version. Cross-collection moves support content items only, require matching collection kinds and an attached matching content type, and revalidate all current values and references. Identity, blobs, history and relationships survive. Source item grants are removed and the item inherits destination permissions. Search indexes and business keys move atomically; name/unique-value collisions roll back the move. Explicit publications retain frozen snapshots; automatic publishing exposes the head. Historical revisions retain their original schema/container provenance. Workflow run location metadata follows the item. Same-collection moves retain exclusive permissions.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -7753,7 +7801,7 @@ export interface PreviewGetResponse extends AdditionalDataHolder, Parsable {
  */
 export interface PreviewRequestBuilder extends BaseRequestBuilder<PreviewRequestBuilder> {
 	/**
-	 * Requires list.read and document.read, plus resource ACL access. Resolves the visible published/head revision before selecting a rendition. Identical source bytes share a preview; original bytes are never returned. The default file.preview workflow generates previews asynchronously.
+	 * Requires item.read and document.read, plus resource ACL access. Resolves the visible published/head revision before selecting a rendition. Identical source bytes share a preview; original bytes are never returned. The default file.preview workflow generates previews asynchronously.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<PreviewGetResponse>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
@@ -7773,7 +7821,7 @@ export interface PreviewRequestBuilder extends BaseRequestBuilder<PreviewRequest
 	 */
 	post(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Operation | undefined>;
 	/**
-	 * Requires list.read and document.read, plus resource ACL access. Resolves the visible published/head revision before selecting a rendition. Identical source bytes share a preview; original bytes are never returned. The default file.preview workflow generates previews asynchronously.
+	 * Requires item.read and document.read, plus resource ACL access. Resolves the visible published/head revision before selecting a rendition. Identical source bytes share a preview; original bytes are never returned. The default file.preview workflow generates previews asynchronously.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -7786,7 +7834,7 @@ export interface PreviewRequestBuilder extends BaseRequestBuilder<PreviewRequest
 	toPostRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 }
 /**
- * Requires list.read and document.read, plus resource ACL access. Resolves the visible published/head revision before selecting a rendition. Identical source bytes share a preview; original bytes are never returned. The default file.preview workflow generates previews asynchronously.
+ * Requires item.read and document.read, plus resource ACL access. Resolves the visible published/head revision before selecting a rendition. Identical source bytes share a preview; original bytes are never returned. The default file.preview workflow generates previews asynchronously.
  */
 export interface PreviewRequestBuilderGetQueryParameters {
 	/**
@@ -7809,14 +7857,14 @@ export interface PublicationsGetResponse extends Parsable {
  */
 export interface PublicationsRequestBuilder extends BaseRequestBuilder<PublicationsRequestBuilder> {
 	/**
-	 * Draft readers see lifecycle history. Ordinary readers see publish events for the current published revision only. Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 * Draft readers see lifecycle history. Ordinary readers see publish events for the current published revision only. Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<PublicationsGetResponse>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	get(requestConfiguration?: RequestConfiguration<PublicationsRequestBuilderGetQueryParameters> | undefined): Promise<PublicationsGetResponse | undefined>;
 	/**
-	 *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Publication>}
 	 * @throws {Problem} error when the service returns a 412 status code
@@ -7824,20 +7872,20 @@ export interface PublicationsRequestBuilder extends BaseRequestBuilder<Publicati
 	 */
 	post(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Publication | undefined>;
 	/**
-	 * Draft readers see lifecycle history. Ordinary readers see publish events for the current published revision only. Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 * Draft readers see lifecycle history. Ordinary readers see publish events for the current published revision only. Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<PublicationsRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 	/**
-	 *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toPostRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 }
 /**
- * Draft readers see lifecycle history. Ordinary readers see publish events for the current published revision only. Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+ * Draft readers see lifecycle history. Ordinary readers see publish events for the current published revision only. Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
  */
 export interface PublicationsRequestBuilderGetQueryParameters {
 	/**
@@ -7854,20 +7902,20 @@ export interface PublicationsRequestBuilderGetQueryParameters {
  */
 export interface WithLinkItemRequestBuilder extends BaseRequestBuilder<WithLinkItemRequestBuilder> {
 	/**
-	 * Either endpoint may remove a directed or symmetric edge. Requires write permission on both endpoints without an ETag precondition. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.
+	 * Either endpoint may remove a directed or symmetric edge. Requires write permission on both endpoints without an ETag precondition. Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	delete(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<void>;
 	/**
-	 * The item must participate in the edge and both endpoints must be visible. Required module scope: list.read.
+	 * The item must participate in the edge and both endpoints must be visible. Required module scope: item.read.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<RelationshipView>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	get(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<RelationshipView | undefined>;
 	/**
-	 * Either endpoint may patch a directed or symmetric edge. Requires write permission on both endpoints and the edge If-Match. Omitted metadata keys remain; null removes a key. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.
+	 * Either endpoint may patch a directed or symmetric edge. Requires write permission on both endpoints and the edge If-Match. Omitted metadata keys remain; null removes a key. Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Relationship>}
@@ -7885,19 +7933,19 @@ export interface WithLinkItemRequestBuilder extends BaseRequestBuilder<WithLinkI
 	 */
 	patch(body: UpdateRelationship, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Relationship | undefined>;
 	/**
-	 * Either endpoint may remove a directed or symmetric edge. Requires write permission on both endpoints without an ETag precondition. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.
+	 * Either endpoint may remove a directed or symmetric edge. Requires write permission on both endpoints without an ETag precondition. Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toDeleteRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 	/**
-	 * The item must participate in the edge and both endpoints must be visible. Required module scope: list.read.
+	 * The item must participate in the edge and both endpoints must be visible. Required module scope: item.read.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 	/**
-	 * Either endpoint may patch a directed or symmetric edge. Requires write permission on both endpoints and the edge If-Match. Omitted metadata keys remain; null removes a key. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.
+	 * Either endpoint may patch a directed or symmetric edge. Requires write permission on both endpoints and the edge If-Match. Omitted metadata keys remain; null removes a key. Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -7926,14 +7974,14 @@ export interface RelationshipsRequestBuilder extends BaseRequestBuilder<Relation
 	 */
 	byLinkID(linkID: string): WithLinkItemRequestBuilder;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<RelationshipsGetResponse>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	get(requestConfiguration?: RequestConfiguration<RelationshipsRequestBuilderGetQueryParameters> | undefined): Promise<RelationshipsGetResponse | undefined>;
 	/**
-	 * Endpoints may belong to different workspaces. Type is optional; untyped links default to symmetric and allow at most 64 scalar attributes and 16 KiB of JSON. Requires write permission on both endpoints. Ensures one edge for the type and endpoints; repeating creation returns the existing edge without changing metadata, version or audit history, even at a cardinality limit. Symmetric endpoints use canonical ordering. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.
+	 * Endpoints may belong to different workspaces. Type is optional; untyped links default to symmetric and allow at most 64 scalar attributes and 16 KiB of JSON. Requires write permission on both endpoints. Ensures one edge for the type and endpoints; repeating creation returns the existing edge without changing metadata, version or audit history, even at a cardinality limit. Symmetric endpoints use canonical ordering. Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Relationship>}
@@ -7941,13 +7989,13 @@ export interface RelationshipsRequestBuilder extends BaseRequestBuilder<Relation
 	 */
 	post(body: CreateRelationship, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Relationship | undefined>;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<RelationshipsRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 	/**
-	 * Endpoints may belong to different workspaces. Type is optional; untyped links default to symmetric and allow at most 64 scalar attributes and 16 KiB of JSON. Requires write permission on both endpoints. Ensures one edge for the type and endpoints; repeating creation returns the existing edge without changing metadata, version or audit history, even at a cardinality limit. Symmetric endpoints use canonical ordering. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.
+	 * Endpoints may belong to different workspaces. Type is optional; untyped links default to symmetric and allow at most 64 scalar attributes and 16 KiB of JSON. Requires write permission on both endpoints. Ensures one edge for the type and endpoints; repeating creation returns the existing edge without changing metadata, version or audit history, even at a cardinality limit. Symmetric endpoints use canonical ordering. Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -7955,7 +8003,7 @@ export interface RelationshipsRequestBuilder extends BaseRequestBuilder<Relation
 	toPostRequestInformation(body: CreateRelationship, requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 }
 /**
- *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+ *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
  */
 export interface RelationshipsRequestBuilderGetQueryParameters {
 	direction?: GetDirectionQueryParameterType;
@@ -7979,7 +8027,7 @@ declare const GetDirectionQueryParameterTypeObject: {
 };
 interface RestoreRequestBuilder$1 extends BaseRequestBuilder<RestoreRequestBuilder$1> {
 	/**
-	 * Requires item write permission and its current If-Match. Revalidates values against the current schema; removed fields remain removed and current values absent from the snapshot are cleared. Restores the historical content type (which must still be attached), name, keywords and field values, retaining the current blob. Runs ordinary indexing, publication and domain-event logic atomically. Historical revisions are unchanged. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
+	 * Requires item write permission and its current If-Match. Revalidates values against the current schema; removed fields remain removed and current values absent from the snapshot are cleared. Restores the historical content type (which must still be attached), name, keywords and field values, retaining the current blob. Runs ordinary indexing, publication and domain-event logic atomically. Historical revisions are unchanged. Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Resource>}
 	 * @throws {Problem} error when the service returns a 412 status code
@@ -7987,7 +8035,7 @@ interface RestoreRequestBuilder$1 extends BaseRequestBuilder<RestoreRequestBuild
 	 */
 	post(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Resource | undefined>;
 	/**
-	 * Requires item write permission and its current If-Match. Revalidates values against the current schema; removed fields remain removed and current values absent from the snapshot are cleared. Restores the historical content type (which must still be attached), name, keywords and field values, retaining the current blob. Runs ordinary indexing, publication and domain-event logic atomically. Historical revisions are unchanged. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
+	 * Requires item write permission and its current If-Match. Revalidates values against the current schema; removed fields remain removed and current values absent from the snapshot are cleared. Restores the historical content type (which must still be attached), name, keywords and field values, retaining the current blob. Runs ordinary indexing, publication and domain-event logic atomically. Historical revisions are unchanged. Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -7999,14 +8047,14 @@ interface WithNumberItemRequestBuilder$1 extends BaseRequestBuilder<WithNumberIt
 	 */
 	get restore(): RestoreRequestBuilder$1;
 	/**
-	 * Requires list.read scope and ordinary read permission on the live item. All retained metadata revisions, including unpublished revisions, are available with their frozen schema. Current head content still requires read_draft; restoring history requires write.
+	 * Requires item.read scope and ordinary read permission on the live item. All retained metadata revisions, including unpublished revisions, are available with their frozen schema. Current head content still requires read_draft; restoring history requires write.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<ItemRevision>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	get(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<ItemRevision | undefined>;
 	/**
-	 * Requires list.read scope and ordinary read permission on the live item. All retained metadata revisions, including unpublished revisions, are available with their frozen schema. Current head content still requires read_draft; restoring history requires write.
+	 * Requires item.read scope and ordinary read permission on the live item. All retained metadata revisions, including unpublished revisions, are available with their frozen schema. Current head content still requires read_draft; restoring history requires write.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -8033,21 +8081,21 @@ export interface RevisionsRequestBuilder extends BaseRequestBuilder<RevisionsReq
 	 */
 	byNumber(number: number): WithNumberItemRequestBuilder$1;
 	/**
-	 * Requires list.read scope and ordinary read permission on the live item. All retained metadata revisions, including unpublished revisions, are available with their frozen schema. Current head content still requires read_draft; restoring history requires write. Newest recorded version first. $skiptoken is the last returned recorded number, and following pages contain smaller numbers. revision_number counts recorded entries only; is_current marks the largest retained number, even when recording is disabled.
+	 * Requires item.read scope and ordinary read permission on the live item. All retained metadata revisions, including unpublished revisions, are available with their frozen schema. Current head content still requires read_draft; restoring history requires write. Newest recorded version first. $skiptoken is the last returned recorded number, and following pages contain smaller numbers. revision_number counts recorded entries only; is_current marks the largest retained number, even when recording is disabled.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<RevisionsGetResponse>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	get(requestConfiguration?: RequestConfiguration<RevisionsRequestBuilderGetQueryParameters> | undefined): Promise<RevisionsGetResponse | undefined>;
 	/**
-	 * Requires list.read scope and ordinary read permission on the live item. All retained metadata revisions, including unpublished revisions, are available with their frozen schema. Current head content still requires read_draft; restoring history requires write. Newest recorded version first. $skiptoken is the last returned recorded number, and following pages contain smaller numbers. revision_number counts recorded entries only; is_current marks the largest retained number, even when recording is disabled.
+	 * Requires item.read scope and ordinary read permission on the live item. All retained metadata revisions, including unpublished revisions, are available with their frozen schema. Current head content still requires read_draft; restoring history requires write. Newest recorded version first. $skiptoken is the last returned recorded number, and following pages contain smaller numbers. revision_number counts recorded entries only; is_current marks the largest retained number, even when recording is disabled.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<RevisionsRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 }
 /**
- * Requires list.read scope and ordinary read permission on the live item. All retained metadata revisions, including unpublished revisions, are available with their frozen schema. Current head content still requires read_draft; restoring history requires write. Newest recorded version first. $skiptoken is the last returned recorded number, and following pages contain smaller numbers. revision_number counts recorded entries only; is_current marks the largest retained number, even when recording is disabled.
+ * Requires item.read scope and ordinary read permission on the live item. All retained metadata revisions, including unpublished revisions, are available with their frozen schema. Current head content still requires read_draft; restoring history requires write. Newest recorded version first. $skiptoken is the last returned recorded number, and following pages contain smaller numbers. revision_number counts recorded entries only; is_current marks the largest retained number, even when recording is disabled.
  */
 export interface RevisionsRequestBuilderGetQueryParameters {
 	/**
@@ -8089,21 +8137,21 @@ export interface SchemaGetResponse_file extends AdditionalDataHolder, Parsable {
  */
 export interface SchemaRequestBuilder extends BaseRequestBuilder<SchemaRequestBuilder> {
 	/**
-	 * Returns the frozen content schema of the caller-visible item or folder. Folders use their current metadata schema and do not enforce required fields. Requires list.read and resource read access.
+	 * Returns the frozen content schema of the caller-visible item or folder. Folders use their current metadata schema and do not enforce required fields. Requires item.read and resource read access.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<SchemaGetResponse>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	get(requestConfiguration?: RequestConfiguration<SchemaRequestBuilderGetQueryParameters> | undefined): Promise<SchemaGetResponse | undefined>;
 	/**
-	 * Returns the frozen content schema of the caller-visible item or folder. Folders use their current metadata schema and do not enforce required fields. Requires list.read and resource read access.
+	 * Returns the frozen content schema of the caller-visible item or folder. Folders use their current metadata schema and do not enforce required fields. Requires item.read and resource read access.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<SchemaRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 }
 /**
- * Returns the frozen content schema of the caller-visible item or folder. Folders use their current metadata schema and do not enforce required fields. Requires list.read and resource read access.
+ * Returns the frozen content schema of the caller-visible item or folder. Folders use their current metadata schema and do not enforce required fields. Requires item.read and resource read access.
  */
 export interface SchemaRequestBuilderGetQueryParameters {
 	/**
@@ -8207,12 +8255,13 @@ declare const GetStatusQueryParameterTypeObject: {
  */
 export interface TextRequestBuilder extends BaseRequestBuilder<TextRequestBuilder> {
 	/**
-	 * The page texts a workflow with document.read_text read from the file version the caller may read: the current one, or blob_id. 404 text_not_read before it was read.
+	 * The page texts a workflow with document.read_text read from the file version the caller may read: the current one, or blob_id. 404 text_not_read before it was read. page, offset and max_chars read part of the text: pages from page, starting offset characters (Unicode code points) into it, up to max_chars characters; next is where the following part starts, and null after the end; continue with next and the text_id of the first part. 412 text_changed when the text has changed since, as when the item got another file: read it again from page 1. Without them the whole text is returned.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<ItemText>}
 	 * @throws {Problem} error when the service returns a 401 status code
 	 * @throws {Problem} error when the service returns a 403 status code
 	 * @throws {Problem} error when the service returns a 404 status code
+	 * @throws {Problem} error when the service returns a 412 status code
 	 */
 	get(requestConfiguration?: RequestConfiguration<TextRequestBuilderGetQueryParameters> | undefined): Promise<ItemText | undefined>;
 	/**
@@ -8233,7 +8282,7 @@ export interface TextRequestBuilder extends BaseRequestBuilder<TextRequestBuilde
 	 */
 	post(body: ReadText, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Operation | undefined>;
 	/**
-	 * The page texts a workflow with document.read_text read from the file version the caller may read: the current one, or blob_id. 404 text_not_read before it was read.
+	 * The page texts a workflow with document.read_text read from the file version the caller may read: the current one, or blob_id. 404 text_not_read before it was read. page, offset and max_chars read part of the text: pages from page, starting offset characters (Unicode code points) into it, up to max_chars characters; next is where the following part starts, and null after the end; continue with next and the text_id of the first part. 412 text_changed when the text has changed since, as when the item got another file: read it again from page 1. Without them the whole text is returned.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -8247,24 +8296,40 @@ export interface TextRequestBuilder extends BaseRequestBuilder<TextRequestBuilde
 	toPostRequestInformation(body: ReadText, requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 }
 /**
- * The page texts a workflow with document.read_text read from the file version the caller may read: the current one, or blob_id. 404 text_not_read before it was read.
+ * The page texts a workflow with document.read_text read from the file version the caller may read: the current one, or blob_id. 404 text_not_read before it was read. page, offset and max_chars read part of the text: pages from page, starting offset characters (Unicode code points) into it, up to max_chars characters; next is where the following part starts, and null after the end; continue with next and the text_id of the first part. 412 text_changed when the text has changed since, as when the item got another file: read it again from page 1. Without them the whole text is returned.
  */
 export interface TextRequestBuilderGetQueryParameters {
 	blobId?: string;
+	/**
+	 * At most this many characters; 0 returns everything from the start position.
+	 */
+	maxChars?: number;
+	/**
+	 * Characters to skip into the first page.
+	 */
+	offset?: number;
+	/**
+	 * The first page to return.
+	 */
+	page?: number;
+	/**
+	 * The text_id a ranged read began with. The read fails with 412 text_changed when the text is another one now.
+	 */
+	textId?: string;
 }
 /**
  * Builds and executes requests for operations under /v1/items/{id}/unarchive
  */
 export interface UnarchiveRequestBuilder extends BaseRequestBuilder<UnarchiveRequestBuilder> {
 	/**
-	 * Requires item write access and list.write scope. Applies immediately to head and published content. Changes the lock version without a content revision. Repeating with the current version is a no-op.
+	 * Requires item write access and item.write scope. Applies immediately to head and published content. Changes the lock version without a content revision. Repeating with the current version is a no-op.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<ResourceAccess>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	post(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<ResourceAccess | undefined>;
 	/**
-	 * Requires item write access and list.write scope. Applies immediately to head and published content. Changes the lock version without a content revision. Repeating with the current version is a no-op.
+	 * Requires item write access and item.write scope. Applies immediately to head and published content. Changes the lock version without a content revision. Repeating with the current version is a no-op.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -8275,7 +8340,7 @@ export interface UnarchiveRequestBuilder extends BaseRequestBuilder<UnarchiveReq
  */
 export interface UnpublishRequestBuilder extends BaseRequestBuilder<UnpublishRequestBuilder> {
 	/**
-	 *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Resource>}
 	 * @throws {Problem} error when the service returns a 412 status code
@@ -8283,7 +8348,7 @@ export interface UnpublishRequestBuilder extends BaseRequestBuilder<UnpublishReq
 	 */
 	post(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Resource | undefined>;
 	/**
-	 *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -8581,13 +8646,13 @@ export interface OperationsRequestBuilder extends BaseRequestBuilder<OperationsR
  */
 export interface PeopleRequestBuilder extends BaseRequestBuilder<PeopleRequestBuilder> {
 	/**
-	 * Requires list.read. IDs are enrolled organization subjects; selecting a user grants no content access.
+	 * Requires item.read. IDs are enrolled organization subjects; selecting a user grants no content access.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<string[]>}
 	 */
 	get(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<string[] | undefined>;
 	/**
-	 * Requires list.read. IDs are enrolled organization subjects; selecting a user grants no content access.
+	 * Requires item.read. IDs are enrolled organization subjects; selecting a user grants no content access.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -8598,7 +8663,7 @@ export interface PeopleRequestBuilder extends BaseRequestBuilder<PeopleRequestBu
  */
 export interface RelationshipTypesItemRequestBuilder extends BaseRequestBuilder<RelationshipTypesItemRequestBuilder> {
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<RelationshipType>}
 	 * @throws {Problem} error when the service returns a 400 status code
@@ -8613,7 +8678,7 @@ export interface RelationshipTypesItemRequestBuilder extends BaseRequestBuilder<
 	 */
 	get(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<RelationshipType | undefined>;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -8630,7 +8695,7 @@ export interface RelationshipTypesRequestBuilder extends BaseRequestBuilder<Rela
 	 */
 	byId(id: string): RelationshipTypesItemRequestBuilder;
 	/**
-	 * Organization taxonomy predicates; requires list.read and taxonomy.read to discover, list.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy.
+	 * Organization taxonomy predicates; requires item.read and taxonomy.read to discover, item.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<RelationshipTypePage>}
 	 * @throws {Problem} error when the service returns a 400 status code
@@ -8645,7 +8710,7 @@ export interface RelationshipTypesRequestBuilder extends BaseRequestBuilder<Rela
 	 */
 	get(requestConfiguration?: RequestConfiguration<RelationshipTypesRequestBuilderGetQueryParameters> | undefined): Promise<RelationshipTypePage | undefined>;
 	/**
-	 * Organization taxonomy predicates; requires list.read and taxonomy.read to discover, list.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy.
+	 * Organization taxonomy predicates; requires item.read and taxonomy.read to discover, item.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<RelationshipType>}
@@ -8661,13 +8726,13 @@ export interface RelationshipTypesRequestBuilder extends BaseRequestBuilder<Rela
 	 */
 	post(body: RelationshipTypeInput, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<RelationshipType | undefined>;
 	/**
-	 * Organization taxonomy predicates; requires list.read and taxonomy.read to discover, list.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy.
+	 * Organization taxonomy predicates; requires item.read and taxonomy.read to discover, item.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<RelationshipTypesRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 	/**
-	 * Organization taxonomy predicates; requires list.read and taxonomy.read to discover, list.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy.
+	 * Organization taxonomy predicates; requires item.read and taxonomy.read to discover, item.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -8675,7 +8740,7 @@ export interface RelationshipTypesRequestBuilder extends BaseRequestBuilder<Rela
 	toPostRequestInformation(body: RelationshipTypeInput, requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 }
 /**
- * Organization taxonomy predicates; requires list.read and taxonomy.read to discover, list.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy.
+ * Organization taxonomy predicates; requires item.read and taxonomy.read to discover, item.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy.
  */
 export interface RelationshipTypesRequestBuilderGetQueryParameters {
 	/**
@@ -8721,7 +8786,7 @@ export interface BulkRequestBuilder extends BaseRequestBuilder<BulkRequestBuilde
  */
 export interface BulkUpdateRequestBuilder extends BaseRequestBuilder<BulkUpdateRequestBuilder> {
 	/**
-	 * Starts a durable filtered edit of current head content. Requires list.read, list.write and collection write access. The existing typed query selects readable drafts; omitted query selects all readable head items and folders, including nested content. Sort and group_by are rejected. Selection freezes when execution begins. Each item merges values (null removes a value) through current validation, permissions, uniqueness, revision, audit and event handling, in its own commit. Current name/keywords can also be changed. Successful items survive other items' failures. Poll Location for matched, processed, updated, failed, progress and up to 50 failure reasons; failed counts all failures. succeeded means execution finished, including partial success. Access, schema or infrastructure failures stop the operation with status failed. Cancellation on shutdown leaves pending work resumable. Bulk operations and failure details are visible only to their starter, with collection read access. The explicit /bulk endpoint remains an atomic transaction of up to 100 actions.
+	 * Starts a durable filtered edit of current head content. Requires item.read, item.write and collection write access. The existing typed query selects readable drafts; omitted query selects all readable head items and folders, including nested content. Sort and group_by are rejected. Selection freezes when execution begins. Each item merges values (null removes a value) through current validation, permissions, uniqueness, revision, audit and event handling, in its own commit. Current name/keywords can also be changed. Successful items survive other items' failures. Poll Location for matched, processed, updated, failed, progress and up to 50 failure reasons; failed counts all failures. succeeded means execution finished, including partial success. Access, schema or infrastructure failures stop the operation with status failed. Cancellation on shutdown leaves pending work resumable. Bulk operations and failure details are visible only to their starter, with collection read access. The explicit /bulk endpoint remains an atomic transaction of up to 100 actions.
 	 * @param body At least one of name, keywords or non-empty values is required. Query is optional and uses head content.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Operation>}
@@ -8739,7 +8804,7 @@ export interface BulkUpdateRequestBuilder extends BaseRequestBuilder<BulkUpdateR
 	 */
 	post(body: FilteredBulkUpdate, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Operation | undefined>;
 	/**
-	 * Starts a durable filtered edit of current head content. Requires list.read, list.write and collection write access. The existing typed query selects readable drafts; omitted query selects all readable head items and folders, including nested content. Sort and group_by are rejected. Selection freezes when execution begins. Each item merges values (null removes a value) through current validation, permissions, uniqueness, revision, audit and event handling, in its own commit. Current name/keywords can also be changed. Successful items survive other items' failures. Poll Location for matched, processed, updated, failed, progress and up to 50 failure reasons; failed counts all failures. succeeded means execution finished, including partial success. Access, schema or infrastructure failures stop the operation with status failed. Cancellation on shutdown leaves pending work resumable. Bulk operations and failure details are visible only to their starter, with collection read access. The explicit /bulk endpoint remains an atomic transaction of up to 100 actions.
+	 * Starts a durable filtered edit of current head content. Requires item.read, item.write and collection write access. The existing typed query selects readable drafts; omitted query selects all readable head items and folders, including nested content. Sort and group_by are rejected. Selection freezes when execution begins. Each item merges values (null removes a value) through current validation, permissions, uniqueness, revision, audit and event handling, in its own commit. Current name/keywords can also be changed. Successful items survive other items' failures. Poll Location for matched, processed, updated, failed, progress and up to 50 failure reasons; failed counts all failures. succeeded means execution finished, including partial success. Access, schema or infrastructure failures stop the operation with status failed. Cancellation on shutdown leaves pending work resumable. Bulk operations and failure details are visible only to their starter, with collection read access. The explicit /bulk endpoint remains an atomic transaction of up to 100 actions.
 	 * @param body At least one of name, keywords or non-empty values is required. Query is optional and uses head content.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -8835,7 +8900,7 @@ export interface ChildrenRequestBuilder extends BaseRequestBuilder<ChildrenReque
 	 */
 	get(requestConfiguration?: RequestConfiguration<ChildrenRequestBuilderGetQueryParameters> | undefined): Promise<ChildrenGetResponse | undefined>;
 	/**
-	 * First create returns 201. Retrying an item/folder create with the same caller ID returns the current readable live entry unchanged with 200 and its current ETag, regardless of new body fields. Requires list.write module scope; an existing retry requires read access rather than create ACL access. Conflicting IDs, including deleted, different-collection and inaccessible entries, return 409 without content. All retry checks and the initial insertion are serialized in one write transaction; retries append no revisions, audit or events.
+	 * First create returns 201. Retrying an item/folder create with the same caller ID returns the current readable live entry unchanged with 200 and its current ETag, regardless of new body fields. Requires item.write module scope, and a list or library list.manage and workspace manage access; an existing retry requires read access rather than create ACL access. Conflicting IDs, including deleted, different-collection and inaccessible entries, return 409 without content. All retry checks and the initial insertion are serialized in one write transaction; retries append no revisions, audit or events.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Resource>}
@@ -8849,7 +8914,7 @@ export interface ChildrenRequestBuilder extends BaseRequestBuilder<ChildrenReque
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<ChildrenRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 	/**
-	 * First create returns 201. Retrying an item/folder create with the same caller ID returns the current readable live entry unchanged with 200 and its current ETag, regardless of new body fields. Requires list.write module scope; an existing retry requires read access rather than create ACL access. Conflicting IDs, including deleted, different-collection and inaccessible entries, return 409 without content. All retry checks and the initial insertion are serialized in one write transaction; retries append no revisions, audit or events.
+	 * First create returns 201. Retrying an item/folder create with the same caller ID returns the current readable live entry unchanged with 200 and its current ETag, regardless of new body fields. Requires item.write module scope, and a list or library list.manage and workspace manage access; an existing retry requires read access rather than create ACL access. Conflicting IDs, including deleted, different-collection and inaccessible entries, return 409 without content. All retry checks and the initial insertion are serialized in one write transaction; retries append no revisions, audit or events.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -8922,14 +8987,14 @@ declare const GetSurfaceQueryParameterTypeObject$2: {
  */
 export interface WithTypeItemRequestBuilder extends BaseRequestBuilder<WithTypeItemRequestBuilder> {
 	/**
-	 * Requires collection manage access and the current collection If-Match. Rejects the last attachment, a type used by live items, and dependent saved views. Chooses a remaining default when necessary. Updates the effective schema and business keys atomically; organization catalog types and frozen revisions remain. Deleted items with a detached type require reattachment before restoration.
+	 * Requires list.manage, collection manage access and the current collection If-Match. Rejects the last attachment, a type used by live items, and dependent saved views. Chooses a remaining default when necessary. Updates the effective schema and business keys atomically; organization catalog types and frozen revisions remain. Deleted items with a detached type require reattachment before restoration.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @throws {Problem} error when the service returns a 412 status code
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	delete(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<void>;
 	/**
-	 * Requires collection manage access and the current collection If-Match. Rejects the last attachment, a type used by live items, and dependent saved views. Chooses a remaining default when necessary. Updates the effective schema and business keys atomically; organization catalog types and frozen revisions remain. Deleted items with a detached type require reattachment before restoration.
+	 * Requires list.manage, collection manage access and the current collection If-Match. Rejects the last attachment, a type used by live items, and dependent saved views. Chooses a remaining default when necessary. Updates the effective schema and business keys atomically; organization catalog types and frozen revisions remain. Deleted items with a detached type require reattachment before restoration.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -8950,7 +9015,7 @@ interface ContentTypesRequestBuilder$1 extends BaseRequestBuilder<ContentTypesRe
 	 */
 	get(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<CollectionContentType[] | undefined>;
 	/**
-	 * Requires list.read, contentType.read and manage ACL on the collection. The shared definition is not copied. Returns the collection and its new ETag.
+	 * Requires list.manage, contentType.read and manage ACL on the collection. The shared definition is not copied. Returns the collection and its new ETag.
 	 * @param body Attach the organization definition by ID without copying. At most 32 types per collection. Selecting a default affects only this collection. Conflicting field keys are rejected; types that share a key must reference the same catalog field ID.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Resource>}
@@ -8965,7 +9030,7 @@ interface ContentTypesRequestBuilder$1 extends BaseRequestBuilder<ContentTypesRe
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 	/**
-	 * Requires list.read, contentType.read and manage ACL on the collection. The shared definition is not copied. Returns the collection and its new ETag.
+	 * Requires list.manage, contentType.read and manage ACL on the collection. The shared definition is not copied. Returns the collection and its new ETag.
 	 * @param body Attach the organization definition by ID without copying. At most 32 types per collection. Selecting a default affects only this collection. Conflicting field keys are rejected; types that share a key must reference the same catalog field ID.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -8977,7 +9042,7 @@ interface ContentTypesRequestBuilder$1 extends BaseRequestBuilder<ContentTypesRe
  */
 export interface DeltaRequestBuilder extends BaseRequestBuilder<DeltaRequestBuilder> {
 	/**
-	 * Initial synchronization returns visible items and folders. Follow @odata.nextLink, then persist @odata.deltaLink to retrieve subsequent edits, deletions, moves and access changes. Tokens are bound to caller and collection, durable for 30 days; page continuations expire after five minutes. 410 requires a new initial synchronization. Each synchronization scans the current visible collection and compares stored fingerprints; transient changes that return to the same state between polls are coalesced. Required module scope: list.read.
+	 * Initial synchronization returns visible items and folders. Follow @odata.nextLink, then persist @odata.deltaLink to retrieve subsequent edits, deletions, moves and access changes. Tokens are bound to caller and collection, durable for 30 days; page continuations expire after five minutes. 410 requires a new initial synchronization. Each synchronization scans the current visible collection and compares stored fingerprints; transient changes that return to the same state between polls are coalesced. Required module scope: item.read.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<DeltaPage>}
 	 * @throws {Problem} error when the service returns a 410 status code
@@ -8985,14 +9050,14 @@ export interface DeltaRequestBuilder extends BaseRequestBuilder<DeltaRequestBuil
 	 */
 	get(requestConfiguration?: RequestConfiguration<DeltaRequestBuilderGetQueryParameters> | undefined): Promise<DeltaPage | undefined>;
 	/**
-	 * Initial synchronization returns visible items and folders. Follow @odata.nextLink, then persist @odata.deltaLink to retrieve subsequent edits, deletions, moves and access changes. Tokens are bound to caller and collection, durable for 30 days; page continuations expire after five minutes. 410 requires a new initial synchronization. Each synchronization scans the current visible collection and compares stored fingerprints; transient changes that return to the same state between polls are coalesced. Required module scope: list.read.
+	 * Initial synchronization returns visible items and folders. Follow @odata.nextLink, then persist @odata.deltaLink to retrieve subsequent edits, deletions, moves and access changes. Tokens are bound to caller and collection, durable for 30 days; page continuations expire after five minutes. 410 requires a new initial synchronization. Each synchronization scans the current visible collection and compares stored fingerprints; transient changes that return to the same state between polls are coalesced. Required module scope: item.read.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<DeltaRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 }
 /**
- * Initial synchronization returns visible items and folders. Follow @odata.nextLink, then persist @odata.deltaLink to retrieve subsequent edits, deletions, moves and access changes. Tokens are bound to caller and collection, durable for 30 days; page continuations expire after five minutes. 410 requires a new initial synchronization. Each synchronization scans the current visible collection and compares stored fingerprints; transient changes that return to the same state between polls are coalesced. Required module scope: list.read.
+ * Initial synchronization returns visible items and folders. Follow @odata.nextLink, then persist @odata.deltaLink to retrieve subsequent edits, deletions, moves and access changes. Tokens are bound to caller and collection, durable for 30 days; page continuations expire after five minutes. 410 requires a new initial synchronization. Each synchronization scans the current visible collection and compares stored fingerprints; transient changes that return to the same state between polls are coalesced. Required module scope: item.read.
  */
 export interface DeltaRequestBuilderGetQueryParameters {
 	/**
@@ -9013,7 +9078,7 @@ export interface DeltaRequestBuilderGetQueryParameters {
  */
 export interface DocumentsRequestBuilder extends BaseRequestBuilder<DocumentsRequestBuilder> {
 	/**
-	 * Requires document.write, list.read and list.write and write access to the library and selected folder. One file part is required; one metadata JSON form field is optional. Either order is accepted. File bytes stream under the configured upload limit; metadata is limited to 64 KiB and request framing to an additional 128 KiB. Metadata, first file version, first revision, indexes, publication and events commit together. Invalid metadata, malformed multipart, duplicate blocking and failed writes create no item and clean up stored bytes. Returns 201 with the new item, file, duplicate warnings, Location and numeric ETag. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts only PDF, TIFF, JPEG, PNG and WebP detected from file signatures; filenames and declared MIME types do not determine stored content_type. Unsupported bytes return 415 without item/revision changes. Size limits apply while streaming.
+	 * Requires document.write, item.read and item.write and write access to the library and selected folder. One file part is required; one metadata JSON form field is optional. Either order is accepted. File bytes stream under the configured upload limit; metadata is limited to 64 KiB and request framing to an additional 128 KiB. Metadata, first file version, first revision, indexes, publication and events commit together. Invalid metadata, malformed multipart, duplicate blocking and failed writes create no item and clean up stored bytes. Returns 201 with the new item, file, duplicate warnings, Location and numeric ETag. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts only PDF, TIFF, JPEG, PNG and WebP detected from file signatures; filenames and declared MIME types do not determine stored content_type. Unsupported bytes return 415 without item/revision changes. Size limits apply while streaming.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<DocumentUpload>}
@@ -9021,7 +9086,7 @@ export interface DocumentsRequestBuilder extends BaseRequestBuilder<DocumentsReq
 	 */
 	post(body: MultipartBody, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<DocumentUpload | undefined>;
 	/**
-	 * Requires document.write, list.read and list.write and write access to the library and selected folder. One file part is required; one metadata JSON form field is optional. Either order is accepted. File bytes stream under the configured upload limit; metadata is limited to 64 KiB and request framing to an additional 128 KiB. Metadata, first file version, first revision, indexes, publication and events commit together. Invalid metadata, malformed multipart, duplicate blocking and failed writes create no item and clean up stored bytes. Returns 201 with the new item, file, duplicate warnings, Location and numeric ETag. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts only PDF, TIFF, JPEG, PNG and WebP detected from file signatures; filenames and declared MIME types do not determine stored content_type. Unsupported bytes return 415 without item/revision changes. Size limits apply while streaming.
+	 * Requires document.write, item.read and item.write and write access to the library and selected folder. One file part is required; one metadata JSON form field is optional. Either order is accepted. File bytes stream under the configured upload limit; metadata is limited to 64 KiB and request framing to an additional 128 KiB. Metadata, first file version, first revision, indexes, publication and events commit together. Invalid metadata, malformed multipart, duplicate blocking and failed writes create no item and clean up stored bytes. Returns 201 with the new item, file, duplicate warnings, Location and numeric ETag. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts only PDF, TIFF, JPEG, PNG and WebP detected from file signatures; filenames and declared MIME types do not determine stored content_type. Unsupported bytes return 415 without item/revision changes. Size limits apply while streaming.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -9080,7 +9145,7 @@ interface FieldsRequestBuilder$1 extends BaseRequestBuilder<FieldsRequestBuilder
 	 */
 	byFieldID(fieldID: Guid): WithFieldItemRequestBuilder;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply. Field definitions are organization-wide; editing through a collection applies to every collection using them.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply. Field definitions are organization-wide; editing through a collection applies to every collection using them.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<FieldsGetResponse>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
@@ -9095,7 +9160,7 @@ interface FieldsRequestBuilder$1 extends BaseRequestBuilder<FieldsRequestBuilder
 	 */
 	post(body: CreateField, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<FieldDefinition | undefined>;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply. Field definitions are organization-wide; editing through a collection applies to every collection using them.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply. Field definitions are organization-wide; editing through a collection applies to every collection using them.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -9113,7 +9178,7 @@ interface FieldsRequestBuilder$1 extends BaseRequestBuilder<FieldsRequestBuilder
  */
 export interface RefreshRequestBuilder extends BaseRequestBuilder<RefreshRequestBuilder> {
 	/**
-	 * Requires list Manage and list.write; paused integrations must be resumed. The durable operation carries only the integration ID.
+	 * Requires list manage access and list.manage; paused integrations must be resumed. The durable operation carries only the integration ID.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Operation>}
 	 * @throws {Problem} error when the service returns a 400 status code
@@ -9123,7 +9188,7 @@ export interface RefreshRequestBuilder extends BaseRequestBuilder<RefreshRequest
 	 */
 	post(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Operation | undefined>;
 	/**
-	 * Requires list Manage and list.write; paused integrations must be resumed. The durable operation carries only the integration ID.
+	 * Requires list manage access and list.manage; paused integrations must be resumed. The durable operation carries only the integration ID.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -9183,7 +9248,7 @@ export interface IntegrationsRequestBuilder extends BaseRequestBuilder<Integrati
 	 */
 	get(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<ListIntegration[] | undefined>;
 	/**
-	 * Requires list Manage access and list.read/list.write scopes. Automatically attaches the Event content type without requiring contentType.read, queues a first refresh, and activates the workspace refresh workflow once. Same-list duplicate URLs are rejected; separate lists and sources have independent identities.
+	 * Requires list manage access and the item.read and list.manage scopes; its refreshes keep needing them. Automatically attaches the Event content type without requiring contentType.read, queues a first refresh, and activates the workspace refresh workflow once. Same-list duplicate URLs are rejected; separate lists and sources have independent identities.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<ListIntegration>}
@@ -9197,7 +9262,7 @@ export interface IntegrationsRequestBuilder extends BaseRequestBuilder<Integrati
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 	/**
-	 * Requires list Manage access and list.read/list.write scopes. Automatically attaches the Event content type without requiring contentType.read, queues a first refresh, and activates the workspace refresh workflow once. Same-list duplicate URLs are rejected; separate lists and sources have independent identities.
+	 * Requires list manage access and the item.read and list.manage scopes; its refreshes keep needing them. Automatically attaches the Event content type without requiring contentType.read, queues a first refresh, and activates the workspace refresh workflow once. Same-list duplicate URLs are rejected; separate lists and sources have independent identities.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -9295,14 +9360,14 @@ export interface OperationsRequestBuilderGetQueryParameters {
  */
 export interface PermissionsRequestBuilder extends BaseRequestBuilder<PermissionsRequestBuilder> {
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Permissions>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	get(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Permissions | undefined>;
 	/**
-	 * Break, copy or reset inheritance using typed user, group and workspace role principals. Copied group grants retain group IDs and resolve current nested memberships. Copying workspace inheritance retains dynamic visitor/member/owner role principals. Workspace owners and workspace.manage holders retain control. A permission change that removes the caller's manage access rolls back. list.read and resource manage access are required. Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply. ACL changes deliver permissions.changed (action=replace) to the resource and every item and folder that inherits from it, with previous_scope_id and current_scope_id; the root event, with previous/current permission snapshots (inherit, grants, scope_id, effective_grants), commits with the write and audit, and the dispatcher delivers it in batches. Unchanged ACLs raise no event.
+	 * Break, copy or reset inheritance using typed user, group and workspace role principals. Copied group grants retain group IDs and resolve current nested memberships. Copying workspace inheritance retains dynamic visitor/member/owner role principals. Workspace owners and workspace.manage holders retain control. A permission change that removes the caller's manage access rolls back. list.manage and resource manage access are required. Required module scopes: list.manage. Resource ACLs and any additional use-case checks also apply. ACL changes deliver permissions.changed (action=replace) to the resource and every item and folder that inherits from it, with previous_scope_id and current_scope_id; the root event, with previous/current permission snapshots (inherit, grants, scope_id, effective_grants), commits with the write and audit, and the dispatcher delivers it in batches. Unchanged ACLs raise no event.
 	 * @param body SharePoint-style exclusive scopes. An inherited resource has no local grants. Grants at the nearest exclusive ancestor apply; ancestors beyond it do not. Grants within a scope are additive. Reset with inherit=true and no grants. Denies are rejected.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Resource>}
@@ -9311,13 +9376,13 @@ export interface PermissionsRequestBuilder extends BaseRequestBuilder<Permission
 	 */
 	put(body: Permissions, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Resource | undefined>;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 	/**
-	 * Break, copy or reset inheritance using typed user, group and workspace role principals. Copied group grants retain group IDs and resolve current nested memberships. Copying workspace inheritance retains dynamic visitor/member/owner role principals. Workspace owners and workspace.manage holders retain control. A permission change that removes the caller's manage access rolls back. list.read and resource manage access are required. Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply. ACL changes deliver permissions.changed (action=replace) to the resource and every item and folder that inherits from it, with previous_scope_id and current_scope_id; the root event, with previous/current permission snapshots (inherit, grants, scope_id, effective_grants), commits with the write and audit, and the dispatcher delivers it in batches. Unchanged ACLs raise no event.
+	 * Break, copy or reset inheritance using typed user, group and workspace role principals. Copied group grants retain group IDs and resolve current nested memberships. Copying workspace inheritance retains dynamic visitor/member/owner role principals. Workspace owners and workspace.manage holders retain control. A permission change that removes the caller's manage access rolls back. list.manage and resource manage access are required. Required module scopes: list.manage. Resource ACLs and any additional use-case checks also apply. ACL changes deliver permissions.changed (action=replace) to the resource and every item and folder that inherits from it, with previous_scope_id and current_scope_id; the root event, with previous/current permission snapshots (inherit, grants, scope_id, effective_grants), commits with the write and audit, and the dispatcher delivers it in batches. Unchanged ACLs raise no event.
 	 * @param body SharePoint-style exclusive scopes. An inherited resource has no local grants. Grants at the nearest exclusive ancestor apply; ancestors beyond it do not. Grants within a scope are additive. Reset with inherit=true and no grants. Denies are rejected.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -9406,21 +9471,21 @@ export interface QueryRequestBuilderPostQueryParameters {
 }
 interface RestoreRequestBuilder$2 extends BaseRequestBuilder<RestoreRequestBuilder$2> {
 	/**
-	 * Requires list.write and write access to the retained scope and destination. Returns to the active original folder, otherwise the collection root. Restores head/published content, history and indexes atomically. recursive=true restores folder descendants from the same deletion only. Name or business-key conflicts roll back the entire restore. Retained relationships become visible when both endpoints are active and readable. No If-Match is required.
+	 * Requires item.write and write access to the retained scope and destination. Returns to the active original folder, otherwise the collection root. Restores head/published content, history and indexes atomically. recursive=true restores folder descendants from the same deletion only. Name or business-key conflicts roll back the entire restore. Retained relationships become visible when both endpoints are active and readable. No If-Match is required.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Resource>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	post(requestConfiguration?: RequestConfiguration<RestoreRequestBuilderPostQueryParameters> | undefined): Promise<Resource | undefined>;
 	/**
-	 * Requires list.write and write access to the retained scope and destination. Returns to the active original folder, otherwise the collection root. Restores head/published content, history and indexes atomically. recursive=true restores folder descendants from the same deletion only. Name or business-key conflicts roll back the entire restore. Retained relationships become visible when both endpoints are active and readable. No If-Match is required.
+	 * Requires item.write and write access to the retained scope and destination. Returns to the active original folder, otherwise the collection root. Restores head/published content, history and indexes atomically. recursive=true restores folder descendants from the same deletion only. Name or business-key conflicts roll back the entire restore. Retained relationships become visible when both endpoints are active and readable. No If-Match is required.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toPostRequestInformation(requestConfiguration?: RequestConfiguration<RestoreRequestBuilderPostQueryParameters> | undefined): RequestInformation;
 }
 /**
- * Requires list.write and write access to the retained scope and destination. Returns to the active original folder, otherwise the collection root. Restores head/published content, history and indexes atomically. recursive=true restores folder descendants from the same deletion only. Name or business-key conflicts roll back the entire restore. Retained relationships become visible when both endpoints are active and readable. No If-Match is required.
+ * Requires item.write and write access to the retained scope and destination. Returns to the active original folder, otherwise the collection root. Restores head/published content, history and indexes atomically. recursive=true restores folder descendants from the same deletion only. Name or business-key conflicts roll back the entire restore. Retained relationships become visible when both endpoints are active and readable. No If-Match is required.
  */
 export interface RestoreRequestBuilderPostQueryParameters {
 	recursive?: boolean;
@@ -9434,20 +9499,20 @@ export interface WithItemItemRequestBuilder extends BaseRequestBuilder<WithItemI
 	 */
 	get restore(): RestoreRequestBuilder$2;
 	/**
-	 * Requires list.write and manage access to every purged entry. recursive=true explicitly purges deleted folder descendants. Deletes retained revisions, publications, blob references and grants; audit/run records retain stable IDs. Object deletion is queued durably and retried after storage failures or restart. Only deleted entries in live collections can be purged. No If-Match is required.
+	 * Requires list.manage and manage access to every purged entry. recursive=true explicitly purges deleted folder descendants. Deletes retained revisions, publications, blob references and grants; audit/run records retain stable IDs. Object deletion is queued durably and retried after storage failures or restart. Only deleted entries in live collections can be purged. No If-Match is required.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	delete(requestConfiguration?: RequestConfiguration<WithItemItemRequestBuilderDeleteQueryParameters> | undefined): Promise<void>;
 	/**
-	 * Requires list.write and manage access to every purged entry. recursive=true explicitly purges deleted folder descendants. Deletes retained revisions, publications, blob references and grants; audit/run records retain stable IDs. Object deletion is queued durably and retried after storage failures or restart. Only deleted entries in live collections can be purged. No If-Match is required.
+	 * Requires list.manage and manage access to every purged entry. recursive=true explicitly purges deleted folder descendants. Deletes retained revisions, publications, blob references and grants; audit/run records retain stable IDs. Object deletion is queued durably and retried after storage failures or restart. Only deleted entries in live collections can be purged. No If-Match is required.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toDeleteRequestInformation(requestConfiguration?: RequestConfiguration<WithItemItemRequestBuilderDeleteQueryParameters> | undefined): RequestInformation;
 }
 /**
- * Requires list.write and manage access to every purged entry. recursive=true explicitly purges deleted folder descendants. Deletes retained revisions, publications, blob references and grants; audit/run records retain stable IDs. Object deletion is queued durably and retried after storage failures or restart. Only deleted entries in live collections can be purged. No If-Match is required.
+ * Requires list.manage and manage access to every purged entry. recursive=true explicitly purges deleted folder descendants. Deletes retained revisions, publications, blob references and grants; audit/run records retain stable IDs. Object deletion is queued durably and retried after storage failures or restart. Only deleted entries in live collections can be purged. No If-Match is required.
  */
 export interface WithItemItemRequestBuilderDeleteQueryParameters {
 	recursive?: boolean;
@@ -9463,21 +9528,21 @@ export interface RecycleBinRequestBuilder extends BaseRequestBuilder<RecycleBinR
 	 */
 	byItemID(itemID: Guid): WithItemItemRequestBuilder;
 	/**
-	 * Requires a live readable collection and list.read; entries are filtered by list.write and their retained ACL scopes. Deleted content is excluded from ordinary reads and queries.
+	 * Requires a live readable collection and item.read; entries are filtered by item.write and their retained ACL scopes. Deleted content is excluded from ordinary reads and queries.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<RecycleBinPage>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	get(requestConfiguration?: RequestConfiguration<RecycleBinRequestBuilderGetQueryParameters> | undefined): Promise<RecycleBinPage | undefined>;
 	/**
-	 * Requires a live readable collection and list.read; entries are filtered by list.write and their retained ACL scopes. Deleted content is excluded from ordinary reads and queries.
+	 * Requires a live readable collection and item.read; entries are filtered by item.write and their retained ACL scopes. Deleted content is excluded from ordinary reads and queries.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<RecycleBinRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 }
 /**
- * Requires a live readable collection and list.read; entries are filtered by list.write and their retained ACL scopes. Deleted content is excluded from ordinary reads and queries.
+ * Requires a live readable collection and item.read; entries are filtered by item.write and their retained ACL scopes. Deleted content is excluded from ordinary reads and queries.
  */
 export interface RecycleBinRequestBuilderGetQueryParameters {
 	/**
@@ -9585,7 +9650,7 @@ export interface TemplatesRequestBuilder extends BaseRequestBuilder<TemplatesReq
  */
 export interface ViewsRequestBuilder extends BaseRequestBuilder<ViewsRequestBuilder> {
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<ListViewPage>}
 	 * @throws {Problem} error when the service returns a 400 status code
@@ -9600,7 +9665,7 @@ export interface ViewsRequestBuilder extends BaseRequestBuilder<ViewsRequestBuil
 	 */
 	get(requestConfiguration?: RequestConfiguration<ViewsRequestBuilderGetQueryParameters> | undefined): Promise<ListViewPage | undefined>;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Requires collection manage access. Required module scopes: list.manage. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Collection-managed saved view. Columns use field keys and $id/$name/$keywords; empty columns default to $name. PUT replaces the definition. Layout is a client hint; a navigation view browses the terms of each of settings.fields as folders (POST /v1/views/{id}/navigation) and lists the items at the opened terms through POST /v1/views/{id}/query with selected.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<ListView>}
@@ -9616,13 +9681,13 @@ export interface ViewsRequestBuilder extends BaseRequestBuilder<ViewsRequestBuil
 	 */
 	post(body: ViewInput, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<ListView | undefined>;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<ViewsRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Requires collection manage access. Required module scopes: list.manage. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Collection-managed saved view. Columns use field keys and $id/$name/$keywords; empty columns default to $name. PUT replaces the definition. Layout is a client hint; a navigation view browses the terms of each of settings.fields as folders (POST /v1/views/{id}/navigation) and lists the items at the opened terms through POST /v1/views/{id}/query with selected.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -9630,7 +9695,7 @@ export interface ViewsRequestBuilder extends BaseRequestBuilder<ViewsRequestBuil
 	toPostRequestInformation(body: ViewInput, requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 }
 /**
- *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+ *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
  */
 export interface ViewsRequestBuilderGetQueryParameters {
 	/**
@@ -9716,7 +9781,7 @@ export interface ResourcesItemRequestBuilder extends BaseRequestBuilder<Resource
 	 */
 	get views(): ViewsRequestBuilder;
 	/**
-	 * Deletes an item or empty folder with write access and the current If-Match. For a folder, recursive=true deletes the folder and all live descendants atomically, requiring write access to every descendant. Without recursive=true, any live child, including a hidden item or nested folder, returns 409 with code folder_not_empty. Deleted children do not prevent ordinary deletion. Permission failures and stale versions leave the entire tree unchanged. Workspace and collection deletion require manage access and remove the entire live resource tree independently of recursive; collection managers may delete the entire collection regardless of descendant ACLs. Tombstones, revisions and audit history are retained. Read projections and live relationships are removed, and each deleted item emits item.deleted. Workflows bound to a deleted workspace or collection are disabled and deleted.
+	 * Deletes an item or empty folder with write access and the current If-Match. For a folder, recursive=true deletes the folder and all live descendants atomically, requiring write access to every descendant. Without recursive=true, any live child, including a hidden item or nested folder, returns 409 with code folder_not_empty. Deleted children do not prevent ordinary deletion. Permission failures and stale versions leave the entire tree unchanged. Workspace and collection deletion require manage access and list.manage and remove the entire live resource tree independently of recursive; collection managers may delete the entire collection regardless of descendant ACLs. Tombstones, revisions and audit history are retained. Read projections and live relationships are removed, and each deleted item emits item.deleted. Workflows bound to a deleted workspace or collection are disabled and deleted.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @throws {Problem} error when the service returns a 412 status code
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
@@ -9730,7 +9795,7 @@ export interface ResourcesItemRequestBuilder extends BaseRequestBuilder<Resource
 	 */
 	get(requestConfiguration?: RequestConfiguration<ResourcesItemRequestBuilderGetQueryParameters> | undefined): Promise<ResourceAccess | undefined>;
 	/**
-	 * Workspace and collection metadata changes require manage access. Items and folders require write access. If-Match is required.
+	 * Workspace and collection metadata changes require manage access and list.manage. Items and folders require write access. If-Match is required.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<ResourceAccess>}
@@ -9739,7 +9804,7 @@ export interface ResourcesItemRequestBuilder extends BaseRequestBuilder<Resource
 	 */
 	patch(body: UpdateResource, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<ResourceAccess | undefined>;
 	/**
-	 * Deletes an item or empty folder with write access and the current If-Match. For a folder, recursive=true deletes the folder and all live descendants atomically, requiring write access to every descendant. Without recursive=true, any live child, including a hidden item or nested folder, returns 409 with code folder_not_empty. Deleted children do not prevent ordinary deletion. Permission failures and stale versions leave the entire tree unchanged. Workspace and collection deletion require manage access and remove the entire live resource tree independently of recursive; collection managers may delete the entire collection regardless of descendant ACLs. Tombstones, revisions and audit history are retained. Read projections and live relationships are removed, and each deleted item emits item.deleted. Workflows bound to a deleted workspace or collection are disabled and deleted.
+	 * Deletes an item or empty folder with write access and the current If-Match. For a folder, recursive=true deletes the folder and all live descendants atomically, requiring write access to every descendant. Without recursive=true, any live child, including a hidden item or nested folder, returns 409 with code folder_not_empty. Deleted children do not prevent ordinary deletion. Permission failures and stale versions leave the entire tree unchanged. Workspace and collection deletion require manage access and list.manage and remove the entire live resource tree independently of recursive; collection managers may delete the entire collection regardless of descendant ACLs. Tombstones, revisions and audit history are retained. Read projections and live relationships are removed, and each deleted item emits item.deleted. Workflows bound to a deleted workspace or collection are disabled and deleted.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -9751,7 +9816,7 @@ export interface ResourcesItemRequestBuilder extends BaseRequestBuilder<Resource
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<ResourcesItemRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 	/**
-	 * Workspace and collection metadata changes require manage access. Items and folders require write access. If-Match is required.
+	 * Workspace and collection metadata changes require manage access and list.manage. Items and folders require write access. If-Match is required.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -9759,7 +9824,7 @@ export interface ResourcesItemRequestBuilder extends BaseRequestBuilder<Resource
 	toPatchRequestInformation(body: UpdateResource, requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 }
 /**
- * Deletes an item or empty folder with write access and the current If-Match. For a folder, recursive=true deletes the folder and all live descendants atomically, requiring write access to every descendant. Without recursive=true, any live child, including a hidden item or nested folder, returns 409 with code folder_not_empty. Deleted children do not prevent ordinary deletion. Permission failures and stale versions leave the entire tree unchanged. Workspace and collection deletion require manage access and remove the entire live resource tree independently of recursive; collection managers may delete the entire collection regardless of descendant ACLs. Tombstones, revisions and audit history are retained. Read projections and live relationships are removed, and each deleted item emits item.deleted. Workflows bound to a deleted workspace or collection are disabled and deleted.
+ * Deletes an item or empty folder with write access and the current If-Match. For a folder, recursive=true deletes the folder and all live descendants atomically, requiring write access to every descendant. Without recursive=true, any live child, including a hidden item or nested folder, returns 409 with code folder_not_empty. Deleted children do not prevent ordinary deletion. Permission failures and stale versions leave the entire tree unchanged. Workspace and collection deletion require manage access and list.manage and remove the entire live resource tree independently of recursive; collection managers may delete the entire collection regardless of descendant ACLs. Tombstones, revisions and audit history are retained. Read projections and live relationships are removed, and each deleted item emits item.deleted. Workflows bound to a deleted workspace or collection are disabled and deleted.
  */
 export interface ResourcesItemRequestBuilderDeleteQueryParameters {
 	/**
@@ -9898,21 +9963,21 @@ export interface ContentTypes extends AdditionalDataHolder, Parsable {
 }
 interface ContentTypesRequestBuilder$2 extends BaseRequestBuilder<ContentTypesRequestBuilder$2> {
 	/**
-	 * Requires list.read. Optional workspace and collection scopes narrow the catalog; organization catalog permissions are not required.
+	 * Requires item.read. Optional workspace and collection scopes narrow the catalog; organization catalog permissions are not required.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<ContentTypes[]>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	get(requestConfiguration?: RequestConfiguration<ContentTypesRequestBuilderGetQueryParameters> | undefined): Promise<ContentTypes[] | undefined>;
 	/**
-	 * Requires list.read. Optional workspace and collection scopes narrow the catalog; organization catalog permissions are not required.
+	 * Requires item.read. Optional workspace and collection scopes narrow the catalog; organization catalog permissions are not required.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<ContentTypesRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 }
 /**
- * Requires list.read. Optional workspace and collection scopes narrow the catalog; organization catalog permissions are not required.
+ * Requires item.read. Optional workspace and collection scopes narrow the catalog; organization catalog permissions are not required.
  */
 export interface ContentTypesRequestBuilderGetQueryParameters {
 	collectionId?: Guid;
@@ -10293,7 +10358,7 @@ declare const GetSurfaceQueryParameterTypeObject$5: {
 };
 interface WithItemItemRequestBuilder$1 extends BaseRequestBuilder<WithItemItemRequestBuilder$1> {
 	/**
-	 * Requires item If-Match and current folder_version. Clears matching equality values/keywords and selected terms including descendants; ordinary validation and publication rules apply. Rolls back if the result still matches the definition. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Only definitions with mode classification permit this action; saved queries reject it.
+	 * Requires item If-Match and current folder_version. Clears matching equality values/keywords and selected terms including descendants; ordinary validation and publication rules apply. Rolls back if the result still matches the definition. Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply. Only definitions with mode classification permit this action; saved queries reject it.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Resource>}
@@ -10302,7 +10367,7 @@ interface WithItemItemRequestBuilder$1 extends BaseRequestBuilder<WithItemItemRe
 	 */
 	delete(body: SmartFolderUnclassify, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Resource | undefined>;
 	/**
-	 * Requires item If-Match and current folder_version. Clears matching equality values/keywords and selected terms including descendants; ordinary validation and publication rules apply. Rolls back if the result still matches the definition. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Only definitions with mode classification permit this action; saved queries reject it.
+	 * Requires item If-Match and current folder_version. Clears matching equality values/keywords and selected terms including descendants; ordinary validation and publication rules apply. Rolls back if the result still matches the definition. Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply. Only definitions with mode classification permit this action; saved queries reject it.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -10317,7 +10382,7 @@ interface ItemsRequestBuilder$1 extends BaseRequestBuilder<ItemsRequestBuilder$1
 	 */
 	byItemID(itemID: Guid): WithItemItemRequestBuilder$1;
 	/**
-	 *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Only definitions with mode classification permit this action; saved queries reject it.
+	 *  Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply. Only definitions with mode classification permit this action; saved queries reject it.
 	 * @param body Classify existing item or create one through ordinary item validation/revisions/publication. Current folder_version is required. Inferred AND equalities, selected terms and writable path fields are applied; non-inferable predicates must already fit. The write rolls back unless the head matches the folder/path. Existing items retain location; new parent_id must belong to collection.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Resource>}
@@ -10325,7 +10390,7 @@ interface ItemsRequestBuilder$1 extends BaseRequestBuilder<ItemsRequestBuilder$1
 	 */
 	post(body: SmartFolderDrop, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Resource | undefined>;
 	/**
-	 *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Only definitions with mode classification permit this action; saved queries reject it.
+	 *  Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply. Only definitions with mode classification permit this action; saved queries reject it.
 	 * @param body Classify existing item or create one through ordinary item validation/revisions/publication. Current folder_version is required. Inferred AND equalities, selected terms and writable path fields are applied; non-inferable predicates must already fit. The write rolls back unless the head matches the folder/path. Existing items retain location; new parent_id must belong to collection.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -10334,7 +10399,7 @@ interface ItemsRequestBuilder$1 extends BaseRequestBuilder<ItemsRequestBuilder$1
 }
 interface GroupsRequestBuilder$1 extends BaseRequestBuilder<GroupsRequestBuilder$1> {
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink. An empty path returns all matching items even when group_by is configured.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<SmartFolderGroupsResult>}
@@ -10342,7 +10407,7 @@ interface GroupsRequestBuilder$1 extends BaseRequestBuilder<GroupsRequestBuilder
 	 */
 	post(body: SmartFolderQueryRequest, requestConfiguration?: RequestConfiguration<GroupsRequestBuilderPostQueryParameters$1> | undefined): Promise<SmartFolderGroupsResult | undefined>;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink. An empty path returns all matching items even when group_by is configured.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -10362,7 +10427,7 @@ interface QueryRequestBuilder$1 extends BaseRequestBuilder<QueryRequestBuilder$1
 	 */
 	get groups(): GroupsRequestBuilder$1;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink. An empty path returns all matching items even when group_by is configured.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<SmartFolderResult>}
@@ -10370,7 +10435,7 @@ interface QueryRequestBuilder$1 extends BaseRequestBuilder<QueryRequestBuilder$1
 	 */
 	post(body: SmartFolderQueryRequest, requestConfiguration?: RequestConfiguration<QueryRequestBuilderPostQueryParameters$1> | undefined): Promise<SmartFolderResult | undefined>;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink. An empty path returns all matching items even when group_by is configured.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -10397,21 +10462,21 @@ export interface SmartFoldersItemRequestBuilder extends BaseRequestBuilder<Smart
 	 */
 	get query(): QueryRequestBuilder$1;
 	/**
-	 *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.write; shared smart folders also need list.manage and workspace manage access. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @throws {Problem} error when the service returns a 412 status code
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	delete(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<void>;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<SmartFolder>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	get(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<SmartFolder | undefined>;
 	/**
-	 *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.write; shared smart folders also need list.manage and workspace manage access. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Personal folders are owner-only and may span all readable workspaces. Shared folders require workspace_id and workspace manage permission. Ownership and workspace are immutable on PUT; PUT replaces the definition. At most 100 shared folders per workspace. Shared mutations advance the workspace version; personal mutations do not.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<SmartFolder>}
@@ -10420,19 +10485,19 @@ export interface SmartFoldersItemRequestBuilder extends BaseRequestBuilder<Smart
 	 */
 	put(body: SmartFolderInput, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<SmartFolder | undefined>;
 	/**
-	 *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.write; shared smart folders also need list.manage and workspace manage access. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toDeleteRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 	/**
-	 *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.write; shared smart folders also need list.manage and workspace manage access. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Personal folders are owner-only and may span all readable workspaces. Shared folders require workspace_id and workspace manage permission. Ownership and workspace are immutable on PUT; PUT replaces the definition. At most 100 shared folders per workspace. Shared mutations advance the workspace version; personal mutations do not.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -10441,7 +10506,7 @@ export interface SmartFoldersItemRequestBuilder extends BaseRequestBuilder<Smart
 }
 interface PreviewRequestBuilder$1 extends BaseRequestBuilder<PreviewRequestBuilder$1> {
 	/**
-	 * Read-only evaluation of the caller’s readable collections and visible item revisions. Returns up to five items and a count capped at 10,000; no continuation. No definition, item, version or audit event is saved. Requires list.read.
+	 * Read-only evaluation of the caller’s readable collections and visible item revisions. Returns up to five items and a count capped at 10,000; no continuation. No definition, item, version or audit event is saved. Requires item.read.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<SmartFolderResult>}
@@ -10449,7 +10514,7 @@ interface PreviewRequestBuilder$1 extends BaseRequestBuilder<PreviewRequestBuild
 	 */
 	post(body: SmartFolderPreview, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<SmartFolderResult | undefined>;
 	/**
-	 * Read-only evaluation of the caller’s readable collections and visible item revisions. Returns up to five items and a count capped at 10,000; no continuation. No definition, item, version or audit event is saved. Requires list.read.
+	 * Read-only evaluation of the caller’s readable collections and visible item revisions. Returns up to five items and a count capped at 10,000; no continuation. No definition, item, version or audit event is saved. Requires item.read.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -10471,14 +10536,14 @@ export interface SmartFoldersRequestBuilder extends BaseRequestBuilder<SmartFold
 	 */
 	byId(id: Guid): SmartFoldersItemRequestBuilder;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<SmartFolderPage>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	get(requestConfiguration?: RequestConfiguration<SmartFoldersRequestBuilderGetQueryParameters> | undefined): Promise<SmartFolderPage | undefined>;
 	/**
-	 *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.write; shared smart folders also need list.manage and workspace manage access. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Personal folders are owner-only and may span all readable workspaces. Shared folders require workspace_id and workspace manage permission. Ownership and workspace are immutable on PUT; PUT replaces the definition. At most 100 shared folders per workspace. Shared mutations advance the workspace version; personal mutations do not.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<SmartFolder>}
@@ -10486,13 +10551,13 @@ export interface SmartFoldersRequestBuilder extends BaseRequestBuilder<SmartFold
 	 */
 	post(body: SmartFolderInput, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<SmartFolder | undefined>;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<SmartFoldersRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 	/**
-	 *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.write; shared smart folders also need list.manage and workspace manage access. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Personal folders are owner-only and may span all readable workspaces. Shared folders require workspace_id and workspace manage permission. Ownership and workspace are immutable on PUT; PUT replaces the definition. At most 100 shared folders per workspace. Shared mutations advance the workspace version; personal mutations do not.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -10500,7 +10565,7 @@ export interface SmartFoldersRequestBuilder extends BaseRequestBuilder<SmartFold
 	toPostRequestInformation(body: SmartFolderInput, requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 }
 /**
- *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+ *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
  */
 export interface SmartFoldersRequestBuilderGetQueryParameters {
 	/**
@@ -11419,7 +11484,7 @@ export interface TermSetsRequestBuilderGetQueryParameters {
  */
 export interface NavigationRequestBuilder extends BaseRequestBuilder<NavigationRequestBuilder> {
 	/**
-	 * Lists one level of a field of a navigation view: the terms of field below parent_id (or the roots), in term order, each with the items of the view it lists and those at or below it. Counts follow the view's query, the caller's access and the surface read, and cover items, not folders. Required module scopes: list.read, taxonomy.read. Resource ACLs and any additional use-case checks also apply.
+	 * Lists one level of a field of a navigation view: the terms of field below parent_id (or the roots), in term order, each with the items of the view it lists and those at or below it. Counts follow the view's query, the caller's access and the surface read, and cover items, not folders. Required module scopes: item.read, taxonomy.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<NavigationPage>}
@@ -11435,7 +11500,7 @@ export interface NavigationRequestBuilder extends BaseRequestBuilder<NavigationR
 	 */
 	post(body: NavigationRequest, requestConfiguration?: RequestConfiguration<NavigationRequestBuilderPostQueryParameters> | undefined): Promise<NavigationPage | undefined>;
 	/**
-	 * Lists one level of a field of a navigation view: the terms of field below parent_id (or the roots), in term order, each with the items of the view it lists and those at or below it. Counts follow the view's query, the caller's access and the surface read, and cover items, not folders. Required module scopes: list.read, taxonomy.read. Resource ACLs and any additional use-case checks also apply.
+	 * Lists one level of a field of a navigation view: the terms of field below parent_id (or the roots), in term order, each with the items of the view it lists and those at or below it. Counts follow the view's query, the caller's access and the surface read, and cover items, not folders. Required module scopes: item.read, taxonomy.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -11443,7 +11508,7 @@ export interface NavigationRequestBuilder extends BaseRequestBuilder<NavigationR
 	toPostRequestInformation(body: NavigationRequest, requestConfiguration?: RequestConfiguration<NavigationRequestBuilderPostQueryParameters> | undefined): RequestInformation;
 }
 /**
- * Lists one level of a field of a navigation view: the terms of field below parent_id (or the roots), in term order, each with the items of the view it lists and those at or below it. Counts follow the view's query, the caller's access and the surface read, and cover items, not folders. Required module scopes: list.read, taxonomy.read. Resource ACLs and any additional use-case checks also apply.
+ * Lists one level of a field of a navigation view: the terms of field below parent_id (or the roots), in term order, each with the items of the view it lists and those at or below it. Counts follow the view's query, the caller's access and the surface read, and cover items, not folders. Required module scopes: item.read, taxonomy.read. Resource ACLs and any additional use-case checks also apply.
  */
 export interface NavigationRequestBuilderPostQueryParameters {
 	/**
@@ -11454,7 +11519,7 @@ export interface NavigationRequestBuilderPostQueryParameters {
 }
 interface GroupsRequestBuilder$2 extends BaseRequestBuilder<GroupsRequestBuilder$2> {
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<QueryGroupPage>}
@@ -11470,7 +11535,7 @@ interface GroupsRequestBuilder$2 extends BaseRequestBuilder<GroupsRequestBuilder
 	 */
 	post(body: ViewQueryRequest, requestConfiguration?: RequestConfiguration<GroupsRequestBuilderPostQueryParameters$2> | undefined): Promise<QueryGroupPage | undefined>;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -11490,7 +11555,7 @@ interface QueryRequestBuilder$2 extends BaseRequestBuilder<QueryRequestBuilder$2
 	 */
 	get groups(): GroupsRequestBuilder$2;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<QueryResult>}
@@ -11506,7 +11571,7 @@ interface QueryRequestBuilder$2 extends BaseRequestBuilder<QueryRequestBuilder$2
 	 */
 	post(body: ViewQueryRequest, requestConfiguration?: RequestConfiguration<QueryRequestBuilderPostQueryParameters$2> | undefined): Promise<QueryResult | undefined>;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -11533,13 +11598,13 @@ export interface ViewsItemRequestBuilder extends BaseRequestBuilder<ViewsItemReq
 	 */
 	get query(): QueryRequestBuilder$2;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Requires collection manage access. Required module scopes: list.manage. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @throws {Problem} error when the service returns a 412 status code
 	 */
 	delete(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<void>;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<ListView>}
 	 * @throws {Problem} error when the service returns a 400 status code
@@ -11554,7 +11619,7 @@ export interface ViewsItemRequestBuilder extends BaseRequestBuilder<ViewsItemReq
 	 */
 	get(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<ListView | undefined>;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Requires collection manage access. Required module scopes: list.manage. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Collection-managed saved view. Columns use field keys and $id/$name/$keywords; empty columns default to $name. PUT replaces the definition. Layout is a client hint; a navigation view browses the terms of each of settings.fields as folders (POST /v1/views/{id}/navigation) and lists the items at the opened terms through POST /v1/views/{id}/query with selected.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<ListView>}
@@ -11572,19 +11637,19 @@ export interface ViewsItemRequestBuilder extends BaseRequestBuilder<ViewsItemReq
 	 */
 	put(body: ViewInput, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<ListView | undefined>;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Requires collection manage access. Required module scopes: list.manage. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toDeleteRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Requires collection manage access. Required module scopes: list.manage. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Collection-managed saved view. Columns use field keys and $id/$name/$keywords; empty columns default to $name. PUT replaces the definition. Layout is a client hint; a navigation view browses the terms of each of settings.fields as folders (POST /v1/views/{id}/navigation) and lists the items at the opened terms through POST /v1/views/{id}/query with selected.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -11892,14 +11957,14 @@ interface RelationshipsRequestBuilder$1 extends BaseRequestBuilder<Relationships
 	 */
 	get types(): TypesRequestBuilder;
 	/**
-	 * Both endpoints must be readable on their selected content surface. Returns compact endpoint navigation summaries and resolved relationship labels; load full metadata through the per-item relationship read. All results touch the starting workspace even when item_id belongs elsewhere. Filter scalar attributes/key, id or directed using eq/ne and numeric gt/ge/lt/le, and/or/not and parentheses. Filters are limited to 4096 bytes, 32 nodes and depth 6. Example: attributes/amount gt 100. Required module scope: list.read.
+	 * Both endpoints must be readable on their selected content surface. Returns compact endpoint navigation summaries and resolved relationship labels; load full metadata through the per-item relationship read. All results touch the starting workspace even when item_id belongs elsewhere. Filter scalar attributes/key, id or directed using eq/ne and numeric gt/ge/lt/le, and/or/not and parentheses. Filters are limited to 4096 bytes, 32 nodes and depth 6. Example: attributes/amount gt 100. Required module scope: item.read.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<WorkspaceRelationshipPage>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	get(requestConfiguration?: RequestConfiguration<RelationshipsRequestBuilderGetQueryParameters$1> | undefined): Promise<WorkspaceRelationshipPage | undefined>;
 	/**
-	 * Both endpoints must be readable on their selected content surface. Returns compact endpoint navigation summaries and resolved relationship labels; load full metadata through the per-item relationship read. All results touch the starting workspace even when item_id belongs elsewhere. Filter scalar attributes/key, id or directed using eq/ne and numeric gt/ge/lt/le, and/or/not and parentheses. Filters are limited to 4096 bytes, 32 nodes and depth 6. Example: attributes/amount gt 100. Required module scope: list.read.
+	 * Both endpoints must be readable on their selected content surface. Returns compact endpoint navigation summaries and resolved relationship labels; load full metadata through the per-item relationship read. All results touch the starting workspace even when item_id belongs elsewhere. Filter scalar attributes/key, id or directed using eq/ne and numeric gt/ge/lt/le, and/or/not and parentheses. Filters are limited to 4096 bytes, 32 nodes and depth 6. Example: attributes/amount gt 100. Required module scope: item.read.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -12593,7 +12658,7 @@ export declare function __start(definition: unknown, run: string): Promise<strin
 export declare function __manifest(definition: unknown, params: string): string;
 
 declare namespace models {
-	export { ApplyTemplateInput, ArchiveEntry, ArchiveEntry_duplicate_policy, ArchiveEntry_duplicate_policyObject, ArchiveEntry_kind, ArchiveEntry_kindObject, ArchiveEntry_system_key, ArchiveEntry_system_keyObject, ArchiveEntry_values, ArchiveEntry_versioning, ArchiveEntry_versioningObject, ArchiveSelection, ArchiveSelectionObject, Artifact, Artifact_metrics, Artifact_sources, AttachContentTypeInput, AuditEvent, AuditEvent_details, AuditPage, Blob, Blob_content_type, Blob_content_typeObject, BulkCreate, BulkCreate_values, BulkOperation, BulkOperationMember1, BulkOperationMember2, BulkOperationMember3, BulkOperationMember4, BulkOperationMember5, BulkOperationMember6, BulkOperationMember7, BulkRequest, BulkResponse, BulkResult, BulkResult_action, BulkResult_actionObject, BulkUpdate, BulkUpdate_values, CalendarOccurrence, CalendarQuery, CalendarQuery_surface, CalendarQuery_surfaceObject, ChunkText, ChunkText_chunker, ChunkText_chunkerObject, ChunkText_kind, ChunkText_kindObject, CollectionContentType, CollectionTemplate, CollectionTemplate_duplicate_policy, CollectionTemplate_duplicate_policyObject, CollectionTemplate_kind, CollectionTemplate_kindObject, CollectionTemplate_versioning, CollectionTemplate_versioningObject, CompletionRequest, CompletionRequest_execution, CompletionRequest_executionObject, CompletionRequest_output_schema, ComposePDF, ContentType, ContentTypeInput, CreateCatalogField, CreateCatalogField_type, CreateCatalogField_typeObject, CreateField, CreateField_type, CreateField_typeObject, CreateListIntegration, CreateListIntegration_configuration, CreateRelationship, CreateRelationship_metadata, CreateResource, CreateResource_duplicate_policy, CreateResource_duplicate_policyObject, CreateResource_kind, CreateResource_kindObject, CreateResource_values, CreateResource_versioning, CreateResource_versioningObject, DecisionRequest, DecisionRequest_context, DecisionRequest_data, DecisionRequest_questions, DecisionRequest_questions_options, DecisionRequest_questions_type, DecisionRequest_questions_typeObject, DeletedResource, DeltaPage, DeltaPage_value, DeltaPage_valueMember1, DeltaPage_valueMember1_Removed, DeltaPage_valueMember1_Removed_reason, DeltaPage_valueMember1_Removed_reasonObject, DocumentMetadata, DocumentMetadata_values, DocumentUpload, DuplicateDocument, FieldDefinition, FieldDefinition_index_status, FieldDefinition_index_statusObject, FieldDefinition_type, FieldDefinition_typeObject, FieldOptions, FieldOptions_search_weight, FieldOptions_search_weightObject, FileVersion, FileVersion_availability, FileVersion_availabilityObject, FilterExpr, FilterExpr_op, FilterExpr_opObject, FilterExpr_value_ref, FilterExpr_value_refObject, FilteredBulkUpdate, FilteredBulkUpdate_values, GenerationChunk, GenerationChunkPage, GenerationEnrichments, GenerationEnrichments_enrichments, ItemIntegration, ItemRevision, ItemRevision_payload, ItemText, ItemText_pages, KeywordCount, KeywordCountList, KeywordInput, ListIntegration, ListIntegration_kind, ListIntegration_kindObject, ListView, ListViewPage, ListView_system_key, ListView_system_keyObject, LocatedItem, MergeTerm, MoveItem, MoveTerm, NavigationFieldSetting, NavigationNode, NavigationPage, NavigationRequest, NavigationRequest_surface, NavigationRequest_surfaceObject, NavigationSelection, Operation, OperationFailure, OperationPage, Operation_error_code, Operation_error_codeObject, Operation_status, Operation_statusObject, Operation_waiting, Operation_waitingObject, OptimizeImage, Permissions, Permissions_effective_grants, Permissions_effective_grants_action, Permissions_effective_grants_actionObject, Permissions_effective_grants_effect, Permissions_effective_grants_effectObject, Permissions_effective_grants_principal_type, Permissions_effective_grants_principal_typeObject, Permissions_grants, Permissions_grants_action, Permissions_grants_actionObject, Permissions_grants_effect, Permissions_grants_effectObject, Permissions_grants_principal_type, Permissions_grants_principal_typeObject, PortableSmartFolder, PortableSmartFolderDefinition, PortableSmartFolderDefinition_collection_kind, PortableSmartFolderDefinition_collection_kindObject, PortableSmartFolderDefinition_mode, PortableSmartFolderDefinition_modeObject, PortableSmartFolderDefinition_term_match, PortableSmartFolderDefinition_term_matchObject, PortableTerm, PortableTermGroup, PortableTermSet, PortableTerm_labels, Problem, Problem_existing_item, PromoteKeyword, PromoteStagedFile, PromotedFile, Publication, Publication_action, Publication_actionObject, Publication_snapshot, QueryGroup, QueryGroupPage, QueryRequest, QueryRequest_surface, QueryRequest_surfaceObject, QueryResult, QuerySpec, ReadText, ReadText_ocr, ReadText_ocrObject, ReclaimFileVersion, ReclaimedFileVersion, RecycleBinPage, Relationship, RelationshipEndpoint, RelationshipEndpointPage, RelationshipNeighborhood, RelationshipType, RelationshipTypeInput, RelationshipTypePage, RelationshipType_attributes, RelationshipView, Relationship_metadata, Resource, ResourceAccess, ResourceAccess_access, ResourceAccess_accessObject, Resource_duplicate_policy, Resource_duplicate_policyObject, Resource_kind, Resource_kindObject, Resource_system_key, Resource_system_keyObject, Resource_values, Resource_versioning, Resource_versioningObject, SchemaRevision, SchemaRevision_definition, SchemaRevision_definition_fields, SchemaRevision_definition_fields_type, SchemaRevision_definition_fields_typeObject, SchemaTemplate, SchemaTemplatePage, SchemaTemplate_definition, SearchFacetValue, SearchFacets, SearchField, SearchField_operators, SearchField_operatorsObject, SearchHit, SearchHit_kind, SearchHit_kindObject, SearchHit_matched_by, SearchHit_matched_byObject, SearchHit_surface, SearchHit_surfaceObject, SearchPage, SearchPage_mode, SearchPage_modeObject, SearchRequest, SearchRequest_kind, SearchRequest_kindObject, SearchRequest_mode, SearchRequest_modeObject, SearchRequest_surface, SearchRequest_surfaceObject, SearchStatus, SearchStatus_embeddings, SearchSync, SetWorkspaceMember, SetWorkspaceMember_role, SetWorkspaceMember_roleObject, SmartFolder, SmartFolderDefinition, SmartFolderDefinition_collection_kind, SmartFolderDefinition_collection_kindObject, SmartFolderDefinition_mode, SmartFolderDefinition_modeObject, SmartFolderDefinition_term_match, SmartFolderDefinition_term_matchObject, SmartFolderDrop, SmartFolderEntry, SmartFolderEntry_collection_kind, SmartFolderEntry_collection_kindObject, SmartFolderGroup, SmartFolderGroupBy, SmartFolderGroupBy_by, SmartFolderGroupBy_byObject, SmartFolderGroupsResult, SmartFolderImportResult, SmartFolderInput, SmartFolderPackage, SmartFolderPage, SmartFolderPreview, SmartFolderQueryRequest, SmartFolderQueryRequest_sort, SmartFolderQueryRequest_sort_direction, SmartFolderQueryRequest_sort_directionObject, SmartFolderQueryRequest_sort_field, SmartFolderQueryRequest_sort_fieldObject, SmartFolderQueryRequest_surface, SmartFolderQueryRequest_surfaceObject, SmartFolderResult, SmartFolderTermRef, SmartFolderUnclassify, SortSpec, SortSpec_direction, SortSpec_directionObject, StagedArtifact, StagedFile, StagedFile_metrics, StagedFile_sources, StagedFile_state, StagedFile_stateObject, Task, TaskAnswer, TaskAnswer_input, TaskCreate, TaskCreate_completion, TaskCreate_completionObject, TaskCreate_kind, TaskCreate_kindObject, TaskCreate_priority, TaskCreate_priorityObject, TaskCreate_review, TaskCreate_review_type, TaskCreate_review_typeObject, TaskCreate_values, TaskList, TaskOutcome, TaskOutcome_comment, TaskOutcome_commentObject, TaskOutcome_style, TaskOutcome_styleObject, TaskReassign, TaskResponseInput, TaskResponseInput_input, Task_completion, Task_completionObject, Task_input, Task_kind, Task_kindObject, Task_priority, Task_priorityObject, Task_review, Task_review_type, Task_review_typeObject, Task_source, Task_sourceObject, Task_status, Task_statusObject, Task_values, TaxonomyDecisionRequest, TaxonomyDecisionRequest_context, TaxonomyDecisionRequest_data, TaxonomyDecisionRequest_description_overrides, TaxonomyDecisionRequest_selection, TaxonomyDecisionRequest_selectionObject, TaxonomyImportResult, TaxonomyPackage, TemplateField, TemplateField_type, TemplateField_typeObject, TemplateInput, Term, TermEntries, TermGroup, TermGroupInput, TermGroupPage, TermImportResult, TermInput, TermInput_labels, TermList, TermPage, TermSet, TermSetInput, TermSetPage, Term_labels, UpdateField, UpdateListIntegration, UpdateListIntegration_configuration, UpdateRelationship, UpdateRelationship_metadata, UpdateResource, UpdateResource_duplicate_policy, UpdateResource_duplicate_policyObject, UpdateResource_values, UpdateResource_versioning, UpdateResource_versioningObject, ValidationRule, ValidationRuleMember1, ValidationRuleMember2, ValidationRuleMember2_op, ValidationRuleMember2_opObject, ViewInput, ViewInput_layout, ViewInput_layoutObject, ViewQueryRequest, ViewQueryRequest_surface, ViewQueryRequest_surfaceObject, ViewSettings, ViewSettings_match, ViewSettings_matchObject, WorkflowForm, WorkspaceKeywordCount, WorkspaceKeywordCountPage, WorkspaceMember, WorkspaceMember_role, WorkspaceMember_roleObject, WorkspaceRelationshipPage, WorkspaceRelationshipType, WorkspaceRelationshipTypePage, WorkspaceRelationshipView, createApplyTemplateInputFromDiscriminatorValue, createArchiveEntryFromDiscriminatorValue, createArchiveEntry_valuesFromDiscriminatorValue, createArtifactFromDiscriminatorValue, createArtifact_metricsFromDiscriminatorValue, createArtifact_sourcesFromDiscriminatorValue, createAttachContentTypeInputFromDiscriminatorValue, createAuditEventFromDiscriminatorValue, createAuditEvent_detailsFromDiscriminatorValue, createAuditPageFromDiscriminatorValue, createBlobFromDiscriminatorValue, createBulkCreateFromDiscriminatorValue, createBulkCreate_valuesFromDiscriminatorValue, createBulkOperationFromDiscriminatorValue, createBulkOperationMember1FromDiscriminatorValue, createBulkOperationMember2FromDiscriminatorValue, createBulkOperationMember3FromDiscriminatorValue, createBulkOperationMember4FromDiscriminatorValue, createBulkOperationMember5FromDiscriminatorValue, createBulkOperationMember6FromDiscriminatorValue, createBulkOperationMember7FromDiscriminatorValue, createBulkRequestFromDiscriminatorValue, createBulkResponseFromDiscriminatorValue, createBulkResultFromDiscriminatorValue, createBulkUpdateFromDiscriminatorValue, createBulkUpdate_valuesFromDiscriminatorValue, createCalendarOccurrenceFromDiscriminatorValue, createCalendarQueryFromDiscriminatorValue, createChunkTextFromDiscriminatorValue, createCollectionContentTypeFromDiscriminatorValue, createCollectionTemplateFromDiscriminatorValue, createCompletionRequestFromDiscriminatorValue, createCompletionRequest_output_schemaFromDiscriminatorValue, createComposePDFFromDiscriminatorValue, createContentTypeFromDiscriminatorValue, createContentTypeInputFromDiscriminatorValue, createCreateCatalogFieldFromDiscriminatorValue, createCreateFieldFromDiscriminatorValue, createCreateListIntegrationFromDiscriminatorValue, createCreateListIntegration_configurationFromDiscriminatorValue, createCreateRelationshipFromDiscriminatorValue, createCreateRelationship_metadataFromDiscriminatorValue, createCreateResourceFromDiscriminatorValue, createCreateResource_valuesFromDiscriminatorValue, createDecisionRequestFromDiscriminatorValue, createDecisionRequest_contextFromDiscriminatorValue, createDecisionRequest_dataFromDiscriminatorValue, createDecisionRequest_questionsFromDiscriminatorValue, createDecisionRequest_questions_optionsFromDiscriminatorValue, createDeletedResourceFromDiscriminatorValue, createDeltaPageFromDiscriminatorValue, createDeltaPage_valueFromDiscriminatorValue, createDeltaPage_valueMember1FromDiscriminatorValue, createDeltaPage_valueMember1_RemovedFromDiscriminatorValue, createDocumentMetadataFromDiscriminatorValue, createDocumentMetadata_valuesFromDiscriminatorValue, createDocumentUploadFromDiscriminatorValue, createDuplicateDocumentFromDiscriminatorValue, createFieldDefinitionFromDiscriminatorValue, createFieldOptionsFromDiscriminatorValue, createFileVersionFromDiscriminatorValue, createFilterExprFromDiscriminatorValue, createFilteredBulkUpdateFromDiscriminatorValue, createFilteredBulkUpdate_valuesFromDiscriminatorValue, createGenerationChunkFromDiscriminatorValue, createGenerationChunkPageFromDiscriminatorValue, createGenerationEnrichmentsFromDiscriminatorValue, createGenerationEnrichments_enrichmentsFromDiscriminatorValue, createItemIntegrationFromDiscriminatorValue, createItemRevisionFromDiscriminatorValue, createItemRevision_payloadFromDiscriminatorValue, createItemTextFromDiscriminatorValue, createItemText_pagesFromDiscriminatorValue, createKeywordCountFromDiscriminatorValue, createKeywordCountListFromDiscriminatorValue, createKeywordInputFromDiscriminatorValue, createListIntegrationFromDiscriminatorValue, createListViewFromDiscriminatorValue, createListViewPageFromDiscriminatorValue, createLocatedItemFromDiscriminatorValue, createMergeTermFromDiscriminatorValue, createMoveItemFromDiscriminatorValue, createMoveTermFromDiscriminatorValue, createNavigationFieldSettingFromDiscriminatorValue, createNavigationNodeFromDiscriminatorValue, createNavigationPageFromDiscriminatorValue, createNavigationRequestFromDiscriminatorValue, createNavigationSelectionFromDiscriminatorValue, createOperationFailureFromDiscriminatorValue, createOperationFromDiscriminatorValue, createOperationPageFromDiscriminatorValue, createOptimizeImageFromDiscriminatorValue, createPermissionsFromDiscriminatorValue, createPermissions_effective_grantsFromDiscriminatorValue, createPermissions_grantsFromDiscriminatorValue, createPortableSmartFolderDefinitionFromDiscriminatorValue, createPortableSmartFolderFromDiscriminatorValue, createPortableTermFromDiscriminatorValue, createPortableTermGroupFromDiscriminatorValue, createPortableTermSetFromDiscriminatorValue, createPortableTerm_labelsFromDiscriminatorValue, createProblemFromDiscriminatorValue, createProblem_existing_itemFromDiscriminatorValue, createPromoteKeywordFromDiscriminatorValue, createPromoteStagedFileFromDiscriminatorValue, createPromotedFileFromDiscriminatorValue, createPublicationFromDiscriminatorValue, createPublication_snapshotFromDiscriminatorValue, createQueryGroupFromDiscriminatorValue, createQueryGroupPageFromDiscriminatorValue, createQueryRequestFromDiscriminatorValue, createQueryResultFromDiscriminatorValue, createQuerySpecFromDiscriminatorValue, createReadTextFromDiscriminatorValue, createReclaimFileVersionFromDiscriminatorValue, createReclaimedFileVersionFromDiscriminatorValue, createRecycleBinPageFromDiscriminatorValue, createRelationshipEndpointFromDiscriminatorValue, createRelationshipEndpointPageFromDiscriminatorValue, createRelationshipFromDiscriminatorValue, createRelationshipNeighborhoodFromDiscriminatorValue, createRelationshipTypeFromDiscriminatorValue, createRelationshipTypeInputFromDiscriminatorValue, createRelationshipTypePageFromDiscriminatorValue, createRelationshipType_attributesFromDiscriminatorValue, createRelationshipViewFromDiscriminatorValue, createRelationship_metadataFromDiscriminatorValue, createResourceAccessFromDiscriminatorValue, createResourceFromDiscriminatorValue, createResource_valuesFromDiscriminatorValue, createSchemaRevisionFromDiscriminatorValue, createSchemaRevision_definitionFromDiscriminatorValue, createSchemaRevision_definition_fieldsFromDiscriminatorValue, createSchemaTemplateFromDiscriminatorValue, createSchemaTemplatePageFromDiscriminatorValue, createSchemaTemplate_definitionFromDiscriminatorValue, createSearchFacetValueFromDiscriminatorValue, createSearchFacetsFromDiscriminatorValue, createSearchFieldFromDiscriminatorValue, createSearchHitFromDiscriminatorValue, createSearchPageFromDiscriminatorValue, createSearchRequestFromDiscriminatorValue, createSearchStatusFromDiscriminatorValue, createSearchStatus_embeddingsFromDiscriminatorValue, createSearchSyncFromDiscriminatorValue, createSetWorkspaceMemberFromDiscriminatorValue, createSmartFolderDefinitionFromDiscriminatorValue, createSmartFolderDropFromDiscriminatorValue, createSmartFolderEntryFromDiscriminatorValue, createSmartFolderFromDiscriminatorValue, createSmartFolderGroupByFromDiscriminatorValue, createSmartFolderGroupFromDiscriminatorValue, createSmartFolderGroupsResultFromDiscriminatorValue, createSmartFolderImportResultFromDiscriminatorValue, createSmartFolderInputFromDiscriminatorValue, createSmartFolderPackageFromDiscriminatorValue, createSmartFolderPageFromDiscriminatorValue, createSmartFolderPreviewFromDiscriminatorValue, createSmartFolderQueryRequestFromDiscriminatorValue, createSmartFolderQueryRequest_sortFromDiscriminatorValue, createSmartFolderResultFromDiscriminatorValue, createSmartFolderTermRefFromDiscriminatorValue, createSmartFolderUnclassifyFromDiscriminatorValue, createSortSpecFromDiscriminatorValue, createStagedArtifactFromDiscriminatorValue, createStagedFileFromDiscriminatorValue, createStagedFile_metricsFromDiscriminatorValue, createStagedFile_sourcesFromDiscriminatorValue, createTaskAnswerFromDiscriminatorValue, createTaskAnswer_inputFromDiscriminatorValue, createTaskCreateFromDiscriminatorValue, createTaskCreate_reviewFromDiscriminatorValue, createTaskCreate_valuesFromDiscriminatorValue, createTaskFromDiscriminatorValue, createTaskListFromDiscriminatorValue, createTaskOutcomeFromDiscriminatorValue, createTaskReassignFromDiscriminatorValue, createTaskResponseInputFromDiscriminatorValue, createTaskResponseInput_inputFromDiscriminatorValue, createTask_inputFromDiscriminatorValue, createTask_reviewFromDiscriminatorValue, createTask_valuesFromDiscriminatorValue, createTaxonomyDecisionRequestFromDiscriminatorValue, createTaxonomyDecisionRequest_contextFromDiscriminatorValue, createTaxonomyDecisionRequest_dataFromDiscriminatorValue, createTaxonomyDecisionRequest_description_overridesFromDiscriminatorValue, createTaxonomyImportResultFromDiscriminatorValue, createTaxonomyPackageFromDiscriminatorValue, createTemplateFieldFromDiscriminatorValue, createTemplateInputFromDiscriminatorValue, createTermEntriesFromDiscriminatorValue, createTermFromDiscriminatorValue, createTermGroupFromDiscriminatorValue, createTermGroupInputFromDiscriminatorValue, createTermGroupPageFromDiscriminatorValue, createTermImportResultFromDiscriminatorValue, createTermInputFromDiscriminatorValue, createTermInput_labelsFromDiscriminatorValue, createTermListFromDiscriminatorValue, createTermPageFromDiscriminatorValue, createTermSetFromDiscriminatorValue, createTermSetInputFromDiscriminatorValue, createTermSetPageFromDiscriminatorValue, createTerm_labelsFromDiscriminatorValue, createUpdateFieldFromDiscriminatorValue, createUpdateListIntegrationFromDiscriminatorValue, createUpdateListIntegration_configurationFromDiscriminatorValue, createUpdateRelationshipFromDiscriminatorValue, createUpdateRelationship_metadataFromDiscriminatorValue, createUpdateResourceFromDiscriminatorValue, createUpdateResource_valuesFromDiscriminatorValue, createValidationRuleFromDiscriminatorValue, createValidationRuleMember1FromDiscriminatorValue, createValidationRuleMember2FromDiscriminatorValue, createViewInputFromDiscriminatorValue, createViewQueryRequestFromDiscriminatorValue, createViewSettingsFromDiscriminatorValue, createWorkflowFormFromDiscriminatorValue, createWorkspaceKeywordCountFromDiscriminatorValue, createWorkspaceKeywordCountPageFromDiscriminatorValue, createWorkspaceMemberFromDiscriminatorValue, createWorkspaceRelationshipPageFromDiscriminatorValue, createWorkspaceRelationshipTypeFromDiscriminatorValue, createWorkspaceRelationshipTypePageFromDiscriminatorValue, createWorkspaceRelationshipViewFromDiscriminatorValue, deserializeIntoApplyTemplateInput, deserializeIntoArchiveEntry, deserializeIntoArchiveEntry_values, deserializeIntoArtifact, deserializeIntoArtifact_metrics, deserializeIntoArtifact_sources, deserializeIntoAttachContentTypeInput, deserializeIntoAuditEvent, deserializeIntoAuditEvent_details, deserializeIntoAuditPage, deserializeIntoBlob, deserializeIntoBulkCreate, deserializeIntoBulkCreate_values, deserializeIntoBulkOperation, deserializeIntoBulkOperationMember1, deserializeIntoBulkOperationMember2, deserializeIntoBulkOperationMember3, deserializeIntoBulkOperationMember4, deserializeIntoBulkOperationMember5, deserializeIntoBulkOperationMember6, deserializeIntoBulkOperationMember7, deserializeIntoBulkRequest, deserializeIntoBulkResponse, deserializeIntoBulkResult, deserializeIntoBulkUpdate, deserializeIntoBulkUpdate_values, deserializeIntoCalendarOccurrence, deserializeIntoCalendarQuery, deserializeIntoChunkText, deserializeIntoCollectionContentType, deserializeIntoCollectionTemplate, deserializeIntoCompletionRequest, deserializeIntoCompletionRequest_output_schema, deserializeIntoComposePDF, deserializeIntoContentType, deserializeIntoContentTypeInput, deserializeIntoCreateCatalogField, deserializeIntoCreateField, deserializeIntoCreateListIntegration, deserializeIntoCreateListIntegration_configuration, deserializeIntoCreateRelationship, deserializeIntoCreateRelationship_metadata, deserializeIntoCreateResource, deserializeIntoCreateResource_values, deserializeIntoDecisionRequest, deserializeIntoDecisionRequest_context, deserializeIntoDecisionRequest_data, deserializeIntoDecisionRequest_questions, deserializeIntoDecisionRequest_questions_options, deserializeIntoDeletedResource, deserializeIntoDeltaPage, deserializeIntoDeltaPage_value, deserializeIntoDeltaPage_valueMember1, deserializeIntoDeltaPage_valueMember1_Removed, deserializeIntoDocumentMetadata, deserializeIntoDocumentMetadata_values, deserializeIntoDocumentUpload, deserializeIntoDuplicateDocument, deserializeIntoFieldDefinition, deserializeIntoFieldOptions, deserializeIntoFileVersion, deserializeIntoFilterExpr, deserializeIntoFilteredBulkUpdate, deserializeIntoFilteredBulkUpdate_values, deserializeIntoGenerationChunk, deserializeIntoGenerationChunkPage, deserializeIntoGenerationEnrichments, deserializeIntoGenerationEnrichments_enrichments, deserializeIntoItemIntegration, deserializeIntoItemRevision, deserializeIntoItemRevision_payload, deserializeIntoItemText, deserializeIntoItemText_pages, deserializeIntoKeywordCount, deserializeIntoKeywordCountList, deserializeIntoKeywordInput, deserializeIntoListIntegration, deserializeIntoListView, deserializeIntoListViewPage, deserializeIntoLocatedItem, deserializeIntoMergeTerm, deserializeIntoMoveItem, deserializeIntoMoveTerm, deserializeIntoNavigationFieldSetting, deserializeIntoNavigationNode, deserializeIntoNavigationPage, deserializeIntoNavigationRequest, deserializeIntoNavigationSelection, deserializeIntoOperation, deserializeIntoOperationFailure, deserializeIntoOperationPage, deserializeIntoOptimizeImage, deserializeIntoPermissions, deserializeIntoPermissions_effective_grants, deserializeIntoPermissions_grants, deserializeIntoPortableSmartFolder, deserializeIntoPortableSmartFolderDefinition, deserializeIntoPortableTerm, deserializeIntoPortableTermGroup, deserializeIntoPortableTermSet, deserializeIntoPortableTerm_labels, deserializeIntoProblem, deserializeIntoProblem_existing_item, deserializeIntoPromoteKeyword, deserializeIntoPromoteStagedFile, deserializeIntoPromotedFile, deserializeIntoPublication, deserializeIntoPublication_snapshot, deserializeIntoQueryGroup, deserializeIntoQueryGroupPage, deserializeIntoQueryRequest, deserializeIntoQueryResult, deserializeIntoQuerySpec, deserializeIntoReadText, deserializeIntoReclaimFileVersion, deserializeIntoReclaimedFileVersion, deserializeIntoRecycleBinPage, deserializeIntoRelationship, deserializeIntoRelationshipEndpoint, deserializeIntoRelationshipEndpointPage, deserializeIntoRelationshipNeighborhood, deserializeIntoRelationshipType, deserializeIntoRelationshipTypeInput, deserializeIntoRelationshipTypePage, deserializeIntoRelationshipType_attributes, deserializeIntoRelationshipView, deserializeIntoRelationship_metadata, deserializeIntoResource, deserializeIntoResourceAccess, deserializeIntoResource_values, deserializeIntoSchemaRevision, deserializeIntoSchemaRevision_definition, deserializeIntoSchemaRevision_definition_fields, deserializeIntoSchemaTemplate, deserializeIntoSchemaTemplatePage, deserializeIntoSchemaTemplate_definition, deserializeIntoSearchFacetValue, deserializeIntoSearchFacets, deserializeIntoSearchField, deserializeIntoSearchHit, deserializeIntoSearchPage, deserializeIntoSearchRequest, deserializeIntoSearchStatus, deserializeIntoSearchStatus_embeddings, deserializeIntoSearchSync, deserializeIntoSetWorkspaceMember, deserializeIntoSmartFolder, deserializeIntoSmartFolderDefinition, deserializeIntoSmartFolderDrop, deserializeIntoSmartFolderEntry, deserializeIntoSmartFolderGroup, deserializeIntoSmartFolderGroupBy, deserializeIntoSmartFolderGroupsResult, deserializeIntoSmartFolderImportResult, deserializeIntoSmartFolderInput, deserializeIntoSmartFolderPackage, deserializeIntoSmartFolderPage, deserializeIntoSmartFolderPreview, deserializeIntoSmartFolderQueryRequest, deserializeIntoSmartFolderQueryRequest_sort, deserializeIntoSmartFolderResult, deserializeIntoSmartFolderTermRef, deserializeIntoSmartFolderUnclassify, deserializeIntoSortSpec, deserializeIntoStagedArtifact, deserializeIntoStagedFile, deserializeIntoStagedFile_metrics, deserializeIntoStagedFile_sources, deserializeIntoTask, deserializeIntoTaskAnswer, deserializeIntoTaskAnswer_input, deserializeIntoTaskCreate, deserializeIntoTaskCreate_review, deserializeIntoTaskCreate_values, deserializeIntoTaskList, deserializeIntoTaskOutcome, deserializeIntoTaskReassign, deserializeIntoTaskResponseInput, deserializeIntoTaskResponseInput_input, deserializeIntoTask_input, deserializeIntoTask_review, deserializeIntoTask_values, deserializeIntoTaxonomyDecisionRequest, deserializeIntoTaxonomyDecisionRequest_context, deserializeIntoTaxonomyDecisionRequest_data, deserializeIntoTaxonomyDecisionRequest_description_overrides, deserializeIntoTaxonomyImportResult, deserializeIntoTaxonomyPackage, deserializeIntoTemplateField, deserializeIntoTemplateInput, deserializeIntoTerm, deserializeIntoTermEntries, deserializeIntoTermGroup, deserializeIntoTermGroupInput, deserializeIntoTermGroupPage, deserializeIntoTermImportResult, deserializeIntoTermInput, deserializeIntoTermInput_labels, deserializeIntoTermList, deserializeIntoTermPage, deserializeIntoTermSet, deserializeIntoTermSetInput, deserializeIntoTermSetPage, deserializeIntoTerm_labels, deserializeIntoUpdateField, deserializeIntoUpdateListIntegration, deserializeIntoUpdateListIntegration_configuration, deserializeIntoUpdateRelationship, deserializeIntoUpdateRelationship_metadata, deserializeIntoUpdateResource, deserializeIntoUpdateResource_values, deserializeIntoValidationRule, deserializeIntoValidationRuleMember1, deserializeIntoValidationRuleMember2, deserializeIntoViewInput, deserializeIntoViewQueryRequest, deserializeIntoViewSettings, deserializeIntoWorkflowForm, deserializeIntoWorkspaceKeywordCount, deserializeIntoWorkspaceKeywordCountPage, deserializeIntoWorkspaceMember, deserializeIntoWorkspaceRelationshipPage, deserializeIntoWorkspaceRelationshipType, deserializeIntoWorkspaceRelationshipTypePage, deserializeIntoWorkspaceRelationshipView, serializeApplyTemplateInput, serializeArchiveEntry, serializeArchiveEntry_values, serializeArtifact, serializeArtifact_metrics, serializeArtifact_sources, serializeAttachContentTypeInput, serializeAuditEvent, serializeAuditEvent_details, serializeAuditPage, serializeBlob, serializeBulkCreate, serializeBulkCreate_values, serializeBulkOperation, serializeBulkOperationMember1, serializeBulkOperationMember2, serializeBulkOperationMember3, serializeBulkOperationMember4, serializeBulkOperationMember5, serializeBulkOperationMember6, serializeBulkOperationMember7, serializeBulkRequest, serializeBulkResponse, serializeBulkResult, serializeBulkUpdate, serializeBulkUpdate_values, serializeCalendarOccurrence, serializeCalendarQuery, serializeChunkText, serializeCollectionContentType, serializeCollectionTemplate, serializeCompletionRequest, serializeCompletionRequest_output_schema, serializeComposePDF, serializeContentType, serializeContentTypeInput, serializeCreateCatalogField, serializeCreateField, serializeCreateListIntegration, serializeCreateListIntegration_configuration, serializeCreateRelationship, serializeCreateRelationship_metadata, serializeCreateResource, serializeCreateResource_values, serializeDecisionRequest, serializeDecisionRequest_context, serializeDecisionRequest_data, serializeDecisionRequest_questions, serializeDecisionRequest_questions_options, serializeDeletedResource, serializeDeltaPage, serializeDeltaPage_value, serializeDeltaPage_valueMember1, serializeDeltaPage_valueMember1_Removed, serializeDocumentMetadata, serializeDocumentMetadata_values, serializeDocumentUpload, serializeDuplicateDocument, serializeFieldDefinition, serializeFieldOptions, serializeFileVersion, serializeFilterExpr, serializeFilteredBulkUpdate, serializeFilteredBulkUpdate_values, serializeGenerationChunk, serializeGenerationChunkPage, serializeGenerationEnrichments, serializeGenerationEnrichments_enrichments, serializeItemIntegration, serializeItemRevision, serializeItemRevision_payload, serializeItemText, serializeItemText_pages, serializeKeywordCount, serializeKeywordCountList, serializeKeywordInput, serializeListIntegration, serializeListView, serializeListViewPage, serializeLocatedItem, serializeMergeTerm, serializeMoveItem, serializeMoveTerm, serializeNavigationFieldSetting, serializeNavigationNode, serializeNavigationPage, serializeNavigationRequest, serializeNavigationSelection, serializeOperation, serializeOperationFailure, serializeOperationPage, serializeOptimizeImage, serializePermissions, serializePermissions_effective_grants, serializePermissions_grants, serializePortableSmartFolder, serializePortableSmartFolderDefinition, serializePortableTerm, serializePortableTermGroup, serializePortableTermSet, serializePortableTerm_labels, serializeProblem, serializeProblem_existing_item, serializePromoteKeyword, serializePromoteStagedFile, serializePromotedFile, serializePublication, serializePublication_snapshot, serializeQueryGroup, serializeQueryGroupPage, serializeQueryRequest, serializeQueryResult, serializeQuerySpec, serializeReadText, serializeReclaimFileVersion, serializeReclaimedFileVersion, serializeRecycleBinPage, serializeRelationship, serializeRelationshipEndpoint, serializeRelationshipEndpointPage, serializeRelationshipNeighborhood, serializeRelationshipType, serializeRelationshipTypeInput, serializeRelationshipTypePage, serializeRelationshipType_attributes, serializeRelationshipView, serializeRelationship_metadata, serializeResource, serializeResourceAccess, serializeResource_values, serializeSchemaRevision, serializeSchemaRevision_definition, serializeSchemaRevision_definition_fields, serializeSchemaTemplate, serializeSchemaTemplatePage, serializeSchemaTemplate_definition, serializeSearchFacetValue, serializeSearchFacets, serializeSearchField, serializeSearchHit, serializeSearchPage, serializeSearchRequest, serializeSearchStatus, serializeSearchStatus_embeddings, serializeSearchSync, serializeSetWorkspaceMember, serializeSmartFolder, serializeSmartFolderDefinition, serializeSmartFolderDrop, serializeSmartFolderEntry, serializeSmartFolderGroup, serializeSmartFolderGroupBy, serializeSmartFolderGroupsResult, serializeSmartFolderImportResult, serializeSmartFolderInput, serializeSmartFolderPackage, serializeSmartFolderPage, serializeSmartFolderPreview, serializeSmartFolderQueryRequest, serializeSmartFolderQueryRequest_sort, serializeSmartFolderResult, serializeSmartFolderTermRef, serializeSmartFolderUnclassify, serializeSortSpec, serializeStagedArtifact, serializeStagedFile, serializeStagedFile_metrics, serializeStagedFile_sources, serializeTask, serializeTaskAnswer, serializeTaskAnswer_input, serializeTaskCreate, serializeTaskCreate_review, serializeTaskCreate_values, serializeTaskList, serializeTaskOutcome, serializeTaskReassign, serializeTaskResponseInput, serializeTaskResponseInput_input, serializeTask_input, serializeTask_review, serializeTask_values, serializeTaxonomyDecisionRequest, serializeTaxonomyDecisionRequest_context, serializeTaxonomyDecisionRequest_data, serializeTaxonomyDecisionRequest_description_overrides, serializeTaxonomyImportResult, serializeTaxonomyPackage, serializeTemplateField, serializeTemplateInput, serializeTerm, serializeTermEntries, serializeTermGroup, serializeTermGroupInput, serializeTermGroupPage, serializeTermImportResult, serializeTermInput, serializeTermInput_labels, serializeTermList, serializeTermPage, serializeTermSet, serializeTermSetInput, serializeTermSetPage, serializeTerm_labels, serializeUpdateField, serializeUpdateListIntegration, serializeUpdateListIntegration_configuration, serializeUpdateRelationship, serializeUpdateRelationship_metadata, serializeUpdateResource, serializeUpdateResource_values, serializeValidationRule, serializeValidationRuleMember1, serializeValidationRuleMember2, serializeViewInput, serializeViewQueryRequest, serializeViewSettings, serializeWorkflowForm, serializeWorkspaceKeywordCount, serializeWorkspaceKeywordCountPage, serializeWorkspaceMember, serializeWorkspaceRelationshipPage, serializeWorkspaceRelationshipType, serializeWorkspaceRelationshipTypePage, serializeWorkspaceRelationshipView };
+	export { ApplyTemplateInput, ArchiveEntry, ArchiveEntry_duplicate_policy, ArchiveEntry_duplicate_policyObject, ArchiveEntry_kind, ArchiveEntry_kindObject, ArchiveEntry_system_key, ArchiveEntry_system_keyObject, ArchiveEntry_values, ArchiveEntry_versioning, ArchiveEntry_versioningObject, ArchiveSelection, ArchiveSelectionObject, Artifact, Artifact_metrics, Artifact_sources, AttachContentTypeInput, AuditEvent, AuditEvent_credential, AuditEvent_details, AuditPage, Blob, Blob_content_type, Blob_content_typeObject, BulkCreate, BulkCreate_values, BulkOperation, BulkOperationMember1, BulkOperationMember2, BulkOperationMember3, BulkOperationMember4, BulkOperationMember5, BulkOperationMember6, BulkOperationMember7, BulkRequest, BulkResponse, BulkResult, BulkResult_action, BulkResult_actionObject, BulkUpdate, BulkUpdate_values, CalendarOccurrence, CalendarQuery, CalendarQuery_surface, CalendarQuery_surfaceObject, ChunkText, ChunkText_chunker, ChunkText_chunkerObject, ChunkText_kind, ChunkText_kindObject, CollectionContentType, CollectionTemplate, CollectionTemplate_duplicate_policy, CollectionTemplate_duplicate_policyObject, CollectionTemplate_kind, CollectionTemplate_kindObject, CollectionTemplate_versioning, CollectionTemplate_versioningObject, CompletionRequest, CompletionRequest_execution, CompletionRequest_executionObject, CompletionRequest_output_schema, ComposePDF, ContentType, ContentTypeInput, CreateCatalogField, CreateCatalogField_type, CreateCatalogField_typeObject, CreateField, CreateField_type, CreateField_typeObject, CreateListIntegration, CreateListIntegration_configuration, CreateRelationship, CreateRelationship_metadata, CreateResource, CreateResource_duplicate_policy, CreateResource_duplicate_policyObject, CreateResource_kind, CreateResource_kindObject, CreateResource_values, CreateResource_versioning, CreateResource_versioningObject, DecisionRequest, DecisionRequest_context, DecisionRequest_data, DecisionRequest_questions, DecisionRequest_questions_options, DecisionRequest_questions_type, DecisionRequest_questions_typeObject, DeletedResource, DeltaPage, DeltaPage_value, DeltaPage_valueMember1, DeltaPage_valueMember1_Removed, DeltaPage_valueMember1_Removed_reason, DeltaPage_valueMember1_Removed_reasonObject, DocumentMetadata, DocumentMetadata_values, DocumentUpload, DuplicateDocument, FieldDefinition, FieldDefinition_index_status, FieldDefinition_index_statusObject, FieldDefinition_type, FieldDefinition_typeObject, FieldOptions, FieldOptions_search_weight, FieldOptions_search_weightObject, FileVersion, FileVersion_availability, FileVersion_availabilityObject, FilterExpr, FilterExpr_op, FilterExpr_opObject, FilterExpr_value_ref, FilterExpr_value_refObject, FilteredBulkUpdate, FilteredBulkUpdate_values, GenerationChunk, GenerationChunkPage, GenerationEnrichments, GenerationEnrichments_enrichments, ItemIntegration, ItemRevision, ItemRevision_payload, ItemText, ItemText_next, ItemText_pages, KeywordCount, KeywordCountList, KeywordInput, ListIntegration, ListIntegration_kind, ListIntegration_kindObject, ListView, ListViewPage, ListView_system_key, ListView_system_keyObject, LocatedItem, MergeTerm, MoveItem, MoveTerm, NavigationFieldSetting, NavigationNode, NavigationPage, NavigationRequest, NavigationRequest_surface, NavigationRequest_surfaceObject, NavigationSelection, Operation, OperationFailure, OperationPage, Operation_error_code, Operation_error_codeObject, Operation_status, Operation_statusObject, Operation_waiting, Operation_waitingObject, OptimizeImage, Permissions, Permissions_effective_grants, Permissions_effective_grants_action, Permissions_effective_grants_actionObject, Permissions_effective_grants_effect, Permissions_effective_grants_effectObject, Permissions_effective_grants_principal_type, Permissions_effective_grants_principal_typeObject, Permissions_grants, Permissions_grants_action, Permissions_grants_actionObject, Permissions_grants_effect, Permissions_grants_effectObject, Permissions_grants_principal_type, Permissions_grants_principal_typeObject, PortableSmartFolder, PortableSmartFolderDefinition, PortableSmartFolderDefinition_collection_kind, PortableSmartFolderDefinition_collection_kindObject, PortableSmartFolderDefinition_mode, PortableSmartFolderDefinition_modeObject, PortableSmartFolderDefinition_term_match, PortableSmartFolderDefinition_term_matchObject, PortableTerm, PortableTermGroup, PortableTermSet, PortableTerm_labels, Problem, Problem_existing_item, PromoteKeyword, PromoteStagedFile, PromotedFile, Publication, Publication_action, Publication_actionObject, Publication_snapshot, QueryGroup, QueryGroupPage, QueryRequest, QueryRequest_surface, QueryRequest_surfaceObject, QueryResult, QuerySpec, ReadText, ReadText_ocr, ReadText_ocrObject, ReclaimFileVersion, ReclaimedFileVersion, RecycleBinPage, Relationship, RelationshipEndpoint, RelationshipEndpointPage, RelationshipNeighborhood, RelationshipType, RelationshipTypeInput, RelationshipTypePage, RelationshipType_attributes, RelationshipView, Relationship_metadata, Resource, ResourceAccess, ResourceAccess_access, ResourceAccess_accessObject, Resource_duplicate_policy, Resource_duplicate_policyObject, Resource_kind, Resource_kindObject, Resource_system_key, Resource_system_keyObject, Resource_values, Resource_versioning, Resource_versioningObject, SchemaRevision, SchemaRevision_definition, SchemaRevision_definition_fields, SchemaRevision_definition_fields_type, SchemaRevision_definition_fields_typeObject, SchemaTemplate, SchemaTemplatePage, SchemaTemplate_definition, SearchFacetValue, SearchFacets, SearchField, SearchField_operators, SearchField_operatorsObject, SearchHit, SearchHit_kind, SearchHit_kindObject, SearchHit_matched_by, SearchHit_matched_byObject, SearchHit_surface, SearchHit_surfaceObject, SearchPage, SearchPage_mode, SearchPage_modeObject, SearchRequest, SearchRequest_kind, SearchRequest_kindObject, SearchRequest_mode, SearchRequest_modeObject, SearchRequest_surface, SearchRequest_surfaceObject, SearchStatus, SearchStatus_embeddings, SearchSync, SetWorkspaceMember, SetWorkspaceMember_role, SetWorkspaceMember_roleObject, SmartFolder, SmartFolderDefinition, SmartFolderDefinition_collection_kind, SmartFolderDefinition_collection_kindObject, SmartFolderDefinition_mode, SmartFolderDefinition_modeObject, SmartFolderDefinition_term_match, SmartFolderDefinition_term_matchObject, SmartFolderDrop, SmartFolderEntry, SmartFolderEntry_collection_kind, SmartFolderEntry_collection_kindObject, SmartFolderGroup, SmartFolderGroupBy, SmartFolderGroupBy_by, SmartFolderGroupBy_byObject, SmartFolderGroupsResult, SmartFolderImportResult, SmartFolderInput, SmartFolderPackage, SmartFolderPage, SmartFolderPreview, SmartFolderQueryRequest, SmartFolderQueryRequest_sort, SmartFolderQueryRequest_sort_direction, SmartFolderQueryRequest_sort_directionObject, SmartFolderQueryRequest_sort_field, SmartFolderQueryRequest_sort_fieldObject, SmartFolderQueryRequest_surface, SmartFolderQueryRequest_surfaceObject, SmartFolderResult, SmartFolderTermRef, SmartFolderUnclassify, SortSpec, SortSpec_direction, SortSpec_directionObject, StagedArtifact, StagedFile, StagedFile_metrics, StagedFile_sources, StagedFile_state, StagedFile_stateObject, Task, TaskAnswer, TaskAnswer_input, TaskCreate, TaskCreate_completion, TaskCreate_completionObject, TaskCreate_kind, TaskCreate_kindObject, TaskCreate_priority, TaskCreate_priorityObject, TaskCreate_review, TaskCreate_review_type, TaskCreate_review_typeObject, TaskCreate_values, TaskList, TaskOutcome, TaskOutcome_comment, TaskOutcome_commentObject, TaskOutcome_style, TaskOutcome_styleObject, TaskReassign, TaskResponseInput, TaskResponseInput_input, Task_completion, Task_completionObject, Task_input, Task_kind, Task_kindObject, Task_priority, Task_priorityObject, Task_review, Task_review_type, Task_review_typeObject, Task_source, Task_sourceObject, Task_status, Task_statusObject, Task_values, TaxonomyDecisionRequest, TaxonomyDecisionRequest_context, TaxonomyDecisionRequest_data, TaxonomyDecisionRequest_description_overrides, TaxonomyDecisionRequest_selection, TaxonomyDecisionRequest_selectionObject, TaxonomyImportResult, TaxonomyPackage, TemplateField, TemplateField_type, TemplateField_typeObject, TemplateInput, Term, TermEntries, TermGroup, TermGroupInput, TermGroupPage, TermImportResult, TermInput, TermInput_labels, TermList, TermPage, TermSet, TermSetInput, TermSetPage, Term_labels, UpdateField, UpdateListIntegration, UpdateListIntegration_configuration, UpdateRelationship, UpdateRelationship_metadata, UpdateResource, UpdateResource_duplicate_policy, UpdateResource_duplicate_policyObject, UpdateResource_values, UpdateResource_versioning, UpdateResource_versioningObject, ValidationRule, ValidationRuleMember1, ValidationRuleMember2, ValidationRuleMember2_op, ValidationRuleMember2_opObject, ViewInput, ViewInput_layout, ViewInput_layoutObject, ViewQueryRequest, ViewQueryRequest_surface, ViewQueryRequest_surfaceObject, ViewSettings, ViewSettings_match, ViewSettings_matchObject, WorkflowForm, WorkspaceKeywordCount, WorkspaceKeywordCountPage, WorkspaceMember, WorkspaceMember_role, WorkspaceMember_roleObject, WorkspaceRelationshipPage, WorkspaceRelationshipType, WorkspaceRelationshipTypePage, WorkspaceRelationshipView, createApplyTemplateInputFromDiscriminatorValue, createArchiveEntryFromDiscriminatorValue, createArchiveEntry_valuesFromDiscriminatorValue, createArtifactFromDiscriminatorValue, createArtifact_metricsFromDiscriminatorValue, createArtifact_sourcesFromDiscriminatorValue, createAttachContentTypeInputFromDiscriminatorValue, createAuditEventFromDiscriminatorValue, createAuditEvent_credentialFromDiscriminatorValue, createAuditEvent_detailsFromDiscriminatorValue, createAuditPageFromDiscriminatorValue, createBlobFromDiscriminatorValue, createBulkCreateFromDiscriminatorValue, createBulkCreate_valuesFromDiscriminatorValue, createBulkOperationFromDiscriminatorValue, createBulkOperationMember1FromDiscriminatorValue, createBulkOperationMember2FromDiscriminatorValue, createBulkOperationMember3FromDiscriminatorValue, createBulkOperationMember4FromDiscriminatorValue, createBulkOperationMember5FromDiscriminatorValue, createBulkOperationMember6FromDiscriminatorValue, createBulkOperationMember7FromDiscriminatorValue, createBulkRequestFromDiscriminatorValue, createBulkResponseFromDiscriminatorValue, createBulkResultFromDiscriminatorValue, createBulkUpdateFromDiscriminatorValue, createBulkUpdate_valuesFromDiscriminatorValue, createCalendarOccurrenceFromDiscriminatorValue, createCalendarQueryFromDiscriminatorValue, createChunkTextFromDiscriminatorValue, createCollectionContentTypeFromDiscriminatorValue, createCollectionTemplateFromDiscriminatorValue, createCompletionRequestFromDiscriminatorValue, createCompletionRequest_output_schemaFromDiscriminatorValue, createComposePDFFromDiscriminatorValue, createContentTypeFromDiscriminatorValue, createContentTypeInputFromDiscriminatorValue, createCreateCatalogFieldFromDiscriminatorValue, createCreateFieldFromDiscriminatorValue, createCreateListIntegrationFromDiscriminatorValue, createCreateListIntegration_configurationFromDiscriminatorValue, createCreateRelationshipFromDiscriminatorValue, createCreateRelationship_metadataFromDiscriminatorValue, createCreateResourceFromDiscriminatorValue, createCreateResource_valuesFromDiscriminatorValue, createDecisionRequestFromDiscriminatorValue, createDecisionRequest_contextFromDiscriminatorValue, createDecisionRequest_dataFromDiscriminatorValue, createDecisionRequest_questionsFromDiscriminatorValue, createDecisionRequest_questions_optionsFromDiscriminatorValue, createDeletedResourceFromDiscriminatorValue, createDeltaPageFromDiscriminatorValue, createDeltaPage_valueFromDiscriminatorValue, createDeltaPage_valueMember1FromDiscriminatorValue, createDeltaPage_valueMember1_RemovedFromDiscriminatorValue, createDocumentMetadataFromDiscriminatorValue, createDocumentMetadata_valuesFromDiscriminatorValue, createDocumentUploadFromDiscriminatorValue, createDuplicateDocumentFromDiscriminatorValue, createFieldDefinitionFromDiscriminatorValue, createFieldOptionsFromDiscriminatorValue, createFileVersionFromDiscriminatorValue, createFilterExprFromDiscriminatorValue, createFilteredBulkUpdateFromDiscriminatorValue, createFilteredBulkUpdate_valuesFromDiscriminatorValue, createGenerationChunkFromDiscriminatorValue, createGenerationChunkPageFromDiscriminatorValue, createGenerationEnrichmentsFromDiscriminatorValue, createGenerationEnrichments_enrichmentsFromDiscriminatorValue, createItemIntegrationFromDiscriminatorValue, createItemRevisionFromDiscriminatorValue, createItemRevision_payloadFromDiscriminatorValue, createItemTextFromDiscriminatorValue, createItemText_nextFromDiscriminatorValue, createItemText_pagesFromDiscriminatorValue, createKeywordCountFromDiscriminatorValue, createKeywordCountListFromDiscriminatorValue, createKeywordInputFromDiscriminatorValue, createListIntegrationFromDiscriminatorValue, createListViewFromDiscriminatorValue, createListViewPageFromDiscriminatorValue, createLocatedItemFromDiscriminatorValue, createMergeTermFromDiscriminatorValue, createMoveItemFromDiscriminatorValue, createMoveTermFromDiscriminatorValue, createNavigationFieldSettingFromDiscriminatorValue, createNavigationNodeFromDiscriminatorValue, createNavigationPageFromDiscriminatorValue, createNavigationRequestFromDiscriminatorValue, createNavigationSelectionFromDiscriminatorValue, createOperationFailureFromDiscriminatorValue, createOperationFromDiscriminatorValue, createOperationPageFromDiscriminatorValue, createOptimizeImageFromDiscriminatorValue, createPermissionsFromDiscriminatorValue, createPermissions_effective_grantsFromDiscriminatorValue, createPermissions_grantsFromDiscriminatorValue, createPortableSmartFolderDefinitionFromDiscriminatorValue, createPortableSmartFolderFromDiscriminatorValue, createPortableTermFromDiscriminatorValue, createPortableTermGroupFromDiscriminatorValue, createPortableTermSetFromDiscriminatorValue, createPortableTerm_labelsFromDiscriminatorValue, createProblemFromDiscriminatorValue, createProblem_existing_itemFromDiscriminatorValue, createPromoteKeywordFromDiscriminatorValue, createPromoteStagedFileFromDiscriminatorValue, createPromotedFileFromDiscriminatorValue, createPublicationFromDiscriminatorValue, createPublication_snapshotFromDiscriminatorValue, createQueryGroupFromDiscriminatorValue, createQueryGroupPageFromDiscriminatorValue, createQueryRequestFromDiscriminatorValue, createQueryResultFromDiscriminatorValue, createQuerySpecFromDiscriminatorValue, createReadTextFromDiscriminatorValue, createReclaimFileVersionFromDiscriminatorValue, createReclaimedFileVersionFromDiscriminatorValue, createRecycleBinPageFromDiscriminatorValue, createRelationshipEndpointFromDiscriminatorValue, createRelationshipEndpointPageFromDiscriminatorValue, createRelationshipFromDiscriminatorValue, createRelationshipNeighborhoodFromDiscriminatorValue, createRelationshipTypeFromDiscriminatorValue, createRelationshipTypeInputFromDiscriminatorValue, createRelationshipTypePageFromDiscriminatorValue, createRelationshipType_attributesFromDiscriminatorValue, createRelationshipViewFromDiscriminatorValue, createRelationship_metadataFromDiscriminatorValue, createResourceAccessFromDiscriminatorValue, createResourceFromDiscriminatorValue, createResource_valuesFromDiscriminatorValue, createSchemaRevisionFromDiscriminatorValue, createSchemaRevision_definitionFromDiscriminatorValue, createSchemaRevision_definition_fieldsFromDiscriminatorValue, createSchemaTemplateFromDiscriminatorValue, createSchemaTemplatePageFromDiscriminatorValue, createSchemaTemplate_definitionFromDiscriminatorValue, createSearchFacetValueFromDiscriminatorValue, createSearchFacetsFromDiscriminatorValue, createSearchFieldFromDiscriminatorValue, createSearchHitFromDiscriminatorValue, createSearchPageFromDiscriminatorValue, createSearchRequestFromDiscriminatorValue, createSearchStatusFromDiscriminatorValue, createSearchStatus_embeddingsFromDiscriminatorValue, createSearchSyncFromDiscriminatorValue, createSetWorkspaceMemberFromDiscriminatorValue, createSmartFolderDefinitionFromDiscriminatorValue, createSmartFolderDropFromDiscriminatorValue, createSmartFolderEntryFromDiscriminatorValue, createSmartFolderFromDiscriminatorValue, createSmartFolderGroupByFromDiscriminatorValue, createSmartFolderGroupFromDiscriminatorValue, createSmartFolderGroupsResultFromDiscriminatorValue, createSmartFolderImportResultFromDiscriminatorValue, createSmartFolderInputFromDiscriminatorValue, createSmartFolderPackageFromDiscriminatorValue, createSmartFolderPageFromDiscriminatorValue, createSmartFolderPreviewFromDiscriminatorValue, createSmartFolderQueryRequestFromDiscriminatorValue, createSmartFolderQueryRequest_sortFromDiscriminatorValue, createSmartFolderResultFromDiscriminatorValue, createSmartFolderTermRefFromDiscriminatorValue, createSmartFolderUnclassifyFromDiscriminatorValue, createSortSpecFromDiscriminatorValue, createStagedArtifactFromDiscriminatorValue, createStagedFileFromDiscriminatorValue, createStagedFile_metricsFromDiscriminatorValue, createStagedFile_sourcesFromDiscriminatorValue, createTaskAnswerFromDiscriminatorValue, createTaskAnswer_inputFromDiscriminatorValue, createTaskCreateFromDiscriminatorValue, createTaskCreate_reviewFromDiscriminatorValue, createTaskCreate_valuesFromDiscriminatorValue, createTaskFromDiscriminatorValue, createTaskListFromDiscriminatorValue, createTaskOutcomeFromDiscriminatorValue, createTaskReassignFromDiscriminatorValue, createTaskResponseInputFromDiscriminatorValue, createTaskResponseInput_inputFromDiscriminatorValue, createTask_inputFromDiscriminatorValue, createTask_reviewFromDiscriminatorValue, createTask_valuesFromDiscriminatorValue, createTaxonomyDecisionRequestFromDiscriminatorValue, createTaxonomyDecisionRequest_contextFromDiscriminatorValue, createTaxonomyDecisionRequest_dataFromDiscriminatorValue, createTaxonomyDecisionRequest_description_overridesFromDiscriminatorValue, createTaxonomyImportResultFromDiscriminatorValue, createTaxonomyPackageFromDiscriminatorValue, createTemplateFieldFromDiscriminatorValue, createTemplateInputFromDiscriminatorValue, createTermEntriesFromDiscriminatorValue, createTermFromDiscriminatorValue, createTermGroupFromDiscriminatorValue, createTermGroupInputFromDiscriminatorValue, createTermGroupPageFromDiscriminatorValue, createTermImportResultFromDiscriminatorValue, createTermInputFromDiscriminatorValue, createTermInput_labelsFromDiscriminatorValue, createTermListFromDiscriminatorValue, createTermPageFromDiscriminatorValue, createTermSetFromDiscriminatorValue, createTermSetInputFromDiscriminatorValue, createTermSetPageFromDiscriminatorValue, createTerm_labelsFromDiscriminatorValue, createUpdateFieldFromDiscriminatorValue, createUpdateListIntegrationFromDiscriminatorValue, createUpdateListIntegration_configurationFromDiscriminatorValue, createUpdateRelationshipFromDiscriminatorValue, createUpdateRelationship_metadataFromDiscriminatorValue, createUpdateResourceFromDiscriminatorValue, createUpdateResource_valuesFromDiscriminatorValue, createValidationRuleFromDiscriminatorValue, createValidationRuleMember1FromDiscriminatorValue, createValidationRuleMember2FromDiscriminatorValue, createViewInputFromDiscriminatorValue, createViewQueryRequestFromDiscriminatorValue, createViewSettingsFromDiscriminatorValue, createWorkflowFormFromDiscriminatorValue, createWorkspaceKeywordCountFromDiscriminatorValue, createWorkspaceKeywordCountPageFromDiscriminatorValue, createWorkspaceMemberFromDiscriminatorValue, createWorkspaceRelationshipPageFromDiscriminatorValue, createWorkspaceRelationshipTypeFromDiscriminatorValue, createWorkspaceRelationshipTypePageFromDiscriminatorValue, createWorkspaceRelationshipViewFromDiscriminatorValue, deserializeIntoApplyTemplateInput, deserializeIntoArchiveEntry, deserializeIntoArchiveEntry_values, deserializeIntoArtifact, deserializeIntoArtifact_metrics, deserializeIntoArtifact_sources, deserializeIntoAttachContentTypeInput, deserializeIntoAuditEvent, deserializeIntoAuditEvent_credential, deserializeIntoAuditEvent_details, deserializeIntoAuditPage, deserializeIntoBlob, deserializeIntoBulkCreate, deserializeIntoBulkCreate_values, deserializeIntoBulkOperation, deserializeIntoBulkOperationMember1, deserializeIntoBulkOperationMember2, deserializeIntoBulkOperationMember3, deserializeIntoBulkOperationMember4, deserializeIntoBulkOperationMember5, deserializeIntoBulkOperationMember6, deserializeIntoBulkOperationMember7, deserializeIntoBulkRequest, deserializeIntoBulkResponse, deserializeIntoBulkResult, deserializeIntoBulkUpdate, deserializeIntoBulkUpdate_values, deserializeIntoCalendarOccurrence, deserializeIntoCalendarQuery, deserializeIntoChunkText, deserializeIntoCollectionContentType, deserializeIntoCollectionTemplate, deserializeIntoCompletionRequest, deserializeIntoCompletionRequest_output_schema, deserializeIntoComposePDF, deserializeIntoContentType, deserializeIntoContentTypeInput, deserializeIntoCreateCatalogField, deserializeIntoCreateField, deserializeIntoCreateListIntegration, deserializeIntoCreateListIntegration_configuration, deserializeIntoCreateRelationship, deserializeIntoCreateRelationship_metadata, deserializeIntoCreateResource, deserializeIntoCreateResource_values, deserializeIntoDecisionRequest, deserializeIntoDecisionRequest_context, deserializeIntoDecisionRequest_data, deserializeIntoDecisionRequest_questions, deserializeIntoDecisionRequest_questions_options, deserializeIntoDeletedResource, deserializeIntoDeltaPage, deserializeIntoDeltaPage_value, deserializeIntoDeltaPage_valueMember1, deserializeIntoDeltaPage_valueMember1_Removed, deserializeIntoDocumentMetadata, deserializeIntoDocumentMetadata_values, deserializeIntoDocumentUpload, deserializeIntoDuplicateDocument, deserializeIntoFieldDefinition, deserializeIntoFieldOptions, deserializeIntoFileVersion, deserializeIntoFilterExpr, deserializeIntoFilteredBulkUpdate, deserializeIntoFilteredBulkUpdate_values, deserializeIntoGenerationChunk, deserializeIntoGenerationChunkPage, deserializeIntoGenerationEnrichments, deserializeIntoGenerationEnrichments_enrichments, deserializeIntoItemIntegration, deserializeIntoItemRevision, deserializeIntoItemRevision_payload, deserializeIntoItemText, deserializeIntoItemText_next, deserializeIntoItemText_pages, deserializeIntoKeywordCount, deserializeIntoKeywordCountList, deserializeIntoKeywordInput, deserializeIntoListIntegration, deserializeIntoListView, deserializeIntoListViewPage, deserializeIntoLocatedItem, deserializeIntoMergeTerm, deserializeIntoMoveItem, deserializeIntoMoveTerm, deserializeIntoNavigationFieldSetting, deserializeIntoNavigationNode, deserializeIntoNavigationPage, deserializeIntoNavigationRequest, deserializeIntoNavigationSelection, deserializeIntoOperation, deserializeIntoOperationFailure, deserializeIntoOperationPage, deserializeIntoOptimizeImage, deserializeIntoPermissions, deserializeIntoPermissions_effective_grants, deserializeIntoPermissions_grants, deserializeIntoPortableSmartFolder, deserializeIntoPortableSmartFolderDefinition, deserializeIntoPortableTerm, deserializeIntoPortableTermGroup, deserializeIntoPortableTermSet, deserializeIntoPortableTerm_labels, deserializeIntoProblem, deserializeIntoProblem_existing_item, deserializeIntoPromoteKeyword, deserializeIntoPromoteStagedFile, deserializeIntoPromotedFile, deserializeIntoPublication, deserializeIntoPublication_snapshot, deserializeIntoQueryGroup, deserializeIntoQueryGroupPage, deserializeIntoQueryRequest, deserializeIntoQueryResult, deserializeIntoQuerySpec, deserializeIntoReadText, deserializeIntoReclaimFileVersion, deserializeIntoReclaimedFileVersion, deserializeIntoRecycleBinPage, deserializeIntoRelationship, deserializeIntoRelationshipEndpoint, deserializeIntoRelationshipEndpointPage, deserializeIntoRelationshipNeighborhood, deserializeIntoRelationshipType, deserializeIntoRelationshipTypeInput, deserializeIntoRelationshipTypePage, deserializeIntoRelationshipType_attributes, deserializeIntoRelationshipView, deserializeIntoRelationship_metadata, deserializeIntoResource, deserializeIntoResourceAccess, deserializeIntoResource_values, deserializeIntoSchemaRevision, deserializeIntoSchemaRevision_definition, deserializeIntoSchemaRevision_definition_fields, deserializeIntoSchemaTemplate, deserializeIntoSchemaTemplatePage, deserializeIntoSchemaTemplate_definition, deserializeIntoSearchFacetValue, deserializeIntoSearchFacets, deserializeIntoSearchField, deserializeIntoSearchHit, deserializeIntoSearchPage, deserializeIntoSearchRequest, deserializeIntoSearchStatus, deserializeIntoSearchStatus_embeddings, deserializeIntoSearchSync, deserializeIntoSetWorkspaceMember, deserializeIntoSmartFolder, deserializeIntoSmartFolderDefinition, deserializeIntoSmartFolderDrop, deserializeIntoSmartFolderEntry, deserializeIntoSmartFolderGroup, deserializeIntoSmartFolderGroupBy, deserializeIntoSmartFolderGroupsResult, deserializeIntoSmartFolderImportResult, deserializeIntoSmartFolderInput, deserializeIntoSmartFolderPackage, deserializeIntoSmartFolderPage, deserializeIntoSmartFolderPreview, deserializeIntoSmartFolderQueryRequest, deserializeIntoSmartFolderQueryRequest_sort, deserializeIntoSmartFolderResult, deserializeIntoSmartFolderTermRef, deserializeIntoSmartFolderUnclassify, deserializeIntoSortSpec, deserializeIntoStagedArtifact, deserializeIntoStagedFile, deserializeIntoStagedFile_metrics, deserializeIntoStagedFile_sources, deserializeIntoTask, deserializeIntoTaskAnswer, deserializeIntoTaskAnswer_input, deserializeIntoTaskCreate, deserializeIntoTaskCreate_review, deserializeIntoTaskCreate_values, deserializeIntoTaskList, deserializeIntoTaskOutcome, deserializeIntoTaskReassign, deserializeIntoTaskResponseInput, deserializeIntoTaskResponseInput_input, deserializeIntoTask_input, deserializeIntoTask_review, deserializeIntoTask_values, deserializeIntoTaxonomyDecisionRequest, deserializeIntoTaxonomyDecisionRequest_context, deserializeIntoTaxonomyDecisionRequest_data, deserializeIntoTaxonomyDecisionRequest_description_overrides, deserializeIntoTaxonomyImportResult, deserializeIntoTaxonomyPackage, deserializeIntoTemplateField, deserializeIntoTemplateInput, deserializeIntoTerm, deserializeIntoTermEntries, deserializeIntoTermGroup, deserializeIntoTermGroupInput, deserializeIntoTermGroupPage, deserializeIntoTermImportResult, deserializeIntoTermInput, deserializeIntoTermInput_labels, deserializeIntoTermList, deserializeIntoTermPage, deserializeIntoTermSet, deserializeIntoTermSetInput, deserializeIntoTermSetPage, deserializeIntoTerm_labels, deserializeIntoUpdateField, deserializeIntoUpdateListIntegration, deserializeIntoUpdateListIntegration_configuration, deserializeIntoUpdateRelationship, deserializeIntoUpdateRelationship_metadata, deserializeIntoUpdateResource, deserializeIntoUpdateResource_values, deserializeIntoValidationRule, deserializeIntoValidationRuleMember1, deserializeIntoValidationRuleMember2, deserializeIntoViewInput, deserializeIntoViewQueryRequest, deserializeIntoViewSettings, deserializeIntoWorkflowForm, deserializeIntoWorkspaceKeywordCount, deserializeIntoWorkspaceKeywordCountPage, deserializeIntoWorkspaceMember, deserializeIntoWorkspaceRelationshipPage, deserializeIntoWorkspaceRelationshipType, deserializeIntoWorkspaceRelationshipTypePage, deserializeIntoWorkspaceRelationshipView, serializeApplyTemplateInput, serializeArchiveEntry, serializeArchiveEntry_values, serializeArtifact, serializeArtifact_metrics, serializeArtifact_sources, serializeAttachContentTypeInput, serializeAuditEvent, serializeAuditEvent_credential, serializeAuditEvent_details, serializeAuditPage, serializeBlob, serializeBulkCreate, serializeBulkCreate_values, serializeBulkOperation, serializeBulkOperationMember1, serializeBulkOperationMember2, serializeBulkOperationMember3, serializeBulkOperationMember4, serializeBulkOperationMember5, serializeBulkOperationMember6, serializeBulkOperationMember7, serializeBulkRequest, serializeBulkResponse, serializeBulkResult, serializeBulkUpdate, serializeBulkUpdate_values, serializeCalendarOccurrence, serializeCalendarQuery, serializeChunkText, serializeCollectionContentType, serializeCollectionTemplate, serializeCompletionRequest, serializeCompletionRequest_output_schema, serializeComposePDF, serializeContentType, serializeContentTypeInput, serializeCreateCatalogField, serializeCreateField, serializeCreateListIntegration, serializeCreateListIntegration_configuration, serializeCreateRelationship, serializeCreateRelationship_metadata, serializeCreateResource, serializeCreateResource_values, serializeDecisionRequest, serializeDecisionRequest_context, serializeDecisionRequest_data, serializeDecisionRequest_questions, serializeDecisionRequest_questions_options, serializeDeletedResource, serializeDeltaPage, serializeDeltaPage_value, serializeDeltaPage_valueMember1, serializeDeltaPage_valueMember1_Removed, serializeDocumentMetadata, serializeDocumentMetadata_values, serializeDocumentUpload, serializeDuplicateDocument, serializeFieldDefinition, serializeFieldOptions, serializeFileVersion, serializeFilterExpr, serializeFilteredBulkUpdate, serializeFilteredBulkUpdate_values, serializeGenerationChunk, serializeGenerationChunkPage, serializeGenerationEnrichments, serializeGenerationEnrichments_enrichments, serializeItemIntegration, serializeItemRevision, serializeItemRevision_payload, serializeItemText, serializeItemText_next, serializeItemText_pages, serializeKeywordCount, serializeKeywordCountList, serializeKeywordInput, serializeListIntegration, serializeListView, serializeListViewPage, serializeLocatedItem, serializeMergeTerm, serializeMoveItem, serializeMoveTerm, serializeNavigationFieldSetting, serializeNavigationNode, serializeNavigationPage, serializeNavigationRequest, serializeNavigationSelection, serializeOperation, serializeOperationFailure, serializeOperationPage, serializeOptimizeImage, serializePermissions, serializePermissions_effective_grants, serializePermissions_grants, serializePortableSmartFolder, serializePortableSmartFolderDefinition, serializePortableTerm, serializePortableTermGroup, serializePortableTermSet, serializePortableTerm_labels, serializeProblem, serializeProblem_existing_item, serializePromoteKeyword, serializePromoteStagedFile, serializePromotedFile, serializePublication, serializePublication_snapshot, serializeQueryGroup, serializeQueryGroupPage, serializeQueryRequest, serializeQueryResult, serializeQuerySpec, serializeReadText, serializeReclaimFileVersion, serializeReclaimedFileVersion, serializeRecycleBinPage, serializeRelationship, serializeRelationshipEndpoint, serializeRelationshipEndpointPage, serializeRelationshipNeighborhood, serializeRelationshipType, serializeRelationshipTypeInput, serializeRelationshipTypePage, serializeRelationshipType_attributes, serializeRelationshipView, serializeRelationship_metadata, serializeResource, serializeResourceAccess, serializeResource_values, serializeSchemaRevision, serializeSchemaRevision_definition, serializeSchemaRevision_definition_fields, serializeSchemaTemplate, serializeSchemaTemplatePage, serializeSchemaTemplate_definition, serializeSearchFacetValue, serializeSearchFacets, serializeSearchField, serializeSearchHit, serializeSearchPage, serializeSearchRequest, serializeSearchStatus, serializeSearchStatus_embeddings, serializeSearchSync, serializeSetWorkspaceMember, serializeSmartFolder, serializeSmartFolderDefinition, serializeSmartFolderDrop, serializeSmartFolderEntry, serializeSmartFolderGroup, serializeSmartFolderGroupBy, serializeSmartFolderGroupsResult, serializeSmartFolderImportResult, serializeSmartFolderInput, serializeSmartFolderPackage, serializeSmartFolderPage, serializeSmartFolderPreview, serializeSmartFolderQueryRequest, serializeSmartFolderQueryRequest_sort, serializeSmartFolderResult, serializeSmartFolderTermRef, serializeSmartFolderUnclassify, serializeSortSpec, serializeStagedArtifact, serializeStagedFile, serializeStagedFile_metrics, serializeStagedFile_sources, serializeTask, serializeTaskAnswer, serializeTaskAnswer_input, serializeTaskCreate, serializeTaskCreate_review, serializeTaskCreate_values, serializeTaskList, serializeTaskOutcome, serializeTaskReassign, serializeTaskResponseInput, serializeTaskResponseInput_input, serializeTask_input, serializeTask_review, serializeTask_values, serializeTaxonomyDecisionRequest, serializeTaxonomyDecisionRequest_context, serializeTaxonomyDecisionRequest_data, serializeTaxonomyDecisionRequest_description_overrides, serializeTaxonomyImportResult, serializeTaxonomyPackage, serializeTemplateField, serializeTemplateInput, serializeTerm, serializeTermEntries, serializeTermGroup, serializeTermGroupInput, serializeTermGroupPage, serializeTermImportResult, serializeTermInput, serializeTermInput_labels, serializeTermList, serializeTermPage, serializeTermSet, serializeTermSetInput, serializeTermSetPage, serializeTerm_labels, serializeUpdateField, serializeUpdateListIntegration, serializeUpdateListIntegration_configuration, serializeUpdateRelationship, serializeUpdateRelationship_metadata, serializeUpdateResource, serializeUpdateResource_values, serializeValidationRule, serializeValidationRuleMember1, serializeValidationRuleMember2, serializeViewInput, serializeViewQueryRequest, serializeViewSettings, serializeWorkflowForm, serializeWorkspaceKeywordCount, serializeWorkspaceKeywordCountPage, serializeWorkspaceMember, serializeWorkspaceRelationshipPage, serializeWorkspaceRelationshipType, serializeWorkspaceRelationshipTypePage, serializeWorkspaceRelationshipView };
 }
 
 export {

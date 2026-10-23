@@ -244,7 +244,7 @@ def main():
     # REST writes and WebDAV with a scoped access token.
     workspace = client.request("POST", app + "/v1/workspaces", {"name": "Authentik verification " + secrets.token_hex(4)}, headers=bearer, expected=201)[2]
     library = client.request("POST", app + f"/v1/resources/{workspace['id']}/children", {"kind": "library", "name": "Documents", "webdav_enabled": True}, headers=bearer, expected=201)[2]
-    credential = client.request("POST", app + "/v1/identity/me/tokens", {"name": "WebDAV verification", "scopes": ["list.read", "list.write", "document.read", "document.write"], "expires_in_days": 1}, headers=bearer, expected=201)[2]
+    credential = client.request("POST", app + "/v1/identity/me/tokens", {"name": "WebDAV verification", "scopes": ["item.read", "item.write", "document.read", "document.write"], "expires_in_days": 1}, headers=bearer, expected=201)[2]
     dav = {"Authorization": "Basic " + base64.b64encode(f"{credentials['papergo_user']}:{credential['secret']}".encode()).decode()}
     folder = app + f"/webdav/{library['id']}/" + urllib.parse.quote("Sample Ω")
     client.request("MKCOL", folder, headers=dav, expected=201)

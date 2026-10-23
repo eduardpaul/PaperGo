@@ -48,7 +48,7 @@ func accept(context.Context, *dms.Service, string, string, json.RawMessage) erro
 // register adds a handler for kind that records which operations ran.
 func (f *fixture) register(t *testing.T, kind string, handler dms.OperationHandler) {
 	t.Helper()
-	handler.Scope, handler.Validate = "list.write", accept
+	handler.Scope, handler.Validate = "item.write", accept
 	if err := f.s.RegisterOperationHandler(kind, handler); err != nil {
 		t.Fatal(err)
 	}

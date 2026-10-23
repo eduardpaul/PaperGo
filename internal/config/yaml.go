@@ -48,6 +48,9 @@ type yamlConfig struct {
 		TokenType          string `yaml:"token_type"`
 		GroupsFromUserInfo bool   `yaml:"groups_from_userinfo"`
 	} `yaml:"oidc"`
+	MCP struct {
+		PublicURL string `yaml:"public_url"`
+	} `yaml:"mcp"`
 	Workers map[string]Worker `yaml:"workers"`
 }
 
@@ -120,7 +123,7 @@ func parseYAML(text string) (yamlFile, error) {
 	}
 	file.workers = in.Workers
 	file.values = map[string]string{
-		"PUBLIC_URL": in.Server.PublicURL, "DATABASE_URL": in.Database.URL, "AUTH_MODE": in.Auth.Mode,
+		"PUBLIC_URL": in.Server.PublicURL, "MCP_PUBLIC_URL": in.MCP.PublicURL, "DATABASE_URL": in.Database.URL, "AUTH_MODE": in.Auth.Mode,
 		"ADMIN_SUBJECT": in.Auth.AdminUser, "ADMIN_GROUP": in.Auth.AdminGroup,
 		"PROXY_SECRET_FILE": in.Auth.ProxySecretFile, "PROXY_TRUSTED_CIDRS": strings.Join(in.Auth.ProxyTrustedCIDRs, ","),
 		"SEARCH_STORE": in.Search.Store, "SEARCH_ZVEC_PATH": in.Search.ZvecPath, "BLOB_PATH": in.Storage.BlobPath,

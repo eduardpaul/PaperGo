@@ -32,7 +32,7 @@ function FolderContents({ folderId, edit }: { folderId: string; edit: boolean })
   const folder = useQuery({ queryKey: ['smart-folders', folderId], queryFn: () => smartFolder(folderId) });
   const me = useQuery(meQuery);
   const workspace = useQuery({ ...resourceQuery(folder.data?.workspace_id ?? ''), enabled: !!folder.data?.workspace_id && !folder.data.owner_id });
-  const writable = me.data?.scopes?.includes('list.write') ?? false;
+  const writable = me.data?.scopes?.includes('item.write') ?? false;
   const canManage = writable && (folder.data?.owner_id ? folder.data.owner_id === me.data?.subject : can(workspace.data, 'manage'));
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);

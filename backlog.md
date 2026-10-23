@@ -855,7 +855,7 @@ In PaperDotNet, administrators can generate system-level API access tokens from 
    - `DELETE /v1/identity/tokens/{id}`: Revokes an integration token.
 2. **Administration UI**:
    - Add "Access Tokens" under the Administration navigation.
-   - Interface to generate tokens with name, expiration duration (30 days, 90 days, 1 year, Never), and selectable scopes (`workspace.read`, `list.write`, `search.read`, etc.).
+   - Interface to generate tokens with name, expiration duration (30 days, 90 days, 1 year, Never), and selectable scopes (`workspace.read`, `item.write`, `search.read`, etc.).
    - Secure one-time display modal showing the generated secret token (`pgo_...`).
 
 #### Acceptance Criteria

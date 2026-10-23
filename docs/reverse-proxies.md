@@ -9,7 +9,7 @@ PaperGo runs at the root of one public host behind a TLS-terminating reverse pro
 | Provider bearer tokens | OIDC verifies signature, issuer, expiry and audience. `OIDC_TOKEN_TYPE` optionally checks the JWT header type. |
 | Web sign-in | With `OIDC_CLIENT_ID`, the web app signs in at the provider with the authorization code flow and PKCE, renews access with refresh tokens and signs out at the provider. Without it, people paste a token. |
 | Integration access tokens | Admin-issued service credentials authenticate with scoped Bearer tokens in either mode. Forward Authorization on an API ingress for these clients; PaperGo enforces token scopes and resource ACLs. |
-| Personal access tokens | Bearer-authenticated deployments accept scoped personal credentials. These requests preserve the stored profile and group memberships. |
+| Personal access tokens | Every deployment, proxy deployments included, accepts scoped personal credentials, which can also be limited to workspaces, lists and libraries. These requests preserve the stored profile and group memberships. In proxy deployments, deactivate a departing person in PaperGo as well as removing them from the proxy, since their tokens do not pass through it. |
 | Users | Verified subjects enroll with the Member role on first use. OIDC profile claims supply a display name and email; proxy profiles are locally managed. |
 | Groups | Local groups are administered in PaperGo. OIDC groups synchronize from provider claims; their direct memberships are managed by the provider. |
 | Roles and ACLs | Both group sources use the same persisted role assignments, nested-group expansion and content grants. |
@@ -199,7 +199,7 @@ For any IdP: decode a real access token (`jwt.io`-style, locally) and check `iss
 
 ## WebDAV through a proxy
 
-- Clients use **access tokens** (`POST /v1/identity/me/tokens` with `list.read` and `document.read`, plus `list.write` and `document.write` for writes; `expires_in_days` sets the lifetime) with Basic or Bearer auth. The proxy must pass `Authorization` (rule 1). In OIDC mode, people create them with their bearer token. In proxy mode, clients use NPM Access List credentials instead.
+- Clients use **access tokens** (`POST /v1/identity/me/tokens` with `item.read` and `document.read`, plus `item.write` and `document.write` for writes; `expires_in_days` sets the lifetime) with Basic or Bearer auth. The proxy must pass `Authorization` (rule 1). In OIDC mode, people create them with their bearer token. In proxy mode, clients use NPM Access List credentials instead.
 - Windows' WebClient sends Basic credentials only over HTTPS (default `BasicAuthLevel=1`), which the proxy provides, and limits downloads to 50 MB by default (`FileSizeLimitInBytes`).
 - Group sync does not run on access-token requests: they carry no OIDC token. Their memberships are whatever the user's last token set.
 

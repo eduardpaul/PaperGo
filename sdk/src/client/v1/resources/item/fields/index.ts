@@ -50,7 +50,7 @@ export interface FieldsRequestBuilder extends BaseRequestBuilder<FieldsRequestBu
      */
      byFieldID(fieldID: Guid) : WithFieldItemRequestBuilder;
     /**
-     *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply. Field definitions are organization-wide; editing through a collection applies to every collection using them.
+     *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply. Field definitions are organization-wide; editing through a collection applies to every collection using them.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<FieldsGetResponse>}
      * @throws {Problem} error when the service returns a 4XX or 5XX status code
@@ -65,7 +65,7 @@ export interface FieldsRequestBuilder extends BaseRequestBuilder<FieldsRequestBu
      */
      post(body: CreateField, requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<FieldDefinition | undefined>;
     /**
-     *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply. Field definitions are organization-wide; editing through a collection applies to every collection using them.
+     *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply. Field definitions are organization-wide; editing through a collection applies to every collection using them.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */

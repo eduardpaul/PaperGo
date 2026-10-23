@@ -33,6 +33,7 @@ type AccessToken struct {
 	Prefix      string               `db:"prefix" `
 	SecretHash  string               `db:"secret_hash" `
 	Scopes      types.JSON[[]string] `db:"scopes" `
+	Resources   types.JSON[[]string] `db:"resources" `
 	ExpiresAt   null.Val[time.Time]  `db:"expires_at" `
 	LastUsedAt  null.Val[time.Time]  `db:"last_used_at" `
 	RevokedAt   null.Val[time.Time]  `db:"revoked_at" `
@@ -68,7 +69,7 @@ type accessTokenRLoaded struct {
 
 func buildAccessTokenColumns(tableName string) accessTokenColumns {
 	columnsExpr := expr.NewColumnsExpr(
-		"id", "created_at", "subject", "name", "prefix", "secret_hash", "scopes", "expires_at", "last_used_at", "revoked_at", "integration", "created_by",
+		"id", "created_at", "subject", "name", "prefix", "secret_hash", "scopes", "resources", "expires_at", "last_used_at", "revoked_at", "integration", "created_by",
 	)
 
 	if tableName != "" {
@@ -85,6 +86,7 @@ func buildAccessTokenColumns(tableName string) accessTokenColumns {
 		Prefix:      buildAccessTokenColumn(tableName, "prefix"),
 		SecretHash:  buildAccessTokenColumn(tableName, "secret_hash"),
 		Scopes:      buildAccessTokenColumn(tableName, "scopes"),
+		Resources:   buildAccessTokenColumn(tableName, "resources"),
 		ExpiresAt:   buildAccessTokenColumn(tableName, "expires_at"),
 		LastUsedAt:  buildAccessTokenColumn(tableName, "last_used_at"),
 		RevokedAt:   buildAccessTokenColumn(tableName, "revoked_at"),
@@ -103,6 +105,7 @@ type accessTokenColumns struct {
 	Prefix      accessTokenColumn
 	SecretHash  accessTokenColumn
 	Scopes      accessTokenColumn
+	Resources   accessTokenColumn
 	ExpiresAt   accessTokenColumn
 	LastUsedAt  accessTokenColumn
 	RevokedAt   accessTokenColumn
@@ -160,6 +163,7 @@ type AccessTokenSetter struct {
 	Prefix      omit.Val[string]               `db:"prefix" `
 	SecretHash  omit.Val[string]               `db:"secret_hash" `
 	Scopes      omit.Val[types.JSON[[]string]] `db:"scopes" `
+	Resources   omit.Val[types.JSON[[]string]] `db:"resources" `
 	ExpiresAt   omitnull.Val[time.Time]        `db:"expires_at" `
 	LastUsedAt  omitnull.Val[time.Time]        `db:"last_used_at" `
 	RevokedAt   omitnull.Val[time.Time]        `db:"revoked_at" `
@@ -168,7 +172,7 @@ type AccessTokenSetter struct {
 }
 
 func (s AccessTokenSetter) SetColumns() []string {
-	vals := make([]string, 0, 12)
+	vals := make([]string, 0, 13)
 	if s.ID.IsValue() {
 		vals = append(vals, "id")
 	}
@@ -189,6 +193,9 @@ func (s AccessTokenSetter) SetColumns() []string {
 	}
 	if s.Scopes.IsValue() {
 		vals = append(vals, "scopes")
+	}
+	if s.Resources.IsValue() {
+		vals = append(vals, "resources")
 	}
 	if s.ExpiresAt.IsValue() || s.ExpiresAt.IsNull() {
 		vals = append(vals, "expires_at")
@@ -229,6 +236,9 @@ func (s AccessTokenSetter) Overwrite(t *AccessToken) {
 	}
 	if s.Scopes.IsValue() {
 		t.Scopes = s.Scopes.MustGet()
+	}
+	if s.Resources.IsValue() {
+		t.Resources = s.Resources.MustGet()
 	}
 	if s.ExpiresAt.IsValue() || s.ExpiresAt.IsNull() {
 		t.ExpiresAt = s.ExpiresAt.MustGetNull()
@@ -312,6 +322,13 @@ func (s *AccessTokenSetter) Apply(q *dialect.InsertQuery) {
 				}
 				return sqlite.Arg(s.Scopes.MustGet()).WriteSQL(ctx, w, d, start)
 			}))
+		case "resources":
+			vals = append(vals, bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+				if s.Resources.IsUnset() {
+					return sqlite.Arg(nil).WriteSQL(ctx, w, d, start)
+				}
+				return sqlite.Arg(s.Resources.MustGet()).WriteSQL(ctx, w, d, start)
+			}))
 		case "expires_at":
 			vals = append(vals, bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
 				if s.ExpiresAt.IsUnset() {
@@ -358,7 +375,7 @@ func (s AccessTokenSetter) UpdateMod() bob.Mod[*dialect.UpdateQuery] {
 }
 
 func (s AccessTokenSetter) Expressions(prefix ...string) []bob.Expression {
-	exprs := make([]bob.Expression, 0, 12)
+	exprs := make([]bob.Expression, 0, 13)
 
 	if s.ID.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
@@ -409,6 +426,13 @@ func (s AccessTokenSetter) Expressions(prefix ...string) []bob.Expression {
 		}})
 	}
 
+	if s.Resources.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			sqlite.Quote(append(prefix, "resources")...),
+			sqlite.Arg(s.Resources),
+		}})
+	}
+
 	if s.ExpiresAt.IsValue() || s.ExpiresAt.IsNull() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
 			sqlite.Quote(append(prefix, "expires_at")...),
@@ -454,7 +478,7 @@ func accessTokenScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc,
 		idx int
 		dst func(o *AccessToken) any
 	}
-	targets := make([]target, 0, 12)
+	targets := make([]target, 0, 13)
 	for i, col := range cols {
 		switch col {
 		case "id":
@@ -471,6 +495,8 @@ func accessTokenScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc,
 			targets = append(targets, target{i, func(o *AccessToken) any { return &o.SecretHash }})
 		case "scopes":
 			targets = append(targets, target{i, func(o *AccessToken) any { return &o.Scopes }})
+		case "resources":
+			targets = append(targets, target{i, func(o *AccessToken) any { return &o.Resources }})
 		case "expires_at":
 			targets = append(targets, target{i, func(o *AccessToken) any { return &o.ExpiresAt }})
 		case "last_used_at":
@@ -800,6 +826,7 @@ type accessTokenWhere[Q sqlite.Filterable] struct {
 	Prefix      sqlite.WhereMod[Q, string]
 	SecretHash  sqlite.WhereMod[Q, string]
 	Scopes      sqlite.WhereMod[Q, types.JSON[[]string]]
+	Resources   sqlite.WhereMod[Q, types.JSON[[]string]]
 	ExpiresAt   sqlite.WhereNullMod[Q, time.Time]
 	LastUsedAt  sqlite.WhereNullMod[Q, time.Time]
 	RevokedAt   sqlite.WhereNullMod[Q, time.Time]
@@ -822,6 +849,7 @@ func buildAccessTokenWhere[Q sqlite.Filterable](cols accessTokenColumns) accessT
 		Prefix:      sqlite.Where[Q, string](cols.Prefix.Expression),
 		SecretHash:  sqlite.Where[Q, string](cols.SecretHash.Expression),
 		Scopes:      sqlite.Where[Q, types.JSON[[]string]](cols.Scopes.Expression),
+		Resources:   sqlite.Where[Q, types.JSON[[]string]](cols.Resources.Expression),
 		ExpiresAt:   sqlite.WhereNull[Q, time.Time](cols.ExpiresAt.Expression),
 		LastUsedAt:  sqlite.WhereNull[Q, time.Time](cols.LastUsedAt.Expression),
 		RevokedAt:   sqlite.WhereNull[Q, time.Time](cols.RevokedAt.Expression),

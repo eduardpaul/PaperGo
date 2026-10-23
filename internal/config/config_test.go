@@ -363,6 +363,28 @@ func TestPublicURLIsAnOrigin(t *testing.T) {
 		t.Fatalf("origin: %v %v", c.PublicURL, err)
 	}
 }
+func TestMCPPublicURLNamesTheEndpoint(t *testing.T) {
+	t.Setenv("APP_ENV", "test")
+	t.Setenv("AUTH_MODE", "development")
+	t.Setenv("DEV_TOKEN", "0123456789abcdef0123456789abcdef")
+	c, err := Load()
+	if err != nil || c.MCPPublicURL != nil {
+		t.Fatalf("default: %+v %v", c.MCPPublicURL, err)
+	}
+	for _, bad := range []string{"docs.example.com/v1/mcp", "https://docs.example.com", "https://docs.example.com/mcp", "https://docs.example.com/v1/mcp?a=1", "https://user@docs.example.com/v1/mcp"} {
+		t.Run(bad, func(t *testing.T) {
+			t.Setenv("MCP_PUBLIC_URL", bad)
+			if _, err := Load(); err == nil {
+				t.Fatalf("MCP_PUBLIC_URL=%s accepted", bad)
+			}
+		})
+	}
+	t.Setenv("MCP_PUBLIC_URL", "http://localhost:8090/v1/mcp")
+	if c, err = Load(); err != nil || c.MCPPublicURL.String() != "http://localhost:8090/v1/mcp" {
+		t.Fatalf("endpoint: %v %v", c.MCPPublicURL, err)
+	}
+}
+
 func TestProductionPublicURLRequiresHTTPS(t *testing.T) {
 	t.Setenv("APP_ENV", "production")
 	t.Setenv("AUTH_MODE", "oidc")

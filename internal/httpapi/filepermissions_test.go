@@ -25,7 +25,7 @@ func TestMetadataEditorCannotReplaceFileWithoutDocumentWrite(t *testing.T) {
 		t.Fatal(err)
 	}
 	d := s.Directory()
-	role, err := d.SaveRole(ctx, "organization-admin", "", 0, identity.RoleInput{Name: "Metadata editor", Scopes: []string{"workspace.read", "list.read", "list.write", "document.read"}})
+	role, err := d.SaveRole(ctx, "organization-admin", "", 0, identity.RoleInput{Name: "Metadata editor", Scopes: []string{"workspace.read", "item.read", "item.write", "document.read"}})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -39,7 +39,7 @@ class PackagingTests(unittest.TestCase):
                 with patch.object(build, 'compiler_runtime', return_value={}):
                     files = build.runtime_files(native, system, {})
                 suffix = '.exe' if system == 'windows' else ''
-                for name in ('papergo', 'papergo-admin'):
+                for name in ('papergo', 'papergo-admin', 'papergo-mcp'):
                     path = binaries / (name + suffix)
                     path.parent.mkdir(parents=True, exist_ok=True)
                     path.write_bytes(b'application')

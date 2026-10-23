@@ -70,16 +70,16 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.status(w, http.StatusUnauthorized, "valid credentials are required")
 		return
 	}
-	scope := "list.write"
+	scope := "item.write"
 	if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == "PROPFIND" {
-		scope = "list.read"
+		scope = "item.read"
 	}
 	if err = h.DMS.RequireScope(r.Context(), subject, scope); err != nil {
 		h.fail(w, r, err)
 		return
 	}
 	documentScope := "document.write"
-	if scope == "list.read" {
+	if scope == "item.read" {
 		documentScope = "document.read"
 	}
 	if err = h.DMS.RequireScope(r.Context(), subject, documentScope); err != nil {

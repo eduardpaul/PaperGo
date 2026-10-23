@@ -65,7 +65,7 @@ func (s *Service) documentParent(ctx context.Context, subject, libraryID, folder
 
 // CanCreateDocument authorizes the destination before the HTTP layer streams bytes.
 func (s *Service) CanCreateDocument(ctx context.Context, subject, libraryID string) error {
-	if err := s.RequireScope(ctx, subject, "list.write"); err != nil {
+	if err := s.RequireScope(ctx, subject, "item.write"); err != nil {
 		return err
 	}
 	_, err := read(ctx, s, func(t *Service) (*resources.Resource, error) { return t.documentParent(ctx, subject, libraryID, "") })

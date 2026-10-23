@@ -19,7 +19,7 @@ export interface ItemsRequestBuilder extends BaseRequestBuilder<ItemsRequestBuil
      */
      byItemID(itemID: Guid) : WithItemItemRequestBuilder;
     /**
-     *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Only definitions with mode classification permit this action; saved queries reject it.
+     *  Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply. Only definitions with mode classification permit this action; saved queries reject it.
      * @param body Classify existing item or create one through ordinary item validation/revisions/publication. Current folder_version is required. Inferred AND equalities, selected terms and writable path fields are applied; non-inferable predicates must already fit. The write rolls back unless the head matches the folder/path. Existing items retain location; new parent_id must belong to collection.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<Resource>}
@@ -27,7 +27,7 @@ export interface ItemsRequestBuilder extends BaseRequestBuilder<ItemsRequestBuil
      */
      post(body: SmartFolderDrop, requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<Resource | undefined>;
     /**
-     *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Only definitions with mode classification permit this action; saved queries reject it.
+     *  Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply. Only definitions with mode classification permit this action; saved queries reject it.
      * @param body Classify existing item or create one through ordinary item validation/revisions/publication. Current folder_version is required. Inferred AND equalities, selected terms and writable path fields are applied; non-inferable predicates must already fit. The write rolls back unless the head matches the folder/path. Existing items retain location; new parent_id must belong to collection.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}

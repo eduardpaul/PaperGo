@@ -28,7 +28,7 @@ func TestRESTPersonalTokensEnforceScopesExpiryAndRevocation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := request(h, "POST", "/v1/identity/me/tokens", `{"name":"Read only","scopes":["list.read"],"expires_in_days":1}`, testToken, "", "application/json")
+	r := request(h, "POST", "/v1/identity/me/tokens", `{"name":"Read only","scopes":["item.read"],"expires_in_days":1}`, testToken, "", "application/json")
 	var token identity.CreatedAccessToken
 	if r.Code != 201 || json.Unmarshal(r.Body.Bytes(), &token) != nil || !strings.HasPrefix(token.Secret, identity.AccessTokenPrefix) || token.Token.ExpiresAt.Before(time.Now()) {
 		t.Fatal(r.Code, r.Body.String())
@@ -50,10 +50,10 @@ func TestRESTPersonalTokensEnforceScopesExpiryAndRevocation(t *testing.T) {
 	}
 	r = request(h, "GET", "/v1/identity/me", "", token.Secret, "", "")
 	var me identity.MeProfile
-	if r.Code != 200 || json.Unmarshal(r.Body.Bytes(), &me) != nil || len(me.Scopes) != 1 || me.Scopes[0] != "list.read" {
+	if r.Code != 200 || json.Unmarshal(r.Body.Bytes(), &me) != nil || len(me.Scopes) != 1 || me.Scopes[0] != "item.read" {
 		t.Fatal(r.Code, r.Body.String())
 	}
-	r = request(h, "POST", "/v1/identity/me/tokens", `{"name":"Escalate","scopes":["list.write"]}`, token.Secret, "", "application/json")
+	r = request(h, "POST", "/v1/identity/me/tokens", `{"name":"Escalate","scopes":["item.write"]}`, token.Secret, "", "application/json")
 	if r.Code != 422 {
 		t.Fatal("token escalated scopes", r.Code, r.Body.String())
 	}
@@ -86,7 +86,7 @@ func TestRESTPersonalTokensEnforceScopesExpiryAndRevocation(t *testing.T) {
 	if r.Code != 401 {
 		t.Fatal("revoked token authenticated", r.Code, r.Body.String())
 	}
-	expired, err := s.Directory().CreateAccessToken(ctx, "alice", identity.AccessTokenInput{Name: "Expired", Scopes: []string{"list.read"}})
+	expired, err := s.Directory().CreateAccessToken(ctx, "alice", identity.AccessTokenInput{Name: "Expired", Scopes: []string{"item.read"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +95,7 @@ func TestRESTPersonalTokensEnforceScopesExpiryAndRevocation(t *testing.T) {
 	if r.Code != 401 {
 		t.Fatal("expired token authenticated", r.Code, r.Body.String())
 	}
-	for _, body := range []string{`{"name":"Invalid","scopes":[]}`, `{"name":"Invalid","scopes":["list.read","list.read"]}`, `{"name":"Invalid","scopes":["organization.manage"]}`, `{"name":"Invalid","scopes":["list.read"],"expires_in_days":0}`} {
+	for _, body := range []string{`{"name":"Invalid","scopes":[]}`, `{"name":"Invalid","scopes":["item.read","item.read"]}`, `{"name":"Invalid","scopes":["organization.manage"]}`, `{"name":"Invalid","scopes":["item.read"],"expires_in_days":0}`} {
 		r = request(h, "POST", "/v1/identity/me/tokens", body, testToken, "", "application/json")
 		if r.Code != 422 {
 			t.Fatal(body, r.Code, r.Body.String())

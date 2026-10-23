@@ -17,8 +17,8 @@ afterEach(() => {
 });
 
 it.each([
-  ['list.read', 'document.read'],
-  ['list.read', 'list.write', 'document.read', 'document.write'],
+  ['item.read', 'document.read'],
+  ['item.read', 'item.write', 'document.read', 'document.write'],
 ])('issues a WebDAV token capped to account scopes %j', async (...granted) => {
   const calls: { method: string; path: string; body: unknown }[] = [];
   vi.stubGlobal('fetch', vi.fn(async (input: URL, init: RequestInit = {}) => {

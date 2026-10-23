@@ -18,8 +18,20 @@ type Event struct {
 	EntityType, EntityID, TraceID                string
 	// Properties names the entity properties the action changed.
 	Properties []string
-	Details    map[string]any
-	CreatedAt  time.Time
+	// CredentialID is the access token the action was taken with, such as
+	// an AI assistant's; empty for sign-ins. Append takes it from the
+	// context (WithCredential) when it is not given.
+	CredentialID string
+	Details      map[string]any
+	CreatedAt    time.Time
+}
+
+type credentialKey struct{}
+
+// WithCredential records that actions in ctx are taken with the access
+// token id, so their audit events name it.
+func WithCredential(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, credentialKey{}, id)
 }
 
 // Filter selects audit events, newest first. AfterAt and AfterID continue
@@ -90,6 +102,9 @@ func (r *Repo) Append(ctx context.Context, e Event) (Event, error) {
 	}
 	if e.CreatedAt.IsZero() {
 		e.CreatedAt = time.Now()
+	}
+	if id, ok := ctx.Value(credentialKey{}).(string); ok && e.CredentialID == "" {
+		e.CredentialID = id
 	}
 	e.CreatedAt = e.CreatedAt.UTC().Truncate(time.Microsecond)
 	err := r.write(ctx, func(q Queries) error {

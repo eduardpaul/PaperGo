@@ -68,6 +68,10 @@ type Config struct {
 	// PublicURL is the scheme and host clients use, for example behind a
 	// TLS-terminating reverse proxy. Nil uses each request's own.
 	PublicURL *url.URL
+	// MCPPublicURL is where AI assistants reach the optional MCP server,
+	// papergo-mcp, ending in /v1/mcp; the web app offers assistant
+	// connections only when it is set.
+	MCPPublicURL *url.URL
 	// GroupsClaim is the claim holding group names (e.g. "groups" or "realm_access.roles").
 	GroupsClaim string
 	// GroupsPrefix filters group names to those with this prefix, stripped before syncing.
@@ -322,6 +326,13 @@ func loadFrom(getenv func(string) string, yamlText, directory string) (Config, e
 			return c, fmt.Errorf("PUBLIC_URL must be an http or https origin without a path, such as https://docs.example.com")
 		}
 		c.PublicURL = &url.URL{Scheme: u.Scheme, Host: u.Host}
+	}
+	if v := lookup("MCP_PUBLIC_URL"); v != "" {
+		u, err := url.Parse(v)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil || u.Opaque != "" || u.Path != "/v1/mcp" || u.RawQuery != "" || u.Fragment != "" {
+			return c, fmt.Errorf("MCP_PUBLIC_URL must be the MCP server's absolute http or https URL ending in /v1/mcp, such as https://docs.example.com/v1/mcp")
+		}
+		c.MCPPublicURL = u
 	}
 	if c.Env != "development" && c.Env != "test" && c.Env != "production" {
 		return c, fmt.Errorf("invalid APP_ENV")

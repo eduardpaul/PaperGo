@@ -54,7 +54,7 @@ func testDirectoryIdentity(t *testing.T, s *dal.Store) {
 	if err := r.SetMember(ctx, parent.ID, childPrincipal, false); err != nil {
 		t.Fatal(err)
 	}
-	role, err := r.CreateRole(ctx, directory.Role{ID: "admin", Name: "Administrator", Builtin: true, Scopes: []string{"role.manage", "list.read"}})
+	role, err := r.CreateRole(ctx, directory.Role{ID: "admin", Name: "Administrator", Builtin: true, Scopes: []string{"role.manage", "item.read"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func testDirectoryIdentity(t *testing.T, s *dal.Store) {
 		t.Fatal(err)
 	}
 	scopes, err := r.EffectiveScopes(ctx, "alice", "")
-	if err != nil || !reflect.DeepEqual(scopes, []string{"list.read", "role.manage"}) {
+	if err != nil || !reflect.DeepEqual(scopes, []string{"item.read", "role.manage"}) {
 		t.Fatalf("nested scopes: %v %v", scopes, err)
 	}
 	if has, err := r.HasAdministrator(ctx, role.ID); err != nil || !has {

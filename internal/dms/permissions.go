@@ -20,7 +20,7 @@ const (
 func principal(ctx context.Context, subject string) access.Principal {
 	p := access.Principal{Subject: subject}
 	if t, ok := identity.AccessTokenContext(ctx); ok {
-		p.Credential = &access.Credential{ID: t.ID, Scopes: t.Scopes}
+		p.Credential = t.Credential()
 	}
 	return p
 }
@@ -144,14 +144,14 @@ func (s *Service) GetSurface(ctx context.Context, subject, id, surface string) (
 // Access returns the actions the subject may take on r, so clients can offer
 // only those. It applies the same ACL and module-scope rules as the writes:
 // adding or changing content (write, publish) below a workspace also needs the
-// list.write scope.
+// item.write scope.
 func (s *Service) Access(ctx context.Context, subject string, r *resources.Resource) ([]string, error) {
 	if !s.transaction {
 		return read(ctx, s, func(t *Service) ([]string, error) { return t.Access(ctx, subject, r) })
 	}
 	contentWrite := true
 	if r.Kind != refs.KindWorkspace {
-		if err := s.RequireScope(ctx, subject, "list.write"); errors.Is(err, ErrForbidden) {
+		if err := s.RequireScope(ctx, subject, "item.write"); errors.Is(err, ErrForbidden) {
 			contentWrite = false
 		} else if err != nil {
 			return nil, err

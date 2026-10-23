@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"github.com/google/uuid"
 	auditstore "papergo/internal/dal/audit"
+	"papergo/internal/dal/directory"
 	"time"
 )
 
@@ -22,6 +23,15 @@ type AuditEvent struct {
 	Properties  []string       `json:"properties,omitempty"`
 	TraceID     string         `json:"trace_id,omitempty"`
 	Details     map[string]any `json:"details,omitempty"`
+	// Credential is the access token the action was taken with, such as an
+	// AI assistant's connection, beside the person in Subject.
+	Credential *AuditCredential `json:"credential,omitempty"`
+}
+
+// AuditCredential names the access token behind an audit event.
+type AuditCredential struct {
+	ID   string `json:"id"`
+	Name string `json:"name,omitempty"`
 }
 
 type AuditQuery struct {
@@ -59,11 +69,26 @@ func (s *Service) OrganizationAudit(ctx context.Context, subject string, in Audi
 			return Page[*AuditEvent]{}, err
 		}
 		rows := make([]*AuditEvent, 0, len(records))
+		names := map[string]string{}
 		for _, record := range records {
 			event := &AuditEvent{
 				ID: record.ID, CreatedAt: record.CreatedAt, WorkspaceID: record.WorkspaceID, ResourceID: record.ResourceID,
 				Subject: record.Subject, Action: record.Action, EntityType: record.EntityType, EntityID: record.EntityID, TraceID: record.TraceID,
 				Properties: record.Properties, Details: record.Details,
+			}
+			if id := record.CredentialID; id != "" {
+				name, known := names[id]
+				if !known {
+					tokens, err := t.DAL.Directory().AccessTokens(ctx, directory.AccessTokenFilter{ID: id})
+					if err != nil {
+						return Page[*AuditEvent]{}, err
+					}
+					if len(tokens) == 1 {
+						name = tokens[0].Name
+					}
+					names[id] = name
+				}
+				event.Credential = &AuditCredential{ID: id, Name: name}
 			}
 			rows = append(rows, event)
 		}

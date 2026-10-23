@@ -11,13 +11,13 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface CollectionTemplatesRequestBuilder extends BaseRequestBuilder<CollectionTemplatesRequestBuilder> {
     /**
-     * Requires list.read. Built-in Documents and Contacts and templates registered by modules. Create a collection with template_key to provision it.
+     * Requires item.read. Built-in Documents and Contacts and templates registered by modules. Create a collection with template_key to provision it.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<CollectionTemplate[]>}
      */
      get(requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<CollectionTemplate[] | undefined>;
     /**
-     * Requires list.read. Built-in Documents and Contacts and templates registered by modules. Create a collection with template_key to provision it.
+     * Requires item.read. Built-in Documents and Contacts and templates registered by modules. Create a collection with template_key to provision it.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */

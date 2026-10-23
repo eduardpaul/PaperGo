@@ -8,7 +8,7 @@ Every list and library provisions a permanent **Archived** table view, including
 
 ## State and permissions
 
-`archived_at` and `archived_by` are resource lifecycle metadata; `archived` is derived from them. Archive/unarchive requires `list.write` scope and the item's existing write permission. Readers retain access to archived items they could otherwise read, including the usual head/published restrictions. Archive status is shared by both surfaces and applies without publishing.
+`archived_at` and `archived_by` are resource lifecycle metadata; `archived` is derived from them. Archive/unarchive requires `item.write` scope and the item's existing write permission. Readers retain access to archived items they could otherwise read, including the usual head/published restrictions. Archive status is shared by both surfaces and applies without publishing.
 
 A transition increments the resource lock version and atomically records audit and `item.archived` or `item.unarchived` events. It does not change content modification metadata, allocate a content revision, change publication pointers, or modify file bytes. Repeating a transition with the current version leaves state, version, and events unchanged; a stale version still fails.
 

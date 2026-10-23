@@ -596,7 +596,7 @@ func (s *Service) StartTest(ctx context.Context, subject, id string, in TestRun)
 		if err = workspace(ctx, t, subject, w.WorkspaceID, "manage"); err != nil {
 			return err
 		}
-		if err = t.RequireScope(ctx, subject, "list.write"); err != nil {
+		if err = t.RequireScope(ctx, subject, "item.write"); err != nil {
 			return err
 		}
 		v, err := current(ctx, t, w)
@@ -693,7 +693,7 @@ func (s *Service) planStart(ctx context.Context, t *dms.Service, subject, id str
 		if err = workspace(ctx, t, subject, w.WorkspaceID, "read"); err != nil {
 			return err
 		}
-		if err = t.RequireScope(ctx, subject, "list.write"); err != nil {
+		if err = t.RequireScope(ctx, subject, "item.write"); err != nil {
 			return err
 		}
 		if !w.ManualEnabled || w.State != workflows.StatePublished {

@@ -223,7 +223,7 @@ func (s *Service) deltaState(ctx context.Context, viewID string, sequence int64)
 	return s.DAL.Delta().States(ctx, viewID, sequence)
 }
 func (s *Service) deltaVisible(ctx context.Context, subject, collectionID string) (map[string]visibleDeltaItem, error) {
-	if err := s.RequireScope(ctx, subject, "list.read"); err != nil {
+	if err := s.RequireScope(ctx, subject, "item.read"); err != nil {
 		return nil, err
 	}
 	c, err := s.authorize(ctx, subject, collectionID, "read")

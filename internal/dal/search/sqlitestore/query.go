@@ -130,6 +130,10 @@ func where(f search.Filter) (string, []any, error) {
 			args = append(args, value)
 		}
 	}
+	if f.Within != nil {
+		conds = append(conds, "(d.workspace_id IN (SELECT value FROM json_each(?)) OR d.collection_id IN (SELECT value FROM json_each(?)))")
+		args = append(args, jsonList(f.Within.Workspaces), jsonList(f.Within.Collections))
+	}
 	if len(f.TermIDs) > 0 {
 		conds = append(conds, "EXISTS (SELECT 1 FROM document_terms t WHERE t.doc=d.rowid AND t.term_id IN (SELECT value FROM json_each(?)))")
 		args = append(args, jsonList(f.TermIDs))

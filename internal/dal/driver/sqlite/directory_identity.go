@@ -281,7 +281,7 @@ func (q Queries) WriteDirectoryPreferences(ctx context.Context, owner directory.
 }
 
 func (q Queries) DirectoryAccessTokens(ctx context.Context, f directory.AccessTokenFilter) ([]directory.AccessToken, error) {
-	query := `SELECT id,subject,name,prefix,secret_hash,created_by,scopes,integration,created_at,expires_at,last_used_at,revoked_at FROM access_tokens WHERE TRUE`
+	query := `SELECT id,subject,name,prefix,secret_hash,created_by,scopes,resources,integration,created_at,expires_at,last_used_at,revoked_at FROM access_tokens WHERE TRUE`
 	args := []any{}
 	add := func(clause string, v any) { args = append(args, v); query += clause + "$" + strconv.Itoa(len(args)) }
 	if f.Subject != "" {
@@ -303,9 +303,9 @@ func (q Queries) DirectoryAccessTokens(ctx context.Context, f directory.AccessTo
 	query += ` ORDER BY created_at DESC,id`
 	return directoryRows(ctx, q.exec, query, func(r scan.Rows) (directory.AccessToken, error) {
 		var t directory.AccessToken
-		var raw []byte
+		var raw, limit []byte
 		var expires, used, revoked sql.NullTime
-		e := r.Scan(&t.ID, &t.Subject, &t.Name, &t.Prefix, &t.SecretHash, &t.CreatedBy, &raw, &t.Integration, &t.CreatedAt, &expires, &used, &revoked)
+		e := r.Scan(&t.ID, &t.Subject, &t.Name, &t.Prefix, &t.SecretHash, &t.CreatedBy, &raw, &limit, &t.Integration, &t.CreatedAt, &expires, &used, &revoked)
 		if expires.Valid {
 			t.ExpiresAt = &expires.Time
 		}
@@ -318,11 +318,14 @@ func (q Queries) DirectoryAccessTokens(ctx context.Context, f directory.AccessTo
 		if e == nil {
 			e = json.Unmarshal(raw, &t.Scopes)
 		}
+		if e == nil {
+			e = json.Unmarshal(limit, &t.Resources)
+		}
 		return t, e
 	}, args...)
 }
 func (q Queries) InsertDirectoryAccessToken(ctx context.Context, t directory.AccessToken) error {
-	_, err := models.AccessTokens.Insert(&models.AccessTokenSetter{ID: omit.From(t.ID), Subject: omit.From(t.Subject), Name: omit.From(t.Name), Prefix: omit.From(t.Prefix), SecretHash: omit.From(t.SecretHash), Scopes: omit.From(types.NewJSON(t.Scopes)), Integration: omit.From(t.Integration), CreatedBy: omit.From(t.CreatedBy), CreatedAt: omit.From(t.CreatedAt), ExpiresAt: nullable.Time(t.ExpiresAt)}).Exec(ctx, q.exec)
+	_, err := models.AccessTokens.Insert(&models.AccessTokenSetter{ID: omit.From(t.ID), Subject: omit.From(t.Subject), Name: omit.From(t.Name), Prefix: omit.From(t.Prefix), SecretHash: omit.From(t.SecretHash), Scopes: omit.From(types.NewJSON(t.Scopes)), Resources: omit.From(types.NewJSON(t.Resources)), Integration: omit.From(t.Integration), CreatedBy: omit.From(t.CreatedBy), CreatedAt: omit.From(t.CreatedAt), ExpiresAt: nullable.Time(t.ExpiresAt)}).Exec(ctx, q.exec)
 	return dberr.Translate(err)
 }
 

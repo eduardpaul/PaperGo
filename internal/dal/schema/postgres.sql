@@ -51,6 +51,8 @@ CREATE TABLE access_tokens (
     prefix TEXT NOT NULL,
     secret_hash TEXT NOT NULL CHECK (length(secret_hash) = 64),
     scopes JSONB NOT NULL CHECK (jsonb_typeof(scopes) = 'array' AND jsonb_array_length(scopes) > 0),
+    -- Workspaces, lists and libraries the token is limited to; empty is unlimited.
+    resources JSONB NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(resources) = 'array'),
     expires_at TIMESTAMPTZ,
     last_used_at TIMESTAMPTZ,
     revoked_at TIMESTAMPTZ,
@@ -1042,7 +1044,9 @@ CREATE TABLE audit_events (
     entity_id TEXT,
     properties JSONB NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(properties) = 'array'),
     trace_id TEXT NOT NULL CHECK (length(trace_id) > 0),
-    details JSONB NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(details) = 'object')
+    details JSONB NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(details) = 'object'),
+    -- The access token the action was taken with, such as an AI assistant's.
+    credential_id TEXT
 );
 CREATE INDEX auditevent_workspace_id_created_at ON audit_events(workspace_id, created_at);
 CREATE INDEX auditevent_resource_id_created_at ON audit_events(resource_id, created_at);

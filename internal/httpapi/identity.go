@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"net/http"
-	"papergo/internal/auth"
 	"papergo/internal/dal"
 	"papergo/internal/dal/directory"
 	"papergo/internal/identity"
@@ -24,19 +23,17 @@ func (a *API) registerIdentity(m *router) {
 		}
 		w.WriteHeader(204)
 	})
-	if a.Auth == nil || a.Auth.Kind() != auth.TrustedProxy {
-		m.HandleFunc("GET /v1/identity/me/tokens", foundationRead(a, func(r *http.Request) (any, error) { return a.dms(r).Directory().AccessTokens(r.Context(), subject(r)) }))
-		m.HandleFunc("POST /v1/identity/me/tokens", foundationMutation(a, 201, false, func(r *http.Request, in identity.AccessTokenInput, _ int) (any, error) {
-			return a.dms(r).Directory().CreateAccessToken(r.Context(), subject(r), in)
-		}))
-		m.HandleFunc("DELETE /v1/identity/me/tokens/{id}", func(w http.ResponseWriter, r *http.Request) {
-			if err := a.dms(r).Directory().RevokeAccessToken(r.Context(), subject(r), r.PathValue("id")); err != nil {
-				a.failure(w, r, err)
-				return
-			}
-			w.WriteHeader(204)
-		})
-	}
+	m.HandleFunc("GET /v1/identity/me/tokens", foundationRead(a, func(r *http.Request) (any, error) { return a.dms(r).Directory().AccessTokens(r.Context(), subject(r)) }))
+	m.HandleFunc("POST /v1/identity/me/tokens", foundationMutation(a, 201, false, func(r *http.Request, in identity.AccessTokenInput, _ int) (any, error) {
+		return a.dms(r).Directory().CreateAccessToken(r.Context(), subject(r), in)
+	}))
+	m.HandleFunc("DELETE /v1/identity/me/tokens/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if err := a.dms(r).Directory().RevokeAccessToken(r.Context(), subject(r), r.PathValue("id")); err != nil {
+			a.failure(w, r, err)
+			return
+		}
+		w.WriteHeader(204)
+	})
 	m.HandleFunc("GET /v1/organization", foundationRead(a, func(r *http.Request) (any, error) { return a.dms(r).Directory().Organization(r.Context(), subject(r)) }))
 	m.HandleFunc("PATCH /v1/organization", foundationMutation(a, 200, true, func(r *http.Request, in identity.OrganizationUpdate, v int) (any, error) {
 		return a.dms(r).Directory().UpdateOrganization(r.Context(), subject(r), v, in)

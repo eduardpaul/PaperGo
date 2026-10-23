@@ -3,7 +3,7 @@
   "info": {
     "title": "PaperGo API",
     "version": "0.4.0",
-    "description": "One organization per SQLite deployment. Immutable schema/content revisions, SharePoint-style exclusive permission scopes, head/published projections, rich typed fields, reusable templates, saved queries, personal/shared smart folders with cross-collection navigation and classification, taxonomy, and typed relationships. Libraries with webdav_enabled are also served over WebDAV (RFC 4918 class 1 and 2) at /webdav/{libraryID}/, outside this contract; In OIDC/development deployments, WebDAV accepts provider bearer tokens or HTTP Basic with a WebDAV credential password. In trusted proxy mode, REST and WebDAV clients authenticate with proxy Basic credentials over HTTPS; credential-management endpoints are unavailable. Workflows (triggers, a condition and a flow of activities, with built-in workflows people can turn on, configure or copy) react to committed item changes, schedules and manual starts; runs are durable and are listed under each workspace. Organization groups support nested membership; persisted roles grant module scopes independently of resource ACLs. Verified subjects enroll with the Member role on first authentication. Local deployments authenticate REST requests with HTTP Basic credentials or the session cookie issued by POST /auth/login; profiles are locally managed. ADMIN_SUBJECT provisions the first administrator once; local authentication defaults to admin, and development defaults to DEV_SUBJECT."
+    "description": "One organization per SQLite deployment. Immutable schema/content revisions, SharePoint-style exclusive permission scopes, head/published projections, rich typed fields, reusable templates, saved queries, personal/shared smart folders with cross-collection navigation and classification, taxonomy, and typed relationships. Libraries with webdav_enabled are also served over WebDAV (RFC 4918 class 1 and 2) at /webdav/{libraryID}/, outside this contract; In OIDC/development deployments, WebDAV accepts provider bearer tokens or HTTP Basic with a WebDAV credential password. In trusted proxy mode, browsers and WebDAV clients authenticate with proxy Basic credentials over HTTPS, WebDAV credential endpoints are unavailable, and personal and integration access tokens authenticate directly. Workflows (triggers, a condition and a flow of activities, with built-in workflows people can turn on, configure or copy) react to committed item changes, schedules and manual starts; runs are durable and are listed under each workspace. Organization groups support nested membership; persisted roles grant module scopes independently of resource ACLs. Verified subjects enroll with the Member role on first authentication. Local deployments authenticate REST requests with HTTP Basic credentials or the session cookie issued by POST /auth/login; profiles are locally managed. ADMIN_SUBJECT provisions the first administrator once; local authentication defaults to admin, and development defaults to DEV_SUBJECT."
   },
   "servers": [
     {
@@ -99,6 +99,17 @@
                     "items": {
                       "type": "string"
                     }
+                  },
+                  "resources": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 50,
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "description": "Limits the token to these workspaces, lists and libraries, each one the caller can read. A limited token holds only workspace.read, item.read, item.write, document.read, document.write, contentType.read, taxonomy.read, user.read and group.read, and cannot issue tokens. Omitted, the token reaches everything its holder can."
                   },
                   "expires_in_days": {
                     "type": "integer",
@@ -389,7 +400,7 @@
       ],
       "get": {
         "summary": "Query visible edges incident to a workspace",
-        "description": "Both endpoints must be readable on their selected content surface. Returns compact endpoint navigation summaries and resolved relationship labels; load full metadata through the per-item relationship read. All results touch the starting workspace even when item_id belongs elsewhere. Filter scalar attributes/key, id or directed using eq/ne and numeric gt/ge/lt/le, and/or/not and parentheses. Filters are limited to 4096 bytes, 32 nodes and depth 6. Example: attributes/amount gt 100. Required module scope: list.read.",
+        "description": "Both endpoints must be readable on their selected content surface. Returns compact endpoint navigation summaries and resolved relationship labels; load full metadata through the per-item relationship read. All results touch the starting workspace even when item_id belongs elsewhere. Filter scalar attributes/key, id or directed using eq/ne and numeric gt/ge/lt/le, and/or/not and parentheses. Filters are limited to 4096 bytes, 32 nodes and depth 6. Example: attributes/amount gt 100. Required module scope: item.read.",
         "parameters": [
           {
             "name": "$skiptoken",
@@ -506,7 +517,7 @@
           }
         },
         "x-module-scopes": [
-          "list.read"
+          "item.read"
         ]
       }
     },
@@ -967,11 +978,11 @@
             }
           }
         },
-        "description": "Workspace and collection metadata changes require manage access. Items and folders require write access. If-Match is required."
+        "description": "Workspace and collection metadata changes require manage access and list.manage. Items and folders require write access. If-Match is required."
       },
       "delete": {
         "summary": "Delete a resource, optionally including folder contents",
-        "description": "Deletes an item or empty folder with write access and the current If-Match. For a folder, recursive=true deletes the folder and all live descendants atomically, requiring write access to every descendant. Without recursive=true, any live child, including a hidden item or nested folder, returns 409 with code folder_not_empty. Deleted children do not prevent ordinary deletion. Permission failures and stale versions leave the entire tree unchanged. Workspace and collection deletion require manage access and remove the entire live resource tree independently of recursive; collection managers may delete the entire collection regardless of descendant ACLs. Tombstones, revisions and audit history are retained. Read projections and live relationships are removed, and each deleted item emits item.deleted. Workflows bound to a deleted workspace or collection are disabled and deleted.",
+        "description": "Deletes an item or empty folder with write access and the current If-Match. For a folder, recursive=true deletes the folder and all live descendants atomically, requiring write access to every descendant. Without recursive=true, any live child, including a hidden item or nested folder, returns 409 with code folder_not_empty. Deleted children do not prevent ordinary deletion. Permission failures and stale versions leave the entire tree unchanged. Workspace and collection deletion require manage access and list.manage and remove the entire live resource tree independently of recursive; collection managers may delete the entire collection regardless of descendant ACLs. Tombstones, revisions and audit history are retained. Read projections and live relationships are removed, and each deleted item emits item.deleted. Workflows bound to a deleted workspace or collection are disabled and deleted.",
         "responses": {
           "204": {
             "description": "Deleted"
@@ -1217,7 +1228,7 @@
             }
           }
         },
-        "description": "First create returns 201. Retrying an item/folder create with the same caller ID returns the current readable live entry unchanged with 200 and its current ETag, regardless of new body fields. Requires list.write module scope; an existing retry requires read access rather than create ACL access. Conflicting IDs, including deleted, different-collection and inaccessible entries, return 409 without content. All retry checks and the initial insertion are serialized in one write transaction; retries append no revisions, audit or events."
+        "description": "First create returns 201. Retrying an item/folder create with the same caller ID returns the current readable live entry unchanged with 200 and its current ETag, regardless of new body fields. Requires item.write module scope, and a list or library list.manage and workspace manage access; an existing retry requires read access rather than create ACL access. Conflicting IDs, including deleted, different-collection and inaccessible entries, return 409 without content. All retry checks and the initial insertion are serialized in one write transaction; retries append no revisions, audit or events."
       }
     },
     "/v1/resources/{id}/fields": {
@@ -1268,9 +1279,9 @@
           }
         },
         "x-module-scopes": [
-          "list.read"
+          "item.read"
         ],
-        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply. Field definitions are organization-wide; editing through a collection applies to every collection using them."
+        "description": " Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply. Field definitions are organization-wide; editing through a collection applies to every collection using them."
       },
       "post": {
         "summary": "Add a field definition (manage required)",
@@ -1335,9 +1346,9 @@
           }
         },
         "x-module-scopes": [
-          "list.read"
+          "item.read"
         ],
-        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply."
       },
       "put": {
         "summary": "Replace permissions and inheritance (manage required)",
@@ -1388,9 +1399,9 @@
             }
           }
         },
-        "description": "Break, copy or reset inheritance using typed user, group and workspace role principals. Copied group grants retain group IDs and resolve current nested memberships. Copying workspace inheritance retains dynamic visitor/member/owner role principals. Workspace owners and workspace.manage holders retain control. A permission change that removes the caller's manage access rolls back. list.read and resource manage access are required. Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply. ACL changes deliver permissions.changed (action=replace) to the resource and every item and folder that inherits from it, with previous_scope_id and current_scope_id; the root event, with previous/current permission snapshots (inherit, grants, scope_id, effective_grants), commits with the write and audit, and the dispatcher delivers it in batches. Unchanged ACLs raise no event.",
+        "description": "Break, copy or reset inheritance using typed user, group and workspace role principals. Copied group grants retain group IDs and resolve current nested memberships. Copying workspace inheritance retains dynamic visitor/member/owner role principals. Workspace owners and workspace.manage holders retain control. A permission change that removes the caller's manage access rolls back. list.manage and resource manage access are required. Required module scopes: list.manage. Resource ACLs and any additional use-case checks also apply. ACL changes deliver permissions.changed (action=replace) to the resource and every item and folder that inherits from it, with previous_scope_id and current_scope_id; the root event, with previous/current permission snapshots (inherit, grants, scope_id, effective_grants), commits with the write and audit, and the dispatcher delivers it in batches. Unchanged ACLs raise no event.",
         "x-module-scopes": [
-          "list.read"
+          "list.manage"
         ]
       }
     },
@@ -1485,9 +1496,9 @@
           }
         ],
         "x-module-scopes": [
-          "list.read"
+          "item.read"
         ],
-        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply."
       },
       "post": {
         "summary": "Create a typed or untyped relationship",
@@ -1524,9 +1535,9 @@
             }
           }
         },
-        "description": "Endpoints may belong to different workspaces. Type is optional; untyped links default to symmetric and allow at most 64 scalar attributes and 16 KiB of JSON. Requires write permission on both endpoints. Ensures one edge for the type and endpoints; repeating creation returns the existing edge without changing metadata, version or audit history, even at a cardinality limit. Symmetric endpoints use canonical ordering. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.",
+        "description": "Endpoints may belong to different workspaces. Type is optional; untyped links default to symmetric and allow at most 64 scalar attributes and 16 KiB of JSON. Requires write permission on both endpoints. Ensures one edge for the type and endpoints; repeating creation returns the existing edge without changing metadata, version or audit history, even at a cardinality limit. Symmetric endpoints use canonical ordering. Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.",
         "x-module-scopes": [
-          "list.write"
+          "item.write"
         ]
       }
     },
@@ -1553,7 +1564,7 @@
       ],
       "get": {
         "summary": "Read one edge with its located peer",
-        "description": "The item must participate in the edge and both endpoints must be visible. Required module scope: list.read.",
+        "description": "The item must participate in the edge and both endpoints must be visible. Required module scope: item.read.",
         "responses": {
           "200": {
             "description": "Success",
@@ -1578,7 +1589,7 @@
           }
         },
         "x-module-scopes": [
-          "list.read"
+          "item.read"
         ]
       },
       "delete": {
@@ -1591,9 +1602,9 @@
             "$ref": "#/components/responses/Problem"
           }
         },
-        "description": "Either endpoint may remove a directed or symmetric edge. Requires write permission on both endpoints without an ETag precondition. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.",
+        "description": "Either endpoint may remove a directed or symmetric edge. Requires write permission on both endpoints without an ETag precondition. Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.",
         "x-module-scopes": [
-          "list.write"
+          "item.write"
         ]
       },
       "patch": {
@@ -1765,9 +1776,9 @@
             }
           }
         },
-        "description": "Either endpoint may patch a directed or symmetric edge. Requires write permission on both endpoints and the edge If-Match. Omitted metadata keys remain; null removes a key. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.",
+        "description": "Either endpoint may patch a directed or symmetric edge. Requires write permission on both endpoints and the edge If-Match. Omitted metadata keys remain; null removes a key. Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.",
         "x-module-scopes": [
-          "list.write"
+          "item.write"
         ]
       }
     },
@@ -1823,9 +1834,9 @@
           }
         ],
         "x-module-scopes": [
-          "list.write"
+          "item.write"
         ],
-        "description": " Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply."
       },
       "get": {
         "summary": "Read immutable publications",
@@ -1883,9 +1894,9 @@
             "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           }
         ],
-        "description": "Draft readers see lifecycle history. Ordinary readers see publish events for the current published revision only. Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.",
+        "description": "Draft readers see lifecycle history. Ordinary readers see publish events for the current published revision only. Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.",
         "x-module-scopes": [
-          "list.read"
+          "item.read"
         ]
       }
     },
@@ -1973,10 +1984,10 @@
           }
         },
         "x-module-scopes": [
-          "list.write",
+          "item.write",
           "document.write"
         ],
-        "description": "Checks the library duplicate policy in the same transaction as the new file revision. Warn returns duplicates; block returns 409 duplicate_file and stores no revision. Self, deleted items, historical files and inaccessible content do not count. Requires list.write and document.write and item write access with current If-Match. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts only PDF, TIFF, JPEG, PNG and WebP detected from file signatures; filenames and declared MIME types do not determine stored content_type. Unsupported bytes return 415 without item/revision changes. Size limits apply while streaming."
+        "description": "Checks the library duplicate policy in the same transaction as the new file revision. Warn returns duplicates; block returns 409 duplicate_file and stores no revision. Self, deleted items, historical files and inaccessible content do not count. Requires item.write and document.write and item write access with current If-Match. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts only PDF, TIFF, JPEG, PNG and WebP detected from file signatures; filenames and declared MIME types do not determine stored content_type. Unsupported bytes return 415 without item/revision changes. Size limits apply while streaming."
       },
       "get": {
         "summary": "Download selected head/published blob; supports byte ranges",
@@ -2015,9 +2026,9 @@
             "$ref": "#/components/responses/Problem"
           }
         },
-        "description": "Ordinary readers can download only the current published blob, including with blob_id. Draft readers default to head and may request retained historical blobs. Required module scopes: list.read and document.read. Resource ACLs and any additional use-case checks also apply.",
+        "description": "Ordinary readers can download only the current published blob, including with blob_id. Draft readers default to head and may request retained historical blobs. Required module scopes: item.read and document.read. Resource ACLs and any additional use-case checks also apply.",
         "x-module-scopes": [
-          "list.read",
+          "item.read",
           "document.read"
         ]
       }
@@ -2037,7 +2048,7 @@
       "get": {
         "summary": "List retained file versions",
         "operationId": "listFileVersions",
-        "description": "Retained files of a library item, newest first. Draft readers see every version; ordinary readers see only the published file. `is_current` marks the file of the caller's visible revision, `created_by` who uploaded or restored that version, and `availability` whether the bytes are still stored. A reclaimed version keeps its id, version, filename, content type, size and checksum; downloading or restoring it reports that the content is unavailable. Restore a version that still has its bytes with POST /v1/items/{id}/content/versions/{number}/restore. Required module scopes: list.read, document.read. Resource ACLs and any additional use-case checks also apply.",
+        "description": "Retained files of a library item, newest first. Draft readers see every version; ordinary readers see only the published file. `is_current` marks the file of the caller's visible revision, `created_by` who uploaded or restored that version, and `availability` whether the bytes are still stored. A reclaimed version keeps its id, version, filename, content type, size and checksum; downloading or restoring it reports that the content is unavailable. Restore a version that still has its bytes with POST /v1/items/{id}/content/versions/{number}/restore. Required module scopes: item.read, document.read. Resource ACLs and any additional use-case checks also apply.",
         "parameters": [
           {
             "name": "$skiptoken",
@@ -2093,7 +2104,7 @@
           }
         },
         "x-module-scopes": [
-          "list.read",
+          "item.read",
           "document.read"
         ]
       }
@@ -2356,9 +2367,9 @@
           }
         ],
         "x-module-scopes": [
-          "list.read"
+          "item.read"
         ],
-        "description": "Requires list.read scope and ordinary read permission on the live item. All retained metadata revisions, including unpublished revisions, are available with their frozen schema. Current head content still requires read_draft; restoring history requires write. Newest recorded version first. $skiptoken is the last returned recorded number, and following pages contain smaller numbers. revision_number counts recorded entries only; is_current marks the largest retained number, even when recording is disabled."
+        "description": "Requires item.read scope and ordinary read permission on the live item. All retained metadata revisions, including unpublished revisions, are available with their frozen schema. Current head content still requires read_draft; restoring history requires write. Newest recorded version first. $skiptoken is the last returned recorded number, and following pages contain smaller numbers. revision_number counts recorded entries only; is_current marks the largest retained number, even when recording is disabled."
       }
     },
     "/v1/items/{id}/unpublish": {
@@ -2413,9 +2424,9 @@
           }
         ],
         "x-module-scopes": [
-          "list.write"
+          "item.write"
         ],
-        "description": " Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/items/{id}/schema": {
@@ -2500,9 +2511,9 @@
           }
         ],
         "x-module-scopes": [
-          "list.read"
+          "item.read"
         ],
-        "description": "Returns the frozen content schema of the caller-visible item or folder. Folders use their current metadata schema and do not enforce required fields. Requires list.read and resource read access."
+        "description": "Returns the frozen content schema of the caller-visible item or folder. Folders use their current metadata schema and do not enforce required fields. Requires item.read and resource read access."
       }
     },
     "/v1/workspaces/{id}/templates": {
@@ -3932,9 +3943,9 @@
           }
         },
         "x-module-scopes": [
-          "list.read"
+          "item.read"
         ],
-        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply."
       },
       "post": {
         "summary": "Create View",
@@ -4070,9 +4081,9 @@
           }
         },
         "x-module-scopes": [
-          "list.read"
+          "list.manage"
         ],
-        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
+        "description": " Requires collection manage access. Required module scopes: list.manage. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/views/{id}": {
@@ -4200,9 +4211,9 @@
           }
         },
         "x-module-scopes": [
-          "list.read"
+          "item.read"
         ],
-        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply."
       },
       "put": {
         "summary": "Update View",
@@ -4361,9 +4372,9 @@
           }
         },
         "x-module-scopes": [
-          "list.read"
+          "list.manage"
         ],
-        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
+        "description": " Requires collection manage access. Required module scopes: list.manage. Resource ACLs and any additional use-case checks also apply."
       },
       "delete": {
         "summary": "Delete saved view",
@@ -4402,9 +4413,9 @@
           }
         },
         "x-module-scopes": [
-          "list.read"
+          "list.manage"
         ],
-        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
+        "description": " Requires collection manage access. Required module scopes: list.manage. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/views/{id}/query": {
@@ -4552,9 +4563,9 @@
           }
         },
         "x-module-scopes": [
-          "list.read"
+          "item.read"
         ],
-        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/views/{id}/query/groups": {
@@ -4702,9 +4713,9 @@
           }
         },
         "x-module-scopes": [
-          "list.read"
+          "item.read"
         ],
-        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/views/{id}/navigation": {
@@ -4852,10 +4863,10 @@
           }
         },
         "x-module-scopes": [
-          "list.read",
+          "item.read",
           "taxonomy.read"
         ],
-        "description": "Lists one level of a field of a navigation view: the terms of field below parent_id (or the roots), in term order, each with the items of the view it lists and those at or below it. Counts follow the view's query, the caller's access and the surface read, and cover items, not folders. Required module scopes: list.read, taxonomy.read. Resource ACLs and any additional use-case checks also apply."
+        "description": "Lists one level of a field of a navigation view: the terms of field below parent_id (or the roots), in term order, each with the items of the view it lists and those at or below it. Counts follow the view's query, the caller's access and the surface read, and cover items, not folders. Required module scopes: item.read, taxonomy.read. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/relationship-types/{id}": {
@@ -4983,9 +4994,9 @@
           }
         },
         "x-module-scopes": [
-          "list.read"
+          "item.read"
         ],
-        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/resources/{id}/bulk": {
@@ -5148,10 +5159,10 @@
           }
         },
         "x-module-scopes": [
-          "list.read",
+          "list.manage",
           "contentType.read"
         ],
-        "description": "Requires list.read, contentType.read and manage ACL on the collection. The shared definition is not copied. Returns the collection and its new ETag."
+        "description": "Requires list.manage, contentType.read and manage ACL on the collection. The shared definition is not copied. Returns the collection and its new ETag."
       }
     },
     "/v1/content-types/{id}": {
@@ -5303,9 +5314,9 @@
           }
         ],
         "x-module-scopes": [
-          "list.read"
+          "item.read"
         ],
-        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply."
       },
       "post": {
         "operationId": "createSmartFolder",
@@ -5344,9 +5355,9 @@
           }
         },
         "x-module-scopes": [
-          "list.write"
+          "item.write"
         ],
-        "description": " Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: item.write; shared smart folders also need list.manage and workspace manage access. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/smart-folders/{id}": {
@@ -5388,9 +5399,9 @@
           }
         },
         "x-module-scopes": [
-          "list.read"
+          "item.read"
         ],
-        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply."
       },
       "put": {
         "operationId": "updateSmartFolder",
@@ -5444,9 +5455,9 @@
           }
         ],
         "x-module-scopes": [
-          "list.write"
+          "item.write"
         ],
-        "description": " Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: item.write; shared smart folders also need list.manage and workspace manage access. Resource ACLs and any additional use-case checks also apply."
       },
       "delete": {
         "operationId": "deleteSmartFolder",
@@ -5474,9 +5485,9 @@
           }
         },
         "x-module-scopes": [
-          "list.write"
+          "item.write"
         ],
-        "description": " Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: item.write; shared smart folders also need list.manage and workspace manage access. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/smart-folders/{id}/query": {
@@ -5520,9 +5531,9 @@
           }
         },
         "x-module-scopes": [
-          "list.read"
+          "item.read"
         ],
-        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.",
+        "description": " Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.",
         "parameters": [
           {
             "in": "query",
@@ -5586,9 +5597,9 @@
           }
         },
         "x-module-scopes": [
-          "list.read"
+          "item.read"
         ],
-        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.",
+        "description": " Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.",
         "parameters": [
           {
             "in": "query",
@@ -5665,9 +5676,9 @@
         },
         "summary": "Classify or create an item in a smart folder",
         "x-module-scopes": [
-          "list.write"
+          "item.write"
         ],
-        "description": " Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Only definitions with mode classification permit this action; saved queries reject it."
+        "description": " Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply. Only definitions with mode classification permit this action; saved queries reject it."
       },
       "parameters": [
         {
@@ -5683,7 +5694,7 @@
     },
     "/v1/smart-folders/{id}/items/{itemID}": {
       "delete": {
-        "description": "Requires item If-Match and current folder_version. Clears matching equality values/keywords and selected terms including descendants; ordinary validation and publication rules apply. Rolls back if the result still matches the definition. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Only definitions with mode classification permit this action; saved queries reject it.",
+        "description": "Requires item If-Match and current folder_version. Clears matching equality values/keywords and selected terms including descendants; ordinary validation and publication rules apply. Rolls back if the result still matches the definition. Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply. Only definitions with mode classification permit this action; saved queries reject it.",
         "responses": {
           "200": {
             "content": {
@@ -5734,7 +5745,7 @@
           }
         },
         "x-module-scopes": [
-          "list.write"
+          "item.write"
         ]
       },
       "parameters": [
@@ -11424,9 +11435,9 @@
           }
         },
         "x-module-scopes": [
-          "list.read"
+          "item.read"
         ],
-        "description": "Requires list.read scope and ordinary read permission on the live item. All retained metadata revisions, including unpublished revisions, are available with their frozen schema. Current head content still requires read_draft; restoring history requires write."
+        "description": "Requires item.read scope and ordinary read permission on the live item. All retained metadata revisions, including unpublished revisions, are available with their frozen schema. Current head content still requires read_draft; restoring history requires write."
       }
     },
     "/v1/items/{id}/revisions/{number}/restore": {
@@ -11452,7 +11463,7 @@
       ],
       "post": {
         "summary": "Restore historical metadata as a new revision",
-        "description": "Requires item write permission and its current If-Match. Revalidates values against the current schema; removed fields remain removed and current values absent from the snapshot are cleared. Restores the historical content type (which must still be attached), name, keywords and field values, retaining the current blob. Runs ordinary indexing, publication and domain-event logic atomically. Historical revisions are unchanged. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.",
+        "description": "Requires item write permission and its current If-Match. Revalidates values against the current schema; removed fields remain removed and current values absent from the snapshot are cleared. Restores the historical content type (which must still be attached), name, keywords and field values, retaining the current blob. Runs ordinary indexing, publication and domain-event logic atomically. Historical revisions are unchanged. Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply.",
         "parameters": [
           {
             "name": "If-Match",
@@ -11483,7 +11494,7 @@
           }
         },
         "x-module-scopes": [
-          "list.write"
+          "item.write"
         ]
       }
     },
@@ -12559,10 +12570,10 @@
         ],
         "operationId": "startFilteredBulkUpdate",
         "summary": "Bulk edit matching items with durable progress",
-        "description": "Starts a durable filtered edit of current head content. Requires list.read, list.write and collection write access. The existing typed query selects readable drafts; omitted query selects all readable head items and folders, including nested content. Sort and group_by are rejected. Selection freezes when execution begins. Each item merges values (null removes a value) through current validation, permissions, uniqueness, revision, audit and event handling, in its own commit. Current name/keywords can also be changed. Successful items survive other items' failures. Poll Location for matched, processed, updated, failed, progress and up to 50 failure reasons; failed counts all failures. succeeded means execution finished, including partial success. Access, schema or infrastructure failures stop the operation with status failed. Cancellation on shutdown leaves pending work resumable. Bulk operations and failure details are visible only to their starter, with collection read access. The explicit /bulk endpoint remains an atomic transaction of up to 100 actions.",
+        "description": "Starts a durable filtered edit of current head content. Requires item.read, item.write and collection write access. The existing typed query selects readable drafts; omitted query selects all readable head items and folders, including nested content. Sort and group_by are rejected. Selection freezes when execution begins. Each item merges values (null removes a value) through current validation, permissions, uniqueness, revision, audit and event handling, in its own commit. Current name/keywords can also be changed. Successful items survive other items' failures. Poll Location for matched, processed, updated, failed, progress and up to 50 failure reasons; failed counts all failures. succeeded means execution finished, including partial success. Access, schema or infrastructure failures stop the operation with status failed. Cancellation on shutdown leaves pending work resumable. Bulk operations and failure details are visible only to their starter, with collection read access. The explicit /bulk endpoint remains an atomic transaction of up to 100 actions.",
         "x-required-scopes": [
-          "list.read",
-          "list.write"
+          "item.read",
+          "item.write"
         ],
         "parameters": [
           {
@@ -12689,7 +12700,7 @@
           "Lists"
         ],
         "summary": "List registered complete collection templates",
-        "description": "Requires list.read. Built-in Documents and Contacts and templates registered by modules. Create a collection with template_key to provision it.",
+        "description": "Requires item.read. Built-in Documents and Contacts and templates registered by modules. Create a collection with template_key to provision it.",
         "responses": {
           "200": {
             "description": "Available templates",
@@ -12705,7 +12716,7 @@
             }
           },
           "403": {
-            "description": "Missing list.read scope"
+            "description": "Missing item.read scope"
           }
         }
       }
@@ -12838,9 +12849,9 @@
           }
         },
         "x-module-scopes": [
-          "list.read"
+          "item.read"
         ],
-        "description": "Organization taxonomy predicates; requires list.read and taxonomy.read to discover, list.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy."
+        "description": "Organization taxonomy predicates; requires item.read and taxonomy.read to discover, item.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy."
       },
       "post": {
         "summary": "Create Relationship Type",
@@ -12967,9 +12978,9 @@
           }
         },
         "x-module-scopes": [
-          "list.write"
+          "item.write"
         ],
-        "description": "Organization taxonomy predicates; requires list.read and taxonomy.read to discover, list.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy."
+        "description": "Organization taxonomy predicates; requires item.read and taxonomy.read to discover, item.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy."
       }
     },
     "/v1/identity/users/{subject}/status": {
@@ -13071,7 +13082,7 @@
       "get": {
         "operationId": "listActivePeople",
         "summary": "List active users for person field selection",
-        "description": "Requires list.read. IDs are enrolled organization subjects; selecting a user grants no content access.",
+        "description": "Requires item.read. IDs are enrolled organization subjects; selecting a user grants no content access.",
         "responses": {
           "200": {
             "description": "Active person IDs",
@@ -13107,7 +13118,7 @@
       "get": {
         "operationId": "listRecycleBin",
         "summary": "List writable deleted items and folders",
-        "description": "Requires a live readable collection and list.read; entries are filtered by list.write and their retained ACL scopes. Deleted content is excluded from ordinary reads and queries.",
+        "description": "Requires a live readable collection and item.read; entries are filtered by item.write and their retained ACL scopes. Deleted content is excluded from ordinary reads and queries.",
         "parameters": [
           {
             "name": "$skiptoken",
@@ -13170,7 +13181,7 @@
       "post": {
         "operationId": "restoreDeletedResource",
         "summary": "Restore a deleted item or folder",
-        "description": "Requires list.write and write access to the retained scope and destination. Returns to the active original folder, otherwise the collection root. Restores head/published content, history and indexes atomically. recursive=true restores folder descendants from the same deletion only. Name or business-key conflicts roll back the entire restore. Retained relationships become visible when both endpoints are active and readable. No If-Match is required.",
+        "description": "Requires item.write and write access to the retained scope and destination. Returns to the active original folder, otherwise the collection root. Restores head/published content, history and indexes atomically. recursive=true restores folder descendants from the same deletion only. Name or business-key conflicts roll back the entire restore. Retained relationships become visible when both endpoints are active and readable. No If-Match is required.",
         "parameters": [
           {
             "name": "recursive",
@@ -13222,7 +13233,7 @@
       "delete": {
         "operationId": "purgeDeletedResource",
         "summary": "Permanently purge deleted content",
-        "description": "Requires list.write and manage access to every purged entry. recursive=true explicitly purges deleted folder descendants. Deletes retained revisions, publications, blob references and grants; audit/run records retain stable IDs. Object deletion is queued durably and retried after storage failures or restart. Only deleted entries in live collections can be purged. No If-Match is required.",
+        "description": "Requires list.manage and manage access to every purged entry. recursive=true explicitly purges deleted folder descendants. Deletes retained revisions, publications, blob references and grants; audit/run records retain stable IDs. Object deletion is queued durably and retried after storage failures or restart. Only deleted entries in live collections can be purged. No If-Match is required.",
         "parameters": [
           {
             "name": "recursive",
@@ -13258,10 +13269,10 @@
       "post": {
         "operationId": "moveItem",
         "summary": "Move an item across compatible collections or workspaces",
-        "description": "Requires list.write, source write access, destination collection read access and destination parent write access. If-Match validates the current item version. Cross-collection moves support content items only, require matching collection kinds and an attached matching content type, and revalidate all current values and references. Identity, blobs, history and relationships survive. Source item grants are removed and the item inherits destination permissions. Search indexes and business keys move atomically; name/unique-value collisions roll back the move. Explicit publications retain frozen snapshots; automatic publishing exposes the head. Historical revisions retain their original schema/container provenance. Workflow run location metadata follows the item. Same-collection moves retain exclusive permissions.",
+        "description": "Requires item.write, source write access, destination collection read access and destination parent write access. If-Match validates the current item version. Cross-collection moves support content items only, require matching collection kinds and an attached matching content type, and revalidate all current values and references. Identity, blobs, history and relationships survive. Source item grants are removed and the item inherits destination permissions. Search indexes and business keys move atomically; name/unique-value collisions roll back the move. Explicit publications retain frozen snapshots; automatic publishing exposes the head. Historical revisions retain their original schema/container provenance. Workflow run location metadata follows the item. Same-collection moves retain exclusive permissions.",
         "x-module-scopes": [
-          "list.read",
-          "list.write"
+          "item.read",
+          "item.write"
         ],
         "parameters": [
           {
@@ -13328,9 +13339,9 @@
       "delete": {
         "operationId": "detachContentType",
         "summary": "Detach an unused collection content type",
-        "description": "Requires collection manage access and the current collection If-Match. Rejects the last attachment, a type used by live items, and dependent saved views. Chooses a remaining default when necessary. Updates the effective schema and business keys atomically; organization catalog types and frozen revisions remain. Deleted items with a detached type require reattachment before restoration.",
+        "description": "Requires list.manage, collection manage access and the current collection If-Match. Rejects the last attachment, a type used by live items, and dependent saved views. Chooses a remaining default when necessary. Updates the effective schema and business keys atomically; organization catalog types and frozen revisions remain. Deleted items with a detached type require reattachment before restoration.",
         "x-module-scopes": [
-          "list.read"
+          "list.manage"
         ],
         "parameters": [
           {
@@ -13379,7 +13390,7 @@
       ],
       "post": {
         "summary": "Restore an earlier file as a new immutable file version",
-        "description": "Requires list.write and document.write, item write access and the current numeric If-Match. Restores file bytes and filename while retaining current metadata. Creates a new blob sequence number and content revision; automatic publishing follows library settings. Explicit publication remains unchanged. Earlier versions remain immutable. The source version must belong to this item.",
+        "description": "Requires item.write and document.write, item write access and the current numeric If-Match. Restores file bytes and filename while retaining current metadata. Creates a new blob sequence number and content revision; automatic publishing follows library settings. Explicit publication remains unchanged. Earlier versions remain immutable. The source version must belong to this item.",
         "parameters": [
           {
             "name": "If-Match",
@@ -13418,7 +13429,7 @@
           }
         },
         "x-module-scopes": [
-          "list.write",
+          "item.write",
           "document.write"
         ],
         "operationId": "restoreFileVersion"
@@ -13439,11 +13450,11 @@
       "post": {
         "operationId": "createDocument",
         "summary": "Create a document, metadata and content from one multipart upload",
-        "description": "Requires document.write, list.read and list.write and write access to the library and selected folder. One file part is required; one metadata JSON form field is optional. Either order is accepted. File bytes stream under the configured upload limit; metadata is limited to 64 KiB and request framing to an additional 128 KiB. Metadata, first file version, first revision, indexes, publication and events commit together. Invalid metadata, malformed multipart, duplicate blocking and failed writes create no item and clean up stored bytes. Returns 201 with the new item, file, duplicate warnings, Location and numeric ETag. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts only PDF, TIFF, JPEG, PNG and WebP detected from file signatures; filenames and declared MIME types do not determine stored content_type. Unsupported bytes return 415 without item/revision changes. Size limits apply while streaming.",
+        "description": "Requires document.write, item.read and item.write and write access to the library and selected folder. One file part is required; one metadata JSON form field is optional. Either order is accepted. File bytes stream under the configured upload limit; metadata is limited to 64 KiB and request framing to an additional 128 KiB. Metadata, first file version, first revision, indexes, publication and events commit together. Invalid metadata, malformed multipart, duplicate blocking and failed writes create no item and clean up stored bytes. Returns 201 with the new item, file, duplicate warnings, Location and numeric ETag. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts only PDF, TIFF, JPEG, PNG and WebP detected from file signatures; filenames and declared MIME types do not determine stored content_type. Unsupported bytes return 415 without item/revision changes. Size limits apply while streaming.",
         "x-module-scopes": [
           "document.write",
-          "list.read",
-          "list.write"
+          "item.read",
+          "item.write"
         ],
         "requestBody": {
           "required": true,
@@ -13717,7 +13728,7 @@
       ],
       "get": {
         "summary": "Synchronize the caller’s visible collection",
-        "description": "Initial synchronization returns visible items and folders. Follow @odata.nextLink, then persist @odata.deltaLink to retrieve subsequent edits, deletions, moves and access changes. Tokens are bound to caller and collection, durable for 30 days; page continuations expire after five minutes. 410 requires a new initial synchronization. Each synchronization scans the current visible collection and compares stored fingerprints; transient changes that return to the same state between polls are coalesced. Required module scope: list.read.",
+        "description": "Initial synchronization returns visible items and folders. Follow @odata.nextLink, then persist @odata.deltaLink to retrieve subsequent edits, deletions, moves and access changes. Tokens are bound to caller and collection, durable for 30 days; page continuations expire after five minutes. 410 requires a new initial synchronization. Each synchronization scans the current visible collection and compares stored fingerprints; transient changes that return to the same state between polls are coalesced. Required module scope: item.read.",
         "parameters": [
           {
             "name": "$deltatoken",
@@ -13766,7 +13777,7 @@
           }
         },
         "x-module-scopes": [
-          "list.read"
+          "item.read"
         ]
       }
     },
@@ -14176,9 +14187,9 @@
       "get": {
         "operationId": "getHome",
         "summary": "Discover and lazily provision personal Home and default libraries",
-        "description": "Atomically provisions one Home per active user with Documents and Inbox libraries using the Documents template, versioning off and a default view. Requires list.read; no workspace creation or catalog administration scopes. Ordinary deletion of Home and its default libraries is blocked. Home has one fixed owner; the administrator override and descendant ACLs still apply.",
+        "description": "Atomically provisions one Home per active user with Documents and Inbox libraries using the Documents template, versioning off and a default view. Requires item.read; no workspace creation or catalog administration scopes. Ordinary deletion of Home and its default libraries is blocked. Home has one fixed owner; the administrator override and descendant ACLs still apply.",
         "x-module-scopes": [
-          "list.read"
+          "item.read"
         ],
         "responses": {
           "200": {
@@ -14313,11 +14324,11 @@
       "post": {
         "operationId": "uploadPersonalInboxDocument",
         "summary": "Upload a document to personal Inbox",
-        "description": "Uses the existing streamed document upload contract and permission model: document.write, list.read, list.write and destination write access. Uploads use the library root and default content type; folder_id and content_type_id overrides return 422. Permission checks occur before streaming and again at commit. Personal locations are created on first use.",
+        "description": "Uses the existing streamed document upload contract and permission model: document.write, item.read, item.write and destination write access. Uploads use the library root and default content type; folder_id and content_type_id overrides return 422. Permission checks occur before streaming and again at commit. Personal locations are created on first use.",
         "x-module-scopes": [
           "document.write",
-          "list.read",
-          "list.write"
+          "item.read",
+          "item.write"
         ],
         "requestBody": {
           "required": true,
@@ -14391,11 +14402,11 @@
       "post": {
         "operationId": "uploadGroupInboxDocument",
         "summary": "Upload a document to a group Inbox",
-        "description": "Uses the existing streamed document upload contract and permission model: document.write, list.read, list.write and destination write access. Uploads use the library root and default content type; folder_id and content_type_id overrides return 422. Permission checks occur before streaming and again at commit. Effective nested group membership is required; missing binding or nonmembership returns 404. Binding changes during streaming return 409.",
+        "description": "Uses the existing streamed document upload contract and permission model: document.write, item.read, item.write and destination write access. Uploads use the library root and default content type; folder_id and content_type_id overrides return 422. Permission checks occur before streaming and again at commit. Effective nested group membership is required; missing binding or nonmembership returns 404. Binding changes during streaming return 409.",
         "x-module-scopes": [
           "document.write",
-          "list.read",
-          "list.write"
+          "item.read",
+          "item.write"
         ],
         "requestBody": {
           "required": true,
@@ -16006,7 +16017,7 @@
       "post": {
         "operationId": "createListIntegration",
         "summary": "Configure an HTTPS iCalendar integration on a list",
-        "description": "Requires list Manage access and list.read/list.write scopes. Automatically attaches the Event content type without requiring contentType.read, queues a first refresh, and activates the workspace refresh workflow once. Same-list duplicate URLs are rejected; separate lists and sources have independent identities.",
+        "description": "Requires list manage access and the item.read and list.manage scopes; its refreshes keep needing them. Automatically attaches the Event content type without requiring contentType.read, queues a first refresh, and activates the workspace refresh workflow once. Same-list duplicate URLs are rejected; separate lists and sources have independent identities.",
         "requestBody": {
           "required": true,
           "content": {
@@ -16158,7 +16169,7 @@
       "post": {
         "operationId": "refreshListIntegration",
         "summary": "Queue a refresh of this integration only",
-        "description": "Requires list Manage and list.write; paused integrations must be resumed. The durable operation carries only the integration ID.",
+        "description": "Requires list manage access and list.manage; paused integrations must be resumed. The durable operation carries only the integration ID.",
         "responses": {
           "200": {
             "description": "An Idempotency-Key returned the operation this request accepted earlier.",
@@ -16491,7 +16502,7 @@
         "summary": "Search items and folders across readable workspaces",
         "description": "Keyword search over the search index, trimmed to what the caller reads now and on the surface they read; every hit is rechecked against current permissions. File text participates in matching and snippets only with document.read; otherwise metadata is searched. Facets are omitted if any matching source fails current authorization. Indexing is asynchronous (the search.index workflow). See docs/search.md. Served when the deployment runs search (SEARCH_STORE is not none).",
         "x-required-scopes": [
-          "list.read"
+          "item.read"
         ],
         "parameters": [
           {
@@ -16731,7 +16742,7 @@
         "summary": "Search items and folders with field filters",
         "description": "Keyword search over the search index, trimmed to what the caller reads now and on the surface they read; every hit is rechecked against current permissions. File text participates in matching and snippets only with document.read; otherwise metadata is searched. Facets are omitted if any matching source fails current authorization. Indexing is asynchronous (the search.index workflow). See docs/search.md. The JSON body takes the GET parameters (kind as an array) and a filter on search fields; $top and $skiptoken stay in the URL, and a next page repeats the body. Served when the deployment runs search (SEARCH_STORE is not none).",
         "x-required-scopes": [
-          "list.read"
+          "item.read"
         ],
         "parameters": [
           {
@@ -16967,7 +16978,7 @@
         "summary": "Fields search can filter on",
         "description": "The fields of the lists and libraries the caller may read, one per key, type and scale. Notes are text, not filters.",
         "x-required-scopes": [
-          "list.read"
+          "item.read"
         ],
         "parameters": [
           {
@@ -17026,7 +17037,7 @@
         ],
         "operationId": "itemText",
         "summary": "Text read from an item's file",
-        "description": "The page texts a workflow with document.read_text read from the file version the caller may read: the current one, or blob_id. 404 text_not_read before it was read.",
+        "description": "The page texts a workflow with document.read_text read from the file version the caller may read: the current one, or blob_id. 404 text_not_read before it was read. page, offset and max_chars read part of the text: pages from page, starting offset characters (Unicode code points) into it, up to max_chars characters; next is where the following part starts, and null after the end; continue with next and the text_id of the first part. 412 text_changed when the text has changed since, as when the item got another file: read it again from page 1. Without them the whole text is returned.",
         "x-required-scopes": [
           "document.read"
         ],
@@ -17046,6 +17057,48 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "description": "The first page to return."
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            },
+            "description": "Characters to skip into the first page."
+          },
+          {
+            "name": "max_chars",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            },
+            "description": "At most this many characters; 0 returns everything from the start position."
+          },
+          {
+            "name": "text_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The text_id a ranged read began with. The read fails with 412 text_changed when the text is another one now."
           }
         ],
         "responses": {
@@ -17073,6 +17126,9 @@
             "$ref": "#/components/responses/Problem"
           },
           "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
             "$ref": "#/components/responses/Problem"
           }
         }
@@ -17204,7 +17260,7 @@
     "/v1/search/content-types": {
       "get": {
         "summary": "List content types attached to readable collections",
-        "description": "Requires list.read. Optional workspace and collection scopes narrow the catalog; organization catalog permissions are not required.",
+        "description": "Requires item.read. Optional workspace and collection scopes narrow the catalog; organization catalog permissions are not required.",
         "parameters": [
           {
             "name": "workspace_id",
@@ -17352,9 +17408,9 @@
       "post": {
         "operationId": "previewSmartFolder",
         "summary": "Preview unsaved smart-folder rules",
-        "description": "Read-only evaluation of the caller’s readable collections and visible item revisions. Returns up to five items and a count capped at 10,000; no continuation. No definition, item, version or audit event is saved. Requires list.read.",
+        "description": "Read-only evaluation of the caller’s readable collections and visible item revisions. Returns up to five items and a count capped at 10,000; no continuation. No definition, item, version or audit event is saved. Requires item.read.",
         "x-module-scopes": [
-          "list.read"
+          "item.read"
         ],
         "requestBody": {
           "required": true,
@@ -17487,9 +17543,9 @@
       "get": {
         "operationId": "getItemPreview",
         "summary": "Read a lightweight rendition of the authorized visible file",
-        "description": "Requires list.read and document.read, plus resource ACL access. Resolves the visible published/head revision before selecting a rendition. Identical source bytes share a preview; original bytes are never returned. The default file.preview workflow generates previews asynchronously.",
+        "description": "Requires item.read and document.read, plus resource ACL access. Resolves the visible published/head revision before selecting a rendition. Identical source bytes share a preview; original bytes are never returned. The default file.preview workflow generates previews asynchronously.",
         "x-module-scopes": [
-          "list.read",
+          "item.read",
           "document.read"
         ],
         "parameters": [
@@ -17980,7 +18036,7 @@
           }
         },
         "x-module-scopes": [
-          "list.read"
+          "item.read"
         ]
       }
     },
@@ -18112,7 +18168,7 @@
           }
         },
         "x-module-scopes": [
-          "list.read"
+          "item.read"
         ]
       }
     },
@@ -18244,7 +18300,7 @@
           }
         },
         "x-module-scopes": [
-          "list.read"
+          "item.read"
         ]
       }
     },
@@ -18364,7 +18420,7 @@
           }
         },
         "x-module-scopes": [
-          "list.read",
+          "item.read",
           "taxonomy.read"
         ]
       }
@@ -18487,7 +18543,7 @@
           }
         },
         "x-module-scopes": [
-          "list.read"
+          "item.read"
         ]
       }
     },
@@ -18605,7 +18661,7 @@
           }
         },
         "x-module-scopes": [
-          "list.read"
+          "item.read"
         ]
       }
     },
@@ -19118,7 +19174,7 @@
         "summary": "Queue search entries to be brought up to date",
         "description": "Queues a search.sync operation that rewrites the search documents of resources of the workspace from their current state, and removes those of resources that are gone. The search worker runs queued syncs together, up to 200 at a time, outside any database transaction; syncing again is harmless. Its result counts what the batch wrote and removed (SearchSyncResult). Requires write access to the workspace; a resource of another workspace is refused. Served when the deployment runs search.",
         "x-required-scopes": [
-          "list.read"
+          "item.read"
         ],
         "parameters": [
           {
@@ -20161,7 +20217,7 @@
           "Archive"
         ],
         "summary": "Browse readable archived documents and list items across all workspaces",
-        "description": "Database-backed name search and filters; newest archived first with keyset pagination. Works without a search service. Requires list.read. Archive date bounds are inclusive.",
+        "description": "Database-backed name search and filters; newest archived first with keyset pagination. Works without a search service. Requires item.read. Archive date bounds are inclusive.",
         "parameters": [
           {
             "name": "q",
@@ -20285,7 +20341,7 @@
           "Archive"
         ],
         "summary": "Archive a document or list item",
-        "description": "Requires item write access and list.write scope. Applies immediately to head and published content. Changes the lock version without a content revision. Repeating with the current version is a no-op.",
+        "description": "Requires item write access and item.write scope. Applies immediately to head and published content. Changes the lock version without a content revision. Repeating with the current version is a no-op.",
         "parameters": [
           {
             "name": "id",
@@ -20336,7 +20392,7 @@
           "Archive"
         ],
         "summary": "Unarchive a document or list item",
-        "description": "Requires item write access and list.write scope. Applies immediately to head and published content. Changes the lock version without a content revision. Repeating with the current version is a no-op.",
+        "description": "Requires item write access and item.write scope. Applies immediately to head and published content. Changes the lock version without a content revision. Repeating with the current version is a no-op.",
         "parameters": [
           {
             "name": "id",
@@ -20391,7 +20447,7 @@
       "proxyBasicAuth": {
         "type": "http",
         "scheme": "basic",
-        "description": "In AUTH_MODE=proxy, authenticate at the trusted reverse proxy over HTTPS. PaperGo validates the proxy assertion and applies persisted permissions. Personal-token and WebDAV credential endpoints are unavailable in this mode. Integration access tokens authenticate directly when the API ingress forwards Authorization: Bearer pgo_…."
+        "description": "In AUTH_MODE=proxy, authenticate at the trusted reverse proxy over HTTPS. PaperGo validates the proxy assertion and applies persisted permissions. WebDAV credential endpoints are unavailable in this mode. Personal and integration access tokens authenticate directly when an ingress forwards Authorization: Bearer pgo_… without proxy sign-in, as the MCP endpoint's route does."
       },
       "localBasicAuth": {
         "type": "http",
@@ -20452,6 +20508,16 @@
             "items": {
               "type": "string"
             }
+          },
+          "resources": {
+            "type": "array",
+            "maxItems": 50,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Workspaces, lists and libraries the token is limited to: their content, and a listed collection's workspace for reading. Empty when the token reaches everything its holder can."
           },
           "created_at": {
             "type": "string",
@@ -20555,6 +20621,14 @@
                 "items": {
                   "type": "string"
                 }
+              },
+              "resources": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "description": "The workspaces, lists and libraries the request's access token is limited to; absent when it reaches everything."
               }
             },
             "required": [
@@ -21642,6 +21716,24 @@
           "details": {
             "type": "object",
             "additionalProperties": true
+          },
+          "credential": {
+            "type": "object",
+            "required": [
+              "id"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string",
+                "description": "The token's name, such as an AI assistant connection's; absent once the token is gone."
+              }
+            },
+            "description": "The access token the action was taken with, beside the person in subject; absent for actions taken after signing in."
           }
         }
       },
@@ -22152,6 +22244,11 @@
             "type": "string",
             "maxLength": 64,
             "description": "Keyword term ID or label. Matches intrinsic keywords and keywords fields on the selected visible surface."
+          },
+          "ancestor_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Keeps what is anywhere below a folder: in it or its subfolders; the collection itself means everything. Cannot be combined with parent_id."
           },
           "archive": {
             "$ref": "#/components/schemas/ArchiveSelection"
@@ -26613,7 +26710,7 @@
                     "manage"
                   ]
                 },
-                "description": "Allowed actions, in the order read, read_draft, write, publish, manage. Workspace ACLs and the caller's module scopes both apply: write and publish below a workspace also need list.write. On a workspace, manage means owner; on a list or library, write means adding and editing content and manage means changing settings, fields, views and permissions."
+                "description": "Allowed actions, in the order read, read_draft, write, publish, manage. Workspace ACLs and the caller's module scopes both apply: write and publish below a workspace also need item.write, and manage needs list.manage. On a workspace, manage means owner; on a list or library, write means adding and editing content and manage means changing settings, fields, views and permissions."
               }
             }
           }
@@ -28111,6 +28208,10 @@
                 },
                 "ocr": {
                   "type": "boolean"
+                },
+                "partial": {
+                  "type": "boolean",
+                  "description": "A ranged read returned only part of the page."
                 }
               },
               "required": [
@@ -28142,6 +28243,26 @@
           "read_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "next": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "page": {
+                "type": "integer"
+              },
+              "offset": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "page",
+              "offset"
+            ],
+            "additionalProperties": false,
+            "description": "Where the next part of a ranged read starts; null after the end."
           }
         },
         "required": [
@@ -28155,7 +28276,8 @@
           "ocr_pages",
           "skipped_pages",
           "truncated",
-          "read_at"
+          "read_at",
+          "next"
         ],
         "additionalProperties": false
       },
@@ -28211,6 +28333,17 @@
             "items": {
               "type": "string"
             }
+          },
+          "resources": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 50,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Limits the token to these workspaces, lists and libraries, each one the caller can read. A limited token holds only workspace.read, item.read, item.write, document.read, document.write, contentType.read, taxonomy.read, user.read and group.read, and cannot issue tokens. Omitted, the token reaches everything its holder can."
           },
           "expires_in_days": {
             "type": "integer",

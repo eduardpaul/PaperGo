@@ -249,6 +249,10 @@ export interface AuditEvent extends AdditionalDataHolder, Parsable {
      */
     createdAt?: Date | null;
     /**
+     * The access token the action was taken with, beside the person in subject; absent for actions taken after signing in.
+     */
+    credential?: AuditEvent_credential | null;
+    /**
      * The details property
      */
     details?: AuditEvent_details | null;
@@ -284,6 +288,19 @@ export interface AuditEvent extends AdditionalDataHolder, Parsable {
      * The workspace_id property
      */
     workspaceId?: string | null;
+}
+/**
+ * The access token the action was taken with, beside the person in subject; absent for actions taken after signing in.
+ */
+export interface AuditEvent_credential extends Parsable {
+    /**
+     * The id property
+     */
+    id?: Guid | null;
+    /**
+     * The token's name, such as an AI assistant connection's; absent once the token is gone.
+     */
+    name?: string | null;
 }
 export interface AuditEvent_details extends AdditionalDataHolder, Parsable {
 }
@@ -859,6 +876,15 @@ export function createArtifactFromDiscriminatorValue(parseNode: ParseNode | unde
 // @ts-ignore
 export function createAttachContentTypeInputFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoAttachContentTypeInput;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {AuditEvent_credential}
+ */
+// @ts-ignore
+export function createAuditEvent_credentialFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoAuditEvent_credential;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -1509,6 +1535,15 @@ export function createItemRevision_payloadFromDiscriminatorValue(parseNode: Pars
 // @ts-ignore
 export function createItemRevisionFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoItemRevision;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {ItemText_next}
+ */
+// @ts-ignore
+export function createItemText_nextFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoItemText_next;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -3258,6 +3293,7 @@ export function deserializeIntoAuditEvent(auditEvent: Partial<AuditEvent> | unde
     return {
         "action": n => { auditEvent.action = n.getStringValue(); },
         "created_at": n => { auditEvent.createdAt = n.getDateValue(); },
+        "credential": n => { auditEvent.credential = n.getObjectValue<AuditEvent_credential>(createAuditEvent_credentialFromDiscriminatorValue); },
         "details": n => { auditEvent.details = n.getObjectValue<AuditEvent_details>(createAuditEvent_detailsFromDiscriminatorValue); },
         "entity_id": n => { auditEvent.entityId = n.getStringValue(); },
         "entity_type": n => { auditEvent.entityType = n.getStringValue(); },
@@ -3267,6 +3303,18 @@ export function deserializeIntoAuditEvent(auditEvent: Partial<AuditEvent> | unde
         "subject": n => { auditEvent.subject = n.getStringValue(); },
         "trace_id": n => { auditEvent.traceId = n.getStringValue(); },
         "workspace_id": n => { auditEvent.workspaceId = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param AuditEvent_credential The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoAuditEvent_credential(auditEvent_credential: Partial<AuditEvent_credential> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "id": n => { auditEvent_credential.id = n.getGuidValue(); },
+        "name": n => { auditEvent_credential.name = n.getStringValue(); },
     }
 }
 /**
@@ -4185,6 +4233,7 @@ export function deserializeIntoItemText(itemText: Partial<ItemText> | undefined 
         "chars": n => { itemText.chars = n.getNumberValue(); },
         "item_id": n => { itemText.itemId = n.getStringValue(); },
         "language": n => { itemText.language = n.getStringValue(); },
+        "next": n => { itemText.next = n.getObjectValue<ItemText_next>(createItemText_nextFromDiscriminatorValue); },
         "ocr_pages": n => { itemText.ocrPages = n.getNumberValue(); },
         "page_count": n => { itemText.pageCount = n.getNumberValue(); },
         "pages": n => { itemText.pages = n.getCollectionOfObjectValues<ItemText_pages>(createItemText_pagesFromDiscriminatorValue); },
@@ -4192,6 +4241,18 @@ export function deserializeIntoItemText(itemText: Partial<ItemText> | undefined 
         "skipped_pages": n => { itemText.skippedPages = n.getNumberValue(); },
         "text_id": n => { itemText.textId = n.getStringValue(); },
         "truncated": n => { itemText.truncated = n.getBooleanValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param ItemText_next The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoItemText_next(itemText_next: Partial<ItemText_next> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "offset": n => { itemText_next.offset = n.getNumberValue(); },
+        "page": n => { itemText_next.page = n.getNumberValue(); },
     }
 }
 /**
@@ -4204,6 +4265,7 @@ export function deserializeIntoItemText_pages(itemText_pages: Partial<ItemText_p
     return {
         "ocr": n => { itemText_pages.ocr = n.getBooleanValue(); },
         "page": n => { itemText_pages.page = n.getNumberValue(); },
+        "partial": n => { itemText_pages.partial = n.getBooleanValue(); },
         "text": n => { itemText_pages.text = n.getStringValue(); },
     }
 }
@@ -4788,6 +4850,7 @@ export function deserializeIntoQueryResult(queryResult: Partial<QueryResult> | u
 // @ts-ignore
 export function deserializeIntoQuerySpec(querySpec: Partial<QuerySpec> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
+        "ancestor_id": n => { querySpec.ancestorId = n.getGuidValue(); },
         "archive": n => { querySpec.archive = n.getEnumValue<ArchiveSelection>(ArchiveSelectionObject) ?? ArchiveSelectionObject.Active; },
         "content_type_id": n => { querySpec.contentTypeId = n.getGuidValue(); },
         "filter": n => { querySpec.filter = n.getObjectValue<FilterExpr>(createFilterExprFromDiscriminatorValue); },
@@ -6867,6 +6930,10 @@ export interface ItemText extends Parsable {
      */
     language?: string | null;
     /**
+     * Where the next part of a ranged read starts; null after the end.
+     */
+    next?: ItemText_next | null;
+    /**
      * The ocr_pages property
      */
     ocrPages?: number | null;
@@ -6895,6 +6962,19 @@ export interface ItemText extends Parsable {
      */
     truncated?: boolean | null;
 }
+/**
+ * Where the next part of a ranged read starts; null after the end.
+ */
+export interface ItemText_next extends Parsable {
+    /**
+     * The offset property
+     */
+    offset?: number | null;
+    /**
+     * The page property
+     */
+    page?: number | null;
+}
 export interface ItemText_pages extends Parsable {
     /**
      * The ocr property
@@ -6904,6 +6984,10 @@ export interface ItemText_pages extends Parsable {
      * The page property
      */
     page?: number | null;
+    /**
+     * A ranged read returned only part of the page.
+     */
+    partial?: boolean | null;
     /**
      * The text property
      */
@@ -7761,6 +7845,10 @@ export interface QueryResult extends Parsable {
  */
 export interface QuerySpec extends Parsable {
     /**
+     * Keeps what is anywhere below a folder: in it or its subfolders; the collection itself means everything. Cannot be combined with parent_id.
+     */
+    ancestorId?: Guid | null;
+    /**
      * Discovery state. Omitted selects active items; archive status is independent of publication and deletion.
      */
     archive?: ArchiveSelection | null;
@@ -8175,7 +8263,7 @@ export type Resource_versioning = (typeof Resource_versioningObject)[keyof typeo
  */
 export interface ResourceAccess extends Parsable, Resource {
     /**
-     * Allowed actions, in the order read, read_draft, write, publish, manage. Workspace ACLs and the caller's module scopes both apply: write and publish below a workspace also need list.write. On a workspace, manage means owner; on a list or library, write means adding and editing content and manage means changing settings, fields, views and permissions.
+     * Allowed actions, in the order read, read_draft, write, publish, manage. Workspace ACLs and the caller's module scopes both apply: write and publish below a workspace also need item.write, and manage needs list.manage. On a workspace, manage means owner; on a list or library, write means adding and editing content and manage means changing settings, fields, views and permissions.
      */
     access?: ResourceAccess_access[] | null;
 }
@@ -8731,6 +8819,7 @@ export function serializeAuditEvent(writer: SerializationWriter, auditEvent: Par
     if (!auditEvent || isSerializingDerivedType) { return; }
     writer.writeStringValue("action", auditEvent.action);
     writer.writeDateValue("created_at", auditEvent.createdAt);
+    writer.writeObjectValue<AuditEvent_credential>("credential", auditEvent.credential, serializeAuditEvent_credential);
     writer.writeObjectValue<AuditEvent_details>("details", auditEvent.details, serializeAuditEvent_details);
     writer.writeStringValue("entity_id", auditEvent.entityId);
     writer.writeStringValue("entity_type", auditEvent.entityType);
@@ -8741,6 +8830,18 @@ export function serializeAuditEvent(writer: SerializationWriter, auditEvent: Par
     writer.writeStringValue("trace_id", auditEvent.traceId);
     writer.writeStringValue("workspace_id", auditEvent.workspaceId);
     writer.writeAdditionalData(auditEvent.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param AuditEvent_credential The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeAuditEvent_credential(writer: SerializationWriter, auditEvent_credential: Partial<AuditEvent_credential> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!auditEvent_credential || isSerializingDerivedType) { return; }
+    writer.writeGuidValue("id", auditEvent_credential.id);
+    writer.writeStringValue("name", auditEvent_credential.name);
 }
 /**
  * Serializes information the current object
@@ -9679,6 +9780,7 @@ export function serializeItemText(writer: SerializationWriter, itemText: Partial
     writer.writeNumberValue("chars", itemText.chars);
     writer.writeStringValue("item_id", itemText.itemId);
     writer.writeStringValue("language", itemText.language);
+    writer.writeObjectValue<ItemText_next>("next", itemText.next, serializeItemText_next);
     writer.writeNumberValue("ocr_pages", itemText.ocrPages);
     writer.writeNumberValue("page_count", itemText.pageCount);
     writer.writeCollectionOfObjectValues<ItemText_pages>("pages", itemText.pages, serializeItemText_pages);
@@ -9686,6 +9788,18 @@ export function serializeItemText(writer: SerializationWriter, itemText: Partial
     writer.writeNumberValue("skipped_pages", itemText.skippedPages);
     writer.writeStringValue("text_id", itemText.textId);
     writer.writeBooleanValue("truncated", itemText.truncated);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param ItemText_next The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeItemText_next(writer: SerializationWriter, itemText_next: Partial<ItemText_next> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!itemText_next || isSerializingDerivedType) { return; }
+    writer.writeNumberValue("offset", itemText_next.offset);
+    writer.writeNumberValue("page", itemText_next.page);
 }
 /**
  * Serializes information the current object
@@ -9698,6 +9812,7 @@ export function serializeItemText_pages(writer: SerializationWriter, itemText_pa
     if (!itemText_pages || isSerializingDerivedType) { return; }
     writer.writeBooleanValue("ocr", itemText_pages.ocr);
     writer.writeNumberValue("page", itemText_pages.page);
+    writer.writeBooleanValue("partial", itemText_pages.partial);
     writer.writeStringValue("text", itemText_pages.text);
 }
 /**
@@ -10284,6 +10399,7 @@ export function serializeQueryResult(writer: SerializationWriter, queryResult: P
 // @ts-ignore
 export function serializeQuerySpec(writer: SerializationWriter, querySpec: Partial<QuerySpec> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!querySpec || isSerializingDerivedType) { return; }
+    writer.writeGuidValue("ancestor_id", querySpec.ancestorId);
     writer.writeEnumValue<ArchiveSelection>("archive", querySpec.archive);
     writer.writeGuidValue("content_type_id", querySpec.contentTypeId);
     writer.writeObjectValue<FilterExpr>("filter", querySpec.filter, serializeFilterExpr);

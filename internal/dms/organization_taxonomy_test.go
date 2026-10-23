@@ -227,7 +227,7 @@ func TestItemKeywordContributionsRequireTaxonomyRead(t *testing.T) {
 	if _, err := s.CreateField(ctx, "alice", list.ID, CreateField{Key: "keywords", Label: "Keywords", Type: "keywords", Indexed: true, Options: model.FieldOptions{Multiple: true}}); err != nil {
 		t.Fatal(err)
 	}
-	taxonomyOnlyRole(t, s, "bob", "workspace.read", "list.read", "list.write")
+	taxonomyOnlyRole(t, s, "bob", "workspace.read", "item.read", "item.write")
 	if err := s.SetWorkspaceMember(ctx, "alice", w.ID, WorkspaceMember{Subject: "bob", Role: "member"}); err != nil {
 		t.Fatal(err)
 	}

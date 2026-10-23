@@ -12,7 +12,7 @@ it('builds typed rules from labels, previews matches and saves workspace scope a
     const body = init.body ? JSON.parse(String(init.body)) : {};
     requests.push({ path, method: init.method ?? 'GET', body });
     let result: unknown = { value: [] };
-    if (path === '/v1/identity/me') result = { subject: 'alice', scopes: ['list.read', 'list.write'] };
+    if (path === '/v1/identity/me') result = { subject: 'alice', scopes: ['item.read', 'item.write'] };
     if (path === '/v1/workspaces') result = { value: [{ id: 'w', name: 'Finance', kind: 'workspace' }] };
     if (path === '/v1/resources/w') result = { id: 'w', access: ['read', 'manage'] };
     if (path === '/v1/search/fields') result = { value: [{ key: 'status_key', label: 'Approval status', type: 'choice', choices: ['Open', 'Closed'], queryable: true }, { key: 'private_key', label: 'Unindexed field', type: 'text', queryable: false }] };
@@ -58,7 +58,7 @@ it('adds a new keyword to the term store before previewing and saving its rule',
     const path = new URL(String(input)).pathname;
     const body = init.body ? JSON.parse(String(init.body)) : {};
     let result: unknown = { value: [] };
-    if (path === '/v1/identity/me') result = { subject: 'alice', scopes: ['list.read', 'list.write', 'taxonomy.read'] };
+    if (path === '/v1/identity/me') result = { subject: 'alice', scopes: ['item.read', 'item.write', 'taxonomy.read'] };
     if (path === '/v1/search/content-types' || path === '/v1/collection-templates') result = [];
     if (path === '/v1/keywords' && init.method === 'POST') result = { id: 'finance-id', name: 'Finance' };
     if (path === '/v1/smart-folders/preview') { previews.push(body.definition); result = { value: [], total: 0 }; }

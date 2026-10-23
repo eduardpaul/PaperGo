@@ -7,6 +7,11 @@ server:
   data_dir: ./data
   public_url: http://localhost:8080
 
+# Where AI assistants reach the optional MCP server, papergo-mcp; the web
+# app offers assistant connections only when it is set:
+# mcp:
+#   public_url: http://localhost:8090/v1/mcp
+
 # PostgreSQL instead of the SQLite file in data_dir:
 # database:
 #   url: postgres://papergo:secret@localhost:5432/papergo

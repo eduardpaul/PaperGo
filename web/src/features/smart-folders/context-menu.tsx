@@ -15,7 +15,7 @@ export function SmartFolderContextMenu({ folder, children, onNavigate }: { folde
   const current = fresh.data ?? folder;
   const me = useQuery({ ...meQuery, enabled: open });
   const workspace = useQuery({ ...resourceQuery(current.workspace_id ?? ''), enabled: open && !!current.workspace_id && !current.owner_id });
-  const manageable = me.data?.scopes?.includes('list.write') && (current.owner_id ? current.owner_id === me.data.subject : can(workspace.data, 'manage'));
+  const manageable = me.data?.scopes?.includes('item.write') && (current.owner_id ? current.owner_id === me.data.subject : can(workspace.data, 'manage'));
   const navigate = useNavigate();
   const client = useQueryClient();
   const remove = useMutation({

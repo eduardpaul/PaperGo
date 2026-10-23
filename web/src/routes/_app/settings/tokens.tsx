@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createFileRoute, redirect } from '@tanstack/react-router';
-import { authenticationMode } from '@/api/auth';
+import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { api } from '@/api/http';
 import { scopeCatalog, scopes, tokens } from '@/api/queries';
@@ -11,9 +10,6 @@ import { CopyField, SettingRow, SettingsSection } from '@/features/settings/sect
 import { useFormat } from '@/lib/preferences';
 
 export const Route = createFileRoute('/_app/settings/tokens')({
-  beforeLoad: () => {
-    if (authenticationMode() === 'proxy') throw redirect({ to: '/settings' });
-  },
   component: TokensPage,
 });
 

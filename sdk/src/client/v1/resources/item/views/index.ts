@@ -11,7 +11,7 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface ViewsRequestBuilder extends BaseRequestBuilder<ViewsRequestBuilder> {
     /**
-     *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+     *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<ListViewPage>}
      * @throws {Problem} error when the service returns a 400 status code
@@ -26,7 +26,7 @@ export interface ViewsRequestBuilder extends BaseRequestBuilder<ViewsRequestBuil
      */
      get(requestConfiguration?: RequestConfiguration<ViewsRequestBuilderGetQueryParameters> | undefined) : Promise<ListViewPage | undefined>;
     /**
-     *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+     *  Requires collection manage access. Required module scopes: list.manage. Resource ACLs and any additional use-case checks also apply.
      * @param body Collection-managed saved view. Columns use field keys and $id/$name/$keywords; empty columns default to $name. PUT replaces the definition. Layout is a client hint; a navigation view browses the terms of each of settings.fields as folders (POST /v1/views/{id}/navigation) and lists the items at the opened terms through POST /v1/views/{id}/query with selected.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<ListView>}
@@ -42,13 +42,13 @@ export interface ViewsRequestBuilder extends BaseRequestBuilder<ViewsRequestBuil
      */
      post(body: ViewInput, requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<ListView | undefined>;
     /**
-     *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+     *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */
      toGetRequestInformation(requestConfiguration?: RequestConfiguration<ViewsRequestBuilderGetQueryParameters> | undefined) : RequestInformation;
     /**
-     *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+     *  Requires collection manage access. Required module scopes: list.manage. Resource ACLs and any additional use-case checks also apply.
      * @param body Collection-managed saved view. Columns use field keys and $id/$name/$keywords; empty columns default to $name. PUT replaces the definition. Layout is a client hint; a navigation view browses the terms of each of settings.fields as folders (POST /v1/views/{id}/navigation) and lists the items at the opened terms through POST /v1/views/{id}/query with selected.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
@@ -56,7 +56,7 @@ export interface ViewsRequestBuilder extends BaseRequestBuilder<ViewsRequestBuil
      toPostRequestInformation(body: ViewInput, requestConfiguration?: RequestConfiguration<object> | undefined) : RequestInformation;
 }
 /**
- *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+ *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
  */
 export interface ViewsRequestBuilderGetQueryParameters {
     /**

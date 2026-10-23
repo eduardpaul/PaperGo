@@ -25,8 +25,12 @@ Direct Go modules and the licences they ship under. Add a row when a change adds
 | `modernc.org/sqlite` | SQLite driver | BSD-3-Clause |
 | `github.com/dop251/goja` | JavaScript runtime for workflow scripts (`internal/script` only) | MIT |
 | `github.com/evanw/esbuild` | bundling workflow scripts (`internal/script` only) | MIT |
+| `github.com/modelcontextprotocol/go-sdk` | the [MCP server](mcp.md)'s protocol and Streamable HTTP transport (`extensions/mcp` only) | Apache-2.0, older contributions MIT |
+| `github.com/google/jsonschema-go` | validating MCP tool arguments against their schemas (`extensions/mcp` only) | MIT |
 
 goja also links `github.com/dlclark/regexp2` (MIT), `github.com/go-sourcemap/sourcemap` (BSD-2-Clause) and `github.com/google/pprof` (Apache-2.0).
+
+The MCP SDK also links `github.com/segmentio/encoding` and `github.com/segmentio/asm` (MIT), `github.com/yosida95/uritemplate/v3` (BSD-3-Clause) and `golang.org/x/time` (BSD-3-Clause).
 
 The embedded workflow SDK (`sdk/dist/sdk.js`) bundles the npm packages `@microsoft/kiota-abstractions` and the Kiota JSON, text, form and multipart serializers (MIT), `@opentelemetry/api` and `@std-uritemplate/std-uritemplate` (Apache-2.0), and `tinyduration` (MIT). The client is generated with Kiota 1.35.0 (MIT), a development tool.
 

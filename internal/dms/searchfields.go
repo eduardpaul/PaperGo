@@ -77,7 +77,7 @@ func (s *Service) searchFieldDefinitions(ctx context.Context, subject, workspace
 // the lists and libraries they may read, optionally narrowed to a workspace
 // or a collection.
 func (s *Service) SearchFields(ctx context.Context, subject, workspaceID, collectionID string) ([]SearchField, error) {
-	if err := s.RequireScope(ctx, subject, "list.read"); err != nil {
+	if err := s.RequireScope(ctx, subject, "item.read"); err != nil {
 		return nil, err
 	}
 	return read(ctx, s, func(t *Service) ([]SearchField, error) {
@@ -110,7 +110,7 @@ type SearchContentType struct {
 }
 
 func (s *Service) SearchContentTypes(ctx context.Context, subject, workspaceID, collectionID string) ([]SearchContentType, error) {
-	if err := s.RequireScope(ctx, subject, "list.read"); err != nil {
+	if err := s.RequireScope(ctx, subject, "item.read"); err != nil {
 		return nil, err
 	}
 	return read(ctx, s, func(t *Service) ([]SearchContentType, error) {

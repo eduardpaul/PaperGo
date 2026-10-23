@@ -11,14 +11,14 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface PermissionsRequestBuilder extends BaseRequestBuilder<PermissionsRequestBuilder> {
     /**
-     *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+     *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<Permissions>}
      * @throws {Problem} error when the service returns a 4XX or 5XX status code
      */
      get(requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<Permissions | undefined>;
     /**
-     * Break, copy or reset inheritance using typed user, group and workspace role principals. Copied group grants retain group IDs and resolve current nested memberships. Copying workspace inheritance retains dynamic visitor/member/owner role principals. Workspace owners and workspace.manage holders retain control. A permission change that removes the caller's manage access rolls back. list.read and resource manage access are required. Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply. ACL changes deliver permissions.changed (action=replace) to the resource and every item and folder that inherits from it, with previous_scope_id and current_scope_id; the root event, with previous/current permission snapshots (inherit, grants, scope_id, effective_grants), commits with the write and audit, and the dispatcher delivers it in batches. Unchanged ACLs raise no event.
+     * Break, copy or reset inheritance using typed user, group and workspace role principals. Copied group grants retain group IDs and resolve current nested memberships. Copying workspace inheritance retains dynamic visitor/member/owner role principals. Workspace owners and workspace.manage holders retain control. A permission change that removes the caller's manage access rolls back. list.manage and resource manage access are required. Required module scopes: list.manage. Resource ACLs and any additional use-case checks also apply. ACL changes deliver permissions.changed (action=replace) to the resource and every item and folder that inherits from it, with previous_scope_id and current_scope_id; the root event, with previous/current permission snapshots (inherit, grants, scope_id, effective_grants), commits with the write and audit, and the dispatcher delivers it in batches. Unchanged ACLs raise no event.
      * @param body SharePoint-style exclusive scopes. An inherited resource has no local grants. Grants at the nearest exclusive ancestor apply; ancestors beyond it do not. Grants within a scope are additive. Reset with inherit=true and no grants. Denies are rejected.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<Resource>}
@@ -27,13 +27,13 @@ export interface PermissionsRequestBuilder extends BaseRequestBuilder<Permission
      */
      put(body: Permissions, requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<Resource | undefined>;
     /**
-     *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+     *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */
      toGetRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined) : RequestInformation;
     /**
-     * Break, copy or reset inheritance using typed user, group and workspace role principals. Copied group grants retain group IDs and resolve current nested memberships. Copying workspace inheritance retains dynamic visitor/member/owner role principals. Workspace owners and workspace.manage holders retain control. A permission change that removes the caller's manage access rolls back. list.read and resource manage access are required. Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply. ACL changes deliver permissions.changed (action=replace) to the resource and every item and folder that inherits from it, with previous_scope_id and current_scope_id; the root event, with previous/current permission snapshots (inherit, grants, scope_id, effective_grants), commits with the write and audit, and the dispatcher delivers it in batches. Unchanged ACLs raise no event.
+     * Break, copy or reset inheritance using typed user, group and workspace role principals. Copied group grants retain group IDs and resolve current nested memberships. Copying workspace inheritance retains dynamic visitor/member/owner role principals. Workspace owners and workspace.manage holders retain control. A permission change that removes the caller's manage access rolls back. list.manage and resource manage access are required. Required module scopes: list.manage. Resource ACLs and any additional use-case checks also apply. ACL changes deliver permissions.changed (action=replace) to the resource and every item and folder that inherits from it, with previous_scope_id and current_scope_id; the root event, with previous/current permission snapshots (inherit, grants, scope_id, effective_grants), commits with the write and audit, and the dispatcher delivers it in batches. Unchanged ACLs raise no event.
      * @param body SharePoint-style exclusive scopes. An inherited resource has no local grants. Grants at the nearest exclusive ancestor apply; ancestors beyond it do not. Grants within a scope are additive. Reset with inherit=true and no grants. Denies are rejected.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}

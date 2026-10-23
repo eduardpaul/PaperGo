@@ -27,7 +27,7 @@ type RelationshipNeighborhood struct {
 
 func (s *Service) workspaceRelationshipQuery(ctx context.Context, subject, workspaceID string, in WorkspaceRelationshipsQuery) (content.RelationshipExploreQuery, bool, error) {
 	out := content.RelationshipExploreQuery{WorkspaceID: workspaceID, ItemID: in.ItemID, CollectionID: in.CollectionID, Scope: in.Scope, Direction: in.Direction, Search: in.Search, After: in.After, Untyped: in.Untyped, Directed: in.Directed, Limit: pageSize(in.Limit) + 1, Reader: principal(ctx, subject)}
-	if err := s.RequireScope(ctx, subject, "list.read"); err != nil {
+	if err := s.RequireScope(ctx, subject, "item.read"); err != nil {
 		return out, false, err
 	}
 	workspace, err := s.authorize(ctx, subject, workspaceID, "read")

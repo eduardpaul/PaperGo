@@ -205,6 +205,10 @@ replacements:
     match:
       name: "scopes"
     replace: "types.JSON[[]string]"
+  - tables: ["access_tokens"]
+    match:
+      name: "resources"
+    replace: "types.JSON[[]string]"
   - tables: ["identity_preferences"]
     match:
       name: "values"

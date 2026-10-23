@@ -37,6 +37,9 @@ type MeProfile struct {
 	UserProfile
 	Groups []string `json:"groups"`
 	Scopes []string `json:"scopes"`
+	// Resources are the workspaces, lists and libraries the request's access
+	// token is limited to; absent when it reaches everything.
+	Resources []string `json:"resources,omitempty"`
 }
 
 var ErrCannotDeleteSelf = errors.New("you cannot delete your own account")
@@ -105,6 +108,9 @@ func (d Directory) Me(ctx context.Context, subject string) (MeProfile, error) {
 		out.Scopes, err = EffectiveScopes(ctx, d.store(tx), subject)
 		if err != nil {
 			return err
+		}
+		if token, ok := AccessTokenContext(ctx); ok && len(token.Resources) > 0 {
+			out.Resources = token.Resources
 		}
 		memberships, err := d.store(tx).Directory().Memberships(ctx, directory.MembershipFilter{Principal: &Principal{Type: directory.PrincipalUser, ID: subject}})
 		if err != nil {

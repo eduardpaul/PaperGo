@@ -3,10 +3,21 @@ package httpapi
 import (
 	"log/slog"
 	"net/http"
+	"net/url"
 	"papergo/internal/auth"
 	"strings"
 	"testing"
 )
+
+func TestAuthConfigNamesTheMCPEndpoint(t *testing.T) {
+	_, s, _ := setup(t)
+	endpoint, _ := url.Parse("https://docs.example.com/v1/mcp")
+	h := (&API{DMS: s, Auth: auth.Development{Token: testToken, Subject: "alice"}, Logger: slog.Default(), MCPURL: endpoint}).Handler()
+	config := request(h, "GET", "/auth/config", "", "", "", "")
+	if config.Code != 200 || strings.TrimSpace(config.Body.String()) != `{"mode":"bearer","mcp_url":"https://docs.example.com/v1/mcp"}` {
+		t.Fatal(config.Code, config.Body.String())
+	}
+}
 
 func TestPublicFrontendAndReservedNamespaces(t *testing.T) {
 	h, _, _ := setup(t)

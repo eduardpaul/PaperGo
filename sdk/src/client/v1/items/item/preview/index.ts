@@ -42,7 +42,7 @@ export interface PreviewGetResponse extends AdditionalDataHolder, Parsable {
  */
 export interface PreviewRequestBuilder extends BaseRequestBuilder<PreviewRequestBuilder> {
     /**
-     * Requires list.read and document.read, plus resource ACL access. Resolves the visible published/head revision before selecting a rendition. Identical source bytes share a preview; original bytes are never returned. The default file.preview workflow generates previews asynchronously.
+     * Requires item.read and document.read, plus resource ACL access. Resolves the visible published/head revision before selecting a rendition. Identical source bytes share a preview; original bytes are never returned. The default file.preview workflow generates previews asynchronously.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<PreviewGetResponse>}
      * @throws {Problem} error when the service returns a 4XX or 5XX status code
@@ -62,7 +62,7 @@ export interface PreviewRequestBuilder extends BaseRequestBuilder<PreviewRequest
      */
      post(requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<Operation | undefined>;
     /**
-     * Requires list.read and document.read, plus resource ACL access. Resolves the visible published/head revision before selecting a rendition. Identical source bytes share a preview; original bytes are never returned. The default file.preview workflow generates previews asynchronously.
+     * Requires item.read and document.read, plus resource ACL access. Resolves the visible published/head revision before selecting a rendition. Identical source bytes share a preview; original bytes are never returned. The default file.preview workflow generates previews asynchronously.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */
@@ -75,7 +75,7 @@ export interface PreviewRequestBuilder extends BaseRequestBuilder<PreviewRequest
      toPostRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined) : RequestInformation;
 }
 /**
- * Requires list.read and document.read, plus resource ACL access. Resolves the visible published/head revision before selecting a rendition. Identical source bytes share a preview; original bytes are never returned. The default file.preview workflow generates previews asynchronously.
+ * Requires item.read and document.read, plus resource ACL access. Resolves the visible published/head revision before selecting a rendition. Identical source bytes share a preview; original bytes are never returned. The default file.preview workflow generates previews asynchronously.
  */
 export interface PreviewRequestBuilderGetQueryParameters {
     /**

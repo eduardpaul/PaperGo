@@ -111,7 +111,7 @@ func (x *Search) Register(s *dms.Service) error {
 		KindEmbed:   {Scope: "document.write", Validate: x.validateGeneration, Execute: x.embed},
 		KindPublish: {Scope: "document.write", Validate: x.validateGeneration, Execute: x.publish},
 		KindSweep:   {Scope: "organization.manage", Validate: refuseSweep, Execute: x.sweep},
-		KindSync:    {Scope: "list.read", Validate: validateSync, Admission: syncAdmission, ExecuteGroup: x.sync},
+		KindSync:    {Scope: "item.read", Validate: validateSync, Admission: syncAdmission, ExecuteGroup: x.sync},
 		KindReindex: {Scope: "organization.manage", Validate: validateReindex, Execute: x.reindex},
 	} {
 		if err := s.RegisterOperationHandler(kind, h); err != nil {

@@ -42,6 +42,9 @@ type API struct {
 	RequestTimeout time.Duration
 	// WebDAV serves WebDAV-enabled libraries under webdav.Prefix with its own authentication.
 	WebDAV *webdav.Handler
+	// MCPURL, when set, is where AI assistants reach papergo-mcp; the web
+	// app learns it from /auth/config.
+	MCPURL *url.URL
 	// PublicURL, when set, supplies the scheme and host of absolute links, so
 	// they are correct behind a TLS-terminating reverse proxy.
 	PublicURL *url.URL
@@ -188,10 +191,15 @@ func (a *API) root() (*router, error) {
 		if mode == auth.Bearer {
 			signIn = a.BrowserSignIn
 		}
+		var mcpURL string
+		if a.MCPURL != nil {
+			mcpURL = a.MCPURL.String()
+		}
 		respond(w, r, 200, struct {
 			Mode auth.Kind      `json:"mode"`
 			OIDC *BrowserSignIn `json:"oidc,omitempty"`
-		}{mode, signIn})
+			MCP  string         `json:"mcp_url,omitempty"`
+		}{mode, signIn, mcpURL})
 	})
 	if local, ok := a.Auth.(auth.Local); ok {
 		root.HandleFunc("POST /auth/login", a.localLogin(local))
@@ -806,7 +814,7 @@ func (a *API) authenticate(next http.Handler) http.Handler {
 		parts := strings.Fields(r.Header.Get("Authorization"))
 		if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") && strings.HasPrefix(parts[1], identity.AccessTokenPrefix) {
 			token, e := a.dms(r).Directory().AuthenticateAccessToken(r.Context(), parts[1])
-			if e != nil || (a.Auth.Kind() == auth.TrustedProxy && !token.Integration) {
+			if e != nil {
 				err = auth.ErrUnauthenticated
 			} else {
 				ident = auth.Identity{Subject: token.Subject}

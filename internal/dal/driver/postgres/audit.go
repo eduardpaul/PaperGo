@@ -68,7 +68,7 @@ func (q Queries) AuditEvents(ctx context.Context, f audit.Filter) ([]audit.Event
 		out[i] = audit.Event{
 			ID: r.ID, WorkspaceID: r.WorkspaceID.GetOrZero(), ResourceID: r.ResourceID.GetOrZero(), Subject: r.Subject, Action: r.Action,
 			EntityType: r.EntityType, EntityID: r.EntityID.GetOrZero(), TraceID: r.TraceID, Properties: r.Properties.Val, Details: r.Details.Val,
-			CreatedAt: r.CreatedAt.UTC(),
+			CredentialID: r.CredentialID.GetOrZero(), CreatedAt: r.CreatedAt.UTC(),
 		}
 	}
 	return out, nil
@@ -79,6 +79,7 @@ func (q Queries) InsertAuditEvent(ctx context.Context, e audit.Event) error {
 		ID: omit.From(e.ID), CreatedAt: omit.From(e.CreatedAt), WorkspaceID: nullable.String(e.WorkspaceID), ResourceID: nullable.String(e.ResourceID),
 		Subject: omit.From(e.Subject), Action: omit.From(e.Action), EntityType: omit.From(e.EntityType), EntityID: nullable.String(e.EntityID),
 		Properties: omit.From(types.NewJSON(e.Properties)), TraceID: omit.From(e.TraceID), Details: omit.From(types.NewJSON(e.Details)),
+		CredentialID: nullable.String(e.CredentialID),
 	}).Exec(ctx, q.exec)
 	return dberr.Translate(err)
 }

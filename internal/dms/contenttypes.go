@@ -303,7 +303,7 @@ func (s *Service) AttachContentType(ctx context.Context, subject, collection str
 // contentType.read as well.
 func (s *Service) attachContentType(ctx context.Context, subject, collection string, version int, in AttachContentTypeInput) (out *resources.Resource, err error) {
 	err = s.write(ctx, func(t *Service) error {
-		if e := t.RequireScope(ctx, subject, "list.read"); e != nil {
+		if e := t.RequireScope(ctx, subject, "item.read"); e != nil {
 			return e
 		}
 		c, e := t.authorize(ctx, subject, collection, "manage")

@@ -13,7 +13,7 @@ import (
 // SetArchived changes an item's discovery state with its existing write permission.
 func (s *Service) SetArchived(ctx context.Context, subject, id string, version int, archived bool) (out *resources.Resource, err error) {
 	err = s.write(ctx, func(t *Service) error {
-		if e := t.RequireScope(ctx, subject, "list.write"); e != nil {
+		if e := t.RequireScope(ctx, subject, "item.write"); e != nil {
 			return e
 		}
 		r, e := t.authorize(ctx, subject, id, "write")
@@ -68,7 +68,7 @@ type archivePosition struct {
 func (s *Service) archiveItems(ctx context.Context, subject string, in ArchiveQuery) (Page[*resources.Resource], error) {
 	return read(ctx, s, func(t *Service) (Page[*resources.Resource], error) {
 		out := Page[*resources.Resource]{Data: []*resources.Resource{}}
-		if err := t.RequireScope(ctx, subject, "list.read"); err != nil {
+		if err := t.RequireScope(ctx, subject, "item.read"); err != nil {
 			return out, err
 		}
 		if len(in.Search) > 256 {
@@ -140,7 +140,7 @@ func (s *Service) ArchiveItems(ctx context.Context, subject string, in ArchiveQu
 			return out, err
 		}
 		writable := map[string]bool{}
-		if e := t.RequireScope(ctx, subject, "list.write"); e == nil {
+		if e := t.RequireScope(ctx, subject, "item.write"); e == nil {
 			writable, err = t.allowedMany(ctx, subject, "write", page.Data)
 		} else if !errors.Is(e, ErrForbidden) {
 			return out, e

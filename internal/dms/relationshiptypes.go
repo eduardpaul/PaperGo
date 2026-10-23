@@ -191,7 +191,7 @@ func (s *Service) ensureRelationshipPolicy(ctx context.Context, subject string, 
 }
 func (s *Service) CreateRelationshipType(ctx context.Context, subject string, in RelationshipTypeInput) (out RelationshipTypeView, err error) {
 	err = s.write(ctx, func(t *Service) error {
-		if err := t.RequireScope(ctx, subject, "list.write"); err != nil {
+		if err := t.RequireScope(ctx, subject, "item.write"); err != nil {
 			return err
 		}
 		policy, err := t.ensureRelationshipPolicy(ctx, subject, in)
@@ -215,7 +215,7 @@ func (s *Service) describeRelationshipTerm(ctx context.Context, v taxonomy.Term)
 }
 func (s *Service) RelationshipTypes(ctx context.Context, subject, after string, limit int) (Page[RelationshipTypeView], error) {
 	return read(ctx, s, func(t *Service) (Page[RelationshipTypeView], error) {
-		if err := t.RequireScope(ctx, subject, "list.read"); err != nil {
+		if err := t.RequireScope(ctx, subject, "item.read"); err != nil {
 			return Page[RelationshipTypeView]{}, err
 		}
 		if err := t.requireTaxonomy(ctx, subject, "read"); err != nil {
@@ -243,7 +243,7 @@ func (s *Service) RelationshipTypes(ctx context.Context, subject, after string, 
 }
 func (s *Service) RelationshipType(ctx context.Context, subject, id string) (RelationshipTypeView, error) {
 	return read(ctx, s, func(t *Service) (RelationshipTypeView, error) {
-		if err := t.RequireScope(ctx, subject, "list.read"); err != nil {
+		if err := t.RequireScope(ctx, subject, "item.read"); err != nil {
 			return RelationshipTypeView{}, err
 		}
 		v, found, err := t.resolveRelationshipTerm(ctx, subject, id, false)

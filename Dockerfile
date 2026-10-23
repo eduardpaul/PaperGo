@@ -119,9 +119,11 @@ COPY --from=frontend /src/web/dist ./web/dist
 ARG VERSION=development
 ARG COMMIT=unknown
 ARG BUILD_DATE=unknown
+# papergo-mcp has its own image, extensions/mcp/Dockerfile.
 RUN --mount=type=cache,target=/root/.cache/go-build \
     python3 scripts/build-binaries.py --output-dir /out/bin \
        --ldflags="-s -w -X papergo/internal/buildinfo.Version=$VERSION -X papergo/internal/buildinfo.Commit=$COMMIT -X papergo/internal/buildinfo.Date=$BUILD_DATE" \
+    && rm /out/bin/papergo-mcp \
     && mkdir -p /state/blobs
 
 FROM gcr.io/distroless/cc-debian12:nonroot

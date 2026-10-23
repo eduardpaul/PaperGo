@@ -19,7 +19,7 @@ export interface RelationshipTypesRequestBuilder extends BaseRequestBuilder<Rela
      */
      byId(id: string) : RelationshipTypesItemRequestBuilder;
     /**
-     * Organization taxonomy predicates; requires list.read and taxonomy.read to discover, list.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy.
+     * Organization taxonomy predicates; requires item.read and taxonomy.read to discover, item.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<RelationshipTypePage>}
      * @throws {Problem} error when the service returns a 400 status code
@@ -34,7 +34,7 @@ export interface RelationshipTypesRequestBuilder extends BaseRequestBuilder<Rela
      */
      get(requestConfiguration?: RequestConfiguration<RelationshipTypesRequestBuilderGetQueryParameters> | undefined) : Promise<RelationshipTypePage | undefined>;
     /**
-     * Organization taxonomy predicates; requires list.read and taxonomy.read to discover, list.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy.
+     * Organization taxonomy predicates; requires item.read and taxonomy.read to discover, item.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy.
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<RelationshipType>}
@@ -50,13 +50,13 @@ export interface RelationshipTypesRequestBuilder extends BaseRequestBuilder<Rela
      */
      post(body: RelationshipTypeInput, requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<RelationshipType | undefined>;
     /**
-     * Organization taxonomy predicates; requires list.read and taxonomy.read to discover, list.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy.
+     * Organization taxonomy predicates; requires item.read and taxonomy.read to discover, item.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */
      toGetRequestInformation(requestConfiguration?: RequestConfiguration<RelationshipTypesRequestBuilderGetQueryParameters> | undefined) : RequestInformation;
     /**
-     * Organization taxonomy predicates; requires list.read and taxonomy.read to discover, list.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy.
+     * Organization taxonomy predicates; requires item.read and taxonomy.read to discover, item.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy.
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
@@ -64,7 +64,7 @@ export interface RelationshipTypesRequestBuilder extends BaseRequestBuilder<Rela
      toPostRequestInformation(body: RelationshipTypeInput, requestConfiguration?: RequestConfiguration<object> | undefined) : RequestInformation;
 }
 /**
- * Organization taxonomy predicates; requires list.read and taxonomy.read to discover, list.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy.
+ * Organization taxonomy predicates; requires item.read and taxonomy.read to discover, item.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy.
  */
 export interface RelationshipTypesRequestBuilderGetQueryParameters {
     /**

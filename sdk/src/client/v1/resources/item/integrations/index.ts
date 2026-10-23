@@ -26,7 +26,7 @@ export interface IntegrationsRequestBuilder extends BaseRequestBuilder<Integrati
      */
      get(requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<ListIntegration[] | undefined>;
     /**
-     * Requires list Manage access and list.read/list.write scopes. Automatically attaches the Event content type without requiring contentType.read, queues a first refresh, and activates the workspace refresh workflow once. Same-list duplicate URLs are rejected; separate lists and sources have independent identities.
+     * Requires list manage access and the item.read and list.manage scopes; its refreshes keep needing them. Automatically attaches the Event content type without requiring contentType.read, queues a first refresh, and activates the workspace refresh workflow once. Same-list duplicate URLs are rejected; separate lists and sources have independent identities.
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<ListIntegration>}
@@ -40,7 +40,7 @@ export interface IntegrationsRequestBuilder extends BaseRequestBuilder<Integrati
      */
      toGetRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined) : RequestInformation;
     /**
-     * Requires list Manage access and list.read/list.write scopes. Automatically attaches the Event content type without requiring contentType.read, queues a first refresh, and activates the workspace refresh workflow once. Same-list duplicate URLs are rejected; separate lists and sources have independent identities.
+     * Requires list manage access and the item.read and list.manage scopes; its refreshes keep needing them. Automatically attaches the Event content type without requiring contentType.read, queues a first refresh, and activates the workspace refresh workflow once. Same-list duplicate URLs are rejected; separate lists and sources have independent identities.
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}

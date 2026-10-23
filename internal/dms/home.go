@@ -17,7 +17,7 @@ type Home struct {
 
 func (s *Service) Home(ctx context.Context, subject string) (out Home, err error) {
 	err = s.write(ctx, func(t *Service) error {
-		if err := t.RequireScope(ctx, subject, "list.read"); err != nil {
+		if err := t.RequireScope(ctx, subject, "item.read"); err != nil {
 			return err
 		}
 		out, err = t.ensureHome(ctx, subject)

@@ -253,7 +253,7 @@ func run(log *slog.Logger) error {
 			return err
 		}
 		return db.CheckSchema(ctx)
-	}, WebDAV: webdav.New(service, verifier, store, log, c.MaxUpload), PublicURL: c.PublicURL}
+	}, WebDAV: webdav.New(service, verifier, store, log, c.MaxUpload), PublicURL: c.PublicURL, MCPURL: c.MCPPublicURL}
 	if c.ClientID != "" {
 		a.BrowserSignIn = &httpapi.BrowserSignIn{Issuer: c.Issuer, ClientID: c.ClientID, Scope: c.ClientScopes}
 	}

@@ -17,20 +17,20 @@ export interface WithItemItemRequestBuilder extends BaseRequestBuilder<WithItemI
      */
     get restore(): RestoreRequestBuilder;
     /**
-     * Requires list.write and manage access to every purged entry. recursive=true explicitly purges deleted folder descendants. Deletes retained revisions, publications, blob references and grants; audit/run records retain stable IDs. Object deletion is queued durably and retried after storage failures or restart. Only deleted entries in live collections can be purged. No If-Match is required.
+     * Requires list.manage and manage access to every purged entry. recursive=true explicitly purges deleted folder descendants. Deletes retained revisions, publications, blob references and grants; audit/run records retain stable IDs. Object deletion is queued durably and retried after storage failures or restart. Only deleted entries in live collections can be purged. No If-Match is required.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @throws {Problem} error when the service returns a 4XX or 5XX status code
      */
      delete(requestConfiguration?: RequestConfiguration<WithItemItemRequestBuilderDeleteQueryParameters> | undefined) : Promise<void>;
     /**
-     * Requires list.write and manage access to every purged entry. recursive=true explicitly purges deleted folder descendants. Deletes retained revisions, publications, blob references and grants; audit/run records retain stable IDs. Object deletion is queued durably and retried after storage failures or restart. Only deleted entries in live collections can be purged. No If-Match is required.
+     * Requires list.manage and manage access to every purged entry. recursive=true explicitly purges deleted folder descendants. Deletes retained revisions, publications, blob references and grants; audit/run records retain stable IDs. Object deletion is queued durably and retried after storage failures or restart. Only deleted entries in live collections can be purged. No If-Match is required.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */
      toDeleteRequestInformation(requestConfiguration?: RequestConfiguration<WithItemItemRequestBuilderDeleteQueryParameters> | undefined) : RequestInformation;
 }
 /**
- * Requires list.write and manage access to every purged entry. recursive=true explicitly purges deleted folder descendants. Deletes retained revisions, publications, blob references and grants; audit/run records retain stable IDs. Object deletion is queued durably and retried after storage failures or restart. Only deleted entries in live collections can be purged. No If-Match is required.
+ * Requires list.manage and manage access to every purged entry. recursive=true explicitly purges deleted folder descendants. Deletes retained revisions, publications, blob references and grants; audit/run records retain stable IDs. Object deletion is queued durably and retried after storage failures or restart. Only deleted entries in live collections can be purged. No If-Match is required.
  */
 export interface WithItemItemRequestBuilderDeleteQueryParameters {
     recursive?: boolean;

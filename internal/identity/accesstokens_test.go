@@ -16,7 +16,7 @@ func TestAccessTokenAuditUsesDirectoryEntity(t *testing.T) {
 	db := daltest.Database(t)
 	d := identity.Directory{DB: db.SQL}
 	store := dal.NewStore(db.SQL)
-	created, err := d.CreateAccessToken(ctx, "organization-admin", identity.AccessTokenInput{Name: "Audit credential", Scopes: []string{"list.read"}})
+	created, err := d.CreateAccessToken(ctx, "organization-admin", identity.AccessTokenInput{Name: "Audit credential", Scopes: []string{"item.read"}})
 	if err != nil {
 		t.Fatal(err)
 	}

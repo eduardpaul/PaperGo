@@ -56,11 +56,11 @@ func integrationName(name string) (string, error) {
 	return name, nil
 }
 func (s *Service) integrationList(ctx context.Context, subject, id, action string) (*resources.Resource, error) {
-	if err := s.RequireScope(ctx, subject, "list.read"); err != nil {
+	if err := s.RequireScope(ctx, subject, "item.read"); err != nil {
 		return nil, err
 	}
 	if action == "manage" {
-		if err := s.RequireScope(ctx, subject, "list.write"); err != nil {
+		if err := s.RequireScope(ctx, subject, "list.manage"); err != nil {
 			return nil, err
 		}
 	}
@@ -372,7 +372,7 @@ func validateIntegrationRefresh(ctx context.Context, t *Service, subject, list s
 	return nil
 }
 func integrationOperationHandler() OperationHandler {
-	return OperationHandler{Scope: "list.write", Validate: validateIntegrationRefresh, Execute: func(ctx context.Context, s *Service, op *operations.Operation) error {
+	return OperationHandler{Scope: "item.write", Validate: validateIntegrationRefresh, Execute: func(ctx context.Context, s *Service, op *operations.Operation) error {
 		return s.refreshIntegrationOperation(ctx, op)
 	}, Failed: func(ctx context.Context, t *Service, op *operations.Operation, cause error) error {
 		id, err := decodeIntegrationRefresh(op.Payload)
@@ -415,8 +415,7 @@ func (s *Service) RefreshIntegrations(ctx context.Context, _ time.Time) error {
 			actor := row.ConfiguredBy
 			credentialCtx := ctx
 			if row.CredentialID != "" {
-				credentialCtx = identity.WithAccessToken(ctx, identity.AccessTokenIdentity{Subject: actor, ID: row.CredentialID, Scopes: row.CredentialScopes})
-				if identity.RequireCredential(credentialCtx, dal.NewStore(t.db).WithTx(t.tx), actor) != nil {
+				if credentialCtx, err = identity.RestoreCredential(ctx, dal.NewStore(t.db).WithTx(t.tx), actor, row.CredentialID, row.CredentialScopes); err != nil {
 					continue
 				}
 			}

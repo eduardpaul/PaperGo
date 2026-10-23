@@ -85,17 +85,38 @@ func TestProxyIdentityPreservesProfilesAndRejectsCredentialBypasses(t *testing.T
 	if r := do("GET", "/v1/identity/me", "", "proxy-member", ""); r.Code != 403 {
 		t.Fatal("proxy request reactivated a disabled user", r.Code)
 	}
-	for _, path := range []string{"/v1/identity/me/tokens"} {
-		if r := do("GET", path, "", "bob", ""); r.Code != 404 {
-			t.Fatal(path, r.Code)
-		}
+	// People signed in through the proxy issue their own access tokens, such
+	// as for an AI assistant, which then act as them without the proxy.
+	if r := do("GET", "/v1/identity/me/tokens", "", "bob", ""); r.Code != 200 {
+		t.Fatal("proxy user's tokens", r.Code, r.Body.String())
 	}
-	token, err := s.Directory().CreateAccessToken(ctx, "bob", identity.AccessTokenInput{Name: "Bypass", Scopes: []string{"list.read"}})
+	token, err := s.Directory().CreateAccessToken(ctx, "bob", identity.AccessTokenInput{Name: "Assistant", Scopes: []string{"item.read"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r := do("GET", "/v1/identity/me", "", "bob", token.Secret); r.Code != 401 {
-		t.Fatal("personal credential bypassed proxy policy", r.Code)
+	// The token arrives from another peer, such as papergo-mcp, without the
+	// proxy's assertion.
+	direct := func(credential string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("GET", "/v1/identity/me", nil)
+		r.RemoteAddr = "172.29.242.9:1234"
+		r.Header.Set("Authorization", "Bearer "+credential)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	if r := direct(token.Secret); r.Code != 200 || !strings.Contains(r.Body.String(), `"subject":"bob"`) {
+		t.Fatal("personal token in a proxy deployment", r.Code, r.Body.String())
+	}
+	// Deactivating the person in PaperGo stops their tokens; the proxy alone
+	// cannot.
+	if _, err := s.Directory().SetUserActive(ctx, "organization-admin", "bob", false); err != nil {
+		t.Fatal(err)
+	}
+	if r := direct(token.Secret); r.Code != 401 {
+		t.Fatal("deactivated user's token", r.Code)
+	}
+	if _, err := s.Directory().SetUserActive(ctx, "organization-admin", "bob", true); err != nil {
+		t.Fatal(err)
 	}
 	batch := do("POST", "/v1/$batch", `{"requests":[{"id":"me","method":"GET","url":"identity/me"}]}`, "bob", "")
 	if batch.Code != 200 || !strings.Contains(batch.Body.String(), `"subject":"bob"`) || !strings.Contains(batch.Body.String(), `"status":200`) {

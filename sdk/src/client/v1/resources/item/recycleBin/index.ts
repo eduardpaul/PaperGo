@@ -19,21 +19,21 @@ export interface RecycleBinRequestBuilder extends BaseRequestBuilder<RecycleBinR
      */
      byItemID(itemID: Guid) : WithItemItemRequestBuilder;
     /**
-     * Requires a live readable collection and list.read; entries are filtered by list.write and their retained ACL scopes. Deleted content is excluded from ordinary reads and queries.
+     * Requires a live readable collection and item.read; entries are filtered by item.write and their retained ACL scopes. Deleted content is excluded from ordinary reads and queries.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<RecycleBinPage>}
      * @throws {Problem} error when the service returns a 4XX or 5XX status code
      */
      get(requestConfiguration?: RequestConfiguration<RecycleBinRequestBuilderGetQueryParameters> | undefined) : Promise<RecycleBinPage | undefined>;
     /**
-     * Requires a live readable collection and list.read; entries are filtered by list.write and their retained ACL scopes. Deleted content is excluded from ordinary reads and queries.
+     * Requires a live readable collection and item.read; entries are filtered by item.write and their retained ACL scopes. Deleted content is excluded from ordinary reads and queries.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */
      toGetRequestInformation(requestConfiguration?: RequestConfiguration<RecycleBinRequestBuilderGetQueryParameters> | undefined) : RequestInformation;
 }
 /**
- * Requires a live readable collection and list.read; entries are filtered by list.write and their retained ACL scopes. Deleted content is excluded from ordinary reads and queries.
+ * Requires a live readable collection and item.read; entries are filtered by item.write and their retained ACL scopes. Deleted content is excluded from ordinary reads and queries.
  */
 export interface RecycleBinRequestBuilderGetQueryParameters {
     /**

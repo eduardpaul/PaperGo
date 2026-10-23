@@ -44,6 +44,9 @@ def papergo_config(public_url, admin_user, trusted_cidr):
         "  data_dir: /data",
         f"  public_url: {json.dumps(public_url)}",
         "",
+        "mcp:",
+        f"  public_url: {json.dumps(public_url + '/v1/mcp')}",
+        "",
         "auth:",
         "  mode: proxy",
         f"  admin_user: {json.dumps(admin_user)}",
@@ -67,6 +70,30 @@ def compose(*args, check=True):
                     "-f", str(ROOT / "compose.yaml"), *args], check=check)
 
 
+def proxy_server_config(public_url, https_port):
+    """The proxy host's server-level Advanced configuration."""
+    config = "client_max_body_size 80m;\n"
+    # NPM's Force SSL redirect targets port 443. Custom published TLS ports
+    # need an explicit public-origin redirect in the supported Advanced field.
+    if https_port != 443:
+        config += f'if ($scheme = http) {{ return 308 {public_url}$request_uri; }}\n'
+    # AI assistants reach papergo-mcp at /v1/mcp with their own bearer token,
+    # which PaperGo checks on every request. The Access List's Basic sign-in
+    # would claim that Authorization header, so this exact location has none,
+    # and no proxy identity is asserted to the MCP server.
+    config += ("location = /v1/mcp {\n"
+               "    auth_basic off;\n"
+               "    allow all;\n"
+               "    proxy_set_header Host $host;\n"
+               "    proxy_set_header X-Forwarded-Proto $scheme;\n"
+               "    proxy_set_header X-Papergo-Subject \"\";\n"
+               "    proxy_set_header X-Papergo-Proxy-Secret \"\";\n"
+               "    proxy_buffering off;\n"
+               "    proxy_pass http://papergo-mcp:8081;\n"
+               "}\n")
+    return config
+
+
 def start_stack(no_build):
     try:
         compose("up", *([] if no_build else ["--build"]), "-d", "--wait", "--wait-timeout", "240")
@@ -74,7 +101,7 @@ def start_stack(no_build):
         print("Docker Compose startup failed; recent service logs:", flush=True)
         try:
             compose("logs", "--no-color", "--tail", "80",
-                    "volume-permissions", "papergo", "npm", check=False)
+                    "volume-permissions", "papergo", "papergo-mcp", "npm", check=False)
         except OSError:
             pass
         raise RuntimeError(
@@ -351,7 +378,9 @@ def main():
     private_write(ROOT / ".env", "\n".join([
                    f"HTTP_PORT={args.http_port}", f"HTTPS_PORT={args.https_port}", f"ADMIN_PORT={args.admin_port}",
                    f"PRIVATE_SUBNET={network}", f"NPM_PRIVATE_IP={npm_ip}",
-                   f"PAPERGO_PRIVATE_IP={network.network_address + 3}"]) + "\n")
+                   f"PAPERGO_PRIVATE_IP={network.network_address + 3}",
+                   f"PAPERGO_MCP_PRIVATE_IP={network.network_address + 4}",
+                   f"PAPERGO_MCP_PUBLIC_URL={public_url}/v1/mcp"]) + "\n")
     write_shared_config(GENERATED / "config.yaml", papergo_config(public_url, args.admin_user, f"{npm_ip}/32"))
     private_write(GENERATED / "curl.netrc", f"machine {args.host}\nlogin {args.admin_user}\npassword {credentials['papergo_password']}\n")
     start_stack(args.no_build)
@@ -377,11 +406,7 @@ def main():
                f'proxy_set_header X-Papergo-Proxy-Secret "{secret}";\n'
                'proxy_request_buffering off;\nproxy_buffering off;\n'
                'proxy_read_timeout 300s;\nproxy_send_timeout 300s;\n')
-    server_config = "client_max_body_size 80m;\n"
-    # NPM's Force SSL redirect targets port 443. Custom published TLS ports
-    # need an explicit public-origin redirect in the supported Advanced field.
-    if args.https_port != 443:
-        server_config += f'if ($scheme = http) {{ return 308 {public_url}$request_uri; }}\n'
+    server_config = proxy_server_config(public_url, args.https_port)
     host_config = {"domain_names": [args.host], "forward_scheme": "http", "forward_host": "papergo", "forward_port": 8080,
                    "certificate_id": certificate["id"], "ssl_forced": args.https_port == 443, "hsts_enabled": True, "hsts_subdomains": False,
                    "http2_support": True, "block_exploits": False, "caching_enabled": False, "allow_websocket_upgrade": True,

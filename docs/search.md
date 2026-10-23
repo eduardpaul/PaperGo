@@ -68,13 +68,13 @@ Search never shows more than the caller may read now:
 2. Each hit is checked again in the database: an entry that was deleted, moved out of reach or lost its publication since it was indexed is left out, and the result says `total_estimated: true`.
 3. Facets are returned only after every matching source, including entries outside the current page, passes the same check. When a stale source is found, facets are omitted and `total_estimated` is true until the index catches up.
 
-File text participates in matching and snippets only with `document.read`. A caller with `list.read` alone can search metadata, including in collection queries and resource listings.
+File text participates in matching and snippets only with `document.read`. A caller with `item.read` alone can search metadata, including in collection queries and resource listings.
 
 A revoked permission or membership therefore applies to the next search at once, before anything is reindexed.
 
 ## Global search
 
-`GET /v1/search` finds items (and, with `kind=folder` or `kind=item,folder`, folders) across every workspace the caller reads. `POST /v1/search` takes the same parameters as a JSON body (`kind` as an array), plus a `filter`; `$top` and `$skiptoken` stay in the URL, and a next page repeats the body. Both need `list.read`.
+`GET /v1/search` finds items (and, with `kind=folder` or `kind=item,folder`, folders) across every workspace the caller reads. `POST /v1/search` takes the same parameters as a JSON body (`kind` as an array), plus a `filter`; `$top` and `$skiptoken` stay in the URL, and a next page repeats the body. Both need `item.read`.
 
 | Parameter | Meaning |
 | --- | --- |

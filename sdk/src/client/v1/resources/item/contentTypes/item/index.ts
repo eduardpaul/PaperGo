@@ -11,14 +11,14 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface WithTypeItemRequestBuilder extends BaseRequestBuilder<WithTypeItemRequestBuilder> {
     /**
-     * Requires collection manage access and the current collection If-Match. Rejects the last attachment, a type used by live items, and dependent saved views. Chooses a remaining default when necessary. Updates the effective schema and business keys atomically; organization catalog types and frozen revisions remain. Deleted items with a detached type require reattachment before restoration.
+     * Requires list.manage, collection manage access and the current collection If-Match. Rejects the last attachment, a type used by live items, and dependent saved views. Chooses a remaining default when necessary. Updates the effective schema and business keys atomically; organization catalog types and frozen revisions remain. Deleted items with a detached type require reattachment before restoration.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @throws {Problem} error when the service returns a 412 status code
      * @throws {Problem} error when the service returns a 4XX or 5XX status code
      */
      delete(requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<void>;
     /**
-     * Requires collection manage access and the current collection If-Match. Rejects the last attachment, a type used by live items, and dependent saved views. Chooses a remaining default when necessary. Updates the effective schema and business keys atomically; organization catalog types and frozen revisions remain. Deleted items with a detached type require reattachment before restoration.
+     * Requires list.manage, collection manage access and the current collection If-Match. Rejects the last attachment, a type used by live items, and dependent saved views. Chooses a remaining default when necessary. Updates the effective schema and business keys atomically; organization catalog types and frozen revisions remain. Deleted items with a detached type require reattachment before restoration.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */

@@ -55,7 +55,7 @@ func TestInboxUploadRechecksChangesDuringStreaming(t *testing.T) {
 			authToken := testToken
 			var token identity.CreatedAccessToken
 			if scenario.name == "credential" {
-				token, err = s.Directory().CreateAccessToken(ctx, "alice", identity.AccessTokenInput{Name: "Upload", Scopes: []string{"document.write", "list.read", "list.write"}})
+				token, err = s.Directory().CreateAccessToken(ctx, "alice", identity.AccessTokenInput{Name: "Upload", Scopes: []string{"document.write", "item.read", "item.write"}})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -174,7 +174,7 @@ func TestHomeAndInboxHTTPContracts(t *testing.T) {
 func TestInboxUploadRejectsMissingScopeBeforeReadingBody(t *testing.T) {
 	h, s, _ := setup(t)
 	ctx := t.Context()
-	token, err := s.Directory().CreateAccessToken(ctx, "alice", identity.AccessTokenInput{Name: "File only", Scopes: []string{"document.write", "list.read"}})
+	token, err := s.Directory().CreateAccessToken(ctx, "alice", identity.AccessTokenInput{Name: "File only", Scopes: []string{"document.write", "item.read"}})
 	if err != nil {
 		t.Fatal(err)
 	}
