@@ -528,7 +528,7 @@ export interface TaskAnswer {
 /** One message to one person: their inbox. */
 export interface Notification {
   id: string;
-  type: 'message' | 'task.assigned' | 'task.completed' | 'workflow.failed';
+  type: 'message' | 'task.assigned' | 'task.completed' | 'workflow.failed' | 'comment.mentioned' | 'comment.replied';
   title: string;
   body?: string;
   workspace_id?: string;
@@ -536,12 +536,76 @@ export interface Notification {
   item_id?: string;
   task_id?: string;
   run_id?: string;
+  /** The comment whose thread it opens on item_id. */
+  comment_id?: string;
+  /** How many notifications it stands for, such as replies while it was unread. */
+  count: number;
   source: 'workflow' | 'user' | 'system';
   /** Who sent it or caused what it reports. */
   sender?: string;
   workflow_id?: string;
   created_at: string;
   read_at?: string;
+}
+
+/** Who takes part in a collection's discussions. */
+export type CommentMode = 'off' | 'collaborators' | 'readers';
+
+export interface CommentPerson {
+  subject: string;
+  name: string;
+}
+
+/** A comment on an item; a thread's first comment has thread_id equal to id. */
+export interface Comment {
+  id: string;
+  item_id: string;
+  thread_id: string;
+  author: CommentPerson;
+  source: 'user' | 'workflow';
+  workflow_id?: string;
+  /** Plain text; <@user:subject> mentions a person. Empty once deleted. */
+  body: string;
+  mentions: CommentPerson[];
+  created_at: string;
+  updated_at: string;
+  edited_at?: string;
+  deleted?: boolean;
+  resolved_at?: string;
+  resolved_by?: CommentPerson;
+  version: number;
+  can_edit: boolean;
+  can_delete: boolean;
+  can_resolve?: boolean;
+}
+
+export interface CommentThread extends Comment {
+  replies: Comment[];
+}
+
+/** An item's threads and what the reader may do in its discussion. */
+export interface CommentPage extends Page<CommentThread> {
+  mode: CommentMode;
+  mode_from: 'deployment' | 'organization' | 'workspace' | 'collection' | 'default';
+  can_read: boolean;
+  can_post: boolean;
+}
+
+export interface MentionCandidate extends CommentPerson {
+  can_see: boolean;
+}
+
+export interface CommentSettings {
+  mode: CommentMode | null;
+  effective: { mode: CommentMode; from: CommentPage['mode_from'] };
+  version: number;
+}
+
+export interface OrganizationCommentSettings {
+  enabled: boolean;
+  mode: CommentMode | null;
+  available: boolean;
+  version: number;
 }
 
 /** An action request: an approval, or any task a workflow, person or the system created. */

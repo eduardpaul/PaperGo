@@ -12,6 +12,7 @@ import { useHasScope } from '@/features/admin/common';
 import { SmartFolderPackages } from '@/features/smart-folders/packages';
 import { can } from '@/features/lists/access';
 import { ConfirmDialog, SettingRow, SettingsSection } from '@/features/settings/section';
+import { PlaceCommentSettings } from '@/features/comments/settings';
 
 export const Route = createFileRoute('/_app/w/$workspaceId/settings/')({ component: GeneralPage });
 
@@ -95,6 +96,7 @@ function GeneralPage() {
         </SettingsSection>
       )}
       <SmartFolderPackages workspaceId={workspaceId} />
+      <PlaceCommentSettings resourceId={workspaceId} canManage={canManage} workspace />
       {canManage && !workspace.data.personal_owner_id && (
         <SettingsSection
           title="Delete workspace"

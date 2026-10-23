@@ -34,6 +34,7 @@ function notification(id: string, extra: Partial<Notification> = {}): Notificati
   return {
     id,
     type: 'message',
+    count: 1,
     title: `Note ${id}`,
     source: 'user',
     sender: 'carol',

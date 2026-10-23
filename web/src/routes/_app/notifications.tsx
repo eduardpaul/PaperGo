@@ -21,8 +21,9 @@ export const Route = createFileRoute('/_app/notifications')({
 function NotificationsPage() {
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
-  const unreadOnly = search.view === 'unread';
-  const list = useInfiniteQuery(notificationsQuery(unreadOnly));
+  const view = search.view === 'unread' || search.view === 'mentions' ? search.view : 'all';
+  const unreadOnly = view === 'unread';
+  const list = useInfiniteQuery(notificationsQuery(unreadOnly, view === 'mentions' ? 'comment.mentioned' : undefined));
   const unread = useQuery(unreadNotificationsQuery);
   const rows = list.data?.pages.flatMap((page) => page.value ?? []) ?? [];
   const { markRead, remove } = useNotificationActions();
@@ -31,7 +32,7 @@ function NotificationsPage() {
     <Page>
       <PageHeader
         title="Notifications"
-        description="What happened that concerns you: tasks, messages and failed workflows."
+        description="What happened that concerns you: tasks, mentions, replies, messages and failed workflows."
         icon={Bell}
         actions={
           <Button size="sm" disabled={!unread.data || markRead.isPending} onClick={() => markRead.mutate(undefined)}>
@@ -43,8 +44,9 @@ function NotificationsPage() {
         {[
           { value: 'all', label: 'All' },
           { value: 'unread', label: unread.data ? `Unread (${unread.data})` : 'Unread' },
+          { value: 'mentions', label: 'Mentions' },
         ].map((v) => {
-          const selected = (v.value === 'unread') === unreadOnly;
+          const selected = v.value === view;
           return (
             <Button
               key={v.value}
@@ -62,7 +64,16 @@ function NotificationsPage() {
       {list.isLoading && <Skeleton className="h-16" />}
       {list.error && <Alert>{problemMessage(list.error)}</Alert>}
       {list.isSuccess && rows.length === 0 && (
-        <EmptyState icon={Bell} title={unreadOnly ? 'You have read everything' : 'No notifications yet'} />
+        <EmptyState
+          icon={Bell}
+          title={
+            unreadOnly
+              ? 'You have read everything'
+              : view === 'mentions'
+                ? 'Nobody mentioned you yet'
+                : 'No notifications yet'
+          }
+        />
       )}
       <ul className="flex flex-col divide-y rounded-lg border bg-surface empty:hidden" aria-label="Notifications">
         {rows.map((notification) => (

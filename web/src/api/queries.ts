@@ -3,6 +3,9 @@ import { api, continuation, isApiError, listOf } from './http';
 import type {
   Task,
   Notification,
+  CommentPage,
+  CommentSettings,
+  OrganizationCommentSettings,
   BuiltInState,
   CollectionTemplate,
   ContentType,
@@ -49,8 +52,12 @@ export const keys = {
   task: (id: string) => ['tasks', 'one', id] as const,
   stagedFile: (id: string) => ['staged-files', id] as const,
   notifications: ['notifications'] as const,
-  notificationList: (unread: boolean) => ['notifications', 'list', { unread }] as const,
+  notificationList: (unread: boolean, type?: string) => ['notifications', 'list', { unread, type }] as const,
   unreadNotifications: ['notifications', 'unread'] as const,
+  comments: ['comments'] as const,
+  itemComments: (itemId: string, status: string) => ['comments', itemId, status] as const,
+  commentSettings: (resourceId: string) => ['comment-settings', resourceId] as const,
+  organizationCommentSettings: ['comment-settings', 'organization'] as const,
 };
 
 /** Which of the caller's tasks to list: waiting for them, or by status. */
@@ -67,23 +74,24 @@ export const myTasksQuery = (filter: TaskFilter) =>
     queryFn: async ({ pageParam }) =>
       (
         await api<Page<Task>>(pageParam, {
-          query: pageParam === '/v1/me/tasks'
-            ? { waiting: filter.waiting ? 'true' : undefined, status: filter.status, kind: filter.kind }
-            : undefined,
+          query:
+            pageParam === '/v1/me/tasks'
+              ? { waiting: filter.waiting ? 'true' : undefined, status: filter.status, kind: filter.kind }
+              : undefined,
         })
       ).data,
     getNextPageParam: (page) => continuation(page['@odata.nextLink']) ?? undefined,
   });
 
-/** The caller's notifications, newest first; unread keeps the unread ones. */
-export const notificationsQuery = (unread = false) =>
+/** The caller's notifications, newest first; unread keeps the unread ones and type one kind. */
+export const notificationsQuery = (unread = false, type?: string) =>
   infiniteQueryOptions({
-    queryKey: keys.notificationList(unread),
+    queryKey: keys.notificationList(unread, type),
     initialPageParam: '/v1/me/notifications',
     queryFn: async ({ pageParam }) =>
       (
         await api<Page<Notification>>(pageParam, {
-          query: pageParam === '/v1/me/notifications' ? { unread: unread ? 'true' : undefined } : undefined,
+          query: pageParam === '/v1/me/notifications' ? { unread: unread ? 'true' : undefined, type } : undefined,
         })
       ).data,
     getNextPageParam: (page) => continuation(page['@odata.nextLink']) ?? undefined,
@@ -92,6 +100,25 @@ export const notificationsQuery = (unread = false) =>
 export const unreadNotificationsQuery = queryOptions({
   queryKey: keys.unreadNotifications,
   queryFn: async () => (await api<{ count: number }>('/v1/me/notifications/unread-count')).data.count,
+});
+
+/** An item's comment threads with their replies; status is open, resolved or all. */
+export const commentsQuery = (itemId: string, status: string) =>
+  queryOptions({
+    queryKey: keys.itemComments(itemId, status),
+    queryFn: async () =>
+      (await api<CommentPage>(`/v1/items/${itemId}/comments`, { query: { status, $top: '100' } })).data,
+  });
+
+export const commentSettingsQuery = (resourceId: string) =>
+  queryOptions({
+    queryKey: keys.commentSettings(resourceId),
+    queryFn: async () => (await api<CommentSettings>(`/v1/resources/${resourceId}/settings/comments`)).data,
+  });
+
+export const organizationCommentSettingsQuery = queryOptions({
+  queryKey: keys.organizationCommentSettings,
+  queryFn: async () => (await api<OrganizationCommentSettings>('/v1/organization/settings/comments')).data,
 });
 
 export const taskQuery = (id: string) =>
@@ -148,7 +175,8 @@ export const resourceQuery = (id: string) =>
 export const childrenQuery = (id: string, query: { q?: string; parent?: boolean } = {}) =>
   queryOptions({
     queryKey: keys.children(id, query),
-    queryFn: async () => (await api<Page<Resource>>(`/v1/resources/${id}/children`, { query: { q: query.q, $top: 50 } })).data,
+    queryFn: async () =>
+      (await api<Page<Resource>>(`/v1/resources/${id}/children`, { query: { q: query.q, $top: 50 } })).data,
   });
 
 export const fieldsQuery = (id: string) =>
@@ -160,18 +188,21 @@ export const fieldsQuery = (id: string) =>
 export const contentTypesQuery = (id: string) =>
   queryOptions({
     queryKey: keys.contentTypes(id),
-    queryFn: async () => listOf((await api<Page<ContentType> | ContentType[]>(`/v1/resources/${id}/content-types`)).data),
+    queryFn: async () =>
+      listOf((await api<Page<ContentType> | ContentType[]>(`/v1/resources/${id}/content-types`)).data),
   });
 
 export const viewsQuery = (id: string) =>
   queryOptions({
     queryKey: keys.views(id),
-    queryFn: async () => listOf((await api<Page<ListView>>(`/v1/resources/${id}/views`, { query: { $top: 100 } })).data),
+    queryFn: async () =>
+      listOf((await api<Page<ListView>>(`/v1/resources/${id}/views`, { query: { $top: 100 } })).data),
   });
 
 export const templatesQuery = queryOptions({
   queryKey: keys.templates,
-  queryFn: async () => listOf((await api<Page<CollectionTemplate> | CollectionTemplate[]>('/v1/collection-templates')).data),
+  queryFn: async () =>
+    listOf((await api<Page<CollectionTemplate> | CollectionTemplate[]>('/v1/collection-templates')).data),
 });
 
 // The workflow catalog. Search's roles are in it when the deployment runs
@@ -205,9 +236,9 @@ export const usersQuery = queryOptions({
 });
 
 export async function collectionChildren(workspaceId: string) {
-  return listOf((await api<Page<Resource>>(`/v1/resources/${workspaceId}/children`, { query: { $top: 200 } })).data).filter(
-    (resource) => resource.kind === 'list' || resource.kind === 'library',
-  );
+  return listOf(
+    (await api<Page<Resource>>(`/v1/resources/${workspaceId}/children`, { query: { $top: 200 } })).data,
+  ).filter((resource) => resource.kind === 'list' || resource.kind === 'library');
 }
 
 export async function members(workspaceId: string) {
@@ -219,7 +250,9 @@ export async function workflows(workspaceId: string) {
 }
 
 export async function builtIns(workspaceId: string) {
-  return listOf((await api<Page<BuiltInState> | BuiltInState[]>(`/v1/workspaces/${workspaceId}/workflow-builtins`)).data);
+  return listOf(
+    (await api<Page<BuiltInState> | BuiltInState[]>(`/v1/workspaces/${workspaceId}/workflow-builtins`)).data,
+  );
 }
 
 export async function workflowRuns(workspaceId: string) {

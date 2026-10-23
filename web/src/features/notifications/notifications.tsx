@@ -1,6 +1,15 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { AlertTriangle, Bell, CheckCheck, ClipboardCheck, Mail, type LucideIcon } from 'lucide-react';
+import {
+  AlertTriangle,
+  AtSign,
+  Bell,
+  CheckCheck,
+  ClipboardCheck,
+  Mail,
+  MessageSquare,
+  type LucideIcon,
+} from 'lucide-react';
 import { useState } from 'react';
 import { api } from '@/api/http';
 import { keys, notificationsQuery, resourceQuery, unreadNotificationsQuery } from '@/api/queries';
@@ -17,6 +26,8 @@ const kinds: Record<Notification['type'], { label: string; icon: LucideIcon }> =
   'task.assigned': { label: 'Task for you', icon: ClipboardCheck },
   'task.completed': { label: 'Task answered', icon: CheckCheck },
   'workflow.failed': { label: 'Workflow failed', icon: AlertTriangle },
+  'comment.mentioned': { label: 'Mention', icon: AtSign },
+  'comment.replied': { label: 'Reply', icon: MessageSquare },
 };
 
 /** Marks notifications read, or with no IDs all of them, and deletes them. */
@@ -35,7 +46,7 @@ export function useNotificationActions() {
   return { markRead, remove };
 }
 
-/** Opens what a notification links to: its task, its item in its list or library, or its run. */
+/** Opens what a notification links to: its task, its item in its list or library (on the Discussion tab for a comment), or its run. */
 export function useOpenNotification() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -48,7 +59,9 @@ export function useOpenNotification() {
       await navigate({
         to: '/w/$workspaceId/l/$listId',
         params: { workspaceId: notification.workspace_id, listId: item.container_id },
-        search: { item: notification.item_id },
+        search: notification.comment_id
+          ? { item: notification.item_id, tab: 'discussion' }
+          : { item: notification.item_id },
       });
     } else if (notification.run_id && notification.workspace_id) {
       await navigate({
@@ -76,7 +89,10 @@ export function NotificationRow({ notification, onOpen }: { notification: Notifi
         aria-hidden
       />
       <span className="min-w-0 flex-1">
-        <span className={cn('block truncate text-[13px]', unread && 'font-semibold')}>{notification.title}</span>
+        <span className={cn('block truncate text-[13px]', unread && 'font-semibold')}>
+          {notification.title}
+          {notification.count > 1 && <span className="ml-1 text-xs font-normal text-muted">×{notification.count}</span>}
+        </span>
         {notification.body && (
           <span className="line-clamp-2 block text-xs whitespace-pre-line text-muted">{notification.body}</span>
         )}
