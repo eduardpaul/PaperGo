@@ -1,42 +1,28 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, redirect } from "@tanstack/react-router";
-import { ChevronDown, ChevronRight } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { authenticationMode } from "@/api/auth";
-import { api } from "@/api/http";
-import {
-  collectionChildren,
-  scopes,
-  tokens,
-  workspacesQuery,
-} from "@/api/queries";
-import type { AccessToken, CreatedAccessToken, Resource } from "@/api/types";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  ConfirmDialog,
-  CopyField,
-  SettingRow,
-  SettingsSection,
-} from "@/features/settings/section";
-import { problemMessage } from "@/lib/errors";
-import { useFormat } from "@/lib/preferences";
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { createFileRoute } from '@tanstack/react-router';
+import { ChevronDown, ChevronRight } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { api } from '@/api/http';
+import { collectionChildren, scopes, tokens, workspacesQuery } from '@/api/queries';
+import type { AccessToken, CreatedAccessToken, Resource } from '@/api/types';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { ConfirmDialog, CopyField, SettingRow, SettingsSection } from '@/features/settings/section';
+import { problemMessage } from '@/lib/errors';
+import { useFormat } from '@/lib/preferences';
 
-export const Route = createFileRoute("/_app/settings/assistants")({
-  beforeLoad: () => {
-    if (authenticationMode() === "proxy") throw redirect({ to: "/settings" });
-  },
+export const Route = createFileRoute('/_app/settings/assistants')({
   component: AssistantsPage,
 });
 
 /** What a read-only connection may do; read and write adds list.write. */
 export const ReadScopes = [
-  "workspace.read",
-  "list.read",
-  "contentType.read",
-  "document.read",
-  "taxonomy.read",
-  "user.read",
+  'workspace.read',
+  'list.read',
+  'contentType.read',
+  'document.read',
+  'taxonomy.read',
+  'user.read',
 ];
 /** The most places one connection can be limited to. */
 export const MaxPlaces = 50;
@@ -54,7 +40,7 @@ export function jsonConfig(secret: string) {
   return JSON.stringify({
     mcpServers: {
       papergo: {
-        type: "http",
+        type: 'http',
         url: endpoint(),
         headers: { Authorization: `Bearer ${secret}` },
       },
@@ -64,71 +50,61 @@ export function jsonConfig(secret: string) {
 
 /** "Read only · Everything" or "Read and write · 2 places". */
 export function summary(token: AccessToken) {
-  const access = token.scopes?.includes("list.write")
-    ? "Read and write"
-    : "Read only";
+  const access = token.scopes?.includes('list.write') ? 'Read and write' : 'Read only';
   const places = token.resources?.length ?? 0;
-  return `${access} · ${places === 0 ? "Everything" : places === 1 ? "1 place" : `${places} places`}`;
+  return `${access} · ${places === 0 ? 'Everything' : places === 1 ? '1 place' : `${places} places`}`;
 }
 
 function AssistantsPage() {
   const format = useFormat();
   const queryClient = useQueryClient();
-  const list = useQuery({ queryKey: ["tokens"], queryFn: tokens });
-  const mine = useQuery({ queryKey: ["my-scopes"], queryFn: scopes });
-  const [name, setName] = useState("AI assistant");
+  const list = useQuery({ queryKey: ['tokens'], queryFn: tokens });
+  const mine = useQuery({ queryKey: ['my-scopes'], queryFn: scopes });
+  const [name, setName] = useState('AI assistant');
   const [write, setWrite] = useState(false);
   const [advanced, setAdvanced] = useState(false);
   const [limited, setLimited] = useState(false);
   const [places, setPlaces] = useState<string[]>([]);
-  const [days, setDays] = useState("90");
+  const [days, setDays] = useState('90');
   const [created, setCreated] = useState<CreatedAccessToken | null>(null);
   const [revoking, setRevoking] = useState<AccessToken | null>(null);
   const result = useRef<HTMLDivElement>(null);
   // The new connection's setup appears below the form; bring it into view.
   useEffect(() => {
-    if (created)
-      result.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    if (created) result.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
   }, [created]);
 
   const held = mine.data ?? [];
-  const canRead = held.includes("list.read");
-  const canWrite = held.includes("list.write");
+  const canRead = held.includes('list.read');
+  const canWrite = held.includes('list.write');
   const expires = Number(days);
-  const validExpiry =
-    Number.isInteger(expires) && expires >= 1 && expires <= 3650;
-  const validPlaces =
-    !limited || (places.length > 0 && places.length <= MaxPlaces);
+  const validExpiry = Number.isInteger(expires) && expires >= 1 && expires <= 3650;
+  const validPlaces = !limited || (places.length > 0 && places.length <= MaxPlaces);
   const issue = useMutation({
     mutationFn: () =>
-      api<CreatedAccessToken>("/v1/identity/me/tokens", {
-        method: "POST",
+      api<CreatedAccessToken>('/v1/identity/me/tokens', {
+        method: 'POST',
         body: {
           name: name.trim(),
-          scopes: [...ReadScopes, ...(write ? ["list.write"] : [])].filter(
-            (scope) => held.includes(scope),
-          ),
+          scopes: [...ReadScopes, ...(write ? ['list.write'] : [])].filter((scope) => held.includes(scope)),
           resources: limited ? places : undefined,
           expires_in_days: expires,
         },
       }).then((result) => result.data),
     onSuccess: async (connection) => {
       setCreated(connection);
-      await queryClient.invalidateQueries({ queryKey: ["tokens"] });
+      await queryClient.invalidateQueries({ queryKey: ['tokens'] });
     },
   });
   const revoke = useMutation({
-    mutationFn: (id: string) =>
-      api(`/v1/identity/me/tokens/${id}`, { method: "DELETE" }),
+    mutationFn: (id: string) => api(`/v1/identity/me/tokens/${id}`, { method: 'DELETE' }),
     onSuccess: async () => {
       setRevoking(null);
-      await queryClient.invalidateQueries({ queryKey: ["tokens"] });
+      await queryClient.invalidateQueries({ queryKey: ['tokens'] });
     },
   });
   // Any token that reads lists can connect an assistant.
-  const connections = (list.data ?? []).filter((token) =>
-    token.scopes?.includes("list.read"),
-  );
+  const connections = (list.data ?? []).filter((token) => token.scopes?.includes('list.read'));
 
   return (
     <div className="flex flex-col gap-5">
@@ -138,43 +114,20 @@ function AssistantsPage() {
         actions={
           <Button
             variant="primary"
-            disabled={
-              issue.isPending ||
-              !canRead ||
-              !name.trim() ||
-              !validExpiry ||
-              !validPlaces
-            }
+            disabled={issue.isPending || !canRead || !name.trim() || !validExpiry || !validPlaces}
             onClick={() => issue.mutate()}
           >
             Create connection
           </Button>
         }
       >
-        <SettingRow
-          id="assistant-name"
-          label="Name"
-          hint="So you recognise it later, such as the assistant it is for."
-        >
-          <Input
-            id="assistant-name"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-          />
+        <SettingRow id="assistant-name" label="Name" hint="So you recognise it later, such as the assistant it is for.">
+          <Input id="assistant-name" value={name} onChange={(event) => setName(event.target.value)} />
         </SettingRow>
         <SettingRow id="assistant-access" label="Access">
-          <div
-            role="radiogroup"
-            aria-labelledby="assistant-access-label"
-            className="flex flex-col gap-1.5"
-          >
+          <div role="radiogroup" aria-labelledby="assistant-access-label" className="flex flex-col gap-1.5">
             <label className="flex items-center gap-2 text-[13px]">
-              <input
-                type="radio"
-                name="assistant-access"
-                checked={!write}
-                onChange={() => setWrite(false)}
-              />
+              <input type="radio" name="assistant-access" checked={!write} onChange={() => setWrite(false)} />
               Read only
             </label>
             <label className="flex items-center gap-2 text-[13px]">
@@ -195,37 +148,18 @@ function AssistantsPage() {
           aria-expanded={advanced}
           onClick={() => setAdvanced((open) => !open)}
         >
-          {advanced ? (
-            <ChevronDown className="size-4" />
-          ) : (
-            <ChevronRight className="size-4" />
-          )}{" "}
-          Advanced options
+          {advanced ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />} Advanced options
         </button>
         {advanced && (
           <>
             <SettingRow id="assistant-reach" label="Reach">
-              <div
-                role="radiogroup"
-                aria-labelledby="assistant-reach-label"
-                className="flex flex-col gap-1.5"
-              >
+              <div role="radiogroup" aria-labelledby="assistant-reach-label" className="flex flex-col gap-1.5">
                 <label className="flex items-center gap-2 text-[13px]">
-                  <input
-                    type="radio"
-                    name="assistant-reach"
-                    checked={!limited}
-                    onChange={() => setLimited(false)}
-                  />
+                  <input type="radio" name="assistant-reach" checked={!limited} onChange={() => setLimited(false)} />
                   Everything I can access
                 </label>
                 <label className="flex items-center gap-2 text-[13px]">
-                  <input
-                    type="radio"
-                    name="assistant-reach"
-                    checked={limited}
-                    onChange={() => setLimited(true)}
-                  />
+                  <input type="radio" name="assistant-reach" checked={limited} onChange={() => setLimited(true)} />
                   Only selected workspaces, lists and libraries
                 </label>
               </div>
@@ -238,8 +172,8 @@ function AssistantsPage() {
                   places.length > MaxPlaces
                     ? `Choose at most ${MaxPlaces}.`
                     : places.length === 0
-                      ? "Choose at least one. A workspace includes the lists and libraries added to it later."
-                      : "A workspace includes the lists and libraries added to it later."
+                      ? 'Choose at least one. A workspace includes the lists and libraries added to it later.'
+                      : 'A workspace includes the lists and libraries added to it later.'
                 }
               >
                 <PlacePicker selected={places} onChange={setPlaces} />
@@ -256,13 +190,9 @@ function AssistantsPage() {
           </>
         )}
         {mine.isSuccess && !canRead && (
-          <p className="text-sm text-muted">
-            Reading lists is required to connect an assistant.
-          </p>
+          <p className="text-sm text-muted">Reading lists is required to connect an assistant.</p>
         )}
-        {issue.isError && (
-          <p className="text-sm text-danger">{problemMessage(issue.error)}</p>
-        )}
+        {issue.isError && <p className="text-sm text-danger">{problemMessage(issue.error)}</p>}
       </SettingsSection>
       {created && (
         <div ref={result}>
@@ -278,20 +208,14 @@ function AssistantsPage() {
                 <CopyField label="Token" value={created.secret} />
               </SettingRow>
               <SettingRow id="assistant-claude" label="Claude Code">
-                <CopyField
-                  label="Claude Code command"
-                  value={claudeCode(created.secret)}
-                />
+                <CopyField label="Claude Code command" value={claudeCode(created.secret)} />
               </SettingRow>
               <SettingRow
                 id="assistant-json"
                 label="Other assistants"
                 hint="For clients configured with JSON, such as Cursor or VS Code."
               >
-                <CopyField
-                  label="JSON configuration"
-                  value={jsonConfig(created.secret)}
-                />
+                <CopyField label="JSON configuration" value={jsonConfig(created.secret)} />
               </SettingRow>
             </div>
           </SettingsSection>
@@ -303,33 +227,21 @@ function AssistantsPage() {
       >
         <ul className="flex flex-col gap-2">
           {connections.map((token) => (
-            <li
-              key={token.id}
-              className="flex items-center gap-3 rounded-md border px-3 py-2"
-            >
+            <li key={token.id} className="flex items-center gap-3 rounded-md border px-3 py-2">
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[13px] font-medium">{token.name}</p>
                 <p className="text-xs text-muted">
-                  {summary(token)} ·{" "}
-                  {token.last_used_at
-                    ? `last used ${format.date(token.last_used_at)}`
-                    : "never used"}{" "}
-                  · expires{" "}
-                  {token.expires_at ? format.date(token.expires_at) : "never"}
+                  {summary(token)} ·{' '}
+                  {token.last_used_at ? `last used ${format.date(token.last_used_at)}` : 'never used'} · expires{' '}
+                  {token.expires_at ? format.date(token.expires_at) : 'never'}
                 </p>
               </div>
-              <Button
-                size="sm"
-                variant="danger"
-                onClick={() => setRevoking(token)}
-              >
+              <Button size="sm" variant="danger" onClick={() => setRevoking(token)}>
                 Revoke
               </Button>
             </li>
           ))}
-          {list.isFetched && connections.length === 0 && (
-            <li className="text-sm text-muted">No connections yet.</li>
-          )}
+          {list.isFetched && connections.length === 0 && <li className="text-sm text-muted">No connections yet.</li>}
         </ul>
       </SettingsSection>
       <ConfirmDialog
@@ -337,7 +249,7 @@ function AssistantsPage() {
         onOpenChange={(open) => {
           if (!open) setRevoking(null);
         }}
-        title={`Revoke ${revoking?.name ?? "this connection"}?`}
+        title={`Revoke ${revoking?.name ?? 'this connection'}?`}
         description="Assistants using it stop working at once. This cannot be undone; create a new connection to reconnect."
         confirm="Revoke"
         busy={revoke.isPending}
@@ -349,25 +261,15 @@ function AssistantsPage() {
 }
 
 /** Workspaces with their lists and libraries; ticking a workspace takes all of it. */
-function PlacePicker({
-  selected,
-  onChange,
-}: {
-  selected: string[];
-  onChange: (ids: string[]) => void;
-}) {
+function PlacePicker({ selected, onChange }: { selected: string[]; onChange: (ids: string[]) => void }) {
   const workspaces = useQuery(workspacesQuery);
-  const [filter, setFilter] = useState("");
+  const [filter, setFilter] = useState('');
   // Taking a whole workspace drops its lists and libraries ticked one by one.
   const toggle = (id: string, on: boolean, drop: string[] = []) =>
     onChange(
-      on
-        ? [...selected.filter((other) => !drop.includes(other)), id]
-        : selected.filter((other) => other !== id),
+      on ? [...selected.filter((other) => !drop.includes(other)), id] : selected.filter((other) => other !== id),
     );
-  const shown = (workspaces.data ?? []).filter(
-    (workspace) => workspace.kind === "workspace",
-  );
+  const shown = (workspaces.data ?? []).filter((workspace) => workspace.kind === 'workspace');
   return (
     <div className="flex flex-col gap-2">
       <Input
@@ -386,14 +288,10 @@ function PlacePicker({
             onToggle={toggle}
           />
         ))}
-        {workspaces.isFetched && shown.length === 0 && (
-          <p className="text-sm text-muted">No workspaces.</p>
-        )}
+        {workspaces.isFetched && shown.length === 0 && <p className="text-sm text-muted">No workspaces.</p>}
       </div>
       <p className="text-xs text-muted">
-        {selected.length === 1
-          ? "1 place selected"
-          : `${selected.length} places selected`}
+        {selected.length === 1 ? '1 place selected' : `${selected.length} places selected`}
       </p>
     </div>
   );
@@ -412,41 +310,28 @@ function WorkspacePlaces({
 }) {
   const [open, setOpen] = useState(false);
   const collections = useQuery({
-    queryKey: ["resources", workspace.id, "collections"],
+    queryKey: ['resources', workspace.id, 'collections'],
     queryFn: () => collectionChildren(workspace.id),
-    enabled: open || filter !== "",
+    enabled: open || filter !== '',
   });
   const needle = filter.trim().toLowerCase();
   const matching = useMemo(
-    () =>
-      (collections.data ?? []).filter(
-        (collection) =>
-          !needle || collection.name.toLowerCase().includes(needle),
-      ),
+    () => (collections.data ?? []).filter((collection) => !needle || collection.name.toLowerCase().includes(needle)),
     [collections.data, needle],
   );
   const whole = selected.includes(workspace.id);
-  if (
-    needle &&
-    !workspace.name.toLowerCase().includes(needle) &&
-    matching.length === 0
-  )
-    return null;
+  if (needle && !workspace.name.toLowerCase().includes(needle) && matching.length === 0) return null;
   return (
     <div>
       <div className="flex items-center gap-1">
         <button
           type="button"
-          aria-label={`${open ? "Hide" : "Show"} ${workspace.name}'s lists and libraries`}
+          aria-label={`${open ? 'Hide' : 'Show'} ${workspace.name}'s lists and libraries`}
           aria-expanded={open}
           className="text-muted"
           onClick={() => setOpen((value) => !value)}
         >
-          {open ? (
-            <ChevronDown className="size-4" />
-          ) : (
-            <ChevronRight className="size-4" />
-          )}
+          {open ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
         </button>
         <label className="flex items-center gap-2 text-[13px] font-medium">
           <input
@@ -466,22 +351,15 @@ function WorkspacePlaces({
       {(open || needle) && (
         <div className="ml-6 flex flex-col gap-1 py-1">
           {matching.map((collection) => (
-            <label
-              key={collection.id}
-              className="flex items-center gap-2 text-[13px]"
-            >
+            <label key={collection.id} className="flex items-center gap-2 text-[13px]">
               <input
                 type="checkbox"
                 checked={whole || selected.includes(collection.id)}
                 disabled={whole}
-                onChange={(event) =>
-                  onToggle(collection.id, event.target.checked)
-                }
+                onChange={(event) => onToggle(collection.id, event.target.checked)}
               />
               {collection.name}
-              <span className="text-xs text-muted">
-                {collection.kind === "library" ? "Library" : "List"}
-              </span>
+              <span className="text-xs text-muted">{collection.kind === 'library' ? 'Library' : 'List'}</span>
             </label>
           ))}
           {collections.isFetched && matching.length === 0 && (

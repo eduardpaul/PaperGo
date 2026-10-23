@@ -24,26 +24,37 @@ const lists = [
 
 function serve(granted: string[], existing: unknown[] = []) {
   const posts: unknown[] = [];
-  vi.stubGlobal('fetch', vi.fn(async (input: URL, init: RequestInit = {}) => {
-    const path = input.pathname;
-    if (init.method === 'POST') {
-      posts.push(JSON.parse(String(init.body)));
-      return new Response(JSON.stringify({ token: { id: 'new' }, secret: 'pgo_assistant_secret' }));
-    }
-    const data = path.endsWith('/me/scopes') ? granted
-      : path.endsWith('/me/tokens') ? existing
-      : path === '/v1/workspaces' ? { value: [workspace], '@odata.nextLink': null }
-      : path === '/v1/resources/w1/children' ? { value: lists, '@odata.nextLink': null }
-      : [];
-    return new Response(JSON.stringify(data));
-  }));
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: URL, init: RequestInit = {}) => {
+      const path = input.pathname;
+      if (init.method === 'POST') {
+        posts.push(JSON.parse(String(init.body)));
+        return new Response(JSON.stringify({ token: { id: 'new' }, secret: 'pgo_assistant_secret' }));
+      }
+      const data = path.endsWith('/me/scopes')
+        ? granted
+        : path.endsWith('/me/tokens')
+          ? existing
+          : path === '/v1/workspaces'
+            ? { value: [workspace], '@odata.nextLink': null }
+            : path === '/v1/resources/w1/children'
+              ? { value: lists, '@odata.nextLink': null }
+              : [];
+      return new Response(JSON.stringify(data));
+    }),
+  );
   return posts;
 }
 
 function show() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   const Page = Route.options.component as ComponentType;
-  render(<QueryClientProvider client={client}><Page /></QueryClientProvider>);
+  render(
+    <QueryClientProvider client={client}>
+      <Page />
+    </QueryClientProvider>,
+  );
   return client;
 }
 
@@ -58,7 +69,9 @@ it('connects a read-only assistant to everything in one step', async () => {
   expect(await screen.findByDisplayValue('pgo_assistant_secret')).toBeTruthy();
   expect(posts).toEqual([{ name: 'AI assistant', scopes: reading, expires_in_days: 90 }]);
   expect(screen.getByDisplayValue(`${window.location.origin}/v1/mcp`)).toBeTruthy();
-  expect((screen.getByLabelText('Claude Code command') as HTMLInputElement).value).toContain('Authorization: Bearer pgo_assistant_secret');
+  expect((screen.getByLabelText('Claude Code command') as HTMLInputElement).value).toContain(
+    'Authorization: Bearer pgo_assistant_secret',
+  );
   client.clear();
 });
 
@@ -78,7 +91,9 @@ it('limits a read-and-write connection to chosen places under advanced options',
   await waitFor(() => expect(create.disabled).toBe(false));
   fireEvent.click(create);
   await screen.findByDisplayValue('pgo_assistant_secret');
-  expect(posts).toEqual([{ name: 'AI assistant', scopes: [...reading, 'list.write'], resources: ['l1', 'l2'], expires_in_days: 30 }]);
+  expect(posts).toEqual([
+    { name: 'AI assistant', scopes: [...reading, 'list.write'], resources: ['l1', 'l2'], expires_in_days: 30 },
+  ]);
   client.clear();
 });
 
@@ -105,23 +120,49 @@ it('offers read and write only to people who can write', async () => {
 });
 
 it('summarises what a connection reaches', () => {
-  const token = { id: 't', name: 'n', prefix: 'p', subject: 's', integration: false, created_by: 's', created_at: '', expires_at: null };
+  const token = {
+    id: 't',
+    name: 'n',
+    prefix: 'p',
+    subject: 's',
+    integration: false,
+    created_by: 's',
+    created_at: '',
+    expires_at: null,
+  };
   expect(summary({ ...token, scopes: reading })).toBe('Read only · Everything');
-  expect(summary({ ...token, scopes: [...reading, 'list.write'], resources: ['a', 'b'] })).toBe('Read and write · 2 places');
+  expect(summary({ ...token, scopes: [...reading, 'list.write'], resources: ['a', 'b'] })).toBe(
+    'Read and write · 2 places',
+  );
   expect(summary({ ...token, scopes: reading, resources: ['a'] })).toBe('Read only · 1 place');
 });
 
 it('asks before revoking a connection', async () => {
   const deleted: string[] = [];
-  const existing = [{ id: 'tok1', name: 'Claude', prefix: 'pgo_x', subject: 'a', integration: false, created_by: 'a', created_at: '', expires_at: null,
-    scopes: reading, resources: ['l1'] }];
-  vi.stubGlobal('fetch', vi.fn(async (input: URL, init: RequestInit = {}) => {
-    if (init.method === 'DELETE') {
-      deleted.push(input.pathname);
-      return new Response(null, { status: 204 });
-    }
-    return new Response(JSON.stringify(input.pathname.endsWith('/me/tokens') ? existing : reading));
-  }));
+  const existing = [
+    {
+      id: 'tok1',
+      name: 'Claude',
+      prefix: 'pgo_x',
+      subject: 'a',
+      integration: false,
+      created_by: 'a',
+      created_at: '',
+      expires_at: null,
+      scopes: reading,
+      resources: ['l1'],
+    },
+  ];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: URL, init: RequestInit = {}) => {
+      if (init.method === 'DELETE') {
+        deleted.push(input.pathname);
+        return new Response(null, { status: 204 });
+      }
+      return new Response(JSON.stringify(input.pathname.endsWith('/me/tokens') ? existing : reading));
+    }),
+  );
   const client = show();
   expect(await screen.findByText(/Read only · 1 place/)).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Revoke' }));

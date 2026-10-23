@@ -23,6 +23,11 @@ Decisions:
 - **One access level per connection:** read only, or read and write.
 - **The endpoint is the app's own host:** `https://<app host>/v1/mcp`, the
   documented layout. There is no setting for another address.
+- **Proxy deployments work too.** People signed in through the proxy create
+  personal tokens, which the API now accepts in every mode; the proxy routes
+  exactly `/v1/mcp` past its Basic sign-in to papergo-mcp, as the NPM
+  sample does. Tokens do not pass through the proxy, so a departing person
+  is also deactivated in PaperGo.
 - **The API enforces the limit, not papergo-mcp.** A limited token is
   limited everywhere: REST, WebDAV, queued work and MCP alike.
 

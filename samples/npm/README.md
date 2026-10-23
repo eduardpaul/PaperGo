@@ -28,7 +28,7 @@ curl --noproxy '*' --resolve papergo.localhost:18443:127.0.0.1 \
   https://papergo.localhost:18443/v1/identity/me
 ```
 
-Open the public origin in a browser and sign in with the NPM application username and password at the browser’s HTTP authentication prompt. The embedded frontend automatically loads the verified PaperGo profile without asking for a bearer token. `/auth/config` reports proxy mode; the protected `/` location also covers this endpoint, frontend assets and every API route. WebDAV uses the same NPM credentials. `verify.py` checks the embedded app, deep links, protected frontend assets and proxy auth configuration, then creates a test workspace and library, exercises REST and Unicode WebDAV paths with chunked uploads, COPY and MOVE, and rejects unauthenticated requests and forged identity headers. Run `python3 verify.py --large-upload` to also check a 64 MiB upload and download at the configured limit.
+Open the public origin in a browser and sign in with the NPM application username and password at the browser’s HTTP authentication prompt. The embedded frontend automatically loads the verified PaperGo profile without asking for a bearer token. `/auth/config` reports proxy mode; the protected `/` location also covers this endpoint, frontend assets and every API route; only the MCP endpoint, `/v1/mcp`, takes [access tokens](#ai-assistants) instead. WebDAV uses the same NPM credentials. `verify.py` checks the embedded app, deep links, protected frontend assets and proxy auth configuration, then creates a test workspace and library, exercises REST and Unicode WebDAV paths with chunked uploads, COPY and MOVE, rejects unauthenticated requests and forged identity headers, and connects an AI assistant limited to the test library through `/v1/mcp` with a personal token that NPM's sign-in would refuse elsewhere. Run `python3 verify.py --large-upload` to also check a 64 MiB upload and download at the configured limit.
 
 ## Deploy with a public certificate
 
@@ -51,11 +51,17 @@ Open `http://127.0.0.1:8181`. Public ports expose NPM only; PaperGo has no host 
 
 ## Users, roles and profiles
 
-In NPM, edit the **PaperGo users** Access List to add application users. Keep **Satisfy Any** and **Pass Auth to Host** disabled. Preserve the generated TLS redirect, protected `/` location and forwarding headers. New usernames enroll with PaperGo's Member role on their first request. `ADMIN_SUBJECT` names the first application administrator; the initial username is `papergo-admin`.
+In NPM, edit the **PaperGo users** Access List to add application users. Keep **Satisfy Any** and **Pass Auth to Host** disabled. Preserve the generated TLS redirect, protected `/` location, the `/v1/mcp` location and forwarding headers. New usernames enroll with PaperGo's Member role on their first request. `ADMIN_SUBJECT` names the first application administrator; the initial username is `papergo-admin`.
 
 Use the frontend’s Administration screens or `/v1/identity` to manage application profiles, groups and role assignments. NPM does not supply group or role claims. Usernames are stable application subjects: choosing another username creates another identity and does not transfer permissions. Keep an active application administrator in the Access List when editing credentials.
 
-Removing NPM credentials blocks new requests. Disabling the PaperGo user through its status API also revokes ongoing application access. The frontend hides personal access tokens and displays proxy WebDAV instructions instead of access-token creation. Browser HTTP credentials are managed by the proxy and browser; PaperGo does not provide a proxy logout endpoint. Personal access-token endpoints are unavailable in proxy mode; automations should have their own NPM username and appropriately limited PaperGo roles.
+Removing NPM credentials blocks new browser and WebDAV requests. Disabling the PaperGo user through Administration → Users or its status API also stops ongoing application access and every access token the person holds. The frontend displays proxy WebDAV instructions instead of WebDAV credentials. Browser HTTP credentials are managed by the proxy and browser; PaperGo does not provide a proxy logout endpoint.
+
+## AI assistants
+
+The stack runs [`papergo-mcp`](../../docs/mcp.md) beside PaperGo, on the private network without a published port. Signed-in people connect an assistant under **Settings → AI assistants**, to everything they can access or to chosen workspaces, lists and libraries, and add the shown address, `https://<host>/v1/mcp`, and token to the assistant. Setup adds an exact `/v1/mcp` location to the proxy host's Advanced configuration: it has no Basic sign-in, since the assistant's `Authorization` header carries its token, asserts no proxy identity, and forwards to `papergo-mcp`, which asks PaperGo to check the token on every request. Every other path keeps the Access List.
+
+Access tokens act without passing through NPM, so removing someone from the Access List does not stop them. When someone leaves, also deactivate them in PaperGo, which stops all their tokens at once; administrators see and revoke every token under Administration → Access tokens. Automations can use a personal token or an administrator's integration token, each limited to the places it needs.
 
 PaperGo validates the actual forwarding peer, secret and username. It rejects duplicate assertion headers, forwarded `Authorization`, client attempts to override the assertion in batches, and cross-origin browser mutations. NPM overwrites incoming assertion headers with the authenticated username and configured secret.
 

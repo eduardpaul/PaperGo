@@ -7,8 +7,8 @@ It is a separate process in front of the PaperGo API. It holds no data, no datab
 ## Who can connect
 
 - **Clients:** any MCP client that can send an `Authorization` header with a remote (Streamable HTTP) server, such as Claude Code, Cursor or VS Code. Clients that connect to remote servers only through OAuth sign-in cannot connect: the server offers no OAuth.
-- **People:** in deployments with local, OIDC or development authentication, each person creates a connection under Settings → AI assistants and connects as themselves, to everything they can access or to chosen places. With proxy authentication (`AUTH_MODE=proxy`) personal tokens do not exist; an administrator creates an integration token, which can be limited to places in the same way, and whose service identity needs its own access to workspaces.
-- **Hosts:** with proxy authentication the browser hostname sits behind the proxy's Basic sign-in, which takes the `Authorization` header. Serve the MCP endpoint on a separate hostname whose proxy route has no Basic sign-in and forwards `Authorization` unchanged.
+- **People:** in every authentication mode, proxy included, each person creates a connection under Settings → AI assistants and connects as themselves, to everything they can access or to chosen places. Administrators can also create integration tokens, limited in the same way, for a service identity with its own access.
+- **Hosts:** with proxy authentication the proxy's Basic sign-in would take the `Authorization` header the assistant sends. Exempt the exact `/v1/mcp` route from it, forwarding `Authorization` unchanged to `papergo-mcp` and asserting no proxy identity there; PaperGo checks the token on every request. The [NPM sample](../samples/npm/README.md) does this, so the endpoint stays on the app's own host.
 
 ## Endpoint
 

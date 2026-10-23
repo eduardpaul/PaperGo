@@ -55,6 +55,36 @@ def request(method, path, body=None, *, authenticated=True, headers=None, expect
     return json.loads(data) if data and data.lstrip().startswith((b"{", b"[")) else data
 
 
+def mcp(token, method, params, expected=200):
+    """One stateless MCP request to /v1/mcp with a bearer token and no Basic login."""
+    headers = {"Accept": "application/json, text/event-stream", "MCP-Protocol-Version": "2025-06-18"}
+    if token:
+        headers["Authorization"] = "Bearer " + token
+    return request("POST", "/v1/mcp", {"jsonrpc": "2.0", "id": 1, "method": method, "params": params},
+                   authenticated=False, headers=headers, expected=expected)
+
+
+def verify_mcp(workspace, library):
+    """A person signed in through NPM connects an assistant limited to one
+    library; the assistant reaches papergo-mcp past the Basic sign-in with
+    that token alone, and sees only that library."""
+    connection = request("POST", "/v1/identity/me/tokens", {"name": "NPM verification assistant", "scopes": ["workspace.read", "list.read"],
+                                                            "resources": [library["id"]], "expires_in_days": 1}, expected=201)
+    try:
+        mcp(None, "tools/list", {}, expected=401)
+        request("GET", "/v1/identity/me", authenticated=False, headers={"Authorization": "Bearer " + connection["secret"]}, expected=401)
+        initialized = mcp(connection["secret"], "initialize", {"protocolVersion": "2025-06-18", "capabilities": {},
+                                                               "clientInfo": {"name": "verify", "version": "1"}})
+        assert initialized["result"]["serverInfo"]["name"], initialized
+        listed = mcp(connection["secret"], "tools/call", {"name": "list_collections", "arguments": {"workspace_id": workspace["id"]}})
+        collections = listed["result"]["structuredContent"]["value"]
+        assert [c["id"] for c in collections] == [library["id"]], listed
+        workspaces = mcp(connection["secret"], "tools/call", {"name": "list_workspaces", "arguments": {}})
+        assert [w["id"] for w in workspaces["result"]["structuredContent"]["value"]] == [workspace["id"]], workspaces
+    finally:
+        request("DELETE", f"/v1/identity/me/tokens/{connection['token']['id']}", expected=204)
+
+
 def main():
     global settings, credentials, hostname, port, origin, context
     parser = argparse.ArgumentParser(description=__doc__)
@@ -86,7 +116,7 @@ def main():
     assert request("GET", "/v1/search/status")["store"] == "zvec", "NPM sample must use native zvec search"
     spoofed = request("GET", "/v1/identity/me", headers={"X-Papergo-Subject": "forged-admin", "X-Papergo-Proxy-Secret": "forged"})
     assert spoofed["subject"] == me["subject"]
-    request("GET", "/v1/identity/me/tokens", expected=404)
+    assert isinstance(request("GET", "/v1/identity/me/tokens"), list)
     batch = request("POST", "/v1/$batch", {"requests": [{"id": "me", "method": "GET", "url": "identity/me"}]})
     assert batch["responses"][0]["status"] == 200 and batch["responses"][0]["body"]["subject"] == me["subject"]
     request("POST", "/v1/$batch", {"requests": [{"id": "me", "method": "GET", "url": "identity/me", "headers": {"X-Papergo-Subject": "forged"}}]}, expected=400)
@@ -114,16 +144,18 @@ def main():
     assert request("GET", folder + "/chunked.pdf") == content
     request("COPY", folder + "/chunked.pdf", headers={"Destination": origin + folder + "/copied.pdf"}, expected=201)
     assert request("GET", folder + "/copied.pdf") == content
+    verify_mcp(workspace, library)
     if args.large_upload:
         large = content + b"\0" * (64 * 1024 * 1024 - len(content))
         request("PUT", folder + "/large.pdf", large, headers={"Content-Type": "application/pdf"}, expected=201)
         assert request("GET", folder + "/large.pdf") == large
         print("Verified a 64 MiB upload and download at MAX_UPLOAD_BYTES.")
     command = ["docker", "compose", "--env-file", str(ROOT / ".env"), "-f", str(ROOT / "compose.yaml")]
-    cid = subprocess.check_output(command + ["ps", "-q", "papergo"], text=True).strip()
-    ports = json.loads(subprocess.check_output(["docker", "inspect", "--format", "{{json .NetworkSettings.Ports}}", cid], text=True))
-    assert not any(ports.values()), "PaperGo backend was published on the host"
-    print("Verified embedded UI, deep links, frontend assets, proxy auth configuration, HTTP-to-HTTPS redirect, HTTPS, NPM login, header-spoofing rejection, batch identity, CSRF rejection, private backend, REST writes, and Unicode WebDAV PUT/GET/MOVE/COPY with chunked uploads.")
+    for service in ("papergo", "papergo-mcp"):
+        cid = subprocess.check_output(command + ["ps", "-q", service], text=True).strip()
+        ports = json.loads(subprocess.check_output(["docker", "inspect", "--format", "{{json .NetworkSettings.Ports}}", cid], text=True))
+        assert not any(ports.values()), f"{service} was published on the host"
+    print("Verified embedded UI, deep links, frontend assets, proxy auth configuration, HTTP-to-HTTPS redirect, HTTPS, NPM login, header-spoofing rejection, batch identity, CSRF rejection, private backends, REST writes, Unicode WebDAV PUT/GET/MOVE/COPY with chunked uploads, and an AI assistant connection limited to one library through /v1/mcp.")
     print(f"Test workspace: {workspace['id']}; WebDAV library: {library['id']}")
 
 

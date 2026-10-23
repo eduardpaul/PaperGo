@@ -61,6 +61,33 @@ services:
       driver: json-file
       options: {max-size: 10m, max-file: "3"}
 
+  # The MCP server AI assistants connect to at /v1/mcp, with a person's
+  # access token. It holds no data and reaches PaperGo only through its API.
+  papergo-mcp:
+    image: papergo-mcp:npm-sample
+    build:
+      context: ../..
+      dockerfile: extensions/mcp/Dockerfile
+    environment:
+      PAPERGO_MCP_BACKEND_URL: http://papergo:8080
+      PAPERGO_MCP_PUBLIC_URL: ${PAPERGO_MCP_PUBLIC_URL:?Run setup.py first}
+    depends_on:
+      papergo:
+        condition: service_healthy
+    networks:
+      backend:
+        ipv4_address: ${PAPERGO_MCP_PRIVATE_IP:?Run setup.py first}
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    stop_grace_period: 35s
+    mem_limit: 256m
+    pids_limit: 64
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+
   npm:
     image: jc21/nginx-proxy-manager:2.16.0@sha256:4393e642e233e5efd5adeb7f10918d4aaea71c9ed875b94190273fc8e87f9594
     ports:
@@ -77,6 +104,8 @@ services:
     depends_on:
       papergo:
         condition: service_healthy
+      papergo-mcp:
+        condition: service_started
     environment:
       DISABLE_IPV6: "true"
     security_opt: [no-new-privileges:true]

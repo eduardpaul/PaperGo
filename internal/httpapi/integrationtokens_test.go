@@ -99,7 +99,9 @@ func TestAdminIntegrationTokensHaveServiceIdentityScopedAccessAndRevocation(t *t
 	}
 }
 
-func TestProxyAcceptsIntegrationBearerAndRejectsPersonalBearer(t *testing.T) {
+// Proxy deployments accept both kinds of access token: integration tokens
+// for services and personal tokens, such as an AI assistant's.
+func TestProxyAcceptsIntegrationAndPersonalBearer(t *testing.T) {
 	_, s, _ := setup(t)
 	ctx := context.Background()
 	if err := s.Directory().SetAssignment(ctx, "organization-admin", identity.AdministratorRole, identity.Principal{Type: directory.PrincipalUser, ID: "alice"}, false); err != nil {
@@ -121,7 +123,7 @@ func TestProxyAcceptsIntegrationBearerAndRejectsPersonalBearer(t *testing.T) {
 	for _, tc := range []struct {
 		secret string
 		status int
-	}{{integration.Secret, 200}, {personal.Secret, 401}} {
+	}{{integration.Secret, 200}, {personal.Secret, 200}, {"pgo_" + strings.Repeat("x", 43), 401}} {
 		got := request(h, http.MethodGet, "/v1/identity/me", "", tc.secret, "", "")
 		if got.Code != tc.status {
 			t.Fatal(got.Code, got.Body.String())

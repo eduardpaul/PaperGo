@@ -806,7 +806,7 @@ func (a *API) authenticate(next http.Handler) http.Handler {
 		parts := strings.Fields(r.Header.Get("Authorization"))
 		if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") && strings.HasPrefix(parts[1], identity.AccessTokenPrefix) {
 			token, e := a.dms(r).Directory().AuthenticateAccessToken(r.Context(), parts[1])
-			if e != nil || (a.Auth.Kind() == auth.TrustedProxy && !token.Integration) {
+			if e != nil {
 				err = auth.ErrUnauthenticated
 			} else {
 				ident = auth.Identity{Subject: token.Subject}

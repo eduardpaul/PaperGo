@@ -33,9 +33,9 @@ class StartupTests(unittest.TestCase):
         startup, logs = run.call_args_list
         self.assertIn('--build', startup.args[0])
         self.assertTrue(startup.kwargs['check'])
-        self.assertEqual(logs.args[0][-7:],
+        self.assertEqual(logs.args[0][-8:],
                          ['logs', '--no-color', '--tail', '80',
-                          'volume-permissions', 'papergo', 'npm'])
+                          'volume-permissions', 'papergo', 'papergo-mcp', 'npm'])
         self.assertFalse(logs.kwargs['check'])
 
     def test_log_failure_keeps_startup_error(self):
@@ -68,6 +68,20 @@ class SingleBinaryTests(unittest.TestCase):
         self.assertIn('  proxy_trusted_cidrs:\n    - "10.90.0.2/32"', config)
         self.assertIn('  store: zvec', config)
         self.assertIn('  admin_user: "papergo-admin"', config)
+
+    def test_assistants_reach_the_mcp_server_past_the_access_list(self):
+        compose = (Path(__file__).parent / 'compose.yaml').read_text()
+        self.assertIn('dockerfile: extensions/mcp/Dockerfile', compose)
+        self.assertIn('PAPERGO_MCP_BACKEND_URL: http://papergo:8080', compose)
+        for port in (443, 8443):
+            config = setup.proxy_server_config('https://docs.example.com', port)
+            location = config[config.index('location = /v1/mcp {'):]
+            self.assertIn('auth_basic off;', location)
+            self.assertIn('proxy_pass http://papergo-mcp:8081;', location)
+            # No proxy identity reaches the MCP server.
+            self.assertIn('proxy_set_header X-Papergo-Subject "";', location)
+            self.assertIn('proxy_set_header X-Papergo-Proxy-Secret "";', location)
+            self.assertEqual('return 308' in config, port != 443)
 
 
 class EgressTests(unittest.TestCase):
