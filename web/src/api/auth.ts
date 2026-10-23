@@ -5,6 +5,7 @@ export type AuthenticationMode = 'bearer' | 'proxy' | 'local';
 let mode: AuthenticationMode = 'bearer';
 let oidc: OidcSignIn | null = null;
 let mcp: string | null = null;
+let comments = false;
 const TokenKey = 'papergo.token';
 
 export function authenticationMode(): AuthenticationMode {
@@ -14,6 +15,11 @@ export function authenticationMode(): AuthenticationMode {
 /** Where AI assistants reach this deployment's MCP server; null when it runs none. */
 export function mcpEndpoint(): string | null {
   return mcp;
+}
+
+/** Whether the deployment runs discussions on items. */
+export function commentsAvailable(): boolean {
+  return comments;
 }
 
 /** The provider sign-in of OIDC deployments that advertise a browser client; null otherwise. */
@@ -58,7 +64,9 @@ export async function loadAuthentication() {
   const settings = reported === 'bearer' ? oidcSettings((config as { oidc?: unknown }).oidc) : null;
   mode = reported;
   oidc = null;
-  mcp = mcpSetting((config as { mcp_url?: unknown }).mcp_url);
+  const features = (config as { features?: { comments?: unknown; mcp?: { url?: unknown } } }).features;
+  mcp = mcpSetting(features?.mcp?.url);
+  comments = features?.comments === true;
   if (mode === 'proxy' || mode === 'local') clearToken();
   if (settings) {
     // Loaded only by deployments that sign in at an identity provider.

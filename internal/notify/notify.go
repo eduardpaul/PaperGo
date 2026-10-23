@@ -35,15 +35,19 @@ type Message struct {
 	Type        notifications.Type
 	WorkspaceID string
 	Title, Body string
-	// ItemID, TaskID or RunID is what the notification opens.
-	ItemID, TaskID, RunID string
-	Source                notifications.Source
+	// ItemID, TaskID or RunID is what the notification opens; CommentID
+	// opens a comment's thread on ItemID.
+	ItemID, TaskID, RunID, CommentID string
+	Source                           notifications.Source
 	// Sender is who sent the message or caused what it reports, and
 	// WorkflowID the workflow that sent it.
 	Sender, WorkflowID string
 	// DedupKey sends the message to each person once: a later send with
 	// the same key reaches only people who do not have it yet.
 	DedupKey string
+	// CoalesceKey folds the message into a person's unread notification
+	// with the key, which counts one more, instead of adding another.
+	CoalesceKey string
 	// Actor caused what the message reports and is not told about it.
 	Actor string
 	// Allowed reports whether a person may receive the message. Without it,
@@ -100,7 +104,8 @@ func Send(ctx context.Context, t *dms.Service, m Message, people []string) (Resu
 		}
 		_, created, err := t.DAL.Notifications().Create(ctx, notifications.Notification{
 			Recipient: person, WorkspaceID: m.WorkspaceID, Type: m.Type, Title: m.Title, Body: m.Body,
-			ItemID: m.ItemID, TaskID: m.TaskID, RunID: m.RunID, Source: m.Source, Sender: m.Sender, WorkflowID: m.WorkflowID, DedupKey: m.DedupKey,
+			ItemID: m.ItemID, TaskID: m.TaskID, RunID: m.RunID, CommentID: m.CommentID, Source: m.Source, Sender: m.Sender, WorkflowID: m.WorkflowID,
+			DedupKey: m.DedupKey, CoalesceKey: m.CoalesceKey,
 		})
 		if err != nil {
 			return out, err
@@ -170,24 +175,28 @@ type SendInput struct {
 
 // View is a notification as the API shows it.
 type View struct {
-	ID          string               `json:"id"`
-	Type        notifications.Type   `json:"type"`
-	Title       string               `json:"title"`
-	Body        string               `json:"body,omitempty"`
-	WorkspaceID *string              `json:"workspace_id,omitempty"`
-	ItemID      *string              `json:"item_id,omitempty"`
-	TaskID      *string              `json:"task_id,omitempty"`
-	RunID       *string              `json:"run_id,omitempty"`
-	Source      notifications.Source `json:"source"`
-	Sender      *string              `json:"sender,omitempty"`
-	WorkflowID  *string              `json:"workflow_id,omitempty"`
-	CreatedAt   time.Time            `json:"created_at"`
-	ReadAt      *time.Time           `json:"read_at,omitempty"`
+	ID          string             `json:"id"`
+	Type        notifications.Type `json:"type"`
+	Title       string             `json:"title"`
+	Body        string             `json:"body,omitempty"`
+	WorkspaceID *string            `json:"workspace_id,omitempty"`
+	ItemID      *string            `json:"item_id,omitempty"`
+	TaskID      *string            `json:"task_id,omitempty"`
+	RunID       *string            `json:"run_id,omitempty"`
+	CommentID   *string            `json:"comment_id,omitempty"`
+	// Count is how many notifications this one stands for, such as
+	// replies to a thread while it was unread.
+	Count      int64                `json:"count"`
+	Source     notifications.Source `json:"source"`
+	Sender     *string              `json:"sender,omitempty"`
+	WorkflowID *string              `json:"workflow_id,omitempty"`
+	CreatedAt  time.Time            `json:"created_at"`
+	ReadAt     *time.Time           `json:"read_at,omitempty"`
 }
 
 func viewOf(n notifications.Notification) View {
 	return View{ID: n.ID, Type: n.Type, Title: n.Title, Body: n.Body, WorkspaceID: ptr(n.WorkspaceID), ItemID: ptr(n.ItemID), TaskID: ptr(n.TaskID),
-		RunID: ptr(n.RunID), Source: n.Source, Sender: ptr(n.Sender), WorkflowID: ptr(n.WorkflowID), CreatedAt: n.CreatedAt, ReadAt: n.ReadAt}
+		RunID: ptr(n.RunID), CommentID: ptr(n.CommentID), Count: n.Count, Source: n.Source, Sender: ptr(n.Sender), WorkflowID: ptr(n.WorkflowID), CreatedAt: n.CreatedAt, ReadAt: n.ReadAt}
 }
 
 func ptr(s string) *string {
@@ -226,7 +235,7 @@ const (
 // or deleted meanwhile do not shift it.
 func (s *Service) Inbox(ctx context.Context, subject string, f Filter) (dms.Page[View], error) {
 	if f.Type != "" && !f.Type.Valid() {
-		return dms.Page[View]{}, dms.Invalid("type is message, task.assigned, task.completed or workflow.failed")
+		return dms.Page[View]{}, dms.Invalid("type is message, task.assigned, task.completed, workflow.failed, comment.mentioned or comment.replied")
 	}
 	limit := f.Limit
 	if limit <= 0 || limit > 200 {

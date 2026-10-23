@@ -26,7 +26,7 @@ func TestProxyIdentityPreservesProfilesAndRejectsCredentialBypasses(t *testing.T
 	}
 	h := (&API{DMS: s, Auth: proxy, Logger: slog.Default()}).Handler()
 	config := request(h, "GET", "/auth/config", "", "", "", "")
-	if config.Code != 200 || strings.TrimSpace(config.Body.String()) != `{"mode":"proxy"}` || config.Header().Get("Cache-Control") != "private, no-store" {
+	if config.Code != 200 || strings.TrimSpace(config.Body.String()) != `{"mode":"proxy","features":{"comments":true}}` || config.Header().Get("Cache-Control") != "private, no-store" {
 		t.Fatal("public proxy capability discovery", config.Code, config.Body.String(), config.Header())
 	}
 	do := func(method, path, body, subject, credential string) *httptest.ResponseRecorder {

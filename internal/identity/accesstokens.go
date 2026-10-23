@@ -30,7 +30,7 @@ const MaxTokenResources = 50
 // LimitableScopes are the scopes a token limited to some places may hold:
 // reading and changing content, and the organization catalogs content needs.
 // Scopes that act across the organization stay with unlimited tokens.
-var LimitableScopes = []string{"workspace.read", "item.read", "item.write", "document.read", "document.write", "contentType.read", "taxonomy.read", "user.read", "group.read"}
+var LimitableScopes = []string{"workspace.read", "item.read", "item.write", "comment.write", "document.read", "document.write", "contentType.read", "taxonomy.read", "user.read", "group.read"}
 
 type AccessToken struct {
 	Subject     string     `json:"subject"`

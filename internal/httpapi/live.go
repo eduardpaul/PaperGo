@@ -172,6 +172,21 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 				if err = a.notificationFrame(r, frame, position, note.ID, change.Action, &note); err != nil {
 					return
 				}
+			case live.KindComment:
+				// A comment frame names what changed for people who may read
+				// its discussion; clients read the thread again.
+				if a.CommentsOff {
+					continue
+				}
+				c, visible, e := a.comments(r).Visible(r.Context(), subject(r), change.EntityID)
+				if e != nil {
+					return
+				}
+				if visible {
+					if err = frame("comment", position, map[string]any{"id": c.ID, "item_id": c.ItemID, "thread_id": c.ThreadID, "action": change.Action}); err != nil {
+						return
+					}
+				}
 			case live.KindOperation, live.KindRun:
 				// A run is an operation: its manager follows it as a run.
 				if a.Workflows != nil {

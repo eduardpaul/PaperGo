@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"papergo/internal/auth"
+	"papergo/internal/comments"
 	"papergo/internal/dal/notifications"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
@@ -215,5 +216,69 @@ func TestLiveNotificationsReachTheirRecipient(t *testing.T) {
 	}
 	if deleted := next(); deleted["id"] != early.ID || deleted["action"] != "deleted" || deleted["unread"] != float64(0) {
 		t.Fatalf("deleted frame of an earlier notification: %v", deleted)
+	}
+}
+
+// A comment frame tells people who may read the discussion what changed.
+func TestLiveCommentFrames(t *testing.T) {
+	_, s, _ := setup(t)
+	previousInterval := livePollInterval
+	livePollInterval = 20 * time.Millisecond
+	t.Cleanup(func() { livePollInterval = previousInterval })
+	a := &API{DMS: s, Auth: auth.Development{Token: testToken, Subject: "alice"}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), MaxInFlight: 1, RequestTimeout: 5 * time.Second}
+	server := httptest.NewServer(a.Handler())
+	defer server.Close()
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	mine, err := s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Mine"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	theirs, err := s.Create(ctx, "bob", "", dms.CreateResource{Kind: "workspace", Name: "Theirs"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := func(subject, workspace string) string {
+		t.Helper()
+		l, err := s.Create(ctx, subject, workspace, dms.CreateResource{Kind: "list", Name: "L"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		i, err := s.Create(ctx, subject, l.ID, dms.CreateResource{Kind: "item", Name: "I"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return i.ID
+	}
+	hidden, shown := item("bob", theirs.ID), item("alice", mine.ID)
+	req, err := http.NewRequestWithContext(ctx, "GET", server.URL+"/v1/events", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+testToken)
+	stream, err := server.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Body.Close()
+	reader := bufio.NewReader(stream.Body)
+	readFrame(t, reader)
+	svc := &comments.Service{DMS: s, Enabled: true}
+	if _, err = svc.Create(ctx, "bob", "", hidden, comments.Input{Body: "Private"}); err != nil {
+		t.Fatal(err)
+	}
+	c, err := svc.Create(ctx, "alice", "", shown, comments.Input{Body: "Shared"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for {
+		frame := readFrame(t, reader)
+		if frame.kind == "keepalive" || frame.kind == "item" {
+			continue
+		}
+		if frame.kind != "comment" || !strings.Contains(frame.data, c.ID) || !strings.Contains(frame.data, shown) || !strings.Contains(frame.data, `"action":"created"`) {
+			t.Fatalf("comment frame: %+v", frame)
+		}
+		break
 	}
 }

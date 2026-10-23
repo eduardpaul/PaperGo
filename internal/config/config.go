@@ -39,13 +39,16 @@ type Config struct {
 	// (SEARCH_LANGUAGES, comma-separated Snowball names; default english,
 	// none for no stemming).
 	SearchLanguages []string
-	AuthMode        string
-	DevToken        string
-	DevSubject      string
-	AdminSubject    string
-	Issuer          string
-	Audience        string
-	MaxUpload       int64
+	// Comments runs discussions on items (COMMENTS=on, the default, or off).
+	// Off keeps existing comments but serves none of them.
+	Comments     bool
+	AuthMode     string
+	DevToken     string
+	DevSubject   string
+	AdminSubject string
+	Issuer       string
+	Audience     string
+	MaxUpload    int64
 	// MaxInFlight bounds concurrent API requests; excess requests are shed with 503.
 	MaxInFlight int
 	// RequestTimeout cancels API reads that outlive it; mutations and blob transfers are exempt.
@@ -184,6 +187,13 @@ func loadFrom(getenv func(string) string, yamlText, directory string) (Config, e
 	c.SearchStore = value("SEARCH_STORE", SearchZvec)
 	if c.SearchStore != SearchSQLite && c.SearchStore != SearchZvec && c.SearchStore != SearchNone {
 		return c, fmt.Errorf("SEARCH_STORE must be zvec, sqlite or none")
+	}
+	switch value("COMMENTS", "on") {
+	case "on":
+		c.Comments = true
+	case "off":
+	default:
+		return c, fmt.Errorf("COMMENTS must be on or off")
 	}
 	c.ZvecPath = value("SEARCH_ZVEC_PATH", filepath.Join(filepath.Dir(c.DatabasePath), "search", "zvec"))
 	c.ZvecKeywordCandidates = 10000

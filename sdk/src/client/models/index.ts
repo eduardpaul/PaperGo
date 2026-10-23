@@ -686,6 +686,189 @@ export interface CollectionTemplate extends AdditionalDataHolder, Parsable {
 export type CollectionTemplate_duplicate_policy = (typeof CollectionTemplate_duplicate_policyObject)[keyof typeof CollectionTemplate_duplicate_policyObject];
 export type CollectionTemplate_kind = (typeof CollectionTemplate_kindObject)[keyof typeof CollectionTemplate_kindObject];
 export type CollectionTemplate_versioning = (typeof CollectionTemplate_versioningObject)[keyof typeof CollectionTemplate_versioningObject];
+export interface Comment extends AdditionalDataHolder, Parsable {
+    /**
+     * The author property
+     */
+    author?: CommentPerson | null;
+    /**
+     * Plain text; <@user:subject> mentions a person. Empty once deleted.
+     */
+    body?: string | null;
+    /**
+     * The can_delete property
+     */
+    canDelete?: boolean | null;
+    /**
+     * The can_edit property
+     */
+    canEdit?: boolean | null;
+    /**
+     * The can_resolve property
+     */
+    canResolve?: boolean | null;
+    /**
+     * The created_at property
+     */
+    createdAt?: Date | null;
+    /**
+     * The deleted property
+     */
+    deleted?: boolean | null;
+    /**
+     * The edited_at property
+     */
+    editedAt?: Date | null;
+    /**
+     * The id property
+     */
+    id?: string | null;
+    /**
+     * The item_id property
+     */
+    itemId?: string | null;
+    /**
+     * The mentions property
+     */
+    mentions?: CommentPerson[] | null;
+    /**
+     * The resolved_at property
+     */
+    resolvedAt?: Date | null;
+    /**
+     * The resolved_by property
+     */
+    resolvedBy?: CommentPerson | null;
+    /**
+     * The source property
+     */
+    source?: Comment_source | null;
+    /**
+     * The thread's first comment; equal to id for it.
+     */
+    threadId?: string | null;
+    /**
+     * The updated_at property
+     */
+    updatedAt?: Date | null;
+    /**
+     * The version property
+     */
+    version?: number | null;
+    /**
+     * The workflow_id property
+     */
+    workflowId?: string | null;
+}
+export type Comment_source = (typeof Comment_sourceObject)[keyof typeof Comment_sourceObject];
+export interface CommentCounts extends AdditionalDataHolder, Parsable {
+    /**
+     * The counts property
+     */
+    counts?: CommentCounts_counts | null;
+}
+export interface CommentCounts_counts extends AdditionalDataHolder, Parsable {
+}
+export interface CommentCountsRequest extends Parsable {
+    /**
+     * The item_ids property
+     */
+    itemIds?: string[] | null;
+}
+export interface CommentCreate extends Parsable {
+    /**
+     * The body property
+     */
+    body?: string | null;
+    /**
+     * The thread to answer; none starts one.
+     */
+    threadId?: string | null;
+}
+export interface CommentEdit extends Parsable {
+    /**
+     * The body property
+     */
+    body?: string | null;
+}
+export interface CommentPerson extends AdditionalDataHolder, Parsable {
+    /**
+     * The name property
+     */
+    name?: string | null;
+    /**
+     * The subject property
+     */
+    subject?: string | null;
+}
+export interface CommentSettings extends AdditionalDataHolder, Parsable {
+    /**
+     * The effective property
+     */
+    effective?: CommentSettings_effective | null;
+    /**
+     * The place's own mode; null inherits.
+     */
+    mode?: CommentSettings_mode | null;
+    /**
+     * The version property
+     */
+    version?: number | null;
+}
+export interface CommentSettings_effective extends AdditionalDataHolder, Parsable {
+    /**
+     * The from property
+     */
+    from?: CommentSettings_effective_from | null;
+    /**
+     * The mode property
+     */
+    mode?: CommentSettings_effective_mode | null;
+}
+export type CommentSettings_effective_from = (typeof CommentSettings_effective_fromObject)[keyof typeof CommentSettings_effective_fromObject];
+export type CommentSettings_effective_mode = (typeof CommentSettings_effective_modeObject)[keyof typeof CommentSettings_effective_modeObject];
+export type CommentSettings_mode = (typeof CommentSettings_modeObject)[keyof typeof CommentSettings_modeObject];
+export interface CommentSettingsInput extends Parsable {
+    /**
+     * The mode property
+     */
+    mode?: CommentSettingsInput_mode | null;
+}
+export type CommentSettingsInput_mode = (typeof CommentSettingsInput_modeObject)[keyof typeof CommentSettingsInput_modeObject];
+export interface CommentThread extends Comment, Parsable {
+    /**
+     * The replies property
+     */
+    replies?: Comment[] | null;
+}
+export interface CommentThreadList extends AdditionalDataHolder, Parsable {
+    /**
+     * The can_post property
+     */
+    canPost?: boolean | null;
+    /**
+     * The can_read property
+     */
+    canRead?: boolean | null;
+    /**
+     * The mode property
+     */
+    mode?: CommentThreadList_mode | null;
+    /**
+     * The mode_from property
+     */
+    modeFrom?: CommentThreadList_mode_from | null;
+    /**
+     * The OdataNextLink property
+     */
+    odataNextLink?: string | null;
+    /**
+     * The value property
+     */
+    value?: CommentThread[] | null;
+}
+export type CommentThreadList_mode = (typeof CommentThreadList_modeObject)[keyof typeof CommentThreadList_modeObject];
+export type CommentThreadList_mode_from = (typeof CommentThreadList_mode_fromObject)[keyof typeof CommentThreadList_mode_fromObject];
 /**
  * A completion. Give item_id with text_id or image_blob_id, else workspace_id.
  */
@@ -1136,6 +1319,114 @@ export function createCollectionContentTypeFromDiscriminatorValue(parseNode: Par
 // @ts-ignore
 export function createCollectionTemplateFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoCollectionTemplate;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {CommentCounts_counts}
+ */
+// @ts-ignore
+export function createCommentCounts_countsFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoCommentCounts_counts;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {CommentCounts}
+ */
+// @ts-ignore
+export function createCommentCountsFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoCommentCounts;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {CommentCountsRequest}
+ */
+// @ts-ignore
+export function createCommentCountsRequestFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoCommentCountsRequest;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {CommentCreate}
+ */
+// @ts-ignore
+export function createCommentCreateFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoCommentCreate;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {CommentEdit}
+ */
+// @ts-ignore
+export function createCommentEditFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoCommentEdit;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {Comment}
+ */
+// @ts-ignore
+export function createCommentFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoComment;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {CommentPerson}
+ */
+// @ts-ignore
+export function createCommentPersonFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoCommentPerson;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {CommentSettings_effective}
+ */
+// @ts-ignore
+export function createCommentSettings_effectiveFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoCommentSettings_effective;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {CommentSettings}
+ */
+// @ts-ignore
+export function createCommentSettingsFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoCommentSettings;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {CommentSettingsInput}
+ */
+// @ts-ignore
+export function createCommentSettingsInputFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoCommentSettingsInput;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {CommentThread}
+ */
+// @ts-ignore
+export function createCommentThreadFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoCommentThread;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {CommentThreadList}
+ */
+// @ts-ignore
+export function createCommentThreadListFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoCommentThreadList;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -1648,6 +1939,24 @@ export function createListViewPageFromDiscriminatorValue(parseNode: ParseNode | 
 // @ts-ignore
 export function createLocatedItemFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoLocatedItem;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {MentionCandidateList_value}
+ */
+// @ts-ignore
+export function createMentionCandidateList_valueFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoMentionCandidateList_value;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {MentionCandidateList}
+ */
+// @ts-ignore
+export function createMentionCandidateListFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoMentionCandidateList;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -3657,6 +3966,165 @@ export function deserializeIntoCollectionTemplate(collectionTemplate: Partial<Co
 }
 /**
  * The deserialization information for the current model
+ * @param Comment The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoComment(comment: Partial<Comment> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "author": n => { comment.author = n.getObjectValue<CommentPerson>(createCommentPersonFromDiscriminatorValue); },
+        "body": n => { comment.body = n.getStringValue(); },
+        "can_delete": n => { comment.canDelete = n.getBooleanValue(); },
+        "can_edit": n => { comment.canEdit = n.getBooleanValue(); },
+        "can_resolve": n => { comment.canResolve = n.getBooleanValue(); },
+        "created_at": n => { comment.createdAt = n.getDateValue(); },
+        "deleted": n => { comment.deleted = n.getBooleanValue(); },
+        "edited_at": n => { comment.editedAt = n.getDateValue(); },
+        "id": n => { comment.id = n.getStringValue(); },
+        "item_id": n => { comment.itemId = n.getStringValue(); },
+        "mentions": n => { comment.mentions = n.getCollectionOfObjectValues<CommentPerson>(createCommentPersonFromDiscriminatorValue); },
+        "resolved_at": n => { comment.resolvedAt = n.getDateValue(); },
+        "resolved_by": n => { comment.resolvedBy = n.getObjectValue<CommentPerson>(createCommentPersonFromDiscriminatorValue); },
+        "source": n => { comment.source = n.getEnumValue<Comment_source>(Comment_sourceObject); },
+        "thread_id": n => { comment.threadId = n.getStringValue(); },
+        "updated_at": n => { comment.updatedAt = n.getDateValue(); },
+        "version": n => { comment.version = n.getNumberValue(); },
+        "workflow_id": n => { comment.workflowId = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param CommentCounts The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoCommentCounts(commentCounts: Partial<CommentCounts> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "counts": n => { commentCounts.counts = n.getObjectValue<CommentCounts_counts>(createCommentCounts_countsFromDiscriminatorValue); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param CommentCounts_counts The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoCommentCounts_counts(commentCounts_counts: Partial<CommentCounts_counts> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param CommentCountsRequest The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoCommentCountsRequest(commentCountsRequest: Partial<CommentCountsRequest> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "item_ids": n => { commentCountsRequest.itemIds = n.getCollectionOfPrimitiveValues<string>("string"); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param CommentCreate The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoCommentCreate(commentCreate: Partial<CommentCreate> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "body": n => { commentCreate.body = n.getStringValue(); },
+        "thread_id": n => { commentCreate.threadId = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param CommentEdit The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoCommentEdit(commentEdit: Partial<CommentEdit> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "body": n => { commentEdit.body = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param CommentPerson The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoCommentPerson(commentPerson: Partial<CommentPerson> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "name": n => { commentPerson.name = n.getStringValue(); },
+        "subject": n => { commentPerson.subject = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param CommentSettings The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoCommentSettings(commentSettings: Partial<CommentSettings> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "effective": n => { commentSettings.effective = n.getObjectValue<CommentSettings_effective>(createCommentSettings_effectiveFromDiscriminatorValue); },
+        "mode": n => { commentSettings.mode = n.getEnumValue<CommentSettings_mode>(CommentSettings_modeObject); },
+        "version": n => { commentSettings.version = n.getNumberValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param CommentSettings_effective The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoCommentSettings_effective(commentSettings_effective: Partial<CommentSettings_effective> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "from": n => { commentSettings_effective.from = n.getEnumValue<CommentSettings_effective_from>(CommentSettings_effective_fromObject); },
+        "mode": n => { commentSettings_effective.mode = n.getEnumValue<CommentSettings_effective_mode>(CommentSettings_effective_modeObject); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param CommentSettingsInput The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoCommentSettingsInput(commentSettingsInput: Partial<CommentSettingsInput> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "mode": n => { commentSettingsInput.mode = n.getEnumValue<CommentSettingsInput_mode>(CommentSettingsInput_modeObject); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param CommentThread The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoCommentThread(commentThread: Partial<CommentThread> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        ...deserializeIntoComment(commentThread),
+        "replies": n => { commentThread.replies = n.getCollectionOfObjectValues<Comment>(createCommentFromDiscriminatorValue); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param CommentThreadList The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoCommentThreadList(commentThreadList: Partial<CommentThreadList> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "can_post": n => { commentThreadList.canPost = n.getBooleanValue(); },
+        "can_read": n => { commentThreadList.canRead = n.getBooleanValue(); },
+        "mode": n => { commentThreadList.mode = n.getEnumValue<CommentThreadList_mode>(CommentThreadList_modeObject); },
+        "mode_from": n => { commentThreadList.modeFrom = n.getEnumValue<CommentThreadList_mode_from>(CommentThreadList_mode_fromObject); },
+        "@odata.nextLink": n => { commentThreadList.odataNextLink = n.getStringValue(); },
+        "value": n => { commentThreadList.value = n.getCollectionOfObjectValues<CommentThread>(createCommentThreadFromDiscriminatorValue); },
+    }
+}
+/**
+ * The deserialization information for the current model
  * @param CompletionRequest The instance to deserialize into.
  * @returns {Record<string, (node: ParseNode) => void>}
  */
@@ -4390,6 +4858,30 @@ export function deserializeIntoLocatedItem(locatedItem: Partial<LocatedItem> | u
         "collection_id": n => { locatedItem.collectionId = n.getGuidValue(); },
         "collection_name": n => { locatedItem.collectionName = n.getStringValue(); },
         "workspace_name": n => { locatedItem.workspaceName = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param MentionCandidateList The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoMentionCandidateList(mentionCandidateList: Partial<MentionCandidateList> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "value": n => { mentionCandidateList.value = n.getCollectionOfObjectValues<MentionCandidateList_value>(createMentionCandidateList_valueFromDiscriminatorValue); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param MentionCandidateList_value The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoMentionCandidateList_value(mentionCandidateList_value: Partial<MentionCandidateList_value> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "can_see": n => { mentionCandidateList_value.canSee = n.getBooleanValue(); },
+        "name": n => { mentionCandidateList_value.name = n.getStringValue(); },
+        "subject": n => { mentionCandidateList_value.subject = n.getStringValue(); },
     }
 }
 /**
@@ -7191,6 +7683,26 @@ export interface LocatedItem extends Parsable, Resource {
      */
     workspaceName?: string | null;
 }
+export interface MentionCandidateList extends AdditionalDataHolder, Parsable {
+    /**
+     * The value property
+     */
+    value?: MentionCandidateList_value[] | null;
+}
+export interface MentionCandidateList_value extends AdditionalDataHolder, Parsable {
+    /**
+     * The can_see property
+     */
+    canSee?: boolean | null;
+    /**
+     * The name property
+     */
+    name?: string | null;
+    /**
+     * The subject property
+     */
+    subject?: string | null;
+}
 export interface MergeTerm extends Parsable {
     /**
      * The target_term_id property
@@ -9252,6 +9764,172 @@ export function serializeCollectionTemplate(writer: SerializationWriter, collect
 }
 /**
  * Serializes information the current object
+ * @param Comment The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeComment(writer: SerializationWriter, comment: Partial<Comment> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!comment || isSerializingDerivedType) { return; }
+    writer.writeObjectValue<CommentPerson>("author", comment.author, serializeCommentPerson);
+    writer.writeStringValue("body", comment.body);
+    writer.writeBooleanValue("can_delete", comment.canDelete);
+    writer.writeBooleanValue("can_edit", comment.canEdit);
+    writer.writeBooleanValue("can_resolve", comment.canResolve);
+    writer.writeDateValue("created_at", comment.createdAt);
+    writer.writeBooleanValue("deleted", comment.deleted);
+    writer.writeDateValue("edited_at", comment.editedAt);
+    writer.writeStringValue("id", comment.id);
+    writer.writeStringValue("item_id", comment.itemId);
+    writer.writeCollectionOfObjectValues<CommentPerson>("mentions", comment.mentions, serializeCommentPerson);
+    writer.writeDateValue("resolved_at", comment.resolvedAt);
+    writer.writeObjectValue<CommentPerson>("resolved_by", comment.resolvedBy, serializeCommentPerson);
+    writer.writeEnumValue<Comment_source>("source", comment.source);
+    writer.writeStringValue("thread_id", comment.threadId);
+    writer.writeDateValue("updated_at", comment.updatedAt);
+    writer.writeNumberValue("version", comment.version);
+    writer.writeStringValue("workflow_id", comment.workflowId);
+    writer.writeAdditionalData(comment.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param CommentCounts The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeCommentCounts(writer: SerializationWriter, commentCounts: Partial<CommentCounts> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!commentCounts || isSerializingDerivedType) { return; }
+    writer.writeObjectValue<CommentCounts_counts>("counts", commentCounts.counts, serializeCommentCounts_counts);
+    writer.writeAdditionalData(commentCounts.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param CommentCounts_counts The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeCommentCounts_counts(writer: SerializationWriter, commentCounts_counts: Partial<CommentCounts_counts> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!commentCounts_counts || isSerializingDerivedType) { return; }
+    writer.writeAdditionalData(commentCounts_counts.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param CommentCountsRequest The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeCommentCountsRequest(writer: SerializationWriter, commentCountsRequest: Partial<CommentCountsRequest> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!commentCountsRequest || isSerializingDerivedType) { return; }
+    writer.writeCollectionOfPrimitiveValues<string>("item_ids", commentCountsRequest.itemIds);
+}
+/**
+ * Serializes information the current object
+ * @param CommentCreate The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeCommentCreate(writer: SerializationWriter, commentCreate: Partial<CommentCreate> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!commentCreate || isSerializingDerivedType) { return; }
+    writer.writeStringValue("body", commentCreate.body);
+    writer.writeStringValue("thread_id", commentCreate.threadId);
+}
+/**
+ * Serializes information the current object
+ * @param CommentEdit The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeCommentEdit(writer: SerializationWriter, commentEdit: Partial<CommentEdit> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!commentEdit || isSerializingDerivedType) { return; }
+    writer.writeStringValue("body", commentEdit.body);
+}
+/**
+ * Serializes information the current object
+ * @param CommentPerson The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeCommentPerson(writer: SerializationWriter, commentPerson: Partial<CommentPerson> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!commentPerson || isSerializingDerivedType) { return; }
+    writer.writeStringValue("name", commentPerson.name);
+    writer.writeStringValue("subject", commentPerson.subject);
+    writer.writeAdditionalData(commentPerson.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param CommentSettings The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeCommentSettings(writer: SerializationWriter, commentSettings: Partial<CommentSettings> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!commentSettings || isSerializingDerivedType) { return; }
+    writer.writeObjectValue<CommentSettings_effective>("effective", commentSettings.effective, serializeCommentSettings_effective);
+    writer.writeEnumValue<CommentSettings_mode>("mode", commentSettings.mode);
+    writer.writeNumberValue("version", commentSettings.version);
+    writer.writeAdditionalData(commentSettings.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param CommentSettings_effective The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeCommentSettings_effective(writer: SerializationWriter, commentSettings_effective: Partial<CommentSettings_effective> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!commentSettings_effective || isSerializingDerivedType) { return; }
+    writer.writeEnumValue<CommentSettings_effective_from>("from", commentSettings_effective.from);
+    writer.writeEnumValue<CommentSettings_effective_mode>("mode", commentSettings_effective.mode);
+    writer.writeAdditionalData(commentSettings_effective.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param CommentSettingsInput The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeCommentSettingsInput(writer: SerializationWriter, commentSettingsInput: Partial<CommentSettingsInput> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!commentSettingsInput || isSerializingDerivedType) { return; }
+    writer.writeEnumValue<CommentSettingsInput_mode>("mode", commentSettingsInput.mode);
+}
+/**
+ * Serializes information the current object
+ * @param CommentThread The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeCommentThread(writer: SerializationWriter, commentThread: Partial<CommentThread> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!commentThread || isSerializingDerivedType) { return; }
+    serializeComment(writer, commentThread, isSerializingDerivedType)
+    writer.writeCollectionOfObjectValues<Comment>("replies", commentThread.replies, serializeComment);
+}
+/**
+ * Serializes information the current object
+ * @param CommentThreadList The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeCommentThreadList(writer: SerializationWriter, commentThreadList: Partial<CommentThreadList> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!commentThreadList || isSerializingDerivedType) { return; }
+    writer.writeBooleanValue("can_post", commentThreadList.canPost);
+    writer.writeBooleanValue("can_read", commentThreadList.canRead);
+    writer.writeEnumValue<CommentThreadList_mode>("mode", commentThreadList.mode);
+    writer.writeEnumValue<CommentThreadList_mode_from>("mode_from", commentThreadList.modeFrom);
+    writer.writeStringValue("@odata.nextLink", commentThreadList.odataNextLink);
+    writer.writeCollectionOfObjectValues<CommentThread>("value", commentThreadList.value, serializeCommentThread);
+    writer.writeAdditionalData(commentThreadList.additionalData);
+}
+/**
+ * Serializes information the current object
  * @param CompletionRequest The instance to serialize from.
  * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
  * @param writer Serialization writer to use to serialize this model
@@ -10000,6 +10678,32 @@ export function serializeLocatedItem(writer: SerializationWriter, locatedItem: P
     writer.writeGuidValue("collection_id", locatedItem.collectionId);
     writer.writeStringValue("collection_name", locatedItem.collectionName);
     writer.writeStringValue("workspace_name", locatedItem.workspaceName);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param MentionCandidateList The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeMentionCandidateList(writer: SerializationWriter, mentionCandidateList: Partial<MentionCandidateList> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!mentionCandidateList || isSerializingDerivedType) { return; }
+    writer.writeCollectionOfObjectValues<MentionCandidateList_value>("value", mentionCandidateList.value, serializeMentionCandidateList_value);
+    writer.writeAdditionalData(mentionCandidateList.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param MentionCandidateList_value The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeMentionCandidateList_value(writer: SerializationWriter, mentionCandidateList_value: Partial<MentionCandidateList_value> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!mentionCandidateList_value || isSerializingDerivedType) { return; }
+    writer.writeBooleanValue("can_see", mentionCandidateList_value.canSee);
+    writer.writeStringValue("name", mentionCandidateList_value.name);
+    writer.writeStringValue("subject", mentionCandidateList_value.subject);
+    writer.writeAdditionalData(mentionCandidateList_value.additionalData);
 }
 /**
  * Serializes information the current object
@@ -13850,6 +14554,47 @@ export const CollectionTemplate_kindObject = {
 export const CollectionTemplate_versioningObject = {
     Off: "off",
     Major: "major",
+} as const;
+export const Comment_sourceObject = {
+    User: "user",
+    Workflow: "workflow",
+} as const;
+export const CommentSettings_effective_fromObject = {
+    Deployment: "deployment",
+    Organization: "organization",
+    Workspace: "workspace",
+    Collection: "collection",
+    DefaultEscaped: "default",
+} as const;
+export const CommentSettings_effective_modeObject = {
+    Off: "off",
+    Collaborators: "collaborators",
+    Readers: "readers",
+} as const;
+/**
+ * The place's own mode; null inherits.
+ */
+export const CommentSettings_modeObject = {
+    Off: "off",
+    Collaborators: "collaborators",
+    Readers: "readers",
+} as const;
+export const CommentSettingsInput_modeObject = {
+    Off: "off",
+    Collaborators: "collaborators",
+    Readers: "readers",
+} as const;
+export const CommentThreadList_mode_fromObject = {
+    Deployment: "deployment",
+    Organization: "organization",
+    Workspace: "workspace",
+    Collection: "collection",
+    DefaultEscaped: "default",
+} as const;
+export const CommentThreadList_modeObject = {
+    Off: "off",
+    Collaborators: "collaborators",
+    Readers: "readers",
 } as const;
 /**
  * immediate calls the model now; batch sends the request in a provider batch, which its worker admits in groups per queue. The deployment's default when omitted.

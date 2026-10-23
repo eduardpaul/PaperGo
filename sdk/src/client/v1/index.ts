@@ -12,6 +12,8 @@ import { AuditRequestBuilderRequestsMetadata, type AuditRequestBuilder } from '.
 // @ts-ignore
 import { CollectionTemplatesRequestBuilderRequestsMetadata, type CollectionTemplatesRequestBuilder } from './collectionTemplates/index.js';
 // @ts-ignore
+import { CommentsRequestBuilderNavigationMetadata, type CommentsRequestBuilder } from './comments/index.js';
+// @ts-ignore
 import { ContentTypesRequestBuilderNavigationMetadata, ContentTypesRequestBuilderRequestsMetadata, type ContentTypesRequestBuilder } from './contentTypes/index.js';
 // @ts-ignore
 import { FieldsRequestBuilderNavigationMetadata, FieldsRequestBuilderRequestsMetadata, type FieldsRequestBuilder } from './fields/index.js';
@@ -76,6 +78,10 @@ export interface V1RequestBuilder extends BaseRequestBuilder<V1RequestBuilder> {
      * The collectionTemplates property
      */
     get collectionTemplates(): CollectionTemplatesRequestBuilder;
+    /**
+     * The comments property
+     */
+    get comments(): CommentsRequestBuilder;
     /**
      * The contentTypes property
      */
@@ -175,6 +181,9 @@ export const V1RequestBuilderNavigationMetadata: Record<Exclude<keyof V1RequestB
     },
     collectionTemplates: {
         requestsMetadata: CollectionTemplatesRequestBuilderRequestsMetadata,
+    },
+    comments: {
+        navigationMetadata: CommentsRequestBuilderNavigationMetadata,
     },
     contentTypes: {
         requestsMetadata: ContentTypesRequestBuilderRequestsMetadata,
