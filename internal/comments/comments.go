@@ -31,6 +31,7 @@ import (
 	"papergo/internal/dms"
 	"papergo/internal/identity"
 	"papergo/internal/notify"
+	"papergo/internal/recipients"
 )
 
 // Mode is who takes part in a collection's discussions.
@@ -813,8 +814,8 @@ type Candidate struct {
 // MaxCandidates bounds the people Mentionable suggests.
 const MaxCandidates = 20
 
-// Mentionable suggests the workspace's people whose subject or name
-// contains q, for a mention in the item's discussion.
+// Mentionable suggests the people the item is shared with whose subject,
+// name or email contains q, for a mention in the item's discussion.
 func (s *Service) Mentionable(ctx context.Context, subject, itemID, q string) ([]Candidate, error) {
 	return dms.Read(ctx, s.DMS, func(t *dms.Service) ([]Candidate, error) {
 		a, err := s.discussion(ctx, t, subject, itemID)
@@ -824,15 +825,10 @@ func (s *Service) Mentionable(ctx context.Context, subject, itemID, q string) ([
 		if err = a.refuse(); err != nil {
 			return nil, err
 		}
-		grants, err := t.DAL.Grants().List(ctx, grantstore.Filter{ResourceID: a.item.WorkspaceID, PrincipalType: grantstore.PrincipalUser})
-		if err != nil {
-			return nil, err
+		people, err := sharedWith(ctx, t, a.item)
+		if err != nil || len(people) == 0 {
+			return []Candidate{}, err
 		}
-		var people []string
-		for _, g := range grants {
-			people = append(people, g.PrincipalID)
-		}
-		people = slices.Compact(slices.Sorted(slices.Values(people)))
 		rows, err := t.DAL.Directory().Users(ctx, directory.UserFilter{IDs: people})
 		if err != nil {
 			return nil, err
@@ -859,6 +855,34 @@ func (s *Service) Mentionable(ctx context.Context, subject, itemID, q string) ([
 		}
 		return out, nil
 	})
+}
+
+// sharedWith returns the active people the item is shared with: those
+// granted access to it, its folders, its collection or its workspace, in
+// person or through a group.
+func sharedWith(ctx context.Context, t *dms.Service, item *resources.Resource) ([]string, error) {
+	var entries []string
+	for r := item; r != nil; {
+		grants, err := t.DAL.Grants().List(ctx, grantstore.Filter{ResourceID: r.ID})
+		if err != nil {
+			return nil, err
+		}
+		for _, g := range grants {
+			switch g.PrincipalType {
+			case grantstore.PrincipalUser:
+				entries = append(entries, g.PrincipalID)
+			case grantstore.PrincipalGroup:
+				entries = append(entries, "group:"+g.PrincipalID)
+			}
+		}
+		if r.ParentID == nil || r.Kind == refs.KindWorkspace {
+			break
+		}
+		if r, err = t.DAL.Resources().Resource(ctx, *r.ParentID); err != nil {
+			return nil, err
+		}
+	}
+	return recipients.People(ctx, t, slices.Compact(slices.Sorted(slices.Values(entries))))
 }
 
 // Settings is a workspace's or collection's comment setting.

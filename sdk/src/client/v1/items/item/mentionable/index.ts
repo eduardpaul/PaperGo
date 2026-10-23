@@ -11,7 +11,7 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface MentionableRequestBuilder extends BaseRequestBuilder<MentionableRequestBuilder> {
     /**
-     * The workspace's people whose subject, name or email contains q, at most 20, each with whether they may read the item's discussion. A mention never shares the item.
+     * The people the item is shared with, in person or through a group, on it, its folders, its collection or its workspace, whose subject, name or email contains q, at most 20, each with whether they may read the item's discussion. A mention never shares the item.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<MentionCandidateList>}
      * @throws {Problem} error when the service returns a 400 status code
@@ -26,14 +26,14 @@ export interface MentionableRequestBuilder extends BaseRequestBuilder<Mentionabl
      */
      get(requestConfiguration?: RequestConfiguration<MentionableRequestBuilderGetQueryParameters> | undefined) : Promise<MentionCandidateList | undefined>;
     /**
-     * The workspace's people whose subject, name or email contains q, at most 20, each with whether they may read the item's discussion. A mention never shares the item.
+     * The people the item is shared with, in person or through a group, on it, its folders, its collection or its workspace, whose subject, name or email contains q, at most 20, each with whether they may read the item's discussion. A mention never shares the item.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */
      toGetRequestInformation(requestConfiguration?: RequestConfiguration<MentionableRequestBuilderGetQueryParameters> | undefined) : RequestInformation;
 }
 /**
- * The workspace's people whose subject, name or email contains q, at most 20, each with whether they may read the item's discussion. A mention never shares the item.
+ * The people the item is shared with, in person or through a group, on it, its folders, its collection or its workspace, whose subject, name or email contains q, at most 20, each with whether they may read the item's discussion. A mention never shares the item.
  */
 export interface MentionableRequestBuilderGetQueryParameters {
     q?: string;

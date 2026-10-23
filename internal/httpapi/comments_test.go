@@ -103,6 +103,33 @@ func TestCommentRoutes(t *testing.T) {
 	if !strings.Contains(body, `"subject":"dave"`) || !strings.Contains(body, `"can_see":false`) || strings.Contains(body, `"subject":"bob"`) {
 		t.Fatalf("mentionable: %s", body)
 	}
+	// People the list is shared with through a group are suggested;
+	// people the item is not shared with never are.
+	for _, id := range []string{"erin", "frank"} {
+		if _, err := s.DAL.Directory().CreateUser(ctx, id, id, "", true, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	reviewers, err := s.DAL.Directory().CreateGroup(ctx, "reviewers", "Reviewers", "", directorydomain.SourceLocal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.DAL.Directory().SetMember(ctx, reviewers.ID, directorydomain.Principal{Type: directorydomain.PrincipalUser, ID: "erin"}, false); err != nil {
+		t.Fatal(err)
+	}
+	shared, err := s.Get(ctx, "alice", list)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.SetPermissions(ctx, "alice", list, shared.Version, dms.Permissions{CopyInherited: true, Grants: []dms.Permission{{PrincipalType: "group", PrincipalID: reviewers.ID, Action: "read", Effect: "allow"}}}); err != nil {
+		t.Fatal(err)
+	}
+	if body = call("GET", "/v1/items/"+item+"/mentionable", "", "", 200); !strings.Contains(body, `"subject":"erin"`) || strings.Contains(body, `"subject":"frank"`) {
+		t.Fatalf("mentionable through a group: %s", body)
+	}
+	if body = call("GET", "/v1/items/"+item+"/mentionable?q=frank", "", "", 200); body != "{\"value\":[]}\n" {
+		t.Fatalf("someone the item is not shared with: %s", body)
+	}
 
 	// Edits tell only the people they add; only the author edits.
 	reply := page.Value[0].Replies[0]

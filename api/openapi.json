@@ -21341,7 +21341,7 @@
       "get": {
         "summary": "Suggest Mentions",
         "operationId": "listMentionable",
-        "description": "The workspace's people whose subject, name or email contains q, at most 20, each with whether they may read the item's discussion. A mention never shares the item.",
+        "description": "The people the item is shared with, in person or through a group, on it, its folders, its collection or its workspace, whose subject, name or email contains q, at most 20, each with whether they may read the item's discussion. A mention never shares the item.",
         "parameters": [
           {
             "name": "id",
