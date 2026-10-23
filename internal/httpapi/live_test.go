@@ -137,7 +137,7 @@ func TestLiveStreamDeliveryReconnectAndCredentialRevocation(t *testing.T) {
 }
 
 // A notification reaches only its recipient's streams, with their unread
-// count, as it arrives, is read and is deleted.
+// count, as it arrives, is read and is deleted, wherever it was delivered.
 func TestLiveNotificationsReachTheirRecipient(t *testing.T) {
 	_, s, _ := setup(t)
 	previousInterval := livePollInterval
@@ -148,6 +148,11 @@ func TestLiveNotificationsReachTheirRecipient(t *testing.T) {
 	defer server.Close()
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
+	// One notification arrives before the stream opens, as on another device.
+	early, _, err := s.DAL.Notifications().Create(ctx, notifications.Notification{Recipient: "alice", Type: notifications.TypeMessage, Title: "Earlier", Source: notifications.SourceUser, Sender: "carol"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	req, err := http.NewRequestWithContext(ctx, "GET", server.URL+"/v1/events", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -188,13 +193,13 @@ func TestLiveNotificationsReachTheirRecipient(t *testing.T) {
 		}
 	}
 	created := next()
-	if created["id"] != mine || created["action"] != "created" || created["unread"] != float64(1) || !strings.Contains(fmt.Sprint(created["notification"]), "For Alice") {
+	if created["id"] != mine || created["action"] != "created" || created["unread"] != float64(2) || !strings.Contains(fmt.Sprint(created["notification"]), "For Alice") {
 		t.Fatalf("created frame: %v", created)
 	}
 	if _, err = (&notify.Service{DMS: s}).MarkRead(ctx, "alice", []string{mine}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if read := next(); read["action"] != "updated" || read["unread"] != float64(0) {
+	if read := next(); read["action"] != "updated" || read["unread"] != float64(1) {
 		t.Fatalf("read frame: %v", read)
 	}
 	if err = (&notify.Service{DMS: s}).Delete(ctx, "alice", mine); err != nil {
@@ -202,5 +207,13 @@ func TestLiveNotificationsReachTheirRecipient(t *testing.T) {
 	}
 	if deleted := next(); deleted["id"] != mine || deleted["action"] != "deleted" || deleted["notification"] != nil {
 		t.Fatalf("deleted frame: %v", deleted)
+	}
+	// Deleting one the stream never delivered still reaches it, with the
+	// new count.
+	if err = (&notify.Service{DMS: s}).Delete(ctx, "alice", early.ID); err != nil {
+		t.Fatal(err)
+	}
+	if deleted := next(); deleted["id"] != early.ID || deleted["action"] != "deleted" || deleted["unread"] != float64(0) {
+		t.Fatalf("deleted frame of an earlier notification: %v", deleted)
 	}
 }

@@ -11818,7 +11818,7 @@ export interface MembersRequestBuilder extends BaseRequestBuilder<MembersRequest
  */
 export interface NotificationsRequestBuilder extends BaseRequestBuilder<NotificationsRequestBuilder> {
 	/**
-	 * Sends a message to the people the recipients name who can read its item, or else the workspace; the others are skipped and counted. The caller needs read access to the workspace and the item. A workflow's request sends it from the workflow. A dedup key sends it to each person once.
+	 * Sends a message to the people the recipients name who can read a revision of its item, or else the workspace; the others are skipped and counted. The caller needs read access to the workspace and the item, and the item.write scope. A workflow's request sends it from the workflow. A dedup key sends it to each person once, apart from the keys of PaperGo's own notifications.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<NotificationSendResult>}
@@ -11834,7 +11834,7 @@ export interface NotificationsRequestBuilder extends BaseRequestBuilder<Notifica
 	 */
 	post(body: NotificationSend, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<NotificationSendResult | undefined>;
 	/**
-	 * Sends a message to the people the recipients name who can read its item, or else the workspace; the others are skipped and counted. The caller needs read access to the workspace and the item. A workflow's request sends it from the workflow. A dedup key sends it to each person once.
+	 * Sends a message to the people the recipients name who can read a revision of its item, or else the workspace; the others are skipped and counted. The caller needs read access to the workspace and the item, and the item.write scope. A workflow's request sends it from the workflow. A dedup key sends it to each person once, apart from the keys of PaperGo's own notifications.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -12219,7 +12219,7 @@ interface TasksRequestBuilder$2 extends BaseRequestBuilder<TasksRequestBuilder$2
 	 */
 	get(requestConfiguration?: RequestConfiguration<TasksRequestBuilderGetQueryParameters$1> | undefined): Promise<TaskList | undefined>;
 	/**
-	 * Creates a task. The creator needs read access to the workspace, and write access to the item when it concerns one. Assignees are recipient entries; none means the workspace's owners. Unknown recipients fail with their names. A task a workflow run creates is that workflow's: its operation_id is the operation its answer ends, which the run waits on, it may review a staged file of the run, and it is cancelled with the run.
+	 * Creates a task. The creator needs read access to the workspace, and write access to the item when it concerns one. Assignees are recipient entries; none means the workspace's owners. Unknown recipients fail with their names. A task a workflow run creates is that workflow's: its operation_id is the operation its answer ends, which the run waits on, it may review a staged file of the run, and it is cancelled with the run. Needs the item.write scope.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Task>}
@@ -12241,7 +12241,7 @@ interface TasksRequestBuilder$2 extends BaseRequestBuilder<TasksRequestBuilder$2
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<TasksRequestBuilderGetQueryParameters$1> | undefined): RequestInformation;
 	/**
-	 * Creates a task. The creator needs read access to the workspace, and write access to the item when it concerns one. Assignees are recipient entries; none means the workspace's owners. Unknown recipients fail with their names. A task a workflow run creates is that workflow's: its operation_id is the operation its answer ends, which the run waits on, it may review a staged file of the run, and it is cancelled with the run.
+	 * Creates a task. The creator needs read access to the workspace, and write access to the item when it concerns one. Assignees are recipient entries; none means the workspace's owners. Unknown recipients fail with their names. A task a workflow run creates is that workflow's: its operation_id is the operation its answer ends, which the run waits on, it may review a staged file of the run, and it is cancelled with the run. Needs the item.write scope.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}

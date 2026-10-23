@@ -14788,7 +14788,7 @@
       "get": {
         "summary": "List My Notifications",
         "operationId": "listMyNotifications",
-        "description": "The caller's inbox, newest first. unread=true keeps the unread ones.",
+        "description": "The caller's inbox, newest first. unread=true keeps the unread ones. A page continues after the last notification of the previous one. Through an access token, only notifications about content the token may read.",
         "parameters": [
           {
             "name": "unread",
@@ -15283,7 +15283,7 @@
       "post": {
         "summary": "Send Notification",
         "operationId": "sendNotification",
-        "description": "Sends a message to the people the recipients name who can read its item, or else the workspace; the others are skipped and counted. The caller needs read access to the workspace and the item. A workflow's request sends it from the workflow. A dedup key sends it to each person once.",
+        "description": "Sends a message to the people the recipients name who can read a revision of its item, or else the workspace; the others are skipped and counted. The caller needs read access to the workspace and the item, and the item.write scope. A workflow's request sends it from the workflow. A dedup key sends it to each person once, apart from the keys of PaperGo's own notifications.",
         "parameters": [
           {
             "name": "id",
@@ -15577,7 +15577,7 @@
       "post": {
         "summary": "Create Task",
         "operationId": "createTask",
-        "description": "Creates a task. The creator needs read access to the workspace, and write access to the item when it concerns one. Assignees are recipient entries; none means the workspace's owners. Unknown recipients fail with their names. A task a workflow run creates is that workflow's: its operation_id is the operation its answer ends, which the run waits on, it may review a staged file of the run, and it is cancelled with the run.",
+        "description": "Creates a task. The creator needs read access to the workspace, and write access to the item when it concerns one. Assignees are recipient entries; none means the workspace's owners. Unknown recipients fail with their names. A task a workflow run creates is that workflow's: its operation_id is the operation its answer ends, which the run waits on, it may review a staged file of the run, and it is cancelled with the run. Needs the item.write scope.",
         "parameters": [
           {
             "name": "id",
@@ -27965,7 +27965,7 @@
           },
           "dedup_key": {
             "type": "string",
-            "maxLength": 200,
+            "maxLength": 192,
             "description": "Sends to each person once: a later send with the same key reaches only people who do not have it."
           }
         },

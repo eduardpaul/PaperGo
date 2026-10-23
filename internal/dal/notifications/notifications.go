@@ -5,6 +5,8 @@ package notifications
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"time"
 	"unicode/utf8"
@@ -32,14 +34,37 @@ type Notification struct {
 	ReadAt             *time.Time
 }
 
-// Filter selects a recipient's notifications, newest first. Offset applies
-// only together with Limit.
+// Filter selects a recipient's notifications, newest first.
 type Filter struct {
-	Recipient     string
-	Unread        bool
-	Type          Type
-	WorkspaceID   string
-	Offset, Limit int
+	Recipient   string
+	Unread      bool
+	Type        Type
+	WorkspaceID string
+	// After continues below a notification already read, so entries read
+	// or deleted meanwhile do not shift the page.
+	After *Key
+	// Until keeps those created at or before it, when set.
+	Until time.Time
+	Limit int
+}
+
+// Key is a notification's place in the newest-first order.
+type Key struct {
+	CreatedAt time.Time
+	ID        string
+}
+
+// LiveID is the live change entity of a notification: the recipient's
+// digest and the notification's ID, so a stream recognizes changes to its
+// subject's notifications, deletions included, without reading them.
+func LiveID(recipient, id string) string {
+	return RecipientKey(recipient) + ":" + id
+}
+
+// RecipientKey is the digest LiveID starts with.
+func RecipientKey(recipient string) string {
+	sum := sha256.Sum256([]byte(recipient))
+	return hex.EncodeToString(sum[:8])
 }
 
 // Queries are the statements a driver runs for notifications.
@@ -122,7 +147,7 @@ func (r *Repo) Create(ctx context.Context, n Notification) (Notification, bool, 
 		if created, err = q.InsertNotification(ctx, n); err != nil || !created {
 			return err
 		}
-		return live.Notify(ctx, q, live.KindNotification, n.ID, live.ActionCreated)
+		return live.Notify(ctx, q, live.KindNotification, LiveID(n.Recipient, n.ID), live.ActionCreated)
 	})
 	if err != nil || !created {
 		return Notification{}, false, err
@@ -140,7 +165,7 @@ func (r *Repo) MarkRead(ctx context.Context, recipient string, ids []string, bef
 			return err
 		}
 		for _, id := range marked {
-			if err = live.Notify(ctx, q, live.KindNotification, id, live.ActionUpdated); err != nil {
+			if err = live.Notify(ctx, q, live.KindNotification, LiveID(recipient, id), live.ActionUpdated); err != nil {
 				return err
 			}
 		}
@@ -159,6 +184,6 @@ func (r *Repo) Delete(ctx context.Context, recipient, id string) error {
 		if !found {
 			return dberr.ErrNotFound
 		}
-		return live.Notify(ctx, q, live.KindNotification, id, live.ActionDeleted)
+		return live.Notify(ctx, q, live.KindNotification, LiveID(recipient, id), live.ActionDeleted)
 	})
 }

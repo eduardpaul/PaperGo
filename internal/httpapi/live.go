@@ -7,10 +7,12 @@ import (
 	"net/http"
 	"papergo/internal/dal"
 	"papergo/internal/dal/live"
+	"papergo/internal/dal/notifications"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
 	"papergo/internal/notify"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -92,7 +94,7 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 	end := time.NewTimer(30 * time.Minute)
 	defer end.Stop()
 	known := map[string]bool{}
-	notes := map[string]bool{}
+	mine := notifications.RecipientKey(subject(r))
 	for {
 		if err = identity.RequireCredential(r.Context(), dal.NewStore(a.dms(r).Directory().DB), subject(r)); err != nil {
 			_ = frame("reauthenticate", position, map[string]any{})
@@ -148,25 +150,25 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 			case live.KindNotification:
-				// Only the recipient hears of a notification; a deleted one
-				// was delivered on this connection or is not theirs.
+				// Only the recipient hears of a notification, a deletion
+				// included: the change names the recipient's digest.
+				owner, id, _ := strings.Cut(change.EntityID, ":")
+				if owner != mine {
+					continue
+				}
 				if change.Action == live.ActionDeleted {
-					if notes[change.EntityID] {
-						delete(notes, change.EntityID)
-						if err = a.notificationFrame(r, frame, position, change.EntityID, change.Action, nil); err != nil {
-							return
-						}
+					if err = a.notificationFrame(r, frame, position, id, change.Action, nil); err != nil {
+						return
 					}
 					continue
 				}
-				note, e := a.notifications(r).Get(r.Context(), subject(r), change.EntityID)
+				note, e := a.notifications(r).Get(r.Context(), subject(r), id)
 				if errors.Is(e, dms.ErrNotFound) {
 					continue
 				}
 				if e != nil {
 					return
 				}
-				notes[note.ID] = true
 				if err = a.notificationFrame(r, frame, position, note.ID, change.Action, &note); err != nil {
 					return
 				}

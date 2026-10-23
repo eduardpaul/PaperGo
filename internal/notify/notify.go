@@ -11,10 +11,10 @@ package notify
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -114,18 +114,17 @@ func Send(ctx context.Context, t *dms.Service, m Message, people []string) (Resu
 	return out, nil
 }
 
-// canRead lets people receive m who can read its item or, without one, its
-// workspace.
+// canRead lets people receive m who can read a revision of its item or,
+// without one, its workspace.
 func canRead(m Message) func(context.Context, *dms.Service, string) (bool, error) {
 	return func(ctx context.Context, t *dms.Service, subject string) (bool, error) {
-		target := m.ItemID
-		if target == "" {
-			target = m.WorkspaceID
+		if m.ItemID != "" {
+			return CanSee(ctx, t, subject, m.ItemID)
 		}
-		if target == "" {
+		if m.WorkspaceID == "" {
 			return true, nil
 		}
-		return Can(ctx, t, subject, target, "read")
+		return Can(ctx, t, subject, m.WorkspaceID, "read")
 	}
 }
 
@@ -133,6 +132,17 @@ func canRead(m Message) func(context.Context, *dms.Service, string) (bool, error
 // a refusal or a missing resource as no.
 func Can(ctx context.Context, t *dms.Service, subject, id, action string) (bool, error) {
 	_, err := t.Authorize(ctx, subject, id, action)
+	if errors.Is(err, dms.ErrForbidden) || errors.Is(err, dms.ErrNotFound) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+// CanSee reports whether subject can read a revision of the item: its
+// draft, or its published revision. Read access to an item that was never
+// published shows a reader nothing.
+func CanSee(ctx context.Context, t *dms.Service, subject, itemID string) (bool, error) {
+	_, err := t.GetSurface(ctx, subject, itemID, "auto")
 	if errors.Is(err, dms.ErrForbidden) || errors.Is(err, dms.ErrNotFound) {
 		return false, nil
 	}
@@ -203,7 +213,17 @@ type Service struct {
 	DMS *dms.Service
 }
 
-// Inbox lists subject's notifications, newest first.
+// scanBatch is how many notifications a read takes at once while it skips
+// those an access token may not show, and maxScanned how many a page or a
+// count looks at in all.
+const (
+	scanBatch  = 200
+	maxScanned = 2000
+)
+
+// Inbox lists subject's notifications, newest first. A page continues
+// below the last notification of the previous one, so notifications read
+// or deleted meanwhile do not shift it.
 func (s *Service) Inbox(ctx context.Context, subject string, f Filter) (dms.Page[View], error) {
 	if f.Type != "" && !f.Type.Valid() {
 		return dms.Page[View]{}, dms.Invalid("type is message, task.assigned, task.completed or workflow.failed")
@@ -212,52 +232,192 @@ func (s *Service) Inbox(ctx context.Context, subject string, f Filter) (dms.Page
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	offset := 0
+	q := notifications.Filter{Recipient: subject, Unread: f.Unread, Type: f.Type, WorkspaceID: f.WorkspaceID}
 	if f.After != "" {
-		n, err := strconv.Atoi(f.After)
-		if err != nil || n < 0 {
-			return dms.Page[View]{}, dms.Invalid("$skiptoken is not a cursor of this list")
+		key, err := parseCursor(f.After)
+		if err != nil {
+			return dms.Page[View]{}, err
 		}
-		offset = n
-	}
-	rows, err := s.DMS.DAL.Notifications().List(ctx, notifications.Filter{Recipient: subject, Unread: f.Unread, Type: f.Type, WorkspaceID: f.WorkspaceID, Offset: offset, Limit: limit + 1})
-	if err != nil {
-		return dms.Page[View]{}, err
+		q.After = &key
 	}
 	out := dms.Page[View]{Data: []View{}}
-	if len(rows) > limit {
-		rows = rows[:limit]
-		out.NextCursor = strconv.Itoa(offset + limit)
+	for scanned := 0; ; {
+		q.Limit = limit + 1 - len(out.Data)
+		if limited(ctx) {
+			q.Limit = scanBatch
+		}
+		rows, err := s.DMS.DAL.Notifications().List(ctx, q)
+		if err != nil {
+			return out, err
+		}
+		show, err := s.visible(ctx, subject, rows)
+		if err != nil {
+			return out, err
+		}
+		for _, n := range rows {
+			scanned++
+			if !show[n.ID] {
+				q.After = &notifications.Key{CreatedAt: n.CreatedAt, ID: n.ID}
+				continue
+			}
+			if len(out.Data) == limit {
+				out.NextCursor = cursorOf(out.Data[len(out.Data)-1])
+				return out, nil
+			}
+			out.Data = append(out.Data, viewOf(n))
+			q.After = &notifications.Key{CreatedAt: n.CreatedAt, ID: n.ID}
+		}
+		if len(rows) < q.Limit {
+			return out, nil
+		}
+		if scanned >= maxScanned {
+			// A page cut short still links to the rest.
+			out.NextCursor = cursorOf(View{ID: q.After.ID, CreatedAt: q.After.CreatedAt})
+			return out, nil
+		}
+	}
+}
+
+// cursorOf names the place after which the next page starts.
+func cursorOf(v View) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(v.CreatedAt.UTC().Format(time.RFC3339Nano) + "|" + v.ID))
+}
+
+func parseCursor(cursor string) (notifications.Key, error) {
+	invalid := dms.Invalid("$skiptoken is not a cursor of this list")
+	raw, err := base64.RawURLEncoding.DecodeString(cursor)
+	if err != nil {
+		return notifications.Key{}, invalid
+	}
+	at, id, ok := strings.Cut(string(raw), "|")
+	created, err := time.Parse(time.RFC3339Nano, at)
+	if !ok || err != nil || id == "" {
+		return notifications.Key{}, invalid
+	}
+	return notifications.Key{CreatedAt: created, ID: id}, nil
+}
+
+// limited reports whether the request carries an access token, whose scopes
+// and places limit which notifications it may show.
+func limited(ctx context.Context) bool {
+	_, ok := identity.AccessTokenContext(ctx)
+	return ok
+}
+
+// visible reports which of subject's notifications the request may show.
+// Signed in, a person sees all of their own. An access token sees those
+// about content it may read: the linked item, a task's item, or else the
+// workspace, which a token limited to places never sees on its own, as
+// such a notification may concern anything there.
+func (s *Service) visible(ctx context.Context, subject string, rows []notifications.Notification) (map[string]bool, error) {
+	out := map[string]bool{}
+	token, ok := identity.AccessTokenContext(ctx)
+	for _, n := range rows {
+		out[n.ID] = !ok
+	}
+	if !ok {
+		return out, nil
 	}
 	for _, n := range rows {
-		out.Data = append(out.Data, viewOf(n))
+		item := n.ItemID
+		if n.TaskID != "" {
+			tk, err := s.DMS.DAL.Tasks().Find(ctx, n.TaskID)
+			if err != nil && !dberr.IsNotFound(err) {
+				return nil, err
+			}
+			item = tk.ItemID
+		}
+		var err error
+		switch {
+		case item != "":
+			out[n.ID], err = Can(ctx, s.DMS, subject, item, "read")
+		case len(token.Resources) > 0 || n.WorkspaceID == "":
+			out[n.ID] = false
+		default:
+			out[n.ID], err = Can(ctx, s.DMS, subject, n.WorkspaceID, "read")
+		}
+		if err != nil {
+			return nil, err
+		}
 	}
 	return out, nil
 }
 
-// Get reads one of subject's notifications; others' are not found.
-func (s *Service) Get(ctx context.Context, subject, id string) (View, error) {
+// find reads one of subject's notifications that the request may show;
+// others are not found.
+func (s *Service) find(ctx context.Context, subject, id string) (notifications.Notification, error) {
 	n, err := s.DMS.DAL.Notifications().Find(ctx, id)
 	if dberr.IsNotFound(err) || (err == nil && n.Recipient != subject) {
-		return View{}, dms.ErrNotFound
+		return n, dms.ErrNotFound
 	}
+	if err != nil {
+		return n, err
+	}
+	show, err := s.visible(ctx, subject, []notifications.Notification{n})
+	if err != nil {
+		return n, err
+	}
+	if !show[n.ID] {
+		return n, dms.ErrNotFound
+	}
+	return n, nil
+}
+
+// Get reads one of subject's notifications; others' are not found.
+func (s *Service) Get(ctx context.Context, subject, id string) (View, error) {
+	n, err := s.find(ctx, subject, id)
 	if err != nil {
 		return View{}, err
 	}
 	return viewOf(n), nil
 }
 
-// Unread counts subject's unread notifications.
+// Unread counts subject's unread notifications that the request may show.
+// Through an access token the count stops at the notifications among the
+// latest 2,000 unread ones.
 func (s *Service) Unread(ctx context.Context, subject string) (int64, error) {
-	return s.DMS.DAL.Notifications().Unread(ctx, subject)
+	if !limited(ctx) {
+		return s.DMS.DAL.Notifications().Unread(ctx, subject)
+	}
+	ids, err := s.unread(ctx, subject, time.Time{})
+	return int64(len(ids)), err
+}
+
+// unread returns the IDs of subject's unread notifications created until
+// then (any time when zero) that the request may show, among the latest
+// 2,000.
+func (s *Service) unread(ctx context.Context, subject string, until time.Time) ([]string, error) {
+	q := notifications.Filter{Recipient: subject, Unread: true, Until: until, Limit: scanBatch}
+	var ids []string
+	for scanned := 0; scanned < maxScanned; {
+		rows, err := s.DMS.DAL.Notifications().List(ctx, q)
+		if err != nil {
+			return nil, err
+		}
+		show, err := s.visible(ctx, subject, rows)
+		if err != nil {
+			return nil, err
+		}
+		for _, n := range rows {
+			if show[n.ID] {
+				ids = append(ids, n.ID)
+			}
+			q.After = &notifications.Key{CreatedAt: n.CreatedAt, ID: n.ID}
+		}
+		scanned += len(rows)
+		if len(rows) < scanBatch {
+			break
+		}
+	}
+	return ids, nil
 }
 
 // MaxMarked bounds the notifications one request names.
 const MaxMarked = 500
 
 // MarkRead marks subject's notifications read: those of ids, or with none
-// every one created at or before before, or else all. It returns how many
-// it marked.
+// every one created at or before before, or else all. An access token
+// marks only those it may show. It returns how many it marked.
 func (s *Service) MarkRead(ctx context.Context, subject string, ids []string, before *time.Time) (int, error) {
 	if len(ids) > MaxMarked {
 		return 0, dms.Invalid(fmt.Sprintf("ids names at most %d notifications", MaxMarked))
@@ -269,17 +429,50 @@ func (s *Service) MarkRead(ctx context.Context, subject string, ids []string, be
 	if before != nil {
 		until = *before
 	}
-	var marked []string
+	if limited(ctx) {
+		var shown []string
+		if len(ids) == 0 {
+			var err error
+			if shown, err = s.unread(ctx, subject, until); err != nil {
+				return 0, err
+			}
+		}
+		for _, id := range ids {
+			if _, err := s.find(ctx, subject, id); err == nil {
+				shown = append(shown, id)
+			} else if !errors.Is(err, dms.ErrNotFound) {
+				return 0, err
+			}
+		}
+		if len(shown) == 0 {
+			return 0, nil
+		}
+		ids = shown
+	}
+	marked := 0
 	err := s.DMS.Write(ctx, func(t *dms.Service) error {
-		var err error
-		marked, err = t.DAL.Notifications().MarkRead(ctx, subject, ids, until)
-		return err
+		if len(ids) == 0 {
+			done, err := t.DAL.Notifications().MarkRead(ctx, subject, nil, until)
+			marked = len(done)
+			return err
+		}
+		for chunk := range slices.Chunk(ids, MaxMarked) {
+			done, err := t.DAL.Notifications().MarkRead(ctx, subject, chunk, until)
+			if err != nil {
+				return err
+			}
+			marked += len(done)
+		}
+		return nil
 	})
-	return len(marked), err
+	return marked, err
 }
 
 // Delete removes one of subject's notifications.
 func (s *Service) Delete(ctx context.Context, subject, id string) error {
+	if _, err := s.find(ctx, subject, id); err != nil {
+		return err
+	}
 	err := s.DMS.Write(ctx, func(t *dms.Service) error { return t.DAL.Notifications().Delete(ctx, subject, id) })
 	if dberr.IsNotFound(err) {
 		return dms.ErrNotFound
@@ -290,9 +483,17 @@ func (s *Service) Delete(ctx context.Context, subject, id string) error {
 // Send sends a message from subject, or from the workflow run that makes
 // the request, to the people its recipient entries name who can read its
 // item or else its workspace. Naming someone sends to them even when they
-// are the sender.
+// are the sender. Sending writes to other people's inboxes, so it needs the
+// item.write scope. A caller's dedup key never meets the keys PaperGo uses
+// for its own notifications.
 func (s *Service) Send(ctx context.Context, subject, run string, in SendInput) (Result, error) {
 	var out Result
+	if err := identity.RequireScope(ctx, s.DMS.DAL, subject, "item.write"); err != nil {
+		if errors.Is(err, identity.ErrForbidden) {
+			return out, dms.ErrForbidden
+		}
+		return out, err
+	}
 	err := s.DMS.Write(ctx, func(t *dms.Service) error {
 		ws, err := t.Authorize(ctx, subject, in.WorkspaceID, "read")
 		if err != nil {
@@ -310,8 +511,14 @@ func (s *Service) Send(ctx context.Context, subject, run string, in SendInput) (
 				return dms.Invalid("item_id must be an item of the workspace")
 			}
 		}
+		if utf8.RuneCountInString(in.DedupKey) > notifications.MaxDedupKey-len(messageKeys) {
+			return dms.Invalid(fmt.Sprintf("dedup_key has at most %d characters", notifications.MaxDedupKey-len(messageKeys)))
+		}
 		m := Message{Type: notifications.TypeMessage, WorkspaceID: in.WorkspaceID, Title: in.Title, Body: in.Body, ItemID: in.ItemID,
-			Source: notifications.SourceUser, Sender: subject, DedupKey: in.DedupKey}
+			Source: notifications.SourceUser, Sender: subject}
+		if key := strings.TrimSpace(in.DedupKey); key != "" {
+			m.DedupKey = messageKeys + key
+		}
 		if run != "" {
 			r, err := t.DAL.Runs().Find(ctx, run)
 			if err != nil {
@@ -340,3 +547,7 @@ func (s *Service) Send(ctx context.Context, subject, run string, in SendInput) (
 	})
 	return out, err
 }
+
+// messageKeys prefixes the dedup keys of messages people and workflows
+// send, apart from the keys of PaperGo's own notifications.
+const messageKeys = "message:"

@@ -122,7 +122,7 @@ func TestNotificationRoutes(t *testing.T) {
 	if w = request(h, "GET", "/v1/me/notifications?type=task.completed&$top=1", "", testToken, "", ""); w.Code != 200 || strings.Contains(w.Body.String(), "Lease renewed") || !strings.Contains(w.Body.String(), `"@odata.nextLink":null`) {
 		t.Fatalf("by type: %d %s", w.Code, w.Body)
 	}
-	if w = request(h, "GET", "/v1/me/notifications?$top=1", "", testToken, "", ""); w.Code != 200 || !strings.Contains(w.Body.String(), "%24skiptoken=1") {
+	if w = request(h, "GET", "/v1/me/notifications?$top=1", "", testToken, "", ""); w.Code != 200 || !strings.Contains(w.Body.String(), "%24skiptoken=") {
 		t.Fatalf("paged: %d %s", w.Code, w.Body)
 	}
 	if w = request(h, "GET", "/v1/me/notifications?type=other", "", testToken, "", ""); w.Code != 422 {
@@ -155,5 +155,156 @@ func TestNotificationRoutes(t *testing.T) {
 	}
 	if len(inbox("alice")) != 1 {
 		t.Fatalf("deleted notification remains: %+v", inbox("alice"))
+	}
+}
+
+// Inboxes keep to what a request may read, sending needs write access,
+// and pages, keys and long answers hold up.
+func TestNotificationLimits(t *testing.T) {
+	h, s := setupWorkflows(t)
+	ctx := t.Context()
+	create := func(subject, parent, kind, name string, publishing bool) string {
+		t.Helper()
+		r, err := s.Create(ctx, subject, parent, dms.CreateResource{Kind: kind, Name: name, PublishingEnabled: publishing})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r.ID
+	}
+	ws := create("alice", "", "workspace", "Ops", false)
+	open := create("alice", ws, "list", "Open", false)
+	drafts := create("alice", ws, "list", "Drafts", true)
+	shared := create("alice", open, "item", "Shared", false)
+	draft := create("alice", drafts, "item", "Draft", false)
+	other := create("alice", "", "workspace", "Other", false)
+	secret := create("alice", create("alice", other, "list", "Secret", false), "item", "Merger", false)
+	for _, m := range []dms.WorkspaceMember{{Subject: "dave", Role: "visitor"}, {Subject: "bob", Role: "member"}} {
+		if err := s.SetWorkspaceMember(ctx, "alice", ws, m); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const json_ = "application/json"
+	send := func(token, workspace, body string) (int, string) {
+		w := request(h, "POST", "/v1/workspaces/"+workspace+"/notifications", body, token, "", json_)
+		return w.Code, w.Body.String()
+	}
+	issue := func(body string) string {
+		t.Helper()
+		w := request(h, "POST", "/v1/identity/me/tokens", body, testToken, "", json_)
+		var out struct {
+			Secret string `json:"secret"`
+		}
+		if w.Code != 201 || json.Unmarshal(w.Body.Bytes(), &out) != nil {
+			t.Fatal(w.Code, w.Body.String())
+		}
+		return out.Secret
+	}
+
+	// A visitor reads only published revisions: a draft is no news to them.
+	if code, body := send(testToken, ws, `{"recipients": ["dave"], "title": "Draft ready", "item_id": "`+draft+`"}`); code != 200 || !strings.Contains(body, `"skipped":1`) {
+		t.Fatalf("draft to a visitor: %d %s", code, body)
+	}
+	if code, body := send(testToken, ws, `{"recipients": ["dave"], "title": "Shared ready", "item_id": "`+shared+`"}`); code != 200 || !strings.Contains(body, `"sent":1`) {
+		t.Fatalf("published item to a visitor: %d %s", code, body)
+	}
+
+	// A read-only token neither sends messages nor creates tasks.
+	reader := issue(`{"name":"Reader","scopes":["workspace.read","item.read"]}`)
+	if code, body := send(reader, ws, `{"recipients": ["bob"], "title": "Hi"}`); code != 403 {
+		t.Fatalf("read-only send: %d %s", code, body)
+	}
+	if w := request(h, "POST", "/v1/workspaces/"+ws+"/tasks", `{"title": "Hi", "assignees": ["bob"]}`, reader, "", json_); w.Code != 403 {
+		t.Fatalf("read-only task: %d %s", w.Code, w.Body)
+	}
+
+	// A message's dedup key cannot suppress a task's answer.
+	w := request(h, "POST", "/v1/workspaces/"+ws+"/tasks", `{"title": "Sign", "assignees": ["bob"]}`, testToken, "", json_)
+	var task tasks.View
+	if w.Code != 201 || json.Unmarshal(w.Body.Bytes(), &task) != nil {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if code, body := send(testToken, ws, `{"recipients": ["alice"], "title": "Decoy", "dedup_key": "task:`+task.ID+`:completed"}`); code != 200 || !strings.Contains(body, `"sent":1`) {
+		t.Fatalf("decoy: %d %s", code, body)
+	}
+	// The longest comment still completes the task, its notice shortened.
+	if _, err := (&tasks.Service{DMS: s}).Respond(ctx, "bob", task.ID, tasks.Response{Outcome: "done", Comment: strings.Repeat("x", 4000)}); err != nil {
+		t.Fatal(err)
+	}
+	completed, err := (&notify.Service{DMS: s}).Inbox(ctx, "alice", notify.Filter{Type: notifications.TypeTaskCompleted})
+	if err != nil || len(completed.Data) != 1 || len([]rune(completed.Data[0].Body)) != notifications.MaxBody {
+		t.Fatalf("answer notice: %+v %v", completed.Data, err)
+	}
+
+	// A page continues after its last notification, whatever was read
+	// since, so nothing unread is skipped.
+	for _, title := range []string{"One", "Two", "Three"} {
+		if code, body := send(testToken, ws, `{"recipients": ["alice"], "title": "`+title+`"}`); code != 200 {
+			t.Fatal(code, body)
+		}
+	}
+	page := func(path string) (titles []string, next string) {
+		t.Helper()
+		w := request(h, "GET", path, "", testToken, "", "")
+		var out struct {
+			Value []notify.View `json:"value"`
+			Next  *string       `json:"@odata.nextLink"`
+		}
+		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &out) != nil {
+			t.Fatal(w.Code, w.Body.String())
+		}
+		for _, n := range out.Value {
+			titles = append(titles, n.Title)
+		}
+		if out.Next != nil {
+			next = strings.TrimPrefix(*out.Next, "http://example.com")
+		}
+		return titles, next
+	}
+	first, next := page("/v1/me/notifications?unread=true&$top=1")
+	if len(first) != 1 || first[0] != "Three" || next == "" {
+		t.Fatalf("first page: %v %q", first, next)
+	}
+	mine, _ := (&notify.Service{DMS: s}).Inbox(ctx, "alice", notify.Filter{Limit: 1})
+	if _, err = (&notify.Service{DMS: s}).MarkRead(ctx, "alice", []string{mine.Data[0].ID}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if second, _ := page(next); len(second) != 1 || second[0] != "Two" {
+		t.Fatalf("second page skipped an unread notification: %v", second)
+	}
+	if w := request(h, "GET", "/v1/me/notifications?$skiptoken=nonsense", "", testToken, "", ""); w.Code != 422 {
+		t.Fatalf("bad cursor: %d", w.Code)
+	}
+
+	// A token limited to a place sees only notifications about it, counts
+	// and marks only those, and cannot delete the others.
+	if code, body := send(testToken, other, `{"recipients": ["alice"], "title": "Merger talks", "body": "Confidential", "item_id": "`+secret+`"}`); code != 200 {
+		t.Fatal(code, body)
+	}
+	if code, body := send(testToken, ws, `{"recipients": ["alice"], "title": "About the shared item", "item_id": "`+shared+`"}`); code != 200 {
+		t.Fatal(code, body)
+	}
+	place := issue(`{"name":"Open list","scopes":["workspace.read","item.read"],"resources":["` + open + `"]}`)
+	w = request(h, "GET", "/v1/me/notifications", "", place, "", "")
+	if w.Code != 200 || strings.Contains(w.Body.String(), "Merger") || strings.Contains(w.Body.String(), "Decoy") || !strings.Contains(w.Body.String(), "About the shared item") {
+		t.Fatalf("limited inbox: %d %s", w.Code, w.Body)
+	}
+	if w = request(h, "GET", "/v1/me/notifications/unread-count", "", place, "", ""); w.Body.String() != "{\"count\":1}\n" {
+		t.Fatalf("limited count: %s", w.Body)
+	}
+	all, _ := (&notify.Service{DMS: s}).Inbox(ctx, "alice", notify.Filter{})
+	var merger string
+	for _, n := range all.Data {
+		if n.Title == "Merger talks" {
+			merger = n.ID
+		}
+	}
+	if w = request(h, "DELETE", "/v1/me/notifications/"+merger, "", place, "", ""); w.Code != 404 {
+		t.Fatalf("limited delete: %d", w.Code)
+	}
+	if w = request(h, "POST", "/v1/me/notifications/read", `{}`, place, "", json_); w.Body.String() != "{\"marked\":1}\n" {
+		t.Fatalf("limited mark all: %s", w.Body)
+	}
+	if n, _ := (&notify.Service{DMS: s}).Unread(ctx, "alice"); n == 0 {
+		t.Fatal("a limited token marked notifications it cannot see")
 	}
 }

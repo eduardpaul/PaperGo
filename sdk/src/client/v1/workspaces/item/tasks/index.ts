@@ -28,7 +28,7 @@ export interface TasksRequestBuilder extends BaseRequestBuilder<TasksRequestBuil
      */
      get(requestConfiguration?: RequestConfiguration<TasksRequestBuilderGetQueryParameters> | undefined) : Promise<TaskList | undefined>;
     /**
-     * Creates a task. The creator needs read access to the workspace, and write access to the item when it concerns one. Assignees are recipient entries; none means the workspace's owners. Unknown recipients fail with their names. A task a workflow run creates is that workflow's: its operation_id is the operation its answer ends, which the run waits on, it may review a staged file of the run, and it is cancelled with the run.
+     * Creates a task. The creator needs read access to the workspace, and write access to the item when it concerns one. Assignees are recipient entries; none means the workspace's owners. Unknown recipients fail with their names. A task a workflow run creates is that workflow's: its operation_id is the operation its answer ends, which the run waits on, it may review a staged file of the run, and it is cancelled with the run. Needs the item.write scope.
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<Task>}
@@ -50,7 +50,7 @@ export interface TasksRequestBuilder extends BaseRequestBuilder<TasksRequestBuil
      */
      toGetRequestInformation(requestConfiguration?: RequestConfiguration<TasksRequestBuilderGetQueryParameters> | undefined) : RequestInformation;
     /**
-     * Creates a task. The creator needs read access to the workspace, and write access to the item when it concerns one. Assignees are recipient entries; none means the workspace's owners. Unknown recipients fail with their names. A task a workflow run creates is that workflow's: its operation_id is the operation its answer ends, which the run waits on, it may review a staged file of the run, and it is cancelled with the run.
+     * Creates a task. The creator needs read access to the workspace, and write access to the item when it concerns one. Assignees are recipient entries; none means the workspace's owners. Unknown recipients fail with their names. A task a workflow run creates is that workflow's: its operation_id is the operation its answer ends, which the run waits on, it may review a staged file of the run, and it is cancelled with the run. Needs the item.write scope.
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}

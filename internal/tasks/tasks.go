@@ -672,7 +672,7 @@ func answered(ctx context.Context, t *dms.Service, tk taskstore.Task, actor stri
 		body += "\n\n" + tk.Comment
 	}
 	_, err := notify.Send(ctx, t, notify.Message{
-		Type: notifications.TypeTaskCompleted, WorkspaceID: tk.WorkspaceID, Title: notify.Clip(tk.Title, notifications.MaxTitle), Body: body, TaskID: tk.ID,
+		Type: notifications.TypeTaskCompleted, WorkspaceID: tk.WorkspaceID, Title: notify.Clip(tk.Title, notifications.MaxTitle), Body: notify.Clip(body, notifications.MaxBody), TaskID: tk.ID,
 		Source: notifications.SourceSystem, Sender: tk.CompletedBy, DedupKey: "task:" + tk.ID + ":completed", Actor: actor,
 	}, []string{tk.CreatedBy})
 	return err

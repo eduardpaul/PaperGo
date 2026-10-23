@@ -343,7 +343,7 @@ Saving a workflow checks that collections and relationship types belong to the w
 
 ## Tasks
 
-A task asks people to do something and say so: approve, confirm data, fill in a form. Scripts and people create tasks with `POST /v1/workspaces/{id}/tasks`; people also use the web app's Tasks screen. An approval is a task of kind `approval`. The model and its rules live in `internal/tasks`, shared by workflows, the API and PaperGo itself.
+A task asks people to do something and say so: approve, confirm data, fill in a form. Scripts and people create tasks with `POST /v1/workspaces/{id}/tasks`, which needs the `item.write` scope; people also use the web app's Tasks screen. An approval is a task of kind `approval`. The model and its rules live in `internal/tasks`, shared by workflows, the API and PaperGo itself.
 
 The Tasks screen offers Waiting for me, Approvals, Completed and All views. **Load more** appends the next page of the selected view while keeping the current task open.
 

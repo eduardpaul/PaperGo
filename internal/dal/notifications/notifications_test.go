@@ -79,9 +79,13 @@ func runNotificationSuite(t *testing.T, newStore func(testing.TB) *dal.Store) {
 		if n, _ := repo.Unread(ctx, "bob"); n != 1 {
 			t.Fatalf("unread after marking = %d", n)
 		}
-		page, err := repo.List(ctx, notifications.Filter{Recipient: "bob", Type: notifications.TypeMessage, Limit: 1, Offset: 1})
+		page, err := repo.List(ctx, notifications.Filter{Recipient: "bob", Type: notifications.TypeMessage, Limit: 1})
+		if err != nil || len(page) != 1 || page[0].ID != second.ID {
+			t.Fatalf("first page by type: %+v %v", page, err)
+		}
+		page, err = repo.List(ctx, notifications.Filter{Recipient: "bob", Type: notifications.TypeMessage, Limit: 1, After: &notifications.Key{CreatedAt: page[0].CreatedAt, ID: page[0].ID}})
 		if err != nil || len(page) != 1 || page[0].ID != first.ID || page[0].ReadAt == nil {
-			t.Fatalf("paged by type: %+v %v", page, err)
+			t.Fatalf("next page by type: %+v %v", page, err)
 		}
 
 		if err = repo.Delete(ctx, "carol", second.ID); !errors.Is(err, dberr.ErrNotFound) {
@@ -96,7 +100,7 @@ func runNotificationSuite(t *testing.T, newStore func(testing.TB) *dal.Store) {
 		}
 		var kinds []live.Action
 		for _, c := range changes {
-			if c.Kind == live.KindNotification && c.EntityID == second.ID {
+			if c.Kind == live.KindNotification && c.EntityID == notifications.LiveID("bob", second.ID) {
 				kinds = append(kinds, c.Action)
 			}
 		}

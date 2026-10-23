@@ -19,9 +19,9 @@ The model and its rules live in `internal/notify`, shared by tasks, workflow run
 
 ## Rules
 
-- **Access at send time.** A notification reaches only people who can read what it is about: its item, or else its workspace. A task's notification reaches only people who can review the task. Everyone else is skipped and counted. Each person's own access decides, not the limits of the sender's access token.
+- **Access at send time.** A notification reaches only people who can read what it is about: a revision of its item (its draft, or its published revision, so a visitor hears nothing of an item that was never published), or else its workspace. A task's notification reaches only people who can review the task. Everyone else is skipped and counted. Each person's own access decides, not the limits of the sender's access token.
 - **Nobody is told about their own action.** The person who caused a change is left out of the notifications about it. A message sent through the API reaches everyone it names, the sender included.
-- **Once per dedup key.** A send with a `dedup_key` reaches only the people who do not have a notification with that key yet, so a repeated request sends nothing twice.
+- **Once per dedup key.** A send with a `dedup_key` reaches only the people who do not have a notification with that key yet, so a repeated request sends nothing twice. The keys of messages people and workflows send are kept apart from the keys of PaperGo's own notifications, so a message can never suppress one of them.
 - **Bounded fan-out.** One send reaches at most 500 people once groups and roles are expanded; a larger send fails.
 - **Inactive people** are left out.
 
@@ -50,7 +50,8 @@ Anything else a process wants to tell people, such as "your document was publish
 ```
 
 - `recipients` takes the same entries as task assignees: people, `group:<id>`, `role:owners`, `role:members`, `creator`, `actor` (the caller) and `field:<key>`. Unknown people and groups fail with their names.
-- The caller needs read access to the workspace and to `item_id`, an item of the workspace.
+- The caller needs read access to the workspace and to `item_id`, an item of the workspace, and the `item.write` scope: sending writes to other people's inboxes, so a read-only access token cannot.
+- `dedup_key` has up to 192 characters.
 - The answer counts what happened: `{"sent": 2, "skipped": 1, "deduplicated": 0}`. `skipped` counts people who cannot read the item or workspace.
 - A workflow's request sends the message from its workflow (`source: "workflow"`). The request is an exactly-once step, so a replayed run does not send it again:
 
@@ -69,12 +70,14 @@ The workspace's audit trail records each send as `notification.send`.
 
 | Route | Does |
 | --- | --- |
-| `GET /v1/me/notifications?unread=&type=&workspace_id=` | the caller's notifications, newest first, paged with `$top` (up to 200, default 50) and `$skiptoken` |
+| `GET /v1/me/notifications?unread=&type=&workspace_id=` | the caller's notifications, newest first, paged with `$top` (up to 200, default 50) and `$skiptoken`. A page continues after the last notification of the previous one, so notifications read or deleted meanwhile do not shift it. |
 | `GET /v1/me/notifications/unread-count` | `{"count": n}`, for a badge |
 | `POST /v1/me/notifications/read` | `{"ids": [...]}` marks those read, `{"before": "<time>"}` every one created until then, and `{}` all of them; answers `{"marked": n}` |
 | `DELETE /v1/me/notifications/{id}` | removes one |
 
 People see and change only their own notifications; someone else's reads as not found.
+
+Through an access token, the inbox keeps to what the token may read: notifications about an item it may read, about a task whose item it may read, or about a workspace it may read. A token limited to places sees only notifications about items in them, since a notification about a workspace may concern anything there. It counts, marks read and deletes only what it sees; its unread count considers the latest 2,000 unread notifications.
 
 Notifications are removed with what they link to: purging an item or a task removes its notifications, and a run that retention deletes leaves its notification without a link. Deleting a person removes their inbox.
 
@@ -86,7 +89,7 @@ The [live stream](application-foundation.md#live-api-updates) (`GET /v1/events`)
 {"id": "…", "action": "created", "unread": 3, "notification": {"id": "…", "type": "task.assigned", "title": "Check the lease", …}}
 ```
 
-A deleted notification's frame carries only its `id`, and only on a connection that delivered it.
+A deleted notification's frame carries only its `id` and the new count, and reaches every connection of the recipient, wherever the notification was first shown.
 
 ## Web app
 

@@ -6,6 +6,7 @@ import (
 
 	"github.com/aarondl/opt/omit"
 	"github.com/aarondl/opt/omitnull"
+	"github.com/stephenafamo/bob/dialect/psql"
 	"github.com/stephenafamo/bob/dialect/psql/im"
 	"github.com/stephenafamo/bob/dialect/psql/sm"
 	"papergo/internal/dal/dberr"
@@ -35,9 +36,15 @@ func (q Queries) Notifications(ctx context.Context, f notifications.Filter) ([]n
 	if f.WorkspaceID != "" {
 		query.Apply(w.WorkspaceID.EQ(f.WorkspaceID))
 	}
+	if f.After != nil {
+		query.Apply(sm.Where(psql.Or(c.CreatedAt.LT(psql.Arg(f.After.CreatedAt)), psql.And(c.CreatedAt.EQ(psql.Arg(f.After.CreatedAt)), c.ID.LT(psql.Arg(f.After.ID))))))
+	}
+	if !f.Until.IsZero() {
+		query.Apply(w.CreatedAt.LTE(f.Until))
+	}
 	query.Apply(sm.OrderBy(c.CreatedAt).Desc(), sm.OrderBy(c.ID).Desc())
 	if f.Limit > 0 {
-		query.Apply(sm.Limit(f.Limit), sm.Offset(max(f.Offset, 0)))
+		query.Apply(sm.Limit(f.Limit))
 	}
 	rows, err := query.All(ctx, q.exec)
 	if err != nil {
