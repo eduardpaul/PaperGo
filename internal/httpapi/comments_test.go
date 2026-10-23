@@ -208,3 +208,50 @@ func TestCommentRoutes(t *testing.T) {
 		t.Fatalf("archived discussion: %s", body)
 	}
 }
+
+// An integration's identity has only its token's access, which carries it
+// through mentions and replies as through plain comments.
+func TestIntegrationsMentionAndReply(t *testing.T) {
+	h, s := setupWorkflows(t)
+	ctx := t.Context()
+	if err := s.Directory().SetAssignment(ctx, "organization-admin", identity.AdministratorRole, identity.Principal{Type: directorydomain.PrincipalUser, ID: "alice"}, false); err != nil {
+		t.Fatal(err)
+	}
+	ws, err := s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Ops"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, err := s.Create(ctx, "alice", ws.ID, dms.CreateResource{Kind: "list", Name: "Requests"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	item, err := s.Create(ctx, "alice", list.ID, dms.CreateResource{Kind: "item", Name: "Laptop"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, err := s.Directory().CreateIntegrationToken(ctx, "alice", identity.AccessTokenInput{Name: "Helpdesk", Scopes: []string{"workspace.read", "item.read", "comment.write"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.SetWorkspaceMember(ctx, "alice", ws.ID, dms.WorkspaceMember{Subject: token.Token.Subject, Role: "member"}); err != nil {
+		t.Fatal(err)
+	}
+	post := func(body string) comments.View {
+		t.Helper()
+		w := request(h, "POST", "/v1/items/"+item.ID+"/comments", body, token.Secret, "", "application/json")
+		var out comments.View
+		if w.Code != 201 || json.Unmarshal(w.Body.Bytes(), &out) != nil {
+			t.Fatalf("integration comment %s: %d %s", body, w.Code, w.Body)
+		}
+		return out
+	}
+	post(`{"body": "Ticket opened"}`)
+	root := post(`{"body": "Approve the order, <@user:alice>?"}`)
+	if _, err = (&comments.Service{DMS: s, Enabled: true}).Create(ctx, "alice", "", item.ID, comments.Input{Body: "Approved", ThreadID: root.ID}); err != nil {
+		t.Fatal(err)
+	}
+	post(`{"body": "Ordered", "thread_id": "` + root.ID + `"}`)
+	if got, _ := (&notify.Service{DMS: s}).Inbox(ctx, "alice", notify.Filter{}); len(got.Data) != 2 {
+		t.Fatalf("alice's mention and reply: %+v", got.Data)
+	}
+}

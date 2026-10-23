@@ -128,7 +128,8 @@ const (
 // Create stores one notification and tells its recipient's live streams.
 // It reports false, storing nothing, when the recipient already has a
 // notification with n's dedup key. With a coalesce key, an unread
-// notification with that key takes n's text and counts one more instead.
+// notification with that key takes n's text, link and sender, the source
+// and workflow included, and counts one more instead.
 func (r *Repo) Create(ctx context.Context, n Notification) (Notification, bool, error) {
 	if !n.Type.Valid() || !n.Source.Valid() {
 		return Notification{}, false, fmt.Errorf("%w: invalid notification type or source", dberr.ErrCheckViolation)

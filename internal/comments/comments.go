@@ -735,14 +735,17 @@ func (s *Service) tell(ctx context.Context, t *dms.Service, a access, c comments
 // read: its draft's among collaborators; among readers its published
 // revision's, or its draft's when it was never published, which only
 // draft readers see.
+//
+// It reads as the author with the request's own credential, which just
+// passed the discussion's checks: an integration's identity has no access
+// but its token's.
 func (s *Service) itemName(ctx context.Context, t *dms.Service, a access, author string) (string, error) {
-	as := identity.WithoutAccessToken(ctx)
 	if a.mode.Mode == ModeReaders {
-		if r, err := t.GetSurface(as, author, a.item.ID, "published"); err == nil {
+		if r, err := t.GetSurface(ctx, author, a.item.ID, "published"); err == nil {
 			return r.Name, nil
 		}
 	}
-	r, err := t.GetSurface(as, author, a.item.ID, "auto")
+	r, err := t.GetSurface(ctx, author, a.item.ID, "auto")
 	if err != nil {
 		return "", err
 	}

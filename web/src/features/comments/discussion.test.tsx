@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, expect, it, vi } from 'vitest';
 import { stringifyJSON } from '@/api/json';
 import type { Comment, CommentPage, CommentThread } from '@/api/types';
-import { Discussion, fromTokens, toTokens } from '@/features/comments/discussion';
+import { Discussion, choose, fromTokens, labelled, toTokens } from '@/features/comments/discussion';
 
 afterEach(() => {
   cleanup();
@@ -76,13 +76,20 @@ function show() {
   );
 }
 
-it('writes mentions as names to edit and back as mentions to save', () => {
+it('keeps people who share a name apart while editing and saving', () => {
   const people = [
     { subject: 'bob', name: 'Bob' },
-    { subject: 'bobby', name: 'Bob Smith' },
+    { subject: 'bob2', name: 'Bob' },
+    { subject: 'bobby', name: 'Bobby' },
   ];
-  expect(fromTokens('Hi <@user:bob> and <@user:bobby>', people)).toBe('Hi @Bob and @Bob Smith');
-  expect(toTokens('Hi @Bob and @Bob Smith', people)).toBe('Hi <@user:bob> and <@user:bobby>');
+  const body = 'Hi <@user:bob>, <@user:bob2> and <@user:bobby>';
+  const text = fromTokens(body, people);
+  expect(text).toBe('Hi @Bob (bob), @Bob (bob2) and @Bobby');
+  expect(toTokens(text, labelled(people))).toBe(body);
+  // Picking a second Bob labels them apart from the first.
+  const chosen = choose(choose([], people[0]), people[1]);
+  expect(chosen.map((p) => p.label)).toEqual(['Bob', 'Bob (bob2)']);
+  expect(toTokens('@Bob and @Bob (bob2), not @Bobby', chosen)).toBe('<@user:bob> and <@user:bob2>, not @Bobby');
 });
 
 it('shows threads with their replies and mentions as names', async () => {
@@ -145,4 +152,64 @@ it('says when comments are off and when the discussion is for collaborators', as
   show();
   expect(await screen.findByText('The discussion is for collaborators')).toBeTruthy();
   expect(screen.queryByRole('textbox')).toBeNull();
+});
+
+/** Serves an item's discussion over two pages. */
+function paged(first: CommentThread[], second: CommentThread[]) {
+  const asked: string[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: URL) => {
+      asked.push(url.search);
+      const next = url.searchParams.has('$skiptoken');
+      return new Response(
+        stringifyJSON(
+          page(
+            next ? second : first,
+            next ? {} : { '@odata.nextLink': '/v1/items/item/comments?status=all&$skiptoken=next' },
+          ),
+        ),
+      );
+    }),
+  );
+  return asked;
+}
+
+function showFocused(focus?: string) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={client}>
+      <Discussion itemId="item" focus={focus} />
+    </QueryClientProvider>,
+  );
+}
+
+it('loads more threads through the next link', async () => {
+  paged([{ ...comment('first'), replies: [] }], [{ ...comment('second'), replies: [] }]);
+  showFocused();
+  fireEvent.click(await screen.findByRole('button', { name: 'Load more threads' }));
+  const threads = screen.getByRole('list', { name: 'Threads' });
+  await waitFor(() => expect(within(threads).getAllByRole('listitem')).toHaveLength(2));
+  expect(screen.queryByRole('button', { name: 'Load more threads' })).toBeNull();
+});
+
+it('finds the comment a notification points at, in a resolved thread on a later page', async () => {
+  const asked = paged(
+    [{ ...comment('open'), replies: [] }],
+    [
+      {
+        ...comment('done', { resolved_at: '2026-10-13T11:00:00Z' }),
+        replies: [comment('target', { thread_id: 'done', body: 'Mentioned here' })],
+      },
+    ],
+  );
+  showFocused('target');
+  const threads = await screen.findByRole('list', { name: 'Threads' });
+  await waitFor(() => expect(within(threads).getAllByRole('listitem')).toHaveLength(2));
+  const focused = within(threads)
+    .getAllByRole('listitem')
+    .find((li) => li.getAttribute('aria-current') === 'true');
+  expect(focused?.textContent).toContain('Mentioned here');
+  expect(screen.getByRole('tab', { name: 'All' }).getAttribute('aria-selected')).toBe('true');
+  expect(asked[0]).toContain('status=all');
 });

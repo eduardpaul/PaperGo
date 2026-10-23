@@ -102,12 +102,18 @@ export const unreadNotificationsQuery = queryOptions({
   queryFn: async () => (await api<{ count: number }>('/v1/me/notifications/unread-count')).data.count,
 });
 
-/** An item's comment threads with their replies; status is open, resolved or all. */
+/** An item's comment threads with their replies, page by page; status is open, resolved or all. */
 export const commentsQuery = (itemId: string, status: string) =>
-  queryOptions({
+  infiniteQueryOptions({
     queryKey: keys.itemComments(itemId, status),
-    queryFn: async () =>
-      (await api<CommentPage>(`/v1/items/${itemId}/comments`, { query: { status, $top: '100' } })).data,
+    initialPageParam: `/v1/items/${itemId}/comments`,
+    queryFn: async ({ pageParam }) =>
+      (
+        await api<CommentPage>(pageParam, {
+          query: pageParam === `/v1/items/${itemId}/comments` ? { status } : undefined,
+        })
+      ).data,
+    getNextPageParam: (page) => continuation(page['@odata.nextLink']) ?? undefined,
   });
 
 export const commentSettingsQuery = (resourceId: string) =>

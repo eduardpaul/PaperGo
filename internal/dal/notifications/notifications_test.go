@@ -13,6 +13,7 @@ import (
 	"papergo/internal/dal/notifications"
 	"papergo/internal/dal/refs"
 	"papergo/internal/dal/resources"
+	"papergo/internal/dal/workflows"
 )
 
 func runNotificationSuite(t *testing.T, newStore func(testing.TB) *dal.Store) {
@@ -113,18 +114,22 @@ func runNotificationSuite(t *testing.T, newStore func(testing.TB) *dal.Store) {
 		ctx := context.Background()
 		s, in := daltest.TaskFixture(t, newStore)
 		repo := s.Notifications()
+		workflow, err := s.Workflows().Create(ctx, workflows.CreateInput{ID: "workflow", WorkspaceID: in.WorkspaceID, Key: "replies", Name: "Replies", Content: daltest.Script, CreatedBy: "alice"})
+		if err != nil {
+			t.Fatal(err)
+		}
 		reply := notifications.Notification{Recipient: "bob", WorkspaceID: in.WorkspaceID, Type: notifications.TypeCommentReplied, Title: "Reply", Body: "First", Source: notifications.SourceUser, Sender: "alice", CoalesceKey: "thread"}
 		first, _, err := repo.Create(ctx, reply)
 		if err != nil || first.Count != 1 {
 			t.Fatalf("first: %+v %v", first, err)
 		}
-		reply.Body, reply.Sender = "Second", "carol"
+		reply.Body, reply.Sender, reply.Source, reply.WorkflowID = "Second", "carol", notifications.SourceWorkflow, workflow.ID
 		second, _, err := repo.Create(ctx, reply)
 		if err != nil || second.ID != first.ID || second.Count != 2 {
 			t.Fatalf("second: %+v %v", second, err)
 		}
 		stored, err := repo.Find(ctx, first.ID)
-		if err != nil || stored.Body != "Second" || stored.Sender != "carol" || stored.Count != 2 || !stored.CreatedAt.After(first.CreatedAt) {
+		if err != nil || stored.Body != "Second" || stored.Sender != "carol" || stored.Source != notifications.SourceWorkflow || stored.WorkflowID != workflow.ID || stored.Count != 2 || !stored.CreatedAt.After(first.CreatedAt) {
 			t.Fatalf("coalesced: %+v %v", stored, err)
 		}
 		if _, err = repo.MarkRead(ctx, "bob", []string{first.ID}, time.Time{}); err != nil {

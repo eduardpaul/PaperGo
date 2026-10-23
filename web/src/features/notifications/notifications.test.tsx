@@ -134,3 +134,36 @@ it('lists the inbox, keeps the unread view to unread ones, opens items and delet
   await waitFor(() => expect(screen.queryByText('Seen before')).toBeNull());
   expect(screen.getByRole('tab', { name: 'Unread (1)' }).getAttribute('aria-selected')).toBe('true');
 });
+
+it('opens a comment notification at its comment on the Discussion tab', async () => {
+  stub([
+    notification('mention', {
+      type: 'comment.mentioned',
+      title: 'Alice mentioned you on Lease',
+      item_id: 'item',
+      comment_id: 'reply',
+      workspace_id: 'ws',
+      count: 1,
+    }),
+    notification('replies', {
+      type: 'comment.replied',
+      title: 'Bob replied on Lease',
+      item_id: 'item',
+      comment_id: 'r2',
+      workspace_id: 'ws',
+      count: 3,
+    }),
+  ]);
+  show(<NotificationBell />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Notifications, 2 unread' }));
+  const latest = await screen.findByRole('list', { name: 'Latest notifications' });
+  expect(await within(latest).findByText('×3')).toBeTruthy();
+  fireEvent.click(within(latest).getByRole('button', { name: /Alice mentioned you/ }));
+  await waitFor(() =>
+    expect(navigation.navigate).toHaveBeenCalledWith({
+      to: '/w/$workspaceId/l/$listId',
+      params: { workspaceId: 'ws', listId: 'list' },
+      search: { item: 'item', tab: 'discussion', comment: 'reply' },
+    }),
+  );
+});

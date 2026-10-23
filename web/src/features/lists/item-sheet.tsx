@@ -50,6 +50,7 @@ export function ItemSheet({
   fields,
   contentTypes,
   tab,
+  comment,
   onTab,
   onClose,
   onMoved,
@@ -59,6 +60,8 @@ export function ItemSheet({
   fields: FieldDefinition[];
   contentTypes: ContentType[];
   tab: string;
+  /** The comment to bring into view on the Discussion tab. */
+  comment?: string;
   onTab: (tab: string) => void;
   onClose: () => void;
   onMoved: (resource: Resource) => void;
@@ -194,7 +197,7 @@ export function ItemSheet({
             </TabsContent>}
             {discussed && (
               <TabsContent value="discussion" className="min-h-0 flex-1 overflow-auto p-4">
-                <Discussion itemId={item.id} />
+                <Discussion key={comment} itemId={item.id} focus={comment} />
               </TabsContent>
             )}
             <TabsContent value="versions" className="min-h-0 flex-1 overflow-auto p-4">

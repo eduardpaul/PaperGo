@@ -44,9 +44,9 @@ A setting that was never written has version 0: its first `PUT` sends `If-Match:
 | Type | Sent to | Notes |
 | --- | --- | --- |
 | `comment.mentioned` | the people a comment mentions, and those an edit adds | once per comment and person |
-| `comment.replied` | the thread's other participants: its first comment's author and those who replied | a burst of replies folds into one unread notification per person, whose `count` says how many it stands for; once read, the next reply starts a new one |
+| `comment.replied` | the thread's other participants: its first comment's author and those who replied | a burst of replies folds into one unread notification per person, whose `count` says how many it stands for and whose text, sender and source are the latest reply's; once read, the next reply starts a new one |
 
-Only people who may read the discussion are told, never the comment's author. A mentioned person is told of the mention, not also of the reply. The title names the item as everyone told can read it: its draft's name among collaborators; among readers its published name, or its draft's when it was never published. Each notification opens the item's thread (`item_id`, `comment_id`).
+Only people who may read the discussion are told, never the comment's author. A mentioned person is told of the mention, not also of the reply. The title names the item as everyone told can read it: its draft's name among collaborators; among readers its published name, or its draft's when it was never published. Each notification opens the item's thread (`item_id`, `comment_id`). An integration's token mentions and replies like a person, with the access its token gives it.
 
 ## API
 
@@ -67,6 +67,6 @@ Workflow scripts comment through the same route: `ctx.api.v1.items.byId(id).comm
 
 ## Web app
 
-An item's panel has a **Discussion** tab with the open, resolved and all threads, their replies, and a box to start a thread. Typing `@` suggests the workspace's people. Each comment offers edit and delete to those who may, and each thread offers reply, resolve and reopen. The tab says when comments are off and which level turned them off, or that the discussion is for collaborators.
+An item's panel has a **Discussion** tab with the open, resolved and all threads, their replies, and a box to start a thread; **Load more threads** continues past the first 50. Typing `@` suggests the workspace's people; a person picked appears as `@Name`, or `@Name (subject)` when someone else mentioned shares the name, so editing a comment never swaps one person for another. Opening a mention or reply notification shows every thread, loads pages until the comment's thread is there, and brings it into view, resolved or not. Each comment offers edit and delete to those who may, and each thread offers reply, resolve and reopen. The tab says when comments are off and which level turned them off, or that the discussion is for collaborators.
 
 Lists, libraries and workspaces choose their mode on their settings page; the organization turns comments on or off and chooses the default mode under Administration. The Notifications page has a **Mentions** view, and a folded reply shows how many it stands for.

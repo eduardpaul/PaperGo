@@ -60,7 +60,7 @@ export function useOpenNotification() {
         to: '/w/$workspaceId/l/$listId',
         params: { workspaceId: notification.workspace_id, listId: item.container_id },
         search: notification.comment_id
-          ? { item: notification.item_id, tab: 'discussion' }
+          ? { item: notification.item_id, tab: 'discussion', comment: notification.comment_id }
           : { item: notification.item_id },
       });
     } else if (notification.run_id && notification.workspace_id) {

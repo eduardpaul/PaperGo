@@ -1,6 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, MessageSquare, MoreHorizontal, RotateCcw } from 'lucide-react';
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { api } from '@/api/http';
 import { commentsQuery, keys } from '@/api/queries';
 import type { Comment, CommentPage, CommentPerson, CommentThread, MentionCandidate } from '@/api/types';
@@ -14,19 +14,53 @@ import { cn } from '@/lib/utils';
 
 const mentionToken = /<@user:([^<>\s]{1,255})>/g;
 
-/** Writes a comment's mentions as @Name for editing, from the people it mentions. */
+/** A person to mention and the text that stands for them while writing: their name, or with their subject when someone else mentioned shares it. */
+export interface Mention extends CommentPerson {
+  label: string;
+}
+
+/** Labels people apart: those who share a name also show their subject. */
+export function labelled(people: CommentPerson[]): Mention[] {
+  return people.map((p) => ({
+    ...p,
+    label: people.some((o) => o.subject !== p.subject && o.name === p.name) ? `${p.name} (${p.subject})` : p.name,
+  }));
+}
+
+/** Adds a person to those chosen, labelled apart from anyone chosen with the same name. */
+export function choose(chosen: Mention[], person: CommentPerson): Mention[] {
+  if (chosen.some((p) => p.subject === person.subject)) return chosen;
+  const shared = chosen.some((p) => p.name === person.name || p.label === person.name);
+  return [...chosen, { ...person, label: shared ? `${person.name} (${person.subject})` : person.name }];
+}
+
+function escape(text: string) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Matches @label as a whole mention, not the start of a longer word. */
+function mention(label: string, flags = 'u') {
+  return new RegExp(`${escape(`@${label}`)}(?![\\p{L}\\p{N}_])`, flags);
+}
+
+function holds(text: string, label: string) {
+  return mention(label).test(text);
+}
+
+/** Writes a comment's mentions as @label for editing, from the people it mentions. */
 export function fromTokens(body: string, mentions: CommentPerson[]): string {
+  const labels = labelled(mentions);
   return body.replace(
     mentionToken,
-    (_, subject: string) => `@${mentions.find((m) => m.subject === subject)?.name ?? subject}`,
+    (_, subject: string) => `@${labels.find((m) => m.subject === subject)?.label ?? subject}`,
   );
 }
 
-/** Turns the @Name of each chosen person back into a mention, longest names first. */
-export function toTokens(text: string, chosen: CommentPerson[]): string {
+/** Turns each chosen person's @label back into a mention, longest labels first. */
+export function toTokens(text: string, chosen: Mention[]): string {
   let out = text;
-  for (const person of [...chosen].sort((a, b) => b.name.length - a.name.length)) {
-    out = out.split(`@${person.name}`).join(`<@user:${person.subject}>`);
+  for (const person of [...chosen].sort((a, b) => b.label.length - a.label.length)) {
+    out = out.replace(mention(person.label, 'gu'), `<@user:${person.subject}>`);
   }
   return out;
 }
@@ -71,7 +105,7 @@ function Composer({
   onCancel?: () => void;
 }) {
   const [text, setText] = useState(initial);
-  const [chosen, setChosen] = useState<CommentPerson[]>(initialMentions);
+  const [chosen, setChosen] = useState<Mention[]>(() => labelled(initialMentions));
   const [query, setQuery] = useState<string | null>(null);
   const box = useRef<HTMLTextAreaElement>(null);
   const candidates = useQuery({
@@ -88,14 +122,16 @@ function Composer({
   };
   const pick = (person: MentionCandidate) => {
     const caret = box.current?.selectionStart ?? text.length;
-    const before = text.slice(0, caret).replace(/@([^\s@]*)$/, `@${person.name} `);
+    const next = choose(chosen, person);
+    const label = next.find((p) => p.subject === person.subject)!.label;
+    const before = text.slice(0, caret).replace(/@([^\s@]*)$/, `@${label} `);
     setText(before + text.slice(caret));
-    setChosen((list) => (list.some((p) => p.subject === person.subject) ? list : [...list, person]));
+    setChosen(next);
     setQuery(null);
     box.current?.focus();
   };
   const hidden = (candidates.data ?? []).filter((c) => !c.can_see);
-  const unseen = chosen.filter((p) => hidden.some((h) => h.subject === p.subject) && text.includes(`@${p.name}`));
+  const unseen = chosen.filter((p) => hidden.some((h) => h.subject === p.subject) && holds(text, p.label));
   return (
     <form
       className="flex flex-col gap-2"
@@ -103,7 +139,7 @@ function Composer({
         event.preventDefault();
         const body = toTokens(
           text.trim(),
-          chosen.filter((p) => text.includes(`@${p.name}`)),
+          chosen.filter((p) => holds(text, p.label)),
         );
         if (!body) return;
         void onSubmit(body).then(() => {
@@ -230,7 +266,17 @@ function CommentEntry({ comment, itemId, compact }: { comment: Comment; itemId: 
 }
 
 /** A thread: its first comment, its replies, and a reply box. */
-function ThreadCard({ thread, itemId, canPost }: { thread: CommentThread; itemId: string; canPost: boolean }) {
+function ThreadCard({
+  thread,
+  itemId,
+  canPost,
+  focused,
+}: {
+  thread: CommentThread;
+  itemId: string;
+  canPost: boolean;
+  focused?: boolean;
+}) {
   const queryClient = useQueryClient();
   const [replying, setReplying] = useState(false);
   const refresh = () => queryClient.invalidateQueries({ queryKey: keys.comments });
@@ -250,8 +296,20 @@ function ThreadCard({ thread, itemId, canPost }: { thread: CommentThread; itemId
       }),
     onSuccess: refresh,
   });
+  const here = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    if (focused) here.current?.scrollIntoView?.({ block: 'center' });
+  }, [focused]);
   return (
-    <li className={cn('flex flex-col gap-3 rounded-lg border bg-surface p-3', thread.resolved_at && 'opacity-80')}>
+    <li
+      ref={here}
+      aria-current={focused || undefined}
+      className={cn(
+        'flex flex-col gap-3 rounded-lg border bg-surface p-3',
+        thread.resolved_at && !focused && 'opacity-80',
+        focused && 'border-accent ring-2 ring-accent/30',
+      )}
+    >
       <CommentEntry comment={thread} itemId={itemId} />
       {thread.replies.map((r) => (
         <CommentEntry key={r.id} comment={r} itemId={itemId} compact />
@@ -300,18 +358,28 @@ const origins: Record<CommentPage['mode_from'], string> = {
   default: 'default',
 };
 
-/** An item's discussion: its threads, and a box to start one. */
-export function Discussion({ itemId }: { itemId: string }) {
+/**
+ * An item's discussion: its threads, and a box to start one. With focus, a
+ * comment a notification points at, it shows every thread, loads pages until
+ * the comment's thread is there and brings that thread into view.
+ */
+export function Discussion({ itemId, focus }: { itemId: string; focus?: string }) {
   const queryClient = useQueryClient();
-  const [status, setStatus] = useState('open');
-  const page = useQuery(commentsQuery(itemId, status));
+  const [status, setStatus] = useState(focus ? 'all' : 'open');
+  const pages = useInfiniteQuery(commentsQuery(itemId, status));
+  const threads = pages.data?.pages.flatMap((page) => page.value ?? []) ?? [];
+  const target = focus ? threads.find((t) => t.id === focus || t.replies.some((r) => r.id === focus)) : undefined;
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = pages;
+  useEffect(() => {
+    if (focus && !target && hasNextPage && !isFetchingNextPage) void fetchNextPage();
+  }, [focus, target, hasNextPage, isFetchingNextPage, fetchNextPage]);
   const start = useMutation({
     mutationFn: (body: string) => api<Comment>(`/v1/items/${itemId}/comments`, { method: 'POST', body: { body } }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.comments }),
   });
-  if (page.isLoading) return <Skeleton className="h-24" />;
-  if (page.error) return <Alert>{problemMessage(page.error)}</Alert>;
-  const data = page.data!;
+  if (pages.isLoading) return <Skeleton className="h-24" />;
+  if (pages.error && !pages.data) return <Alert>{problemMessage(pages.error)}</Alert>;
+  const data = pages.data!.pages[0];
   if (data.mode === 'off') {
     return (
       <EmptyState icon={MessageSquare} title="Comments are off here">
@@ -326,7 +394,7 @@ export function Discussion({ itemId }: { itemId: string }) {
       </EmptyState>
     );
   }
-  const threads = data.value ?? [];
+  const missing = focus && status === 'all' && !target && !hasNextPage && !pages.isFetching;
   return (
     <section className="flex flex-col gap-3" aria-label="Discussion">
       <div className="flex gap-2" role="tablist" aria-label="Thread views">
@@ -343,6 +411,9 @@ export function Discussion({ itemId }: { itemId: string }) {
           </Button>
         ))}
       </div>
+      {missing && (
+        <p className="text-xs text-muted">The comment you followed was deleted or is no longer in this discussion.</p>
+      )}
       {threads.length === 0 && (
         <p className="py-4 text-center text-[13px] text-muted">
           {status === 'resolved' ? 'No resolved threads.' : 'No discussion yet.'}
@@ -350,9 +421,21 @@ export function Discussion({ itemId }: { itemId: string }) {
       )}
       <ul className="flex flex-col gap-3" aria-label="Threads">
         {threads.map((thread) => (
-          <ThreadCard key={thread.id} thread={thread} itemId={itemId} canPost={data.can_post} />
+          <ThreadCard
+            key={thread.id}
+            thread={thread}
+            itemId={itemId}
+            canPost={data.can_post}
+            focused={thread.id === target?.id}
+          />
         ))}
       </ul>
+      {pages.hasNextPage && (
+        <Button size="sm" disabled={pages.isFetching} onClick={() => void pages.fetchNextPage()}>
+          {pages.isFetchingNextPage ? 'Loading…' : 'Load more threads'}
+        </Button>
+      )}
+      {pages.error && <Alert>{problemMessage(pages.error)}</Alert>}
       {data.can_post ? (
         <Composer
           itemId={itemId}

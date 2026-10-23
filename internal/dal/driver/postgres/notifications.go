@@ -86,7 +86,8 @@ func (q Queries) CoalesceNotification(ctx context.Context, n notifications.Notif
 	out, err := bob.One(ctx, q.exec, psql.RawQuery(`INSERT INTO notifications (id, created_at, recipient, workspace_id, type, title, body, item_id, task_id, run_id, comment_id, source, sender, workflow_id, coalesce_key, "count")
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
 ON CONFLICT (recipient, coalesce_key) WHERE coalesce_key IS NOT NULL AND read_at IS NULL
-DO UPDATE SET created_at = excluded.created_at, title = excluded.title, body = excluded.body, comment_id = excluded.comment_id, sender = excluded.sender, "count" = notifications."count" + 1
+DO UPDATE SET created_at = excluded.created_at, title = excluded.title, body = excluded.body, comment_id = excluded.comment_id, sender = excluded.sender,
+	source = excluded.source, workflow_id = excluded.workflow_id, "count" = notifications."count" + 1
 RETURNING id, "count"`, n.ID, n.CreatedAt, n.Recipient, orNull(n.WorkspaceID), string(n.Type), n.Title, n.Body, orNull(n.ItemID), orNull(n.TaskID), orNull(n.RunID), orNull(n.CommentID),
 		string(n.Source), n.Sender, orNull(n.WorkflowID), n.CoalesceKey), scan.StructMapper[stored]())
 	if err != nil {
