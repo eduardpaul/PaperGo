@@ -26,6 +26,7 @@ import (
 	"papergo/internal/dal/grants"
 	"papergo/internal/dal/integrations"
 	"papergo/internal/dal/live"
+	"papergo/internal/dal/notifications"
 	"papergo/internal/dal/operations"
 	"papergo/internal/dal/portable"
 	"papergo/internal/dal/relationships"
@@ -73,6 +74,7 @@ type queries interface {
 	grants.Queries
 	integrations.Queries
 	live.Queries
+	notifications.Queries
 	operations.Queries
 	relationships.Queries
 	resources.Queries
@@ -213,6 +215,12 @@ func (s *Store) Surfaces() *surfaces.Repo {
 
 // Tasks returns the task repository, bound to the store's transaction when
 // WithTx was used.
+// Notifications returns the people's inboxes, bound to the store's
+// transaction when WithTx was used.
+func (s *Store) Notifications() *notifications.Repo {
+	return notifications.NewRepo(s.bind(s.exec()), writer[notifications.Queries](s))
+}
+
 func (s *Store) Tasks() *tasks.Repo {
 	return tasks.NewRepo(s.bind(s.exec()), writer[tasks.Queries](s))
 }

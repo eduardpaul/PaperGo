@@ -53,6 +53,7 @@ type IdentityUsersQuery = *psql.ViewQuery[*IdentityUser, IdentityUserSlice]
 type identityUserR struct {
 	SubjectAccessTokens     AccessTokenSlice     // access_tokens.access_tokens_subject_fkey
 	SubjectIdentitySessions IdentitySessionSlice // identity_sessions.identity_sessions_subject_fkey
+	RecipientNotifications  NotificationSlice    // notifications.notifications_recipient_fkey
 	PersonalOwnerResources  ResourceSlice        // resources.resources_personal_owner_id_fkey
 	OwnerSmartFolders       SmartFolderSlice     // smart_folders.smart_folders_owner_id_fkey
 	SubjectSyncViews        SyncViewSlice        // sync_views.sync_views_subject_fkey
@@ -66,6 +67,7 @@ type identityUserR struct {
 type identityUserRLoaded struct {
 	SubjectAccessTokens     bool // access_tokens.access_tokens_subject_fkey
 	SubjectIdentitySessions bool // identity_sessions.identity_sessions_subject_fkey
+	RecipientNotifications  bool // notifications.notifications_recipient_fkey
 	PersonalOwnerResources  bool // resources.resources_personal_owner_id_fkey
 	OwnerSmartFolders       bool // smart_folders.smart_folders_owner_id_fkey
 	SubjectSyncViews        bool // sync_views.sync_views_subject_fkey
@@ -701,6 +703,29 @@ func (os IdentityUserSlice) SubjectIdentitySessions(mods ...bob.Mod[*dialect.Sel
 	)...)
 }
 
+// RecipientNotifications starts a query for related objects on notifications
+func (o *IdentityUser) RecipientNotifications(mods ...bob.Mod[*dialect.SelectQuery]) NotificationsQuery {
+	return Notifications.Query(append(mods,
+		sm.Where(Notifications.Columns.Recipient.EQ(psql.Arg(o.ID))),
+	)...)
+}
+
+func (os IdentityUserSlice) RecipientNotifications(mods ...bob.Mod[*dialect.SelectQuery]) NotificationsQuery {
+	pkID := make(pgtypes.Array[string], 0, len(os))
+
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		pkID = append(pkID, o.ID)
+	}
+	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkID), "text[]"))
+
+	return Notifications.Query(append(mods,
+		sm.Where(Notifications.Columns.Recipient.EQ(PKArgExpr)),
+	)...)
+}
+
 // PersonalOwnerResources starts a query for related objects on resources
 func (o *IdentityUser) PersonalOwnerResources(mods ...bob.Mod[*dialect.SelectQuery]) ResourcesQuery {
 	return Resources.Query(append(mods,
@@ -888,6 +913,67 @@ func (identityUser0 *IdentityUser) AttachSubjectIdentitySessions(ctx context.Con
 	}
 
 	identityUser0.R.SubjectIdentitySessions = append(identityUser0.R.SubjectIdentitySessions, identitySessions1...)
+
+	return nil
+}
+
+func insertIdentityUserRecipientNotifications0(ctx context.Context, exec bob.Executor, notifications1 []*NotificationSetter, identityUser0 *IdentityUser) (NotificationSlice, error) {
+	for i := range notifications1 {
+		notifications1[i].Recipient = omit.From(identityUser0.ID)
+	}
+
+	ret, err := Notifications.Insert(bob.ToMods(notifications1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertIdentityUserRecipientNotifications0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachIdentityUserRecipientNotifications0(ctx context.Context, exec bob.Executor, count int, notifications1 NotificationSlice, identityUser0 *IdentityUser) (NotificationSlice, error) {
+	setter := &NotificationSetter{
+		Recipient: omit.From(identityUser0.ID),
+	}
+
+	err := notifications1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachIdentityUserRecipientNotifications0: %w", err)
+	}
+
+	return notifications1, nil
+}
+
+func (identityUser0 *IdentityUser) InsertRecipientNotifications(ctx context.Context, exec bob.Executor, related ...*NotificationSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	notifications1, err := insertIdentityUserRecipientNotifications0(ctx, exec, related, identityUser0)
+	if err != nil {
+		return err
+	}
+
+	identityUser0.R.RecipientNotifications = append(identityUser0.R.RecipientNotifications, notifications1...)
+
+	return nil
+}
+
+func (identityUser0 *IdentityUser) AttachRecipientNotifications(ctx context.Context, exec bob.Executor, related ...*Notification) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	notifications1 := NotificationSlice(related)
+
+	_, err = attachIdentityUserRecipientNotifications0(ctx, exec, len(related), notifications1, identityUser0)
+	if err != nil {
+		return err
+	}
+
+	identityUser0.R.RecipientNotifications = append(identityUser0.R.RecipientNotifications, notifications1...)
 
 	return nil
 }
@@ -1139,6 +1225,20 @@ func (w identityUserWhereR[Q]) HasSubjectIdentitySessions(filters ...bob.Mod[*di
 		sm.Columns(psql.Raw("1")),
 		sm.From(IdentitySessions.NameExpr()),
 		sm.Where(IdentitySessions.Columns.Subject.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: psql.Exists(q)}
+}
+
+// HasRecipientNotifications filters parents that have a matching RecipientNotifications using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Notifications).
+func (w identityUserWhereR[Q]) HasRecipientNotifications(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := psql.Select(
+		sm.Columns(psql.Raw("1")),
+		sm.From(Notifications.NameExpr()),
+		sm.Where(Notifications.Columns.Recipient.EQ(w.cols.ID)),
 	)
 	q.Apply(filters...)
 	return mods.Where[Q]{E: psql.Exists(q)}

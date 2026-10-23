@@ -9,6 +9,7 @@ sql:
   only:
     tasks: []
     task_responses: []
+    notifications: []
     domain_events: []
     audit_events: []
     live_changes: []

@@ -99,6 +99,8 @@ type resourceR struct {
 	ItemItemSurfaces              ItemSurfaceSlice     // fk_item_surfaces_3
 	ContainerListIntegrations     ListIntegrationSlice // fk_list_integrations_0
 	ContainerListViews            ListViewSlice        // fk_list_views_0
+	ItemNotifications             NotificationSlice    // fk_notifications_3
+	WorkspaceNotifications        NotificationSlice    // fk_notifications_4
 	ItemOperationItems            OperationItemSlice   // fk_operation_items_0
 	WorkspaceOperations           OperationSlice       // fk_operations_1
 	ContainerOperations           OperationSlice       // fk_operations_2
@@ -161,6 +163,8 @@ type resourceRLoaded struct {
 	ItemItemSurfaces              bool // fk_item_surfaces_3
 	ContainerListIntegrations     bool // fk_list_integrations_0
 	ContainerListViews            bool // fk_list_views_0
+	ItemNotifications             bool // fk_notifications_3
+	WorkspaceNotifications        bool // fk_notifications_4
 	ItemOperationItems            bool // fk_operation_items_0
 	WorkspaceOperations           bool // fk_operations_1
 	ContainerOperations           bool // fk_operations_2
@@ -1834,6 +1838,44 @@ func (os ResourceSlice) ContainerListViews(mods ...bob.Mod[*dialect.SelectQuery]
 
 	return ListViews.Query(append(mods,
 		sm.Where(sqlite.Group(ListViews.Columns.ContainerID).OP("IN", PKArgExpr)),
+	)...)
+}
+
+// ItemNotifications starts a query for related objects on notifications
+func (o *Resource) ItemNotifications(mods ...bob.Mod[*dialect.SelectQuery]) NotificationsQuery {
+	return Notifications.Query(append(mods,
+		sm.Where(Notifications.Columns.ItemID.EQ(sqlite.Arg(o.ID))),
+	)...)
+}
+
+func (os ResourceSlice) ItemNotifications(mods ...bob.Mod[*dialect.SelectQuery]) NotificationsQuery {
+	PKArgSlice := make([]bob.Expression, len(os))
+	for i, o := range os {
+		PKArgSlice[i] = sqlite.ArgGroup(o.ID)
+	}
+	PKArgExpr := sqlite.Group(PKArgSlice...)
+
+	return Notifications.Query(append(mods,
+		sm.Where(sqlite.Group(Notifications.Columns.ItemID).OP("IN", PKArgExpr)),
+	)...)
+}
+
+// WorkspaceNotifications starts a query for related objects on notifications
+func (o *Resource) WorkspaceNotifications(mods ...bob.Mod[*dialect.SelectQuery]) NotificationsQuery {
+	return Notifications.Query(append(mods,
+		sm.Where(Notifications.Columns.WorkspaceID.EQ(sqlite.Arg(o.ID))),
+	)...)
+}
+
+func (os ResourceSlice) WorkspaceNotifications(mods ...bob.Mod[*dialect.SelectQuery]) NotificationsQuery {
+	PKArgSlice := make([]bob.Expression, len(os))
+	for i, o := range os {
+		PKArgSlice[i] = sqlite.ArgGroup(o.ID)
+	}
+	PKArgExpr := sqlite.Group(PKArgSlice...)
+
+	return Notifications.Query(append(mods,
+		sm.Where(sqlite.Group(Notifications.Columns.WorkspaceID).OP("IN", PKArgExpr)),
 	)...)
 }
 
@@ -3695,6 +3737,128 @@ func (resource0 *Resource) AttachContainerListViews(ctx context.Context, exec bo
 	}
 
 	resource0.R.ContainerListViews = append(resource0.R.ContainerListViews, listViews1...)
+
+	return nil
+}
+
+func insertResourceItemNotifications0(ctx context.Context, exec bob.Executor, notifications1 []*NotificationSetter, resource0 *Resource) (NotificationSlice, error) {
+	for i := range notifications1 {
+		notifications1[i].ItemID = omitnull.From(resource0.ID)
+	}
+
+	ret, err := Notifications.Insert(bob.ToMods(notifications1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertResourceItemNotifications0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachResourceItemNotifications0(ctx context.Context, exec bob.Executor, count int, notifications1 NotificationSlice, resource0 *Resource) (NotificationSlice, error) {
+	setter := &NotificationSetter{
+		ItemID: omitnull.From(resource0.ID),
+	}
+
+	err := notifications1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachResourceItemNotifications0: %w", err)
+	}
+
+	return notifications1, nil
+}
+
+func (resource0 *Resource) InsertItemNotifications(ctx context.Context, exec bob.Executor, related ...*NotificationSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	notifications1, err := insertResourceItemNotifications0(ctx, exec, related, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.ItemNotifications = append(resource0.R.ItemNotifications, notifications1...)
+
+	return nil
+}
+
+func (resource0 *Resource) AttachItemNotifications(ctx context.Context, exec bob.Executor, related ...*Notification) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	notifications1 := NotificationSlice(related)
+
+	_, err = attachResourceItemNotifications0(ctx, exec, len(related), notifications1, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.ItemNotifications = append(resource0.R.ItemNotifications, notifications1...)
+
+	return nil
+}
+
+func insertResourceWorkspaceNotifications0(ctx context.Context, exec bob.Executor, notifications1 []*NotificationSetter, resource0 *Resource) (NotificationSlice, error) {
+	for i := range notifications1 {
+		notifications1[i].WorkspaceID = omitnull.From(resource0.ID)
+	}
+
+	ret, err := Notifications.Insert(bob.ToMods(notifications1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertResourceWorkspaceNotifications0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachResourceWorkspaceNotifications0(ctx context.Context, exec bob.Executor, count int, notifications1 NotificationSlice, resource0 *Resource) (NotificationSlice, error) {
+	setter := &NotificationSetter{
+		WorkspaceID: omitnull.From(resource0.ID),
+	}
+
+	err := notifications1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachResourceWorkspaceNotifications0: %w", err)
+	}
+
+	return notifications1, nil
+}
+
+func (resource0 *Resource) InsertWorkspaceNotifications(ctx context.Context, exec bob.Executor, related ...*NotificationSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	notifications1, err := insertResourceWorkspaceNotifications0(ctx, exec, related, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.WorkspaceNotifications = append(resource0.R.WorkspaceNotifications, notifications1...)
+
+	return nil
+}
+
+func (resource0 *Resource) AttachWorkspaceNotifications(ctx context.Context, exec bob.Executor, related ...*Notification) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	notifications1 := NotificationSlice(related)
+
+	_, err = attachResourceWorkspaceNotifications0(ctx, exec, len(related), notifications1, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.WorkspaceNotifications = append(resource0.R.WorkspaceNotifications, notifications1...)
 
 	return nil
 }
@@ -6005,6 +6169,34 @@ func (w resourceWhereR[Q]) HasContainerListViews(filters ...bob.Mod[*dialect.Sel
 		sm.Columns(sqlite.Raw("1")),
 		sm.From(ListViews.NameExpr()),
 		sm.Where(ListViews.Columns.ContainerID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: sqlite.Exists(q)}
+}
+
+// HasItemNotifications filters parents that have a matching ItemNotifications using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Notifications).
+func (w resourceWhereR[Q]) HasItemNotifications(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := sqlite.Select(
+		sm.Columns(sqlite.Raw("1")),
+		sm.From(Notifications.NameExpr()),
+		sm.Where(Notifications.Columns.ItemID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: sqlite.Exists(q)}
+}
+
+// HasWorkspaceNotifications filters parents that have a matching WorkspaceNotifications using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Notifications).
+func (w resourceWhereR[Q]) HasWorkspaceNotifications(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := sqlite.Select(
+		sm.Columns(sqlite.Raw("1")),
+		sm.From(Notifications.NameExpr()),
+		sm.Where(Notifications.Columns.WorkspaceID.EQ(w.cols.ID)),
 	)
 	q.Apply(filters...)
 	return mods.Where[Q]{E: sqlite.Exists(q)}

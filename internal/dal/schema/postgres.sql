@@ -915,6 +915,35 @@ CREATE TABLE task_responses (
 );
 CREATE UNIQUE INDEX taskresponse_task_id_assignee ON task_responses(task_id, assignee);
 
+-- A notification is one message to one person: their inbox. It never starts
+-- a workflow and raises no domain event, so notifications cannot loop.
+CREATE TABLE notifications (
+    id TEXT PRIMARY KEY NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    recipient TEXT NOT NULL REFERENCES identity_users(id) ON DELETE CASCADE DEFERRABLE,
+    workspace_id TEXT REFERENCES resources(id) ON DELETE CASCADE DEFERRABLE,
+    type TEXT NOT NULL CHECK (type IN ('message', 'task.assigned', 'task.completed', 'workflow.failed')),
+    title TEXT NOT NULL CHECK (length(title) BETWEEN 1 AND 300),
+    body TEXT NOT NULL DEFAULT '' CHECK (length(body) <= 4000),
+    -- The link opens one item, task or run; a purged item or task takes its
+    -- notifications with it, a run past retention leaves them unlinked.
+    item_id TEXT REFERENCES resources(id) ON DELETE CASCADE DEFERRABLE,
+    task_id TEXT REFERENCES tasks(id) ON DELETE CASCADE DEFERRABLE,
+    run_id TEXT REFERENCES workflow_runs(id) ON DELETE SET NULL DEFERRABLE,
+    source TEXT NOT NULL CHECK (source IN ('workflow', 'user', 'system')),
+    sender TEXT NOT NULL DEFAULT '',
+    workflow_id TEXT REFERENCES workflows(id) ON DELETE SET NULL DEFERRABLE,
+    dedup_key TEXT CHECK (dedup_key IS NULL OR length(dedup_key) BETWEEN 1 AND 200),
+    read_at TIMESTAMPTZ,
+    CHECK ((item_id IS NULL OR task_id IS NULL) AND (run_id IS NULL OR (item_id IS NULL AND task_id IS NULL)))
+);
+CREATE INDEX notification_recipient_created ON notifications(recipient, created_at, id);
+CREATE INDEX notification_recipient_unread ON notifications(recipient) WHERE read_at IS NULL;
+CREATE UNIQUE INDEX notification_recipient_dedup ON notifications(recipient, dedup_key) WHERE dedup_key IS NOT NULL;
+CREATE INDEX notification_item_id ON notifications(item_id);
+CREATE INDEX notification_task_id ON notifications(task_id);
+CREATE INDEX notification_run_id ON notifications(run_id);
+
 CREATE TABLE workflow_steps (
     run_id TEXT NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE DEFERRABLE,
     seq BIGINT NOT NULL CHECK (seq >= 0),
@@ -1064,7 +1093,7 @@ INSERT INTO live_change_position (id, position) VALUES (1, 0);
 CREATE TABLE live_changes (
     id BIGINT PRIMARY KEY NOT NULL CHECK (id > 0),
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    kind TEXT NOT NULL CHECK (kind IN ('item', 'operation', 'run', 'access')),
+    kind TEXT NOT NULL CHECK (kind IN ('item', 'operation', 'run', 'access', 'notification')),
     entity_id TEXT NOT NULL CHECK (length(entity_id) BETWEEN 1 AND 200),
     action TEXT NOT NULL
 );

@@ -56,6 +56,7 @@ type WorkflowRunsQuery = *psql.ViewQuery[*WorkflowRun, WorkflowRunSlice]
 
 // workflowRunR is where relationships are stored.
 type workflowRunR struct {
+	RunNotifications    NotificationSlice    // notifications.notifications_run_id_fkey
 	RunStagedFiles      StagedFileSlice      // staged_files.staged_files_run_id_fkey
 	RunTasks            TaskSlice            // tasks.tasks_run_id_fkey
 	RunWorkflowRunItems WorkflowRunItemSlice // workflow_run_items.workflow_run_items_run_id_fkey
@@ -71,6 +72,7 @@ type workflowRunR struct {
 
 // workflowRunRLoaded tracks which relationships on WorkflowRun have been loaded.
 type workflowRunRLoaded struct {
+	RunNotifications    bool // notifications.notifications_run_id_fkey
 	RunStagedFiles      bool // staged_files.staged_files_run_id_fkey
 	RunTasks            bool // tasks.tasks_run_id_fkey
 	RunWorkflowRunItems bool // workflow_run_items.workflow_run_items_run_id_fkey
@@ -733,6 +735,29 @@ func (o WorkflowRunSlice) ReloadAll(ctx context.Context, exec bob.Executor) erro
 	return nil
 }
 
+// RunNotifications starts a query for related objects on notifications
+func (o *WorkflowRun) RunNotifications(mods ...bob.Mod[*dialect.SelectQuery]) NotificationsQuery {
+	return Notifications.Query(append(mods,
+		sm.Where(Notifications.Columns.RunID.EQ(psql.Arg(o.ID))),
+	)...)
+}
+
+func (os WorkflowRunSlice) RunNotifications(mods ...bob.Mod[*dialect.SelectQuery]) NotificationsQuery {
+	pkID := make(pgtypes.Array[string], 0, len(os))
+
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		pkID = append(pkID, o.ID)
+	}
+	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkID), "text[]"))
+
+	return Notifications.Query(append(mods,
+		sm.Where(Notifications.Columns.RunID.EQ(PKArgExpr)),
+	)...)
+}
+
 // RunStagedFiles starts a query for related objects on staged_files
 func (o *WorkflowRun) RunStagedFiles(mods ...bob.Mod[*dialect.SelectQuery]) StagedFilesQuery {
 	return StagedFiles.Query(append(mods,
@@ -906,6 +931,67 @@ func (os WorkflowRunSlice) RunWorkflowSteps(mods ...bob.Mod[*dialect.SelectQuery
 	return WorkflowSteps.Query(append(mods,
 		sm.Where(WorkflowSteps.Columns.RunID.EQ(PKArgExpr)),
 	)...)
+}
+
+func insertWorkflowRunRunNotifications0(ctx context.Context, exec bob.Executor, notifications1 []*NotificationSetter, workflowRun0 *WorkflowRun) (NotificationSlice, error) {
+	for i := range notifications1 {
+		notifications1[i].RunID = omitnull.From(workflowRun0.ID)
+	}
+
+	ret, err := Notifications.Insert(bob.ToMods(notifications1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertWorkflowRunRunNotifications0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachWorkflowRunRunNotifications0(ctx context.Context, exec bob.Executor, count int, notifications1 NotificationSlice, workflowRun0 *WorkflowRun) (NotificationSlice, error) {
+	setter := &NotificationSetter{
+		RunID: omitnull.From(workflowRun0.ID),
+	}
+
+	err := notifications1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachWorkflowRunRunNotifications0: %w", err)
+	}
+
+	return notifications1, nil
+}
+
+func (workflowRun0 *WorkflowRun) InsertRunNotifications(ctx context.Context, exec bob.Executor, related ...*NotificationSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	notifications1, err := insertWorkflowRunRunNotifications0(ctx, exec, related, workflowRun0)
+	if err != nil {
+		return err
+	}
+
+	workflowRun0.R.RunNotifications = append(workflowRun0.R.RunNotifications, notifications1...)
+
+	return nil
+}
+
+func (workflowRun0 *WorkflowRun) AttachRunNotifications(ctx context.Context, exec bob.Executor, related ...*Notification) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	notifications1 := NotificationSlice(related)
+
+	_, err = attachWorkflowRunRunNotifications0(ctx, exec, len(related), notifications1, workflowRun0)
+	if err != nil {
+		return err
+	}
+
+	workflowRun0.R.RunNotifications = append(workflowRun0.R.RunNotifications, notifications1...)
+
+	return nil
 }
 
 func insertWorkflowRunRunStagedFiles0(ctx context.Context, exec bob.Executor, stagedFiles1 []*StagedFileSetter, workflowRun0 *WorkflowRun) (StagedFileSlice, error) {
@@ -1335,6 +1421,20 @@ func buildWorkflowRunWhere[Q psql.Filterable](cols workflowRunColumns) workflowR
 // R struct — so they cannot collide with column-based filter fields.
 type workflowRunWhereR[Q psql.Filterable] struct {
 	cols workflowRunColumns
+}
+
+// HasRunNotifications filters parents that have a matching RunNotifications using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Notifications).
+func (w workflowRunWhereR[Q]) HasRunNotifications(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := psql.Select(
+		sm.Columns(psql.Raw("1")),
+		sm.From(Notifications.NameExpr()),
+		sm.Where(Notifications.Columns.RunID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: psql.Exists(q)}
 }
 
 // HasRunStagedFiles filters parents that have a matching RunStagedFiles using a

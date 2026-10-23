@@ -18,13 +18,12 @@ import (
 	"unicode/utf8"
 
 	"papergo/internal/dal/dberr"
-	"papergo/internal/dal/directory"
-	grantstore "papergo/internal/dal/grants"
 	"papergo/internal/dal/operations"
 	taskstore "papergo/internal/dal/tasks"
 	"papergo/internal/dms"
 	"papergo/internal/forms"
 	"papergo/internal/model"
+	"papergo/internal/recipients"
 
 	"github.com/google/uuid"
 )
@@ -164,7 +163,7 @@ func Create(ctx context.Context, t *dms.Service, subject string, in Input) (task
 		}
 		collection = item.ContainerID
 	}
-	assignees, err := Resolve(ctx, t, subject, in.Assignees, in.WorkspaceID, in.ItemID, in.Actor)
+	assignees, err := assigneesOf(ctx, t, subject, in.Assignees, in.WorkspaceID, in.ItemID, in.Actor)
 	if err != nil {
 		return taskstore.Task{}, err
 	}
@@ -374,134 +373,12 @@ func checkReview(ctx context.Context, t *dms.Service, subject string, in Input) 
 	return nil
 }
 
-// Resolve turns recipient entries into assignees: subjects and group:<id>
-// entries, sorted and without duplicates.
-//
-//	<subject>                  a user
-//	group:<id>                 a group, nested groups included
-//	role:owners, role:members  the workspace's owners or members
-//	creator                    the item's creator
-//	actor                      who caused the run
-//	field:<key>                the people in a field of the item
-//
-// No entries means the workspace's owners. Unknown users and groups fail
-// with their names; inactive users are left out. subject reads the item.
-func Resolve(ctx context.Context, t *dms.Service, subject string, entries []string, workspaceID, itemID, actor string) ([]string, error) {
-	var out []string
-	var unknown []string
-	var itemLoaded bool
-	var creator string
-	var itemValues map[string]any
-	loadItem := func(entry string) error {
-		if itemID == "" {
-			return dms.Invalid(entry + " needs a task about an item")
-		}
-		if !itemLoaded {
-			r, err := t.GetSurface(ctx, subject, itemID, "auto")
-			if err != nil {
-				return err
-			}
-			creator, itemValues, itemLoaded = r.CreatedBy, r.Values, true
-		}
-		return nil
-	}
-	if len(entries) == 0 {
-		entries = []string{"role:owners"}
-	}
-	for _, raw := range entries {
-		entry := strings.TrimSpace(raw)
-		switch {
-		case entry == "":
-		case entry == "role:owners":
-			owners, err := t.WorkspaceManagers(ctx, workspaceID)
-			if err != nil {
-				return nil, err
-			}
-			out = append(out, owners...)
-		case entry == "role:members":
-			members, err := t.DAL.Grants().List(ctx, grantstore.Filter{ResourceID: workspaceID, PrincipalType: grantstore.PrincipalUser})
-			if err != nil {
-				return nil, err
-			}
-			for _, g := range members {
-				out = append(out, g.PrincipalID)
-			}
-		case entry == "creator":
-			if err := loadItem(entry); err != nil {
-				return nil, err
-			}
-			out = append(out, creator)
-		case entry == "actor":
-			if actor == "" {
-				return nil, dms.Invalid("actor needs a run caused by a person")
-			}
-			out = append(out, actor)
-		case strings.HasPrefix(entry, "field:"):
-			if err := loadItem(entry); err != nil {
-				return nil, err
-			}
-			switch v := itemValues[strings.TrimPrefix(entry, "field:")].(type) {
-			case string:
-				out = append(out, v)
-			case []any:
-				for _, x := range v {
-					if s, ok := x.(string); ok {
-						out = append(out, s)
-					}
-				}
-			}
-		case strings.HasPrefix(entry, "group:"):
-			ok, err := t.DAL.Directory().GroupExists(ctx, strings.TrimPrefix(entry, "group:"))
-			if err != nil {
-				return nil, err
-			}
-			if !ok {
-				unknown = append(unknown, entry)
-				continue
-			}
-			out = append(out, entry)
-		case strings.HasPrefix(entry, "role:"):
-			return nil, dms.Invalid("role is owners or members, as in role:owners")
-		default:
-			out = append(out, entry)
-		}
-	}
-	slices.Sort(out)
-	out = slices.Compact(out)
-	users := make([]string, 0, len(out))
-	for _, a := range out {
-		if !strings.HasPrefix(a, "group:") {
-			users = append(users, a)
-		}
-	}
-	if len(users) > 0 {
-		rows, err := t.DAL.Directory().Users(ctx, directory.UserFilter{IDs: users})
-		if err != nil {
-			return nil, err
-		}
-		known := map[string]bool{}
-		inactive := map[string]bool{}
-		for _, u := range rows {
-			known[u.ID] = true
-			inactive[u.ID] = !u.Active
-		}
-		out = slices.DeleteFunc(out, func(a string) bool {
-			if strings.HasPrefix(a, "group:") {
-				return false
-			}
-			if !known[a] {
-				unknown = append(unknown, a)
-				return true
-			}
-			return inactive[a]
-		})
-	}
-	if len(unknown) > 0 {
-		slices.Sort(unknown)
-		return nil, dms.Invalid("unknown recipients: " + strings.Join(slices.Compact(unknown), ", "))
-	}
-	if len(out) == 0 {
-		return nil, dms.Invalid("no one can be assigned: the recipients give no active user or group, or the workspace has no owners")
+// assigneesOf resolves recipient entries into a task's assignees, at most
+// MaxAssignees of them.
+func assigneesOf(ctx context.Context, t *dms.Service, subject string, entries []string, workspaceID, itemID, actor string) ([]string, error) {
+	out, err := recipients.Resolve(ctx, t, subject, entries, workspaceID, itemID, actor)
+	if err != nil {
+		return nil, err
 	}
 	if len(out) > MaxAssignees {
 		return nil, dms.Invalid(fmt.Sprintf("a task has at most %d assignees", MaxAssignees))
@@ -713,7 +590,7 @@ func Reassign(ctx context.Context, t *dms.Service, subject, id string, entries [
 	if tk.Status != taskstore.StatusOpen {
 		return taskstore.Task{}, fmt.Errorf("%w: the task is %s", dms.ErrConflict, tk.Status)
 	}
-	assignees, err := Resolve(ctx, t, subject, entries, tk.WorkspaceID, tk.ItemID, "")
+	assignees, err := assigneesOf(ctx, t, subject, entries, tk.WorkspaceID, tk.ItemID, "")
 	if err != nil {
 		return taskstore.Task{}, err
 	}

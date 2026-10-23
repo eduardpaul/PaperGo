@@ -64,6 +64,7 @@ type WorkflowsQuery = *psql.ViewQuery[*Workflow, WorkflowSlice]
 
 // workflowR is where relationships are stored.
 type workflowR struct {
+	Notifications      NotificationSlice    // notifications.notifications_workflow_id_fkey
 	Tasks              TaskSlice            // tasks.tasks_workflow_id_fkey
 	WorkflowRuns       WorkflowRunSlice     // workflow_runs.workflow_runs_workflow_id_fkey
 	WorkflowTriggers   WorkflowTriggerSlice // workflow_triggers.workflow_triggers_workflow_id_fkey
@@ -78,6 +79,7 @@ type workflowR struct {
 
 // workflowRLoaded tracks which relationships on Workflow have been loaded.
 type workflowRLoaded struct {
+	Notifications      bool // notifications.notifications_workflow_id_fkey
 	Tasks              bool // tasks.tasks_workflow_id_fkey
 	WorkflowRuns       bool // workflow_runs.workflow_runs_workflow_id_fkey
 	WorkflowTriggers   bool // workflow_triggers.workflow_triggers_workflow_id_fkey
@@ -923,6 +925,29 @@ func (o WorkflowSlice) ReloadAll(ctx context.Context, exec bob.Executor) error {
 	return nil
 }
 
+// Notifications starts a query for related objects on notifications
+func (o *Workflow) Notifications(mods ...bob.Mod[*dialect.SelectQuery]) NotificationsQuery {
+	return Notifications.Query(append(mods,
+		sm.Where(Notifications.Columns.WorkflowID.EQ(psql.Arg(o.ID))),
+	)...)
+}
+
+func (os WorkflowSlice) Notifications(mods ...bob.Mod[*dialect.SelectQuery]) NotificationsQuery {
+	pkID := make(pgtypes.Array[string], 0, len(os))
+
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		pkID = append(pkID, o.ID)
+	}
+	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkID), "text[]"))
+
+	return Notifications.Query(append(mods,
+		sm.Where(Notifications.Columns.WorkflowID.EQ(PKArgExpr)),
+	)...)
+}
+
 // Tasks starts a query for related objects on tasks
 func (o *Workflow) Tasks(mods ...bob.Mod[*dialect.SelectQuery]) TasksQuery {
 	return Tasks.Query(append(mods,
@@ -1073,6 +1098,67 @@ func (os WorkflowSlice) WorkspaceResource(mods ...bob.Mod[*dialect.SelectQuery])
 	return Resources.Query(append(mods,
 		sm.Where(Resources.Columns.ID.EQ(PKArgExpr)),
 	)...)
+}
+
+func insertWorkflowNotifications0(ctx context.Context, exec bob.Executor, notifications1 []*NotificationSetter, workflow0 *Workflow) (NotificationSlice, error) {
+	for i := range notifications1 {
+		notifications1[i].WorkflowID = omitnull.From(workflow0.ID)
+	}
+
+	ret, err := Notifications.Insert(bob.ToMods(notifications1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertWorkflowNotifications0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachWorkflowNotifications0(ctx context.Context, exec bob.Executor, count int, notifications1 NotificationSlice, workflow0 *Workflow) (NotificationSlice, error) {
+	setter := &NotificationSetter{
+		WorkflowID: omitnull.From(workflow0.ID),
+	}
+
+	err := notifications1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachWorkflowNotifications0: %w", err)
+	}
+
+	return notifications1, nil
+}
+
+func (workflow0 *Workflow) InsertNotifications(ctx context.Context, exec bob.Executor, related ...*NotificationSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	notifications1, err := insertWorkflowNotifications0(ctx, exec, related, workflow0)
+	if err != nil {
+		return err
+	}
+
+	workflow0.R.Notifications = append(workflow0.R.Notifications, notifications1...)
+
+	return nil
+}
+
+func (workflow0 *Workflow) AttachNotifications(ctx context.Context, exec bob.Executor, related ...*Notification) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	notifications1 := NotificationSlice(related)
+
+	_, err = attachWorkflowNotifications0(ctx, exec, len(related), notifications1, workflow0)
+	if err != nil {
+		return err
+	}
+
+	workflow0.R.Notifications = append(workflow0.R.Notifications, notifications1...)
+
+	return nil
 }
 
 func insertWorkflowTasks0(ctx context.Context, exec bob.Executor, tasks1 []*TaskSetter, workflow0 *Workflow) (TaskSlice, error) {
@@ -1472,6 +1558,20 @@ func buildWorkflowWhere[Q psql.Filterable](cols workflowColumns) workflowWhere[Q
 // R struct — so they cannot collide with column-based filter fields.
 type workflowWhereR[Q psql.Filterable] struct {
 	cols workflowColumns
+}
+
+// HasNotifications filters parents that have a matching Notifications using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Notifications).
+func (w workflowWhereR[Q]) HasNotifications(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := psql.Select(
+		sm.Columns(psql.Raw("1")),
+		sm.From(Notifications.NameExpr()),
+		sm.Where(Notifications.Columns.WorkflowID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: psql.Exists(q)}
 }
 
 // HasTasks filters parents that have a matching Tasks using a

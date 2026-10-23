@@ -16,11 +16,13 @@ const (
 	KindOperation Kind = "operation"
 	KindRun       Kind = "run"
 	KindAccess    Kind = "access"
+	// KindNotification reaches only the notification's recipient.
+	KindNotification Kind = "notification"
 )
 
 func (k Kind) Valid() bool {
 	switch k {
-	case KindItem, KindOperation, KindRun, KindAccess:
+	case KindItem, KindOperation, KindRun, KindAccess, KindNotification:
 		return true
 	}
 	return false

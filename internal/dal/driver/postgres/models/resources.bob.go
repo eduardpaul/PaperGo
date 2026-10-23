@@ -100,6 +100,8 @@ type resourceR struct {
 	WorkspaceItemSurfaces         ItemSurfaceSlice     // item_surfaces.item_surfaces_workspace_id_fkey
 	ContainerListIntegrations     ListIntegrationSlice // list_integrations.list_integrations_container_id_fkey
 	ContainerListViews            ListViewSlice        // list_views.list_views_container_id_fkey
+	ItemNotifications             NotificationSlice    // notifications.notifications_item_id_fkey
+	WorkspaceNotifications        NotificationSlice    // notifications.notifications_workspace_id_fkey
 	ItemOperationItems            OperationItemSlice   // operation_items.operation_items_item_id_fkey
 	ContainerOperations           OperationSlice       // operations.operations_container_id_fkey
 	WorkspaceOperations           OperationSlice       // operations.operations_workspace_id_fkey
@@ -162,6 +164,8 @@ type resourceRLoaded struct {
 	WorkspaceItemSurfaces         bool // item_surfaces.item_surfaces_workspace_id_fkey
 	ContainerListIntegrations     bool // list_integrations.list_integrations_container_id_fkey
 	ContainerListViews            bool // list_views.list_views_container_id_fkey
+	ItemNotifications             bool // notifications.notifications_item_id_fkey
+	WorkspaceNotifications        bool // notifications.notifications_workspace_id_fkey
 	ItemOperationItems            bool // operation_items.operation_items_item_id_fkey
 	ContainerOperations           bool // operations.operations_container_id_fkey
 	WorkspaceOperations           bool // operations.operations_workspace_id_fkey
@@ -1860,6 +1864,52 @@ func (os ResourceSlice) ContainerListViews(mods ...bob.Mod[*dialect.SelectQuery]
 
 	return ListViews.Query(append(mods,
 		sm.Where(ListViews.Columns.ContainerID.EQ(PKArgExpr)),
+	)...)
+}
+
+// ItemNotifications starts a query for related objects on notifications
+func (o *Resource) ItemNotifications(mods ...bob.Mod[*dialect.SelectQuery]) NotificationsQuery {
+	return Notifications.Query(append(mods,
+		sm.Where(Notifications.Columns.ItemID.EQ(psql.Arg(o.ID))),
+	)...)
+}
+
+func (os ResourceSlice) ItemNotifications(mods ...bob.Mod[*dialect.SelectQuery]) NotificationsQuery {
+	pkID := make(pgtypes.Array[string], 0, len(os))
+
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		pkID = append(pkID, o.ID)
+	}
+	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkID), "text[]"))
+
+	return Notifications.Query(append(mods,
+		sm.Where(Notifications.Columns.ItemID.EQ(PKArgExpr)),
+	)...)
+}
+
+// WorkspaceNotifications starts a query for related objects on notifications
+func (o *Resource) WorkspaceNotifications(mods ...bob.Mod[*dialect.SelectQuery]) NotificationsQuery {
+	return Notifications.Query(append(mods,
+		sm.Where(Notifications.Columns.WorkspaceID.EQ(psql.Arg(o.ID))),
+	)...)
+}
+
+func (os ResourceSlice) WorkspaceNotifications(mods ...bob.Mod[*dialect.SelectQuery]) NotificationsQuery {
+	pkID := make(pgtypes.Array[string], 0, len(os))
+
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		pkID = append(pkID, o.ID)
+	}
+	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkID), "text[]"))
+
+	return Notifications.Query(append(mods,
+		sm.Where(Notifications.Columns.WorkspaceID.EQ(PKArgExpr)),
 	)...)
 }
 
@@ -3920,6 +3970,128 @@ func (resource0 *Resource) AttachContainerListViews(ctx context.Context, exec bo
 	}
 
 	resource0.R.ContainerListViews = append(resource0.R.ContainerListViews, listViews1...)
+
+	return nil
+}
+
+func insertResourceItemNotifications0(ctx context.Context, exec bob.Executor, notifications1 []*NotificationSetter, resource0 *Resource) (NotificationSlice, error) {
+	for i := range notifications1 {
+		notifications1[i].ItemID = omitnull.From(resource0.ID)
+	}
+
+	ret, err := Notifications.Insert(bob.ToMods(notifications1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertResourceItemNotifications0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachResourceItemNotifications0(ctx context.Context, exec bob.Executor, count int, notifications1 NotificationSlice, resource0 *Resource) (NotificationSlice, error) {
+	setter := &NotificationSetter{
+		ItemID: omitnull.From(resource0.ID),
+	}
+
+	err := notifications1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachResourceItemNotifications0: %w", err)
+	}
+
+	return notifications1, nil
+}
+
+func (resource0 *Resource) InsertItemNotifications(ctx context.Context, exec bob.Executor, related ...*NotificationSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	notifications1, err := insertResourceItemNotifications0(ctx, exec, related, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.ItemNotifications = append(resource0.R.ItemNotifications, notifications1...)
+
+	return nil
+}
+
+func (resource0 *Resource) AttachItemNotifications(ctx context.Context, exec bob.Executor, related ...*Notification) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	notifications1 := NotificationSlice(related)
+
+	_, err = attachResourceItemNotifications0(ctx, exec, len(related), notifications1, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.ItemNotifications = append(resource0.R.ItemNotifications, notifications1...)
+
+	return nil
+}
+
+func insertResourceWorkspaceNotifications0(ctx context.Context, exec bob.Executor, notifications1 []*NotificationSetter, resource0 *Resource) (NotificationSlice, error) {
+	for i := range notifications1 {
+		notifications1[i].WorkspaceID = omitnull.From(resource0.ID)
+	}
+
+	ret, err := Notifications.Insert(bob.ToMods(notifications1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertResourceWorkspaceNotifications0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachResourceWorkspaceNotifications0(ctx context.Context, exec bob.Executor, count int, notifications1 NotificationSlice, resource0 *Resource) (NotificationSlice, error) {
+	setter := &NotificationSetter{
+		WorkspaceID: omitnull.From(resource0.ID),
+	}
+
+	err := notifications1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachResourceWorkspaceNotifications0: %w", err)
+	}
+
+	return notifications1, nil
+}
+
+func (resource0 *Resource) InsertWorkspaceNotifications(ctx context.Context, exec bob.Executor, related ...*NotificationSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	notifications1, err := insertResourceWorkspaceNotifications0(ctx, exec, related, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.WorkspaceNotifications = append(resource0.R.WorkspaceNotifications, notifications1...)
+
+	return nil
+}
+
+func (resource0 *Resource) AttachWorkspaceNotifications(ctx context.Context, exec bob.Executor, related ...*Notification) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	notifications1 := NotificationSlice(related)
+
+	_, err = attachResourceWorkspaceNotifications0(ctx, exec, len(related), notifications1, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.WorkspaceNotifications = append(resource0.R.WorkspaceNotifications, notifications1...)
 
 	return nil
 }
@@ -6230,6 +6402,34 @@ func (w resourceWhereR[Q]) HasContainerListViews(filters ...bob.Mod[*dialect.Sel
 		sm.Columns(psql.Raw("1")),
 		sm.From(ListViews.NameExpr()),
 		sm.Where(ListViews.Columns.ContainerID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: psql.Exists(q)}
+}
+
+// HasItemNotifications filters parents that have a matching ItemNotifications using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Notifications).
+func (w resourceWhereR[Q]) HasItemNotifications(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := psql.Select(
+		sm.Columns(psql.Raw("1")),
+		sm.From(Notifications.NameExpr()),
+		sm.Where(Notifications.Columns.ItemID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: psql.Exists(q)}
+}
+
+// HasWorkspaceNotifications filters parents that have a matching WorkspaceNotifications using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Notifications).
+func (w resourceWhereR[Q]) HasWorkspaceNotifications(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := psql.Select(
+		sm.Columns(psql.Raw("1")),
+		sm.From(Notifications.NameExpr()),
+		sm.Where(Notifications.Columns.WorkspaceID.EQ(w.cols.ID)),
 	)
 	q.Apply(filters...)
 	return mods.Where[Q]{E: psql.Exists(q)}

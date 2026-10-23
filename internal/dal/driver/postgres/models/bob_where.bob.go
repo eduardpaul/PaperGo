@@ -50,6 +50,7 @@ func Where[Q psql.Filterable]() struct {
 	ListIntegrations        listIntegrationWhere[Q]
 	ListViews               listViewWhere[Q]
 	LiveChanges             liveChangeWhere[Q]
+	Notifications           notificationWhere[Q]
 	OperationItems          operationItemWhere[Q]
 	Operations              operationWhere[Q]
 	Publications            publicationWhere[Q]
@@ -111,6 +112,7 @@ func Where[Q psql.Filterable]() struct {
 		ListIntegrations        listIntegrationWhere[Q]
 		ListViews               listViewWhere[Q]
 		LiveChanges             liveChangeWhere[Q]
+		Notifications           notificationWhere[Q]
 		OperationItems          operationItemWhere[Q]
 		Operations              operationWhere[Q]
 		Publications            publicationWhere[Q]
@@ -171,6 +173,7 @@ func Where[Q psql.Filterable]() struct {
 		ListIntegrations:        buildListIntegrationWhere[Q](ListIntegrations.Columns),
 		ListViews:               buildListViewWhere[Q](ListViews.Columns),
 		LiveChanges:             buildLiveChangeWhere[Q](LiveChanges.Columns),
+		Notifications:           buildNotificationWhere[Q](Notifications.Columns),
 		OperationItems:          buildOperationItemWhere[Q](OperationItems.Columns),
 		Operations:              buildOperationWhere[Q](Operations.Columns),
 		Publications:            buildPublicationWhere[Q](Publications.Columns),

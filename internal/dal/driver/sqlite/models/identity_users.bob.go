@@ -52,6 +52,7 @@ type IdentityUsersQuery = *sqlite.ViewQuery[*IdentityUser, IdentityUserSlice]
 type identityUserR struct {
 	SubjectAccessTokens     AccessTokenSlice     // fk_access_tokens_0
 	SubjectIdentitySessions IdentitySessionSlice // fk_identity_sessions_0
+	RecipientNotifications  NotificationSlice    // fk_notifications_5
 	PersonalOwnerResources  ResourceSlice        // fk_resources_7
 	OwnerSmartFolders       SmartFolderSlice     // fk_smart_folders_0
 	SubjectSyncViews        SyncViewSlice        // fk_sync_views_1
@@ -65,6 +66,7 @@ type identityUserR struct {
 type identityUserRLoaded struct {
 	SubjectAccessTokens     bool // fk_access_tokens_0
 	SubjectIdentitySessions bool // fk_identity_sessions_0
+	RecipientNotifications  bool // fk_notifications_5
 	PersonalOwnerResources  bool // fk_resources_7
 	OwnerSmartFolders       bool // fk_smart_folders_0
 	SubjectSyncViews        bool // fk_sync_views_1
@@ -693,6 +695,25 @@ func (os IdentityUserSlice) SubjectIdentitySessions(mods ...bob.Mod[*dialect.Sel
 	)...)
 }
 
+// RecipientNotifications starts a query for related objects on notifications
+func (o *IdentityUser) RecipientNotifications(mods ...bob.Mod[*dialect.SelectQuery]) NotificationsQuery {
+	return Notifications.Query(append(mods,
+		sm.Where(Notifications.Columns.Recipient.EQ(sqlite.Arg(o.ID))),
+	)...)
+}
+
+func (os IdentityUserSlice) RecipientNotifications(mods ...bob.Mod[*dialect.SelectQuery]) NotificationsQuery {
+	PKArgSlice := make([]bob.Expression, len(os))
+	for i, o := range os {
+		PKArgSlice[i] = sqlite.ArgGroup(o.ID)
+	}
+	PKArgExpr := sqlite.Group(PKArgSlice...)
+
+	return Notifications.Query(append(mods,
+		sm.Where(sqlite.Group(Notifications.Columns.Recipient).OP("IN", PKArgExpr)),
+	)...)
+}
+
 // PersonalOwnerResources starts a query for related objects on resources
 func (o *IdentityUser) PersonalOwnerResources(mods ...bob.Mod[*dialect.SelectQuery]) ResourcesQuery {
 	return Resources.Query(append(mods,
@@ -868,6 +889,67 @@ func (identityUser0 *IdentityUser) AttachSubjectIdentitySessions(ctx context.Con
 	}
 
 	identityUser0.R.SubjectIdentitySessions = append(identityUser0.R.SubjectIdentitySessions, identitySessions1...)
+
+	return nil
+}
+
+func insertIdentityUserRecipientNotifications0(ctx context.Context, exec bob.Executor, notifications1 []*NotificationSetter, identityUser0 *IdentityUser) (NotificationSlice, error) {
+	for i := range notifications1 {
+		notifications1[i].Recipient = omit.From(identityUser0.ID)
+	}
+
+	ret, err := Notifications.Insert(bob.ToMods(notifications1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertIdentityUserRecipientNotifications0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachIdentityUserRecipientNotifications0(ctx context.Context, exec bob.Executor, count int, notifications1 NotificationSlice, identityUser0 *IdentityUser) (NotificationSlice, error) {
+	setter := &NotificationSetter{
+		Recipient: omit.From(identityUser0.ID),
+	}
+
+	err := notifications1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachIdentityUserRecipientNotifications0: %w", err)
+	}
+
+	return notifications1, nil
+}
+
+func (identityUser0 *IdentityUser) InsertRecipientNotifications(ctx context.Context, exec bob.Executor, related ...*NotificationSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	notifications1, err := insertIdentityUserRecipientNotifications0(ctx, exec, related, identityUser0)
+	if err != nil {
+		return err
+	}
+
+	identityUser0.R.RecipientNotifications = append(identityUser0.R.RecipientNotifications, notifications1...)
+
+	return nil
+}
+
+func (identityUser0 *IdentityUser) AttachRecipientNotifications(ctx context.Context, exec bob.Executor, related ...*Notification) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	notifications1 := NotificationSlice(related)
+
+	_, err = attachIdentityUserRecipientNotifications0(ctx, exec, len(related), notifications1, identityUser0)
+	if err != nil {
+		return err
+	}
+
+	identityUser0.R.RecipientNotifications = append(identityUser0.R.RecipientNotifications, notifications1...)
 
 	return nil
 }
@@ -1119,6 +1201,20 @@ func (w identityUserWhereR[Q]) HasSubjectIdentitySessions(filters ...bob.Mod[*di
 		sm.Columns(sqlite.Raw("1")),
 		sm.From(IdentitySessions.NameExpr()),
 		sm.Where(IdentitySessions.Columns.Subject.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: sqlite.Exists(q)}
+}
+
+// HasRecipientNotifications filters parents that have a matching RecipientNotifications using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Notifications).
+func (w identityUserWhereR[Q]) HasRecipientNotifications(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := sqlite.Select(
+		sm.Columns(sqlite.Raw("1")),
+		sm.From(Notifications.NameExpr()),
+		sm.Where(Notifications.Columns.Recipient.EQ(w.cols.ID)),
 	)
 	q.Apply(filters...)
 	return mods.Where[Q]{E: sqlite.Exists(q)}
