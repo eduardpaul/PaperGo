@@ -26,7 +26,7 @@ export interface ContentTypesRequestBuilder extends BaseRequestBuilder<ContentTy
      */
      get(requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<CollectionContentType[] | undefined>;
     /**
-     * Requires list.read, contentType.read and manage ACL on the collection. The shared definition is not copied. Returns the collection and its new ETag.
+     * Requires list.write, contentType.read and manage ACL on the collection. The shared definition is not copied. Returns the collection and its new ETag.
      * @param body Attach the organization definition by ID without copying. At most 32 types per collection. Selecting a default affects only this collection. Conflicting field keys are rejected; types that share a key must reference the same catalog field ID.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<Resource>}
@@ -41,7 +41,7 @@ export interface ContentTypesRequestBuilder extends BaseRequestBuilder<ContentTy
      */
      toGetRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined) : RequestInformation;
     /**
-     * Requires list.read, contentType.read and manage ACL on the collection. The shared definition is not copied. Returns the collection and its new ETag.
+     * Requires list.write, contentType.read and manage ACL on the collection. The shared definition is not copied. Returns the collection and its new ETag.
      * @param body Attach the organization definition by ID without copying. At most 32 types per collection. Selecting a default affects only this collection. Conflicting field keys are rejected; types that share a key must reference the same catalog field ID.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}

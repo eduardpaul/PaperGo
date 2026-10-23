@@ -1399,9 +1399,9 @@
             }
           }
         },
-        "description": "Break, copy or reset inheritance using typed user, group and workspace role principals. Copied group grants retain group IDs and resolve current nested memberships. Copying workspace inheritance retains dynamic visitor/member/owner role principals. Workspace owners and workspace.manage holders retain control. A permission change that removes the caller's manage access rolls back. list.read and resource manage access are required. Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply. ACL changes deliver permissions.changed (action=replace) to the resource and every item and folder that inherits from it, with previous_scope_id and current_scope_id; the root event, with previous/current permission snapshots (inherit, grants, scope_id, effective_grants), commits with the write and audit, and the dispatcher delivers it in batches. Unchanged ACLs raise no event.",
+        "description": "Break, copy or reset inheritance using typed user, group and workspace role principals. Copied group grants retain group IDs and resolve current nested memberships. Copying workspace inheritance retains dynamic visitor/member/owner role principals. Workspace owners and workspace.manage holders retain control. A permission change that removes the caller's manage access rolls back. list.write and resource manage access are required. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. ACL changes deliver permissions.changed (action=replace) to the resource and every item and folder that inherits from it, with previous_scope_id and current_scope_id; the root event, with previous/current permission snapshots (inherit, grants, scope_id, effective_grants), commits with the write and audit, and the dispatcher delivers it in batches. Unchanged ACLs raise no event.",
         "x-module-scopes": [
-          "list.read"
+          "list.write"
         ]
       }
     },
@@ -4081,9 +4081,9 @@
           }
         },
         "x-module-scopes": [
-          "list.read"
+          "list.write"
         ],
-        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/views/{id}": {
@@ -4372,9 +4372,9 @@
           }
         },
         "x-module-scopes": [
-          "list.read"
+          "list.write"
         ],
-        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply."
       },
       "delete": {
         "summary": "Delete saved view",
@@ -4413,9 +4413,9 @@
           }
         },
         "x-module-scopes": [
-          "list.read"
+          "list.write"
         ],
-        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/views/{id}/query": {
@@ -5159,10 +5159,10 @@
           }
         },
         "x-module-scopes": [
-          "list.read",
+          "list.write",
           "contentType.read"
         ],
-        "description": "Requires list.read, contentType.read and manage ACL on the collection. The shared definition is not copied. Returns the collection and its new ETag."
+        "description": "Requires list.write, contentType.read and manage ACL on the collection. The shared definition is not copied. Returns the collection and its new ETag."
       }
     },
     "/v1/content-types/{id}": {
@@ -13341,7 +13341,7 @@
         "summary": "Detach an unused collection content type",
         "description": "Requires collection manage access and the current collection If-Match. Rejects the last attachment, a type used by live items, and dependent saved views. Chooses a remaining default when necessary. Updates the effective schema and business keys atomically; organization catalog types and frozen revisions remain. Deleted items with a detached type require reattachment before restoration.",
         "x-module-scopes": [
-          "list.read"
+          "list.write"
         ],
         "parameters": [
           {

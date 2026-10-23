@@ -8954,7 +8954,7 @@ interface ContentTypesRequestBuilder$1 extends BaseRequestBuilder<ContentTypesRe
 	 */
 	get(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<CollectionContentType[] | undefined>;
 	/**
-	 * Requires list.read, contentType.read and manage ACL on the collection. The shared definition is not copied. Returns the collection and its new ETag.
+	 * Requires list.write, contentType.read and manage ACL on the collection. The shared definition is not copied. Returns the collection and its new ETag.
 	 * @param body Attach the organization definition by ID without copying. At most 32 types per collection. Selecting a default affects only this collection. Conflicting field keys are rejected; types that share a key must reference the same catalog field ID.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Resource>}
@@ -8969,7 +8969,7 @@ interface ContentTypesRequestBuilder$1 extends BaseRequestBuilder<ContentTypesRe
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 	/**
-	 * Requires list.read, contentType.read and manage ACL on the collection. The shared definition is not copied. Returns the collection and its new ETag.
+	 * Requires list.write, contentType.read and manage ACL on the collection. The shared definition is not copied. Returns the collection and its new ETag.
 	 * @param body Attach the organization definition by ID without copying. At most 32 types per collection. Selecting a default affects only this collection. Conflicting field keys are rejected; types that share a key must reference the same catalog field ID.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -9306,7 +9306,7 @@ export interface PermissionsRequestBuilder extends BaseRequestBuilder<Permission
 	 */
 	get(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Permissions | undefined>;
 	/**
-	 * Break, copy or reset inheritance using typed user, group and workspace role principals. Copied group grants retain group IDs and resolve current nested memberships. Copying workspace inheritance retains dynamic visitor/member/owner role principals. Workspace owners and workspace.manage holders retain control. A permission change that removes the caller's manage access rolls back. list.read and resource manage access are required. Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply. ACL changes deliver permissions.changed (action=replace) to the resource and every item and folder that inherits from it, with previous_scope_id and current_scope_id; the root event, with previous/current permission snapshots (inherit, grants, scope_id, effective_grants), commits with the write and audit, and the dispatcher delivers it in batches. Unchanged ACLs raise no event.
+	 * Break, copy or reset inheritance using typed user, group and workspace role principals. Copied group grants retain group IDs and resolve current nested memberships. Copying workspace inheritance retains dynamic visitor/member/owner role principals. Workspace owners and workspace.manage holders retain control. A permission change that removes the caller's manage access rolls back. list.write and resource manage access are required. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. ACL changes deliver permissions.changed (action=replace) to the resource and every item and folder that inherits from it, with previous_scope_id and current_scope_id; the root event, with previous/current permission snapshots (inherit, grants, scope_id, effective_grants), commits with the write and audit, and the dispatcher delivers it in batches. Unchanged ACLs raise no event.
 	 * @param body SharePoint-style exclusive scopes. An inherited resource has no local grants. Grants at the nearest exclusive ancestor apply; ancestors beyond it do not. Grants within a scope are additive. Reset with inherit=true and no grants. Denies are rejected.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Resource>}
@@ -9321,7 +9321,7 @@ export interface PermissionsRequestBuilder extends BaseRequestBuilder<Permission
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 	/**
-	 * Break, copy or reset inheritance using typed user, group and workspace role principals. Copied group grants retain group IDs and resolve current nested memberships. Copying workspace inheritance retains dynamic visitor/member/owner role principals. Workspace owners and workspace.manage holders retain control. A permission change that removes the caller's manage access rolls back. list.read and resource manage access are required. Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply. ACL changes deliver permissions.changed (action=replace) to the resource and every item and folder that inherits from it, with previous_scope_id and current_scope_id; the root event, with previous/current permission snapshots (inherit, grants, scope_id, effective_grants), commits with the write and audit, and the dispatcher delivers it in batches. Unchanged ACLs raise no event.
+	 * Break, copy or reset inheritance using typed user, group and workspace role principals. Copied group grants retain group IDs and resolve current nested memberships. Copying workspace inheritance retains dynamic visitor/member/owner role principals. Workspace owners and workspace.manage holders retain control. A permission change that removes the caller's manage access rolls back. list.write and resource manage access are required. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. ACL changes deliver permissions.changed (action=replace) to the resource and every item and folder that inherits from it, with previous_scope_id and current_scope_id; the root event, with previous/current permission snapshots (inherit, grants, scope_id, effective_grants), commits with the write and audit, and the dispatcher delivers it in batches. Unchanged ACLs raise no event.
 	 * @param body SharePoint-style exclusive scopes. An inherited resource has no local grants. Grants at the nearest exclusive ancestor apply; ancestors beyond it do not. Grants within a scope are additive. Reset with inherit=true and no grants. Denies are rejected.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -9604,7 +9604,7 @@ export interface ViewsRequestBuilder extends BaseRequestBuilder<ViewsRequestBuil
 	 */
 	get(requestConfiguration?: RequestConfiguration<ViewsRequestBuilderGetQueryParameters> | undefined): Promise<ListViewPage | undefined>;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Collection-managed saved view. Columns use field keys and $id/$name/$keywords; empty columns default to $name. PUT replaces the definition. Layout is a client hint; a navigation view browses the terms of each of settings.fields as folders (POST /v1/views/{id}/navigation) and lists the items at the opened terms through POST /v1/views/{id}/query with selected.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<ListView>}
@@ -9626,7 +9626,7 @@ export interface ViewsRequestBuilder extends BaseRequestBuilder<ViewsRequestBuil
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<ViewsRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Collection-managed saved view. Columns use field keys and $id/$name/$keywords; empty columns default to $name. PUT replaces the definition. Layout is a client hint; a navigation view browses the terms of each of settings.fields as folders (POST /v1/views/{id}/navigation) and lists the items at the opened terms through POST /v1/views/{id}/query with selected.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -11537,7 +11537,7 @@ export interface ViewsItemRequestBuilder extends BaseRequestBuilder<ViewsItemReq
 	 */
 	get query(): QueryRequestBuilder$2;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @throws {Problem} error when the service returns a 412 status code
 	 */
@@ -11558,7 +11558,7 @@ export interface ViewsItemRequestBuilder extends BaseRequestBuilder<ViewsItemReq
 	 */
 	get(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<ListView | undefined>;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Collection-managed saved view. Columns use field keys and $id/$name/$keywords; empty columns default to $name. PUT replaces the definition. Layout is a client hint; a navigation view browses the terms of each of settings.fields as folders (POST /v1/views/{id}/navigation) and lists the items at the opened terms through POST /v1/views/{id}/query with selected.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<ListView>}
@@ -11576,7 +11576,7 @@ export interface ViewsItemRequestBuilder extends BaseRequestBuilder<ViewsItemReq
 	 */
 	put(body: ViewInput, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<ListView | undefined>;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -11588,7 +11588,7 @@ export interface ViewsItemRequestBuilder extends BaseRequestBuilder<ViewsItemReq
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Collection-managed saved view. Columns use field keys and $id/$name/$keywords; empty columns default to $name. PUT replaces the definition. Layout is a client hint; a navigation view browses the terms of each of settings.fields as folders (POST /v1/views/{id}/navigation) and lists the items at the opened terms through POST /v1/views/{id}/query with selected.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}

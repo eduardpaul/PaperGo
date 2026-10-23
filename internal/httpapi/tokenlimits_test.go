@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -157,5 +158,59 @@ func TestTokenResourceLimits(t *testing.T) {
 	}
 	if _, err := s.GetSurface(restored, "alice", salary, "auto"); err == nil {
 		t.Fatal("queued work escaped the limit")
+	}
+}
+
+// A token without list.write changes nothing: not items, and not
+// workspaces, lists or libraries themselves, whose settings, permissions,
+// views and existence its holder could otherwise manage. Reading still works.
+func TestReadOnlyTokensChangeNothing(t *testing.T) {
+	h, s, _ := setup(t)
+	ctx := context.Background()
+	w, err := s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Operations"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, _ := s.Create(ctx, "alice", w.ID, dms.CreateResource{Kind: "list", Name: "Invoices"})
+	library, _ := s.Create(ctx, "alice", w.ID, dms.CreateResource{Kind: "library", Name: "Contracts"})
+	item, _ := s.Create(ctx, "alice", list.ID, dms.CreateResource{Kind: "item", Name: "Invoice"})
+	read := []string{"workspace.read", "list.read", "contentType.read", "document.read", "taxonomy.read", "user.read"}
+	// Refusals are 403, or 404 for workspaces, which do not reveal themselves.
+	for _, limit := range [][]string{nil, {w.ID}} {
+		tok, err := s.Directory().CreateAccessToken(ctx, "alice", identity.AccessTokenInput{Name: "Read only", Scopes: read, Resources: limit})
+		if err != nil {
+			t.Fatal(err)
+		}
+		version := func(id string) string {
+			r, err := s.GetSurface(ctx, "alice", id, "auto")
+			if err != nil {
+				t.Fatal(err)
+			}
+			return `"` + strconv.Itoa(r.Version) + `"`
+		}
+		for _, id := range []string{w.ID, list.ID, library.ID, item.ID} {
+			if r := request(h, "GET", "/v1/resources/"+id, "", tok.Secret, "", ""); r.Code != 200 {
+				t.Fatalf("read %s: %d", id, r.Code)
+			}
+			if r := request(h, "PATCH", "/v1/resources/"+id, `{"name":"Renamed"}`, tok.Secret, version(id), "application/json"); r.Code != 403 && r.Code != 404 {
+				t.Fatalf("limit %v renamed %s: %d %s", limit, id, r.Code, r.Body.String())
+			}
+			if r := request(h, "DELETE", "/v1/resources/"+id+"?recursive=true", "", tok.Secret, version(id), ""); r.Code != 403 && r.Code != 404 {
+				t.Fatalf("limit %v deleted %s: %d %s", limit, id, r.Code, r.Body.String())
+			}
+		}
+		for _, c := range []struct{ method, path, body string }{
+			{"POST", "/v1/resources/" + w.ID + "/children", `{"kind":"list","name":"New"}`},
+			{"POST", "/v1/resources/" + list.ID + "/children", `{"kind":"item","name":"New"}`},
+			{"POST", "/v1/resources/" + list.ID + "/views", `{"name":"Mine"}`},
+		} {
+			if r := request(h, c.method, c.path, c.body, tok.Secret, "", "application/json"); r.Code != 403 && r.Code != 404 {
+				t.Fatalf("limit %v %s %s: %d %s", limit, c.method, c.path, r.Code, r.Body.String())
+			}
+		}
+		perms := request(h, "GET", "/v1/resources/"+list.ID+"/permissions", "", testToken, "", "")
+		if r := request(h, "PUT", "/v1/resources/"+list.ID+"/permissions", perms.Body.String(), tok.Secret, version(list.ID), "application/json"); r.Code != 403 && r.Code != 404 {
+			t.Fatalf("limit %v changed permissions: %d %s", limit, r.Code, r.Body.String())
+		}
 	}
 }
