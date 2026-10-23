@@ -23,6 +23,8 @@ import (
 
 	"papergo/internal/dal/dberr"
 	"papergo/internal/dal/notifications"
+	"papergo/internal/dal/refs"
+	"papergo/internal/dal/resources"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
 	"papergo/internal/recipients"
@@ -515,21 +517,9 @@ func (s *Service) Send(ctx context.Context, subject, run string, in SendInput) (
 		return out, err
 	}
 	err := s.DMS.Write(ctx, func(t *dms.Service) error {
-		ws, err := t.Authorize(ctx, subject, in.WorkspaceID, "read")
+		ws, _, err := Place(ctx, t, subject, in.WorkspaceID, in.ItemID, "read")
 		if err != nil {
 			return err
-		}
-		if ws.Kind != "workspace" {
-			return dms.Invalid("the notification's workspace is not a workspace")
-		}
-		if in.ItemID != "" {
-			item, err := t.Authorize(ctx, subject, in.ItemID, "read")
-			if err != nil {
-				return err
-			}
-			if item.Kind != "item" || item.WorkspaceID != in.WorkspaceID {
-				return dms.Invalid("item_id must be an item of the workspace")
-			}
 		}
 		if utf8.RuneCountInString(in.DedupKey) > MaxMessageKey {
 			return dms.Invalid(fmt.Sprintf("dedup_key has at most %d characters", MaxMessageKey))
@@ -569,6 +559,28 @@ func (s *Service) Send(ctx context.Context, subject, run string, in SendInput) (
 		return t.Record(ctx, subject, "notification.send", ws, map[string]any{"item_id": in.ItemID, "recipients": entries, "sent": out.Sent})
 	})
 	return out, err
+}
+
+// Place authorizes subject to read a workspace and, with itemID, for
+// itemAction on an item of that workspace, which what a message or a task
+// is about must be.
+func Place(ctx context.Context, t *dms.Service, subject, workspaceID, itemID, itemAction string) (ws, item *resources.Resource, err error) {
+	if ws, err = t.Authorize(ctx, subject, workspaceID, "read"); err != nil {
+		return nil, nil, err
+	}
+	if ws.Kind != refs.KindWorkspace {
+		return nil, nil, dms.Invalid("workspace_id is not a workspace")
+	}
+	if itemID == "" {
+		return ws, nil, nil
+	}
+	if item, err = t.Authorize(ctx, subject, itemID, itemAction); err != nil {
+		return nil, nil, err
+	}
+	if item.Kind != refs.KindItem || item.WorkspaceID != workspaceID {
+		return nil, nil, dms.Invalid("item_id must be an item of the workspace")
+	}
+	return ws, item, nil
 }
 
 // MaxMessageKey bounds the dedup key of a message people and workflows

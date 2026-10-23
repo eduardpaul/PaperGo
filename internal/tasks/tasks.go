@@ -143,26 +143,16 @@ func Create(ctx context.Context, t *dms.Service, subject string, in Input) (task
 	if err := in.normalize(); err != nil {
 		return taskstore.Task{}, err
 	}
-	ws, err := t.Authorize(ctx, subject, in.WorkspaceID, "read")
+	action := "read_draft"
+	if in.Workflow == nil && !in.System {
+		action = "write"
+	}
+	ws, item, err := notify.Place(ctx, t, subject, in.WorkspaceID, in.ItemID, action)
 	if err != nil {
 		return taskstore.Task{}, err
 	}
-	if ws.Kind != "workspace" {
-		return taskstore.Task{}, dms.Invalid("workspace_id is not a workspace")
-	}
 	var collection *string
-	if in.ItemID != "" {
-		action := "read_draft"
-		if in.Workflow == nil && !in.System {
-			action = "write"
-		}
-		item, err := t.Authorize(ctx, subject, in.ItemID, action)
-		if err != nil {
-			return taskstore.Task{}, err
-		}
-		if item.Kind != "item" || item.WorkspaceID != in.WorkspaceID {
-			return taskstore.Task{}, dms.Invalid("item_id must be an item of the task's workspace")
-		}
+	if item != nil {
 		collection = item.ContainerID
 	}
 	assignees, err := assigneesOf(ctx, t, subject, in.Assignees, in.WorkspaceID, in.ItemID, in.Actor)
