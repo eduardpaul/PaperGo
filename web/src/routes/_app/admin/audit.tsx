@@ -21,6 +21,8 @@ interface AuditEvent {
   entity_id: string;
   properties?: string[];
   details?: Record<string, unknown>;
+  /** The access token the action was taken with, such as an AI assistant's. */
+  credential?: { id: string; name?: string };
 }
 export const Route = createFileRoute('/_app/admin/audit')({
   validateSearch: (search: Record<string, unknown>): Filters =>
@@ -58,7 +60,12 @@ function AuditPage() {
             {entries.items.map((entry) => (
               <tr key={entry.id}>
                 <td className="p-2 whitespace-nowrap">{format.dateTime(entry.created_at)}</td>
-                <td className="p-2">{entry.subject || 'System'}</td>
+                <td className="p-2">
+                  {entry.subject || 'System'}
+                  {entry.credential && (
+                    <p className="mt-1 text-xs text-muted">via {entry.credential.name ?? 'a removed access token'}</p>
+                  )}
+                </td>
                 <td className="p-2">
                   <Badge>{entry.action}</Badge>
                   <p className="mt-1 text-xs text-muted">

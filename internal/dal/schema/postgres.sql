@@ -1044,7 +1044,9 @@ CREATE TABLE audit_events (
     entity_id TEXT,
     properties JSONB NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(properties) = 'array'),
     trace_id TEXT NOT NULL CHECK (length(trace_id) > 0),
-    details JSONB NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(details) = 'object')
+    details JSONB NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(details) = 'object'),
+    -- The access token the action was taken with, such as an AI assistant's.
+    credential_id TEXT
 );
 CREATE INDEX auditevent_workspace_id_created_at ON audit_events(workspace_id, created_at);
 CREATE INDEX auditevent_resource_id_created_at ON audit_events(resource_id, created_at);

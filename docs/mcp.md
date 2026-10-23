@@ -94,7 +94,7 @@ Two scope sets cover most assistants:
 - **Read:** `workspace.read`, `list.read`, `contentType.read`, `document.read`, `taxonomy.read` and `user.read`. `taxonomy.read` and `user.read` also let results name terms and people (see [Results](#results)).
 - **Read and write:** the same plus `list.write`.
 
-Members hold all of these by default. A tool the caller lacks the scopes for is not listed, and calling it by name fails as an unknown tool. Give each assistant its own token, named after it, so revoking one leaves the others working. An assistant's changes are recorded as its token holder's, like any request with that token. Tokens expire (90 days unless set otherwise); the client then gets `401` until it is given a new one.
+Members hold all of these by default. A tool the caller lacks the scopes for is not listed, and calling it by name fails as an unknown tool. Give each assistant its own token, named after it, so revoking one leaves the others working. An assistant's changes are recorded as its token holder's, with the token's name beside them in the audit log (Administration → Audit), so they can be told from the holder's own. Tokens expire (90 days unless set otherwise); the client then gets `401` until it is given a new one.
 
 Revoking or expiring a token, deactivating its user or removing a role takes effect on the next request, since nothing is cached.
 

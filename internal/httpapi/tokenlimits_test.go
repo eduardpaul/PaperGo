@@ -214,3 +214,41 @@ func TestReadOnlyTokensChangeNothing(t *testing.T) {
 		}
 	}
 }
+
+// The audit log names the access token an action was taken with, such as an
+// AI assistant's connection, beside the person who holds it.
+func TestAuditNamesTheCredential(t *testing.T) {
+	h, s, _ := setup(t)
+	ctx := context.Background()
+	w, err := s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Operations"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, _ := s.Create(ctx, "alice", w.ID, dms.CreateResource{Kind: "list", Name: "Invoices"})
+	tok, err := s.Directory().CreateAccessToken(ctx, "alice", identity.AccessTokenInput{Name: "Claude", Scopes: []string{"workspace.read", "list.read", "list.write"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	created := request(h, "POST", "/v1/resources/"+list.ID+"/children", `{"kind":"item","name":"By the assistant"}`, tok.Secret, "", "application/json")
+	if created.Code != 201 {
+		t.Fatal(created.Code, created.Body.String())
+	}
+	var item struct{ ID string }
+	_ = json.Unmarshal(created.Body.Bytes(), &item)
+	r := request(h, "GET", "/v1/audit?entity_id="+item.ID, "", testToken, "", "")
+	var page struct {
+		Value []dms.AuditEvent `json:"value"`
+	}
+	if r.Code != 200 || json.Unmarshal(r.Body.Bytes(), &page) != nil || len(page.Value) == 0 {
+		t.Fatal(r.Code, r.Body.String())
+	}
+	if e := page.Value[0]; e.Subject != "alice" || e.Credential == nil || e.Credential.ID != tok.Token.ID || e.Credential.Name != "Claude" {
+		t.Fatalf("event %+v %+v", e, e.Credential)
+	}
+	// An action without a token names none.
+	byHand, _ := s.Create(ctx, "alice", list.ID, dms.CreateResource{Kind: "item", Name: "By hand"})
+	r = request(h, "GET", "/v1/audit?entity_id="+byHand.ID, "", testToken, "", "")
+	if r.Code != 200 || strings.Contains(r.Body.String(), `"credential"`) {
+		t.Fatal(r.Code, r.Body.String())
+	}
+}

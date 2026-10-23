@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"papergo/internal/dal"
 	"papergo/internal/dal/access"
+	"papergo/internal/dal/audit"
 	"papergo/internal/dal/directory"
 	"papergo/internal/dal/refs"
 	"papergo/internal/dal/resources"
@@ -74,8 +75,10 @@ func (t AccessTokenIdentity) Credential() *access.Credential {
 
 type accessTokenContextKey struct{}
 
+// WithAccessToken runs ctx with an access token: its scopes and resource
+// limit cap what the request may do, and its audit events name it.
 func WithAccessToken(ctx context.Context, token AccessTokenIdentity) context.Context {
-	return context.WithValue(ctx, accessTokenContextKey{}, token)
+	return audit.WithCredential(context.WithValue(ctx, accessTokenContextKey{}, token), token.ID)
 }
 
 func AccessTokenContext(ctx context.Context) (AccessTokenIdentity, bool) {

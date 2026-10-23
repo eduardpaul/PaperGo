@@ -115,5 +115,4 @@ any of them can connect an assistant.
 ## Later
 
 Changing a connection's places without a new token; admin policy to turn
-off global connections or cap expiry; recording the credential on audit
-events.
+off global connections or cap expiry.

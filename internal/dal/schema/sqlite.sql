@@ -1040,7 +1040,9 @@ CREATE TABLE audit_events (
     entity_id TEXT,
     properties TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(properties) AND json_type(properties) = 'array'),
     trace_id TEXT NOT NULL CHECK (length(trace_id) > 0),
-    details TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(details) AND json_type(details) = 'object')
+    details TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(details) AND json_type(details) = 'object'),
+    -- The access token the action was taken with, such as an AI assistant's.
+    credential_id TEXT
 );
 CREATE INDEX auditevent_workspace_id_created_at ON audit_events(workspace_id, created_at);
 CREATE INDEX auditevent_resource_id_created_at ON audit_events(resource_id, created_at);

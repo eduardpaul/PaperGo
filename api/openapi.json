@@ -21704,6 +21704,24 @@
           "details": {
             "type": "object",
             "additionalProperties": true
+          },
+          "credential": {
+            "type": "object",
+            "required": [
+              "id"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string",
+                "description": "The token's name, such as an AI assistant connection's; absent once the token is gone."
+              }
+            },
+            "description": "The access token the action was taken with, beside the person in subject; absent for actions taken after signing in."
           }
         }
       },

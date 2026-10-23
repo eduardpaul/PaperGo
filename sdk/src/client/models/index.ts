@@ -249,6 +249,10 @@ export interface AuditEvent extends AdditionalDataHolder, Parsable {
      */
     createdAt?: Date | null;
     /**
+     * The access token the action was taken with, beside the person in subject; absent for actions taken after signing in.
+     */
+    credential?: AuditEvent_credential | null;
+    /**
      * The details property
      */
     details?: AuditEvent_details | null;
@@ -284,6 +288,19 @@ export interface AuditEvent extends AdditionalDataHolder, Parsable {
      * The workspace_id property
      */
     workspaceId?: string | null;
+}
+/**
+ * The access token the action was taken with, beside the person in subject; absent for actions taken after signing in.
+ */
+export interface AuditEvent_credential extends Parsable {
+    /**
+     * The id property
+     */
+    id?: Guid | null;
+    /**
+     * The token's name, such as an AI assistant connection's; absent once the token is gone.
+     */
+    name?: string | null;
 }
 export interface AuditEvent_details extends AdditionalDataHolder, Parsable {
 }
@@ -859,6 +876,15 @@ export function createArtifactFromDiscriminatorValue(parseNode: ParseNode | unde
 // @ts-ignore
 export function createAttachContentTypeInputFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoAttachContentTypeInput;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {AuditEvent_credential}
+ */
+// @ts-ignore
+export function createAuditEvent_credentialFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoAuditEvent_credential;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -3267,6 +3293,7 @@ export function deserializeIntoAuditEvent(auditEvent: Partial<AuditEvent> | unde
     return {
         "action": n => { auditEvent.action = n.getStringValue(); },
         "created_at": n => { auditEvent.createdAt = n.getDateValue(); },
+        "credential": n => { auditEvent.credential = n.getObjectValue<AuditEvent_credential>(createAuditEvent_credentialFromDiscriminatorValue); },
         "details": n => { auditEvent.details = n.getObjectValue<AuditEvent_details>(createAuditEvent_detailsFromDiscriminatorValue); },
         "entity_id": n => { auditEvent.entityId = n.getStringValue(); },
         "entity_type": n => { auditEvent.entityType = n.getStringValue(); },
@@ -3276,6 +3303,18 @@ export function deserializeIntoAuditEvent(auditEvent: Partial<AuditEvent> | unde
         "subject": n => { auditEvent.subject = n.getStringValue(); },
         "trace_id": n => { auditEvent.traceId = n.getStringValue(); },
         "workspace_id": n => { auditEvent.workspaceId = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param AuditEvent_credential The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoAuditEvent_credential(auditEvent_credential: Partial<AuditEvent_credential> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "id": n => { auditEvent_credential.id = n.getGuidValue(); },
+        "name": n => { auditEvent_credential.name = n.getStringValue(); },
     }
 }
 /**
@@ -8780,6 +8819,7 @@ export function serializeAuditEvent(writer: SerializationWriter, auditEvent: Par
     if (!auditEvent || isSerializingDerivedType) { return; }
     writer.writeStringValue("action", auditEvent.action);
     writer.writeDateValue("created_at", auditEvent.createdAt);
+    writer.writeObjectValue<AuditEvent_credential>("credential", auditEvent.credential, serializeAuditEvent_credential);
     writer.writeObjectValue<AuditEvent_details>("details", auditEvent.details, serializeAuditEvent_details);
     writer.writeStringValue("entity_id", auditEvent.entityId);
     writer.writeStringValue("entity_type", auditEvent.entityType);
@@ -8790,6 +8830,18 @@ export function serializeAuditEvent(writer: SerializationWriter, auditEvent: Par
     writer.writeStringValue("trace_id", auditEvent.traceId);
     writer.writeStringValue("workspace_id", auditEvent.workspaceId);
     writer.writeAdditionalData(auditEvent.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param AuditEvent_credential The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeAuditEvent_credential(writer: SerializationWriter, auditEvent_credential: Partial<AuditEvent_credential> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!auditEvent_credential || isSerializingDerivedType) { return; }
+    writer.writeGuidValue("id", auditEvent_credential.id);
+    writer.writeStringValue("name", auditEvent_credential.name);
 }
 /**
  * Serializes information the current object
