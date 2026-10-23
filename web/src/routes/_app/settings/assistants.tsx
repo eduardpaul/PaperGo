@@ -89,8 +89,21 @@ export async function checkConnection(endpoint: string, secret: string): Promise
   return { ok: false, reason: `${endpoint} did not answer as an MCP server.` };
 }
 
-export function accessLabel(write: boolean) {
-  return write ? 'Read and write' : 'Read only';
+/** The scopes a connection gets: reading, and item.write for read and write. */
+export function connectionScopes(write: boolean, held: string[]) {
+  return [...ReadScopes, ...(write ? ['item.write'] : [])].filter((scope) => held.includes(scope));
+}
+
+/**
+ * What a token may do: read only, or read and write, as connections are
+ * made here. A token made elsewhere can hold more, such as list.manage, and
+ * those scopes are named so it never looks narrower than it is.
+ */
+export function accessLabel(scopes: string[]) {
+  const write = scopes.includes('item.write');
+  const more = scopes.filter((scope) => scope !== 'item.write' && !ReadScopes.includes(scope));
+  if (more.length === 0) return write ? 'Read and write' : 'Read only';
+  return `${write ? 'Read and write' : 'Read'}, plus ${more.join(', ')}`;
 }
 
 export function placesLabel(places: Place[] | null) {
@@ -166,7 +179,7 @@ function Connect({ endpoint }: { endpoint: string }) {
         method: 'POST',
         body: {
           name: name.trim(),
-          scopes: [...ReadScopes, ...(write ? ['item.write'] : [])].filter((scope) => held.includes(scope)),
+          scopes: connectionScopes(write, held),
           resources: limited ? places.map((place) => place.id) : undefined,
           expires_in_days: expires,
         },
@@ -272,7 +285,7 @@ function Connect({ endpoint }: { endpoint: string }) {
           className="mt-2 grid gap-1 rounded-md bg-surface-muted/60 px-3 py-2.5 text-[13px] sm:grid-cols-[6rem_1fr]"
         >
           <dt className="text-muted">Access</dt>
-          <dd>{accessLabel(write)}</dd>
+          <dd>{accessLabel(connectionScopes(write, held))}</dd>
           <dt className="text-muted">Reach</dt>
           <dd>{limited ? (places.length ? placesLabel(places) : 'No places chosen yet') : placesLabel(null)}</dd>
           <dt className="text-muted">Expires</dt>
@@ -403,7 +416,7 @@ function Connections() {
                   {over ? <Badge tone="danger">Expired</Badge> : !token.last_used_at && <Badge>Not used yet</Badge>}
                 </p>
                 <p className="text-xs text-muted">
-                  {accessLabel(!!token.scopes?.includes('item.write'))} · <TokenPlaces ids={token.resources ?? []} />
+                  {accessLabel(token.scopes ?? [])} · <TokenPlaces ids={token.resources ?? []} />
                 </p>
                 <p className="text-xs text-muted">
                   {token.last_used_at ? `Last used ${format.date(token.last_used_at)}` : 'Never used'} ·{' '}

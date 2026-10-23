@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import type { ComponentType } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type * as Auth from '@/api/auth';
-import { clientSetup, Route } from './assistants';
+import { accessLabel, clientSetup, Route } from './assistants';
 
 vi.mock('@tanstack/react-router', async (original) => ({
   ...(await original<typeof Router>()),
@@ -200,6 +200,14 @@ it('lists connections with their places, state, and asks before revoking', async
         resources: ['l1', 'gone'],
       },
       { ...token, id: 'tok2', name: 'Old', expires_at: '2020-01-01T00:00:00Z', scopes: [...reading, 'item.write'] },
+      {
+        ...token,
+        id: 'tok3',
+        name: 'Admin script',
+        expires_at: '2999-01-01T00:00:00Z',
+        last_used_at: '2026-01-02T00:00:00Z',
+        scopes: ['item.read', 'list.manage'],
+      },
     ],
   });
   const client = show();
@@ -207,6 +215,7 @@ it('lists connections with their places, state, and asks before revoking', async
   expect(screen.getByText('Not used yet')).toBeTruthy();
   expect(screen.getByText('Expired')).toBeTruthy();
   expect(screen.getByText(/Read and write · Everything you can access/)).toBeTruthy();
+  expect(screen.getByText(/Read, plus list.manage · Everything you can access/)).toBeTruthy();
   fireEvent.click(screen.getAllByRole('button', { name: 'Revoke' })[0]!);
   expect(served.deleted).toEqual([]);
   const dialog = await screen.findByRole('alertdialog');
@@ -223,5 +232,14 @@ it('gives each client its own setup with the token as a header', () => {
   expect(JSON.parse(setup.vscode).servers.papergo.type).toBe('http');
   expect(setup.claudeCode).toBe(
     'claude mcp add --transport http papergo https://mcp.example/v1/mcp --header "Authorization: Bearer pgo_s"',
+  );
+});
+
+it('names every scope beyond reading and writing items', () => {
+  expect(accessLabel(reading)).toBe('Read only');
+  expect(accessLabel([...reading, 'item.write'])).toBe('Read and write');
+  expect(accessLabel(['item.read', 'list.manage'])).toBe('Read, plus list.manage');
+  expect(accessLabel([...reading, 'item.write', 'list.manage', 'document.write'])).toBe(
+    'Read and write, plus list.manage, document.write',
   );
 });

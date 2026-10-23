@@ -92,8 +92,10 @@ Read only maps to `workspace.read`, `item.read`, `contentType.read`,
 themselves: creating, configuring, sharing and deleting workspaces, lists
 and libraries needs `list.manage`, which connections never request. Scopes
 the person does not hold are left out. Tokens have no
-kind, so **Your connections** lists every personal token that reads lists:
-any of them can connect an assistant.
+kind, so **Your connections** lists every personal token that reads items:
+any of them can connect an assistant. Its access names every scope beyond
+those two sets, such as "Read, plus list.manage" for a token made on the
+Access tokens page, so no token looks narrower than it is.
 
 ## Phases
 
