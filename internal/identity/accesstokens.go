@@ -128,6 +128,11 @@ func RequireCredential(ctx context.Context, store *dal.Store, subject string) er
 	}
 	return nil
 }
+
+// CredentialAllows reports whether the request's access token, if any,
+// holds scope; a request without one is not narrowed.
+func CredentialAllows(ctx context.Context, scope string) bool { return credentialAllows(ctx, scope) }
+
 func credentialAllows(ctx context.Context, scope string) bool {
 	token, limited := ctx.Value(accessTokenContextKey{}).(AccessTokenIdentity)
 	if !limited {

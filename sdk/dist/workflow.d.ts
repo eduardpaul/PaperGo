@@ -3599,7 +3599,7 @@ export interface NotificationSend extends Parsable {
 	 */
 	body?: string | null;
 	/**
-	 * Sends to each person once: a later send with the same key reaches only people who do not have it.
+	 * Sends to each person once: a later send with the same key, from the same sender in the same workspace, reaches only people who do not have it.
 	 */
 	dedupKey?: string | null;
 	/**
@@ -12435,7 +12435,7 @@ export interface MembersRequestBuilder extends BaseRequestBuilder<MembersRequest
  */
 export interface NotificationsRequestBuilder extends BaseRequestBuilder<NotificationsRequestBuilder> {
 	/**
-	 * Sends a message to the people the recipients name who can read a revision of its item, or else the workspace; the others are skipped and counted. The caller needs read access to the workspace and the item, and the item.write scope. A workflow's request sends it from the workflow. A dedup key sends it to each person once, apart from the keys of PaperGo's own notifications.
+	 * Sends a message to the people the recipients name who can read a revision of its item, or else the workspace; the others are skipped and counted. The caller needs read access to the workspace and the item, and the item.write scope. A workflow's request sends it from the workflow. A dedup key sends it to each person once; it belongs to the workspace and the sender, apart from other senders' keys and PaperGo's own.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<NotificationSendResult>}
@@ -12451,7 +12451,7 @@ export interface NotificationsRequestBuilder extends BaseRequestBuilder<Notifica
 	 */
 	post(body: NotificationSend, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<NotificationSendResult | undefined>;
 	/**
-	 * Sends a message to the people the recipients name who can read a revision of its item, or else the workspace; the others are skipped and counted. The caller needs read access to the workspace and the item, and the item.write scope. A workflow's request sends it from the workflow. A dedup key sends it to each person once, apart from the keys of PaperGo's own notifications.
+	 * Sends a message to the people the recipients name who can read a revision of its item, or else the workspace; the others are skipped and counted. The caller needs read access to the workspace and the item, and the item.write scope. A workflow's request sends it from the workflow. A dedup key sends it to each person once; it belongs to the workspace and the sender, apart from other senders' keys and PaperGo's own.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}

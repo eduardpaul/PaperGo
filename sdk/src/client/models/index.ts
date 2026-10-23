@@ -7836,7 +7836,7 @@ export interface NotificationSend extends Parsable {
      */
     body?: string | null;
     /**
-     * Sends to each person once: a later send with the same key reaches only people who do not have it.
+     * Sends to each person once: a later send with the same key, from the same sender in the same workspace, reaches only people who do not have it.
      */
     dedupKey?: string | null;
     /**

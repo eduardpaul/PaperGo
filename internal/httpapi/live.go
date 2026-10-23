@@ -95,6 +95,8 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 	defer end.Stop()
 	known := map[string]bool{}
 	mine := notifications.RecipientKey(subject(r))
+	notes := map[string]bool{}
+	_, token := identity.AccessTokenContext(r.Context())
 	for {
 		if err = identity.RequireCredential(r.Context(), dal.NewStore(a.dms(r).Directory().DB), subject(r)); err != nil {
 			_ = frame("reauthenticate", position, map[string]any{})
@@ -156,7 +158,14 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 				if owner != mine {
 					continue
 				}
+				// A stream signed in hears of every deletion, so all of a
+				// person's devices stay current; an access token's, which
+				// may not see every notification, only of those it showed.
 				if change.Action == live.ActionDeleted {
+					if token && !notes[id] {
+						continue
+					}
+					delete(notes, id)
 					if err = a.notificationFrame(r, frame, position, id, change.Action, nil); err != nil {
 						return
 					}
@@ -169,6 +178,7 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 				if e != nil {
 					return
 				}
+				notes[note.ID] = true
 				if err = a.notificationFrame(r, frame, position, note.ID, change.Action, &note); err != nil {
 					return
 				}

@@ -282,3 +282,68 @@ func TestLiveCommentFrames(t *testing.T) {
 		break
 	}
 }
+
+// A stream opened with an access token hears only of deletions of
+// notifications it showed, so it learns nothing of those it may not see.
+func TestLiveNotificationDeletionsKeepToAToken(t *testing.T) {
+	_, s, _ := setup(t)
+	previousInterval := livePollInterval
+	livePollInterval = 20 * time.Millisecond
+	t.Cleanup(func() { livePollInterval = previousInterval })
+	a := &API{DMS: s, Auth: auth.Development{Token: testToken, Subject: "alice"}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), MaxInFlight: 1, RequestTimeout: 5 * time.Second}
+	server := httptest.NewServer(a.Handler())
+	defer server.Close()
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	ws, err := s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "W"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, err := s.Directory().CreateAccessToken(ctx, "alice", identity.AccessTokenInput{Name: "Stream", Scopes: []string{"workspace.read", "item.read"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	send := func(workspace, title string) string {
+		t.Helper()
+		n, _, err := s.DAL.Notifications().Create(ctx, notifications.Notification{Recipient: "alice", WorkspaceID: workspace, Type: notifications.TypeMessage, Title: title, Source: notifications.SourceUser, Sender: "carol"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return n.ID
+	}
+	// The token may not see a notification about no workspace.
+	hidden := send("", "Hidden")
+	req, err := http.NewRequestWithContext(ctx, "GET", server.URL+"/v1/events", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token.Secret)
+	stream, err := server.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Body.Close()
+	reader := bufio.NewReader(stream.Body)
+	readFrame(t, reader)
+	if err = s.Write(ctx, func(t *dms.Service) error { return t.DAL.Notifications().Delete(ctx, "alice", hidden) }); err != nil {
+		t.Fatal(err)
+	}
+	shown := send(ws.ID, "Shown")
+	next := func() sseFrame {
+		t.Helper()
+		for {
+			if frame := readFrame(t, reader); frame.kind != "keepalive" {
+				return frame
+			}
+		}
+	}
+	if frame := next(); frame.kind != "notification" || !strings.Contains(frame.data, shown) || strings.Contains(frame.data, hidden) {
+		t.Fatalf("the token heard of a hidden deletion: %+v", frame)
+	}
+	if err = s.Write(ctx, func(t *dms.Service) error { return t.DAL.Notifications().Delete(ctx, "alice", shown) }); err != nil {
+		t.Fatal(err)
+	}
+	if frame := next(); frame.kind != "notification" || !strings.Contains(frame.data, shown) || !strings.Contains(frame.data, `"action":"deleted"`) {
+		t.Fatalf("the token missed the deletion of what it showed: %+v", frame)
+	}
+}

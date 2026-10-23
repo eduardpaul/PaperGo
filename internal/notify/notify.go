@@ -11,7 +11,9 @@ package notify
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"slices"
@@ -306,6 +308,16 @@ func parseCursor(cursor string) (notifications.Key, error) {
 	return notifications.Key{CreatedAt: created, ID: id}, nil
 }
 
+// changes refuses an access token without the item.write scope: a
+// read-only token changes nothing, its holder's inbox included. A person
+// signed in changes their own inbox.
+func changes(ctx context.Context) error {
+	if !identity.CredentialAllows(ctx, "item.write") {
+		return dms.ErrForbidden
+	}
+	return nil
+}
+
 // limited reports whether the request carries an access token, whose scopes
 // and places limit which notifications it may show.
 func limited(ctx context.Context) bool {
@@ -428,6 +440,9 @@ const MaxMarked = 500
 // every one created at or before before, or else all. An access token
 // marks only those it may show. It returns how many it marked.
 func (s *Service) MarkRead(ctx context.Context, subject string, ids []string, before *time.Time) (int, error) {
+	if err := changes(ctx); err != nil {
+		return 0, err
+	}
 	if len(ids) > MaxMarked {
 		return 0, dms.Invalid(fmt.Sprintf("ids names at most %d notifications", MaxMarked))
 	}
@@ -479,6 +494,9 @@ func (s *Service) MarkRead(ctx context.Context, subject string, ids []string, be
 
 // Delete removes one of subject's notifications.
 func (s *Service) Delete(ctx context.Context, subject, id string) error {
+	if err := changes(ctx); err != nil {
+		return err
+	}
 	if _, err := s.find(ctx, subject, id); err != nil {
 		return err
 	}
@@ -520,14 +538,11 @@ func (s *Service) Send(ctx context.Context, subject, run string, in SendInput) (
 				return dms.Invalid("item_id must be an item of the workspace")
 			}
 		}
-		if utf8.RuneCountInString(in.DedupKey) > notifications.MaxDedupKey-len(messageKeys) {
-			return dms.Invalid(fmt.Sprintf("dedup_key has at most %d characters", notifications.MaxDedupKey-len(messageKeys)))
+		if utf8.RuneCountInString(in.DedupKey) > MaxMessageKey {
+			return dms.Invalid(fmt.Sprintf("dedup_key has at most %d characters", MaxMessageKey))
 		}
 		m := Message{Type: notifications.TypeMessage, WorkspaceID: in.WorkspaceID, Title: in.Title, Body: in.Body, ItemID: in.ItemID,
 			Source: notifications.SourceUser, Sender: subject}
-		if key := strings.TrimSpace(in.DedupKey); key != "" {
-			m.DedupKey = messageKeys + key
-		}
 		if run != "" {
 			r, err := t.DAL.Runs().Find(ctx, run)
 			if err != nil {
@@ -537,6 +552,9 @@ func (s *Service) Send(ctx context.Context, subject, run string, in SendInput) (
 				return dms.Invalid("a workflow sends notifications in its own workspace")
 			}
 			m.Source, m.WorkflowID = notifications.SourceWorkflow, r.WorkflowID
+		}
+		if key := strings.TrimSpace(in.DedupKey); key != "" {
+			m.DedupKey = messageKey(m, key)
 		}
 		if len(in.Recipients) == 0 {
 			return dms.Invalid("recipients names who is told")
@@ -557,6 +575,19 @@ func (s *Service) Send(ctx context.Context, subject, run string, in SendInput) (
 	return out, err
 }
 
-// messageKeys prefixes the dedup keys of messages people and workflows
-// send, apart from the keys of PaperGo's own notifications.
-const messageKeys = "message:"
+// MaxMessageKey bounds the dedup key of a message people and workflows
+// send, which messageKey scopes.
+const MaxMessageKey = notifications.MaxDedupKey - 25
+
+// messageKey scopes a message's dedup key to its workspace and its sender,
+// the workflow or else the person, and keeps it apart from the keys of
+// PaperGo's own notifications: "message:", a digest of the scope, ":" and
+// the key. Unrelated senders never suppress each other's messages.
+func messageKey(m Message, key string) string {
+	sender := "user:" + m.Sender
+	if m.WorkflowID != "" {
+		sender = "workflow:" + m.WorkflowID
+	}
+	sum := sha256.Sum256([]byte(m.WorkspaceID + "\x00" + sender))
+	return "message:" + hex.EncodeToString(sum[:8]) + ":" + key
+}

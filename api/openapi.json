@@ -15054,7 +15054,7 @@
       "post": {
         "summary": "Mark My Notifications Read",
         "operationId": "markMyNotificationsRead",
-        "description": "Marks the caller's notifications read: those of ids, or every one created at or before before, or with neither all of them.",
+        "description": "Marks the caller's notifications read: those of ids, or every one created at or before before, or with neither all of them. An access token needs the item.write scope and marks only notifications it may show.",
         "requestBody": {
           "required": true,
           "content": {
@@ -15173,7 +15173,7 @@
       "delete": {
         "summary": "Delete My Notification",
         "operationId": "deleteMyNotification",
-        "description": "Removes a notification from the caller's inbox.",
+        "description": "Removes a notification from the caller's inbox. An access token needs the item.write scope.",
         "parameters": [
           {
             "name": "id",
@@ -15285,7 +15285,7 @@
       "post": {
         "summary": "Send Notification",
         "operationId": "sendNotification",
-        "description": "Sends a message to the people the recipients name who can read a revision of its item, or else the workspace; the others are skipped and counted. The caller needs read access to the workspace and the item, and the item.write scope. A workflow's request sends it from the workflow. A dedup key sends it to each person once, apart from the keys of PaperGo's own notifications.",
+        "description": "Sends a message to the people the recipients name who can read a revision of its item, or else the workspace; the others are skipped and counted. The caller needs read access to the workspace and the item, and the item.write scope. A workflow's request sends it from the workflow. A dedup key sends it to each person once; it belongs to the workspace and the sender, apart from other senders' keys and PaperGo's own.",
         "parameters": [
           {
             "name": "id",
@@ -29620,8 +29620,8 @@
           },
           "dedup_key": {
             "type": "string",
-            "maxLength": 192,
-            "description": "Sends to each person once: a later send with the same key reaches only people who do not have it."
+            "maxLength": 175,
+            "description": "Sends to each person once: a later send with the same key, from the same sender in the same workspace, reaches only people who do not have it."
           }
         },
         "additionalProperties": false

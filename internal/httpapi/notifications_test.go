@@ -216,6 +216,24 @@ func TestNotificationLimits(t *testing.T) {
 	if w := request(h, "POST", "/v1/workspaces/"+ws+"/tasks", `{"title": "Hi", "assignees": ["bob"]}`, reader, "", json_); w.Code != 403 {
 		t.Fatalf("read-only task: %d %s", w.Code, w.Body)
 	}
+	if w := request(h, "POST", "/v1/me/notifications/read", `{}`, reader, "", json_); w.Code != 403 {
+		t.Fatalf("read-only mark read: %d %s", w.Code, w.Body)
+	}
+	if w := request(h, "DELETE", "/v1/me/notifications/missing", "", reader, "", ""); w.Code != 403 {
+		t.Fatalf("read-only delete: %d %s", w.Code, w.Body)
+	}
+
+	// A dedup key belongs to its workspace and sender: the same key in
+	// another workspace sends again.
+	if code, body := send(testToken, ws, `{"recipients": ["alice"], "title": "Once", "dedup_key": "weekly"}`); code != 200 || !strings.Contains(body, `"sent":1`) {
+		t.Fatalf("first keyed send: %d %s", code, body)
+	}
+	if code, body := send(testToken, ws, `{"recipients": ["alice"], "title": "Once", "dedup_key": "weekly"}`); code != 200 || !strings.Contains(body, `"deduplicated":1`) {
+		t.Fatalf("repeated keyed send: %d %s", code, body)
+	}
+	if code, body := send(testToken, other, `{"recipients": ["alice"], "title": "Elsewhere", "dedup_key": "weekly"}`); code != 200 || !strings.Contains(body, `"sent":1`) {
+		t.Fatalf("keyed send in another workspace: %d %s", code, body)
+	}
 
 	// A message's dedup key cannot suppress a task's answer.
 	w := request(h, "POST", "/v1/workspaces/"+ws+"/tasks", `{"title": "Sign", "assignees": ["bob"]}`, testToken, "", json_)
@@ -283,7 +301,7 @@ func TestNotificationLimits(t *testing.T) {
 	if code, body := send(testToken, ws, `{"recipients": ["alice"], "title": "About the shared item", "item_id": "`+shared+`"}`); code != 200 {
 		t.Fatal(code, body)
 	}
-	place := issue(`{"name":"Open list","scopes":["workspace.read","item.read"],"resources":["` + open + `"]}`)
+	place := issue(`{"name":"Open list","scopes":["workspace.read","item.read","item.write"],"resources":["` + open + `"]}`)
 	w = request(h, "GET", "/v1/me/notifications", "", place, "", "")
 	if w.Code != 200 || strings.Contains(w.Body.String(), "Merger") || strings.Contains(w.Body.String(), "Decoy") || !strings.Contains(w.Body.String(), "About the shared item") {
 		t.Fatalf("limited inbox: %d %s", w.Code, w.Body)
