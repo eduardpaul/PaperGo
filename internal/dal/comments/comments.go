@@ -138,19 +138,27 @@ func (r *Repo) Replies(ctx context.Context, threadIDs []string) ([]Comment, erro
 	return rows, r.mentions(ctx, rows)
 }
 
+// mentionBatch is how many comments one mentions statement names, well
+// inside the bound databases set on a statement's parameters: a page of
+// threads holds up to 100 threads of up to 500 replies.
+const mentionBatch = 1000
+
+// mentions reads the mentions of rows, in batches.
 func (r *Repo) mentions(ctx context.Context, rows []Comment) error {
-	if len(rows) == 0 {
-		return nil
+	for batch := range slices.Chunk(rows, mentionBatch) {
+		ids := make([]string, len(batch))
+		for i, c := range batch {
+			ids[i] = c.ID
+		}
+		m, err := r.read.Mentions(ctx, ids)
+		if err != nil {
+			return err
+		}
+		for i := range batch {
+			batch[i].Mentions = m[batch[i].ID]
+		}
 	}
-	ids := make([]string, len(rows))
-	for i, c := range rows {
-		ids[i] = c.ID
-	}
-	m, err := r.read.Mentions(ctx, ids)
-	for i := range rows {
-		rows[i].Mentions = m[rows[i].ID]
-	}
-	return err
+	return nil
 }
 
 // Counts returns the thread counts of items; items without threads have

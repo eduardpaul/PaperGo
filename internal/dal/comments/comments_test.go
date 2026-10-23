@@ -3,6 +3,7 @@ package comments_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"papergo/internal/dal"
@@ -115,6 +116,39 @@ func runCommentSuite(t *testing.T, newStore func(testing.TB) *dal.Store) {
 		}
 		if _, err = repo.Find(ctx, reply.ID); !dberr.IsNotFound(err) {
 			t.Fatalf("a purged item's comment remains: %v", err)
+		}
+	})
+
+	t.Run("MentionsOfManyReplies", func(t *testing.T) {
+		ctx := context.Background()
+		s := newStore(t)
+		if _, err := s.Directory().CreateUser(ctx, "bob", "bob", "", true, false); err != nil {
+			t.Fatal(err)
+		}
+		f := daltest.NewFixture(t, s)
+		repo := s.Comments()
+		// More replies than one statement names: each keeps its mentions.
+		var threads []string
+		for range 3 {
+			root, err := repo.Create(ctx, comments.Comment{ItemID: f.Item, Author: "bob", Source: comments.SourceUser, Body: "Thread"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			threads = append(threads, root.ID)
+			for i := range 340 {
+				if _, err = repo.Create(ctx, comments.Comment{ItemID: f.Item, ThreadID: root.ID, Author: "bob", Source: comments.SourceUser, Body: fmt.Sprint(i), Mentions: []string{"bob"}}); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+		replies, err := repo.Replies(ctx, threads)
+		if err != nil || len(replies) != 1020 {
+			t.Fatalf("replies: %d %v", len(replies), err)
+		}
+		for _, r := range replies {
+			if len(r.Mentions) != 1 {
+				t.Fatalf("a reply lost its mention: %+v", r)
+			}
 		}
 	})
 }
