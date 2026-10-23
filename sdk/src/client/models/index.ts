@@ -1724,6 +1724,24 @@ export function createNavigationSelectionFromDiscriminatorValue(parseNode: Parse
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {NotificationSend}
+ */
+// @ts-ignore
+export function createNotificationSendFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoNotificationSend;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {NotificationSendResult}
+ */
+// @ts-ignore
+export function createNotificationSendResultFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoNotificationSendResult;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {OperationFailure}
  */
 // @ts-ignore
@@ -4478,6 +4496,34 @@ export function deserializeIntoNavigationSelection(navigationSelection: Partial<
         "field": n => { navigationSelection.field = n.getStringValue(); },
         "no_value": n => { navigationSelection.noValue = n.getBooleanValue(); },
         "term_id": n => { navigationSelection.termId = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param NotificationSend The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoNotificationSend(notificationSend: Partial<NotificationSend> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "body": n => { notificationSend.body = n.getStringValue(); },
+        "dedup_key": n => { notificationSend.dedupKey = n.getStringValue(); },
+        "item_id": n => { notificationSend.itemId = n.getStringValue(); },
+        "recipients": n => { notificationSend.recipients = n.getCollectionOfPrimitiveValues<string>("string"); },
+        "title": n => { notificationSend.title = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param NotificationSendResult The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoNotificationSendResult(notificationSendResult: Partial<NotificationSendResult> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "deduplicated": n => { notificationSendResult.deduplicated = n.getNumberValue(); },
+        "sent": n => { notificationSendResult.sent = n.getNumberValue(); },
+        "skipped": n => { notificationSendResult.skipped = n.getNumberValue(); },
     }
 }
 /**
@@ -7272,6 +7318,42 @@ export interface NavigationSelection extends Parsable {
      */
     termId?: string | null;
 }
+export interface NotificationSend extends Parsable {
+    /**
+     * The body property
+     */
+    body?: string | null;
+    /**
+     * Sends to each person once: a later send with the same key reaches only people who do not have it.
+     */
+    dedupKey?: string | null;
+    /**
+     * An item of the workspace the notification opens.
+     */
+    itemId?: string | null;
+    /**
+     * People, group:<id>, role:owners, role:members, creator, actor or field:<key>, as task assignees; at most 500 people once expanded.
+     */
+    recipients?: string[] | null;
+    /**
+     * The title property
+     */
+    title?: string | null;
+}
+export interface NotificationSendResult extends AdditionalDataHolder, Parsable {
+    /**
+     * People who already had the dedup key.
+     */
+    deduplicated?: number | null;
+    /**
+     * The sent property
+     */
+    sent?: number | null;
+    /**
+     * People who cannot read the item or workspace.
+     */
+    skipped?: number | null;
+}
 /**
  * Tracked operation executed by a registered handler, in bounded transactional batches or outside the database writer under a renewed claim. Field indexing and filtered bulk edits are built in. Payloads, credential constraints and claims are private; progress and results are visible through operation reads. Pending work resumes after restart: an execution that stops gives its claim back or lets it expire, and transient failures retry later. Terminal records expire after 30 days without an update.
  */
@@ -10024,6 +10106,35 @@ export function serializeNavigationSelection(writer: SerializationWriter, naviga
     writer.writeStringValue("field", navigationSelection.field);
     writer.writeBooleanValue("no_value", navigationSelection.noValue);
     writer.writeStringValue("term_id", navigationSelection.termId);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param NotificationSend The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeNotificationSend(writer: SerializationWriter, notificationSend: Partial<NotificationSend> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!notificationSend || isSerializingDerivedType) { return; }
+    writer.writeStringValue("body", notificationSend.body);
+    writer.writeStringValue("dedup_key", notificationSend.dedupKey);
+    writer.writeStringValue("item_id", notificationSend.itemId);
+    writer.writeCollectionOfPrimitiveValues<string>("recipients", notificationSend.recipients);
+    writer.writeStringValue("title", notificationSend.title);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param NotificationSendResult The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeNotificationSendResult(writer: SerializationWriter, notificationSendResult: Partial<NotificationSendResult> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!notificationSendResult || isSerializingDerivedType) { return; }
+    writer.writeNumberValue("deduplicated", notificationSendResult.deduplicated);
+    writer.writeNumberValue("sent", notificationSendResult.sent);
+    writer.writeNumberValue("skipped", notificationSendResult.skipped);
+    writer.writeAdditionalData(notificationSendResult.additionalData);
 }
 /**
  * Serializes information the current object

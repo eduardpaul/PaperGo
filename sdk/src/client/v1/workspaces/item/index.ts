@@ -6,6 +6,8 @@ import { KeywordsRequestBuilderRequestsMetadata, type KeywordsRequestBuilder } f
 // @ts-ignore
 import { MembersRequestBuilderNavigationMetadata, MembersRequestBuilderRequestsMetadata, type MembersRequestBuilder } from './members/index.js';
 // @ts-ignore
+import { NotificationsRequestBuilderRequestsMetadata, type NotificationsRequestBuilder } from './notifications/index.js';
+// @ts-ignore
 import { RelationshipsRequestBuilderNavigationMetadata, RelationshipsRequestBuilderRequestsMetadata, type RelationshipsRequestBuilder } from './relationships/index.js';
 // @ts-ignore
 import { SearchRequestBuilderNavigationMetadata, type SearchRequestBuilder } from './search/index.js';
@@ -30,6 +32,10 @@ export interface WorkspacesItemRequestBuilder extends BaseRequestBuilder<Workspa
      * The members property
      */
     get members(): MembersRequestBuilder;
+    /**
+     * The notifications property
+     */
+    get notifications(): NotificationsRequestBuilder;
     /**
      * The relationships property
      */
@@ -65,6 +71,9 @@ export const WorkspacesItemRequestBuilderNavigationMetadata: Record<Exclude<keyo
     members: {
         requestsMetadata: MembersRequestBuilderRequestsMetadata,
         navigationMetadata: MembersRequestBuilderNavigationMetadata,
+    },
+    notifications: {
+        requestsMetadata: NotificationsRequestBuilderRequestsMetadata,
     },
     relationships: {
         requestsMetadata: RelationshipsRequestBuilderRequestsMetadata,

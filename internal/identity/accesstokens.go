@@ -81,6 +81,13 @@ func WithAccessToken(ctx context.Context, token AccessTokenIdentity) context.Con
 	return audit.WithCredential(context.WithValue(ctx, accessTokenContextKey{}, token), token.ID)
 }
 
+// WithoutAccessToken runs ctx without the request's access token, so a
+// check of what another person may do sees their own access rather than
+// the token's limits.
+func WithoutAccessToken(ctx context.Context) context.Context {
+	return context.WithValue(ctx, accessTokenContextKey{}, nil)
+}
+
 func AccessTokenContext(ctx context.Context) (AccessTokenIdentity, bool) {
 	token, limited := ctx.Value(accessTokenContextKey{}).(AccessTokenIdentity)
 	return token, limited

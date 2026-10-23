@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"papergo/internal/dal/notifications"
 	"strings"
 	"testing"
 	"time"
@@ -321,6 +322,11 @@ export default workflow({
 	failed := r.await(t, id, runstore.StatusFailed)
 	if !strings.Contains(failed.Error, "the item is not ready") {
 		t.Fatalf("failure: %+v", failed)
+	}
+	// The author of the run's version is told, linked to the run.
+	inbox, err := r.s.DAL.Notifications().List(t.Context(), notifications.Filter{Recipient: "alice", Type: notifications.TypeWorkflowFailed})
+	if err != nil || len(inbox) != 1 || inbox[0].RunID != id || inbox[0].Title != "Workflow failed: Check" || !strings.Contains(inbox[0].Body, "the item is not ready") || inbox[0].WorkflowID != w.ID {
+		t.Fatalf("failure notification: %+v %v", inbox, err)
 	}
 	var item struct {
 		Version int `json:"version"`

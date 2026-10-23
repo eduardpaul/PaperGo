@@ -9,11 +9,13 @@ import (
 	"time"
 
 	"papergo/internal/dal/blobs"
+	"papergo/internal/dal/notifications"
 	"papergo/internal/dal/operations"
 	runstore "papergo/internal/dal/runs"
 	"papergo/internal/dms"
 	"papergo/internal/forms"
 	"papergo/internal/httpapi"
+	"papergo/internal/notify"
 	"papergo/internal/script"
 	"papergo/internal/tasks"
 	"papergo/internal/workflow"
@@ -197,10 +199,42 @@ func ended(ctx context.Context, t *dms.Service, op *operations.Operation, messag
 	}
 	if message != "" {
 		raise(ctx, t, op.ID, p, "failed", map[string]any{"error": message})
+		if err := failed(ctx, t, op, p, message); err != nil {
+			return err
+		}
 	} else if err := t.DiscardStagedFiles(ctx, blobs.StagedSelection{RunIDs: []string{op.ID}}); err != nil {
 		return err
 	}
 	return finished(ctx, t, p)
+}
+
+// failed tells who answers for a workflow that its run failed: the author
+// of the run's version, or a system built-in's workspace owners. A workflow
+// version tells each of them at most once an hour, so a failing automatic
+// workflow does not flood inboxes; its runs list every failure. Test runs
+// tell nobody.
+func failed(ctx context.Context, t *dms.Service, op *operations.Operation, p workflow.RunPayload, message string) error {
+	if p.Test {
+		return nil
+	}
+	people := []string{op.CreatedBy}
+	if p.System {
+		var err error
+		if people, err = t.WorkspaceManagers(ctx, p.WorkspaceID); err != nil {
+			return err
+		}
+	}
+	name := p.Key
+	if wf, err := t.DAL.Workflows().Find(ctx, p.WorkflowID); err == nil && wf.Name != "" {
+		name = wf.Name
+	}
+	_, err := notify.Send(ctx, t, notify.Message{
+		Type: notifications.TypeWorkflowFailed, WorkspaceID: p.WorkspaceID, Title: notify.Clip("Workflow failed: "+name, notifications.MaxTitle),
+		Body: notify.Clip(message, notifications.MaxBody), RunID: op.ID,
+		Source: notifications.SourceSystem, WorkflowID: p.WorkflowID,
+		DedupKey: fmt.Sprintf("workflow:%s:%d:failed:%s", p.WorkflowID, p.Version, time.Now().UTC().Format("2006-01-02T15")),
+	}, people)
+	return err
 }
 
 // finished lets the next run of a coalescing workflow on a run's item start

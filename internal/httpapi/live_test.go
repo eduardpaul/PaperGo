@@ -4,13 +4,16 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"papergo/internal/auth"
+	"papergo/internal/dal/notifications"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
+	"papergo/internal/notify"
 	"strings"
 	"testing"
 	"time"
@@ -130,5 +133,74 @@ func TestLiveStreamDeliveryReconnectAndCredentialRevocation(t *testing.T) {
 	// Frame data is valid JSON; credential details never appear.
 	if !json.Valid([]byte(event.data)) || strings.Contains(event.data, token.Secret) {
 		t.Fatal(event)
+	}
+}
+
+// A notification reaches only its recipient's streams, with their unread
+// count, as it arrives, is read and is deleted.
+func TestLiveNotificationsReachTheirRecipient(t *testing.T) {
+	_, s, _ := setup(t)
+	previousInterval := livePollInterval
+	livePollInterval = 20 * time.Millisecond
+	t.Cleanup(func() { livePollInterval = previousInterval })
+	a := &API{DMS: s, Auth: auth.Development{Token: testToken, Subject: "alice"}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), MaxInFlight: 1, RequestTimeout: 5 * time.Second}
+	server := httptest.NewServer(a.Handler())
+	defer server.Close()
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, "GET", server.URL+"/v1/events", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+testToken)
+	stream, err := server.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Body.Close()
+	reader := bufio.NewReader(stream.Body)
+	readFrame(t, reader)
+	send := func(recipient, title string) string {
+		t.Helper()
+		n, _, err := s.DAL.Notifications().Create(ctx, notifications.Notification{Recipient: recipient, Type: notifications.TypeMessage, Title: title, Source: notifications.SourceUser, Sender: "carol"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return n.ID
+	}
+	send("bob", "For Bob")
+	mine := send("alice", "For Alice")
+	next := func() map[string]any {
+		t.Helper()
+		for {
+			frame := readFrame(t, reader)
+			if frame.kind == "keepalive" {
+				continue
+			}
+			if frame.kind != "notification" {
+				t.Fatalf("unexpected frame: %+v", frame)
+			}
+			var out map[string]any
+			if err := json.Unmarshal([]byte(frame.data), &out); err != nil {
+				t.Fatal(err)
+			}
+			return out
+		}
+	}
+	created := next()
+	if created["id"] != mine || created["action"] != "created" || created["unread"] != float64(1) || !strings.Contains(fmt.Sprint(created["notification"]), "For Alice") {
+		t.Fatalf("created frame: %v", created)
+	}
+	if _, err = (&notify.Service{DMS: s}).MarkRead(ctx, "alice", []string{mine}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if read := next(); read["action"] != "updated" || read["unread"] != float64(0) {
+		t.Fatalf("read frame: %v", read)
+	}
+	if err = (&notify.Service{DMS: s}).Delete(ctx, "alice", mine); err != nil {
+		t.Fatal(err)
+	}
+	if deleted := next(); deleted["id"] != mine || deleted["action"] != "deleted" || deleted["notification"] != nil {
+		t.Fatalf("deleted frame: %v", deleted)
 	}
 }

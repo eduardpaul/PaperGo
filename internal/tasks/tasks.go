@@ -18,11 +18,13 @@ import (
 	"unicode/utf8"
 
 	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/notifications"
 	"papergo/internal/dal/operations"
 	taskstore "papergo/internal/dal/tasks"
 	"papergo/internal/dms"
 	"papergo/internal/forms"
 	"papergo/internal/model"
+	"papergo/internal/notify"
 	"papergo/internal/recipients"
 
 	"github.com/google/uuid"
@@ -219,6 +221,13 @@ func Create(ctx context.Context, t *dms.Service, subject string, in Input) (task
 
 	t.Raise(ctx, EventCreated, subject, in.WorkspaceID, collection, in.ItemID, eventData(tk))
 	if err = t.Record(ctx, subject, "task.create", ws, map[string]any{"task_id": tk.ID, "kind": string(in.Kind), "key": in.Key, "assignees": assignees}); err != nil {
+		return taskstore.Task{}, err
+	}
+	actor := ""
+	if tk.Source == taskstore.SourceUser {
+		actor = subject
+	}
+	if err = assigned(ctx, t, tk, actor); err != nil {
 		return taskstore.Task{}, err
 	}
 	return tk, nil
@@ -551,6 +560,9 @@ func completed(ctx context.Context, t *dms.Service, tk taskstore.Task, actor str
 	if err := raise(ctx, t, tk, EventCompleted, actor); err != nil {
 		return err
 	}
+	if err := answered(ctx, t, tk, actor); err != nil {
+		return err
+	}
 	if tk.OperationID == "" {
 		return nil
 	}
@@ -613,12 +625,67 @@ func Reassign(ctx context.Context, t *dms.Service, subject, id string, entries [
 	if err = t.Record(ctx, subject, "task.reassign", ws, map[string]any{"task_id": id, "assignees": assignees}); err != nil {
 		return taskstore.Task{}, err
 	}
+	if err = assigned(ctx, t, tk, subject); err != nil {
+		return taskstore.Task{}, err
+	}
 	if tk.Status == taskstore.StatusCompleted {
 		if err = completed(ctx, t, tk, subject); err != nil {
 			return taskstore.Task{}, err
 		}
 	}
 	return tk, nil
+}
+
+// assigned tells the people a task's assignees name that it waits for
+// them, once each: a reassignment tells only those it adds. People who
+// cannot review the task are left out, and so is actor, who assigned it.
+func assigned(ctx context.Context, t *dms.Service, tk taskstore.Task, actor string) error {
+	people, err := recipients.People(ctx, t, tk.Assignees)
+	if err != nil {
+		return err
+	}
+	_, err = notify.Send(ctx, t, notify.Message{
+		Type: notifications.TypeTaskAssigned, WorkspaceID: tk.WorkspaceID, Title: notify.Clip(tk.Title, notifications.MaxTitle), Body: tk.Description, TaskID: tk.ID,
+		Source: notifications.SourceSystem, Sender: tk.CreatedBy, WorkflowID: tk.WorkflowID, DedupKey: "task:" + tk.ID + ":assigned", Actor: actor,
+		Allowed: func(ctx context.Context, t *dms.Service, subject string) (bool, error) {
+			return reviews(ctx, t, subject, tk.WorkspaceID, tk.ItemID)
+		},
+	}, people)
+	return err
+}
+
+// answered tells the creator of a person's task how it was answered,
+// unless they answered it themselves. A workflow's task tells nobody: its
+// workflow decides what follows.
+func answered(ctx context.Context, t *dms.Service, tk taskstore.Task, actor string) error {
+	if tk.Source != taskstore.SourceUser {
+		return nil
+	}
+	label := tk.Outcome
+	for _, o := range tk.Outcomes {
+		if o.Key == tk.Outcome && o.Label != "" {
+			label = o.Label
+		}
+	}
+	body := tk.CompletedBy + ": " + label
+	if tk.Comment != "" {
+		body += "\n\n" + tk.Comment
+	}
+	_, err := notify.Send(ctx, t, notify.Message{
+		Type: notifications.TypeTaskCompleted, WorkspaceID: tk.WorkspaceID, Title: notify.Clip(tk.Title, notifications.MaxTitle), Body: body, TaskID: tk.ID,
+		Source: notifications.SourceSystem, Sender: tk.CompletedBy, DedupKey: "task:" + tk.ID + ":completed", Actor: actor,
+	}, []string{tk.CreatedBy})
+	return err
+}
+
+// reviews reports whether subject may see and answer a task, as CanReview
+// checks, treating a refusal as no.
+func reviews(ctx context.Context, t *dms.Service, subject, workspaceID, itemID string) (bool, error) {
+	ok, err := notify.Can(ctx, t, subject, workspaceID, "read")
+	if !ok || err != nil || itemID == "" {
+		return ok, err
+	}
+	return notify.Can(ctx, t, subject, itemID, "read_draft")
 }
 
 func eventData(tk taskstore.Task) map[string]any {

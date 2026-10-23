@@ -9,6 +9,7 @@ import (
 	"papergo/internal/dal/live"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
+	"papergo/internal/notify"
 	"strconv"
 	"sync"
 	"time"
@@ -91,6 +92,7 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 	end := time.NewTimer(30 * time.Minute)
 	defer end.Stop()
 	known := map[string]bool{}
+	notes := map[string]bool{}
 	for {
 		if err = identity.RequireCredential(r.Context(), dal.NewStore(a.dms(r).Directory().DB), subject(r)); err != nil {
 			_ = frame("reauthenticate", position, map[string]any{})
@@ -145,6 +147,29 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 				} else {
 					return
 				}
+			case live.KindNotification:
+				// Only the recipient hears of a notification; a deleted one
+				// was delivered on this connection or is not theirs.
+				if change.Action == live.ActionDeleted {
+					if notes[change.EntityID] {
+						delete(notes, change.EntityID)
+						if err = a.notificationFrame(r, frame, position, change.EntityID, change.Action, nil); err != nil {
+							return
+						}
+					}
+					continue
+				}
+				note, e := a.notifications(r).Get(r.Context(), subject(r), change.EntityID)
+				if errors.Is(e, dms.ErrNotFound) {
+					continue
+				}
+				if e != nil {
+					return
+				}
+				notes[note.ID] = true
+				if err = a.notificationFrame(r, frame, position, note.ID, change.Action, &note); err != nil {
+					return
+				}
 			case live.KindOperation, live.KindRun:
 				// A run is an operation: its manager follows it as a run.
 				if a.Workflows != nil {
@@ -189,4 +214,18 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 		case <-ticker.C:
 		}
 	}
+}
+
+// notificationFrame sends a notification frame with the recipient's unread
+// count, which a bell shows.
+func (a *API) notificationFrame(r *http.Request, frame func(string, int64, any) error, position int64, id string, action live.Action, note *notify.View) error {
+	unread, err := a.notifications(r).Unread(r.Context(), subject(r))
+	if err != nil {
+		return err
+	}
+	value := map[string]any{"id": id, "action": action, "unread": unread}
+	if note != nil {
+		value["notification"] = note
+	}
+	return frame("notification", position, value)
 }
