@@ -23,7 +23,7 @@ The model and its rules live in `internal/notify`, shared by tasks, workflow run
 - **Access at send time.** A notification reaches only people who can read what it is about: a revision of its item (its draft, or its published revision, so a visitor hears nothing of an item that was never published), or else its workspace. A task's notification reaches only people who can review the task. Everyone else is skipped and counted. Each person's own access decides, not the limits of the sender's access token.
 - **Nobody is told about their own action.** The person who caused a change is left out of the notifications about it. A message sent through the API reaches everyone it names, the sender included.
 - **Once per dedup key.** A send with a `dedup_key` reaches only the people who do not have a notification with that key yet, so a repeated request sends nothing twice. A message's key belongs to its workspace and its sender (the workflow, or else the person), and is kept apart from the keys of PaperGo's own notifications, so a message never suppresses another sender's message or one of PaperGo's.
-- **Bounded fan-out.** One send reaches at most 500 people once groups and roles are expanded; a larger send fails.
+- **Bounded fan-out.** A message sent through the API reaches at most 500 people once groups and roles are expanded; a larger send fails. PaperGo's own notifications reach everyone the change concerns, such as every member of a group a task is assigned to, and never fail the change.
 - **Inactive people** are left out.
 
 ## What PaperGo sends itself

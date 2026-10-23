@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -324,5 +325,27 @@ func TestNotificationLimits(t *testing.T) {
 	}
 	if n, _ := (&notify.Service{DMS: s}).Unread(ctx, "alice"); n == 0 {
 		t.Fatal("a limited token marked notifications it cannot see")
+	}
+
+	// A task's notice never blocks the task, however large its group: the
+	// bound is a message's.
+	crowd, err := s.DAL.Directory().CreateGroup(ctx, "everyone", "Everyone", "", directory.SourceLocal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range notify.MaxRecipients + 1 {
+		id := fmt.Sprintf("p%03d", i)
+		if _, err = s.DAL.Directory().CreateUser(ctx, id, id, "", true, false); err != nil {
+			t.Fatal(err)
+		}
+		if err = s.DAL.Directory().SetMember(ctx, crowd.ID, directory.Principal{Type: directory.PrincipalUser, ID: id}, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if w = request(h, "POST", "/v1/workspaces/"+ws+"/tasks", `{"title": "All hands", "assignees": ["group:`+crowd.ID+`"]}`, testToken, "", json_); w.Code != 201 {
+		t.Fatalf("task for a large group: %d %s", w.Code, w.Body)
+	}
+	if code, body := send(testToken, ws, `{"recipients": ["group:`+crowd.ID+`"], "title": "All hands"}`); code != 422 {
+		t.Fatalf("message past the bound: %d %s", code, body)
 	}
 }

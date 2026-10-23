@@ -6,6 +6,8 @@ package directory
 import (
 	"context"
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -94,11 +96,29 @@ func (r *Repo) ActiveUser(ctx context.Context, id string) (bool, error) {
 	return err == nil && u.Active, err
 }
 
+// idBatch is how many IDs one statement names, well inside the bound
+// databases set on a statement's parameters.
+const idBatch = 1000
+
+// Users lists users by ID, oldest ID first. With IDs nil it lists everyone;
+// with IDs empty, no one.
 func (r *Repo) Users(ctx context.Context, f UserFilter) ([]User, error) {
 	if f.IDs != nil && len(f.IDs) == 0 {
 		return []User{}, nil
 	}
-	return r.read.DirectoryUsers(ctx, f)
+	if len(f.IDs) <= idBatch {
+		return r.read.DirectoryUsers(ctx, f)
+	}
+	var out []User
+	for ids := range slices.Chunk(f.IDs, idBatch) {
+		rows, err := r.read.DirectoryUsers(ctx, UserFilter{IDs: ids, Active: f.Active})
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, rows...)
+	}
+	slices.SortFunc(out, func(a, b User) int { return strings.Compare(a.ID, b.ID) })
+	return out, nil
 }
 
 func (r *Repo) Group(ctx context.Context, id string) (Group, error) {

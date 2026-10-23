@@ -28,8 +28,9 @@ import (
 	"papergo/internal/recipients"
 )
 
-// MaxRecipients bounds the people one send reaches, after groups and roles
-// are expanded.
+// MaxRecipients bounds the people a message sent through the API reaches,
+// after groups and roles are expanded. PaperGo's own notifications reach
+// everyone the change they report concerns, so they never block it.
 const MaxRecipients = 500
 
 // Message is what Send tells each recipient.
@@ -82,9 +83,6 @@ func Send(ctx context.Context, t *dms.Service, m Message, people []string) (Resu
 		return out, dms.Invalid(fmt.Sprintf("dedup_key has at most %d characters", notifications.MaxDedupKey))
 	}
 	people = slices.Compact(slices.Sorted(slices.Values(people)))
-	if len(people) > MaxRecipients {
-		return out, dms.Invalid(fmt.Sprintf("a notification reaches at most %d people", MaxRecipients))
-	}
 	allowed := m.Allowed
 	if allowed == nil {
 		allowed = canRead(m)
@@ -566,6 +564,9 @@ func (s *Service) Send(ctx context.Context, subject, run string, in SendInput) (
 		people, err := recipients.People(ctx, t, entries)
 		if err != nil {
 			return err
+		}
+		if len(people) > MaxRecipients {
+			return dms.Invalid(fmt.Sprintf("a message reaches at most %d people", MaxRecipients))
 		}
 		if out, err = Send(ctx, t, m, people); err != nil {
 			return err
