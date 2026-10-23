@@ -1,6 +1,6 @@
 # Comments and mentions (plan)
 
-Status: **proposed**. Nothing is implemented. This plan needs decisions on the core sockets in [extension points](#extension-points-this-needs) and on the [open decisions](#open-decisions) before phase 1.
+Status: **phase 0 (notifications core) in progress**. Comments are a **core** building block, like tasks: they are coupled to the DMS, tasks and notifications, so `internal/comments` names them directly instead of plugging in through registries. The [open decisions](#open-decisions) are taken with the recommended answers unless changed before phase 1.
 
 The goal is a collaborative DMS. People can discuss a document or list item where it lives, pull a colleague in with an @mention, and turn a discussion into a task. Mentions, replies and resolved threads reach people through the same inbox as tasks.
 
@@ -47,9 +47,11 @@ The goal is a collaborative DMS. People can discuss a document or list item wher
 | Purge | `resources.Purge` deletes the resource rows | Module tables can reference `resources(id) ON DELETE CASCADE`, so no hook is needed |
 | Workspace packages (portability) | `OnImport` hook only; export has no contributor | An export/import contributor so discussions move with a workspace (socket S7) |
 
-## Extension-First assessment
+## Core or extension
 
-**Can comments be an extension? Yes, almost entirely.** The module `internal/comments`, compiled in like `internal/documentsearch`, would own:
+**Decision: core.** Comments act on items and tasks, raise notifications and tasks, and are named in triggers, live frames, scopes and packages. Each of those places names tasks directly today, and comments join them the same way. The rest of this section records the extension design that was considered: it remains the shape of the package (own tables, own routes, no base-table changes), and its sockets become direct core changes where comments need them.
+
+**Could comments be an extension? Yes, almost entirely.** The module `internal/comments`, compiled in like `internal/documentsearch`, would own:
 - its tables;
 - its routes (`httpapi.Module`);
 - its audit actions;
@@ -88,7 +90,12 @@ AGENTS.md requires asking before building any of these. Each one is listed with 
 | S6 | **Feature discovery** | `/auth/config` returns `features: {"comments": {...}, "search": {...}, "mcp": {"url": "..."}}`, filled by registered modules. `mcp_url` becomes `features.mcp.url` | The web app hides the UI of features that are off. Search and MCP move onto it |
 | S7 | **Package contributors** | `dms.AddPackageContributor{Export, Import}` beside `OnImport`, so a module's rows travel with workspace export and import | Comments, tasks (not exported today), saved module settings |
 
-Phase 1 needs S1, S2, S4, S5 and S6. S3 and S7 are needed in phase 2.
+With comments in the core:
+
+- **S1** becomes a fixed set of notification types: a `CHECK` constraint and named constants in `internal/dal/notifications`, extended by each feature that sends one. Phase 0.
+- **S2** (inherited settings) and **S6** (feature discovery) are still needed for on and off at every level. They arrive in phase 1 with comments as their first user.
+- **S3**, **S4** and **S5** are not needed: comments add their trigger events, live frame kind and `comment.write` scope to the core lists, as tasks did.
+- **S7** (package contributors) arrives in phase 2.
 
 ## Model
 
@@ -252,10 +259,12 @@ The code lives in `web/src/features/comments`, and the item page renders feature
 
 Each phase ships with its tests (SQLite and PostgreSQL), OpenAPI, SDK, docs and web screens.
 
-0. **Prerequisites.**
-   - Notifications core: phase 2 of the [tasks plan](tasks-and-notifications.md#phases), with the type registry (S1) and coalescing.
-   - Sockets S2, S4, S5 and S6, each with its first existing user moved onto it: tasks and notifications frames on S4, `mcp_url` on S6.
-1. **Item discussions (MVP).**
+0. **Notifications core** (phase 2 of the [tasks plan](tasks-and-notifications.md#phases)):
+   - the `notifications` table and `internal/notify`, with access at send time, no notification about your own action, deduplication, coalescing and bounded fan-out;
+   - the inbox API, `notification` live frames, the bell and the Notifications view;
+   - sending from workflows and people (`POST /v1/workspaces/{id}/notifications`);
+   - system notifications: `task.assigned`, `task.completed` and `workflow.failed`.
+1. **Item discussions (MVP)**, with the inherited settings (S2) and feature discovery (S6) they need:
    - The module, its tables and routes.
    - Threads, replies, edit and delete, resolve.
    - User mentions with access checks, `comment.mentioned` and `comment.replied`.
@@ -285,9 +294,9 @@ Each phase ships with its tests (SQLite and PostgreSQL), OpenAPI, SDK, docs and 
 
 ## Open decisions
 
-1. **Build the sockets S1–S7?** They are core changes, so AGENTS.md requires approval. Each is generic and replaces something the core already hard-codes.
-2. **Notifications first.** Comments are not worth shipping without delivery, so phase 2 of the tasks plan must come first. Is that the right order?
-3. **Default visibility.** Should the default `mode` be `collaborators` (draft readers; recommended for a DMS with published portals) or `readers`?
-4. **Whom mentions suggest.** Should it be the workspace's members (recommended) or the whole directory, with the "can't see" warning?
-5. **Scope.** Should there be a separate `comment.write` (recommended: lets read-only assistants and integrations comment) or should posting fall under `item.write`?
-6. **Archived items.** Should they be read-only for comments (proposed) or open?
+Decided: comments are core, and notifications come first (phase 0).
+
+1. **Default visibility.** Should the default `mode` be `collaborators` (draft readers; recommended for a DMS with published portals) or `readers`?
+2. **Whom mentions suggest.** Should it be the workspace's members (recommended) or the whole directory, with the "can't see" warning?
+3. **Scope.** Should there be a separate `comment.write` (recommended: lets read-only assistants and integrations comment) or should posting fall under `item.write`?
+4. **Archived items.** Should they be read-only for comments (proposed) or open?

@@ -1,6 +1,6 @@
 # Tasks and notifications (plan)
 
-Status: **phase 1 (tasks core) implemented**, with owners' reassignment from phase 3, documented in [workflows](../workflows.md#tasks). Phases 2 to 4 are planned. It designs two core building blocks that workflows and the rest of PaperGo share:
+Status: **phase 1 (tasks core) implemented**, with owners' reassignment from phase 3; phase 2 (notifications core) in progress, documented in [workflows](../workflows.md#tasks). Phases 2 to 4 are planned. It designs two core building blocks that workflows and the rest of PaperGo share:
 
 - **Tasks:** *action required.* Someone has to do something and say so: approve, reject, fill in a form, confirm. A workflow can wait for the answer.
 - **Notifications:** *something happened.* People are told; nobody has to answer, and nothing waits.
