@@ -162,7 +162,7 @@ def exercise(binary, admin, directory, expected_version=None, model='embeddingge
     for name in ('ONNXRUNTIME_LIB', 'OCR_MODELS', 'AI_DECISION_MODELS_PATH', 'AI_EMBEDDINGS_MODELS_PATH',
                  'PAPERGO_CONFIG', 'LD_LIBRARY_PATH', 'DYLD_LIBRARY_PATH'):
         env.pop(name, None)
-    excluded = {os.path.normcase(str(ROOT / '.tools/native/lib'))}
+    excluded = {os.path.normcase(str(Path(os.environ.get('PAPERGO_NATIVE_DIR') or ROOT / '.tools/native') / 'lib'))}
     compiler = Path(os.environ.get('CC', ''))
     if compiler.is_absolute():
         excluded.add(os.path.normcase(str(compiler.parent)))
@@ -202,14 +202,13 @@ def exercise(binary, admin, directory, expected_version=None, model='embeddingge
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait(timeout=10)
-    if admin:
-        subprocess.run([str(admin), "backup", "--search-store", "zvec", "--file", str(directory / "backup.tar.gz")],
-                       cwd=directory, env=env, check=True)
-    with closing(sqlite3.connect(directory / "papergo.db")) as db:
-        if expected_version:
+    # A backup checks the schema, integrity and foreign keys with the
+    # release's own SQLite; the schema uses functions older ones lack.
+    subprocess.run([str(admin), "backup", "--search-store", "zvec", "--file", str(directory / "backup.tar.gz")],
+                   cwd=directory, env=env, check=True)
+    if expected_version:
+        with closing(sqlite3.connect(directory / "papergo.db")) as db:
             assert db.execute("SELECT hash FROM schema_metadata").fetchone()[0] == expected_version
-        assert db.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
-        assert not db.execute("PRAGMA foreign_key_check").fetchall()
 
 
 def extract_zip(path, directory):
@@ -262,7 +261,7 @@ def main():
         # must be found beside the executable without development loader paths.
         expected = current['schema_hash'] if current else None
         exercise(binary, admin, directory / 'fresh', expected)
-        exercise(binary, None, directory / 'harrier', expected, model='harrier-oss-v1-0.6b')
+        exercise(binary, admin, directory / 'harrier', expected, model='harrier-oss-v1-0.6b')
     print('Platform binaries plus shared assets: versions, UI, zvec, PDF previews, PaddleOCR, Laya, both embedding presets and backup passed.')
 
 

@@ -1133,5 +1133,5 @@ func literalPackageFilter(node map[string]any, types map[string]string) bool {
 
 func personPackageFilter(node map[string]any, types map[string]string) bool {
 	field, _ := node["field"].(string)
-	return types[field] == "person" || field == "$created_by" || field == "$modified_by"
+	return types[field] == "person" || field == "$created_by" || field == "$modified_by" || field == "$archived_by"
 }

@@ -173,6 +173,9 @@ func (s *Service) PromoteKeyword(ctx context.Context, subject, id string, versio
 			if promoted, e = t.DAL.Taxonomy().Move(ctx, kw.ID, version, set.ID, parent, true); e != nil {
 				return taxonomyError(e)
 			}
+			if e = t.emitTermMoved(ctx, subject, kw, promoted); e != nil {
+				return e
+			}
 		}
 		views, e := t.termViews(ctx, []taxonomy.Term{promoted})
 		if e != nil {

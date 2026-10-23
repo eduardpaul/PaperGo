@@ -1,6 +1,8 @@
 import type { Trigger } from '@/features/workflows/model';
 import type { FormSchema } from '@/features/workflows/model';
 
+export type ArchiveSelection = 'active' | 'archived' | 'all';
+
 export type Kind = 'workspace' | 'list' | 'library' | 'folder' | 'item';
 
 export type AccessAction = 'read' | 'read_draft' | 'write' | 'publish' | 'manage';
@@ -16,6 +18,9 @@ export interface Page<T> {
 }
 
 export interface Resource {
+  archived?: boolean;
+  archived_at?: string;
+  archived_by?: string;
   id: string;
   workspace_id: string;
   personal_owner_id?: string;
@@ -52,6 +57,9 @@ export interface Resource {
 
 /** A hit of global search (GET /v1/search). */
 export interface SearchHit {
+  archived?: boolean;
+  archived_at?: string;
+  archived_by?: string;
   id: string;
   kind: 'item' | 'folder';
   surface: 'head' | 'published';
@@ -103,6 +111,8 @@ export interface FieldOptions {
   multiple?: boolean;
   lookup_container_id?: string;
   term_set_id?: string;
+  /** Picking a term also applies its parent terms (term and keywords fields). */
+  apply_parents?: boolean;
   /** Where the field's text goes in search; empty is normal. */
   search_weight?: 'none' | 'normal' | 'high';
 }
@@ -142,14 +152,60 @@ export interface ValidationRule {
 }
 
 export interface ListView {
+  system_key?: 'archived';
   id: string;
   container_id: string;
   name: string;
   columns?: string[] | null;
   layout?: string;
+  /** Layout settings: the fields a navigation view browses. */
+  settings?: ViewSettings;
   is_default?: boolean;
   version: number;
   query?: QuerySpec;
+}
+
+export interface ViewSettings {
+  /** The fields a navigation view browses, one tree each. */
+  fields?: NavigationFieldSetting[];
+  /** Whether items match every term opened in the trees or any of them; unset matches all. */
+  match?: NavigationMatch;
+  /** Leave out terms no item holds at or below them. */
+  hide_empty?: boolean;
+}
+
+export type NavigationMatch = 'all' | 'any';
+
+export interface NavigationFieldSetting {
+  /** `$keywords` or a term or keywords field. */
+  field: string;
+  /** Items below a term show at it too; unset follows the field. */
+  include_subterms?: boolean;
+}
+
+/** A term opened in one of a navigation view's trees, or the items holding none of its terms. */
+export interface NavigationSelection {
+  field: string;
+  term_id?: string;
+  no_value?: boolean;
+}
+
+/** A term of a navigation view's level with the items it lists and those at or below it. */
+export interface NavigationNode {
+  term_id: string;
+  name: string;
+  has_children: boolean;
+  count: number;
+  subtree_count: number;
+}
+
+export interface NavigationPage extends Page<NavigationNode> {
+  field: string;
+  term_set_id: string;
+  include_subterms: boolean;
+  hide_empty: boolean;
+  parent_id?: string;
+  no_value_count?: number;
 }
 
 export interface FilterExpr {
@@ -162,6 +218,7 @@ export interface FilterExpr {
   value_ref?: string;
 }
 export interface QuerySpec {
+  archive?: ArchiveSelection;
   filter?: FilterExpr;
   sort?: { field: string; direction: string }[];
   group_by?: string;
@@ -278,6 +335,7 @@ export interface SmartFolder {
 }
 
 export interface SmartFolderDefinition {
+  archive?: ArchiveSelection;
   mode: 'query' | 'classification';
   collection_kind?: 'list' | 'library';
   collections?: string[];
@@ -315,6 +373,7 @@ export interface Term {
   id: string;
   name: string;
   term_set_id?: string;
+  parent_id?: string | null;
   path?: string;
 }
 

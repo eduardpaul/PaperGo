@@ -5,6 +5,7 @@ import (
 	"errors"
 	"papergo/internal/dal/catalog"
 	"papergo/internal/dal/resources"
+	viewstore "papergo/internal/dal/views"
 	"papergo/internal/model"
 	"testing"
 )
@@ -41,7 +42,7 @@ func TestCollectionTemplatesProvisionShareAndPreserveTypes(t *testing.T) {
 		t.Fatal(bt, err)
 	}
 	views, err := s.Views(ctx, "bob", b.ID, "", 50)
-	if err != nil || len(views.Data) != 1 || !views.Data[0].IsDefault || len(views.Data[0].Columns) != 4 {
+	if err != nil || len(views.Data) != 2 || !hasDefaultView(views.Data, 4) {
 		t.Fatal(views, err)
 	}
 	item, err := s.Create(ctx, "bob", b.ID, CreateResource{Kind: "item", Name: "Ada", Values: map[string]any{"email": "ada@example.com"}})
@@ -123,4 +124,13 @@ func TestModuleCollectionTemplateSharesFieldsAcrossTypes(t *testing.T) {
 	if e != nil || len(defs) != 2 {
 		t.Fatal(defs, e)
 	}
+}
+
+func hasDefaultView(views []viewstore.ListView, columns int) bool {
+	active, archive := false, false
+	for _, v := range views {
+		active = active || v.IsDefault && len(v.Columns) == columns && v.SystemKey == ""
+		archive = archive || v.SystemKey == viewstore.SystemArchived && !v.IsDefault
+	}
+	return active && archive
 }

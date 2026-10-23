@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"papergo/internal/dal/refs"
 	"papergo/internal/dms"
 	"papergo/internal/httpapi"
 )
@@ -166,21 +167,25 @@ type cursor struct {
 // /v1/search, and a filter on search fields. $top and $skiptoken stay in
 // the URL.
 type body struct {
-	Q             string          `json:"q"`
-	Mode          string          `json:"mode"`
-	Surface       string          `json:"surface"`
-	Kind          []string        `json:"kind"`
-	WorkspaceID   string          `json:"workspace_id"`
-	CollectionID  string          `json:"collection_id"`
-	ContentTypeID string          `json:"content_type_id"`
-	TermID        string          `json:"term_id"`
-	Keyword       string          `json:"keyword"`
-	CreatedBy     string          `json:"created_by"`
-	ModifiedBy    string          `json:"modified_by"`
-	ModifiedFrom  *time.Time      `json:"modified_from"`
-	ModifiedTo    *time.Time      `json:"modified_to"`
-	Facets        *bool           `json:"facets"`
-	Filter        *dms.FilterExpr `json:"filter"`
+	Archive       refs.ArchiveSelection `json:"archive"`
+	ArchivedBy    string                `json:"archived_by"`
+	ArchivedFrom  *time.Time            `json:"archived_from"`
+	ArchivedTo    *time.Time            `json:"archived_to"`
+	Q             string                `json:"q"`
+	Mode          string                `json:"mode"`
+	Surface       string                `json:"surface"`
+	Kind          []string              `json:"kind"`
+	WorkspaceID   string                `json:"workspace_id"`
+	CollectionID  string                `json:"collection_id"`
+	ContentTypeID string                `json:"content_type_id"`
+	TermID        string                `json:"term_id"`
+	Keyword       string                `json:"keyword"`
+	CreatedBy     string                `json:"created_by"`
+	ModifiedBy    string                `json:"modified_by"`
+	ModifiedFrom  *time.Time            `json:"modified_from"`
+	ModifiedTo    *time.Time            `json:"modified_to"`
+	Facets        *bool                 `json:"facets"`
+	Filter        *dms.FilterExpr       `json:"filter"`
 }
 
 // readRequest reads a search from the URL (GET) or the body (POST). When it
@@ -193,7 +198,7 @@ func readRequest(w http.ResponseWriter, r *http.Request, in httpapi.Request) (Re
 			return Request{}, false, nil
 		}
 	} else {
-		b = body{Q: q.Get("q"), Mode: q.Get("mode"), Surface: q.Get("surface"), WorkspaceID: q.Get("workspace_id"), CollectionID: q.Get("collection_id"), ContentTypeID: q.Get("content_type_id"),
+		b = body{Archive: refs.ArchiveSelection(q.Get("archive")), ArchivedBy: q.Get("archived_by"), Q: q.Get("q"), Mode: q.Get("mode"), Surface: q.Get("surface"), WorkspaceID: q.Get("workspace_id"), CollectionID: q.Get("collection_id"), ContentTypeID: q.Get("content_type_id"),
 			TermID: q.Get("term_id"), Keyword: q.Get("keyword"), CreatedBy: q.Get("created_by"), ModifiedBy: q.Get("modified_by")}
 		if kind := q.Get("kind"); kind != "" {
 			b.Kind = strings.Split(kind, ",")
@@ -202,7 +207,7 @@ func readRequest(w http.ResponseWriter, r *http.Request, in httpapi.Request) (Re
 			off := false
 			b.Facets = &off
 		}
-		for key, into := range map[string]**time.Time{"modified_from": &b.ModifiedFrom, "modified_to": &b.ModifiedTo} {
+		for key, into := range map[string]**time.Time{"archived_from": &b.ArchivedFrom, "archived_to": &b.ArchivedTo, "modified_from": &b.ModifiedFrom, "modified_to": &b.ModifiedTo} {
 			if v := q.Get(key); v != "" {
 				t, err := time.Parse(time.RFC3339Nano, v)
 				if err != nil {
@@ -212,10 +217,16 @@ func readRequest(w http.ResponseWriter, r *http.Request, in httpapi.Request) (Re
 			}
 		}
 	}
-	out := Request{Q: b.Q, Mode: b.Mode, Surface: b.Surface, Kinds: b.Kind, WorkspaceID: b.WorkspaceID, CollectionID: b.CollectionID, ContentTypeID: b.ContentTypeID,
+	out := Request{Archive: b.Archive.Default(), ArchivedBy: b.ArchivedBy, Q: b.Q, Mode: b.Mode, Surface: b.Surface, Kinds: b.Kind, WorkspaceID: b.WorkspaceID, CollectionID: b.CollectionID, ContentTypeID: b.ContentTypeID,
 		TermID: b.TermID, Keyword: b.Keyword, CreatedBy: b.CreatedBy, ModifiedBy: b.ModifiedBy, Filter: b.Filter, Facets: b.Facets == nil || *b.Facets}
 	if len(out.Kinds) == 0 {
 		out.Kinds = []string{"item"}
+	}
+	if b.ArchivedFrom != nil {
+		out.ArchivedFrom = *b.ArchivedFrom
+	}
+	if b.ArchivedTo != nil {
+		out.ArchivedTo = *b.ArchivedTo
 	}
 	if b.ModifiedFrom != nil {
 		out.ModifiedFrom = *b.ModifiedFrom
@@ -296,9 +307,10 @@ func (m module) termEntries(w http.ResponseWriter, r *http.Request, in httpapi.R
 }
 
 // Holders lists, 500 at a time, the resources of a workspace, or of one of
-// its collections, holding any of terms or the terms merged into them,
-// whose search entries a relabel or merge changes. The caller needs manage
-// access to the workspace.
+// its collections, holding any of terms, their descendants or the terms
+// merged into those, whose search entries a relabel, move or merge changes:
+// values that apply parents carry their ancestors' words and keywords. The
+// caller needs manage access to the workspace.
 func Holders(ctx context.Context, s *dms.Service, subject, workspaceID, collectionID string, terms []string, after string) (TermEntries, error) {
 	if len(terms) == 0 || len(terms) > 20 {
 		return TermEntries{}, dms.Invalid("give 1 to 20 term_id values")
@@ -307,7 +319,8 @@ func Holders(ctx context.Context, s *dms.Service, subject, workspaceID, collecti
 		return TermEntries{}, err
 	}
 	// Retained values keep merged source IDs; their words come from the
-	// target, so their entries change too.
+	// target, so their entries change too. Holders of a term below one of
+	// terms carry its words and keywords where they apply parents.
 	var aliases []string
 	for _, id := range terms {
 		expanded, err := s.TermAliases(ctx, id)
@@ -320,7 +333,7 @@ func Holders(ctx context.Context, s *dms.Service, subject, workspaceID, collecti
 			}
 		}
 	}
-	items, err := s.EntriesWithTerms(ctx, workspaceID, collectionID, nil, aliases, after, termBatch)
+	items, err := s.EntriesWithTerms(ctx, workspaceID, collectionID, nil, aliases, terms, after, termBatch)
 	if err != nil {
 		return TermEntries{}, err
 	}

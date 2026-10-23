@@ -181,11 +181,14 @@ func validateField(d FieldDefinition) error {
 	if d.Options.Multiple && !d.Type.Multivalued() {
 		return fmt.Errorf("%w: multiple cardinality not supported for field type %q", dberr.ErrCheckViolation, d.Type)
 	}
+	if d.Options.ApplyParents && !d.Type.Terms() {
+		return fmt.Errorf("%w: parent terms apply only to term and keywords fields, not %q", dberr.ErrCheckViolation, d.Type)
+	}
 	return nil
 }
 
 // SaveField changes a field's label, flags, choices and options at
-// version. Cardinality and reference scope never change.
+// version. Cardinality, reference scope and parent application never change.
 func (r *Repo) SaveField(ctx context.Context, in FieldDefinition, version int) (*FieldDefinition, error) {
 	var out *FieldDefinition
 	err := r.write(ctx, func(q Queries) error {
@@ -197,8 +200,8 @@ func (r *Repo) SaveField(ctx context.Context, in FieldDefinition, version int) (
 			return dberr.ErrConcurrentUpdate
 		}
 		old, next := d.Options, in.Options
-		if old.Multiple != next.Multiple || old.LookupContainerID != next.LookupContainerID || old.TermSetID != next.TermSetID {
-			return fmt.Errorf("%w: field cardinality and reference scope are immutable", dberr.ErrImmutable)
+		if old.Multiple != next.Multiple || old.LookupContainerID != next.LookupContainerID || old.TermSetID != next.TermSetID || old.ApplyParents != next.ApplyParents {
+			return fmt.Errorf("%w: field cardinality, reference scope and parent application are immutable", dberr.ErrImmutable)
 		}
 		d.Label, d.Required, d.Indexed, d.Choices, d.Options, d.Version = in.Label, in.Required, in.Indexed, in.Choices, in.Options, version+1
 		if d.Choices == nil {

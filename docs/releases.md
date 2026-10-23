@@ -82,8 +82,8 @@ the next; GitHub concurrency can replace older pending runs. Draft releases and 
 Release candidates participate in one linear history, so a stable version follows
 its candidates and maintenance release branches are not supported by this pipeline.
 
-Release tooling requires [sqlite3def 3.11.26](https://github.com/sqldef/sqldef/releases/tag/v3.11.26).
-CI and the development container install checksum-pinned binaries. For another
+Release tooling requires sqlite3def, pinned with its checksums in
+`scripts/sqlite3def.py`, which installs it in CI and the development container. For another
 development environment, install that version on `PATH`, or set `SQLITE3DEF` to
 its executable. sqlite3def is a release build tool; installed PaperGo needs no
 external migration executable, SQL files or network connection.

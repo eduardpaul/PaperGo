@@ -29,11 +29,12 @@ type SortSpec struct {
 	Direction string `json:"direction,omitempty"`
 }
 type QuerySpec struct {
-	ContentTypeID string      `json:"content_type_id,omitempty"`
-	Filter        *FilterExpr `json:"filter,omitempty"`
-	Sort          []SortSpec  `json:"sort,omitempty"`
-	GroupBy       string      `json:"group_by,omitempty"`
-	ParentID      string      `json:"parent_id,omitempty"`
+	Archive       refs.ArchiveSelection `json:"archive,omitempty"`
+	ContentTypeID string                `json:"content_type_id,omitempty"`
+	Filter        *FilterExpr           `json:"filter,omitempty"`
+	Sort          []SortSpec            `json:"sort,omitempty"`
+	GroupBy       string                `json:"group_by,omitempty"`
+	ParentID      string                `json:"parent_id,omitempty"`
 	// AncestorID keeps what is anywhere below a folder: in it or its subfolders.
 	AncestorID string `json:"ancestor_id,omitempty"`
 	Search     string `json:"search,omitempty"`
@@ -53,6 +54,8 @@ type QueryRequest struct {
 	// rowACL checks permissions row by row, so queries over several
 	// collections share one SQL shape (smart folders).
 	rowACL bool
+	// itemsOnly leaves folders out (navigation views).
+	itemsOnly bool
 }
 type QueryResult struct {
 	Data       []*resources.Resource `json:"value"`
@@ -212,8 +215,14 @@ func (q *queryCompiler) filter(f *FilterExpr, depth int) (*content.Filter, error
 	if builtin {
 		// System metadata belongs to the selected immutable content surface.
 	} else if f.Field == "$keywords" {
+		if op == content.FilterMissing || op == content.FilterPresent {
+			if len(f.Value) > 0 {
+				return nil, invalid("missing and present take no value")
+			}
+			return &content.Filter{Cond: &content.Condition{Field: field, Op: op}}, nil
+		}
 		if op != content.FilterEQ && op != content.FilterNE {
-			return nil, invalid("keywords support eq and ne")
+			return nil, invalid("keywords support eq, ne, missing and present")
 		}
 		v, e := decodeValue(f.Value)
 		if e != nil {
@@ -255,7 +264,7 @@ func (q *queryCompiler) filter(f *FilterExpr, depth int) (*content.Filter, error
 		if err != nil {
 			return nil, err
 		}
-		if builtin && (f.Field == "$created_at" || f.Field == "$modified_at") {
+		if builtin && d.Type == catalog.FieldDatetime {
 			stamp, err := time.Parse(time.RFC3339Nano, literal.(string))
 			if err != nil {
 				return nil, err
@@ -314,7 +323,7 @@ func (s *Service) compileQuery(ctx context.Context, subject, containerID string,
 
 // matchQueryText matches the search text of a query of a collection the
 // subject may read before its read transaction opens.
-func (s *Service) matchQueryText(ctx context.Context, subject, collectionID, text string) (context.Context, error) {
+func (s *Service) matchQueryText(ctx context.Context, subject, collectionID, text string, archive refs.ArchiveSelection) (context.Context, error) {
 	if s.transaction || strings.TrimSpace(text) == "" {
 		return ctx, nil
 	}
@@ -323,7 +332,7 @@ func (s *Service) matchQueryText(ctx context.Context, subject, collectionID, tex
 		// The query reports what is wrong.
 		return ctx, nil
 	}
-	return s.matchFirst(ctx, subject, collectionID, "", text)
+	return s.matchFirst(ctx, subject, collectionID, "", text, archive)
 }
 
 // The caller has authorized c in the current snapshot.
@@ -366,7 +375,10 @@ func (s *Service) collectionPlan(ctx context.Context, subject string, c *resourc
 	for _, d := range defs {
 		compiler.defs[d.Key] = d
 	}
-	plan := content.Plan{Reader: principal(ctx, subject), CollectionID: c.ID, Publishes: c.PublishingEnabled, Surface: in.Surface, RowACL: in.rowACL}
+	if !in.Query.Archive.Valid() {
+		return content.Plan{}, compiledQuery{}, invalid("archive must be active, archived or all")
+	}
+	plan := content.Plan{Archive: in.Query.Archive.Default(), Reader: principal(ctx, subject), CollectionID: c.ID, Publishes: c.PublishingEnabled, Surface: in.Surface, RowACL: in.rowACL}
 	if in.Query.ContentTypeID != "" {
 		typ, e := s.contentType(ctx, c.ID, in.Query.ContentTypeID)
 		if e != nil {
@@ -450,18 +462,19 @@ func (s *Service) collectionPlan(ctx context.Context, subject string, c *resourc
 		}
 	}
 	plan.Keyword = in.Query.Keyword
+	plan.ItemsOnly = in.itemsOnly
 	searchCapped := false
 	if strings.TrimSpace(in.Query.Search) != "" {
-		if plan.Search, searchCapped, e = s.matchText(ctx, subject, c.ID, "", in.Query.Search); e != nil {
+		if plan.Search, searchCapped, e = s.matchText(ctx, subject, c.ID, "", in.Query.Search, in.Query.Archive.Default()); e != nil {
 			return content.Plan{}, compiledQuery{}, e
 		}
 	}
 	fingerprint, _ := json.Marshal(struct {
 		Subject, Collection, Surface, Schema string
 		Query                                QuerySpec
-		Grouped                              bool
+		Grouped, ItemsOnly                   bool
 		Select                               []string
-	}{subject, c.ID, in.Surface, *c.SchemaHeadID, in.Query, grouped, in.Select})
+	}{subject, c.ID, in.Surface, *c.SchemaHeadID, in.Query, grouped, in.itemsOnly, in.Select})
 	sum := sha256.Sum256(fingerprint)
 	return plan, compiledQuery{fingerprint: hex.EncodeToString(sum[:]), projection: projection, includeKeywords: includeKeywords, searchCapped: searchCapped}, nil
 }
@@ -564,7 +577,7 @@ func (s *Service) Query(ctx context.Context, subject, containerID string, in Que
 	if in.Surface == "" {
 		in.Surface = "auto"
 	}
-	ctx, err := s.matchQueryText(ctx, subject, containerID, in.Query.Search)
+	ctx, err := s.matchQueryText(ctx, subject, containerID, in.Query.Search, in.Query.Archive.Default())
 	if err != nil {
 		return QueryResult{}, err
 	}
@@ -648,7 +661,7 @@ func (s *Service) queryCompiled(ctx context.Context, subject string, in QueryReq
 	})
 }
 func (s *Service) QueryGroups(ctx context.Context, subject, containerID string, in QueryRequest) (Page[QueryGroup], error) {
-	ctx, err := s.matchQueryText(ctx, subject, containerID, in.Query.Search)
+	ctx, err := s.matchQueryText(ctx, subject, containerID, in.Query.Search, in.Query.Archive.Default())
 	if err != nil {
 		return Page[QueryGroup]{}, err
 	}

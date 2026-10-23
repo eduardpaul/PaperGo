@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/refs"
 	"papergo/internal/dal/taxonomy"
 	viewstore "papergo/internal/dal/views"
 	"slices"
@@ -15,16 +16,17 @@ type SmartFolderTermRef struct {
 	Path       []string `json:"path"`
 }
 type PortableSmartFolderDefinition struct {
-	Mode           string               `json:"mode"`
-	CollectionKind string               `json:"collection_kind,omitempty"`
-	Collections    []string             `json:"collections,omitempty"`
-	Templates      []string             `json:"templates,omitempty"`
-	ContentTypes   []string             `json:"content_types,omitempty"`
-	Terms          []SmartFolderTermRef `json:"terms,omitempty"`
-	TermMatch      string               `json:"term_match,omitempty"`
-	Filter         *FilterExpr          `json:"filter,omitempty"`
-	GroupBy        []SmartFolderGroupBy `json:"group_by,omitempty"`
-	IncludeFolders bool                 `json:"include_folders,omitempty"`
+	Archive        refs.ArchiveSelection `json:"archive,omitempty"`
+	Mode           string                `json:"mode"`
+	CollectionKind string                `json:"collection_kind,omitempty"`
+	Collections    []string              `json:"collections,omitempty"`
+	Templates      []string              `json:"templates,omitempty"`
+	ContentTypes   []string              `json:"content_types,omitempty"`
+	Terms          []SmartFolderTermRef  `json:"terms,omitempty"`
+	TermMatch      string                `json:"term_match,omitempty"`
+	Filter         *FilterExpr           `json:"filter,omitempty"`
+	GroupBy        []SmartFolderGroupBy  `json:"group_by,omitempty"`
+	IncludeFolders bool                  `json:"include_folders,omitempty"`
 }
 type PortableSmartFolder struct {
 	Name        string                        `json:"name"`
@@ -133,7 +135,7 @@ func (s *Service) ExportSmartFolders(ctx context.Context, subject, workspace str
 			for _, id := range d.Terms {
 				terms = append(terms, refs[id])
 			}
-			pkg.Folders = append(pkg.Folders, PortableSmartFolder{f.Name, f.Description, PortableSmartFolderDefinition{d.Mode, d.CollectionKind, d.Collections, d.Templates, d.ContentTypes, terms, d.TermMatch, d.Filter, d.GroupBy, d.IncludeFolders}})
+			pkg.Folders = append(pkg.Folders, PortableSmartFolder{f.Name, f.Description, PortableSmartFolderDefinition{Archive: d.Archive, Mode: d.Mode, CollectionKind: d.CollectionKind, Collections: d.Collections, Templates: d.Templates, ContentTypes: d.ContentTypes, Terms: terms, TermMatch: d.TermMatch, Filter: d.Filter, GroupBy: d.GroupBy, IncludeFolders: d.IncludeFolders}})
 		}
 		return result{pkg, w.Version}, nil
 	})
@@ -259,7 +261,7 @@ func (s *Service) ImportSmartFolders(ctx context.Context, subject, workspace str
 			for _, ref := range p.Terms {
 				ids = append(ids, refs[smartTermRefKey(ref)])
 			}
-			d := SmartFolderDefinition{p.Mode, p.CollectionKind, p.Collections, p.Templates, p.ContentTypes, ids, p.TermMatch, p.Filter, p.GroupBy, p.IncludeFolders}
+			d := SmartFolderDefinition{Archive: p.Archive, Mode: p.Mode, CollectionKind: p.CollectionKind, Collections: p.Collections, Templates: p.Templates, ContentTypes: p.ContentTypes, Terms: ids, TermMatch: p.TermMatch, Filter: p.Filter, GroupBy: p.GroupBy, IncludeFolders: p.IncludeFolders}
 			in := SmartFolderInput{Name: portable.Name, Description: portable.Description, WorkspaceID: &workspace, Definition: d}
 			if e = t.validateSmartFolder(ctx, subject, in); e != nil {
 				return e

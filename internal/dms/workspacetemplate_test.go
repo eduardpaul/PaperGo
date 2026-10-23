@@ -10,6 +10,7 @@ import (
 	"papergo/internal/dal/resources"
 	"papergo/internal/dal/workflows"
 	"papergo/internal/storage"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -214,4 +215,29 @@ func userCount(t *testing.T, s *Service) int {
 		t.Fatal(err)
 	}
 	return len(users)
+}
+
+func TestWorkspaceTemplateBindsArchivedBy(t *testing.T) {
+	s := emptyPackageTarget(t)
+	for _, test := range []struct {
+		archivedBy, want, problem string
+	}{{"", "organization-admin", ""}, {"another-user", "", "resources.archived_by"}} {
+		p := sampleTemplateForTest(t)
+		if test.archivedBy == "" {
+			test.archivedBy = p.TemplateSubject
+		}
+		table := p.Tables["resources"]
+		column := slices.Index(table.Columns, "archived_by")
+		table.Rows[0][column] = test.archivedBy
+		err := s.bindWorkspaceTemplate(t.Context(), &p, "organization-admin")
+		if test.problem != "" {
+			if err == nil || !strings.Contains(err.Error(), test.problem) {
+				t.Fatal("accepted another archiving subject", err)
+			}
+			continue
+		}
+		if got := table.Rows[0][column]; got != test.want {
+			t.Fatalf("archived_by = %v, want %s (%v)", got, test.want, err)
+		}
+	}
 }

@@ -1,5 +1,5 @@
 import { stringifyJSON } from './json';
-import type { FilterExpr, QuerySpec } from './types';
+import type { ArchiveSelection, FilterExpr, NavigationSelection, QuerySpec } from './types';
 
 /** Shapes of `/v1` calls the screens share. Tests assert these paths and bodies. */
 
@@ -115,6 +115,50 @@ export function viewRowsRequest(collectionId: string, view: ViewLike, extra: Fil
   };
 }
 
+/**
+ * One level of a navigation view's tree for a field: its roots, or the children of a term. Counts cover the view's
+ * items holding the terms opened in the other trees.
+ */
+export function navigationRequest(viewId: string, field: string, parentId?: string, selected: NavigationSelection[] = []): ApiCall {
+  const body: Record<string, unknown> = { field };
+  if (parentId) body.parent_id = parentId;
+  if (selected.length > 0) body.selected = selected;
+  return { path: `/v1/views/${viewId}/navigation`, method: 'POST', query: { $top: 200 }, body };
+}
+
+/** The items a navigation view lists at the terms opened in its trees, counted up to a thousand. */
+export function navigationItemsRequest(viewId: string, selected: NavigationSelection[], top = 50): ApiCall {
+  return { path: `/v1/views/${viewId}/query`, method: 'POST', query: { $top: top }, body: { selected, total_limit: 1000 } };
+}
+
+/** The URL value of a navigation tree's "No value" node. */
+export const noTerm = 'none';
+
+/** A field's opened term as a selection; `none` stands for the items without a term. */
+export function navigationSelection(field: string, term: string): NavigationSelection {
+  return term === noTerm ? { field, no_value: true } : { field, term_id: term };
+}
+
+/** Reads a navigation view's opened terms from the URL: `field~term` pairs joined by commas, the latest last. */
+export function parseNavigation(value?: string): NavigationSelection[] {
+  const seen = new Set<string>();
+  const out: NavigationSelection[] = [];
+  for (const pair of value?.split(',') ?? []) {
+    const at = pair.lastIndexOf('~');
+    const field = pair.slice(0, at);
+    const term = pair.slice(at + 1);
+    if (at <= 0 || !term || seen.has(field)) continue;
+    seen.add(field);
+    out.push(navigationSelection(field, term));
+  }
+  return out;
+}
+
+/** Writes a navigation view's opened terms for the URL, or nothing when none is open. */
+export function formatNavigation(selected: NavigationSelection[]): string | undefined {
+  return selected.map((entry) => `${entry.field}~${entry.no_value ? noTerm : entry.term_id}`).join(',') || undefined;
+}
+
 /** How many items of a view fall in each value of its grouping field (board column counts). */
 export function viewGroupsRequest(collectionId: string, view: ViewLike): ApiCall {
   const { sort: _sort, ...query } = view.query ?? {};
@@ -154,12 +198,13 @@ export function bulkUpdateRequests(
     const ids = target.ids.slice(start, start + bulkIdsPerRequest);
     const parts: FilterExpr[] = [];
     for (let at = 0; at < ids.length; at += 50) parts.push({ field: '$id', op: 'in', value: ids.slice(at, at + 50) });
-    calls.push(call({ filter: parts.length === 1 ? parts[0] : { or: parts } }));
+    calls.push(call({ archive: 'all', filter: parts.length === 1 ? parts[0] : { or: parts } }));
   }
   return calls;
 }
 
 export interface SearchParams {
+  archive?: ArchiveSelection;
   contentTypeId?: string;
   q?: string;
   workspaceId?: string;
@@ -174,6 +219,7 @@ export function searchRequest(params: SearchParams): ApiCall {
     path: '/v1/search',
     method: 'GET',
     query: {
+      archive: params.archive,
       q: params.q,
       workspace_id: params.workspaceId,
       collection_id: params.collectionId,

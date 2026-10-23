@@ -33,6 +33,9 @@ func foundationMutation[T any](a *API, status int, precondition bool, fn func(*h
 		case *dms.SmartFolderQueryRequest:
 			query.After = r.URL.Query().Get("$skiptoken")
 			query.Limit = queryInt(r, "$top")
+		case *dms.NavigationRequest:
+			query.After = r.URL.Query().Get("$skiptoken")
+			query.Limit = queryInt(r, "$top")
 		}
 		out, e := fn(r, in, version)
 		if e != nil {
@@ -221,6 +224,9 @@ func (a *API) registerFoundation(m *router) {
 	}))
 	m.HandleFunc("POST /v1/views/{id}/query/groups", foundationMutation(a, 200, false, func(r *http.Request, in dms.ViewQueryRequest, v int) (any, error) {
 		return a.dms(r).QueryViewGroups(r.Context(), subject(r), r.PathValue("id"), in)
+	}))
+	m.HandleFunc("POST /v1/views/{id}/navigation", foundationMutation(a, 200, false, func(r *http.Request, in dms.NavigationRequest, v int) (any, error) {
+		return a.dms(r).ViewNavigation(r.Context(), subject(r), r.PathValue("id"), in)
 	}))
 	a.registerTaxonomy(m)
 	m.HandleFunc("GET /v1/relationship-types", foundationRead(a, func(r *http.Request) (any, error) {

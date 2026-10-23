@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"papergo/internal/dal/refs"
 	"papergo/internal/search"
 )
 
@@ -18,6 +19,7 @@ var ctx = context.Background()
 // Run runs the suite against fresh stores from open, which stem English.
 func Run(t *testing.T, open func(t *testing.T) search.Store) {
 	for name, test := range map[string]func(*testing.T, search.Store){
+		"ArchiveFiltering":                archiveFiltering,
 		"KeywordFindsNameKeywordsAndBody": keywordFindsNameKeywordsAndBody,
 		"NameRanksAboveBody":              nameRanksAboveBody,
 		"QuerySyntax":                     querySyntax,
@@ -614,5 +616,50 @@ func enrichments(t *testing.T, s search.Store) {
 	}
 	if h := hitOf(t, s, "rent"); h.Page != 1 {
 		t.Fatalf("published enrichment: %+v", h)
+	}
+}
+
+func archiveFiltering(t *testing.T, s search.Store) {
+	a, b := doc("active", "Shared invoice"), doc("archived", "Shared invoice")
+	b.Archived, b.ArchivedBy, b.ArchivedAt = true, "alice", &epoch
+	upsert(t, s, a, b)
+	for _, test := range []struct {
+		selection refs.ArchiveSelection
+		count     int
+	}{{refs.ArchiveActive, 1}, {refs.ArchiveArchived, 1}, {refs.ArchiveAll, 2}} {
+		q := search.Query{Filter: search.Filter{Archive: test.selection, Access: everyone}, Text: search.Literal("invoice"), Facets: true, Limit: 1}
+		result, err := s.Search(ctx, q)
+		if err != nil || result.Total != test.count || len(result.Hits) != 1 {
+			t.Fatal(test.selection, result, err)
+		}
+		if result.Facets == nil || result.Facets.Collection[0].Count != test.count {
+			t.Fatal("archive facets", result)
+		}
+		if test.selection == refs.ArchiveArchived && (!result.Hits[0].Archived || result.Hits[0].ArchivedAt == nil || !result.Hits[0].ArchivedAt.Equal(epoch)) {
+			t.Fatal("archive metadata", result.Hits)
+		}
+		matched, err := s.Match(ctx, search.MatchQuery{Archive: test.selection, CollectionID: "c", Text: search.Literal("invoice")})
+		if err != nil || len(matched.Head) != test.count {
+			t.Fatal("archive text matching", test.selection, matched, err)
+		}
+	}
+	result, err := s.Search(ctx, search.Query{Filter: search.Filter{Archive: refs.ArchiveArchived, Access: everyone, ArchivedBy: "bob"}, Limit: 50})
+	if err != nil || result.Total != 0 {
+		t.Fatal("archive actor filter", result, err)
+	}
+	later := epoch.Add(time.Hour)
+	result, err = s.Search(ctx, search.Query{Filter: search.Filter{Archive: refs.ArchiveArchived, Access: everyone, ArchivedFrom: later}, Limit: 50})
+	if err != nil || result.Total != 0 {
+		t.Fatal("archive date filter", result, err)
+	}
+	// A date bound matches only archived documents, whatever the selection.
+	for _, f := range []search.Filter{{ArchivedTo: later}, {ArchivedFrom: epoch.Add(-time.Hour)}} {
+		f.Archive, f.Access = refs.ArchiveAll, everyone
+		for _, text := range []*search.FullTextQuery{nil, search.Literal("invoice")} {
+			result, err = s.Search(ctx, search.Query{Filter: f, Text: text, Limit: 50})
+			if err != nil || result.Total != 1 || result.Hits[0].ResourceID != "archived" {
+				t.Fatal("archive date bound", f, text, result, err)
+			}
+		}
 	}
 }

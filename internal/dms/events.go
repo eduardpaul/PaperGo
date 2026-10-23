@@ -13,6 +13,8 @@ import (
 const (
 	EventItemCreated     = "item.created"
 	EventItemUpdated     = "item.updated"
+	EventItemArchived    = "item.archived"
+	EventItemUnarchived  = "item.unarchived"
 	EventItemPublished   = "item.published"
 	EventItemUnpublished = "item.unpublished"
 	EventItemDeleted     = "item.deleted"

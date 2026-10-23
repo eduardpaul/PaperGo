@@ -16,16 +16,18 @@ func (s *Store) Export(ctx context.Context, yield func(search.Record) error) err
 		return err
 	}
 	defer tx.Rollback()
-	rows, err := tx.QueryContext(ctx, `SELECT rowid,resource_id,surface,kind,views,workspace_id,collection_id,parent_id,content_type_id,scope_id,revision_id,blob_id,name,keywords,body,language,created_by,created_at,modified_by,modified_at,stamp FROM documents ORDER BY resource_id,surface`)
+	rows, err := tx.QueryContext(ctx, `SELECT archived,archived_at,archived_by,rowid,resource_id,surface,kind,views,workspace_id,collection_id,parent_id,content_type_id,scope_id,revision_id,blob_id,name,keywords,body,language,created_by,created_at,modified_by,modified_at,stamp FROM documents ORDER BY resource_id,surface`)
 	if err != nil {
 		return err
 	}
 	for rows.Next() {
 		var id, created, modified, stamp int64
+		var archived sql.NullInt64
 		var d search.Document
-		if err = rows.Scan(&id, &d.ResourceID, &d.Surface, &d.Kind, &d.Views, &d.WorkspaceID, &d.CollectionID, &d.ParentID, &d.ContentTypeID, &d.ScopeID, &d.RevisionID, &d.BlobID, &d.Name, &d.Keywords, &d.Body, &d.Language, &d.CreatedBy, &created, &d.ModifiedBy, &modified, &stamp); err != nil {
+		if err = rows.Scan(&d.Archived, &archived, &d.ArchivedBy, &id, &d.ResourceID, &d.Surface, &d.Kind, &d.Views, &d.WorkspaceID, &d.CollectionID, &d.ParentID, &d.ContentTypeID, &d.ScopeID, &d.RevisionID, &d.BlobID, &d.Name, &d.Keywords, &d.Body, &d.Language, &d.CreatedBy, &created, &d.ModifiedBy, &modified, &stamp); err != nil {
 			break
 		}
+		d.ArchivedAt = archiveTime(archived)
 		d.CreatedAt, d.ModifiedAt = fromNanos(created), fromNanos(modified)
 		if err = exportFields(ctx, tx, id, &d); err != nil {
 			break

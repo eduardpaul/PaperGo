@@ -17,8 +17,9 @@ import (
 	"papergo/internal/dal"
 )
 
-// Store tests run on both engines: SQLite always, PostgreSQL when
-// TEST_POSTGRES_DSN names a server whose user may create databases.
+// Store tests run on SQLite, and on PostgreSQL when either test DSN names
+// a server whose user may create databases. The PostgreSQL stage sets
+// PAPERGO_TEST_POSTGRES_DSN and leaves SQLite coverage to the Go stage.
 
 // Engines runs a test once per engine, as subtests named SQLite and
 // Postgres, each opening stores with newStore.
@@ -63,8 +64,12 @@ var sqliteTemplate = sync.OnceValues(func() ([]byte, error) {
 })
 
 // SQLiteStore opens a store on a new SQLite database with the schema.
+// The PostgreSQL stage skips these contracts, already run in the Go stage.
 func SQLiteStore(t testing.TB) *dal.Store {
 	t.Helper()
+	if PostgresDSN() != "" {
+		t.Skip("SQLite contracts run in the Go stage")
+	}
 	template, err := sqliteTemplate()
 	if err != nil {
 		t.Fatalf("create sqlite template: %v", err)
@@ -82,7 +87,7 @@ func SQLiteStore(t testing.TB) *dal.Store {
 	return dal.NewStoreWithDialect(db, dal.DialectSQLite)
 }
 
-// storeServer connects to the server TEST_POSTGRES_DSN names, where store
+// storeServer connects to the configured test server, where store
 // databases are created and dropped.
 type storeServer struct {
 	config   *pgx.ConnConfig
@@ -92,13 +97,20 @@ type storeServer struct {
 
 var dropStoreTemplate func()
 
+func postgresStoreDSN() string {
+	if dsn := PostgresDSN(); dsn != "" {
+		return dsn
+	}
+	return os.Getenv("TEST_POSTGRES_DSN")
+}
+
 // storeTemplate creates, once per test binary, a database with the
 // PostgreSQL schema installed. Each store clones it with CREATE DATABASE ...
 // TEMPLATE, which copies files instead of running the schema DDL.
 var storeTemplate = sync.OnceValues(func() (*storeServer, error) {
-	config, err := pgx.ParseConfig(os.Getenv("TEST_POSTGRES_DSN"))
+	config, err := pgx.ParseConfig(postgresStoreDSN())
 	if err != nil {
-		return nil, fmt.Errorf("parse TEST_POSTGRES_DSN: %w", err)
+		return nil, fmt.Errorf("parse PostgreSQL test DSN: %w", err)
 	}
 	config.ConnectTimeout = 5 * time.Second
 	server := &storeServer{config: config, db: stdlib.OpenDB(*config), template: storeName()}
@@ -138,11 +150,11 @@ func storeName() string {
 }
 
 // PostgresStore opens a store on a new PostgreSQL database with the schema,
-// dropped after the test. Without TEST_POSTGRES_DSN the test skips.
+// dropped after the test. Without either test DSN the test skips.
 func PostgresStore(t testing.TB) *dal.Store {
 	t.Helper()
-	if os.Getenv("TEST_POSTGRES_DSN") == "" {
-		t.Skip("TEST_POSTGRES_DSN not set; skipping PostgreSQL integration test")
+	if postgresStoreDSN() == "" {
+		t.Skip("no PostgreSQL test DSN; skipping PostgreSQL integration test")
 	}
 	server, err := storeTemplate()
 	if err != nil {

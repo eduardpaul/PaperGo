@@ -344,7 +344,7 @@ func fieldValueRows(payload json.RawMessage, defs []*catalog.FieldDefinition) ([
 			list = v.([]any)
 		}
 		for ordinal, v := range list {
-			b := surfaces.FieldValue{Ordinal: int64(ordinal), FieldKey: d.Key, FieldType: d.Type, Scale: int64(d.Scale)}
+			b := surfaces.FieldValue{Ordinal: int64(ordinal), FieldKey: d.Key, FieldType: d.Type, Scale: int64(d.Scale), AppliesParents: d.Options.ApplyParents}
 			switch string(d.Type) {
 			case "text", "note", "email", "url", "date", "lookup", "person", "term", "keywords", "choice":
 				value := v.(string)

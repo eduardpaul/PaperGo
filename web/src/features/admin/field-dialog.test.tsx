@@ -80,3 +80,24 @@ it('requires selecting a term set for a taxonomy field', async () => {
   expect(save.disabled).toBe(false);
   client.clear();
 });
+
+it('sends apply_parents for taxonomy fields only', async () => {
+  const fetch = vi.fn(async (input: URL | string, init?: RequestInit) => new Response(JSON.stringify(init?.method !== 'POST' && new URL(String(input)).pathname === '/v1/term-sets' ? { value: [{ id: 'regions', name: 'Regions' }] } : {})));
+  vi.stubGlobal('fetch', fetch);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(<QueryClientProvider client={client}><FieldDialog onClose={vi.fn()} /></QueryClientProvider>);
+  fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Region' } });
+  fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'term' } });
+  await screen.findByRole('option', { name: 'Regions' });
+  fireEvent.change(screen.getByLabelText('Term set'), { target: { value: 'regions' } });
+  fireEvent.click(screen.getByLabelText(/Apply parent terms/));
+  fireEvent.click(screen.getByRole('button', { name: 'Save field' }));
+  await waitFor(() => expect(fetch.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(true));
+  const [, init] = fetch.mock.calls.find(([, init]) => init?.method === 'POST')!;
+  const body = JSON.parse(String(init?.body));
+  expect(body.options.apply_parents).toBe(true);
+  expect(body.indexed).toBe(true);
+  fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'text' } });
+  expect(screen.queryByLabelText(/Apply parent terms/)).toBeNull();
+  client.clear();
+});

@@ -258,14 +258,20 @@ CREATE TABLE resources (
     name_key TEXT,
     deleted_at DATETIME,
     deleted_by TEXT,
+    archived_at DATETIME,
+    archived_by TEXT,
     created_by TEXT NOT NULL DEFAULT '',
     updated_by TEXT NOT NULL DEFAULT '',
     content_type_id TEXT REFERENCES content_types(id) ON DELETE RESTRICT,
     template_keys TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(template_keys) AND json_type(template_keys) = 'array' AND json_array_length(template_keys) <= 100 AND (kind IN ('list', 'library') OR json_array_length(template_keys) = 0)),
+    CHECK ((archived_at IS NULL) = (archived_by IS NULL)),
+    CHECK (archived_at IS NULL OR kind = 'item'),
     CHECK (deleted_at IS NULL OR name_key IS NULL),
     CHECK ((kind IN ('item', 'folder')) = (content_type_id IS NOT NULL)),
     CHECK (kind <> 'workspace' OR (workspace_id = id AND parent_id IS NULL AND container_id IS NULL AND inherit_permissions = 0))
 );
+CREATE INDEX resource_archived_at_id ON resources(archived_at DESC, id DESC) WHERE archived_at IS NOT NULL AND deleted_at IS NULL;
+CREATE INDEX resource_container_id_archived_at_id ON resources(container_id, archived_at, id);
 CREATE INDEX resource_workspace_id_kind_id ON resources(workspace_id, kind, id);
 CREATE INDEX resource_workspace_id_id_scope_id ON resources(workspace_id, id, scope_id);
 CREATE INDEX resource_kind_id_workspace_id_scope_id ON resources(kind, id, workspace_id, scope_id);
@@ -452,6 +458,10 @@ CREATE TABLE field_values (
     value_integer INTEGER,
     value_numeric NUMERIC,
     value_boolean BOOLEAN,
+    -- applies_parents copies the immutable apply_parents option of a term
+    -- or keywords field: its value also applies the term's ancestors.
+    applies_parents BOOLEAN NOT NULL DEFAULT FALSE CHECK (applies_parents IN (0, 1)),
+    CHECK (field_type IN ('term', 'keywords') OR NOT applies_parents),
     CHECK (
         (CASE WHEN value_text IS NOT NULL THEN 1 ELSE 0 END) +
         (CASE WHEN value_integer IS NOT NULL THEN 1 ELSE 0 END) +
@@ -552,12 +562,16 @@ CREATE TABLE list_views (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     container_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
+    system_key TEXT NOT NULL DEFAULT '' CHECK (system_key IN ('', 'archived')),
     columns TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(columns) AND json_type(columns) = 'array'),
     "query" TEXT NOT NULL DEFAULT '{}' CHECK (json_valid("query") AND json_type("query") = 'object'),
-    layout TEXT NOT NULL DEFAULT 'table' CHECK (layout IN ('table', 'board', 'calendar', 'gallery')),
+    layout TEXT NOT NULL DEFAULT 'table' CHECK (layout IN ('table', 'board', 'calendar', 'gallery', 'navigation')),
+    -- settings configures the layout, such as the field a navigation view browses.
+    settings TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(settings) AND json_type(settings) = 'object'),
     is_default BOOLEAN NOT NULL DEFAULT FALSE CHECK (is_default IN (0, 1)),
     version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0)
 );
+CREATE UNIQUE INDEX listview_container_id_system_key ON list_views(container_id, system_key) WHERE system_key <> '';
 CREATE UNIQUE INDEX listview_container_id_name ON list_views(container_id, name);
 CREATE INDEX listview_container_id_id ON list_views(container_id, id);
 CREATE UNIQUE INDEX listview_one_default ON list_views(container_id) WHERE is_default = 1;

@@ -6,6 +6,7 @@ import (
 
 	"github.com/stephenafamo/scan"
 	"papergo/internal/dal/access"
+	"papergo/internal/dal/refs"
 )
 
 // KeywordCount is how many resources hold a keyword.
@@ -26,9 +27,11 @@ func (r *Repo) PopularKeywords(ctx context.Context, keywordsSetID string, top in
 		}
 		out = append(out, c)
 		return nil
-	}, `WITH usage AS (
- SELECT p.item_id,coalesce(t.merged_into_id,t.id) AS keyword FROM item_surfaces p JOIN resources c ON c.id=p.container_id AND c.deleted_at IS NULL JOIN resources r ON r.id=p.item_id AND r.deleted_at IS NULL JOIN terms t ON t.id IN (`+SurfaceKeywords+`) WHERE p.surface=CASE WHEN c.publishing_enabled THEN 'head' ELSE 'published' END
- ) SELECT u.keyword,count(DISTINCT u.item_id) AS n FROM usage u JOIN terms t ON t.id=u.keyword WHERE NOT t.deprecated AND (t.term_set_id=? OR t.available_as_keyword) GROUP BY u.keyword ORDER BY n DESC,u.keyword LIMIT ?`, keywordsSetID, top)
+	}, `WITH current(owner,surface) AS (
+ SELECT p.item_id,p.id FROM item_surfaces p JOIN resources c ON c.id=p.container_id AND c.deleted_at IS NULL JOIN resources r ON r.id=p.item_id AND r.deleted_at IS NULL
+ WHERE p.surface=CASE WHEN c.publishing_enabled THEN 'head' ELSE 'published' END
+ ), usage AS (`+r.appliedKeywords(surfaceKeywordRows("current"))+`
+ ) SELECT u.keyword,count(DISTINCT u.owner) AS n FROM usage u JOIN terms t ON t.id=u.keyword WHERE NOT t.deprecated AND (t.term_set_id=? OR t.available_as_keyword) GROUP BY u.keyword ORDER BY n DESC,u.keyword LIMIT ?`, keywordsSetID, top)
 	return out, err
 }
 
@@ -37,6 +40,7 @@ func (r *Repo) PopularKeywords(ctx context.Context, keywordsSetID string, top in
 // keyword: collections and workspaces by their keywords, items and
 // folders on the surface the reader reads.
 type WorkspaceKeywords struct {
+	Archive                   refs.ArchiveSelection
 	Reader                    access.Principal
 	WorkspaceID, CollectionID string
 	// Prefix starts the normalized names of the keywords.
@@ -52,18 +56,17 @@ func (r *Repo) WorkspaceKeywords(ctx context.Context, w WorkspaceKeywords) ([]Ke
 	if w.CollectionID != "" {
 		scope, args = "r.container_id=?", []any{w.CollectionID}
 	}
+	scope += " AND " + w.Archive.Predicate("r")
 	readable, readArgs := r.acl.Resource("r.id", w.Reader, access.Read)
 	selected, surfaceArgs := r.acl.Surface("r.id", w.Reader, "auto")
-	query := `WITH usage AS (
- SELECT r.id,coalesce(t.merged_into_id,t.id) AS keyword FROM resources r JOIN resource_keywords k ON k.resource_id=r.id JOIN terms t ON t.id=k.keyword
- WHERE r.kind NOT IN ('item','folder') AND r.deleted_at IS NULL AND ` + scope + ` AND ` + readable + `
- UNION
- SELECT r.id,coalesce(t.merged_into_id,t.id) FROM resources r JOIN item_surfaces p ON p.item_id=r.id JOIN terms t ON t.id IN (` + SurfaceKeywords + `)
- WHERE r.deleted_at IS NULL AND ` + scope + ` AND p.surface=` + selected + ` AND ` + readable + `
+	// The readable surfaces are found once for both keyword sources.
+	resourceRows := "SELECT r.id AS owner,k.keyword AS term,TRUE AS lineage FROM resources r JOIN resource_keywords k ON k.resource_id=r.id WHERE r.kind NOT IN ('item','folder') AND r.deleted_at IS NULL AND " + scope + " AND " + readable
+	query := `WITH readable(owner,surface) AS (
+ SELECT r.id,p.id FROM resources r JOIN item_surfaces p ON p.item_id=r.id WHERE r.deleted_at IS NULL AND ` + scope + ` AND p.surface=` + selected + ` AND ` + readable + `
+ ), usage AS (` + r.appliedKeywords(resourceRows) + ` UNION ` + r.appliedKeywords(surfaceKeywordRows("readable")) + `
  ) SELECT t.id,t.name,count(*) FROM usage u JOIN terms t ON t.id=u.keyword WHERE TRUE`
-	values := append(append([]any{}, args...), readArgs...)
+	values := append(append(append([]any{}, args...), surfaceArgs...), readArgs...)
 	values = append(values, args...)
-	values = append(values, surfaceArgs...)
 	values = append(values, readArgs...)
 	if w.Prefix != "" {
 		query += " AND " + r.d.HasPrefix("t.normalized_name", "?")

@@ -30,9 +30,11 @@ type ListView struct {
 	UpdatedAt   time.Time                   `db:"updated_at" `
 	ContainerID string                      `db:"container_id" `
 	Name        string                      `db:"name" `
+	SystemKey   string                      `db:"system_key" `
 	Columns     types.JSON[[]string]        `db:"columns" `
 	Query       types.JSON[json.RawMessage] `db:"query" `
 	Layout      string                      `db:"layout" `
+	Settings    types.JSON[json.RawMessage] `db:"settings" `
 	IsDefault   bool                        `db:"is_default" `
 	Version     int64                       `db:"version" `
 
@@ -65,7 +67,7 @@ type listViewRLoaded struct {
 
 func buildListViewColumns(tableName string) listViewColumns {
 	columnsExpr := expr.NewColumnsExpr(
-		"id", "created_at", "updated_at", "container_id", "name", "columns", "query", "layout", "is_default", "version",
+		"id", "created_at", "updated_at", "container_id", "name", "system_key", "columns", "query", "layout", "settings", "is_default", "version",
 	)
 
 	if tableName != "" {
@@ -80,9 +82,11 @@ func buildListViewColumns(tableName string) listViewColumns {
 		UpdatedAt:   buildListViewColumn(tableName, "updated_at"),
 		ContainerID: buildListViewColumn(tableName, "container_id"),
 		Name:        buildListViewColumn(tableName, "name"),
+		SystemKey:   buildListViewColumn(tableName, "system_key"),
 		Columns:     buildListViewColumn(tableName, "columns"),
 		Query:       buildListViewColumn(tableName, "query"),
 		Layout:      buildListViewColumn(tableName, "layout"),
+		Settings:    buildListViewColumn(tableName, "settings"),
 		IsDefault:   buildListViewColumn(tableName, "is_default"),
 		Version:     buildListViewColumn(tableName, "version"),
 	}
@@ -96,9 +100,11 @@ type listViewColumns struct {
 	UpdatedAt   listViewColumn
 	ContainerID listViewColumn
 	Name        listViewColumn
+	SystemKey   listViewColumn
 	Columns     listViewColumn
 	Query       listViewColumn
 	Layout      listViewColumn
+	Settings    listViewColumn
 	IsDefault   listViewColumn
 	Version     listViewColumn
 }
@@ -151,15 +157,17 @@ type ListViewSetter struct {
 	UpdatedAt   omit.Val[time.Time]                   `db:"updated_at" `
 	ContainerID omit.Val[string]                      `db:"container_id" `
 	Name        omit.Val[string]                      `db:"name" `
+	SystemKey   omit.Val[string]                      `db:"system_key" `
 	Columns     omit.Val[types.JSON[[]string]]        `db:"columns" `
 	Query       omit.Val[types.JSON[json.RawMessage]] `db:"query" `
 	Layout      omit.Val[string]                      `db:"layout" `
+	Settings    omit.Val[types.JSON[json.RawMessage]] `db:"settings" `
 	IsDefault   omit.Val[bool]                        `db:"is_default" `
 	Version     omit.Val[int64]                       `db:"version" `
 }
 
 func (s ListViewSetter) SetColumns() []string {
-	vals := make([]string, 0, 10)
+	vals := make([]string, 0, 12)
 	if s.ID.IsValue() {
 		vals = append(vals, "id")
 	}
@@ -175,6 +183,9 @@ func (s ListViewSetter) SetColumns() []string {
 	if s.Name.IsValue() {
 		vals = append(vals, "name")
 	}
+	if s.SystemKey.IsValue() {
+		vals = append(vals, "system_key")
+	}
 	if s.Columns.IsValue() {
 		vals = append(vals, "columns")
 	}
@@ -183,6 +194,9 @@ func (s ListViewSetter) SetColumns() []string {
 	}
 	if s.Layout.IsValue() {
 		vals = append(vals, "layout")
+	}
+	if s.Settings.IsValue() {
+		vals = append(vals, "settings")
 	}
 	if s.IsDefault.IsValue() {
 		vals = append(vals, "is_default")
@@ -209,6 +223,9 @@ func (s ListViewSetter) Overwrite(t *ListView) {
 	if s.Name.IsValue() {
 		t.Name = s.Name.MustGet()
 	}
+	if s.SystemKey.IsValue() {
+		t.SystemKey = s.SystemKey.MustGet()
+	}
 	if s.Columns.IsValue() {
 		t.Columns = s.Columns.MustGet()
 	}
@@ -217,6 +234,9 @@ func (s ListViewSetter) Overwrite(t *ListView) {
 	}
 	if s.Layout.IsValue() {
 		t.Layout = s.Layout.MustGet()
+	}
+	if s.Settings.IsValue() {
+		t.Settings = s.Settings.MustGet()
 	}
 	if s.IsDefault.IsValue() {
 		t.IsDefault = s.IsDefault.MustGet()
@@ -277,6 +297,13 @@ func (s *ListViewSetter) Apply(q *dialect.InsertQuery) {
 				}
 				return sqlite.Arg(s.Name.MustGet()).WriteSQL(ctx, w, d, start)
 			}))
+		case "system_key":
+			vals = append(vals, bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+				if s.SystemKey.IsUnset() {
+					return sqlite.Arg(nil).WriteSQL(ctx, w, d, start)
+				}
+				return sqlite.Arg(s.SystemKey.MustGet()).WriteSQL(ctx, w, d, start)
+			}))
 		case "columns":
 			vals = append(vals, bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
 				if s.Columns.IsUnset() {
@@ -297,6 +324,13 @@ func (s *ListViewSetter) Apply(q *dialect.InsertQuery) {
 					return sqlite.Arg(nil).WriteSQL(ctx, w, d, start)
 				}
 				return sqlite.Arg(s.Layout.MustGet()).WriteSQL(ctx, w, d, start)
+			}))
+		case "settings":
+			vals = append(vals, bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+				if s.Settings.IsUnset() {
+					return sqlite.Arg(nil).WriteSQL(ctx, w, d, start)
+				}
+				return sqlite.Arg(s.Settings.MustGet()).WriteSQL(ctx, w, d, start)
 			}))
 		case "is_default":
 			vals = append(vals, bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
@@ -323,7 +357,7 @@ func (s ListViewSetter) UpdateMod() bob.Mod[*dialect.UpdateQuery] {
 }
 
 func (s ListViewSetter) Expressions(prefix ...string) []bob.Expression {
-	exprs := make([]bob.Expression, 0, 10)
+	exprs := make([]bob.Expression, 0, 12)
 
 	if s.ID.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
@@ -360,6 +394,13 @@ func (s ListViewSetter) Expressions(prefix ...string) []bob.Expression {
 		}})
 	}
 
+	if s.SystemKey.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			sqlite.Quote(append(prefix, "system_key")...),
+			sqlite.Arg(s.SystemKey),
+		}})
+	}
+
 	if s.Columns.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
 			sqlite.Quote(append(prefix, "columns")...),
@@ -378,6 +419,13 @@ func (s ListViewSetter) Expressions(prefix ...string) []bob.Expression {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
 			sqlite.Quote(append(prefix, "layout")...),
 			sqlite.Arg(s.Layout),
+		}})
+	}
+
+	if s.Settings.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			sqlite.Quote(append(prefix, "settings")...),
+			sqlite.Arg(s.Settings),
 		}})
 	}
 
@@ -405,7 +453,7 @@ func listViewScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc, fu
 		idx int
 		dst func(o *ListView) any
 	}
-	targets := make([]target, 0, 10)
+	targets := make([]target, 0, 12)
 	for i, col := range cols {
 		switch col {
 		case "id":
@@ -418,12 +466,16 @@ func listViewScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc, fu
 			targets = append(targets, target{i, func(o *ListView) any { return &o.ContainerID }})
 		case "name":
 			targets = append(targets, target{i, func(o *ListView) any { return &o.Name }})
+		case "system_key":
+			targets = append(targets, target{i, func(o *ListView) any { return &o.SystemKey }})
 		case "columns":
 			targets = append(targets, target{i, func(o *ListView) any { return &o.Columns }})
 		case "query":
 			targets = append(targets, target{i, func(o *ListView) any { return &o.Query }})
 		case "layout":
 			targets = append(targets, target{i, func(o *ListView) any { return &o.Layout }})
+		case "settings":
+			targets = append(targets, target{i, func(o *ListView) any { return &o.Settings }})
 		case "is_default":
 			targets = append(targets, target{i, func(o *ListView) any { return &o.IsDefault }})
 		case "version":
@@ -745,9 +797,11 @@ type listViewWhere[Q sqlite.Filterable] struct {
 	UpdatedAt   sqlite.WhereMod[Q, time.Time]
 	ContainerID sqlite.WhereMod[Q, string]
 	Name        sqlite.WhereMod[Q, string]
+	SystemKey   sqlite.WhereMod[Q, string]
 	Columns     sqlite.WhereMod[Q, types.JSON[[]string]]
 	Query       sqlite.WhereMod[Q, types.JSON[json.RawMessage]]
 	Layout      sqlite.WhereMod[Q, string]
+	Settings    sqlite.WhereMod[Q, types.JSON[json.RawMessage]]
 	IsDefault   sqlite.WhereMod[Q, bool]
 	Version     sqlite.WhereMod[Q, int64]
 	R           listViewWhereR[Q]
@@ -765,9 +819,11 @@ func buildListViewWhere[Q sqlite.Filterable](cols listViewColumns) listViewWhere
 		UpdatedAt:   sqlite.Where[Q, time.Time](cols.UpdatedAt.Expression),
 		ContainerID: sqlite.Where[Q, string](cols.ContainerID.Expression),
 		Name:        sqlite.Where[Q, string](cols.Name.Expression),
+		SystemKey:   sqlite.Where[Q, string](cols.SystemKey.Expression),
 		Columns:     sqlite.Where[Q, types.JSON[[]string]](cols.Columns.Expression),
 		Query:       sqlite.Where[Q, types.JSON[json.RawMessage]](cols.Query.Expression),
 		Layout:      sqlite.Where[Q, string](cols.Layout.Expression),
+		Settings:    sqlite.Where[Q, types.JSON[json.RawMessage]](cols.Settings.Expression),
 		IsDefault:   sqlite.Where[Q, bool](cols.IsDefault.Expression),
 		Version:     sqlite.Where[Q, int64](cols.Version.Expression),
 		R:           listViewWhereR[Q]{cols: cols},

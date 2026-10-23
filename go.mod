@@ -166,4 +166,7 @@ require (
 
 replace github.com/zvec-ai/zvec-go => github.com/eduardpaul/zvec-go v0.0.0-20261015090631-dbf998ca01f1
 
-tool github.com/stephenafamo/bob/gen/bobgen-sql
+tool (
+	github.com/stephenafamo/bob/gen/bobgen-psql
+	github.com/stephenafamo/bob/gen/bobgen-sql
+)

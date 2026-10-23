@@ -14,7 +14,7 @@ measurements below have not been rerun with that allocator policy.
   approximately 9.7 GiB VM memory, ext4 storage on a virtual disk. No CPU or
   memory cgroup limit was applied. Other host activity was not controlled.
 - Go 1.26.0, native binaries built with `-trimpath` and
-  `-ldflags='-s -w'`. The Dockerfile currently builds with Go 1.27.2; the image
+  `-ldflags='-s -w'`. The Dockerfile pins a newer Go; the image
   itself and ARM devices were not measured.
 - Fresh temporary databases initialized using the actual schema and admin
   binary. User data was not opened or changed. All application defaults were

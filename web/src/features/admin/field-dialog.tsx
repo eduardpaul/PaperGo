@@ -67,6 +67,7 @@ export function keyFromLabel(label: string) {
 }
 
 const multipleTypes = new Set(['choice', 'person', 'lookup', 'term', 'keywords']);
+const termTypes = new Set(['term', 'keywords']);
 
 /** Shared organization field editor, adapted from PaperDotNet's content type editor. */
 export function FieldDialog({
@@ -101,7 +102,11 @@ export function FieldDialog({
   const workspace = useQuery({ ...resourceQuery(collection?.workspace_id ?? ''), enabled: !field && !!collection?.workspace_id });
   const organization = useQuery({ ...organizationPreferencesQuery, enabled: !field });
   const currencyCode = options.currency_code ?? (workspace.data?.default_currency || organization.data?.default_currency || 'USD');
-  const effectiveOptions = type === 'currency' ? { ...options, currency_code: currencyCode } : options;
+  const effectiveOptions = {
+    ...options,
+    currency_code: type === 'currency' ? currencyCode : options.currency_code,
+    apply_parents: termTypes.has(type) ? options.apply_parents : undefined,
+  };
   const draft: FieldDefinition = {
     id: field?.id ?? 'new',
     key,
@@ -115,13 +120,15 @@ export function FieldDialog({
     options: { ...effectiveOptions, default_value: undefined },
   };
   const patchOptions = (patch: Partial<FieldOptions>) => setOptions((current) => ({ ...current, ...patch }));
+  // Keywords fields and fields that apply parent terms are always indexed.
+  const alwaysIndexed = type === 'keywords' || !!effectiveOptions.apply_parents;
   const save = useMutation({
     mutationFn: () => {
       const normalizedDefault = hasDefault ? valuesPatch([draft], {}, { [key]: defaultValue })?.[key] : undefined;
       const body = {
         label: label.trim(),
         required,
-        indexed: indexed || type === 'keywords',
+        indexed: indexed || alwaysIndexed,
         choices: type === 'choice' ? draft.choices : undefined,
         options: { ...effectiveOptions, default_value: normalizedDefault },
       };
@@ -340,11 +347,11 @@ export function FieldDialog({
         </label>
         <label className="flex gap-2">
           <Checkbox
-            checked={indexed || type === 'keywords'}
-            disabled={type === 'keywords'}
+            checked={indexed || alwaysIndexed}
+            disabled={alwaysIndexed}
             onChange={(event) => setIndexed(event.target.checked)}
           />
-          Use for filtering, sorting and grouping in views{type === 'keywords' ? ' (always on for keywords)' : ''}
+          Use for filtering, sorting and grouping in views{alwaysIndexed ? ' (always on for keywords and parent terms)' : ''}
         </label>
         <label className="flex gap-2">
           <Checkbox checked={!!options.unique} onChange={(event) => patchOptions({ unique: event.target.checked })} />
@@ -361,6 +368,16 @@ export function FieldDialog({
               }}
             />
             Allow multiple values
+          </label>
+        )}
+        {termTypes.has(type) && (
+          <label className="flex gap-2">
+            <Checkbox
+              checked={!!options.apply_parents}
+              disabled={!!field}
+              onChange={(event) => patchOptions({ apply_parents: event.target.checked })}
+            />
+            Apply parent terms (picking a term also tags its parents)
           </label>
         )}
         <label className="flex gap-2">

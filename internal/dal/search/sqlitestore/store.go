@@ -28,7 +28,7 @@ var schema string
 
 // schemaVersion changes with schema.sql: a file of another version is
 // recreated, and a reindex refills it.
-const schemaVersion = "5"
+const schemaVersion = "6"
 
 const applicationID = 1346851657
 
@@ -177,13 +177,13 @@ func (s *Store) UpsertDocuments(ctx context.Context, docs []search.Document, sta
 func (s *Store) upsertDocuments(ctx context.Context, tx *sql.Tx, docs []search.Document, stamp int64) error {
 	for _, d := range docs {
 		var rowid int64
-		err := tx.QueryRowContext(ctx, `INSERT INTO documents (resource_id,surface,kind,views,workspace_id,collection_id,parent_id,content_type_id,scope_id,revision_id,blob_id,
- name,keywords,body,language,created_by,created_at,modified_by,modified_at,stamp) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
- ON CONFLICT(resource_id,surface) DO UPDATE SET kind=excluded.kind,views=excluded.views,workspace_id=excluded.workspace_id,collection_id=excluded.collection_id,
+		err := tx.QueryRowContext(ctx, `INSERT INTO documents (archived,archived_at,archived_by,resource_id,surface,kind,views,workspace_id,collection_id,parent_id,content_type_id,scope_id,revision_id,blob_id,
+ name,keywords,body,language,created_by,created_at,modified_by,modified_at,stamp) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+ ON CONFLICT(resource_id,surface) DO UPDATE SET archived=excluded.archived,archived_at=excluded.archived_at,archived_by=excluded.archived_by,kind=excluded.kind,views=excluded.views,workspace_id=excluded.workspace_id,collection_id=excluded.collection_id,
  parent_id=excluded.parent_id,content_type_id=excluded.content_type_id,scope_id=excluded.scope_id,revision_id=excluded.revision_id,blob_id=excluded.blob_id,
  name=excluded.name,keywords=excluded.keywords,body=excluded.body,language=excluded.language,created_by=excluded.created_by,created_at=excluded.created_at,
  modified_by=excluded.modified_by,modified_at=excluded.modified_at,stamp=excluded.stamp RETURNING rowid`,
-			d.ResourceID, d.Surface, d.Kind, int(d.Views), d.WorkspaceID, d.CollectionID, d.ParentID, d.ContentTypeID, d.ScopeID, d.RevisionID, d.BlobID,
+			d.Archived, archiveNanos(d.ArchivedAt), d.ArchivedBy, d.ResourceID, d.Surface, d.Kind, int(d.Views), d.WorkspaceID, d.CollectionID, d.ParentID, d.ContentTypeID, d.ScopeID, d.RevisionID, d.BlobID,
 			d.Name, d.Keywords, d.Body, d.Language, d.CreatedBy, d.CreatedAt.UnixNano(), d.ModifiedBy, d.ModifiedAt.UnixNano(), stamp).Scan(&rowid)
 		if err != nil {
 			return err
@@ -364,3 +364,17 @@ func jsonList(values []string) string {
 }
 
 func fromNanos(n int64) time.Time { return time.Unix(0, n).UTC() }
+
+func archiveNanos(t *time.Time) any {
+	if t == nil {
+		return nil
+	}
+	return t.UnixNano()
+}
+func archiveTime(n sql.NullInt64) *time.Time {
+	if !n.Valid {
+		return nil
+	}
+	t := fromNanos(n.Int64)
+	return &t
+}

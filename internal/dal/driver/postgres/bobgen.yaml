@@ -1,11 +1,8 @@
-# Generates this driver's models from the DAL schema master. Run from the
-# repository root:
-#   go tool bobgen-sql -c internal/dal/driver/postgres/bobgen.yaml
+# Generates this driver's models from a database holding the DAL schema
+# master. scripts/generate-models.sh creates that database on the test
+# PostgreSQL server and passes it as PSQL_DSN.
 
-sql:
-  dialect: "psql"
-  pattern: "internal/dal/schema/postgres.sql"
-  driver_image: "postgres:17-alpine"
+psql:
   # Tables of the domains that run through internal/dal/driver.
   only:
     tasks: []
@@ -268,7 +265,7 @@ replacements:
     replace: "types.JSON[json.RawMessage]"
   - tables: ["list_views"]
     match:
-      name: "query"
+      name: "/^(query|settings)$/"
     replace: "types.JSON[json.RawMessage]"
   - tables: ["smart_folders"]
     match:

@@ -140,6 +140,7 @@ func (q Queries) FieldValues(ctx context.Context, f surfaces.ValueFilter) ([]sur
 			ID: row.ID, SurfaceID: row.SurfaceID, ContainerID: row.ContainerID, ItemID: row.ItemID, Surface: refs.Surface(row.Surface),
 			FieldKey: row.FieldKey, FieldType: catalog.FieldType(row.FieldType), Scale: row.Scale, Ordinal: row.Ordinal,
 			ValueText: row.ValueText.Ptr(), ValueInteger: row.ValueInteger.Ptr(), ValueNumeric: row.ValueNumeric.Ptr(), ValueBoolean: row.ValueBoolean.Ptr(),
+			AppliesParents: row.AppliesParents,
 		}
 	}
 	return out, nil
@@ -169,7 +170,7 @@ func valueFilter(f surfaces.ValueFilter) []bob.Expression {
 	return out
 }
 
-// fieldValueBatch keeps a multi-row insert of field values (14 columns)
+// fieldValueBatch keeps a multi-row insert of field values (15 columns)
 // below both engines' parameter limits.
 const fieldValueBatch = 500
 
@@ -183,7 +184,7 @@ func (q Queries) InsertFieldValues(ctx context.Context, values []surfaces.FieldV
 				ID: omit.From(v.ID), CreatedAt: omit.From(at), SurfaceID: omit.From(v.SurfaceID), ContainerID: omit.From(v.ContainerID),
 				ItemID: omit.From(v.ItemID), Surface: omit.From(string(v.Surface)), FieldKey: omit.From(v.FieldKey), FieldType: omit.From(string(v.FieldType)),
 				Scale: omit.From(v.Scale), Ordinal: omit.From(v.Ordinal), ValueText: omitnull.FromPtr(v.ValueText), ValueInteger: omitnull.FromPtr(v.ValueInteger),
-				ValueNumeric: omitnull.FromPtr(v.ValueNumeric), ValueBoolean: omitnull.FromPtr(v.ValueBoolean),
+				ValueNumeric: omitnull.FromPtr(v.ValueNumeric), ValueBoolean: omitnull.FromPtr(v.ValueBoolean), AppliesParents: omit.From(v.AppliesParents),
 			}
 		}
 		if _, err := models.FieldValues.Insert(rows...).Exec(ctx, q.exec); err != nil {

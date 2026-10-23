@@ -18,7 +18,7 @@ case "${1:-}" in
 esac
 
 python3 scripts/native.py
-source .tools/native/env.sh
+source "${PAPERGO_NATIVE_DIR:-.tools/native}/env.sh"
 
 if [[ ! -f .cache/development.env ]]; then
     printf 'Run bash scripts/setup-dev.sh first.\n' >&2

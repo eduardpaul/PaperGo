@@ -112,12 +112,28 @@ func (d Dialect) JSONText(column, key string) string {
 }
 
 // Below tests that the materialized path child lies in the subtree rooted
-// at path root, the root included. Paths end with a separator.
+// at path root, the root included. Paths end with a separator and compare
+// as bytes, so the subtree is one range of the path index: '0' is the byte
+// after '/'.
 func (d Dialect) Below(child, root string) string {
-	if d.Postgres {
-		return `starts_with(` + child + `, ` + root + `)`
-	}
 	return child + `>=` + root + ` AND ` + child + `<substr(` + root + `,1,length(` + root + `)-1)||'0'`
+}
+
+// PathIDs is a table expression of the IDs in the materialized path path,
+// root first, named alias with one column, value.
+func (d Dialect) PathIDs(path, alias string) string {
+	if d.Postgres {
+		return `unnest(string_to_array(trim(both '/' from ` + path + `), '/')) AS ` + alias + `(value)`
+	}
+	return `json_each('["'||replace(trim(` + path + `,'/'),'/','","')||'"]') ` + alias
+}
+
+// FirstSegment is the text before the first '/' of text.
+func (d Dialect) FirstSegment(text string) string {
+	if d.Postgres {
+		return `split_part(` + text + `, '/', 1)`
+	}
+	return `substr(` + text + `,1,instr(` + text + `,'/')-1)`
 }
 
 // Prefix is the leading size characters of text; a timestamp is read as

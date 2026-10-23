@@ -1,0 +1,70 @@
+name: Toolchain
+description: >-
+  Install the toolchain the Dockerfile pins on a runner that cannot use the
+  toolchain image: Go, Node, the native cgo SDKs and, on request, sqlite3def.
+inputs:
+  sqlite3def:
+    description: Also install the pinned sqlite3def release planner
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    # Python only runs the repository's scripts; any current 3.x does.
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+    - id: versions
+      shell: bash
+      run: python scripts/toolchain-versions.py >> "$GITHUB_OUTPUT"
+    - uses: actions/setup-go@v5
+      with:
+        go-version: ${{ steps.versions.outputs.go }}
+        cache: true
+    - uses: actions/setup-node@v4
+      with:
+        node-version: ${{ steps.versions.outputs.node }}
+        cache: npm
+        cache-dependency-path: web/package-lock.json
+    - uses: msys2/setup-msys2@v2
+      id: msys2
+      if: runner.os == 'Windows'
+      with:
+        msystem: UCRT64
+        install: mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-pkgconf mingw-w64-ucrt-x86_64-ninja
+    - name: Select the Windows GNU compiler
+      if: runner.os == 'Windows'
+      shell: bash
+      env:
+        MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
+      run: |
+        compiler_dir="$(cygpath -m "$MSYS2_LOCATION/ucrt64/bin")"
+        test -x "$compiler_dir/gcc.exe"
+        test -x "$compiler_dir/g++.exe"
+        echo "$compiler_dir" >> "$GITHUB_PATH"
+        echo "CC=$compiler_dir/gcc.exe" >> "$GITHUB_ENV"
+        echo "CXX=$compiler_dir/g++.exe" >> "$GITHUB_ENV"
+        echo 'CMAKE_GENERATOR=Ninja' >> "$GITHUB_ENV"
+    # Windows builds the tokenizer's static library from source.
+    - uses: dtolnay/rust-toolchain@1.90.0
+      if: runner.os == 'Windows'
+      with:
+        targets: x86_64-pc-windows-gnu
+    - uses: actions/cache@v4
+      with:
+        path: |
+          .tools/native
+          .tools/native-downloads
+        key: native-${{ runner.os }}-${{ runner.arch }}-${{ env.ImageOS }}-${{ hashFiles('.github/actions/toolchain/action.yml', 'Dockerfile', 'scripts/native.py', 'scripts/native.json', 'scripts/native-notices/**') }}
+    - name: Install native SDKs
+      shell: bash
+      run: |
+        python -m pip install cmake==${{ steps.versions.outputs.cmake }}
+        python scripts/native.py --github-env
+    - name: Install sqlite3def
+      if: inputs.sqlite3def == 'true'
+      shell: bash
+      run: |
+        directory="$RUNNER_TEMP/sqlite3def"
+        if [[ "$RUNNER_OS" == Windows ]]; then directory="$(cygpath -m "$directory")"; fi
+        python scripts/sqlite3def.py --directory "$directory"
+        echo "$directory" >> "$GITHUB_PATH"

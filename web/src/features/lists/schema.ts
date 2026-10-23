@@ -8,6 +8,8 @@ const labels: Record<string, string> = {
   $created_by: 'Created by',
   $modified_at: 'Modified',
   $modified_by: 'Modified by',
+  $archived_at: 'Archived',
+  $archived_by: 'Archived by',
 };
 
 export function columnLabel(key: string, fields: FieldDefinition[]): string {
@@ -30,7 +32,7 @@ export function publishState(item: Resource, publishingEnabled: boolean): 'Publi
   return 'Published';
 }
 
-const sortableSystemColumns = ['$name', '$created_at', '$created_by', '$modified_at', '$modified_by'];
+const sortableSystemColumns = ['$archived_at', '$archived_by', '$name', '$created_at', '$created_by', '$modified_at', '$modified_by'];
 
 /** Columns a collection query can sort by: built-in columns and filterable, ready, single-value fields. */
 export function sortableColumns(fields: FieldDefinition[]): Set<string> {

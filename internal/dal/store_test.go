@@ -7,10 +7,14 @@ import (
 	"testing"
 
 	"papergo/internal/dal"
+	"papergo/internal/dal/daltest"
 )
 
 func freshStore(t *testing.T) *dal.Store {
 	t.Helper()
+	if daltest.PostgresDSN() != "" {
+		t.Skip("SQLite schema installation runs in the Go stage")
+	}
 	db, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "schema.sqlite")+"?_pragma=foreign_keys(1)")
 	if err != nil {
 		t.Fatal(err)

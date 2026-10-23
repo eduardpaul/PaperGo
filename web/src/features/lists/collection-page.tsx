@@ -1,3 +1,4 @@
+import { useArchiveActions } from './archive-actions';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import {
@@ -18,7 +19,7 @@ import { cloneElement, useEffect, useRef, useState, type HTMLAttributes, type Re
 import { toast } from 'sonner';
 import { api, continuation } from '@/api/http';
 import { batch } from '@/api/batch';
-import { countRequest, listingQuery, listingRequest, type ApiCall } from '@/api/requests';
+import { countRequest, formatNavigation, listingQuery, listingRequest, parseNavigation, type ApiCall } from '@/api/requests';
 import { contentTypesQuery, fieldsQuery, keys, resourceQuery, viewsQuery } from '@/api/queries';
 import type { Page, QuerySpec, Resource } from '@/api/types';
 import { Page as Screen, PageHeader } from '@/components/page';
@@ -57,6 +58,7 @@ import { ItemsBoard, ItemsCalendar, ItemsGallery } from './items-layouts';
 import { ItemsTable } from './items-table';
 import { BulkEditDialog } from './operations';
 import { ColumnPicker } from './column-picker';
+import { ItemsNavigation } from './navigation-layout';
 import { columnLabel, fieldsForType, parseSort, sortableColumns, sortParam } from './schema';
 
 export interface CollectionSearch {
@@ -70,6 +72,8 @@ export interface CollectionSearch {
   sort?: string;
   /** Columns chosen on the page, comma separated, instead of the view's. */
   cols?: string;
+  /** The terms a navigation view has open as `field~term` pairs, the latest last; `none` for items without one. */
+  nav?: string;
 }
 
 interface Listing {
@@ -106,7 +110,7 @@ export function CollectionPage({
     enabled: !!search.folder,
     queryFn: () => folderCrumbs(search.folder!, listId),
   });
-  const viewId = search.view === 'none' ? undefined : (search.view ?? views.data?.find((view) => view.is_default)?.id);
+  const viewId = search.view === 'none' ? undefined : (search.view === 'archived' ? views.data?.find(view => view.system_key === 'archived')?.id : (search.view ?? views.data?.find((view) => view.is_default)?.id));
   const view = views.data?.find((entry) => entry.id === viewId);
   const layout = !search.folder && !search.q ? (view?.layout ?? 'table') : 'table';
   const sortable = sortableColumns(fields.data ?? []);
@@ -122,8 +126,8 @@ export function CollectionPage({
     .filter((key) => columnChoices.some((choice) => choice.key === key));
   const pageColumns = chosenColumns?.length ? [...new Set(['$name', ...chosenColumns])] : undefined;
   const request = listingRequest(listId, { folder: search.folder, view, q: search.q, sort, columns: pageColumns });
-  // Boards and calendars load their own rows: per column, per month.
-  const ownRows = !!view && (layout === 'board' || layout === 'calendar');
+  // Boards, calendars and navigation views load their own rows: per column, per month, per term.
+  const ownRows = !!view && (layout === 'board' || layout === 'calendar' || layout === 'navigation');
   const listing = useQuery({
     queryKey: ['resources', listId, 'rows', request],
     enabled: !!collection.data && views.isSuccess && (!search.sort || fields.isSuccess) && !ownRows,
@@ -134,6 +138,7 @@ export function CollectionPage({
   const [next, setNext] = useState<string | null>(listing.data?.next ?? null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [selected, setSelected] = useState<Map<string, Resource>>(new Map());
+  const archive = useArchiveActions(completed => setSelected(current => new Map([...current].filter(([id]) => !completed.includes(id)))));
   // Everything the listing matches, beyond the loaded rows (for bulk edits).
   const [allMatching, setAllMatching] = useState(false);
   const folderMoves = useFolderMoves(collection.data, selected, items => { setSelected(new Map(items.map(item => [item.id, item]))); setAllMatching(false); });
@@ -393,12 +398,12 @@ export function CollectionPage({
         {(views.data?.length ?? 0) > 0 && (
           <div role="tablist" aria-label="Views" className="flex max-w-full overflow-x-auto rounded-md bg-surface-muted p-0.5">
             {views.data?.map((entry) => (
-              <ViewTab key={entry.id} active={entry.id === viewId} onClick={() => onSearch({ view: entry.id, q: undefined, sort: undefined, cols: undefined })}>
+              <ViewTab key={entry.id} active={entry.id === viewId} onClick={() => onSearch({ view: entry.id, folder: undefined, q: undefined, sort: undefined, cols: undefined, nav: undefined })}>
                 {entry.name}
               </ViewTab>
             ))}
-            <ViewTab active={!viewId} onClick={() => onSearch({ view: 'none', q: undefined, sort: undefined, cols: undefined })}>
-              All items
+            <ViewTab active={!viewId} onClick={() => onSearch({ view: 'none', q: undefined, sort: undefined, cols: undefined, nav: undefined })}>
+              Active items
             </ViewTab>
           </div>
         )}
@@ -481,6 +486,10 @@ export function CollectionPage({
           {!allMatching && canEdit && items.length === selected.size && (
             <RunWorkflowAction workspaceId={workspaceId} collectionId={listId} items={items} />
           )}
+          {!allMatching && canEdit && items.length === selected.size && <>
+            {items.some(item => !item.archived) && <Button size="sm" disabled={archive.isPending || items.length > 100} onClick={() => archive.mutate({ items, archived: true })}>Archive selected</Button>}
+            {items.some(item => item.archived) && <Button size="sm" disabled={archive.isPending || items.length > 100} onClick={() => archive.mutate({ items, archived: false })}>Unarchive selected</Button>}
+          </>}
           {!allMatching && <Button size="sm" disabled={selected.size > 100} onClick={() => setMoving(true)}>Move selected…</Button>}
           {!allMatching && (
             <Button size="sm" disabled={remove.isPending} onClick={() => setConfirmingDelete(true)}>
@@ -527,7 +536,19 @@ export function CollectionPage({
             Drop to upload to {search.folder ? (crumbs.data?.at(-1)?.name ?? 'this folder') : current.name}
           </div>
         )}
-        {ownRows && layout === 'board' ? (
+        {ownRows && layout === 'navigation' ? (
+          <ItemsNavigation
+            view={view}
+            fields={fieldList}
+            columns={columns}
+            publishing={!!current.publishing_enabled}
+            selected={parseNavigation(search.nav)}
+            activeId={search.item}
+            onSelect={(selected) => onSearch({ nav: formatNavigation(selected), item: undefined })}
+            renderItem={renderItem}
+            onOpen={open}
+          />
+        ) : ownRows && layout === 'board' ? (
           <ItemsBoard
             filePreviews={library}
             renderItem={renderItem}

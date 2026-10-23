@@ -1,3 +1,4 @@
+import { useArchiveActions } from './archive-actions';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Download, FileCode2, FolderInput, FolderSearch, MoreHorizontal, Trash2, Upload } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -85,6 +86,7 @@ export function ItemSheet({
     },
   });
   const close = () => (dirty ? setConfirmingClose(true) : onClose());
+  const archive = useArchiveActions();
   const isFile = library && item?.kind === 'item';
   const canWrite = can(item, 'write');
   const canManage = can(item, 'manage');
@@ -106,7 +108,7 @@ export function ItemSheet({
       <SheetContent aria-describedby={undefined}>
         <header className="flex items-start gap-2 border-b px-4 py-3">
           <div className="min-w-0 flex-1">
-            <SheetTitle className="truncate text-base font-semibold">{item?.name ?? (itemQuery.isPending ? '…' : 'Item')}</SheetTitle>
+            <SheetTitle className="truncate text-base font-semibold">{item?.name ?? (itemQuery.isPending ? '…' : 'Item')}{item?.archived && <Badge className="ml-2">Archived</Badge>}</SheetTitle>
             <SheetDescription className="truncate text-xs text-muted">
               {collection.name}
               {item?.updated_at && ` · Updated ${format.relative(item.updated_at)}${editor ? ` by ${editor}` : ''}`}
@@ -127,6 +129,7 @@ export function ItemSheet({
                 )}
                 {item.kind === 'item' && canWrite && (
                   <>
+                    <DropdownMenuItem disabled={archive.isPending} onSelect={() => archive.mutate({ items: [item], archived: !item.archived })}>{item.archived ? 'Unarchive' : 'Archive'}</DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => setDialog('rename')}>Rename…</DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => setDialog('move')}>
                       <FolderInput /> Move…

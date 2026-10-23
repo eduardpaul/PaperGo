@@ -2,7 +2,7 @@ import type { Resource, Workflow } from '@/api/types';
 import type { Trigger, WorkflowDefinition } from './model';
 
 export function triggerLabel(trigger: Trigger): string {
-  const labels: Record<string, string> = { manual: 'Run on demand', 'file.added': 'When a file is added', 'file.updated': 'When a file is replaced', 'item.created': 'When an item is created', 'item.updated': 'When metadata changes', 'item.published': 'When an item is published', 'permissions.changed': 'When permissions change', 'term.changed': 'When a term changes', 'term.merged': 'When terms merge', 'task.completed': 'When a task is completed' };
+  const labels: Record<string, string> = { manual: 'Run on demand', 'file.added': 'When a file is added', 'file.updated': 'When a file is replaced', 'item.created': 'When an item is created', 'item.updated': 'When metadata changes', 'item.published': 'When an item is published', 'permissions.changed': 'When permissions change', 'term.changed': 'When a term changes', 'term.merged': 'When terms merge', 'term.moved': 'When a term moves', 'task.completed': 'When a task is completed' };
   if (trigger.type === 'schedule') {
     if (trigger.cron === '* * * * *') return 'Every minute';
     const daily = /^(\d+) (\d+) \* \* \*$/.exec(trigger.cron ?? '');

@@ -3,8 +3,10 @@ package content
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"papergo/internal/dal/access"
 	"papergo/internal/dal/catalog"
@@ -12,8 +14,18 @@ import (
 )
 
 // Browse selects the live resources a reader lists below a parent, in a
-// workspace or, with neither, the workspaces, in ID order.
+// workspace or, with neither, the workspaces, in Order.
 type Browse struct {
+	Archive refs.ArchiveSelection
+	// GlobalItems selects items in every collection, or in WorkspaceID.
+	GlobalItems                             bool
+	CollectionID, ContentTypeID, ArchivedBy string
+	ArchivedFrom, ArchivedTo                time.Time
+	// BeforeArchivedAt and BeforeArchivedID page NewestArchived: items
+	// archived before BeforeArchivedAt, or then with a smaller ID.
+	BeforeArchivedAt      time.Time
+	BeforeArchivedID      string
+	Order                 BrowseOrder
 	Reader                access.Principal
 	ParentID, WorkspaceID string
 	Kind                  refs.ResourceKind
@@ -27,6 +39,16 @@ type Browse struct {
 	AfterID string
 	Limit   int
 }
+
+// BrowseOrder sorts browsed resources.
+type BrowseOrder uint8
+
+const (
+	BrowseByID BrowseOrder = iota
+	// NewestArchived sorts archived items by archive time, newest first,
+	// then by ID descending.
+	NewestArchived
+)
 
 // SearchMatch matches workspaces and collections whose folded name
 // contains Name, and the items and folders a text matcher found on each
@@ -98,12 +120,66 @@ func (r *Repo) selective(ctx context.Context, c candidate) (bool, error) {
 	return n <= CandidateDriveLimit, err
 }
 
-// SurfaceKeywords selects the keywords of the item surface aliased p: its
-// own keywords and its keyword and keyword-term field values.
-const SurfaceKeywords = "SELECT keyword FROM item_surface_keywords WHERE surface_id=p.id UNION SELECT value_text FROM field_values WHERE surface_id=p.id AND (field_type='keywords' OR field_type='term' AND value_text IN (SELECT t.id FROM terms t JOIN term_sets ts ON ts.id=t.term_set_id WHERE ts.is_keywords OR t.available_as_keyword))"
+// keywordValue tests that the field value aliased f holds a keyword: a
+// keywords field value, or a term field value that is a keyword.
+const keywordValue = "(f.field_type='keywords' OR f.field_type='term' AND f.value_text IN (SELECT t.id FROM terms t JOIN term_sets ts ON ts.id=t.term_set_id WHERE ts.is_keywords OR t.available_as_keyword))"
+
+// surfaceKeywordRows selects the keyword sources of the item surfaces in
+// the table scope, of columns owner and surface, as rows of owner, term
+// and lineage. Name scope in a WITH clause: it is read twice.
+func surfaceKeywordRows(scope string) string {
+	return "SELECT o.owner,k.keyword AS term,TRUE AS lineage FROM " + scope + " o JOIN item_surface_keywords k ON k.surface_id=o.surface" +
+		" UNION ALL SELECT o.owner,f.value_text,f.applies_parents FROM " + scope + " o JOIN field_values f ON f.surface_id=o.surface WHERE " + keywordValue
+}
+
+// keywordTerms selects from the terms whose holders take on the canonical
+// term the expression keyword names, x: as t, the term, one below it as c,
+// or one merged into either, joined with holders. Terms below x apply it
+// only where their source applies parents. x and its subtree are one range
+// of the path index, so holders are found from the keyword.
+func (r *Repo) keywordTerms(holders, keyword string) string {
+	return "terms x JOIN terms c ON c.id=x.id OR " + r.d.Below("c.path", "x.path") + " JOIN terms t ON t.id=c.id OR t.merged_into_id=c.id " + holders + " WHERE x.id=" + keyword
+}
+
+// keywordSurfaces selects the item surfaces that the canonical term the
+// expression keyword names applies to: their own keywords hold it or a
+// term below it, or a keyword field value holds it, or a term below it
+// where the field applies parents. keyword appears twice.
+func (r *Repo) keywordSurfaces(keyword string) string {
+	return "SELECT k.surface_id FROM " + r.keywordTerms("JOIN item_surface_keywords k ON k.keyword=t.id", keyword) +
+		" UNION ALL SELECT f.surface_id FROM " + r.keywordTerms("JOIN field_values f ON f.value_text=t.id AND f.field_type IN ('term','keywords')", keyword) + " AND (c.id=x.id OR f.applies_parents) AND " + keywordValue
+}
+
+// keywordResources selects the resources whose own keywords hold the
+// canonical term the expression keyword names, or a term below it.
+func (r *Repo) keywordResources(keyword string) string {
+	return "SELECT k.resource_id FROM " + r.keywordTerms("JOIN resource_keywords k ON k.keyword=t.id", keyword)
+}
+
+// appliedKeywords selects each owner and canonical keyword that rows of
+// owner, term and lineage apply: a merged term counts as the term it was
+// merged into, and that term's path lists the ancestors a row applies. An
+// owner may repeat a keyword. Rows are joined, not correlated per owner, so
+// each term's ancestors are listed once per row.
+func (r *Repo) appliedKeywords(rows string) string {
+	return "SELECT s.owner,a.value AS keyword FROM (" + rows + ") s JOIN terms t ON t.id=s.term JOIN terms c ON c.id=coalesce(t.merged_into_id,t.id) CROSS JOIN " + r.d.PathIDs("c.path", "a") + " WHERE s.lineage OR a.value=c.id"
+}
+
+// family selects a term, its descendants and the terms merged into those:
+// the terms whose holders a parent-applying source tags with the term.
+func (r *Repo) family() string {
+	subtree := "SELECT t.id FROM terms x JOIN terms t ON " + r.d.Below("t.path", "x.path") + " WHERE x.id=?"
+	return subtree + " UNION ALL SELECT m.id FROM terms m WHERE m.merged_into_id IN (" + subtree + ")"
+}
 
 // BrowseIDs returns the IDs of the resources b selects.
 func (r *Repo) BrowseIDs(ctx context.Context, b Browse) ([]string, error) {
+	if b.Order == NewestArchived && b.Archive != refs.ArchiveArchived {
+		return nil, fmt.Errorf("archive order needs archived resources, not %q", b.Archive)
+	}
+	if !b.BeforeArchivedAt.IsZero() && b.Order != NewestArchived {
+		return nil, errors.New("an archive cursor needs archive order")
+	}
 	where := []string{"r.deleted_at IS NULL"}
 	args := []any{}
 	add := func(cond string, a ...any) {
@@ -111,12 +187,36 @@ func (r *Repo) BrowseIDs(ctx context.Context, b Browse) ([]string, error) {
 		args = append(args, a...)
 	}
 	switch {
+	case b.GlobalItems:
+		add("r.kind='item'")
+		if b.WorkspaceID != "" {
+			add("r.workspace_id=?", b.WorkspaceID)
+		}
 	case b.ParentID != "":
 		add("r.parent_id=?", b.ParentID)
 	case b.WorkspaceID != "":
 		add("r.workspace_id=?", b.WorkspaceID)
 	default:
 		add("r.kind='workspace'")
+	}
+	add(b.Archive.Predicate("r"))
+	if b.CollectionID != "" {
+		add("r.container_id=?", b.CollectionID)
+	}
+	if b.ContentTypeID != "" {
+		add("r.content_type_id=?", b.ContentTypeID)
+	}
+	if b.ArchivedBy != "" {
+		add("r.archived_by=?", b.ArchivedBy)
+	}
+	if !b.ArchivedFrom.IsZero() {
+		add("r.archived_at>=?", b.ArchivedFrom.UTC())
+	}
+	if !b.ArchivedTo.IsZero() {
+		add("r.archived_at<=?", b.ArchivedTo.UTC())
+	}
+	if !b.BeforeArchivedAt.IsZero() {
+		add("(r.archived_at,r.id)<(?,?)", b.BeforeArchivedAt.UTC(), b.BeforeArchivedID)
 	}
 	if b.Kind != "" {
 		add("r.kind=?", string(b.Kind))
@@ -136,9 +236,10 @@ func (r *Repo) BrowseIDs(ctx context.Context, b Browse) ([]string, error) {
 		})
 	}
 	if b.Keyword != "" {
-		aliases := "SELECT id FROM terms WHERE id=? OR merged_into_id=?"
+		// Holders of a descendant apply the keyword when they apply parents.
+		family := r.family()
 		candidates = append(candidates, candidate{
-			"SELECT resource_id AS id FROM resource_keywords WHERE keyword IN (" + aliases + ") UNION ALL SELECT p.item_id FROM item_surface_keywords k JOIN item_surfaces p ON p.id=k.surface_id WHERE k.keyword IN (" + aliases + ") UNION ALL SELECT item_id FROM field_values WHERE field_type IN ('keywords','term') AND value_text IN (" + aliases + ")",
+			"SELECT resource_id AS id FROM resource_keywords WHERE keyword IN (" + family + ") UNION ALL SELECT p.item_id FROM item_surface_keywords k JOIN item_surfaces p ON p.id=k.surface_id WHERE k.keyword IN (" + family + ") UNION ALL SELECT item_id FROM field_values WHERE field_type IN ('keywords','term') AND value_text IN (" + family + ")",
 			[]any{b.Keyword, b.Keyword, b.Keyword, b.Keyword, b.Keyword, b.Keyword},
 		})
 	}
@@ -177,9 +278,11 @@ func (r *Repo) BrowseIDs(ctx context.Context, b Browse) ([]string, error) {
 	add(visible, visibleArgs...)
 	if b.Keyword != "" {
 		selected, selectedArgs := r.acl.Surface("r.id", b.Reader, b.Surface)
-		cond := "(r.kind NOT IN ('item','folder') AND EXISTS(SELECT 1 FROM resource_keywords k JOIN terms kt ON kt.id=k.keyword WHERE k.resource_id=r.id AND coalesce(kt.merged_into_id,kt.id)=?) OR r.kind IN ('item','folder') AND EXISTS (SELECT 1 FROM item_surfaces p WHERE p.item_id=r.id AND p.surface=" + selected + " AND EXISTS(SELECT 1 FROM (" + SurfaceKeywords + ") k JOIN terms kt ON kt.id=k.keyword WHERE coalesce(kt.merged_into_id,kt.id)=?)))"
+		// The holders are one uncorrelated set of item and surface, matched
+		// against the surface each entry is read on, so it is found once.
+		cond := "(r.kind NOT IN ('item','folder') AND r.id IN (" + r.keywordResources("?") + ") OR r.kind IN ('item','folder') AND (r.id," + selected + ") IN (SELECT h.item_id,h.surface FROM item_surfaces h WHERE h.id IN (" + r.keywordSurfaces("?") + ")))"
 		a := append([]any{b.Keyword}, selectedArgs...)
-		add(cond, append(a, b.Keyword)...)
+		add(cond, append(a, b.Keyword, b.Keyword)...)
 	}
 	if b.Search != nil {
 		selected, selectedArgs := r.acl.Surface("r.id", b.Reader, b.Surface)
@@ -200,7 +303,11 @@ func (r *Repo) BrowseIDs(ctx context.Context, b Browse) ([]string, error) {
 		a := append([]any{f.ContainerID}, selectedArgs...)
 		add(cond, append(a, f.Key, string(f.Type), f.Scale, f.Value)...)
 	}
-	query := "SELECT r.id FROM resources r WHERE " + strings.Join(where, " AND ") + " ORDER BY r.id"
+	order := "r.id"
+	if b.Order == NewestArchived {
+		order = "r.archived_at DESC,r.id DESC"
+	}
+	query := "SELECT r.id FROM resources r WHERE " + strings.Join(where, " AND ") + " ORDER BY " + order
 	if b.Limit > 0 {
 		query += " LIMIT ?"
 		args = append(args, b.Limit)

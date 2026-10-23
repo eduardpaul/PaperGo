@@ -29,7 +29,7 @@ const (
 )
 
 // ItemTriggers are the trigger types raised by item writes.
-var ItemTriggers = []string{dms.EventItemCreated, dms.EventItemUpdated, dms.EventItemPublished, dms.EventItemUnpublished, dms.EventItemDeleted, dms.EventItemRestored, dms.EventItemPurged, dms.EventFileAdded, dms.EventFileUpdated}
+var ItemTriggers = []string{dms.EventItemArchived, dms.EventItemUnarchived, dms.EventItemCreated, dms.EventItemUpdated, dms.EventItemPublished, dms.EventItemUnpublished, dms.EventItemDeleted, dms.EventItemRestored, dms.EventItemPurged, dms.EventFileAdded, dms.EventFileUpdated}
 
 // FolderTriggers are the trigger types raised by folder writes.
 var FolderTriggers = []string{dms.EventFolderCreated, dms.EventFolderUpdated, dms.EventFolderDeleted, dms.EventFolderRestored, dms.EventFolderPurged}
@@ -322,7 +322,7 @@ func (d Definition) validate() error {
 			if t.Cron != "" || t.TimeZone != "" {
 				return dms.Invalid(at + "cron and time_zone belong to schedule triggers")
 			}
-		case t.Type == dms.EventTermMerged || t.Type == dms.EventTermChanged:
+		case t.Type == dms.EventTermMerged || t.Type == dms.EventTermMoved || t.Type == dms.EventTermChanged:
 			if t.CollectionID != "" || t.ContentTypeID != "" || t.Cron != "" || t.TimeZone != "" {
 				return dms.Invalid(at + t.Type + " triggers take no options")
 			}

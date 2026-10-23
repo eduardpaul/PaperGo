@@ -11,7 +11,7 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface MoveRequestBuilder extends BaseRequestBuilder<MoveRequestBuilder> {
     /**
-     * Moves the term and its subtree in its set. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.
+     * Moves the term and its subtree in its set. Raises term.moved. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<Term>}
@@ -28,7 +28,7 @@ export interface MoveRequestBuilder extends BaseRequestBuilder<MoveRequestBuilde
      */
      post(body: MoveTerm, requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<Term | undefined>;
     /**
-     * Moves the term and its subtree in its set. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.
+     * Moves the term and its subtree in its set. Raises term.moved. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}

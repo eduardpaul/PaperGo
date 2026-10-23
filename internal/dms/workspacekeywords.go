@@ -15,6 +15,7 @@ type WorkspaceKeywordCount struct {
 }
 
 type WorkspaceKeywordsQuery struct {
+	Archive      refs.ArchiveSelection
 	CollectionID string
 	Prefix       string
 	After        string
@@ -36,7 +37,10 @@ func (s *Service) WorkspaceKeywords(ctx context.Context, subject, workspaceID st
 	if w.Kind != refs.KindWorkspace {
 		return Page[WorkspaceKeywordCount]{}, invalid("keywords belong to a workspace")
 	}
-	query := content.WorkspaceKeywords{Reader: principal(ctx, subject), WorkspaceID: workspaceID, Prefix: in.Prefix, Limit: pageSize(in.Limit) + 1}
+	if !in.Archive.Valid() {
+		return Page[WorkspaceKeywordCount]{}, invalid("archive must be active, archived or all")
+	}
+	query := content.WorkspaceKeywords{Archive: in.Archive.Default(), Reader: principal(ctx, subject), WorkspaceID: workspaceID, Prefix: in.Prefix, Limit: pageSize(in.Limit) + 1}
 	if in.CollectionID != "" {
 		c, err := s.authorize(ctx, subject, in.CollectionID, "read")
 		if err != nil {
@@ -47,8 +51,19 @@ func (s *Service) WorkspaceKeywords(ctx context.Context, subject, workspaceID st
 		}
 		query.CollectionID = in.CollectionID
 	}
+	normalized := in
+	normalized.After, normalized.Limit = "", 0
+	normalized.Archive = in.Archive.Default()
+	fingerprint := queryFingerprint(struct {
+		Subject, Workspace string
+		Query              WorkspaceKeywordsQuery
+	}{subject, workspaceID, normalized})
 	if in.After != "" {
-		query.AfterName, query.AfterID, _ = strings.Cut(in.After, "\x1f")
+		position, ok := decodePageCursor[keywordPosition](in.After, "kw1.", fingerprint)
+		if !ok {
+			return Page[WorkspaceKeywordCount]{}, invalid("keyword cursor does not match query or caller")
+		}
+		query.AfterName, query.AfterID = position.Name, position.Keyword
 	}
 	counts, err := s.DAL.Content().WorkspaceKeywords(ctx, query)
 	if err != nil {
@@ -58,5 +73,13 @@ func (s *Service) WorkspaceKeywords(ctx context.Context, subject, workspaceID st
 	for i, c := range counts {
 		out[i] = WorkspaceKeywordCount{Keyword: c.ID, Name: c.Name, Count: c.Count}
 	}
-	return entityPage(out, in.Limit, func(entry WorkspaceKeywordCount) string { return strings.ToLower(entry.Name) + "\x1f" + entry.Keyword }), nil
+	return entityPage(out, in.Limit, func(entry WorkspaceKeywordCount) string {
+		return encodePageCursor("kw1.", fingerprint, keywordPosition{strings.ToLower(entry.Name), entry.Keyword})
+	}), nil
+}
+
+// keywordPosition is the last keyword of a page, in name then ID order.
+type keywordPosition struct {
+	Name    string `json:"name"`
+	Keyword string `json:"keyword"`
 }

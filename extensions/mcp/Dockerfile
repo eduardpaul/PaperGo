@@ -3,7 +3,8 @@
 #   docker build -f extensions/mcp/Dockerfile -t papergo-mcp .
 #
 # It is pure Go: no native libraries, models or database.
-FROM golang:1.27.2-bookworm AS build
+ARG GO_VERSION=1.27.3
+FROM golang:${GO_VERSION}-bookworm AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 COPY cmd/mcp ./cmd/mcp

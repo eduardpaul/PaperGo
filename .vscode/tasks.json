@@ -56,28 +56,29 @@
     {
       "label": "PaperGo: check on PostgreSQL",
       "detail": "Runs the DAL and application suites on PostgreSQL 17",
-      "type": "process", "command": "bash", "args": ["scripts/check.sh", "--postgres"],
+      "type": "process", "command": "bash", "args": ["scripts/check.sh", "test", "--only", "postgres"],
       "problemMatcher": ["$go"], "options": { "cwd": "${workspaceFolder}" }
     },
     {
       "label": "PaperGo: check Go package on PostgreSQL",
       "type": "process", "command": "bash",
-      "args": ["scripts/check.sh", "--postgres", "--packages", "${input:papergoTestPackage}"],
+      "args": ["scripts/check.sh", "test", "--only", "postgres", "--packages", "${input:papergoTestPackage}"],
       "problemMatcher": ["$go"], "options": { "cwd": "${workspaceFolder}" }
     },
     {
       "label": "PaperGo: check frontend",
-      "type": "process", "command": "bash", "args": ["scripts/check.sh", "--web"],
+      "type": "process", "command": "bash", "args": ["scripts/check.sh", "web"],
       "problemMatcher": [], "options": { "cwd": "${workspaceFolder}" }
     },
     {
       "label": "PaperGo: race check",
-      "type": "process", "command": "bash", "args": ["scripts/check.sh", "--race"],
+      "type": "process", "command": "bash", "args": ["scripts/check.sh", "race"],
       "problemMatcher": ["$go"], "options": { "cwd": "${workspaceFolder}" }
     },
     {
-      "label": "PaperGo: full check",
-      "type": "process", "command": "bash", "args": ["scripts/check.sh", "--full"],
+      "label": "PaperGo: CI checks",
+      "detail": "Runs the pull request gate, lint and test, in the CI toolchain image",
+      "type": "process", "command": "bash", "args": ["scripts/ci.sh"],
       "problemMatcher": ["$go"], "options": { "cwd": "${workspaceFolder}" }
     },
     {
@@ -116,19 +117,19 @@
     },
     {
       "label": "PaperGo: install sqlite3def",
-      "type": "process", "command": "bash", "args": ["scripts/sqlite3def.sh"],
+      "type": "process", "command": "python3", "args": ["scripts/sqlite3def.py"],
       "problemMatcher": [], "options": { "cwd": "${workspaceFolder}" }
     },
     {
       "label": "PaperGo: release rehearsal",
       "detail": "Packages and smoke-tests the release executables as CI does",
-      "type": "process", "command": "bash", "args": ["scripts/release-rehearsal.sh"],
+      "type": "process", "command": "bash", "args": ["scripts/ci.sh", "release"],
       "problemMatcher": [], "options": { "cwd": "${workspaceFolder}" }
     },
     {
-      "label": "PaperGo: release rehearsal with image",
-      "detail": "Also builds the container image and runs its smoke test (needs Docker)",
-      "type": "process", "command": "bash", "args": ["scripts/release-rehearsal.sh", "--image"],
+      "label": "PaperGo: container image check",
+      "detail": "Builds the container image and runs its smoke test (needs Docker)",
+      "type": "process", "command": "bash", "args": ["scripts/ci.sh", "docker"],
       "problemMatcher": [], "options": { "cwd": "${workspaceFolder}" }
     },
     {

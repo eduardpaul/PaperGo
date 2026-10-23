@@ -171,6 +171,7 @@ a workflow. The server rechecks write permission on every item before starting.
 | `schedule` | a cron occurrence: `cron` (5 fields) and `time_zone` (IANA, default UTC) | see below |
 | `manual` | someone starts it through the API or the web app | each chosen item, the selection's primary item, or none |
 | `term.merged` | a term is merged into another (see [taxonomy](application-foundation.md#controlled-taxonomy)) | none |
+| `term.moved` | a term moves under another parent, or a keyword is promoted into another set | none |
 | `term.changed` | a term's name, localized labels or other editable properties change through PUT `/v1/terms/{id}` | none |
 | `task.created`, `task.completed`, `task.cancelled` | a [task](#tasks) of the workspace is created, completed or cancelled | the task's item, or none |
 | `wf.{key}.completed`, `wf.{key}.failed` | a run of workflow `key` ends | that run's item |
@@ -185,7 +186,7 @@ Fields of a trigger:
 - `sources` (on `file.added` and `file.updated`) lists the file sources that start runs: `upload`, `webdav`, `restore`, `workflow` and `reindex` (a [search reindex with content](search.md#the-store)). The default is `upload`, `webdav` and `restore`, so a workflow that replaces a file does not start itself again.
 - `media_types` (on `file.added` and `file.updated`) limits the trigger to files of these media types: exact (`application/pdf`) or a wildcard (`image/*`), up to 20. Other files start no run; a script can also read `ctx.run.event.data.content_type`.
 - Folder triggers take `collection_id` and `content_type_id`, and no condition: conditions test item fields.
-- `actions` (on `permissions.changed`) lists the changes that start runs: `replace` (an ACL was replaced), `move` (a move gave the entry another permission scope), `member.set` and `member.remove` (workspace membership). The default is all. `permissions.changed` also takes `collection_id`, `content_type_id` and a condition, which folders never meet. `term.changed` and `term.merged` take no trigger options or item conditions.
+- `actions` (on `permissions.changed`) lists the changes that start runs: `replace` (an ACL was replaced), `move` (a move gave the entry another permission scope), `member.set` and `member.remove` (workspace membership). The default is all. `permissions.changed` also takes `collection_id`, `content_type_id` and a condition, which folders never meet. `term.changed`, `term.merged` and `term.moved` take no trigger options or item conditions.
 - For a schedule:
   - **With `collection_id`:** each occurrence starts one run per item of the collection that meets the condition, up to 500, on `surface` (`head` by default, or `published`).
   - **Without `collection_id`:** one run with no item.
@@ -219,6 +220,7 @@ The `data` for each event type:
 - `schedule`: `workflow_id`, `occurrence`; item-associated schedules also include `surface` (`head` or `published`)
 - `manual`: `workflow_id`; form results are available as `ctx.trigger.input` and `run(ctx, input)`'s second argument
 - `term.merged`: `source_term_id`, `target_term_id`, `term_set_id`
+- `term.moved`: `term_id`, `term_set_id`, `previous_term_set_id`, `parent_id`, `previous_parent_id` (empty at the root)
 - `term.changed`: `term_id`, `term_set_id`, `version`, sorted `changed_fields`, and `previous` / `current` term properties (`name`, `parent_id`, `description`, `color`, `sort_order`, `labels`, `synonyms`, `deprecated`, `available_as_keyword`; absent optional fields mean unset). The event has no `resource_id` because the term is organization taxonomy, not a workspace resource.
 - `task.*`: `task_id`, `kind`, `key`, `assignees`, `source`, `item_id`, `run_id`; `task.completed` adds `outcome` and `completed_by`
 - `wf.*` and `role.*`: `run_id`, `workflow_id` and `status`; `failed` adds `error`, and `completed` adds the run's [`outputs`](#outputs): what its script returned
@@ -234,7 +236,7 @@ The entries are those the change reaches when the root is dispatched. An entry t
 
 A change is expanded only when an enabled workflow of the workspace subscribes to it (its `collection_id` and `actions` match), so permission changes cost nothing when no workflow listens. An unchanged ACL or term update, or a repeated membership assignment, raises no event. Failed writes leave no events. Permission events and term events retain the actor and workflow cause/depth, and commit with the write and audit.
 
-Updating organization terms delivers `term.changed` to every live workspace so its workflow subscriptions can react, including localized-label-only edits. Subscriptions to `term.changed` require `taxonomy.read`. Dispatch skips subscriptions whose workflow version author no longer has that scope. These events describe taxonomy changes without changing item revisions. Term creation, moves, keyword promotion and merges do not raise `term.changed`; merges raise `term.merged` in every live workspace.
+Updating organization terms delivers `term.changed` to every live workspace so its workflow subscriptions can react, including localized-label-only edits. Subscriptions to `term.changed` require `taxonomy.read`. Dispatch skips subscriptions whose workflow version author no longer has that scope. These events describe taxonomy changes without changing item revisions. Term creation, moves, keyword promotion and merges do not raise `term.changed`; moves and promotions raise `term.moved` and merges raise `term.merged` in every live workspace.
 
 ## Concurrency
 
@@ -432,7 +434,7 @@ Built-in workflows are processes PaperGo ships, as scripts in `internal/workflow
 | `documents.optimize` | Optimize image storage: when an image is added (uploaded, through WebDAV or restored), or on demand, [`optimize-image`](documents.md#image-optimization) proposes a smaller copy and an approval asks the `approvers` to compare it with the current file at full size; approving promotes it as a new file version, rejecting discards it. `concurrency: replace`, so a newer file cancels a waiting review. Needs OCR. | per library | `target_height`, `min_confidence`, `percentile`, `max_analysis_dimension`, `minimum_scale`, `quality`, `approvers` (people; none means the workspace's owners) |
 | `documents.photos_to_pdf` | Photos to PDF: started on a selection (`selection: "selection"`, launch screen with image previews and a page order), [`compose-pdf`](documents.md#photos-to-pdf) combines the photos into one searchable PDF and an approval asks the `approvers` to review it (`file.preview`). Approving promotes it as the primary item's new file version, keeping its metadata and history, and sends the other photos to the recycle bin in the same transaction; rejecting discards it. `concurrency: skip`. Needs OCR. | per library | `target_height` (default 32), `quality` (default 80), `approvers` |
 | `search.content` | Index file content: when a PDF or an image is added (also through WebDAV, a restore, a workflow or a content reindex), reads its text, chunks, embeds and publishes it ([search](search.md#file-content)). `concurrency: coalesce`. A system built-in filling the `search.content` role, on by default when the deployment runs search; outputs `blob_id`, `text_id`, `pages`, `language`, `generation`, `chunks` | per list or library (manual catalog entry available) | `ocr`, `max_pages`, `chunker`, `max_chars`, `overlap`, `max_chunks`, `embed` |
-| `search.index` | Index for search: on item and folder changes, `permissions.changed` (`replace`, `move`), `term.changed`, `term.merged` and manual starts, `POST /v1/workspaces/{id}/search/sync` queues the entry's [search](search.md) documents to be rewritten, in batches; term events resync every entry holding the term. `concurrency: coalesce`. A system built-in filling the `search.index` role, on by default when the deployment runs search. | per list or library (manual catalog entry available) | none |
+| `search.index` | Index for search: on item and folder changes, `permissions.changed` (`replace`, `move`), `term.changed`, `term.merged`, `term.moved` and manual starts, `POST /v1/workspaces/{id}/search/sync` queues the entry's [search](search.md) documents to be rewritten, in batches; term events resync every entry holding the term or a term below it. `concurrency: coalesce`. A system built-in filling the `search.index` role, on by default when the deployment runs search. | per list or library (manual catalog entry available) | none |
 | `documents.preview` | Generate file previews: renders a [preview](previews.md) when a file is added or replaced, and on demand. A system built-in filling the `file.preview` role, on by default. | per list or library | none |
 | `items.expire` | Unpublish expired items: every day, unpublishes the published items whose date `field` is before today | per list or library | `field` (an indexed date field), `cron` (default `0 1 * * *`), `time_zone` (default `UTC`) |
 
@@ -566,3 +568,7 @@ PaperGo code that should happen after a change or on a schedule:
 3. Never reacts to changes in hidden code paths.
 
 Relationship creation, attribute updates, deletion and taxonomy merges emit `item.updated` for each live endpoint. These writes advance both item ETags and modification timestamps without adding metadata history. Their data includes `relationship_id`, `relationship_action`, `peer_id`, `changed_fields: ["$relationships"]`, the head `revision_id` and `content_type_id`. Term filters can match present terms; added/removed term filters do not fire for relationship-only changes. Duplicate link requests leave both endpoints unchanged. Purging an item emits relationship changes for surviving peers.
+
+## Archive events
+
+`item.archived` and `item.unarchived` identify the affected item and collection and carry `data.archived` (`true` or `false`). They commit with the transition and its audit entry, without a content revision or file event. The search-index built-in subscribes to both. Workflows may call `POST /v1/items/{id}/archive` and `/unarchive` with the current `If-Match`, or use collection bulk archive actions. No automatic archive policy runs unless configured in a workflow.

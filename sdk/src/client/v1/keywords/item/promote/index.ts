@@ -11,7 +11,7 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface PromoteRequestBuilder extends BaseRequestBuilder<PromoteRequestBuilder> {
     /**
-     * Moves a keyword into a managed set, available as a keyword, or merges it into the set's term with the same name, label or synonym. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.
+     * Moves a keyword into a managed set, available as a keyword, or merges it into the set's term with the same name, label or synonym. Raises term.moved or term.merged. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<Term>}
@@ -28,7 +28,7 @@ export interface PromoteRequestBuilder extends BaseRequestBuilder<PromoteRequest
      */
      post(body: PromoteKeyword, requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<Term | undefined>;
     /**
-     * Moves a keyword into a managed set, available as a keyword, or merges it into the set's term with the same name, label or synonym. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.
+     * Moves a keyword into a managed set, available as a keyword, or merges it into the set's term with the same name, label or synonym. Raises term.moved or term.merged. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
