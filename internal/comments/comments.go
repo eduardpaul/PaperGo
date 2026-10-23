@@ -184,13 +184,7 @@ func (s *Service) discussion(ctx context.Context, t *dms.Service, subject, itemI
 	if a.mode, err = s.effective(ctx, t, item); err != nil {
 		return a, err
 	}
-	switch a.mode.Mode {
-	case ModeCollaborators:
-		a.read, err = notify.Can(ctx, t, subject, itemID, "read_draft")
-	case ModeReaders:
-		a.read, err = notify.CanSee(ctx, t, subject, itemID)
-	}
-	if err != nil || !a.read {
+	if a.read, err = reads(ctx, t, subject, itemID, a.mode.Mode); err != nil || !a.read {
 		return a, err
 	}
 	if a.write, err = notify.Can(ctx, t, subject, itemID, "write"); err != nil {
@@ -207,6 +201,18 @@ func (s *Service) discussion(ctx context.Context, t *dms.Service, subject, itemI
 	}
 	a.post = a.scope && !a.archivedItem
 	return a, nil
+}
+
+// reads reports whether subject may read the item's discussion in mode:
+// its draft among collaborators, a revision of it among readers.
+func reads(ctx context.Context, t *dms.Service, subject, itemID string, mode Mode) (bool, error) {
+	switch mode {
+	case ModeCollaborators:
+		return notify.Can(ctx, t, subject, itemID, "read_draft")
+	case ModeReaders:
+		return notify.CanSee(ctx, t, subject, itemID)
+	}
+	return false, nil
 }
 
 // refuse refuses writes where discussions are off or hidden, without the
@@ -696,12 +702,9 @@ func (s *Service) tell(ctx context.Context, t *dms.Service, a access, c comments
 	if err != nil {
 		return err
 	}
+	// The discussion's mode is the item's, the same for everyone told.
 	allowed := func(ctx context.Context, t *dms.Service, subject string) (bool, error) {
-		d, err := s.discussion(ctx, t, subject, c.ItemID)
-		if errors.Is(err, dms.ErrForbidden) || errors.Is(err, dms.ErrNotFound) {
-			return false, nil
-		}
-		return d.read, err
+		return reads(ctx, t, subject, c.ItemID, a.mode.Mode)
 	}
 	body, err := plain(ctx, t, c.Body)
 	if err != nil {
@@ -860,11 +863,11 @@ func (s *Service) Mentionable(ctx context.Context, subject, itemID, q string) ([
 			if name == "" {
 				name = u.ID
 			}
-			d, err := s.discussion(as, t, u.ID, itemID)
-			if err != nil && !errors.Is(err, dms.ErrForbidden) && !errors.Is(err, dms.ErrNotFound) {
+			see, err := reads(as, t, u.ID, itemID, a.mode.Mode)
+			if err != nil {
 				return nil, err
 			}
-			out = append(out, Candidate{Person: Person{Subject: u.ID, Name: name}, CanSee: err == nil && d.read})
+			out = append(out, Candidate{Person: Person{Subject: u.ID, Name: name}, CanSee: see})
 		}
 		return out, nil
 	})
