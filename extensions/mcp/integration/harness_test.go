@@ -40,14 +40,17 @@ type env struct {
 	search *documentsearch.Search
 	api    *httptest.Server
 	mcp    *httptest.Server
+	// mu guards gate, before and backend, which tests change while the API
+	// serves requests.
+	mu sync.Mutex
 	// gate, when set, holds workspace listings until it is closed.
-	gate   chan struct{}
-	gateMu sync.Mutex
+	gate chan struct{}
 	// before, when set, runs before the API serves a request.
-	before  func(*http.Request)
+	before func(*http.Request)
+	// backend answers the API's requests; tests replace it with serve.
+	backend http.Handler
 	logs    *bytes.Buffer
 	logsMu  *sync.Mutex
-	backend http.Handler
 }
 
 type options struct {
@@ -78,16 +81,16 @@ func setup(t *testing.T, o options) *env {
 	}
 	e.backend = a.Handler()
 	e.api = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		e.gateMu.Lock()
-		gate, before := e.gate, e.before
-		e.gateMu.Unlock()
+		e.mu.Lock()
+		gate, before, backend := e.gate, e.before, e.backend
+		e.mu.Unlock()
 		if before != nil {
 			before(r)
 		}
 		if gate != nil && r.URL.Path == "/v1/workspaces" {
 			<-gate
 		}
-		e.backend.ServeHTTP(w, r)
+		backend.ServeHTTP(w, r)
 	}))
 	t.Cleanup(e.api.Close)
 	backendURL, _ := url.Parse(e.api.URL)
@@ -123,6 +126,13 @@ func (e *env) log() string {
 	e.logsMu.Lock()
 	defer e.logsMu.Unlock()
 	return e.logs.String()
+}
+
+// serve makes h answer the API's requests from now on.
+func (e *env) serve(h http.Handler) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.backend = h
 }
 
 func (e *env) endpoint() string { return e.mcp.URL + server.Path }

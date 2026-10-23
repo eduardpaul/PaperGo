@@ -120,14 +120,14 @@ func TestOverloadAndLimits(t *testing.T) {
 	// One call holds the only slot at the API; the next request is refused.
 	gate, arrived := make(chan struct{}), make(chan struct{})
 	var once sync.Once
-	e.gateMu.Lock()
+	e.mu.Lock()
 	e.gate = gate
 	e.before = func(r *http.Request) {
 		if r.URL.Path == "/v1/workspaces" {
 			once.Do(func() { close(arrived) })
 		}
 	}
-	e.gateMu.Unlock()
+	e.mu.Unlock()
 	held := make(chan error, 1)
 	go func() {
 		_, err := s.CallTool(context.Background(), &sdk.CallToolParams{Name: "list_workspaces", Arguments: map[string]any{}})
@@ -135,9 +135,9 @@ func TestOverloadAndLimits(t *testing.T) {
 	}()
 	<-arrived
 	busy := post(t, e, `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, map[string]string{"Authorization": "Bearer " + aliceToken})
-	e.gateMu.Lock()
+	e.mu.Lock()
 	e.gate, e.before = nil, nil
-	e.gateMu.Unlock()
+	e.mu.Unlock()
 	close(gate)
 	if err := <-held; err != nil {
 		t.Fatalf("held call: %v", err)
@@ -162,7 +162,7 @@ func TestUnavailableBackend(t *testing.T) {
 	f := seed(t, e)
 	s := e.connect(t, aliceToken)
 	// An answer that is not JSON is the API being unavailable, not data.
-	e.backend = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	e.serve(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v1/identity/me" {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = io.WriteString(w, `{"subject":"alice","active":true,"scopes":["item.read"]}`)
@@ -170,7 +170,7 @@ func TestUnavailableBackend(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `<html>`)
-	})
+	}))
 	f2 := fails(t, s, "get_item", `{"item_id": "`+f.items[0]+`"}`, "unavailable")
 	if !f2.Retryable {
 		t.Fatalf("%+v", f2)
@@ -273,7 +273,7 @@ func TestWritesAreNotRetried(t *testing.T) {
 	s := e.connect(t, aliceToken)
 	api := e.backend
 	var posts atomic.Int32
-	e.backend = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	e.serve(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			api.ServeHTTP(w, r)
 			return
@@ -285,13 +285,13 @@ func TestWritesAreNotRetried(t *testing.T) {
 		if err == nil {
 			conn.Close()
 		}
-	})
+	}))
 	const id = "2f1e7c55-3b0e-4d8f-9b3e-5d7c1a2b3c4d"
 	fails(t, s, "create_item", `{"parent_id": "`+f.list+`", "id": "`+id+`", "name": "Lost answer"}`, "unavailable")
 	if n := posts.Load(); n != 1 {
 		t.Fatalf("%d writes sent", n)
 	}
-	e.backend = api
+	e.serve(api)
 	if again := ok(t, s, "create_item", `{"parent_id": "`+f.list+`", "id": "`+id+`", "name": "Lost answer"}`); again["created"] != false {
 		t.Fatalf("repeat %v", again)
 	}
@@ -305,7 +305,7 @@ func TestWriteSurvivesLabelFailure(t *testing.T) {
 	s := e.connect(t, aliceToken)
 	api := e.backend
 	var dropped atomic.Int32
-	e.backend = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	e.serve(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/fields") {
 			dropped.Add(1)
 			if conn, _, err := http.NewResponseController(w).Hijack(); err == nil {
@@ -314,7 +314,7 @@ func TestWriteSurvivesLabelFailure(t *testing.T) {
 			return
 		}
 		api.ServeHTTP(w, r)
-	})
+	}))
 	created := ok(t, s, "create_item", `{"parent_id": "`+f.list+`", "name": "Written", "values": {"status": "Open"}}`)
 	if dropped.Load() == 0 || created["created"] != true || str(created["id"]) == "" || created["labels_missing"] != true {
 		t.Fatalf("create %v", created)
@@ -323,7 +323,7 @@ func TestWriteSurvivesLabelFailure(t *testing.T) {
 	if updated["name"] != "Rewritten" || updated["labels_missing"] != true {
 		t.Fatalf("update %v", updated)
 	}
-	e.backend = api
+	e.serve(api)
 	if again := ok(t, s, "get_item", `{"item_id": "`+str(created["id"])+`"}`); again["labels_missing"] != nil {
 		t.Fatalf("read %v", again)
 	}
