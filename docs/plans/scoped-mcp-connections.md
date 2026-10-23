@@ -79,9 +79,9 @@ Simple first:
 
 Read only maps to `workspace.read`, `list.read`, `contentType.read`,
 `document.read`, `taxonomy.read` and `user.read`; read and write adds
-`list.write`. Scopes the person does not hold are left out. Connections are
-the person's access tokens whose names the page created; other tokens stay
-on the Access tokens page.
+`list.write`. Scopes the person does not hold are left out. Tokens have no
+kind, so **Your connections** lists every personal token that reads lists:
+any of them can connect an assistant.
 
 ## Phases
 

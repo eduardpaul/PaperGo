@@ -7,7 +7,7 @@ It is a separate process in front of the PaperGo API. It holds no data, no datab
 ## Who can connect
 
 - **Clients:** any MCP client that can send an `Authorization` header with a remote (Streamable HTTP) server, such as Claude Code, Cursor or VS Code. Clients that connect to remote servers only through OAuth sign-in cannot connect: the server offers no OAuth.
-- **People:** in deployments with local, OIDC or development authentication, each person creates a personal access token and connects as themselves. With proxy authentication (`AUTH_MODE=proxy`) personal tokens do not exist; an administrator creates an integration token, whose service identity needs its own access to workspaces.
+- **People:** in deployments with local, OIDC or development authentication, each person creates a connection under Settings → AI assistants and connects as themselves, to everything they can access or to chosen places. With proxy authentication (`AUTH_MODE=proxy`) personal tokens do not exist; an administrator creates an integration token, which can be limited to places in the same way, and whose service identity needs its own access to workspaces.
 - **Hosts:** with proxy authentication the browser hostname sits behind the proxy's Basic sign-in, which takes the `Authorization` header. Serve the MCP endpoint on a separate hostname whose proxy route has no Basic sign-in and forwards `Authorization` unchanged.
 
 ## Endpoint
@@ -100,7 +100,11 @@ OAuth sign-in is not offered: the server publishes no OAuth metadata, so clients
 
 ## Connecting a client
 
-Create a personal access token with the scopes above (Settings → Access tokens, or `POST /v1/identity/me/tokens`), then add the server with a header. In Claude Code:
+The simplest way is **Settings → AI assistants** in the web app. **Connect an assistant** asks for a name and **Read only** or **Read and write**, and creates a connection that reaches everything you can access. Under **Advanced options**, **Only selected workspaces, lists and libraries** limits it to the places you pick, and you choose when it expires. The page then shows the endpoint, `https://<your PaperGo host>/v1/mcp`, the token once, and setup ready to copy for Claude Code and for clients configured with JSON. **Your connections** lists the tokens that can connect an assistant, what they reach and when they were last used, and revokes them.
+
+A connection is a personal access token, so you can also create one under Settings → Access tokens or with `POST /v1/identity/me/tokens`, with the scopes above and, to limit it, [`resources`](identity.md). The token carries the limit, so PaperGo enforces it for every request, whichever client sends it: a limited connection lists only the workspaces and collections it reaches, finds and reads nothing elsewhere, and `labels` leave out the names of linked items outside it. `GET /v1/identity/me` with the token reports its limit.
+
+Add the server with a header. In Claude Code:
 
 ```sh
 claude mcp add --transport http papergo https://papergo.example.com/v1/mcp \
