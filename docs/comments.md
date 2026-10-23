@@ -6,7 +6,7 @@ People discuss an item where it lives, in threads of comments, and bring others 
 
 - A **thread** is a first comment and its replies, one level deep. Starting a comment without `thread_id` starts a thread; with it, the comment answers that thread.
 - A comment is plain text of up to 10,000 characters, never rendered as HTML. A thread has at most 500 replies.
-- **Mentions** are written `<@user:subject>`. They must name active people; at most 50 per comment. The API shows each comment's mentions and author with their current names.
+- **Mentions** are written `<@user:subject>`, at most 50 per comment. A mention a comment adds must name an active person; someone who leaves stays mentioned where they were, so the comment can still be edited. The API shows each comment's mentions and author with their current names.
 - **Editing** replaces a comment's text; only its author edits. The comment shows that it was edited, and the audit trail keeps the previous text.
 - **Deleting** empties a comment and keeps its place: its author, or the item's managers, delete it. A thread whose first comment is deleted stays while it has replies, and nobody can answer it any more.
 - **Resolving** marks a thread done, and reopening opens it again: the thread's author, people who may change the item and its managers may. Threads list as open (the default), resolved or all.

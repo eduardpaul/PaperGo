@@ -478,17 +478,19 @@ type Input struct {
 	ThreadID string
 }
 
-// mentionsOf reads a comment's mentions and checks they name active
-// people.
-func mentionsOf(ctx context.Context, t *dms.Service, body string) ([]string, error) {
+// mentionsOf reads a comment's mentions and checks that those it adds to
+// kept, the comment's mentions before an edit, name active people. People
+// who left since they were mentioned stay mentioned.
+func mentionsOf(ctx context.Context, t *dms.Service, body string, kept []string) ([]string, error) {
 	people := Mentions(body)
 	if len(people) > MaxMentions {
 		return nil, dms.Invalid(fmt.Sprintf("a comment mentions at most %d people", MaxMentions))
 	}
-	if len(people) == 0 {
-		return nil, nil
+	added := slices.DeleteFunc(slices.Clone(people), func(p string) bool { return slices.Contains(kept, p) })
+	if len(added) == 0 {
+		return people, nil
 	}
-	rows, err := t.DAL.Directory().Users(ctx, directory.UserFilter{IDs: people})
+	rows, err := t.DAL.Directory().Users(ctx, directory.UserFilter{IDs: added})
 	if err != nil {
 		return nil, err
 	}
@@ -497,7 +499,7 @@ func mentionsOf(ctx context.Context, t *dms.Service, body string) ([]string, err
 		active[u.ID] = u.Active && u.DeletedAt == nil
 	}
 	var unknown []string
-	for _, p := range people {
+	for _, p := range added {
 		if !active[p] {
 			unknown = append(unknown, p)
 		}
@@ -532,7 +534,7 @@ func (s *Service) Create(ctx context.Context, subject, run, itemID string, in In
 		if err != nil {
 			return err
 		}
-		mentions, err := mentionsOf(ctx, t, body)
+		mentions, err := mentionsOf(ctx, t, body, nil)
 		if err != nil {
 			return err
 		}
@@ -581,7 +583,7 @@ func (s *Service) Edit(ctx context.Context, subject, id string, version int64, b
 		if body, err = checkBody(body); err != nil {
 			return err
 		}
-		mentions, err := mentionsOf(ctx, t, body)
+		mentions, err := mentionsOf(ctx, t, body, c.Mentions)
 		if err != nil {
 			return err
 		}

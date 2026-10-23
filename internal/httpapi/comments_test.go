@@ -131,6 +131,19 @@ func TestCommentRoutes(t *testing.T) {
 		t.Fatalf("someone the item is not shared with: %s", body)
 	}
 
+	// Someone who leaves stays mentioned: the author still edits the
+	// comment, but nobody mentions them anew.
+	var note comments.View
+	if err = json.Unmarshal([]byte(call("POST", "/v1/items/"+item+"/comments", `{"body": "Ask <@user:frank>"}`, "", 201)), &note); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.DAL.Directory().SetUserActive(ctx, "frank", false); err != nil {
+		t.Fatal(err)
+	}
+	call("PATCH", "/v1/comments/"+note.ID, `{"body": "Ask <@user:frank> first"}`, `"`+strconv.FormatInt(note.Version, 10)+`"`, 200)
+	call("POST", "/v1/items/"+item+"/comments", `{"body": "Ask <@user:frank> again"}`, "", 422)
+	call("DELETE", "/v1/comments/"+note.ID, "", `"`+strconv.FormatInt(note.Version+1, 10)+`"`, 204)
+
 	// Edits tell only the people they add; only the author edits.
 	reply := page.Value[0].Replies[0]
 	if _, err := svc.Edit(ctx, "alice", reply.ID, reply.Version, "Edited"); err == nil {
