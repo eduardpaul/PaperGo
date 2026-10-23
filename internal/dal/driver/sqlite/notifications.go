@@ -110,15 +110,9 @@ func (q Queries) CountUnread(ctx context.Context, recipient string) (int64, erro
 	return n, dberr.Translate(err)
 }
 
-func (q Queries) MarkRead(ctx context.Context, recipient string, ids []string, before, at time.Time) ([]string, error) {
+func (q Queries) MarkRead(ctx context.Context, recipient string, ids []string, at time.Time) ([]string, error) {
 	w := models.SelectWhere.Notifications
-	query := models.Notifications.Query(w.Recipient.EQ(recipient), w.ReadAt.IsNull())
-	if len(ids) > 0 {
-		query.Apply(w.ID.In(ids...))
-	} else {
-		query.Apply(w.CreatedAt.LTE(before))
-	}
-	rows, err := query.All(ctx, q.exec)
+	rows, err := models.Notifications.Query(w.Recipient.EQ(recipient), w.ReadAt.IsNull(), w.ID.In(ids...)).All(ctx, q.exec)
 	if err != nil || len(rows) == 0 {
 		return nil, dberr.Translate(err)
 	}
@@ -130,6 +124,13 @@ func (q Queries) MarkRead(ctx context.Context, recipient string, ids []string, b
 	set := &models.NotificationSetter{ReadAt: omitnull.From(at)}
 	_, err = models.Notifications.Update(set.UpdateMod(), u.ID.In(marked...)).Exec(ctx, q.exec)
 	return marked, dberr.Translate(err)
+}
+
+func (q Queries) MarkAllRead(ctx context.Context, recipient string, before, at time.Time) (int64, error) {
+	u := models.UpdateWhere.Notifications
+	set := &models.NotificationSetter{ReadAt: omitnull.From(at)}
+	n, err := models.Notifications.Update(set.UpdateMod(), u.Recipient.EQ(recipient), u.ReadAt.IsNull(), u.CreatedAt.LTE(before)).Exec(ctx, q.exec)
+	return n, dberr.Translate(err)
 }
 
 // CommentNotifications returns the notifications that show a comment.

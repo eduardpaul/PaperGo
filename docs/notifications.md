@@ -92,7 +92,7 @@ The [live stream](application-foundation.md#live-api-updates) (`GET /v1/events`)
 {"id": "…", "action": "created", "unread": 3, "notification": {"id": "…", "type": "task.assigned", "title": "Check the lease", …}}
 ```
 
-A deleted notification's frame carries only its `id` and the new count. It reaches every connection the recipient signed in with, wherever the notification was first shown; a connection through an access token hears only of deletions of notifications it showed, so it learns nothing of those it may not see.
+A deleted notification's frame carries only its `id` and the new count. Marking everything read is one change of the whole inbox, however many notifications it marks: its frame has no `id`, only the action and the new count, and clients read the inbox again. It reaches every connection the recipient signed in with, wherever the notification was first shown; a connection through an access token hears only of deletions of notifications it showed, so it learns nothing of those it may not see.
 
 ## Web app
 

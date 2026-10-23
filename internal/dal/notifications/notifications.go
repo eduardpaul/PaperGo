@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"slices"
 	"time"
 	"unicode/utf8"
 
@@ -60,7 +61,8 @@ type Key struct {
 
 // LiveID is the live change entity of a notification: the recipient's
 // digest and the notification's ID, so a stream recognizes changes to its
-// subject's notifications, deletions included, without reading them.
+// subject's notifications, deletions included, without reading them. An
+// empty ID stands for the recipient's whole inbox.
 func LiveID(recipient, id string) string {
 	return RecipientKey(recipient) + ":" + id
 }
@@ -84,10 +86,12 @@ type Queries interface {
 	// count.
 	CoalesceNotification(ctx context.Context, n Notification) (id string, count int64, err error)
 	CountUnread(ctx context.Context, recipient string) (int64, error)
-	// MarkRead marks the recipient's unread notifications read at at: those
-	// of ids, or with no ids every one created at or before before. It
-	// returns the IDs it marked.
-	MarkRead(ctx context.Context, recipient string, ids []string, before time.Time, at time.Time) ([]string, error)
+	// MarkRead marks the recipient's unread notifications of ids read at at
+	// and returns the IDs it marked.
+	MarkRead(ctx context.Context, recipient string, ids []string, at time.Time) ([]string, error)
+	// MarkAllRead marks every unread notification of the recipient created
+	// at or before before read at at, in one statement, and counts them.
+	MarkAllRead(ctx context.Context, recipient string, before, at time.Time) (int64, error)
 	// DeleteNotification deletes the recipient's notification and reports
 	// whether there was one.
 	DeleteNotification(ctx context.Context, recipient, id string) (bool, error)
@@ -184,21 +188,44 @@ func (r *Repo) Create(ctx context.Context, n Notification) (Notification, bool, 
 	return n, true, nil
 }
 
-// MarkRead marks the recipient's notifications read, those of ids or, with
-// none, all created at or before before, and tells their live streams.
-func (r *Repo) MarkRead(ctx context.Context, recipient string, ids []string, before time.Time) ([]string, error) {
+// MaxMarked bounds the notifications one MarkRead statement names.
+const MaxMarked = 500
+
+// MarkRead marks the recipient's notifications of ids read and tells their
+// live streams of each.
+func (r *Repo) MarkRead(ctx context.Context, recipient string, ids []string) ([]string, error) {
 	var marked []string
+	at := time.Now().UTC().Truncate(time.Microsecond)
 	err := r.write(ctx, func(q Queries) error {
-		var err error
-		if marked, err = q.MarkRead(ctx, recipient, ids, before.UTC(), time.Now().UTC().Truncate(time.Microsecond)); err != nil {
-			return err
-		}
-		for _, id := range marked {
-			if err = live.Notify(ctx, q, live.KindNotification, LiveID(recipient, id), live.ActionUpdated); err != nil {
+		for chunk := range slices.Chunk(ids, MaxMarked) {
+			done, err := q.MarkRead(ctx, recipient, chunk, at)
+			if err != nil {
 				return err
 			}
+			for _, id := range done {
+				if err = live.Notify(ctx, q, live.KindNotification, LiveID(recipient, id), live.ActionUpdated); err != nil {
+					return err
+				}
+			}
+			marked = append(marked, done...)
 		}
 		return nil
+	})
+	return marked, err
+}
+
+// MarkAllRead marks every unread notification of the recipient created at
+// or before before read, however many, and tells their live streams once,
+// with the change of the whole inbox, LiveID(recipient, ""). It counts the
+// notifications it marked.
+func (r *Repo) MarkAllRead(ctx context.Context, recipient string, before time.Time) (int64, error) {
+	var marked int64
+	err := r.write(ctx, func(q Queries) error {
+		var err error
+		if marked, err = q.MarkAllRead(ctx, recipient, before.UTC(), time.Now().UTC().Truncate(time.Microsecond)); err != nil || marked == 0 {
+			return err
+		}
+		return live.Notify(ctx, q, live.KindNotification, LiveID(recipient, ""), live.ActionUpdated)
 	})
 	return marked, err
 }

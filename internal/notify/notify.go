@@ -474,18 +474,13 @@ func (s *Service) MarkRead(ctx context.Context, subject string, ids []string, be
 	marked := 0
 	err := s.DMS.Write(ctx, func(t *dms.Service) error {
 		if len(ids) == 0 {
-			done, err := t.DAL.Notifications().MarkRead(ctx, subject, nil, until)
-			marked = len(done)
+			all, err := t.DAL.Notifications().MarkAllRead(ctx, subject, until)
+			marked = int(all)
 			return err
 		}
-		for chunk := range slices.Chunk(ids, MaxMarked) {
-			done, err := t.DAL.Notifications().MarkRead(ctx, subject, chunk, until)
-			if err != nil {
-				return err
-			}
-			marked += len(done)
-		}
-		return nil
+		done, err := t.DAL.Notifications().MarkRead(ctx, subject, ids)
+		marked = len(done)
+		return err
 	})
 	return marked, err
 }

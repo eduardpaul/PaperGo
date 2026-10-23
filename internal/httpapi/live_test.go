@@ -217,6 +217,22 @@ func TestLiveNotificationsReachTheirRecipient(t *testing.T) {
 	if deleted := next(); deleted["id"] != early.ID || deleted["action"] != "deleted" || deleted["unread"] != float64(0) {
 		t.Fatalf("deleted frame of an earlier notification: %v", deleted)
 	}
+	// Marking everything read is one change of the whole inbox, whatever
+	// it holds, told in one frame without an id.
+	for _, title := range []string{"One", "Two", "Three"} {
+		send("alice", title)
+	}
+	for range 3 {
+		if created := next(); created["action"] != "created" {
+			t.Fatalf("created frame: %v", created)
+		}
+	}
+	if marked, err := (&notify.Service{DMS: s}).MarkRead(ctx, "alice", nil, nil); err != nil || marked != 3 {
+		t.Fatalf("marked %d, %v", marked, err)
+	}
+	if all := next(); all["id"] != nil || all["action"] != "updated" || all["unread"] != float64(0) {
+		t.Fatalf("frame of the whole inbox: %v", all)
+	}
 }
 
 // A comment frame tells people who may read the discussion what changed.

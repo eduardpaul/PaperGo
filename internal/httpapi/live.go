@@ -116,6 +116,19 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 		for i, change := range changes {
 			last[key(change.Kind, change.EntityID)] = i
 		}
+		// One unread count serves a batch's notification frames: each would
+		// read the same inbox.
+		unread := int64(-1)
+		count := func() (int64, error) {
+			if unread < 0 {
+				n, err := a.notifications(r).Unread(r.Context(), subject(r))
+				if err != nil {
+					return 0, err
+				}
+				unread = n
+			}
+			return unread, nil
+		}
 		for i, change := range changes {
 			if err = identity.RequireCredential(r.Context(), dal.NewStore(a.dms(r).Directory().DB), subject(r)); err != nil {
 				_ = frame("reauthenticate", position, map[string]any{})
@@ -166,7 +179,15 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 						continue
 					}
 					delete(notes, id)
-					if err = a.notificationFrame(r, frame, position, id, change.Action, nil); err != nil {
+					if err = notificationFrame(frame, count, position, id, change.Action, nil); err != nil {
+						return
+					}
+					continue
+				}
+				// A change of the whole inbox, such as marking everything
+				// read, names no notification.
+				if id == "" {
+					if err = notificationFrame(frame, count, position, "", change.Action, nil); err != nil {
 						return
 					}
 					continue
@@ -179,7 +200,7 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 				notes[note.ID] = true
-				if err = a.notificationFrame(r, frame, position, note.ID, change.Action, &note); err != nil {
+				if err = notificationFrame(frame, count, position, note.ID, change.Action, &note); err != nil {
 					return
 				}
 			case live.KindComment:
@@ -244,13 +265,17 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 }
 
 // notificationFrame sends a notification frame with the recipient's unread
-// count, which a bell shows.
-func (a *API) notificationFrame(r *http.Request, frame func(string, int64, any) error, position int64, id string, action live.Action, note *notify.View) error {
-	unread, err := a.notifications(r).Unread(r.Context(), subject(r))
+// count, which a bell shows. A frame without an id tells of a change to the
+// whole inbox.
+func notificationFrame(frame func(string, int64, any) error, count func() (int64, error), position int64, id string, action live.Action, note *notify.View) error {
+	unread, err := count()
 	if err != nil {
 		return err
 	}
-	value := map[string]any{"id": id, "action": action, "unread": unread}
+	value := map[string]any{"action": action, "unread": unread}
+	if id != "" {
+		value["id"] = id
+	}
 	if note != nil {
 		value["notification"] = note
 	}

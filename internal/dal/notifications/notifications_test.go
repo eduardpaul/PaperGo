@@ -3,13 +3,12 @@ package notifications_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
-	"time"
 
 	"papergo/internal/dal"
 	"papergo/internal/dal/daltest"
 	"papergo/internal/dal/dberr"
-	"papergo/internal/dal/live"
 	"papergo/internal/dal/notifications"
 	"papergo/internal/dal/refs"
 	"papergo/internal/dal/resources"
@@ -63,19 +62,19 @@ func runNotificationSuite(t *testing.T, newStore func(testing.TB) *dal.Store) {
 		if n, err := repo.Unread(ctx, "bob"); err != nil || n != 3 {
 			t.Fatalf("unread = %d, %v", n, err)
 		}
-		marked, err := repo.MarkRead(ctx, "bob", []string{first.ID, "missing"}, time.Time{})
+		marked, err := repo.MarkRead(ctx, "bob", []string{first.ID, "missing"})
 		if err != nil || len(marked) != 1 || marked[0] != first.ID {
 			t.Fatalf("marked %v, %v", marked, err)
 		}
-		if again, err := repo.MarkRead(ctx, "carol", []string{second.ID}, time.Time{}); err != nil || len(again) != 0 {
+		if again, err := repo.MarkRead(ctx, "carol", []string{second.ID}); err != nil || len(again) != 0 {
 			t.Fatalf("someone else's notification was marked: %v %v", again, err)
 		}
 		unread, err := repo.List(ctx, notifications.Filter{Recipient: "bob", Unread: true})
 		if err != nil || len(unread) != 2 {
 			t.Fatalf("unread list: %d %v", len(unread), err)
 		}
-		if marked, err = repo.MarkRead(ctx, "bob", nil, second.CreatedAt); err != nil || len(marked) != 1 || marked[0] != second.ID {
-			t.Fatalf("marked before: %v %v", marked, err)
+		if all, err := repo.MarkAllRead(ctx, "bob", second.CreatedAt); err != nil || all != 1 {
+			t.Fatalf("marked before: %d %v", all, err)
 		}
 		if n, _ := repo.Unread(ctx, "bob"); n != 1 {
 			t.Fatalf("unread after marking = %d", n)
@@ -99,13 +98,17 @@ func runNotificationSuite(t *testing.T, newStore func(testing.TB) *dal.Store) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		var kinds []live.Action
+		// Marking everything read changes the whole inbox, once.
+		var kinds []string
 		for _, c := range changes {
-			if c.Kind == live.KindNotification && c.EntityID == notifications.LiveID("bob", second.ID) {
-				kinds = append(kinds, c.Action)
+			switch c.EntityID {
+			case notifications.LiveID("bob", second.ID):
+				kinds = append(kinds, string(c.Action))
+			case notifications.LiveID("bob", ""):
+				kinds = append(kinds, "inbox "+string(c.Action))
 			}
 		}
-		if len(kinds) != 3 || kinds[0] != live.ActionCreated || kinds[1] != live.ActionUpdated || kinds[2] != live.ActionDeleted {
+		if !slices.Equal(kinds, []string{"created", "inbox updated", "deleted"}) {
 			t.Fatalf("live changes of a notification: %v", kinds)
 		}
 	})
@@ -132,7 +135,7 @@ func runNotificationSuite(t *testing.T, newStore func(testing.TB) *dal.Store) {
 		if err != nil || stored.Body != "Second" || stored.Sender != "carol" || stored.Source != notifications.SourceWorkflow || stored.WorkflowID != workflow.ID || stored.Count != 2 || !stored.CreatedAt.After(first.CreatedAt) {
 			t.Fatalf("coalesced: %+v %v", stored, err)
 		}
-		if _, err = repo.MarkRead(ctx, "bob", []string{first.ID}, time.Time{}); err != nil {
+		if _, err = repo.MarkRead(ctx, "bob", []string{first.ID}); err != nil {
 			t.Fatal(err)
 		}
 		third, _, err := repo.Create(ctx, reply)
