@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -67,6 +68,15 @@ func TestLimitedConnection(t *testing.T) {
 		if h := h.(map[string]any); h["collection_id"] != k.list {
 			t.Fatalf("hit outside the limit %v", h)
 		}
+	}
+	// Totals count only what the connection reaches, so they reveal nothing
+	// about the places outside it, even when a search names one.
+	if fmt.Sprint(hits["total"]) != fmt.Sprint(len(hits["value"].([]any))) {
+		t.Fatalf("total %v for %d hits", hits["total"], len(hits["value"].([]any)))
+	}
+	outside := ok(t, limited, "search", `{"query": "invoice", "collection_id": "`+k.fixture.list+`"}`)
+	if len(outside["value"].([]any)) != 0 || fmt.Sprint(outside["total"]) != "0" {
+		t.Fatalf("search outside the limit %v", outside)
 	}
 	// Without the limit, the same search finds the invoices.
 	if everywhere := ok(t, s, "search", `{"query": "invoice"}`); len(everywhere["value"].([]any)) <= len(hits["value"].([]any)) {

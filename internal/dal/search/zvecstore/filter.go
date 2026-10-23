@@ -82,6 +82,9 @@ func nativeFilter(f search.Filter) (string, error) {
 			parts = append(parts, equal(column, encode(value)))
 		}
 	}
+	if f.Within != nil {
+		parts = append(parts, in("workspace_id", encoded(f.Within.Workspaces))+" OR "+in("collection_id", encoded(f.Within.Collections)))
+	}
 	if len(f.TermIDs) > 0 {
 		tokens := encoded(f.TermIDs)
 		for i := range tokens {

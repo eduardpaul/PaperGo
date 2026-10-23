@@ -56,10 +56,10 @@ serves MCP connections, single-list integration tokens and WebDAV tokens.
   so queued work stays inside the limit.
 - **Search.** Its permission prefilter samples one item per permission scope,
   which can span lists, so a limited search computes scopes without the
-  limit and rechecks every hit with it. When the limit is a single
-  workspace or collection, that place is also passed to the index as a
-  filter. With several places, pages can come back short and totals count
-  matches outside the limit; a store-level set filter is a follow-up.
+  limit, passes the limit's workspaces and collections to the index as a
+  filter, applied before ranking, totals, facets and pages in both stores,
+  and still rechecks every hit. A search naming a place outside the limit
+  finds and counts nothing.
 
 ## MCP
 
@@ -113,4 +113,4 @@ any of them can connect an assistant.
 
 Changing a connection's places without a new token; admin policy to turn
 off global connections or cap expiry; recording the credential on audit
-events; a store-level search filter for several places.
+events.

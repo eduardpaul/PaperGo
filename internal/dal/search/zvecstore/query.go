@@ -81,7 +81,7 @@ func scalarMatch(d search.Document, f search.Filter) bool {
 	if !f.ArchivedTo.IsZero() && (d.ArchivedAt == nil || d.ArchivedAt.After(f.ArchivedTo)) {
 		return false
 	}
-	if !visible(d, f) || len(f.Kinds) > 0 && !slices.Contains(f.Kinds, d.Kind) {
+	if !visible(d, f) || len(f.Kinds) > 0 && !slices.Contains(f.Kinds, d.Kind) || !f.Within.Holds(d.WorkspaceID, d.CollectionID) {
 		return false
 	}
 	if f.WorkspaceID != "" && d.WorkspaceID != f.WorkspaceID || f.CollectionID != "" && d.CollectionID != f.CollectionID || f.ContentTypeID != "" && d.ContentTypeID != f.ContentTypeID || f.CreatedBy != "" && d.CreatedBy != f.CreatedBy || f.ModifiedBy != "" && d.ModifiedBy != f.ModifiedBy || f.Keyword != "" && !slices.Contains(d.KeywordIDs, f.Keyword) {

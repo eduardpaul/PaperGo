@@ -25,6 +25,7 @@ func Run(t *testing.T, open func(t *testing.T) search.Store) {
 		"QuerySyntax":                     querySyntax,
 		"AccessTrimsByScopeAndSurface":    accessTrimsByScopeAndSurface,
 		"Filters":                         filters,
+		"WithinLimitsResultsTotalsFacets": withinLimits,
 		"FiltersAloneListNewestFirst":     filtersAloneListNewestFirst,
 		"PagingAndTotals":                 pagingAndTotals,
 		"Facets":                          facets,
@@ -187,6 +188,46 @@ func filters(t *testing.T, s search.Store) {
 	} {
 		tc.filter.Access = everyone
 		expect(t, name, find(t, s, "report", tc.filter), tc.want...)
+	}
+}
+
+// withinLimits keeps a search inside the places an access token reaches:
+// documents elsewhere are neither found, counted nor faceted.
+func withinLimits(t *testing.T, s search.Store) {
+	a, b, c := doc("a", "Limit"), doc("b", "Limit"), doc("c", "Limit")
+	b.CollectionID = "c2"
+	c.WorkspaceID, c.CollectionID = "w2", "c3"
+	upsert(t, s, a, b, c)
+	q, _ := search.Parse("limit")
+	for name, tc := range map[string]struct {
+		within search.Within
+		want   []string
+	}{
+		"collection":              {search.Within{Collections: []string{"c2"}}, []string{"b"}},
+		"workspace":               {search.Within{Workspaces: []string{"w2"}}, []string{"c"}},
+		"workspace or collection": {search.Within{Workspaces: []string{"w2"}, Collections: []string{"c"}}, []string{"a", "c"}},
+		"nothing":                 {search.Within{}, nil},
+	} {
+		within := tc.within
+		res, err := s.Search(ctx, search.Query{Text: q, Filter: search.Filter{Access: everyone, Within: &within}, Facets: true, Limit: 1})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.Total != len(tc.want) {
+			t.Fatalf("%s: total %d, want %d", name, res.Total, len(tc.want))
+		}
+		counted := 0
+		if res.Facets != nil {
+			for _, v := range res.Facets.Collection {
+				counted += v.Count
+			}
+		}
+		if counted != len(tc.want) {
+			t.Fatalf("%s: facets count %d, want %d", name, counted, len(tc.want))
+		}
+		expect(t, name, find(t, s, "limit", search.Filter{Access: everyone, Within: &within}), tc.want...)
+		// A place filter outside the limit finds nothing.
+		expect(t, name+" outside", find(t, s, "limit", search.Filter{Access: everyone, Within: &within, CollectionID: "elsewhere"}))
 	}
 }
 

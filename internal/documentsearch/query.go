@@ -7,8 +7,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"papergo/internal/dal/dberr"
 	"papergo/internal/dal/refs"
+	"papergo/internal/dal/resources"
 	"papergo/internal/dms"
 	"papergo/internal/httpapi"
 	"papergo/internal/search"
@@ -185,7 +185,7 @@ func (x *Search) search(ctx context.Context, s *dms.Service, subject string, in 
 		return Result{}, err
 	}
 	q.Filter.Access = access
-	if err := narrow(ctx, s, subject, &q.Filter); err != nil {
+	if q.Filter.Within, err = within(ctx, s, subject); err != nil {
 		return Result{}, err
 	}
 	if q.Content, err = contentAllowed(ctx, s, subject); err != nil {
@@ -375,7 +375,8 @@ func fieldFilter(f *dms.IndexFilter) *search.FieldFilter {
 // workspace and whether it is content, so one live row stands for each
 // scope, as in collection queries. A token's resource limit does not: a
 // scope can span collections in and out of it, so scopes are decided
-// without it, and every hit is rechecked with it.
+// without it, the index keeps to its places (within), and every hit is
+// rechecked with it.
 func scopes(ctx context.Context, s *dms.Service, subject string) (search.Access, error) {
 	p := dms.Principal(ctx, subject)
 	if p.Credential.Limited() {
@@ -387,28 +388,29 @@ func scopes(ctx context.Context, s *dms.Service, subject string) (search.Access,
 	return search.Access{Draft: draft, Read: readable}, err
 }
 
-// narrow points a search that names no place at the one workspace or
-// collection the request's access token is limited to, so the index skips
-// what the recheck would drop. Limits of several places are left to the
-// recheck.
-func narrow(ctx context.Context, s *dms.Service, subject string, f *search.Filter) error {
+// within keeps a search inside the places the request's access token is
+// limited to, in the index itself, so results, totals, facets and pages
+// never count what lies outside it. It is nil without a limit.
+func within(ctx context.Context, s *dms.Service, subject string) (*search.Within, error) {
 	p := dms.Principal(ctx, subject)
-	if !p.Credential.Limited() || len(p.Credential.Resources) != 1 || f.WorkspaceID != "" || f.CollectionID != "" {
-		return nil
+	if !p.Credential.Limited() {
+		return nil, nil
 	}
-	r, err := s.DAL.Resources().Resource(ctx, p.Credential.Resources[0])
-	if dberr.IsNotFound(err) {
-		return nil
-	}
+	places, err := s.DAL.Resources().Resources(ctx, resources.Filter{IDs: p.Credential.Resources})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if r.Kind == refs.KindWorkspace {
-		f.WorkspaceID = r.ID
-	} else {
-		f.CollectionID = r.ID
+	out := &search.Within{Workspaces: []string{}, Collections: []string{}}
+	for _, r := range places {
+		switch {
+		case r.DeletedAt != nil:
+		case r.Kind == refs.KindWorkspace:
+			out.Workspaces = append(out.Workspaces, r.ID)
+		default:
+			out.Collections = append(out.Collections, r.ID)
+		}
 	}
-	return nil
+	return out, nil
 }
 
 // visible reports which documents the subject may be shown now, on the

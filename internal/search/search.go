@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"papergo/internal/dal/refs"
+	"slices"
 	"time"
 )
 
@@ -141,6 +142,21 @@ type Filter struct {
 	ModifiedTo   time.Time
 	// Fields filters on typed fields; nil filters nothing.
 	Fields *FieldFilter
+	// Within, when set, keeps only documents in its workspaces or
+	// collections: an access token's resource limit, applied before
+	// ranking, totals, facets and pages. Nil keeps everything.
+	Within *Within
+}
+
+// Within names the places a search may reach. Empty reaches nothing.
+type Within struct {
+	Workspaces, Collections []string
+}
+
+// Holds reports whether a document of a workspace and collection is
+// inside w; a nil w holds everything.
+func (w *Within) Holds(workspaceID, collectionID string) bool {
+	return w == nil || slices.Contains(w.Workspaces, workspaceID) || slices.Contains(w.Collections, collectionID)
 }
 
 // Search modes: keyword matches words; semantic finds file content close
