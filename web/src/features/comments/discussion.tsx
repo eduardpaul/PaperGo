@@ -141,10 +141,14 @@ function Composer({
           chosen.filter((p) => holds(text, p.label)),
         );
         if (!body) return;
-        void onSubmit(body).then(() => {
-          setText('');
-          setChosen([]);
-        });
+        // A failure shows in the mutation's alert and keeps the text.
+        onSubmit(body).then(
+          () => {
+            setText('');
+            setChosen([]);
+          },
+          () => undefined,
+        );
       }}
     >
       <div className="relative">

@@ -249,3 +249,20 @@ it('stops following pages to a notified comment when a page fails', async () => 
   fireEvent.click(screen.getByRole('button', { name: 'Load more threads' }));
   await waitFor(() => expect(asked.filter((q) => q.includes('skiptoken'))).toHaveLength(2));
 });
+
+it('keeps the text and shows why when a comment cannot be posted', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (_url: URL, init?: RequestInit) =>
+      init?.method === 'POST'
+        ? new Response(stringifyJSON({ detail: 'The item is archived' }), { status: 409 })
+        : new Response(stringifyJSON(page([]))),
+    ),
+  );
+  show();
+  const box = await screen.findByRole('textbox', { name: /Start a thread/ });
+  fireEvent.change(box, { target: { value: 'Too late' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Comment' }));
+  expect((await screen.findByRole('alert')).textContent).toBe('The item is archived');
+  expect((box as HTMLTextAreaElement).value).toBe('Too late');
+});
