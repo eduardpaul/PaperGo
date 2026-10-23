@@ -290,9 +290,7 @@ func createItem(l links) mcp.Tool {
 				return nil, err
 			}
 			out := []item{r.item(l, false)}
-			if err := label(ctx, c, r.ContainerID, out); err != nil {
-				return nil, err
-			}
+			labelWritten(ctx, c, r.ContainerID, out)
 			return encode(struct {
 				item
 				Created bool `json:"created"`
@@ -355,11 +353,20 @@ func updateItem(l links) mcp.Tool {
 			if err := unmarshal(res.Body, &updated); err != nil {
 				return nil, err
 			}
-			out := updated.item(l, true)
-			if err := label(ctx, c, updated.ContainerID, []item{out}); err != nil {
-				return nil, err
-			}
-			return encode(out)
+			out := []item{updated.item(l, true)}
+			labelWritten(ctx, c, updated.ContainerID, out)
+			return encode(out[0])
 		},
+	}
+}
+
+// labelWritten names what written entries hold. The write has happened, so
+// a failure to name them never fails the call, which a client could repeat
+// as if nothing was written: the entries come back with labels_missing.
+func labelWritten(ctx context.Context, c mcp.Caller, collectionID *string, entries []item) {
+	if label(ctx, c, collectionID, entries) != nil {
+		for i := range entries {
+			entries[i].LabelsMissing = true
+		}
 	}
 }

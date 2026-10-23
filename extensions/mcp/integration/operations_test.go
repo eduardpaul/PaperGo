@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"fmt"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -272,5 +273,37 @@ func TestWritesAreNotRetried(t *testing.T) {
 	e.backend = api
 	if again := ok(t, s, "create_item", `{"parent_id": "`+f.list+`", "id": "`+id+`", "name": "Lost answer"}`); again["created"] != false {
 		t.Fatalf("repeat %v", again)
+	}
+}
+
+// A write that succeeded is reported as written even when naming what it
+// holds fails afterwards: a client must never repeat it as if it failed.
+func TestWriteSurvivesLabelFailure(t *testing.T) {
+	e := setup(t, options{})
+	f := seed(t, e)
+	s := e.connect(t, aliceToken)
+	api := e.backend
+	var dropped atomic.Int32
+	e.backend = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/fields") {
+			dropped.Add(1)
+			if conn, _, err := http.NewResponseController(w).Hijack(); err == nil {
+				conn.Close()
+			}
+			return
+		}
+		api.ServeHTTP(w, r)
+	})
+	created := ok(t, s, "create_item", `{"parent_id": "`+f.list+`", "name": "Written", "values": {"status": "Open"}}`)
+	if dropped.Load() == 0 || created["created"] != true || str(created["id"]) == "" || created["labels_missing"] != true {
+		t.Fatalf("create %v", created)
+	}
+	updated := ok(t, s, "update_item", `{"item_id": "`+str(created["id"])+`", "version": `+fmt.Sprint(created["version"])+`, "name": "Rewritten"}`)
+	if updated["name"] != "Rewritten" || updated["labels_missing"] != true {
+		t.Fatalf("update %v", updated)
+	}
+	e.backend = api
+	if again := ok(t, s, "get_item", `{"item_id": "`+str(created["id"])+`"}`); again["labels_missing"] != nil {
+		t.Fatalf("read %v", again)
 	}
 }

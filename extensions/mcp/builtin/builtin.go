@@ -255,11 +255,13 @@ type item struct {
 	Keywords      []string          `json:"keywords"`
 	Values        json.RawMessage   `json:"values"`
 	// Labels names the IDs the entry holds; see label.
-	Labels   map[string]string `json:"labels"`
-	Draft    bool              `json:"draft"`
-	Archived bool              `json:"archived"`
-	URL      *string           `json:"url,omitempty"`
-	Access   []string          `json:"access,omitempty"`
+	Labels map[string]string `json:"labels"`
+	// LabelsMissing says labels could not be read after a write.
+	LabelsMissing bool     `json:"labels_missing,omitempty"`
+	Draft         bool     `json:"draft"`
+	Archived      bool     `json:"archived"`
+	URL           *string  `json:"url,omitempty"`
+	Access        []string `json:"access,omitempty"`
 }
 
 // item is the entry r as the tools return it, without labels.
