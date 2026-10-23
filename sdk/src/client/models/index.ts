@@ -8263,7 +8263,7 @@ export type Resource_versioning = (typeof Resource_versioningObject)[keyof typeo
  */
 export interface ResourceAccess extends Parsable, Resource {
     /**
-     * Allowed actions, in the order read, read_draft, write, publish, manage. Workspace ACLs and the caller's module scopes both apply: write and publish below a workspace also need list.write, and manage needs list.manage. On a workspace, manage means owner; on a list or library, write means adding and editing content and manage means changing settings, fields, views and permissions.
+     * Allowed actions, in the order read, read_draft, write, publish, manage. Workspace ACLs and the caller's module scopes both apply: write and publish below a workspace also need item.write, and manage needs list.manage. On a workspace, manage means owner; on a list or library, write means adding and editing content and manage means changing settings, fields, views and permissions.
      */
     access?: ResourceAccess_access[] | null;
 }

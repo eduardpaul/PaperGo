@@ -21,7 +21,7 @@ func TestAccessTokenPreservesOIDCProfileAndMemberships(t *testing.T) {
 	if err := d.SyncUser(ctx, u); err != nil {
 		t.Fatal(err)
 	}
-	credential, err := d.CreateAccessToken(ctx, "bob", identity.AccessTokenInput{Name: "Reader", Scopes: []string{"list.read"}})
+	credential, err := d.CreateAccessToken(ctx, "bob", identity.AccessTokenInput{Name: "Reader", Scopes: []string{"item.read"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestRESTProfilesAndAccountDeletion(t *testing.T) {
 	if r.Code != 200 {
 		t.Fatal(r.Code, r.Body.String())
 	}
-	credential, err := s.Directory().CreateAccessToken(ctx, "profile-api", identity.AccessTokenInput{Name: "Account", Scopes: []string{"list.read"}})
+	credential, err := s.Directory().CreateAccessToken(ctx, "profile-api", identity.AccessTokenInput{Name: "Account", Scopes: []string{"item.read"}})
 	if err != nil {
 		t.Fatal(err)
 	}

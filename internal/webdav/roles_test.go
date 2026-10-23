@@ -28,7 +28,7 @@ func TestWebDAVResolvesGroupACLAndRevokedModuleScopes(t *testing.T) {
 	if err = d.SetAssignment(ctx, "alice", identity.MemberRole, identity.Principal{Type: directory.PrincipalUser, ID: "bob"}, true); err != nil {
 		t.Fatal(err)
 	}
-	role, err := d.SaveRole(ctx, "alice", "", 0, identity.RoleInput{Name: "Library reader", Scopes: []string{"list.read", "document.read"}})
+	role, err := d.SaveRole(ctx, "alice", "", 0, identity.RoleInput{Name: "Library reader", Scopes: []string{"item.read", "document.read"}})
 	if err != nil {
 		t.Fatal(err)
 	}

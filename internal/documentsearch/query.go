@@ -97,7 +97,7 @@ const searchRounds = 3
 // against the database, so an index that lags never shows what the caller
 // may no longer read.
 func (x *Search) Search(ctx context.Context, s *dms.Service, subject string, in Request) (Result, error) {
-	if err := s.RequireScope(ctx, subject, "list.read"); err != nil {
+	if err := s.RequireScope(ctx, subject, "item.read"); err != nil {
 		return Result{}, err
 	}
 	if x.rebuilding.Load() {

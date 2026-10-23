@@ -21,7 +21,7 @@ import (
 func TestAdminIntegrationTokensHaveServiceIdentityScopedAccessAndRevocation(t *testing.T) {
 	h, s, _ := setup(t)
 	ctx := context.Background()
-	body := `{"name":"Calendar integration","scopes":["workspace.read","list.read"],"expires_in_days":0}`
+	body := `{"name":"Calendar integration","scopes":["workspace.read","item.read"],"expires_in_days":0}`
 	if got := request(h, "POST", "/v1/identity/tokens", body, testToken, "", "application/json"); got.Code != 403 {
 		t.Fatal(got.Code, got.Body.String())
 	}
@@ -79,7 +79,7 @@ func TestAdminIntegrationTokensHaveServiceIdentityScopedAccessAndRevocation(t *t
 	// Persisted operations restore an ID and cap, without trusting a cached kind flag.
 	credential := identity.AccessTokenIdentity{ID: created.Token.ID, Subject: created.Token.Subject, Scopes: created.Token.Scopes}
 	queued := identity.WithAccessToken(ctx, credential)
-	if err = identity.RequireScope(queued, dal.NewStore(s.Directory().DB), created.Token.Subject, "list.read"); err != nil {
+	if err = identity.RequireScope(queued, dal.NewStore(s.Directory().DB), created.Token.Subject, "item.read"); err != nil {
 		t.Fatal("queued credential lost integration grant", err)
 	}
 	got = request(h, "DELETE", "/v1/identity/tokens/"+created.Token.ID, "", testToken, "", "")
@@ -107,11 +107,11 @@ func TestProxyAcceptsIntegrationAndPersonalBearer(t *testing.T) {
 	if err := s.Directory().SetAssignment(ctx, "organization-admin", identity.AdministratorRole, identity.Principal{Type: directory.PrincipalUser, ID: "alice"}, false); err != nil {
 		t.Fatal(err)
 	}
-	integration, err := s.Directory().CreateIntegrationToken(ctx, "alice", identity.AccessTokenInput{Name: "Service", Scopes: []string{"list.read"}})
+	integration, err := s.Directory().CreateIntegrationToken(ctx, "alice", identity.AccessTokenInput{Name: "Service", Scopes: []string{"item.read"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	personal, err := s.Directory().CreateAccessToken(ctx, "alice", identity.AccessTokenInput{Name: "Personal", Scopes: []string{"list.read"}})
+	personal, err := s.Directory().CreateAccessToken(ctx, "alice", identity.AccessTokenInput{Name: "Personal", Scopes: []string{"item.read"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +138,7 @@ func TestIntegrationTokenExpiryAndDisabledIdentityAreRevalidated(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, mode := range []string{"expired", "disabled"} {
-		token, err := s.Directory().CreateIntegrationToken(ctx, "alice", identity.AccessTokenInput{Name: mode, Scopes: []string{"list.read"}})
+		token, err := s.Directory().CreateIntegrationToken(ctx, "alice", identity.AccessTokenInput{Name: mode, Scopes: []string{"item.read"}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -155,7 +155,7 @@ func TestIntegrationTokenExpiryAndDisabledIdentityAreRevalidated(t *testing.T) {
 		if got.Code != 401 {
 			t.Fatal(mode, got.Code, got.Body.String())
 		}
-		if err = identity.RequireScope(queued, dal.NewStore(s.Directory().DB), token.Token.Subject, "list.read"); err == nil {
+		if err = identity.RequireScope(queued, dal.NewStore(s.Directory().DB), token.Token.Subject, "item.read"); err == nil {
 			t.Fatal(mode, "retained live scope")
 		}
 	}
@@ -167,7 +167,7 @@ func TestOrganizationManagersCanReadTokenScopeCatalogWithoutRoleAdministration(t
 	if err := s.Directory().SetAssignment(ctx, "organization-admin", identity.AdministratorRole, identity.Principal{Type: directory.PrincipalUser, ID: "alice"}, false); err != nil {
 		t.Fatal(err)
 	}
-	limited, err := s.Directory().CreateAccessToken(ctx, "alice", identity.AccessTokenInput{Name: "Organization manager", Scopes: []string{"organization.manage", "list.read"}})
+	limited, err := s.Directory().CreateAccessToken(ctx, "alice", identity.AccessTokenInput{Name: "Organization manager", Scopes: []string{"organization.manage", "item.read"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +175,7 @@ func TestOrganizationManagersCanReadTokenScopeCatalogWithoutRoleAdministration(t
 	if got.Code != 200 {
 		t.Fatal(got.Code, got.Body.String())
 	}
-	got = request(h, "POST", "/v1/identity/tokens", `{"name":"Escalate","scopes":["list.write"]}`, limited.Secret, "", "application/json")
+	got = request(h, "POST", "/v1/identity/tokens", `{"name":"Escalate","scopes":["item.write"]}`, limited.Secret, "", "application/json")
 	if got.Code != 422 {
 		t.Fatal("manager exceeded credential scope", got.Code, got.Body.String())
 	}

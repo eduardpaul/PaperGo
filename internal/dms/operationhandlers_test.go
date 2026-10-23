@@ -13,7 +13,7 @@ import (
 )
 
 func checkpointHandler() OperationHandler {
-	return OperationHandler{Scope: "list.write", Validate: func(ctx context.Context, s *Service, subject, container string, payload json.RawMessage) error {
+	return OperationHandler{Scope: "item.write", Validate: func(ctx context.Context, s *Service, subject, container string, payload json.RawMessage) error {
 		return nil
 	}, Step: func(ctx context.Context, s *Service, op *operations.Operation) error {
 		op.Processed++
@@ -90,7 +90,7 @@ func TestOperationUnknownHandlerAndRevokedCredential(t *testing.T) {
 	if err = s.RegisterOperationHandler("checkpoint", checkpointHandler()); err != nil {
 		t.Fatal(err)
 	}
-	token, err := s.Directory().CreateAccessToken(testContext, "alice", identity.AccessTokenInput{Name: "Job", Scopes: []string{"list.read", "list.write", "workspace.read"}})
+	token, err := s.Directory().CreateAccessToken(testContext, "alice", identity.AccessTokenInput{Name: "Job", Scopes: []string{"item.read", "item.write", "workspace.read"}})
 	if err != nil {
 		t.Fatal(err)
 	}

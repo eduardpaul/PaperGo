@@ -125,11 +125,11 @@ func TestHomeConcurrentProvisioningAndProtection(t *testing.T) {
 func TestHomeRestrictedTokenAndRollback(t *testing.T) {
 	s, _, _ := fixture(t)
 	ctx := t.Context()
-	token, err := s.Directory().CreateAccessToken(ctx, "bob", identity.AccessTokenInput{Name: "Home discovery", Scopes: []string{"list.read"}})
+	token, err := s.Directory().CreateAccessToken(ctx, "bob", identity.AccessTokenInput{Name: "Home discovery", Scopes: []string{"item.read"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	limited := identity.WithAccessToken(ctx, identity.AccessTokenIdentity{ID: token.Token.ID, Subject: "bob", Scopes: []string{"list.read"}})
+	limited := identity.WithAccessToken(ctx, identity.AccessTokenIdentity{ID: token.Token.ID, Subject: "bob", Scopes: []string{"item.read"}})
 	home, err := s.Home(limited, "bob")
 	if err != nil || home.InboxLibraryID == "" {
 		t.Fatal(home, err)

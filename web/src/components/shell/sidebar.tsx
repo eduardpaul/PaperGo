@@ -58,7 +58,7 @@ function SmartFolders({ onNavigate }: { onNavigate?: () => void }) {
   const { data } = useQuery(smartFoldersQuery);
   const [open, setOpen] = useState(true);
   const [creating, setCreating] = useState(false);
-  const canCreate = useHasScope('list.write');
+  const canCreate = useHasScope('item.write');
   return (
     <Collapsible.Root open={open} onOpenChange={setOpen} className="mt-5">
       <div className="flex items-center px-2 pb-1">

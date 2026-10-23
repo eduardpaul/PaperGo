@@ -32,7 +32,7 @@ export interface ChildrenRequestBuilder extends BaseRequestBuilder<ChildrenReque
      */
      get(requestConfiguration?: RequestConfiguration<ChildrenRequestBuilderGetQueryParameters> | undefined) : Promise<ChildrenGetResponse | undefined>;
     /**
-     * First create returns 201. Retrying an item/folder create with the same caller ID returns the current readable live entry unchanged with 200 and its current ETag, regardless of new body fields. Requires list.write module scope, and a list or library list.manage and workspace manage access; an existing retry requires read access rather than create ACL access. Conflicting IDs, including deleted, different-collection and inaccessible entries, return 409 without content. All retry checks and the initial insertion are serialized in one write transaction; retries append no revisions, audit or events.
+     * First create returns 201. Retrying an item/folder create with the same caller ID returns the current readable live entry unchanged with 200 and its current ETag, regardless of new body fields. Requires item.write module scope, and a list or library list.manage and workspace manage access; an existing retry requires read access rather than create ACL access. Conflicting IDs, including deleted, different-collection and inaccessible entries, return 409 without content. All retry checks and the initial insertion are serialized in one write transaction; retries append no revisions, audit or events.
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<Resource>}
@@ -46,7 +46,7 @@ export interface ChildrenRequestBuilder extends BaseRequestBuilder<ChildrenReque
      */
      toGetRequestInformation(requestConfiguration?: RequestConfiguration<ChildrenRequestBuilderGetQueryParameters> | undefined) : RequestInformation;
     /**
-     * First create returns 201. Retrying an item/folder create with the same caller ID returns the current readable live entry unchanged with 200 and its current ETag, regardless of new body fields. Requires list.write module scope, and a list or library list.manage and workspace manage access; an existing retry requires read access rather than create ACL access. Conflicting IDs, including deleted, different-collection and inaccessible entries, return 409 without content. All retry checks and the initial insertion are serialized in one write transaction; retries append no revisions, audit or events.
+     * First create returns 201. Retrying an item/folder create with the same caller ID returns the current readable live entry unchanged with 200 and its current ETag, regardless of new body fields. Requires item.write module scope, and a list or library list.manage and workspace manage access; an existing retry requires read access rather than create ACL access. Conflicting IDs, including deleted, different-collection and inaccessible entries, return 409 without content. All retry checks and the initial insertion are serialized in one write transaction; retries append no revisions, audit or events.
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}

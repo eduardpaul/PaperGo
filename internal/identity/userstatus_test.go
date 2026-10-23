@@ -28,7 +28,7 @@ func TestInactiveUserScopesAndLastActiveAdministrator(t *testing.T) {
 	if err := d.EnsureUser(ctx, "status-member"); err != nil {
 		t.Fatal(err)
 	}
-	if err := identity.RequireScope(ctx, dal.NewStore(d.DB), "status-member", "list.read"); !errors.Is(err, identity.ErrForbidden) {
+	if err := identity.RequireScope(ctx, dal.NewStore(d.DB), "status-member", "item.read"); !errors.Is(err, identity.ErrForbidden) {
 		t.Fatal("inactive user authorized", err)
 	}
 	if scopes, err := identity.EffectiveScopes(ctx, dal.NewStore(d.DB), "status-member"); err != nil || len(scopes) != 0 {
@@ -40,7 +40,7 @@ func TestInactiveUserScopesAndLastActiveAdministrator(t *testing.T) {
 	if _, err := d.SetUserActive(ctx, admin, "status-member", true); err != nil {
 		t.Fatal(err)
 	}
-	if err := identity.RequireScope(ctx, dal.NewStore(d.DB), "status-member", "list.read"); err != nil {
+	if err := identity.RequireScope(ctx, dal.NewStore(d.DB), "status-member", "item.read"); err != nil {
 		t.Fatal(err)
 	}
 }

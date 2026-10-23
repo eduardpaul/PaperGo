@@ -25,7 +25,7 @@ import (
 // acme is a test contribution: one tool, available while open is set.
 func acme(open *atomic.Bool) mcp.Contribution {
 	return mcp.Contribution{ID: "acme.crm", Tools: []mcp.Tool{{
-		Name: "acme_crm_whoami", Description: "Who the caller is.", Scopes: []string{"list.read"},
+		Name: "acme_crm_whoami", Description: "Who the caller is.", Scopes: []string{"item.read"},
 		InputSchema: json.RawMessage(`{"type": "object", "additionalProperties": false, "properties": {}}`),
 		Annotations: mcp.Annotations{ReadOnly: true},
 		Available:   func(context.Context, mcp.Caller) (bool, error) { return open.Load(), nil },
@@ -165,7 +165,7 @@ func TestUnavailableBackend(t *testing.T) {
 	e.backend = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v1/identity/me" {
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = io.WriteString(w, `{"subject":"alice","active":true,"scopes":["list.read"]}`)
+			_, _ = io.WriteString(w, `{"subject":"alice","active":true,"scopes":["item.read"]}`)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")

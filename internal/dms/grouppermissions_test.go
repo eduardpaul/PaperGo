@@ -112,7 +112,7 @@ func TestModuleRolesRestrictOwnersAndResolveGroupAssignments(t *testing.T) {
 	if err := d.SetAssignment(ctx, "alice", identity.MemberRole, identity.Principal{Type: directory.PrincipalUser, ID: "bob"}, true); err != nil {
 		t.Fatal(err)
 	}
-	role, err := d.SaveRole(ctx, "alice", "", 0, identity.RoleInput{Name: "Lists reader", Scopes: []string{"workspace.read", "list.read"}})
+	role, err := d.SaveRole(ctx, "alice", "", 0, identity.RoleInput{Name: "Lists reader", Scopes: []string{"workspace.read", "item.read"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +124,7 @@ func TestModuleRolesRestrictOwnersAndResolveGroupAssignments(t *testing.T) {
 	}
 	name := "Changed"
 	if _, err = s.Update(ctx, "bob", item.ID, item.Version, UpdateResource{Name: &name}); !errors.Is(err, ErrForbidden) {
-		t.Fatal("owner bypassed list.write", err)
+		t.Fatal("owner bypassed item.write", err)
 	}
 	if _, err = s.Create(ctx, "bob", list.ID, CreateResource{Kind: "item", Name: "Blocked"}); !errors.Is(err, ErrForbidden) {
 		t.Fatal("parent ACL bypassed create scope", err)
@@ -142,7 +142,7 @@ func TestModuleRolesRestrictOwnersAndResolveGroupAssignments(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	writeRole, err := d.SaveRole(ctx, "alice", "", 0, identity.RoleInput{Name: "List contributor", Scopes: []string{"list.write"}})
+	writeRole, err := d.SaveRole(ctx, "alice", "", 0, identity.RoleInput{Name: "List contributor", Scopes: []string{"item.write"}})
 	if err != nil {
 		t.Fatal(err)
 	}

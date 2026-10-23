@@ -126,7 +126,7 @@ func (s *Service) RegisterCollectionTemplate(in CollectionTemplate) error {
 }
 
 func (s *Service) CollectionTemplates(ctx context.Context, subject string) ([]CollectionTemplate, error) {
-	if err := s.RequireScope(ctx, subject, "list.read"); err != nil {
+	if err := s.RequireScope(ctx, subject, "item.read"); err != nil {
 		return nil, err
 	}
 	out := []CollectionTemplate{}

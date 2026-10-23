@@ -50,21 +50,21 @@ export interface RevisionsRequestBuilder extends BaseRequestBuilder<RevisionsReq
      */
      byNumber(number: number) : WithNumberItemRequestBuilder;
     /**
-     * Requires list.read scope and ordinary read permission on the live item. All retained metadata revisions, including unpublished revisions, are available with their frozen schema. Current head content still requires read_draft; restoring history requires write. Newest recorded version first. $skiptoken is the last returned recorded number, and following pages contain smaller numbers. revision_number counts recorded entries only; is_current marks the largest retained number, even when recording is disabled.
+     * Requires item.read scope and ordinary read permission on the live item. All retained metadata revisions, including unpublished revisions, are available with their frozen schema. Current head content still requires read_draft; restoring history requires write. Newest recorded version first. $skiptoken is the last returned recorded number, and following pages contain smaller numbers. revision_number counts recorded entries only; is_current marks the largest retained number, even when recording is disabled.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<RevisionsGetResponse>}
      * @throws {Problem} error when the service returns a 4XX or 5XX status code
      */
      get(requestConfiguration?: RequestConfiguration<RevisionsRequestBuilderGetQueryParameters> | undefined) : Promise<RevisionsGetResponse | undefined>;
     /**
-     * Requires list.read scope and ordinary read permission on the live item. All retained metadata revisions, including unpublished revisions, are available with their frozen schema. Current head content still requires read_draft; restoring history requires write. Newest recorded version first. $skiptoken is the last returned recorded number, and following pages contain smaller numbers. revision_number counts recorded entries only; is_current marks the largest retained number, even when recording is disabled.
+     * Requires item.read scope and ordinary read permission on the live item. All retained metadata revisions, including unpublished revisions, are available with their frozen schema. Current head content still requires read_draft; restoring history requires write. Newest recorded version first. $skiptoken is the last returned recorded number, and following pages contain smaller numbers. revision_number counts recorded entries only; is_current marks the largest retained number, even when recording is disabled.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */
      toGetRequestInformation(requestConfiguration?: RequestConfiguration<RevisionsRequestBuilderGetQueryParameters> | undefined) : RequestInformation;
 }
 /**
- * Requires list.read scope and ordinary read permission on the live item. All retained metadata revisions, including unpublished revisions, are available with their frozen schema. Current head content still requires read_draft; restoring history requires write. Newest recorded version first. $skiptoken is the last returned recorded number, and following pages contain smaller numbers. revision_number counts recorded entries only; is_current marks the largest retained number, even when recording is disabled.
+ * Requires item.read scope and ordinary read permission on the live item. All retained metadata revisions, including unpublished revisions, are available with their frozen schema. Current head content still requires read_draft; restoring history requires write. Newest recorded version first. $skiptoken is the last returned recorded number, and following pages contain smaller numbers. revision_number counts recorded entries only; is_current marks the largest retained number, even when recording is disabled.
  */
 export interface RevisionsRequestBuilderGetQueryParameters {
     /**

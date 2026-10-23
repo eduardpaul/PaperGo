@@ -7,7 +7,7 @@ import { can } from '@/features/lists/access';
 export function SmartFolderPackages({ workspaceId }: { workspaceId: string }) {
   const client = useQueryClient();
   const workspace = useQuery(resourceQuery(workspaceId));
-  const canWrite = useHasScope('list.write');
+  const canWrite = useHasScope('item.write');
   if (!can(workspace.data, 'manage')) return null;
   return (
     <PackageTransfer

@@ -30,4 +30,4 @@ Adding or changing a workspace membership rejects inactive users with `422`. Exi
 
 ## Personal Home
 
-An active user discovers Home through GET `/v1/identity/me/home` with `list.read`; discovery needs no workspace creation or catalog administration permission. Home has a fixed sole owner. Its default Documents and Inbox libraries inherit that access. The organization administrator override and descendant ACLs apply. Ordinary deletion of Home or either default library, and changes to Home membership, return `protected_home` (409). Read-only `personal_owner_id` and `system_key` identify these resources.
+An active user discovers Home through GET `/v1/identity/me/home` with `item.read`; discovery needs no workspace creation or catalog administration permission. Home has a fixed sole owner. Its default Documents and Inbox libraries inherit that access. The organization administrator override and descendant ACLs apply. Ordinary deletion of Home or either default library, and changes to Home membership, return `protected_home` (409). Read-only `personal_owner_id` and `system_key` identify these resources.

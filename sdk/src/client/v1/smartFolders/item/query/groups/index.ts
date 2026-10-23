@@ -11,7 +11,7 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface GroupsRequestBuilder extends BaseRequestBuilder<GroupsRequestBuilder> {
     /**
-     *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+     *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
      * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink. An empty path returns all matching items even when group_by is configured.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<SmartFolderGroupsResult>}
@@ -19,7 +19,7 @@ export interface GroupsRequestBuilder extends BaseRequestBuilder<GroupsRequestBu
      */
      post(body: SmartFolderQueryRequest, requestConfiguration?: RequestConfiguration<GroupsRequestBuilderPostQueryParameters> | undefined) : Promise<SmartFolderGroupsResult | undefined>;
     /**
-     *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+     *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
      * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink. An empty path returns all matching items even when group_by is configured.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
@@ -27,7 +27,7 @@ export interface GroupsRequestBuilder extends BaseRequestBuilder<GroupsRequestBu
      toPostRequestInformation(body: SmartFolderQueryRequest, requestConfiguration?: RequestConfiguration<GroupsRequestBuilderPostQueryParameters> | undefined) : RequestInformation;
 }
 /**
- *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+ *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
  */
 export interface GroupsRequestBuilderPostQueryParameters {
     /**

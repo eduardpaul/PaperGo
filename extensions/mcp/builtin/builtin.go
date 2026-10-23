@@ -26,8 +26,8 @@ import (
 // request against the caller's access to each resource.
 const (
 	scopeWorkspaceRead   = "workspace.read"
-	scopeListRead        = "list.read"
-	scopeListWrite       = "list.write"
+	scopeItemRead        = "item.read"
+	scopeItemWrite       = "item.write"
 	scopeContentTypeRead = "contentType.read"
 	scopeDocumentRead    = "document.read"
 	scopeTaxonomyRead    = "taxonomy.read"

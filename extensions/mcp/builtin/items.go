@@ -67,7 +67,7 @@ func queryItems(l links) mcp.Tool {
 		Description:  queryDescription,
 		InputSchema:  queryItemsSchema,
 		OutputSchema: pageSchema(itemSchema, property("search_capped", `{"type": "boolean", "description": "The search words matched more than 10,000 entries and only the first 10,000 are paged; narrow the search."}`)),
-		Scopes:       []string{scopeListRead},
+		Scopes:       []string{scopeItemRead},
 		Annotations:  mcp.Annotations{ReadOnly: true, Idempotent: true},
 		Call: func(ctx context.Context, c mcp.Caller, args json.RawMessage) (json.RawMessage, error) {
 			var in struct {
@@ -204,7 +204,7 @@ func getItem(l links) mcp.Tool {
 		InputSchema: object([]string{"item_id"},
 			property("item_id", idProperty("The item or folder.")), property("surface", surfaceProperty)),
 		OutputSchema: json.RawMessage(itemSchema),
-		Scopes:       []string{scopeListRead},
+		Scopes:       []string{scopeItemRead},
 		Annotations:  mcp.Annotations{ReadOnly: true, Idempotent: true},
 		Call: func(ctx context.Context, c mcp.Caller, args json.RawMessage) (json.RawMessage, error) {
 			var in struct {
@@ -248,7 +248,7 @@ func createItem(l links) mcp.Tool {
 			property("keywords", keywordsProperty)),
 		OutputSchema: json.RawMessage(`{"type": "object", "required": ["created"], "allOf": [` + itemSchema + `], "properties": {
 			"created": {"type": "boolean", "description": "false when an item with the given id already existed and was returned unchanged."}}}`),
-		Scopes:      []string{scopeListRead, scopeListWrite},
+		Scopes:      []string{scopeItemRead, scopeItemWrite},
 		Annotations: mcp.Annotations{},
 		Call: func(ctx context.Context, c mcp.Caller, args json.RawMessage) (json.RawMessage, error) {
 			var in struct {
@@ -316,7 +316,7 @@ func updateItem(l links) mcp.Tool {
 			property("values", valuesProperty),
 			property("keywords", keywordsProperty)),
 		OutputSchema: json.RawMessage(itemSchema),
-		Scopes:       []string{scopeListRead, scopeListWrite},
+		Scopes:       []string{scopeItemRead, scopeItemWrite},
 		Annotations:  mcp.Annotations{Destructive: true},
 		Call: func(ctx context.Context, c mcp.Caller, args json.RawMessage) (json.RawMessage, error) {
 			var in struct {

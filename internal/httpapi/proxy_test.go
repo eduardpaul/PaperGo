@@ -90,7 +90,7 @@ func TestProxyIdentityPreservesProfilesAndRejectsCredentialBypasses(t *testing.T
 	if r := do("GET", "/v1/identity/me/tokens", "", "bob", ""); r.Code != 200 {
 		t.Fatal("proxy user's tokens", r.Code, r.Body.String())
 	}
-	token, err := s.Directory().CreateAccessToken(ctx, "bob", identity.AccessTokenInput{Name: "Assistant", Scopes: []string{"list.read"}})
+	token, err := s.Directory().CreateAccessToken(ctx, "bob", identity.AccessTokenInput{Name: "Assistant", Scopes: []string{"item.read"}})
 	if err != nil {
 		t.Fatal(err)
 	}

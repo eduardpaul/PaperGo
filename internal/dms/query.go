@@ -55,7 +55,7 @@ func (s *Service) Browse(ctx context.Context, subject string, in Browse) (Page[*
 		}
 		return read(ctx, s, func(t *Service) (Page[*resources.Resource], error) { return t.Browse(ctx, subject, in) })
 	}
-	scope := "list.read"
+	scope := "item.read"
 	if in.WorkspaceID == "" && in.ParentID == "" {
 		scope = "workspace.read"
 	}

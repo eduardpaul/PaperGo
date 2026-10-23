@@ -106,7 +106,7 @@ modifications. The analysis is a source review; PaperDotNet was not built or run
 
 PaperDotNet also requires `mcp.use`, uses `search.read`, accepts OData filters,
 and resolves a tenant. PaperGo has one organization per deployment, search uses
-`list.read`, and query inputs are `QuerySpec`/`FilterExpr` objects. Preserve those
+`item.read`, and query inputs are `QuerySpec`/`FilterExpr` objects. Preserve those
 PaperGo rules. Do not introduce tenant headers, OData parsing, camelCase aliases,
 PaperDotNet routes or a second item writer.
 
@@ -227,13 +227,13 @@ integers, not numeric strings. Bounds are validated, not silently clamped.
 | Tool | Arguments | Backend operation and scopes |
 | --- | --- | --- |
 | `list_workspaces` | Optional `limit`, `cursor` | `GET /v1/workspaces`; `workspace.read` |
-| `list_collections` | Required `workspace_id`; optional `limit`, `cursor` | Verify workspace kind with `GET /v1/resources/{id}`, then `GET /v1/resources/{workspace_id}/children`; `workspace.read` plus `list.read`. A workspace's immediate children are lists/libraries. Do not enumerate all workspaces to synthesize an unbounded global list. |
-| `get_collection_schema` | Required `collection_id` | Read the resource, `/fields` and `/content-types`; `list.read` plus `contentType.read`. Return current fields, attached content types, their rules/default designation and collection settings. |
-| `query_items` | Required `collection_id`; optional `query`, `select`, `surface`, `limit`, `cursor` | `POST /v1/resources/{id}/query`; `list.read`. Forward PaperGo's structured `QuerySpec`, selected fields and surface. No OData or grouping/count API in this tool. |
-| `get_item` | Required `item_id`; optional `surface` | `GET /v1/resources/{id}`; `list.read`. Accept item/folder kinds; include the backend's allowed actions. |
-| `create_item` | Required `parent_id`, `name`; optional `id`, `content_type_id`, `values`, `keywords` | `POST /v1/resources/{parent_id}/children`, with kind fixed to item; `list.read` for parent verification and `list.write` for creation. Parent must be a readable list/library/folder. |
-| `update_item` | Required `item_id`, `version`; optional `name`, `values`, `keywords`; at least one change | `PATCH /v1/resources/{id}` with quoted numeric `If-Match`; `list.read` for item verification and `list.write` for mutation. Item/folder metadata only. |
-| `search` | Required nonblank `query`; optional `workspace_id`, `collection_id`, `mode`, `surface`, `limit`, `cursor` | `GET /v1/search` with `q=query`, `facets=false`, `kind=item`; `list.read`. Return selected mode, hits and backend estimate flags. |
+| `list_collections` | Required `workspace_id`; optional `limit`, `cursor` | Verify workspace kind with `GET /v1/resources/{id}`, then `GET /v1/resources/{workspace_id}/children`; `workspace.read` plus `item.read`. A workspace's immediate children are lists/libraries. Do not enumerate all workspaces to synthesize an unbounded global list. |
+| `get_collection_schema` | Required `collection_id` | Read the resource, `/fields` and `/content-types`; `item.read` plus `contentType.read`. Return current fields, attached content types, their rules/default designation and collection settings. |
+| `query_items` | Required `collection_id`; optional `query`, `select`, `surface`, `limit`, `cursor` | `POST /v1/resources/{id}/query`; `item.read`. Forward PaperGo's structured `QuerySpec`, selected fields and surface. No OData or grouping/count API in this tool. |
+| `get_item` | Required `item_id`; optional `surface` | `GET /v1/resources/{id}`; `item.read`. Accept item/folder kinds; include the backend's allowed actions. |
+| `create_item` | Required `parent_id`, `name`; optional `id`, `content_type_id`, `values`, `keywords` | `POST /v1/resources/{parent_id}/children`, with kind fixed to item; `item.read` for parent verification and `item.write` for creation. Parent must be a readable list/library/folder. |
+| `update_item` | Required `item_id`, `version`; optional `name`, `values`, `keywords`; at least one change | `PATCH /v1/resources/{id}` with quoted numeric `If-Match`; `item.read` for item verification and `item.write` for mutation. Item/folder metadata only. |
+| `search` | Required nonblank `query`; optional `workspace_id`, `collection_id`, `mode`, `surface`, `limit`, `cursor` | `GET /v1/search` with `q=query`, `facets=false`, `kind=item`; `item.read`. Return selected mode, hits and backend estimate flags. |
 
 Use `surface=auto` by default; accept `auto`, `head`, `published` and leave
 authorization to the backend. `mode` is omitted by default so backend search

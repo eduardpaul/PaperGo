@@ -134,7 +134,7 @@ func TestDiscoveryAndAuthentication(t *testing.T) {
 	e.expect(e.do("PROPFIND", e.root+"/", "wrong", "", "Depth", "0"), 401)
 
 	// Windows Explorer authenticates with an access token secret and any user name.
-	c, err := e.s.Directory().CreateAccessToken(ctx, "alice", identity.AccessTokenInput{Name: "Explorer", Scopes: []string{"list.read", "document.read"}})
+	c, err := e.s.Directory().CreateAccessToken(ctx, "alice", identity.AccessTokenInput{Name: "Explorer", Scopes: []string{"item.read", "document.read"}})
 	if err != nil {
 		t.Fatal(err)
 	}

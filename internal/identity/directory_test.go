@@ -119,7 +119,7 @@ func TestEnrollmentAndBootstrapDoNotRestoreRemovedRoles(t *testing.T) {
 	if err := d.EnsureUser(ctx, user); err != nil {
 		t.Fatal(err)
 	}
-	if err := identity.RequireScope(ctx, dal.NewStore(db.SQL), user, "list.read"); !errors.Is(err, identity.ErrForbidden) {
+	if err := identity.RequireScope(ctx, dal.NewStore(db.SQL), user, "item.read"); !errors.Is(err, identity.ErrForbidden) {
 		t.Fatalf("enrollment restored removed role: %v", err)
 	}
 	if err := d.Initialize(ctx, user, ""); err != nil {

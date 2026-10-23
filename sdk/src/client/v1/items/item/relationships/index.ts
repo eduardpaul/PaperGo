@@ -51,14 +51,14 @@ export interface RelationshipsRequestBuilder extends BaseRequestBuilder<Relation
      */
      byLinkID(linkID: string) : WithLinkItemRequestBuilder;
     /**
-     *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+     *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<RelationshipsGetResponse>}
      * @throws {Problem} error when the service returns a 4XX or 5XX status code
      */
      get(requestConfiguration?: RequestConfiguration<RelationshipsRequestBuilderGetQueryParameters> | undefined) : Promise<RelationshipsGetResponse | undefined>;
     /**
-     * Endpoints may belong to different workspaces. Type is optional; untyped links default to symmetric and allow at most 64 scalar attributes and 16 KiB of JSON. Requires write permission on both endpoints. Ensures one edge for the type and endpoints; repeating creation returns the existing edge without changing metadata, version or audit history, even at a cardinality limit. Symmetric endpoints use canonical ordering. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.
+     * Endpoints may belong to different workspaces. Type is optional; untyped links default to symmetric and allow at most 64 scalar attributes and 16 KiB of JSON. Requires write permission on both endpoints. Ensures one edge for the type and endpoints; repeating creation returns the existing edge without changing metadata, version or audit history, even at a cardinality limit. Symmetric endpoints use canonical ordering. Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<Relationship>}
@@ -66,13 +66,13 @@ export interface RelationshipsRequestBuilder extends BaseRequestBuilder<Relation
      */
      post(body: CreateRelationship, requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<Relationship | undefined>;
     /**
-     *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+     *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */
      toGetRequestInformation(requestConfiguration?: RequestConfiguration<RelationshipsRequestBuilderGetQueryParameters> | undefined) : RequestInformation;
     /**
-     * Endpoints may belong to different workspaces. Type is optional; untyped links default to symmetric and allow at most 64 scalar attributes and 16 KiB of JSON. Requires write permission on both endpoints. Ensures one edge for the type and endpoints; repeating creation returns the existing edge without changing metadata, version or audit history, even at a cardinality limit. Symmetric endpoints use canonical ordering. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.
+     * Endpoints may belong to different workspaces. Type is optional; untyped links default to symmetric and allow at most 64 scalar attributes and 16 KiB of JSON. Requires write permission on both endpoints. Ensures one edge for the type and endpoints; repeating creation returns the existing edge without changing metadata, version or audit history, even at a cardinality limit. Symmetric endpoints use canonical ordering. Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
@@ -80,7 +80,7 @@ export interface RelationshipsRequestBuilder extends BaseRequestBuilder<Relation
      toPostRequestInformation(body: CreateRelationship, requestConfiguration?: RequestConfiguration<object> | undefined) : RequestInformation;
 }
 /**
- *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+ *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
  */
 export interface RelationshipsRequestBuilderGetQueryParameters {
     direction?: GetDirectionQueryParameterType;

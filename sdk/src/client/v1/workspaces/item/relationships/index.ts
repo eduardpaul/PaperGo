@@ -31,21 +31,21 @@ export interface RelationshipsRequestBuilder extends BaseRequestBuilder<Relation
      */
     get types(): TypesRequestBuilder;
     /**
-     * Both endpoints must be readable on their selected content surface. Returns compact endpoint navigation summaries and resolved relationship labels; load full metadata through the per-item relationship read. All results touch the starting workspace even when item_id belongs elsewhere. Filter scalar attributes/key, id or directed using eq/ne and numeric gt/ge/lt/le, and/or/not and parentheses. Filters are limited to 4096 bytes, 32 nodes and depth 6. Example: attributes/amount gt 100. Required module scope: list.read.
+     * Both endpoints must be readable on their selected content surface. Returns compact endpoint navigation summaries and resolved relationship labels; load full metadata through the per-item relationship read. All results touch the starting workspace even when item_id belongs elsewhere. Filter scalar attributes/key, id or directed using eq/ne and numeric gt/ge/lt/le, and/or/not and parentheses. Filters are limited to 4096 bytes, 32 nodes and depth 6. Example: attributes/amount gt 100. Required module scope: item.read.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<WorkspaceRelationshipPage>}
      * @throws {Problem} error when the service returns a 4XX or 5XX status code
      */
      get(requestConfiguration?: RequestConfiguration<RelationshipsRequestBuilderGetQueryParameters> | undefined) : Promise<WorkspaceRelationshipPage | undefined>;
     /**
-     * Both endpoints must be readable on their selected content surface. Returns compact endpoint navigation summaries and resolved relationship labels; load full metadata through the per-item relationship read. All results touch the starting workspace even when item_id belongs elsewhere. Filter scalar attributes/key, id or directed using eq/ne and numeric gt/ge/lt/le, and/or/not and parentheses. Filters are limited to 4096 bytes, 32 nodes and depth 6. Example: attributes/amount gt 100. Required module scope: list.read.
+     * Both endpoints must be readable on their selected content surface. Returns compact endpoint navigation summaries and resolved relationship labels; load full metadata through the per-item relationship read. All results touch the starting workspace even when item_id belongs elsewhere. Filter scalar attributes/key, id or directed using eq/ne and numeric gt/ge/lt/le, and/or/not and parentheses. Filters are limited to 4096 bytes, 32 nodes and depth 6. Example: attributes/amount gt 100. Required module scope: item.read.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */
      toGetRequestInformation(requestConfiguration?: RequestConfiguration<RelationshipsRequestBuilderGetQueryParameters> | undefined) : RequestInformation;
 }
 /**
- * Both endpoints must be readable on their selected content surface. Returns compact endpoint navigation summaries and resolved relationship labels; load full metadata through the per-item relationship read. All results touch the starting workspace even when item_id belongs elsewhere. Filter scalar attributes/key, id or directed using eq/ne and numeric gt/ge/lt/le, and/or/not and parentheses. Filters are limited to 4096 bytes, 32 nodes and depth 6. Example: attributes/amount gt 100. Required module scope: list.read.
+ * Both endpoints must be readable on their selected content surface. Returns compact endpoint navigation summaries and resolved relationship labels; load full metadata through the per-item relationship read. All results touch the starting workspace even when item_id belongs elsewhere. Filter scalar attributes/key, id or directed using eq/ne and numeric gt/ge/lt/le, and/or/not and parentheses. Filters are limited to 4096 bytes, 32 nodes and depth 6. Example: attributes/amount gt 100. Required module scope: item.read.
  */
 export interface RelationshipsRequestBuilderGetQueryParameters {
     /**

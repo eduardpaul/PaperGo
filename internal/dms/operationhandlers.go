@@ -92,7 +92,7 @@ func builtInOperationHandlers() map[string]OperationHandler {
 			}
 			return err
 		}},
-		OperationKindBulkUpdate: {Scope: "list.write", Step: func(ctx context.Context, s *Service, op *operations.Operation) error {
+		OperationKindBulkUpdate: {Scope: "item.write", Step: func(ctx context.Context, s *Service, op *operations.Operation) error {
 			return s.bulkUpdateStep(ctx, op)
 		}, Failed: func(ctx context.Context, s *Service, op *operations.Operation, cause error) error {
 			return s.DAL.Operations().ClearItems(ctx, op.ID)

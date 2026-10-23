@@ -77,7 +77,7 @@ func testRecords(t *testing.T, s *dal.Store) {
 	f := daltest.NewFixture(t, s)
 	ops := s.Operations()
 	refresh := accept(t, ops, operations.Operation{ContainerID: f.Source, WorkspaceID: f.Workspace, Kind: "refresh", Payload: json.RawMessage(`{"integration_id":"one"}`)}, start)
-	index := accept(t, ops, operations.Operation{ContainerID: f.Source, Kind: "field_index", FieldID: "field", CreatedBy: "bob", CredentialID: "token", CredentialScopes: []string{"list.read"}}, start)
+	index := accept(t, ops, operations.Operation{ContainerID: f.Source, Kind: "field_index", FieldID: "field", CreatedBy: "bob", CredentialID: "token", CredentialScopes: []string{"item.read"}}, start)
 	stored, err := ops.Find(ctx, index.ID)
 	if err != nil || stored.CredentialID != "token" || len(stored.CredentialScopes) != 1 || stored.FieldID != "field" || !stored.AttemptAt.Equal(start) || string(stored.Result) != "{}" {
 		t.Fatalf("stored: %+v %v", stored, err)

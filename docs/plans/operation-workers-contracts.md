@@ -17,9 +17,9 @@ Decisions D1–D10 are [settled](#settled-decisions); Phase 1 can start. CPU and
 | Kind | Step | Scope | Producers | Terminal side effects |
 | --- | --- | --- | --- | --- |
 | `field_index` | transactional | none (acts for no one) | `enqueueFieldIndex` (`internal/dms/operations.go:24`) on field indexing changes | `Failed` sets the field `index_failed`; success sets it ready when no other operation is pending |
-| `bulk_update` | transactional | `list.write` | `StartBulkUpdate` ← `POST /v1/resources/{id}/bulk-update` | `Failed` clears `operation_items` |
+| `bulk_update` | transactional | `item.write` | `StartBulkUpdate` ← `POST /v1/resources/{id}/bulk-update` | `Failed` clears `operation_items` |
 | `search_reindex` | transactional | `organization.manage` | `POST /v1/search/reindex`; `RebuildSearch` at startup as the `papergo` system subject; portability import | Clears the in-memory `searchRebuild` flag |
-| `integration.refresh` | **external** | `list.write` | Integration create/update/refresh routes; scheduled `integrations.refresh` built-in workflow | `Failed` writes the integration error. Has its own integration-row lease (`ErrIntegrationBusy`) |
+| `integration.refresh` | **external** | `item.write` | Integration create/update/refresh routes; scheduled `integrations.refresh` built-in workflow | `Failed` writes the integration error. Has its own integration-row lease (`ErrIntegrationBusy`) |
 | `portability.export` / `portability.import` | transactional | `organization.manage` | `RegisterPortability` ← `POST /v1/portability/{exports,imports}` | `ObjectReferenced` keeps import objects while pending and export objects while their result is unexpired |
 
 Start routes answer `202` with `Location: /v1/operations/{id}`. Results are read from `GET /v1/operations/{id}` and `GET /v1/resources/{id}/operations`; `GET /v1/events` also streams `operation` frames.

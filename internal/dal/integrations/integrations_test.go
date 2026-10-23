@@ -28,7 +28,7 @@ func testIntegrations(t *testing.T, s *dal.Store) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	source, err := repo.Create(ctx, integrations.Integration{ContainerID: list.ID, Kind: "feed", Name: "Feed", Generation: "g", ConfigHash: "h", ConfiguredBy: "alice", ConfigCiphertext: []byte("secret"), CredentialID: "token", CredentialScopes: []string{"list.write"}})
+	source, err := repo.Create(ctx, integrations.Integration{ContainerID: list.ID, Kind: "feed", Name: "Feed", Generation: "g", ConfigHash: "h", ConfiguredBy: "alice", ConfigCiphertext: []byte("secret"), CredentialID: "token", CredentialScopes: []string{"item.write"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +51,7 @@ func testIntegrations(t *testing.T, s *dal.Store) {
 		t.Fatal(err)
 	}
 	stored, err := repo.Find(ctx, source.ID)
-	if err != nil || !stored.Leased(time.Now()) || string(stored.ConfigCiphertext) != "secret" || stored.CredentialScopes[0] != "list.write" || !stored.Paused {
+	if err != nil || !stored.Leased(time.Now()) || string(stored.ConfigCiphertext) != "secret" || stored.CredentialScopes[0] != "item.write" || !stored.Paused {
 		t.Fatalf("saved integration: %+v %v", stored, err)
 	}
 	if active, err := repo.List(ctx, integrations.Filter{Unpaused: true}); err != nil || len(active) != 0 {

@@ -55,15 +55,15 @@ func TestResourceReadsReportCallerAccess(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	member := token("member", "workspace.read", "list.read", "list.write")
+	member := token("member", "workspace.read", "item.read", "item.write")
 	if got := access(member, l.ID); !slices.Equal(got, []string{"read", "read_draft", "write"}) {
 		t.Fatal("member access", got)
 	}
-	if got := access(token("visitor", "workspace.read", "list.read", "list.write"), i.ID); !slices.Equal(got, []string{"read"}) {
+	if got := access(token("visitor", "workspace.read", "item.read", "item.write"), i.ID); !slices.Equal(got, []string{"read"}) {
 		t.Fatal("visitor access", got)
 	}
-	// A token without list.write cannot change content, whatever the ACL grants.
-	if got := access(token("member", "workspace.read", "list.read"), l.ID); !slices.Equal(got, []string{"read", "read_draft"}) {
+	// A token without item.write cannot change content, whatever the ACL grants.
+	if got := access(token("member", "workspace.read", "item.read"), l.ID); !slices.Equal(got, []string{"read", "read_draft"}) {
 		t.Fatal("read-only token access", got)
 	}
 	r := request(h, "PATCH", "/v1/resources/"+i.ID, `{"name":"Renamed"}`, member, `"1"`, "application/json")

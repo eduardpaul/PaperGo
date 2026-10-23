@@ -86,7 +86,7 @@ func listCollections(l links) mcp.Tool {
 			property("workspace_id", idProperty("The workspace, as list_workspaces returns it.")),
 			property("limit", limitProperty(maxLimit, defaultLimit)), property("cursor", cursorProperty)),
 		OutputSchema: pageSchema(collectionSchema),
-		Scopes:       []string{scopeWorkspaceRead, scopeListRead},
+		Scopes:       []string{scopeWorkspaceRead, scopeItemRead},
 		Annotations:  mcp.Annotations{ReadOnly: true, Idempotent: true},
 		Call: func(ctx context.Context, c mcp.Caller, args json.RawMessage) (json.RawMessage, error) {
 			var in struct {
@@ -132,7 +132,7 @@ func getCollectionSchema(l links) mcp.Tool {
 			"fields": {"type": "array", "items": {"type": "object"}, "description": "Field definitions, as PaperGo's FieldDefinition."},
 			"content_types": {"type": "array", "items": {"type": "object"}, "description": "Attached content types, as PaperGo's CollectionContentType, with is_default."},
 			"views": {"type": "array", "items": {"type": "object"}, "description": "Saved views, as PaperGo's ListView: id, name, layout, columns, query, is_default."}}}`),
-		Scopes:      []string{scopeListRead, scopeContentTypeRead},
+		Scopes:      []string{scopeItemRead, scopeContentTypeRead},
 		Annotations: mcp.Annotations{ReadOnly: true, Idempotent: true},
 		Call: func(ctx context.Context, c mcp.Caller, args json.RawMessage) (json.RawMessage, error) {
 			var in struct {

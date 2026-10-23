@@ -13,7 +13,7 @@ import (
 
 func tool(name string) mcp.Tool {
 	return mcp.Tool{Name: name, InputSchema: json.RawMessage(`{"type": "object", "additionalProperties": false, "properties": {"n": {"type": "integer"}}}`),
-		Scopes: []string{"list.read"},
+		Scopes: []string{"item.read"},
 		Call: func(context.Context, mcp.Caller, json.RawMessage) (json.RawMessage, error) {
 			return json.RawMessage(`{}`), nil
 		}}

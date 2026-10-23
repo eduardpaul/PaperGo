@@ -88,7 +88,7 @@ func TestEntriesNameLinkAndFlag(t *testing.T) {
 
 	// A token without taxonomy or people scopes still reads; names it may
 	// not read are left out.
-	narrow := e.connect(t, e.token(t, "alice", "list.read").Secret)
+	narrow := e.connect(t, e.token(t, "alice", "item.read").Secret)
 	plain := ok(t, narrow, "get_item", `{"item_id": "`+id+`"}`)
 	if labels := plain["labels"].(map[string]any); labels[k.items[0]] != "Invoice 0" || labels[k.acme] != nil || labels["alice"] != nil {
 		t.Fatalf("narrow labels %v", labels)
@@ -162,7 +162,7 @@ func TestListTerms(t *testing.T) {
 	fails(t, s, "list_terms", `{"collection_id": "`+k.list+`", "field_key": "note"}`, "invalid_arguments")
 	fails(t, s, "list_terms", `{"collection_id": "`+k.list+`"}`, "invalid_arguments")
 	fails(t, s, "list_terms", `{"collection_id": "`+k.list+`", "field_key": "client", "term_set_id": "`+str(roots["term_set_id"])+`"}`, "invalid_arguments")
-	if names := toolNames(t, e.connect(t, e.token(t, "alice", "list.read").Secret)); strings.Contains(strings.Join(names, ","), "list_terms") {
+	if names := toolNames(t, e.connect(t, e.token(t, "alice", "item.read").Secret)); strings.Contains(strings.Join(names, ","), "list_terms") {
 		t.Fatalf("list_terms without taxonomy.read: %v", names)
 	}
 }

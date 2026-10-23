@@ -15,7 +15,7 @@ import { valuesPatch } from '@/features/fields/values';
 export function RelatedItems({ item, canWrite }: { item: Resource; canWrite: boolean }) {
   const client = useQueryClient();
   const types = useQuery(relationshipTypesQuery);
-  const canCreate = useHasScope('list.write');
+  const canCreate = useHasScope('item.write');
   const [typeId, setTypeId] = useState('');
   const [filterType, setFilterType] = useState('');
   const [direction, setDirection] = useState('both');

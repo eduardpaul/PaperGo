@@ -40,8 +40,8 @@ function BearerWebDAV() {
   const [label, setLabel] = useState('');
   const [days, setDays] = useState('90');
   const [created, setCreated] = useState<CreatedAccessToken | null>(null);
-  const tokenScopes = ['list.read', 'list.write', 'document.read', 'document.write'].filter(scope => mine.data?.includes(scope));
-  const canRead = tokenScopes.includes('list.read') && tokenScopes.includes('document.read');
+  const tokenScopes = ['item.read', 'item.write', 'document.read', 'document.write'].filter(scope => mine.data?.includes(scope));
+  const canRead = tokenScopes.includes('item.read') && tokenScopes.includes('document.read');
   const expires = Number(days);
   const validExpiry = Number.isInteger(expires) && expires >= 1 && expires <= 3650;
   const issue = useMutation({

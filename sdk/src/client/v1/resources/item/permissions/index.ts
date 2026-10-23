@@ -11,7 +11,7 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface PermissionsRequestBuilder extends BaseRequestBuilder<PermissionsRequestBuilder> {
     /**
-     *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+     *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<Permissions>}
      * @throws {Problem} error when the service returns a 4XX or 5XX status code
@@ -27,7 +27,7 @@ export interface PermissionsRequestBuilder extends BaseRequestBuilder<Permission
      */
      put(body: Permissions, requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<Resource | undefined>;
     /**
-     *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+     *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */

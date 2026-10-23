@@ -65,7 +65,7 @@ func TestLiveStreamDeliveryReconnectAndCredentialRevocation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	token, err := s.Directory().CreateAccessToken(ctx, "alice", identity.AccessTokenInput{Name: "Stream", Scopes: []string{"workspace.read", "list.read"}})
+	token, err := s.Directory().CreateAccessToken(ctx, "alice", identity.AccessTokenInput{Name: "Stream", Scopes: []string{"workspace.read", "item.read"}})
 	if err != nil {
 		t.Fatal(err)
 	}

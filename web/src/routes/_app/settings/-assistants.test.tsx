@@ -32,7 +32,7 @@ const lists = [
   { id: 'l1', kind: 'list', name: 'Invoices' },
   { id: 'l2', kind: 'library', name: 'Contracts' },
 ];
-const reading = ['workspace.read', 'list.read', 'contentType.read', 'document.read', 'taxonomy.read', 'user.read'];
+const reading = ['workspace.read', 'item.read', 'contentType.read', 'document.read', 'taxonomy.read', 'user.read'];
 
 interface Served {
   posts: unknown[];
@@ -95,7 +95,7 @@ function show() {
 }
 
 it('connects a read-only assistant to everything, then checks the connection', async () => {
-  const served = serve([...reading, 'list.write', 'workspace.manage']);
+  const served = serve([...reading, 'item.write', 'workspace.manage']);
   const client = show();
   const summary = screen.getByLabelText('This connection');
   expect(summary.textContent).toContain('Read only');
@@ -129,7 +129,7 @@ it('reports an unreachable endpoint without hiding the created token', async () 
 });
 
 it('limits a read-and-write connection to named places', async () => {
-  const served = serve([...reading, 'list.write']);
+  const served = serve([...reading, 'item.write']);
   const client = show();
   fireEvent.click(await screen.findByLabelText(/Read and write/));
   fireEvent.click(screen.getByLabelText(/Only selected/));
@@ -146,7 +146,7 @@ it('limits a read-and-write connection to named places', async () => {
   fireEvent.click(create);
   await screen.findByDisplayValue('pgo_assistant_secret');
   expect(served.posts).toEqual([
-    { name: 'AI assistant', scopes: [...reading, 'list.write'], resources: ['l1', 'l2'], expires_in_days: 30 },
+    { name: 'AI assistant', scopes: [...reading, 'item.write'], resources: ['l1', 'l2'], expires_in_days: 30 },
   ]);
   client.clear();
 });
@@ -199,7 +199,7 @@ it('lists connections with their places, state, and asks before revoking', async
         scopes: reading,
         resources: ['l1', 'gone'],
       },
-      { ...token, id: 'tok2', name: 'Old', expires_at: '2020-01-01T00:00:00Z', scopes: [...reading, 'list.write'] },
+      { ...token, id: 'tok2', name: 'Old', expires_at: '2020-01-01T00:00:00Z', scopes: [...reading, 'item.write'] },
     ],
   });
   const client = show();

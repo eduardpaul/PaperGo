@@ -72,7 +72,7 @@ func TestFileVersionsListRetainedFilesNewestFirst(t *testing.T) {
 	if err = s.SetWorkspaceMember(ctx, "alice", w.ID, dms.WorkspaceMember{Subject: "visitor", Role: "visitor"}); err != nil {
 		t.Fatal(err)
 	}
-	reader, err := s.Directory().CreateAccessToken(ctx, "visitor", identity.AccessTokenInput{Name: "Reader", Scopes: []string{"workspace.read", "list.read", "document.read"}})
+	reader, err := s.Directory().CreateAccessToken(ctx, "visitor", identity.AccessTokenInput{Name: "Reader", Scopes: []string{"workspace.read", "item.read", "document.read"}})
 	if err != nil {
 		t.Fatal(err)
 	}

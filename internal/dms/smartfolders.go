@@ -151,9 +151,9 @@ func (s *Service) validateSmartFolder(ctx context.Context, subject string, in Sm
 }
 
 func (s *Service) smartFolder(ctx context.Context, subject, id string, manage bool) (*viewstore.SmartFolder, error) {
-	scope := "list.read"
+	scope := "item.read"
 	if manage {
-		scope = "list.write"
+		scope = "item.write"
 	}
 	if err := s.RequireScope(ctx, subject, scope); err != nil {
 		return nil, err
@@ -196,7 +196,7 @@ func (s *Service) auditSmartFolder(ctx context.Context, subject, action string, 
 }
 
 func (s *Service) createSmartFolder(ctx context.Context, subject string, in SmartFolderInput) (*viewstore.SmartFolder, error) {
-	if err := s.RequireScope(ctx, subject, "list.write"); err != nil {
+	if err := s.RequireScope(ctx, subject, "item.write"); err != nil {
 		return nil, err
 	}
 	if subject == "" {
@@ -243,7 +243,7 @@ func (s *Service) SmartFolder(ctx context.Context, subject, id string) (*viewsto
 
 func (s *Service) SmartFolders(ctx context.Context, subject, workspace, after string, limit int) (Page[viewstore.SmartFolder], error) {
 	return read(ctx, s, func(t *Service) (Page[viewstore.SmartFolder], error) {
-		if err := t.RequireScope(ctx, subject, "list.read"); err != nil {
+		if err := t.RequireScope(ctx, subject, "item.read"); err != nil {
 			return Page[viewstore.SmartFolder]{}, err
 		}
 		reader := principal(ctx, subject)

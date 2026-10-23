@@ -29,7 +29,7 @@ export interface ViewsItemRequestBuilder extends BaseRequestBuilder<ViewsItemReq
      */
      delete(requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<void>;
     /**
-     *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+     *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<ListView>}
      * @throws {Problem} error when the service returns a 400 status code
@@ -68,7 +68,7 @@ export interface ViewsItemRequestBuilder extends BaseRequestBuilder<ViewsItemReq
      */
      toDeleteRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined) : RequestInformation;
     /**
-     *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+     *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */

@@ -80,21 +80,21 @@ export interface SchemaGetResponse_file extends AdditionalDataHolder, Parsable {
  */
 export interface SchemaRequestBuilder extends BaseRequestBuilder<SchemaRequestBuilder> {
     /**
-     * Returns the frozen content schema of the caller-visible item or folder. Folders use their current metadata schema and do not enforce required fields. Requires list.read and resource read access.
+     * Returns the frozen content schema of the caller-visible item or folder. Folders use their current metadata schema and do not enforce required fields. Requires item.read and resource read access.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<SchemaGetResponse>}
      * @throws {Problem} error when the service returns a 4XX or 5XX status code
      */
      get(requestConfiguration?: RequestConfiguration<SchemaRequestBuilderGetQueryParameters> | undefined) : Promise<SchemaGetResponse | undefined>;
     /**
-     * Returns the frozen content schema of the caller-visible item or folder. Folders use their current metadata schema and do not enforce required fields. Requires list.read and resource read access.
+     * Returns the frozen content schema of the caller-visible item or folder. Folders use their current metadata schema and do not enforce required fields. Requires item.read and resource read access.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */
      toGetRequestInformation(requestConfiguration?: RequestConfiguration<SchemaRequestBuilderGetQueryParameters> | undefined) : RequestInformation;
 }
 /**
- * Returns the frozen content schema of the caller-visible item or folder. Folders use their current metadata schema and do not enforce required fields. Requires list.read and resource read access.
+ * Returns the frozen content schema of the caller-visible item or folder. Folders use their current metadata schema and do not enforce required fields. Requires item.read and resource read access.
  */
 export interface SchemaRequestBuilderGetQueryParameters {
     /**

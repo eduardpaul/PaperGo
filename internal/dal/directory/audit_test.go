@@ -49,7 +49,7 @@ func testDirectoryAuditState(t *testing.T, s *dal.Store) {
 			t.Fatalf("private property in audit state: %s", key)
 		}
 	}
-	if _, err := s.Directory().CreateAccessToken(ctx, directory.AccessToken{ID: "t", Subject: "a", Name: "Token", Prefix: "prefix", SecretHash: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", CreatedBy: "a", Scopes: []string{"list.read"}}); err != nil {
+	if _, err := s.Directory().CreateAccessToken(ctx, directory.AccessToken{ID: "t", Subject: "a", Name: "Token", Prefix: "prefix", SecretHash: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", CreatedBy: "a", Scopes: []string{"item.read"}}); err != nil {
 		t.Fatal(err)
 	}
 	token, err := s.Directory().AuditState(ctx, directory.EntityAccessToken, "t")

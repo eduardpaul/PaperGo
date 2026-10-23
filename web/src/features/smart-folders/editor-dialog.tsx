@@ -37,7 +37,7 @@ function Editor({ folder, onClose, onSaved }: { folder?: SmartFolder; onClose: (
   const initial = folder?.definition;
   const client = useQueryClient();
   const workspaces = useQuery(workspacesQuery);
-  const canWrite = useHasScope('list.write');
+  const canWrite = useHasScope('item.write');
   const taxonomy = useHasScope('taxonomy.read');
   const [name, setName] = useState(folder?.name ?? '');
   const [description, setDescription] = useState(folder?.description ?? '');

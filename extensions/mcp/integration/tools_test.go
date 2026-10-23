@@ -324,8 +324,8 @@ func TestIdentitiesStayApart(t *testing.T) {
 	f := seed(t, e)
 	bobsWorkspace := create(t, e.svc, "bob", "", dms.CreateResource{Kind: "workspace", Name: "Bob's"})
 	alice := e.connect(t, aliceToken)
-	bob := e.connect(t, e.token(t, "bob", "workspace.read", "list.read", "list.write", "contentType.read").Secret)
-	reader := e.token(t, "alice", "list.read")
+	bob := e.connect(t, e.token(t, "bob", "workspace.read", "item.read", "item.write", "contentType.read").Secret)
+	reader := e.token(t, "alice", "item.read")
 	readOnly := e.connect(t, reader.Secret)
 
 	done := make(chan []string, 2)
@@ -367,7 +367,7 @@ func TestIdentitiesStayApart(t *testing.T) {
 	ok(t, bob, "list_collections", `{"workspace_id": "`+bobsWorkspace+`"}`)
 
 	// A token's scopes narrow the tools its holder sees and may call.
-	// (Search, also list.read, is listed once TestSearch registered it.)
+	// (Search, also item.read, is listed once TestSearch registered it.)
 	names := slices.DeleteFunc(toolNames(t, readOnly), func(n string) bool { return n == "search" && searchRegistered() })
 	if names := strings.Join(names, ","); names != "get_item,query_items" {
 		t.Fatalf("read-only tools %s", names)
@@ -438,7 +438,7 @@ func TestIntegrationTokens(t *testing.T) {
 	e := setup(t, options{})
 	f := seed(t, e)
 	ctx := t.Context()
-	integration, err := e.svc.Directory().CreateIntegrationToken(ctx, "organization-admin", identity.AccessTokenInput{Name: "MCP service", Scopes: []string{"workspace.read", "list.read"}})
+	integration, err := e.svc.Directory().CreateIntegrationToken(ctx, "organization-admin", identity.AccessTokenInput{Name: "MCP service", Scopes: []string{"workspace.read", "item.read"}})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -25,7 +25,7 @@ func TestLimitedConnection(t *testing.T) {
 		t.Fatal(err)
 	}
 	tok, err := e.svc.Directory().CreateAccessToken(t.Context(), "alice", identity.AccessTokenInput{Name: "Tasks assistant",
-		Scopes: []string{"workspace.read", "list.read", "contentType.read", "taxonomy.read", "user.read"}, Resources: []string{k.list}})
+		Scopes: []string{"workspace.read", "item.read", "contentType.read", "taxonomy.read", "user.read"}, Resources: []string{k.list}})
 	if err != nil {
 		t.Fatal(err)
 	}

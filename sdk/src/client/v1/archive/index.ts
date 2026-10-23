@@ -21,21 +21,21 @@ export interface ArchiveGetResponse extends Parsable {
  */
 export interface ArchiveRequestBuilder extends BaseRequestBuilder<ArchiveRequestBuilder> {
     /**
-     * Database-backed name search and filters; newest archived first with keyset pagination. Works without a search service. Requires list.read. Archive date bounds are inclusive.
+     * Database-backed name search and filters; newest archived first with keyset pagination. Works without a search service. Requires item.read. Archive date bounds are inclusive.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<ArchiveGetResponse>}
      * @throws {Problem} error when the service returns a 4XX or 5XX status code
      */
      get(requestConfiguration?: RequestConfiguration<ArchiveRequestBuilderGetQueryParameters> | undefined) : Promise<ArchiveGetResponse | undefined>;
     /**
-     * Database-backed name search and filters; newest archived first with keyset pagination. Works without a search service. Requires list.read. Archive date bounds are inclusive.
+     * Database-backed name search and filters; newest archived first with keyset pagination. Works without a search service. Requires item.read. Archive date bounds are inclusive.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */
      toGetRequestInformation(requestConfiguration?: RequestConfiguration<ArchiveRequestBuilderGetQueryParameters> | undefined) : RequestInformation;
 }
 /**
- * Database-backed name search and filters; newest archived first with keyset pagination. Works without a search service. Requires list.read. Archive date bounds are inclusive.
+ * Database-backed name search and filters; newest archived first with keyset pagination. Works without a search service. Requires item.read. Archive date bounds are inclusive.
  */
 export interface ArchiveRequestBuilderGetQueryParameters {
     archivedBy?: string;

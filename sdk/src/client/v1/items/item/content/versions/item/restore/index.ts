@@ -11,7 +11,7 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface RestoreRequestBuilder extends BaseRequestBuilder<RestoreRequestBuilder> {
     /**
-     * Requires list.write and document.write, item write access and the current numeric If-Match. Restores file bytes and filename while retaining current metadata. Creates a new blob sequence number and content revision; automatic publishing follows library settings. Explicit publication remains unchanged. Earlier versions remain immutable. The source version must belong to this item.
+     * Requires item.write and document.write, item write access and the current numeric If-Match. Restores file bytes and filename while retaining current metadata. Creates a new blob sequence number and content revision; automatic publishing follows library settings. Explicit publication remains unchanged. Earlier versions remain immutable. The source version must belong to this item.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<Blob>}
      * @throws {Problem} error when the service returns a 412 status code
@@ -19,7 +19,7 @@ export interface RestoreRequestBuilder extends BaseRequestBuilder<RestoreRequest
      */
      post(requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<Blob | undefined>;
     /**
-     * Requires list.write and document.write, item write access and the current numeric If-Match. Restores file bytes and filename while retaining current metadata. Creates a new blob sequence number and content revision; automatic publishing follows library settings. Explicit publication remains unchanged. Earlier versions remain immutable. The source version must belong to this item.
+     * Requires item.write and document.write, item write access and the current numeric If-Match. Restores file bytes and filename while retaining current metadata. Creates a new blob sequence number and content revision; automatic publishing follows library settings. Explicit publication remains unchanged. Earlier versions remain immutable. The source version must belong to this item.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */

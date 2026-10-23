@@ -206,7 +206,7 @@ func (s *Service) inboxUploadDestination(ctx context.Context, subject, groupID s
 		}
 		return "", err
 	}
-	for _, scope := range []string{"document.write", "list.read", "list.write"} {
+	for _, scope := range []string{"document.write", "item.read", "item.write"} {
 		if err := s.RequireScope(ctx, subject, scope); err != nil {
 			return "", err
 		}

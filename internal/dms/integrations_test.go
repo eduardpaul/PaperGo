@@ -77,7 +77,7 @@ func TestIntegrationCreateWithListScopedManagerToken(t *testing.T) {
 	if _, err := s.SetPermissions(ctx, "alice", list.ID, list.Version, Permissions{Inherit: false, Grants: []Permission{{PrincipalType: "user", PrincipalID: "bob", Action: "manage", Effect: "allow"}}}); err != nil {
 		t.Fatal(err)
 	}
-	token, err := s.Directory().CreateAccessToken(ctx, "bob", identity.AccessTokenInput{Name: "Feed", Scopes: []string{"list.read", "list.write", "list.manage"}})
+	token, err := s.Directory().CreateAccessToken(ctx, "bob", identity.AccessTokenInput{Name: "Feed", Scopes: []string{"item.read", "item.write", "list.manage"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +104,7 @@ func TestIntegrationRevalidatesCredentialAfterDownload(t *testing.T) {
 			s, _, list, body := integrationFixture(t)
 			ctx := t.Context()
 			*body = sourceFeed(sourceEvent)
-			token, err := s.Directory().CreateAccessToken(ctx, "alice", identity.AccessTokenInput{Name: "Feed", Scopes: []string{"list.read", "list.write", "list.manage"}})
+			token, err := s.Directory().CreateAccessToken(ctx, "alice", identity.AccessTokenInput{Name: "Feed", Scopes: []string{"item.read", "item.write", "list.manage"}})
 			if err != nil {
 				t.Fatal(err)
 			}

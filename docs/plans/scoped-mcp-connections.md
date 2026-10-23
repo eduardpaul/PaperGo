@@ -68,7 +68,7 @@ serves MCP connections, single-list integration tokens and WebDAV tokens.
 
 papergo-mcp needs no new rules: every API call it makes is limited. Tools
 already list only what the API returns, labels leave out names the caller
-cannot read, and write tools are hidden without `list.write`. The docs
+cannot read, and write tools are hidden without `item.write`. The docs
 explain connections and limits.
 
 ## Web app: Settings → AI assistants
@@ -86,9 +86,9 @@ Simple first:
 4. **Your connections.** Name, access ("Read only · 2 places" or
    "Read and write · Everything"), created, last used, expiry, Revoke.
 
-Read only maps to `workspace.read`, `list.read`, `contentType.read`,
+Read only maps to `workspace.read`, `item.read`, `contentType.read`,
 `document.read`, `taxonomy.read` and `user.read`; read and write adds
-`list.write`, which changes items and folders but not the places
+`item.write`, which changes items and folders but not the places
 themselves: creating, configuring, sharing and deleting workspaces, lists
 and libraries needs `list.manage`, which connections never request. Scopes
 the person does not hold are left out. Tokens have no

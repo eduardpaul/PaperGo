@@ -17,14 +17,14 @@ export interface WithNumberItemRequestBuilder extends BaseRequestBuilder<WithNum
      */
     get restore(): RestoreRequestBuilder;
     /**
-     * Requires list.read scope and ordinary read permission on the live item. All retained metadata revisions, including unpublished revisions, are available with their frozen schema. Current head content still requires read_draft; restoring history requires write.
+     * Requires item.read scope and ordinary read permission on the live item. All retained metadata revisions, including unpublished revisions, are available with their frozen schema. Current head content still requires read_draft; restoring history requires write.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<ItemRevision>}
      * @throws {Problem} error when the service returns a 4XX or 5XX status code
      */
      get(requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<ItemRevision | undefined>;
     /**
-     * Requires list.read scope and ordinary read permission on the live item. All retained metadata revisions, including unpublished revisions, are available with their frozen schema. Current head content still requires read_draft; restoring history requires write.
+     * Requires item.read scope and ordinary read permission on the live item. All retained metadata revisions, including unpublished revisions, are available with their frozen schema. Current head content still requires read_draft; restoring history requires write.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */

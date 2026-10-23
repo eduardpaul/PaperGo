@@ -82,7 +82,7 @@ func (s *Service) RecycleBin(ctx context.Context, subject, collection string, in
 }
 
 func (s *Service) recycleCollection(ctx context.Context, subject, id string) (*resources.Resource, error) {
-	if err := s.RequireScope(ctx, subject, "list.read"); err != nil {
+	if err := s.RequireScope(ctx, subject, "item.read"); err != nil {
 		return nil, err
 	}
 	c, err := s.authorize(ctx, subject, id, "read")

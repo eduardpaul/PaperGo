@@ -37,7 +37,7 @@ func (s *Service) validatePersonValues(ctx context.Context, values []any, old ma
 }
 
 func (s *Service) People(ctx context.Context, subject string) ([]string, error) {
-	if err := s.RequireScope(ctx, subject, "list.read"); err != nil {
+	if err := s.RequireScope(ctx, subject, "item.read"); err != nil {
 		return nil, err
 	}
 	users, err := s.DAL.Directory().Users(ctx, directory.UserFilter{Active: true})

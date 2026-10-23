@@ -44,7 +44,7 @@ func TestTokenResourceLimits(t *testing.T) {
 		_ = json.Unmarshal(r.Body.Bytes(), &out)
 		return r.Code, out, r.Body.String()
 	}
-	read := `"scopes":["workspace.read","list.read"]`
+	read := `"scopes":["workspace.read","item.read"]`
 	code, invoicesOnly, body := issue(`{"name":"Invoices assistant",` + read + `,"resources":["` + invoices + `"]}`)
 	if code != 201 || strings.Join(invoicesOnly.Token.Resources, ",") != invoices {
 		t.Fatal(code, body)
@@ -100,7 +100,7 @@ func TestTokenResourceLimits(t *testing.T) {
 
 	// Writing stays inside the limit, and a listed collection's workspace is
 	// readable but not writable.
-	code, writer, body := issue(`{"name":"Invoices writer","scopes":["workspace.read","list.read","list.write"],"resources":["` + invoices + `"]}`)
+	code, writer, body := issue(`{"name":"Invoices writer","scopes":["workspace.read","item.read","item.write"],"resources":["` + invoices + `"]}`)
 	if code != 201 {
 		t.Fatal(code, body)
 	}
@@ -138,7 +138,7 @@ func TestTokenResourceLimits(t *testing.T) {
 		"unreadable":     `{"name":"x",` + read + `,"resources":["` + bobsList + `"]}`,
 		"duplicate":      `{"name":"x",` + read + `,"resources":["` + invoices + `","` + invoices + `"]}`,
 		"empty":          `{"name":"x",` + read + `,"resources":[]}`,
-		"organization":   `{"name":"x","scopes":["list.read","workspace.create"],"resources":["` + invoices + `"]}`,
+		"organization":   `{"name":"x","scopes":["item.read","workspace.create"],"resources":["` + invoices + `"]}`,
 		"too many":       `{"name":"x",` + read + `,"resources":["` + strings.Repeat(invoices+`","`, identity.MaxTokenResources) + invoices + `"]}`,
 		"unknown":        `{"name":"x",` + read + `,"resources":["00000000-0000-4000-8000-000000000000"]}`,
 		"other's member": `{"name":"x",` + read + `,"resources":["` + bobs + `"]}`,
@@ -161,7 +161,7 @@ func TestTokenResourceLimits(t *testing.T) {
 	}
 }
 
-// A token without list.write changes nothing: not items, and not
+// A token without item.write changes nothing: not items, and not
 // workspaces, lists or libraries themselves, whose settings, permissions,
 // views and existence its holder could otherwise manage. Reading still works.
 func TestReadOnlyTokensChangeNothing(t *testing.T) {
@@ -174,7 +174,7 @@ func TestReadOnlyTokensChangeNothing(t *testing.T) {
 	list, _ := s.Create(ctx, "alice", w.ID, dms.CreateResource{Kind: "list", Name: "Invoices"})
 	library, _ := s.Create(ctx, "alice", w.ID, dms.CreateResource{Kind: "library", Name: "Contracts"})
 	item, _ := s.Create(ctx, "alice", list.ID, dms.CreateResource{Kind: "item", Name: "Invoice"})
-	read := []string{"workspace.read", "list.read", "contentType.read", "document.read", "taxonomy.read", "user.read"}
+	read := []string{"workspace.read", "item.read", "contentType.read", "document.read", "taxonomy.read", "user.read"}
 	// Refusals are 403, or 404 for workspaces, which do not reveal themselves.
 	for _, limit := range [][]string{nil, {w.ID}} {
 		tok, err := s.Directory().CreateAccessToken(ctx, "alice", identity.AccessTokenInput{Name: "Read only", Scopes: read, Resources: limit})
@@ -231,7 +231,7 @@ func TestWriteTokensLeavePlacesAsTheyAre(t *testing.T) {
 	if _, err = s.Create(ctx, "alice", list.ID, dms.CreateResource{Kind: "item", Name: "Invoice"}); err != nil {
 		t.Fatal(err)
 	}
-	write := []string{"workspace.read", "list.read", "list.write", "contentType.read", "document.read", "taxonomy.read", "user.read"}
+	write := []string{"workspace.read", "item.read", "item.write", "contentType.read", "document.read", "taxonomy.read", "user.read"}
 	version := func(id string) string {
 		r, err := s.GetSurface(ctx, "alice", id, "auto")
 		if err != nil {
@@ -287,7 +287,7 @@ func TestAuditNamesTheCredential(t *testing.T) {
 		t.Fatal(err)
 	}
 	list, _ := s.Create(ctx, "alice", w.ID, dms.CreateResource{Kind: "list", Name: "Invoices"})
-	tok, err := s.Directory().CreateAccessToken(ctx, "alice", identity.AccessTokenInput{Name: "Claude", Scopes: []string{"workspace.read", "list.read", "list.write"}})
+	tok, err := s.Directory().CreateAccessToken(ctx, "alice", identity.AccessTokenInput{Name: "Claude", Scopes: []string{"workspace.read", "item.read", "item.write"}})
 	if err != nil {
 		t.Fatal(err)
 	}

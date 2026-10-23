@@ -430,7 +430,7 @@ type SmartFolderPreview struct {
 
 // Preview evaluates an unsaved definition against exactly the caller's visible item surfaces.
 func (s *Service) PreviewSmartFolder(ctx context.Context, subject string, in SmartFolderPreview) (SmartFolderResult, error) {
-	if err := s.RequireScope(ctx, subject, "list.read"); err != nil {
+	if err := s.RequireScope(ctx, subject, "item.read"); err != nil {
 		return SmartFolderResult{}, err
 	}
 	return read(ctx, s, func(t *Service) (SmartFolderResult, error) {

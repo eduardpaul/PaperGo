@@ -26,13 +26,13 @@ export const relationshipTypesQuery = {
 };
 
 export function RelationshipTypesCatalog() {
-  const listRead = useHasScope('list.read');
+  const listRead = useHasScope('item.read');
   const taxonomyRead = useHasScope('taxonomy.read');
   const canRead = listRead && taxonomyRead;
-  const canCreate = useHasScope('list.write');
+  const canCreate = useHasScope('item.write');
   const types = useQuery({ ...relationshipTypesQuery, enabled: canRead });
   const [creating, setCreating] = useState(false);
-  if (!canRead) return <p>You need list.read and taxonomy.read to view relationship types.</p>;
+  if (!canRead) return <p>You need item.read and taxonomy.read to view relationship types.</p>;
   return (
     <>
       <SettingsSection

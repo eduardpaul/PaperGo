@@ -25,14 +25,14 @@ export interface SmartFoldersRequestBuilder extends BaseRequestBuilder<SmartFold
      */
      byId(id: Guid) : SmartFoldersItemRequestBuilder;
     /**
-     *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+     *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<SmartFolderPage>}
      * @throws {Problem} error when the service returns a 4XX or 5XX status code
      */
      get(requestConfiguration?: RequestConfiguration<SmartFoldersRequestBuilderGetQueryParameters> | undefined) : Promise<SmartFolderPage | undefined>;
     /**
-     *  Required module scopes: list.write; shared smart folders also need list.manage and workspace manage access. Resource ACLs and any additional use-case checks also apply.
+     *  Required module scopes: item.write; shared smart folders also need list.manage and workspace manage access. Resource ACLs and any additional use-case checks also apply.
      * @param body Personal folders are owner-only and may span all readable workspaces. Shared folders require workspace_id and workspace manage permission. Ownership and workspace are immutable on PUT; PUT replaces the definition. At most 100 shared folders per workspace. Shared mutations advance the workspace version; personal mutations do not.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<SmartFolder>}
@@ -40,13 +40,13 @@ export interface SmartFoldersRequestBuilder extends BaseRequestBuilder<SmartFold
      */
      post(body: SmartFolderInput, requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<SmartFolder | undefined>;
     /**
-     *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+     *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */
      toGetRequestInformation(requestConfiguration?: RequestConfiguration<SmartFoldersRequestBuilderGetQueryParameters> | undefined) : RequestInformation;
     /**
-     *  Required module scopes: list.write; shared smart folders also need list.manage and workspace manage access. Resource ACLs and any additional use-case checks also apply.
+     *  Required module scopes: item.write; shared smart folders also need list.manage and workspace manage access. Resource ACLs and any additional use-case checks also apply.
      * @param body Personal folders are owner-only and may span all readable workspaces. Shared folders require workspace_id and workspace manage permission. Ownership and workspace are immutable on PUT; PUT replaces the definition. At most 100 shared folders per workspace. Shared mutations advance the workspace version; personal mutations do not.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
@@ -54,7 +54,7 @@ export interface SmartFoldersRequestBuilder extends BaseRequestBuilder<SmartFold
      toPostRequestInformation(body: SmartFolderInput, requestConfiguration?: RequestConfiguration<object> | undefined) : RequestInformation;
 }
 /**
- *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+ *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
  */
 export interface SmartFoldersRequestBuilderGetQueryParameters {
     /**

@@ -660,7 +660,7 @@ Personalization changes quality and cost, never permissions or inclusion.
 
 ## 10. Global search API
 
-`GET /v1/search`, or `POST /v1/search` with a JSON body when a `filter` is given. Both need `list.read`; reindex and status need `organization.manage`.
+`GET /v1/search`, or `POST /v1/search` with a JSON body when a `filter` is given. Both need `item.read`; reindex and status need `organization.manage`.
 
 | Parameter | Meaning |
 | --- | --- |

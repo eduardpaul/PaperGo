@@ -44,7 +44,7 @@ func getItemText() mcp.Tool {
 			"ocr_pages": {"type": "integer"},
 			"skipped_pages": {"type": "integer", "description": "Pages without a text layer that were not recognized."},
 			"truncated": {"type": "boolean", "description": "PaperGo stored only the first part of a very long file's text."}}}`),
-		Scopes:      []string{scopeListRead, scopeDocumentRead},
+		Scopes:      []string{scopeItemRead, scopeDocumentRead},
 		Annotations: mcp.Annotations{ReadOnly: true, Idempotent: true},
 		Call: func(ctx context.Context, c mcp.Caller, args json.RawMessage) (json.RawMessage, error) {
 			in := struct {

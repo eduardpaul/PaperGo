@@ -4349,7 +4349,7 @@ export type Resource_versioning = (typeof Resource_versioningObject)[keyof typeo
  */
 export interface ResourceAccess extends Parsable, Resource {
 	/**
-	 * Allowed actions, in the order read, read_draft, write, publish, manage. Workspace ACLs and the caller's module scopes both apply: write and publish below a workspace also need list.write, and manage needs list.manage. On a workspace, manage means owner; on a list or library, write means adding and editing content and manage means changing settings, fields, views and permissions.
+	 * Allowed actions, in the order read, read_draft, write, publish, manage. Workspace ACLs and the caller's module scopes both apply: write and publish below a workspace also need item.write, and manage needs list.manage. On a workspace, manage means owner; on a list or library, write means adding and editing content and manage means changing settings, fields, views and permissions.
 	 */
 	access?: ResourceAccess_access[] | null;
 }
@@ -7219,21 +7219,21 @@ export interface ArchiveGetResponse extends Parsable {
  */
 export interface ArchiveRequestBuilder extends BaseRequestBuilder<ArchiveRequestBuilder> {
 	/**
-	 * Database-backed name search and filters; newest archived first with keyset pagination. Works without a search service. Requires list.read. Archive date bounds are inclusive.
+	 * Database-backed name search and filters; newest archived first with keyset pagination. Works without a search service. Requires item.read. Archive date bounds are inclusive.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<ArchiveGetResponse>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	get(requestConfiguration?: RequestConfiguration<ArchiveRequestBuilderGetQueryParameters> | undefined): Promise<ArchiveGetResponse | undefined>;
 	/**
-	 * Database-backed name search and filters; newest archived first with keyset pagination. Works without a search service. Requires list.read. Archive date bounds are inclusive.
+	 * Database-backed name search and filters; newest archived first with keyset pagination. Works without a search service. Requires item.read. Archive date bounds are inclusive.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<ArchiveRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 }
 /**
- * Database-backed name search and filters; newest archived first with keyset pagination. Works without a search service. Requires list.read. Archive date bounds are inclusive.
+ * Database-backed name search and filters; newest archived first with keyset pagination. Works without a search service. Requires item.read. Archive date bounds are inclusive.
  */
 export interface ArchiveRequestBuilderGetQueryParameters {
 	archivedBy?: string;
@@ -7379,13 +7379,13 @@ export interface AuditRequestBuilderGetQueryParameters {
  */
 export interface CollectionTemplatesRequestBuilder extends BaseRequestBuilder<CollectionTemplatesRequestBuilder> {
 	/**
-	 * Requires list.read. Built-in Documents and Contacts and templates registered by modules. Create a collection with template_key to provision it.
+	 * Requires item.read. Built-in Documents and Contacts and templates registered by modules. Create a collection with template_key to provision it.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<CollectionTemplate[]>}
 	 */
 	get(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<CollectionTemplate[] | undefined>;
 	/**
-	 * Requires list.read. Built-in Documents and Contacts and templates registered by modules. Create a collection with template_key to provision it.
+	 * Requires item.read. Built-in Documents and Contacts and templates registered by modules. Create a collection with template_key to provision it.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -7539,14 +7539,14 @@ export interface FieldsRequestBuilder extends BaseRequestBuilder<FieldsRequestBu
 }
 interface ArchiveRequestBuilder$1 extends BaseRequestBuilder<ArchiveRequestBuilder$1> {
 	/**
-	 * Requires item write access and list.write scope. Applies immediately to head and published content. Changes the lock version without a content revision. Repeating with the current version is a no-op.
+	 * Requires item write access and item.write scope. Applies immediately to head and published content. Changes the lock version without a content revision. Repeating with the current version is a no-op.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<ResourceAccess>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	post(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<ResourceAccess | undefined>;
 	/**
-	 * Requires item write access and list.write scope. Applies immediately to head and published content. Changes the lock version without a content revision. Repeating with the current version is a no-op.
+	 * Requires item write access and item.write scope. Applies immediately to head and published content. Changes the lock version without a content revision. Repeating with the current version is a no-op.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -7607,7 +7607,7 @@ export interface ReclaimRequestBuilder extends BaseRequestBuilder<ReclaimRequest
  */
 export interface RestoreRequestBuilder extends BaseRequestBuilder<RestoreRequestBuilder> {
 	/**
-	 * Requires list.write and document.write, item write access and the current numeric If-Match. Restores file bytes and filename while retaining current metadata. Creates a new blob sequence number and content revision; automatic publishing follows library settings. Explicit publication remains unchanged. Earlier versions remain immutable. The source version must belong to this item.
+	 * Requires item.write and document.write, item write access and the current numeric If-Match. Restores file bytes and filename while retaining current metadata. Creates a new blob sequence number and content revision; automatic publishing follows library settings. Explicit publication remains unchanged. Earlier versions remain immutable. The source version must belong to this item.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Blob>}
 	 * @throws {Problem} error when the service returns a 412 status code
@@ -7615,7 +7615,7 @@ export interface RestoreRequestBuilder extends BaseRequestBuilder<RestoreRequest
 	 */
 	post(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Blob | undefined>;
 	/**
-	 * Requires list.write and document.write, item write access and the current numeric If-Match. Restores file bytes and filename while retaining current metadata. Creates a new blob sequence number and content revision; automatic publishing follows library settings. Explicit publication remains unchanged. Earlier versions remain immutable. The source version must belong to this item.
+	 * Requires item.write and document.write, item write access and the current numeric If-Match. Restores file bytes and filename while retaining current metadata. Creates a new blob sequence number and content revision; automatic publishing follows library settings. Explicit publication remains unchanged. Earlier versions remain immutable. The source version must belong to this item.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -7651,21 +7651,21 @@ export interface VersionsRequestBuilder extends BaseRequestBuilder<VersionsReque
 	 */
 	byNumber(number: number): WithNumberItemRequestBuilder;
 	/**
-	 * Retained files of a library item, newest first. Draft readers see every version; ordinary readers see only the published file. `is_current` marks the file of the caller's visible revision, `created_by` who uploaded or restored that version, and `availability` whether the bytes are still stored. A reclaimed version keeps its id, version, filename, content type, size and checksum; downloading or restoring it reports that the content is unavailable. Restore a version that still has its bytes with POST /v1/items/{id}/content/versions/{number}/restore. Required module scopes: list.read, document.read. Resource ACLs and any additional use-case checks also apply.
+	 * Retained files of a library item, newest first. Draft readers see every version; ordinary readers see only the published file. `is_current` marks the file of the caller's visible revision, `created_by` who uploaded or restored that version, and `availability` whether the bytes are still stored. A reclaimed version keeps its id, version, filename, content type, size and checksum; downloading or restoring it reports that the content is unavailable. Restore a version that still has its bytes with POST /v1/items/{id}/content/versions/{number}/restore. Required module scopes: item.read, document.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<VersionsGetResponse>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	get(requestConfiguration?: RequestConfiguration<VersionsRequestBuilderGetQueryParameters> | undefined): Promise<VersionsGetResponse | undefined>;
 	/**
-	 * Retained files of a library item, newest first. Draft readers see every version; ordinary readers see only the published file. `is_current` marks the file of the caller's visible revision, `created_by` who uploaded or restored that version, and `availability` whether the bytes are still stored. A reclaimed version keeps its id, version, filename, content type, size and checksum; downloading or restoring it reports that the content is unavailable. Restore a version that still has its bytes with POST /v1/items/{id}/content/versions/{number}/restore. Required module scopes: list.read, document.read. Resource ACLs and any additional use-case checks also apply.
+	 * Retained files of a library item, newest first. Draft readers see every version; ordinary readers see only the published file. `is_current` marks the file of the caller's visible revision, `created_by` who uploaded or restored that version, and `availability` whether the bytes are still stored. A reclaimed version keeps its id, version, filename, content type, size and checksum; downloading or restoring it reports that the content is unavailable. Restore a version that still has its bytes with POST /v1/items/{id}/content/versions/{number}/restore. Required module scopes: item.read, document.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<VersionsRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 }
 /**
- * Retained files of a library item, newest first. Draft readers see every version; ordinary readers see only the published file. `is_current` marks the file of the caller's visible revision, `created_by` who uploaded or restored that version, and `availability` whether the bytes are still stored. A reclaimed version keeps its id, version, filename, content type, size and checksum; downloading or restoring it reports that the content is unavailable. Restore a version that still has its bytes with POST /v1/items/{id}/content/versions/{number}/restore. Required module scopes: list.read, document.read. Resource ACLs and any additional use-case checks also apply.
+ * Retained files of a library item, newest first. Draft readers see every version; ordinary readers see only the published file. `is_current` marks the file of the caller's visible revision, `created_by` who uploaded or restored that version, and `availability` whether the bytes are still stored. A reclaimed version keeps its id, version, filename, content type, size and checksum; downloading or restoring it reports that the content is unavailable. Restore a version that still has its bytes with POST /v1/items/{id}/content/versions/{number}/restore. Required module scopes: item.read, document.read. Resource ACLs and any additional use-case checks also apply.
  */
 export interface VersionsRequestBuilderGetQueryParameters {
 	/**
@@ -7687,13 +7687,13 @@ interface ContentRequestBuilder$1 extends BaseRequestBuilder<ContentRequestBuild
 	 */
 	get versions(): VersionsRequestBuilder;
 	/**
-	 * Ordinary readers can download only the current published blob, including with blob_id. Draft readers default to head and may request retained historical blobs. Required module scopes: list.read and document.read. Resource ACLs and any additional use-case checks also apply.
+	 * Ordinary readers can download only the current published blob, including with blob_id. Draft readers default to head and may request retained historical blobs. Required module scopes: item.read and document.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	get(requestConfiguration?: RequestConfiguration<ContentRequestBuilderGetQueryParameters> | undefined): Promise<void>;
 	/**
-	 * Checks the library duplicate policy in the same transaction as the new file revision. Warn returns duplicates; block returns 409 duplicate_file and stores no revision. Self, deleted items, historical files and inaccessible content do not count. Requires list.write and document.write and item write access with current If-Match. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts only PDF, TIFF, JPEG, PNG and WebP detected from file signatures; filenames and declared MIME types do not determine stored content_type. Unsupported bytes return 415 without item/revision changes. Size limits apply while streaming.
+	 * Checks the library duplicate policy in the same transaction as the new file revision. Warn returns duplicates; block returns 409 duplicate_file and stores no revision. Self, deleted items, historical files and inaccessible content do not count. Requires item.write and document.write and item write access with current If-Match. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts only PDF, TIFF, JPEG, PNG and WebP detected from file signatures; filenames and declared MIME types do not determine stored content_type. Unsupported bytes return 415 without item/revision changes. Size limits apply while streaming.
 	 * @param body Binary request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Blob>}
@@ -7702,13 +7702,13 @@ interface ContentRequestBuilder$1 extends BaseRequestBuilder<ContentRequestBuild
 	 */
 	put(body: ArrayBuffer | undefined, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Blob | undefined>;
 	/**
-	 * Ordinary readers can download only the current published blob, including with blob_id. Draft readers default to head and may request retained historical blobs. Required module scopes: list.read and document.read. Resource ACLs and any additional use-case checks also apply.
+	 * Ordinary readers can download only the current published blob, including with blob_id. Draft readers default to head and may request retained historical blobs. Required module scopes: item.read and document.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<ContentRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 	/**
-	 * Checks the library duplicate policy in the same transaction as the new file revision. Warn returns duplicates; block returns 409 duplicate_file and stores no revision. Self, deleted items, historical files and inaccessible content do not count. Requires list.write and document.write and item write access with current If-Match. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts only PDF, TIFF, JPEG, PNG and WebP detected from file signatures; filenames and declared MIME types do not determine stored content_type. Unsupported bytes return 415 without item/revision changes. Size limits apply while streaming.
+	 * Checks the library duplicate policy in the same transaction as the new file revision. Warn returns duplicates; block returns 409 duplicate_file and stores no revision. Self, deleted items, historical files and inaccessible content do not count. Requires item.write and document.write and item write access with current If-Match. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts only PDF, TIFF, JPEG, PNG and WebP detected from file signatures; filenames and declared MIME types do not determine stored content_type. Unsupported bytes return 415 without item/revision changes. Size limits apply while streaming.
 	 * @param body Binary request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -7716,7 +7716,7 @@ interface ContentRequestBuilder$1 extends BaseRequestBuilder<ContentRequestBuild
 	toPutRequestInformation(body: ArrayBuffer | undefined, requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 }
 /**
- * Ordinary readers can download only the current published blob, including with blob_id. Draft readers default to head and may request retained historical blobs. Required module scopes: list.read and document.read. Resource ACLs and any additional use-case checks also apply.
+ * Ordinary readers can download only the current published blob, including with blob_id. Draft readers default to head and may request retained historical blobs. Required module scopes: item.read and document.read. Resource ACLs and any additional use-case checks also apply.
  */
 export interface ContentRequestBuilderGetQueryParameters {
 	blobId?: Guid;
@@ -7744,7 +7744,7 @@ export interface IntegrationRequestBuilder extends BaseRequestBuilder<Integratio
  */
 export interface MoveRequestBuilder extends BaseRequestBuilder<MoveRequestBuilder> {
 	/**
-	 * Requires list.write, source write access, destination collection read access and destination parent write access. If-Match validates the current item version. Cross-collection moves support content items only, require matching collection kinds and an attached matching content type, and revalidate all current values and references. Identity, blobs, history and relationships survive. Source item grants are removed and the item inherits destination permissions. Search indexes and business keys move atomically; name/unique-value collisions roll back the move. Explicit publications retain frozen snapshots; automatic publishing exposes the head. Historical revisions retain their original schema/container provenance. Workflow run location metadata follows the item. Same-collection moves retain exclusive permissions.
+	 * Requires item.write, source write access, destination collection read access and destination parent write access. If-Match validates the current item version. Cross-collection moves support content items only, require matching collection kinds and an attached matching content type, and revalidate all current values and references. Identity, blobs, history and relationships survive. Source item grants are removed and the item inherits destination permissions. Search indexes and business keys move atomically; name/unique-value collisions roll back the move. Explicit publications retain frozen snapshots; automatic publishing exposes the head. Historical revisions retain their original schema/container provenance. Workflow run location metadata follows the item. Same-collection moves retain exclusive permissions.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Resource>}
@@ -7753,7 +7753,7 @@ export interface MoveRequestBuilder extends BaseRequestBuilder<MoveRequestBuilde
 	 */
 	post(body: MoveItem, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Resource | undefined>;
 	/**
-	 * Requires list.write, source write access, destination collection read access and destination parent write access. If-Match validates the current item version. Cross-collection moves support content items only, require matching collection kinds and an attached matching content type, and revalidate all current values and references. Identity, blobs, history and relationships survive. Source item grants are removed and the item inherits destination permissions. Search indexes and business keys move atomically; name/unique-value collisions roll back the move. Explicit publications retain frozen snapshots; automatic publishing exposes the head. Historical revisions retain their original schema/container provenance. Workflow run location metadata follows the item. Same-collection moves retain exclusive permissions.
+	 * Requires item.write, source write access, destination collection read access and destination parent write access. If-Match validates the current item version. Cross-collection moves support content items only, require matching collection kinds and an attached matching content type, and revalidate all current values and references. Identity, blobs, history and relationships survive. Source item grants are removed and the item inherits destination permissions. Search indexes and business keys move atomically; name/unique-value collisions roll back the move. Explicit publications retain frozen snapshots; automatic publishing exposes the head. Historical revisions retain their original schema/container provenance. Workflow run location metadata follows the item. Same-collection moves retain exclusive permissions.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -7801,7 +7801,7 @@ export interface PreviewGetResponse extends AdditionalDataHolder, Parsable {
  */
 export interface PreviewRequestBuilder extends BaseRequestBuilder<PreviewRequestBuilder> {
 	/**
-	 * Requires list.read and document.read, plus resource ACL access. Resolves the visible published/head revision before selecting a rendition. Identical source bytes share a preview; original bytes are never returned. The default file.preview workflow generates previews asynchronously.
+	 * Requires item.read and document.read, plus resource ACL access. Resolves the visible published/head revision before selecting a rendition. Identical source bytes share a preview; original bytes are never returned. The default file.preview workflow generates previews asynchronously.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<PreviewGetResponse>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
@@ -7821,7 +7821,7 @@ export interface PreviewRequestBuilder extends BaseRequestBuilder<PreviewRequest
 	 */
 	post(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Operation | undefined>;
 	/**
-	 * Requires list.read and document.read, plus resource ACL access. Resolves the visible published/head revision before selecting a rendition. Identical source bytes share a preview; original bytes are never returned. The default file.preview workflow generates previews asynchronously.
+	 * Requires item.read and document.read, plus resource ACL access. Resolves the visible published/head revision before selecting a rendition. Identical source bytes share a preview; original bytes are never returned. The default file.preview workflow generates previews asynchronously.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -7834,7 +7834,7 @@ export interface PreviewRequestBuilder extends BaseRequestBuilder<PreviewRequest
 	toPostRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 }
 /**
- * Requires list.read and document.read, plus resource ACL access. Resolves the visible published/head revision before selecting a rendition. Identical source bytes share a preview; original bytes are never returned. The default file.preview workflow generates previews asynchronously.
+ * Requires item.read and document.read, plus resource ACL access. Resolves the visible published/head revision before selecting a rendition. Identical source bytes share a preview; original bytes are never returned. The default file.preview workflow generates previews asynchronously.
  */
 export interface PreviewRequestBuilderGetQueryParameters {
 	/**
@@ -7857,14 +7857,14 @@ export interface PublicationsGetResponse extends Parsable {
  */
 export interface PublicationsRequestBuilder extends BaseRequestBuilder<PublicationsRequestBuilder> {
 	/**
-	 * Draft readers see lifecycle history. Ordinary readers see publish events for the current published revision only. Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 * Draft readers see lifecycle history. Ordinary readers see publish events for the current published revision only. Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<PublicationsGetResponse>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	get(requestConfiguration?: RequestConfiguration<PublicationsRequestBuilderGetQueryParameters> | undefined): Promise<PublicationsGetResponse | undefined>;
 	/**
-	 *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Publication>}
 	 * @throws {Problem} error when the service returns a 412 status code
@@ -7872,20 +7872,20 @@ export interface PublicationsRequestBuilder extends BaseRequestBuilder<Publicati
 	 */
 	post(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Publication | undefined>;
 	/**
-	 * Draft readers see lifecycle history. Ordinary readers see publish events for the current published revision only. Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 * Draft readers see lifecycle history. Ordinary readers see publish events for the current published revision only. Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<PublicationsRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 	/**
-	 *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toPostRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 }
 /**
- * Draft readers see lifecycle history. Ordinary readers see publish events for the current published revision only. Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+ * Draft readers see lifecycle history. Ordinary readers see publish events for the current published revision only. Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
  */
 export interface PublicationsRequestBuilderGetQueryParameters {
 	/**
@@ -7902,20 +7902,20 @@ export interface PublicationsRequestBuilderGetQueryParameters {
  */
 export interface WithLinkItemRequestBuilder extends BaseRequestBuilder<WithLinkItemRequestBuilder> {
 	/**
-	 * Either endpoint may remove a directed or symmetric edge. Requires write permission on both endpoints without an ETag precondition. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.
+	 * Either endpoint may remove a directed or symmetric edge. Requires write permission on both endpoints without an ETag precondition. Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	delete(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<void>;
 	/**
-	 * The item must participate in the edge and both endpoints must be visible. Required module scope: list.read.
+	 * The item must participate in the edge and both endpoints must be visible. Required module scope: item.read.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<RelationshipView>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	get(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<RelationshipView | undefined>;
 	/**
-	 * Either endpoint may patch a directed or symmetric edge. Requires write permission on both endpoints and the edge If-Match. Omitted metadata keys remain; null removes a key. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.
+	 * Either endpoint may patch a directed or symmetric edge. Requires write permission on both endpoints and the edge If-Match. Omitted metadata keys remain; null removes a key. Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Relationship>}
@@ -7933,19 +7933,19 @@ export interface WithLinkItemRequestBuilder extends BaseRequestBuilder<WithLinkI
 	 */
 	patch(body: UpdateRelationship, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Relationship | undefined>;
 	/**
-	 * Either endpoint may remove a directed or symmetric edge. Requires write permission on both endpoints without an ETag precondition. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.
+	 * Either endpoint may remove a directed or symmetric edge. Requires write permission on both endpoints without an ETag precondition. Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toDeleteRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 	/**
-	 * The item must participate in the edge and both endpoints must be visible. Required module scope: list.read.
+	 * The item must participate in the edge and both endpoints must be visible. Required module scope: item.read.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 	/**
-	 * Either endpoint may patch a directed or symmetric edge. Requires write permission on both endpoints and the edge If-Match. Omitted metadata keys remain; null removes a key. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.
+	 * Either endpoint may patch a directed or symmetric edge. Requires write permission on both endpoints and the edge If-Match. Omitted metadata keys remain; null removes a key. Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -7974,14 +7974,14 @@ export interface RelationshipsRequestBuilder extends BaseRequestBuilder<Relation
 	 */
 	byLinkID(linkID: string): WithLinkItemRequestBuilder;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<RelationshipsGetResponse>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	get(requestConfiguration?: RequestConfiguration<RelationshipsRequestBuilderGetQueryParameters> | undefined): Promise<RelationshipsGetResponse | undefined>;
 	/**
-	 * Endpoints may belong to different workspaces. Type is optional; untyped links default to symmetric and allow at most 64 scalar attributes and 16 KiB of JSON. Requires write permission on both endpoints. Ensures one edge for the type and endpoints; repeating creation returns the existing edge without changing metadata, version or audit history, even at a cardinality limit. Symmetric endpoints use canonical ordering. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.
+	 * Endpoints may belong to different workspaces. Type is optional; untyped links default to symmetric and allow at most 64 scalar attributes and 16 KiB of JSON. Requires write permission on both endpoints. Ensures one edge for the type and endpoints; repeating creation returns the existing edge without changing metadata, version or audit history, even at a cardinality limit. Symmetric endpoints use canonical ordering. Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Relationship>}
@@ -7989,13 +7989,13 @@ export interface RelationshipsRequestBuilder extends BaseRequestBuilder<Relation
 	 */
 	post(body: CreateRelationship, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Relationship | undefined>;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<RelationshipsRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 	/**
-	 * Endpoints may belong to different workspaces. Type is optional; untyped links default to symmetric and allow at most 64 scalar attributes and 16 KiB of JSON. Requires write permission on both endpoints. Ensures one edge for the type and endpoints; repeating creation returns the existing edge without changing metadata, version or audit history, even at a cardinality limit. Symmetric endpoints use canonical ordering. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.
+	 * Endpoints may belong to different workspaces. Type is optional; untyped links default to symmetric and allow at most 64 scalar attributes and 16 KiB of JSON. Requires write permission on both endpoints. Ensures one edge for the type and endpoints; repeating creation returns the existing edge without changing metadata, version or audit history, even at a cardinality limit. Symmetric endpoints use canonical ordering. Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -8003,7 +8003,7 @@ export interface RelationshipsRequestBuilder extends BaseRequestBuilder<Relation
 	toPostRequestInformation(body: CreateRelationship, requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 }
 /**
- *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+ *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
  */
 export interface RelationshipsRequestBuilderGetQueryParameters {
 	direction?: GetDirectionQueryParameterType;
@@ -8027,7 +8027,7 @@ declare const GetDirectionQueryParameterTypeObject: {
 };
 interface RestoreRequestBuilder$1 extends BaseRequestBuilder<RestoreRequestBuilder$1> {
 	/**
-	 * Requires item write permission and its current If-Match. Revalidates values against the current schema; removed fields remain removed and current values absent from the snapshot are cleared. Restores the historical content type (which must still be attached), name, keywords and field values, retaining the current blob. Runs ordinary indexing, publication and domain-event logic atomically. Historical revisions are unchanged. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
+	 * Requires item write permission and its current If-Match. Revalidates values against the current schema; removed fields remain removed and current values absent from the snapshot are cleared. Restores the historical content type (which must still be attached), name, keywords and field values, retaining the current blob. Runs ordinary indexing, publication and domain-event logic atomically. Historical revisions are unchanged. Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Resource>}
 	 * @throws {Problem} error when the service returns a 412 status code
@@ -8035,7 +8035,7 @@ interface RestoreRequestBuilder$1 extends BaseRequestBuilder<RestoreRequestBuild
 	 */
 	post(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Resource | undefined>;
 	/**
-	 * Requires item write permission and its current If-Match. Revalidates values against the current schema; removed fields remain removed and current values absent from the snapshot are cleared. Restores the historical content type (which must still be attached), name, keywords and field values, retaining the current blob. Runs ordinary indexing, publication and domain-event logic atomically. Historical revisions are unchanged. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
+	 * Requires item write permission and its current If-Match. Revalidates values against the current schema; removed fields remain removed and current values absent from the snapshot are cleared. Restores the historical content type (which must still be attached), name, keywords and field values, retaining the current blob. Runs ordinary indexing, publication and domain-event logic atomically. Historical revisions are unchanged. Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -8047,14 +8047,14 @@ interface WithNumberItemRequestBuilder$1 extends BaseRequestBuilder<WithNumberIt
 	 */
 	get restore(): RestoreRequestBuilder$1;
 	/**
-	 * Requires list.read scope and ordinary read permission on the live item. All retained metadata revisions, including unpublished revisions, are available with their frozen schema. Current head content still requires read_draft; restoring history requires write.
+	 * Requires item.read scope and ordinary read permission on the live item. All retained metadata revisions, including unpublished revisions, are available with their frozen schema. Current head content still requires read_draft; restoring history requires write.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<ItemRevision>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	get(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<ItemRevision | undefined>;
 	/**
-	 * Requires list.read scope and ordinary read permission on the live item. All retained metadata revisions, including unpublished revisions, are available with their frozen schema. Current head content still requires read_draft; restoring history requires write.
+	 * Requires item.read scope and ordinary read permission on the live item. All retained metadata revisions, including unpublished revisions, are available with their frozen schema. Current head content still requires read_draft; restoring history requires write.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -8081,21 +8081,21 @@ export interface RevisionsRequestBuilder extends BaseRequestBuilder<RevisionsReq
 	 */
 	byNumber(number: number): WithNumberItemRequestBuilder$1;
 	/**
-	 * Requires list.read scope and ordinary read permission on the live item. All retained metadata revisions, including unpublished revisions, are available with their frozen schema. Current head content still requires read_draft; restoring history requires write. Newest recorded version first. $skiptoken is the last returned recorded number, and following pages contain smaller numbers. revision_number counts recorded entries only; is_current marks the largest retained number, even when recording is disabled.
+	 * Requires item.read scope and ordinary read permission on the live item. All retained metadata revisions, including unpublished revisions, are available with their frozen schema. Current head content still requires read_draft; restoring history requires write. Newest recorded version first. $skiptoken is the last returned recorded number, and following pages contain smaller numbers. revision_number counts recorded entries only; is_current marks the largest retained number, even when recording is disabled.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<RevisionsGetResponse>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	get(requestConfiguration?: RequestConfiguration<RevisionsRequestBuilderGetQueryParameters> | undefined): Promise<RevisionsGetResponse | undefined>;
 	/**
-	 * Requires list.read scope and ordinary read permission on the live item. All retained metadata revisions, including unpublished revisions, are available with their frozen schema. Current head content still requires read_draft; restoring history requires write. Newest recorded version first. $skiptoken is the last returned recorded number, and following pages contain smaller numbers. revision_number counts recorded entries only; is_current marks the largest retained number, even when recording is disabled.
+	 * Requires item.read scope and ordinary read permission on the live item. All retained metadata revisions, including unpublished revisions, are available with their frozen schema. Current head content still requires read_draft; restoring history requires write. Newest recorded version first. $skiptoken is the last returned recorded number, and following pages contain smaller numbers. revision_number counts recorded entries only; is_current marks the largest retained number, even when recording is disabled.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<RevisionsRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 }
 /**
- * Requires list.read scope and ordinary read permission on the live item. All retained metadata revisions, including unpublished revisions, are available with their frozen schema. Current head content still requires read_draft; restoring history requires write. Newest recorded version first. $skiptoken is the last returned recorded number, and following pages contain smaller numbers. revision_number counts recorded entries only; is_current marks the largest retained number, even when recording is disabled.
+ * Requires item.read scope and ordinary read permission on the live item. All retained metadata revisions, including unpublished revisions, are available with their frozen schema. Current head content still requires read_draft; restoring history requires write. Newest recorded version first. $skiptoken is the last returned recorded number, and following pages contain smaller numbers. revision_number counts recorded entries only; is_current marks the largest retained number, even when recording is disabled.
  */
 export interface RevisionsRequestBuilderGetQueryParameters {
 	/**
@@ -8137,21 +8137,21 @@ export interface SchemaGetResponse_file extends AdditionalDataHolder, Parsable {
  */
 export interface SchemaRequestBuilder extends BaseRequestBuilder<SchemaRequestBuilder> {
 	/**
-	 * Returns the frozen content schema of the caller-visible item or folder. Folders use their current metadata schema and do not enforce required fields. Requires list.read and resource read access.
+	 * Returns the frozen content schema of the caller-visible item or folder. Folders use their current metadata schema and do not enforce required fields. Requires item.read and resource read access.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<SchemaGetResponse>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	get(requestConfiguration?: RequestConfiguration<SchemaRequestBuilderGetQueryParameters> | undefined): Promise<SchemaGetResponse | undefined>;
 	/**
-	 * Returns the frozen content schema of the caller-visible item or folder. Folders use their current metadata schema and do not enforce required fields. Requires list.read and resource read access.
+	 * Returns the frozen content schema of the caller-visible item or folder. Folders use their current metadata schema and do not enforce required fields. Requires item.read and resource read access.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<SchemaRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 }
 /**
- * Returns the frozen content schema of the caller-visible item or folder. Folders use their current metadata schema and do not enforce required fields. Requires list.read and resource read access.
+ * Returns the frozen content schema of the caller-visible item or folder. Folders use their current metadata schema and do not enforce required fields. Requires item.read and resource read access.
  */
 export interface SchemaRequestBuilderGetQueryParameters {
 	/**
@@ -8322,14 +8322,14 @@ export interface TextRequestBuilderGetQueryParameters {
  */
 export interface UnarchiveRequestBuilder extends BaseRequestBuilder<UnarchiveRequestBuilder> {
 	/**
-	 * Requires item write access and list.write scope. Applies immediately to head and published content. Changes the lock version without a content revision. Repeating with the current version is a no-op.
+	 * Requires item write access and item.write scope. Applies immediately to head and published content. Changes the lock version without a content revision. Repeating with the current version is a no-op.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<ResourceAccess>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	post(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<ResourceAccess | undefined>;
 	/**
-	 * Requires item write access and list.write scope. Applies immediately to head and published content. Changes the lock version without a content revision. Repeating with the current version is a no-op.
+	 * Requires item write access and item.write scope. Applies immediately to head and published content. Changes the lock version without a content revision. Repeating with the current version is a no-op.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -8340,7 +8340,7 @@ export interface UnarchiveRequestBuilder extends BaseRequestBuilder<UnarchiveReq
  */
 export interface UnpublishRequestBuilder extends BaseRequestBuilder<UnpublishRequestBuilder> {
 	/**
-	 *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Resource>}
 	 * @throws {Problem} error when the service returns a 412 status code
@@ -8348,7 +8348,7 @@ export interface UnpublishRequestBuilder extends BaseRequestBuilder<UnpublishReq
 	 */
 	post(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Resource | undefined>;
 	/**
-	 *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -8646,13 +8646,13 @@ export interface OperationsRequestBuilder extends BaseRequestBuilder<OperationsR
  */
 export interface PeopleRequestBuilder extends BaseRequestBuilder<PeopleRequestBuilder> {
 	/**
-	 * Requires list.read. IDs are enrolled organization subjects; selecting a user grants no content access.
+	 * Requires item.read. IDs are enrolled organization subjects; selecting a user grants no content access.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<string[]>}
 	 */
 	get(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<string[] | undefined>;
 	/**
-	 * Requires list.read. IDs are enrolled organization subjects; selecting a user grants no content access.
+	 * Requires item.read. IDs are enrolled organization subjects; selecting a user grants no content access.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -8663,7 +8663,7 @@ export interface PeopleRequestBuilder extends BaseRequestBuilder<PeopleRequestBu
  */
 export interface RelationshipTypesItemRequestBuilder extends BaseRequestBuilder<RelationshipTypesItemRequestBuilder> {
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<RelationshipType>}
 	 * @throws {Problem} error when the service returns a 400 status code
@@ -8678,7 +8678,7 @@ export interface RelationshipTypesItemRequestBuilder extends BaseRequestBuilder<
 	 */
 	get(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<RelationshipType | undefined>;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -8695,7 +8695,7 @@ export interface RelationshipTypesRequestBuilder extends BaseRequestBuilder<Rela
 	 */
 	byId(id: string): RelationshipTypesItemRequestBuilder;
 	/**
-	 * Organization taxonomy predicates; requires list.read and taxonomy.read to discover, list.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy.
+	 * Organization taxonomy predicates; requires item.read and taxonomy.read to discover, item.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<RelationshipTypePage>}
 	 * @throws {Problem} error when the service returns a 400 status code
@@ -8710,7 +8710,7 @@ export interface RelationshipTypesRequestBuilder extends BaseRequestBuilder<Rela
 	 */
 	get(requestConfiguration?: RequestConfiguration<RelationshipTypesRequestBuilderGetQueryParameters> | undefined): Promise<RelationshipTypePage | undefined>;
 	/**
-	 * Organization taxonomy predicates; requires list.read and taxonomy.read to discover, list.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy.
+	 * Organization taxonomy predicates; requires item.read and taxonomy.read to discover, item.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<RelationshipType>}
@@ -8726,13 +8726,13 @@ export interface RelationshipTypesRequestBuilder extends BaseRequestBuilder<Rela
 	 */
 	post(body: RelationshipTypeInput, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<RelationshipType | undefined>;
 	/**
-	 * Organization taxonomy predicates; requires list.read and taxonomy.read to discover, list.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy.
+	 * Organization taxonomy predicates; requires item.read and taxonomy.read to discover, item.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<RelationshipTypesRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 	/**
-	 * Organization taxonomy predicates; requires list.read and taxonomy.read to discover, list.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy.
+	 * Organization taxonomy predicates; requires item.read and taxonomy.read to discover, item.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -8740,7 +8740,7 @@ export interface RelationshipTypesRequestBuilder extends BaseRequestBuilder<Rela
 	toPostRequestInformation(body: RelationshipTypeInput, requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 }
 /**
- * Organization taxonomy predicates; requires list.read and taxonomy.read to discover, list.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy.
+ * Organization taxonomy predicates; requires item.read and taxonomy.read to discover, item.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy.
  */
 export interface RelationshipTypesRequestBuilderGetQueryParameters {
 	/**
@@ -8786,7 +8786,7 @@ export interface BulkRequestBuilder extends BaseRequestBuilder<BulkRequestBuilde
  */
 export interface BulkUpdateRequestBuilder extends BaseRequestBuilder<BulkUpdateRequestBuilder> {
 	/**
-	 * Starts a durable filtered edit of current head content. Requires list.read, list.write and collection write access. The existing typed query selects readable drafts; omitted query selects all readable head items and folders, including nested content. Sort and group_by are rejected. Selection freezes when execution begins. Each item merges values (null removes a value) through current validation, permissions, uniqueness, revision, audit and event handling, in its own commit. Current name/keywords can also be changed. Successful items survive other items' failures. Poll Location for matched, processed, updated, failed, progress and up to 50 failure reasons; failed counts all failures. succeeded means execution finished, including partial success. Access, schema or infrastructure failures stop the operation with status failed. Cancellation on shutdown leaves pending work resumable. Bulk operations and failure details are visible only to their starter, with collection read access. The explicit /bulk endpoint remains an atomic transaction of up to 100 actions.
+	 * Starts a durable filtered edit of current head content. Requires item.read, item.write and collection write access. The existing typed query selects readable drafts; omitted query selects all readable head items and folders, including nested content. Sort and group_by are rejected. Selection freezes when execution begins. Each item merges values (null removes a value) through current validation, permissions, uniqueness, revision, audit and event handling, in its own commit. Current name/keywords can also be changed. Successful items survive other items' failures. Poll Location for matched, processed, updated, failed, progress and up to 50 failure reasons; failed counts all failures. succeeded means execution finished, including partial success. Access, schema or infrastructure failures stop the operation with status failed. Cancellation on shutdown leaves pending work resumable. Bulk operations and failure details are visible only to their starter, with collection read access. The explicit /bulk endpoint remains an atomic transaction of up to 100 actions.
 	 * @param body At least one of name, keywords or non-empty values is required. Query is optional and uses head content.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Operation>}
@@ -8804,7 +8804,7 @@ export interface BulkUpdateRequestBuilder extends BaseRequestBuilder<BulkUpdateR
 	 */
 	post(body: FilteredBulkUpdate, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Operation | undefined>;
 	/**
-	 * Starts a durable filtered edit of current head content. Requires list.read, list.write and collection write access. The existing typed query selects readable drafts; omitted query selects all readable head items and folders, including nested content. Sort and group_by are rejected. Selection freezes when execution begins. Each item merges values (null removes a value) through current validation, permissions, uniqueness, revision, audit and event handling, in its own commit. Current name/keywords can also be changed. Successful items survive other items' failures. Poll Location for matched, processed, updated, failed, progress and up to 50 failure reasons; failed counts all failures. succeeded means execution finished, including partial success. Access, schema or infrastructure failures stop the operation with status failed. Cancellation on shutdown leaves pending work resumable. Bulk operations and failure details are visible only to their starter, with collection read access. The explicit /bulk endpoint remains an atomic transaction of up to 100 actions.
+	 * Starts a durable filtered edit of current head content. Requires item.read, item.write and collection write access. The existing typed query selects readable drafts; omitted query selects all readable head items and folders, including nested content. Sort and group_by are rejected. Selection freezes when execution begins. Each item merges values (null removes a value) through current validation, permissions, uniqueness, revision, audit and event handling, in its own commit. Current name/keywords can also be changed. Successful items survive other items' failures. Poll Location for matched, processed, updated, failed, progress and up to 50 failure reasons; failed counts all failures. succeeded means execution finished, including partial success. Access, schema or infrastructure failures stop the operation with status failed. Cancellation on shutdown leaves pending work resumable. Bulk operations and failure details are visible only to their starter, with collection read access. The explicit /bulk endpoint remains an atomic transaction of up to 100 actions.
 	 * @param body At least one of name, keywords or non-empty values is required. Query is optional and uses head content.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -8900,7 +8900,7 @@ export interface ChildrenRequestBuilder extends BaseRequestBuilder<ChildrenReque
 	 */
 	get(requestConfiguration?: RequestConfiguration<ChildrenRequestBuilderGetQueryParameters> | undefined): Promise<ChildrenGetResponse | undefined>;
 	/**
-	 * First create returns 201. Retrying an item/folder create with the same caller ID returns the current readable live entry unchanged with 200 and its current ETag, regardless of new body fields. Requires list.write module scope, and a list or library list.manage and workspace manage access; an existing retry requires read access rather than create ACL access. Conflicting IDs, including deleted, different-collection and inaccessible entries, return 409 without content. All retry checks and the initial insertion are serialized in one write transaction; retries append no revisions, audit or events.
+	 * First create returns 201. Retrying an item/folder create with the same caller ID returns the current readable live entry unchanged with 200 and its current ETag, regardless of new body fields. Requires item.write module scope, and a list or library list.manage and workspace manage access; an existing retry requires read access rather than create ACL access. Conflicting IDs, including deleted, different-collection and inaccessible entries, return 409 without content. All retry checks and the initial insertion are serialized in one write transaction; retries append no revisions, audit or events.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Resource>}
@@ -8914,7 +8914,7 @@ export interface ChildrenRequestBuilder extends BaseRequestBuilder<ChildrenReque
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<ChildrenRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 	/**
-	 * First create returns 201. Retrying an item/folder create with the same caller ID returns the current readable live entry unchanged with 200 and its current ETag, regardless of new body fields. Requires list.write module scope, and a list or library list.manage and workspace manage access; an existing retry requires read access rather than create ACL access. Conflicting IDs, including deleted, different-collection and inaccessible entries, return 409 without content. All retry checks and the initial insertion are serialized in one write transaction; retries append no revisions, audit or events.
+	 * First create returns 201. Retrying an item/folder create with the same caller ID returns the current readable live entry unchanged with 200 and its current ETag, regardless of new body fields. Requires item.write module scope, and a list or library list.manage and workspace manage access; an existing retry requires read access rather than create ACL access. Conflicting IDs, including deleted, different-collection and inaccessible entries, return 409 without content. All retry checks and the initial insertion are serialized in one write transaction; retries append no revisions, audit or events.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -9042,7 +9042,7 @@ interface ContentTypesRequestBuilder$1 extends BaseRequestBuilder<ContentTypesRe
  */
 export interface DeltaRequestBuilder extends BaseRequestBuilder<DeltaRequestBuilder> {
 	/**
-	 * Initial synchronization returns visible items and folders. Follow @odata.nextLink, then persist @odata.deltaLink to retrieve subsequent edits, deletions, moves and access changes. Tokens are bound to caller and collection, durable for 30 days; page continuations expire after five minutes. 410 requires a new initial synchronization. Each synchronization scans the current visible collection and compares stored fingerprints; transient changes that return to the same state between polls are coalesced. Required module scope: list.read.
+	 * Initial synchronization returns visible items and folders. Follow @odata.nextLink, then persist @odata.deltaLink to retrieve subsequent edits, deletions, moves and access changes. Tokens are bound to caller and collection, durable for 30 days; page continuations expire after five minutes. 410 requires a new initial synchronization. Each synchronization scans the current visible collection and compares stored fingerprints; transient changes that return to the same state between polls are coalesced. Required module scope: item.read.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<DeltaPage>}
 	 * @throws {Problem} error when the service returns a 410 status code
@@ -9050,14 +9050,14 @@ export interface DeltaRequestBuilder extends BaseRequestBuilder<DeltaRequestBuil
 	 */
 	get(requestConfiguration?: RequestConfiguration<DeltaRequestBuilderGetQueryParameters> | undefined): Promise<DeltaPage | undefined>;
 	/**
-	 * Initial synchronization returns visible items and folders. Follow @odata.nextLink, then persist @odata.deltaLink to retrieve subsequent edits, deletions, moves and access changes. Tokens are bound to caller and collection, durable for 30 days; page continuations expire after five minutes. 410 requires a new initial synchronization. Each synchronization scans the current visible collection and compares stored fingerprints; transient changes that return to the same state between polls are coalesced. Required module scope: list.read.
+	 * Initial synchronization returns visible items and folders. Follow @odata.nextLink, then persist @odata.deltaLink to retrieve subsequent edits, deletions, moves and access changes. Tokens are bound to caller and collection, durable for 30 days; page continuations expire after five minutes. 410 requires a new initial synchronization. Each synchronization scans the current visible collection and compares stored fingerprints; transient changes that return to the same state between polls are coalesced. Required module scope: item.read.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<DeltaRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 }
 /**
- * Initial synchronization returns visible items and folders. Follow @odata.nextLink, then persist @odata.deltaLink to retrieve subsequent edits, deletions, moves and access changes. Tokens are bound to caller and collection, durable for 30 days; page continuations expire after five minutes. 410 requires a new initial synchronization. Each synchronization scans the current visible collection and compares stored fingerprints; transient changes that return to the same state between polls are coalesced. Required module scope: list.read.
+ * Initial synchronization returns visible items and folders. Follow @odata.nextLink, then persist @odata.deltaLink to retrieve subsequent edits, deletions, moves and access changes. Tokens are bound to caller and collection, durable for 30 days; page continuations expire after five minutes. 410 requires a new initial synchronization. Each synchronization scans the current visible collection and compares stored fingerprints; transient changes that return to the same state between polls are coalesced. Required module scope: item.read.
  */
 export interface DeltaRequestBuilderGetQueryParameters {
 	/**
@@ -9078,7 +9078,7 @@ export interface DeltaRequestBuilderGetQueryParameters {
  */
 export interface DocumentsRequestBuilder extends BaseRequestBuilder<DocumentsRequestBuilder> {
 	/**
-	 * Requires document.write, list.read and list.write and write access to the library and selected folder. One file part is required; one metadata JSON form field is optional. Either order is accepted. File bytes stream under the configured upload limit; metadata is limited to 64 KiB and request framing to an additional 128 KiB. Metadata, first file version, first revision, indexes, publication and events commit together. Invalid metadata, malformed multipart, duplicate blocking and failed writes create no item and clean up stored bytes. Returns 201 with the new item, file, duplicate warnings, Location and numeric ETag. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts only PDF, TIFF, JPEG, PNG and WebP detected from file signatures; filenames and declared MIME types do not determine stored content_type. Unsupported bytes return 415 without item/revision changes. Size limits apply while streaming.
+	 * Requires document.write, item.read and item.write and write access to the library and selected folder. One file part is required; one metadata JSON form field is optional. Either order is accepted. File bytes stream under the configured upload limit; metadata is limited to 64 KiB and request framing to an additional 128 KiB. Metadata, first file version, first revision, indexes, publication and events commit together. Invalid metadata, malformed multipart, duplicate blocking and failed writes create no item and clean up stored bytes. Returns 201 with the new item, file, duplicate warnings, Location and numeric ETag. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts only PDF, TIFF, JPEG, PNG and WebP detected from file signatures; filenames and declared MIME types do not determine stored content_type. Unsupported bytes return 415 without item/revision changes. Size limits apply while streaming.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<DocumentUpload>}
@@ -9086,7 +9086,7 @@ export interface DocumentsRequestBuilder extends BaseRequestBuilder<DocumentsReq
 	 */
 	post(body: MultipartBody, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<DocumentUpload | undefined>;
 	/**
-	 * Requires document.write, list.read and list.write and write access to the library and selected folder. One file part is required; one metadata JSON form field is optional. Either order is accepted. File bytes stream under the configured upload limit; metadata is limited to 64 KiB and request framing to an additional 128 KiB. Metadata, first file version, first revision, indexes, publication and events commit together. Invalid metadata, malformed multipart, duplicate blocking and failed writes create no item and clean up stored bytes. Returns 201 with the new item, file, duplicate warnings, Location and numeric ETag. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts only PDF, TIFF, JPEG, PNG and WebP detected from file signatures; filenames and declared MIME types do not determine stored content_type. Unsupported bytes return 415 without item/revision changes. Size limits apply while streaming.
+	 * Requires document.write, item.read and item.write and write access to the library and selected folder. One file part is required; one metadata JSON form field is optional. Either order is accepted. File bytes stream under the configured upload limit; metadata is limited to 64 KiB and request framing to an additional 128 KiB. Metadata, first file version, first revision, indexes, publication and events commit together. Invalid metadata, malformed multipart, duplicate blocking and failed writes create no item and clean up stored bytes. Returns 201 with the new item, file, duplicate warnings, Location and numeric ETag. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts only PDF, TIFF, JPEG, PNG and WebP detected from file signatures; filenames and declared MIME types do not determine stored content_type. Unsupported bytes return 415 without item/revision changes. Size limits apply while streaming.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -9145,7 +9145,7 @@ interface FieldsRequestBuilder$1 extends BaseRequestBuilder<FieldsRequestBuilder
 	 */
 	byFieldID(fieldID: Guid): WithFieldItemRequestBuilder;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply. Field definitions are organization-wide; editing through a collection applies to every collection using them.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply. Field definitions are organization-wide; editing through a collection applies to every collection using them.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<FieldsGetResponse>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
@@ -9160,7 +9160,7 @@ interface FieldsRequestBuilder$1 extends BaseRequestBuilder<FieldsRequestBuilder
 	 */
 	post(body: CreateField, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<FieldDefinition | undefined>;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply. Field definitions are organization-wide; editing through a collection applies to every collection using them.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply. Field definitions are organization-wide; editing through a collection applies to every collection using them.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -9248,7 +9248,7 @@ export interface IntegrationsRequestBuilder extends BaseRequestBuilder<Integrati
 	 */
 	get(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<ListIntegration[] | undefined>;
 	/**
-	 * Requires list manage access and the list.read and list.manage scopes; its refreshes keep needing them. Automatically attaches the Event content type without requiring contentType.read, queues a first refresh, and activates the workspace refresh workflow once. Same-list duplicate URLs are rejected; separate lists and sources have independent identities.
+	 * Requires list manage access and the item.read and list.manage scopes; its refreshes keep needing them. Automatically attaches the Event content type without requiring contentType.read, queues a first refresh, and activates the workspace refresh workflow once. Same-list duplicate URLs are rejected; separate lists and sources have independent identities.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<ListIntegration>}
@@ -9262,7 +9262,7 @@ export interface IntegrationsRequestBuilder extends BaseRequestBuilder<Integrati
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 	/**
-	 * Requires list manage access and the list.read and list.manage scopes; its refreshes keep needing them. Automatically attaches the Event content type without requiring contentType.read, queues a first refresh, and activates the workspace refresh workflow once. Same-list duplicate URLs are rejected; separate lists and sources have independent identities.
+	 * Requires list manage access and the item.read and list.manage scopes; its refreshes keep needing them. Automatically attaches the Event content type without requiring contentType.read, queues a first refresh, and activates the workspace refresh workflow once. Same-list duplicate URLs are rejected; separate lists and sources have independent identities.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -9360,7 +9360,7 @@ export interface OperationsRequestBuilderGetQueryParameters {
  */
 export interface PermissionsRequestBuilder extends BaseRequestBuilder<PermissionsRequestBuilder> {
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Permissions>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
@@ -9376,7 +9376,7 @@ export interface PermissionsRequestBuilder extends BaseRequestBuilder<Permission
 	 */
 	put(body: Permissions, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Resource | undefined>;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -9471,21 +9471,21 @@ export interface QueryRequestBuilderPostQueryParameters {
 }
 interface RestoreRequestBuilder$2 extends BaseRequestBuilder<RestoreRequestBuilder$2> {
 	/**
-	 * Requires list.write and write access to the retained scope and destination. Returns to the active original folder, otherwise the collection root. Restores head/published content, history and indexes atomically. recursive=true restores folder descendants from the same deletion only. Name or business-key conflicts roll back the entire restore. Retained relationships become visible when both endpoints are active and readable. No If-Match is required.
+	 * Requires item.write and write access to the retained scope and destination. Returns to the active original folder, otherwise the collection root. Restores head/published content, history and indexes atomically. recursive=true restores folder descendants from the same deletion only. Name or business-key conflicts roll back the entire restore. Retained relationships become visible when both endpoints are active and readable. No If-Match is required.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Resource>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	post(requestConfiguration?: RequestConfiguration<RestoreRequestBuilderPostQueryParameters> | undefined): Promise<Resource | undefined>;
 	/**
-	 * Requires list.write and write access to the retained scope and destination. Returns to the active original folder, otherwise the collection root. Restores head/published content, history and indexes atomically. recursive=true restores folder descendants from the same deletion only. Name or business-key conflicts roll back the entire restore. Retained relationships become visible when both endpoints are active and readable. No If-Match is required.
+	 * Requires item.write and write access to the retained scope and destination. Returns to the active original folder, otherwise the collection root. Restores head/published content, history and indexes atomically. recursive=true restores folder descendants from the same deletion only. Name or business-key conflicts roll back the entire restore. Retained relationships become visible when both endpoints are active and readable. No If-Match is required.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toPostRequestInformation(requestConfiguration?: RequestConfiguration<RestoreRequestBuilderPostQueryParameters> | undefined): RequestInformation;
 }
 /**
- * Requires list.write and write access to the retained scope and destination. Returns to the active original folder, otherwise the collection root. Restores head/published content, history and indexes atomically. recursive=true restores folder descendants from the same deletion only. Name or business-key conflicts roll back the entire restore. Retained relationships become visible when both endpoints are active and readable. No If-Match is required.
+ * Requires item.write and write access to the retained scope and destination. Returns to the active original folder, otherwise the collection root. Restores head/published content, history and indexes atomically. recursive=true restores folder descendants from the same deletion only. Name or business-key conflicts roll back the entire restore. Retained relationships become visible when both endpoints are active and readable. No If-Match is required.
  */
 export interface RestoreRequestBuilderPostQueryParameters {
 	recursive?: boolean;
@@ -9528,21 +9528,21 @@ export interface RecycleBinRequestBuilder extends BaseRequestBuilder<RecycleBinR
 	 */
 	byItemID(itemID: Guid): WithItemItemRequestBuilder;
 	/**
-	 * Requires a live readable collection and list.read; entries are filtered by list.write and their retained ACL scopes. Deleted content is excluded from ordinary reads and queries.
+	 * Requires a live readable collection and item.read; entries are filtered by item.write and their retained ACL scopes. Deleted content is excluded from ordinary reads and queries.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<RecycleBinPage>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	get(requestConfiguration?: RequestConfiguration<RecycleBinRequestBuilderGetQueryParameters> | undefined): Promise<RecycleBinPage | undefined>;
 	/**
-	 * Requires a live readable collection and list.read; entries are filtered by list.write and their retained ACL scopes. Deleted content is excluded from ordinary reads and queries.
+	 * Requires a live readable collection and item.read; entries are filtered by item.write and their retained ACL scopes. Deleted content is excluded from ordinary reads and queries.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<RecycleBinRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 }
 /**
- * Requires a live readable collection and list.read; entries are filtered by list.write and their retained ACL scopes. Deleted content is excluded from ordinary reads and queries.
+ * Requires a live readable collection and item.read; entries are filtered by item.write and their retained ACL scopes. Deleted content is excluded from ordinary reads and queries.
  */
 export interface RecycleBinRequestBuilderGetQueryParameters {
 	/**
@@ -9650,7 +9650,7 @@ export interface TemplatesRequestBuilder extends BaseRequestBuilder<TemplatesReq
  */
 export interface ViewsRequestBuilder extends BaseRequestBuilder<ViewsRequestBuilder> {
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<ListViewPage>}
 	 * @throws {Problem} error when the service returns a 400 status code
@@ -9681,7 +9681,7 @@ export interface ViewsRequestBuilder extends BaseRequestBuilder<ViewsRequestBuil
 	 */
 	post(body: ViewInput, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<ListView | undefined>;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -9695,7 +9695,7 @@ export interface ViewsRequestBuilder extends BaseRequestBuilder<ViewsRequestBuil
 	toPostRequestInformation(body: ViewInput, requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 }
 /**
- *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+ *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
  */
 export interface ViewsRequestBuilderGetQueryParameters {
 	/**
@@ -9963,21 +9963,21 @@ export interface ContentTypes extends AdditionalDataHolder, Parsable {
 }
 interface ContentTypesRequestBuilder$2 extends BaseRequestBuilder<ContentTypesRequestBuilder$2> {
 	/**
-	 * Requires list.read. Optional workspace and collection scopes narrow the catalog; organization catalog permissions are not required.
+	 * Requires item.read. Optional workspace and collection scopes narrow the catalog; organization catalog permissions are not required.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<ContentTypes[]>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	get(requestConfiguration?: RequestConfiguration<ContentTypesRequestBuilderGetQueryParameters> | undefined): Promise<ContentTypes[] | undefined>;
 	/**
-	 * Requires list.read. Optional workspace and collection scopes narrow the catalog; organization catalog permissions are not required.
+	 * Requires item.read. Optional workspace and collection scopes narrow the catalog; organization catalog permissions are not required.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<ContentTypesRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 }
 /**
- * Requires list.read. Optional workspace and collection scopes narrow the catalog; organization catalog permissions are not required.
+ * Requires item.read. Optional workspace and collection scopes narrow the catalog; organization catalog permissions are not required.
  */
 export interface ContentTypesRequestBuilderGetQueryParameters {
 	collectionId?: Guid;
@@ -10358,7 +10358,7 @@ declare const GetSurfaceQueryParameterTypeObject$5: {
 };
 interface WithItemItemRequestBuilder$1 extends BaseRequestBuilder<WithItemItemRequestBuilder$1> {
 	/**
-	 * Requires item If-Match and current folder_version. Clears matching equality values/keywords and selected terms including descendants; ordinary validation and publication rules apply. Rolls back if the result still matches the definition. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Only definitions with mode classification permit this action; saved queries reject it.
+	 * Requires item If-Match and current folder_version. Clears matching equality values/keywords and selected terms including descendants; ordinary validation and publication rules apply. Rolls back if the result still matches the definition. Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply. Only definitions with mode classification permit this action; saved queries reject it.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Resource>}
@@ -10367,7 +10367,7 @@ interface WithItemItemRequestBuilder$1 extends BaseRequestBuilder<WithItemItemRe
 	 */
 	delete(body: SmartFolderUnclassify, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Resource | undefined>;
 	/**
-	 * Requires item If-Match and current folder_version. Clears matching equality values/keywords and selected terms including descendants; ordinary validation and publication rules apply. Rolls back if the result still matches the definition. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Only definitions with mode classification permit this action; saved queries reject it.
+	 * Requires item If-Match and current folder_version. Clears matching equality values/keywords and selected terms including descendants; ordinary validation and publication rules apply. Rolls back if the result still matches the definition. Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply. Only definitions with mode classification permit this action; saved queries reject it.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -10382,7 +10382,7 @@ interface ItemsRequestBuilder$1 extends BaseRequestBuilder<ItemsRequestBuilder$1
 	 */
 	byItemID(itemID: Guid): WithItemItemRequestBuilder$1;
 	/**
-	 *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Only definitions with mode classification permit this action; saved queries reject it.
+	 *  Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply. Only definitions with mode classification permit this action; saved queries reject it.
 	 * @param body Classify existing item or create one through ordinary item validation/revisions/publication. Current folder_version is required. Inferred AND equalities, selected terms and writable path fields are applied; non-inferable predicates must already fit. The write rolls back unless the head matches the folder/path. Existing items retain location; new parent_id must belong to collection.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Resource>}
@@ -10390,7 +10390,7 @@ interface ItemsRequestBuilder$1 extends BaseRequestBuilder<ItemsRequestBuilder$1
 	 */
 	post(body: SmartFolderDrop, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Resource | undefined>;
 	/**
-	 *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Only definitions with mode classification permit this action; saved queries reject it.
+	 *  Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply. Only definitions with mode classification permit this action; saved queries reject it.
 	 * @param body Classify existing item or create one through ordinary item validation/revisions/publication. Current folder_version is required. Inferred AND equalities, selected terms and writable path fields are applied; non-inferable predicates must already fit. The write rolls back unless the head matches the folder/path. Existing items retain location; new parent_id must belong to collection.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -10399,7 +10399,7 @@ interface ItemsRequestBuilder$1 extends BaseRequestBuilder<ItemsRequestBuilder$1
 }
 interface GroupsRequestBuilder$1 extends BaseRequestBuilder<GroupsRequestBuilder$1> {
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink. An empty path returns all matching items even when group_by is configured.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<SmartFolderGroupsResult>}
@@ -10407,7 +10407,7 @@ interface GroupsRequestBuilder$1 extends BaseRequestBuilder<GroupsRequestBuilder
 	 */
 	post(body: SmartFolderQueryRequest, requestConfiguration?: RequestConfiguration<GroupsRequestBuilderPostQueryParameters$1> | undefined): Promise<SmartFolderGroupsResult | undefined>;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink. An empty path returns all matching items even when group_by is configured.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -10427,7 +10427,7 @@ interface QueryRequestBuilder$1 extends BaseRequestBuilder<QueryRequestBuilder$1
 	 */
 	get groups(): GroupsRequestBuilder$1;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink. An empty path returns all matching items even when group_by is configured.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<SmartFolderResult>}
@@ -10435,7 +10435,7 @@ interface QueryRequestBuilder$1 extends BaseRequestBuilder<QueryRequestBuilder$1
 	 */
 	post(body: SmartFolderQueryRequest, requestConfiguration?: RequestConfiguration<QueryRequestBuilderPostQueryParameters$1> | undefined): Promise<SmartFolderResult | undefined>;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink. An empty path returns all matching items even when group_by is configured.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -10462,21 +10462,21 @@ export interface SmartFoldersItemRequestBuilder extends BaseRequestBuilder<Smart
 	 */
 	get query(): QueryRequestBuilder$1;
 	/**
-	 *  Required module scopes: list.write; shared smart folders also need list.manage and workspace manage access. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.write; shared smart folders also need list.manage and workspace manage access. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @throws {Problem} error when the service returns a 412 status code
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	delete(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<void>;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<SmartFolder>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	get(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<SmartFolder | undefined>;
 	/**
-	 *  Required module scopes: list.write; shared smart folders also need list.manage and workspace manage access. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.write; shared smart folders also need list.manage and workspace manage access. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Personal folders are owner-only and may span all readable workspaces. Shared folders require workspace_id and workspace manage permission. Ownership and workspace are immutable on PUT; PUT replaces the definition. At most 100 shared folders per workspace. Shared mutations advance the workspace version; personal mutations do not.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<SmartFolder>}
@@ -10485,19 +10485,19 @@ export interface SmartFoldersItemRequestBuilder extends BaseRequestBuilder<Smart
 	 */
 	put(body: SmartFolderInput, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<SmartFolder | undefined>;
 	/**
-	 *  Required module scopes: list.write; shared smart folders also need list.manage and workspace manage access. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.write; shared smart folders also need list.manage and workspace manage access. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toDeleteRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 	/**
-	 *  Required module scopes: list.write; shared smart folders also need list.manage and workspace manage access. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.write; shared smart folders also need list.manage and workspace manage access. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Personal folders are owner-only and may span all readable workspaces. Shared folders require workspace_id and workspace manage permission. Ownership and workspace are immutable on PUT; PUT replaces the definition. At most 100 shared folders per workspace. Shared mutations advance the workspace version; personal mutations do not.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -10506,7 +10506,7 @@ export interface SmartFoldersItemRequestBuilder extends BaseRequestBuilder<Smart
 }
 interface PreviewRequestBuilder$1 extends BaseRequestBuilder<PreviewRequestBuilder$1> {
 	/**
-	 * Read-only evaluation of the caller’s readable collections and visible item revisions. Returns up to five items and a count capped at 10,000; no continuation. No definition, item, version or audit event is saved. Requires list.read.
+	 * Read-only evaluation of the caller’s readable collections and visible item revisions. Returns up to five items and a count capped at 10,000; no continuation. No definition, item, version or audit event is saved. Requires item.read.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<SmartFolderResult>}
@@ -10514,7 +10514,7 @@ interface PreviewRequestBuilder$1 extends BaseRequestBuilder<PreviewRequestBuild
 	 */
 	post(body: SmartFolderPreview, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<SmartFolderResult | undefined>;
 	/**
-	 * Read-only evaluation of the caller’s readable collections and visible item revisions. Returns up to five items and a count capped at 10,000; no continuation. No definition, item, version or audit event is saved. Requires list.read.
+	 * Read-only evaluation of the caller’s readable collections and visible item revisions. Returns up to five items and a count capped at 10,000; no continuation. No definition, item, version or audit event is saved. Requires item.read.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -10536,14 +10536,14 @@ export interface SmartFoldersRequestBuilder extends BaseRequestBuilder<SmartFold
 	 */
 	byId(id: Guid): SmartFoldersItemRequestBuilder;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<SmartFolderPage>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	get(requestConfiguration?: RequestConfiguration<SmartFoldersRequestBuilderGetQueryParameters> | undefined): Promise<SmartFolderPage | undefined>;
 	/**
-	 *  Required module scopes: list.write; shared smart folders also need list.manage and workspace manage access. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.write; shared smart folders also need list.manage and workspace manage access. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Personal folders are owner-only and may span all readable workspaces. Shared folders require workspace_id and workspace manage permission. Ownership and workspace are immutable on PUT; PUT replaces the definition. At most 100 shared folders per workspace. Shared mutations advance the workspace version; personal mutations do not.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<SmartFolder>}
@@ -10551,13 +10551,13 @@ export interface SmartFoldersRequestBuilder extends BaseRequestBuilder<SmartFold
 	 */
 	post(body: SmartFolderInput, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<SmartFolder | undefined>;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<SmartFoldersRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 	/**
-	 *  Required module scopes: list.write; shared smart folders also need list.manage and workspace manage access. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.write; shared smart folders also need list.manage and workspace manage access. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Personal folders are owner-only and may span all readable workspaces. Shared folders require workspace_id and workspace manage permission. Ownership and workspace are immutable on PUT; PUT replaces the definition. At most 100 shared folders per workspace. Shared mutations advance the workspace version; personal mutations do not.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -10565,7 +10565,7 @@ export interface SmartFoldersRequestBuilder extends BaseRequestBuilder<SmartFold
 	toPostRequestInformation(body: SmartFolderInput, requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 }
 /**
- *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+ *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
  */
 export interface SmartFoldersRequestBuilderGetQueryParameters {
 	/**
@@ -11484,7 +11484,7 @@ export interface TermSetsRequestBuilderGetQueryParameters {
  */
 export interface NavigationRequestBuilder extends BaseRequestBuilder<NavigationRequestBuilder> {
 	/**
-	 * Lists one level of a field of a navigation view: the terms of field below parent_id (or the roots), in term order, each with the items of the view it lists and those at or below it. Counts follow the view's query, the caller's access and the surface read, and cover items, not folders. Required module scopes: list.read, taxonomy.read. Resource ACLs and any additional use-case checks also apply.
+	 * Lists one level of a field of a navigation view: the terms of field below parent_id (or the roots), in term order, each with the items of the view it lists and those at or below it. Counts follow the view's query, the caller's access and the surface read, and cover items, not folders. Required module scopes: item.read, taxonomy.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<NavigationPage>}
@@ -11500,7 +11500,7 @@ export interface NavigationRequestBuilder extends BaseRequestBuilder<NavigationR
 	 */
 	post(body: NavigationRequest, requestConfiguration?: RequestConfiguration<NavigationRequestBuilderPostQueryParameters> | undefined): Promise<NavigationPage | undefined>;
 	/**
-	 * Lists one level of a field of a navigation view: the terms of field below parent_id (or the roots), in term order, each with the items of the view it lists and those at or below it. Counts follow the view's query, the caller's access and the surface read, and cover items, not folders. Required module scopes: list.read, taxonomy.read. Resource ACLs and any additional use-case checks also apply.
+	 * Lists one level of a field of a navigation view: the terms of field below parent_id (or the roots), in term order, each with the items of the view it lists and those at or below it. Counts follow the view's query, the caller's access and the surface read, and cover items, not folders. Required module scopes: item.read, taxonomy.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -11508,7 +11508,7 @@ export interface NavigationRequestBuilder extends BaseRequestBuilder<NavigationR
 	toPostRequestInformation(body: NavigationRequest, requestConfiguration?: RequestConfiguration<NavigationRequestBuilderPostQueryParameters> | undefined): RequestInformation;
 }
 /**
- * Lists one level of a field of a navigation view: the terms of field below parent_id (or the roots), in term order, each with the items of the view it lists and those at or below it. Counts follow the view's query, the caller's access and the surface read, and cover items, not folders. Required module scopes: list.read, taxonomy.read. Resource ACLs and any additional use-case checks also apply.
+ * Lists one level of a field of a navigation view: the terms of field below parent_id (or the roots), in term order, each with the items of the view it lists and those at or below it. Counts follow the view's query, the caller's access and the surface read, and cover items, not folders. Required module scopes: item.read, taxonomy.read. Resource ACLs and any additional use-case checks also apply.
  */
 export interface NavigationRequestBuilderPostQueryParameters {
 	/**
@@ -11519,7 +11519,7 @@ export interface NavigationRequestBuilderPostQueryParameters {
 }
 interface GroupsRequestBuilder$2 extends BaseRequestBuilder<GroupsRequestBuilder$2> {
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<QueryGroupPage>}
@@ -11535,7 +11535,7 @@ interface GroupsRequestBuilder$2 extends BaseRequestBuilder<GroupsRequestBuilder
 	 */
 	post(body: ViewQueryRequest, requestConfiguration?: RequestConfiguration<GroupsRequestBuilderPostQueryParameters$2> | undefined): Promise<QueryGroupPage | undefined>;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -11555,7 +11555,7 @@ interface QueryRequestBuilder$2 extends BaseRequestBuilder<QueryRequestBuilder$2
 	 */
 	get groups(): GroupsRequestBuilder$2;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<QueryResult>}
@@ -11571,7 +11571,7 @@ interface QueryRequestBuilder$2 extends BaseRequestBuilder<QueryRequestBuilder$2
 	 */
 	post(body: ViewQueryRequest, requestConfiguration?: RequestConfiguration<QueryRequestBuilderPostQueryParameters$2> | undefined): Promise<QueryResult | undefined>;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -11604,7 +11604,7 @@ export interface ViewsItemRequestBuilder extends BaseRequestBuilder<ViewsItemReq
 	 */
 	delete(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<void>;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<ListView>}
 	 * @throws {Problem} error when the service returns a 400 status code
@@ -11643,7 +11643,7 @@ export interface ViewsItemRequestBuilder extends BaseRequestBuilder<ViewsItemReq
 	 */
 	toDeleteRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 	/**
-	 *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -11957,14 +11957,14 @@ interface RelationshipsRequestBuilder$1 extends BaseRequestBuilder<Relationships
 	 */
 	get types(): TypesRequestBuilder;
 	/**
-	 * Both endpoints must be readable on their selected content surface. Returns compact endpoint navigation summaries and resolved relationship labels; load full metadata through the per-item relationship read. All results touch the starting workspace even when item_id belongs elsewhere. Filter scalar attributes/key, id or directed using eq/ne and numeric gt/ge/lt/le, and/or/not and parentheses. Filters are limited to 4096 bytes, 32 nodes and depth 6. Example: attributes/amount gt 100. Required module scope: list.read.
+	 * Both endpoints must be readable on their selected content surface. Returns compact endpoint navigation summaries and resolved relationship labels; load full metadata through the per-item relationship read. All results touch the starting workspace even when item_id belongs elsewhere. Filter scalar attributes/key, id or directed using eq/ne and numeric gt/ge/lt/le, and/or/not and parentheses. Filters are limited to 4096 bytes, 32 nodes and depth 6. Example: attributes/amount gt 100. Required module scope: item.read.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<WorkspaceRelationshipPage>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	get(requestConfiguration?: RequestConfiguration<RelationshipsRequestBuilderGetQueryParameters$1> | undefined): Promise<WorkspaceRelationshipPage | undefined>;
 	/**
-	 * Both endpoints must be readable on their selected content surface. Returns compact endpoint navigation summaries and resolved relationship labels; load full metadata through the per-item relationship read. All results touch the starting workspace even when item_id belongs elsewhere. Filter scalar attributes/key, id or directed using eq/ne and numeric gt/ge/lt/le, and/or/not and parentheses. Filters are limited to 4096 bytes, 32 nodes and depth 6. Example: attributes/amount gt 100. Required module scope: list.read.
+	 * Both endpoints must be readable on their selected content surface. Returns compact endpoint navigation summaries and resolved relationship labels; load full metadata through the per-item relationship read. All results touch the starting workspace even when item_id belongs elsewhere. Filter scalar attributes/key, id or directed using eq/ne and numeric gt/ge/lt/le, and/or/not and parentheses. Filters are limited to 4096 bytes, 32 nodes and depth 6. Example: attributes/amount gt 100. Required module scope: item.read.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */

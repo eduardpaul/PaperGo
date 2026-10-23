@@ -15,7 +15,7 @@ function show(mode = 'query', editable = true) {
     const body = init.body ? JSON.parse(String(init.body)) : {};
     requests.push({ path, body });
     let result: unknown = { value: [] };
-    if (path === '/v1/identity/me') result = { subject: 'alice', scopes: editable ? ['list.read', 'list.write'] : ['list.read'] };
+    if (path === '/v1/identity/me') result = { subject: 'alice', scopes: editable ? ['item.read', 'item.write'] : ['item.read'] };
     if (path === '/v1/smart-folders/f') result = { id: 'f', name: 'My rules', owner_id: 'alice', version: 3, definition: { mode, group_by: [{ field: '$modified_at', by: 'year' }] } };
     if (path === '/v1/terms') result = { value: [{ id: 'finance-id', name: 'Finance keyword' }] };
     if (path === '/v1/search/fields') result = { value: [] };

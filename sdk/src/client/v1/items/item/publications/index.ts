@@ -42,14 +42,14 @@ export interface PublicationsGetResponse extends Parsable {
  */
 export interface PublicationsRequestBuilder extends BaseRequestBuilder<PublicationsRequestBuilder> {
     /**
-     * Draft readers see lifecycle history. Ordinary readers see publish events for the current published revision only. Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+     * Draft readers see lifecycle history. Ordinary readers see publish events for the current published revision only. Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<PublicationsGetResponse>}
      * @throws {Problem} error when the service returns a 4XX or 5XX status code
      */
      get(requestConfiguration?: RequestConfiguration<PublicationsRequestBuilderGetQueryParameters> | undefined) : Promise<PublicationsGetResponse | undefined>;
     /**
-     *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
+     *  Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<Publication>}
      * @throws {Problem} error when the service returns a 412 status code
@@ -57,20 +57,20 @@ export interface PublicationsRequestBuilder extends BaseRequestBuilder<Publicati
      */
      post(requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<Publication | undefined>;
     /**
-     * Draft readers see lifecycle history. Ordinary readers see publish events for the current published revision only. Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+     * Draft readers see lifecycle history. Ordinary readers see publish events for the current published revision only. Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */
      toGetRequestInformation(requestConfiguration?: RequestConfiguration<PublicationsRequestBuilderGetQueryParameters> | undefined) : RequestInformation;
     /**
-     *  Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.
+     *  Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */
      toPostRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined) : RequestInformation;
 }
 /**
- * Draft readers see lifecycle history. Ordinary readers see publish events for the current published revision only. Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+ * Draft readers see lifecycle history. Ordinary readers see publish events for the current published revision only. Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
  */
 export interface PublicationsRequestBuilderGetQueryParameters {
     /**

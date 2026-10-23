@@ -224,11 +224,11 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 	if in.Versioning != nil {
 		versioning = *in.Versioning
 	}
-	scope := "list.write"
+	scope := "item.write"
 	if in.Kind == "workspace" {
 		scope = "workspace.create"
 	} else if collection {
-		scope = "list.read"
+		scope = "item.read"
 	}
 	if err := s.RequireScope(ctx, subject, scope); err != nil {
 		return nil, err

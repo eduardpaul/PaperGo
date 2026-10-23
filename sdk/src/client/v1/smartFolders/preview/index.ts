@@ -11,7 +11,7 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface PreviewRequestBuilder extends BaseRequestBuilder<PreviewRequestBuilder> {
     /**
-     * Read-only evaluation of the caller’s readable collections and visible item revisions. Returns up to five items and a count capped at 10,000; no continuation. No definition, item, version or audit event is saved. Requires list.read.
+     * Read-only evaluation of the caller’s readable collections and visible item revisions. Returns up to five items and a count capped at 10,000; no continuation. No definition, item, version or audit event is saved. Requires item.read.
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<SmartFolderResult>}
@@ -19,7 +19,7 @@ export interface PreviewRequestBuilder extends BaseRequestBuilder<PreviewRequest
      */
      post(body: SmartFolderPreview, requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<SmartFolderResult | undefined>;
     /**
-     * Read-only evaluation of the caller’s readable collections and visible item revisions. Returns up to five items and a count capped at 10,000; no continuation. No definition, item, version or audit event is saved. Requires list.read.
+     * Read-only evaluation of the caller’s readable collections and visible item revisions. Returns up to five items and a count capped at 10,000; no continuation. No definition, item, version or audit event is saved. Requires item.read.
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}

@@ -11,7 +11,7 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface ViewsRequestBuilder extends BaseRequestBuilder<ViewsRequestBuilder> {
     /**
-     *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+     *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<ListViewPage>}
      * @throws {Problem} error when the service returns a 400 status code
@@ -42,7 +42,7 @@ export interface ViewsRequestBuilder extends BaseRequestBuilder<ViewsRequestBuil
      */
      post(body: ViewInput, requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<ListView | undefined>;
     /**
-     *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+     *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */
@@ -56,7 +56,7 @@ export interface ViewsRequestBuilder extends BaseRequestBuilder<ViewsRequestBuil
      toPostRequestInformation(body: ViewInput, requestConfiguration?: RequestConfiguration<object> | undefined) : RequestInformation;
 }
 /**
- *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+ *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
  */
 export interface ViewsRequestBuilderGetQueryParameters {
     /**

@@ -45,7 +45,7 @@ total counts matches before current permissions are rechecked; total_estimated m
 			property("mode", `{"type": "string", "enum": ["keyword", "semantic", "hybrid"]}`),
 			property("total", `{"type": "integer"}`),
 			property("total_estimated", `{"type": "boolean"}`)),
-		Scopes:      []string{scopeListRead},
+		Scopes:      []string{scopeItemRead},
 		Annotations: mcp.Annotations{ReadOnly: true, Idempotent: true},
 		Available: func(ctx context.Context, c mcp.Caller) (bool, error) {
 			var catalog struct {

@@ -17,7 +17,7 @@ export interface QueryRequestBuilder extends BaseRequestBuilder<QueryRequestBuil
      */
     get groups(): GroupsRequestBuilder;
     /**
-     *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+     *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
      * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<QueryResult>}
@@ -33,7 +33,7 @@ export interface QueryRequestBuilder extends BaseRequestBuilder<QueryRequestBuil
      */
      post(body: ViewQueryRequest, requestConfiguration?: RequestConfiguration<QueryRequestBuilderPostQueryParameters> | undefined) : Promise<QueryResult | undefined>;
     /**
-     *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+     *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
      * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
@@ -41,7 +41,7 @@ export interface QueryRequestBuilder extends BaseRequestBuilder<QueryRequestBuil
      toPostRequestInformation(body: ViewQueryRequest, requestConfiguration?: RequestConfiguration<QueryRequestBuilderPostQueryParameters> | undefined) : RequestInformation;
 }
 /**
- *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+ *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
  */
 export interface QueryRequestBuilderPostQueryParameters {
     /**

@@ -24,7 +24,7 @@ func (s *Service) CreateWithStatus(ctx context.Context, subject, parentID string
 			}
 			canonical := id.String()
 			in.ID = &canonical
-			if e = t.RequireScope(ctx, subject, "list.write"); e != nil {
+			if e = t.RequireScope(ctx, subject, "item.write"); e != nil {
 				return e
 			}
 			existing, e := t.DAL.Resources().Resource(ctx, canonical)

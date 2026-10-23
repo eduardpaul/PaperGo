@@ -9,13 +9,13 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface PeopleRequestBuilder extends BaseRequestBuilder<PeopleRequestBuilder> {
     /**
-     * Requires list.read. IDs are enrolled organization subjects; selecting a user grants no content access.
+     * Requires item.read. IDs are enrolled organization subjects; selecting a user grants no content access.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<string[]>}
      */
      get(requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<string[] | undefined>;
     /**
-     * Requires list.read. IDs are enrolled organization subjects; selecting a user grants no content access.
+     * Requires item.read. IDs are enrolled organization subjects; selecting a user grants no content access.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */

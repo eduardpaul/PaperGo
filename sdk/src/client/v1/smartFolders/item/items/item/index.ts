@@ -11,7 +11,7 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface WithItemItemRequestBuilder extends BaseRequestBuilder<WithItemItemRequestBuilder> {
     /**
-     * Requires item If-Match and current folder_version. Clears matching equality values/keywords and selected terms including descendants; ordinary validation and publication rules apply. Rolls back if the result still matches the definition. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Only definitions with mode classification permit this action; saved queries reject it.
+     * Requires item If-Match and current folder_version. Clears matching equality values/keywords and selected terms including descendants; ordinary validation and publication rules apply. Rolls back if the result still matches the definition. Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply. Only definitions with mode classification permit this action; saved queries reject it.
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<Resource>}
@@ -20,7 +20,7 @@ export interface WithItemItemRequestBuilder extends BaseRequestBuilder<WithItemI
      */
      delete(body: SmartFolderUnclassify, requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<Resource | undefined>;
     /**
-     * Requires item If-Match and current folder_version. Clears matching equality values/keywords and selected terms including descendants; ordinary validation and publication rules apply. Rolls back if the result still matches the definition. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Only definitions with mode classification permit this action; saved queries reject it.
+     * Requires item If-Match and current folder_version. Clears matching equality values/keywords and selected terms including descendants; ordinary validation and publication rules apply. Rolls back if the result still matches the definition. Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply. Only definitions with mode classification permit this action; saved queries reject it.
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}

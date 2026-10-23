@@ -199,7 +199,7 @@ For any IdP: decode a real access token (`jwt.io`-style, locally) and check `iss
 
 ## WebDAV through a proxy
 
-- Clients use **access tokens** (`POST /v1/identity/me/tokens` with `list.read` and `document.read`, plus `list.write` and `document.write` for writes; `expires_in_days` sets the lifetime) with Basic or Bearer auth. The proxy must pass `Authorization` (rule 1). In OIDC mode, people create them with their bearer token. In proxy mode, clients use NPM Access List credentials instead.
+- Clients use **access tokens** (`POST /v1/identity/me/tokens` with `item.read` and `document.read`, plus `item.write` and `document.write` for writes; `expires_in_days` sets the lifetime) with Basic or Bearer auth. The proxy must pass `Authorization` (rule 1). In OIDC mode, people create them with their bearer token. In proxy mode, clients use NPM Access List credentials instead.
 - Windows' WebClient sends Basic credentials only over HTTPS (default `BasicAuthLevel=1`), which the proxy provides, and limits downloads to 50 MB by default (`FileSizeLimitInBytes`).
 - Group sync does not run on access-token requests: they carry no OIDC token. Their memberships are whatever the user's last token set.
 

@@ -11,7 +11,7 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface DeltaRequestBuilder extends BaseRequestBuilder<DeltaRequestBuilder> {
     /**
-     * Initial synchronization returns visible items and folders. Follow @odata.nextLink, then persist @odata.deltaLink to retrieve subsequent edits, deletions, moves and access changes. Tokens are bound to caller and collection, durable for 30 days; page continuations expire after five minutes. 410 requires a new initial synchronization. Each synchronization scans the current visible collection and compares stored fingerprints; transient changes that return to the same state between polls are coalesced. Required module scope: list.read.
+     * Initial synchronization returns visible items and folders. Follow @odata.nextLink, then persist @odata.deltaLink to retrieve subsequent edits, deletions, moves and access changes. Tokens are bound to caller and collection, durable for 30 days; page continuations expire after five minutes. 410 requires a new initial synchronization. Each synchronization scans the current visible collection and compares stored fingerprints; transient changes that return to the same state between polls are coalesced. Required module scope: item.read.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<DeltaPage>}
      * @throws {Problem} error when the service returns a 410 status code
@@ -19,14 +19,14 @@ export interface DeltaRequestBuilder extends BaseRequestBuilder<DeltaRequestBuil
      */
      get(requestConfiguration?: RequestConfiguration<DeltaRequestBuilderGetQueryParameters> | undefined) : Promise<DeltaPage | undefined>;
     /**
-     * Initial synchronization returns visible items and folders. Follow @odata.nextLink, then persist @odata.deltaLink to retrieve subsequent edits, deletions, moves and access changes. Tokens are bound to caller and collection, durable for 30 days; page continuations expire after five minutes. 410 requires a new initial synchronization. Each synchronization scans the current visible collection and compares stored fingerprints; transient changes that return to the same state between polls are coalesced. Required module scope: list.read.
+     * Initial synchronization returns visible items and folders. Follow @odata.nextLink, then persist @odata.deltaLink to retrieve subsequent edits, deletions, moves and access changes. Tokens are bound to caller and collection, durable for 30 days; page continuations expire after five minutes. 410 requires a new initial synchronization. Each synchronization scans the current visible collection and compares stored fingerprints; transient changes that return to the same state between polls are coalesced. Required module scope: item.read.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */
      toGetRequestInformation(requestConfiguration?: RequestConfiguration<DeltaRequestBuilderGetQueryParameters> | undefined) : RequestInformation;
 }
 /**
- * Initial synchronization returns visible items and folders. Follow @odata.nextLink, then persist @odata.deltaLink to retrieve subsequent edits, deletions, moves and access changes. Tokens are bound to caller and collection, durable for 30 days; page continuations expire after five minutes. 410 requires a new initial synchronization. Each synchronization scans the current visible collection and compares stored fingerprints; transient changes that return to the same state between polls are coalesced. Required module scope: list.read.
+ * Initial synchronization returns visible items and folders. Follow @odata.nextLink, then persist @odata.deltaLink to retrieve subsequent edits, deletions, moves and access changes. Tokens are bound to caller and collection, durable for 30 days; page continuations expire after five minutes. 410 requires a new initial synchronization. Each synchronization scans the current visible collection and compares stored fingerprints; transient changes that return to the same state between polls are coalesced. Required module scope: item.read.
  */
 export interface DeltaRequestBuilderGetQueryParameters {
     /**

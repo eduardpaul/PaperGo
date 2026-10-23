@@ -25,21 +25,21 @@ export interface ContentTypes extends AdditionalDataHolder, Parsable {
  */
 export interface ContentTypesRequestBuilder extends BaseRequestBuilder<ContentTypesRequestBuilder> {
     /**
-     * Requires list.read. Optional workspace and collection scopes narrow the catalog; organization catalog permissions are not required.
+     * Requires item.read. Optional workspace and collection scopes narrow the catalog; organization catalog permissions are not required.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<ContentTypes[]>}
      * @throws {Problem} error when the service returns a 4XX or 5XX status code
      */
      get(requestConfiguration?: RequestConfiguration<ContentTypesRequestBuilderGetQueryParameters> | undefined) : Promise<ContentTypes[] | undefined>;
     /**
-     * Requires list.read. Optional workspace and collection scopes narrow the catalog; organization catalog permissions are not required.
+     * Requires item.read. Optional workspace and collection scopes narrow the catalog; organization catalog permissions are not required.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */
      toGetRequestInformation(requestConfiguration?: RequestConfiguration<ContentTypesRequestBuilderGetQueryParameters> | undefined) : RequestInformation;
 }
 /**
- * Requires list.read. Optional workspace and collection scopes narrow the catalog; organization catalog permissions are not required.
+ * Requires item.read. Optional workspace and collection scopes narrow the catalog; organization catalog permissions are not required.
  */
 export interface ContentTypesRequestBuilderGetQueryParameters {
     collectionId?: Guid;

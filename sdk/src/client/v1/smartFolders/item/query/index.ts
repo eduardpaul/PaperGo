@@ -17,7 +17,7 @@ export interface QueryRequestBuilder extends BaseRequestBuilder<QueryRequestBuil
      */
     get groups(): GroupsRequestBuilder;
     /**
-     *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+     *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
      * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink. An empty path returns all matching items even when group_by is configured.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<SmartFolderResult>}
@@ -25,7 +25,7 @@ export interface QueryRequestBuilder extends BaseRequestBuilder<QueryRequestBuil
      */
      post(body: SmartFolderQueryRequest, requestConfiguration?: RequestConfiguration<QueryRequestBuilderPostQueryParameters> | undefined) : Promise<SmartFolderResult | undefined>;
     /**
-     *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+     *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
      * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink. An empty path returns all matching items even when group_by is configured.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
@@ -33,7 +33,7 @@ export interface QueryRequestBuilder extends BaseRequestBuilder<QueryRequestBuil
      toPostRequestInformation(body: SmartFolderQueryRequest, requestConfiguration?: RequestConfiguration<QueryRequestBuilderPostQueryParameters> | undefined) : RequestInformation;
 }
 /**
- *  Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.
+ *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
  */
 export interface QueryRequestBuilderPostQueryParameters {
     /**

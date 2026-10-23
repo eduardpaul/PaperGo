@@ -18,10 +18,10 @@ export const Route = createFileRoute('/_app/settings/assistants')({
   component: AssistantsPage,
 });
 
-/** What a read-only connection may do; read and write adds list.write. */
+/** What a read-only connection may do; read and write adds item.write. */
 export const ReadScopes = [
   'workspace.read',
-  'list.read',
+  'item.read',
   'contentType.read',
   'document.read',
   'taxonomy.read',
@@ -145,8 +145,8 @@ function Connect({ endpoint }: { endpoint: string }) {
   const result = useRef<HTMLDivElement>(null);
 
   const held = mine.data ?? [];
-  const canRead = held.includes('list.read');
-  const canWrite = held.includes('list.write');
+  const canRead = held.includes('item.read');
+  const canWrite = held.includes('item.write');
   const expires = Number(days);
   const validExpiry = Number.isInteger(expires) && expires >= 1 && expires <= 3650;
   const validPlaces = !limited || (places.length > 0 && places.length <= MaxPlaces);
@@ -166,7 +166,7 @@ function Connect({ endpoint }: { endpoint: string }) {
         method: 'POST',
         body: {
           name: name.trim(),
-          scopes: [...ReadScopes, ...(write ? ['list.write'] : [])].filter((scope) => held.includes(scope)),
+          scopes: [...ReadScopes, ...(write ? ['item.write'] : [])].filter((scope) => held.includes(scope)),
           resources: limited ? places.map((place) => place.id) : undefined,
           expires_in_days: expires,
         },
@@ -386,7 +386,7 @@ function Connections() {
     },
   });
   // Any token that reads lists can connect an assistant.
-  const connections = (list.data ?? []).filter((token) => token.scopes?.includes('list.read'));
+  const connections = (list.data ?? []).filter((token) => token.scopes?.includes('item.read'));
   return (
     <SettingsSection
       title="Your connections"
@@ -403,7 +403,7 @@ function Connections() {
                   {over ? <Badge tone="danger">Expired</Badge> : !token.last_used_at && <Badge>Not used yet</Badge>}
                 </p>
                 <p className="text-xs text-muted">
-                  {accessLabel(!!token.scopes?.includes('list.write'))} · <TokenPlaces ids={token.resources ?? []} />
+                  {accessLabel(!!token.scopes?.includes('item.write'))} · <TokenPlaces ids={token.resources ?? []} />
                 </p>
                 <p className="text-xs text-muted">
                   {token.last_used_at ? `Last used ${format.date(token.last_used_at)}` : 'Never used'} ·{' '}

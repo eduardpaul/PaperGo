@@ -68,7 +68,7 @@ def verify_mcp(workspace, library):
     """A person signed in through NPM connects an assistant limited to one
     library; the assistant reaches papergo-mcp past the Basic sign-in with
     that token alone, and sees only that library."""
-    connection = request("POST", "/v1/identity/me/tokens", {"name": "NPM verification assistant", "scopes": ["workspace.read", "list.read"],
+    connection = request("POST", "/v1/identity/me/tokens", {"name": "NPM verification assistant", "scopes": ["workspace.read", "item.read"],
                                                             "resources": [library["id"]], "expires_in_days": 1}, expected=201)
     try:
         mcp(None, "tools/list", {}, expected=401)
