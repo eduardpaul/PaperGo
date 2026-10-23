@@ -26,6 +26,8 @@ func Where[Q sqlite.Filterable]() struct {
 	Blobs                   blobWhere[Q]
 	BusinessKeys            businessKeyWhere[Q]
 	CollectionTypes         collectionTypeWhere[Q]
+	CommentMentions         commentMentionWhere[Q]
+	Comments                commentWhere[Q]
 	ContentTypes            contentTypeWhere[Q]
 	DomainEvents            domainEventWhere[Q]
 	FieldDefinitions        fieldDefinitionWhere[Q]
@@ -60,6 +62,7 @@ func Where[Q sqlite.Filterable]() struct {
 	Resources               resourceWhere[Q]
 	SchemaRevisions         schemaRevisionWhere[Q]
 	SchemaTemplates         schemaTemplateWhere[Q]
+	Settings                settingWhere[Q]
 	SmartFolders            smartFolderWhere[Q]
 	StagedFiles             stagedFileWhere[Q]
 	SyncStates              syncStateWhere[Q]
@@ -88,6 +91,8 @@ func Where[Q sqlite.Filterable]() struct {
 		Blobs                   blobWhere[Q]
 		BusinessKeys            businessKeyWhere[Q]
 		CollectionTypes         collectionTypeWhere[Q]
+		CommentMentions         commentMentionWhere[Q]
+		Comments                commentWhere[Q]
 		ContentTypes            contentTypeWhere[Q]
 		DomainEvents            domainEventWhere[Q]
 		FieldDefinitions        fieldDefinitionWhere[Q]
@@ -122,6 +127,7 @@ func Where[Q sqlite.Filterable]() struct {
 		Resources               resourceWhere[Q]
 		SchemaRevisions         schemaRevisionWhere[Q]
 		SchemaTemplates         schemaTemplateWhere[Q]
+		Settings                settingWhere[Q]
 		SmartFolders            smartFolderWhere[Q]
 		StagedFiles             stagedFileWhere[Q]
 		SyncStates              syncStateWhere[Q]
@@ -149,6 +155,8 @@ func Where[Q sqlite.Filterable]() struct {
 		Blobs:                   buildBlobWhere[Q](Blobs.Columns),
 		BusinessKeys:            buildBusinessKeyWhere[Q](BusinessKeys.Columns),
 		CollectionTypes:         buildCollectionTypeWhere[Q](CollectionTypes.Columns),
+		CommentMentions:         buildCommentMentionWhere[Q](CommentMentions.Columns),
+		Comments:                buildCommentWhere[Q](Comments.Columns),
 		ContentTypes:            buildContentTypeWhere[Q](ContentTypes.Columns),
 		DomainEvents:            buildDomainEventWhere[Q](DomainEvents.Columns),
 		FieldDefinitions:        buildFieldDefinitionWhere[Q](FieldDefinitions.Columns),
@@ -183,6 +191,7 @@ func Where[Q sqlite.Filterable]() struct {
 		Resources:               buildResourceWhere[Q](Resources.Columns),
 		SchemaRevisions:         buildSchemaRevisionWhere[Q](SchemaRevisions.Columns),
 		SchemaTemplates:         buildSchemaTemplateWhere[Q](SchemaTemplates.Columns),
+		Settings:                buildSettingWhere[Q](Settings.Columns),
 		SmartFolders:            buildSmartFolderWhere[Q](SmartFolders.Columns),
 		StagedFiles:             buildStagedFileWhere[Q](StagedFiles.Columns),
 		SyncStates:              buildSyncStateWhere[Q](SyncStates.Columns),

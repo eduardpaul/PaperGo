@@ -109,6 +109,37 @@ func runNotificationSuite(t *testing.T, newStore func(testing.TB) *dal.Store) {
 		}
 	})
 
+	t.Run("CoalescesWhileUnread", func(t *testing.T) {
+		ctx := context.Background()
+		s, in := daltest.TaskFixture(t, newStore)
+		repo := s.Notifications()
+		reply := notifications.Notification{Recipient: "bob", WorkspaceID: in.WorkspaceID, Type: notifications.TypeCommentReplied, Title: "Reply", Body: "First", Source: notifications.SourceUser, Sender: "alice", CoalesceKey: "thread"}
+		first, _, err := repo.Create(ctx, reply)
+		if err != nil || first.Count != 1 {
+			t.Fatalf("first: %+v %v", first, err)
+		}
+		reply.Body, reply.Sender = "Second", "carol"
+		second, _, err := repo.Create(ctx, reply)
+		if err != nil || second.ID != first.ID || second.Count != 2 {
+			t.Fatalf("second: %+v %v", second, err)
+		}
+		stored, err := repo.Find(ctx, first.ID)
+		if err != nil || stored.Body != "Second" || stored.Sender != "carol" || stored.Count != 2 || !stored.CreatedAt.After(first.CreatedAt) {
+			t.Fatalf("coalesced: %+v %v", stored, err)
+		}
+		if _, err = repo.MarkRead(ctx, "bob", []string{first.ID}, time.Time{}); err != nil {
+			t.Fatal(err)
+		}
+		third, _, err := repo.Create(ctx, reply)
+		if err != nil || third.ID == first.ID || third.Count != 1 {
+			t.Fatalf("after reading: %+v %v", third, err)
+		}
+		reply.DedupKey = "x"
+		if _, _, err = repo.Create(ctx, reply); !errors.Is(err, dberr.ErrCheckViolation) {
+			t.Fatalf("dedup and coalesce: %v", err)
+		}
+	})
+
 	t.Run("PurgeTakesLinkedNotifications", func(t *testing.T) {
 		ctx := context.Background()
 		s, in := daltest.TaskFixture(t, newStore)

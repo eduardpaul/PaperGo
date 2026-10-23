@@ -35,10 +35,13 @@ type Notification struct {
 	ItemID      null.Val[string]    `db:"item_id" `
 	TaskID      null.Val[string]    `db:"task_id" `
 	RunID       null.Val[string]    `db:"run_id" `
+	CommentID   null.Val[string]    `db:"comment_id" `
 	Source      string              `db:"source" `
 	Sender      string              `db:"sender" `
 	WorkflowID  null.Val[string]    `db:"workflow_id" `
 	DedupKey    null.Val[string]    `db:"dedup_key" `
+	CoalesceKey null.Val[string]    `db:"coalesce_key" `
+	Count       int64               `db:"count" `
 	ReadAt      null.Val[time.Time] `db:"read_at" `
 
 	R notificationR `db:"-" `
@@ -57,11 +60,12 @@ type NotificationsQuery = *sqlite.ViewQuery[*Notification, NotificationSlice]
 // notificationR is where relationships are stored.
 type notificationR struct {
 	Workflow              *Workflow     // fk_notifications_0
-	RunWorkflowRun        *WorkflowRun  // fk_notifications_1
-	Task                  *Task         // fk_notifications_2
-	ItemResource          *Resource     // fk_notifications_3
-	WorkspaceResource     *Resource     // fk_notifications_4
-	RecipientIdentityUser *IdentityUser // fk_notifications_5
+	Comment               *Comment      // fk_notifications_1
+	RunWorkflowRun        *WorkflowRun  // fk_notifications_2
+	Task                  *Task         // fk_notifications_3
+	ItemResource          *Resource     // fk_notifications_4
+	WorkspaceResource     *Resource     // fk_notifications_5
+	RecipientIdentityUser *IdentityUser // fk_notifications_6
 	// Loaded reports whether each relationship has been loaded.
 	// A relationship's bool is set by Load*, Preload, ThenLoad, factory builds,
 	// and to-one Attach/Insert operations. To-many Attach/Insert operations leave it unchanged.
@@ -71,16 +75,17 @@ type notificationR struct {
 // notificationRLoaded tracks which relationships on Notification have been loaded.
 type notificationRLoaded struct {
 	Workflow              bool // fk_notifications_0
-	RunWorkflowRun        bool // fk_notifications_1
-	Task                  bool // fk_notifications_2
-	ItemResource          bool // fk_notifications_3
-	WorkspaceResource     bool // fk_notifications_4
-	RecipientIdentityUser bool // fk_notifications_5
+	Comment               bool // fk_notifications_1
+	RunWorkflowRun        bool // fk_notifications_2
+	Task                  bool // fk_notifications_3
+	ItemResource          bool // fk_notifications_4
+	WorkspaceResource     bool // fk_notifications_5
+	RecipientIdentityUser bool // fk_notifications_6
 }
 
 func buildNotificationColumns(tableName string) notificationColumns {
 	columnsExpr := expr.NewColumnsExpr(
-		"id", "created_at", "recipient", "workspace_id", "type", "title", "body", "item_id", "task_id", "run_id", "source", "sender", "workflow_id", "dedup_key", "read_at",
+		"id", "created_at", "recipient", "workspace_id", "type", "title", "body", "item_id", "task_id", "run_id", "comment_id", "source", "sender", "workflow_id", "dedup_key", "coalesce_key", "count", "read_at",
 	)
 
 	if tableName != "" {
@@ -100,10 +105,13 @@ func buildNotificationColumns(tableName string) notificationColumns {
 		ItemID:      buildNotificationColumn(tableName, "item_id"),
 		TaskID:      buildNotificationColumn(tableName, "task_id"),
 		RunID:       buildNotificationColumn(tableName, "run_id"),
+		CommentID:   buildNotificationColumn(tableName, "comment_id"),
 		Source:      buildNotificationColumn(tableName, "source"),
 		Sender:      buildNotificationColumn(tableName, "sender"),
 		WorkflowID:  buildNotificationColumn(tableName, "workflow_id"),
 		DedupKey:    buildNotificationColumn(tableName, "dedup_key"),
+		CoalesceKey: buildNotificationColumn(tableName, "coalesce_key"),
+		Count:       buildNotificationColumn(tableName, "count"),
 		ReadAt:      buildNotificationColumn(tableName, "read_at"),
 	}
 }
@@ -121,10 +129,13 @@ type notificationColumns struct {
 	ItemID      notificationColumn
 	TaskID      notificationColumn
 	RunID       notificationColumn
+	CommentID   notificationColumn
 	Source      notificationColumn
 	Sender      notificationColumn
 	WorkflowID  notificationColumn
 	DedupKey    notificationColumn
+	CoalesceKey notificationColumn
+	Count       notificationColumn
 	ReadAt      notificationColumn
 }
 
@@ -181,15 +192,18 @@ type NotificationSetter struct {
 	ItemID      omitnull.Val[string]    `db:"item_id" `
 	TaskID      omitnull.Val[string]    `db:"task_id" `
 	RunID       omitnull.Val[string]    `db:"run_id" `
+	CommentID   omitnull.Val[string]    `db:"comment_id" `
 	Source      omit.Val[string]        `db:"source" `
 	Sender      omit.Val[string]        `db:"sender" `
 	WorkflowID  omitnull.Val[string]    `db:"workflow_id" `
 	DedupKey    omitnull.Val[string]    `db:"dedup_key" `
+	CoalesceKey omitnull.Val[string]    `db:"coalesce_key" `
+	Count       omit.Val[int64]         `db:"count" `
 	ReadAt      omitnull.Val[time.Time] `db:"read_at" `
 }
 
 func (s NotificationSetter) SetColumns() []string {
-	vals := make([]string, 0, 15)
+	vals := make([]string, 0, 18)
 	if s.ID.IsValue() {
 		vals = append(vals, "id")
 	}
@@ -220,6 +234,9 @@ func (s NotificationSetter) SetColumns() []string {
 	if s.RunID.IsValue() || s.RunID.IsNull() {
 		vals = append(vals, "run_id")
 	}
+	if s.CommentID.IsValue() || s.CommentID.IsNull() {
+		vals = append(vals, "comment_id")
+	}
 	if s.Source.IsValue() {
 		vals = append(vals, "source")
 	}
@@ -231,6 +248,12 @@ func (s NotificationSetter) SetColumns() []string {
 	}
 	if s.DedupKey.IsValue() || s.DedupKey.IsNull() {
 		vals = append(vals, "dedup_key")
+	}
+	if s.CoalesceKey.IsValue() || s.CoalesceKey.IsNull() {
+		vals = append(vals, "coalesce_key")
+	}
+	if s.Count.IsValue() {
+		vals = append(vals, "count")
 	}
 	if s.ReadAt.IsValue() || s.ReadAt.IsNull() {
 		vals = append(vals, "read_at")
@@ -269,6 +292,9 @@ func (s NotificationSetter) Overwrite(t *Notification) {
 	if s.RunID.IsValue() || s.RunID.IsNull() {
 		t.RunID = s.RunID.MustGetNull()
 	}
+	if s.CommentID.IsValue() || s.CommentID.IsNull() {
+		t.CommentID = s.CommentID.MustGetNull()
+	}
 	if s.Source.IsValue() {
 		t.Source = s.Source.MustGet()
 	}
@@ -280,6 +306,12 @@ func (s NotificationSetter) Overwrite(t *Notification) {
 	}
 	if s.DedupKey.IsValue() || s.DedupKey.IsNull() {
 		t.DedupKey = s.DedupKey.MustGetNull()
+	}
+	if s.CoalesceKey.IsValue() || s.CoalesceKey.IsNull() {
+		t.CoalesceKey = s.CoalesceKey.MustGetNull()
+	}
+	if s.Count.IsValue() {
+		t.Count = s.Count.MustGet()
 	}
 	if s.ReadAt.IsValue() || s.ReadAt.IsNull() {
 		t.ReadAt = s.ReadAt.MustGetNull()
@@ -372,6 +404,13 @@ func (s *NotificationSetter) Apply(q *dialect.InsertQuery) {
 				}
 				return sqlite.Arg(s.RunID.MustGetNull()).WriteSQL(ctx, w, d, start)
 			}))
+		case "comment_id":
+			vals = append(vals, bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+				if s.CommentID.IsUnset() {
+					return sqlite.Arg(nil).WriteSQL(ctx, w, d, start)
+				}
+				return sqlite.Arg(s.CommentID.MustGetNull()).WriteSQL(ctx, w, d, start)
+			}))
 		case "source":
 			vals = append(vals, bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
 				if s.Source.IsUnset() {
@@ -400,6 +439,20 @@ func (s *NotificationSetter) Apply(q *dialect.InsertQuery) {
 				}
 				return sqlite.Arg(s.DedupKey.MustGetNull()).WriteSQL(ctx, w, d, start)
 			}))
+		case "coalesce_key":
+			vals = append(vals, bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+				if s.CoalesceKey.IsUnset() {
+					return sqlite.Arg(nil).WriteSQL(ctx, w, d, start)
+				}
+				return sqlite.Arg(s.CoalesceKey.MustGetNull()).WriteSQL(ctx, w, d, start)
+			}))
+		case "count":
+			vals = append(vals, bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+				if s.Count.IsUnset() {
+					return sqlite.Arg(nil).WriteSQL(ctx, w, d, start)
+				}
+				return sqlite.Arg(s.Count.MustGet()).WriteSQL(ctx, w, d, start)
+			}))
 		case "read_at":
 			vals = append(vals, bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
 				if s.ReadAt.IsUnset() {
@@ -418,7 +471,7 @@ func (s NotificationSetter) UpdateMod() bob.Mod[*dialect.UpdateQuery] {
 }
 
 func (s NotificationSetter) Expressions(prefix ...string) []bob.Expression {
-	exprs := make([]bob.Expression, 0, 15)
+	exprs := make([]bob.Expression, 0, 18)
 
 	if s.ID.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
@@ -490,6 +543,13 @@ func (s NotificationSetter) Expressions(prefix ...string) []bob.Expression {
 		}})
 	}
 
+	if s.CommentID.IsValue() || s.CommentID.IsNull() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			sqlite.Quote(append(prefix, "comment_id")...),
+			sqlite.Arg(s.CommentID),
+		}})
+	}
+
 	if s.Source.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
 			sqlite.Quote(append(prefix, "source")...),
@@ -518,6 +578,20 @@ func (s NotificationSetter) Expressions(prefix ...string) []bob.Expression {
 		}})
 	}
 
+	if s.CoalesceKey.IsValue() || s.CoalesceKey.IsNull() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			sqlite.Quote(append(prefix, "coalesce_key")...),
+			sqlite.Arg(s.CoalesceKey),
+		}})
+	}
+
+	if s.Count.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			sqlite.Quote(append(prefix, "count")...),
+			sqlite.Arg(s.Count),
+		}})
+	}
+
 	if s.ReadAt.IsValue() || s.ReadAt.IsNull() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
 			sqlite.Quote(append(prefix, "read_at")...),
@@ -535,7 +609,7 @@ func notificationScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc
 		idx int
 		dst func(o *Notification) any
 	}
-	targets := make([]target, 0, 15)
+	targets := make([]target, 0, 18)
 	for i, col := range cols {
 		switch col {
 		case "id":
@@ -558,6 +632,8 @@ func notificationScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc
 			targets = append(targets, target{i, func(o *Notification) any { return &o.TaskID }})
 		case "run_id":
 			targets = append(targets, target{i, func(o *Notification) any { return &o.RunID }})
+		case "comment_id":
+			targets = append(targets, target{i, func(o *Notification) any { return &o.CommentID }})
 		case "source":
 			targets = append(targets, target{i, func(o *Notification) any { return &o.Source }})
 		case "sender":
@@ -566,6 +642,10 @@ func notificationScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc
 			targets = append(targets, target{i, func(o *Notification) any { return &o.WorkflowID }})
 		case "dedup_key":
 			targets = append(targets, target{i, func(o *Notification) any { return &o.DedupKey }})
+		case "coalesce_key":
+			targets = append(targets, target{i, func(o *Notification) any { return &o.CoalesceKey }})
+		case "count":
+			targets = append(targets, target{i, func(o *Notification) any { return &o.Count }})
 		case "read_at":
 			targets = append(targets, target{i, func(o *Notification) any { return &o.ReadAt }})
 		}
@@ -832,6 +912,25 @@ func (os NotificationSlice) Workflow(mods ...bob.Mod[*dialect.SelectQuery]) Work
 	)...)
 }
 
+// Comment starts a query for related objects on comments
+func (o *Notification) Comment(mods ...bob.Mod[*dialect.SelectQuery]) CommentsQuery {
+	return Comments.Query(append(mods,
+		sm.Where(Comments.Columns.ID.EQ(sqlite.Arg(o.CommentID))),
+	)...)
+}
+
+func (os NotificationSlice) Comment(mods ...bob.Mod[*dialect.SelectQuery]) CommentsQuery {
+	PKArgSlice := make([]bob.Expression, len(os))
+	for i, o := range os {
+		PKArgSlice[i] = sqlite.ArgGroup(o.CommentID)
+	}
+	PKArgExpr := sqlite.Group(PKArgSlice...)
+
+	return Comments.Query(append(mods,
+		sm.Where(sqlite.Group(Comments.Columns.ID).OP("IN", PKArgExpr)),
+	)...)
+}
+
 // RunWorkflowRun starts a query for related objects on workflow_runs
 func (o *Notification) RunWorkflowRun(mods ...bob.Mod[*dialect.SelectQuery]) WorkflowRunsQuery {
 	return WorkflowRuns.Query(append(mods,
@@ -969,6 +1068,52 @@ func (notification0 *Notification) AttachWorkflow(ctx context.Context, exec bob.
 
 	notification0.R.Workflow = workflow1
 	notification0.R.Loaded.Workflow = true
+
+	return nil
+}
+
+func attachNotificationComment0(ctx context.Context, exec bob.Executor, count int, notification0 *Notification, comment1 *Comment) (*Notification, error) {
+	setter := &NotificationSetter{
+		CommentID: omitnull.From(comment1.ID),
+	}
+
+	err := notification0.Update(ctx, exec, setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachNotificationComment0: %w", err)
+	}
+
+	return notification0, nil
+}
+
+func (notification0 *Notification) InsertComment(ctx context.Context, exec bob.Executor, related *CommentSetter) error {
+	var err error
+
+	comment1, err := Comments.Insert(related).One(ctx, exec)
+	if err != nil {
+		return fmt.Errorf("inserting related objects: %w", err)
+	}
+
+	_, err = attachNotificationComment0(ctx, exec, 1, notification0, comment1)
+	if err != nil {
+		return err
+	}
+
+	notification0.R.Comment = comment1
+	notification0.R.Loaded.Comment = true
+
+	return nil
+}
+
+func (notification0 *Notification) AttachComment(ctx context.Context, exec bob.Executor, comment1 *Comment) error {
+	var err error
+
+	_, err = attachNotificationComment0(ctx, exec, 1, notification0, comment1)
+	if err != nil {
+		return err
+	}
+
+	notification0.R.Comment = comment1
+	notification0.R.Loaded.Comment = true
 
 	return nil
 }
@@ -1215,10 +1360,13 @@ type notificationWhere[Q sqlite.Filterable] struct {
 	ItemID      sqlite.WhereNullMod[Q, string]
 	TaskID      sqlite.WhereNullMod[Q, string]
 	RunID       sqlite.WhereNullMod[Q, string]
+	CommentID   sqlite.WhereNullMod[Q, string]
 	Source      sqlite.WhereMod[Q, string]
 	Sender      sqlite.WhereMod[Q, string]
 	WorkflowID  sqlite.WhereNullMod[Q, string]
 	DedupKey    sqlite.WhereNullMod[Q, string]
+	CoalesceKey sqlite.WhereNullMod[Q, string]
+	Count       sqlite.WhereMod[Q, int64]
 	ReadAt      sqlite.WhereNullMod[Q, time.Time]
 	R           notificationWhereR[Q]
 }
@@ -1240,10 +1388,13 @@ func buildNotificationWhere[Q sqlite.Filterable](cols notificationColumns) notif
 		ItemID:      sqlite.WhereNull[Q, string](cols.ItemID.Expression),
 		TaskID:      sqlite.WhereNull[Q, string](cols.TaskID.Expression),
 		RunID:       sqlite.WhereNull[Q, string](cols.RunID.Expression),
+		CommentID:   sqlite.WhereNull[Q, string](cols.CommentID.Expression),
 		Source:      sqlite.Where[Q, string](cols.Source.Expression),
 		Sender:      sqlite.Where[Q, string](cols.Sender.Expression),
 		WorkflowID:  sqlite.WhereNull[Q, string](cols.WorkflowID.Expression),
 		DedupKey:    sqlite.WhereNull[Q, string](cols.DedupKey.Expression),
+		CoalesceKey: sqlite.WhereNull[Q, string](cols.CoalesceKey.Expression),
+		Count:       sqlite.Where[Q, int64](cols.Count.Expression),
 		ReadAt:      sqlite.WhereNull[Q, time.Time](cols.ReadAt.Expression),
 		R:           notificationWhereR[Q]{cols: cols},
 	}
@@ -1265,6 +1416,20 @@ func (w notificationWhereR[Q]) HasWorkflow(filters ...bob.Mod[*dialect.SelectQue
 		sm.Columns(sqlite.Raw("1")),
 		sm.From(Workflows.NameExpr()),
 		sm.Where(Workflows.Columns.ID.EQ(w.cols.WorkflowID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: sqlite.Exists(q)}
+}
+
+// HasComment filters parents that have a matching Comment using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Comments).
+func (w notificationWhereR[Q]) HasComment(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := sqlite.Select(
+		sm.Columns(sqlite.Raw("1")),
+		sm.From(Comments.NameExpr()),
+		sm.Where(Comments.Columns.ID.EQ(w.cols.CommentID)),
 	)
 	q.Apply(filters...)
 	return mods.Where[Q]{E: sqlite.Exists(q)}

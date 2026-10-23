@@ -36,10 +36,13 @@ type Notification struct {
 	ItemID      null.Val[string]    `db:"item_id" `
 	TaskID      null.Val[string]    `db:"task_id" `
 	RunID       null.Val[string]    `db:"run_id" `
+	CommentID   null.Val[string]    `db:"comment_id" `
 	Source      string              `db:"source" `
 	Sender      string              `db:"sender" `
 	WorkflowID  null.Val[string]    `db:"workflow_id" `
 	DedupKey    null.Val[string]    `db:"dedup_key" `
+	CoalesceKey null.Val[string]    `db:"coalesce_key" `
+	Count       int64               `db:"count" `
 	ReadAt      null.Val[time.Time] `db:"read_at" `
 
 	R notificationR `db:"-" `
@@ -57,6 +60,7 @@ type NotificationsQuery = *psql.ViewQuery[*Notification, NotificationSlice]
 
 // notificationR is where relationships are stored.
 type notificationR struct {
+	Comment               *Comment      // notifications.notifications_comment_id_fkey
 	ItemResource          *Resource     // notifications.notifications_item_id_fkey
 	RecipientIdentityUser *IdentityUser // notifications.notifications_recipient_fkey
 	RunWorkflowRun        *WorkflowRun  // notifications.notifications_run_id_fkey
@@ -71,6 +75,7 @@ type notificationR struct {
 
 // notificationRLoaded tracks which relationships on Notification have been loaded.
 type notificationRLoaded struct {
+	Comment               bool // notifications.notifications_comment_id_fkey
 	ItemResource          bool // notifications.notifications_item_id_fkey
 	RecipientIdentityUser bool // notifications.notifications_recipient_fkey
 	RunWorkflowRun        bool // notifications.notifications_run_id_fkey
@@ -81,7 +86,7 @@ type notificationRLoaded struct {
 
 func buildNotificationColumns(tableName string) notificationColumns {
 	columnsExpr := expr.NewColumnsExpr(
-		"id", "created_at", "recipient", "workspace_id", "type", "title", "body", "item_id", "task_id", "run_id", "source", "sender", "workflow_id", "dedup_key", "read_at",
+		"id", "created_at", "recipient", "workspace_id", "type", "title", "body", "item_id", "task_id", "run_id", "comment_id", "source", "sender", "workflow_id", "dedup_key", "coalesce_key", "count", "read_at",
 	)
 
 	if tableName != "" {
@@ -101,10 +106,13 @@ func buildNotificationColumns(tableName string) notificationColumns {
 		ItemID:      buildNotificationColumn(tableName, "item_id"),
 		TaskID:      buildNotificationColumn(tableName, "task_id"),
 		RunID:       buildNotificationColumn(tableName, "run_id"),
+		CommentID:   buildNotificationColumn(tableName, "comment_id"),
 		Source:      buildNotificationColumn(tableName, "source"),
 		Sender:      buildNotificationColumn(tableName, "sender"),
 		WorkflowID:  buildNotificationColumn(tableName, "workflow_id"),
 		DedupKey:    buildNotificationColumn(tableName, "dedup_key"),
+		CoalesceKey: buildNotificationColumn(tableName, "coalesce_key"),
+		Count:       buildNotificationColumn(tableName, "count"),
 		ReadAt:      buildNotificationColumn(tableName, "read_at"),
 	}
 }
@@ -122,10 +130,13 @@ type notificationColumns struct {
 	ItemID      notificationColumn
 	TaskID      notificationColumn
 	RunID       notificationColumn
+	CommentID   notificationColumn
 	Source      notificationColumn
 	Sender      notificationColumn
 	WorkflowID  notificationColumn
 	DedupKey    notificationColumn
+	CoalesceKey notificationColumn
+	Count       notificationColumn
 	ReadAt      notificationColumn
 }
 
@@ -182,15 +193,18 @@ type NotificationSetter struct {
 	ItemID      omitnull.Val[string]    `db:"item_id" `
 	TaskID      omitnull.Val[string]    `db:"task_id" `
 	RunID       omitnull.Val[string]    `db:"run_id" `
+	CommentID   omitnull.Val[string]    `db:"comment_id" `
 	Source      omit.Val[string]        `db:"source" `
 	Sender      omit.Val[string]        `db:"sender" `
 	WorkflowID  omitnull.Val[string]    `db:"workflow_id" `
 	DedupKey    omitnull.Val[string]    `db:"dedup_key" `
+	CoalesceKey omitnull.Val[string]    `db:"coalesce_key" `
+	Count       omit.Val[int64]         `db:"count" `
 	ReadAt      omitnull.Val[time.Time] `db:"read_at" `
 }
 
 func (s NotificationSetter) SetColumns() []string {
-	vals := make([]string, 0, 15)
+	vals := make([]string, 0, 18)
 	if s.ID.IsValue() {
 		vals = append(vals, "id")
 	}
@@ -221,6 +235,9 @@ func (s NotificationSetter) SetColumns() []string {
 	if s.RunID.IsValue() || s.RunID.IsNull() {
 		vals = append(vals, "run_id")
 	}
+	if s.CommentID.IsValue() || s.CommentID.IsNull() {
+		vals = append(vals, "comment_id")
+	}
 	if s.Source.IsValue() {
 		vals = append(vals, "source")
 	}
@@ -232,6 +249,12 @@ func (s NotificationSetter) SetColumns() []string {
 	}
 	if s.DedupKey.IsValue() || s.DedupKey.IsNull() {
 		vals = append(vals, "dedup_key")
+	}
+	if s.CoalesceKey.IsValue() || s.CoalesceKey.IsNull() {
+		vals = append(vals, "coalesce_key")
+	}
+	if s.Count.IsValue() {
+		vals = append(vals, "count")
 	}
 	if s.ReadAt.IsValue() || s.ReadAt.IsNull() {
 		vals = append(vals, "read_at")
@@ -270,6 +293,9 @@ func (s NotificationSetter) Overwrite(t *Notification) {
 	if s.RunID.IsValue() || s.RunID.IsNull() {
 		t.RunID = s.RunID.MustGetNull()
 	}
+	if s.CommentID.IsValue() || s.CommentID.IsNull() {
+		t.CommentID = s.CommentID.MustGetNull()
+	}
 	if s.Source.IsValue() {
 		t.Source = s.Source.MustGet()
 	}
@@ -281,6 +307,12 @@ func (s NotificationSetter) Overwrite(t *Notification) {
 	}
 	if s.DedupKey.IsValue() || s.DedupKey.IsNull() {
 		t.DedupKey = s.DedupKey.MustGetNull()
+	}
+	if s.CoalesceKey.IsValue() || s.CoalesceKey.IsNull() {
+		t.CoalesceKey = s.CoalesceKey.MustGetNull()
+	}
+	if s.Count.IsValue() {
+		t.Count = s.Count.MustGet()
 	}
 	if s.ReadAt.IsValue() || s.ReadAt.IsNull() {
 		t.ReadAt = s.ReadAt.MustGetNull()
@@ -344,6 +376,11 @@ func (s *NotificationSetter) Apply(q *dialect.InsertQuery) {
 			}
 			return psql.Arg(s.RunID.MustGetNull()).WriteSQL(ctx, w, d, start)
 		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.CommentID.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.CommentID.MustGetNull()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
 			if s.Source.IsUnset() {
 				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
 			}
@@ -364,6 +401,16 @@ func (s *NotificationSetter) Apply(q *dialect.InsertQuery) {
 			}
 			return psql.Arg(s.DedupKey.MustGetNull()).WriteSQL(ctx, w, d, start)
 		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.CoalesceKey.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.CoalesceKey.MustGetNull()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.Count.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.Count.MustGet()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
 			if s.ReadAt.IsUnset() {
 				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
 			}
@@ -376,7 +423,7 @@ func (s NotificationSetter) UpdateMod() bob.Mod[*dialect.UpdateQuery] {
 }
 
 func (s NotificationSetter) Expressions(prefix ...string) []bob.Expression {
-	exprs := make([]bob.Expression, 0, 15)
+	exprs := make([]bob.Expression, 0, 18)
 
 	if s.ID.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
@@ -448,6 +495,13 @@ func (s NotificationSetter) Expressions(prefix ...string) []bob.Expression {
 		}})
 	}
 
+	if s.CommentID.IsValue() || s.CommentID.IsNull() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "comment_id")...),
+			psql.Arg(s.CommentID),
+		}})
+	}
+
 	if s.Source.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
 			psql.Quote(append(prefix, "source")...),
@@ -476,6 +530,20 @@ func (s NotificationSetter) Expressions(prefix ...string) []bob.Expression {
 		}})
 	}
 
+	if s.CoalesceKey.IsValue() || s.CoalesceKey.IsNull() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "coalesce_key")...),
+			psql.Arg(s.CoalesceKey),
+		}})
+	}
+
+	if s.Count.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "count")...),
+			psql.Arg(s.Count),
+		}})
+	}
+
 	if s.ReadAt.IsValue() || s.ReadAt.IsNull() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
 			psql.Quote(append(prefix, "read_at")...),
@@ -493,7 +561,7 @@ func notificationScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc
 		idx int
 		dst func(o *Notification) any
 	}
-	targets := make([]target, 0, 15)
+	targets := make([]target, 0, 18)
 	for i, col := range cols {
 		switch col {
 		case "id":
@@ -516,6 +584,8 @@ func notificationScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc
 			targets = append(targets, target{i, func(o *Notification) any { return &o.TaskID }})
 		case "run_id":
 			targets = append(targets, target{i, func(o *Notification) any { return &o.RunID }})
+		case "comment_id":
+			targets = append(targets, target{i, func(o *Notification) any { return &o.CommentID }})
 		case "source":
 			targets = append(targets, target{i, func(o *Notification) any { return &o.Source }})
 		case "sender":
@@ -524,6 +594,10 @@ func notificationScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc
 			targets = append(targets, target{i, func(o *Notification) any { return &o.WorkflowID }})
 		case "dedup_key":
 			targets = append(targets, target{i, func(o *Notification) any { return &o.DedupKey }})
+		case "coalesce_key":
+			targets = append(targets, target{i, func(o *Notification) any { return &o.CoalesceKey }})
+		case "count":
+			targets = append(targets, target{i, func(o *Notification) any { return &o.Count }})
 		case "read_at":
 			targets = append(targets, target{i, func(o *Notification) any { return &o.ReadAt }})
 		}
@@ -801,6 +875,36 @@ func (o NotificationSlice) ReloadAll(ctx context.Context, exec bob.Executor) err
 	return nil
 }
 
+// Comment starts a query for related objects on comments
+func (o *Notification) Comment(mods ...bob.Mod[*dialect.SelectQuery]) CommentsQuery {
+	return Comments.Query(append(mods,
+		sm.Where(Comments.Columns.ID.EQ(psql.Arg(o.CommentID))),
+	)...)
+}
+
+func (os NotificationSlice) Comment(mods ...bob.Mod[*dialect.SelectQuery]) CommentsQuery {
+	pkCommentID := make(pgtypes.Array[null.Val[string]], 0, len(os))
+
+	// the array is only a filter (semi-join), so duplicate keys can be
+	// dropped before they are sent over the wire
+	seenCommentID := make(map[null.Val[string]]struct{}, len(os))
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		if _, ok := seenCommentID[o.CommentID]; ok {
+			continue
+		}
+		seenCommentID[o.CommentID] = struct{}{}
+		pkCommentID = append(pkCommentID, o.CommentID)
+	}
+	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkCommentID), "text[]"))
+
+	return Comments.Query(append(mods,
+		sm.Where(Comments.Columns.ID.EQ(PKArgExpr)),
+	)...)
+}
+
 // ItemResource starts a query for related objects on resources
 func (o *Notification) ItemResource(mods ...bob.Mod[*dialect.SelectQuery]) ResourcesQuery {
 	return Resources.Query(append(mods,
@@ -979,6 +1083,52 @@ func (os NotificationSlice) WorkspaceResource(mods ...bob.Mod[*dialect.SelectQue
 	return Resources.Query(append(mods,
 		sm.Where(Resources.Columns.ID.EQ(PKArgExpr)),
 	)...)
+}
+
+func attachNotificationComment0(ctx context.Context, exec bob.Executor, count int, notification0 *Notification, comment1 *Comment) (*Notification, error) {
+	setter := &NotificationSetter{
+		CommentID: omitnull.From(comment1.ID),
+	}
+
+	err := notification0.Update(ctx, exec, setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachNotificationComment0: %w", err)
+	}
+
+	return notification0, nil
+}
+
+func (notification0 *Notification) InsertComment(ctx context.Context, exec bob.Executor, related *CommentSetter) error {
+	var err error
+
+	comment1, err := Comments.Insert(related).One(ctx, exec)
+	if err != nil {
+		return fmt.Errorf("inserting related objects: %w", err)
+	}
+
+	_, err = attachNotificationComment0(ctx, exec, 1, notification0, comment1)
+	if err != nil {
+		return err
+	}
+
+	notification0.R.Comment = comment1
+	notification0.R.Loaded.Comment = true
+
+	return nil
+}
+
+func (notification0 *Notification) AttachComment(ctx context.Context, exec bob.Executor, comment1 *Comment) error {
+	var err error
+
+	_, err = attachNotificationComment0(ctx, exec, 1, notification0, comment1)
+	if err != nil {
+		return err
+	}
+
+	notification0.R.Comment = comment1
+	notification0.R.Loaded.Comment = true
+
+	return nil
 }
 
 func attachNotificationItemResource0(ctx context.Context, exec bob.Executor, count int, notification0 *Notification, resource1 *Resource) (*Notification, error) {
@@ -1269,10 +1419,13 @@ type notificationWhere[Q psql.Filterable] struct {
 	ItemID      psql.WhereNullMod[Q, string]
 	TaskID      psql.WhereNullMod[Q, string]
 	RunID       psql.WhereNullMod[Q, string]
+	CommentID   psql.WhereNullMod[Q, string]
 	Source      psql.WhereMod[Q, string]
 	Sender      psql.WhereMod[Q, string]
 	WorkflowID  psql.WhereNullMod[Q, string]
 	DedupKey    psql.WhereNullMod[Q, string]
+	CoalesceKey psql.WhereNullMod[Q, string]
+	Count       psql.WhereMod[Q, int64]
 	ReadAt      psql.WhereNullMod[Q, time.Time]
 	R           notificationWhereR[Q]
 }
@@ -1294,10 +1447,13 @@ func buildNotificationWhere[Q psql.Filterable](cols notificationColumns) notific
 		ItemID:      psql.WhereNull[Q, string](cols.ItemID.Expression),
 		TaskID:      psql.WhereNull[Q, string](cols.TaskID.Expression),
 		RunID:       psql.WhereNull[Q, string](cols.RunID.Expression),
+		CommentID:   psql.WhereNull[Q, string](cols.CommentID.Expression),
 		Source:      psql.Where[Q, string](cols.Source.Expression),
 		Sender:      psql.Where[Q, string](cols.Sender.Expression),
 		WorkflowID:  psql.WhereNull[Q, string](cols.WorkflowID.Expression),
 		DedupKey:    psql.WhereNull[Q, string](cols.DedupKey.Expression),
+		CoalesceKey: psql.WhereNull[Q, string](cols.CoalesceKey.Expression),
+		Count:       psql.Where[Q, int64](cols.Count.Expression),
 		ReadAt:      psql.WhereNull[Q, time.Time](cols.ReadAt.Expression),
 		R:           notificationWhereR[Q]{cols: cols},
 	}
@@ -1308,6 +1464,20 @@ func buildNotificationWhere[Q psql.Filterable](cols notificationColumns) notific
 // R struct — so they cannot collide with column-based filter fields.
 type notificationWhereR[Q psql.Filterable] struct {
 	cols notificationColumns
+}
+
+// HasComment filters parents that have a matching Comment using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Comments).
+func (w notificationWhereR[Q]) HasComment(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := psql.Select(
+		sm.Columns(psql.Raw("1")),
+		sm.From(Comments.NameExpr()),
+		sm.Where(Comments.Columns.ID.EQ(w.cols.CommentID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: psql.Exists(q)}
 }
 
 // HasItemResource filters parents that have a matching ItemResource using a

@@ -8,6 +8,9 @@ psql:
     tasks: []
     task_responses: []
     notifications: []
+    settings: []
+    comments: []
+    comment_mentions: []
     domain_events: []
     audit_events: []
     live_changes: []
@@ -203,6 +206,10 @@ replacements:
   - tables: ["identity_preferences"]
     match:
       name: "values"
+    replace: "types.JSON[json.RawMessage]"
+  - tables: ["settings"]
+    match:
+      name: "value"
     replace: "types.JSON[json.RawMessage]"
   - tables: ["terms"]
     match:

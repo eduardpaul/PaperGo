@@ -55,7 +55,7 @@ type WorkflowRunsQuery = *sqlite.ViewQuery[*WorkflowRun, WorkflowRunSlice]
 
 // workflowRunR is where relationships are stored.
 type workflowRunR struct {
-	RunNotifications    NotificationSlice    // fk_notifications_1
+	RunNotifications    NotificationSlice    // fk_notifications_2
 	RunStagedFiles      StagedFileSlice      // fk_staged_files_0
 	RunTasks            TaskSlice            // fk_tasks_1
 	RunWorkflowRunItems WorkflowRunItemSlice // fk_workflow_run_items_0
@@ -71,7 +71,7 @@ type workflowRunR struct {
 
 // workflowRunRLoaded tracks which relationships on WorkflowRun have been loaded.
 type workflowRunRLoaded struct {
-	RunNotifications    bool // fk_notifications_1
+	RunNotifications    bool // fk_notifications_2
 	RunStagedFiles      bool // fk_staged_files_0
 	RunTasks            bool // fk_tasks_1
 	RunWorkflowRunItems bool // fk_workflow_run_items_0

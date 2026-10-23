@@ -15,6 +15,7 @@ import (
 	"papergo/internal/dal/audit"
 	"papergo/internal/dal/blobs"
 	"papergo/internal/dal/catalog"
+	"papergo/internal/dal/comments"
 	"papergo/internal/dal/content"
 	"papergo/internal/dal/dberr"
 	"papergo/internal/dal/delta"
@@ -33,6 +34,7 @@ import (
 	"papergo/internal/dal/resources"
 	"papergo/internal/dal/revisions"
 	"papergo/internal/dal/runs"
+	"papergo/internal/dal/settings"
 	"papergo/internal/dal/surfaces"
 	"papergo/internal/dal/tasks"
 	"papergo/internal/dal/taxonomy"
@@ -68,6 +70,7 @@ type queries interface {
 	audit.Queries
 	blobs.Queries
 	catalog.Queries
+	comments.Queries
 	delta.Queries
 	directory.Queries
 	events.Queries
@@ -80,6 +83,7 @@ type queries interface {
 	resources.Queries
 	revisions.Queries
 	runs.Queries
+	settings.Queries
 	surfaces.Queries
 	tasks.Queries
 	taxonomy.Queries
@@ -219,6 +223,18 @@ func (s *Store) Surfaces() *surfaces.Repo {
 // transaction when WithTx was used.
 func (s *Store) Notifications() *notifications.Repo {
 	return notifications.NewRepo(s.bind(s.exec()), writer[notifications.Queries](s))
+}
+
+// Comments returns the discussions on items, bound to the store's
+// transaction when WithTx was used.
+func (s *Store) Comments() *comments.Repo {
+	return comments.NewRepo(s.bind(s.exec()), writer[comments.Queries](s))
+}
+
+// Settings returns the features' settings, bound to the store's
+// transaction when WithTx was used.
+func (s *Store) Settings() *settings.Repo {
+	return settings.NewRepo(s.bind(s.exec()), writer[settings.Queries](s))
 }
 
 func (s *Store) Tasks() *tasks.Repo {

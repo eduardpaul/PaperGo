@@ -51,8 +51,9 @@ type IdentityUsersQuery = *sqlite.ViewQuery[*IdentityUser, IdentityUserSlice]
 // identityUserR is where relationships are stored.
 type identityUserR struct {
 	SubjectAccessTokens     AccessTokenSlice     // fk_access_tokens_0
+	SubjectCommentMentions  CommentMentionSlice  // fk_comment_mentions_0
 	SubjectIdentitySessions IdentitySessionSlice // fk_identity_sessions_0
-	RecipientNotifications  NotificationSlice    // fk_notifications_5
+	RecipientNotifications  NotificationSlice    // fk_notifications_6
 	PersonalOwnerResources  ResourceSlice        // fk_resources_7
 	OwnerSmartFolders       SmartFolderSlice     // fk_smart_folders_0
 	SubjectSyncViews        SyncViewSlice        // fk_sync_views_1
@@ -65,8 +66,9 @@ type identityUserR struct {
 // identityUserRLoaded tracks which relationships on IdentityUser have been loaded.
 type identityUserRLoaded struct {
 	SubjectAccessTokens     bool // fk_access_tokens_0
+	SubjectCommentMentions  bool // fk_comment_mentions_0
 	SubjectIdentitySessions bool // fk_identity_sessions_0
-	RecipientNotifications  bool // fk_notifications_5
+	RecipientNotifications  bool // fk_notifications_6
 	PersonalOwnerResources  bool // fk_resources_7
 	OwnerSmartFolders       bool // fk_smart_folders_0
 	SubjectSyncViews        bool // fk_sync_views_1
@@ -676,6 +678,25 @@ func (os IdentityUserSlice) SubjectAccessTokens(mods ...bob.Mod[*dialect.SelectQ
 	)...)
 }
 
+// SubjectCommentMentions starts a query for related objects on comment_mentions
+func (o *IdentityUser) SubjectCommentMentions(mods ...bob.Mod[*dialect.SelectQuery]) CommentMentionsQuery {
+	return CommentMentions.Query(append(mods,
+		sm.Where(CommentMentions.Columns.Subject.EQ(sqlite.Arg(o.ID))),
+	)...)
+}
+
+func (os IdentityUserSlice) SubjectCommentMentions(mods ...bob.Mod[*dialect.SelectQuery]) CommentMentionsQuery {
+	PKArgSlice := make([]bob.Expression, len(os))
+	for i, o := range os {
+		PKArgSlice[i] = sqlite.ArgGroup(o.ID)
+	}
+	PKArgExpr := sqlite.Group(PKArgSlice...)
+
+	return CommentMentions.Query(append(mods,
+		sm.Where(sqlite.Group(CommentMentions.Columns.Subject).OP("IN", PKArgExpr)),
+	)...)
+}
+
 // SubjectIdentitySessions starts a query for related objects on identity_sessions
 func (o *IdentityUser) SubjectIdentitySessions(mods ...bob.Mod[*dialect.SelectQuery]) IdentitySessionsQuery {
 	return IdentitySessions.Query(append(mods,
@@ -828,6 +849,67 @@ func (identityUser0 *IdentityUser) AttachSubjectAccessTokens(ctx context.Context
 	}
 
 	identityUser0.R.SubjectAccessTokens = append(identityUser0.R.SubjectAccessTokens, accessTokens1...)
+
+	return nil
+}
+
+func insertIdentityUserSubjectCommentMentions0(ctx context.Context, exec bob.Executor, commentMentions1 []*CommentMentionSetter, identityUser0 *IdentityUser) (CommentMentionSlice, error) {
+	for i := range commentMentions1 {
+		commentMentions1[i].Subject = omit.From(identityUser0.ID)
+	}
+
+	ret, err := CommentMentions.Insert(bob.ToMods(commentMentions1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertIdentityUserSubjectCommentMentions0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachIdentityUserSubjectCommentMentions0(ctx context.Context, exec bob.Executor, count int, commentMentions1 CommentMentionSlice, identityUser0 *IdentityUser) (CommentMentionSlice, error) {
+	setter := &CommentMentionSetter{
+		Subject: omit.From(identityUser0.ID),
+	}
+
+	err := commentMentions1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachIdentityUserSubjectCommentMentions0: %w", err)
+	}
+
+	return commentMentions1, nil
+}
+
+func (identityUser0 *IdentityUser) InsertSubjectCommentMentions(ctx context.Context, exec bob.Executor, related ...*CommentMentionSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	commentMentions1, err := insertIdentityUserSubjectCommentMentions0(ctx, exec, related, identityUser0)
+	if err != nil {
+		return err
+	}
+
+	identityUser0.R.SubjectCommentMentions = append(identityUser0.R.SubjectCommentMentions, commentMentions1...)
+
+	return nil
+}
+
+func (identityUser0 *IdentityUser) AttachSubjectCommentMentions(ctx context.Context, exec bob.Executor, related ...*CommentMention) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	commentMentions1 := CommentMentionSlice(related)
+
+	_, err = attachIdentityUserSubjectCommentMentions0(ctx, exec, len(related), commentMentions1, identityUser0)
+	if err != nil {
+		return err
+	}
+
+	identityUser0.R.SubjectCommentMentions = append(identityUser0.R.SubjectCommentMentions, commentMentions1...)
 
 	return nil
 }
@@ -1187,6 +1269,20 @@ func (w identityUserWhereR[Q]) HasSubjectAccessTokens(filters ...bob.Mod[*dialec
 		sm.Columns(sqlite.Raw("1")),
 		sm.From(AccessTokens.NameExpr()),
 		sm.Where(AccessTokens.Columns.Subject.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: sqlite.Exists(q)}
+}
+
+// HasSubjectCommentMentions filters parents that have a matching SubjectCommentMentions using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to CommentMentions).
+func (w identityUserWhereR[Q]) HasSubjectCommentMentions(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := sqlite.Select(
+		sm.Columns(sqlite.Raw("1")),
+		sm.From(CommentMentions.NameExpr()),
+		sm.Where(CommentMentions.Columns.Subject.EQ(w.cols.ID)),
 	)
 	q.Apply(filters...)
 	return mods.Where[Q]{E: sqlite.Exists(q)}

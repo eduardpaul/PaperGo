@@ -18,11 +18,14 @@ const (
 	KindAccess    Kind = "access"
 	// KindNotification reaches only the notification's recipient.
 	KindNotification Kind = "notification"
+	// KindComment reaches the streams of people who may read the
+	// comment's discussion.
+	KindComment Kind = "comment"
 )
 
 func (k Kind) Valid() bool {
 	switch k {
-	case KindItem, KindOperation, KindRun, KindAccess, KindNotification:
+	case KindItem, KindOperation, KindRun, KindAccess, KindNotification, KindComment:
 		return true
 	}
 	return false

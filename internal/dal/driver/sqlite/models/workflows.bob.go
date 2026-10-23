@@ -63,6 +63,7 @@ type WorkflowsQuery = *sqlite.ViewQuery[*Workflow, WorkflowSlice]
 
 // workflowR is where relationships are stored.
 type workflowR struct {
+	Comments           CommentSlice         // fk_comments_0
 	Notifications      NotificationSlice    // fk_notifications_0
 	Tasks              TaskSlice            // fk_tasks_2
 	WorkflowRuns       WorkflowRunSlice     // fk_workflow_runs_1
@@ -78,6 +79,7 @@ type workflowR struct {
 
 // workflowRLoaded tracks which relationships on Workflow have been loaded.
 type workflowRLoaded struct {
+	Comments           bool // fk_comments_0
 	Notifications      bool // fk_notifications_0
 	Tasks              bool // fk_tasks_2
 	WorkflowRuns       bool // fk_workflow_runs_1
@@ -947,6 +949,25 @@ func (o WorkflowSlice) ReloadAll(ctx context.Context, exec bob.Executor) error {
 	return nil
 }
 
+// Comments starts a query for related objects on comments
+func (o *Workflow) Comments(mods ...bob.Mod[*dialect.SelectQuery]) CommentsQuery {
+	return Comments.Query(append(mods,
+		sm.Where(Comments.Columns.WorkflowID.EQ(sqlite.Arg(o.ID))),
+	)...)
+}
+
+func (os WorkflowSlice) Comments(mods ...bob.Mod[*dialect.SelectQuery]) CommentsQuery {
+	PKArgSlice := make([]bob.Expression, len(os))
+	for i, o := range os {
+		PKArgSlice[i] = sqlite.ArgGroup(o.ID)
+	}
+	PKArgExpr := sqlite.Group(PKArgSlice...)
+
+	return Comments.Query(append(mods,
+		sm.Where(sqlite.Group(Comments.Columns.WorkflowID).OP("IN", PKArgExpr)),
+	)...)
+}
+
 // Notifications starts a query for related objects on notifications
 func (o *Workflow) Notifications(mods ...bob.Mod[*dialect.SelectQuery]) NotificationsQuery {
 	return Notifications.Query(append(mods,
@@ -1078,6 +1099,67 @@ func (os WorkflowSlice) WorkspaceResource(mods ...bob.Mod[*dialect.SelectQuery])
 	return Resources.Query(append(mods,
 		sm.Where(sqlite.Group(Resources.Columns.ID).OP("IN", PKArgExpr)),
 	)...)
+}
+
+func insertWorkflowComments0(ctx context.Context, exec bob.Executor, comments1 []*CommentSetter, workflow0 *Workflow) (CommentSlice, error) {
+	for i := range comments1 {
+		comments1[i].WorkflowID = omitnull.From(workflow0.ID)
+	}
+
+	ret, err := Comments.Insert(bob.ToMods(comments1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertWorkflowComments0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachWorkflowComments0(ctx context.Context, exec bob.Executor, count int, comments1 CommentSlice, workflow0 *Workflow) (CommentSlice, error) {
+	setter := &CommentSetter{
+		WorkflowID: omitnull.From(workflow0.ID),
+	}
+
+	err := comments1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachWorkflowComments0: %w", err)
+	}
+
+	return comments1, nil
+}
+
+func (workflow0 *Workflow) InsertComments(ctx context.Context, exec bob.Executor, related ...*CommentSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	comments1, err := insertWorkflowComments0(ctx, exec, related, workflow0)
+	if err != nil {
+		return err
+	}
+
+	workflow0.R.Comments = append(workflow0.R.Comments, comments1...)
+
+	return nil
+}
+
+func (workflow0 *Workflow) AttachComments(ctx context.Context, exec bob.Executor, related ...*Comment) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	comments1 := CommentSlice(related)
+
+	_, err = attachWorkflowComments0(ctx, exec, len(related), comments1, workflow0)
+	if err != nil {
+		return err
+	}
+
+	workflow0.R.Comments = append(workflow0.R.Comments, comments1...)
+
+	return nil
 }
 
 func insertWorkflowNotifications0(ctx context.Context, exec bob.Executor, notifications1 []*NotificationSetter, workflow0 *Workflow) (NotificationSlice, error) {
@@ -1538,6 +1620,20 @@ func buildWorkflowWhere[Q sqlite.Filterable](cols workflowColumns) workflowWhere
 // R struct — so they cannot collide with column-based filter fields.
 type workflowWhereR[Q sqlite.Filterable] struct {
 	cols workflowColumns
+}
+
+// HasComments filters parents that have a matching Comments using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Comments).
+func (w workflowWhereR[Q]) HasComments(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := sqlite.Select(
+		sm.Columns(sqlite.Raw("1")),
+		sm.From(Comments.NameExpr()),
+		sm.Where(Comments.Columns.WorkflowID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: sqlite.Exists(q)}
 }
 
 // HasNotifications filters parents that have a matching Notifications using a

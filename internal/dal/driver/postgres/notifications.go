@@ -6,9 +6,11 @@ import (
 
 	"github.com/aarondl/opt/omit"
 	"github.com/aarondl/opt/omitnull"
+	"github.com/stephenafamo/bob"
 	"github.com/stephenafamo/bob/dialect/psql"
 	"github.com/stephenafamo/bob/dialect/psql/im"
 	"github.com/stephenafamo/bob/dialect/psql/sm"
+	"github.com/stephenafamo/scan"
 	"papergo/internal/dal/dberr"
 	"papergo/internal/dal/driver/nullable"
 	"papergo/internal/dal/driver/postgres/models"
@@ -63,14 +65,42 @@ func (q Queries) InsertNotification(ctx context.Context, n notifications.Notific
 	inserted, err := models.Notifications.Insert(&models.NotificationSetter{
 		ID: omit.From(n.ID), CreatedAt: omit.From(n.CreatedAt), Recipient: omit.From(n.Recipient), WorkspaceID: nullable.String(n.WorkspaceID),
 		Type: omit.From(string(n.Type)), Title: omit.From(n.Title), Body: omit.From(n.Body),
-		ItemID: nullable.String(n.ItemID), TaskID: nullable.String(n.TaskID), RunID: nullable.String(n.RunID),
+		ItemID: nullable.String(n.ItemID), TaskID: nullable.String(n.TaskID), RunID: nullable.String(n.RunID), CommentID: nullable.String(n.CommentID),
 		Source: omit.From(string(n.Source)), Sender: omit.From(n.Sender), WorkflowID: nullable.String(n.WorkflowID),
-		DedupKey: nullable.String(n.DedupKey),
+		DedupKey: nullable.String(n.DedupKey), Count: omit.From(n.Count),
 	}, im.OnConflict().DoNothing()).Exec(ctx, q.exec)
 	if err != nil {
 		return false, dberr.Translate(err)
 	}
 	return inserted == 1, nil
+}
+
+// CoalesceNotification folds n into the recipient's unread notification
+// with its coalesce key, which the partial unique index finds, or inserts
+// it.
+func (q Queries) CoalesceNotification(ctx context.Context, n notifications.Notification) (string, int64, error) {
+	type stored struct {
+		ID    string `db:"id"`
+		Count int64  `db:"count"`
+	}
+	out, err := bob.One(ctx, q.exec, psql.RawQuery(`INSERT INTO notifications (id, created_at, recipient, workspace_id, type, title, body, item_id, task_id, run_id, comment_id, source, sender, workflow_id, coalesce_key, "count")
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+ON CONFLICT (recipient, coalesce_key) WHERE coalesce_key IS NOT NULL AND read_at IS NULL
+DO UPDATE SET created_at = excluded.created_at, title = excluded.title, body = excluded.body, comment_id = excluded.comment_id, sender = excluded.sender, "count" = notifications."count" + 1
+RETURNING id, "count"`, n.ID, n.CreatedAt, n.Recipient, orNull(n.WorkspaceID), string(n.Type), n.Title, n.Body, orNull(n.ItemID), orNull(n.TaskID), orNull(n.RunID), orNull(n.CommentID),
+		string(n.Source), n.Sender, orNull(n.WorkflowID), n.CoalesceKey), scan.StructMapper[stored]())
+	if err != nil {
+		return "", 0, dberr.Translate(err)
+	}
+	return out.ID, out.Count, nil
+}
+
+// orNull binds an empty optional identifier as NULL.
+func orNull(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 func (q Queries) CountUnread(ctx context.Context, recipient string) (int64, error) {
@@ -110,7 +140,8 @@ func (q Queries) DeleteNotification(ctx context.Context, recipient, id string) (
 func notificationRecord(r *models.Notification) notifications.Notification {
 	return notifications.Notification{
 		ID: r.ID, Recipient: r.Recipient, WorkspaceID: r.WorkspaceID.GetOrZero(), Type: notifications.Type(r.Type), Title: r.Title, Body: r.Body,
-		ItemID: r.ItemID.GetOrZero(), TaskID: r.TaskID.GetOrZero(), RunID: r.RunID.GetOrZero(),
+		ItemID: r.ItemID.GetOrZero(), TaskID: r.TaskID.GetOrZero(), RunID: r.RunID.GetOrZero(), CommentID: r.CommentID.GetOrZero(),
+		CoalesceKey: r.CoalesceKey.GetOrZero(), Count: r.Count,
 		Source: notifications.Source(r.Source), Sender: r.Sender, WorkflowID: r.WorkflowID.GetOrZero(), DedupKey: r.DedupKey.GetOrZero(),
 		CreatedAt: r.CreatedAt.UTC(), ReadAt: nullable.UTC(r.ReadAt),
 	}

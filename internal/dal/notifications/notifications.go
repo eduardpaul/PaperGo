@@ -23,15 +23,19 @@ type Notification struct {
 	Type                       Type
 	Title, Body                string
 	// ItemID, TaskID and RunID link what the notification opens; at most
-	// one is set.
-	ItemID, TaskID, RunID string
-	Source                Source
+	// one is set. CommentID also opens a comment's thread on ItemID.
+	ItemID, TaskID, RunID, CommentID string
+	Source                           Source
 	// Sender is the person who sent it or caused it, and WorkflowID the
 	// workflow that sent it.
 	Sender, WorkflowID string
 	DedupKey           string
-	CreatedAt          time.Time
-	ReadAt             *time.Time
+	// CoalesceKey folds the next notification with the key into this one
+	// while it is unread; Count is how many it stands for.
+	CoalesceKey string
+	Count       int64
+	CreatedAt   time.Time
+	ReadAt      *time.Time
 }
 
 // Filter selects a recipient's notifications, newest first.
@@ -75,6 +79,10 @@ type Queries interface {
 	// InsertNotification inserts n unless the recipient already has one
 	// with its dedup key, and reports whether it did.
 	InsertNotification(ctx context.Context, n Notification) (bool, error)
+	// CoalesceNotification folds n into the recipient's unread notification
+	// with its coalesce key, or inserts it, and returns the stored ID and
+	// count.
+	CoalesceNotification(ctx context.Context, n Notification) (id string, count int64, err error)
 	CountUnread(ctx context.Context, recipient string) (int64, error)
 	// MarkRead marks the recipient's unread notifications read at at: those
 	// of ids, or with no ids every one created at or before before. It
@@ -119,12 +127,13 @@ const (
 
 // Create stores one notification and tells its recipient's live streams.
 // It reports false, storing nothing, when the recipient already has a
-// notification with n's dedup key.
+// notification with n's dedup key. With a coalesce key, an unread
+// notification with that key takes n's text and counts one more instead.
 func (r *Repo) Create(ctx context.Context, n Notification) (Notification, bool, error) {
 	if !n.Type.Valid() || !n.Source.Valid() {
 		return Notification{}, false, fmt.Errorf("%w: invalid notification type or source", dberr.ErrCheckViolation)
 	}
-	if n.Recipient == "" || n.Title == "" || utf8.RuneCountInString(n.Title) > MaxTitle || utf8.RuneCountInString(n.Body) > MaxBody || utf8.RuneCountInString(n.DedupKey) > MaxDedupKey {
+	if n.Recipient == "" || n.Title == "" || utf8.RuneCountInString(n.Title) > MaxTitle || utf8.RuneCountInString(n.Body) > MaxBody || utf8.RuneCountInString(n.DedupKey) > MaxDedupKey || utf8.RuneCountInString(n.CoalesceKey) > MaxDedupKey {
 		return Notification{}, false, fmt.Errorf("%w: a notification needs a recipient and a title of up to %d characters, a body of up to %d", dberr.ErrCheckViolation, MaxTitle, MaxBody)
 	}
 	links := 0
@@ -133,16 +142,31 @@ func (r *Repo) Create(ctx context.Context, n Notification) (Notification, bool, 
 			links++
 		}
 	}
-	if links > 1 {
-		return Notification{}, false, fmt.Errorf("%w: a notification links one item, task or run", dberr.ErrCheckViolation)
+	if links > 1 || (n.CommentID != "" && n.ItemID == "") {
+		return Notification{}, false, fmt.Errorf("%w: a notification links one item, task or run, and a comment with its item", dberr.ErrCheckViolation)
+	}
+	if n.DedupKey != "" && n.CoalesceKey != "" {
+		return Notification{}, false, fmt.Errorf("%w: a notification is deduplicated or coalesced, not both", dberr.ErrCheckViolation)
 	}
 	if n.ID == "" {
 		n.ID = uuid.NewString()
 	}
 	n.CreatedAt = time.Now().UTC().Truncate(time.Microsecond)
-	n.ReadAt = nil
+	n.ReadAt, n.Count = nil, 1
 	var created bool
 	err := r.write(ctx, func(q Queries) error {
+		if n.CoalesceKey != "" {
+			id, count, err := q.CoalesceNotification(ctx, n)
+			if err != nil {
+				return err
+			}
+			action := live.ActionCreated
+			if id != n.ID {
+				action = live.ActionUpdated
+			}
+			n.ID, n.Count, created = id, count, true
+			return live.Notify(ctx, q, live.KindNotification, LiveID(n.Recipient, n.ID), action)
+		}
 		var err error
 		if created, err = q.InsertNotification(ctx, n); err != nil || !created {
 			return err

@@ -13,11 +13,15 @@ const (
 	// TypeWorkflowFailed tells who is responsible for a workflow that a run
 	// failed.
 	TypeWorkflowFailed Type = "workflow.failed"
+	// TypeCommentMentioned tells people a comment mentions them.
+	TypeCommentMentioned Type = "comment.mentioned"
+	// TypeCommentReplied tells a thread's participants of new replies.
+	TypeCommentReplied Type = "comment.replied"
 )
 
 func (t Type) Valid() bool {
 	switch t {
-	case TypeMessage, TypeTaskAssigned, TypeTaskCompleted, TypeWorkflowFailed:
+	case TypeMessage, TypeTaskAssigned, TypeTaskCompleted, TypeWorkflowFailed, TypeCommentMentioned, TypeCommentReplied:
 		return true
 	}
 	return false

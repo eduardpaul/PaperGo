@@ -73,7 +73,7 @@ type TasksQuery = *sqlite.ViewQuery[*Task, TaskSlice]
 
 // taskR is where relationships are stored.
 type taskR struct {
-	Notifications     NotificationSlice // fk_notifications_2
+	Notifications     NotificationSlice // fk_notifications_3
 	TaskResponses     TaskResponseSlice // fk_task_responses_0
 	Operation         *Operation        // fk_tasks_0
 	RunWorkflowRun    *WorkflowRun      // fk_tasks_1
@@ -88,7 +88,7 @@ type taskR struct {
 
 // taskRLoaded tracks which relationships on Task have been loaded.
 type taskRLoaded struct {
-	Notifications     bool // fk_notifications_2
+	Notifications     bool // fk_notifications_3
 	TaskResponses     bool // fk_task_responses_0
 	Operation         bool // fk_tasks_0
 	RunWorkflowRun    bool // fk_tasks_1
