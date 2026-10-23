@@ -4,7 +4,8 @@
 #
 # It is pure Go: no native libraries, models or database.
 ARG GO_VERSION=1.27.3
-FROM golang:${GO_VERSION}-bookworm AS build
+# Pure Go cross-compiles: every platform builds on the builder's own.
+FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-bookworm AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 COPY cmd/mcp ./cmd/mcp
@@ -14,9 +15,11 @@ COPY internal/dal/refs ./internal/dal/refs
 ARG VERSION=development
 ARG COMMIT=unknown
 ARG BUILD_DATE=unknown
+ARG TARGETOS
+ARG TARGETARCH
 # Only the modules papergo-mcp imports are downloaded.
 RUN --mount=type=cache,target=/root/.cache/go-build --mount=type=cache,target=/go/pkg/mod \
-    CGO_ENABLED=0 go build -trimpath -o /out/papergo-mcp \
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -o /out/papergo-mcp \
        -ldflags="-s -w -X papergo/internal/buildinfo.Version=$VERSION -X papergo/internal/buildinfo.Commit=$COMMIT -X papergo/internal/buildinfo.Date=$BUILD_DATE" \
        ./cmd/mcp
 

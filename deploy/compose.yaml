@@ -21,6 +21,23 @@ services:
       driver: json-file
       options: {max-size: 10m, max-file: "3"}
 
+  # The optional MCP server, which lets AI assistants use PaperGo with a
+  # person's access token (docs/mcp.md). Uncomment to serve it at
+  # http://localhost:8090/v1/mcp; behind a reverse proxy, route /v1/mcp to it
+  # instead of publishing a port and set PAPERGO_MCP_PUBLIC_URL.
+  # papergo-mcp:
+  #   image: ghcr.io/eduardpaul/papergo-mcp:${PAPERGO_VERSION:-latest}
+  #   ports:
+  #     - "${PAPERGO_BIND:-127.0.0.1}:${PAPERGO_MCP_PORT:-8090}:8081"
+  #   environment:
+  #     PAPERGO_MCP_BACKEND_URL: http://papergo:8080
+  #     PAPERGO_MCP_APP_URL: http://localhost:${PAPERGO_PORT:-8080}
+  #   depends_on: [papergo]
+  #   read_only: true
+  #   cap_drop: [ALL]
+  #   security_opt: [no-new-privileges:true]
+  #   restart: unless-stopped
+
 volumes:
   papergo-data: {}
 

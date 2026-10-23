@@ -20,6 +20,9 @@ def manifest(tag='v1.2.3', revision='commit'):
 class ReleaseImageTests(unittest.TestCase):
     def test_normalized_package_name_and_invalid_repositories(self):
         self.assertEqual(image.image_name('Owner/PaperGo'), 'ghcr.io/owner/papergo')
+        self.assertEqual(image.image_name('Owner/PaperGo', 'papergo-mcp'), 'ghcr.io/owner/papergo-mcp')
+        with self.assertRaises(ValueError):
+            image.image_name('Owner/PaperGo', '../other')
         for repository in ['../repo', 'owner/repo;exit 1', 'owner/repo/sub']:
             with self.assertRaises(ValueError):
                 image.image_name(repository)
@@ -28,6 +31,8 @@ class ReleaseImageTests(unittest.TestCase):
         with patch.object(image.subprocess, 'check_output', return_value='User\n'), \
              patch.object(image.subprocess, 'run', return_value=subprocess.CompletedProcess([], 1, '', 'gh: Not Found (HTTP 404)')):
             self.assertFalse(image.package_exists('Owner/PaperGo'))
+            image.package_exists('Owner/PaperGo', 'papergo-mcp')
+            self.assertEqual(image.subprocess.run.call_args.args[0][-1], 'users/owner/packages/container/papergo-mcp')
         with patch.object(image.subprocess, 'check_output', return_value='Organization\n'), \
              patch.object(image.subprocess, 'run', return_value=subprocess.CompletedProcess([], 1, '', 'gh: Forbidden (HTTP 403)')):
             with self.assertRaises(RuntimeError):

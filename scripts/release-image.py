@@ -14,14 +14,20 @@ spec.loader.exec_module(metadata)
 ARCHITECTURES = {'amd64', 'arm64'}
 
 
-def image_name(repository):
+def image_name(repository, package=None):
+    """The repository's container image, or its owner's package of that name,
+    such as papergo-mcp."""
     if not re.fullmatch(r'[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?/[\w.-]+', repository, re.ASCII):
         raise ValueError('Invalid GitHub repository')
-    return 'ghcr.io/' + repository.lower()
-
-
-def package_exists(repository):
+    if package is not None and not re.fullmatch(r'[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?', package, re.ASCII):
+        raise ValueError('Invalid package name')
     owner, name = repository.lower().split('/')
+    return f'ghcr.io/{owner}/{package or name}'
+
+
+def package_exists(repository, package=None):
+    owner, name = repository.lower().split('/')
+    name = package or name
     owner_type = subprocess.check_output(['gh', 'api', f'repos/{repository}', '--jq', '.owner.type'], text=True).strip()
     scope = 'orgs' if owner_type == 'Organization' else 'users'
     result = subprocess.run(['gh', 'api', f'{scope}/{owner}/packages/container/{name}'], capture_output=True, text=True)
@@ -85,14 +91,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=['check', 'publish'])
     parser.add_argument('--digests', type=Path, default=Path('digests'))
+    parser.add_argument('--package', help="another image of the repository's owner, such as papergo-mcp")
     args = parser.parse_args()
     repository, tag, commit = (os.environ[key] for key in ['GITHUB_REPOSITORY', 'RELEASE_TAG', 'RELEASE_COMMIT'])
     metadata.version_key(tag)
-    image = image_name(repository)
+    image = image_name(repository, args.package)
     if args.command == 'check':
         # GHCR refuses even token negotiation for a package that has never
         # been pushed. Distinguish that first-publication case through its API.
-        existing = inspect(image, tag) if package_exists(repository) else None
+        existing = inspect(image, tag) if package_exists(repository, args.package) else None
         if existing is not None:
             validate(existing, tag, commit)
         with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:

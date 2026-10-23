@@ -20,7 +20,7 @@ chmod 0444 deploy/secrets/admin-password
 docker compose -f deploy/compose.yaml up -d
 ```
 
-Open http://localhost:8080 and sign in as `admin` with the password stored in that file. `PAPERGO_VERSION=vX.Y.Z docker compose -f deploy/compose.yaml up -d` selects a release. `PAPERGO_PORT=8081` changes the host port.
+Open http://localhost:8080 and sign in as `admin` with the password stored in that file. `PAPERGO_VERSION=vX.Y.Z docker compose -f deploy/compose.yaml up -d` selects a release. `PAPERGO_PORT=8081` changes the host port. The Compose file also holds the optional [MCP server](mcp.md) for AI assistants, commented out; uncommented, it listens on `PAPERGO_MCP_PORT` (default 8090).
 
 The secret's host directory is private. Its file is readable by the container's UID 65532 because Compose file-backed secrets retain host permissions. The secret is mounted read-only and is not stored in the image or the container's environment. Production local authentication requires an explicit initial password through `ADMIN_PASSWORD_FILE`, `ADMIN_PASSWORD` or YAML; it never supplies a default password. Use only one of the two environment settings. The password file accepts 1–72 bytes and ignores trailing CR/LF. The initial password applies only to a new administrator; changing the secret does not reset an existing password.
 

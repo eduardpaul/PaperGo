@@ -68,6 +68,8 @@ Candidate images are uploaded by digest with BuildKit SBOM and provenance attest
 
 An existing version image is checked for its source revision and both platforms and is never replaced. A missing image can be completed by rerunning the release workflow; a published database bundle is downloaded and checksum-verified for that image-only retry. Authentication errors fail the workflow instead of being treated as absent tags. A failed image build can leave untagged candidate digests in GHCR; these are not release version tags.
 
+The optional [MCP server](mcp.md) has its own image, built from `extensions/mcp/Dockerfile` by cross-compiling its pure Go executable for both platforms in one build. After GitHub Releases publication, the workflow checks for an existing `ghcr.io/eduardpaul/papergo-mcp:vX.Y.Z`, uploads a candidate by digest with SBOM and provenance attestations, runs the exact candidate's `--version`, and publishes it with the same rules: an existing version is checked and never replaced, and only the current stable release updates `latest`.
+
 The registry jobs use `GITHUB_TOKEN` with `packages: write`; inspection uses `packages: read`. The package is linked to the source repository. An existing manually created package must grant this repository Actions access. GitHub creates packages as private: set the package Public after first publication if anonymous `docker pull` is intended, or keep it private and authenticate consumers with `read:packages`. See [GitHub's registry instructions](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry) and the [Docker deployment guide](https://github.com/eduardpaul/PaperGo/blob/main/docs/docker.md).
 
 ## Release-only database history
