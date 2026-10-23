@@ -132,6 +132,26 @@ func (q Queries) MarkRead(ctx context.Context, recipient string, ids []string, b
 	return marked, dberr.Translate(err)
 }
 
+// CommentNotifications returns the notifications that show a comment.
+func (q Queries) CommentNotifications(ctx context.Context, commentID string) ([]notifications.Notification, error) {
+	rows, err := models.Notifications.Query(models.SelectWhere.Notifications.CommentID.EQ(commentID)).All(ctx, q.exec)
+	if err != nil {
+		return nil, dberr.Translate(err)
+	}
+	out := make([]notifications.Notification, len(rows))
+	for i, row := range rows {
+		out[i] = notificationRecord(row)
+	}
+	return out, nil
+}
+
+// ReviseNotification stores n's body, comment and count.
+func (q Queries) ReviseNotification(ctx context.Context, n notifications.Notification) error {
+	set := &models.NotificationSetter{Body: omit.From(n.Body), CommentID: nullable.String(n.CommentID), Count: omit.From(n.Count)}
+	_, err := models.Notifications.Update(set.UpdateMod(), models.UpdateWhere.Notifications.ID.EQ(n.ID)).Exec(ctx, q.exec)
+	return dberr.Translate(err)
+}
+
 func (q Queries) DeleteNotification(ctx context.Context, recipient, id string) (bool, error) {
 	w := models.DeleteWhere.Notifications
 	n, err := models.Notifications.Delete(w.ID.EQ(id), w.Recipient.EQ(recipient)).Exec(ctx, q.exec)

@@ -91,6 +91,10 @@ type Queries interface {
 	// DeleteNotification deletes the recipient's notification and reports
 	// whether there was one.
 	DeleteNotification(ctx context.Context, recipient, id string) (bool, error)
+	// CommentNotifications returns the notifications that show a comment.
+	CommentNotifications(ctx context.Context, commentID string) ([]Notification, error)
+	// ReviseNotification stores a notification's body, comment and count.
+	ReviseNotification(ctx context.Context, n Notification) error
 }
 
 // Repo runs notification reads on its connection and changes in
@@ -210,5 +214,56 @@ func (r *Repo) Delete(ctx context.Context, recipient, id string) error {
 			return dberr.ErrNotFound
 		}
 		return live.Notify(ctx, q, live.KindNotification, LiveID(recipient, id), live.ActionDeleted)
+	})
+}
+
+// Retext gives the notifications that show a comment its edited text and
+// tells their live streams.
+func (r *Repo) Retext(ctx context.Context, commentID, body string) error {
+	return r.write(ctx, func(q Queries) error {
+		rows, err := q.CommentNotifications(ctx, commentID)
+		if err != nil {
+			return err
+		}
+		for _, n := range rows {
+			n.Body = body
+			if err = q.ReviseNotification(ctx, n); err != nil {
+				return err
+			}
+			if err = live.Notify(ctx, q, live.KindNotification, LiveID(n.Recipient, n.ID), live.ActionUpdated); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// Withdraw takes a deleted comment out of the notifications that show it,
+// so its text stays nowhere: one that stands for it alone is deleted, and
+// one that folds several replies counts one fewer and opens the thread,
+// threadID, without its text.
+func (r *Repo) Withdraw(ctx context.Context, commentID, threadID string) error {
+	return r.write(ctx, func(q Queries) error {
+		rows, err := q.CommentNotifications(ctx, commentID)
+		if err != nil {
+			return err
+		}
+		for _, n := range rows {
+			action := live.ActionUpdated
+			if n.Count > 1 && threadID != commentID {
+				n.Body, n.CommentID, n.Count = "", threadID, n.Count-1
+				err = q.ReviseNotification(ctx, n)
+			} else {
+				action = live.ActionDeleted
+				_, err = q.DeleteNotification(ctx, n.Recipient, n.ID)
+			}
+			if err != nil {
+				return err
+			}
+			if err = live.Notify(ctx, q, live.KindNotification, LiveID(n.Recipient, n.ID), action); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }

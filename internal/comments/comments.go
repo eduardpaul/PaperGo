@@ -566,7 +566,7 @@ func (s *Service) Create(ctx context.Context, subject, run, itemID string, in In
 }
 
 // Edit replaces the text of subject's comment; people it newly mentions
-// are told.
+// are told, and the notifications that show it take its new text.
 func (s *Service) Edit(ctx context.Context, subject, id string, version int64, body string) (View, error) {
 	var out View
 	err := s.DMS.Write(ctx, func(t *dms.Service) error {
@@ -595,6 +595,13 @@ func (s *Service) Edit(ctx context.Context, subject, id string, version int64, b
 		if err = t.Record(ctx, subject, "comment.edit", a.item, map[string]any{"comment_id": c.ID, "previous": previous}); err != nil {
 			return err
 		}
+		text, err := plain(ctx, t, c.Body)
+		if err != nil {
+			return err
+		}
+		if err = t.DAL.Notifications().Retext(ctx, c.ID, notify.Clip(text, notifications.MaxBody)); err != nil {
+			return err
+		}
 		if err = s.tell(ctx, t, a, c, added, false); err != nil {
 			return err
 		}
@@ -606,6 +613,7 @@ func (s *Service) Edit(ctx context.Context, subject, id string, version int64, b
 }
 
 // Delete empties a comment: its author's or, for the item's managers, any.
+// Its notifications go with its text.
 func (s *Service) Delete(ctx context.Context, subject, id string, version int64) error {
 	return s.DMS.Write(ctx, func(t *dms.Service) error {
 		c, a, err := s.load(ctx, t, subject, id)
@@ -620,6 +628,9 @@ func (s *Service) Delete(ctx context.Context, subject, id string, version int64)
 		}
 		if _, err = t.DAL.Comments().Delete(ctx, id, version, subject); err != nil {
 			return commentError(err)
+		}
+		if err = t.DAL.Notifications().Withdraw(ctx, c.ID, c.ThreadID); err != nil {
+			return err
 		}
 		return t.Record(ctx, subject, "comment.delete", a.item, map[string]any{"comment_id": c.ID, "author": c.Author, "body": c.Body})
 	})
