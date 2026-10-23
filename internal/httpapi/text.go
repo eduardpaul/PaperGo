@@ -74,7 +74,9 @@ func textQuery(r *http.Request) (from textPosition, limit int, err error) {
 }
 
 // itemText returns the text read from the file version the caller may
-// read: the current one, or blob_id.
+// read: the current one, or blob_id. A ranged read continues with the
+// text_id it began with, and fails when the text has changed since, so its
+// parts never mix two files or two readings of one.
 func (a *API) itemText(w http.ResponseWriter, r *http.Request) {
 	from, limit, err := textQuery(r)
 	if err != nil {
@@ -84,6 +86,10 @@ func (a *API) itemText(w http.ResponseWriter, r *http.Request) {
 	b, text, err := a.dms(r).ItemText(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("blob_id"))
 	if err != nil {
 		a.failure(w, r, err)
+		return
+	}
+	if began := r.URL.Query().Get("text_id"); began != "" && began != text.ID {
+		a.problem(w, r, http.StatusPreconditionFailed, "text_changed", "The document's text changed since this read began; read it again from page 1.")
 		return
 	}
 	file, err := a.Storage.Open(r.Context(), text.ObjectKey)

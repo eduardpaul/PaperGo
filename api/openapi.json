@@ -17037,7 +17037,7 @@
         ],
         "operationId": "itemText",
         "summary": "Text read from an item's file",
-        "description": "The page texts a workflow with document.read_text read from the file version the caller may read: the current one, or blob_id. 404 text_not_read before it was read. page, offset and max_chars read part of the text: pages from page, starting offset characters (Unicode code points) into it, up to max_chars characters; next is where the following part starts, and null after the end. Without them the whole text is returned.",
+        "description": "The page texts a workflow with document.read_text read from the file version the caller may read: the current one, or blob_id. 404 text_not_read before it was read. page, offset and max_chars read part of the text: pages from page, starting offset characters (Unicode code points) into it, up to max_chars characters; next is where the following part starts, and null after the end; continue with next and the text_id of the first part. 412 text_changed when the text has changed since, as when the item got another file: read it again from page 1. Without them the whole text is returned.",
         "x-required-scopes": [
           "document.read"
         ],
@@ -17090,6 +17090,15 @@
               "default": 0
             },
             "description": "At most this many characters; 0 returns everything from the start position."
+          },
+          {
+            "name": "text_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The text_id a ranged read began with. The read fails with 412 text_changed when the text is another one now."
           }
         ],
         "responses": {
@@ -17117,6 +17126,9 @@
             "$ref": "#/components/responses/Problem"
           },
           "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
             "$ref": "#/components/responses/Problem"
           }
         }

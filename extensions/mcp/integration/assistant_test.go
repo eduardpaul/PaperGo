@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"papergo/extensions/mcp"
 	"papergo/extensions/mcp/server"
 	"papergo/internal/dal/blobs"
 	"papergo/internal/dms"
@@ -245,34 +246,52 @@ func saveText(t *testing.T, e *env, sha string, pages []byte) {
 	}
 }
 
-// A document whose whole text exceeds the server's answer limit is still
-// read in parts: PaperGo cuts the range, so only the part asked for
-// travels.
-func TestLargeTextIsReadInParts(t *testing.T) {
-	e := setup(t, options{configure: func(c *server.Config) { c.MaxBackendBytes = 64 << 10 }})
-	f := seed(t, e)
-	s := e.connect(t, aliceToken)
-	doc := create(t, e.svc, "alice", f.library, dms.CreateResource{Kind: "item", Name: "Archive scan"})
-	req, _ := http.NewRequestWithContext(t.Context(), "PUT", e.api.URL+"/v1/items/"+doc+"/content", strings.NewReader("%PDF-scan"))
+// upload gives the item a file and returns its digest.
+func upload(t *testing.T, e *env, item, body, version string) string {
+	t.Helper()
+	req, _ := http.NewRequestWithContext(t.Context(), "PUT", e.api.URL+"/v1/items/"+item+"/content", strings.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+aliceToken)
 	req.Header.Set("Content-Type", "application/pdf")
 	req.Header.Set("X-Filename", "scan.pdf")
-	req.Header.Set("If-Match", `"1"`)
+	req.Header.Set("If-Match", `"`+version+`"`)
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer res.Body.Close()
 	var blob struct {
 		Sha256 string `json:"sha256"`
 	}
 	if err := json.NewDecoder(res.Body).Decode(&blob); err != nil || res.StatusCode != 201 {
 		t.Fatal(res.StatusCode, err)
 	}
-	res.Body.Close()
+	return blob.Sha256
+}
+
+// A document whose whole text exceeds the server's answer limit is still
+// read in parts: PaperGo cuts the range, so only the part asked for
+// travels. Parts never mix two files: once the file is replaced, the read
+// must start again.
+func TestLargeTextIsReadInParts(t *testing.T) {
+	e := setup(t, options{configure: func(c *server.Config) { c.MaxBackendBytes = 64 << 10 }})
+	f := seed(t, e)
+	s := e.connect(t, aliceToken)
+	doc := create(t, e.svc, "alice", f.library, dms.CreateResource{Kind: "item", Name: "Archive scan"})
 	stored, _ := json.Marshal(map[string]any{"pages": []map[string]any{{"page": 1, "text": strings.Repeat("a", 200<<10)}}})
-	saveText(t, e, blob.Sha256, stored)
+	saveText(t, e, upload(t, e, doc, "%PDF-scan", "1"), stored)
 	out := ok(t, s, "get_item_text", `{"item_id": "`+doc+`", "max_chars": 1000}`)
 	if page := out["pages"].([]any)[0].(map[string]any); len(str(page["text"])) != 1000 || fmt.Sprint(out["next_offset"]) != "1000" {
 		t.Fatalf("part %v next %v+%v", len(str(page["text"])), out["next_page"], out["next_offset"])
+	}
+	next := `{"item_id": "` + doc + `", "page": 1, "offset": 1000, "max_chars": 1000, "text_id": "` + str(out["text_id"]) + `"}`
+	ok(t, s, "get_item_text", next)
+
+	replaced, _ := json.Marshal(map[string]any{"pages": []map[string]any{{"page": 1, "text": strings.Repeat("b", 4000)}}})
+	saveText(t, e, upload(t, e, doc, "%PDF-another-scan", "2"), replaced)
+	if f := fails(t, s, "get_item_text", next, mcp.CodeVersionConflict); !strings.Contains(f.Message, "page 1") {
+		t.Fatalf("message %q", f.Message)
+	}
+	if again := ok(t, s, "get_item_text", `{"item_id": "`+doc+`", "max_chars": 1000}`); str(again["text_id"]) == str(out["text_id"]) {
+		t.Fatal("a new read kept the old text")
 	}
 }

@@ -11,12 +11,13 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface TextRequestBuilder extends BaseRequestBuilder<TextRequestBuilder> {
     /**
-     * The page texts a workflow with document.read_text read from the file version the caller may read: the current one, or blob_id. 404 text_not_read before it was read. page, offset and max_chars read part of the text: pages from page, starting offset characters (Unicode code points) into it, up to max_chars characters; next is where the following part starts, and null after the end. Without them the whole text is returned.
+     * The page texts a workflow with document.read_text read from the file version the caller may read: the current one, or blob_id. 404 text_not_read before it was read. page, offset and max_chars read part of the text: pages from page, starting offset characters (Unicode code points) into it, up to max_chars characters; next is where the following part starts, and null after the end; continue with next and the text_id of the first part. 412 text_changed when the text has changed since, as when the item got another file: read it again from page 1. Without them the whole text is returned.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<ItemText>}
      * @throws {Problem} error when the service returns a 401 status code
      * @throws {Problem} error when the service returns a 403 status code
      * @throws {Problem} error when the service returns a 404 status code
+     * @throws {Problem} error when the service returns a 412 status code
      */
      get(requestConfiguration?: RequestConfiguration<TextRequestBuilderGetQueryParameters> | undefined) : Promise<ItemText | undefined>;
     /**
@@ -37,7 +38,7 @@ export interface TextRequestBuilder extends BaseRequestBuilder<TextRequestBuilde
      */
      post(body: ReadText, requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<Operation | undefined>;
     /**
-     * The page texts a workflow with document.read_text read from the file version the caller may read: the current one, or blob_id. 404 text_not_read before it was read. page, offset and max_chars read part of the text: pages from page, starting offset characters (Unicode code points) into it, up to max_chars characters; next is where the following part starts, and null after the end. Without them the whole text is returned.
+     * The page texts a workflow with document.read_text read from the file version the caller may read: the current one, or blob_id. 404 text_not_read before it was read. page, offset and max_chars read part of the text: pages from page, starting offset characters (Unicode code points) into it, up to max_chars characters; next is where the following part starts, and null after the end; continue with next and the text_id of the first part. 412 text_changed when the text has changed since, as when the item got another file: read it again from page 1. Without them the whole text is returned.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */
@@ -51,7 +52,7 @@ export interface TextRequestBuilder extends BaseRequestBuilder<TextRequestBuilde
      toPostRequestInformation(body: ReadText, requestConfiguration?: RequestConfiguration<object> | undefined) : RequestInformation;
 }
 /**
- * The page texts a workflow with document.read_text read from the file version the caller may read: the current one, or blob_id. 404 text_not_read before it was read. page, offset and max_chars read part of the text: pages from page, starting offset characters (Unicode code points) into it, up to max_chars characters; next is where the following part starts, and null after the end. Without them the whole text is returned.
+ * The page texts a workflow with document.read_text read from the file version the caller may read: the current one, or blob_id. 404 text_not_read before it was read. page, offset and max_chars read part of the text: pages from page, starting offset characters (Unicode code points) into it, up to max_chars characters; next is where the following part starts, and null after the end; continue with next and the text_id of the first part. 412 text_changed when the text has changed since, as when the item got another file: read it again from page 1. Without them the whole text is returned.
  */
 export interface TextRequestBuilderGetQueryParameters {
     blobId?: string;
@@ -67,17 +68,22 @@ export interface TextRequestBuilderGetQueryParameters {
      * The first page to return.
      */
     page?: number;
+    /**
+     * The text_id a ranged read began with. The read fails with 412 text_changed when the text is another one now.
+     */
+    textId?: string;
 }
 /**
  * Uri template for the request builder.
  */
-export const TextRequestBuilderUriTemplate = "{+baseurl}/v1/items/{id}/text{?blob_id*,max_chars*,offset*,page*}";
+export const TextRequestBuilderUriTemplate = "{+baseurl}/v1/items/{id}/text{?blob_id*,max_chars*,offset*,page*,text_id*}";
 /**
  * Mapper for query parameters from symbol name to serialization name represented as a constant.
  */
 const TextRequestBuilderGetQueryParametersMapper: Record<string, string> = {
     "blobId": "blob_id",
     "maxChars": "max_chars",
+    "textId": "text_id",
 };
 /**
  * Metadata for all the requests in the request builder.
@@ -90,6 +96,7 @@ export const TextRequestBuilderRequestsMetadata: RequestsMetadata = {
             401: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             403: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             404: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+            412: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
         },
         adapterMethodName: "send",
         responseBodyFactory:  createItemTextFromDiscriminatorValue,

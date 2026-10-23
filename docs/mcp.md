@@ -183,7 +183,7 @@ Filters and sorts on custom fields need the field indexed; a query that names an
 
 ### Documents and terms
 
-`get_item_text` returns the text PaperGo read from a document's current file: up to `max_chars` characters (default 20,000, at most 100,000) from `page` (default 1), starting `offset` characters into it, and `next_page` and `next_offset` to continue from, so any file is read in parts whatever its size; PaperGo cuts the range, so only that part travels. Pages cut short are marked `partial`. A file whose text has not been read yet, because no [workflow](workflows.md) with `document.read_text` ran for it, fails as `not_found`.
+`get_item_text` returns the text PaperGo read from a document's current file: up to `max_chars` characters (default 20,000, at most 100,000) from `page` (default 1), starting `offset` characters into it, and `next_page` and `next_offset` to continue from, so any file is read in parts whatever its size; PaperGo cuts the range, so only that part travels. A continuation passes back the first part's `text_id`, and fails as `version_conflict` once the document's text changed, as when its file was replaced, so an answer never mixes two files. Pages cut short are marked `partial`. A file whose text has not been read yet, because no [workflow](workflows.md) with `document.read_text` ran for it, fails as `not_found`.
 
 `list_terms` lists terms so assistants use existing ones instead of guessing labels: for a term or keywords field (`collection_id` and `field_key`, `$keywords` for the keywords every entry has) or a `term_set_id`. Without `search` or `parent_id` it lists top-level terms; `parent_id` lists a term's children and `search` matches names, labels and synonyms.
 
