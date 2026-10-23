@@ -20,7 +20,7 @@ const (
 func principal(ctx context.Context, subject string) access.Principal {
 	p := access.Principal{Subject: subject}
 	if t, ok := identity.AccessTokenContext(ctx); ok {
-		p.Credential = &access.Credential{ID: t.ID, Scopes: t.Scopes}
+		p.Credential = t.Credential()
 	}
 	return p
 }

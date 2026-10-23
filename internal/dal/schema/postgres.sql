@@ -51,6 +51,8 @@ CREATE TABLE access_tokens (
     prefix TEXT NOT NULL,
     secret_hash TEXT NOT NULL CHECK (length(secret_hash) = 64),
     scopes JSONB NOT NULL CHECK (jsonb_typeof(scopes) = 'array' AND jsonb_array_length(scopes) > 0),
+    -- Workspaces, lists and libraries the token is limited to; empty is unlimited.
+    resources JSONB NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(resources) = 'array'),
     expires_at TIMESTAMPTZ,
     last_used_at TIMESTAMPTZ,
     revoked_at TIMESTAMPTZ,

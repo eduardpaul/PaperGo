@@ -494,10 +494,11 @@ func (s *Service) operationPermission(ctx context.Context, subject, containerID,
 func (s *Service) operationContext(ctx context.Context, op *operations.Operation) (context.Context, error) {
 	ctx = WithParentOperation(requestmeta.WithTrace(ctx, op.TraceID), op.ID)
 	if op.CredentialID != "" {
-		ctx = identity.WithAccessToken(ctx, identity.AccessTokenIdentity{Subject: op.CreatedBy, ID: op.CredentialID, Scopes: op.CredentialScopes})
-		if err := identity.RequireCredential(ctx, dal.NewStore(s.db).WithTx(s.tx), op.CreatedBy); err != nil {
-			return ctx, ErrForbidden
+		restored, err := identity.RestoreCredential(ctx, dal.NewStore(s.db).WithTx(s.tx), op.CreatedBy, op.CredentialID, op.CredentialScopes)
+		if err != nil {
+			return restored, ErrForbidden
 		}
+		ctx = restored
 	}
 	return ctx, nil
 }

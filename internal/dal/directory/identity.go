@@ -46,9 +46,12 @@ type Membership struct {
 type AccessToken struct {
 	ID, Subject, Name, Prefix, SecretHash, CreatedBy string
 	Scopes                                           []string
-	Integration                                      bool
-	CreatedAt                                        time.Time
-	ExpiresAt, LastUsedAt, RevokedAt                 *time.Time
+	// Resources limits the token to these workspaces, lists and libraries;
+	// empty is unlimited.
+	Resources                        []string
+	Integration                      bool
+	CreatedAt                        time.Time
+	ExpiresAt, LastUsedAt, RevokedAt *time.Time
 }
 type AccessTokenFilter struct {
 	Subject        string
@@ -443,6 +446,9 @@ func (r *Repo) CreateAccessToken(ctx context.Context, t AccessToken) (AccessToke
 	}
 	if len(t.Scopes) == 0 {
 		return AccessToken{}, dberr.ErrCheckViolation
+	}
+	if t.Resources == nil {
+		t.Resources = []string{}
 	}
 	e := r.change(ctx, func(q Queries) error { return q.InsertDirectoryAccessToken(ctx, t) })
 	return t, e

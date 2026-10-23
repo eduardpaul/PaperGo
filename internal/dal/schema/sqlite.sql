@@ -52,6 +52,8 @@ CREATE TABLE access_tokens (
     prefix TEXT NOT NULL,
     secret_hash TEXT NOT NULL CHECK (length(secret_hash) = 64),
     scopes TEXT NOT NULL CHECK (json_valid(scopes) AND json_type(scopes) = 'array' AND json_array_length(scopes) > 0),
+    -- Workspaces, lists and libraries the token is limited to; empty is unlimited.
+    resources TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(resources) AND json_type(resources) = 'array'),
     expires_at DATETIME,
     last_used_at DATETIME,
     revoked_at DATETIME,

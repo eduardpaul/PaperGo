@@ -7,6 +7,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"papergo/internal/dal/dberr"
 	"papergo/internal/dal/refs"
 	"papergo/internal/dms"
 	"papergo/internal/httpapi"
@@ -184,6 +185,9 @@ func (x *Search) search(ctx context.Context, s *dms.Service, subject string, in 
 		return Result{}, err
 	}
 	q.Filter.Access = access
+	if err := narrow(ctx, s, subject, &q.Filter); err != nil {
+		return Result{}, err
+	}
 	if q.Content, err = contentAllowed(ctx, s, subject); err != nil {
 		return Result{}, err
 	}
@@ -369,10 +373,42 @@ func fieldFilter(f *dms.IndexFilter) *search.FieldFilter {
 // and folders, whether the subject reads drafts there or published content:
 // what search trims to. Permissions depend only on a row's scope, its
 // workspace and whether it is content, so one live row stands for each
-// scope, as in collection queries.
+// scope, as in collection queries. A token's resource limit does not: a
+// scope can span collections in and out of it, so scopes are decided
+// without it, and every hit is rechecked with it.
 func scopes(ctx context.Context, s *dms.Service, subject string) (search.Access, error) {
-	draft, readable, err := s.DAL.Content().SearchScopes(ctx, dms.Principal(ctx, subject))
+	p := dms.Principal(ctx, subject)
+	if p.Credential.Limited() {
+		unlimited := *p.Credential
+		unlimited.Resources = nil
+		p.Credential = &unlimited
+	}
+	draft, readable, err := s.DAL.Content().SearchScopes(ctx, p)
 	return search.Access{Draft: draft, Read: readable}, err
+}
+
+// narrow points a search that names no place at the one workspace or
+// collection the request's access token is limited to, so the index skips
+// what the recheck would drop. Limits of several places are left to the
+// recheck.
+func narrow(ctx context.Context, s *dms.Service, subject string, f *search.Filter) error {
+	p := dms.Principal(ctx, subject)
+	if !p.Credential.Limited() || len(p.Credential.Resources) != 1 || f.WorkspaceID != "" || f.CollectionID != "" {
+		return nil
+	}
+	r, err := s.DAL.Resources().Resource(ctx, p.Credential.Resources[0])
+	if dberr.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if r.Kind == refs.KindWorkspace {
+		f.WorkspaceID = r.ID
+	} else {
+		f.CollectionID = r.ID
+	}
+	return nil
 }
 
 // visible reports which documents the subject may be shown now, on the

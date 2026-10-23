@@ -100,6 +100,17 @@
                       "type": "string"
                     }
                   },
+                  "resources": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 50,
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "description": "Limits the token to these workspaces, lists and libraries, each one the caller can read. A limited token holds only workspace.read, list.read, list.write, document.read, document.write, contentType.read, taxonomy.read, user.read and group.read, and cannot issue tokens. Omitted, the token reaches everything its holder can."
+                  },
                   "expires_in_days": {
                     "type": "integer",
                     "minimum": 1,
@@ -20453,6 +20464,16 @@
               "type": "string"
             }
           },
+          "resources": {
+            "type": "array",
+            "maxItems": 50,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Workspaces, lists and libraries the token is limited to: their content, and a listed collection's workspace for reading. Empty when the token reaches everything its holder can."
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -20555,6 +20576,14 @@
                 "items": {
                   "type": "string"
                 }
+              },
+              "resources": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "description": "The workspaces, lists and libraries the request's access token is limited to; absent when it reaches everything."
               }
             },
             "required": [
@@ -28216,6 +28245,17 @@
             "items": {
               "type": "string"
             }
+          },
+          "resources": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 50,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Limits the token to these workspaces, lists and libraries, each one the caller can read. A limited token holds only workspace.read, list.read, list.write, document.read, document.write, contentType.read, taxonomy.read, user.read and group.read, and cannot issue tokens. Omitted, the token reaches everything its holder can."
           },
           "expires_in_days": {
             "type": "integer",

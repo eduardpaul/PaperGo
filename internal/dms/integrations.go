@@ -415,8 +415,7 @@ func (s *Service) RefreshIntegrations(ctx context.Context, _ time.Time) error {
 			actor := row.ConfiguredBy
 			credentialCtx := ctx
 			if row.CredentialID != "" {
-				credentialCtx = identity.WithAccessToken(ctx, identity.AccessTokenIdentity{Subject: actor, ID: row.CredentialID, Scopes: row.CredentialScopes})
-				if identity.RequireCredential(credentialCtx, dal.NewStore(t.db).WithTx(t.tx), actor) != nil {
+				if credentialCtx, err = identity.RestoreCredential(ctx, dal.NewStore(t.db).WithTx(t.tx), actor, row.CredentialID, row.CredentialScopes); err != nil {
 					continue
 				}
 			}
