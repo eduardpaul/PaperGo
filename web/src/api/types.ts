@@ -525,6 +525,25 @@ export interface TaskAnswer {
   created_at: string;
 }
 
+/** One message to one person: their inbox. */
+export interface Notification {
+  id: string;
+  type: 'message' | 'task.assigned' | 'task.completed' | 'workflow.failed';
+  title: string;
+  body?: string;
+  workspace_id?: string;
+  /** What the notification opens: at most one of these. */
+  item_id?: string;
+  task_id?: string;
+  run_id?: string;
+  source: 'workflow' | 'user' | 'system';
+  /** Who sent it or caused what it reports. */
+  sender?: string;
+  workflow_id?: string;
+  created_at: string;
+  read_at?: string;
+}
+
 /** An action request: an approval, or any task a workflow, person or the system created. */
 export interface Task {
   id: string;

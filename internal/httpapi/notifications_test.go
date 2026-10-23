@@ -98,9 +98,9 @@ func TestNotificationRoutes(t *testing.T) {
 		t.Fatalf("send again: %d %s", code, body)
 	}
 	for body, want := range map[string]string{
-		`{"recipients": ["nobody"], "title": "Hi"}`:                       "unknown recipients",
-		`{"recipients": ["bob"], "title": " "}`:                           "title",
-		`{"title": "Hi"}`:                                                 "recipients",
+		`{"recipients": ["nobody"], "title": "Hi"}`:                          "unknown recipients",
+		`{"recipients": ["bob"], "title": " "}`:                              "title",
+		`{"title": "Hi"}`:                                                    "recipients",
 		`{"recipients": ["bob"], "title": "Hi", "item_id": "` + ws.ID + `"}`: "item_id",
 	} {
 		if code, _, got := send(body); code != 422 || !strings.Contains(got, want) {

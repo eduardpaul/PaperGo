@@ -24,6 +24,11 @@ export function useLiveEvents() {
         void queryClient.invalidateQueries({ queryKey: keys.inboxes });
       }
       if (pending.has('run')) void queryClient.invalidateQueries({ queryKey: ['workflow-runs'] });
+      // A notification may tell of a task, which the task lists show too.
+      if (pending.has('notification')) {
+        void queryClient.invalidateQueries({ queryKey: keys.notifications });
+        void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      }
       pending.clear();
     };
     const schedule = (kind: string) => {
@@ -34,6 +39,7 @@ export function useLiveEvents() {
     void readEvents(controller.signal, (event) => {
       if (event === 'item' || event === 'resync' || event === 'connected') schedule('content');
       if (event === 'run') schedule('run');
+      if (event === 'notification' || event === 'connected' || event === 'resync') schedule('notification');
       if (event === 'reauthenticate') {
         clearToken();
         window.location.assign('/login');

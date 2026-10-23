@@ -2,6 +2,7 @@ import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query';
 import { api, continuation, isApiError, listOf } from './http';
 import type {
   Task,
+  Notification,
   BuiltInState,
   CollectionTemplate,
   ContentType,
@@ -47,6 +48,9 @@ export const keys = {
   tasks: (filter: TaskFilter) => ['tasks', filter] as const,
   task: (id: string) => ['tasks', 'one', id] as const,
   stagedFile: (id: string) => ['staged-files', id] as const,
+  notifications: ['notifications'] as const,
+  notificationList: (unread: boolean) => ['notifications', 'list', { unread }] as const,
+  unreadNotifications: ['notifications', 'unread'] as const,
 };
 
 /** Which of the caller's tasks to list: waiting for them, or by status. */
@@ -70,6 +74,25 @@ export const myTasksQuery = (filter: TaskFilter) =>
       ).data,
     getNextPageParam: (page) => continuation(page['@odata.nextLink']) ?? undefined,
   });
+
+/** The caller's notifications, newest first; unread keeps the unread ones. */
+export const notificationsQuery = (unread = false) =>
+  infiniteQueryOptions({
+    queryKey: keys.notificationList(unread),
+    initialPageParam: '/v1/me/notifications',
+    queryFn: async ({ pageParam }) =>
+      (
+        await api<Page<Notification>>(pageParam, {
+          query: pageParam === '/v1/me/notifications' ? { unread: unread ? 'true' : undefined } : undefined,
+        })
+      ).data,
+    getNextPageParam: (page) => continuation(page['@odata.nextLink']) ?? undefined,
+  });
+
+export const unreadNotificationsQuery = queryOptions({
+  queryKey: keys.unreadNotifications,
+  queryFn: async () => (await api<{ count: number }>('/v1/me/notifications/unread-count')).data.count,
+});
 
 export const taskQuery = (id: string) =>
   queryOptions({
