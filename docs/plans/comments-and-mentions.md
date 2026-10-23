@@ -1,6 +1,6 @@
 # Comments and mentions (plan)
 
-Status: **phase 0 (notifications core) implemented**, documented in [notifications](../notifications.md); coalescing arrives in phase 1 with replies, its first user. Comments are a **core** building block, like tasks: they are coupled to the DMS, tasks and notifications, so `internal/comments` names them directly instead of plugging in through registries. The [open decisions](#open-decisions) are taken with the recommended answers unless changed before phase 1.
+Status: **phases 0 (notifications core) and 1 (item discussions) implemented**, documented in [notifications](../notifications.md) and [comments](../comments.md). Comments are a **core** building block, like tasks: they are coupled to the DMS, tasks and notifications, so `internal/comments` names them directly instead of plugging in through registries. Phase 1 took the recommended answers to the [open decisions](#open-decisions). It keeps the generic `settings` table (S2) and `/auth/config` features (S6) as core pieces; the counts column in lists, unread marks per thread, and folder and item locks remain for later phases.
 
 The goal is a collaborative DMS. People can discuss a document or list item where it lives, pull a colleague in with an @mention, and turn a discussion into a task. Mentions, replies and resolved threads reach people through the same inbox as tasks.
 

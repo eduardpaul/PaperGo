@@ -8,14 +8,15 @@ The model and its rules live in `internal/notify`, shared by tasks, workflow run
 
 | Field | Meaning |
 | --- | --- |
-| `type` | `message` (sent by a person or a workflow), `task.assigned`, `task.completed` or `workflow.failed` |
+| `type` | `message` (sent by a person or a workflow), `task.assigned`, `task.completed`, `workflow.failed`, `comment.mentioned` or `comment.replied` |
 | `title`, `body` | plain text of up to 300 and 4,000 characters, never rendered as HTML |
 | `workspace_id` | the workspace it concerns |
-| `item_id`, `task_id` or `run_id` | what it opens, at most one |
+| `item_id`, `task_id` or `run_id` | what it opens, at most one; `comment_id` also opens a comment's thread on `item_id` |
 | `source` | `user`, `workflow` or `system` |
 | `sender` | who sent it, or who caused what it reports |
 | `workflow_id` | the workflow that sent it |
-| `created_at`, `read_at` | when it arrived and when it was read |
+| `count` | how many notifications it stands for: replies to a thread fold into one while it is unread |
+| `created_at`, `read_at` | when it arrived, or the latest one it folds in, and when it was read |
 
 ## Rules
 
@@ -32,6 +33,8 @@ The model and its rules live in `internal/notify`, shared by tasks, workflow run
 | `task.assigned` | a task is created, or reassigned | each person its assignees name, members of an assigned group included, who can review it; a reassignment tells only the people it adds. The person who assigned it is not told, unless a workflow created the task. |
 | `task.completed` | a person's task is answered | its creator, unless they answered it. The body names who answered, the outcome and the comment. A workflow's task tells nobody: its workflow decides what follows. |
 | `workflow.failed` | a run fails | the author of the run's workflow version, or the workspace's owners for a system built-in. Each workflow version tells each person at most once an hour, so a failing automatic workflow does not flood inboxes; the workflow's runs list every failure. Test runs tell nobody. |
+
+[Comments](comments.md#notifications) tell people they mention (`comment.mentioned`) and a thread's participants of replies (`comment.replied`).
 
 Anything else a process wants to tell people, such as "your document was published", is a message a workflow sends, where people can see and change it.
 
@@ -93,4 +96,4 @@ A deleted notification's frame carries only its `id` and the new count, and reac
 
 ## Web app
 
-The bell in the top bar shows the unread count and the latest notifications; **Mark all read** clears the count. **View all notifications** (or `g` then `n`) opens the Notifications page, with All and Unread views, where each notification can be deleted. Opening a notification marks it read and goes to its task, its item in its list or library, or its run.
+The bell in the top bar shows the unread count and the latest notifications, a folded one with how many it stands for; **Mark all read** clears the count. **View all notifications** (or `g` then `n`) opens the Notifications page, with All, Unread and Mentions views, where each notification can be deleted. Opening a notification marks it read and goes to its task, its item in its list or library (on its Discussion tab for a comment), or its run.
