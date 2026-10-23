@@ -32,6 +32,11 @@ func TestConfigure(t *testing.T) {
 	if err != nil || tools.AppURL.String() != "https://papergo.example" {
 		t.Fatalf("%+v %v", tools, err)
 	}
+	// The web app's origin may check connections from the browser.
+	if cfg, _, _, _, _ := configure(environment(map[string]string{"PAPERGO_MCP_BACKEND_URL": "http://papergo:8080",
+		"PAPERGO_MCP_APP_URL": "http://localhost:8080"})); !strings.Contains(strings.Join(cfg.AllowedOrigins, ","), "http://localhost:8080") {
+		t.Fatalf("app origin not allowed: %v", cfg.AllowedOrigins)
+	}
 	if _, tools, _, _, err = configure(environment(map[string]string{"PAPERGO_MCP_BACKEND_URL": "http://papergo:8080"})); err != nil || tools.AppURL != nil {
 		t.Fatalf("%+v %v", tools, err)
 	}

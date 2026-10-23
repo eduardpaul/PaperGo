@@ -4,10 +4,16 @@ export type AuthenticationMode = 'bearer' | 'proxy' | 'local';
 
 let mode: AuthenticationMode = 'bearer';
 let oidc: OidcSignIn | null = null;
+let mcp: string | null = null;
 const TokenKey = 'papergo.token';
 
 export function authenticationMode(): AuthenticationMode {
   return mode;
+}
+
+/** Where AI assistants reach this deployment's MCP server; null when it runs none. */
+export function mcpEndpoint(): string | null {
+  return mcp;
 }
 
 /** The provider sign-in of OIDC deployments that advertise a browser client; null otherwise. */
@@ -30,6 +36,16 @@ function oidcSettings(value: unknown): OidcSettings | null {
   return { issuer, client_id, scope };
 }
 
+function mcpSetting(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Initialize before mounting the router; never render the app with unknown server capabilities. */
 export async function loadAuthentication() {
   const response = await fetch('/auth/config', { credentials: 'same-origin', cache: 'no-store' });
@@ -42,6 +58,7 @@ export async function loadAuthentication() {
   const settings = reported === 'bearer' ? oidcSettings((config as { oidc?: unknown }).oidc) : null;
   mode = reported;
   oidc = null;
+  mcp = mcpSetting((config as { mcp_url?: unknown }).mcp_url);
   if (mode === 'proxy' || mode === 'local') clearToken();
   if (settings) {
     // Loaded only by deployments that sign in at an identity provider.

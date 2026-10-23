@@ -71,7 +71,7 @@ func (s *Server) RequestTimeout() time.Duration { return s.cfg.RequestTimeout }
 // Handler serves /v1/mcp, /health/live and /health/ready.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.Handle(Path, s.observe(s.admit(s.endpoint())))
+	mux.Handle(Path, s.observe(s.cors(s.admit(s.endpoint()))))
 	mux.HandleFunc("GET /health/live", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	mux.HandleFunc("GET /health/ready", func(w http.ResponseWriter, r *http.Request) {
 		if err := s.rest.ready(r.Context()); err != nil {
@@ -148,6 +148,32 @@ func (s *Server) admit(next http.Handler) http.Handler {
 		ctx, cancel := context.WithTimeout(r.Context(), s.cfg.RequestTimeout)
 		defer cancel()
 		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// cors lets a page of an allowed origin, such as PaperGo's web app checking
+// a new connection, call the endpoint from a browser: it answers preflights
+// and names the origin on responses. Credentials are bearer tokens, never
+// cookies. Other origins are refused by endpoint; native clients send none.
+func (s *Server) cors(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		o := r.Header.Get("Origin")
+		if o == "" || !s.origins[strings.ToLower(o)] {
+			next.ServeHTTP(w, r)
+			return
+		}
+		h := w.Header()
+		h.Set("Access-Control-Allow-Origin", o)
+		h.Add("Vary", "Origin")
+		h.Set("Access-Control-Expose-Headers", "WWW-Authenticate, X-Request-ID")
+		if r.Method == http.MethodOptions && r.Header.Get("Access-Control-Request-Method") != "" {
+			h.Set("Access-Control-Allow-Methods", "POST")
+			h.Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, MCP-Protocol-Version")
+			h.Set("Access-Control-Max-Age", "600")
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
 	})
 }
 

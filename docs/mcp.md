@@ -24,13 +24,15 @@ Every release archive contains `papergo-mcp` beside `papergo`. Point it at the A
 PAPERGO_MCP_BACKEND_URL=http://127.0.0.1:8080 ./papergo-mcp
 ```
 
+Then tell PaperGo where people's assistants reach it, so its web app offers connections: set `MCP_PUBLIC_URL` to the endpoint's public URL, such as `https://papergo.example.com/v1/mcp`, or `mcp.public_url` in `config.yaml`. It is an absolute `http` or `https` URL ending in `/v1/mcp`.
+
 | Setting | Meaning |
 | --- | --- |
 | `PAPERGO_MCP_BACKEND_URL` | Required. The PaperGo API's origin, without path, query or credentials. `https`, or `http` only to a loopback or private address or a single-label host such as a Compose service name. |
 | `PAPERGO_MCP_LISTEN` | Address to listen on. Default `127.0.0.1:8081`; the container image sets `0.0.0.0:8081`. |
 | `PAPERGO_MCP_PUBLIC_URL` | The endpoint's public URL, ending in `/v1/mcp`, when clients reach it through a reverse proxy. `https` unless on loopback. Browser requests from its origin are accepted, and results link to the web app at its origin unless `PAPERGO_MCP_APP_URL` says otherwise. |
 | `PAPERGO_MCP_APP_URL` | The web app's origin, such as `https://papergo.example.com`, that results link to. Defaults to `PAPERGO_MCP_PUBLIC_URL`'s origin; without either, results carry no links. `https`, or `http` only to a loopback, private or single-label host. |
-| `PAPERGO_MCP_ALLOWED_ORIGINS` | Further browser origins allowed to call the endpoint, comma-separated, such as `https://app.example`. Clients outside a browser send no origin and need none. |
+| `PAPERGO_MCP_ALLOWED_ORIGINS` | Further browser origins allowed to call the endpoint, comma-separated, such as `https://app.example`. The web app's origin, from `PAPERGO_MCP_APP_URL` or `PAPERGO_MCP_PUBLIC_URL`, is always allowed. Clients outside a browser send no origin and need none. |
 | `PAPERGO_MCP_ENABLED_EXTENSIONS` | Compiled tool contributions to serve, by ID, comma-separated. None ship today. |
 
 There is no setting for a backend token: the server only relays its callers' credentials. Logs are JSON lines on standard output, one per request, with its request ID, status, duration, tool, failure code and the API request IDs it caused. They never contain credentials, arguments or results.
@@ -41,7 +43,7 @@ There is no setting for a backend token: the server only relays its callers' cre
 
 Every release publishes the server's own image for Linux amd64 and arm64, `ghcr.io/eduardpaul/papergo-mcp:vX.Y.Z` and `:latest`. It contains only the static executable; build it from the repository root with `docker build -f extensions/mcp/Dockerfile -t papergo-mcp .`.
 
-The [Compose file](../deploy/compose.yaml) has a `papergo-mcp` service, commented out. Uncommented, it serves the endpoint at `http://localhost:8090/v1/mcp` and links results to the web app at `http://localhost:8080`. Behind a reverse proxy, run it on the private network without a published port and set its public URL:
+The [Compose file](../deploy/compose.yaml) has a `papergo-mcp` service and PaperGo's `MCP_PUBLIC_URL`, both commented out. Uncommented, the server answers at `http://localhost:8090/v1/mcp`, links results to the web app at `http://localhost:8080`, and the web app offers connections to it. Behind a reverse proxy, run it on the private network without a published port and set its public URL, and PaperGo's `MCP_PUBLIC_URL`, to the proxied address:
 
 ```yaml
   papergo-mcp:
@@ -100,7 +102,11 @@ OAuth sign-in is not offered: the server publishes no OAuth metadata, so clients
 
 ## Connecting a client
 
-The simplest way is **Settings → AI assistants** in the web app. **Connect an assistant** asks for a name and **Read only** or **Read and write**, and creates a connection that reaches everything you can access. Under **Advanced options**, **Only selected workspaces, lists and libraries** limits it to the places you pick, and you choose when it expires. The page then shows the endpoint, `https://<your PaperGo host>/v1/mcp`, the token once, and setup ready to copy for Claude Code and for clients configured with JSON. **Your connections** lists the tokens that can connect an assistant, what they reach and when they were last used, and revokes them.
+The simplest way is **Settings → AI assistants** in the web app. It offers connections when PaperGo's `MCP_PUBLIC_URL` setting (`mcp.public_url` in `config.yaml`) names this server's public endpoint; otherwise it says that an administrator has to set one up. **Connect an assistant** asks for a name, **Read only** or **Read and write**, and whether it reaches **everything you can access** or **only selected workspaces, lists and libraries**, picked by name; **Advanced options** set when it expires. A summary shows the access, places and expiry before anything is created.
+
+Creating the connection creates its token, shown once, and then checks the connection: the browser asks the endpoint to start a session with the new token, as an assistant would, and says whether it answered. A token that cannot reach the endpoint still exists and still works once the address is right; **Check again** repeats the check. Setup is ready to copy for Claude Code, Cursor, VS Code and other clients that send a header. **Your connections** lists the tokens that can connect an assistant with the places they reach by name, whether they have been used, when they expire or expired, and revokes them after asking.
+
+The browser's check comes from the web app's origin. papergo-mcp accepts it from the origin of `PAPERGO_MCP_APP_URL` (or `PAPERGO_MCP_PUBLIC_URL`) and from `PAPERGO_MCP_ALLOWED_ORIGINS`, answering the browser's preflight; other origins are refused.
 
 A connection is a personal access token, so you can also create one under Settings → Access tokens or with `POST /v1/identity/me/tokens`, with the scopes above and, to limit it, [`resources`](identity.md). The token carries the limit, so PaperGo enforces it for every request, whichever client sends it: a limited connection lists only the workspaces and collections it reaches, finds and reads nothing elsewhere, and `labels` leave out the names of linked items outside it. `GET /v1/identity/me` with the token reports its limit.
 

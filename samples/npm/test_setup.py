@@ -68,6 +68,7 @@ class SingleBinaryTests(unittest.TestCase):
         self.assertIn('  proxy_trusted_cidrs:\n    - "10.90.0.2/32"', config)
         self.assertIn('  store: zvec', config)
         self.assertIn('  admin_user: "papergo-admin"', config)
+        self.assertIn('mcp:\n  public_url: "https://docs.example.com/v1/mcp"', config)
 
     def test_assistants_reach_the_mcp_server_past_the_access_list(self):
         compose = (Path(__file__).parent / 'compose.yaml').read_text()

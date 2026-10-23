@@ -2,8 +2,8 @@ package integration
 
 import (
 	"context"
-	"fmt"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -68,6 +68,27 @@ func TestOrigins(t *testing.T) {
 		if r.StatusCode != want {
 			t.Errorf("%s: %d, want %d", origin, r.StatusCode, want)
 		}
+	}
+	// An allowed page, such as PaperGo's web app checking a new connection,
+	// may call from the browser: preflights are answered and responses name
+	// its origin. Other origins get neither.
+	for origin, want := range map[string]int{"https://app.example": 204, "https://evil.example": 403} {
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodOptions, e.endpoint(), nil)
+		req.Header.Set("Origin", origin)
+		req.Header.Set("Access-Control-Request-Method", "POST")
+		req.Header.Set("Access-Control-Request-Headers", "authorization, content-type, mcp-protocol-version")
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		allowed := res.Header.Get("Access-Control-Allow-Origin")
+		if res.StatusCode != want || (want == 204) != (allowed == origin) || want == 204 && !strings.Contains(res.Header.Get("Access-Control-Allow-Headers"), "Authorization") {
+			t.Errorf("preflight from %s: %d %v", origin, res.StatusCode, res.Header)
+		}
+	}
+	if r := post(t, e, list, map[string]string{"Authorization": auth, "Origin": "https://app.example", "MCP-Protocol-Version": "2025-06-18"}); r.Header.Get("Access-Control-Allow-Origin") != "https://app.example" {
+		t.Errorf("response to an allowed page: %v", r.Header)
 	}
 	// A browser's cross-site request without an Origin is refused too.
 	if r := post(t, e, list, map[string]string{"Authorization": auth, "Sec-Fetch-Site": "cross-site"}); r.StatusCode != 403 {

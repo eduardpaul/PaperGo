@@ -21,8 +21,11 @@ Decisions:
 - **Places are workspaces, lists and libraries.** A workspace includes the
   lists and libraries created in it later. Folders are not a unit.
 - **One access level per connection:** read only, or read and write.
-- **The endpoint is the app's own host:** `https://<app host>/v1/mcp`, the
-  documented layout. There is no setting for another address.
+- **PaperGo knows the endpoint:** its `MCP_PUBLIC_URL` setting names where
+  assistants connect, and the web app offers connections only when it is
+  set. Creating a connection and checking it are separate steps: the
+  browser asks the endpoint to start a session with the new token, and
+  papergo-mcp accepts that from the web app's origin.
 - **Proxy deployments work too.** People signed in through the proxy create
   personal tokens, which the API now accepts in every mode; the proxy routes
   exactly `/v1/mcp` past its Basic sign-in to papergo-mcp, as the NPM

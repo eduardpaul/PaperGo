@@ -118,6 +118,11 @@ func configure(env func(string) string) (cfg server.Config, tools builtin.Option
 	if cfg.AllowedOrigins, err = server.ParseOrigins(env("PAPERGO_MCP_ALLOWED_ORIGINS")); err != nil {
 		return fail("PAPERGO_MCP_ALLOWED_ORIGINS", err)
 	}
+	// The web app checks the connections it creates from the browser; the
+	// public URL's origin is allowed already.
+	if tools.AppURL != nil && (cfg.PublicURL == nil || *server.AppOrigin(cfg.PublicURL) != *server.AppOrigin(tools.AppURL)) {
+		cfg.AllowedOrigins = append(cfg.AllowedOrigins, strings.ToLower(server.AppOrigin(tools.AppURL).String()))
+	}
 	listen = env("PAPERGO_MCP_LISTEN")
 	if listen == "" {
 		listen = "127.0.0.1:8081"

@@ -8,6 +8,9 @@ services:
     environment:
       AUTH_MODE: local
       ADMIN_PASSWORD_FILE: /run/secrets/admin-password
+      # With the papergo-mcp service below, tells the web app where AI
+      # assistants connect, so Settings → AI assistants offers connections.
+      # MCP_PUBLIC_URL: http://localhost:${PAPERGO_MCP_PORT:-8090}/v1/mcp
     secrets: [admin-password]
     volumes:
       - papergo-data:/data
@@ -22,9 +25,10 @@ services:
       options: {max-size: 10m, max-file: "3"}
 
   # The optional MCP server, which lets AI assistants use PaperGo with a
-  # person's access token (docs/mcp.md). Uncomment to serve it at
-  # http://localhost:8090/v1/mcp; behind a reverse proxy, route /v1/mcp to it
-  # instead of publishing a port and set PAPERGO_MCP_PUBLIC_URL.
+  # person's access token (docs/mcp.md). Uncomment it and MCP_PUBLIC_URL
+  # above to serve it at http://localhost:8090/v1/mcp; behind a reverse
+  # proxy, route /v1/mcp to it instead of publishing a port and set both
+  # public URLs to that address.
   # papergo-mcp:
   #   image: ghcr.io/eduardpaul/papergo-mcp:${PAPERGO_VERSION:-latest}
   #   ports:
