@@ -19,6 +19,7 @@ import { useFormat } from '@/lib/preferences';
 import { cn } from '@/lib/utils';
 import { usePeopleNames } from '@/features/fields/people';
 import { FileTypeIcon, fileTypeLabel } from './file-types';
+import { OpenInOffice } from './office';
 import { comparable, TextCompareDialog } from './text-compare';
 import { fileRef, fileSource, handlerFor, type EditSession, type FileRef } from './handlers';
 import { HandlerBoundary, typing, useViewerKeys, ViewerMessage } from './viewer-kit';
@@ -276,6 +277,7 @@ export function FileViewer({
             </Button>
           </div>
         )}
+        {item && !file?.earlier && <OpenInOffice item={item} collection={collection} className="hidden sm:inline-flex" />}
         {canEdit && !edit && (
           <Button variant="secondary" onClick={() => onEdit(true)} title="Edit (E)">
             <Pencil /> <span className="hidden sm:inline">Edit</span>

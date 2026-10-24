@@ -1,6 +1,6 @@
 // Package textfiles makes Markdown and plain text files first-class: it
-// names them when they are stored and reads their text for search and
-// workflows. It plugs into the storage file type registry and the doctext
+// names them when they are stored and reads their text, and that of CSV
+// files, for search and workflows. It plugs into the storage file type registry and the doctext
 // reader registry, so core knows text files only through those sockets.
 package textfiles
 
@@ -18,6 +18,8 @@ import (
 const (
 	Markdown = "text/markdown"
 	Plain    = "text/plain"
+	// CSV is named by storage; this package reads its text.
+	CSV = "text/csv"
 )
 
 // PageChars bounds a page of text, so long files read as several pages and
@@ -34,6 +36,7 @@ func Register() {
 		storage.RegisterFileType(storage.FileType{Media: Plain, Label: "Text file", Family: "text", Extensions: []string{".txt", ".log"}, Text: true})
 		doctext.RegisterReader(Markdown, Read)
 		doctext.RegisterReader(Plain, Read)
+		doctext.RegisterReader(CSV, Read)
 	})
 }
 

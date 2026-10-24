@@ -7,6 +7,8 @@ import type { FileSummary } from '@/api/types';
 import { editableFile, FileAction, FileLinksProvider, useClickOrOpenFile, viewable } from './file-action';
 import { fileFamily, fileTypeLabel } from './file-types';
 import { fileRef, fileSource, handlerFor } from './handlers';
+import { detectDelimiter, parseCsv } from './csv';
+import { officeApp, officeUri } from './office';
 import { comparable } from './text-compare';
 import { pagesMatching } from './text-find';
 
@@ -135,4 +137,24 @@ it('compares only text versions', () => {
   expect(comparable('text/markdown')).toBe(true);
   expect(comparable('text/plain')).toBe(true);
   expect(comparable('application/pdf')).toBe(false);
+});
+
+it('parses CSV with quotes, line breaks in cells and the delimiter in use', () => {
+  expect(parseCsv('﻿name,amount\r\n"ACME, Inc.",12\n"He said ""hi""\nthere",3\n')).toEqual({
+    rows: [['name', 'amount'], ['ACME, Inc.', '12'], ['He said "hi"\nthere', '3']],
+    delimiter: ',',
+    truncated: false,
+  });
+  expect(detectDelimiter('a;b;c\n1;2;3\n')).toBe(';');
+  expect(detectDelimiter('a\tb\n"x,y"\tz\n')).toBe('\t');
+  expect(parseCsv('a,b\n1,2', ',').rows).toEqual([['a', 'b'], ['1', '2']]);
+  expect(parseCsv('1\n2\n3\n4\n', ',', 2)).toEqual({ rows: [['1'], ['2']], delimiter: ',', truncated: true });
+  expect(handlerFor({ contentType: 'text/csv', filename: 'a.csv' })?.id).toBe('csv');
+  expect(handlerFor({ contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', filename: 'a.docx' })?.id).toBe('docx');
+});
+
+it('opens Office files in their desktop app over WebDAV', () => {
+  expect(officeApp('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')?.name).toBe('Excel');
+  expect(officeApp('application/pdf')).toBeUndefined();
+  expect(officeUri(officeApp('application/msword')!, 'https://papergo.example/webdav/lib/Contracts/Lease%202026.docx')).toBe('ms-word:ofe|u|https://papergo.example/webdav/lib/Contracts/Lease%202026.docx');
 });

@@ -10,6 +10,7 @@ import type { Resource, Workflow, WorkflowAction } from '@/api/types';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuShortcut, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { downloadContent } from '@/features/documents/transfer';
 import { editableFile, useOpenFile, viewable } from '@/features/files/file-action';
+import { useOfficeLink } from '@/features/files/office';
 import { ConfirmDialog } from '@/features/settings/section';
 import { AddToSmartFolder } from '@/features/smart-folders/classification';
 import { api } from '@/api/http';
@@ -47,6 +48,7 @@ export function ItemContextMenu({ item, collection, selection = [item], onSelect
         {!bulk && item.kind === 'folder' && <ContextMenuItem onSelect={() => onOpen(fresh)}>Open</ContextMenuItem>}
         {!bulk && viewable(fresh) && <ContextMenuItem onSelect={() => openFile(fresh)}>Open file<ContextMenuShortcut>O</ContextMenuShortcut></ContextMenuItem>}
         {!bulk && can(fresh, 'write') && editableFile(fresh) && <ContextMenuItem onSelect={() => openFile(fresh, { edit: true })}>Edit file</ContextMenuItem>}
+        {!bulk && fresh.file && <OfficeMenuItem item={fresh} collection={collection} />}
         {!bulk && fresh.file && <ContextMenuItem onSelect={() => void downloadContent(fresh.id, fresh.file?.filename ?? fresh.name)}>Download<ContextMenuShortcut>D</ContextMenuShortcut></ContextMenuItem>}
         {!bulk && <ContextMenuItem onSelect={() => onDetails(fresh)}>Details<ContextMenuShortcut>Enter</ContextMenuShortcut></ContextMenuItem>}
         {writable && <>
@@ -76,4 +78,11 @@ export function ItemContextMenu({ item, collection, selection = [item], onSelect
     {launching && <LaunchWorkflow workflow={launching} itemIds={items.map(item => item.id)} fixedSelection={items} onClose={() => setLaunching(undefined)} />}
     <ConfirmDialog open={dialog === 'delete'} onOpenChange={value => !value && setDialog(undefined)} title={bulk ? `Delete ${items.length} selected entries?` : `Delete “${fresh.name}”?`} description="Folders include their contents. You can restore entries from the recycle bin." confirm="Delete" busy={remove.isPending} error={remove.error} onConfirm={() => remove.mutate()} />
   </>;
+}
+
+/** Open in Word and the like, for Office files in libraries shared over WebDAV. */
+function OfficeMenuItem({ item, collection }: { item: Resource; collection: Resource }) {
+  const link = useOfficeLink(item, collection);
+  if (!link) return null;
+  return <ContextMenuItem onSelect={() => window.location.assign(link.href)}>Open in {link.app.name}</ContextMenuItem>;
 }

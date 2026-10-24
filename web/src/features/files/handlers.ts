@@ -101,6 +101,9 @@ const images = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 
 registerFileHandler({ id: 'pdf', accepts: (file) => file.contentType === 'application/pdf', View: lazy(() => import('./handlers/pdf')) });
 registerFileHandler({ id: 'image', accepts: (file) => images.has(file.contentType), View: lazy(() => import('./handlers/image')) });
+// Word documents are laid out in the browser, in a frame that runs no scripts.
+registerFileHandler({ id: 'docx', accepts: (file) => file.contentType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', View: lazy(() => import('./handlers/docx')) });
+registerFileHandler({ id: 'csv', accepts: (file) => file.contentType === 'text/csv', View: lazy(() => import('./handlers/csv')) });
 // Browsers cannot decode TIFF; the server renders each page of a scan.
 registerFileHandler({ id: 'pages', accepts: (file) => file.contentType === 'image/tiff', View: lazy(() => import('./handlers/pages')) });
 registerFileHandler({ id: 'markdown', accepts: (file) => file.contentType === 'text/markdown', View: lazy(() => import('./handlers/markdown')), editable: true });

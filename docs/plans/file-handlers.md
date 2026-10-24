@@ -1,14 +1,17 @@
 # File handlers (plan)
 
-Status: **phases 1, 2, 2b and 3 implemented**: the viewer, the PDF, image
-and TIFF handlers, every way to open a file, the file summary on rows, any
-file stored, Markdown and plain text viewed, edited and compared, page
-renditions, find in scanned pages, and the organization's trusted hosts, as
+Status: **phases 1 to 4 implemented, except comments anchored to a PDF
+page or region**, which need a core extension point that awaits a decision.
+Implemented: the viewer and its PDF, image, TIFF, Markdown, text, Word and
+CSV handlers, every way to open a file, the file summary on rows, any file
+stored, Markdown and plain text edited and compared, page renditions, find
+in scanned pages, Office text for search, Open in Word, Excel and
+PowerPoint, and the organization's trusted hosts, as
 [Viewing files](../documents.md#viewing-files),
 [File types](../documents.md#file-types),
 [Page renditions](../previews.md#page-renditions) and
-[Trusted hosts](../trusted-hosts.md) describe. Phase 4 is next. The product
-owner settled every decision ([below](#decisions)).
+[Trusted hosts](../trusted-hosts.md) describe. The product owner settled
+every other decision ([below](#decisions)).
 
 What phase 1 learned:
 - PDF.js 6 uses JavaScript features that browsers shipped only recently, so the viewer loads its legacy build, which carries their polyfills.
@@ -30,6 +33,11 @@ What phase 3 learned:
 - Page renditions render on request rather than as stored operations: a scan is read page by page as people scroll, and a small in-memory cache and fixed widths make repeat views free. Nothing new is stored, so nothing needs cleaning up.
 - Scanned pages have no text layer, so find cannot highlight in them. It names the pages whose read text matches instead and goes to them; a file whose text was never read says so.
 - A handler shown outside the viewer, as in a review, would take the page's keys (Ctrl+F among them), so handlers take keys only from inside the box that holds them there.
+
+What phase 4 learned:
+- docx-preview empties the containers it draws into, so the Word frame keeps its own styles apart from them. The frame is sandboxed without scripts and same-origin, so the app draws into it and handles its link clicks under the trusted-hosts rule, and the browser's own find works inside it.
+- Office text reading needed no core change: `internal/officefiles` registers doctext readers, as `textfiles` does, and the search workflow lists the types; a type without a reader is skipped with 415.
+- Open in Word needs only the library's WebDAV address and the folder names above the item, so it is a web feature; Office's own lock files were already kept out of the library.
 
 The goal has three parts:
 - **PaperGo stores any file.**

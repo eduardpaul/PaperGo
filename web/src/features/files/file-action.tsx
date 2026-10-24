@@ -13,6 +13,7 @@ import { useFormat } from '@/lib/preferences';
 import { cn } from '@/lib/utils';
 import { FileTypeIcon, fileFamily, fileTypeLabel } from './file-types';
 import { handlerFor } from './handlers';
+import { OpenInOffice } from './office';
 
 /** An item with the fields that locate and describe its file. */
 export type FileItem = Pick<Resource, 'id' | 'workspace_id' | 'container_id' | 'name'> & { file?: FileSummary | null };
@@ -178,7 +179,7 @@ function TextExcerpt({ item, className, iconClassName }: { item: FileItem; class
  * file is one click from the details: a thumbnail that opens it, what it is,
  * and Open or Download.
  */
-export function FileBar({ item, draft, canWrite, onUpload }: { item: FileItem; draft?: boolean; canWrite?: boolean; onUpload?: () => void }) {
+export function FileBar({ item, collection, draft, canWrite, onUpload }: { item: FileItem & { parent_id?: string }; collection?: Pick<Resource, 'id' | 'webdav_enabled'>; draft?: boolean; canWrite?: boolean; onUpload?: () => void }) {
   const link = useOpenFileLink();
   const format = useFormat();
   const file = item.file;
@@ -227,6 +228,7 @@ export function FileBar({ item, draft, canWrite, onUpload }: { item: FileItem; d
           <Pencil /> Edit
         </Link>
       )}
+      <OpenInOffice item={item} collection={collection} className="hidden sm:inline-flex" />
       <FileAction item={item} variant="button" />
       {open && (
         <button type="button" aria-label={`Download ${file.filename}`} title="Download (D)" className={buttonVariants({ variant: 'ghost', size: 'icon' })} onClick={() => void downloadContent(item.id, file.filename)}>

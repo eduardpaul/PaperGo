@@ -193,7 +193,7 @@ export function ItemPanel({
         </header>
         {item && isFile && sheet && (
           <>
-            <FileBar item={item} draft={publishState(item, !!collection.publishing_enabled) === 'Draft'} canWrite={canWrite} onUpload={() => replaceInput.current?.click()} />
+            <FileBar item={item} collection={collection} draft={publishState(item, !!collection.publishing_enabled) === 'Draft'} canWrite={canWrite} onUpload={() => replaceInput.current?.click()} />
             <ReplaceInput input={replaceInput} onFile={(file) => replaceFile.mutate(file)} />
           </>
         )}

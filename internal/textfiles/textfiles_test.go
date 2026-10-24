@@ -22,7 +22,7 @@ func TestTextFilesAreNamedAndRead(t *testing.T) {
 	if got := storage.Identify([]byte{0, 1, 2}, "binary.txt"); got != storage.OctetStream {
 		t.Fatal("binary text names stay binary", got)
 	}
-	if !doctext.Supported(Markdown) || !doctext.Supported(Plain) {
+	if !doctext.Supported(Markdown) || !doctext.Supported(Plain) || !doctext.Supported(CSV) {
 		t.Fatal("readers registered")
 	}
 	read, err := doctext.Extract(t.Context(), []byte("\uFEFFHello\r\nwörld \xff"), Markdown, doctext.Options{}, nil, nil)

@@ -53,6 +53,8 @@ Web numeric transport, long tables and component tests use these direct packages
 | `oidc-client-ts` | web sign-in at the OIDC provider: authorization code with PKCE, refresh and sign-out (brings `jwt-decode`, MIT) | Apache-2.0 |
 | `@tanstack/react-virtual` | rendering only the visible rows of long list tables | MIT |
 | `pdfjs-dist` | the PDF file handler: rendering, text layer and find, loaded only when a PDF opens; its legacy build carries the polyfills older browsers need, and its CMaps, standard fonts, ICC profiles and image decoders ship as versioned assets | Apache-2.0 |
+| `docx-preview` | the Word file handler: laying out `.docx` pages in the browser, loaded only when a Word file opens | Apache-2.0 |
+| `jszip` | reading the `.docx` archive for `docx-preview` | MIT (dual-licensed MIT or GPL-3.0; used under MIT) |
 | `react-markdown`, `remark-gfm` | the Markdown file handler: rendering GitHub-flavoured Markdown (tables, task lists, strikethrough) to React elements without raw HTML, loaded only when a Markdown file opens | MIT |
 | `@testing-library/react` | tests of rendered forms and user interactions | MIT |
 | `jsdom` | DOM environment for component tests | MIT |

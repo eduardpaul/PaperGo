@@ -46,6 +46,8 @@ The web app opens an item's whole file full screen, above the list it belongs to
 - **TIFF scans:** every page, as page images the server renders at the width the screen needs, with page numbers, zoom, rotation and find in their read text.
 - **Markdown:** rendered with GitHub syntax (tables, task lists, strikethrough), with an outline of its headings on wide screens. Raw HTML shows as text.
 - **Plain text:** with line numbers, or wrapped to the window.
+- **Word documents** (`.docx`): laid out in the browser with pages, fonts, tables, headers, footers and footnotes, inside a frame that runs no scripts. The layout is close to Word's but simplified: fields, tracked changes, comments and floating objects may differ, as the viewer notes. Links in the document follow trusted hosts.
+- **CSV files:** as a table, with the first row naming the columns (switchable), numbered rows, a row filter, and the delimiter (comma, semicolon or tab) detected. Files up to 20 MB and their first 100,000 rows are shown.
 
 A file no handler shows offers **Download**, with its type's icon and name.
 
@@ -71,6 +73,10 @@ People who may write an item edit its Markdown or text file in the viewer: **Edi
 
 Text files show their first lines as their thumbnail in galleries and on the file bar.
 
+### Opening in Word, Excel and PowerPoint
+
+In a library shared over [WebDAV](../README.md#webdav), Word, Excel and PowerPoint files (including the older `.doc`, `.xls` and `.ppt`) offer **Open in Word**, **Open in Excel** or **Open in PowerPoint**: in the viewer, on the file bar and in the right-click menu. It opens the file from its WebDAV address in the desktop app installed on the computer (`ms-word:ofe|u|https://<host>/webdav/<library>/<folders>/<name>`), which signs in to WebDAV as usual. Each save in the app is a new file version, with the library's permissions, publishing and workflows, and Office's lock files never become items.
+
 ### Comparing versions
 
 Markdown and text files compare any earlier version with the current file, line by line and side by side (inline on narrow screens), with the number of changes and buttons to step through them: **Compare** on a version in the File tab, or **Compare with the current file** while viewing an earlier version.
@@ -85,6 +91,8 @@ When a workflow asks someone to review a file it made, such as a PDF composed fr
 
 - **PDFs:** each page's text layer is read with the linked PDFium SDK. With `ocr: auto`, a page without a text layer is rendered at 200 DPI and read by [OCR](ocr.md); `always` OCRs every page; `never` reads text layers only. PaperGo's own searchable PDFs (Photos to PDF) carry their OCR text, so they are not OCRed again.
 - **Images** (JPEG, PNG and WebP) are turned upright and read by OCR, and so is every page of a TIFF, up to `max_pages`.
+- **Text, Markdown and CSV files** are read as text, in pages of 20,000 characters.
+- **Word, Excel and PowerPoint files** (`.docx`, `.xlsx`, `.pptx`) are read without OCR: a Word document's paragraphs and tables (cells separated by tabs), footnotes and endnotes, with a new page at each page break it holds; each worksheet as a page, named first, with its rows as lines; each slide as a page, with its speaker notes. Reading is bounded, so a damaged or oversized file fails or is truncated rather than exhausting the server.
 - **Without OCR** configured, `auto` reads text layers only and counts the pages it could not read in `skipped_pages`; `always` is refused.
 - **Language:** the file's language hint (`languages` on upload, `X-OCR-Languages`) when it names one language, else the language detected among the hinted ones or `SEARCH_LANGUAGES`, else none.
 

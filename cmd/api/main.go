@@ -30,6 +30,7 @@ import (
 	"papergo/internal/identity"
 	"papergo/internal/integration"
 	"papergo/internal/ocr"
+	"papergo/internal/officefiles"
 	"papergo/internal/readiness"
 	"papergo/internal/scriptrun"
 	"papergo/internal/search"
@@ -223,8 +224,9 @@ func run(log *slog.Logger) error {
 		}
 	}
 	workflows := &workflow.Service{DMS: service, OCR: reader != nil}
-	// Markdown and text files are named and their text read.
+	// Markdown, text, CSV and Office files have their text read.
 	textfiles.Register()
+	officefiles.Register()
 	feats := features{
 		text:    &documenttext.Reader{Storage: store, PDF: pdf, OCR: reader, Languages: c.SearchLanguages},
 		preview: &documentpreview.Renderer{Storage: store, PDF: pdf},

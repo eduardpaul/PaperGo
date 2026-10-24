@@ -1,5 +1,6 @@
 // Indexes file content: reads the text of a PDF, an image (OCR for scans
-// and photos when configured) or a text file, splits it into chunks, embeds them for
+// and photos when configured), a text or CSV file, or a Word, Excel or
+// PowerPoint file, splits it into chunks, embeds them for
 // semantic search when an embedding model is configured, and makes them the
 // file's searchable content.
 import { OperationError, plain, workflow } from "@papergo/workflow";
@@ -16,7 +17,19 @@ interface Params {
 }
 
 // The kinds of file whose text PaperGo reads; other files start no run.
-const files = ["application/pdf", "image/jpeg", "image/png", "image/webp", "image/tiff", "text/markdown", "text/plain"];
+const files = [
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/tiff",
+  "text/markdown",
+  "text/plain",
+  "text/csv",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+];
 const sources = ["upload", "webdav", "restore", "workflow", "reindex"];
 
 export default workflow<unknown, unknown, Params>({

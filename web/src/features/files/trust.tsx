@@ -95,6 +95,24 @@ export function TrustedLink({ href, children }: { href?: string; children?: Reac
   );
 }
 
+/**
+ * Follows links from content PaperGo does not render itself, such as a Word
+ * document in a sandboxed frame: trusted hosts open in a new tab, others ask
+ * first. Render dialog wherever the links are.
+ */
+export function useFollowLink() {
+  const { trusted } = useTrust();
+  const [asking, setAsking] = useState<{ href: string; host: string }>();
+  const follow = (href: string) => {
+    const host = hostOf(href);
+    if (!host) return;
+    if (trusted(href)) window.open(href, '_blank', 'noopener,noreferrer');
+    else setAsking({ href, host });
+  };
+  const dialog = asking ? <LeavingDialog href={asking.href} host={asking.host} onClose={() => setAsking(undefined)} /> : null;
+  return { follow, dialog };
+}
+
 function LeavingDialog({ href, host, onClose }: { href: string; host: string; onClose: () => void }) {
   const { allowed, trust } = useTrustHost();
   return (
