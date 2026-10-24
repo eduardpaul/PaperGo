@@ -79,7 +79,9 @@ export function TextDocument({ file, source, editing, language, render, preview 
   });
   const key = draftKey(file.itemId, file.blobId);
   const [draft, setDraft] = useState<string>();
-  const [saved, setSaved] = useState<{ version: number; text: string }>();
+  const [saved, setSaved] = useState<{ blobId: string; version: number; text: string }>();
+  // The file version and item version the text being edited started from: saves send that version, so a newer file is a conflict.
+  const [base, setBase] = useState<{ blobId: string; version: number }>();
   const [declined, setDeclined] = useState(false);
   const [pane, setPane] = useState<'write' | 'preview'>('write');
   const [conflict, setConflict] = useState(false);
@@ -91,7 +93,6 @@ export function TextDocument({ file, source, editing, language, render, preview 
   const active = !!editing?.active && !!editing.allowed && !!loaded.data?.utf8;
   const text = draft ?? baseline;
   const dirty = active && draft !== undefined && draft !== baseline;
-  const version = Math.max(editing?.version ?? 0, saved?.version ?? 0);
 
   // The editor offers text this browser kept from an unsaved edit, until the person types or decides.
   const kept = active && draft === undefined && !declined ? readDraft(key) : undefined;
@@ -109,11 +110,13 @@ export function TextDocument({ file, source, editing, language, render, preview 
   }, [dirty]);
 
   const change = (value: string) => {
+    if (!base) setBase(saved ? { blobId: saved.blobId, version: saved.version } : { blobId: file.blobId, version: editing?.version ?? 0 });
     setDraft(value);
     writeDraft(key, value === baseline ? undefined : value);
   };
   const done = () => {
     setDraft(undefined);
+    setBase(undefined);
     writeDraft(key, undefined);
     editing?.setActive(false);
   };
@@ -123,20 +126,31 @@ export function TextDocument({ file, source, editing, language, render, preview 
     meta: { silent: true },
     mutationFn: async ({ body, ifMatch }: { body: string; ifMatch: number }) => (await replaceContent(file.itemId, ifMatch, asFile(body))).data,
     onSuccess: async (result, { body }) => {
-      setSaved({ version: result.resource_version, text: body });
-      // Text typed while the save was on its way stays a draft.
-      setDraft((current) => (current === body ? undefined : current));
+      setSaved({ blobId: result.id, version: result.resource_version, text: body });
+      // Text typed while the save was on its way stays a draft, now based on the saved file.
+      const rest = draftRef.current === body ? undefined : draftRef.current;
+      setDraft(rest);
+      setBase(rest === undefined ? undefined : { blobId: result.id, version: result.resource_version });
       if (readDraft(key)?.text === body) writeDraft(key, undefined);
       toast.success(`Saved · version ${result.version}`);
       await client.invalidateQueries({ queryKey: keys.resources });
     },
-    onError: (error) => {
-      if (isApiError(error, 412)) setConflict(true);
-      else toast.error(problemMessage(error));
+    onError: async (error, { body, ifMatch }) => {
+      if (!isApiError(error, 412)) return void toast.error(problemMessage(error));
+      // Only the item's details changed when its file is still the one edited: save again on the new version.
+      const latest = await client.fetchQuery({ ...resourceQuery(file.itemId), staleTime: 0 }).catch(() => undefined);
+      if (base && latest && latest.file?.blob_id === base.blobId && latest.version !== ifMatch) {
+        setBase({ blobId: base.blobId, version: latest.version });
+        save.mutate({ body, ifMatch: latest.version });
+      } else setConflict(true);
     },
   });
+  const draftRef = useRef(draft);
+  useEffect(() => {
+    draftRef.current = draft;
+  });
   const submit = () => {
-    if (dirty && !save.isPending) save.mutate({ body: text, ifMatch: version });
+    if (dirty && base && !save.isPending) save.mutate({ body: text, ifMatch: base.version });
   };
 
   useViewerKeys(
@@ -256,6 +270,7 @@ export function TextDocument({ file, source, editing, language, render, preview 
             setConflict(false);
             setSaved(undefined);
             setDraft(undefined);
+            setBase(undefined);
             writeDraft(key, undefined);
             await client.invalidateQueries({ queryKey: keys.resources });
             await client.invalidateQueries({ queryKey: ['file-text', source.url] });
@@ -265,6 +280,8 @@ export function TextDocument({ file, source, editing, language, render, preview 
           onMine={async () => {
             const latest = await client.fetchQuery({ ...resourceQuery(file.itemId), staleTime: 0 });
             setConflict(false);
+            // Theirs is the base now, so later saves conflict only with newer changes.
+            if (latest.file) setBase({ blobId: latest.file.blob_id, version: latest.version });
             save.mutate({ body: text, ifMatch: latest.version });
           }}
           onCopy={async () => {
