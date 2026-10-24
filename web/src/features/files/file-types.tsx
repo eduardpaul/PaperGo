@@ -1,55 +1,8 @@
-import { File, FileArchive, FileAudio, FileCode, FileImage, FileSpreadsheet, FileText, FileVideo, Presentation, type LucideIcon } from 'lucide-react';
+import { File, FileArchive, FileAudio, FileCode, FileImage, FileSpreadsheet, FileText, FileVideo, Mail, Presentation, type LucideIcon } from 'lucide-react';
+import { fileTypes } from '@/api/auth';
 import { cn } from '@/lib/utils';
 
-export type FileFamily = 'pdf' | 'image' | 'text' | 'document' | 'spreadsheet' | 'presentation' | 'archive' | 'audio' | 'video' | 'code' | 'file';
-
-const labels: Record<string, string> = {
-  'application/pdf': 'PDF document',
-  'image/tiff': 'TIFF image',
-  'image/jpeg': 'JPEG image',
-  'image/png': 'PNG image',
-  'image/webp': 'WebP image',
-  'image/gif': 'GIF image',
-  'text/markdown': 'Markdown document',
-  'text/plain': 'Text file',
-  'text/csv': 'CSV file',
-  'application/json': 'JSON file',
-  'application/msword': 'Word document',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'Word document',
-  'application/vnd.oasis.opendocument.text': 'OpenDocument text',
-  'application/rtf': 'Rich text document',
-  'application/vnd.ms-excel': 'Excel workbook',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'Excel workbook',
-  'application/vnd.oasis.opendocument.spreadsheet': 'OpenDocument spreadsheet',
-  'application/vnd.ms-powerpoint': 'PowerPoint presentation',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'PowerPoint presentation',
-  'application/vnd.oasis.opendocument.presentation': 'OpenDocument presentation',
-  'application/zip': 'ZIP archive',
-  'message/rfc822': 'Email message',
-};
-
-const families: [FileFamily, (media: string) => boolean][] = [
-  ['pdf', (media) => media === 'application/pdf'],
-  ['image', (media) => media.startsWith('image/')],
-  ['spreadsheet', (media) => media === 'text/csv' || /spreadsheet|ms-excel/.test(media)],
-  ['presentation', (media) => /presentation|ms-powerpoint/.test(media)],
-  ['document', (media) => /wordprocessing|msword|opendocument\.text|rtf/.test(media) || media === 'message/rfc822'],
-  ['code', (media) => media === 'application/json' || media === 'application/xml' || media === 'text/html'],
-  ['text', (media) => media.startsWith('text/')],
-  ['archive', (media) => /zip|x-7z|x-tar|gzip|x-rar/.test(media)],
-  ['audio', (media) => media.startsWith('audio/')],
-  ['video', (media) => media.startsWith('video/')],
-];
-
-export function fileFamily(media: string | undefined): FileFamily {
-  return (media && families.find(([, matches]) => matches(media))?.[0]) || 'file';
-}
-
-/** A person's name for a media type: "PDF document", or the type itself when it has none. */
-export function fileTypeLabel(media: string | undefined): string {
-  if (!media) return 'File';
-  return labels[media] ?? `${media.split('/')[1]?.replace(/^(x-|vnd\.)/, '').toUpperCase() || 'Unknown'} file`;
-}
+export type FileFamily = 'pdf' | 'image' | 'text' | 'document' | 'spreadsheet' | 'presentation' | 'archive' | 'audio' | 'video' | 'email' | 'code' | 'file';
 
 const icons: Record<FileFamily, [LucideIcon, string]> = {
   pdf: [FileText, 'text-red-600 dark:text-red-400'],
@@ -61,9 +14,26 @@ const icons: Record<FileFamily, [LucideIcon, string]> = {
   archive: [FileArchive, 'text-amber-600 dark:text-amber-400'],
   audio: [FileAudio, 'text-pink-600 dark:text-pink-400'],
   video: [FileVideo, 'text-pink-600 dark:text-pink-400'],
+  email: [Mail, 'text-sky-600 dark:text-sky-400'],
   code: [FileCode, 'text-muted'],
   file: [File, 'text-muted'],
 };
+
+const known = (media: string | undefined) => (media ? fileTypes().find((type) => type.media_type === media) : undefined);
+
+/** The icon family of a media type: the server's, else one guessed from its top-level type. */
+export function fileFamily(media: string | undefined): FileFamily {
+  const family = known(media)?.family;
+  if (family && family in icons) return family as FileFamily;
+  const top = media?.split('/')[0];
+  return top === 'image' || top === 'audio' || top === 'video' || top === 'text' ? top : 'file';
+}
+
+/** A person's name for a media type: the server's, such as "PDF document", else one made from the type. */
+export function fileTypeLabel(media: string | undefined): string {
+  if (!media || media === 'application/octet-stream') return 'File';
+  return known(media)?.label ?? `${media.split('/')[1]?.replace(/^(x-|vnd\.)/, '').toUpperCase() || 'Unknown'} file`;
+}
 
 /** The icon of a file's family, coloured so kinds are told apart at a glance. */
 export function FileTypeIcon({ media, className }: { media: string | undefined; className?: string }) {

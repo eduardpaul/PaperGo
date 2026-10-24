@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useCanGoBack, useRouter } from '@tanstack/react-router';
 import {
   ChevronRight,
+  FilePen,
   FilePlus,
   FolderOpen,
   FolderPlus,
@@ -39,6 +40,7 @@ import {
 import { Select } from '@/components/ui/select';
 import { QueryFeedback } from '@/features/admin/common';
 import { OperationProgress } from '@/features/admin/operation-progress';
+import { uploadDocument } from '@/features/documents/transfer';
 import { useUploads } from '@/features/documents/uploads';
 import { FileLinksProvider, openFileLink, type FileItem, type OpenFileOptions } from '@/features/files/file-action';
 import { FileViewer } from '@/features/files/viewer';
@@ -74,6 +76,8 @@ export interface CollectionSearch {
   page?: number;
   /** An earlier file version the viewer shows. */
   blob?: string;
+  /** The viewer shows the file in its editor. */
+  edit?: true;
   tab?: string;
   /** The comment a notification points at, shown on the Discussion tab. */
   comment?: string;
@@ -164,7 +168,7 @@ export function CollectionPage({
   const [bulkEditing, setBulkEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [operations, setOperations] = useState<string[]>([]);
-  const [creating, setCreating] = useState<'item' | 'folder' | null>(null);
+  const [creating, setCreating] = useState<'item' | 'folder' | 'markdown' | null>(null);
   const [dragging, setDragging] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const handledCreate = useRef<string | undefined>(undefined);
@@ -210,7 +214,7 @@ export function CollectionPage({
       ? {
           to: '/w/$workspaceId/l/$listId' as const,
           params: { workspaceId, listId },
-          search: { ...search, create: undefined, item: item.id, open: 'file' as const, page: options.page, blob: options.blob, tab: search.item === item.id ? search.tab : undefined, comment: undefined },
+          search: { ...search, create: undefined, item: item.id, open: 'file' as const, page: options.page, blob: options.blob, edit: options.edit || undefined, tab: search.item === item.id ? search.tab : undefined, comment: undefined },
         }
       : openFileLink(item, options);
   const viewing = search.open === 'file' && !!search.item;
@@ -218,7 +222,7 @@ export function CollectionPage({
   const router = useRouter();
   const canGoBack = useCanGoBack();
   const closeViewer = () =>
-    canGoBack ? router.history.back() : onSearch({ item: undefined, open: undefined, page: undefined, blob: undefined, tab: undefined, comment: undefined });
+    canGoBack ? router.history.back() : onSearch({ item: undefined, open: undefined, page: undefined, blob: undefined, edit: undefined, tab: undefined, comment: undefined });
   const files = ownRows ? [] : rows.filter((row) => row.kind === 'item');
   const position = viewing ? files.findIndex((row) => row.id === search.item) : -1;
   // Opening a folder found by a search shows the folder, not the search inside it.
@@ -377,9 +381,14 @@ export function CollectionPage({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 {library && canAdd && (
-                  <DropdownMenuItem onSelect={() => setCreating('item')}>
-                    <FilePlus /> New item without a file
-                  </DropdownMenuItem>
+                  <>
+                    <DropdownMenuItem onSelect={() => setCreating('markdown')}>
+                      <FilePen /> New Markdown document
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setCreating('item')}>
+                      <FilePlus /> New item without a file
+                    </DropdownMenuItem>
+                  </>
                 )}
                 {canEdit && (
                   <DropdownMenuItem asChild>
@@ -413,7 +422,6 @@ export function CollectionPage({
               className="sr-only"
               tabIndex={-1}
               aria-hidden
-              accept="application/pdf,image/tiff,image/jpeg,image/png,image/webp"
               onChange={(event) => {
                 uploadFiles(event.target.files);
                 event.target.value = '';
@@ -730,7 +738,9 @@ export function CollectionPage({
             setCreating(null);
             if (search.create) onSearch({ create: undefined }, true);
             void refresh();
-            open(created);
+            // A new Markdown document opens in the editor; anything else shows its details.
+            if (requestedCreate === 'markdown') onSearch({ item: created.id, open: 'file', edit: true, tab: undefined, comment: undefined });
+            else open(created);
           }}
         />
       )}
@@ -745,16 +755,18 @@ export function CollectionPage({
           contentTypes={typeList}
           tab={search.tab ?? 'details'}
           comment={search.comment}
+          edit={search.edit}
+          onEdit={(edit) => onSearch({ edit: edit || undefined }, true, true)}
           siblings={
             position < 0
               ? {}
               : { previous: files[position - 1]?.id, next: files[position + 1]?.id, position: position + 1, total: counted?.total ?? files.length, more: !!next && !counted }
           }
-          onStep={(id) => onSearch({ item: id, page: undefined, blob: undefined, comment: undefined }, true, true)}
+          onStep={(id) => onSearch({ item: id, page: undefined, blob: undefined, edit: undefined, comment: undefined }, true, true)}
           onPage={(page) => onSearch({ page: page > 1 ? page : undefined }, true, true)}
           onTab={(tab) => onSearch({ tab: tab === 'details' ? undefined : tab, comment: undefined }, true, true)}
           onClose={closeViewer}
-          onDetails={() => onSearch({ open: undefined, page: undefined, blob: undefined })}
+          onDetails={() => onSearch({ open: undefined, page: undefined, blob: undefined, edit: undefined })}
           onMoved={onMoved}
         />
       )}
@@ -869,7 +881,7 @@ function SearchBox({ initial, noun, onSearch }: { initial: string; noun: string;
   );
 }
 
-/** A new folder, or a new item with the columns of its content type. */
+/** A new folder, a new item with the columns of its content type, or a new Markdown document with them. */
 function CreateDialog({
   kind,
   collection,
@@ -877,7 +889,7 @@ function CreateDialog({
   onClose,
   onCreated,
 }: {
-  kind: 'item' | 'folder';
+  kind: 'item' | 'folder' | 'markdown';
   collection: Resource;
   parentId: string;
   onClose: () => void;
@@ -892,10 +904,23 @@ function CreateDialog({
   const typeList = types.data ?? [];
   const defaultType = typeList.find((entry) => entry.is_default) ?? typeList[0];
   const chosenType = type || defaultType?.id || '';
-  const visible = kind === 'item' ? fieldsForType(fields.data ?? [], typeList, chosenType) : [];
+  const visible = kind !== 'folder' ? fieldsForType(fields.data ?? [], typeList, chosenType) : [];
   const create = useMutation({
-    mutationFn: async () =>
-      (
+    mutationFn: async () => {
+      if (kind === 'markdown') {
+        const title = name.trim().replace(/\.(md|markdown)$/i, '');
+        const file = new File([`# ${title}\n\n`], `${title.replace(/[\\/]/g, '-')}.md`, { type: 'text/markdown' });
+        return (
+          await uploadDocument(`/v1/resources/${collection.id}/documents`, file, {
+            name: title,
+            folder_id: parentId !== collection.id ? parentId : undefined,
+            keywords,
+            values: valuesPatch(visible, {}, values) ?? {},
+            content_type_id: type || undefined,
+          })
+        ).item;
+      }
+      return (
         await api<Resource>(`/v1/resources/${parentId}/children`, {
           method: 'POST',
           body: {
@@ -906,14 +931,15 @@ function CreateDialog({
             content_type_id: kind === 'item' && type ? type : undefined,
           },
         })
-      ).data,
+      ).data;
+    },
     onSuccess: onCreated,
   });
   return (
     <FormDialog
       open
-      title={kind === 'folder' ? 'New folder' : 'New item'}
-      submitLabel={kind === 'folder' ? 'Create folder' : 'Create item'}
+      title={kind === 'folder' ? 'New folder' : kind === 'markdown' ? 'New Markdown document' : 'New item'}
+      submitLabel={kind === 'folder' ? 'Create folder' : kind === 'markdown' ? 'Create and edit' : 'Create item'}
       pending={create.isPending}
       submitDisabled={!name.trim()}
       onClose={onClose}
@@ -921,7 +947,7 @@ function CreateDialog({
     >
       <Label htmlFor="draft-name">Name</Label>
       <Input id="draft-name" value={name} onChange={(event) => setName(event.target.value)} required autoFocus />
-      {kind === 'item' && typeList.length > 1 && (
+      {kind !== 'folder' && typeList.length > 1 && (
         <>
           <Label htmlFor="draft-type">Content type</Label>
           <Select id="draft-type" value={chosenType} onChange={(event) => setType(event.target.value)}>

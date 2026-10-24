@@ -39,6 +39,28 @@ export interface ViewerProps {
   onPage?: (page: number) => void;
   /** Steps to the previous (-1) or next (1) item, for a swipe; absent when there is none. */
   onStep?: (delta: -1 | 1) => void;
+  /** Editing, for editable handlers; absent for earlier file versions. */
+  editing?: EditSession;
+}
+
+/**
+ * The viewer's side of editing a file: whether the person may edit it here,
+ * whether they are (edit=1 in the URL), and what a save needs. Each save is a
+ * new file version, conditional on the item version it started from.
+ */
+export interface EditSession {
+  active: boolean;
+  allowed: boolean;
+  /** Why editing is not allowed, for people who may write the item. */
+  reason?: string;
+  /** The item version the file was read at, for If-Match. */
+  version: number;
+  /** Where Save as a new file puts the copy. */
+  containerId: string;
+  folderId?: string;
+  setActive: (active: boolean) => void;
+  /** Reports unsaved changes, so the viewer asks before leaving them. */
+  onDirty: (dirty: boolean) => void;
 }
 
 /**
@@ -50,6 +72,8 @@ export interface FileHandler {
   id: string;
   accepts(file: Pick<FileRef, 'contentType' | 'filename'>): boolean;
   View: LazyExoticComponent<ComponentType<ViewerProps>>;
+  /** The View edits the file too, when the viewer's edit session allows. */
+  editable?: boolean;
 }
 
 const handlers: FileHandler[] = [];
@@ -69,3 +93,5 @@ const images = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'i
 
 registerFileHandler({ id: 'pdf', accepts: (file) => file.contentType === 'application/pdf', View: lazy(() => import('./handlers/pdf')) });
 registerFileHandler({ id: 'image', accepts: (file) => images.has(file.contentType), View: lazy(() => import('./handlers/image')) });
+registerFileHandler({ id: 'markdown', accepts: (file) => file.contentType === 'text/markdown', View: lazy(() => import('./handlers/markdown')), editable: true });
+registerFileHandler({ id: 'text', accepts: (file) => file.contentType === 'text/plain', View: lazy(() => import('./handlers/text')), editable: true });

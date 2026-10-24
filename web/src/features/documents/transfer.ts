@@ -89,7 +89,7 @@ export function uploadDocument(
 
 export async function replaceContent(itemId: string, version: number, file: File, signal?: AbortSignal) {
   const request = replaceContentRequest(itemId, version, file);
-  return api<DocumentUpload['file'] & Pick<DocumentUpload, 'duplicates'>>(request.path, {
+  return api<DocumentUpload['file'] & Pick<DocumentUpload, 'duplicates'> & { version: number; resource_version: number }>(request.path, {
     method: request.method,
     raw: file,
     signal,

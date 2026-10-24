@@ -1,6 +1,9 @@
+import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, type LinkProps } from '@tanstack/react-router';
-import { Download, Expand, Upload } from 'lucide-react';
+import { Download, Expand, Pencil, Upload } from 'lucide-react';
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { authorizationHeaders, fileEditMax } from '@/api/auth';
+import { downloadContentPath } from '@/api/requests';
 import type { FileSummary, Resource } from '@/api/types';
 import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
@@ -19,6 +22,8 @@ export interface OpenFileOptions {
   page?: number;
   /** An earlier file version to open instead of the item's file. */
   blob?: string;
+  /** Open the file in its editor. */
+  edit?: boolean;
 }
 
 /**
@@ -32,7 +37,7 @@ export function openFileLink(item: FileItem, options: OpenFileOptions = {}): Lin
   return {
     to: '/w/$workspaceId/l/$listId',
     params: { workspaceId: item.workspace_id, listId: item.container_id ?? '' },
-    search: { item: item.id, open: 'file', page: options.page, blob: options.blob },
+    search: { item: item.id, open: 'file', page: options.page, blob: options.blob, edit: options.edit || undefined },
   };
 }
 
@@ -86,6 +91,11 @@ export function viewable(item: { file?: FileSummary | null }) {
   return !!item.file && !!handlerFor({ contentType: item.file.content_type, filename: item.file.filename });
 }
 
+/** Whether PaperGo can edit the item's file in the browser: an editable type, within the edit size limit. */
+export function editableFile(item: { file?: FileSummary | null }) {
+  return !!item.file && item.file.size <= fileEditMax() && !!handlerFor({ contentType: item.file.content_type, filename: item.file.filename })?.editable;
+}
+
 /**
  * The one control for an item's file, the same everywhere: Open (a real link,
  * so it also opens in a new tab) when a handler shows the type, Download
@@ -122,14 +132,41 @@ export function FileAction({ item, options, variant = 'icon', className }: { ite
   );
 }
 
-/** A small picture of the file: its preview for types that have one, else its type icon. */
+/** A small picture of the file: its preview for types that have one, the opening lines of text files, else its type icon. */
 export function FileThumb({ item, className, iconClassName }: { item: FileItem; className?: string; iconClassName?: string }) {
   const family = fileFamily(item.file?.content_type);
   if (item.file && (family === 'pdf' || family === 'image'))
     return <FilePreview itemId={item.id} version={item.file.version} alt="" className={className} />;
+  if (item.file && family === 'text' && viewable(item)) return <TextExcerpt item={item} className={className} iconClassName={iconClassName} />;
   return (
     <span className={cn('grid place-items-center rounded-md bg-surface-muted', className)}>
       <FileTypeIcon media={item.file?.content_type} className={cn('size-8', iconClassName)} />
+    </span>
+  );
+}
+
+/** The first kilobyte of a text file, decoded leniently; the file's icon until it arrives. */
+function TextExcerpt({ item, className, iconClassName }: { item: FileItem; className?: string; iconClassName?: string }) {
+  const excerpt = useQuery({
+    queryKey: ['resources', item.id, 'excerpt', item.file?.version],
+    staleTime: Infinity,
+    queryFn: async ({ signal }) => {
+      const response = await fetch(downloadContentPath(item.id), { headers: { ...authorizationHeaders(), Range: 'bytes=0-1023' }, credentials: 'same-origin', signal });
+      if (!response.ok) throw new Error(`excerpt ${response.status}`);
+      return new TextDecoder('utf-8').decode(await response.arrayBuffer()).replace(/\uFFFD+$/, '');
+    },
+  });
+  if (!excerpt.data?.trim()) {
+    return (
+      <span className={cn('grid place-items-center rounded-md bg-surface-muted', className)}>
+        <FileTypeIcon media={item.file?.content_type} className={cn('size-8', iconClassName)} />
+      </span>
+    );
+  }
+  return (
+    <span aria-hidden className={cn('relative block overflow-hidden rounded-md border bg-surface p-2 text-left font-mono text-[9px] leading-tight whitespace-pre-wrap break-words text-muted', className)}>
+      {excerpt.data.slice(0, 600)}
+      <span className="absolute inset-x-0 bottom-0 h-1/3 bg-linear-to-t from-surface" />
     </span>
   );
 }
@@ -183,6 +220,11 @@ export function FileBar({ item, draft, canWrite, onUpload }: { item: FileItem; d
           {draft && <Badge className="ml-1.5">Draft</Badge>}
         </p>
       </div>
+      {canWrite && editableFile(item) && (
+        <Link {...link(item, { edit: true })} aria-label={`Edit ${file.filename}`} title="Edit (E in the viewer)" className={buttonVariants()}>
+          <Pencil /> Edit
+        </Link>
+      )}
       <FileAction item={item} variant="button" />
       {open && (
         <button type="button" aria-label={`Download ${file.filename}`} title="Download (D)" className={buttonVariants({ variant: 'ghost', size: 'icon' })} onClick={() => void downloadContent(item.id, file.filename)}>

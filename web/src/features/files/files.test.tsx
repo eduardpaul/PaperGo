@@ -2,8 +2,9 @@
 import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
+import type * as Auth from '@/api/auth';
 import type { FileSummary } from '@/api/types';
-import { FileAction, FileLinksProvider, useClickOrOpenFile, viewable } from './file-action';
+import { editableFile, FileAction, FileLinksProvider, useClickOrOpenFile, viewable } from './file-action';
 import { fileFamily, fileTypeLabel } from './file-types';
 import { fileRef, fileSource, handlerFor } from './handlers';
 
@@ -18,6 +19,15 @@ vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => navigate,
 }));
 vi.mock('@/features/documents/transfer', () => ({ downloadContent: download }));
+vi.mock('@/api/auth', async (original) => ({
+  ...(await original<typeof Auth>()),
+  fileEditMax: () => 100,
+  fileTypes: () => [
+    { media_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', label: 'Word document', family: 'document', extensions: ['.docx'] },
+    { media_type: 'text/csv', label: 'CSV table', family: 'spreadsheet', extensions: ['.csv'] },
+    { media_type: 'application/vnd.ms-powerpoint', label: 'PowerPoint presentation', family: 'presentation', extensions: ['.ppt'] },
+  ],
+}));
 
 afterEach(() => {
   cleanup();
@@ -35,6 +45,16 @@ it('picks a handler by media type and leaves other files to download', () => {
   expect(viewable(item(file('image/png')))).toBe(true);
   expect(viewable(item(file('application/zip')))).toBe(false);
   expect(viewable(item())).toBe(false);
+});
+
+it('edits Markdown and plain text within the size limit, and nothing else', () => {
+  expect(handlerFor({ contentType: 'text/markdown', filename: 'a.md' })?.id).toBe('markdown');
+  expect(handlerFor({ contentType: 'text/plain', filename: 'a.txt' })?.id).toBe('text');
+  expect(editableFile(item(file('text/markdown')))).toBe(true);
+  expect(editableFile(item(file('text/plain')))).toBe(true);
+  expect(editableFile(item({ ...file('text/markdown'), size: 101 }))).toBe(false);
+  expect(editableFile(item(file('application/pdf')))).toBe(false);
+  expect(editableFile(item())).toBe(false);
 });
 
 it('reads the item file without a blob and an earlier version with its blob', () => {

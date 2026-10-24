@@ -3,7 +3,8 @@ import { api } from '@/api/http';
 import { templatesQuery } from '@/api/queries';
 import type { FieldDefinition, FilterExpr, Page, SmartFolder } from '@/api/types';
 import { useTermNames, useValueNames } from '@/features/fields/names';
-import { comparisonLabels, fileTypeLabels, relativeLabels, systemFields, fileTypeField } from '@/features/lists/filter-editor';
+import { comparisonLabels, relativeLabels, systemFields, fileTypeField } from '@/features/lists/filter-editor';
+import { fileTypeLabel } from '@/features/files/file-types';
 import type { SmartQueryField } from './editor-dialog';
 
 export function describeFilter(filter: FilterExpr | undefined, fields: FieldDefinition[], names = new Map<string, string>()): string {
@@ -17,7 +18,7 @@ export function describeFilter(filter: FilterExpr | undefined, fields: FieldDefi
   if (op === 'missing' || op === 'present') return `${label} ${comparisonLabels[op]}`;
   const value = (entry: unknown) => {
     if (typeof entry === 'boolean') return entry ? 'Yes' : 'No';
-    if (field?.key === '$file_type') return fileTypeLabels[String(entry)] ?? 'Selected file type';
+    if (field?.key === '$file_type') return fileTypeLabel(String(entry));
     if (['person', 'lookup', 'term', 'keywords'].includes(field?.type ?? '')) return names.get(String(entry)) ?? 'Selected value';
     return String(entry ?? '');
   };
@@ -27,7 +28,7 @@ export function describeFilter(filter: FilterExpr | undefined, fields: FieldDefi
 
 export function RuleSummary({ folder }: { folder: SmartFolder }) {
   const metadata = useQuery({ queryKey: ['resources', 'smart-folder-fields', folder.workspace_id, undefined], queryFn: async () => (await api<Page<SmartQueryField>>('/v1/search/fields', { query: { workspace_id: folder.workspace_id } })).data.value });
-  const fields: FieldDefinition[] = [...systemFields, fileTypeField, ...(metadata.data ?? []).map(field => ({ id: field.key, key: field.key, label: field.label, type: field.type, options: { term_set_id: field.term_set_id, lookup_container_id: field.lookup_container_id } }))];
+  const fields: FieldDefinition[] = [...systemFields, fileTypeField(), ...(metadata.data ?? []).map(field => ({ id: field.key, key: field.key, label: field.label, type: field.type, options: { term_set_id: field.term_set_id, lookup_container_id: field.lookup_container_id } }))];
   const values: Record<string, unknown[]> = {};
   const visit = (filter?: FilterExpr) => {
     if (!filter) return;

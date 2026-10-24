@@ -57,6 +57,13 @@ export interface Resource {
   access?: AccessAction[];
 }
 
+/** The organization's trusted hosts (GET /v1/organization/settings/trusted-hosts). */
+export interface TrustedHosts {
+  /** Host names, *.domain wildcards, or * for every public host. */
+  hosts: string[];
+  version: number;
+}
+
 /** The file an item shows: what a viewer needs to pick a handler. */
 export interface FileSummary {
   blob_id: string;

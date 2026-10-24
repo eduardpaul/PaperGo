@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { CollectionPage, type CollectionSearch } from '@/features/lists/collection-page';
-import { pageParam, textParam } from '@/lib/search';
+import { flagParam, pageParam, textParam } from '@/lib/search';
 
 export const Route = createFileRoute('/_app/w/$workspaceId/l/$listId/')({
   validateSearch: (search: Record<string, unknown>): CollectionSearch => ({
@@ -11,6 +11,7 @@ export const Route = createFileRoute('/_app/w/$workspaceId/l/$listId/')({
     open: search.open === 'file' ? 'file' : undefined,
     page: pageParam(search.page),
     blob: textParam(search.blob),
+    edit: flagParam(search.edit),
     tab: textParam(search.tab),
     comment: textParam(search.comment),
     q: textParam(search.q),

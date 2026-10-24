@@ -6,7 +6,19 @@ let mode: AuthenticationMode = 'bearer';
 let oidc: OidcSignIn | null = null;
 let mcp: string | null = null;
 let comments = false;
+let types: FileTypeInfo[] = [];
+let editMax = 2 * 1024 * 1024;
 const TokenKey = 'papergo.token';
+
+/** A kind of file the server names, and what it does with such files. */
+export interface FileTypeInfo {
+  media_type: string;
+  label: string;
+  family: string;
+  extensions: string[];
+  preview: boolean;
+  text: boolean;
+}
 
 export function authenticationMode(): AuthenticationMode {
   return mode;
@@ -20,6 +32,21 @@ export function mcpEndpoint(): string | null {
 /** Whether the deployment runs discussions on items. */
 export function commentsAvailable(): boolean {
   return comments;
+}
+
+/** The kinds of file the server names, in its matching order. */
+export function fileTypes(): FileTypeInfo[] {
+  return types;
+}
+
+/** The largest file the browser edits (FILE_EDIT_MAX_BYTES). */
+export function fileEditMax(): number {
+  return editMax;
+}
+
+function fileTypeList(value: unknown): FileTypeInfo[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((entry): entry is FileTypeInfo => !!entry && typeof entry === 'object' && typeof (entry as FileTypeInfo).media_type === 'string' && typeof (entry as FileTypeInfo).label === 'string');
 }
 
 /** The provider sign-in of OIDC deployments that advertise a browser client; null otherwise. */
@@ -64,9 +91,11 @@ export async function loadAuthentication() {
   const settings = reported === 'bearer' ? oidcSettings((config as { oidc?: unknown }).oidc) : null;
   mode = reported;
   oidc = null;
-  const features = (config as { features?: { comments?: unknown; mcp?: { url?: unknown } } }).features;
+  const features = (config as { features?: { comments?: unknown; mcp?: { url?: unknown }; file_types?: unknown; file_edit_max_bytes?: unknown } }).features;
   mcp = mcpSetting(features?.mcp?.url);
   comments = features?.comments === true;
+  types = fileTypeList(features?.file_types);
+  if (typeof features?.file_edit_max_bytes === 'number' && features.file_edit_max_bytes > 0) editMax = features.file_edit_max_bytes;
   if (mode === 'proxy' || mode === 'local') clearToken();
   if (settings) {
     // Loaded only by deployments that sign in at an identity provider.

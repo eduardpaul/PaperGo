@@ -23,7 +23,7 @@ export interface SmartQueryField {
 export function smartQueryFields(entries: SmartQueryField[]): FieldDefinition[] {
   const byKey = new Map<string, SmartQueryField[]>();
   for (const field of entries.filter(field => field.queryable)) byKey.set(field.key, [...(byKey.get(field.key) ?? []), field]);
-  return [...systemFields, fileTypeField, ...[...byKey.values()].filter(fields => new Set(fields.map(field => [field.type, field.scale, !!field.multiple, field.term_set_id, field.lookup_container_id].join(':'))).size === 1).map(fields => ({
+  return [...systemFields, fileTypeField(), ...[...byKey.values()].filter(fields => new Set(fields.map(field => [field.type, field.scale, !!field.multiple, field.term_set_id, field.lookup_container_id].join(':'))).size === 1).map(fields => ({
     id: fields[0].key, key: fields[0].key, label: fields[0].label, type: fields[0].type, scale: fields[0].scale, indexed: true,
     choices: [...new Set(fields.flatMap(field => field.choices ?? []))], options: { multiple: fields[0].multiple, term_set_id: fields[0].term_set_id, lookup_container_id: fields[0].lookup_container_id },
   }))];

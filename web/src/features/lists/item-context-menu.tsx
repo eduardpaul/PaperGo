@@ -9,7 +9,7 @@ import { keys, resourceQuery } from '@/api/queries';
 import type { Resource, Workflow, WorkflowAction } from '@/api/types';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuShortcut, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { downloadContent } from '@/features/documents/transfer';
-import { useOpenFile, viewable } from '@/features/files/file-action';
+import { editableFile, useOpenFile, viewable } from '@/features/files/file-action';
 import { ConfirmDialog } from '@/features/settings/section';
 import { AddToSmartFolder } from '@/features/smart-folders/classification';
 import { api } from '@/api/http';
@@ -46,6 +46,7 @@ export function ItemContextMenu({ item, collection, selection = [item], onSelect
       <ContextMenuContent>
         {!bulk && item.kind === 'folder' && <ContextMenuItem onSelect={() => onOpen(fresh)}>Open</ContextMenuItem>}
         {!bulk && viewable(fresh) && <ContextMenuItem onSelect={() => openFile(fresh)}>Open file<ContextMenuShortcut>O</ContextMenuShortcut></ContextMenuItem>}
+        {!bulk && can(fresh, 'write') && editableFile(fresh) && <ContextMenuItem onSelect={() => openFile(fresh, { edit: true })}>Edit file</ContextMenuItem>}
         {!bulk && fresh.file && <ContextMenuItem onSelect={() => void downloadContent(fresh.id, fresh.file?.filename ?? fresh.name)}>Download<ContextMenuShortcut>D</ContextMenuShortcut></ContextMenuItem>}
         {!bulk && <ContextMenuItem onSelect={() => onDetails(fresh)}>Details<ContextMenuShortcut>Enter</ContextMenuShortcut></ContextMenuItem>}
         {writable && <>

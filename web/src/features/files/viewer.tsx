@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, ChevronLeft, ChevronRight, Download, Info, Link2, MoreHorizontal, PanelRight, Upload, X } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Download, Info, Link2, MoreHorizontal, PanelRight, Pencil, Upload, X } from 'lucide-react';
 import { Component, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
-import { authorizationHeaders } from '@/api/auth';
+import { authorizationHeaders, fileEditMax } from '@/api/auth';
 import { api } from '@/api/http';
 import { resourceQuery } from '@/api/queries';
 import type { ContentType, FieldDefinition, FileVersion, Page, Resource } from '@/api/types';
@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/feedback';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/menu';
 import { downloadContent } from '@/features/documents/transfer';
+import { can } from '@/features/lists/access';
 import { ItemPanel } from '@/features/lists/item-sheet';
 import { publishState } from '@/features/lists/schema';
 import { ConfirmDialog } from '@/features/settings/section';
@@ -18,7 +19,7 @@ import { useFormat } from '@/lib/preferences';
 import { cn } from '@/lib/utils';
 import { usePeopleNames } from '@/features/fields/people';
 import { FileTypeIcon, fileTypeLabel } from './file-types';
-import { fileRef, fileSource, handlerFor, type FileRef } from './handlers';
+import { fileRef, fileSource, handlerFor, type EditSession, type FileRef } from './handlers';
 import { typing, useViewerKeys, ViewerMessage } from './viewer-kit';
 
 const infoKey = 'papergo.viewer.info';
@@ -55,6 +56,8 @@ export function FileViewer({
   tab,
   comment,
   siblings,
+  edit,
+  onEdit,
   onStep,
   onPage,
   onTab,
@@ -71,6 +74,9 @@ export function FileViewer({
   tab: string;
   comment?: string;
   siblings: ViewerSiblings;
+  /** The file is open in its handler's editor (edit=1). */
+  edit?: boolean;
+  onEdit: (edit: boolean) => void;
   onStep: (itemId: string) => void;
   onPage: (page: number) => void;
   onTab: (tab: string) => void;
@@ -106,13 +112,35 @@ export function FileViewer({
       /* The panel still toggles for this visit. */
     }
   };
-  // Unsaved details in the info panel are kept until the person decides.
-  const dirty = useRef(false);
+  // Unsaved details in the info panel, or unsaved text in an editor, are kept until the person decides.
+  const dirty = useRef({ details: false, file: false });
   const onDirty = useCallback((value: boolean) => {
-    dirty.current = value;
+    dirty.current.details = value;
+  }, []);
+  const onFileDirty = useCallback((value: boolean) => {
+    dirty.current.file = value;
   }, []);
   const [pending, setPending] = useState<() => void>();
-  const guard = (action: () => void) => (dirty.current ? setPending(() => action) : action());
+  const guard = (action: () => void) => (dirty.current.details || dirty.current.file ? setPending(() => action) : action());
+
+  // Editable handlers edit the item's file, never an earlier version, for people who may write the item.
+  const writable = can(item, 'write');
+  const editable = !!handler?.editable && !!file && !file.earlier && writable;
+  const tooLarge = !!file && file.size > fileEditMax();
+  const canEdit = editable && !tooLarge;
+  const editing: EditSession | undefined =
+    editable && item
+      ? {
+          active: !!edit && canEdit,
+          allowed: canEdit,
+          reason: tooLarge ? `This file is too large to edit in the browser (the limit is ${format.fileSize(fileEditMax())}). Download it, or edit it over WebDAV.` : undefined,
+          version: item.version,
+          containerId: item.container_id ?? collection.id,
+          folderId: item.parent_id !== (item.container_id ?? collection.id) ? item.parent_id : undefined,
+          setActive: (active) => onEdit(active),
+          onDirty: onFileDirty,
+        }
+      : undefined;
 
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -145,6 +173,7 @@ export function FileViewer({
     if (event.key === 'ArrowRight' || event.key === 'j') return siblings.next ? void step(siblings.next) : false;
     if (event.key === 'i') return toggleInfo();
     if (event.key === 'd' && file) return download();
+    if (event.key === 'e' && canEdit && !edit) return onEdit(true);
     return false;
   });
 
@@ -184,7 +213,8 @@ export function FileViewer({
     );
   else
     canvas = (
-      <HandlerBoundary key={`${file.itemId}:${file.blobId}`} onDownload={download}>
+      // The item's own file keeps its handler across saves; an earlier version is another file.
+      <HandlerBoundary key={`${file.itemId}:${file.earlier ? file.blobId : 'current'}`} onDownload={download}>
         <Suspense
           fallback={
             <ViewerMessage title="Opening…">
@@ -198,6 +228,7 @@ export function FileViewer({
             page={page}
             onPage={onPage}
             onStep={(delta) => step(delta < 0 ? siblings.previous : siblings.next)}
+            editing={editing}
           />
         </Suspense>
       </HandlerBoundary>
@@ -238,6 +269,11 @@ export function FileViewer({
               <ChevronRight />
             </Button>
           </div>
+        )}
+        {canEdit && !edit && (
+          <Button variant="secondary" onClick={() => onEdit(true)} title="Edit (E)">
+            <Pencil /> <span className="hidden sm:inline">Edit</span>
+          </Button>
         )}
         {file && (
           <Button variant="ghost" className="hidden sm:inline-flex" onClick={download} title="Download (D)">
@@ -315,7 +351,7 @@ export function FileViewer({
         onConfirm={() => {
           const action = pending;
           setPending(undefined);
-          dirty.current = false;
+          dirty.current = { details: false, file: false };
           action?.();
         }}
       />
