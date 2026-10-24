@@ -24,6 +24,21 @@ Libraries accept `duplicate_policy: "allow" | "warn" | "block"` on creation and 
 
 `POST /v1/items/{id}/content/versions/{number}/restore` restores an earlier file that still has its bytes as a new file version. A reclaimed version answers `410 content_unavailable`. It requires item write permission, `item.write` and `document.write` and the current resource `If-Match`. It retains current metadata, restores the selected bytes and filename, and follows the library's publication settings. In a library with explicit publishing, restoring creates a draft and leaves the publication unchanged. Earlier files and metadata revisions remain immutable. Identical SHA-256 and size reuse one stored byte object across items and workspaces. File names, media types, language hints and access remain specific to each file version. Purging an item queues its objects once; cleanup rechecks all file-version references while holding the database write lock. Bytes shared by another item remain available. A periodic collector runs each minute and removes unreferenced completed objects older than one hour, including objects left by interrupted uploads. Failed storage deletion stays queued for retry.
 
+## Viewing files
+
+The web app opens an item's whole file full screen, above the list it belongs to. A **file handler** shows each kind of file: PDFs (every page, with find, text selection, zoom, rotation and page links) and JPEG, PNG, WebP and GIF images (full resolution, zoom, pan and rotation). A TIFF shows its first-page preview. A file no handler shows offers **Download**.
+
+Clicking an item still opens its details. Its file is one click away everywhere:
+
+- the **file bar** above the details sheet's tabs: thumbnail, type, size, version and **Open** or **Download**;
+- the button at the end of a row's name, and on a gallery or board card, shown on hover and always on touch screens;
+- double-clicking a row or card, or pressing **O** on a row (**D** downloads);
+- **Open file** in the right-click menu and the command palette (Ctrl/⌘ K);
+- **Open** on a global search hit, at the page the text matched;
+- **Open** on each file version in the File tab, and on a finished upload.
+
+The viewer lives in the URL (`?item=<id>&open=file`, with `page` for a PDF page and `blob` for an earlier version), so its links can be shared, opened in a new tab and reloaded. Back or Esc returns to where it was opened. ← and → (or J and K) step through the items the list shows, **I** shows the item's details, discussion and versions beside the file, and **Copy file link** copies the current page's link. Handlers read the file through `GET /v1/items/{id}/content` with the caller's credentials and byte ranges; draft readers see the draft file and ordinary readers the published one, as with downloads. PDFs render with PDF.js without running document scripts; links in a PDF open in a new tab.
+
 ## Reading text
 
 `POST /v1/items/{id}/text` reads the text of the item's current file as a background operation (`202 Accepted`), for API clients and workflow scripts alike: `ocr` (`auto`, `always`, `never`), `max_pages` (default 500, at most 2,000) and `languages` (OCR codes such as `eng+deu`; default the file's). It requires `document.write` and write access to the item.

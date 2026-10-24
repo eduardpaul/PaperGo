@@ -7,7 +7,10 @@ import { SearchRelationships } from '@/features/search/search-relationships';
 import { useApiPages } from '@/api/pages';
 import { workflowCatalogQuery, workspacesQuery } from '@/api/queries';
 import { searchRequest } from '@/api/requests';
+import { cn } from '@/lib/utils';
 import type { SearchFacetValue, SearchHit, SearchPage } from '@/api/types';
+import { FileAction } from '@/features/files/file-action';
+import { FileTypeIcon } from '@/features/files/file-types';
 import { Page, PageHeader } from '@/components/page';
 import { Button } from '@/components/ui/button';
 import { EmptyState, Skeleton } from '@/components/ui/feedback';
@@ -327,8 +330,8 @@ export function Hit({ hit, where }: { hit: SearchHit; where: string }) {
       search: hit.kind === 'folder' ? { folder: hit.id } : { item: hit.id, ...(hit.archived ? { view: 'archived' } : {}) },
     });
   return (
-    <div><button type="button" className="flex w-full items-start gap-3 px-4 py-2.5 text-left hover:bg-surface-muted" onClick={open}>
-      <Icon className="mt-0.5 size-4 shrink-0 text-muted" />
+    <div className="relative"><button type="button" className={cn('flex w-full items-start gap-3 px-4 py-2.5 text-left hover:bg-surface-muted', hit.file && 'pr-14')} onClick={open}>
+      {hit.file ? <FileTypeIcon media={hit.file.content_type} className="mt-0.5" /> : <Icon className="mt-0.5 size-4 shrink-0 text-muted" />}
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2">
           <span className="truncate text-sm font-medium">{hit.name}</span>
@@ -354,7 +357,15 @@ export function Hit({ hit, where }: { hit: SearchHit; where: string }) {
           </span>
         )}
       </span>
-    </button>{hit.kind === 'item' && <SearchRelationships itemId={hit.id} />}
+    </button>
+    {hit.file && (
+      <FileAction
+        item={{ id: hit.id, workspace_id: hit.workspace_id, container_id: hit.collection_id, name: hit.name, file: hit.file }}
+        options={{ page: hit.page }}
+        className="absolute top-2 right-3"
+      />
+    )}
+    {hit.kind === 'item' && <SearchRelationships itemId={hit.id} />}
     </div>
   );
 }

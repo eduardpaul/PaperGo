@@ -1,6 +1,7 @@
 import { useArchiveActions } from './archive-actions';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Download, FileCode2, FolderInput, FolderSearch, MoreHorizontal, Trash2, Upload } from 'lucide-react';
+import { Link } from '@tanstack/react-router';
+import { Download, Expand, FileCode2, FolderInput, FolderSearch, MoreHorizontal, Trash2, Upload, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { api } from '@/api/http';
@@ -8,7 +9,7 @@ import { keys, resourceQuery, revisions } from '@/api/queries';
 import { useApiPages } from '@/api/pages';
 import type { ContentType, FieldDefinition, FileVersion, Resource, Revision } from '@/api/types';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/feedback';
 import { Input, Label } from '@/components/ui/input';
@@ -24,6 +25,7 @@ import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from '@
 import { KeywordInput } from '@/components/keyword-input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FilePreview } from '@/features/documents/preview';
+import { FileBar, FileThumb, useOpenFileLink, viewable } from '@/features/files/file-action';
 import { downloadContent, replaceContent } from '@/features/documents/transfer';
 import { FieldEditor } from '@/features/fields/editor';
 import { usePeopleNames } from '@/features/fields/people';
@@ -43,18 +45,7 @@ import { RenameDialog } from './rename-dialog';
 import { RelatedItems } from './related-items';
 import { fieldsForType, publishState } from './schema';
 
-/** The item panel next to its list: details and the other tabs, with item actions in the header menu. */
-export function ItemSheet({
-  itemId,
-  collection,
-  fields,
-  contentTypes,
-  tab,
-  comment,
-  onTab,
-  onClose,
-  onMoved,
-}: {
+type ItemPanelProps = {
   itemId: string;
   collection: Resource;
   fields: FieldDefinition[];
@@ -65,7 +56,31 @@ export function ItemSheet({
   onTab: (tab: string) => void;
   onClose: () => void;
   onMoved: (resource: Resource) => void;
-}) {
+};
+
+/** The item panel next to its list: the file, details and the other tabs, with item actions in the header menu. */
+export function ItemSheet(props: ItemPanelProps) {
+  return <ItemPanel {...props} chrome="sheet" />;
+}
+
+/**
+ * The item's details and tabs, as a sheet beside its list or as the viewer's
+ * info panel. The panel reports unsaved details, so whatever hosts it can ask
+ * before it goes.
+ */
+export function ItemPanel({
+  itemId,
+  collection,
+  fields,
+  contentTypes,
+  tab,
+  comment,
+  onTab,
+  onClose,
+  onMoved,
+  chrome,
+  onDirty,
+}: ItemPanelProps & { chrome: 'sheet' | 'panel'; onDirty?: (dirty: boolean) => void }) {
   const queryClient = useQueryClient();
   const format = useFormat();
   const names = usePeopleNames();
@@ -73,6 +88,9 @@ export function ItemSheet({
   const item = itemQuery.data;
   const library = collection.kind === 'library';
   const [dirty, setDirty] = useState(false);
+  useEffect(() => onDirty?.(dirty), [dirty, onDirty]);
+  const replaceInput = useRef<HTMLInputElement>(null);
+  const replaceFile = useReplaceFile(item);
   const [confirmingClose, setConfirmingClose] = useState(false);
   const [dialog, setDialog] = useState<'move' | 'classify' | 'delete' | 'schema' | 'rename'>();
   const remove = useMutation({
@@ -109,17 +127,19 @@ export function ItemSheet({
   ];
   const current = tabs.includes(tab) ? tab : 'details';
   const editor = item?.updated_by ? (names.get(item.updated_by) ?? item.updated_by) : undefined;
+  const sheet = chrome === 'sheet';
+  const Title = sheet ? SheetTitle : 'h2';
+  const Description = sheet ? SheetDescription : 'p';
 
-  return (
-    <Sheet open onOpenChange={(open) => !open && close()}>
-      <SheetContent aria-describedby={undefined}>
+  const body = (
+    <>
         <header className="flex items-start gap-2 border-b px-4 py-3">
           <div className="min-w-0 flex-1">
-            <SheetTitle className="truncate text-base font-semibold">{item?.name ?? (itemQuery.isPending ? '…' : 'Item')}{item?.archived && <Badge className="ml-2">Archived</Badge>}</SheetTitle>
-            <SheetDescription className="truncate text-xs text-muted">
+            <Title className="truncate text-base font-semibold">{item?.name ?? (itemQuery.isPending ? '…' : 'Item')}{item?.archived && <Badge className="ml-2">Archived</Badge>}</Title>
+            <Description className="truncate text-xs text-muted">
               {collection.name}
               {item?.updated_at && ` · Updated ${format.relative(item.updated_at)}${editor ? ` by ${editor}` : ''}`}
-            </SheetDescription>
+            </Description>
           </div>
           {item && hasActions && (
             <DropdownMenu>
@@ -162,8 +182,20 @@ export function ItemSheet({
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          <SheetClose />
+          {sheet ? (
+            <SheetClose />
+          ) : (
+            <Button variant="ghost" size="icon" aria-label="Close the info panel" onClick={close}>
+              <X />
+            </Button>
+          )}
         </header>
+        {item && isFile && sheet && (
+          <>
+            <FileBar item={item} draft={publishState(item, !!collection.publishing_enabled) === 'Draft'} canWrite={canWrite} onUpload={() => replaceInput.current?.click()} />
+            <ReplaceInput input={replaceInput} onFile={(file) => replaceFile.mutate(file)} />
+          </>
+        )}
         {item ? (
           <Tabs value={current} onValueChange={onTab} className="flex min-h-0 flex-1 flex-col">
             <TabsList className="shrink-0 overflow-x-auto">
@@ -268,8 +300,48 @@ export function ItemSheet({
             onClose();
           }}
         />
-      </SheetContent>
+    </>
+  );
+  return sheet ? (
+    <Sheet open onOpenChange={(open) => !open && close()}>
+      <SheetContent aria-describedby={undefined}>{body}</SheetContent>
     </Sheet>
+  ) : (
+    <aside aria-label="Item info" className="flex h-full min-h-0 flex-col bg-surface">
+      {body}
+    </aside>
+  );
+}
+
+/** Replaces an item's file with a new version. */
+function useReplaceFile(item: Resource | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => replaceContent(item!.id, item!.version, file),
+    onSuccess: async (result) => {
+      await queryClient.invalidateQueries({ queryKey: keys.resources });
+      const duplicates = result.data.duplicates ?? [];
+      if (duplicates.length)
+        toast.warning(`Already stored elsewhere: ${duplicates.map((duplicate) => duplicate.name).join(', ')}`);
+      else toast.success(item?.file ? 'File replaced' : 'File uploaded');
+    },
+  });
+}
+
+function ReplaceInput({ input, onFile }: { input: React.RefObject<HTMLInputElement | null>; onFile: (file: File) => void }) {
+  return (
+    <input
+      ref={input}
+      type="file"
+      className="sr-only"
+      tabIndex={-1}
+      aria-label="Replacement file"
+      onChange={(event) => {
+        const file = event.target.files?.[0];
+        if (file) onFile(file);
+        event.target.value = '';
+      }}
+    />
   );
 }
 
@@ -402,16 +474,8 @@ function Content({ item, canWrite }: { item: Resource; canWrite: boolean }) {
       toast.success('File restored as a new version');
     },
   });
-  const replace = useMutation({
-    mutationFn: (file: File) => replaceContent(item.id, item.version, file),
-    onSuccess: async (result) => {
-      await queryClient.invalidateQueries({ queryKey: keys.resources });
-      const duplicates = result.data.duplicates ?? [];
-      if (duplicates.length)
-        toast.warning(`Already stored elsewhere: ${duplicates.map((duplicate) => duplicate.name).join(', ')}`);
-      else toast.success('File replaced');
-    },
-  });
+  const replace = useReplaceFile(item);
+  const link = useOpenFileLink();
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap gap-2">
@@ -423,20 +487,15 @@ function Content({ item, canWrite }: { item: Resource; canWrite: boolean }) {
             <Upload /> {replace.isPending ? 'Uploading…' : 'Replace file'}
           </Button>
         )}
-        <input
-          ref={input}
-          type="file"
-          className="sr-only"
-          tabIndex={-1}
-          aria-label="Replacement file"
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (file) replace.mutate(file);
-            event.target.value = '';
-          }}
-        />
+        <ReplaceInput input={input} onFile={(file) => replace.mutate(file)} />
       </div>
-      <FilePreview itemId={item.id} version={item.version} alt={`Preview of ${item.name}`} />
+      {viewable(item) ? (
+        <Link {...link(item)} aria-label={`Open ${item.file?.filename ?? item.name}`} className="cursor-zoom-in rounded-md focus-visible:ring-2 focus-visible:ring-ring">
+          <FilePreview itemId={item.id} version={item.version} alt={`Preview of ${item.name}`} />
+        </Link>
+      ) : (
+        <FileThumb item={item} className="h-40" iconClassName="size-12" />
+      )}
       {canWrite && (
         <p className="text-xs text-muted">Replacing the file keeps the name, keywords and columns, and adds a new file version.</p>
       )}
@@ -462,6 +521,11 @@ function Content({ item, canWrite }: { item: Resource; canWrite: boolean }) {
                     {unavailable && ' · content unavailable'}
                   </p>
                 </div>
+                {!unavailable && viewable({ file: { blob_id: version.id, content_type: version.content_type, filename: version.filename, size: version.size, version: version.version } }) && (
+                  <Link {...link(item, version.is_current ? {} : { blob: version.id })} aria-label={`Open version ${version.version}`} className={buttonVariants({ size: 'sm', variant: 'ghost' })}>
+                    <Expand />
+                  </Link>
+                )}
                 {!unavailable && (
                   <Button
                     size="sm"

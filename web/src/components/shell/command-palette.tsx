@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from '@tanstack/react-router';
+import { useNavigate, useRouterState } from '@tanstack/react-router';
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { collectionChildren, smartFoldersQuery, workspacesQuery } from '@/api/queries';
+import { collectionChildren, resourceQuery, smartFoldersQuery, workspacesQuery } from '@/api/queries';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { downloadContent } from '@/features/documents/transfer';
+import { useOpenFile, viewable } from '@/features/files/file-action';
 import { useSearchAvailable } from '@/lib/search';
 
 interface Palette {
@@ -64,6 +66,12 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
     queryFn: () => collectionChildren(workspaceId!),
   });
 
+  // The item open in a list is the palette's subject: its file can be opened or downloaded from here.
+  const openItem = useRouterState({ select: (state) => (state.location.pathname.includes('/l/') ? (state.location.search as { item?: string }).item : undefined) });
+  const item = useQuery({ ...resourceQuery(openItem ?? ''), enabled: !!openItem });
+  const openFile = useOpenFile();
+  const file = item.data?.file;
+
   function go(to: string) {
     onClose();
     void navigate({ href: to });
@@ -74,6 +82,28 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
       <CommandInput placeholder="Search or jump to…" autoFocus />
       <CommandList>
         <CommandEmpty>{searchAvailable ? 'No matches. Press enter on Search to look through items.' : 'No matches.'}</CommandEmpty>
+        {item.data && file && (
+          <CommandGroup heading={item.data.name}>
+            {viewable(item.data) && (
+              <CommandItem
+                onSelect={() => {
+                  onClose();
+                  openFile(item.data!);
+                }}
+              >
+                Open file
+              </CommandItem>
+            )}
+            <CommandItem
+              onSelect={() => {
+                onClose();
+                void downloadContent(item.data!.id, file.filename);
+              }}
+            >
+              Download file
+            </CommandItem>
+          </CommandGroup>
+        )}
         <CommandGroup heading="Go to">
           {jumps.filter((jump) => jump.to !== '/search' || searchAvailable).map((jump) => (
             <CommandItem key={jump.to} onSelect={() => go(jump.to)}>

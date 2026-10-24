@@ -1,6 +1,6 @@
 import { useArchiveActions } from './archive-actions';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
+import { Link, useCanGoBack, useRouter } from '@tanstack/react-router';
 import {
   ChevronRight,
   FilePlus,
@@ -40,6 +40,8 @@ import { Select } from '@/components/ui/select';
 import { QueryFeedback } from '@/features/admin/common';
 import { OperationProgress } from '@/features/admin/operation-progress';
 import { useUploads } from '@/features/documents/uploads';
+import { FileLinksProvider, openFileLink, type FileItem, type OpenFileOptions } from '@/features/files/file-action';
+import { FileViewer } from '@/features/files/viewer';
 import { FieldEditor } from '@/features/fields/editor';
 import { useResourceNames, useValueNames } from '@/features/fields/names';
 import { valuesPatch } from '@/features/fields/values';
@@ -66,6 +68,12 @@ export interface CollectionSearch {
   folder?: string;
   view?: string;
   item?: string;
+  /** `file` shows the item's file in the viewer instead of its details. */
+  open?: 'file';
+  /** The PDF page the viewer shows. */
+  page?: number;
+  /** An earlier file version the viewer shows. */
+  blob?: string;
   tab?: string;
   /** The comment a notification points at, shown on the Discussion tab. */
   comment?: string;
@@ -98,7 +106,8 @@ export function CollectionPage({
   workspaceId: string;
   listId: string;
   search: CollectionSearch;
-  onSearch: (patch: Partial<CollectionSearch>, replace?: boolean) => void;
+  /** keepScroll leaves every scroll position alone, for changes inside the file viewer. */
+  onSearch: (patch: Partial<CollectionSearch>, replace?: boolean, keepScroll?: boolean) => void;
   onMoved: (resource: Resource) => void;
 }) {
   const queryClient = useQueryClient();
@@ -195,6 +204,23 @@ export function CollectionPage({
         ])
   ).filter((column) => column !== '$id');
   const refresh = () => queryClient.invalidateQueries({ queryKey: keys.resources });
+  // Open keeps the view, folder, search and sort, so the viewer steps through what the list shows.
+  const fileLink = (item: FileItem, options: OpenFileOptions = {}) =>
+    item.container_id === listId
+      ? {
+          to: '/w/$workspaceId/l/$listId' as const,
+          params: { workspaceId, listId },
+          search: { ...search, create: undefined, item: item.id, open: 'file' as const, page: options.page, blob: options.blob, tab: search.item === item.id ? search.tab : undefined, comment: undefined },
+        }
+      : openFileLink(item, options);
+  const viewing = search.open === 'file' && !!search.item;
+  // Closing the viewer returns to where Open was chosen: the sheet, the list, or search; a link opened afresh returns to the list.
+  const router = useRouter();
+  const canGoBack = useCanGoBack();
+  const closeViewer = () =>
+    canGoBack ? router.history.back() : onSearch({ item: undefined, open: undefined, page: undefined, blob: undefined, tab: undefined, comment: undefined });
+  const files = ownRows ? [] : rows.filter((row) => row.kind === 'item');
+  const position = viewing ? files.findIndex((row) => row.id === search.item) : -1;
   // Opening a folder found by a search shows the folder, not the search inside it.
   const open = (resource: Resource) =>
     resource.kind === 'folder'
@@ -300,7 +326,7 @@ export function CollectionPage({
       open: (itemId) => ({
         to: '/w/$workspaceId/l/$listId',
         params: { workspaceId, listId },
-        search: folder ? { folder, item: itemId } : { item: itemId },
+        search: folder ? { folder, item: itemId, open: 'file' as const } : { item: itemId, open: 'file' as const },
       }),
     }).then((results) => {
       if (list.length === 1 && results.length === 1 && mounted.current) onSearch({ item: results[0].item.id, tab: undefined });
@@ -315,6 +341,7 @@ export function CollectionPage({
   };
 
   return (
+    <FileLinksProvider value={fileLink}>
     <Screen wide className="max-w-[1600px]">
       <PageHeader
         title={
@@ -649,7 +676,7 @@ export function CollectionPage({
           )}
           {layout === 'table' && (
             <span className="ml-auto hidden md:inline">
-              <Kbd>↑</Kbd> <Kbd>↓</Kbd> move · <Kbd>Enter</Kbd> open{canEdit && <> · <Kbd>x</Kbd> select</>} · <Kbd>/</Kbd>{' '}
+              <Kbd>↑</Kbd> <Kbd>↓</Kbd> move · <Kbd>Enter</Kbd> details{library && <> · <Kbd>o</Kbd> open file</>}{canEdit && <> · <Kbd>x</Kbd> select</>} · <Kbd>/</Kbd>{' '}
               search
             </span>
           )}
@@ -707,7 +734,31 @@ export function CollectionPage({
           }}
         />
       )}
-      {search.item && (
+      {viewing && (
+        <FileViewer
+          key={search.item}
+          itemId={search.item!}
+          blob={search.blob}
+          page={search.page}
+          collection={current}
+          fields={fieldList}
+          contentTypes={typeList}
+          tab={search.tab ?? 'details'}
+          comment={search.comment}
+          siblings={
+            position < 0
+              ? {}
+              : { previous: files[position - 1]?.id, next: files[position + 1]?.id, position: position + 1, total: counted?.total ?? files.length, more: !!next && !counted }
+          }
+          onStep={(id) => onSearch({ item: id, page: undefined, blob: undefined, comment: undefined }, true, true)}
+          onPage={(page) => onSearch({ page: page > 1 ? page : undefined }, true, true)}
+          onTab={(tab) => onSearch({ tab: tab === 'details' ? undefined : tab, comment: undefined }, true, true)}
+          onClose={closeViewer}
+          onDetails={() => onSearch({ open: undefined, page: undefined, blob: undefined })}
+          onMoved={onMoved}
+        />
+      )}
+      {search.item && !viewing && (
         <ItemSheet
           itemId={search.item}
           collection={current}
@@ -721,6 +772,7 @@ export function CollectionPage({
         />
       )}
     </Screen>
+    </FileLinksProvider>
   );
 }
 

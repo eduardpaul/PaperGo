@@ -1,7 +1,17 @@
 # File handlers (plan)
 
-Status: **design agreed, nothing implemented.** The product owner settled
-every decision ([below](#decisions)).
+Status: **phase 1 implemented** (the viewer, the PDF and image handlers,
+every way to open a file, and the file summary on rows), as
+[Viewing files](../documents.md#viewing-files) describes. Phases 2 and 2b
+are next. The product owner settled every decision ([below](#decisions)).
+
+What phase 1 learned:
+- PDF.js 6 uses JavaScript features that browsers shipped only recently, so the viewer loads its legacy build, which carries their polyfills.
+- A click on a row opens the details sheet, which covers the list. So a row or card with a file waits a quarter of a second for a second click before it opens details.
+- Close and Esc go back in the browser history, so they return to wherever Open was chosen: the sheet, the list or search. A link opened afresh closes to the list.
+- Previous and next also work after a reload: the list reloads the same rows.
+- Viewer URL changes (page, step, info tab) keep scroll positions; the router would otherwise restore stale ones into the PDF.
+- There is no `?` shortcut help in the app yet. The keys show in tooltips, the right-click menu and the list's key hint.
 
 The goal has three parts:
 - **PaperGo stores any file.**
@@ -130,7 +140,7 @@ the tabs, visible on every tab:
 - **Edit** appears for editable types when the person may write. **Download** is an icon button beside the primary button.
 - **The `⋯` menu** gains Replace file and Copy file link.
 - **An item with no file yet** shows "No file yet" and an **Upload file** button. That is today's Replace action, given a name that fits.
-- **Mobile.** The sheet is full screen, and the file bar becomes a sticky bottom bar: **Open** full width, with Edit and Download as icon buttons.
+- **Mobile.** The sheet is full screen, and the file bar stays at the top. A sticky bottom bar would sit over the Details tab's Save footer.
 
 The **File** tab keeps the large preview and the version list. Clicking the preview opens the viewer, and each version row gets **Open** for that version.
 
@@ -149,7 +159,7 @@ The **File** tab keeps the large preview and the version list. Clicking the prev
 
   Elsewhere it stays hidden, so the table stays calm.
 - **Its tooltip** names the action and the key: "Open (O)".
-- **Double-click** a row to open the file.
+- **Double-click** a row to open the file. A single click waits a moment for a second click before it opens details, because the sheet would otherwise cover the row.
 - **Keys:** `o` opens the file, `Enter` opens details (unchanged) and `d` downloads.
 - **The list's keyboard hint** at the bottom reads "↑↓ move · Enter details · O open file · X select".
 
@@ -200,7 +210,7 @@ The menu is the same for one item in tables, cards, search results and smart fol
 #### Discoverability
 
 - The first time someone opens a library sheet, the **Open** button gets a one-time coach mark: "Open the whole file here. Shortcut: O". It is dismissed for good and remembered per browser.
-- The `?` shortcut help lists **O / E / D**.
+- The right-click menu shows **O**, **D** and **Enter** beside its items.
 
 ### The viewer
 
@@ -232,7 +242,7 @@ as `?item=<id>&open=file`, with optional `&page=<n>` (PDF),
   - The file name, with badges: **Draft** (a newer unpublished file than readers see), **Archived**, or **Version 3 of 7** when viewing an earlier version.
   - Previous and next.
   - The actions.
-- **Previous and next** step through the items of the list as it was showing: the same view, folder, filter, search and sort. The list hands the viewer the ordered IDs it has loaded. After a reload, or when the viewer was opened from a link, the arrows are hidden rather than guessed. An item with no handler shows the download card (see the states below), so stepping never stops.
+- **Previous and next** step through the items of the list as it was showing: the same view, folder, filter, search and sort. The viewer steps through the rows the list has loaded; a reload loads the same rows. Where the list does not know the order, as in board, calendar and navigation views or from search, the arrows are hidden rather than guessed. An item with no handler shows the download card (see the states below), so stepping never stops.
 - **Info panel** (`i`) reuses the item sheet's tabs:
   - **Details** (editable as in the sheet);
   - **Discussion**;
