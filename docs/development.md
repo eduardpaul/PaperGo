@@ -111,7 +111,8 @@ stage, so a failing job names the command that reproduces it.
 | `race` | The Go suite with race detection |
 | `web` | Frontend typecheck, lint and tests |
 | `native` | Real decision, embedding and OCR models |
-| `zvec` | Native search store conformance, parity, soak and fuzzing |
+| `zvec` | Native search store conformance and parity |
+| `soak` | Native search soak at real dimensions and timed fuzzing |
 | `release` | Builds, packages and runs the release executables with the shared assets |
 | `docker` | Builds the container image and runs its smoke test |
 | `vuln` | Reachable Go dependency vulnerabilities |
@@ -170,26 +171,27 @@ its inputs (the Dockerfile and the native SDK pins), the tag CI
 publishes to `ghcr.io/eduardpaul/papergo-ci`; it is pulled from there when you
 can read it, otherwise built locally once. `native`, `release` and `docker`
 first prepare the model presets in `.tools` with
-`scripts/prepare-preset-models.py`, which needs Docker for Laya; `docker` runs
-on the host. `scripts/ci.sh clean` removes the database, network and cache
+`scripts/prepare-preset-models.py`, which downloads and verifies them; `docker`
+runs on the host. `scripts/ci.sh clean` removes the database, network and cache
 volumes.
 
 ### Continuous integration
 
 Pull requests run `lint` and `test`: Go in two shards, PostgreSQL and the
-frontend, about ten minutes on warm caches. Pushes to `main`, a weekly
-schedule and releases also run `race` in three shards, `native`, `zvec`,
-`release` and `vuln` in the toolchain image, `release` on Windows and `zvec` on
-Linux arm64 with natively installed SDKs, and `docker`. The weekly schedule and
-manual runs also build the devcontainer and run its smoke test. The first job
-of each run publishes the toolchain image when its inputs changed. Each kind of
+frontend, about ten minutes on warm caches. Pushes to `main` and a weekly
+schedule run the Go suite as `race` in three shards instead, with PostgreSQL
+and the frontend, and add `native`, `zvec`, `release` and `vuln` in the
+toolchain image, `release` on Windows and `zvec` on Linux arm64 with natively
+installed SDKs, and `docker`. The weekly schedule and manual runs also run
+`soak` and build the devcontainer and run its smoke test. The first job of
+each run publishes the toolchain image when its inputs changed. Each kind of
 job restores its Go, npm and Staticcheck cache; runs on `main` save a new one
-once a week or when a lockfile changes, and pull requests only read them. Go test reports are uploaded even when tests
-fail. Superseded branch
-and pull request runs are cancelled; release validation keeps its serialized
-publication policy.
+once a week or when a lockfile changes, and pull requests only read them. Go
+test reports are uploaded even when tests fail. Superseded branch and pull
+request runs are cancelled. A release tag must name a commit whose run on
+`main` passed; the release workflow does not run these checks again.
 
-The devcontainer CI job builds the actual configuration and runs
+The weekly devcontainer CI job builds the actual configuration and runs
 `bash .devcontainer/smoke-test.sh` as the non-root user. The smoke test uses its
 own disposable database and ports, verifies the toolchain and writable caches,
 starts the real API under Delve, checks the embedded UI, Vite client and all

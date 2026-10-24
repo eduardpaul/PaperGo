@@ -62,7 +62,7 @@ With globally installed tools, run `npm ci --prefix web` and `npm --prefix web r
 ./scripts/check.ps1
 ```
 
-Tests initialize temporary databases from the DAL schema masters and verify repository invariants on SQLite and PostgreSQL. Pull requests run the lint and test stages; pushes to main, a weekly schedule and releases add the Go race detector, real models, native search, packaging, the container image and the dependency vulnerability scan. The Docker smoke test runs the built image directly with production authentication, a persistent data volume and a read-only root filesystem, and checks the UI, health, graceful shutdown, native search, PDFs, OCR, Laya and both embedding presets. `scripts/ci.sh docker` builds the image and runs it.
+Tests initialize temporary databases from the DAL schema masters and verify repository invariants on SQLite and PostgreSQL. Pull requests run the lint and test stages; pushes to main and a weekly schedule run the Go suite with the race detector instead and add real models, native search, packaging, the container image and the dependency vulnerability scan. The Docker smoke test runs the built image directly with production authentication, a persistent data volume and a read-only root filesystem, and checks the UI, health, graceful shutdown, native search, PDFs, OCR, Laya and both embedding presets. `scripts/ci.sh docker` builds the image and runs it.
 
 The machine-readable REST contract is in [`api/openapi.json`](api/openapi.json).
 
@@ -76,7 +76,7 @@ To build the deployable executable from the repository root:
 bash scripts/build.sh
 ```
 
-On Windows, run `./scripts/build.ps1`. These scripts install the locked frontend dependencies, build the UI, then run `scripts/build-binaries.py` and `scripts/build-assets.py`. The `bin/` directory contains both executables, their native libraries and `assets/`; copy the whole directory to deploy it. Preparing Laya from scratch requires Docker for the pinned Linux CPU exporter, cached under `.tools/decision/model`. To use an existing verified Laya directory/archive or HTTPS artifact, run `python3 scripts/prepare-preset-models.py --laya-bundle PATH_OR_URL` before building. Asset preparation also downloads and verifies both embedding presets and their model cards. Binary compilation alone needs no model downloads: `python3 scripts/build-binaries.py`. For local Go commands, first run `python3 scripts/native.py` and source `.tools/native/env.sh` (PowerShell: `. .tools/native/env.ps1`). The Docker image uses the same executable, native-library and shared-assets layout under `/opt/papergo`.
+On Windows, run `./scripts/build.ps1`. These scripts install the locked frontend dependencies, build the UI, then run `scripts/build-binaries.py` and `scripts/build-assets.py`. The `bin/` directory contains both executables, their native libraries and `assets/`; copy the whole directory to deploy it. Laya is downloaded from its published, checksum-pinned bundle into `.tools/decision/model`. To use an existing verified Laya directory/archive or HTTPS artifact, run `python3 scripts/prepare-preset-models.py --laya-bundle PATH_OR_URL` before building. Asset preparation also downloads and verifies both embedding presets and their model cards. Binary compilation alone needs no model downloads: `python3 scripts/build-binaries.py`. For local Go commands, first run `python3 scripts/native.py` and source `.tools/native/env.sh` (PowerShell: `. .tools/native/env.ps1`). The Docker image uses the same executable, native-library and shared-assets layout under `/opt/papergo`.
 
 For frontend development with hot reload, run this from `web/` alongside PaperGo:
 
@@ -276,7 +276,7 @@ which PaperGo applies at startup. See [database upgrades](docs/releases.md#datab
 
 ## Tagged binary releases
 
-Push a version tag such as `v0.1.0` to run verification, build and smoke-test Windows and Linux executables, publish archives with checksums to GitHub Releases, and publish Linux amd64/arm64 images to `ghcr.io/eduardpaul/papergo`. Stable releases update the `latest` image tag; release candidates use only their version tag. Database migrations are embedded in the executables; stop the service, replace the binaries and restart to apply them automatically. See [release management](docs/releases.md) for platform support, release candidates, blocked changes, backups and recovery.
+Push a version tag such as `v0.1.0` on a commit that passed CI on main to build and smoke-test Windows and Linux executables, publish archives with checksums to GitHub Releases, and publish Linux amd64/arm64 images to `ghcr.io/eduardpaul/papergo`. Stable releases update the `latest` image tag; release candidates use only their version tag. Database migrations are embedded in the executables; stop the service, replace the binaries and restart to apply them automatically. See [release management](docs/releases.md) for platform support, release candidates, blocked changes, backups and recovery.
 
 ## Deployment and scaling
 
@@ -298,7 +298,7 @@ This is an initial backend foundation, not a completed enterprise certification 
 
 The [NPM Compose sample](samples/npm/README.md) provisions an NPM-only authenticated deployment with HTTPS and persistent storage. The [authentik Compose sample](samples/authentik/README.md) provisions an OIDC deployment with authentik for users, groups and MFA, browser sign-in, Caddy for HTTPS, and persistent storage. The [reverse proxy guide](docs/reverse-proxies.md) covers running PaperGo behind Nginx Proxy Manager and other proxies, and syncing identity-provider users and groups.
 
-Multi-node operation requires PostgreSQL runtime integration and shared object storage. See the [storage migration checklist](reports/ent-bob-migration.md) for the current implementation status.
+Multi-node operation requires PostgreSQL runtime integration and shared object storage.
 
 Relevant upstream reference: [Bob](https://bob.stephenafamo.com/).
 

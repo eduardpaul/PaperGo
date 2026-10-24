@@ -1,11 +1,13 @@
 name: release
+# Builds, tests and publishes a version tag. The tag must name a commit
+# whose verify run on main succeeded; the release does not run CI again.
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing version tag to release or retry (vX.Y.Z or vX.Y.Z-rc.N)
+        description: Existing version tag to release (vX.Y.Z or vX.Y.Z-rc.N)
         required: true
         type: string
 permissions:
@@ -14,23 +16,14 @@ permissions:
 concurrency:
   group: papergo-release
   cancel-in-progress: false
+env:
+  IMAGE: ghcr.io/eduardpaul/papergo
+  MCP_IMAGE: ghcr.io/eduardpaul/papergo-mcp
 jobs:
-  verify:
-    # Publishes the CI toolchain image when the tag's inputs are new.
-    permissions:
-      contents: read
-      packages: write
-    uses: ./.github/workflows/ci.yml
-    with:
-      ref: ${{ inputs.tag || github.ref_name }}
   prepare:
-    permissions:
-      contents: read
-    needs: verify
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     outputs:
-      state: ${{ steps.metadata.outputs.state }}
       tag: ${{ steps.metadata.outputs.tag }}
       previous: ${{ steps.metadata.outputs.previous }}
       commit: ${{ steps.metadata.outputs.commit }}
@@ -40,49 +33,16 @@ jobs:
         with:
           ref: ${{ inputs.tag || github.ref_name }}
           fetch-depth: 0
-      - name: Check out release tooling from the workflow revision
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.workflow_sha }}
-          path: release-tools
-          sparse-checkout: scripts
-      - name: Validate tag and published history
+      - name: Check the tag, its verification on main and the published history
         id: metadata
         env:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
           GH_TOKEN: ${{ github.token }}
-        run: python3 release-tools/scripts/release-metadata.py
-  image-check:
+        run: python3 scripts/release-metadata.py
+  assets:
     needs: prepare
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: read
-    outputs:
-      image: ${{ steps.image.outputs.image }}
-      state: ${{ steps.image.outputs.state }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.workflow_sha }}
-          sparse-checkout: scripts
-      - uses: docker/login-action@v4.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Check for an existing release image
-        id: image
-        env:
-          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
-          RELEASE_COMMIT: ${{ needs.prepare.outputs.commit }}
-          GH_TOKEN: ${{ github.token }}
-        run: python3 scripts/release-image.py check
-  assets:
-    needs: [prepare, image-check]
-    if: needs.prepare.outputs.state != 'complete' || needs.image-check.outputs.state == 'missing'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -90,10 +50,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.x'
-      - uses: actions/download-artifact@v4
+      - uses: actions/cache@v4
         with:
-          name: model-presets
-          path: .tools
+          path: |
+            .tools/decision/model
+            .tools/embedding/models
+          key: presets-${{ hashFiles('internal/decision/manifest.json', 'scripts/decision-model/bundle.json', 'scripts/fetch-embedding-models.py') }}
       - name: Package shared models and assets
         env:
           RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
@@ -112,7 +74,6 @@ jobs:
           retention-days: 14
   build:
     needs: [prepare, assets]
-    if: needs.prepare.outputs.state != 'complete'
     strategy:
       fail-fast: false
       matrix:
@@ -162,9 +123,10 @@ jobs:
           path: dist/*
           if-no-files-found: error
           retention-days: 14
-  image-build:
-    needs: [prepare, image-check, assets]
-    if: needs.image-check.outputs.state == 'missing'
+  # Each platform's image is pushed by digest and tested; image-publish tags
+  # the tested digests once the GitHub release exists.
+  image:
+    needs: [prepare, assets]
     strategy:
       fail-fast: false
       matrix:
@@ -197,7 +159,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build an OCI candidate by digest
+      - name: Build an image by digest
         id: image
         uses: docker/build-push-action@v7.4.0
         with:
@@ -210,25 +172,22 @@ jobs:
             COMMIT=${{ needs.prepare.outputs.commit }}
             BUILD_DATE=${{ needs.prepare.outputs.date }}
             SOURCE_URL=${{ github.server_url }}/${{ github.repository }}
-          outputs: type=image,name=${{ needs.image-check.outputs.image }},push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
           provenance: mode=max
           sbom: true
           cache-from: type=gha,scope=release-image-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=release-image-${{ matrix.arch }}
-      - name: Pull and test the exact candidate image
+      - name: Pull and test the image
         env:
-          IMAGE: ${{ needs.image-check.outputs.image }}@${{ steps.image.outputs.digest }}
+          CANDIDATE: ${{ env.IMAGE }}@${{ steps.image.outputs.digest }}
           RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
         run: |
-          docker pull "$IMAGE"
-          python3 scripts/docker-smoke.py --image "$IMAGE" --version "$RELEASE_TAG"
+          docker pull "$CANDIDATE"
+          python3 scripts/docker-smoke.py --image "$CANDIDATE" --version "$RELEASE_TAG"
       - name: Record the tested digest
         env:
-          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
-          IMAGE_ARCH: ${{ matrix.arch }}
-        run: |
-          mkdir -p digests
-          python3 -c 'import os,pathlib; pathlib.Path("digests",os.environ["IMAGE_ARCH"]).write_text(os.environ["IMAGE_DIGEST"]+"\n")'
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: mkdir -p digests && echo "$DIGEST" > "digests/${{ matrix.arch }}"
       - uses: actions/upload-artifact@v4
         with:
           name: image-digest-${{ matrix.arch }}
@@ -236,27 +195,15 @@ jobs:
           if-no-files-found: error
           retention-days: 14
   publish:
-    needs: [prepare, assets, build, image-check, image-build]
-    if: >-
-      always() && !cancelled() && needs.prepare.result == 'success' &&
-      needs.prepare.outputs.state != 'complete' && needs.assets.result == 'success' &&
-      needs.build.result == 'success' &&
-      (needs.image-build.result == 'success' || needs.image-check.outputs.state == 'existing')
+    needs: [prepare, build, image]
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.prepare.outputs.commit }}
-          fetch-depth: 0
-      - name: Check out release tooling from the workflow revision
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.workflow_sha }}
-          path: release-tools
-          sparse-checkout: scripts
       - uses: actions/download-artifact@v4
         with:
           pattern: binary-*
@@ -269,31 +216,22 @@ jobs:
       - name: Write asset checksums
         working-directory: dist
         run: sha256sum -- * > SHA256SUMS
-      - name: Publish prepared assets or finish an empty existing release
+      - name: Create the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
           PREVIOUS_TAG: ${{ needs.prepare.outputs.previous }}
-        run: python3 release-tools/scripts/release-metadata.py --publish dist
+        run: python3 scripts/release-metadata.py --publish dist
+  # Stable releases also move latest; release candidates keep only their tag.
   image-publish:
-    needs: [prepare, image-check, image-build, publish]
-    if: >-
-      always() && !cancelled() && needs.prepare.result == 'success' &&
-      needs.image-check.result == 'success' &&
-      (needs.image-build.result == 'success' || needs.image-check.outputs.state == 'existing') &&
-      (needs.publish.result == 'success' || needs.prepare.outputs.state == 'complete')
+    needs: [prepare, publish]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.workflow_sha }}
-          sparse-checkout: scripts
       - uses: actions/download-artifact@v4
-        if: needs.image-check.outputs.state == 'missing'
         with:
           pattern: image-digest-*
           merge-multiple: true
@@ -304,19 +242,24 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Publish the tested multi-platform release image
+      - name: Tag the tested multi-platform image
         env:
           RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
           RELEASE_COMMIT: ${{ needs.prepare.outputs.commit }}
-          GH_TOKEN: ${{ github.token }}
-        run: python3 scripts/release-image.py publish
+          SOURCE_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          tags=(--tag "$IMAGE:$RELEASE_TAG")
+          if [[ $RELEASE_TAG != *-rc.* ]]; then tags+=(--tag "$IMAGE:latest"); fi
+          docker buildx imagetools create "${tags[@]}" \
+            --annotation "index:org.opencontainers.image.version=$RELEASE_TAG" \
+            --annotation "index:org.opencontainers.image.revision=$RELEASE_COMMIT" \
+            --annotation "index:org.opencontainers.image.source=$SOURCE_URL" \
+            "$IMAGE@$(cat digests/amd64)" "$IMAGE@$(cat digests/arm64)"
+          docker buildx imagetools inspect "$IMAGE:$RELEASE_TAG"
   # papergo-mcp's own image: pure Go, cross-compiled for both platforms in
-  # one build, tested, then published like the main image.
+  # one build, tested, then tagged like the main image.
   mcp-image:
     needs: [prepare, publish]
-    if: >-
-      always() && !cancelled() && needs.prepare.result == 'success' &&
-      (needs.publish.result == 'success' || needs.prepare.outputs.state == 'complete')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -326,12 +269,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.prepare.outputs.commit }}
-      - name: Check out release tooling from the workflow revision
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.workflow_sha }}
-          path: release-tools
-          sparse-checkout: scripts
       - uses: docker/setup-buildx-action@v4.4.1
         with:
           driver: docker-container
@@ -340,16 +277,8 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Check for an existing release image
-        id: check
-        env:
-          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
-          RELEASE_COMMIT: ${{ needs.prepare.outputs.commit }}
-          GH_TOKEN: ${{ github.token }}
-        run: python3 release-tools/scripts/release-image.py check --package papergo-mcp
-      - name: Build an OCI candidate by digest
+      - name: Build an image by digest
         id: image
-        if: steps.check.outputs.state == 'missing'
         uses: docker/build-push-action@v7.4.0
         with:
           context: .
@@ -361,27 +290,17 @@ jobs:
             COMMIT=${{ needs.prepare.outputs.commit }}
             BUILD_DATE=${{ needs.prepare.outputs.date }}
             SOURCE_URL=${{ github.server_url }}/${{ github.repository }}
-          outputs: type=image,name=${{ steps.check.outputs.image }},push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=${{ env.MCP_IMAGE }},push-by-digest=true,name-canonical=true,push=true
           provenance: mode=max
           sbom: true
           cache-from: type=gha,scope=release-mcp-image
           cache-to: type=gha,mode=max,scope=release-mcp-image
-      - name: Test the candidate and record its platform digests
-        if: steps.check.outputs.state == 'missing'
+      - name: Test and tag the image
         env:
-          IMAGE: ${{ steps.check.outputs.image }}@${{ steps.image.outputs.digest }}
+          CANDIDATE: ${{ env.MCP_IMAGE }}@${{ steps.image.outputs.digest }}
           RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
         run: |
-          docker run --rm --platform linux/amd64 "$IMAGE" --version | grep -F "$RELEASE_TAG"
-          mkdir -p digests
-          docker buildx imagetools inspect --raw "$IMAGE" | python3 -c 'import json,pathlib,sys
-          for m in json.load(sys.stdin)["manifests"]:
-              p = m.get("platform", {})
-              if p.get("os") == "linux" and p.get("architecture") in ("amd64", "arm64"):
-                  pathlib.Path("digests", p["architecture"]).write_text(m["digest"] + "\n")'
-      - name: Publish the tested multi-platform image
-        env:
-          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
-          RELEASE_COMMIT: ${{ needs.prepare.outputs.commit }}
-          GH_TOKEN: ${{ github.token }}
-        run: python3 release-tools/scripts/release-image.py publish --package papergo-mcp --digests digests
+          docker run --rm --platform linux/amd64 "$CANDIDATE" --version | grep -F "$RELEASE_TAG"
+          tags=(--tag "$MCP_IMAGE:$RELEASE_TAG")
+          if [[ $RELEASE_TAG != *-rc.* ]]; then tags+=(--tag "$MCP_IMAGE:latest"); fi
+          docker buildx imagetools create "${tags[@]}" "$CANDIDATE"
