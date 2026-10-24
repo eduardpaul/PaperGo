@@ -45,6 +45,10 @@ export interface ViewerProps {
   onPage?: (page: number) => void;
   /** Words to find when the file opens, such as a search's query. */
   find?: string;
+  /** The comment thread to show, for handlers that place threads in the file. */
+  comment?: string;
+  /** Shows a thread in the viewer's discussion; absent outside the viewer. */
+  onComment?: (threadId: string) => void;
   /** Steps to the previous (-1) or next (1) item, for a swipe; absent when there is none. */
   onStep?: (delta: -1 | 1) => void;
   /** Editing, for editable handlers; absent for earlier file versions. */

@@ -21303,6 +21303,14 @@
             }
           },
           {
+            "name": "anchor_kind",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Keeps the threads anchored with this kind, such as file.region."
+          },
+          {
             "name": "$top",
             "in": "query",
             "schema": {
@@ -33250,6 +33258,10 @@
           },
           "can_resolve": {
             "type": "boolean"
+          },
+          "anchor": {
+            "$ref": "#/components/schemas/CommentAnchor",
+            "description": "On a thread's first comment: where in the item the thread is."
           }
         }
       },
@@ -33334,6 +33346,17 @@
           "thread_id": {
             "type": "string",
             "description": "The thread to answer; none starts one."
+          },
+          "anchor": {
+            "description": "Places a new thread in its item; replies have none.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CommentAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false
@@ -33683,6 +33706,21 @@
           },
           "height": {
             "type": "integer"
+          }
+        }
+      },
+      "CommentAnchor": {
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "additionalProperties": true,
+        "description": "Places a thread in its item. kind names what interprets the rest, as dotted lowercase names; at most 2,048 bytes of JSON. The web app's PDF viewer writes file.region: blob_id (the file version), page (from 1), and x, y, w, h as fractions of the page's width and height from its top left.",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z][a-z0-9_-]*)*$",
+            "maxLength": 64
           }
         }
       }

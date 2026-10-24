@@ -3,12 +3,13 @@ import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-li
 import type { ReactNode } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
 import type * as Auth from '@/api/auth';
-import type { FileSummary } from '@/api/types';
+import type { CommentThread, FileSummary } from '@/api/types';
 import { editableFile, FileAction, FileLinksProvider, useClickOrOpenFile, viewable } from './file-action';
 import { fileFamily, fileTypeLabel } from './file-types';
 import { fileRef, fileSource, handlerFor } from './handlers';
 import { detectDelimiter, parseCsv } from './csv';
 import { officeApp, officeUri } from './office';
+import { fileRegion, threadsOn, turn, unturn } from './regions';
 import { comparable } from './text-compare';
 import { pagesMatching } from './text-find';
 
@@ -157,4 +158,25 @@ it('opens Office files in their desktop app over WebDAV', () => {
   expect(officeApp('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')?.name).toBe('Excel');
   expect(officeApp('application/pdf')).toBeUndefined();
   expect(officeUri(officeApp('application/msword')!, 'https://papergo.example/webdav/lib/Contracts/Lease%202026.docx')).toBe('ms-word:ofe|u|https://papergo.example/webdav/lib/Contracts/Lease%202026.docx');
+});
+
+it('places regions on turned pages and reads them back upright', () => {
+  const rect = { x: 0.1, y: 0.2, w: 0.3, h: 0.1 };
+  const close = (a: { x: number; y: number; w: number; h: number }, b: typeof a) => expect([a.x, a.y, a.w, a.h].map((n) => n.toFixed(6))).toEqual([b.x, b.y, b.w, b.h].map((n) => n.toFixed(6)));
+  close(turn(rect, 0), rect);
+  close(turn(rect, 90), { x: 0.7, y: 0.1, w: 0.1, h: 0.3 });
+  close(turn(rect, 180), { x: 0.6, y: 0.7, w: 0.3, h: 0.1 });
+  close(turn(rect, 270), { x: 0.2, y: 0.6, w: 0.1, h: 0.3 });
+  for (const rotation of [0, 90, 180, 270]) close(unturn(turn(rect, rotation), rotation), rect);
+  const region = { kind: 'file.region', blob_id: 'b1', page: 2, ...rect };
+  expect(fileRegion(region)).toEqual(region);
+  expect(fileRegion({ ...region, page: 0 })).toBeUndefined();
+  expect(fileRegion({ ...region, x: 2 })).toBeUndefined();
+  expect(fileRegion({ kind: 'text.range' })).toBeUndefined();
+  const thread = (id: string, anchor?: object) => ({ id, anchor }) as unknown as CommentThread;
+  const pins = threadsOn([thread('a', region), thread('b'), thread('c', { ...region, blob_id: 'b0' }), thread('d', { ...region, page: 3 })], 'b1');
+  expect(pins.map((pin) => [pin.thread.id, pin.number, pin.region.page])).toEqual([
+    ['a', 1, 2],
+    ['d', 2, 3],
+  ]);
 });

@@ -597,6 +597,8 @@ export interface Comment {
   can_edit: boolean;
   can_delete: boolean;
   can_resolve?: boolean;
+  /** On a thread's first comment: where in the item it is, such as a file.region on a page. */
+  anchor?: { kind: string; [key: string]: unknown };
 }
 
 export interface CommentThread extends Comment {

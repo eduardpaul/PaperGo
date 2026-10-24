@@ -217,7 +217,7 @@ export function CollectionPage({
       ? {
           to: '/w/$workspaceId/l/$listId' as const,
           params: { workspaceId, listId },
-          search: { ...search, create: undefined, item: item.id, open: 'file' as const, page: options.page, blob: options.blob, edit: options.edit || undefined, find: options.find, tab: search.item === item.id ? search.tab : undefined, comment: undefined },
+          search: { ...search, create: undefined, item: item.id, open: 'file' as const, page: options.page, blob: options.blob, edit: options.edit || undefined, find: options.find, tab: options.comment ? 'discussion' : search.item === item.id ? search.tab : undefined, comment: options.comment },
         }
       : openFileLink(item, options);
   const viewing = search.open === 'file' && !!search.item;
@@ -769,6 +769,7 @@ export function CollectionPage({
           onStep={(id) => onSearch({ item: id, page: undefined, blob: undefined, edit: undefined, find: undefined, comment: undefined }, true, true)}
           onPage={(page) => onSearch({ page: page > 1 ? page : undefined }, true, true)}
           onTab={(tab) => onSearch({ tab: tab === 'details' ? undefined : tab, comment: undefined }, true, true)}
+          onComment={(threadId) => onSearch({ tab: 'discussion', comment: threadId }, true, true)}
           onClose={closeViewer}
           onDetails={() => onSearch({ open: undefined, page: undefined, blob: undefined, edit: undefined, find: undefined })}
           onMoved={onMoved}

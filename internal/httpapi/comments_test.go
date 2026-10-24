@@ -96,7 +96,7 @@ func TestCommentRoutes(t *testing.T) {
 	if err := json.Unmarshal([]byte(body), &page); err != nil || len(page.Value) != 1 || len(page.Value[0].Replies) != 2 || page.Mode != "collaborators" || page.From != "default" || !page.CanPost {
 		t.Fatalf("threads: %s %v", body, err)
 	}
-	if visitor, err := svc.Threads(ctx, "dave", item, comments.StatusAll, 0, ""); err != nil || visitor.CanRead || len(visitor.Data) != 0 {
+	if visitor, err := svc.Threads(ctx, "dave", item, comments.Query{Status: comments.StatusAll}); err != nil || visitor.CanRead || len(visitor.Data) != 0 {
 		t.Fatalf("a visitor read collaborators' discussion: %+v %v", visitor, err)
 	}
 	body = call("GET", "/v1/items/"+item+"/mentionable?q=da", "", "", 200)
@@ -176,7 +176,7 @@ func TestCommentRoutes(t *testing.T) {
 	// A manager deletes someone's reply; the thread keeps the others.
 	second := page.Value[0].Replies[1]
 	call("DELETE", "/v1/comments/"+second.ID, "", `"`+strconv.FormatInt(second.Version, 10)+`"`, 204)
-	if threads, _ := svc.Threads(ctx, "alice", item, comments.StatusAll, 0, ""); len(threads.Data[0].Replies) != 1 {
+	if threads, _ := svc.Threads(ctx, "alice", item, comments.Query{Status: comments.StatusAll}); len(threads.Data[0].Replies) != 1 {
 		t.Fatalf("a deleted reply remains: %+v", threads.Data[0].Replies)
 	}
 
@@ -189,7 +189,7 @@ func TestCommentRoutes(t *testing.T) {
 	}
 	call("PUT", "/v1/resources/"+item+"/settings/comments", `{"mode": "readers"}`, `"0"`, 422)
 	call("PUT", "/v1/resources/"+list+"/settings/comments", `{"mode": "everyone"}`, `"1"`, 422)
-	visitor, err := svc.Threads(ctx, "dave", item, comments.StatusAll, 0, "")
+	visitor, err := svc.Threads(ctx, "dave", item, comments.Query{Status: comments.StatusAll})
 	if err != nil || !visitor.CanRead || !visitor.CanPost || len(visitor.Data) != 1 || visitor.Data[0].CanResolve {
 		t.Fatalf("a visitor among readers: %+v %v", visitor, err)
 	}
@@ -426,5 +426,48 @@ func TestCommentEditsReachOnlyReaders(t *testing.T) {
 	}
 	if got := inbox(notifications.TypeCommentMentioned); len(got) != 1 || got[0].Body != "" {
 		t.Fatalf("an edit reached someone who lost access: %+v", got)
+	}
+}
+
+func TestCommentAnchors(t *testing.T) {
+	h, s := setupWorkflows(t)
+	ctx := t.Context()
+	ws, err := s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Legal"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, err := s.Create(ctx, "alice", ws.ID, dms.CreateResource{Kind: "list", Name: "Contracts"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	item, err := s.Create(ctx, "alice", list.ID, dms.CreateResource{Kind: "item", Name: "Lease"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	call := func(method, path, body string, want int) string {
+		t.Helper()
+		w := request(h, method, path, body, testToken, "", "application/json")
+		if w.Code != want {
+			t.Fatalf("%s %s: %d %s", method, path, w.Code, w.Body)
+		}
+		return w.Body.String()
+	}
+	base := "/v1/items/" + item.ID + "/comments"
+	var root comments.View
+	body := call("POST", base, `{"body": "Check this clause", "anchor": {"kind": "file.region", "blob_id": "b1", "page": 2, "x": 0.1, "y": 0.2, "w": 0.3, "h": 0.05}}`, 201)
+	if err = json.Unmarshal([]byte(body), &root); err != nil || !strings.Contains(string(root.Anchor), `"kind":"file.region"`) {
+		t.Fatalf("anchored: %s %v", body, err)
+	}
+	call("POST", base, `{"body": "General", "anchor": null}`, 201)
+	call("POST", base, `{"body": "Reply", "thread_id": "`+root.ID+`", "anchor": {"kind": "file.region"}}`, 422)
+	call("POST", base, `{"body": "No kind", "anchor": {"page": 1}}`, 422)
+	call("POST", base, `{"body": "Not an object", "anchor": [1]}`, 422)
+	all := call("GET", base, "", 200)
+	pinned := call("GET", base+"?anchor_kind=file.region", "", 200)
+	if strings.Count(all, `"thread_id"`) != 2 || strings.Count(pinned, `"thread_id"`) != 1 || !strings.Contains(pinned, `"page":2`) {
+		t.Fatalf("all: %s\npinned: %s", all, pinned)
+	}
+	if got := call("GET", "/v1/comments/"+root.ID, "", 200); !strings.Contains(got, `"anchor":{`) {
+		t.Fatalf("one comment: %s", got)
 	}
 }

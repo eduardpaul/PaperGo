@@ -146,6 +146,10 @@ replacements:
     match:
       name: "input"
     replace: "types.JSON[json.RawMessage]"
+  - tables: ["comments"]
+    match:
+      name: "anchor"
+    replace: "types.JSON[json.RawMessage]"
   - tables: ["domain_events"]
     match:
       name: "data"

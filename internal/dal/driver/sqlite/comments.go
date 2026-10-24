@@ -34,6 +34,9 @@ func (q Queries) Roots(ctx context.Context, f comments.Threads) ([]comments.Comm
 			query.Apply(sm.Where(c.ResolvedAt.IsNull()))
 		}
 	}
+	if f.AnchorKind != "" {
+		query.Apply(sm.Where(sqlite.Raw(`json_extract("comments"."anchor", '$.kind') = ?`, f.AnchorKind)))
+	}
 	// A deleted root stays while its thread has replies.
 	query.Apply(sm.Where(sqlite.Or(c.DeletedAt.IsNull(), sqlite.Raw(`EXISTS (SELECT 1 FROM comments r WHERE r.thread_id = "comments"."id" AND r.id <> r.thread_id AND r.deleted_at IS NULL)`))))
 	if f.After != nil {
@@ -62,7 +65,7 @@ func (q Queries) InsertComment(ctx context.Context, c comments.Comment) error {
 	_, err := models.Comments.Insert(&models.CommentSetter{
 		ID: omit.From(c.ID), CreatedAt: omit.From(c.CreatedAt), UpdatedAt: omit.From(c.UpdatedAt), Version: omit.From(c.Version),
 		ItemID: omit.From(c.ItemID), ThreadID: omit.From(c.ThreadID), Author: omit.From(c.Author), Source: omit.From(string(c.Source)),
-		WorkflowID: nullable.String(c.WorkflowID), Body: omit.From(c.Body),
+		WorkflowID: nullable.String(c.WorkflowID), Body: omit.From(c.Body), Anchor: nullable.JSON(c.Anchor),
 	}).Exec(ctx, q.exec)
 	return dberr.Translate(err)
 }
@@ -155,6 +158,6 @@ func commentRecord(r *models.Comment) comments.Comment {
 	return comments.Comment{
 		ID: r.ID, ItemID: r.ItemID, ThreadID: r.ThreadID, Author: r.Author, Source: comments.Source(r.Source), WorkflowID: r.WorkflowID.GetOrZero(), Body: r.Body,
 		CreatedAt: r.CreatedAt.UTC(), UpdatedAt: r.UpdatedAt.UTC(), EditedAt: nullable.UTC(r.EditedAt), DeletedAt: nullable.UTC(r.DeletedAt), DeletedBy: r.DeletedBy.GetOrZero(),
-		ResolvedAt: nullable.UTC(r.ResolvedAt), ResolvedBy: r.ResolvedBy.GetOrZero(), Version: r.Version,
+		ResolvedAt: nullable.UTC(r.ResolvedAt), ResolvedBy: r.ResolvedBy.GetOrZero(), Version: r.Version, Anchor: r.Anchor.GetOrZero().Val,
 	}
 }

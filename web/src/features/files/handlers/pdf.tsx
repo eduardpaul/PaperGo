@@ -1,14 +1,16 @@
 import 'pdfjs-dist/legacy/web/pdf_viewer.css';
 import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Images, RotateCw, Search, X, ZoomIn, ZoomOut } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Images, MessageSquarePlus, RotateCw, Search, X, ZoomIn, ZoomOut } from 'lucide-react';
 import type * as PdfLibrary from 'pdfjs-dist/legacy/build/pdf.mjs';
 import type * as PdfComponents from 'pdfjs-dist/legacy/web/pdf_viewer.mjs';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/feedback';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import type { FileRef, ViewerProps } from '../handlers';
+import { PageRegions, threadsOn, useRegionThreads } from '../regions';
 import { PageMatches, pagesMatching, useReadText } from '../text-find';
 import { typing, useViewerKeys, ViewerBar, ViewerMessage } from '../viewer-kit';
 import { PageImages } from './pages';
@@ -82,7 +84,7 @@ export default function PdfView(props: ViewerProps) {
 }
 
 /** Every page of a PDF, with find, text selection, zoom and links, rendered by PDF.js without scripts. */
-function PdfDocument({ file, source, page, onPage, find: initialFind, onLight }: ViewerProps & { onLight?: () => void }) {
+function PdfDocument({ file, source, page, onPage, find: initialFind, comment, onComment, onLight }: ViewerProps & { onLight?: () => void }) {
   const container = useRef<HTMLDivElement>(null);
   const pages = useRef<HTMLDivElement>(null);
   const viewer = useRef<Viewer>(null);
@@ -98,6 +100,13 @@ function PdfDocument({ file, source, page, onPage, find: initialFind, onLight }:
   const scanned = pagesMatching(recognized.data, query, 'ocr');
   const [matches, setMatches] = useState<{ current: number; total: number }>();
   const findInput = useRef<HTMLInputElement>(null);
+  // Comment threads placed on regions of this file version, drawn on their pages.
+  const [pageLayers, setPageLayers] = useState<{ number: number; page: HTMLElement; layer: HTMLElement }[]>([]);
+  const [rotation, setRotation] = useState(0);
+  const [drawing, setDrawing] = useState(false);
+  const regions = useRegionThreads(file, !!onComment);
+  const pins = threadsOn(regions.data?.threads, file.blobId);
+  const canComment = !!onComment && !!regions.data?.canPost;
   const initialPage = useRef(page);
   const initialQuery = useRef(initialFind);
   const reportPage = useRef(onPage);
@@ -127,6 +136,13 @@ function PdfDocument({ file, source, page, onPage, find: initialFind, onLight }:
       viewer.current = pdfViewer;
       bus.current = eventBus;
       eventBus.on('pagesinit', () => {
+        setPageLayers(
+          [...(pages.current?.querySelectorAll<HTMLElement>('.page[data-page-number]') ?? [])].map((page) => {
+            const layer = document.createElement('div');
+            layer.className = 'pointer-events-none absolute inset-0 z-[5]';
+            return { number: Number(page.dataset.pageNumber), page, layer };
+          }),
+        );
         pdfViewer.currentScaleValue = 'page-width';
         const first = initialPage.current;
         if (first && first > 1 && first <= pdfViewer.pagesCount) pdfViewer.currentPageNumber = first;
@@ -137,6 +153,7 @@ function PdfDocument({ file, source, page, onPage, find: initialFind, onLight }:
         setCurrent(pageNumber);
         reportPage.current?.(pageNumber);
       });
+      eventBus.on('rotationchanging', ({ pagesRotation }: { pagesRotation: number }) => setRotation(pagesRotation));
       eventBus.on('scalechanging', ({ scale, presetValue }: { scale: number; presetValue?: string }) => {
         setPercent(Math.round(scale * 100));
         setScale(presetValue ?? String(scale));
@@ -182,6 +199,20 @@ function PdfDocument({ file, source, page, onPage, find: initialFind, onLight }:
     };
   }, [source.url, source.headers]);
 
+  // PDF.js empties a page each time it draws it again, so each page's region layer goes back on.
+  useEffect(() => {
+    const element = pages.current;
+    if (!element || pageLayers.length === 0) return;
+    const layers = new Set<Node>(pageLayers.map(({ layer }) => layer));
+    const attach = () => pageLayers.forEach(({ page, layer }) => layer.parentNode !== page && page.append(layer));
+    attach();
+    const observer = new MutationObserver((records) => {
+      if (records.some((record) => [...record.removedNodes].some((node) => layers.has(node)))) attach();
+    });
+    observer.observe(element, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [pageLayers]);
+
   // A fitted scale fits again when the canvas changes size, as when the info panel opens.
   useEffect(() => {
     const element = container.current;
@@ -209,6 +240,21 @@ function PdfDocument({ file, source, page, onPage, find: initialFind, onLight }:
 
   const ready = state.status === 'ready';
   const total = ready ? state.pages : 0;
+
+  // A page asked for from outside, as by a comment's page link, is shown.
+  useEffect(() => {
+    const pdf = viewer.current;
+    if (ready && pdf && page && page !== pdf.currentPageNumber && page <= pdf.pagesCount) pdf.currentPageNumber = page;
+  }, [page, ready]);
+  // A thread asked for is shown on its page once.
+  const shownThread = useRef<string>(undefined);
+  const focusPage = pins.find((pin) => pin.thread.id === comment)?.region.page;
+  useEffect(() => {
+    const pdf = viewer.current;
+    if (!ready || !pdf || !comment || !focusPage || shownThread.current === comment) return;
+    shownThread.current = comment;
+    if (focusPage !== pdf.currentPageNumber) pdf.currentPageNumber = focusPage;
+  }, [comment, focusPage, ready]);
   const go = (target: number) => {
     if (viewer.current && target >= 1 && target <= total) viewer.current.currentPageNumber = target;
   };
@@ -232,6 +278,7 @@ function PdfDocument({ file, source, page, onPage, find: initialFind, onLight }:
     if (!ready) return false;
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') return openFind();
     if (event.key === 'Escape' && finding) return closeFind();
+    if (event.key === 'Escape' && drawing) return setDrawing(false);
     if (typing(event) || event.ctrlKey || event.metaKey || event.altKey) return false;
     if (event.key === '+' || event.key === '=') return void zoom(1);
     if (event.key === '-') return void zoom(-1);
@@ -239,6 +286,7 @@ function PdfDocument({ file, source, page, onPage, find: initialFind, onLight }:
     if (event.key === 'Home') return go(1);
     if (event.key === 'End') return go(total);
     if (event.key === 'r') return void (viewer.current && (viewer.current.pagesRotation = (viewer.current.pagesRotation + 90) % 360));
+    if (event.key === 'c' && canComment) return setDrawing(!drawing);
     return false;
   }, { first: true });
 
@@ -249,6 +297,32 @@ function PdfDocument({ file, source, page, onPage, find: initialFind, onLight }:
         <div ref={container} tabIndex={0} aria-label={`Pages of ${file.filename}`} className="absolute inset-0 overflow-auto outline-none">
           <div ref={pages} className="pdfViewer" />
         </div>
+        {ready &&
+          onComment &&
+          pageLayers.map(({ number, layer }) =>
+            createPortal(
+              <PageRegions
+                file={file}
+                page={number}
+                rotation={rotation}
+                pins={pins}
+                focus={comment}
+                drawing={drawing}
+                onOpen={onComment}
+                onDone={(threadId) => {
+                  setDrawing(false);
+                  if (threadId) onComment(threadId);
+                }}
+              />,
+              layer,
+              `regions-${number}`,
+            ),
+          )}
+        {drawing && (
+          <p role="status" className="absolute top-3 left-1/2 z-10 -translate-x-1/2 rounded-full bg-foreground px-3 py-1 text-xs text-background shadow">
+            Drag over the area to comment on, or click a spot. Esc cancels.
+          </p>
+        )}
         {state.status !== 'ready' && (
           <div className="absolute inset-0 bg-surface-muted">
             {state.status === 'loading' ? (
@@ -297,6 +371,11 @@ function PdfDocument({ file, source, page, onPage, find: initialFind, onLight }:
           <Button size="icon" variant="ghost" aria-label="Rotate the view (R)" onClick={() => viewer.current && (viewer.current.pagesRotation = (viewer.current.pagesRotation + 90) % 360)}>
             <RotateCw />
           </Button>
+          {canComment && (
+            <Button size="sm" variant={drawing ? 'secondary' : 'ghost'} aria-pressed={drawing} aria-label="Comment on an area (C)" title="Comment on an area (C)" onClick={() => setDrawing(!drawing)}>
+              <MessageSquarePlus /> <span className="hidden md:inline">Comment</span>
+            </Button>
+          )}
           <span className="mx-1 h-5 w-px bg-border" aria-hidden />
           {finding ? (
             <form

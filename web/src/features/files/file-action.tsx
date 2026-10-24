@@ -27,6 +27,8 @@ export interface OpenFileOptions {
   edit?: boolean;
   /** Words to find in the file when it opens. */
   find?: string;
+  /** A comment thread to show in the file, such as one on a region of a page. */
+  comment?: string;
 }
 
 /**
@@ -40,7 +42,7 @@ export function openFileLink(item: FileItem, options: OpenFileOptions = {}): Lin
   return {
     to: '/w/$workspaceId/l/$listId',
     params: { workspaceId: item.workspace_id, listId: item.container_id ?? '' },
-    search: { item: item.id, open: 'file', page: options.page, blob: options.blob, edit: options.edit || undefined, find: options.find },
+    search: { item: item.id, open: 'file', page: options.page, blob: options.blob, edit: options.edit || undefined, find: options.find, comment: options.comment },
   };
 }
 

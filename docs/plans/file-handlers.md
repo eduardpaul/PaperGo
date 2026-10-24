@@ -1,17 +1,17 @@
 # File handlers (plan)
 
-Status: **phases 1 to 4 implemented, except comments anchored to a PDF
-page or region**, which need a core extension point that awaits a decision.
-Implemented: the viewer and its PDF, image, TIFF, Markdown, text, Word and
-CSV handlers, every way to open a file, the file summary on rows, any file
+Status: **phases 1 to 4 implemented.** Implemented: the viewer and its
+PDF, image, TIFF, Markdown, text, Word and CSV handlers, every way to open a file, the file summary on rows, any file
 stored, Markdown and plain text edited and compared, page renditions, find
 in scanned pages, Office text for search, Open in Word, Excel and
-PowerPoint, and the organization's trusted hosts, as
+PowerPoint, comments on an area of a PDF page, and the organization's
+trusted hosts, as
 [Viewing files](../documents.md#viewing-files),
 [File types](../documents.md#file-types),
-[Page renditions](../previews.md#page-renditions) and
-[Trusted hosts](../trusted-hosts.md) describe. The product owner settled
-every other decision ([below](#decisions)).
+[Page renditions](../previews.md#page-renditions),
+[Trusted hosts](../trusted-hosts.md) and
+[Comments](../comments.md#anchor-kinds) describe. The product owner settled
+every decision ([below](#decisions)).
 
 What phase 1 learned:
 - PDF.js 6 uses JavaScript features that browsers shipped only recently, so the viewer loads its legacy build, which carries their polyfills.
@@ -38,6 +38,8 @@ What phase 4 learned:
 - docx-preview empties the containers it draws into, so the Word frame keeps its own styles apart from them. The frame is sandboxed without scripts and same-origin, so the app draws into it and handles its link clicks under the trusted-hosts rule, and the browser's own find works inside it.
 - Office text reading needed no core change: `internal/officefiles` registers doctext readers, as `textfiles` does, and the search workflow lists the types; a type without a reader is skipped with 415.
 - Open in Word needs only the library's WebDAV address and the folder names above the item, so it is a web feature; Office's own lock files were already kept out of the library.
+- Comments on a PDF area needed one core socket: a thread's first comment takes an opaque `anchor` whose `kind` the API stores, validates in shape and filters on. The `file.region` kind and its pins belong to the PDF handler, so other handlers can add their own kinds without core changes.
+- PDF.js empties a page's element each time it draws it again (zoom, rotation, pages leaving the render buffer), so the pins live in a layer the viewer puts back whenever PDF.js removes it.
 
 The goal has three parts:
 - **PaperGo stores any file.**
@@ -58,6 +60,7 @@ Each file type that PaperGo can show is served by a **file handler**: a plug-in 
 | D6 | Remote content | One **organization-wide list of trusted hosts**. Content from them opens without asking. Changing the list changes every feature that reaches outside PaperGo, integrations included. See [Trusted hosts](#trusted-hosts). |
 | O1 | Trusted hosts at first | **`*`: every public host is trusted.** Administrators narrow the list by removing `*` and adding the hosts they want. |
 | O2 | Viewing Word files | **In the browser, with an npm package:** [`docx-preview`](https://www.npmjs.com/package/docx-preview) (Apache-2.0) in phase 4. |
+| O3 | Comments on a PDF area | **A generic anchor on threads.** A thread's first comment takes an optional `anchor` object with a `kind`; core stores, checks its shape, returns and filters it, and handlers interpret their kinds. The PDF handler adds `file.region`. |
 
 ## Product view
 
@@ -113,7 +116,8 @@ Each file type that PaperGo can show is served by a **file handler**: a plug-in 
 
 - Real-time co-editing, presence and in-browser editing of PDFs, images or
   Office files. The editor is single-user, with optimistic concurrency.
-- Annotations, and comments anchored to a page or region ([phase 4](#phases)).
+- Annotations drawn into a file, such as highlights or ink saved in the PDF.
+  Comments on an area of a page are in [phase 4](#phases).
 - Converting between formats, such as Markdown to PDF.
 - Malware scanning of uploads. This matters more once anything can be stored, so it is a separate proposal; `MAX_UPLOAD_BYTES` still applies.
 

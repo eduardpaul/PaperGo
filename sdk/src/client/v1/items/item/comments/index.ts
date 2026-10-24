@@ -60,6 +60,10 @@ export interface CommentsRequestBuilder extends BaseRequestBuilder<CommentsReque
  */
 export interface CommentsRequestBuilderGetQueryParameters {
     /**
+     * Keeps the threads anchored with this kind, such as file.region.
+     */
+    anchorKind?: string;
+    /**
      * Opaque continuation token supplied by @odata.nextLink.
      */
     skiptoken?: string;
@@ -70,13 +74,14 @@ export type GetStatusQueryParameterType = (typeof GetStatusQueryParameterTypeObj
 /**
  * Uri template for the request builder.
  */
-export const CommentsRequestBuilderUriTemplate = "{+baseurl}/v1/items/{id}/comments{?%24skiptoken*,%24top*,status*}";
+export const CommentsRequestBuilderUriTemplate = "{+baseurl}/v1/items/{id}/comments{?%24skiptoken*,%24top*,anchor_kind*,status*}";
 /**
  * Mapper for query parameters from symbol name to serialization name represented as a constant.
  */
 const CommentsRequestBuilderGetQueryParametersMapper: Record<string, string> = {
     "skiptoken": "%24skiptoken",
     "top": "%24top",
+    "anchorKind": "anchor_kind",
 };
 /**
  * Metadata for all the requests in the request builder.

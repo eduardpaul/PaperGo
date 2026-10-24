@@ -688,6 +688,10 @@ export type CollectionTemplate_kind = (typeof CollectionTemplate_kindObject)[key
 export type CollectionTemplate_versioning = (typeof CollectionTemplate_versioningObject)[keyof typeof CollectionTemplate_versioningObject];
 export interface Comment extends AdditionalDataHolder, Parsable {
     /**
+     * On a thread's first comment: where in the item the thread is.
+     */
+    anchor?: CommentAnchor | null;
+    /**
      * The author property
      */
     author?: CommentPerson | null;
@@ -761,6 +765,15 @@ export interface Comment extends AdditionalDataHolder, Parsable {
     workflowId?: string | null;
 }
 export type Comment_source = (typeof Comment_sourceObject)[keyof typeof Comment_sourceObject];
+/**
+ * Places a thread in its item. kind names what interprets the rest, as dotted lowercase names; at most 2,048 bytes of JSON. The web app's PDF viewer writes file.region: blob_id (the file version), page (from 1), and x, y, w, h as fractions of the page's width and height from its top left.
+ */
+export interface CommentAnchor extends AdditionalDataHolder, Parsable {
+    /**
+     * The kind property
+     */
+    kind?: string | null;
+}
 export interface CommentCounts extends AdditionalDataHolder, Parsable {
     /**
      * The counts property
@@ -776,6 +789,10 @@ export interface CommentCountsRequest extends Parsable {
     itemIds?: string[] | null;
 }
 export interface CommentCreate extends Parsable {
+    /**
+     * Places a new thread in its item; replies have none.
+     */
+    anchor?: CommentAnchor | null;
     /**
      * The body property
      */
@@ -1319,6 +1336,15 @@ export function createCollectionContentTypeFromDiscriminatorValue(parseNode: Par
 // @ts-ignore
 export function createCollectionTemplateFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoCollectionTemplate;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {CommentAnchor}
+ */
+// @ts-ignore
+export function createCommentAnchorFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoCommentAnchor;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -3999,6 +4025,7 @@ export function deserializeIntoCollectionTemplate(collectionTemplate: Partial<Co
 // @ts-ignore
 export function deserializeIntoComment(comment: Partial<Comment> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
+        "anchor": n => { comment.anchor = n.getObjectValue<CommentAnchor>(createCommentAnchorFromDiscriminatorValue); },
         "author": n => { comment.author = n.getObjectValue<CommentPerson>(createCommentPersonFromDiscriminatorValue); },
         "body": n => { comment.body = n.getStringValue(); },
         "can_delete": n => { comment.canDelete = n.getBooleanValue(); },
@@ -4017,6 +4044,17 @@ export function deserializeIntoComment(comment: Partial<Comment> | undefined = {
         "updated_at": n => { comment.updatedAt = n.getDateValue(); },
         "version": n => { comment.version = n.getNumberValue(); },
         "workflow_id": n => { comment.workflowId = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param CommentAnchor The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoCommentAnchor(commentAnchor: Partial<CommentAnchor> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "kind": n => { commentAnchor.kind = n.getStringValue(); },
     }
 }
 /**
@@ -4059,6 +4097,7 @@ export function deserializeIntoCommentCountsRequest(commentCountsRequest: Partia
 // @ts-ignore
 export function deserializeIntoCommentCreate(commentCreate: Partial<CommentCreate> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
+        "anchor": n => { commentCreate.anchor = n.getObjectValue<CommentAnchor>(createCommentAnchorFromDiscriminatorValue); },
         "body": n => { commentCreate.body = n.getStringValue(); },
         "thread_id": n => { commentCreate.threadId = n.getStringValue(); },
     }
@@ -9897,6 +9936,7 @@ export function serializeCollectionTemplate(writer: SerializationWriter, collect
 // @ts-ignore
 export function serializeComment(writer: SerializationWriter, comment: Partial<Comment> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!comment || isSerializingDerivedType) { return; }
+    writer.writeObjectValue<CommentAnchor>("anchor", comment.anchor, serializeCommentAnchor);
     writer.writeObjectValue<CommentPerson>("author", comment.author, serializeCommentPerson);
     writer.writeStringValue("body", comment.body);
     writer.writeBooleanValue("can_delete", comment.canDelete);
@@ -9916,6 +9956,18 @@ export function serializeComment(writer: SerializationWriter, comment: Partial<C
     writer.writeNumberValue("version", comment.version);
     writer.writeStringValue("workflow_id", comment.workflowId);
     writer.writeAdditionalData(comment.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param CommentAnchor The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeCommentAnchor(writer: SerializationWriter, commentAnchor: Partial<CommentAnchor> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!commentAnchor || isSerializingDerivedType) { return; }
+    writer.writeStringValue("kind", commentAnchor.kind);
+    writer.writeAdditionalData(commentAnchor.additionalData);
 }
 /**
  * Serializes information the current object
@@ -9960,6 +10012,7 @@ export function serializeCommentCountsRequest(writer: SerializationWriter, comme
 // @ts-ignore
 export function serializeCommentCreate(writer: SerializationWriter, commentCreate: Partial<CommentCreate> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!commentCreate || isSerializingDerivedType) { return; }
+    writer.writeObjectValue<CommentAnchor>("anchor", commentCreate.anchor, serializeCommentAnchor);
     writer.writeStringValue("body", commentCreate.body);
     writer.writeStringValue("thread_id", commentCreate.threadId);
 }

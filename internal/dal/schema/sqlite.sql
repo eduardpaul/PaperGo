@@ -944,9 +944,13 @@ CREATE TABLE comments (
     deleted_by TEXT,
     resolved_at DATETIME,
     resolved_by TEXT,
+    -- anchor places a thread in its item's file, such as a region of a PDF
+    -- page: an object whose kind names what interprets the rest.
+    anchor TEXT CHECK (anchor IS NULL OR (json_valid(anchor) AND json_type(anchor) = 'object' AND json_type(anchor, '$.kind') = 'text' AND length(anchor) <= 2048)),
     CHECK ((deleted_at IS NULL) = (deleted_by IS NULL)),
     CHECK ((resolved_at IS NULL) = (resolved_by IS NULL)),
     CHECK (resolved_at IS NULL OR thread_id = id),
+    CHECK (anchor IS NULL OR thread_id = id),
     CHECK (deleted_at IS NOT NULL OR length(body) >= 1)
 );
 CREATE INDEX comment_item_created ON comments(item_id, created_at, id);

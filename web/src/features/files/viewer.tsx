@@ -64,6 +64,7 @@ export function FileViewer({
   onStep,
   onPage,
   onTab,
+  onComment,
   onClose,
   onDetails,
   onMoved,
@@ -85,6 +86,8 @@ export function FileViewer({
   onStep: (itemId: string) => void;
   onPage: (page: number) => void;
   onTab: (tab: string) => void;
+  /** Shows a comment thread in the info panel's discussion. */
+  onComment: (threadId: string) => void;
   onClose: () => void;
   onDetails: () => void;
   onMoved: (resource: Resource) => void;
@@ -234,6 +237,11 @@ export function FileViewer({
             page={page}
             onPage={onPage}
             find={find}
+            comment={comment}
+            onComment={(threadId) => {
+              toggleInfo(true);
+              onComment(threadId);
+            }}
             onStep={(delta) => step(delta < 0 ? siblings.previous : siblings.next)}
             editing={editing}
           />

@@ -4,8 +4,11 @@
 package comments
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"regexp"
 	"slices"
 	"time"
 	"unicode/utf8"
@@ -31,7 +34,13 @@ const (
 	MaxBody = 10000
 	// MaxReplies bounds a thread, so a thread reads at once.
 	MaxReplies = 500
+	// MaxAnchor bounds a thread's anchor, as compact JSON.
+	MaxAnchor = 2048
 )
+
+// anchorKind is the form of an anchor's kind, such as file.region: what
+// interprets the anchor, named by the feature that does.
+var anchorKind = regexp.MustCompile(`^[a-z][a-z0-9_-]*(\.[a-z][a-z0-9_-]*)*$`)
 
 // Comment is a stored comment. A thread's root has ThreadID = ID; a deleted
 // comment keeps its place with an empty body.
@@ -48,6 +57,39 @@ type Comment struct {
 	ResolvedAt           *time.Time
 	ResolvedBy           string
 	Version              int64
+	// Anchor places a thread in its item, such as a region of a page of its
+	// file: a JSON object whose kind names what interprets the rest. Only a
+	// thread's root has one, set when the thread starts; nil means none.
+	Anchor json.RawMessage
+}
+
+// AnchorKind returns the kind of an anchor, empty for none.
+func AnchorKind(anchor json.RawMessage) string {
+	var v struct {
+		Kind string `json:"kind"`
+	}
+	if len(anchor) == 0 || json.Unmarshal(anchor, &v) != nil {
+		return ""
+	}
+	return v.Kind
+}
+
+// Anchor returns an anchor as compact JSON, checked: an object of at most
+// MaxAnchor bytes with a kind of dotted lowercase names.
+func Anchor(raw json.RawMessage) (json.RawMessage, error) {
+	var compact bytes.Buffer
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) != nil || fields == nil || json.Compact(&compact, raw) != nil {
+		return nil, fmt.Errorf("%w: an anchor is a JSON object", dberr.ErrCheckViolation)
+	}
+	if compact.Len() > MaxAnchor {
+		return nil, fmt.Errorf("%w: an anchor has at most %d bytes", dberr.ErrCheckViolation, MaxAnchor)
+	}
+	var kind string
+	if json.Unmarshal(fields["kind"], &kind) != nil || len(kind) > 64 || !anchorKind.MatchString(kind) {
+		return nil, fmt.Errorf("%w: an anchor's kind is a dotted lowercase name, such as file.region", dberr.ErrCheckViolation)
+	}
+	return compact.Bytes(), nil
 }
 
 // Root reports whether c starts a thread.
@@ -65,8 +107,10 @@ type Threads struct {
 	// Resolved keeps resolved threads when true, open ones when false, and
 	// both when nil.
 	Resolved *bool
-	After    *Key
-	Limit    int
+	// AnchorKind keeps the threads anchored with that kind; empty keeps all.
+	AnchorKind string
+	After      *Key
+	Limit      int
 }
 
 // Count is how many threads an item has, by state; deleted roots count
@@ -192,6 +236,18 @@ func (r *Repo) Create(ctx context.Context, c Comment) (Comment, error) {
 	}
 	if err := check(c); err != nil {
 		return Comment{}, err
+	}
+	if len(c.Anchor) > 0 {
+		if c.ThreadID != "" {
+			return Comment{}, fmt.Errorf("%w: only a thread's first comment is anchored", dberr.ErrCheckViolation)
+		}
+		anchor, err := Anchor(c.Anchor)
+		if err != nil {
+			return Comment{}, err
+		}
+		c.Anchor = anchor
+	} else {
+		c.Anchor = nil
 	}
 	if c.ID == "" {
 		c.ID = uuid.NewString()

@@ -10,6 +10,7 @@
 package comments
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -261,6 +262,9 @@ type View struct {
 	// CanResolve, on a thread's first comment, tells whether the reader may
 	// resolve or reopen the thread.
 	CanResolve bool `json:"can_resolve,omitempty"`
+	// Anchor, on a thread's first comment, places the thread in its item,
+	// such as a region of a page of its file.
+	Anchor json.RawMessage `json:"anchor,omitempty"`
 }
 
 // Thread is a thread's first comment and its replies, oldest first.
@@ -320,6 +324,9 @@ func (v viewer) view(c commentstore.Comment) View {
 	if c.WorkflowID != "" {
 		out.WorkflowID = &c.WorkflowID
 	}
+	if len(c.Anchor) > 0 {
+		out.Anchor = c.Anchor
+	}
 	for _, m := range c.Mentions {
 		out.Mentions = append(out.Mentions, v.person(m))
 	}
@@ -360,10 +367,24 @@ const (
 	StatusAll      Status = "all"
 )
 
+// Query selects an item's threads.
+type Query struct {
+	// Status keeps open threads by default.
+	Status Status
+	// AnchorKind keeps the threads anchored with that kind, such as
+	// file.region; empty keeps all.
+	AnchorKind string
+	// Limit is the page size, 50 by default and at most 100.
+	Limit int
+	// After continues from a page's next cursor.
+	After string
+}
+
 // Threads lists an item's threads, oldest first, each with its replies.
 // Where discussions are off or hidden from the reader, it lists none and
 // says why.
-func (s *Service) Threads(ctx context.Context, subject, itemID string, status Status, limit int, after string) (Page, error) {
+func (s *Service) Threads(ctx context.Context, subject, itemID string, query Query) (Page, error) {
+	status, limit, after := query.Status, query.Limit, query.After
 	return dms.Read(ctx, s.DMS, func(t *dms.Service) (Page, error) {
 		a, err := s.discussion(ctx, t, subject, itemID)
 		if err != nil {
@@ -373,7 +394,7 @@ func (s *Service) Threads(ctx context.Context, subject, itemID string, status St
 		if !a.read {
 			return out, nil
 		}
-		f := commentstore.Threads{ItemID: itemID}
+		f := commentstore.Threads{ItemID: itemID, AnchorKind: query.AnchorKind}
 		switch status {
 		case StatusOpen, "":
 			open := false
@@ -482,6 +503,9 @@ type Input struct {
 	Body string
 	// ThreadID answers a thread; empty starts one.
 	ThreadID string
+	// Anchor places a new thread in its item: a JSON object whose kind,
+	// such as file.region, names what interprets it. Replies have none.
+	Anchor json.RawMessage
 }
 
 // mentionsOf reads a comment's mentions and checks that those it adds to
@@ -544,7 +568,11 @@ func (s *Service) Create(ctx context.Context, subject, run, itemID string, in In
 		if err != nil {
 			return err
 		}
-		c := commentstore.Comment{ItemID: itemID, ThreadID: in.ThreadID, Author: subject, Source: commentstore.SourceUser, Body: body, Mentions: mentions}
+		anchor := in.Anchor
+		if string(bytes.TrimSpace(anchor)) == "null" {
+			anchor = nil
+		}
+		c := commentstore.Comment{ItemID: itemID, ThreadID: in.ThreadID, Author: subject, Source: commentstore.SourceUser, Body: body, Mentions: mentions, Anchor: anchor}
 		if run != "" {
 			r, err := t.DAL.Runs().Find(ctx, run)
 			if err != nil {
@@ -558,7 +586,11 @@ func (s *Service) Create(ctx context.Context, subject, run, itemID string, in In
 		if c, err = t.DAL.Comments().Create(ctx, c); err != nil {
 			return commentError(err)
 		}
-		if err = t.Record(ctx, subject, "comment.create", a.item, map[string]any{"comment_id": c.ID, "thread_id": c.ThreadID, "mentions": mentions}); err != nil {
+		details := map[string]any{"comment_id": c.ID, "thread_id": c.ThreadID, "mentions": mentions}
+		if kind := commentstore.AnchorKind(c.Anchor); kind != "" {
+			details["anchor_kind"] = kind
+		}
+		if err = t.Record(ctx, subject, "comment.create", a.item, details); err != nil {
 			return err
 		}
 		if err = s.tell(ctx, t, a, c, mentions, !c.Root()); err != nil {

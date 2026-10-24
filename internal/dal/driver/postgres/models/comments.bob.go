@@ -5,6 +5,7 @@ package models
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"time"
@@ -20,27 +21,29 @@ import (
 	"github.com/stephenafamo/bob/dialect/psql/um"
 	"github.com/stephenafamo/bob/expr"
 	"github.com/stephenafamo/bob/mods"
+	"github.com/stephenafamo/bob/types"
 	"github.com/stephenafamo/bob/types/pgtypes"
 	"github.com/stephenafamo/scan"
 )
 
 // Comment is an object representing the database table.
 type Comment struct {
-	ID         string              `db:"id,pk" `
-	CreatedAt  time.Time           `db:"created_at" `
-	UpdatedAt  time.Time           `db:"updated_at" `
-	Version    int64               `db:"version" `
-	ItemID     string              `db:"item_id" `
-	ThreadID   string              `db:"thread_id" `
-	Author     string              `db:"author" `
-	Source     string              `db:"source" `
-	WorkflowID null.Val[string]    `db:"workflow_id" `
-	Body       string              `db:"body" `
-	EditedAt   null.Val[time.Time] `db:"edited_at" `
-	DeletedAt  null.Val[time.Time] `db:"deleted_at" `
-	DeletedBy  null.Val[string]    `db:"deleted_by" `
-	ResolvedAt null.Val[time.Time] `db:"resolved_at" `
-	ResolvedBy null.Val[string]    `db:"resolved_by" `
+	ID         string                                `db:"id,pk" `
+	CreatedAt  time.Time                             `db:"created_at" `
+	UpdatedAt  time.Time                             `db:"updated_at" `
+	Version    int64                                 `db:"version" `
+	ItemID     string                                `db:"item_id" `
+	ThreadID   string                                `db:"thread_id" `
+	Author     string                                `db:"author" `
+	Source     string                                `db:"source" `
+	WorkflowID null.Val[string]                      `db:"workflow_id" `
+	Body       string                                `db:"body" `
+	EditedAt   null.Val[time.Time]                   `db:"edited_at" `
+	DeletedAt  null.Val[time.Time]                   `db:"deleted_at" `
+	DeletedBy  null.Val[string]                      `db:"deleted_by" `
+	ResolvedAt null.Val[time.Time]                   `db:"resolved_at" `
+	ResolvedBy null.Val[string]                      `db:"resolved_by" `
+	Anchor     null.Val[types.JSON[json.RawMessage]] `db:"anchor" `
 
 	R commentR `db:"-" `
 }
@@ -83,7 +86,7 @@ type commentRLoaded struct {
 
 func buildCommentColumns(tableName string) commentColumns {
 	columnsExpr := expr.NewColumnsExpr(
-		"id", "created_at", "updated_at", "version", "item_id", "thread_id", "author", "source", "workflow_id", "body", "edited_at", "deleted_at", "deleted_by", "resolved_at", "resolved_by",
+		"id", "created_at", "updated_at", "version", "item_id", "thread_id", "author", "source", "workflow_id", "body", "edited_at", "deleted_at", "deleted_by", "resolved_at", "resolved_by", "anchor",
 	)
 
 	if tableName != "" {
@@ -108,6 +111,7 @@ func buildCommentColumns(tableName string) commentColumns {
 		DeletedBy:   buildCommentColumn(tableName, "deleted_by"),
 		ResolvedAt:  buildCommentColumn(tableName, "resolved_at"),
 		ResolvedBy:  buildCommentColumn(tableName, "resolved_by"),
+		Anchor:      buildCommentColumn(tableName, "anchor"),
 	}
 }
 
@@ -129,6 +133,7 @@ type commentColumns struct {
 	DeletedBy  commentColumn
 	ResolvedAt commentColumn
 	ResolvedBy commentColumn
+	Anchor     commentColumn
 }
 
 // Alias returns the current table alias for the columns set.
@@ -174,25 +179,26 @@ func (c commentColumn) ShouldOmitParens() bool {
 // All values are optional, and do not have to be set
 // Generated columns are not included
 type CommentSetter struct {
-	ID         omit.Val[string]        `db:"id,pk" `
-	CreatedAt  omit.Val[time.Time]     `db:"created_at" `
-	UpdatedAt  omit.Val[time.Time]     `db:"updated_at" `
-	Version    omit.Val[int64]         `db:"version" `
-	ItemID     omit.Val[string]        `db:"item_id" `
-	ThreadID   omit.Val[string]        `db:"thread_id" `
-	Author     omit.Val[string]        `db:"author" `
-	Source     omit.Val[string]        `db:"source" `
-	WorkflowID omitnull.Val[string]    `db:"workflow_id" `
-	Body       omit.Val[string]        `db:"body" `
-	EditedAt   omitnull.Val[time.Time] `db:"edited_at" `
-	DeletedAt  omitnull.Val[time.Time] `db:"deleted_at" `
-	DeletedBy  omitnull.Val[string]    `db:"deleted_by" `
-	ResolvedAt omitnull.Val[time.Time] `db:"resolved_at" `
-	ResolvedBy omitnull.Val[string]    `db:"resolved_by" `
+	ID         omit.Val[string]                          `db:"id,pk" `
+	CreatedAt  omit.Val[time.Time]                       `db:"created_at" `
+	UpdatedAt  omit.Val[time.Time]                       `db:"updated_at" `
+	Version    omit.Val[int64]                           `db:"version" `
+	ItemID     omit.Val[string]                          `db:"item_id" `
+	ThreadID   omit.Val[string]                          `db:"thread_id" `
+	Author     omit.Val[string]                          `db:"author" `
+	Source     omit.Val[string]                          `db:"source" `
+	WorkflowID omitnull.Val[string]                      `db:"workflow_id" `
+	Body       omit.Val[string]                          `db:"body" `
+	EditedAt   omitnull.Val[time.Time]                   `db:"edited_at" `
+	DeletedAt  omitnull.Val[time.Time]                   `db:"deleted_at" `
+	DeletedBy  omitnull.Val[string]                      `db:"deleted_by" `
+	ResolvedAt omitnull.Val[time.Time]                   `db:"resolved_at" `
+	ResolvedBy omitnull.Val[string]                      `db:"resolved_by" `
+	Anchor     omitnull.Val[types.JSON[json.RawMessage]] `db:"anchor" `
 }
 
 func (s CommentSetter) SetColumns() []string {
-	vals := make([]string, 0, 15)
+	vals := make([]string, 0, 16)
 	if s.ID.IsValue() {
 		vals = append(vals, "id")
 	}
@@ -237,6 +243,9 @@ func (s CommentSetter) SetColumns() []string {
 	}
 	if s.ResolvedBy.IsValue() || s.ResolvedBy.IsNull() {
 		vals = append(vals, "resolved_by")
+	}
+	if s.Anchor.IsValue() || s.Anchor.IsNull() {
+		vals = append(vals, "anchor")
 	}
 	return vals
 }
@@ -286,6 +295,9 @@ func (s CommentSetter) Overwrite(t *Comment) {
 	}
 	if s.ResolvedBy.IsValue() || s.ResolvedBy.IsNull() {
 		t.ResolvedBy = s.ResolvedBy.MustGetNull()
+	}
+	if s.Anchor.IsValue() || s.Anchor.IsNull() {
+		t.Anchor = s.Anchor.MustGetNull()
 	}
 }
 
@@ -370,6 +382,11 @@ func (s *CommentSetter) Apply(q *dialect.InsertQuery) {
 				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
 			}
 			return psql.Arg(s.ResolvedBy.MustGetNull()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.Anchor.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.Anchor.MustGetNull()).WriteSQL(ctx, w, d, start)
 		}))
 }
 
@@ -378,7 +395,7 @@ func (s CommentSetter) UpdateMod() bob.Mod[*dialect.UpdateQuery] {
 }
 
 func (s CommentSetter) Expressions(prefix ...string) []bob.Expression {
-	exprs := make([]bob.Expression, 0, 15)
+	exprs := make([]bob.Expression, 0, 16)
 
 	if s.ID.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
@@ -485,6 +502,13 @@ func (s CommentSetter) Expressions(prefix ...string) []bob.Expression {
 		}})
 	}
 
+	if s.Anchor.IsValue() || s.Anchor.IsNull() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "anchor")...),
+			psql.Arg(s.Anchor),
+		}})
+	}
+
 	return exprs
 }
 
@@ -495,7 +519,7 @@ func commentScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc, fun
 		idx int
 		dst func(o *Comment) any
 	}
-	targets := make([]target, 0, 15)
+	targets := make([]target, 0, 16)
 	for i, col := range cols {
 		switch col {
 		case "id":
@@ -528,6 +552,8 @@ func commentScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc, fun
 			targets = append(targets, target{i, func(o *Comment) any { return &o.ResolvedAt }})
 		case "resolved_by":
 			targets = append(targets, target{i, func(o *Comment) any { return &o.ResolvedBy }})
+		case "anchor":
+			targets = append(targets, target{i, func(o *Comment) any { return &o.Anchor }})
 		}
 	}
 
@@ -1386,6 +1412,7 @@ type commentWhere[Q psql.Filterable] struct {
 	DeletedBy  psql.WhereNullMod[Q, string]
 	ResolvedAt psql.WhereNullMod[Q, time.Time]
 	ResolvedBy psql.WhereNullMod[Q, string]
+	Anchor     psql.WhereNullMod[Q, types.JSON[json.RawMessage]]
 	R          commentWhereR[Q]
 }
 
@@ -1411,6 +1438,7 @@ func buildCommentWhere[Q psql.Filterable](cols commentColumns) commentWhere[Q] {
 		DeletedBy:  psql.WhereNull[Q, string](cols.DeletedBy.Expression),
 		ResolvedAt: psql.WhereNull[Q, time.Time](cols.ResolvedAt.Expression),
 		ResolvedBy: psql.WhereNull[Q, string](cols.ResolvedBy.Expression),
+		Anchor:     psql.WhereNull[Q, types.JSON[json.RawMessage]](cols.Anchor.Expression),
 		R:          commentWhereR[Q]{cols: cols},
 	}
 }
