@@ -15,6 +15,14 @@ export function typing(event: KeyboardEvent) {
  * (in the capture phase), so their keys, such as Escape closing find, win over
  * the viewer's own, whichever mounted first.
  */
+/**
+ * The viewer is a modal dialog, and the dialog marks its Esc handled on its
+ * way down to the page. The viewer records that key here, so its own
+ * handling still sees it as unhandled when it bubbles back, after anything
+ * inside, such as an editor's popup, has had it.
+ */
+export const viewerEscapes = new WeakSet<Event>();
+
 export function useViewerKeys(handle: (event: KeyboardEvent) => boolean | void, { first = false }: { first?: boolean } = {}) {
   const latest = useRef(handle);
   const scope = useContext(KeyScope);
@@ -23,7 +31,7 @@ export function useViewerKeys(handle: (event: KeyboardEvent) => boolean | void, 
   });
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.isComposing) return;
+      if ((event.defaultPrevented && !viewerEscapes.has(event)) || event.isComposing) return;
       if (scope && !(event.target instanceof Node && scope.current?.contains(event.target))) return;
       if (latest.current(event) === false) return;
       event.preventDefault();

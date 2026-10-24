@@ -216,6 +216,7 @@ export function ItemsTable({
               <tr
                 key={resource.id}
                 data-index={index}
+                data-item={resource.id}
                 aria-rowindex={virtualize ? index + 2 : undefined}
                 ref={(element) => {
                   rowRefs.current[index] = element;

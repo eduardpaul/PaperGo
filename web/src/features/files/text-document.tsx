@@ -213,6 +213,8 @@ export function TextDocument({ file, source, editing, language, render, preview 
     setDraft(undefined);
     setBase(undefined);
     forget();
+    // Said at once, so leaving right after discarding does not ask again.
+    editing?.onDirty(false);
   };
   const done = () => {
     clear();

@@ -113,7 +113,7 @@ export function FileAction({ item, options, variant = 'icon', className }: { ite
   const style = variant === 'icon' ? buttonVariants({ variant: 'ghost', size: 'icon' }) : buttonVariants({ variant: 'primary' });
   if (viewable(item)) {
     return (
-      <Link {...link(item, options)} {...stop} aria-label={`Open ${item.file.filename}${options?.page ? ` at page ${options.page}` : ''}`} title="Open (O)" className={cn(style, className)}>
+      <Link {...link(item, options)} {...stop} data-open-item={item.id} aria-label={`Open ${item.file.filename}${options?.page ? ` at page ${options.page}` : ''}`} title="Open (O)" className={cn(style, className)}>
         <Expand />
         {variant === 'button' && 'Open'}
       </Link>
