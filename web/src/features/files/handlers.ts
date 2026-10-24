@@ -13,6 +13,12 @@ export interface FileRef {
   version: number;
   /** An earlier version than the one the item shows, read with its blob_id. */
   earlier?: boolean;
+  /**
+   * Bytes that are not one of the item's file versions, such as a file a
+   * workflow staged for review: handlers read only their source, with no
+   * page renditions or read text from the item.
+   */
+  detached?: boolean;
 }
 
 export function fileRef(itemId: string, file: FileSummary | null | undefined, earlier = false): FileRef | undefined {
@@ -37,6 +43,8 @@ export interface ViewerProps {
   page?: number;
   /** Reports the page in view, so links and reloads keep it. */
   onPage?: (page: number) => void;
+  /** Words to find when the file opens, such as a search's query. */
+  find?: string;
   /** Steps to the previous (-1) or next (1) item, for a swipe; absent when there is none. */
   onStep?: (delta: -1 | 1) => void;
   /** Editing, for editable handlers; absent for earlier file versions. */
@@ -89,9 +97,11 @@ export function handlerFor(file: Pick<FileRef, 'contentType' | 'filename'> | und
   return file ? handlers.find((handler) => handler.accepts(file)) : undefined;
 }
 
-const images = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/tiff']);
+const images = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 
 registerFileHandler({ id: 'pdf', accepts: (file) => file.contentType === 'application/pdf', View: lazy(() => import('./handlers/pdf')) });
 registerFileHandler({ id: 'image', accepts: (file) => images.has(file.contentType), View: lazy(() => import('./handlers/image')) });
+// Browsers cannot decode TIFF; the server renders each page of a scan.
+registerFileHandler({ id: 'pages', accepts: (file) => file.contentType === 'image/tiff', View: lazy(() => import('./handlers/pages')) });
 registerFileHandler({ id: 'markdown', accepts: (file) => file.contentType === 'text/markdown', View: lazy(() => import('./handlers/markdown')), editable: true });
 registerFileHandler({ id: 'text', accepts: (file) => file.contentType === 'text/plain', View: lazy(() => import('./handlers/text')), editable: true });

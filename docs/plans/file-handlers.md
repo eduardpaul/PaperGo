@@ -1,11 +1,13 @@
 # File handlers (plan)
 
-Status: **phases 1, 2 and 2b implemented**: the viewer, the PDF and image
-handlers, every way to open a file, the file summary on rows, any file
-stored, Markdown and plain text viewed and edited, and the organization's
-trusted hosts, as [Viewing files](../documents.md#viewing-files),
-[File types](../documents.md#file-types) and
-[Trusted hosts](../trusted-hosts.md) describe. Phase 3 is next. The product
+Status: **phases 1, 2, 2b and 3 implemented**: the viewer, the PDF, image
+and TIFF handlers, every way to open a file, the file summary on rows, any
+file stored, Markdown and plain text viewed, edited and compared, page
+renditions, find in scanned pages, and the organization's trusted hosts, as
+[Viewing files](../documents.md#viewing-files),
+[File types](../documents.md#file-types),
+[Page renditions](../previews.md#page-renditions) and
+[Trusted hosts](../trusted-hosts.md) describe. Phase 4 is next. The product
 owner settled every decision ([below](#decisions)).
 
 What phase 1 learned:
@@ -22,6 +24,12 @@ What phases 2 and 2b learned:
 - A save that finishes while someone keeps typing keeps the newer text as a draft.
 - Office and operating-system housekeeping files would have become items once any file was accepted, so WebDAV keeps them in memory apart from the library.
 - In the editor, `i` and other single keys type; Esc leaves edit unless one of Monaco's own popups is open.
+
+What phase 3 learned:
+- Go's TIFF decoder reads only the first page. Pointing a view of the file's header at each page's directory decodes every page without copying the file, so previews, text reading and page renditions share one TIFF reader.
+- Page renditions render on request rather than as stored operations: a scan is read page by page as people scroll, and a small in-memory cache and fixed widths make repeat views free. Nothing new is stored, so nothing needs cleaning up.
+- Scanned pages have no text layer, so find cannot highlight in them. It names the pages whose read text matches instead and goes to them; a file whose text was never read says so.
+- A handler shown outside the viewer, as in a review, would take the page's keys (Ctrl+F among them), so handlers take keys only from inside the box that holds them there.
 
 The goal has three parts:
 - **PaperGo stores any file.**

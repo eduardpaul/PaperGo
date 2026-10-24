@@ -79,6 +79,8 @@ export interface CollectionSearch {
   blob?: string;
   /** The viewer shows the file in its editor. */
   edit?: true;
+  /** Words the viewer finds in the file, as from a search. */
+  find?: string;
   tab?: string;
   /** The comment a notification points at, shown on the Discussion tab. */
   comment?: string;
@@ -215,7 +217,7 @@ export function CollectionPage({
       ? {
           to: '/w/$workspaceId/l/$listId' as const,
           params: { workspaceId, listId },
-          search: { ...search, create: undefined, item: item.id, open: 'file' as const, page: options.page, blob: options.blob, edit: options.edit || undefined, tab: search.item === item.id ? search.tab : undefined, comment: undefined },
+          search: { ...search, create: undefined, item: item.id, open: 'file' as const, page: options.page, blob: options.blob, edit: options.edit || undefined, find: options.find, tab: search.item === item.id ? search.tab : undefined, comment: undefined },
         }
       : openFileLink(item, options);
   const viewing = search.open === 'file' && !!search.item;
@@ -223,7 +225,7 @@ export function CollectionPage({
   const router = useRouter();
   const canGoBack = useCanGoBack();
   const closeViewer = () =>
-    canGoBack ? router.history.back() : onSearch({ item: undefined, open: undefined, page: undefined, blob: undefined, edit: undefined, tab: undefined, comment: undefined });
+    canGoBack ? router.history.back() : onSearch({ item: undefined, open: undefined, page: undefined, blob: undefined, edit: undefined, find: undefined, tab: undefined, comment: undefined });
   const files = ownRows ? [] : rows.filter((row) => row.kind === 'item');
   const position = viewing ? files.findIndex((row) => row.id === search.item) : -1;
   // Opening a folder found by a search shows the folder, not the search inside it.
@@ -757,17 +759,18 @@ export function CollectionPage({
           tab={search.tab ?? 'details'}
           comment={search.comment}
           edit={search.edit}
+          find={search.find}
           onEdit={(edit) => onSearch({ edit: edit || undefined }, true, true)}
           siblings={
             position < 0
               ? {}
               : { previous: files[position - 1]?.id, next: files[position + 1]?.id, position: position + 1, total: counted?.total ?? files.length, more: !!next && !counted }
           }
-          onStep={(id) => onSearch({ item: id, page: undefined, blob: undefined, edit: undefined, comment: undefined }, true, true)}
+          onStep={(id) => onSearch({ item: id, page: undefined, blob: undefined, edit: undefined, find: undefined, comment: undefined }, true, true)}
           onPage={(page) => onSearch({ page: page > 1 ? page : undefined }, true, true)}
           onTab={(tab) => onSearch({ tab: tab === 'details' ? undefined : tab, comment: undefined }, true, true)}
           onClose={closeViewer}
-          onDetails={() => onSearch({ open: undefined, page: undefined, blob: undefined, edit: undefined })}
+          onDetails={() => onSearch({ open: undefined, page: undefined, blob: undefined, edit: undefined, find: undefined })}
           onMoved={onMoved}
         />
       )}

@@ -2096,6 +2096,24 @@ export function createOptimizeImageFromDiscriminatorValue(parseNode: ParseNode |
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {PageList}
+ */
+// @ts-ignore
+export function createPageListFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoPageList;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {PageSize}
+ */
+// @ts-ignore
+export function createPageSizeFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoPageSize;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {Permissions_effective_grants}
  */
 // @ts-ignore
@@ -5121,6 +5139,31 @@ export function deserializeIntoOptimizeImage(optimizeImage: Partial<OptimizeImag
 }
 /**
  * The deserialization information for the current model
+ * @param PageList The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoPageList(pageList: Partial<PageList> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "blob_id": n => { pageList.blobId = n.getGuidValue(); },
+        "pages": n => { pageList.pages = n.getCollectionOfObjectValues<PageSize>(createPageSizeFromDiscriminatorValue); },
+        "truncated": n => { pageList.truncated = n.getBooleanValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param PageSize The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoPageSize(pageSize: Partial<PageSize> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "height": n => { pageSize.height = n.getNumberValue(); },
+        "width": n => { pageSize.width = n.getNumberValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
  * @param Permissions The instance to deserialize into.
  * @returns {Record<string, (node: ParseNode) => void>}
  */
@@ -8079,6 +8122,30 @@ export interface OptimizeImage extends Parsable {
      */
     targetHeight?: number | null;
 }
+export interface PageList extends AdditionalDataHolder, Parsable {
+    /**
+     * The file version listed.
+     */
+    blobId?: Guid | null;
+    /**
+     * The pages property
+     */
+    pages?: PageSize[] | null;
+    /**
+     * The file has more pages than are listed and rendered.
+     */
+    truncated?: boolean | null;
+}
+export interface PageSize extends AdditionalDataHolder, Parsable {
+    /**
+     * The height property
+     */
+    height?: number | null;
+    /**
+     * The width property
+     */
+    width?: number | null;
+}
 /**
  * SharePoint-style exclusive scopes. An inherited resource has no local grants. Grants at the nearest exclusive ancestor apply; ancestors beyond it do not. Grants within a scope are additive. Reset with inherit=true and no grants. Denies are rejected.
  */
@@ -10993,6 +11060,33 @@ export function serializeOptimizeImage(writer: SerializationWriter, optimizeImag
     writer.writeNumberValue("percentile", optimizeImage.percentile);
     writer.writeNumberValue("quality", optimizeImage.quality);
     writer.writeNumberValue("target_height", optimizeImage.targetHeight);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param PageList The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializePageList(writer: SerializationWriter, pageList: Partial<PageList> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!pageList || isSerializingDerivedType) { return; }
+    writer.writeGuidValue("blob_id", pageList.blobId);
+    writer.writeCollectionOfObjectValues<PageSize>("pages", pageList.pages, serializePageSize);
+    writer.writeBooleanValue("truncated", pageList.truncated);
+    writer.writeAdditionalData(pageList.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param PageSize The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializePageSize(writer: SerializationWriter, pageSize: Partial<PageSize> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!pageSize || isSerializingDerivedType) { return; }
+    writer.writeNumberValue("height", pageSize.height);
+    writer.writeNumberValue("width", pageSize.width);
+    writer.writeAdditionalData(pageSize.additionalData);
 }
 /**
  * Serializes information the current object

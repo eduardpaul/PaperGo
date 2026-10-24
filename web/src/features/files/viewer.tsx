@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, ChevronLeft, ChevronRight, Download, Info, Link2, MoreHorizontal, PanelRight, Pencil, Upload, X } from 'lucide-react';
-import { Component, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Download, GitCompare, Info, Link2, MoreHorizontal, PanelRight, Pencil, Upload, X } from 'lucide-react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { authorizationHeaders, fileEditMax } from '@/api/auth';
 import { api } from '@/api/http';
@@ -19,8 +19,9 @@ import { useFormat } from '@/lib/preferences';
 import { cn } from '@/lib/utils';
 import { usePeopleNames } from '@/features/fields/people';
 import { FileTypeIcon, fileTypeLabel } from './file-types';
+import { comparable, TextCompareDialog } from './text-compare';
 import { fileRef, fileSource, handlerFor, type EditSession, type FileRef } from './handlers';
-import { typing, useViewerKeys, ViewerMessage } from './viewer-kit';
+import { HandlerBoundary, typing, useViewerKeys, ViewerMessage } from './viewer-kit';
 
 const infoKey = 'papergo.viewer.info';
 function rememberedInfo() {
@@ -57,6 +58,7 @@ export function FileViewer({
   comment,
   siblings,
   edit,
+  find,
   onEdit,
   onStep,
   onPage,
@@ -76,6 +78,8 @@ export function FileViewer({
   siblings: ViewerSiblings;
   /** The file is open in its handler's editor (edit=1). */
   edit?: boolean;
+  /** Words to find in the file when it opens. */
+  find?: string;
   onEdit: (edit: boolean) => void;
   onStep: (itemId: string) => void;
   onPage: (page: number) => void;
@@ -104,6 +108,7 @@ export function FileViewer({
   const source = useMemo(() => (file ? fileSource(file) : undefined), [file?.itemId, file?.blobId, file?.earlier, authorization]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [info, setInfo] = useState(rememberedInfo);
+  const [comparing, setComparing] = useState(false);
   const toggleInfo = (open = !info) => {
     setInfo(open);
     try {
@@ -227,6 +232,7 @@ export function FileViewer({
             source={source}
             page={page}
             onPage={onPage}
+            find={find}
             onStep={(delta) => step(delta < 0 ? siblings.previous : siblings.next)}
             editing={editing}
           />
@@ -320,7 +326,21 @@ export function FileViewer({
           <Button size="sm" variant="ghost" onClick={() => item && onStep(item.id)}>
             View the current file
           </Button>
+          {item?.file && comparable(version.content_type) && comparable(item.file.content_type) && (
+            <Button size="sm" variant="ghost" onClick={() => setComparing(true)}>
+              <GitCompare /> Compare with the current file
+            </Button>
+          )}
         </div>
+      )}
+      {comparing && version && item?.file && (
+        <TextCompareDialog
+          itemId={itemId}
+          filename={item.file.filename}
+          from={{ version: version.version, blobId: version.id, contentType: version.content_type }}
+          to={{ version: item.file.version, contentType: item.file.content_type }}
+          onClose={() => setComparing(false)}
+        />
       )}
       <div className="relative flex min-h-0 flex-1">
         <div className="min-w-0 flex-1">{canvas}</div>
@@ -360,20 +380,3 @@ export function FileViewer({
 }
 
 /** A handler that fails to load or draw shows a way out instead of an empty canvas. */
-class HandlerBoundary extends Component<{ children: ReactNode; onDownload: () => void }, { failed: boolean }> {
-  state = { failed: false };
-  static getDerivedStateFromError() {
-    return { failed: true };
-  }
-  render() {
-    if (!this.state.failed) return this.props.children;
-    return (
-      <ViewerMessage title="This file could not be shown.">
-        <span>Reload the page to try again, or download the file.</span>
-        <Button variant="primary" onClick={this.props.onDownload}>
-          <Download /> Download
-        </Button>
-      </ViewerMessage>
-    );
-  }
-}

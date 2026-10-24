@@ -160,6 +160,7 @@ Every `/v1` request requires authentication: HTTP Basic or a session cookie in l
 | GET | `/v1/items/{id}/schema?surface=auto` | Immutable schema of the caller's visible content revision |
 | PUT / GET | `/v1/items/{id}/content` | Upload a blob / download the selected revision's blob; draft readers may request historical `blob_id` |
 | POST | `/v1/resources/{id}/documents` | Create a library document using multipart `file` and optional `metadata` JSON; see [documents](docs/documents.md) |
+| GET | `/v1/items/{id}/pages`, `/v1/items/{id}/pages/{page}` | The pages of the item's file, and one page rendered as WebP at a requested width, for PDFs, TIFF scans and images; see [previews](docs/previews.md#page-renditions) |
 | GET | `/v1/items/{id}/content/versions` | Retained file versions, newest first: number, file name, type, size, SHA-256, who added it, and the current one. Ordinary readers see only the published file |
 | POST | `/v1/items/{id}/content/versions/{number}/restore` | Restore an earlier file as a new version; requires current numeric `If-Match` |
 | GET | `/v1/audit` | Organization-wide feed requiring `audit.read`; actor/entity/workspace/date filters, changed properties, trace IDs and newest-first paging |

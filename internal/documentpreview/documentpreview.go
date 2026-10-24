@@ -75,15 +75,24 @@ func (r *Renderer) Register(s *dms.Service) error {
 	return s.RegisterOperationHandler(Kind, dms.OperationHandler{Scope: "document.write", Validate: validate, Execute: r.execute})
 }
 
-// Module serves POST /v1/items/{id}/preview.
-func (r *Renderer) Module() httpapi.Module { return module{r} }
+// Module serves POST /v1/items/{id}/preview, which renders the preview.
+// It also serves page renditions: GET /v1/items/{id}/pages lists the pages
+// of the caller's file, and GET /v1/items/{id}/pages/{page} renders one.
+func (r *Renderer) Module() httpapi.Module { return module{r, newPages(r)} }
 
-type module struct{ renderer *Renderer }
+type module struct {
+	renderer *Renderer
+	pages    *pages
+}
 
 func (module) Name() string { return "documentpreview" }
 
 func (m module) Routes() []httpapi.Route {
-	return []httpapi.Route{{Method: http.MethodPost, Pattern: "/v1/items/{id}/preview", OperationID: "renderItemPreview", Handle: m.render}}
+	return []httpapi.Route{
+		{Method: http.MethodPost, Pattern: "/v1/items/{id}/preview", OperationID: "renderItemPreview", Handle: m.render},
+		{Method: http.MethodGet, Pattern: "/v1/items/{id}/pages", OperationID: "listItemPages", Handle: m.pages.list},
+		{Method: http.MethodGet, Pattern: "/v1/items/{id}/pages/{page}", OperationID: "getItemPage", Handle: m.pages.page},
+	}
 }
 
 func (m module) render(w http.ResponseWriter, r *http.Request, in httpapi.Request) error {

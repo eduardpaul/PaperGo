@@ -24,6 +24,8 @@ export interface OpenFileOptions {
   blob?: string;
   /** Open the file in its editor. */
   edit?: boolean;
+  /** Words to find in the file when it opens. */
+  find?: string;
 }
 
 /**
@@ -37,7 +39,7 @@ export function openFileLink(item: FileItem, options: OpenFileOptions = {}): Lin
   return {
     to: '/w/$workspaceId/l/$listId',
     params: { workspaceId: item.workspace_id, listId: item.container_id ?? '' },
-    search: { item: item.id, open: 'file', page: options.page, blob: options.blob, edit: options.edit || undefined },
+    search: { item: item.id, open: 'file', page: options.page, blob: options.blob, edit: options.edit || undefined, find: options.find },
   };
 }
 

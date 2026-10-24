@@ -7,6 +7,8 @@ import type { FileSummary } from '@/api/types';
 import { editableFile, FileAction, FileLinksProvider, useClickOrOpenFile, viewable } from './file-action';
 import { fileFamily, fileTypeLabel } from './file-types';
 import { fileRef, fileSource, handlerFor } from './handlers';
+import { comparable } from './text-compare';
+import { pagesMatching } from './text-find';
 
 const navigate = vi.hoisted(() => vi.fn());
 const download = vi.hoisted(() => vi.fn());
@@ -40,7 +42,7 @@ const item = (summary?: FileSummary) => ({ id: 'i1', workspace_id: 'w', containe
 
 it('picks a handler by media type and leaves other files to download', () => {
   expect(handlerFor({ contentType: 'application/pdf', filename: 'a.pdf' })?.id).toBe('pdf');
-  expect(handlerFor({ contentType: 'image/tiff', filename: 'a.tif' })?.id).toBe('image');
+  expect(handlerFor({ contentType: 'image/tiff', filename: 'a.tif' })?.id).toBe('pages');
   expect(handlerFor({ contentType: 'application/zip', filename: 'a.zip' })).toBeUndefined();
   expect(viewable(item(file('image/png')))).toBe(true);
   expect(viewable(item(file('application/zip')))).toBe(false);
@@ -111,4 +113,26 @@ it('waits for a double-click on items with a file and opens others at once', () 
     vi.advanceTimersByTime(500);
   });
   expect(details).toHaveBeenCalledTimes(2);
+});
+
+it('finds pages by every word of a query, ignoring case and accents, in all pages or scanned ones', () => {
+  const text = {
+    pages: [
+      { page: 1, text: 'Invoice for March', ocr: false },
+      { page: 2, text: 'Payment received – Café Müller', ocr: true },
+      { page: 3, text: 'march payment summary', ocr: true },
+    ],
+  };
+  expect(pagesMatching(text, 'march')).toEqual([1, 3]);
+  expect(pagesMatching(text, 'march', 'ocr')).toEqual([3]);
+  expect(pagesMatching(text, 'cafe MULLER')).toEqual([2]);
+  expect(pagesMatching(text, 'payment summary')).toEqual([3]);
+  expect(pagesMatching(text, '  ')).toEqual([]);
+  expect(pagesMatching(null, 'march')).toEqual([]);
+});
+
+it('compares only text versions', () => {
+  expect(comparable('text/markdown')).toBe(true);
+  expect(comparable('text/plain')).toBe(true);
+  expect(comparable('application/pdf')).toBe(false);
 });

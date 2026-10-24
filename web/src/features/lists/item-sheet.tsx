@@ -1,7 +1,7 @@
 import { useArchiveActions } from './archive-actions';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { Download, Expand, FileCode2, FolderInput, FolderSearch, MoreHorizontal, Trash2, Upload, X } from 'lucide-react';
+import { Download, Expand, FileCode2, FolderInput, FolderSearch, GitCompare, MoreHorizontal, Trash2, Upload, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { api } from '@/api/http';
@@ -26,6 +26,7 @@ import { KeywordInput } from '@/components/keyword-input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FilePreview } from '@/features/documents/preview';
 import { FileBar, FileThumb, useOpenFileLink, viewable } from '@/features/files/file-action';
+import { comparable, TextCompareDialog } from '@/features/files/text-compare';
 import { downloadContent, replaceContent } from '@/features/documents/transfer';
 import { FieldEditor } from '@/features/fields/editor';
 import { usePeopleNames } from '@/features/fields/people';
@@ -462,7 +463,9 @@ function Content({ item, canWrite }: { item: Resource; canWrite: boolean }) {
   const names = usePeopleNames();
   const input = useRef<HTMLInputElement>(null);
   const [restoring, setRestoring] = useState<FileVersion>();
+  const [comparing, setComparing] = useState<FileVersion>();
   const versions = useApiPages<FileVersion>(['resources', item.id, 'file-versions'], `/v1/items/${item.id}/content/versions`);
+  const current = versions.items.find((version) => version.is_current);
   const restore = useMutation({
     meta: { silent: true },
     mutationFn: (version: FileVersion) =>
@@ -536,6 +539,11 @@ function Content({ item, canWrite }: { item: Resource; canWrite: boolean }) {
                     <Download />
                   </Button>
                 )}
+                {!version.is_current && !unavailable && current && comparable(version.content_type) && comparable(current.content_type) && (
+                  <Button size="sm" variant="ghost" aria-label={`Compare version ${version.version} with the current file`} title="Compare with the current file" onClick={() => setComparing(version)}>
+                    <GitCompare />
+                  </Button>
+                )}
                 {canWrite && !version.is_current && !unavailable && (
                   <Button size="sm" onClick={() => setRestoring(version)}>
                     Restore
@@ -554,6 +562,15 @@ function Content({ item, canWrite }: { item: Resource; canWrite: boolean }) {
           </Button>
         )}
       </section>
+      {comparing && current && (
+        <TextCompareDialog
+          itemId={item.id}
+          filename={current.filename}
+          from={{ version: comparing.version, blobId: comparing.id, contentType: comparing.content_type }}
+          to={{ version: current.version, contentType: current.content_type }}
+          onClose={() => setComparing(undefined)}
+        />
+      )}
       <ConfirmDialog
         open={restoring !== undefined}
         onOpenChange={(open) => !open && setRestoring(undefined)}

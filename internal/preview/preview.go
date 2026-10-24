@@ -2,14 +2,12 @@
 package preview
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"image"
 	"math"
 	"slices"
 
-	_ "golang.org/x/image/tiff"
 	"papergo/internal/doctext"
 	"papergo/internal/imaging"
 )
@@ -49,14 +47,7 @@ func Generate(ctx context.Context, data []byte, media string, pdf doctext.PDF, m
 		}
 		img, err = doc.Render(0, 100, int64(MaxDimension*MaxDimension))
 	case "image/tiff":
-		cfg, _, e := image.DecodeConfig(bytes.NewReader(data))
-		if e != nil {
-			return Result{}, e
-		}
-		if cfg.Width <= 0 || cfg.Height <= 0 || int64(cfg.Width)*int64(cfg.Height) > maxPixels {
-			return Result{}, imaging.ErrTooLarge
-		}
-		img, _, err = image.Decode(bytes.NewReader(data))
+		img, err = imaging.DecodeTIFFPage(data, 0, maxPixels)
 	default:
 		var decoded imaging.Image
 		decoded, err = imaging.Decode(data, maxPixels)

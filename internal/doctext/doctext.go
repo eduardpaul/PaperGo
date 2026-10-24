@@ -6,7 +6,6 @@
 package doctext
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -21,8 +20,6 @@ import (
 
 	"papergo/internal/imaging"
 	"papergo/internal/ocr"
-
-	_ "golang.org/x/image/tiff" // first page of TIFF scans
 )
 
 // PDF opens PDF files. Implementations are safe for concurrent use.
@@ -37,6 +34,8 @@ type Document interface {
 	Pages() int
 	// Text is the text layer of page i (from 0), as the PDF draws it.
 	Text(i int) (string, error)
+	// Size is the width and height of page i, upright, in points (1/72 inch).
+	Size(i int) (width, height float64, err error)
 	// Render draws page i upright, at most dpi dots per inch and at most
 	// maxPixels pixels.
 	Render(i, dpi int, maxPixels int64) (image.Image, error)
@@ -250,36 +249,63 @@ func extractPDF(ctx context.Context, data []byte, o Options, pdf PDF, engine ocr
 }
 
 func extractImage(ctx context.Context, data []byte, mediaType string, o Options, engine ocr.Engine) (Result, error) {
+	if mediaType == "image/tiff" {
+		return extractTIFF(ctx, data, o, engine)
+	}
 	if engine == nil {
 		return Result{Pages: []Page{{Number: 1}}, Skipped: 1}, nil
 	}
-	var img image.Image
-	if mediaType == "image/tiff" {
-		cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
-		if err != nil || cfg.Width <= 0 || cfg.Height <= 0 {
-			return Result{}, fmt.Errorf("%w: the TIFF cannot be decoded", ErrUnsupported)
-		}
-		if int64(cfg.Width)*int64(cfg.Height) > o.MaxPixels {
-			return Result{}, fmt.Errorf("%w: %d×%d pixels is above %d", imaging.ErrTooLarge, cfg.Width, cfg.Height, o.MaxPixels)
-		}
-		if img, _, err = image.Decode(bytes.NewReader(data)); err != nil {
-			return Result{}, fmt.Errorf("%w: the TIFF cannot be decoded: %w", ErrUnsupported, err)
-		}
-	} else {
-		decoded, err := imaging.Decode(data, o.MaxPixels)
-		if errors.Is(err, imaging.ErrUnsupported) || errors.Is(err, imaging.ErrAnimated) {
-			return Result{}, fmt.Errorf("%w: %w", ErrUnsupported, err)
-		}
-		if err != nil {
-			return Result{}, err
-		}
-		img = decoded.Image
+	decoded, err := imaging.Decode(data, o.MaxPixels)
+	if errors.Is(err, imaging.ErrUnsupported) || errors.Is(err, imaging.ErrAnimated) {
+		return Result{}, fmt.Errorf("%w: %w", ErrUnsupported, err)
 	}
-	read, err := engine.Recognize(ctx, img)
+	if err != nil {
+		return Result{}, err
+	}
+	read, err := engine.Recognize(ctx, decoded.Image)
 	if err != nil {
 		return Result{}, fmt.Errorf("OCR: %w", err)
 	}
 	return Result{Pages: []Page{{Number: 1, Text: clean(read.Text()), OCR: true}}, OCRPages: 1}, nil
+}
+
+// extractTIFF reads every page of a TIFF scan, up to MaxPages, with OCR.
+func extractTIFF(ctx context.Context, data []byte, o Options, engine ocr.Engine) (Result, error) {
+	pages, err := imaging.TIFFPages(data)
+	if err != nil {
+		return Result{}, fmt.Errorf("%w: %w", ErrUnsupported, err)
+	}
+	var r Result
+	n := len(pages)
+	if n > o.MaxPages {
+		n, r.Truncated = o.MaxPages, true
+	}
+	for i := range n {
+		if err = ctx.Err(); err != nil {
+			return Result{}, err
+		}
+		page := Page{Number: i + 1}
+		if engine == nil {
+			r.Skipped++
+			r.Pages = append(r.Pages, page)
+			continue
+		}
+		img, err := imaging.DecodeTIFFPage(data, i, o.MaxPixels)
+		if errors.Is(err, imaging.ErrTIFF) {
+			return Result{}, fmt.Errorf("%w: page %d: %w", ErrUnsupported, i+1, err)
+		}
+		if err != nil {
+			return Result{}, fmt.Errorf("page %d: %w", i+1, err)
+		}
+		read, err := engine.Recognize(ctx, img)
+		if err != nil {
+			return Result{}, fmt.Errorf("OCR page %d: %w", i+1, err)
+		}
+		page.Text, page.OCR = clean(read.Text()), true
+		r.OCRPages++
+		r.Pages = append(r.Pages, page)
+	}
+	return r, nil
 }
 
 // clean trims each line, drops control characters, and keeps one empty line

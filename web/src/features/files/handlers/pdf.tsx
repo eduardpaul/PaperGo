@@ -1,6 +1,6 @@
 import 'pdfjs-dist/legacy/web/pdf_viewer.css';
 import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, RotateCw, Search, X, ZoomIn, ZoomOut } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Images, RotateCw, Search, X, ZoomIn, ZoomOut } from 'lucide-react';
 import type * as PdfLibrary from 'pdfjs-dist/legacy/build/pdf.mjs';
 import type * as PdfComponents from 'pdfjs-dist/legacy/web/pdf_viewer.mjs';
 import { useEffect, useRef, useState } from 'react';
@@ -8,8 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/feedback';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
-import type { ViewerProps } from '../handlers';
+import type { FileRef, ViewerProps } from '../handlers';
+import { PageMatches, pagesMatching, useReadText } from '../text-find';
 import { typing, useViewerKeys, ViewerBar, ViewerMessage } from '../viewer-kit';
+import { PageImages } from './pages';
 
 declare const __PDFJS_ASSETS__: string;
 
@@ -45,8 +47,42 @@ const scales = [
 
 type State = { status: 'loading' } | { status: 'password'; retry: (password: string) => void; wrong: boolean } | { status: 'failed'; message: string } | { status: 'ready'; pages: number };
 
+/** Above this size a PDF opens as page images on phones and tablets with little memory. */
+const lightBytes = 25 * 1024 * 1024;
+
+/** Whether a PDF opens as server-rendered page images, sparing a small device's memory. */
+function opensLight(file: FileRef) {
+  if (file.detached || file.size < lightBytes) return false;
+  const memory = (navigator as { deviceMemory?: number }).deviceMemory;
+  return window.matchMedia?.('(pointer: coarse)').matches && (memory === undefined || memory <= 4);
+}
+
+/**
+ * A PDF: drawn by PDF.js in the browser, or, for very large files on small
+ * devices or when PDF.js cannot draw it, as page images the server renders.
+ */
+export default function PdfView(props: ViewerProps) {
+  const [light, setLight] = useState(() => opensLight(props.file));
+  if (light) {
+    return (
+      <PageImages
+        {...props}
+        notice={
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="flex-1">Showing page images, which use less memory on this device. Text selection and links need the full viewer.</span>
+            <Button size="sm" onClick={() => setLight(false)}>
+              Open the full viewer
+            </Button>
+          </span>
+        }
+      />
+    );
+  }
+  return <PdfDocument {...props} onLight={props.file.detached ? undefined : () => setLight(true)} />;
+}
+
 /** Every page of a PDF, with find, text selection, zoom and links, rendered by PDF.js without scripts. */
-export default function PdfView({ file, source, page, onPage }: ViewerProps) {
+function PdfDocument({ file, source, page, onPage, find: initialFind, onLight }: ViewerProps & { onLight?: () => void }) {
   const container = useRef<HTMLDivElement>(null);
   const pages = useRef<HTMLDivElement>(null);
   const viewer = useRef<Viewer>(null);
@@ -55,11 +91,15 @@ export default function PdfView({ file, source, page, onPage }: ViewerProps) {
   const [current, setCurrent] = useState(page ?? 1);
   const [scale, setScale] = useState<string>('page-width');
   const [percent, setPercent] = useState(100);
-  const [finding, setFinding] = useState(false);
-  const [query, setQuery] = useState('');
+  const [finding, setFinding] = useState(!!initialFind);
+  const [query, setQuery] = useState(initialFind ?? '');
+  // Scanned pages have no text layer; the text PaperGo recognized names the pages that match.
+  const recognized = useReadText(file, finding && !!query.trim());
+  const scanned = pagesMatching(recognized.data, query, 'ocr');
   const [matches, setMatches] = useState<{ current: number; total: number }>();
   const findInput = useRef<HTMLInputElement>(null);
   const initialPage = useRef(page);
+  const initialQuery = useRef(initialFind);
   const reportPage = useRef(onPage);
   useEffect(() => {
     reportPage.current = onPage;
@@ -90,6 +130,8 @@ export default function PdfView({ file, source, page, onPage }: ViewerProps) {
         pdfViewer.currentScaleValue = 'page-width';
         const first = initialPage.current;
         if (first && first > 1 && first <= pdfViewer.pagesCount) pdfViewer.currentPageNumber = first;
+        // Words a search found are highlighted from the page it opened at.
+        if (initialQuery.current) eventBus.dispatch('find', { source: null, type: '', query: initialQuery.current, caseSensitive: false, entireWord: false, highlightAll: true, findPrevious: false, matchDiacritics: false });
       });
       eventBus.on('pagechanging', ({ pageNumber }: { pageNumber: number }) => {
         setCurrent(pageNumber);
@@ -216,7 +258,14 @@ export default function PdfView({ file, source, page, onPage }: ViewerProps) {
             ) : state.status === 'password' ? (
               <PasswordForm wrong={state.wrong} onSubmit={state.retry} />
             ) : (
-              <ViewerMessage title={state.message}>Download the file to open it in another application.</ViewerMessage>
+              <ViewerMessage title={state.message}>
+                Download the file to open it in another application.
+                {onLight && (
+                  <Button onClick={onLight}>
+                    <Images /> Show page images
+                  </Button>
+                )}
+              </ViewerMessage>
             )}
           </div>
         )}
@@ -276,8 +325,9 @@ export default function PdfView({ file, source, page, onPage }: ViewerProps) {
                 }}
               />
               <span aria-live="polite" className="min-w-16 text-xs text-muted">
-                {query && matches ? (matches.total ? `${matches.current} of ${matches.total}` : 'No matches') : ''}
+                {query && matches ? (matches.total ? `${matches.current} of ${matches.total}` : scanned.length ? '' : 'No matches') : ''}
               </span>
+              <PageMatches label="Scanned pages" pages={scanned} current={current} onGo={go} />
               <Button size="icon" variant="ghost" aria-label="Previous match" disabled={!matches?.total} onClick={() => find(true, true)}>
                 <ChevronLeft />
               </Button>

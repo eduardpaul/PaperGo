@@ -253,7 +253,7 @@ function Results({
           <ul className="overflow-hidden rounded-lg border bg-surface">
             {results.items.map((hit) => (
               <li key={`${hit.id}:${hit.surface}`} className="border-b last:border-0">
-                <Hit hit={hit} where={`${collectionName(hit.collection_id)} · ${workspaceName(hit.workspace_id)}`} />
+                <Hit hit={hit} query={q} where={`${collectionName(hit.collection_id)} · ${workspaceName(hit.workspace_id)}`} />
               </li>
             ))}
           </ul>
@@ -319,7 +319,7 @@ function Facet({
 }
 
 /** A hit with where it is, when it changed, and the matching text. */
-export function Hit({ hit, where }: { hit: SearchHit; where: string }) {
+export function Hit({ hit, where, query }: { hit: SearchHit; where: string; query?: string }) {
   const navigate = useNavigate();
   const format = useFormat();
   const Icon = hit.kind === 'folder' ? Folder : File;
@@ -361,7 +361,8 @@ export function Hit({ hit, where }: { hit: SearchHit; where: string }) {
     {hit.file && (
       <FileAction
         item={{ id: hit.id, workspace_id: hit.workspace_id, container_id: hit.collection_id, name: hit.name, file: hit.file }}
-        options={{ page: hit.page }}
+        // The file opens at the matching page with the searched words found in it.
+        options={{ page: hit.page, find: query?.replace(/["*]/g, '').trim() || undefined }}
         className="absolute top-2 right-3"
       />
     )}

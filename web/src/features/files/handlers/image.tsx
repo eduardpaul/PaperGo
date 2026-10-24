@@ -3,7 +3,6 @@ import { Maximize, RotateCw, ZoomIn, ZoomOut } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/feedback';
-import { FilePreview } from '@/features/documents/preview';
 import type { ViewerProps } from '../handlers';
 import { typing, useViewerKeys, ViewerBar, ViewerMessage } from '../viewer-kit';
 
@@ -12,24 +11,7 @@ const maxZoom = 8;
 const clamp = (value: number) => Math.min(maxZoom, Math.max(minZoom, value));
 
 /** An image at full resolution: fit by default, then zoom, pan and rotate. */
-export default function ImageView(props: ViewerProps) {
-  // Browsers cannot decode TIFF; its rendition shows the first page.
-  if (props.file.contentType === 'image/tiff') {
-    return (
-      <div className="flex h-full flex-col">
-        <div className="grid min-h-0 flex-1 place-items-center overflow-auto bg-surface-muted p-4">
-          <FilePreview itemId={props.file.itemId} blobId={props.file.earlier ? props.file.blobId : undefined} alt={props.file.filename} className="bg-transparent" />
-        </div>
-        <ViewerBar>
-          <span className="text-muted">Showing a preview of the first page. Download the file for full resolution.</span>
-        </ViewerBar>
-      </div>
-    );
-  }
-  return <Picture {...props} />;
-}
-
-function Picture({ file, source, onStep }: ViewerProps) {
+export default function ImageView({ file, source, onStep }: ViewerProps) {
   const image = useQuery({
     queryKey: ['file-bytes', source.url, file.blobId],
     queryFn: async ({ signal }) => {

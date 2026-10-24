@@ -8,4 +8,17 @@ The operation pins its source while processing. Successful renditions are shared
 
 `GET /v1/items/{id}/preview` requires `item.read`, `document.read` and access to the item. It resolves the caller’s visible file before reading the shared rendition, so readers cannot inspect an unpublished replacement or another item’s preview. Optional `blob_id` follows the same retained-file permissions as content downloads. Ready responses are `image/webp` with an ETag and `X-Preview-Blob-ID`; pending responses are HTTP 202 with `status: "pending"`, the selected `blob_id` and `Retry-After: 2`. A failed render returns JSON with `status: "unavailable"`. Original file bytes are never sent by this route.
 
+## Page renditions
+
+Viewers that cannot draw a file themselves read its pages as images:
+
+- `GET /v1/items/{id}/pages` lists the pages of the caller's file, or of an earlier version with `blob_id`: `blob_id`, `pages` (each page's `width` and `height` in CSS pixels at 100 %, points at 96 DPI for PDF pages and pixels for images) and `truncated`. PDFs and multi-page TIFFs list every page, up to 2,000; a JPEG, PNG or WebP image has one.
+- `GET /v1/items/{id}/pages/{page}?width=` renders one page, from 1, as WebP at the smallest of 320, 480, 640, 960, 1280, 1600 and 2048 pixels wide that is at least `width` (default 960). Tall pages render narrower, to stay within about 8 megapixels, and images are never enlarged.
+
+Pages render on request, a few at a time, and the server keeps 64 MB of recent renditions in memory, shared by everyone reading the same bytes. With `blob_id` a page is cacheable for a year; without it, it revalidates with its ETag, since the item's file can change. Both routes need `document.read` and read access to the item, and follow the same file visibility as downloads. Other kinds of file answer `415 unsupported_file_type`, and a file whose pages cannot be read answers `422 unreadable_file`.
+
+The web app shows TIFF scans this way, and very large PDFs on small devices.
+
+## In the web app
+
 Gallery and board cards, the item's file bar and File tab, and workflow selection thumbnails use this endpoint. Pending previews show a non-blocking “Generating preview…” placeholder and poll while work is pending. File replacements invalidate the rendition request. A preview is a glance: **Open** shows the whole file in the [file viewer](documents.md#viewing-files), and **Download** retrieves the original bytes.

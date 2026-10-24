@@ -1,32 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo } from "react";
-import { fetchBlob } from "@/api/files";
+import { authorizationHeaders } from "@/api/auth";
+import { downloadFile } from "@/api/files";
 import { stagedFileQuery } from "@/api/queries";
 import type { StagedFile, Task } from "@/api/types";
 import { Alert, Skeleton } from "@/components/ui/feedback";
+import { FileView } from "@/features/files/file-view";
+import type { FileRef } from "@/features/files/handlers";
 import { useFormat } from "@/lib/preferences";
+import { useBlobUrl } from "@/lib/use-blob-url";
 import { problemMessage } from "@/lib/errors";
-
-/** An object URL of an authenticated file, revoked when it is no longer shown. */
-export function useBlobUrl(path: string | undefined) {
-  const blob = useQuery({
-    queryKey: ["blob", path],
-    queryFn: () => fetchBlob(path!),
-    enabled: !!path,
-    staleTime: Infinity,
-  });
-  const url = useMemo(
-    () => (blob.data ? URL.createObjectURL(blob.data) : undefined),
-    [blob.data],
-  );
-  useEffect(
-    () => () => {
-      if (url) URL.revokeObjectURL(url);
-    },
-    [url],
-  );
-  return { url, error: blob.error, loading: blob.isLoading };
-}
 
 /** The staged file a task asks to review, rendered by its review type. */
 export function Review({ task }: { task: Task }) {
@@ -113,25 +95,16 @@ function Compare({ file }: { file: StagedFile }) {
   );
 }
 
-/** A staged document, such as a PDF composed from photos. */
+/** A staged document, such as a PDF composed from photos, shown by the viewer's handler for its type. */
 function Preview({ file }: { file: StagedFile }) {
-  const { url, error } = useBlobUrl(`/v1/staged-files/${file.id}/content`);
-  if (error) return <Alert>{problemMessage(error)}</Alert>;
-  if (!url) return <Skeleton className="h-[70vh]" />;
-  if (file.content_type.startsWith("image/")) {
-    return (
-      <img
-        src={url}
-        alt={file.filename}
-        className="max-w-full rounded-md border"
-      />
-    );
-  }
+  const path = `/v1/staged-files/${file.id}/content`;
+  const staged: FileRef = { itemId: file.item_id, blobId: file.id, contentType: file.content_type, filename: file.filename, size: file.size, version: 0, earlier: true, detached: true };
   return (
-    <iframe
-      title={file.filename}
-      src={url}
-      className="h-[70vh] w-full rounded-md border"
+    <FileView
+      file={staged}
+      source={{ url: path, headers: authorizationHeaders() }}
+      onDownload={() => void downloadFile(path, file.filename)}
+      className="h-[70vh]"
     />
   );
 }

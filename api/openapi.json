@@ -18453,6 +18453,136 @@
         }
       }
     },
+    "/v1/items/{id}/pages": {
+      "get": {
+        "tags": [
+          "Documents"
+        ],
+        "operationId": "listItemPages",
+        "summary": "List the pages of the item's file",
+        "description": "The pages of the caller's file (or an earlier version), with each page's size in CSS pixels at 100 %: points at 96 DPI for PDF pages, pixels for images. Every page of PDFs and multi-page TIFFs is listed, up to 2,000, and a JPEG, PNG or WebP image has one. Requires document.read and read access to the item. Other kinds of file answer 415 unsupported_file_type; a file whose pages cannot be read answers 422 unreadable_file.",
+        "x-required-scopes": [
+          "document.read"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "blob_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "An earlier file version; draft readers only. Without it, the file the caller reads: the draft for draft readers, otherwise the published file."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The pages.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageList"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/items/{id}/pages/{page}": {
+      "get": {
+        "tags": [
+          "Documents"
+        ],
+        "operationId": "getItemPage",
+        "summary": "Render one page of the item's file",
+        "description": "One page, from 1, of the caller's file (or an earlier version) as WebP, for viewers that cannot draw the file themselves, such as multi-page TIFFs. Pages render on request at the smallest of 320, 480, 640, 960, 1280, 1600 and 2048 pixels wide that is at least `width` (default 960); tall pages render narrower to stay within about 8 megapixels, and images are never enlarged. Renders are shared by everyone reading the same bytes. With blob_id the response is cacheable for a year; without it, it revalidates with its ETag. Requires document.read and read access to the item.",
+        "x-required-scopes": [
+          "document.read"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2000
+            }
+          },
+          {
+            "name": "width",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "blob_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "An earlier file version; draft readers only. Without it, the file the caller reads: the draft for draft readers, otherwise the published file."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The page as WebP.",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Page-Blob-ID": {
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "description": "The file version rendered."
+              }
+            },
+            "content": {
+              "image/webp": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Not modified."
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/v1/workspaces/{id}/keywords": {
       "get": {
         "summary": "Keywords",
@@ -33513,6 +33643,46 @@
             "items": {
               "$ref": "#/components/schemas/TrustedHostUse"
             }
+          }
+        }
+      },
+      "PageList": {
+        "type": "object",
+        "required": [
+          "blob_id",
+          "pages",
+          "truncated"
+        ],
+        "properties": {
+          "blob_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The file version listed."
+          },
+          "pages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PageSize"
+            }
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "The file has more pages than are listed and rendered."
+          }
+        }
+      },
+      "PageSize": {
+        "type": "object",
+        "required": [
+          "width",
+          "height"
+        ],
+        "properties": {
+          "width": {
+            "type": "integer"
+          },
+          "height": {
+            "type": "integer"
           }
         }
       }

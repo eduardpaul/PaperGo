@@ -1,4 +1,6 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { Download } from 'lucide-react';
+import { Component, createContext, useContext, useEffect, useRef, type ReactNode, type RefObject } from 'react';
+import { Button } from '@/components/ui/button';
 import { typingIn } from '@/lib/keys';
 import { cn } from '@/lib/utils';
 
@@ -15,19 +17,46 @@ export function typing(event: KeyboardEvent) {
  */
 export function useViewerKeys(handle: (event: KeyboardEvent) => boolean | void, { first = false }: { first?: boolean } = {}) {
   const latest = useRef(handle);
+  const scope = useContext(KeyScope);
   useEffect(() => {
     latest.current = handle;
   });
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.isComposing) return;
+      if (scope && !(event.target instanceof Node && scope.current?.contains(event.target))) return;
       if (latest.current(event) === false) return;
       event.preventDefault();
       event.stopPropagation();
     };
     window.addEventListener('keydown', onKey, first);
     return () => window.removeEventListener('keydown', onKey, first);
-  }, [first]);
+  }, [first, scope]);
+}
+
+/**
+ * Where a handler shown outside the viewer, as in a review, takes its keys:
+ * only keys pressed inside that element, so the page keeps its own.
+ */
+export const KeyScope = createContext<RefObject<HTMLElement | null> | null>(null);
+
+/** Shows a download in place of a handler that failed, rather than a broken canvas. */
+export class HandlerBoundary extends Component<{ children: ReactNode; onDownload: () => void }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <ViewerMessage title="This file could not be shown.">
+        <span>Reload the page to try again, or download the file.</span>
+        <Button variant="primary" onClick={this.props.onDownload}>
+          <Download /> Download
+        </Button>
+      </ViewerMessage>
+    );
+  }
 }
 
 /** The bar of page, zoom and find controls under a handler's canvas. */

@@ -41,8 +41,9 @@ Libraries accept `duplicate_policy: "allow" | "warn" | "block"` on creation and 
 
 The web app opens an item's whole file full screen, above the list it belongs to. A **file handler** shows each kind of file:
 
-- **PDFs:** every page, with find, text selection, zoom, rotation and page links.
-- **Images:** JPEG, PNG, WebP and GIF at full resolution, with zoom, pan and rotation. A TIFF shows its first-page preview.
+- **PDFs:** every page, with find, text selection, zoom, rotation and page links. Find also names the scanned pages whose [read text](#reading-text) matches, since a scan has no text to highlight. On phones and tablets with little memory, a PDF over 25 MB opens as [page images](previews.md#page-renditions) the server renders, with **Open the full viewer** beside them; a PDF that PDF.js cannot draw offers them too.
+- **Images:** JPEG, PNG, WebP and GIF at full resolution, with zoom, pan and rotation.
+- **TIFF scans:** every page, as page images the server renders at the width the screen needs, with page numbers, zoom, rotation and find in their read text.
 - **Markdown:** rendered with GitHub syntax (tables, task lists, strikethrough), with an outline of its headings on wide screens. Raw HTML shows as text.
 - **Plain text:** with line numbers, or wrapped to the window.
 
@@ -54,10 +55,10 @@ Clicking an item still opens its details. Its file is one click away everywhere:
 - the button at the end of a row's name, and on a gallery or board card, shown on hover and always on touch screens;
 - double-clicking a row or card, or pressing **O** on a row (**D** downloads);
 - **Open file** in the right-click menu and the command palette (Ctrl/⌘ K);
-- **Open** on a global search hit, at the page the text matched;
+- **Open** on a global search hit, at the page the text matched, with the searched words found and highlighted in the file;
 - **Open** on each file version in the File tab, and on a finished upload.
 
-The viewer lives in the URL (`?item=<id>&open=file`, with `page` for a PDF page and `blob` for an earlier version), so its links can be shared, opened in a new tab and reloaded. Back or Esc returns to where it was opened. ← and → (or J and K) step through the items the list shows, **I** shows the item's details, discussion and versions beside the file, and **Copy file link** copies the current page's link. Handlers read the file through `GET /v1/items/{id}/content` with the caller's credentials and byte ranges; draft readers see the draft file and ordinary readers the published one, as with downloads. PDFs render with PDF.js without running document scripts. Links in documents and URL fields follow the organization's [trusted hosts](trusted-hosts.md): links to trusted hosts open in a new tab, others ask first, and remote images in Markdown load only from trusted hosts or when someone chooses **Show once**.
+The viewer lives in the URL (`?item=<id>&open=file`, with `page` for a page, `blob` for an earlier version, `edit` for the editor and `find` for words to find), so its links can be shared, opened in a new tab and reloaded. Back or Esc returns to where it was opened. ← and → (or J and K) step through the items the list shows, **I** shows the item's details, discussion and versions beside the file, and **Copy file link** copies the current page's link. Handlers read the file through `GET /v1/items/{id}/content` with the caller's credentials and byte ranges; draft readers see the draft file and ordinary readers the published one, as with downloads. PDFs render with PDF.js without running document scripts. Links in documents and URL fields follow the organization's [trusted hosts](trusted-hosts.md): links to trusted hosts open in a new tab, others ask first, and remote images in Markdown load only from trusted hosts or when someone chooses **Show once**.
 
 ### Editing Markdown and text
 
@@ -70,12 +71,20 @@ People who may write an item edit its Markdown or text file in the viewer: **Edi
 
 Text files show their first lines as their thumbnail in galleries and on the file bar.
 
+### Comparing versions
+
+Markdown and text files compare any earlier version with the current file, line by line and side by side (inline on narrow screens), with the number of changes and buttons to step through them: **Compare** on a version in the File tab, or **Compare with the current file** while viewing an earlier version.
+
+### Reviews
+
+When a workflow asks someone to review a file it made, such as a PDF composed from photos, the task shows the file with the viewer's handler for its type, in the task itself: PDFs with their pages, find and zoom, images with zoom and rotation. Keys reach that view only while focus is inside it. Reviews that compare a smaller image with the original show both at their own pixels, side by side.
+
 ## Reading text
 
 `POST /v1/items/{id}/text` reads the text of the item's current file as a background operation (`202 Accepted`), for API clients and workflow scripts alike: `ocr` (`auto`, `always`, `never`), `max_pages` (default 500, at most 2,000) and `languages` (OCR codes such as `eng+deu`; default the file's). It requires `document.write` and write access to the item.
 
 - **PDFs:** each page's text layer is read with the linked PDFium SDK. With `ocr: auto`, a page without a text layer is rendered at 200 DPI and read by [OCR](ocr.md); `always` OCRs every page; `never` reads text layers only. PaperGo's own searchable PDFs (Photos to PDF) carry their OCR text, so they are not OCRed again.
-- **Images** (JPEG, PNG, WebP, and the first page of a TIFF) are turned upright and read by OCR.
+- **Images** (JPEG, PNG and WebP) are turned upright and read by OCR, and so is every page of a TIFF, up to `max_pages`.
 - **Without OCR** configured, `auto` reads text layers only and counts the pages it could not read in `skipped_pages`; `always` is refused.
 - **Language:** the file's language hint (`languages` on upload, `X-OCR-Languages`) when it names one language, else the language detected among the hinted ones or `SEARCH_LANGUAGES`, else none.
 

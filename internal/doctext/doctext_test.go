@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"golang.org/x/image/tiff"
+	"papergo/internal/imaging/imagingtest"
 
 	"papergo/internal/doctext"
 	"papergo/internal/doctext/doctexttest"
@@ -118,6 +119,18 @@ func TestImagesAreOCRed(t *testing.T) {
 		if err != nil || len(r.Pages) != 1 || r.Pages[0].Text != "Scanned invoice" || r.OCRPages != 1 {
 			t.Fatalf("%s: %+v %v", media, r, err)
 		}
+	}
+	// Every page of a multi-page scan is read, up to MaxPages.
+	pages := imagingtest.TIFF(imagingtest.Page(60, 40, 255), imagingtest.Page(60, 40, 255), imagingtest.Page(60, 40, 255))
+	r, err := doctext.Extract(ctx, pages, "image/tiff", doctext.Options{}, reader, e)
+	if err != nil || len(r.Pages) != 3 || r.OCRPages != 3 || r.Pages[2].Number != 3 || r.Pages[2].Text != "Scanned invoice" || r.Truncated {
+		t.Fatalf("multi-page TIFF: %+v %v", r, err)
+	}
+	if r, err = doctext.Extract(ctx, pages, "image/tiff", doctext.Options{MaxPages: 2}, reader, e); err != nil || len(r.Pages) != 2 || !r.Truncated {
+		t.Fatalf("bounded TIFF: %+v %v", r, err)
+	}
+	if r, err = doctext.Extract(ctx, pages, "image/tiff", doctext.Options{}, reader, nil); err != nil || len(r.Pages) != 3 || r.Skipped != 3 {
+		t.Fatalf("TIFF without an engine: %+v %v", r, err)
 	}
 	if r, err := doctext.Extract(ctx, photo.Bytes(), "image/png", doctext.Options{}, reader, nil); err != nil || r.Skipped != 1 {
 		t.Fatalf("no engine: %+v %v", r, err)
