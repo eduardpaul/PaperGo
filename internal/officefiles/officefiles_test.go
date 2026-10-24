@@ -127,3 +127,45 @@ func TestRegisterMakesOfficeTextReadable(t *testing.T) {
 		}
 	}
 }
+
+// bounded lowers the text and cell bounds for one test.
+func bounded(t *testing.T, chars, cells int) {
+	t.Helper()
+	oldChars, oldCells := textChars, sheetCells
+	textChars, sheetCells = chars, cells
+	t.Cleanup(func() { textChars, sheetCells = oldChars, oldCells })
+}
+
+func TestBoundsKeepTheTextReadUpToThem(t *testing.T) {
+	bounded(t, 40, 3)
+	word := archiveOf(t, map[string]string{
+		"word/document.xml": `<w:document ` + w + `><w:body>` + strings.Repeat(`<w:p><w:r><w:t>Clause text.</w:t></w:r></w:p>`, 20) + `</w:body></w:document>`,
+	})
+	r, err := ReadWord(context.Background(), word, doctext.Options{MaxPages: 10})
+	if err != nil || len(r.Pages) != 1 || !r.Truncated || !strings.HasPrefix(r.Pages[0].Text, "Clause text.\nClause text.") {
+		t.Fatalf("Word: %+v %v", r, err)
+	}
+
+	excel := archiveOf(t, map[string]string{
+		"xl/workbook.xml":            `<workbook xmlns:r="r"><sheets><sheet name="Lines" r:id="rId1"/><sheet name="More" r:id="rId2"/></sheets></workbook>`,
+		"xl/_rels/workbook.xml.rels": `<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Target="worksheets/sheet2.xml"/></Relationships>`,
+		"xl/worksheets/sheet1.xml":   `<worksheet><sheetData>` + strings.Repeat(`<row><c><v>7</v></c><c><v>8</v></c></row>`, 5) + `</sheetData></worksheet>`,
+		"xl/worksheets/sheet2.xml":   `<worksheet><sheetData><row><c><v>9</v></c></row></sheetData></worksheet>`,
+	})
+	if r, err = ReadExcel(context.Background(), excel, doctext.Options{MaxPages: 10}); err != nil || len(r.Pages) != 1 || !r.Truncated || r.Pages[0].Text != "Lines\n7\t8\n7" {
+		t.Fatalf("Excel cells: %+v %v", r, err)
+	}
+	bounded(t, 12, 100)
+	if r, err = ReadExcel(context.Background(), excel, doctext.Options{MaxPages: 10}); err != nil || len(r.Pages) != 1 || !r.Truncated || r.Pages[0].Text != "Lines\n7\t8\n7" {
+		t.Fatalf("Excel text: %+v %v", r, err)
+	}
+
+	slides := archiveOf(t, map[string]string{
+		"ppt/presentation.xml":            `<p:presentation xmlns:p="p" xmlns:r="r"><p:sldIdLst><p:sldId r:id="rId1"/></p:sldIdLst></p:presentation>`,
+		"ppt/_rels/presentation.xml.rels": `<Relationships><Relationship Id="rId1" Target="slides/slide1.xml"/></Relationships>`,
+		"ppt/slides/slide1.xml":           `<p:sld xmlns:p="p" xmlns:a="a">` + strings.Repeat(`<a:p><a:r><a:t>Point</a:t></a:r></a:p>`, 10) + `</p:sld>`,
+	})
+	if r, err = ReadPowerPoint(context.Background(), slides, doctext.Options{MaxPages: 10}); err != nil || len(r.Pages) != 1 || !r.Truncated || r.Pages[0].Text != "Point\nPoint" {
+		t.Fatalf("PowerPoint: %+v %v", r, err)
+	}
+}

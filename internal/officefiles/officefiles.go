@@ -28,10 +28,12 @@ const (
 	PowerPoint = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 )
 
-// Bounds against archives that expand far beyond their size.
-const (
-	// partBytes bounds one XML part as read.
-	partBytes = 64 << 20
+// partBytes bounds one XML part as read, against archives that expand far
+// beyond their size.
+const partBytes = 64 << 20
+
+// Bounds on what one file yields; tests lower them.
+var (
 	// textChars bounds the text read from one file.
 	textChars = 8 << 20
 	// sheetCells bounds the cells read from one workbook.
@@ -119,7 +121,9 @@ func attr(el xml.StartElement, local string) string {
 	return ""
 }
 
-// pages collects text into pages, bounded by MaxPages and textChars.
+// pages collects text into pages, bounded by MaxPages and textChars. Text
+// past a bound is left out and the result marked truncated; the text read
+// up to it is kept.
 type pages struct {
 	max   int
 	chars int
@@ -197,7 +201,7 @@ func ReadWord(ctx context.Context, data []byte, o doctext.Options) (doctext.Resu
 			break
 		}
 	}
-	if !p.r.Truncated && p.text.Len() > 0 {
+	if p.text.Len() > 0 {
 		p.next()
 	}
 	return p.result(), nil
@@ -282,7 +286,8 @@ func ReadExcel(ctx context.Context, data []byte, o doctext.Options) (doctext.Res
 		if err := readSheet(ctx, a, sheet.part, shared, p, &cells); err != nil {
 			return doctext.Result{}, err
 		}
-		if p.r.Truncated || !p.next() {
+		// A sheet cut short by a bound still ends its page.
+		if !p.next() || p.r.Truncated {
 			break
 		}
 	}
@@ -454,7 +459,8 @@ func ReadPowerPoint(ctx context.Context, data []byte, o doctext.Options) (doctex
 				}
 			}
 		}
-		if p.r.Truncated || !p.next() {
+		// A slide cut short by a bound still ends its page.
+		if !p.next() || p.r.Truncated {
 			break
 		}
 	}
