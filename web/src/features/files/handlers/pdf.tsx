@@ -13,6 +13,7 @@ import type { FileRef, ViewerProps } from '../handlers';
 import { PageRegions, threadsOn, useRegionThreads } from '../regions';
 import { PageMatches, pagesMatching, useReadText } from '../text-find';
 import { typing, useViewerKeys, ViewerBar, ViewerMessage } from '../viewer-kit';
+import { useFollowLink } from '../trust';
 import { PageImages } from './pages';
 
 declare const __PDFJS_ASSETS__: string;
@@ -87,6 +88,11 @@ export default function PdfView(props: ViewerProps) {
 function PdfDocument({ file, source, page, onPage, find: initialFind, comment, onComment, onLight }: ViewerProps & { onLight?: () => void }) {
   const container = useRef<HTMLDivElement>(null);
   const pages = useRef<HTMLDivElement>(null);
+  const { follow, dialog } = useFollowLink();
+  const followLink = useRef(follow);
+  useEffect(() => {
+    followLink.current = follow;
+  });
   const viewer = useRef<Viewer>(null);
   const bus = useRef<Bus>(null);
   const [state, setState] = useState<State>({ status: 'loading' });
@@ -212,6 +218,27 @@ function PdfDocument({ file, source, page, onPage, find: initialFind, comment, o
     observer.observe(element, { childList: true, subtree: true });
     return () => observer.disconnect();
   }, [pageLayers]);
+
+  // Links out of the document follow the organization's trusted hosts, by click, Enter or middle click; links to
+  // places in the document keep their own handling.
+  useEffect(() => {
+    const element = container.current;
+    if (!element) return;
+    const onClick = (event: MouseEvent) => {
+      const link = (event.target as Element | null)?.closest?.('.annotationLayer a[href]');
+      const href = link?.getAttribute('href') ?? '';
+      if (!link || href.startsWith('#') || link.classList.contains('internalLink')) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.type === 'click' || event.button === 1) followLink.current(href);
+    };
+    element.addEventListener('click', onClick, true);
+    element.addEventListener('auxclick', onClick, true);
+    return () => {
+      element.removeEventListener('click', onClick, true);
+      element.removeEventListener('auxclick', onClick, true);
+    };
+  }, []);
 
   // A fitted scale fits again when the canvas changes size, as when the info panel opens.
   useEffect(() => {
@@ -424,6 +451,7 @@ function PdfDocument({ file, source, page, onPage, find: initialFind, comment, o
           )}
         </ViewerBar>
       )}
+      {dialog}
     </div>
   );
 }
