@@ -46,7 +46,7 @@ The web app opens an item's whole file full screen, above the list it belongs to
 - **TIFF scans:** every page, as page images the server renders at the width the screen needs, with page numbers, zoom, rotation and find in their read text.
 - **Markdown:** rendered with GitHub syntax (tables, task lists, strikethrough), with an outline of its headings on wide screens. Raw HTML shows as text.
 - **Plain text:** with line numbers, or wrapped to the window.
-- **Word documents** (`.docx`): laid out in the browser with pages, fonts, tables, headers, footers and footnotes, inside a frame that runs no scripts. The layout is close to Word's but simplified: fields, tracked changes, comments and floating objects may differ, as the viewer notes. Links in the document follow trusted hosts.
+- **Word documents** (`.docx`): laid out in the browser with pages, fonts, tables, headers, footers and footnotes, inside a frame that runs no scripts and loads nothing from outside the file: pictures and fonts embedded in it show, and pictures it only links to do not. The layout is close to Word's but simplified: fields, tracked changes, comments and floating objects may differ, as the viewer notes. Links in the document follow trusted hosts.
 - **CSV files:** as a table, with the first row naming the columns (switchable), numbered rows, a row filter, and the delimiter (comma, semicolon or tab) detected. Files up to 20 MB and their first 100,000 rows are shown.
 
 A file no handler shows offers **Download**, with its type's icon and name.

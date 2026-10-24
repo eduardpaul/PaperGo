@@ -7,8 +7,14 @@ import type { ViewerProps } from '../handlers';
 import { useFollowLink } from '../trust';
 import { typing, useViewerKeys, ViewerBar, ViewerMessage } from '../viewer-kit';
 
-/** The frame's own document: no scripts can run in it, only the app draws into it. */
-const frameDocument = `<!doctype html><html><head><meta charset="utf-8"><style>
+/**
+ * The frame's own document: no scripts can run in it, only the app draws
+ * into it, and it loads nothing from anywhere. A document's styles can name
+ * outside URLs, so its policy allows only the images and fonts docx-preview
+ * inlines from the file itself.
+ */
+const framePolicy = "default-src 'none'; style-src 'unsafe-inline'; img-src data: blob:; font-src data: blob:";
+const frameDocument = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${framePolicy}"><style>
 html,body{margin:0;background:#e5e7eb}
 body{padding:16px 0}
 .docx-wrapper{background:transparent!important;padding:0!important;display:flex;flex-direction:column;align-items:center;gap:16px}
