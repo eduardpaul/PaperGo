@@ -47,7 +47,7 @@ The web app opens an item's whole file full screen, above the list it belongs to
 - **Markdown:** rendered with GitHub syntax (tables, task lists, strikethrough), with an outline of its headings on wide screens. Raw HTML shows as text.
 - **Plain text:** with line numbers, or wrapped to the window.
 - **Word documents** (`.docx`): laid out in the browser with pages, fonts, tables, headers, footers and footnotes, inside a frame that runs no scripts and loads nothing from outside the file: pictures and fonts embedded in it show, and pictures it only links to do not. The layout is close to Word's but simplified: fields, tracked changes, comments and floating objects may differ, as the viewer notes. Links in the document follow trusted hosts.
-- **CSV files:** as a table, with the first row naming the columns (switchable), numbered rows, a row filter, and the delimiter (comma, semicolon or tab) detected. Files up to 20 MB and their first 100,000 rows are shown.
+- **CSV files:** as a table, with the first row naming the columns (switchable), numbered rows, a row filter, and the delimiter (comma, semicolon or tab) detected. Files up to 20 MB are shown, up to their first 100,000 rows, 200 columns and 2 million cells, and the table says when it shows less.
 
 A file no handler shows offers **Download**, with its type's icon and name.
 

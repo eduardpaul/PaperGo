@@ -6,7 +6,7 @@ import { Spinner } from '@/components/ui/feedback';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/select';
 import { useFormat } from '@/lib/preferences';
-import { parseCsv } from '../csv';
+import { maxColumns, parseCsv } from '../csv';
 import type { ViewerProps } from '../handlers';
 import { useViewerKeys, ViewerBar, ViewerMessage } from '../viewer-kit';
 
@@ -110,6 +110,7 @@ export default function CsvView({ file, source, find }: ViewerProps) {
           {format.number(body.length)} {body.length === 1 ? 'row' : 'rows'}
           {filter.trim() ? ' match' : ''} · {format.number(columns)} {columns === 1 ? 'column' : 'columns'} · separated by {delimiters[table.data.delimiter]}
           {table.data.truncated && ` · the first ${format.number(rows.length)} rows`}
+          {table.data.wide && ` · the first ${format.number(maxColumns)} columns`}
         </span>
         <span className="mx-1 h-5 w-px bg-border" aria-hidden />
         <label className="flex items-center gap-1.5">

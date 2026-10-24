@@ -7,7 +7,7 @@ import type { CommentThread, FileSummary } from '@/api/types';
 import { editableFile, FileAction, FileLinksProvider, useClickOrOpenFile, viewable } from './file-action';
 import { fileFamily, fileTypeLabel } from './file-types';
 import { fileRef, fileSource, handlerFor } from './handlers';
-import { detectDelimiter, parseCsv } from './csv';
+import { detectDelimiter, maxCells, maxColumns, parseCsv } from './csv';
 import { officeApp, officeUri } from './office';
 import { fileRegion, threadsOn, turn, unturn } from './regions';
 import { comparable } from './text-compare';
@@ -145,11 +145,26 @@ it('parses CSV with quotes, line breaks in cells and the delimiter in use', () =
     rows: [['name', 'amount'], ['ACME, Inc.', '12'], ['He said "hi"\nthere', '3']],
     delimiter: ',',
     truncated: false,
+    wide: false,
   });
   expect(detectDelimiter('a;b;c\n1;2;3\n')).toBe(';');
   expect(detectDelimiter('a\tb\n"x,y"\tz\n')).toBe('\t');
   expect(parseCsv('a,b\n1,2', ',').rows).toEqual([['a', 'b'], ['1', '2']]);
-  expect(parseCsv('1\n2\n3\n4\n', ',', 2)).toEqual({ rows: [['1'], ['2']], delimiter: ',', truncated: true });
+  expect(parseCsv('1\n2\n3\n4\n', ',', 2)).toEqual({ rows: [['1'], ['2']], delimiter: ',', truncated: true, wide: false });
+});
+
+it('bounds the columns and cells of a wide CSV file', () => {
+  // A line of commas is one row of many empty cells; each row keeps its first columns.
+  const wide = parseCsv(','.repeat(100_000), ',');
+  expect(wide.rows).toHaveLength(1);
+  expect(wide.rows[0]).toHaveLength(maxColumns);
+  expect(wide.wide).toBe(true);
+  // Many wide rows stop at the cell bound.
+  const line = Array.from({ length: maxColumns + 5 }, (_, n) => n).join(',') + '\n';
+  const many = parseCsv(line.repeat(Math.ceil(maxCells / maxColumns) + 10), ',');
+  expect(many.rows.length * maxColumns).toBeLessThanOrEqual(maxCells);
+  expect(many.truncated).toBe(true);
+  expect(many.rows[0].at(-1)).toBe(String(maxColumns - 1));
   expect(handlerFor({ contentType: 'text/csv', filename: 'a.csv' })?.id).toBe('csv');
   expect(handlerFor({ contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', filename: 'a.docx' })?.id).toBe('docx');
 });

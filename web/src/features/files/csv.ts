@@ -1,12 +1,17 @@
-/** A parsed CSV file: its rows of cells, and whether the bounds cut it short. */
+/** A parsed CSV file: its rows of cells, and whether the bounds cut its rows short or its columns off. */
 export interface Table {
   rows: string[][];
   delimiter: string;
   truncated: boolean;
+  wide: boolean;
 }
 
 /** The largest number of rows read for the table view. */
 export const maxRows = 100_000;
+/** The columns each row keeps, so a wide file draws a bounded table. */
+export const maxColumns = 200;
+/** The cells read in all, so many columns and many rows together stay bounded too. */
+export const maxCells = 2_000_000;
 
 /** The delimiter of a CSV file: the one of comma, semicolon and tab most used, outside quotes, in its first lines. */
 export function detectDelimiter(text: string): string {
@@ -28,7 +33,8 @@ export function detectDelimiter(text: string): string {
 /**
  * Parses CSV as RFC 4180 describes: quoted cells may hold delimiters,
  * doubled quotes and line breaks; lines end with LF or CRLF. A leading BOM
- * is dropped. Parsing stops after limit rows.
+ * is dropped. Each row keeps its first maxColumns cells, and parsing stops
+ * after limit rows or maxCells cells.
  */
 export function parseCsv(text: string, delimiter = detectDelimiter(text), limit = maxRows): Table {
   if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
@@ -36,10 +42,17 @@ export function parseCsv(text: string, delimiter = detectDelimiter(text), limit 
   let row: string[] = [];
   let cell = '';
   let quoted = false;
+  let wide = false;
+  let cells = 0;
   let i = 0;
-  const endRow = () => {
-    row.push(cell);
+  const endCell = () => {
+    if (row.length < maxColumns) row.push(cell);
+    else wide = true;
     cell = '';
+  };
+  const endRow = () => {
+    endCell();
+    cells += row.length;
     rows.push(row);
     row = [];
   };
@@ -62,17 +75,16 @@ export function parseCsv(text: string, delimiter = detectDelimiter(text), limit 
     if (c === '"' && cell === '') {
       quoted = true;
     } else if (c === delimiter) {
-      row.push(cell);
-      cell = '';
+      endCell();
     } else if (c === '\n' || c === '\r') {
       if (c === '\r' && text[i + 1] === '\n') i++;
       endRow();
-      if (rows.length >= limit) return { rows, delimiter, truncated: i + 1 < text.length };
-    } else {
+      if (rows.length >= limit || cells >= maxCells) return { rows, delimiter, truncated: i + 1 < text.length, wide };
+    } else if (row.length < maxColumns) {
       cell += c;
     }
     i++;
   }
   if (cell !== '' || row.length > 0) endRow();
-  return { rows, delimiter, truncated: false };
+  return { rows, delimiter, truncated: false, wide };
 }
