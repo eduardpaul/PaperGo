@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -22,11 +23,20 @@ import (
 // LibreOffice lock files, Windows thumbnails and folder settings, macOS
 // folder state and resource forks. They are kept in memory for an hour and
 // never become items, so they neither clutter libraries nor start workflows.
+// Each person, and the server as a whole, holds a bounded number and size
+// of them, so nobody can fill the server's memory or crowd others out.
 const (
 	scratchMaxBytes = 1 << 20
 	scratchLifetime = time.Hour
 	scratchMaxFiles = 10_000
+	scratchMaxTotal = 128 << 20
+	// A person copying a thousand files from a Mac writes a thousand ._ files of 4 KB.
+	scratchOwnerFiles = 2_000
+	scratchOwnerBytes = 16 << 20
 )
+
+// errScratchFull refuses a housekeeping file over a person's or the server's bound.
+var errScratchFull = errors.New("no room for more housekeeping files")
 
 // scratchName reports whether a file name is housekeeping.
 func scratchName(name string) bool {
@@ -39,6 +49,7 @@ func scratchName(name string) bool {
 }
 
 type scratchFile struct {
+	owner    string
 	data     []byte
 	sha256   string
 	created  time.Time
@@ -48,17 +59,41 @@ type scratchFile struct {
 type scratchArea struct {
 	mu    sync.Mutex
 	files map[string]*scratchFile
+	// bytes is the size of every file held; owners counts each owner's files and bytes.
+	bytes  int
+	owners map[string]*scratchUse
 }
 
-func newScratchArea() *scratchArea { return &scratchArea{files: map[string]*scratchFile{}} }
+type scratchUse struct{ files, bytes int }
 
-// expire drops files untouched for scratchLifetime.
+func newScratchArea() *scratchArea {
+	return &scratchArea{files: map[string]*scratchFile{}, owners: map[string]*scratchUse{}}
+}
+
+// expire drops files untouched for scratchLifetime; callers hold mu.
 func (a *scratchArea) expire(now time.Time) {
 	for key, f := range a.files {
 		if now.Sub(f.modified) > scratchLifetime {
-			delete(a.files, key)
+			a.remove(key)
 		}
 	}
+}
+
+// remove drops the file at key and what it counted; callers hold mu.
+func (a *scratchArea) remove(key string) bool {
+	f, ok := a.files[key]
+	if !ok {
+		return false
+	}
+	delete(a.files, key)
+	a.bytes -= len(f.data)
+	use := a.owners[f.owner]
+	use.files--
+	use.bytes -= len(f.data)
+	if use.files == 0 {
+		delete(a.owners, f.owner)
+	}
+	return true
 }
 
 func (a *scratchArea) get(key string) (scratchFile, bool) {
@@ -72,30 +107,48 @@ func (a *scratchArea) get(key string) (scratchFile, bool) {
 	return *f, true
 }
 
-// put stores data at key and reports whether it created the file.
-func (a *scratchArea) put(key string, data []byte) (bool, error) {
+// put stores data at key for owner, who then holds it, and reports
+// whether it created the file.
+func (a *scratchArea) put(key, owner string, data []byte) (bool, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	now := time.Now()
 	a.expire(now)
+	old, replaced := a.files[key]
+	use := a.owners[owner]
+	if use == nil {
+		use = &scratchUse{}
+	}
+	// What the file would add for its new owner, and to the server's total.
+	files, bytes, total := 1, len(data), len(data)
+	if replaced {
+		total -= len(old.data)
+		if old.owner == owner {
+			files, bytes = 0, len(data)-len(old.data)
+		}
+	}
+	if use.files+files > scratchOwnerFiles || use.bytes+bytes > scratchOwnerBytes ||
+		!replaced && len(a.files) >= scratchMaxFiles || a.bytes+total > scratchMaxTotal {
+		return false, errScratchFull
+	}
+	created := now
+	if replaced {
+		created = old.created
+		a.remove(key)
+	}
 	sum := sha256.Sum256(data)
-	if f, ok := a.files[key]; ok {
-		f.data, f.sha256, f.modified = data, hex.EncodeToString(sum[:]), now
-		return false, nil
-	}
-	if len(a.files) >= scratchMaxFiles {
-		return false, errTooManyLocks
-	}
-	a.files[key] = &scratchFile{data: data, sha256: hex.EncodeToString(sum[:]), created: now, modified: now}
-	return true, nil
+	a.files[key] = &scratchFile{owner: owner, data: data, sha256: hex.EncodeToString(sum[:]), created: created, modified: now}
+	a.bytes += len(data)
+	use.files++
+	use.bytes += len(data)
+	a.owners[owner] = use
+	return !replaced, nil
 }
 
 func (a *scratchArea) delete(key string) bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	_, ok := a.files[key]
-	delete(a.files, key)
-	return ok
+	return a.remove(key)
 }
 
 // file describes a scratch file the way PROPFIND describes items.
@@ -138,6 +191,12 @@ func (h *Handler) scratch(w http.ResponseWriter, r *request) error {
 	if _, err := h.DMS.WriteTarget(r.Context(), r.subject, r.library, folder, dms.FileConditions{}); err != nil {
 		return err
 	}
+	// Writes honour locks as on real files: Office tells who has a document open by its locked owner file.
+	if r.Method == http.MethodPut || r.Method == http.MethodDelete {
+		if err := h.confirm(r, r.path, false); err != nil {
+			return err
+		}
+	}
 	switch r.Method {
 	case http.MethodPut:
 		if r.ContentLength > scratchMaxBytes {
@@ -147,7 +206,7 @@ func (h *Handler) scratch(w http.ResponseWriter, r *request) error {
 		if err != nil {
 			return err
 		}
-		created, err := h.scratchFiles.put(key, data)
+		created, err := h.scratchFiles.put(key, r.subject, data)
 		if err != nil {
 			return err
 		}

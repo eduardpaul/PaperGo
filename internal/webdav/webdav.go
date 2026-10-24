@@ -267,6 +267,9 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 		h.status(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, errBadGateway):
 		h.status(w, http.StatusBadGateway, "destination must be in the same library")
+	case errors.Is(err, errScratchFull):
+		w.Header().Set("Retry-After", "60")
+		h.status(w, http.StatusInsufficientStorage, err.Error())
 	case errors.Is(err, errTooManyLocks):
 		w.Header().Set("Retry-After", "60")
 		h.status(w, http.StatusServiceUnavailable, "too many active locks")

@@ -503,7 +503,11 @@ func TestWebDAVKeepsHousekeepingFilesOutOfTheLibrary(t *testing.T) {
 	}
 	// Locking a new owner file creates it in memory, not in the library.
 	lock := `<?xml version="1.0"?><D:lockinfo xmlns:D="DAV:"><D:lockscope><D:exclusive/></D:lockscope><D:locktype><D:write/></D:locktype></D:lockinfo>`
-	e.expect(e.do("LOCK", e.root+"/Docs/~%24new.docx", alice, lock), 201)
+	token := e.expect(e.do("LOCK", e.root+"/Docs/~%24new.docx", alice, lock), 201).Header().Get("Lock-Token")
+	// A locked owner file changes only with its lock, as a real file does.
+	e.expect(e.do("PUT", e.root+"/Docs/~%24new.docx", alice, "other"), 423)
+	e.expect(e.do("DELETE", e.root+"/Docs/~%24new.docx", alice, ""), 423)
+	e.expect(e.do("PUT", e.root+"/Docs/~%24new.docx", alice, "owner", "If", "("+token+")"), 204)
 	if w := e.expect(e.do("PROPFIND", e.root+"/Docs/", alice, "", "Depth", "1"), 207); strings.Contains(w.Body.String(), "new.docx") || strings.Contains(w.Body.String(), "Thumbs") {
 		t.Fatal("housekeeping files are listed", w.Body.String())
 	}

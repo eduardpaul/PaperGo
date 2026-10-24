@@ -258,7 +258,7 @@ func (h *Handler) lock(w http.ResponseWriter, r *request) error {
 	status := http.StatusOK
 	if scratch {
 		if _, found := h.scratchFiles.get(l.key); !found {
-			if _, err = h.scratchFiles.put(l.key, nil); err != nil {
+			if _, err = h.scratchFiles.put(l.key, r.subject, nil); err != nil {
 				h.locks.remove(l.token)
 				return err
 			}
