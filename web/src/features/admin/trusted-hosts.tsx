@@ -24,7 +24,7 @@ export function hostEntry(raw: string): { entry?: string; problem?: string } {
   if (!value) return {};
   if (value === '*') return { entry: '*' };
   if (/^[a-z][a-z0-9+.-]*:\/\//.test(value) || /[/:@?#\s]/.test(value)) return { problem: 'Use a host name without a scheme, port or path, such as docs.example.com.' };
-  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(value)) return { problem: "IP addresses can't be trusted; use a host name." };
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(value)) return { problem: "IP addresses can't be listed; use a host name, or * to trust every public host." };
   const name = value.startsWith('*.') ? value.slice(2) : value;
   if (name.includes('*')) return { problem: 'A wildcard is * on its own, or starts the entry, as in *.example.com.' };
   if (!name.includes('.')) return { problem: 'Use a full host name, such as docs.example.com.' };

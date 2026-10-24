@@ -3,6 +3,7 @@ package hosts
 import (
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -46,10 +47,21 @@ func TestTrustedMatchesHostsAndSubdomains(t *testing.T) {
 	if !Trusted(Default(), "anything.example") {
 		t.Fatal("the default list does not trust every host")
 	}
-	if Trusted(Default(), "127.0.0.1") {
-		t.Fatal("* trusts an address")
+	// Only * trusts hosts named by an IP address; fetches keep to public addresses on their own.
+	for _, host := range []string{"203.0.113.5", "[2001:db8::1]"} {
+		if !Trusted(Default(), host) || Trusted(entries, host) {
+			t.Errorf("Trusted(%q): * should trust it, and only *", host)
+		}
 	}
 	if err := NotTrusted("example.org"); !errors.Is(err, ErrNotTrusted) {
 		t.Fatal("NotTrusted is not ErrNotTrusted")
+	}
+	if err := NotTrusted("203.0.113.5"); !errors.Is(err, ErrNotTrusted) || !strings.Contains(err.Error(), "only * trusts") {
+		t.Fatalf("NotTrusted for an address: %v", err)
+	}
+	for host, want := range map[string]string{"Docs.Example.com.": "docs.example.com", "[2001:DB8::1]": "2001:db8::1", "203.0.113.5": "203.0.113.5", "localhost": ""} {
+		if got := Key(host); got != want {
+			t.Errorf("Key(%q) = %q, want %q", host, got, want)
+		}
 	}
 }

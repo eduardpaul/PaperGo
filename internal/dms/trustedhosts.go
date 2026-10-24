@@ -125,9 +125,5 @@ func (s *Service) integrationHost(row integrations.Integration) string {
 	if err != nil {
 		return ""
 	}
-	host, err := hosts.Name(u.Hostname())
-	if err != nil {
-		return ""
-	}
-	return host
+	return hosts.Key(u.Hostname())
 }

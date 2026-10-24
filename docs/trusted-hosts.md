@@ -18,7 +18,7 @@ An entry is one of:
 - a wildcard for the subdomains of a host, such as `*.example.com`, which does not match `example.com` itself;
 - `*`, which trusts every public host.
 
-Entries are stored lowercase, without a trailing dot, with international names in their ASCII (punycode) form. IP addresses, ports, schemes and paths are refused. The list holds at most 200 entries.
+Entries are stored lowercase, without a trailing dot, with international names in their ASCII (punycode) form. IP addresses, ports, schemes and paths are refused. Only `*` trusts a host named by an IP address, and only for server-side fetches, which reach public addresses alone; in the browser, links to an IP address always ask first and images from one wait for **Show once**. The list holds at most 200 entries.
 
 A new organization trusts `*`, so everything works at first. To narrow it, add the hosts the organization uses, then remove `*`. While `*` is listed, nothing offers **Trust host**.
 

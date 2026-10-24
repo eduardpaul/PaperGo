@@ -22,10 +22,13 @@ export function trusts(hosts: string[] | undefined, url: string): boolean {
   return matches(hosts, parsed.hostname);
 }
 
+/** Whether host is an IP address. The browser cannot tell a public address from a private one, so none is trusted here. */
+const isAddress = (host: string) => /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.startsWith('[');
+
 /** Whether a trusted host list names host: *, the host itself, or a wildcard for a domain above it. */
 export function matches(hosts: string[], host: string): boolean {
   const name = host.toLowerCase().replace(/\.$/, '');
-  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(name) || name.startsWith('[')) return false;
+  if (isAddress(name)) return false;
   return hosts.some((entry) => entry === '*' || entry === name || (entry.startsWith('*.') && name.endsWith(entry.slice(1))));
 }
 
@@ -124,7 +127,7 @@ function LeavingDialog({ href, host, onClose }: { href: string; host: string; on
         </DialogHeader>
         <p className="mx-5 rounded-md bg-surface-muted px-3 py-2 font-mono text-xs break-all">{href}</p>
         <DialogFooter>
-          {allowed && (
+          {allowed && !isAddress(host) && (
             <Button className="mr-auto" variant="ghost" disabled={trust.isPending} onClick={() => trust.mutate(host)}>
               Trust {host}
             </Button>
@@ -165,7 +168,7 @@ export function RemoteImage({ src, alt, shown, onShow }: { src?: string; alt?: s
       <Button size="sm" variant="ghost" onClick={() => onShow(true)}>
         Show all images in this file
       </Button>
-      {allowed && (
+      {allowed && !isAddress(host) && (
         <Button size="sm" variant="ghost" disabled={trust.isPending} onClick={() => trust.mutate(host)}>
           Trust {host}
         </Button>

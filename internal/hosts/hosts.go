@@ -8,12 +8,14 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"slices"
 	"strings"
 
 	"golang.org/x/net/idna"
 )
 
-// Any trusts every public host.
+// Any trusts every public host, those named by an IP address included:
+// fetches reach only public addresses on their own.
 const Any = "*"
 
 // MaxEntries bounds the list.
@@ -28,7 +30,26 @@ var ErrNotTrusted = errors.New("host is not trusted")
 // NotTrusted is the refusal for host, naming it for the person who
 // configured the fetch.
 func NotTrusted(host string) error {
+	if _, ok := address(host); ok {
+		return fmt.Errorf("%w: %s is an IP address, which only * trusts. Use the server's host name", ErrNotTrusted, host)
+	}
 	return fmt.Errorf("%w: %s isn't a trusted host. Ask an administrator to trust it", ErrNotTrusted, host)
+}
+
+// address reports the IP address host is, if it is one.
+func address(host string) (netip.Addr, bool) {
+	addr, err := netip.ParseAddr(strings.Trim(strings.TrimSpace(host), "[]"))
+	return addr, err == nil
+}
+
+// Key names host as the trusted-host rules see it: an IP address in its
+// canonical form, or a name in stored form; empty when it is neither.
+func Key(host string) string {
+	if addr, ok := address(host); ok {
+		return addr.String()
+	}
+	name, _ := Name(host)
+	return name
 }
 
 var profile = idna.New(idna.MapForLookup(), idna.Transitional(false), idna.BidiRule(), idna.StrictDomainName(true))
@@ -41,8 +62,8 @@ func Name(host string) (string, error) {
 	if host == "" {
 		return "", errors.New("a host name is required")
 	}
-	if _, err := netip.ParseAddr(strings.Trim(host, "[]")); err == nil {
-		return "", errors.New("IP addresses can't be trusted; use a host name")
+	if _, ok := address(host); ok {
+		return "", errors.New("IP addresses can't be listed; use a host name, or * to trust every public host")
 	}
 	if strings.ContainsAny(host, ":/@?#") {
 		return "", errors.New("use a host name without a scheme, port or path")
@@ -95,8 +116,11 @@ func List(entries []string) ([]string, error) {
 }
 
 // Trusted reports whether entries trust host. A wildcard entry trusts the
-// subdomains of its host, not the host itself.
+// subdomains of its host, not the host itself; only * trusts an IP address.
 func Trusted(entries []string, host string) bool {
+	if _, ok := address(host); ok {
+		return slices.Contains(entries, Any)
+	}
 	name, err := Name(host)
 	if err != nil {
 		return false
