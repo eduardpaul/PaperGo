@@ -949,8 +949,9 @@ CREATE TABLE comments (
     resolved_at TIMESTAMPTZ,
     resolved_by TEXT,
     -- anchor places a thread in its item's file, such as a region of a PDF
-    -- page: an object whose kind names what interprets the rest.
-    anchor JSONB CHECK (anchor IS NULL OR (jsonb_typeof(anchor) = 'object' AND jsonb_typeof(anchor -> 'kind') = 'string' AND length(anchor::text) <= 2048)),
+    -- page: an object whose kind names what interprets the rest. Its size
+    -- is bounded as compact JSON by comments.Anchor.
+    anchor JSONB CHECK (anchor IS NULL OR (jsonb_typeof(anchor) = 'object' AND jsonb_typeof(anchor -> 'kind') = 'string')),
     CHECK ((deleted_at IS NULL) = (deleted_by IS NULL)),
     CHECK ((resolved_at IS NULL) = (resolved_by IS NULL)),
     CHECK (resolved_at IS NULL OR thread_id = id),

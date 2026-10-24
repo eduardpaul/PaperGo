@@ -179,11 +179,21 @@ func runCommentSuite(t *testing.T, newStore func(testing.TB) *dal.Store) {
 				t.Errorf("anchor %.40s: %v", bad, err)
 			}
 		}
+		// The bound is on compact JSON on every engine, however the database writes it out.
+		var wide strings.Builder
+		wide.WriteString(`{"kind":"wide","big":1e300`)
+		for i := 0; wide.Len() < comments.MaxAnchor-16; i++ {
+			fmt.Fprintf(&wide, `,"f%d":[1,2]`, i)
+		}
+		wide.WriteString(`}`)
+		if _, err = repo.Create(ctx, comments.Comment{ItemID: f.Item, Author: "alice", Source: comments.SourceUser, Body: "Wide", Anchor: json.RawMessage(wide.String())}); err != nil {
+			t.Fatalf("an anchor of %d compact bytes: %v", wide.Len(), err)
+		}
 		roots, err := repo.Roots(ctx, comments.Threads{ItemID: f.Item, AnchorKind: "file.region"})
 		if err != nil || len(roots) != 1 || roots[0].ID != pinned.ID || comments.AnchorKind(roots[0].Anchor) != "file.region" {
 			t.Fatalf("anchored roots: %+v %v", roots, err)
 		}
-		if roots, err = repo.Roots(ctx, comments.Threads{ItemID: f.Item}); err != nil || len(roots) != 2 {
+		if roots, err = repo.Roots(ctx, comments.Threads{ItemID: f.Item}); err != nil || len(roots) != 3 {
 			t.Fatalf("all roots: %d %v", len(roots), err)
 		}
 		// Edits, resolving and deleting keep the thread where it is.
