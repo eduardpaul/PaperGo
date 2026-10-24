@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { Eye, PencilLine, Save, X } from 'lucide-react';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
@@ -7,13 +7,13 @@ import { keys, resourceQuery } from '@/api/queries';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/feedback';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { replaceContent, uploadDocument } from '@/features/documents/transfer';
+import { replaceContent, UploadNameConflict, uploadDocument } from '@/features/documents/transfer';
 import { usePeopleNames } from '@/features/fields/people';
 import { ConfirmDialog } from '@/features/settings/section';
 import { problemMessage } from '@/lib/errors';
 import { useFormat } from '@/lib/preferences';
 import { cn } from '@/lib/utils';
-import type { ViewerProps } from './handlers';
+import type { EditSession, ViewerProps } from './handlers';
 import { TextEditor } from './text-editor';
 import { useViewerKeys, ViewerMessage } from './viewer-kit';
 
@@ -35,6 +35,11 @@ function decode(buffer: ArrayBuffer): Loaded {
 interface Base {
   blobId: string;
   version: number;
+}
+
+/** A text and the version it is. */
+interface Snapshot extends Base {
+  text: string;
 }
 
 /**
@@ -109,22 +114,24 @@ export function TextDocument({ file, source, editing, language, render, preview 
   const client = useQueryClient();
   const format = useFormat();
   const editorId = useId();
+  // The file's text, tagged with the version it is; while a newer version loads, the earlier one stays shown.
   const loaded = useQuery({
     queryKey: ['file-text', source.url, file.blobId],
     queryFn: async ({ signal }) => {
       const response = await fetch(source.url, { headers: source.headers, credentials: 'same-origin', signal });
       if (!response.ok) throw new Error(String(response.status));
-      return decode(await response.arrayBuffer());
+      return { ...decode(await response.arrayBuffer()), blobId: file.blobId };
     },
+    placeholderData: keepPreviousData,
     staleTime: Infinity,
     gcTime: 60_000,
     retry: false,
   });
   const key = draftKey(file.itemId);
+  // The edit session: the last save made here, the text a draft started from, and the draft.
+  const [saved, setSaved] = useState<Snapshot & { replaced: string }>();
+  const [base, setBase] = useState<Snapshot>();
   const [draft, setDraft] = useState<string>();
-  const [saved, setSaved] = useState<Base & { text: string }>();
-  // Where the text being edited started: saves send that version, so a newer file is a conflict.
-  const [base, setBase] = useState<Base>();
   const [declined, setDeclined] = useState(false);
   const [pane, setPane] = useState<'write' | 'preview'>('write');
   const [conflict, setConflict] = useState(false);
@@ -132,15 +139,22 @@ export function TextDocument({ file, source, editing, language, render, preview 
   const area = useRef<HTMLDivElement>(null);
   // Counts texts that replace the editor's from outside: a kept draft restored, or their version loaded.
   const [revision, setRevision] = useState(0);
-  const baseline = saved?.text ?? loaded.data?.text ?? '';
+  const version = editing?.version ?? 0;
+  // The file as this editor knows it: its own last save until the item shows a file other than the one that
+  // save replaced, then the file loaded. A file still loading has no known version, so a draft begun on it asks.
+  const fresh = !!saved && (file.blobId === saved.replaced || file.blobId === saved.blobId);
+  const current: Snapshot = fresh
+    ? { ...saved, version: file.blobId === saved.blobId ? Math.max(saved.version, version) : saved.version }
+    : { blobId: loaded.data?.blobId ?? file.blobId, version: loaded.data?.blobId === file.blobId ? version : 0, text: loaded.data?.text ?? '' };
+  const baseline = base?.text ?? current.text;
   const active = !!editing?.active && !!editing.allowed && !!loaded.data?.utf8;
-  const text = draft ?? baseline;
+  const text = draft ?? current.text;
   const dirty = active && draft !== undefined && draft !== baseline;
 
   // The editor offers text this browser kept from an unsaved edit, until the person types or decides.
   const offering = active && draft === undefined && !declined;
   const kept = useMemo(() => (offering ? readDraft(key) : undefined), [offering, key]);
-  const restorable = kept && kept.text !== baseline ? kept : undefined;
+  const restorable = kept && kept.text !== current.text ? kept : undefined;
 
   // Drafts are written after typing pauses, and before the page goes away.
   const pending = useRef<{ key: string; draft: Draft }>(undefined);
@@ -155,7 +169,7 @@ export function TextDocument({ file, source, editing, language, render, preview 
     }
   }, []);
   const keep = (text: string, from: Base) => {
-    pending.current = { key, draft: { text, at: new Date().toISOString(), ...from } };
+    pending.current = { key, draft: { text, at: new Date().toISOString(), blobId: from.blobId, version: from.version } };
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(flush, draftDelay);
   };
@@ -187,47 +201,49 @@ export function TextDocument({ file, source, editing, language, render, preview 
     return () => window.removeEventListener('beforeunload', warn);
   }, [dirty]);
 
+  // A draft starts from the file as the editor knows it, or, restored, from the version it was kept with.
   const change = (value: string, restored?: Base) => {
-    const from = restored ?? base ?? (saved ? { blobId: saved.blobId, version: saved.version } : { blobId: file.blobId, version: editing?.version ?? 0 });
+    const from = restored ? { ...restored, text: current.text } : (base ?? current);
     if (from !== base) setBase(from);
     setDraft(value);
-    if (value === baseline) forget();
+    if (value === from.text && !restored) forget();
     else keep(value, from);
   };
-  const done = () => {
+  const clear = () => {
     setDraft(undefined);
     setBase(undefined);
     forget();
+  };
+  const done = () => {
+    clear();
     editing?.setActive(false);
   };
 
   const asFile = (body: string, name = file.filename) => new File([body], name, { type: mediaTypes[language] });
   const save = useMutation({
     meta: { silent: true },
-    mutationFn: async ({ body, ifMatch }: { body: string; ifMatch: number }) => (await replaceContent(file.itemId, ifMatch, asFile(body))).data,
-    onSuccess: async (result, { body }) => {
-      setSaved({ blobId: result.id, version: result.resource_version, text: body });
+    mutationFn: async ({ body, ifMatch }: { body: string; ifMatch: number; replaced: string }) => (await replaceContent(file.itemId, ifMatch, asFile(body))).data,
+    onSuccess: async (result, { body, replaced }) => {
+      const next = { blobId: result.id, version: result.resource_version, text: body };
+      setSaved({ ...next, replaced });
       // Text typed while the save was on its way stays a draft, now based on the saved file.
       const rest = draftRef.current === body ? undefined : draftRef.current;
-      setDraft(rest);
-      if (rest === undefined) {
-        setBase(undefined);
-        forget();
-      } else {
-        const next = { blobId: result.id, version: result.resource_version };
+      if (rest === undefined) clear();
+      else {
+        setDraft(rest);
         setBase(next);
         keep(rest, next);
       }
       toast.success(`Saved · version ${result.version}`);
       await client.invalidateQueries({ queryKey: keys.resources });
     },
-    onError: async (error, { body, ifMatch }) => {
+    onError: async (error, { body, ifMatch, replaced }) => {
       if (!isApiError(error, 412)) return void toast.error(problemMessage(error));
       // Only the item's details changed when its file is still the one edited: save again on the new version.
       const latest = await client.fetchQuery({ ...resourceQuery(file.itemId), staleTime: 0 }).catch(() => undefined);
       if (base && latest && latest.file?.blob_id === base.blobId && latest.version !== ifMatch) {
-        setBase({ blobId: base.blobId, version: latest.version });
-        save.mutate({ body, ifMatch: latest.version });
+        setBase({ ...base, version: latest.version });
+        save.mutate({ body, ifMatch: latest.version, replaced });
       } else setConflict(true);
     },
   });
@@ -236,7 +252,7 @@ export function TextDocument({ file, source, editing, language, render, preview 
     draftRef.current = draft;
   });
   const submit = () => {
-    if (dirty && base && !save.isPending) save.mutate({ body: text, ifMatch: base.version });
+    if (dirty && base && !save.isPending) save.mutate({ body: text, ifMatch: base.version, replaced: base.blobId });
   };
 
   useViewerKeys(
@@ -278,7 +294,7 @@ export function TextDocument({ file, source, editing, language, render, preview 
           <PencilLine className="size-4 text-accent" /> Editing
         </span>
         <span aria-live="polite" className="text-xs text-muted">
-          {save.isPending ? 'Saving…' : dirty ? 'Unsaved changes' : saved ? 'All changes saved' : ''}
+          {save.isPending ? 'Saving…' : dirty ? 'Unsaved changes' : fresh ? 'All changes saved' : ''}
         </span>
         {preview && (
           <div role="tablist" aria-label="Editor panes" className="ml-2 flex rounded-md bg-surface-muted p-0.5 lg:hidden">
@@ -324,7 +340,8 @@ export function TextDocument({ file, source, editing, language, render, preview 
       )}
       <div className="flex min-h-0 flex-1">
         <div className={cn('min-w-0 flex-1 border-r', preview && pane === 'preview' && 'hidden lg:block')}>
-          <TextEditor id={editorId} value={text} revision={revision} language={language} label={`Text of ${file.filename}`} onChange={change} onSave={submit} />
+          {/* A clean editor follows the file; a draft keeps its own text. */}
+          <TextEditor id={editorId} value={text} revision={draft === undefined ? `${revision}:${current.blobId}` : String(revision)} language={language} label={`Text of ${file.filename}`} onChange={change} onSave={submit} />
         </div>
         {preview && (
           <div className={cn('min-w-0 flex-1 overflow-auto bg-surface', pane === 'write' && 'hidden lg:block')} aria-label="Preview">
@@ -349,32 +366,31 @@ export function TextDocument({ file, source, editing, language, render, preview 
       {conflict && (
         <ConflictDialog
           itemId={file.itemId}
+          text={text}
+          filename={file.filename}
+          history={!!editing?.history}
           busy={save.isPending}
           onClose={() => setConflict(false)}
-          onTheirs={async () => {
-            await navigator.clipboard?.writeText(text).catch(() => undefined);
+          onTheirs={async (copied) => {
             setConflict(false);
             setSaved(undefined);
-            setDraft(undefined);
-            setBase(undefined);
-            forget();
+            clear();
             await client.invalidateQueries({ queryKey: keys.resources });
             await client.invalidateQueries({ queryKey: ['file-text', source.url] });
             setRevision((current) => current + 1);
-            toast.success('Loaded their version. Your text is on the clipboard.');
+            toast.success(copied ? 'Loaded their version. Your text is on the clipboard.' : 'Loaded their version.');
           }}
           onMine={async () => {
             const latest = await client.fetchQuery({ ...resourceQuery(file.itemId), staleTime: 0 });
             setConflict(false);
             // Theirs is the base now, so later saves conflict only with newer changes.
-            if (latest.file) setBase({ blobId: latest.file.blob_id, version: latest.version });
-            save.mutate({ body: text, ifMatch: latest.version });
+            const theirs = latest.file?.blob_id ?? '';
+            if (base) setBase({ ...base, blobId: theirs, version: latest.version });
+            save.mutate({ body: text, ifMatch: latest.version, replaced: theirs });
           }}
           onCopy={async () => {
-            const dot = file.filename.lastIndexOf('.');
-            const name = dot > 0 ? `${file.filename.slice(0, dot)} (copy)${file.filename.slice(dot)}` : `${file.filename} (copy)`;
             try {
-              await uploadDocument(`/v1/resources/${editing!.containerId}/documents`, asFile(text, name), { name, folder_id: editing!.folderId });
+              const name = await saveCopy(client, file, editing!, (name) => asFile(text, name));
               setConflict(false);
               done();
               await client.invalidateQueries({ queryKey: keys.resources });
@@ -389,27 +405,124 @@ export function TextDocument({ file, source, editing, language, render, preview 
   );
 }
 
-/** Someone saved the file since it was opened: keep theirs, keep mine, or keep both. */
-function ConflictDialog({ itemId, busy, onClose, onTheirs, onMine, onCopy }: { itemId: string; busy: boolean; onClose: () => void; onTheirs: () => void; onMine: () => void; onCopy: () => void }) {
+/**
+ * Saves text as a new item beside the file, with the item's content type,
+ * keywords and values, as "name (copy).ext", numbered when that is taken.
+ * Returns the name it got; a refusal leaves the editor as it was.
+ */
+async function saveCopy(client: QueryClient, file: ViewerProps['file'], editing: EditSession, asFile: (name: string) => File) {
+  const source = await client.fetchQuery({ ...resourceQuery(file.itemId), staleTime: 0 });
+  const dot = file.filename.lastIndexOf('.');
+  const [stem, extension] = dot > 0 ? [file.filename.slice(0, dot), file.filename.slice(dot)] : [file.filename, ''];
+  for (let n = 1; ; n++) {
+    const name = `${stem} (copy${n > 1 ? ` ${n}` : ''})${extension}`;
+    try {
+      await uploadDocument(`/v1/resources/${editing.containerId}/documents`, asFile(name), {
+        name,
+        folder_id: editing.folderId,
+        content_type_id: source.content_type_id,
+        keywords: source.keywords ?? undefined,
+        values: source.values ?? undefined,
+      });
+      return name;
+    } catch (error) {
+      if (!(error instanceof UploadNameConflict) || n >= 20) throw error;
+    }
+  }
+}
+
+/** Copies text to the clipboard, reporting whether the browser let it. */
+async function copyText(text: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Gives the person their text as a file, for when the clipboard cannot hold it. */
+function downloadText(text: string, filename: string) {
+  const dot = filename.lastIndexOf('.');
+  const name = dot > 0 ? `${filename.slice(0, dot)} (mine)${filename.slice(dot)}` : `${filename} (mine)`;
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
+  const link = Object.assign(document.createElement('a'), { href: url, download: name });
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+/**
+ * Someone saved the file since it was opened: keep theirs, keep mine, or keep
+ * both. Loading theirs keeps the person's text first: on the clipboard, or,
+ * when the browser refuses, in a box to copy and a file to download, until
+ * they choose to let it go. Saving mine over theirs says what the library
+ * keeps of theirs.
+ */
+function ConflictDialog({
+  itemId,
+  text,
+  filename,
+  history,
+  busy,
+  onClose,
+  onTheirs,
+  onMine,
+  onCopy,
+}: {
+  itemId: string;
+  text: string;
+  filename: string;
+  history: boolean;
+  busy: boolean;
+  onClose: () => void;
+  onTheirs: (copied: boolean) => void;
+  onMine: () => void;
+  onCopy: () => void;
+}) {
   const latest = useQuery({ ...resourceQuery(itemId), staleTime: 0 });
   const names = usePeopleNames();
   const format = useFormat();
+  const [uncopied, setUncopied] = useState(false);
   const who = latest.data?.updated_by ? (names.get(latest.data.updated_by) ?? latest.data.updated_by) : 'Someone';
+  if (uncopied)
+    return (
+      <Dialog open onOpenChange={(open) => !open && onClose()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Keep your text first</DialogTitle>
+            <DialogDescription>This browser didn't let PaperGo copy your text. Copy it from the box or download it before loading their version.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2 px-5 pb-2">
+            <textarea readOnly aria-label="Your text" value={text} rows={8} className="w-full rounded-md border bg-surface-muted p-2 font-mono text-xs" onFocus={(event) => event.currentTarget.select()} />
+            <Button onClick={() => downloadText(text, filename)}>Download your text</Button>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={onClose}>
+              Keep editing
+            </Button>
+            <Button variant="danger" onClick={() => onTheirs(false)}>
+              Load their version
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>This file changed while you were editing</DialogTitle>
           <DialogDescription>
-            {who} saved it{latest.data?.updated_at ? ` ${format.relative(latest.data.updated_at)}` : ''}. Choose what to keep; nothing is lost.
+            {who} saved it{latest.data?.updated_at ? ` ${format.relative(latest.data.updated_at)}` : ''}. Choose what to keep.
+            {!history && ' This library keeps no earlier file versions, so a version replaced here cannot be brought back.'}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-2 px-5 pb-2">
-          <Button disabled={busy} onClick={onTheirs}>
+          <Button disabled={busy} onClick={async () => ((await copyText(text)) ? onTheirs(true) : setUncopied(true))}>
             Load their version (your text goes to the clipboard)
           </Button>
           <Button disabled={busy} onClick={onMine}>
-            Save mine anyway (theirs stays in the file history)
+            {history ? 'Save mine anyway (theirs becomes an earlier version)' : 'Replace theirs with mine (theirs is not kept)'}
           </Button>
           <Button disabled={busy} onClick={onCopy}>
             Save mine as a new file

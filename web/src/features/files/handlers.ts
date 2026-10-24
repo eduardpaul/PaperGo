@@ -67,6 +67,8 @@ export interface EditSession {
   reason?: string;
   /** The item version the file was read at, for If-Match. */
   version: number;
+  /** Whether the library keeps earlier file versions, which decides what replacing a newer one loses. */
+  history: boolean;
   /** Where Save as a new file puts the copy. */
   containerId: string;
   folderId?: string;

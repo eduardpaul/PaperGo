@@ -66,9 +66,13 @@ The viewer lives in the URL (`?item=<id>&open=file`, with `page` for a page, `bl
 
 People who may write an item edit its Markdown or text file in the viewer: **Edit** in the viewer header (or **E**), on the file bar, and in the right-click menu. **New Markdown document** in a library's menu creates an item with a starter file and opens it in the editor. The editor is Monaco with Markdown highlighting (a plain text area on touch screens); on wide screens a Markdown preview sits beside it, and narrower screens switch between **Write** and **Preview**.
 
-- **Save** (Ctrl/⌘ S) replaces the file through `PUT /v1/items/{id}/content` with the item's version, so a save is an ordinary new file version with its history, audit, events and publishing rules.
-- **Conflicts:** when someone else saved first, the editor offers to load their version (copying yours to the clipboard), save yours over theirs, or save yours as a copy.
-- **Drafts:** unsaved text is kept in the browser and offered back when the file is opened again; closing or leaving with unsaved text asks first.
+- **Save** (Ctrl/⌘ S) replaces the file through `PUT /v1/items/{id}/content` with the item version the text was read at, so a save is an ordinary new file version with its history, audit, events and publishing rules. A change to the item's details alone does not stop a save; a newer file does.
+- **Conflicts:** when someone else saved the file first, the editor offers three ways on:
+  - **Load their version.** Your text goes to the clipboard first; when the browser refuses, it stays in a box to copy and a file to download until you choose to load theirs.
+  - **Save mine anyway.** In a library with versioning, theirs becomes an earlier version. With versioning off, the dialog says theirs is not kept.
+  - **Save mine as a new file.** Your text becomes a new item beside it, named "name (copy).ext" (numbered when taken), with the item's content type, keywords and values.
+- **Drafts:** unsaved text is kept in the browser, one draft per item with the version it started from, written when typing pauses and before the page closes, and offered back when the file is opened again; a restored draft still meets a newer file as a conflict. Drafts nobody returns to for 30 days are dropped. Closing or leaving with unsaved text asks first.
+- A clean editor follows the file: when someone saves a new version, reading and editing both show it.
 - **Size:** files up to `FILE_EDIT_MAX_BYTES` (YAML `storage.edit_max_mb`, default 2 MiB, at most the upload limit) edit in the browser; larger ones open read-only. `/auth/config` reports the limit as `features.file_edit_max_bytes`.
 
 Text files show their first lines as their thumbnail in galleries and on the file bar.

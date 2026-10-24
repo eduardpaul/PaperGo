@@ -144,6 +144,7 @@ export function FileViewer({
           allowed: canEdit,
           reason: tooLarge ? `This file is too large to edit in the browser (the limit is ${format.fileSize(fileEditMax())}). Download it, or edit it over WebDAV.` : undefined,
           version: item.version,
+          history: collection.versioning === 'major',
           containerId: item.container_id ?? collection.id,
           folderId: item.parent_id !== (item.container_id ?? collection.id) ? item.parent_id : undefined,
           setActive: (active) => onEdit(active),
