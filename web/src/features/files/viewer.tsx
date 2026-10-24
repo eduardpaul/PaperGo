@@ -5,7 +5,7 @@ import { ArrowLeft, ChevronLeft, ChevronRight, Download, GitCompare, Info, Link2
 import { Suspense, useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { authorizationHeaders, fileEditMax } from '@/api/auth';
-import { api } from '@/api/http';
+import { api, continuation } from '@/api/http';
 import { resourceQuery } from '@/api/queries';
 import type { ContentType, FieldDefinition, FileVersion, Page, Resource } from '@/api/types';
 import { Badge } from '@/components/ui/badge';
@@ -100,12 +100,22 @@ export function FileViewer({
   const item = itemQuery.data;
   const parent = useQuery({ ...resourceQuery(item?.parent_id ?? ''), enabled: !!item?.parent_id && item.parent_id !== collection.id });
   const earlierVersion = !!blob && !!item && item.file?.blob_id !== blob;
+  // The version asked for, looked up through every page of the item's file history.
   const versions = useQuery({
-    queryKey: ['resources', itemId, 'file-versions', 'viewer'],
-    queryFn: async () => (await api<Page<FileVersion>>(`/v1/items/${itemId}/content/versions`, { query: { $top: 100 } })).data.value ?? [],
+    queryKey: ['resources', itemId, 'file-versions', 'viewer', blob],
+    queryFn: async () => {
+      let path: string | null = `/v1/items/${itemId}/content/versions`;
+      for (let first = true; path; first = false) {
+        const page: Page<FileVersion> = (await api<Page<FileVersion>>(path, { query: first ? { $top: 100 } : undefined })).data;
+        const found = page.value?.find((entry) => entry.id === blob);
+        if (found) return found;
+        path = continuation(page['@odata.nextLink']);
+      }
+      return null;
+    },
     enabled: earlierVersion,
   });
-  const version = earlierVersion ? versions.data?.find((entry) => entry.id === blob) : undefined;
+  const version = earlierVersion && versions.data?.availability !== 'reclaimed' ? (versions.data ?? undefined) : undefined;
   const file: FileRef | undefined = earlierVersion
     ? version && { itemId, blobId: version.id, contentType: version.content_type, filename: version.filename, size: version.size, version: version.version, earlier: true }
     : fileRef(itemId, item?.file);
@@ -215,7 +225,9 @@ export function FileViewer({
       </ViewerMessage>
     );
   else if (!item) canvas = <ViewerMessage title="This item is not available.">It was deleted or moved, or you no longer have access.</ViewerMessage>;
-  else if (earlierVersion && !version) canvas = <ViewerMessage title="This file version is not available.">It may have been reclaimed, or you can read only the published file.</ViewerMessage>;
+  else if (earlierVersion && versions.isError) canvas = <ViewerMessage title="The file history could not be loaded.">Try again in a moment.</ViewerMessage>;
+  else if (earlierVersion && versions.data?.availability === 'reclaimed') canvas = <ViewerMessage title="This file version is no longer stored.">Its bytes were reclaimed; its details stay in the File tab.</ViewerMessage>;
+  else if (earlierVersion && !version) canvas = <ViewerMessage title="This file version is not available.">It is not in this item's history, or you can read only the published file.</ViewerMessage>;
   else if (!file)
     canvas = (
       <ViewerMessage title="This item has no file yet.">
