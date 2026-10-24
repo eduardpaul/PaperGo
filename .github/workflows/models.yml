@@ -1,0 +1,40 @@
+name: models
+# Exports the Laya decision model from its pinned source and publishes the
+# verified archive as a release asset. Builds download it and check it
+# against scripts/decision-model/bundle.json. Run it by hand when the pinned
+# model changes, then record the printed size, checksum and URL there.
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: papergo-models
+  cancel-in-progress: false
+jobs:
+  laya:
+    name: Laya FP32 bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v4.4.1
+      - name: Export the pinned graph
+        run: docker buildx build --target laya-model --output type=local,dest=.tools/decision-build/onnx .
+      - name: Package and verify the bundle
+        run: python3 scripts/decision-model/pack.py .tools/decision-build/onnx --output dist/laya-fp32.tar.gz
+      - name: Publish it as a release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          digest=$(cut -d' ' -f1 dist/laya-fp32.tar.gz.sha256)
+          size=$(stat -c %s dist/laya-fp32.tar.gz)
+          tag=models-laya-${digest:0:12}
+          gh release create "$tag" dist/laya-fp32.tar.gz --target "$GITHUB_SHA" --prerelease --latest=false \
+            --title "Laya FP32 model bundle ${digest:0:12}" \
+            --notes "The pinned Laya FP32 decision model, exported by the models workflow. Builds download it and verify it against scripts/decision-model/bundle.json. sha256 $digest, $size bytes."
+          url="https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/laya-fp32.tar.gz"
+          {
+            echo '```json'
+            printf '{\n  "file": "laya-fp32.tar.gz",\n  "url": "%s",\n  "bytes": %s,\n  "sha256": "%s"\n}\n' "$url" "$size" "$digest"
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
