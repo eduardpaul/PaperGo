@@ -43,3 +43,11 @@ func (p writer) Write(b []byte) (int, error) {
 	return p.ResponseWriter.Write(b)
 }
 func (p writer) Unwrap() http.ResponseWriter { return p.ResponseWriter }
+
+// StoredFile marks a response that carries stored file bytes, which can be
+// anything people upload: browsers must not guess its type, and if one is
+// opened directly it renders sandboxed, with no scripts, forms or loads.
+func StoredFile(w http.ResponseWriter) {
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Security-Policy", "sandbox; default-src 'none'")
+}

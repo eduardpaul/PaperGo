@@ -37,10 +37,12 @@ type Handler struct {
 	// headers may name it as well as the request's Host.
 	PublicHost string
 	locks      *lockTable
+	// scratchFiles holds housekeeping files in memory (scratch.go).
+	scratchFiles *scratchArea
 }
 
 func New(service *dms.Service, verifier auth.Authenticator, store storage.Store, logger *slog.Logger, maxUpload int64) *Handler {
-	return &Handler{DMS: service, Auth: verifier, Storage: store, Logger: logger, MaxUpload: maxUpload, locks: newLockTable()}
+	return &Handler{DMS: service, Auth: verifier, Storage: store, Logger: logger, MaxUpload: maxUpload, locks: newLockTable(), scratchFiles: newScratchArea()}
 }
 
 // request is one authenticated WebDAV call on a library path.
@@ -99,6 +101,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		} else {
 			w.Header().Set("Allow", "OPTIONS, PROPFIND")
 			h.status(w, http.StatusMethodNotAllowed, "map a library: "+Prefix+"{library id}/")
+		}
+		return
+	}
+	if len(path) > 0 && scratchName(path[len(path)-1]) {
+		if err = h.scratch(w, req); err != nil {
+			h.fail(w, r, err)
 		}
 		return
 	}
@@ -262,8 +270,6 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, errTooManyLocks):
 		w.Header().Set("Retry-After", "60")
 		h.status(w, http.StatusServiceUnavailable, "too many active locks")
-	case errors.Is(err, storage.ErrUnsupportedFile):
-		h.status(w, http.StatusUnsupportedMediaType, err.Error())
 	case errors.Is(err, storage.ErrTooLarge) || errors.As(err, &tooLarge):
 		h.status(w, http.StatusRequestEntityTooLarge, "file exceeds the upload limit")
 	case errors.Is(err, context.DeadlineExceeded) && errors.Is(r.Context().Err(), context.DeadlineExceeded):

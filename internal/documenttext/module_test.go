@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -17,6 +18,7 @@ import (
 	"papergo/internal/documenttext"
 	"papergo/internal/httpapi"
 	"papergo/internal/storage"
+	"papergo/internal/textfiles"
 )
 
 func TestMain(m *testing.M) { daltest.Main(m) }
@@ -98,5 +100,23 @@ func TestReadTextRoute(t *testing.T) {
 	}
 	if n := daltest.Count(t, s.DAL, "blob_leases", daltest.Row{"operation_id": op.ID}); n != 0 {
 		t.Fatalf("%d leases after the operation ended", n)
+	}
+	// Kinds of file without a text reader are refused before any operation;
+	// text files have one.
+	textfiles.Register()
+	for version, file := range []struct{ name, status string }{{"data.bin", "415"}, {"notes.md", "202"}} {
+		replace := httptest.NewRequest("PUT", "/v1/items/"+item.ID+"/content", strings.NewReader("# Notes"))
+		replace.Header.Set("Authorization", "Bearer "+token)
+		replace.Header.Set("If-Match", `"`+strconv.Itoa(version+2)+`"`)
+		replace.Header.Set("Content-Type", "application/octet-stream")
+		replace.Header.Set("X-Filename", file.name)
+		replaced := httptest.NewRecorder()
+		h.ServeHTTP(replaced, replace)
+		if replaced.Code != 201 {
+			t.Fatal(replaced.Code, replaced.Body.String())
+		}
+		if res = call(h, "POST", path, "", ""); strconv.Itoa(res.Code) != file.status {
+			t.Fatal(file.name, res.Code, res.Body.String())
+		}
 	}
 }

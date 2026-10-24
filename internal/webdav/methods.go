@@ -41,6 +41,7 @@ func (h *Handler) get(w http.ResponseWriter, r *request) error {
 	w.Header().Set("Content-Type", f.ContentType())
 	// File clients ignore the disposition; browsers must not render uploads inline.
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": f.Name}))
+	transfer.StoredFile(w)
 	w.Header().Set("ETag", f.ETag())
 	http.ServeContent(transfer.Writer(w), r.Request, f.Name, f.UpdatedAt, content)
 	return nil
@@ -86,7 +87,7 @@ func (h *Handler) put(w http.ResponseWriter, r *request) error {
 // store writes body to blob storage, then commits it as the file at path.
 // Bytes of a rejected commit are removed again.
 func (h *Handler) store(r *request, path []string, body io.Reader, cond dms.FileConditions, keywords []string, values map[string]any, typeID string) (*dms.File, bool, error) {
-	object, mediaType, err := storage.PutDocument(r.Context(), h.Storage, body, h.MaxUpload)
+	object, mediaType, err := storage.PutDocument(r.Context(), h.Storage, body, h.MaxUpload, path[len(path)-1])
 	if err != nil {
 		return nil, false, err
 	}

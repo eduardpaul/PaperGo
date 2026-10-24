@@ -8289,7 +8289,7 @@ interface ContentRequestBuilder$1 extends BaseRequestBuilder<ContentRequestBuild
 	 */
 	get(requestConfiguration?: RequestConfiguration<ContentRequestBuilderGetQueryParameters> | undefined): Promise<void>;
 	/**
-	 * Checks the library duplicate policy in the same transaction as the new file revision. Warn returns duplicates; block returns 409 duplicate_file and stores no revision. Self, deleted items, historical files and inaccessible content do not count. Requires item.write and document.write and item write access with current If-Match. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts only PDF, TIFF, JPEG, PNG and WebP detected from file signatures; filenames and declared MIME types do not determine stored content_type. Unsupported bytes return 415 without item/revision changes. Size limits apply while streaming.
+	 * Checks the library duplicate policy in the same transaction as the new file revision. Warn returns duplicates; block returns 409 duplicate_file and stores no revision. Self, deleted items, historical files and inaccessible content do not count. Requires item.write and document.write and item write access with current If-Match. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts any file. The stored content_type is identified from the file's first bytes and its filename: bytes that prove a format win (a PDF named notes.txt is a PDF), container formats such as Word and Excel need both their signature and their extension, text types need UTF-8 text, and a file no type describes is application/octet-stream. Declared MIME types are ignored. GET /auth/config lists the types. Size limits apply while streaming.
 	 * @param body Binary request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Blob>}
@@ -8304,7 +8304,7 @@ interface ContentRequestBuilder$1 extends BaseRequestBuilder<ContentRequestBuild
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<ContentRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 	/**
-	 * Checks the library duplicate policy in the same transaction as the new file revision. Warn returns duplicates; block returns 409 duplicate_file and stores no revision. Self, deleted items, historical files and inaccessible content do not count. Requires item.write and document.write and item write access with current If-Match. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts only PDF, TIFF, JPEG, PNG and WebP detected from file signatures; filenames and declared MIME types do not determine stored content_type. Unsupported bytes return 415 without item/revision changes. Size limits apply while streaming.
+	 * Checks the library duplicate policy in the same transaction as the new file revision. Warn returns duplicates; block returns 409 duplicate_file and stores no revision. Self, deleted items, historical files and inaccessible content do not count. Requires item.write and document.write and item write access with current If-Match. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts any file. The stored content_type is identified from the file's first bytes and its filename: bytes that prove a format win (a PDF named notes.txt is a PDF), container formats such as Word and Excel need both their signature and their extension, text types need UTF-8 text, and a file no type describes is application/octet-stream. Declared MIME types are ignored. GET /auth/config lists the types. Size limits apply while streaming.
 	 * @param body Binary request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -8429,14 +8429,14 @@ export interface PreviewGetResponse extends AdditionalDataHolder, Parsable {
  */
 export interface PreviewRequestBuilder extends BaseRequestBuilder<PreviewRequestBuilder> {
 	/**
-	 * Requires item.read and document.read, plus resource ACL access. Resolves the visible published/head revision before selecting a rendition. Identical source bytes share a preview; original bytes are never returned. The default file.preview workflow generates previews asynchronously.
+	 * Requires item.read and document.read, plus resource ACL access. Resolves the visible published/head revision before selecting a rendition. Identical source bytes share a preview; original bytes are never returned. The default file.preview workflow generates previews asynchronously. Kinds of file previews are not rendered for answer unavailable at once.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<PreviewGetResponse>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	get(requestConfiguration?: RequestConfiguration<PreviewRequestBuilderGetQueryParameters> | undefined): Promise<PreviewGetResponse | undefined>;
 	/**
-	 * Starts rendering a first-page WebP preview, under 100 KiB and 800 pixels, of the item's current file as a background operation; GET /v1/items/{id}/preview serves it. Previews are kept once per file bytes, so bytes rendered before finish at once. Requires document.write and write access to the item.
+	 * Starts rendering a first-page WebP preview, under 100 KiB and 800 pixels, of the item's current file as a background operation; GET /v1/items/{id}/preview serves it. Previews are kept once per file bytes, so bytes rendered before finish at once. Requires document.write and write access to the item. Kinds of file previews are not rendered for (GET /auth/config marks the ones they are with preview) are refused with 415 unsupported_file_type.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Operation>}
 	 * @throws {Problem} error when the service returns a 400 status code
@@ -8444,25 +8444,26 @@ export interface PreviewRequestBuilder extends BaseRequestBuilder<PreviewRequest
 	 * @throws {Problem} error when the service returns a 403 status code
 	 * @throws {Problem} error when the service returns a 404 status code
 	 * @throws {Problem} error when the service returns a 409 status code
+	 * @throws {Problem} error when the service returns a 415 status code
 	 * @throws {Problem} error when the service returns a 422 status code
 	 * @throws {Problem} error when the service returns a 429 status code
 	 */
 	post(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Operation | undefined>;
 	/**
-	 * Requires item.read and document.read, plus resource ACL access. Resolves the visible published/head revision before selecting a rendition. Identical source bytes share a preview; original bytes are never returned. The default file.preview workflow generates previews asynchronously.
+	 * Requires item.read and document.read, plus resource ACL access. Resolves the visible published/head revision before selecting a rendition. Identical source bytes share a preview; original bytes are never returned. The default file.preview workflow generates previews asynchronously. Kinds of file previews are not rendered for answer unavailable at once.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<PreviewRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 	/**
-	 * Starts rendering a first-page WebP preview, under 100 KiB and 800 pixels, of the item's current file as a background operation; GET /v1/items/{id}/preview serves it. Previews are kept once per file bytes, so bytes rendered before finish at once. Requires document.write and write access to the item.
+	 * Starts rendering a first-page WebP preview, under 100 KiB and 800 pixels, of the item's current file as a background operation; GET /v1/items/{id}/preview serves it. Previews are kept once per file bytes, so bytes rendered before finish at once. Requires document.write and write access to the item. Kinds of file previews are not rendered for (GET /auth/config marks the ones they are with preview) are refused with 415 unsupported_file_type.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toPostRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 }
 /**
- * Requires item.read and document.read, plus resource ACL access. Resolves the visible published/head revision before selecting a rendition. Identical source bytes share a preview; original bytes are never returned. The default file.preview workflow generates previews asynchronously.
+ * Requires item.read and document.read, plus resource ACL access. Resolves the visible published/head revision before selecting a rendition. Identical source bytes share a preview; original bytes are never returned. The default file.preview workflow generates previews asynchronously. Kinds of file previews are not rendered for answer unavailable at once.
  */
 export interface PreviewRequestBuilderGetQueryParameters {
 	/**
@@ -8893,7 +8894,7 @@ export interface TextRequestBuilder extends BaseRequestBuilder<TextRequestBuilde
 	 */
 	get(requestConfiguration?: RequestConfiguration<TextRequestBuilderGetQueryParameters> | undefined): Promise<ItemText | undefined>;
 	/**
-	 * Starts reading the text of the item's current file as a background operation: the text layer of PDF pages, and OCR of pages without one and of images when the deployment has OCR. The operation reads the file version that is current now, even if the item gets another file meanwhile. Text already read from the same bytes with the same settings is reused. Requires document.write and write access to the item. When the operation succeeds, its result is a ReadTextResult and GET /v1/items/{id}/text returns the pages. A file whose text cannot be read (another format, a protected or broken PDF) fails the operation. The body is optional. 422 refuses ocr=always without an OCR engine.
+	 * Starts reading the text of the item's current file as a background operation: the text layer of PDF pages, and OCR of pages without one and of images when the deployment has OCR. The operation reads the file version that is current now, even if the item gets another file meanwhile. Text already read from the same bytes with the same settings is reused. Requires document.write and write access to the item. When the operation succeeds, its result is a ReadTextResult and GET /v1/items/{id}/text returns the pages. Kinds of file PaperGo does not read (GET /auth/config marks the ones it does with text) are refused with 415 unsupported_file_type before any operation starts; a file whose text still cannot be read, such as a protected or broken PDF, fails the operation. The body is optional. 422 refuses ocr=always without an OCR engine.
 	 * @param body How the text is read.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Operation>}
@@ -8916,7 +8917,7 @@ export interface TextRequestBuilder extends BaseRequestBuilder<TextRequestBuilde
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<TextRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 	/**
-	 * Starts reading the text of the item's current file as a background operation: the text layer of PDF pages, and OCR of pages without one and of images when the deployment has OCR. The operation reads the file version that is current now, even if the item gets another file meanwhile. Text already read from the same bytes with the same settings is reused. Requires document.write and write access to the item. When the operation succeeds, its result is a ReadTextResult and GET /v1/items/{id}/text returns the pages. A file whose text cannot be read (another format, a protected or broken PDF) fails the operation. The body is optional. 422 refuses ocr=always without an OCR engine.
+	 * Starts reading the text of the item's current file as a background operation: the text layer of PDF pages, and OCR of pages without one and of images when the deployment has OCR. The operation reads the file version that is current now, even if the item gets another file meanwhile. Text already read from the same bytes with the same settings is reused. Requires document.write and write access to the item. When the operation succeeds, its result is a ReadTextResult and GET /v1/items/{id}/text returns the pages. Kinds of file PaperGo does not read (GET /auth/config marks the ones it does with text) are refused with 415 unsupported_file_type before any operation starts; a file whose text still cannot be read, such as a protected or broken PDF, fails the operation. The body is optional. 422 refuses ocr=always without an OCR engine.
 	 * @param body How the text is read.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -9714,7 +9715,7 @@ export interface DeltaRequestBuilderGetQueryParameters {
  */
 export interface DocumentsRequestBuilder extends BaseRequestBuilder<DocumentsRequestBuilder> {
 	/**
-	 * Requires document.write, item.read and item.write and write access to the library and selected folder. One file part is required; one metadata JSON form field is optional. Either order is accepted. File bytes stream under the configured upload limit; metadata is limited to 64 KiB and request framing to an additional 128 KiB. Metadata, first file version, first revision, indexes, publication and events commit together. Invalid metadata, malformed multipart, duplicate blocking and failed writes create no item and clean up stored bytes. Returns 201 with the new item, file, duplicate warnings, Location and numeric ETag. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts only PDF, TIFF, JPEG, PNG and WebP detected from file signatures; filenames and declared MIME types do not determine stored content_type. Unsupported bytes return 415 without item/revision changes. Size limits apply while streaming.
+	 * Requires document.write, item.read and item.write and write access to the library and selected folder. One file part is required; one metadata JSON form field is optional. Either order is accepted. File bytes stream under the configured upload limit; metadata is limited to 64 KiB and request framing to an additional 128 KiB. Metadata, first file version, first revision, indexes, publication and events commit together. Invalid metadata, malformed multipart, duplicate blocking and failed writes create no item and clean up stored bytes. Returns 201 with the new item, file, duplicate warnings, Location and numeric ETag. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts any file. The stored content_type is identified from the file's first bytes and its filename: bytes that prove a format win (a PDF named notes.txt is a PDF), container formats such as Word and Excel need both their signature and their extension, text types need UTF-8 text, and a file no type describes is application/octet-stream. Declared MIME types are ignored. GET /auth/config lists the types. Size limits apply while streaming.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<DocumentUpload>}
@@ -9722,7 +9723,7 @@ export interface DocumentsRequestBuilder extends BaseRequestBuilder<DocumentsReq
 	 */
 	post(body: MultipartBody, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<DocumentUpload | undefined>;
 	/**
-	 * Requires document.write, item.read and item.write and write access to the library and selected folder. One file part is required; one metadata JSON form field is optional. Either order is accepted. File bytes stream under the configured upload limit; metadata is limited to 64 KiB and request framing to an additional 128 KiB. Metadata, first file version, first revision, indexes, publication and events commit together. Invalid metadata, malformed multipart, duplicate blocking and failed writes create no item and clean up stored bytes. Returns 201 with the new item, file, duplicate warnings, Location and numeric ETag. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts only PDF, TIFF, JPEG, PNG and WebP detected from file signatures; filenames and declared MIME types do not determine stored content_type. Unsupported bytes return 415 without item/revision changes. Size limits apply while streaming.
+	 * Requires document.write, item.read and item.write and write access to the library and selected folder. One file part is required; one metadata JSON form field is optional. Either order is accepted. File bytes stream under the configured upload limit; metadata is limited to 64 KiB and request framing to an additional 128 KiB. Metadata, first file version, first revision, indexes, publication and events commit together. Invalid metadata, malformed multipart, duplicate blocking and failed writes create no item and clean up stored bytes. Returns 201 with the new item, file, duplicate warnings, Location and numeric ETag. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts any file. The stored content_type is identified from the file's first bytes and its filename: bytes that prove a format win (a PDF named notes.txt is a PDF), container formats such as Word and Excel need both their signature and their extension, text types need UTF-8 text, and a file no type describes is application/octet-stream. Declared MIME types are ignored. GET /auth/config lists the types. Size limits apply while streaming.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}

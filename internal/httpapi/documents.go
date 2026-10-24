@@ -99,7 +99,7 @@ func (a *API) createDocumentTo(w http.ResponseWriter, r *http.Request, groupID s
 				a.problem(w, r, 400, "invalid_upload", "file must have a filename")
 				return
 			}
-			object, media, err = storage.PutDocument(r.Context(), a.Storage, part, a.MaxUpload)
+			object, media, err = storage.PutDocument(r.Context(), a.Storage, part, a.MaxUpload, filename)
 			if err != nil {
 				if errors.Is(err, io.ErrUnexpectedEOF) {
 					a.problem(w, r, 400, "invalid_upload", "invalid multipart file")

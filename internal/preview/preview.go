@@ -7,6 +7,7 @@ import (
 	"errors"
 	"image"
 	"math"
+	"slices"
 
 	_ "golang.org/x/image/tiff"
 	"papergo/internal/doctext"
@@ -20,6 +21,12 @@ type Result struct {
 	WebP          []byte
 	Width, Height int
 }
+
+// Media are the types Generate renders.
+var Media = []string{"application/pdf", "image/tiff", "image/jpeg", "image/png", "image/webp"}
+
+// Supported reports whether Generate renders files of media.
+func Supported(media string) bool { return slices.Contains(Media, media) }
 
 func Generate(ctx context.Context, data []byte, media string, pdf doctext.PDF, maxPixels int64) (Result, error) {
 	if err := ctx.Err(); err != nil {

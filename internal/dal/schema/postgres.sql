@@ -328,7 +328,7 @@ CREATE TABLE blobs (
     version BIGINT NOT NULL CHECK (version > 0),
     object_key TEXT NOT NULL,
     filename TEXT NOT NULL,
-    content_type TEXT COLLATE "C" NOT NULL CHECK (content_type IN ('application/pdf', 'image/tiff', 'image/jpeg', 'image/png', 'image/webp')),
+    content_type TEXT COLLATE "C" NOT NULL CHECK (length(content_type) BETWEEN 3 AND 127 AND content_type LIKE '%/%'),
     languages TEXT NOT NULL DEFAULT '' CHECK (length(languages) <= 191),
     size BIGINT NOT NULL CHECK (size >= 0),
     sha256 TEXT NOT NULL CHECK (length(sha256) = 64),

@@ -316,8 +316,8 @@ func (s *Service) createBlob(ctx context.Context, subject, itemID string, in Blo
 	if !filenameValid(in.Filename) || in.Size < 0 || len(in.SHA256) != 64 || len(in.ContentType) > 255 || in.ContentType == "" || in.ObjectKey == "" {
 		return nil, invalid("invalid blob metadata")
 	}
-	if !storage.SupportedDocumentType(in.ContentType) {
-		return nil, storage.ErrUnsupportedFile
+	if !storage.ValidMediaType(in.ContentType) {
+		return nil, invalid("invalid media type")
 	}
 	if checkDuplicates {
 		if _, err := s.checkDuplicatePolicy(ctx, subject, itemID, in.SHA256); err != nil {

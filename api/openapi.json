@@ -1987,7 +1987,7 @@
           "item.write",
           "document.write"
         ],
-        "description": "Checks the library duplicate policy in the same transaction as the new file revision. Warn returns duplicates; block returns 409 duplicate_file and stores no revision. Self, deleted items, historical files and inaccessible content do not count. Requires item.write and document.write and item write access with current If-Match. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts only PDF, TIFF, JPEG, PNG and WebP detected from file signatures; filenames and declared MIME types do not determine stored content_type. Unsupported bytes return 415 without item/revision changes. Size limits apply while streaming."
+        "description": "Checks the library duplicate policy in the same transaction as the new file revision. Warn returns duplicates; block returns 409 duplicate_file and stores no revision. Self, deleted items, historical files and inaccessible content do not count. Requires item.write and document.write and item write access with current If-Match. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts any file. The stored content_type is identified from the file's first bytes and its filename: bytes that prove a format win (a PDF named notes.txt is a PDF), container formats such as Word and Excel need both their signature and their extension, text types need UTF-8 text, and a file no type describes is application/octet-stream. Declared MIME types are ignored. GET /auth/config lists the types. Size limits apply while streaming."
       },
       "get": {
         "summary": "Download selected head/published blob; supports byte ranges",
@@ -13450,7 +13450,7 @@
       "post": {
         "operationId": "createDocument",
         "summary": "Create a document, metadata and content from one multipart upload",
-        "description": "Requires document.write, item.read and item.write and write access to the library and selected folder. One file part is required; one metadata JSON form field is optional. Either order is accepted. File bytes stream under the configured upload limit; metadata is limited to 64 KiB and request framing to an additional 128 KiB. Metadata, first file version, first revision, indexes, publication and events commit together. Invalid metadata, malformed multipart, duplicate blocking and failed writes create no item and clean up stored bytes. Returns 201 with the new item, file, duplicate warnings, Location and numeric ETag. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts only PDF, TIFF, JPEG, PNG and WebP detected from file signatures; filenames and declared MIME types do not determine stored content_type. Unsupported bytes return 415 without item/revision changes. Size limits apply while streaming.",
+        "description": "Requires document.write, item.read and item.write and write access to the library and selected folder. One file part is required; one metadata JSON form field is optional. Either order is accepted. File bytes stream under the configured upload limit; metadata is limited to 64 KiB and request framing to an additional 128 KiB. Metadata, first file version, first revision, indexes, publication and events commit together. Invalid metadata, malformed multipart, duplicate blocking and failed writes create no item and clean up stored bytes. Returns 201 with the new item, file, duplicate warnings, Location and numeric ETag. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts any file. The stored content_type is identified from the file's first bytes and its filename: bytes that prove a format win (a PDF named notes.txt is a PDF), container formats such as Word and Excel need both their signature and their extension, text types need UTF-8 text, and a file no type describes is application/octet-stream. Declared MIME types are ignored. GET /auth/config lists the types. Size limits apply while streaming.",
         "x-module-scopes": [
           "document.write",
           "item.read",
@@ -14478,7 +14478,8 @@
                 "schema": {
                   "type": "object",
                   "required": [
-                    "mode"
+                    "mode",
+                    "features"
                   ],
                   "additionalProperties": false,
                   "properties": {
@@ -14510,6 +14511,86 @@
                         "scope": {
                           "type": "string",
                           "description": "Space-separated scopes requested at sign-in."
+                        }
+                      }
+                    },
+                    "features": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "description": "The optional parts this deployment runs, and what the web app needs to know about files.",
+                      "required": [
+                        "comments",
+                        "file_types",
+                        "file_edit_max_bytes"
+                      ],
+                      "properties": {
+                        "comments": {
+                          "type": "boolean",
+                          "description": "False when the deployment runs without discussions (COMMENTS=off)."
+                        },
+                        "mcp": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "url"
+                          ],
+                          "properties": {
+                            "url": {
+                              "type": "string",
+                              "format": "uri"
+                            }
+                          },
+                          "description": "Present when MCP_PUBLIC_URL names the deployment's MCP server."
+                        },
+                        "file_types": {
+                          "type": "array",
+                          "description": "The kinds of file PaperGo names, in matching order. Every file is stored; a file no type describes is application/octet-stream.",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "media_type",
+                              "label",
+                              "family",
+                              "extensions",
+                              "preview",
+                              "text"
+                            ],
+                            "properties": {
+                              "media_type": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string",
+                                "description": "The type's name for people, such as PDF document."
+                              },
+                              "family": {
+                                "type": "string",
+                                "description": "An icon family: pdf, image, text, document, spreadsheet, presentation, archive, audio, video, email or code."
+                              },
+                              "extensions": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "description": "Lower-case file extensions with their dot; empty for types recognized by their bytes alone."
+                              },
+                              "preview": {
+                                "type": "boolean",
+                                "description": "Previews are rendered for these files."
+                              },
+                              "text": {
+                                "type": "boolean",
+                                "description": "POST /v1/items/{id}/text reads these files."
+                              }
+                            }
+                          }
+                        },
+                        "file_edit_max_bytes": {
+                          "type": "integer",
+                          "format": "int64",
+                          "minimum": 1,
+                          "description": "The largest file the web app edits in the browser (FILE_EDIT_MAX_BYTES, at most MAX_UPLOAD_BYTES)."
                         }
                       }
                     }
@@ -17765,7 +17846,7 @@
         ],
         "operationId": "readItemText",
         "summary": "Read the text of the item's current file",
-        "description": "Starts reading the text of the item's current file as a background operation: the text layer of PDF pages, and OCR of pages without one and of images when the deployment has OCR. The operation reads the file version that is current now, even if the item gets another file meanwhile. Text already read from the same bytes with the same settings is reused. Requires document.write and write access to the item. When the operation succeeds, its result is a ReadTextResult and GET /v1/items/{id}/text returns the pages. A file whose text cannot be read (another format, a protected or broken PDF) fails the operation. The body is optional. 422 refuses ocr=always without an OCR engine.",
+        "description": "Starts reading the text of the item's current file as a background operation: the text layer of PDF pages, and OCR of pages without one and of images when the deployment has OCR. The operation reads the file version that is current now, even if the item gets another file meanwhile. Text already read from the same bytes with the same settings is reused. Requires document.write and write access to the item. When the operation succeeds, its result is a ReadTextResult and GET /v1/items/{id}/text returns the pages. Kinds of file PaperGo does not read (GET /auth/config marks the ones it does with text) are refused with 415 unsupported_file_type before any operation starts; a file whose text still cannot be read, such as a protected or broken PDF, fails the operation. The body is optional. 422 refuses ocr=always without an OCR engine.",
         "x-required-scopes": [
           "document.write"
         ],
@@ -18169,7 +18250,7 @@
       "get": {
         "operationId": "getItemPreview",
         "summary": "Read a lightweight rendition of the authorized visible file",
-        "description": "Requires item.read and document.read, plus resource ACL access. Resolves the visible published/head revision before selecting a rendition. Identical source bytes share a preview; original bytes are never returned. The default file.preview workflow generates previews asynchronously.",
+        "description": "Requires item.read and document.read, plus resource ACL access. Resolves the visible published/head revision before selecting a rendition. Identical source bytes share a preview; original bytes are never returned. The default file.preview workflow generates previews asynchronously. Kinds of file previews are not rendered for answer unavailable at once.",
         "x-module-scopes": [
           "item.read",
           "document.read"
@@ -18270,7 +18351,7 @@
         ],
         "operationId": "renderItemPreview",
         "summary": "Render a preview of the item's current file",
-        "description": "Starts rendering a first-page WebP preview, under 100 KiB and 800 pixels, of the item's current file as a background operation; GET /v1/items/{id}/preview serves it. Previews are kept once per file bytes, so bytes rendered before finish at once. Requires document.write and write access to the item.",
+        "description": "Starts rendering a first-page WebP preview, under 100 KiB and 800 pixels, of the item's current file as a background operation; GET /v1/items/{id}/preview serves it. Previews are kept once per file bytes, so bytes rendered before finish at once. Requires document.write and write access to the item. Kinds of file previews are not rendered for (GET /auth/config marks the ones they are with preview) are refused with 415 unsupported_file_type.",
         "x-required-scopes": [
           "document.write"
         ],
@@ -18365,6 +18446,9 @@
                 }
               }
             }
+          },
+          "415": {
+            "$ref": "#/components/responses/Problem"
           }
         }
       }

@@ -33,6 +33,9 @@ comments: "on"
 storage:
   blob_path: ./data/blobs
   max_upload_mb: 100
+  # Largest Markdown or text file edited in the browser; larger files open
+  # read-only. At most max_upload_mb.
+  edit_max_mb: 2
 
 # Operation workers. Each named worker runs its own kinds of background
 # work; settings left out keep the defaults. Workers: maintenance (index

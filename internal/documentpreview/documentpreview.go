@@ -12,6 +12,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
@@ -100,6 +101,9 @@ func Start(ctx context.Context, s *dms.Service, subject, itemID string) (*dms.Op
 	b, err := s.CurrentFile(ctx, subject, itemID)
 	if err != nil {
 		return nil, err
+	}
+	if !preview.Supported(string(b.ContentType)) {
+		return nil, fmt.Errorf("%w: PaperGo does not render previews of %s files", storage.ErrUnsupportedFile, b.ContentType)
 	}
 	payload, err := json.Marshal(job{ItemID: itemID, BlobID: b.ID, SHA256: b.Sha256, ObjectKey: b.ObjectKey, ContentType: string(b.ContentType)})
 	if err != nil {

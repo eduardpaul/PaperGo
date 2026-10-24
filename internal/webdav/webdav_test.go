@@ -453,12 +453,61 @@ func TestDestinationAcceptsPublicHost(t *testing.T) {
 	e.expect(e.do("MOVE", e.root+"/Docs/b.txt", alice, "", "Destination", "https://other.example.com"+e.root+"/Docs/d.txt"), 502)
 }
 
-func TestWebDAVRejectsUnsupportedBytesAndDetectsFormat(t *testing.T) {
+func TestWebDAVStoresAnyFileAndNamesItsType(t *testing.T) {
 	e := setup(t)
-	e.expect(e.do("PUT", e.root+"/fake.pdf", "alice-token", "plain text", "Content-Type", "application/pdf"), 415)
-	e.expect(e.do("PUT", e.root+"/wrong.txt", "alice-token", "%PDF-1.7", "Content-Type", "image/jpeg"), 201)
-	response := e.expect(e.do("GET", e.root+"/wrong.txt", "alice-token", ""), 200)
-	if response.Header().Get("Content-Type") != "application/pdf" {
-		t.Fatal(response.Header())
+	for name, want := range map[string]string{
+		"notes.txt": "application/octet-stream",
+		"wrong.txt": "application/pdf",
+		"tool.exe":  "application/octet-stream",
+		"data.csv":  "text/csv",
+	} {
+		body := "plain text"
+		if name == "wrong.txt" {
+			body = "%PDF-1.7"
+		}
+		e.expect(e.do("PUT", e.root+"/"+name, "alice-token", body, "Content-Type", "image/jpeg"), 201)
+		response := e.expect(e.do("GET", e.root+"/"+name, "alice-token", ""), 200)
+		if response.Header().Get("Content-Type") != want || response.Header().Get("Content-Security-Policy") != "sandbox; default-src 'none'" || response.Body.String() != body {
+			t.Fatal(name, response.Header(), response.Body.String())
+		}
+	}
+}
+
+// Office owner files, Explorer thumbnails and macOS folder files stay in
+// memory: they answer like files but never become items.
+func TestWebDAVKeepsHousekeepingFilesOutOfTheLibrary(t *testing.T) {
+	e := setup(t)
+	alice := "alice-token"
+	e.expect(e.do("MKCOL", e.root+"/Docs", alice, ""), 201)
+	for _, name := range []string{"~$report.docx", "Thumbs.db", ".DS_Store", "._report.docx", ".~lock.report.odt#", "desktop.ini"} {
+		path := e.root + "/Docs/" + strings.ReplaceAll(strings.ReplaceAll(name, "#", "%23"), "$", "%24")
+		e.expect(e.do("GET", path, alice, ""), 404)
+		e.expect(e.do("PUT", path, alice, "owner"), 201)
+		e.expect(e.do("PUT", path, alice, "owner2"), 204)
+		if body := e.expect(e.do("GET", path, alice, ""), 200).Body.String(); body != "owner2" {
+			t.Fatal(name, body)
+		}
+		// A reader of the folder sees it; only writers change it.
+		e.expect(e.do("GET", path, "bob-token", ""), 200)
+		e.expect(e.do("PUT", path, "bob-token", "x"), 403)
+		if w := e.expect(e.do("PROPFIND", path, alice, "", "Depth", "0"), 207); !strings.Contains(w.Body.String(), "<D:getcontentlength>6</D:getcontentlength>") {
+			t.Fatal(name, w.Body.String())
+		}
+		lock := `<?xml version="1.0"?><D:lockinfo xmlns:D="DAV:"><D:lockscope><D:exclusive/></D:lockscope><D:locktype><D:write/></D:locktype></D:lockinfo>`
+		token := e.expect(e.do("LOCK", path, alice, lock), 200).Header().Get("Lock-Token")
+		e.expect(e.do("PROPPATCH", path, alice, `<?xml version="1.0"?><D:propertyupdate xmlns:D="DAV:" xmlns:Z="urn:schemas-microsoft-com:"><D:set><D:prop><Z:Win32FileAttributes>00000020</Z:Win32FileAttributes></D:prop></D:set></D:propertyupdate>`, "If", "("+token+")"), 207)
+		e.expect(e.do("UNLOCK", path, alice, "", "Lock-Token", token), 204)
+		e.expect(e.do("MOVE", path, alice, "", "Destination", e.root+"/Docs/kept.docx"), 405)
+		e.expect(e.do("DELETE", path, alice, ""), 204)
+		e.expect(e.do("GET", path, alice, ""), 404)
+	}
+	// Locking a new owner file creates it in memory, not in the library.
+	lock := `<?xml version="1.0"?><D:lockinfo xmlns:D="DAV:"><D:lockscope><D:exclusive/></D:lockscope><D:locktype><D:write/></D:locktype></D:lockinfo>`
+	e.expect(e.do("LOCK", e.root+"/Docs/~%24new.docx", alice, lock), 201)
+	if w := e.expect(e.do("PROPFIND", e.root+"/Docs/", alice, "", "Depth", "1"), 207); strings.Contains(w.Body.String(), "new.docx") || strings.Contains(w.Body.String(), "Thumbs") {
+		t.Fatal("housekeeping files are listed", w.Body.String())
+	}
+	if e.blobCount() != 0 {
+		t.Fatal("housekeeping bytes were stored")
 	}
 }

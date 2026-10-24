@@ -13,8 +13,10 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode"
 
 	"papergo/internal/imaging"
@@ -121,6 +123,37 @@ type Result struct {
 // formats, protected or broken PDFs.
 var ErrUnsupported = errors.New("the file's text cannot be read")
 
+// TextReader reads the text of one kind of file that is neither a PDF nor
+// an image, such as plain text. Extensions register them by media type.
+type TextReader func(ctx context.Context, data []byte, o Options) (Result, error)
+
+var (
+	readersMu sync.RWMutex
+	readers   = map[string]TextReader{}
+)
+
+// RegisterReader makes Extract read files of mediaType with read.
+func RegisterReader(mediaType string, read TextReader) {
+	readersMu.Lock()
+	defer readersMu.Unlock()
+	readers[mediaType] = read
+}
+
+func reader(mediaType string) TextReader {
+	readersMu.RLock()
+	defer readersMu.RUnlock()
+	return readers[mediaType]
+}
+
+// images are the image types Extract reads with OCR.
+var images = []string{"image/jpeg", "image/png", "image/webp", "image/tiff"}
+
+// Supported reports whether Extract reads files of mediaType: PDFs, the
+// images OCR reads, and the types of registered readers.
+func Supported(mediaType string) bool {
+	return mediaType == "application/pdf" || slices.Contains(images, mediaType) || reader(mediaType) != nil
+}
+
 // Extract reads the text of a file of a media type. pdf and engine may be
 // nil: without a reader PDFs are unsupported, without an engine nothing is
 // OCRed (OCRAlways then fails).
@@ -156,8 +189,10 @@ func Extract(ctx context.Context, data []byte, mediaType string, o Options, pdf 
 			return Result{}, fmt.Errorf("%w: no PDF reader is configured", ErrUnsupported)
 		}
 		r, err = extractPDF(ctx, data, o, pdf, engine)
-	case strings.HasPrefix(mediaType, "image/"):
+	case slices.Contains(images, mediaType):
 		r, err = extractImage(ctx, data, mediaType, o, engine)
+	case reader(mediaType) != nil:
+		r, err = reader(mediaType)(ctx, data, o)
 	default:
 		return Result{}, fmt.Errorf("%w: %s files hold no text this reader knows", ErrUnsupported, mediaType)
 	}

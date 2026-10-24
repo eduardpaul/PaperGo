@@ -34,6 +34,7 @@ import (
 	"papergo/internal/scriptrun"
 	"papergo/internal/search"
 	"papergo/internal/storage"
+	"papergo/internal/textfiles"
 	"papergo/internal/webdav"
 	"papergo/internal/workflow"
 	"path/filepath"
@@ -222,6 +223,8 @@ func run(log *slog.Logger) error {
 		}
 	}
 	workflows := &workflow.Service{DMS: service, OCR: reader != nil}
+	// Markdown and text files are named and their text read.
+	textfiles.Register()
 	feats := features{
 		text:    &documenttext.Reader{Storage: store, PDF: pdf, OCR: reader, Languages: c.SearchLanguages},
 		preview: &documentpreview.Renderer{Storage: store, PDF: pdf},
@@ -251,7 +254,7 @@ func run(log *slog.Logger) error {
 			return err
 		}
 		return db.CheckSchema(ctx)
-	}, WebDAV: webdav.New(service, verifier, store, log, c.MaxUpload), PublicURL: c.PublicURL, MCPURL: c.MCPPublicURL, CommentsOff: !c.Comments}
+	}, WebDAV: webdav.New(service, verifier, store, log, c.MaxUpload), PublicURL: c.PublicURL, MCPURL: c.MCPPublicURL, CommentsOff: !c.Comments, FileEditMax: c.FileEditMax}
 	if c.ClientID != "" {
 		a.BrowserSignIn = &httpapi.BrowserSignIn{Issuer: c.Issuer, ClientID: c.ClientID, Scope: c.ClientScopes}
 	}

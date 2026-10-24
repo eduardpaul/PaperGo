@@ -479,7 +479,7 @@ func (s *Service) importCorePackage(ctx context.Context, store storage.Store, su
 	}
 	objectKeys := map[string]string{}
 	objects := map[string]packageObject{}
-	objectTypes := map[string]string{}
+	objectHeads := map[string][]byte{}
 	for _, obj := range p.Objects {
 		if _, err = uuid.Parse(obj.Key); err != nil || len(obj.Key) != 36 || obj.Size < 0 || len(obj.SHA256) != 64 || objects[obj.Key].Key != "" {
 			return result, invalid("invalid package object descriptor")
@@ -493,13 +493,13 @@ func (s *Service) importCorePackage(ctx context.Context, store storage.Store, su
 		if err != nil {
 			return result, err
 		}
-		header := make([]byte, 12)
+		header := make([]byte, storage.HeadSize)
 		headerSize, e := io.ReadFull(reader, header)
 		if e != nil && !errors.Is(e, io.EOF) && !errors.Is(e, io.ErrUnexpectedEOF) {
 			reader.Close()
 			return result, e
 		}
-		objectTypes[obj.Key] = storage.DocumentType(header[:headerSize])
+		objectHeads[obj.Key] = header[:headerSize]
 		h := sha256.New()
 		n, err := io.Copy(h, io.LimitReader(io.MultiReader(bytes.NewReader(header[:headerSize]), reader), obj.Size+1))
 		reader.Close()
@@ -560,8 +560,8 @@ func (s *Service) importCorePackage(ctx context.Context, store storage.Store, su
 		if !present || blob["size"] != obj.Size || blob["sha256"] != obj.SHA256 {
 			return result, invalid("blob metadata does not match packaged bytes")
 		}
-		if objectTypes[key] == "" || objectTypes[key] != blob["content_type"] {
-			return result, invalid("packaged file signature does not match its supported media type")
+		if media, _ := blob["content_type"].(string); !storage.Fits(media, objectHeads[key]) {
+			return result, invalid("packaged file bytes do not match their media type")
 		}
 	}
 	fileHashes := map[any]bool{}
@@ -577,7 +577,7 @@ func (s *Service) importCorePackage(ctx context.Context, store storage.Store, su
 		}
 		key, _ := preview["object_key"].(string)
 		obj, ok := objects[key]
-		if !ok || preview["object_size"] != obj.Size || preview["object_sha256"] != obj.SHA256 || objectTypes[key] != "image/webp" {
+		if !ok || preview["object_size"] != obj.Size || preview["object_sha256"] != obj.SHA256 || storage.Signature(objectHeads[key]) != "image/webp" {
 			return result, invalid("preview does not match its packaged WebP object")
 		}
 	}

@@ -45,6 +45,8 @@ type API struct {
 	// MCPURL, when set, is where AI assistants reach papergo-mcp; the web
 	// app learns it from /auth/config.
 	MCPURL *url.URL
+	// FileEditMax is the largest file the web app edits (FILE_EDIT_MAX_BYTES).
+	FileEditMax int64
 	// CommentsOff runs the deployment without discussions (COMMENTS=off):
 	// their routes are gone and the web app shows none.
 	CommentsOff bool
@@ -202,8 +204,13 @@ func (a *API) root() (*router, error) {
 		type features struct {
 			Comments bool `json:"comments"`
 			MCP      *mcp `json:"mcp,omitempty"`
+			// FileTypes are the kinds of file PaperGo names, and which
+			// of them get previews and text reading.
+			FileTypes []fileType `json:"file_types"`
+			// FileEditMax is the largest file the web app edits.
+			FileEditMax int64 `json:"file_edit_max_bytes"`
 		}
-		f := features{Comments: !a.CommentsOff}
+		f := features{Comments: !a.CommentsOff, FileTypes: fileTypes(), FileEditMax: a.FileEditMax}
 		if a.MCPURL != nil {
 			f.MCP = &mcp{URL: a.MCPURL.String()}
 		}
@@ -783,7 +790,7 @@ func (a *API) upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, a.MaxUpload)
-	object, detected, err := storage.PutDocument(r.Context(), a.Storage, transfer.Reader(r.Body, w), a.MaxUpload)
+	object, detected, err := storage.PutDocument(r.Context(), a.Storage, transfer.Reader(r.Body, w), a.MaxUpload, filename)
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -815,6 +822,7 @@ func (a *API) download(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 	w.Header().Set("Content-Type", string(b.ContentType))
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": b.Filename}))
+	transfer.StoredFile(w)
 	w.Header().Set("ETag", strconv.Quote(b.Sha256))
 	http.ServeContent(transfer.Writer(w), r, b.Filename, b.CreatedAt, file)
 }

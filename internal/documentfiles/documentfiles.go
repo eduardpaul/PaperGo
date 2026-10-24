@@ -538,8 +538,8 @@ func (h module) artifactContent(w http.ResponseWriter, r *http.Request, in httpa
 	defer file.Close()
 	w.Header().Set("Content-Type", a.ContentType)
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("inline", map[string]string{"filename": a.Filename}))
+	transfer.StoredFile(w)
 	w.Header().Set("ETag", strconv.Quote(a.Sha256))
-	w.Header().Set("X-Content-Type-Options", "nosniff")
 	http.ServeContent(transfer.Writer(w), r, a.Filename, a.CreatedAt, file)
 	return nil
 }
