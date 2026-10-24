@@ -1,14 +1,26 @@
 # File handlers (plan)
 
-Status: **proposal, nothing implemented.** It waits on the
-[open decisions](#open-decisions). Two of them add core sockets, which the
-Extension-First protocol requires us to agree on before building.
+Status: **design agreed, nothing implemented.** The product owner settled
+the first round of decisions ([below](#decisions)). Two smaller questions
+remain [open](#still-open).
 
-The goal: a person browsing a library can **open the whole file** inside
-PaperGo, not just its 800-pixel first-page thumbnail. Each file type is
-handled by a **file handler**: a plug-in that knows how to view the type and,
-for some types, edit it. Markdown is the sample handler that does both. PDF
-gets a real viewer. Images get zoom.
+The goal has three parts:
+- **PaperGo stores any file.**
+- A person browsing a library can **open the whole file** inside PaperGo, not just its 800-pixel first-page thumbnail.
+- Opening it is easy from wherever they are.
+
+Each file type that PaperGo can show is served by a **file handler**: a plug-in that views the type and, for some types, edits it. Markdown is the sample handler that does both. PDF gets a real viewer and images get zoom; Word documents are the next handler to add. What a handler may load from the internet, such as images in Markdown or links in PDFs, follows one organization-wide list of **trusted hosts**. Integrations follow the same list.
+
+## Decisions
+
+| # | Question | Decision |
+| --- | --- | --- |
+| D1 | Which files may be stored? | **Any file.** No hard-coded list. PaperGo identifies the type for display and processing, and refuses nothing for its type. |
+| D2 | Item rows carry a `file` summary? | **Yes.** |
+| D3 | Text extensions | `.md`/`.markdown` open as Markdown and `.txt`/`.log` as plain text, for now. More handlers follow, starting with `.docx`. |
+| D4 | Click on a row or card | **Opens details, as today.** From there and from every other place the file must be one obvious click away: see [Ways to open a file](#ways-to-open-a-file). |
+| D5 | Editing limit | A configuration setting, `FILE_EDIT_MAX_BYTES` (default 2 MiB). Raising it is allowed. |
+| D6 | Remote content | One **organization-wide list of trusted hosts**. Content from them opens without asking. Changing the list changes every feature that reaches outside PaperGo, integrations included. See [Trusted hosts](#trusted-hosts). |
 
 ## Product view
 
@@ -19,37 +31,44 @@ gets a real viewer. Images get zoom.
 | Reader | "What does page 7 of this contract say?" | To read every page without downloading the file and finding it in a downloads folder. |
 | Reviewer | "Check the signature block, then the next invoice." | To zoom in, then step to the next item in the same view without closing anything. |
 | Writer | "Keep the team's runbook as Markdown next to the PDFs." | To store `.md` files at all (they're refused today), and to edit one in place with a preview. |
+| Office user | "Our contracts are Word files." | To store `.docx`, `.xlsx` and every other file the team uses. Today PaperGo refuses them. |
 | Mobile user | "Show me the delivery note." | A full-screen, pinch-zoomable view on a phone. |
 | Link sharer | "Look at page 3." | A link that opens the file at that page. |
+| Administrator | "Which outside sites may PaperGo talk to or show?" | One list, in one place, that every feature obeys. |
 
 ### What exists today
 
 | Building block | State | Consequence |
 | --- | --- | --- |
-| Accepted file types | Hard-coded to PDF, TIFF, JPEG, PNG and WebP, detected from the first 12 bytes (`internal/storage/documents.go`). The same set is a `CHECK` on `blobs.content_type`, the `blobs.MediaType` constants, the web upload `accept` list and the file-type filter labels. | `.md` and `.txt` uploads return 415, and so do WebDAV saves of them. **There is no place for a new type to plug in.** |
+| Accepted file types | Hard-coded to PDF, TIFF, JPEG, PNG and WebP, detected from the first 12 bytes (`internal/storage/documents.go`). The same set is a `CHECK` on `blobs.content_type`, the `blobs.MediaType` constants, the web upload `accept` list and the file-type filter labels. | Every other file returns 415, including WebDAV saves from Explorer, Finder and Office, and package imports. |
+| Processing | Preview (`internal/preview`), text reading (`internal/doctext`), OCR, image optimisation and Photos to PDF each assume one of those five types. | Once anything can be stored, each processor must say which types it handles and skip the rest. Otherwise workflows fail. |
 | Preview | `GET /v1/items/{id}/preview`: a WebP of page 1, longest side at most 800 px. It shows in gallery and board cards and in the item sheet's **File** tab. | You can never see page 2. There is no zoom, and clicking the preview does nothing. |
-| Original file | `GET /v1/items/{id}/content`: always `attachment`, with Range support. The web app only ever saves it to disk. | Opening a file means downloading it. |
-| Text | `GET /v1/items/{id}/text` returns text by page once it has been read. It works for PDFs and images (via OCR) only. | Could drive find-in-file for scanned PDFs later. |
+| Original file | `GET /v1/items/{id}/content`: always `attachment` and `nosniff`, with Range support. The web app only ever saves it to disk. | Opening a file means downloading it. |
 | Editing a file | `PUT /v1/items/{id}/content` with `If-Match` makes a new file version. The **Replace file** button uploads one. | The concurrency model an editor needs already exists. |
 | Viewer routes | None. An item is always `?item=<id>` on the list route and opens in the side sheet. Search, smart folders and relationship links all link that way. | A viewer can reuse `?item=` and every existing link gains it. |
+| Outbound hosts | iCalendar integrations accept any public HTTPS host, with no allow list. Links in URL fields open anything. There is no organization-level host policy. | [Trusted hosts](#trusted-hosts) is new, and integrations change to follow it. |
 | Web extension points | None. Layouts, field editors and sheet tabs are `if` chains. | Handlers need a small client-side registry. |
 | Rendering libraries | Monaco is a dependency, lazily loaded for the workflow editor. There is no Markdown renderer and no PDF renderer. | New dependencies: a Markdown renderer and PDF.js. |
-| Security headers | `nosniff` and `no-store` are set. There is no Content-Security-Policy. | Rendered Markdown must be safe by construction: no raw HTML. |
+| Security headers | `nosniff` and `no-store` are set. There is no Content-Security-Policy. | Storing HTML and SVG makes a sandbox header on file downloads necessary. Rendered Markdown must be safe by construction. |
 
 ### Principles
 
-1. **Preview is a glance, the viewer is the file.** Thumbnails stay where they
-   are. One consistent **Open** action leads from any of them to the
+1. **Store anything, show what we can.** Storage never judges a file by its
+   type. Handlers and processors declare the types they understand. Every
+   other file is still a first-class item: metadata, versions, search by
+   name, workflows, WebDAV and download.
+2. **Preview is a glance, the viewer is the file.** Thumbnails stay where they
+   are. One consistent **Open** action leads from each of them to the
    full-screen viewer.
-2. **Details stay one click away.** PaperGo is metadata-first: clicking a row
-   still opens the details sheet. Opening the file is an explicit,
-   always-visible action, plus a double-click and a key.
-3. **The viewer is a place you can link to.** It lives in the URL, survives a
-   reload and closes with Back. Every existing `?item=` link can carry it.
-4. **Saving is a file version.** An editor save is exactly a **Replace file**,
+3. **Details first, the file one click away.** Clicking a row still opens the details sheet. The file is always visible there, and from every other place it is one labelled click away.
+4. **The viewer is a place you can link to.** It lives in the URL, survives a
+   reload, works in a new tab and closes with Back.
+5. **Saving is a file version.** An editor save is exactly a **Replace file**,
    with the same history, publishing, workflows, audit and conflict rules.
    There are no hidden autosave versions.
-5. **A handler is a plug-in.** Core knows file types only through the
+6. **One trust list.** Whether PaperGo may fetch or show something from
+   another host is decided by one organization setting, not per feature.
+7. **A handler is a plug-in.** Core knows file types only through the
    registries below. Viewers and editors live in their own lazily loaded
    bundles, built on the public API.
 
@@ -57,12 +76,9 @@ gets a real viewer. Images get zoom.
 
 - Real-time co-editing, presence and in-browser editing of PDFs, images or
   Office files. The editor is single-user, with optimistic concurrency.
-- Annotations, and comments anchored to a page or region. This is the
-  "point at clause 4 on page 3" need from the comments plan. The viewer's
-  page model prepares for it: [phase 4](#phases).
-- Office formats. They come later through the same socket
-  ([phase 4](#phases)).
+- Annotations, and comments anchored to a page or region ([phase 4](#phases)).
 - Converting between formats, such as Markdown to PDF.
+- Malware scanning of uploads. This matters more once anything can be stored, so it is a separate proposal; `MAX_UPLOAD_BYTES` still applies.
 
 ## The experience
 
@@ -70,22 +86,120 @@ gets a real viewer. Images get zoom.
 
 | Term | Meaning in the UI |
 | --- | --- |
-| **Preview** | The thumbnail on cards and in the File tab. Unchanged. |
-| **Open** | Opens the viewer: the whole file, full screen. |
-| **Edit** | Available for editable types (Markdown, plain text). It turns the viewer into an editor. |
+| **Preview** | The thumbnail on cards and in the sheet. Unchanged. |
+| **Open** | Opens the viewer: the whole file, full screen. It is shown only when a handler exists for the type. |
+| **Edit** | Available for editable types (Markdown and plain text for now). It turns the viewer into an editor. |
+| **Download** | Saves the original file. It is always available, and it is the primary action when no handler exists. |
 | **Save** | Makes a new file version. In libraries with publishing, a save is a draft. |
+| **Trusted host** | An outside site PaperGo may fetch from and show without asking. |
 
-### Ways in
+### Ways to open a file
 
-| Where | Today | Proposed |
-| --- | --- | --- |
-| Table row (library) | Click or Enter opens the details sheet. | Unchanged. **Double-click** or **`o`** opens the file. The name cell shows a file-type icon. |
-| Gallery and board card | Click opens the sheet. | Unchanged. Hovering or focusing the thumbnail shows an **Open** button (expand icon). On touch screens the button is always visible. |
-| Item sheet header | Title, then menu. | A primary **Open** button beside the title for library items, and **Edit** for editable types. |
-| Sheet File tab | Static preview, Download, Replace. | Clicking the preview opens the viewer. Each version row in the file history gets **Open** to view that version. |
-| Context menu | Open, Details, Download… | Adds **Open file** and, for editable types, **Edit**. |
-| Search results, smart folders, notifications | Link to `?item=`. | Unchanged. The sheet's **Open** button is one click away. Search hits get an **Open file** action. |
-| Library toolbar **New** | Item, folder, upload. | Adds **Markdown document**: ask for a name, create the file, open it in the editor. |
+D4 keeps a click on a row or card opening the details sheet. So this section
+designs the paths to the file: always visible, always the same icon and
+label, and always a real link (`<a href>`), so Ctrl/⌘-click and middle-click
+open the viewer in a new tab.
+
+**One control, three faces.** The **file action** is a button whose label and icon come from the handler:
+- **Open** (expand icon), for a viewable type;
+- **Download** (arrow-down icon), for a type with no handler;
+- later, **Open in Word** and the like, for Office files in WebDAV-enabled libraries.
+
+The same component is used in every place below, so the file looks and behaves the same everywhere.
+
+#### 1. The item sheet: the file bar
+
+The sheet opens on **Details**, so the file can't live only on the **File**
+tab. Every library item's sheet gets a **file bar** between the title and
+the tabs, visible on every tab:
+
+```text
+┌ Sheet ──────────────────────────────────────────────────────┐
+│ ACME-0042                                           ⋯   ✕   │
+│ ┌──────┐  ACME-0042.pdf                                     │
+│ │ thumb│  PDF · 1.2 MB · version 5 · Draft                  │
+│ │      │  [⤢ Open]  [✎ Edit]  [⤓]                           │
+│ └──────┘                                                    │
+│  Details   File   Versions   Links   Workflows   Discussion │
+│ ─────────────────────────────────────────────────────────── │
+```
+
+- **Thumbnail.** 64 px, from the existing preview. For a type with no preview it shows the type icon. A text file shows its first lines. Clicking the thumbnail opens the file; the cursor is a zoom-in cursor.
+- **Primary button.** **Open**, or **Download** when no handler exists.
+- **Edit** appears for editable types when the person may write. **Download** is an icon button beside the primary button.
+- **The `⋯` menu** gains Replace file and Copy file link.
+- **An item with no file yet** shows "No file yet" and an **Upload file** button. That is today's Replace action, given a name that fits.
+- **Mobile.** The sheet is full screen, and the file bar becomes a sticky bottom bar: **Open** full width, with Edit and Download as icon buttons.
+
+The **File** tab keeps the large preview and the version list. Clicking the preview opens the viewer, and each version row gets **Open** for that version.
+
+#### 2. Table rows
+
+```text
+│ ☐ │ 📄 ACME-0042.pdf                    [⤢] │ ACME Ltd │ 1,240.00 │
+│ ☐ │ 📝 on-call.md                        [⤢] │ —        │ —        │
+│ ☐ │ 📦 export.zip                        [⤓] │ —        │ —        │
+```
+
+- **The name cell** shows the file-type icon (from the `file` summary, D2) and, at its right edge, the file action as an icon button.
+- **When the button shows:**
+  - while the row is hovered or focused, and on the open row;
+  - always on touch screens.
+
+  Elsewhere it stays hidden, so the table stays calm.
+- **Its tooltip** names the action and the key: "Open (O)".
+- **Double-click** a row to open the file.
+- **Keys:** `o` opens the file, `Enter` opens details (unchanged) and `d` downloads.
+- **The list's keyboard hint** at the bottom reads "↑↓ move · Enter details · O open file · X select".
+
+#### 3. Gallery and board cards
+
+```text
+┌──────────────────────┐
+│                      │
+│      thumbnail       │
+│               [⤢]    │  ← appears on hover or focus; always shown on touch
+├──────────────────────┤
+│ ACME-0042            │  ← click anywhere outside the button: details
+│ ACME Ltd · 1,240.00  │
+└──────────────────────┘
+```
+
+- The card is the details button, as today.
+- The file action sits on the thumbnail's bottom-right corner, and is keyboard-reachable as the card's second tab stop.
+- Text files show an excerpt instead of a thumbnail. Files with no handler show a large type icon.
+
+#### 4. Right-click and `⋯` menus
+
+The first group of the item menu becomes:
+
+| Item | Shown when |
+| --- | --- |
+| Open file (O) | A handler exists |
+| Edit (E) | Editable type and write access |
+| Download (D) | The item has a file |
+| Details (Enter) | Always |
+
+The menu is the same for one item in tables, cards, search results and smart folders.
+
+#### 5. Everywhere else an item appears
+
+| Place | File path |
+| --- | --- |
+| Global search results | Each document hit gets the file action at its right edge. `Enter` opens details; `o` opens the file. A hit found in a PDF's text opens the viewer at that page once [phase 3](#phases) knows the page. |
+| Smart folders | The same rows and cards as collections, with the same controls. |
+| Relationship explorer and Links tab | Each linked document shows the file action beside its name. |
+| Notifications and mentions | Unchanged: they open the item with its Discussion tab. The file bar above the tabs is one click from the file. |
+| Upload finished toast | "Uploaded on-call.md · **Open**". When several files were uploaded, it offers "Show". |
+| New → Markdown document | Opens straight into the editor. |
+| Workflow review tasks | The staged-file comparison uses the same handlers, in place of today's iframe ([phase 3](#phases)). |
+| Command palette | When an item is open: "Open file", "Edit file" and "Download file". |
+| Copied links | **Copy file link** copies `…?item=<id>&open=file`, and the page when there is one. Pasting it opens the viewer directly. |
+
+#### Discoverability
+
+- The first time someone opens a library sheet, the **Open** button gets a one-time coach mark: "Open the whole file here. Shortcut: O". It is dismissed for good and remembered per browser.
+- The `?` shortcut help lists **O / E / D**.
 
 ### The viewer
 
@@ -117,7 +231,7 @@ as `?item=<id>&open=file`, with optional `&page=<n>` (PDF),
   - The file name, with badges: **Draft** (a newer unpublished file than readers see), **Archived**, or **Version 3 of 7** when viewing an earlier version.
   - Previous and next.
   - The actions.
-- **Previous and next** step through the items of the list as it was showing: the same view, folder, filter, search and sort. The list hands the viewer the ordered IDs it has loaded. After a reload, or when the viewer was opened from a link, the arrows are hidden rather than guessed.
+- **Previous and next** step through the items of the list as it was showing: the same view, folder, filter, search and sort. The list hands the viewer the ordered IDs it has loaded. After a reload, or when the viewer was opened from a link, the arrows are hidden rather than guessed. An item with no handler shows the download card (see the states below), so stepping never stops.
 - **Info panel** (`i`) reuses the item sheet's tabs:
   - **Details** (editable as in the sheet);
   - **Discussion**;
@@ -125,7 +239,7 @@ as `?item=<id>&open=file`, with optional `&page=<n>` (PDF),
 
   It is closed by default and remembered per browser. Below 1024 px it opens as an overlay sheet.
 - **The `⋯` menu** holds:
-  - Copy link (the deep link, including the page);
+  - Copy file link;
   - Open details;
   - Replace file;
   - Run workflow;
@@ -133,10 +247,10 @@ as `?item=<id>&open=file`, with optional `&page=<n>` (PDF),
 - **Version view.** When viewing an earlier version, a banner reads "You are viewing version 3 (uploaded by Ana, 12 May). **Restore this version** · **View current**". Edit is disabled.
 - **States.** Each one fills the canvas and never leaves it blank:
   - loading: a skeleton;
-  - the item has no file yet;
+  - the item has no file yet: **Upload file**;
   - the version was reclaimed (410): "This version's bytes were reclaimed";
   - the file is broken or protected (PDF password prompt, client-side only);
-  - no handler for the type: the type icon, file name, size and a large **Download** button;
+  - no handler for the type: the type icon, file name, type, size and a large **Download** button;
   - offline or failed: a retry.
 
 ### PDF handler (view)
@@ -148,18 +262,19 @@ as `?item=<id>&open=file`, with optional `&page=<n>` (PDF),
 - Rotate the view (does not change the file).
 - **Find** (Ctrl/⌘+F) over the PDF's text layer, with a hit count and next/previous.
 - Text selection and copy.
-- Links inside the PDF open in a new tab with `noopener`, after showing the target host.
+- Links inside the PDF follow the [trusted hosts](#trusted-hosts) rule.
 - **Scanned PDFs** have no text layer. Find says "This PDF has no text layer". [Phase 3](#phases) searches PaperGo's OCR text instead and jumps to the matching pages.
 - `&page=n` deep links. The current page updates the URL with `replace`, so Back closes the viewer rather than stepping through pages.
 
 ### Image handler (view)
 
-- JPEG, PNG and WebP are shown at full resolution from the original file.
+- JPEG, PNG, WebP and GIF are shown at full resolution from the original file.
 - Fit by default.
 - Double-click or `1` toggles 100 %.
 - Wheel or pinch zooms; drag pans.
 - Rotate the view.
 - On touch screens, swiping left or right goes to the previous or next item when the image is at fit size.
+- **SVG is never rendered.** It can carry script, so it downloads, like HTML.
 - **TIFF:** browsers can't decode it.
   - Phase 1 shows the 800 px preview with the note "Showing a preview. Download for full resolution."
   - Phase 3 adds server-rendered pages, which also gives multi-page TIFFs every page.
@@ -171,8 +286,7 @@ as `?item=<id>&open=file`, with optional `&page=<n>` (PDF),
 - A readable measure (about 72 characters) in the app's typography.
 - An outline of the headings on wide screens, for jumping around.
 - Raw HTML in the file is shown as text, never rendered.
-- Remote images are not loaded until you choose **Show remote images** for that file. This stops tracking pixels and mixed content.
-- Links open in a new tab with `noopener`.
+- Images and links follow the [trusted hosts](#trusted-hosts) rule.
 
 **Edit** (the **Edit** button, `e`, or `&edit=1`).
 
@@ -201,9 +315,9 @@ as `?item=<id>&open=file`, with optional `&page=<n>` (PDF),
   - **Save mine anyway**: re-read the version and save over theirs, which keeps their file in history if versioning is on;
   - **Save mine as a new file**: creates `on-call (copy).md` next to it.
 - **Permission.** Edit appears only for people who may write the item, with `document.write`. Read-only tokens and readers never see it. Archived items stay editable, as today.
-- **Limits.** Files over 2 MiB open read-only, with "Too large to edit in the browser. Download it, or use WebDAV." The text must be UTF-8.
+- **Limits.** Files larger than `FILE_EDIT_MAX_BYTES` (default 2 MiB, configurable) open read-only, with "Too large to edit in the browser (limit 2 MiB). Download it, or use WebDAV." The text must be UTF-8; otherwise it opens read-only with "This file isn't UTF-8 text".
 
-**Cards and the File tab.** Text files have no rendered preview. A card shows the first lines of the file as a text excerpt: up to 4 KiB, fetched with a `Range` request, with fading at the bottom. The excerpt is cached like previews.
+**Cards and the sheet thumbnail.** Text files have no rendered preview. A card shows the first lines of the file as a text excerpt: up to 4 KiB, fetched with a `Range` request, with fading at the bottom. The excerpt is cached like previews.
 
 **New Markdown document.**
 - **New → Markdown document** asks for a name and creates `<name>.md`, containing `# <name>`, with the library's normal defaults. It then opens the editor.
@@ -213,24 +327,74 @@ as `?item=<id>&open=file`, with optional `&page=<n>` (PDF),
 
 - View: a monospace font, line numbers, wrap on or off, and find.
 - Edit: the same editor, save rules and conflict handling as Markdown, without the preview pane.
-- Accepted extensions: `.txt` and `.log` (decision D3).
+- It handles `.txt` and `.log`.
+
+### Every other file
+
+- A file with no handler is an ordinary item. It has metadata, versions, permissions, publishing, workflows, WebDAV, duplicate detection and search by name and fields.
+- Its file action is **Download**. Its card and thumbnail show the type icon, the label (for example "Word document") and the size.
+- Type icons come in families: document, spreadsheet, presentation, image, PDF, text, archive, audio, video, code and generic.
+
+### Trusted hosts
+
+**Administration → Security → Trusted hosts** holds the organization's single list of outside hosts that PaperGo may fetch from and show without asking.
+
+```text
+┌ Trusted hosts ───────────────────────────────────────────────────────────────┐
+│ PaperGo shows and fetches content from these hosts without asking.           │
+│ Other hosts are blocked or need confirmation, depending on the feature.      │
+│                                                                              │
+│  calendar.google.com                     Used by 3 integrations      [Remove]│
+│  *.sharepoint.com                        —                           [Remove]│
+│  docs.example.com                        —                           [Remove]│
+│                                                                              │
+│  [ host or *.domain                                  ]  [Add]                │
+│                                                                              │
+│  Where this applies: Markdown images and links · links in PDFs · URL fields  │
+│  · calendar integrations · future handlers and integrations                  │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Entries.**
+- An entry is a host name (`docs.example.com`) or a wildcard for subdomains (`*.example.com`, which does not match `example.com` itself).
+- Entries are lowercase and stored in their ASCII (punycode) form. IP addresses and ports are not allowed.
+- The list holds at most 200 entries and starts empty.
+
+**Each entry shows where it is used**, for example "Used by 3 integrations". Removing an entry that is in use asks first and names what will stop.
+
+**Where it applies.** Changing the list takes effect everywhere at once:
+
+| Feature | Host on the list | Host not on the list |
+| --- | --- | --- |
+| Images and media in Markdown (and future handlers) | Load with the document | A placeholder: "Image from example.org not shown · **Show once**". Administrators also get **Trust example.org**. |
+| Links in Markdown, PDFs and URL fields | Open in a new tab (`noopener noreferrer`) | A confirmation: "You're leaving PaperGo for **example.org**". The confirmation shows the full URL. |
+| iCalendar integrations (and future integrations that fetch) | Allowed | **Refused** when added or edited: "example.org isn't a trusted host. Ask an administrator to trust it." Administrators can trust it from that message. An existing integration whose host is removed stops refreshing and shows "Host no longer trusted". Its items stay, and it resumes when the host is trusted again. |
+
+**What it never does.**
+- It never opens private networks. The existing rule that server-side fetches go only to public addresses over HTTPS stays as a floor beneath the list.
+- It never covers what the operator configures: AI endpoints, OIDC, the MCP URL and inbound CORS stay in deployment configuration.
+
+**Who.**
+- Reading the list requires an active account, because the web app needs it to render.
+- Changing it requires `organization.manage`.
+- Changes are versioned with `If-Match` like other organization settings and audited as `settings.trusted_hosts`. Open browsers pick them up the next time the window regains focus.
 
 ### Keyboard
 
 | Key | In the list | In the viewer | In the editor |
 | --- | --- | --- | --- |
 | `o`, double-click | Open the file | — | — |
+| `Enter` | Open details | — | — |
+| `d` | Download | Download | — |
 | Esc | Close the sheet | Close the viewer | Leave edit, asking first if there are unsaved changes |
 | ← / → or `j` / `k` | — | Previous or next item | — |
 | PgUp / PgDn, Home / End | — | Page up or down, first or last page | — |
 | `+` / `-` / `0` | — | Zoom in, out, fit | — |
 | Ctrl/⌘+F | — | Find in the file | Monaco find |
-| `e` | — | Edit (editable types) | — |
+| `e` | Edit (editable types) | Edit | — |
 | Ctrl/⌘+S | — | — | Save |
 | `i` | — | Info panel | Info panel |
 | `?` | Shortcut help | Shortcut help | Shortcut help |
-
-The list's keyboard hint and the `?` help gain these entries.
 
 ### Mobile and touch
 
@@ -238,11 +402,12 @@ The list's keyboard hint and the `?` help gain these entries.
 - The top bar shrinks to Back, the name and `⋯`. Page and zoom controls move to a bottom bar that hides while you scroll.
 - Pinch zooms. Swiping changes items for images only; PDF and text scroll vertically.
 - Editing uses the Write and Preview tabs over a textarea, with Save fixed to the top bar.
+- File actions on rows and cards are always visible on touch screens, because there is no hover.
 
 ### Accessibility
 
 - The viewer is a labelled modal dialog (`aria-modal`, titled with the file name). Focus moves into it and returns to the row or card that opened it.
-- Every toolbar control has a name and a visible focus ring.
+- Every toolbar control has a name and a visible focus ring. Row and card file actions are real links with names such as "Open ACME-0042.pdf".
 - The page number is announced politely when it changes.
 - PDF text is selectable and readable by screen readers through PDF.js's text layer. Rendered Markdown is semantic HTML.
 - Zoom works from the keyboard. The layer honours `prefers-reduced-motion`.
@@ -251,66 +416,106 @@ The list's keyboard hint and the `?` help gain these entries.
 
 ### Extension-First check
 
-| Piece | Can it be an extension? | Result |
+| Piece | Where it lives | Why |
 | --- | --- | --- |
-| PDF and image viewers | **Yes.** They read `GET /content` (Range) and `/content/versions`. | Web-only handler modules. No core change. |
-| Markdown and text editors | **Yes, once the type can be stored.** They write through `PUT /content` with `If-Match`. | Web-only handler modules. |
-| Storing `.md` and `.txt` | **No.** The accepted types are hard-coded in storage, DMS, the database `CHECK`, the web upload list and the filter labels. | **Socket S1: a file type registry** (needs approval). |
-| Text reading and search for text files | **No.** `doctext` is a `switch` that ends in "unsupported", so content workflows would fail on every text file and raise failed-run notifications. | Part of S1: a reader per type. |
-| Not attempting previews of text files | The preview workflow would run on every text file only to record `unavailable`. | Part of S1: the preview role skips types without a renderer. |
-| Knowing a row's file type without an extra request | Rows carry no file information today. | **Socket S2: a file summary on item rows** (needs approval). |
-| Choosing a handler in the web app | There is no client registry. | **Socket S3: a client-side handler registry.** |
-| The viewer itself, routes and Open buttons | This is the app shell. | Built as part of S3. |
+| Accepting any file and identifying its type | **Core:** S1 file type identification. | Decided in D1. Storage, DMS, WebDAV, import and the schema all gate on type today. |
+| Processors (preview, text, OCR, optimise, compose) saying which types they take | **Core:** S1 processor capabilities. | Otherwise every new type makes workflows fail. |
+| Text reading for `.md` and `.txt` | **Extension:** `internal/textfiles` registers a `doctext` reader. | It plugs into S1. |
+| File summary on rows | **Core:** S2. | Decided in D2. |
+| Trusted hosts | **Core:** S4, an organization setting with one Go check. | Decided in D6: integrations and every handler must share it. |
+| Client handler registry, viewer, file action and file bar | **Web core:** S3. | The app shell. |
+| PDF, image, Markdown and text handlers | **Web extensions** on S3. | They use only the public API. |
+| Word and later handlers | **Web extensions** on S3, plus, if needed, a server converter registered through S1. | Phase 4. |
 
-### S1 — file type registry (server, core socket)
+### S1 — any file, identified (server)
 
-A small registry in `internal/storage` replaces the hard-coded set:
+**Storage accepts every file.**
+- `storage.PutDocument` no longer rejects anything. It reads the first 8 KiB and the filename and asks the **type registry** for the media type.
+- `storage.ErrUnsupportedFile` is deleted, along with the 415 `unsupported_file_type` on uploads, the `SupportedDocumentType` gates in `dms` (`content.go`, `staged.go`) and their WebDAV mapping.
+- `MAX_UPLOAD_BYTES` still applies.
 
 ```go
+// internal/storage
 type FileType struct {
     Media      blobs.MediaType // "text/markdown"
     Label      string          // "Markdown document"
+    Family     string          // "text", "document", "spreadsheet", "image", ...
     Extensions []string        // ".md", ".markdown"
-    // Detect sees the first 8 KiB and the filename. Binary types ignore the
-    // filename: their bytes alone decide, as today.
-    Detect func(head []byte, filename string) bool
-    // Validate, when set, checks the whole stream (UTF-8 for text types).
-    Validate func() io.Writer // returns a validating sink; error at Close
+    // Signature, when set, recognises the type from its first bytes alone.
+    Signature func(head []byte) bool
+    // Text types require the head to be UTF-8 without NUL bytes.
+    Text bool
 }
 func RegisterFileType(FileType)
+func Identify(head []byte, filename string) blobs.MediaType
 ```
 
-- Core registers PDF, TIFF, JPEG, PNG and WebP with exactly today's signatures.
-- A new extension package, `internal/textfiles`, registers `text/markdown` and `text/plain`. It then also registers:
-  - a `doctext` reader for them: one page of text, under the existing limits;
-  - "no preview" with the preview role, so the workflow skips these files instead of recording `unavailable`.
-- **Detection policy for text.**
-  - Binary formats keep the rule that bytes decide.
-  - A text file is accepted only when its bytes are valid UTF-8 with no NUL. A UTF-8 BOM is allowed, and a 0-byte file is accepted for WebDAV's empty first write. The extension then picks the dialect.
-  - A renamed binary is therefore still refused.
-  - Text is always served as `text/plain` or `text/markdown` with `nosniff` and an attachment disposition, so it can never run as HTML.
-- **Every path follows the registry:** `PutDocument`, which grows a filename parameter and an 8 KiB head; `dms.createBlob`; staged files; multipart create; WebDAV `PUT`; package import; and backup restore. Saving `notes.md` from Windows Explorer over WebDAV then works too.
-- **Database (decision D1).** `blobs.content_type` stops being a fixed `IN (…)` list, becoming `CHECK (length(content_type) BETWEEN 3 AND 127 AND content_type LIKE '%/%')`. The registry is the source of truth. `blobs.MediaType` keeps named constants for the core types; extensions declare their own.
-  - No migration is needed while no release is published. Today only the `models-laya-*` release exists.
-  - If a release ships first, this becomes migration `0001`: a table rebuild on SQLite, and `DROP`/`ADD CONSTRAINT` on PostgreSQL.
-- **Discovery.** `GET /auth/config` features gain `file_types: [{media_type, label, extensions}]`. From this the web derives the upload `accept` list, the file-type filter labels and the type icons, replacing the three hard-coded copies.
-- **Docs and contract.** Update the upload sections of `README.md`, `docs/documents.md` and `docs/previews.md`, and the OpenAPI descriptions that list the five types.
+**How `Identify` works.**
+1. A registered **signature** wins: a PDF named `notes.txt` is a PDF.
+2. Otherwise the **extension** decides. A text type also requires its head to be UTF-8 without NUL bytes; if it isn't, the file is `application/octet-stream`.
+3. Otherwise the file is `application/octet-stream`.
 
-### S2 — file summary on item rows (API, core socket)
+The built-in table is deterministic and maintained in code. Go's `mime.TypeByExtension` reads the operating system's tables and would differ between Linux, Windows and containers. The table covers:
+- the five current types;
+- GIF;
+- Markdown and plain text;
+- CSV and JSON;
+- the Office and OpenDocument formats;
+- RTF;
+- ZIP;
+- email (`.eml`, `.msg`);
+- common audio and video;
+- HTML and SVG (stored, never rendered).
 
-Library rows in collection listings, smart folders and search hits gain:
+The type a file gets is stored per file version, so a handler added later, such as `.docx`, works on files uploaded before it existed.
+
+**Database.**
+- `blobs.content_type` becomes `CHECK (length(content_type) BETWEEN 3 AND 127 AND content_type LIKE '%/%')`, in both masters.
+- `blobs.MediaType` keeps named constants for the types core refers to.
+- No migration is needed while no PaperGo release is published. If a release ships first, this becomes migration `0001`: a table rebuild on SQLite, and `DROP`/`ADD CONSTRAINT` on PostgreSQL.
+
+**Serving files safely.** Anything can now be stored, including HTML, SVG and executables. So every byte route — `/content`, staged files, artifacts and WebDAV `GET` — sends:
+- `Content-Disposition: attachment`;
+- `X-Content-Type-Options: nosniff`;
+- `Content-Security-Policy: sandbox; default-src 'none'`.
+
+The last header is new; it makes a file opened directly in a browser inert. The viewer fetches bytes with `fetch`, so none of these headers get in its way.
+
+**Processor capabilities.**
+- Each processor declares the types it handles:
+  - preview: PDF, TIFF, JPEG, PNG and WebP;
+  - text reading: those, plus whatever `doctext` readers are registered;
+  - OCR and image optimisation: images;
+  - Photos to PDF: images.
+- A request for another type is refused up front with `415 unsupported_file_type`, before any operation is queued.
+- The built-in workflows check the file's type first and end as **skipped**, not failed, so no failed-run notifications follow.
+- The capabilities are published in `GET /auth/config` features as `file_types: [{media_type, label, family, extensions, preview, text}]`.
+- The web app derives the type labels, icons and the `$file_type` filter choices from that list. The upload `accept` attribute is removed.
+
+**Text extension.** `internal/textfiles` registers a `doctext` reader for `text/markdown` and `text/plain`. It returns one page of text under the existing limits, so these files become searchable by content.
+
+**WebDAV scratch files.**
+- Once anything is accepted, Explorer, Finder and Office would create items for their housekeeping files:
+  - `~$*.docx` lock files;
+  - `.~lock.*#`;
+  - `Thumbs.db`, `desktop.ini` and `.DS_Store`;
+  - `._*` AppleDouble files.
+- WebDAV keeps these names in a per-library, in-memory scratch area instead: at most 1 MiB each, with a one-hour lifetime, like its locks.
+- They never become items or fire workflows, and Office's save-and-rename flow keeps working.
+
+**Docs and contract.** Update the upload sections of `README.md` and `docs/documents.md`, and the processor sections of `docs/previews.md`, `docs/ocr.md` and the workflows docs. Remove the five-type wording from the OpenAPI descriptions.
+
+### S2 — file summary on item rows (API)
+
+Library rows in collection listings, smart folders, search hits and `GET /v1/resources/{id}` gain:
 
 ```json
 "file": {"content_type": "text/markdown", "filename": "on-call.md", "size": 2140, "version": 5}
 ```
 
-This describes the caller's visible file, under the same visibility rule as `$file_type`. It drives:
-- type icons in tables;
-- whether to show **Edit**;
-- the text excerpt instead of a preview;
-- the viewer's first paint without a round trip.
-
-Without S2, the viewer reads `/content/versions?$top=1` first, and cards learn that a file has no preview only after asking.
+- It describes the caller's visible file, under the same visibility rule as `$file_type`, and is `null` before the first upload.
+- It drives the type icons, the choice between Open and Download, whether **Edit** shows, and text excerpts in place of previews.
+- It lets the viewer's first paint happen without a round trip.
 
 ### S3 — client handler registry (web)
 
@@ -319,81 +524,109 @@ Without S2, the viewer reads `/content/versions?$top=1` first, and cards learn t
 ```ts
 export type FileRef = { itemId: string; blobId?: string; contentType: string; filename: string; size: number };
 export type FileHandler = {
-  id: string;                       // 'pdf', 'image', 'markdown', 'text'
+  id: string;                       // 'pdf', 'image', 'markdown', 'text'; later 'docx'
   accepts(file: FileRef): boolean;
   View: React.LazyExoticComponent<React.ComponentType<ViewerProps>>;
   Edit?: React.LazyExoticComponent<React.ComponentType<EditorProps>>;
-  maxEditBytes?: number;
-  Excerpt?: React.ComponentType<{ file: FileRef }>; // card fallback when no preview exists
+  Excerpt?: React.ComponentType<{ file: FileRef }>; // card thumbnail when no preview exists
 };
 export function registerFileHandler(handler: FileHandler): void;
 export function handlerFor(file: FileRef): FileHandler | undefined;
 ```
 
 - **Built-ins** live in `features/files/handlers/{pdf,image,markdown,text}`. Each is its own chunk: PDF.js, the Markdown renderer and Monaco load only when that type opens.
-- **`ViewerProps`** carry the file, page state and zoom state, plus a `fetchContent(range?)` that adds the auth header. Bearer mode cannot use plain `src` URLs, so handlers never build URLs themselves.
-- **`EditorProps`** add `save(text): Promise<SaveResult>`. It implements `If-Match`, the 412 dialog, drafts and the local-storage buffer once, for every editable handler.
-- **The viewer shell** lives in `features/files/viewer.tsx` and owns everything except the canvas:
-  - the URL state (`open`, `page`, `blob`, `edit`);
-  - the top bar;
-  - previous and next;
-  - the Info panel;
-  - the states.
-
-  `collection-page.tsx` renders it when `search.open === 'file'`.
+- **`ViewerProps`** give handlers:
+  - the file;
+  - page state and zoom state;
+  - `fetchContent(range?)`, which adds the auth header. Bearer mode cannot use plain `src` URLs, so handlers never build URLs themselves;
+  - `trust(url)`, the S4 check, used by every handler for images, media and links.
+- **`EditorProps`** add `save(text): Promise<SaveResult>`. It implements `If-Match`, the 412 dialog, drafts and the local-storage buffer once, for every editable handler. The edit limit comes from `FILE_EDIT_MAX_BYTES` via `/auth/config`.
+- **Shared components** in `features/files/`:
+  - `FileAction` (Open, Download or Edit, always a link);
+  - `FileBar` (the sheet strip);
+  - `FileThumb` (preview, excerpt or type icon);
+  - `TrustedLink` (a link that follows S4);
+  - `viewer.tsx` (the viewer shell).
+- **The viewer shell** owns everything except the canvas: the URL state (`open`, `page`, `blob`, `edit`), the top bar, previous and next, the Info panel and the states. `collection-page.tsx` and the smart-folder page render it when `search.open === 'file'`.
 - **Dependencies** (recorded in `docs/dependencies.md` with licences):
   - `pdfjs-dist` (Apache-2.0), with `isEvalSupported: false`. It loads ranges through `httpHeaders` and is kept current, because it parses untrusted files.
   - `react-markdown` with `remark-gfm` (MIT). It renders to React elements with no `dangerouslySetInnerHTML`, and raw HTML is not rendered.
   - Monaco is reused.
 
+### S4 — trusted hosts (server and web)
+
+- **Storage.** It is stored as organization setting `trusted_hosts` in the existing settings table, beside the comment settings.
+- **API.**
+  - `GET /v1/organization/settings/trusted-hosts` is readable by any active user.
+  - `PUT` on the same path requires `organization.manage` and `If-Match`.
+- **Go check.** `hosts.Trusted(ctx, host) bool` lives in a small `internal/hosts` package. Every server feature that fetches calls it. Today that is `internal/calendar/fetch.go`, beside its existing public-address check, on every connection and redirect.
+  - Integrations check it when they are added or edited, and again on each refresh.
+  - A refresh whose host is no longer trusted fetches nothing and records the error "Host no longer trusted" in the integration's existing `error` column. Its items stay untouched, and the next refresh after the host is trusted again succeeds. The integration page shows that error with a **Trust host** action for administrators.
+- **Usage counts.** The admin page shows, per entry, how many integrations use it. Each integration provider reports the hosts of its decrypted configuration through a small `HostUser` interface, so future integrations add themselves.
+- **Web.** `useTrustedHosts()` reads the list when the app loads and again when the window regains focus. `TrustedLink`, the handlers' `trust(url)` and the URL-field display all use it. The "Leaving PaperGo" dialog is one shared component.
+
 ### Security summary
 
-- Nothing from a stored file runs as script: Markdown is rendered without raw HTML, and PDF.js runs without eval.
-- `nosniff` and attachment disposition stay on `/content`. The viewer fetches bytes with the caller's credentials and never embeds a cross-origin frame.
-- Remote images in Markdown load only when you ask; links get `noopener noreferrer`.
-- Edit uses the same write checks as **Replace file**, and every save is audited as a file version.
-- A Content-Security-Policy for the SPA would be good hardening. It is not required by this design and is tracked separately.
+- **Stored files never run.**
+  - Any file can be stored, but none is ever served inline or sniffable.
+  - Byte routes add a sandbox CSP.
+  - Markdown is rendered without raw HTML.
+  - PDF.js runs without eval.
+  - SVG and HTML have no viewer.
+- **Outbound and remote content.**
+  - Outbound fetches stay public-address-only, HTTPS-only and bounded.
+  - Their hosts must also be trusted.
+  - Remote content in documents loads only from trusted hosts or on an explicit "Show once".
+- **Edits and the browser.**
+  - Edit uses the same write checks as **Replace file**, and every save is audited as a file version.
+  - A Content-Security-Policy for the web app itself would be good hardening, and is tracked separately.
 
 ## Phases
 
 | Phase | Delivers | Needs |
 | --- | --- | --- |
-| **1. Viewer** | S3 registry and viewer shell, **PDF** and **image** handlers, all the ways in, previous and next, Info panel, deep links, mobile, keyboard. TIFF shows its preview. | No core change. Can start now. |
-| **2. Markdown and text** | S1 file type registry and `internal/textfiles`. **Markdown** view and edit, **plain text** view and edit, New → Markdown document, text excerpts on cards, conflict dialog, unsaved-changes guard and recovery. S2 if approved. | D1–D4 |
-| **3. Depth** | Server page renditions (`GET /v1/items/{id}/pages/{n}?width=`, an extension of `documentpreview`): every page of a multi-page TIFF, and a light fallback for very large PDFs on low-end phones. OCR-backed find for scanned PDFs, from `/text`. Version compare for text files. | Phase 1 |
-| **4. Later** | **Office files** via S1 (OOXML detection) plus **Open in desktop app** over WebDAV (`ms-word:ofe|u|…`) for WebDAV-enabled libraries. Anchoring comments to a PDF page or region, the comments plan's open need. CSV as a table view. | Separate approval each |
+| **1. Viewer and ways in** | S2 file summary. S3 registry, viewer shell, `FileAction`, `FileBar` and `FileThumb`. **PDF** and **image** handlers. Every way in from [Ways to open a file](#ways-to-open-a-file). Previous and next, Info panel, deep links, mobile and keyboard. TIFF shows its preview. | — |
+| **2. Any file, Markdown and text** | S1: any file stored, `Identify`, the sandbox header on byte routes, processor capabilities and skipped built-ins, WebDAV scratch files, `internal/textfiles`. **Markdown** view and edit, **plain text** view and edit, New → Markdown document, text excerpts, conflict dialog, unsaved-changes guard and recovery, `FILE_EDIT_MAX_BYTES`. | Phase 1 |
+| **2b. Trusted hosts** | S4: the setting, admin page, `internal/hosts`, and the rules for integrations, links, URL fields and Markdown images. | Can be built alongside phase 2. It must ship no later than the Markdown handler, which uses it. |
+| **3. Depth** | Server page renditions (`GET /v1/items/{id}/pages/{n}?width=`, an extension of `documentpreview`): every page of a multi-page TIFF, and a light fallback for very large PDFs on low-end phones. OCR-backed find for scanned PDFs. Hits found in a PDF's text open at their page. Workflow review uses handlers. Version compare for text files. | Phase 2 |
+| **4. Word and beyond** | A **`.docx` view handler**: client-side rendering, or a server conversion registered through S1 (see [Still open](#still-open)). **Open in Word** for WebDAV-enabled libraries (`ms-word:ofe|u|…`), with the same pattern for Excel and PowerPoint. CSV as a table view. Comments anchored to a PDF page or region. | Phase 2 |
 
-**Acceptance for phases 1 and 2**, tested on SQLite and PostgreSQL where the server is involved:
+**Acceptance for phases 1, 2 and 2b**, tested on SQLite and PostgreSQL where the server is involved:
 
 - **Opening.**
-  - Every way in opens the right file at the right page.
-  - Back and Esc return to the same list scroll position.
-  - A deep link survives a reload.
+  - Every way in shows the right action: Open for viewable types, Download otherwise.
+  - Ctrl/⌘-click opens the viewer in a new tab, at the right file and page.
+  - Back and Esc return to the same list scroll position, and a deep link survives a reload.
 - **Permissions.**
   - Readers never see **Edit**.
-  - Draft readers see the draft file and ordinary readers the published one, in the viewer as at `/content`.
-- **Markdown storage.**
-  - A `.md` upload, a WebDAV save and a package round-trip are all accepted.
-  - A renamed binary, invalid UTF-8 and NUL bytes are refused with 415.
-  - Text files raise no failed or wasted preview and text runs.
-  - Markdown text is searchable.
-- **Markdown editing.**
-  - Save makes a file version.
-  - A stale save shows the conflict dialog with all three outcomes.
-  - In a publishing library, a save is a draft.
+  - Draft readers see the draft file and ordinary readers the published one, in the viewer, the file bar and the S2 summary alike.
+- **Any file.**
+  - A `.docx`, a `.zip`, an `.exe`, an `.html` and an `.svg` all upload through REST, multipart, WebDAV and package import, each with the right media type.
+  - Each is served as an attachment with the sandbox CSP.
+  - A PDF renamed `.txt` is identified as a PDF.
+  - No built-in workflow fails on these files: they end as skipped.
+  - The file-type filter lists the known types.
+- **WebDAV.** Saving a `.docx` from Word over WebDAV creates exactly one item and one new version per save, and no `~$` items.
+- **Markdown.**
+  - It is searchable.
+  - Save makes a file version, and a stale save shows the conflict dialog with all three outcomes.
+  - In a publishing library a save is a draft.
   - Leaving with unsaved edits asks first, and the buffer recovers after a reload.
+  - Files over `FILE_EDIT_MAX_BYTES` open read-only.
+- **Trusted hosts.**
+  - An image from a trusted host loads; one from an untrusted host shows the placeholder.
+  - Untrusted links ask first.
+  - An iCalendar URL on an untrusted host is refused.
+  - Removing a host stops the integrations using it at their next refresh, and trusting it again resumes them.
+  - Private addresses stay refused even when trusted.
 - **Safety.**
   - A Markdown file with `<script>`, `<img onerror>` and `javascript:` links renders inert.
   - A PDF with a JavaScript action does nothing.
-- **Size.** The list page's bundle does not grow by more than the shell; PDF.js, the Markdown renderer and Monaco are separate chunks.
+- **Size.** The list page's bundle grows by no more than the shell and the file controls; PDF.js, the Markdown renderer and Monaco are separate chunks.
 
-## Open decisions
+## Still open
 
 | # | Question | Recommendation |
 | --- | --- | --- |
-| D1 | **S1: may core gain a file type registry, with `blobs.content_type` becoming an open, shape-checked value?** The alternative adds `text/markdown` and `text/plain` to the fixed `CHECK` and the constants, so each future type is a schema change. | Registry and shape check. That is the point of pluggable handlers, and phase 4 (Office) needs it. |
-| D2 | **S2: may item rows carry a `file` summary?** | Yes. It saves a request per viewer open and per text card, and gives tables type icons. |
-| D3 | **Which text extensions?** | `.md`/`.markdown` as Markdown; `.txt`/`.log` as plain text. Leave out `.csv`, `.json` and `.yaml` until they get their own handlers. |
-| D4 | **What does a click on a library row or card do?** Details first (today), or the file first (Google Drive, SharePoint)? | Keep details first, and add Open everywhere plus double-click and `o`. If people want file-first, make it a personal preference later rather than a collection setting. |
-| D5 | **Editing limit and editor.** 2 MiB, Monaco on desktop, textarea on touch? | Yes. It reuses a dependency we already ship. |
-| D6 | **Remote images in Markdown:** blocked until asked (proposed), always shown, or never? | Blocked until asked, per file. |
+| O1 | Should the trusted-host list start empty, or with common calendar and Microsoft 365 hosts (`calendar.google.com`, `outlook.office365.com`, `*.sharepoint.com`)? | Empty. It is a security list, and administrators can trust a host in one click from the place that needs it. |
+| O2 | How should the `.docx` handler render (phase 4)? Options: client-side (`docx-preview`, no server cost, approximate layout), server conversion to PDF (LibreOffice in the image, faithful, heavy), or Open in Word only. | Decide when phase 4 starts. Client-side view plus Open in Word is the light default. |
