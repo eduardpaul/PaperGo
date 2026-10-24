@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Eye, PencilLine, Save, X } from 'lucide-react';
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { isApiError } from '@/api/http';
 import { keys, resourceQuery } from '@/api/queries';
@@ -31,28 +31,71 @@ function decode(buffer: ArrayBuffer): Loaded {
   }
 }
 
-/** Unsaved text, kept in this browser per item and file version, so a crash or a closed tab loses nothing. */
-interface Draft {
+/** Where the text being edited started: the file version and the item version it was read at. */
+interface Base {
+  blobId: string;
+  version: number;
+}
+
+/**
+ * Unsaved text, kept in this browser per item with the version it started
+ * from, so a crash or a closed tab loses nothing and a restored draft still
+ * meets a newer file as a conflict.
+ */
+interface Draft extends Base {
   text: string;
   at: string;
 }
-const draftKey = (itemId: string, blobId: string) => `papergo.draft.${itemId}.${blobId}`;
+const draftPrefix = 'papergo.draft.';
+const draftKey = (itemId: string) => draftPrefix + itemId;
+/** Drafts nobody came back to for this long are dropped. */
+const draftDays = 30;
+/** Typing writes the draft once it pauses this long, not at every key. */
+const draftDelay = 600;
+
 function readDraft(key: string): Draft | undefined {
   try {
     const raw = localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as Draft) : undefined;
+    const draft = raw ? (JSON.parse(raw) as Partial<Draft>) : undefined;
+    return typeof draft?.text === 'string' && typeof draft.blobId === 'string' && typeof draft.version === 'number' && typeof draft.at === 'string' ? (draft as Draft) : undefined;
   } catch {
     return undefined;
   }
 }
-function writeDraft(key: string, text: string | undefined) {
+
+/** Drops drafts that are old or unreadable, to keep room for new ones. */
+function pruneDrafts() {
   try {
-    if (text === undefined) localStorage.removeItem(key);
-    else localStorage.setItem(key, JSON.stringify({ text, at: new Date().toISOString() }));
+    const oldest = Date.now() - draftDays * 86_400_000;
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (!key?.startsWith(draftPrefix)) continue;
+      const draft = readDraft(key);
+      if (!draft || !(Date.parse(draft.at) >= oldest)) localStorage.removeItem(key);
+    }
   } catch {
-    /* Without storage the editor still guards unsaved text while it is open. */
+    /* Storage that cannot be read holds no drafts to drop. */
   }
 }
+
+/** Keeps or forgets a draft; reports false when the browser has no room for it, even after old drafts go. */
+function writeDraft(key: string, draft: Draft | undefined): boolean {
+  const write = () => (draft ? localStorage.setItem(key, JSON.stringify(draft)) : localStorage.removeItem(key));
+  try {
+    write();
+    return true;
+  } catch {
+    pruneDrafts();
+    try {
+      write();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
+let warnedNoRoom = false;
 
 const mediaTypes = { markdown: 'text/markdown', plaintext: 'text/plain' };
 
@@ -77,11 +120,11 @@ export function TextDocument({ file, source, editing, language, render, preview 
     gcTime: 60_000,
     retry: false,
   });
-  const key = draftKey(file.itemId, file.blobId);
+  const key = draftKey(file.itemId);
   const [draft, setDraft] = useState<string>();
-  const [saved, setSaved] = useState<{ blobId: string; version: number; text: string }>();
-  // The file version and item version the text being edited started from: saves send that version, so a newer file is a conflict.
-  const [base, setBase] = useState<{ blobId: string; version: number }>();
+  const [saved, setSaved] = useState<Base & { text: string }>();
+  // Where the text being edited started: saves send that version, so a newer file is a conflict.
+  const [base, setBase] = useState<Base>();
   const [declined, setDeclined] = useState(false);
   const [pane, setPane] = useState<'write' | 'preview'>('write');
   const [conflict, setConflict] = useState(false);
@@ -95,8 +138,43 @@ export function TextDocument({ file, source, editing, language, render, preview 
   const dirty = active && draft !== undefined && draft !== baseline;
 
   // The editor offers text this browser kept from an unsaved edit, until the person types or decides.
-  const kept = active && draft === undefined && !declined ? readDraft(key) : undefined;
+  const offering = active && draft === undefined && !declined;
+  const kept = useMemo(() => (offering ? readDraft(key) : undefined), [offering, key]);
   const restorable = kept && kept.text !== baseline ? kept : undefined;
+
+  // Drafts are written after typing pauses, and before the page goes away.
+  const pending = useRef<{ key: string; draft: Draft }>(undefined);
+  const timer = useRef<number>(undefined);
+  const flush = useCallback(() => {
+    window.clearTimeout(timer.current);
+    const next = pending.current;
+    pending.current = undefined;
+    if (next && !writeDraft(next.key, next.draft) && !warnedNoRoom) {
+      warnedNoRoom = true;
+      toast.warning("This browser has no room to keep your unsaved changes. Save soon so they aren't lost.");
+    }
+  }, []);
+  const keep = (text: string, from: Base) => {
+    pending.current = { key, draft: { text, at: new Date().toISOString(), ...from } };
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(flush, draftDelay);
+  };
+  const forget = () => {
+    window.clearTimeout(timer.current);
+    pending.current = undefined;
+    writeDraft(key, undefined);
+  };
+  useEffect(() => {
+    pruneDrafts();
+    const hidden = () => document.visibilityState === 'hidden' && flush();
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', hidden);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', hidden);
+      flush();
+    };
+  }, [flush]);
 
   const reportDirty = editing?.onDirty;
   useEffect(() => {
@@ -109,15 +187,17 @@ export function TextDocument({ file, source, editing, language, render, preview 
     return () => window.removeEventListener('beforeunload', warn);
   }, [dirty]);
 
-  const change = (value: string) => {
-    if (!base) setBase(saved ? { blobId: saved.blobId, version: saved.version } : { blobId: file.blobId, version: editing?.version ?? 0 });
+  const change = (value: string, restored?: Base) => {
+    const from = restored ?? base ?? (saved ? { blobId: saved.blobId, version: saved.version } : { blobId: file.blobId, version: editing?.version ?? 0 });
+    if (from !== base) setBase(from);
     setDraft(value);
-    writeDraft(key, value === baseline ? undefined : value);
+    if (value === baseline) forget();
+    else keep(value, from);
   };
   const done = () => {
     setDraft(undefined);
     setBase(undefined);
-    writeDraft(key, undefined);
+    forget();
     editing?.setActive(false);
   };
 
@@ -130,8 +210,14 @@ export function TextDocument({ file, source, editing, language, render, preview 
       // Text typed while the save was on its way stays a draft, now based on the saved file.
       const rest = draftRef.current === body ? undefined : draftRef.current;
       setDraft(rest);
-      setBase(rest === undefined ? undefined : { blobId: result.id, version: result.resource_version });
-      if (readDraft(key)?.text === body) writeDraft(key, undefined);
+      if (rest === undefined) {
+        setBase(undefined);
+        forget();
+      } else {
+        const next = { blobId: result.id, version: result.resource_version };
+        setBase(next);
+        keep(rest, next);
+      }
       toast.success(`Saved · version ${result.version}`);
       await client.invalidateQueries({ queryKey: keys.resources });
     },
@@ -218,7 +304,7 @@ export function TextDocument({ file, source, editing, language, render, preview 
             size="sm"
             variant="primary"
             onClick={() => {
-              change(restorable.text);
+              change(restorable.text, { blobId: restorable.blobId, version: restorable.version });
               setRevision((current) => current + 1);
             }}
           >
@@ -228,7 +314,7 @@ export function TextDocument({ file, source, editing, language, render, preview 
             size="sm"
             variant="ghost"
             onClick={() => {
-              writeDraft(key, undefined);
+              forget();
               setDeclined(true);
             }}
           >
@@ -271,7 +357,7 @@ export function TextDocument({ file, source, editing, language, render, preview 
             setSaved(undefined);
             setDraft(undefined);
             setBase(undefined);
-            writeDraft(key, undefined);
+            forget();
             await client.invalidateQueries({ queryKey: keys.resources });
             await client.invalidateQueries({ queryKey: ['file-text', source.url] });
             setRevision((current) => current + 1);
