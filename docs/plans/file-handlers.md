@@ -13,6 +13,12 @@ trusted hosts, as
 [Comments](../comments.md#anchor-kinds) describe. The product owner settled
 every decision ([below](#decisions)).
 
+Not yet verified, and needed before these phases are called release-ready:
+saving from desktop Word, Excel and PowerPoint over WebDAV against a real
+client; the page viewer's memory on a low-memory phone; and a screen-reader
+pass over the viewer. Browser tests cover the editor's conflict and recovery
+paths, leaving an edit, the viewer's focus, document trust and old versions.
+
 What phase 1 learned:
 - PDF.js 6 uses JavaScript features that browsers shipped only recently, so the viewer loads its legacy build, which carries their polyfills.
 - A click on a row opens the details sheet, which covers the list. So a row or card with a file waits a quarter of a second for a second click before it opens details.
@@ -40,6 +46,13 @@ What phase 4 learned:
 - Open in Word needs only the library's WebDAV address and the folder names above the item, so it is a web feature; Office's own lock files were already kept out of the library.
 - Comments on a PDF area needed one core socket: a thread's first comment takes an opaque `anchor` whose `kind` the API stores, validates in shape and filters on. The `file.region` kind and its pins belong to the PDF handler, so other handlers can add their own kinds without core changes.
 - PDF.js empties a page's element each time it draws it again (zoom, rotation, pages leaving the render buffer), so the pins live in a layer the viewer puts back whenever PDF.js removes it.
+
+What the phase 1 to 4 review learned:
+- A sandbox without scripts still lets a document's CSS load from anywhere, so a frame drawing a document needs its own content policy; and libraries that draw links (PDF.js) bypass the app's link handling unless their clicks are taken over.
+- Editor state spread over the file query, the last save, the draft and local storage drifted apart. The editor now keeps one base (the file and version a draft started from) and follows the file while clean.
+- Promises in dialogs are measurable: "theirs stays in history" holds only where the library keeps versions, and a clipboard copy can be refused.
+- The browser and the server answer "is this host trusted" differently for IP addresses, because only the server can tell a public address from a private one; administrative impact follows the server's rule.
+- Only rows were bounded in the CSV table and page images were never released; bounds belong on every dimension a file controls.
 
 The goal has three parts:
 - **PaperGo stores any file.**
