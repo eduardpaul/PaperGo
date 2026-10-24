@@ -2,7 +2,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { matches, TrustedLink, trusts } from '@/features/files/trust';
+import { matches, serverMatches, TrustedLink, trusts } from '@/features/files/trust';
 import { hostEntry, TrustedHostsPage } from './trusted-hosts';
 
 afterEach(() => {
@@ -25,13 +25,18 @@ it('trusts listed hosts, subdomains of wildcards and this app, and nothing else'
   expect(matches(hosts, 'sharepoint.com')).toBe(false);
   expect(matches(hosts, 'evilsharepoint.com')).toBe(false);
   expect(matches(['*'], '127.0.0.1')).toBe(false);
+  // The server's fetches keep to public addresses themselves, so there * trusts an IP address, and only *.
+  expect(serverMatches(['*'], '8.8.8.8')).toBe(true);
+  expect(serverMatches(['*'], '[2001:db8::1]')).toBe(true);
+  expect(serverMatches(['docs.example.com'], '8.8.8.8')).toBe(false);
+  expect(serverMatches(['*.sharepoint.com'], 'contoso.sharepoint.com')).toBe(true);
   expect(trusts(hosts, 'https://docs.example.com/a')).toBe(true);
   expect(trusts(hosts, 'javascript:alert(1)')).toBe(false);
   expect(trusts([], `${window.location.origin}/w/1`)).toBe(true);
   expect(trusts(undefined, 'https://docs.example.com/a')).toBe(false);
 });
 
-function serve(hosts: string[], scopes: string[] = []) {
+function serve(hosts: string[], scopes: string[] = [], usage = [{ host: 'calendar.example.com', integrations: 2 }]) {
   const calls: { method: string; path: string; body: unknown; ifMatch?: string }[] = [];
   let current = { hosts, version: 3 };
   vi.stubGlobal(
@@ -45,7 +50,7 @@ function serve(hosts: string[], scopes: string[] = []) {
       if (path === '/v1/identity/me') data = { subject: 'admin', scopes };
       if (path === '/v1/organization/settings/trusted-hosts' && method === 'PUT') current = { hosts: body.hosts, version: current.version + 1 };
       if (path === '/v1/organization/settings/trusted-hosts') data = current;
-      if (path === '/v1/organization/settings/trusted-hosts/usage') data = { value: [{ host: 'calendar.example.com', integrations: 2 }] };
+      if (path === '/v1/organization/settings/trusted-hosts/usage') data = { value: usage };
       return new Response(JSON.stringify(data));
     }),
   );
@@ -90,4 +95,16 @@ it('adds and removes entries with the list version, naming the integrations a re
   expect(await screen.findByText('2 integrations on calendar.example.com will stop refreshing', { exact: false })).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
   await waitFor(() => expect(calls.filter((call) => call.method === 'PUT').at(-1)?.body).toEqual({ hosts: ['docs.example.com'] }));
+});
+
+it('counts integrations on public IP addresses against *, as the server trusts them', async () => {
+  serve(['*'], ['organization.manage'], [{ host: '203.0.113.5', integrations: 1 }]);
+  render(
+    <QueryClientProvider client={client()}>
+      <TrustedHostsPage />
+    </QueryClientProvider>,
+  );
+  expect(await screen.findByText('Used by 1 integration')).toBeTruthy();
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove *' }));
+  expect(await screen.findByText('1 integration on 203.0.113.5 will stop refreshing', { exact: false })).toBeTruthy();
 });

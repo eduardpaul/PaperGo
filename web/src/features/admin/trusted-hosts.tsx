@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Alert } from '@/components/ui/feedback';
 import { Input } from '@/components/ui/input';
 import { QueryFeedback, useHasScope } from '@/features/admin/common';
-import { matches } from '@/features/files/trust';
+import { serverMatches } from '@/features/files/trust';
 import { ConfirmDialog, SettingsSection } from '@/features/settings/section';
 import { problemMessage } from '@/lib/errors';
 
@@ -77,9 +77,9 @@ export function TrustedHostsPage() {
   // What removing an entry stops: hosts in use that the list trusts now and would not after.
   const stops = (entry: string) => {
     const rest = hosts.filter((host) => host !== entry);
-    return (usage.data ?? []).filter((use) => matches(hosts, use.host) && !matches(rest, use.host));
+    return (usage.data ?? []).filter((use) => serverMatches(hosts, use.host) && !serverMatches(rest, use.host));
   };
-  const usedBy = (entry: string) => (usage.data ?? []).filter((use) => matches([entry], use.host)).reduce((sum, use) => sum + use.integrations, 0);
+  const usedBy = (entry: string) => (usage.data ?? []).filter((use) => serverMatches([entry], use.host)).reduce((sum, use) => sum + use.integrations, 0);
   const remove = (entry: string) => (stops(entry).length ? setRemoving(entry) : save.mutate(hosts.filter((host) => host !== entry)));
   const stopping = removing ? stops(removing) : [];
 

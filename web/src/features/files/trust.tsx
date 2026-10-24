@@ -32,6 +32,15 @@ export function matches(hosts: string[], host: string): boolean {
   return hosts.some((entry) => entry === '*' || entry === name || (entry.startsWith('*.') && name.endsWith(entry.slice(1))));
 }
 
+/**
+ * Whether the server's fetches, such as calendar integrations, may reach
+ * host under a trusted host list. Unlike the browser, the server knows a
+ * public address from a private one, so * trusts IP addresses there too.
+ */
+export function serverMatches(hosts: string[], host: string): boolean {
+  return isAddress(host.toLowerCase()) ? hosts.includes('*') : matches(hosts, host);
+}
+
 /** The host a URL names, for messages; empty for what is not a web URL. */
 export function hostOf(url: string): string {
   try {
