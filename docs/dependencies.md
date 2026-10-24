@@ -4,7 +4,6 @@ Direct Go modules and the licences they ship under. Add a row when a change adds
 
 | Module | Used for | Licence |
 | --- | --- | --- |
-| `ariga.io/atlas` | release-result verification: inspects the upgraded schema against the target | Apache-2.0 |
 | `github.com/stephenafamo/bob` | DAL query building and generated models (`internal/dal` only) | MIT |
 | `github.com/stephenafamo/scan` | scanning DAL query rows (`internal/dal` only) | MIT |
 | `github.com/aarondl/opt` | optional and nullable columns of generated models | MIT |
@@ -81,5 +80,3 @@ See [model build/install](../scripts/decision-model/README.md). Python and PyTor
 are model-build dependencies; they are not application runtime dependencies.
 
 Standalone API builds also include the pinned EmbeddingGemma 2 (Google DeepMind, Apache-2.0) and Harrier-OSS-v1-0.6B (Microsoft, MIT) text-only Q4 exports. Their model cards ship beside the extracted weights; license texts and attribution ship under `notices/models`. Revisions and file hashes are in `scripts/fetch-embedding-models.py`.
-
-Release tooling uses the MIT-licensed [sqlite3def 3.11.26](https://github.com/sqldef/sqldef/releases/tag/v3.11.26) CLI for SQLite schema diff SQL. It is installed in CI and the development container and is not a production runtime dependency.

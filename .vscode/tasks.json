@@ -116,11 +116,6 @@
       "problemMatcher": [], "options": { "cwd": "${workspaceFolder}" }
     },
     {
-      "label": "PaperGo: install sqlite3def",
-      "type": "process", "command": "python3", "args": ["scripts/sqlite3def.py"],
-      "problemMatcher": [], "options": { "cwd": "${workspaceFolder}" }
-    },
-    {
       "label": "PaperGo: release rehearsal",
       "detail": "Packages and smoke-tests the release executables as CI does",
       "type": "process", "command": "bash", "args": ["scripts/ci.sh", "release"],

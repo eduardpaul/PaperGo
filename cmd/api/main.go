@@ -16,7 +16,6 @@ import (
 	"papergo/internal/dal/activitystore"
 	"papergo/internal/dal/database"
 	"papergo/internal/dal/integrations"
-	"papergo/internal/dal/migrations"
 	"papergo/internal/dal/resultcache"
 	"papergo/internal/dal/search/sqlitestore"
 	"papergo/internal/dal/search/zvecstore"
@@ -69,10 +68,9 @@ func run(log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	timeout := 20 * time.Second
-	if migrations.Published() {
-		timeout = database.ReleaseStartupTimeout
-	}
+	// Startup may upgrade the database, which copies a SQLite file first and
+	// may rebuild large tables.
+	timeout := 10 * time.Minute
 	startup, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	blobLease, err := database.AcquireLease(c.BlobPath, false)
@@ -86,7 +84,7 @@ func run(log *slog.Logger) error {
 			return err
 		}
 		defer func() { db.Close() }()
-		if err = db.EnsureSchema(startup); err != nil {
+		if err = upgradeSchema(startup, log, db); err != nil {
 			return err
 		}
 	} else {
@@ -309,10 +307,25 @@ func run(log *slog.Logger) error {
 	return nil
 }
 
+// upgradeSchema creates the database's schema or applies its pending
+// migrations, before anything else uses it.
+func upgradeSchema(ctx context.Context, log *slog.Logger, db *database.Database) error {
+	result, err := db.Upgrade(ctx)
+	if err != nil {
+		return err
+	}
+	switch {
+	case result.Created:
+		log.Info("database created", "schema_version", result.To)
+	case result.From < result.To:
+		log.Info("database upgraded", "from", result.From, "to", result.To, "snapshot", result.Snapshot, "version", buildinfo.Version)
+	}
+	return nil
+}
+
 // openSQLite opens the SQLite file under its lease and brings its schema to
-// this build: a published release applies its upgrade bundle, a development
-// build installs the schema into an empty file. It returns the lease, which
-// the caller closes after the database.
+// this build while no other process uses the file. It returns the lease,
+// which the caller closes after the database.
 func openSQLite(startup context.Context, log *slog.Logger, c *config.Config) (*database.Database, *os.File, error) {
 	// Every SQLite handle, including the runner, uses the same canonical name.
 	resolved, err := filepath.EvalSymlinks(c.DatabasePath)
@@ -321,7 +334,7 @@ func openSQLite(startup context.Context, log *slog.Logger, c *config.Config) (*d
 	} else if !os.IsNotExist(err) {
 		return nil, nil, fmt.Errorf("resolve database path: %w", err)
 	}
-	dataLease, err := database.AcquireLease(c.DatabasePath, migrations.Published())
+	dataLease, err := database.AcquireLease(c.DatabasePath, true)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -330,21 +343,7 @@ func openSQLite(startup context.Context, log *slog.Logger, c *config.Config) (*d
 		dataLease.Close()
 		return nil, nil, err
 	}
-	if !migrations.Published() {
-		if err = db.EnsureSchema(startup); err != nil {
-			db.Close()
-			dataLease.Close()
-			return nil, nil, err
-		}
-		return db, dataLease, nil
-	}
-	bundle, err := migrations.EmbeddedBundle()
-	if err == nil {
-		var snapshot string
-		if snapshot, err = db.ApplyRelease(startup, c.DatabasePath, bundle); err == nil && snapshot != "" {
-			log.Info("database upgraded", "snapshot", snapshot, "version", buildinfo.Version)
-		}
-	}
+	err = upgradeSchema(startup, log, db)
 	// Windows cannot downgrade a byte-range lease atomically. Close all
 	// SQLite handles before sharing the lease, then reopen under that lease.
 	if closeErr := db.Close(); err == nil {

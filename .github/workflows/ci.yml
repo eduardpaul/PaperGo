@@ -242,8 +242,6 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.ref }}
       - uses: ./.github/actions/toolchain
-        with:
-          sqlite3def: ${{ matrix.stage == 'release' }}
       - uses: actions/download-artifact@v4
         with:
           name: model-presets

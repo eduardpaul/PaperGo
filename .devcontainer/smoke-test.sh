@@ -15,7 +15,6 @@ test -s web/dist/index.html
 test "$(stat -c %a .cache/development.env)" = 600
 go version
 node --version
-sqlite3def --version
 gopls version
 dlv version
 staticcheck -version

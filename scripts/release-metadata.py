@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate a linear published release history; never base upgrades on draft tags."""
+"""Validate a release tag against the published release history and publish its assets."""
 import argparse
 import json
 import os
@@ -22,7 +22,7 @@ def version_key(tag):
 def select_previous(tag, releases):
     current = version_key(tag)
     published = [r for r in releases if not r.get("draft", False) and r["tag_name"] != tag]
-    # Prereleases participate in the same forward-only database history.
+    # Prereleases count: release notes start at the latest published tag.
     candidates = [(version_key(r["tag_name"]), r["tag_name"]) for r in published]
     if not candidates:
         return ""
@@ -40,7 +40,7 @@ def expected_assets(tag):
             ("windows", "amd64"),
             # ("darwin", "arm64"),
         ]
-    } | {f"papergo_{tag}_assets.zip", "release-database.json", "SHA256SUMS"}
+    } | {f"papergo_{tag}_assets.zip", "SHA256SUMS"}
 
 
 def release_state(tag, releases):
@@ -72,7 +72,7 @@ def publish(tag, previous, state, directory):
     directory = Path(directory)
     paths = {p.name: p for p in directory.iterdir() if p.is_file()}
     if set(paths) != expected_assets(tag) or any(p.stat().st_size == 0 for p in paths.values()):
-        raise ValueError("Publication requires all three binary ZIPs, the shared assets ZIP, the database bundle and SHA256SUMS")
+        raise ValueError("Publication requires all three binary ZIPs, the shared assets ZIP and SHA256SUMS")
     if state == "new":
         args = ["gh", "release", "create", tag, "--draft", "--verify-tag",
                 "--title", f"PaperGo {tag}", "--generate-notes"]

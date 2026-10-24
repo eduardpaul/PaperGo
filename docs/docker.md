@@ -1,6 +1,6 @@
 # Docker deployment
 
-The image contains the web UI, current database schema, native libraries and all four local model presets. It needs no external database, model download, migration command or host Go/Node/Python installation. One container owns the SQLite database and search store; persist `/data` on local storage and run one replica.
+The image contains the web UI, current database schema, native libraries and all four local model presets. It needs no external database, model download, migration command or host Go/Node/Python installation; a newer image upgrades the database when it starts. One container owns the SQLite database and search store; persist `/data` on local storage and run one replica.
 
 ## Published image
 

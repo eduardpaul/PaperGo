@@ -5,7 +5,7 @@ Download the platform ZIP and `papergo_vX.Y.Z_assets.zip` from the same release.
 - Linux: `./papergo`
 - Windows: `papergo.exe`
 
-Sign in as `admin` with password `admin`. `config.yaml` in this directory sets that account, listens on port 8080, and stores the database, files, and zvec search index under `./data`. The first start creates the database from the current schema. No separate migration program is required.
+Sign in as `admin` with password `admin`. `config.yaml` in this directory sets that account, listens on port 8080, and stores the database, files, and zvec search index under `./data`. The first start creates the database from the current schema, and a newer release upgrades it when it starts. No separate migration program is required.
 
 Change `admin_password` before you expose the process beyond this computer. Set `auth.mode` to `oidc` or `proxy` when an identity provider or trusted proxy should sign people in. Environment variables override the same settings.
 

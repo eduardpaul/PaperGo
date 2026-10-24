@@ -1,11 +1,7 @@
 name: Toolchain
 description: >-
   Install the toolchain the Dockerfile pins on a runner that cannot use the
-  toolchain image: Go, Node, the native cgo SDKs and, on request, sqlite3def.
-inputs:
-  sqlite3def:
-    description: Also install the pinned sqlite3def release planner
-    default: 'false'
+  toolchain image: Go, Node and the native cgo SDKs.
 runs:
   using: composite
   steps:
@@ -60,11 +56,3 @@ runs:
       run: |
         python -m pip install cmake==${{ steps.versions.outputs.cmake }}
         python scripts/native.py --github-env
-    - name: Install sqlite3def
-      if: inputs.sqlite3def == 'true'
-      shell: bash
-      run: |
-        directory="$RUNNER_TEMP/sqlite3def"
-        if [[ "$RUNNER_OS" == Windows ]]; then directory="$(cygpath -m "$directory")"; fi
-        python scripts/sqlite3def.py --directory "$directory"
-        echo "$directory" >> "$GITHUB_PATH"

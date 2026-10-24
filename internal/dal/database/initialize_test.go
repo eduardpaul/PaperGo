@@ -1,7 +1,8 @@
 package database_test
 
 import (
-	"os"
+	"fmt"
+	"papergo/internal/dal"
 	"papergo/internal/dal/database"
 	"path/filepath"
 	"testing"
@@ -36,19 +37,22 @@ func TestInitializeCurrentSchemaAndRestart(t *testing.T) {
 	if err = db.SQL.QueryRowContext(ctx, "SELECT display_name FROM identity_users WHERE id='persisted'").Scan(&name); err != nil || name != "Preserved" {
 		t.Fatal(name, err)
 	}
-	if _, err = db.SQL.ExecContext(ctx, "UPDATE schema_metadata SET hash='invalid'"); err != nil {
+	if _, err = db.SQL.ExecContext(ctx, fmt.Sprintf("UPDATE schema_metadata SET version=%d", dal.SchemaVersion()+1)); err != nil {
 		t.Fatal(err)
 	}
 	if err = database.Initialize(ctx, path); err == nil {
-		t.Fatal("invalid schema checksum accepted")
+		t.Fatal("newer schema accepted")
 	}
 }
-func TestInitializeRejectsExistingIncompleteDatabase(t *testing.T) {
+
+func TestInitializeRefusesARunningServer(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "papergo.db")
-	if err := os.WriteFile(path, nil, 0600); err != nil {
+	lease, err := database.AcquireLease(path, false)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := database.Initialize(t.Context(), path); err == nil {
-		t.Fatal("incomplete database was repaired")
+	defer lease.Close()
+	if err = database.Initialize(t.Context(), path); err == nil {
+		t.Fatal("initialized a database in use")
 	}
 }

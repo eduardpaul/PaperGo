@@ -3,11 +3,11 @@
 PaperGo's [devcontainer](../.devcontainer/devcontainer.json) is the `development`
 stage of the repository's one [Dockerfile](../Dockerfile), which is also CI's
 toolchain image and the base of the application build. It provides Go, Node.js
-with npm, Python 3, SQLite's CLI, the PostgreSQL client, sqlite3def, the native
+with npm, Python 3, SQLite's CLI, the PostgreSQL client, the native
 SDKs, a C compiler, pkg-config and CMake, plus gopls, Delve, Staticcheck and
 govulncheck. The Dockerfile is the only place their versions are pinned: Go,
-Node and CMake as `ARG`s at its top, the native SDKs in `scripts/native.json`
-and sqlite3def in `scripts/sqlite3def.py`, which it runs. CI jobs that cannot use
+Node and CMake as `ARG`s at its top and the native SDKs in
+`scripts/native.json`. CI jobs that cannot use
 the image, on Windows and Linux arm64, install the same versions with
 `.github/actions/toolchain`, which reads them through
 `scripts/toolchain-versions.py`. To change a version, edit the Dockerfile. It
@@ -151,8 +151,8 @@ Markdown summary.
 ### Run checks as CI does
 
 `scripts/ci.sh` runs stages in CI's toolchain image, the devcontainer image,
-which pins Go, Node, Python, the native SDKs, Staticcheck, govulncheck,
-sqlite3def and the PostgreSQL client. It needs only Docker, Python 3 and Git:
+which pins Go, Node, Python, the native SDKs, Staticcheck, govulncheck
+and the PostgreSQL client. It needs only Docker, Python 3 and Git:
 
 ```sh
 scripts/ci.sh                         # the pull request gate: lint, then test
@@ -166,7 +166,7 @@ files, without ignored ones, so local build outputs cannot hide a failure. A
 disposable PostgreSQL 17 runs beside it in memory. Go modules, build and npm
 caches, `node_modules` and the frontend build persist in Docker volumes, so
 repeated runs only recompile what changed. The image is tagged with a hash of
-its inputs (the Dockerfile and the native SDK and sqlite3def pins), the tag CI
+its inputs (the Dockerfile and the native SDK pins), the tag CI
 publishes to `ghcr.io/eduardpaul/papergo-ci`; it is pulled from there when you
 can read it, otherwise built locally once. `native`, `release` and `docker`
 first prepare the model presets in `.tools` with
@@ -212,16 +212,13 @@ server `PAPERGO_TEST_POSTGRES_DSN` names or that of `scripts/postgres.sh`; `psql
 must be installed, as it is in the toolchain image. The `lint` stage regenerates
 both and fails when that changes a file.
 
-Release planning uses sqlite3def, installed in the development container.
-Outside the container, `python3 scripts/sqlite3def.py` installs the pinned
-executable into `.tools/bin`, where checks find it; setup runs it when sqlite3def
-is missing.
-The release planner tests execute the real CLI against the full PaperGo schema.
-See [release history and validation](releases.md#release-only-database-history).
+Once a release is published, a schema change also adds a hand-written
+migration for each engine to `internal/dal/migrations/`; see
+[Database upgrades](releases.md#database-upgrades).
 
 Stop the API or debugger before resetting local data. Local databases and blobs
 are disposable: delete `data/`, recreate the directory with `mkdir -p data/blobs`,
-then run `go run ./cmd/admin initialize --database data/papergo.db`. Do not add migration files or backfills.
+then run `go run ./cmd/admin initialize --database data/papergo.db`. Do not add backfills.
 
 Go/npm caches and `web/node_modules` survive container rebuilds. `npm ci` replaces
 the installed dependency tree with the lockfile contents. To clear a stale build

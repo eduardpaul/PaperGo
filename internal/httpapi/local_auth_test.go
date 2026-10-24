@@ -26,7 +26,7 @@ func TestLocalAdminBasicAndSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
-	if err = db.EnsureSchema(ctx); err != nil {
+	if _, err = db.Upgrade(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if err = db.CheckSchema(ctx); err != nil {

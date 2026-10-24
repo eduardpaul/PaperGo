@@ -1179,8 +1179,10 @@ VALUES ('00000000-0000-4000-8000-000000000001', '2026-01-01T00:00:00Z', '2026-01
 INSERT INTO term_sets (id, created_at, updated_at, group_id, "key", name, description, is_open, is_keywords, version)
 VALUES ('00000000-0000-4000-8000-000000000002', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', '00000000-0000-4000-8000-000000000001', 'keywords', 'Keywords', 'Free keywords that people add while tagging items.', TRUE, TRUE, 1);
 
--- The installed schema fingerprint is written by the DAL initializer.
+-- The schema version: the number of the last migration in
+-- internal/dal/migrations the database includes. The DAL writes it when it
+-- installs this schema or applies a migration.
 CREATE TABLE schema_metadata (
     id INTEGER PRIMARY KEY CHECK (id = 1),
-    hash TEXT NOT NULL
+    version INTEGER NOT NULL CHECK (version >= 0)
 );
