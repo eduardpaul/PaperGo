@@ -1,8 +1,7 @@
 # File handlers (plan)
 
 Status: **design agreed, nothing implemented.** The product owner settled
-the first round of decisions ([below](#decisions)). Two smaller questions
-remain [open](#still-open).
+every decision ([below](#decisions)).
 
 The goal has three parts:
 - **PaperGo stores any file.**
@@ -21,6 +20,8 @@ Each file type that PaperGo can show is served by a **file handler**: a plug-in 
 | D4 | Click on a row or card | **Opens details, as today.** From there and from every other place the file must be one obvious click away: see [Ways to open a file](#ways-to-open-a-file). |
 | D5 | Editing limit | A configuration setting, `FILE_EDIT_MAX_BYTES` (default 2 MiB). Raising it is allowed. |
 | D6 | Remote content | One **organization-wide list of trusted hosts**. Content from them opens without asking. Changing the list changes every feature that reaches outside PaperGo, integrations included. See [Trusted hosts](#trusted-hosts). |
+| O1 | Trusted hosts at first | **`*`: every public host is trusted.** Administrators narrow the list by removing `*` and adding the hosts they want. |
+| O2 | Viewing Word files | **In the browser, with an npm package:** [`docx-preview`](https://www.npmjs.com/package/docx-preview) (Apache-2.0) in phase 4. |
 
 ## Product view
 
@@ -344,11 +345,13 @@ as `?item=<id>&open=file`, with optional `&page=<n>` (PDF),
 │ PaperGo shows and fetches content from these hosts without asking.           │
 │ Other hosts are blocked or need confirmation, depending on the feature.      │
 │                                                                              │
-│  calendar.google.com                     Used by 3 integrations      [Remove]│
+│  ⚠ * trusts every public host. Remove it to trust only the hosts listed.     │
+│                                                                              │
+│  *                                       Used by 3 integrations      [Remove]│
 │  *.sharepoint.com                        —                           [Remove]│
 │  docs.example.com                        —                           [Remove]│
 │                                                                              │
-│  [ host or *.domain                                  ]  [Add]                │
+│  [ host, *.domain or *                               ]  [Add]                │
 │                                                                              │
 │  Where this applies: Markdown images and links · links in PDFs · URL fields  │
 │  · calendar integrations · future handlers and integrations                  │
@@ -356,9 +359,15 @@ as `?item=<id>&open=file`, with optional `&page=<n>` (PDF),
 ```
 
 **Entries.**
-- An entry is a host name (`docs.example.com`) or a wildcard for subdomains (`*.example.com`, which does not match `example.com` itself).
+- An entry is one of:
+  - a host name (`docs.example.com`);
+  - a wildcard for subdomains (`*.example.com`, which does not match `example.com` itself);
+  - `*`, which trusts every public host.
 - Entries are lowercase and stored in their ASCII (punycode) form. IP addresses and ports are not allowed.
-- The list holds at most 200 entries and starts empty.
+- The list holds at most 200 entries.
+- **A new organization starts with `*`**, so everything works at first. An administrator restricts PaperGo by removing `*` and adding the hosts the organization uses.
+- While `*` is in the list, the page shows the warning in the mock-up, and no feature offers **Trust host**: there is nothing left to trust.
+- The other entries can be added before `*` is removed, so narrowing the list never breaks anything in between.
 
 **Each entry shows where it is used**, for example "Used by 3 integrations". Removing an entry that is in use asks first and names what will stop.
 
@@ -589,7 +598,7 @@ export function handlerFor(file: FileRef): FileHandler | undefined;
 | **2. Any file, Markdown and text** | S1: any file stored, `Identify`, the sandbox header on byte routes, processor capabilities and skipped built-ins, WebDAV scratch files, `internal/textfiles`. **Markdown** view and edit, **plain text** view and edit, New → Markdown document, text excerpts, conflict dialog, unsaved-changes guard and recovery, `FILE_EDIT_MAX_BYTES`. | Phase 1 |
 | **2b. Trusted hosts** | S4: the setting, admin page, `internal/hosts`, and the rules for integrations, links, URL fields and Markdown images. | Can be built alongside phase 2. It must ship no later than the Markdown handler, which uses it. |
 | **3. Depth** | Server page renditions (`GET /v1/items/{id}/pages/{n}?width=`, an extension of `documentpreview`): every page of a multi-page TIFF, and a light fallback for very large PDFs on low-end phones. OCR-backed find for scanned PDFs. Hits found in a PDF's text open at their page. Workflow review uses handlers. Version compare for text files. | Phase 2 |
-| **4. Word and beyond** | A **`.docx` view handler**: client-side rendering, or a server conversion registered through S1 (see [Still open](#still-open)). **Open in Word** for WebDAV-enabled libraries (`ms-word:ofe|u|…`), with the same pattern for Excel and PowerPoint. CSV as a table view. Comments anchored to a PDF page or region. | Phase 2 |
+| **4. Word and beyond** | A **`.docx` view handler** rendered in the browser with `docx-preview` (see [Word files](#word-files)), so it needs no server conversion. **Open in Word** for WebDAV-enabled libraries (`ms-word:ofe|u|…`), with the same pattern for Excel and PowerPoint. CSV as a table view. Comments anchored to a PDF page or region. | Phase 2 |
 
 **Acceptance for phases 1, 2 and 2b**, tested on SQLite and PostgreSQL where the server is involved:
 
@@ -614,7 +623,8 @@ export function handlerFor(file: FileRef): FileHandler | undefined;
   - Leaving with unsaved edits asks first, and the buffer recovers after a reload.
   - Files over `FILE_EDIT_MAX_BYTES` open read-only.
 - **Trusted hosts.**
-  - An image from a trusted host loads; one from an untrusted host shows the placeholder.
+  - With the default `*`, images load, links open and any public iCalendar URL is accepted.
+  - With `*` removed, an image from a trusted host loads; one from an untrusted host shows the placeholder.
   - Untrusted links ask first.
   - An iCalendar URL on an untrusted host is refused.
   - Removing a host stops the integrations using it at their next refresh, and trusting it again resumes them.
@@ -624,9 +634,18 @@ export function handlerFor(file: FileRef): FileHandler | undefined;
   - A PDF with a JavaScript action does nothing.
 - **Size.** The list page's bundle grows by no more than the shell and the file controls; PDF.js, the Markdown renderer and Monaco are separate chunks.
 
-## Still open
+## Word files
 
-| # | Question | Recommendation |
-| --- | --- | --- |
-| O1 | Should the trusted-host list start empty, or with common calendar and Microsoft 365 hosts (`calendar.google.com`, `outlook.office365.com`, `*.sharepoint.com`)? | Empty. It is a security list, and administrators can trust a host in one click from the place that needs it. |
-| O2 | How should the `.docx` handler render (phase 4)? Options: client-side (`docx-preview`, no server cost, approximate layout), server conversion to PDF (LibreOffice in the image, faithful, heavy), or Open in Word only. | Decide when phase 4 starts. Client-side view plus Open in Word is the light default. |
+Phase 4 views `.docx` in the browser with
+[`docx-preview`](https://www.npmjs.com/package/docx-preview) (Apache-2.0,
+0.4.x). It converts the document's XML into HTML in the browser and keeps
+its page layout, fonts, tables, headers and footers well enough to read and
+review. It is a view handler on S3 like the others:
+
+- **Loading.** It loads lazily, with its ZIP reader, only when a Word file opens, and reads the bytes through `fetchContent`.
+- **Isolation.** It renders inside a sandboxed `<iframe srcdoc>` with no `allow-scripts`, so nothing in a document can run or reach the app.
+- **Links and images.** They follow trusted hosts. Images embedded in the file always show; they are part of the file.
+- **Fidelity.** The layout is approximate: fields, tracked changes, comments and complex floating objects may differ from Word. The viewer says so in its `⋯` menu ("Shown in a simplified layout"), next to **Download**.
+- **Editing.** It stays in Word: **Open in Word** for WebDAV-enabled libraries saves back as a new file version.
+- **Alternative.** [`mammoth`](https://www.npmjs.com/package/mammoth) (BSD-2-Clause) converts to clean, reflowed HTML without page layout. It could become a "Reading view" toggle if the layout view proves too heavy on phones.
+- **Search.** Word text becomes searchable through a server-side `doctext` reader for OOXML, a small Go reader of `word/document.xml`, registered by the same phase.
