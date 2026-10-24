@@ -1,10 +1,10 @@
 import { useEffect, useRef, type ReactNode } from 'react';
+import { typingIn } from '@/lib/keys';
 import { cn } from '@/lib/utils';
 
 /** Keys typed into a field, or pressed with a modifier the viewer does not use, are not viewer shortcuts. */
 export function typing(event: KeyboardEvent) {
-  const target = event.target as HTMLElement | null;
-  return !!target?.closest('input, textarea, select, [contenteditable="true"], [role="menu"], [role="listbox"]');
+  return typingIn(event.target) || (event.target instanceof Element && !!event.target.closest('[role="menu"], [role="listbox"]'));
 }
 
 /**

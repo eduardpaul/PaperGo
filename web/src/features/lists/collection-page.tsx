@@ -48,6 +48,7 @@ import { FieldEditor } from '@/features/fields/editor';
 import { useResourceNames, useValueNames } from '@/features/fields/names';
 import { valuesPatch } from '@/features/fields/values';
 import { ConfirmDialog } from '@/features/settings/section';
+import { typingIn } from '@/lib/keys';
 import { useFormat } from '@/lib/preferences';
 import { RunWorkflowAction } from '@/features/workflows/item-workflows';
 import { cn } from '@/lib/utils';
@@ -819,9 +820,8 @@ function SearchBox({ initial, noun, onSearch }: { initial: string; noun: string;
   // "/" jumps to the search box from anywhere on the page, as in many web apps.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
       if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey) return;
-      if (target && (target.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]') !== null)) return;
+      if (typingIn(event.target) || (event.target instanceof Element && event.target.closest('[role="dialog"]'))) return;
       event.preventDefault();
       input.current?.focus();
     };

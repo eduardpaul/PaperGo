@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Eye, PencilLine, Save, X } from 'lucide-react';
-import { useEffect, useId, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { isApiError } from '@/api/http';
 import { keys, resourceQuery } from '@/api/queries';
@@ -15,7 +15,7 @@ import { useFormat } from '@/lib/preferences';
 import { cn } from '@/lib/utils';
 import type { ViewerProps } from './handlers';
 import { TextEditor } from './text-editor';
-import { typing, useViewerKeys, ViewerMessage } from './viewer-kit';
+import { useViewerKeys, ViewerMessage } from './viewer-kit';
 
 /** A text file's bytes as text: UTF-8 (a leading BOM dropped), or marked when they are not. */
 interface Loaded {
@@ -84,6 +84,9 @@ export function TextDocument({ file, source, editing, language, render, preview 
   const [pane, setPane] = useState<'write' | 'preview'>('write');
   const [conflict, setConflict] = useState(false);
   const [discarding, setDiscarding] = useState(false);
+  const area = useRef<HTMLDivElement>(null);
+  // Counts texts that replace the editor's from outside: a kept draft restored, or their version loaded.
+  const [revision, setRevision] = useState(0);
   const baseline = saved?.text ?? loaded.data?.text ?? '';
   const active = !!editing?.active && !!editing.allowed && !!loaded.data?.utf8;
   const text = draft ?? baseline;
@@ -121,8 +124,9 @@ export function TextDocument({ file, source, editing, language, render, preview 
     mutationFn: async ({ body, ifMatch }: { body: string; ifMatch: number }) => (await replaceContent(file.itemId, ifMatch, asFile(body))).data,
     onSuccess: async (result, { body }) => {
       setSaved({ version: result.resource_version, text: body });
-      setDraft(undefined);
-      writeDraft(key, undefined);
+      // Text typed while the save was on its way stays a draft.
+      setDraft((current) => (current === body ? undefined : current));
+      if (readDraft(key)?.text === body) writeDraft(key, undefined);
       toast.success(`Saved · version ${result.version}`);
       await client.invalidateQueries({ queryKey: keys.resources });
     },
@@ -139,7 +143,12 @@ export function TextDocument({ file, source, editing, language, render, preview 
     (event) => {
       if (!active) return false;
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') return submit();
-      if (event.key === 'Escape' && !typing(event)) return dirty ? setDiscarding(true) : done();
+      if (event.key === 'Escape') {
+        // Dialogs above the editor, and Monaco's own popups such as suggestions and find, close first.
+        if (!(event.target instanceof Node && area.current?.contains(event.target))) return false;
+        if (document.querySelector('.monaco-editor :is(.suggest-widget, .find-widget, .parameter-hints-widget).visible')) return false;
+        return dirty ? setDiscarding(true) : done();
+      }
       return false;
     },
     { first: true },
@@ -163,7 +172,7 @@ export function TextDocument({ file, source, editing, language, render, preview 
     );
 
   return (
-    <div className="flex h-full flex-col">
+    <div ref={area} className="flex h-full flex-col">
       <div role="toolbar" aria-label="Editing" className="flex shrink-0 flex-wrap items-center gap-2 border-b bg-surface px-3 py-1.5 text-[13px]">
         <span className="flex items-center gap-1.5 font-medium">
           <PencilLine className="size-4 text-accent" /> Editing
@@ -194,7 +203,10 @@ export function TextDocument({ file, source, editing, language, render, preview 
           <Button
             size="sm"
             variant="primary"
-            onClick={() => change(restorable.text)}
+            onClick={() => {
+              change(restorable.text);
+              setRevision((current) => current + 1);
+            }}
           >
             Restore them
           </Button>
@@ -212,7 +224,7 @@ export function TextDocument({ file, source, editing, language, render, preview 
       )}
       <div className="flex min-h-0 flex-1">
         <div className={cn('min-w-0 flex-1 border-r', preview && pane === 'preview' && 'hidden lg:block')}>
-          <TextEditor id={editorId} value={text} language={language} label={`Text of ${file.filename}`} onChange={change} onSave={submit} />
+          <TextEditor id={editorId} value={text} revision={revision} language={language} label={`Text of ${file.filename}`} onChange={change} onSave={submit} />
         </div>
         {preview && (
           <div className={cn('min-w-0 flex-1 overflow-auto bg-surface', pane === 'write' && 'hidden lg:block')} aria-label="Preview">
@@ -247,6 +259,7 @@ export function TextDocument({ file, source, editing, language, render, preview 
             writeDraft(key, undefined);
             await client.invalidateQueries({ queryKey: keys.resources });
             await client.invalidateQueries({ queryKey: ['file-text', source.url] });
+            setRevision((current) => current + 1);
             toast.success('Loaded their version. Your text is on the clipboard.');
           }}
           onMine={async () => {

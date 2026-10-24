@@ -12,9 +12,11 @@ function touch() {
 /**
  * Edits text in Monaco, with Markdown highlighting for Markdown files, or in
  * a plain text area on touch screens and while Monaco loads. The editor starts
- * from value and reports each change; Ctrl or ⌘ S saves.
+ * from value and reports each change; Ctrl or ⌘ S saves. Monaco keeps its own
+ * text: value replaces it only when revision changes, so keys typed while
+ * React renders an earlier change are never undone.
  */
-export function TextEditor({ id, value, language, label, onChange, onSave, className }: { id: string; value: string; language: 'markdown' | 'plaintext'; label: string; onChange: (value: string) => void; onSave: () => void; className?: string }) {
+export function TextEditor({ id, value, revision, language, label, onChange, onSave, className }: { id: string; value: string; revision: number; language: 'markdown' | 'plaintext'; label: string; onChange: (value: string) => void; onSave: () => void; className?: string }) {
   const [monaco, setMonaco] = useState<Monaco>();
   const host = useRef<HTMLDivElement>(null);
   const editor = useRef<Api.editor.IStandaloneCodeEditor>(undefined);
@@ -64,11 +66,11 @@ export function TextEditor({ id, value, language, label, onChange, onSave, class
     };
   }, [monaco, language, label]);
 
-  // A value from outside, such as their version after a conflict, replaces the text.
+  // A text from outside, such as their version after a conflict, replaces the editor's.
   useEffect(() => {
     const current = editor.current;
-    if (current && current.getValue() !== value) current.setValue(value);
-  }, [value]);
+    if (current && current.getValue() !== latest.current.value) current.setValue(latest.current.value);
+  }, [revision]);
 
   if (!monaco) {
     return (

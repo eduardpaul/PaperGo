@@ -8,6 +8,7 @@ import { UploadsProvider } from '@/features/documents/uploads';
 import { NotificationBell } from '@/features/notifications/notifications';
 import { rememberWorkspace } from '@/lib/recent-workspace';
 import { useSearchAvailable } from '@/lib/search';
+import { typingIn } from '@/lib/keys';
 import { CommandPaletteProvider, useCommandPalette } from './command-palette';
 import { Sidebar } from './sidebar';
 import { UserMenu } from './user-menu';
@@ -55,8 +56,7 @@ function TopBar({ onMenu }: { onMenu: () => void }) {
   useEffect(() => {
     let prefix = false;
     const onKey = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+      if (typingIn(event.target)) return;
       if (event.key === 'g') {
         prefix = true;
         return;
