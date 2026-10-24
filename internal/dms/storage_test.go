@@ -130,7 +130,7 @@ func TestUnchangedCalendarRefreshAddsNoRevisionPublicationOrRun(t *testing.T) {
 	if same != before {
 		t.Fatalf("unchanged refresh %v from %v", same, before)
 	}
-	s.integrations.ical.download = func(context.Context, string, string, string) (calendar.Download, error) {
+	s.integrations.ical.download = func(context.Context, string, string, string, func(string) bool) (calendar.Download, error) {
 		return calendar.Download{NotModified: true, ETag: "version"}, nil
 	}
 	if _, err = s.RefreshIntegration(ctx, "alice", list.ID, source.ID); err != nil {
@@ -143,7 +143,7 @@ func TestUnchangedCalendarRefreshAddsNoRevisionPublicationOrRun(t *testing.T) {
 		t.Fatalf("not-modified refresh %v from %v", again, before)
 	}
 	*body = sourceFeed(strings.ReplaceAll(sourceEvent, "Meeting", "Moved"))
-	s.integrations.ical.download = func(context.Context, string, string, string) (calendar.Download, error) {
+	s.integrations.ical.download = func(context.Context, string, string, string, func(string) bool) (calendar.Download, error) {
 		return calendar.Download{Body: []byte(*body), ETag: "moved", NotModified: false}, nil
 	}
 	if _, err = s.RefreshIntegration(ctx, "alice", list.ID, source.ID); err != nil {

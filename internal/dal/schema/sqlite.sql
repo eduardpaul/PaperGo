@@ -918,7 +918,7 @@ CREATE TABLE settings (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     resource_id TEXT REFERENCES resources(id) ON DELETE CASCADE,
-    "key" TEXT NOT NULL CHECK ("key" IN ('comments')),
+    "key" TEXT NOT NULL CHECK ("key" IN ('comments', 'trusted_hosts')),
     "value" TEXT NOT NULL CHECK (json_valid("value") AND json_type("value") = 'object'),
     version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0),
     updated_by TEXT NOT NULL DEFAULT ''

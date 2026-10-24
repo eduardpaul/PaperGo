@@ -1,5 +1,6 @@
 import { isLosslessNumber } from 'lossless-json';
 import type { FieldDefinition } from '@/api/types';
+import { TrustedLink } from '@/features/files/trust';
 import { useFormat } from '@/lib/preferences';
 import { asList, fieldText } from './values';
 
@@ -19,6 +20,16 @@ export function FieldDisplay({ field, value, names }: { field: FieldDefinition; 
     const items = asList(value);
     if (items.length === 0) return <span className="text-muted">—</span>;
     return <>{items.map((item) => names?.get(item) ?? item).join(', ')}</>;
+  }
+  if (field.type === 'url') {
+    const href = fieldText(value);
+    // A link inside a row or card opens itself, not the item.
+    const stop = (event: React.SyntheticEvent) => event.stopPropagation();
+    return (
+      <span className="line-clamp-2 break-all" onClick={stop} onDoubleClick={stop} onKeyDown={stop}>
+        <TrustedLink href={href}>{href}</TrustedLink>
+      </span>
+    );
   }
   return <span className="line-clamp-2 whitespace-pre-wrap">{fieldText(value)}</span>;
 }

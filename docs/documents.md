@@ -6,6 +6,19 @@ Example metadata: `{"name":"Invoice","folder_id":"<folder UUID>","values":{"amou
 
 The file streams under the configured upload limit; metadata is limited to 64 KiB and multipart overhead to an additional 128 KiB. Successful creation returns `201` with `item`, `file`, `duplicates`, `Location` and the new item ETag. Its first content revision already contains both metadata and file. Malformed requests, invalid metadata, duplicate blocking and failed writes leave no item and remove the stored object. The library's normal publishing setting controls whether that first revision is published or a draft.
 
+## File types
+
+A library stores any file. PaperGo names each file's media type from its bytes and filename, never from the `Content-Type` a client declares:
+
+- A signature that proves a type wins: PDF, TIFF, JPEG, PNG, WebP, GIF, ZIP, 7z, gzip, MP3, WAV, M4A, MP4, QuickTime and WebM, among others.
+- ZIP and OLE containers also need their extension: `.docx`, `.xlsx`, `.pptx`, `.odt`, `.ods`, `.odp` and `.epub` are ZIP, and `.doc`, `.xls`, `.ppt` and `.msg` are OLE. A container with another extension stays a ZIP or a generic file.
+- Text types (Markdown, plain text, CSV, JSON, XML, HTML, SVG, RTF, email and calendar files) need their extension and valid UTF-8 without NUL bytes.
+- Anything else is `application/octet-stream`.
+
+`/auth/config` lists the known types in `features.file_types`, each with its `media_type`, `label` (such as "Word document"), icon `family`, `extensions`, and whether PaperGo can `preview` it or read its `text`. Every route that returns stored bytes sends them as attachments with `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox; default-src 'none'`, so a stored file never runs in the browser.
+
+Processing follows each type's capabilities. Previews, reading text, OCR and image optimization answer `415 unsupported_file_type` up front for files they cannot read, and built-in workflows skip those files. Markdown and plain text are read as text without OCR, in pages of 20,000 characters.
+
 A library item holds metadata and immutable file versions. Item resources, listings, queries, smart folders and search hits carry a `file` summary of the file the caller reads (the draft for draft readers, otherwise the published file): `blob_id`, `content_type`, `filename`, `size` and `version`. It is absent before the first upload. `PUT /v1/items/{id}/content` streams a new file using `X-Filename`, `Content-Type` and the current numeric `If-Match`. The response includes the file version number and the new resource ETag. File version numbers, metadata revision numbers and resource lock versions are independent.
 
 Lists and libraries, including Documents templates and personal Home libraries,
@@ -26,7 +39,14 @@ Libraries accept `duplicate_policy: "allow" | "warn" | "block"` on creation and 
 
 ## Viewing files
 
-The web app opens an item's whole file full screen, above the list it belongs to. A **file handler** shows each kind of file: PDFs (every page, with find, text selection, zoom, rotation and page links) and JPEG, PNG, WebP and GIF images (full resolution, zoom, pan and rotation). A TIFF shows its first-page preview. A file no handler shows offers **Download**.
+The web app opens an item's whole file full screen, above the list it belongs to. A **file handler** shows each kind of file:
+
+- **PDFs:** every page, with find, text selection, zoom, rotation and page links.
+- **Images:** JPEG, PNG, WebP and GIF at full resolution, with zoom, pan and rotation. A TIFF shows its first-page preview.
+- **Markdown:** rendered with GitHub syntax (tables, task lists, strikethrough), with an outline of its headings on wide screens. Raw HTML shows as text.
+- **Plain text:** with line numbers, or wrapped to the window.
+
+A file no handler shows offers **Download**, with its type's icon and name.
 
 Clicking an item still opens its details. Its file is one click away everywhere:
 
@@ -37,7 +57,18 @@ Clicking an item still opens its details. Its file is one click away everywhere:
 - **Open** on a global search hit, at the page the text matched;
 - **Open** on each file version in the File tab, and on a finished upload.
 
-The viewer lives in the URL (`?item=<id>&open=file`, with `page` for a PDF page and `blob` for an earlier version), so its links can be shared, opened in a new tab and reloaded. Back or Esc returns to where it was opened. ← and → (or J and K) step through the items the list shows, **I** shows the item's details, discussion and versions beside the file, and **Copy file link** copies the current page's link. Handlers read the file through `GET /v1/items/{id}/content` with the caller's credentials and byte ranges; draft readers see the draft file and ordinary readers the published one, as with downloads. PDFs render with PDF.js without running document scripts; links in a PDF open in a new tab.
+The viewer lives in the URL (`?item=<id>&open=file`, with `page` for a PDF page and `blob` for an earlier version), so its links can be shared, opened in a new tab and reloaded. Back or Esc returns to where it was opened. ← and → (or J and K) step through the items the list shows, **I** shows the item's details, discussion and versions beside the file, and **Copy file link** copies the current page's link. Handlers read the file through `GET /v1/items/{id}/content` with the caller's credentials and byte ranges; draft readers see the draft file and ordinary readers the published one, as with downloads. PDFs render with PDF.js without running document scripts. Links in documents and URL fields follow the organization's [trusted hosts](trusted-hosts.md): links to trusted hosts open in a new tab, others ask first, and remote images in Markdown load only from trusted hosts or when someone chooses **Show once**.
+
+### Editing Markdown and text
+
+People who may write an item edit its Markdown or text file in the viewer: **Edit** in the viewer header (or **E**), on the file bar, and in the right-click menu. **New Markdown document** in a library's menu creates an item with a starter file and opens it in the editor. The editor is Monaco with Markdown highlighting (a plain text area on touch screens); on wide screens a Markdown preview sits beside it, and narrower screens switch between **Write** and **Preview**.
+
+- **Save** (Ctrl/⌘ S) replaces the file through `PUT /v1/items/{id}/content` with the item's version, so a save is an ordinary new file version with its history, audit, events and publishing rules.
+- **Conflicts:** when someone else saved first, the editor offers to load their version (copying yours to the clipboard), save yours over theirs, or save yours as a copy.
+- **Drafts:** unsaved text is kept in the browser and offered back when the file is opened again; closing or leaving with unsaved text asks first.
+- **Size:** files up to `FILE_EDIT_MAX_BYTES` (YAML `storage.edit_max_mb`, default 2 MiB, at most the upload limit) edit in the browser; larger ones open read-only. `/auth/config` reports the limit as `features.file_edit_max_bytes`.
+
+Text files show their first lines as their thumbnail in galleries and on the file bar.
 
 ## Reading text
 

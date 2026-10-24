@@ -16,6 +16,7 @@ import (
 	"papergo/internal/dal/dberr"
 	"papergo/internal/dal/integrations"
 	"papergo/internal/dal/operations"
+	"papergo/internal/hosts"
 	"papergo/internal/identity"
 	"papergo/internal/integration"
 )
@@ -25,6 +26,11 @@ const OperationKindIntegrationRefresh = "integration.refresh"
 const integrationLease = 2 * time.Minute
 
 var ErrIntegrationBusy = errors.New("integration is refreshing; try again after it finishes")
+
+// HostNotTrusted is the error of an integration whose host the organization
+// no longer trusts. It fetches nothing and keeps its items until the host is
+// trusted again.
+const HostNotTrusted = "Host no longer trusted"
 
 type integrationRuntime struct {
 	secrets *integration.Secrets
@@ -133,9 +139,13 @@ func (s *Service) validateIntegrationURL(ctx context.Context, subject, list, raw
 	if _, err := read(ctx, s, func(t *Service) (*resources.Resource, error) { return t.integrationList(ctx, subject, list, "manage") }); err != nil {
 		return "", err
 	}
+	trusted, err := s.trustedHost(ctx)
+	if err != nil {
+		return "", err
+	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	u, err := s.integrations.ical.validateURL(ctx, raw)
+	u, err := s.integrations.ical.validateURL(ctx, raw, trusted)
 	if err != nil {
 		return "", invalid(err.Error())
 	}
@@ -389,6 +399,9 @@ func integrationOperationHandler() OperationHandler {
 		// The lease owner releases on both success and failure. An unrelated worker
 		// must not clear a live lease when its duplicate job is superseded.
 		row.Error = "Calendar refresh failed; existing events were retained. Check the feed and list schema."
+		if errors.Is(cause, hosts.ErrNotTrusted) {
+			row.Error = HostNotTrusted
+		}
 		return t.DAL.Integrations().Save(ctx, &row)
 	}}
 }

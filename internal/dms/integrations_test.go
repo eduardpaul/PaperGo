@@ -18,6 +18,7 @@ import (
 	"papergo/internal/calendar"
 	"papergo/internal/dal/integrations"
 	"papergo/internal/dal/operations"
+	"papergo/internal/hosts"
 	"papergo/internal/identity"
 	"papergo/internal/integration"
 	"papergo/internal/storage"
@@ -31,15 +32,21 @@ func integrationFixture(t *testing.T) (*Service, *resources.Resource, *resources
 		t.Fatal(err)
 	}
 	s.ConfigureIntegrations(secrets)
-	s.integrations.ical.validateURL = func(_ context.Context, raw string) (string, error) {
+	s.integrations.ical.validateURL = func(_ context.Context, raw string, trusted func(string) bool) (string, error) {
 		u, err := calendar.ParseURL(raw)
 		if err != nil {
 			return "", err
 		}
+		if !trusted(u.Hostname()) {
+			return "", hosts.NotTrusted(u.Hostname())
+		}
 		return u.String(), nil
 	}
 	body := "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR\r\n"
-	s.integrations.ical.download = func(_ context.Context, _ string, _, _ string) (calendar.Download, error) {
+	s.integrations.ical.download = func(_ context.Context, raw string, _, _ string, trusted func(string) bool) (calendar.Download, error) {
+		if u, _ := calendar.ParseURL(raw); u != nil && !trusted(u.Hostname()) {
+			return calendar.Download{}, hosts.NotTrusted(u.Hostname())
+		}
 		return calendar.Download{Body: []byte(body), ETag: "version"}, nil
 	}
 	return s, w, list, &body
@@ -126,7 +133,7 @@ func TestIntegrationRevalidatesCredentialAfterDownload(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			s.integrations.ical.download = func(_ context.Context, _, _, _ string) (calendar.Download, error) {
+			s.integrations.ical.download = func(_ context.Context, _, _, _ string, _ func(string) bool) (calendar.Download, error) {
 				if mode == "expired" {
 					_, err = daltest.TryUpdate(s.DAL, "access_tokens", daltest.Row{"expires_at": time.Now().UTC().Add(-time.Second)}, daltest.Row{"id": token.Token.ID})
 				} else {
@@ -339,10 +346,10 @@ func TestIntegrationDownloadDoesNotHoldWriterAndLeaseBlocksConfiguration(t *test
 	started := make(chan struct{})
 	finish := make(chan struct{})
 	original := s.integrations.ical.download
-	s.integrations.ical.download = func(ctx context.Context, u, a, b string) (calendar.Download, error) {
+	s.integrations.ical.download = func(ctx context.Context, u, a, b string, trusted func(string) bool) (calendar.Download, error) {
 		close(started)
 		<-finish
-		return original(ctx, u, a, b)
+		return original(ctx, u, a, b, trusted)
 	}
 	done := make(chan error, 1)
 	go func() { _, err := s.operationStep(t.Context()); done <- err }()

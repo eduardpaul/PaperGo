@@ -19,8 +19,14 @@ export function trusts(hosts: string[] | undefined, url: string): boolean {
   }
   if (parsed.origin === window.location.origin) return true;
   if (!hosts || (parsed.protocol !== 'https:' && parsed.protocol !== 'http:')) return false;
-  const host = parsed.hostname.toLowerCase();
-  return hosts.some((entry) => entry === '*' || entry === host || (entry.startsWith('*.') && host.endsWith(entry.slice(1))));
+  return matches(hosts, parsed.hostname);
+}
+
+/** Whether a trusted host list names host: *, the host itself, or a wildcard for a domain above it. */
+export function matches(hosts: string[], host: string): boolean {
+  const name = host.toLowerCase().replace(/\.$/, '');
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(name) || name.startsWith('[')) return false;
+  return hosts.some((entry) => entry === '*' || entry === name || (entry.startsWith('*.') && name.endsWith(entry.slice(1))));
 }
 
 /** The host a URL names, for messages; empty for what is not a web URL. */

@@ -1,9 +1,12 @@
 # File handlers (plan)
 
-Status: **phase 1 implemented** (the viewer, the PDF and image handlers,
-every way to open a file, and the file summary on rows), as
-[Viewing files](../documents.md#viewing-files) describes. Phases 2 and 2b
-are next. The product owner settled every decision ([below](#decisions)).
+Status: **phases 1, 2 and 2b implemented**: the viewer, the PDF and image
+handlers, every way to open a file, the file summary on rows, any file
+stored, Markdown and plain text viewed and edited, and the organization's
+trusted hosts, as [Viewing files](../documents.md#viewing-files),
+[File types](../documents.md#file-types) and
+[Trusted hosts](../trusted-hosts.md) describe. Phase 3 is next. The product
+owner settled every decision ([below](#decisions)).
 
 What phase 1 learned:
 - PDF.js 6 uses JavaScript features that browsers shipped only recently, so the viewer loads its legacy build, which carries their polyfills.
@@ -12,6 +15,13 @@ What phase 1 learned:
 - Previous and next also work after a reload: the list reloads the same rows.
 - Viewer URL changes (page, step, info tab) keep scroll positions; the router would otherwise restore stale ones into the PDF.
 - There is no `?` shortcut help in the app yet. The keys show in tooltips, the right-click menu and the list's key hint.
+
+What phases 2 and 2b learned:
+- Monaco types through the browser's EditContext where it is supported, so its input is a plain element, not a text area. Page shortcuts recognize typing by the editor itself, or single keys such as `d` and `g` would act while someone types.
+- The editor keeps its own text. Feeding every change back through React reset the cursor whenever keys arrived faster than renders, so outside text (a restored draft, their version after a conflict) replaces it only on an explicit revision.
+- A save that finishes while someone keeps typing keeps the newer text as a draft.
+- Office and operating-system housekeeping files would have become items once any file was accepted, so WebDAV keeps them in memory apart from the library.
+- In the editor, `i` and other single keys type; Esc leaves edit unless one of Monaco's own popups is open.
 
 The goal has three parts:
 - **PaperGo stores any file.**
@@ -578,10 +588,10 @@ export function handlerFor(file: FileRef): FileHandler | undefined;
 - **API.**
   - `GET /v1/organization/settings/trusted-hosts` is readable by any active user.
   - `PUT` on the same path requires `organization.manage` and `If-Match`.
-- **Go check.** `hosts.Trusted(ctx, host) bool` lives in a small `internal/hosts` package. Every server feature that fetches calls it. Today that is `internal/calendar/fetch.go`, beside its existing public-address check, on every connection and redirect.
+- **Go check.** `internal/hosts` holds the entry rules and `hosts.Trusted(entries, host)`; `dms` reads the setting and hands fetches a check. Every server feature that fetches calls it. Today that is `internal/calendar/fetch.go`, beside its existing public-address check, on every connection and redirect.
   - Integrations check it when they are added or edited, and again on each refresh.
   - A refresh whose host is no longer trusted fetches nothing and records the error "Host no longer trusted" in the integration's existing `error` column. Its items stay untouched, and the next refresh after the host is trusted again succeeds. The integration page shows that error with a **Trust host** action for administrators.
-- **Usage counts.** The admin page shows, per entry, how many integrations use it. Each integration provider reports the hosts of its decrypted configuration through a small `HostUser` interface, so future integrations add themselves.
+- **Usage counts.** The admin page shows, per entry, how many integrations use it, from `GET .../trusted-hosts/usage`: the host of each integration's decrypted configuration. A second provider adds its own host reader there.
 - **Web.** `useTrustedHosts()` reads the list when the app loads and again when the window regains focus. `TrustedLink`, the handlers' `trust(url)` and the URL-field display all use it. The "Leaving PaperGo" dialog is one shared component.
 
 ### Security summary

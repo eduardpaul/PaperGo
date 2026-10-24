@@ -922,7 +922,7 @@ CREATE TABLE settings (
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     resource_id TEXT REFERENCES resources(id) ON DELETE CASCADE DEFERRABLE,
-    "key" TEXT NOT NULL CHECK ("key" IN ('comments')),
+    "key" TEXT NOT NULL CHECK ("key" IN ('comments', 'trusted_hosts')),
     "value" JSONB NOT NULL CHECK (jsonb_typeof("value") = 'object'),
     version BIGINT NOT NULL DEFAULT 1 CHECK (version > 0),
     updated_by TEXT NOT NULL DEFAULT ''
