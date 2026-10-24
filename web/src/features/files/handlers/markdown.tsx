@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState } from 'react';
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/utils';
@@ -17,15 +17,31 @@ function slugger() {
   };
 }
 
-function textOf(node: ReactNode): string {
-  if (typeof node === 'string' || typeof node === 'number') return String(node);
-  if (Array.isArray(node)) return node.map(textOf).join('');
-  if (node && typeof node === 'object' && 'props' in node) return textOf((node.props as { children?: ReactNode }).children);
-  return '';
+/** The parts of a rendered tree the heading ids need. */
+interface Node {
+  type: string;
+  tagName?: string;
+  value?: string;
+  properties?: Record<string, unknown>;
+  children?: Node[];
+}
+
+const textOf = (node: Node): string => node.value ?? (node.children ?? []).map(textOf).join('');
+
+/** Gives the h1 to h3 headings of each rendering their ids, numbered from the start of the document as the outline numbers them. */
+function headingIds() {
+  return (tree: Node) => {
+    const slug = slugger();
+    const visit = (node: Node) => {
+      if (node.type === 'element' && /^h[1-3]$/.test(node.tagName ?? '')) node.properties = { ...node.properties, id: slug(textOf(node)) };
+      else node.children?.forEach(visit);
+    };
+    visit(tree);
+  };
 }
 
 /** The headings of a Markdown source, outside code fences, for the outline. */
-function outline(source: string) {
+export function outline(source: string) {
   const slug = slugger();
   const headings: { depth: number; text: string; id: string }[] = [];
   let fence = false;
@@ -45,27 +61,18 @@ function outline(source: string) {
  * organization's trusted hosts, and remote images that load only from
  * trusted hosts or when asked.
  */
-function Rendered({ source, className }: { source: string; className?: string }) {
+export function Rendered({ source, className }: { source: string; className?: string }) {
   const [images, setImages] = useState(false);
-  const components = useMemo((): Components => {
-    const slug = slugger();
-    const heading = (Tag: 'h1' | 'h2' | 'h3') =>
-      function Heading({ children }: { children?: ReactNode }) {
-        return <Tag id={slug(textOf(children))}>{children}</Tag>;
-      };
-    return {
+  const components = useMemo(
+    (): Components => ({
       a: ({ href, children }) => <TrustedLink href={href}>{children}</TrustedLink>,
       img: ({ src, alt }) => <RemoteImage src={typeof src === 'string' ? src : undefined} alt={alt} shown={images} onShow={setImages} />,
-      h1: heading('h1'),
-      h2: heading('h2'),
-      h3: heading('h3'),
-    };
-    // A new render numbers headings from the start again.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [images, source]);
+    }),
+    [images],
+  );
   return (
     <div className={cn('markdown mx-auto max-w-[72ch] px-6 py-8', className)}>
-      <Markdown remarkPlugins={[remarkGfm]} skipHtml={false} components={components}>
+      <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[headingIds]} skipHtml={false} components={components}>
         {source}
       </Markdown>
     </div>
