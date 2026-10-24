@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"image"
 	"io"
 	"log/slog"
 	"net/http/httptest"
@@ -20,6 +21,7 @@ import (
 	"papergo/internal/doctext/doctexttest"
 	"papergo/internal/documentpreview"
 	"papergo/internal/httpapi"
+	"papergo/internal/imaging"
 	"papergo/internal/imaging/imagingtest"
 	"papergo/internal/storage"
 )
@@ -114,6 +116,19 @@ func TestPageRenditions(t *testing.T) {
 		t.Fatalf("the scan was read %d times", n)
 	}
 	page("/v1/items/"+scan.ID+"/pages/4", 404)
+	// A scan with more pages than are listed says so.
+	long, err := s.Create(ctx, "alice", lib.ID, dms.CreateResource{Kind: "item", Name: "long.tif"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	many := make([]*image.Gray, imaging.MaxTIFFPages+1)
+	for i := range many {
+		many[i] = imagingtest.Page(1, 1, 200)
+	}
+	upload(long, 1, "long.tif", "image/tiff", imagingtest.TIFF(many...))
+	if listed := list(long.ID, ""); len(listed.Pages) != imaging.MaxTIFFPages || !listed.Truncated {
+		t.Fatalf("long scan: %d pages, truncated %v", len(listed.Pages), listed.Truncated)
+	}
 	page("/v1/items/"+scan.ID+"/pages/0", 404)
 	page("/v1/items/"+scan.ID+"/pages/1?width=-3", 422)
 

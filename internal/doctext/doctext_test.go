@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"golang.org/x/image/tiff"
+	"papergo/internal/imaging"
 	"papergo/internal/imaging/imagingtest"
 
 	"papergo/internal/doctext"
@@ -131,6 +132,14 @@ func TestImagesAreOCRed(t *testing.T) {
 	}
 	if r, err = doctext.Extract(ctx, pages, "image/tiff", doctext.Options{}, reader, nil); err != nil || len(r.Pages) != 3 || r.Skipped != 3 {
 		t.Fatalf("TIFF without an engine: %+v %v", r, err)
+	}
+	// A scan with more pages than a TIFF lists says its text is incomplete.
+	long := make([]*image.Gray, imaging.MaxTIFFPages+1)
+	for i := range long {
+		long[i] = imagingtest.Page(1, 1, 255)
+	}
+	if r, err = doctext.Extract(ctx, imagingtest.TIFF(long...), "image/tiff", doctext.Options{MaxPages: imaging.MaxTIFFPages + 10}, reader, nil); err != nil || len(r.Pages) != imaging.MaxTIFFPages || !r.Truncated {
+		t.Fatalf("TIFF past the page bound: %d pages, truncated %v, %v", len(r.Pages), r.Truncated, err)
 	}
 	if r, err := doctext.Extract(ctx, photo.Bytes(), "image/png", doctext.Options{}, reader, nil); err != nil || r.Skipped != 1 {
 		t.Fatalf("no engine: %+v %v", r, err)

@@ -232,7 +232,7 @@ func (p *pages) sizes(ctx context.Context, data []byte, media string) ([]PageSiz
 			}
 			out = append(out, PageSize{cfg.Width, cfg.Height})
 		}
-		return out, false, nil
+		return out, doc.Truncated(), nil
 	default:
 		img, err := imaging.Decode(data, p.maxPixels())
 		if err != nil {

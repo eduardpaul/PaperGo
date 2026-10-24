@@ -275,7 +275,8 @@ func extractTIFF(ctx context.Context, data []byte, o Options, engine ocr.Engine)
 	if err != nil {
 		return Result{}, fmt.Errorf("%w: %w", ErrUnsupported, err)
 	}
-	var r Result
+	// A scan with more pages than a TIFF lists is read in part, as one past MaxPages is.
+	r := Result{Truncated: doc.Truncated()}
 	n := doc.Pages()
 	if n > o.MaxPages {
 		n, r.Truncated = o.MaxPages, true

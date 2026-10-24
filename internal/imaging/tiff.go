@@ -23,6 +23,8 @@ const MaxTIFFPages = 2000
 type TIFF struct {
 	data  []byte
 	pages []uint32
+	// truncated says more pages follow the last one found.
+	truncated bool
 }
 
 // OpenTIFF finds the pages of data.
@@ -33,27 +35,34 @@ func OpenTIFF(data []byte) (*TIFF, error) {
 	}
 	var pages []uint32
 	seen := map[uint32]bool{}
-	for offset := first; offset != 0 && len(pages) < MaxTIFFPages; {
-		if seen[offset] || int64(offset)+2 > int64(len(data)) {
-			break
-		}
+	// A chain that loops back or runs off the file ends at its last readable page.
+	readable := func(offset uint32) bool { return offset != 0 && !seen[offset] && int64(offset)+2 <= int64(len(data)) }
+	offset := first
+	for ; readable(offset) && len(pages) < MaxTIFFPages; offset = next(order, data, offset) {
 		seen[offset] = true
 		pages = append(pages, offset)
-		entries := int64(order.Uint16(data[offset:]))
-		next := int64(offset) + 2 + entries*12
-		if next+4 > int64(len(data)) {
-			break
-		}
-		offset = order.Uint32(data[next:])
 	}
 	if len(pages) == 0 {
 		return nil, ErrTIFF
 	}
-	return &TIFF{data: data, pages: pages}, nil
+	return &TIFF{data: data, pages: pages, truncated: readable(offset)}, nil
+}
+
+// next returns the offset of the page after the one at offset, or 0.
+func next(order binary.ByteOrder, data []byte, offset uint32) uint32 {
+	at := int64(offset) + 2 + int64(order.Uint16(data[offset:]))*12
+	if at+4 > int64(len(data)) {
+		return 0
+	}
+	return order.Uint32(data[at:])
 }
 
 // Pages returns how many pages the TIFF has, at most MaxTIFFPages.
 func (t *TIFF) Pages() int { return len(t.pages) }
+
+// Truncated reports a TIFF with more than MaxTIFFPages pages, of which Pages
+// lists the first.
+func (t *TIFF) Truncated() bool { return t.truncated }
 
 func tiffHeader(data []byte) (binary.ByteOrder, uint32, error) {
 	if len(data) < 8 {

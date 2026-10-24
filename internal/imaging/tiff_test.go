@@ -2,6 +2,7 @@ package imaging
 
 import (
 	"errors"
+	"image"
 	"image/color"
 	"testing"
 
@@ -51,6 +52,27 @@ func TestTIFFPagesStopAtLoops(t *testing.T) {
 	last := int(doc.pages[1]) + 2 + 9*12
 	copy(data[last:], data[4:8])
 	if again, err := OpenTIFF(data); err != nil || again.Pages() != 2 {
+		t.Fatal(again, err)
+	}
+}
+
+func TestTIFFPagesReportMoreThanTheyList(t *testing.T) {
+	page := imagingtest.Page(1, 1, 7)
+	for _, n := range []int{MaxTIFFPages, MaxTIFFPages + 1} {
+		pages := make([]*image.Gray, n)
+		for i := range pages {
+			pages[i] = page
+		}
+		doc, err := OpenTIFF(imagingtest.TIFF(pages...))
+		if err != nil || doc.Pages() != MaxTIFFPages || doc.Truncated() != (n > MaxTIFFPages) {
+			t.Fatalf("%d pages: %v pages=%d truncated=%v", n, err, doc.Pages(), doc.Truncated())
+		}
+	}
+	// A chain that loops back is complete at its last new page, not truncated.
+	data := imagingtest.TIFF(imagingtest.Page(4, 4, 1), imagingtest.Page(4, 4, 2))
+	doc, _ := OpenTIFF(data)
+	copy(data[int(doc.pages[1])+2+9*12:], data[4:8])
+	if again, err := OpenTIFF(data); err != nil || again.Pages() != 2 || again.Truncated() {
 		t.Fatal(again, err)
 	}
 }
