@@ -10,7 +10,7 @@ on:
         type: string
 permissions:
   contents: read
-# One publication at a time: each release extends the last published bundle.
+# One publication at a time: release notes start at the last published tag.
 concurrency:
   group: papergo-release
   cancel-in-progress: false
@@ -25,7 +25,7 @@ jobs:
       ref: ${{ inputs.tag || github.ref_name }}
   prepare:
     permissions:
-      contents: write
+      contents: read
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -46,61 +46,12 @@ jobs:
           ref: ${{ github.workflow_sha }}
           path: release-tools
           sparse-checkout: scripts
-      - uses: ./.github/actions/toolchain
-        with:
-          sqlite3def: true
       - name: Validate tag and published history
         id: metadata
         env:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
           GH_TOKEN: ${{ github.token }}
         run: python3 release-tools/scripts/release-metadata.py
-      - name: Download and verify the previous published database bundle
-        if: steps.metadata.outputs.previous != ''
-        env:
-          PREVIOUS_TAG: ${{ steps.metadata.outputs.previous }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          mkdir -p previous
-          gh release download "$PREVIOUS_TAG" --pattern release-database.json --pattern SHA256SUMS --dir previous
-          python3 scripts/release-checksum.py previous --verify release-database.json
-          python3 -c 'import json,os; b=json.load(open("previous/release-database.json")); assert b["releases"][-1]["version"] == os.environ["PREVIOUS_TAG"]'
-      - name: Generate and verify the release-only database upgrade
-        if: steps.metadata.outputs.state != 'complete'
-        env:
-          RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
-          PREVIOUS_TAG: ${{ steps.metadata.outputs.previous }}
-        run: |
-          args=()
-          if [[ -n "$PREVIOUS_TAG" ]]; then args+=(--previous previous/release-database.json); fi
-          go run ./cmd/release --version "$RELEASE_TAG" "${args[@]}"
-          mkdir -p release-assets
-          cp internal/dal/migrations/release.json release-assets/release-database.json
-      - name: Verify the published database bundle for image-only retries
-        if: steps.metadata.outputs.state == 'complete'
-        env:
-          RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          mkdir -p release-assets
-          gh release download "$RELEASE_TAG" --pattern release-database.json --pattern SHA256SUMS --dir release-assets
-          python3 scripts/release-checksum.py release-assets --verify release-database.json
-          python3 -c 'import json,os; b=json.load(open("release-assets/release-database.json")); assert b["releases"][-1]["version"] == os.environ["RELEASE_TAG"]'
-      - name: Commit or verify immutable database history before building
-        env:
-          RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
-          RELEASE_COMMIT: ${{ steps.metadata.outputs.commit }}
-          RELEASE_STATE: ${{ steps.metadata.outputs.state }}
-        run: |
-          args=()
-          if [[ "$RELEASE_STATE" == 'complete' ]]; then args+=(--check); fi
-          python3 scripts/release-migrations.py release-assets/release-database.json "${args[@]}"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: release-database
-          path: release-assets/release-database.json
-          if-no-files-found: error
-          retention-days: 14
   image-check:
     needs: prepare
     runs-on: ubuntu-latest
@@ -177,10 +128,6 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.commit }}
       - uses: ./.github/actions/toolchain
-      - uses: actions/download-artifact@v4
-        with:
-          name: release-database
-          path: release-assets
       - name: Build embedded UI, executables and native libraries
         shell: bash
         env:
@@ -191,12 +138,11 @@ jobs:
           GOARCH: ${{ matrix.arch }}
           CGO_ENABLED: '1'
         run: |
-          cp release-assets/release-database.json internal/dal/migrations/release.json
           npm ci --prefix web
           npm --prefix web run build
           flags="-s -w -X papergo/internal/buildinfo.Version=$RELEASE_TAG -X papergo/internal/buildinfo.Commit=$RELEASE_COMMIT -X papergo/internal/buildinfo.Date=$RELEASE_DATE"
           python scripts/build-binaries.py --ldflags="$flags"
-      - name: Package binaries, database bundle and operator guide
+      - name: Package binaries and operator guide
         shell: bash
         env:
           RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
@@ -239,16 +185,10 @@ jobs:
           python-version: '3.x'
       - uses: actions/download-artifact@v4
         with:
-          name: release-database
-          path: release-assets
-      - uses: actions/download-artifact@v4
-        with:
           name: container-assets
           path: container-assets
-      - name: Embed the same database bundle as the release binaries
-        run: |
-          cp release-assets/release-database.json internal/dal/migrations/release.json
-          find container-assets -exec touch -h -d @0 {} +
+      - name: Give the model layer reproducible timestamps
+        run: find container-assets -exec touch -h -d @0 {} +
       - uses: docker/setup-buildx-action@v4.4.1
         with:
           driver: docker-container
@@ -322,10 +262,6 @@ jobs:
           pattern: binary-*
           path: dist
           merge-multiple: true
-      - uses: actions/download-artifact@v4
-        with:
-          name: release-database
-          path: dist
       - uses: actions/download-artifact@v4
         with:
           name: shared-assets

@@ -1,12 +1,9 @@
 # Releases and database upgrades
 
-Development edits the DAL schema masters, `internal/dal/schema/sqlite.sql` and
-`internal/dal/schema/postgres.sql`, and regenerates Bob models from PostgreSQL.
-Do not create development migrations or preserve disposable databases.
-The source `internal/dal/migrations/release.json` is an empty build-input placeholder (`{}`).
-Tag CI generates the cumulative bundle and commits the exact bytes to the
-`release-migrations` branch before any binary or image build starts. Feature
-branches keep the placeholder; they contain no sequential development migrations.
+A release is a version tag. The release workflow builds, tests and publishes
+the binaries and images for it. The database schema changes through
+hand-written migrations, which every PaperGo build applies when it starts;
+see [Database upgrades](#database-upgrades).
 
 ## Publish a version
 
@@ -19,16 +16,14 @@ git push origin v0.1.0
 
 Use `vX.Y.Z` for stable releases and `vX.Y.Z-rc.N` for release candidates.
 The release workflow runs the existing CI and vulnerability workflows against
-that tag, validates a forward-only published history, and prepares the database
-bundle. It builds and runs native smoke tests for Linux amd64/arm64 and Windows amd64, using [GitHub hosted runners](https://docs.github.com/en/actions/reference/runners/github-hosted-runners). Each archive includes `papergo`,
-`papergo-admin`, the optional [MCP server](mcp.md) `papergo-mcp`, the database
-bundle and this guide. Every executable supports `--version`; version, commit and commit date are injected into the build.
+that tag and checks that the tag is newer than the latest published release. It builds and runs native smoke tests for Linux amd64/arm64 and Windows amd64, using [GitHub hosted runners](https://docs.github.com/en/actions/reference/runners/github-hosted-runners). Each archive includes `papergo`,
+`papergo-admin`, the optional [MCP server](mcp.md) `papergo-mcp` and this guide. Every executable supports `--version`; version, commit and commit date are injected into the build.
 Each platform ZIP includes the executables, native libraries, compiler runtimes, license notices, sample `config.yaml` and operator documentation. Linux libraries live in `lib/`; Windows DLLs sit beside the executables. macOS release and native CI builds are temporarily commented out.
 
-One platform-independent `papergo_vX.Y.Z_assets.zip` contains PaddleOCR, Laya multilingual FP32, EmbeddingGemma 2 Q4 and Harrier Q4 models, tokenizers and model notices. Extract it into the platform installation directory: `assets/` must sit beside the main executable and `config.yaml`. The application finds native libraries and models relative to its executable and loads them directly from disk. The web UI and database schema remain embedded. Linux requires the target system's glibc; WebP and tokenizers are statically linked. OCR and local decisions use the shared assets automatically. For local embeddings set `AI_EMBEDDINGS_PROVIDER=local` and choose `AI_EMBEDDINGS_MODEL=embeddinggemma-2` or `harrier-oss-v1-0.6b`. Explicit `ONNXRUNTIME_LIB`, `OCR_MODELS`, `AI_DECISION_MODELS_PATH` and `AI_EMBEDDINGS_MODELS_PATH` settings select alternative inference assets. CI prepares and checksum-verifies the models once on Linux, packages one shared ZIP, and tests each platform ZIP with those same assets. The Docker image uses the same directory layout under `/opt/papergo`.
+One platform-independent `papergo_vX.Y.Z_assets.zip` contains PaddleOCR, Laya multilingual FP32, EmbeddingGemma 2 Q4 and Harrier Q4 models, tokenizers and model notices. Extract it into the platform installation directory: `assets/` must sit beside the main executable and `config.yaml`. The application finds native libraries and models relative to its executable and loads them directly from disk. The web UI, database schema and migrations remain embedded. Linux requires the target system's glibc; WebP and tokenizers are statically linked. OCR and local decisions use the shared assets automatically. For local embeddings set `AI_EMBEDDINGS_PROVIDER=local` and choose `AI_EMBEDDINGS_MODEL=embeddinggemma-2` or `harrier-oss-v1-0.6b`. Explicit `ONNXRUNTIME_LIB`, `OCR_MODELS`, `AI_DECISION_MODELS_PATH` and `AI_EMBEDDINGS_MODELS_PATH` settings select alternative inference assets. CI prepares and checksum-verifies the models once on Linux, packages one shared ZIP, and tests each platform ZIP with those same assets. The Docker image uses the same directory layout under `/opt/papergo`.
 
 Publication creates a draft, uploads all three platform ZIPs and the shared assets ZIP plus
-`release-database.json` and `SHA256SUMS`, then publishes it. Stable releases become
+`SHA256SUMS`, then publishes it. Stable releases become
 Latest; release candidates are marked as prereleases. No personal access token
 is required: the publication job uses GitHub's repository token with
 `contents: write`. Verify Actions is enabled and organization policy permits
@@ -62,78 +57,92 @@ remain possible until platform signing credentials are configured.
 
 ## Container images
 
-Each release also builds the root Dockerfile on native Linux amd64 and arm64 runners. The build embeds the same `release-database.json` as the platform binaries and injects the version, commit and commit date. Verified shared models are supplied as a separate BuildKit context and image layer. OCI labels identify the source, version and revision.
+Each release also builds the root Dockerfile on native Linux amd64 and arm64 runners. The build injects the version, commit and commit date. Verified shared models are supplied as a separate BuildKit context and image layer. OCI labels identify the source, version and revision.
 
 Candidate images are uploaded by digest with BuildKit SBOM and provenance attestations. Each exact digest is pulled and tested with production local authentication, persistent `/data`, read-only code, health, graceful shutdown, PDF rendering, OCR, Laya and both embedding models. Only after the binary and image checks pass and GitHub Releases publication succeeds does the workflow expose the tested images as `ghcr.io/eduardpaul/papergo:vX.Y.Z` (or `vX.Y.Z-rc.N`). The multi-platform index includes both native architectures and their attestations. Only the current stable GitHub release can update `latest`; retrying an older release cannot move it backwards.
 
-An existing version image is checked for its source revision and both platforms and is never replaced. A missing image can be completed by rerunning the release workflow; a published database bundle is downloaded and checksum-verified for that image-only retry. Authentication errors fail the workflow instead of being treated as absent tags. A failed image build can leave untagged candidate digests in GHCR; these are not release version tags.
+An existing version image is checked for its source revision and both platforms and is never replaced. A missing image can be completed by rerunning the release workflow. Authentication errors fail the workflow instead of being treated as absent tags. A failed image build can leave untagged candidate digests in GHCR; these are not release version tags.
 
 The optional [MCP server](mcp.md) has its own image, built from `extensions/mcp/Dockerfile` by cross-compiling its pure Go executable for both platforms in one build. After GitHub Releases publication, the workflow checks for an existing `ghcr.io/eduardpaul/papergo-mcp:vX.Y.Z`, uploads a candidate by digest with SBOM and provenance attestations, runs the exact candidate's `--version`, and publishes it with the same rules: an existing version is checked and never replaced, and only the current stable release updates `latest`.
 
 The registry jobs use `GITHUB_TOKEN` with `packages: write`; inspection uses `packages: read`. The package is linked to the source repository. An existing manually created package must grant this repository Actions access. GitHub creates packages as private: set the package Public after first publication if anonymous `docker pull` is intended, or keep it private and authenticate consumers with `read:packages`. See [GitHub's registry instructions](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry) and the [Docker deployment guide](https://github.com/eduardpaul/PaperGo/blob/main/docs/docker.md).
 
-## Release-only database history
+## Database upgrades
 
-The first published tag captures the complete current schema. Each later tag
-uses the greatest versioned **published** GitHub release, including prereleases,
-as its parent, downloads its bundle, verifies its published SHA-256 checksum,
-and compares that snapshot with the new tag's complete schema. The parent tag
-must be an ancestor of the new tag. Versions must increase; release jobs
-are serialized. Push one version tag and wait for publication before pushing
-the next; GitHub concurrency can replace older pending runs. Draft releases and un-published tags are not database baselines.
-Release candidates participate in one linear history, so a stable version follows
-its candidates and maintenance release branches are not supported by this pipeline.
+The schema masters, `internal/dal/schema/sqlite.sql` and
+`internal/dal/schema/postgres.sql`, always describe the current schema, and a
+new database gets them directly. An existing database reaches it through
+hand-written migrations, one file per engine for each change:
 
-Release tooling requires sqlite3def, pinned with its checksums in
-`scripts/sqlite3def.py`, which installs it in CI and the development container. For another
-development environment, install that version on `PATH`, or set `SQLITE3DEF` to
-its executable. sqlite3def is a release build tool; installed PaperGo needs no
-external migration executable, SQL files or network connection.
-
-The generator creates disposable SQLite databases from both complete snapshots.
-It exports tables, indexes and views from SQLite's catalog and invokes
-`sqlite3def --dry-run --enable-drop --file target.sql previous.sql` in offline
-mode. It removes the tool's transaction wrapper so the startup engine controls
-the transaction. Recursive CTEs inside PaperGo's triggers are outside the tool's
-parser support: SQLite enumerates those triggers separately, and the generated
-step drops the old triggers before DDL and installs the target triggers afterward.
-There is no custom table-copy or AST diff generator.
-
-The generator executes the SQL against the disposable prior snapshot and uses
-Atlas inspection to verify the resulting tables, columns, constraints and indexes
-against the target. Atlas does not generate the upgrade SQL. sqlite3def does not
-implement every SQLite alteration: some type, nullability and CHECK changes are
-silently omitted by the tool, and there is no general table-rebuild support in
-this pinned version. Independent verification rejects such differences and blocks
-publication. Seed changes are also rejected. SQLite syntax in the complete schema
-must be accepted by the pinned parser; CI exercises the actual PaperGo schema.
-Changes to business meaning or derived data still require explicit review; an
-empty fixture cannot prove that existing data satisfies new constraints.
-
-`release-database.json` contains the ordered release versions, complete schema
-snapshots, checksums and SQL steps. The same cumulative bundle is embedded in
-all binaries and images. Before building, the prepare job commits it at
-`migrations/releases/vX.Y.Z/release-database.json` on the artifact-only
-`release-migrations` branch, alongside `source.txt` containing the immutable
-source tag's commit. It never moves version tags or changes the application
-branch. Existing history entries must match byte for byte on retry, and a new
-bundle must retain every committed parent step. Writes are fast-forward only;
-remote access failures block the build. Completed-release image retries verify
-published assets against this history without writing it. Allow the prepare
-job's `GITHUB_TOKEN` to create/update this branch, and protect it against manual
-rewrites and deletion. The prepare job needs `contents: write` for that operation.
-
-Retain the history branch and published release assets. Future releases download
-and checksum-verify the previous published bundle, then verify its cumulative
-history against Git. To reproduce generation locally:
-
-```sh
-go run ./cmd/release --version vX.Y.Z --previous /path/to/release-database.json
+```text
+internal/dal/migrations/sqlite/0001_navigation_views.sql
+internal/dal/migrations/postgres/0001_navigation_views.sql
 ```
 
-Omit `--previous` for the first release. This writes `internal/dal/migrations/release.json`;
-restore the `{}` placeholder after local builds. The release workflow persists
-it automatically before building; developers do not commit it to feature branches.
+The schema version is the number of the last migration; it is 0 until the
+first one. `schema_metadata` records each database's version: a new database
+gets the latest, and each migration moves it on by one. Both engines have the
+same file names, numbered from `0001` without gaps. A missing, misnumbered or
+unmatched file fails every test.
+
+### Changing the schema
+
+1. Edit both schema masters and regenerate the Bob models
+   (`bash scripts/generate-models.sh`).
+2. Add the next migration to both engine directories. It takes a database at
+   the previous version to the new schema, data included: add and drop
+   columns, change constraints, fill or convert values. A migration runs
+   inside PaperGo's transaction, so it has no `BEGIN` or `COMMIT`. The README
+   in each engine directory shows how that engine changes a `CHECK`; SQLite
+   rebuilds the table.
+3. Try it on a database at the previous version. For SQLite:
+
+   ```sh
+   git show v0.1.0:internal/dal/schema/sqlite.sql | sqlite3 old.db
+   sqlite3 old.db "INSERT INTO schema_metadata VALUES (1, 0)"  # v0.1.0's version
+   go run ./cmd/admin initialize --database old.db             # applies the migrations
+   go run ./cmd/admin initialize --database new.db
+   diff <(sqlite3 old.db .schema) <(sqlite3 new.db .schema)
+   ```
+
+   A rebuilt table's name shows quoted, as `CREATE TABLE "list_views"`.
+   For PostgreSQL, set `DATABASE_URL` to run `initialize` on each database
+   and compare their `pg_dump --schema-only`; column order can differ where a
+   migration added a column.
+
+Until the first release there are no migrations: the masters change freely
+and local databases are recreated. A migration in a published release never
+changes; fix it with a new one. An unreleased migration can still change;
+recreate local databases that already applied it.
+
+### What happens at startup
+
+Before it starts workers or serves requests, PaperGo compares the database's
+version with its own:
+
+- An empty database gets the current schema.
+- An older database gets every pending migration, in order, in one
+  transaction, followed by the new version. If one fails, nothing changes,
+  the log names the file, and PaperGo does not start.
+- A newer database is refused: downgrades are unsupported.
+
+On SQLite, PaperGo holds the exclusive data lease while it does this, so no
+backup, admin command or other process can use the file. Before migrating it
+saves a copy beside the database, `papergo-pre-upgrade-*/database.sqlite`,
+with `VACUUM INTO`, which includes the WAL. Migrations run with foreign keys
+off, so tables can be rebuilt, and PaperGo checks every reference and the
+file's integrity after each one before it commits.
+`papergo-admin initialize --database <file>` does the same without starting
+the server.
+
+On PostgreSQL, the transaction holds an advisory lock: when several instances
+start together, one upgrades and the others then find the database current.
+There is no automatic copy, so back up with `pg_dump` first. Stop every
+instance of the old version before starting the new one; an old instance does
+not know the new schema.
+
+Startup has a ten-minute limit, which covers the copy, rebuilt tables and the
+WAL they write.
 
 ## Install or upgrade
 
@@ -142,7 +151,7 @@ and verify both against `SHA256SUMS`. Extract both into the same application
 directory, separate from data. Keep the resulting `assets/` beside `config.yaml`
 and the executables.
 Set the normal production authentication and storage configuration from the
-README. A fresh published binary creates its schema automatically.
+README. The first start creates the database.
 
 For an upgrade:
 
@@ -152,30 +161,23 @@ For an upgrade:
 3. Install the executables, native libraries and matching `assets/` from the new
    platform and shared assets ZIPs. Retain your `config.yaml`, `DATABASE_PATH`,
    `BLOB_PATH` and authentication configuration.
-4. Restart the service. The new binary acquires the exclusive data lease, saves
-   a WAL-consistent SQLite snapshot in `papergo-pre-upgrade-*/database.sqlite`
-   beside the database, and applies every pending published step in one
-   transaction. Each step records its release version and schema checksum in
-   `papergo_release`; foreign keys and integrity are checked after each step before
-   committing the chain. Only
-   then does it start the workers and HTTP server and permit online backups.
-5. Check `/health/ready` and the startup logs. Keep snapshots and full backups
-   until the new release has been validated; remove them according to your
-   retention policy. Startup has a ten-minute limit and requires space for the
-   snapshot, changed-table copies, rebuilt search indexes and WAL.
+4. Restart the service. It upgrades the database as
+   [Database upgrades](#database-upgrades) describes, then starts the workers
+   and HTTP server and permits online backups.
+5. Check `/health/ready` and the startup logs, which report the versions the
+   database moved between and the SQLite copy. Keep that copy and the full
+   backup until the new release has been validated; remove them according to
+   your retention policy.
 
-A failed upgrade prevents serving requests and rolls back the whole schema/data
-transaction. Logs identify the error and retained snapshot. Unknown schemas,
-development databases with edited schema checksums, and database downgrades are
-rejected. Skipping releases is supported through the cumulative bundle. Restart
-with the same release version and schema checksum is a no-op and creates no
-extra snapshot. Releases that share a schema checksum still advance the recorded
-version, so a downgrade to an older version is rejected even with identical DDL.
+On PostgreSQL, back up with `pg_dump` in step 1 and stop every instance in
+step 2. Skipping releases works: the new build applies every migration since
+the database's version. Restarting the same release changes nothing and makes
+no copy.
 
-The automatic snapshot contains only SQLite, including workflow runs and other
+The automatic copy contains only SQLite, including workflow runs and other
 operations. It does not replace the full database-plus-blobs backup. A later
-startup failure may happen after the PaperGo schema transaction has committed. Rolling back an installed application requires stopping it and
-restoring the full backup with the matching old `papergo-admin` before starting
-the old binary. Backup archives remain tied to their schema checksum; use the
-matching release's admin tool to restore them. Do not simply start an older
-binary against a database upgraded by a newer schema.
+startup failure may happen after the migrations have committed. Rolling back
+an installed application requires stopping it and restoring the full backup
+with the matching old `papergo-admin` before starting the old binary: an old
+binary refuses a database that a newer one upgraded. Backup archives record
+their schema version, and only an admin tool at that version restores them.

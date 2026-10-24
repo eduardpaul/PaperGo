@@ -269,14 +269,14 @@ temporary container, so Docker must be available:
 bash scripts/generate-models.sh
 ```
 
-Do not add development migrations, backfills or compatibility paths. Local
-databases are disposable. Initialization installs the selected embedded master
-and records its fingerprint; existing databases must match that fingerprint.
-Published release bundles are described in [release management](docs/releases.md).
+Do not add development backfills or compatibility paths. Local databases are
+disposable. A new database gets the selected embedded master; once a release is
+published, each schema change also adds a hand-written migration per engine,
+which PaperGo applies at startup. See [database upgrades](docs/releases.md#database-upgrades).
 
 ## Tagged binary releases
 
-Push a version tag such as `v0.1.0` to run verification, build and smoke-test Windows and Linux executables, publish archives with checksums to GitHub Releases, and publish Linux amd64/arm64 images to `ghcr.io/eduardpaul/papergo`. Stable releases update the `latest` image tag; release candidates use only their version tag. Release-only database changes are embedded in the executables; stop the service, replace the binaries and restart to apply them automatically. Feature development keeps its single editable schema. See [release management](docs/releases.md) for platform support, release candidates, blocked changes, backups and recovery.
+Push a version tag such as `v0.1.0` to run verification, build and smoke-test Windows and Linux executables, publish archives with checksums to GitHub Releases, and publish Linux amd64/arm64 images to `ghcr.io/eduardpaul/papergo`. Stable releases update the `latest` image tag; release candidates use only their version tag. Database migrations are embedded in the executables; stop the service, replace the binaries and restart to apply them automatically. See [release management](docs/releases.md) for platform support, release candidates, blocked changes, backups and recovery.
 
 ## Deployment and scaling
 
@@ -338,7 +338,7 @@ papergo-admin restore --file backup.tar.gz
 
 `--database`, `--blobs`, `--search` and `--search-store` select paths and the backend; defaults use `DATABASE_PATH`, `BLOB_PATH`, `SEARCH_STORE` and `SEARCH_DATABASE_PATH` or `SEARCH_ZVEC_PATH`. These commands need filesystem access and do not initialize HTTP authentication. With SQLite search, backup can run while the API is serving: it pauses database writes while snapshotting and copying referenced immutable files; reads continue. The gzip tar archive includes the complete SQLite database (including workflow runs), referenced file bytes and a checksum manifest; it leaves out the SQLite search index. With zvec, stop the API first: backup requires exclusive leases and includes the flushed, closed native directory and its checksums. Existing backup archives are never overwritten. The manifest is limited to 16 MiB.
 
-Stop the API before restoring. Restore rejects active API leases and existing destinations unless `--force` is supplied. It validates the complete archive, current build's schema hash, SQLite integrity/foreign keys, file references, sizes and SHA-256 checksums before replacing the database and blob directory, and restores the archived zvec directory, or removes a missing/SQLite search index for the API to rebuild at startup. Invalid archives leave existing data intact. Installation failures restore the saved destinations. Symlinks, unsafe paths, duplicate entries and appended archives are rejected. Restore accepts archives matching this build's complete schema; it does not perform schema upgrades. [Offline search copy](docs/search.md#copying-between-stores) changes backends without OCR or embedding calls. Persistent `.lease` files coordinate the API and CLI through operating-system locks.
+Stop the API before restoring. Restore rejects active API leases and existing destinations unless `--force` is supplied. It validates the complete archive, current build's schema version, SQLite integrity/foreign keys, file references, sizes and SHA-256 checksums before replacing the database and blob directory, and restores the archived zvec directory, or removes a missing/SQLite search index for the API to rebuild at startup. Invalid archives leave existing data intact. Installation failures restore the saved destinations. Symlinks, unsafe paths, duplicate entries and appended archives are rejected. Restore accepts archives at this build's schema version; it does not perform schema upgrades. [Offline search copy](docs/search.md#copying-between-stores) changes backends without OCR or embedding calls. Persistent `.lease` files coordinate the API and CLI through operating-system locks.
 
 Conditional writes accept quoted numeric ETags, including `W/"n"`. Stale versions return HTTP 412 with a `precondition_failed` problem; duplicate names, keys and cardinality conflicts return 409. Missing required `If-Match` returns 428. Paged REST responses expose `value` and `@odata.nextLink`; query selection and filtering use the native typed request contract.
 

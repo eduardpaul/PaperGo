@@ -148,16 +148,13 @@ def prepare_go():
     os.environ[loader] = os.pathsep.join(filter(None, [str(native / 'lib'), os.environ.get(loader)]))
     # The models ship in this checkout, wherever the SDKs were installed.
     os.environ['OCR_MODELS'] = str(ROOT / 'models/paddleocr')
-    planner = ROOT / '.tools/bin/sqlite3def'
-    if planner.is_file() and not shutil.which('sqlite3def'):
-        os.environ.setdefault('SQLITE3DEF', str(planner))
 
 
 def postgres_packages():
-    """The portable database suites. SQLite file/upgrade tests and native
-    search are covered in their own stages, not rerun against PostgreSQL."""
+    """The portable database suites. Native search is covered in its own
+    stage, not rerun against PostgreSQL."""
     listed = subprocess.run(['go', 'list', './internal/dal/...'], cwd=ROOT, check=True, stdout=subprocess.PIPE, text=True).stdout.split()
-    return [package for package in listed if not re.search(r'/internal/dal/(search|releaseplan|database|migrations)(/|$)', package)] + POSTGRES_PACKAGES
+    return [package for package in listed if not re.search(r'/internal/dal/search(/|$)', package)] + POSTGRES_PACKAGES
 
 
 def prepare_postgres():
@@ -344,9 +341,8 @@ def stage_zvec(args):
 
 
 def stage_release(args):
-    """Rehearse a release as the release workflow does: embed a database
-    history, build, package and run the executables. The history is a build
-    input only; the source placeholder is restored afterwards."""
+    """Rehearse a release as the release workflow does: build, package and
+    run the executables."""
     prepare_models()
     prepare_go()
     prepare_frontend(args.setup, force=True)
@@ -355,20 +351,14 @@ def stage_release(args):
     temporary = ROOT / '.cache/tmp'
     temporary.mkdir(parents=True, exist_ok=True)
     os.environ.setdefault('TMPDIR', str(temporary))
-    bundle = ROOT / 'internal/dal/migrations/release.json'
-    placeholder = bundle.read_bytes()
     goos, goarch = (subprocess.run(['go', 'env', name], check=True, capture_output=True, text=True).stdout.strip() for name in ('GOOS', 'GOARCH'))
     assets = f'dist/papergo_{RELEASE_VERSION}_assets.zip'
-    try:
-        run('go', 'run', './cmd/release', '--version', RELEASE_VERSION)
-        run(sys.executable, 'scripts/build-binaries.py', f'--ldflags=-s -w -X papergo/internal/buildinfo.Version={RELEASE_VERSION}')
-        run(sys.executable, 'scripts/build-assets.py', '--archive', assets)
-        for stale in (ROOT / 'dist').glob(f'papergo_*_{goos}_{goarch}.zip'):
-            stale.unlink()
-        run(sys.executable, 'scripts/release-package.py', '--version', RELEASE_VERSION, '--os', goos, '--arch', goarch)
-        run(sys.executable, 'scripts/release-smoke.py', '--assets', assets)
-    finally:
-        bundle.write_bytes(placeholder)
+    run(sys.executable, 'scripts/build-binaries.py', f'--ldflags=-s -w -X papergo/internal/buildinfo.Version={RELEASE_VERSION}')
+    run(sys.executable, 'scripts/build-assets.py', '--archive', assets)
+    for stale in (ROOT / 'dist').glob(f'papergo_*_{goos}_{goarch}.zip'):
+        stale.unlink()
+    run(sys.executable, 'scripts/release-package.py', '--version', RELEASE_VERSION, '--os', goos, '--arch', goarch)
+    run(sys.executable, 'scripts/release-smoke.py', '--assets', assets)
 
 
 def stage_docker(args):

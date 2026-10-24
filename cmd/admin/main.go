@@ -70,12 +70,15 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		if path == "" {
 			path = "data/papergo.db"
 		}
-		flags.StringVar(&path, "database", path, "SQLite database path")
+		flags.StringVar(&path, "database", path, "SQLite database path; DATABASE_URL selects PostgreSQL")
 		if err := flags.Parse(args[1:]); err != nil {
 			return err
 		}
 		if flags.NArg() != 0 {
 			return errors.New("initialize accepts no positional arguments")
+		}
+		if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
+			return database.InitializePostgres(ctx, dsn)
 		}
 		return database.Initialize(ctx, path)
 	}

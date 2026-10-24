@@ -54,9 +54,7 @@ class PackagingTests(unittest.TestCase):
                 assets.collect(binaries / 'assets', models)
                 shared = root / 'papergo_v0.2.0_assets.zip'
                 assets.archive_assets(shared, binaries / 'assets', models)
-                database = root / 'release-database.json'
-                database.write_text(json.dumps({'releases': [{'version': 'v0.2.0'}]}))
-                archive = package.package('v0.2.0', system, arch, binaries, database, root / 'dist')
+                archive = package.package('v0.2.0', system, arch, binaries, root / 'dist')
                 self.assertIn(archive.name, metadata.expected_assets('v0.2.0'))
                 installation = root / 'install'
                 with zipfile.ZipFile(archive) as binary_zip:
@@ -72,9 +70,6 @@ class PackagingTests(unittest.TestCase):
                 for name in models:
                     self.assertEqual((installation / 'assets' / name).read_bytes(), (binaries / 'assets' / name).read_bytes())
                 self.assertEqual((installation / 'assets/models/laya/model.onnx').read_bytes(), data)
-                database.write_text(json.dumps({'releases': [{'version': 'v0.1.0'}]}))
-                with self.assertRaisesRegex(ValueError, 'does not match'):
-                    package.package('v0.2.0', system, arch, binaries, database, root / 'dist')
 
     def test_laya_cache_requires_pinned_manifest_and_every_file_hash(self):
         with tempfile.TemporaryDirectory() as temp:

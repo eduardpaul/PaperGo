@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"papergo/internal/dal"
 	"papergo/internal/dal/daltest"
 	"papergo/internal/dal/database"
 	"papergo/internal/dms"
@@ -138,7 +139,7 @@ func TestBackupRejectsMissingOrCorruptFilesAndSchema(t *testing.T) {
 	if err := Create(context.Background(), in); err == nil {
 		t.Fatal("missing file accepted")
 	}
-	daltest.Update(t, db.DAL, "schema_metadata", daltest.Row{"hash": "other"}, nil)
+	daltest.Update(t, db.DAL, "schema_metadata", daltest.Row{"version": dal.SchemaVersion() + 1}, nil)
 	if err := Create(context.Background(), in); err == nil || !strings.Contains(err.Error(), "schema") {
 		t.Fatal(err)
 	}

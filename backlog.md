@@ -493,7 +493,7 @@ This occurs if publishing was enabled and subsequently disabled in a library, or
 
 ### ISSUE-23: Simplified SQLite Migrations via sqlite3def (sqldef) and Embedded Sequential Upgrades
 
-**Status: Done.** Development retains the single editable Atlas schema and no development upgrade history.
+**Status: Replaced.** The generated sqlite3def bundle refused most real schema changes and covered no PostgreSQL upgrades. It is removed: each schema change after a release adds a hand-written migration per engine, which startup applies on SQLite and PostgreSQL ([Database upgrades](docs/releases.md#database-upgrades)). The notes below record the removed design.
 
 #### Implementation
 - Pinned, checksum-verified sqlite3def 3.11.26 is installed in release CI, verification CI and the development container. The generator uses its offline `--dry-run --enable-drop` SQL instead of custom table-copy/AST diff generation.

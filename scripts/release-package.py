@@ -1,20 +1,18 @@
 #!/usr/bin/env python3
 """Package the executables, native libraries, configuration and operator guide."""
 import argparse
-import json
 from pathlib import Path
 import zipfile
 
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def package(version, system, arch, bin_dir, release_database, dist):
+def package(version, system, arch, bin_dir, dist):
     suffix = '.exe' if system == 'windows' else ''
     inputs = {
         f'papergo{suffix}': bin_dir / f'papergo{suffix}',
         f'papergo-admin{suffix}': bin_dir / f'papergo-admin{suffix}',
         f'papergo-mcp{suffix}': bin_dir / f'papergo-mcp{suffix}',
-        'release-database.json': release_database,
         'RELEASES.md': ROOT / 'docs/releases.md',
         'config.yaml': ROOT / 'deploy/config.yaml',
         'README.md': ROOT / 'deploy/README.md',
@@ -32,9 +30,6 @@ def package(version, system, arch, bin_dir, release_database, dist):
     ]
     if any(name not in inputs for name in required):
         raise ValueError('Build the native libraries alongside the executables before packaging')
-    bundle = json.loads(release_database.read_text())
-    if bundle['releases'][-1]['version'] != version:
-        raise ValueError('Packaged bundle does not match release tag')
     dist.mkdir(parents=True, exist_ok=True)
     target = dist / f'papergo_{version}_{system}_{arch}.zip'
     with zipfile.ZipFile(target, 'w', zipfile.ZIP_DEFLATED) as archive:
@@ -49,9 +44,8 @@ def main():
     parser.add_argument('--os', required=True, choices=['linux', 'darwin', 'windows'])
     parser.add_argument('--arch', required=True, choices=['amd64', 'arm64'])
     parser.add_argument('--bin-dir', type=Path, default=ROOT / 'bin')
-    parser.add_argument('--release-database', type=Path, default=ROOT / 'internal/dal/migrations/release.json')
     args = parser.parse_args()
-    print(package(args.version, args.os, args.arch, args.bin_dir, args.release_database, ROOT / 'dist'))
+    print(package(args.version, args.os, args.arch, args.bin_dir, ROOT / 'dist'))
 
 
 if __name__ == '__main__':

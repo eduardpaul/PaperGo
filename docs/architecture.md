@@ -68,7 +68,7 @@ The DAL maintains SQLite and PostgreSQL masters and verifies cross-table invaria
 
 ## Schema and verification
 
-The complete schemas live in `internal/dal/schema/sqlite.sql` and `internal/dal/schema/postgres.sql`, edited in place; there are no development upgrade paths or compatibility layers (see [AGENTS.md](../AGENTS.md)). Each resource stores its nearest exclusive permission scope (`scope_id`), maintained by DAL transactions, so authorization uses an indexed lookup.
+The complete schemas live in `internal/dal/schema/sqlite.sql` and `internal/dal/schema/postgres.sql`, edited in place, with hand-written [migrations](releases.md#database-upgrades) per engine taking released databases to them and no compatibility layers (see [AGENTS.md](../AGENTS.md)). Each resource stores its nearest exclusive permission scope (`scope_id`), maintained by DAL transactions, so authorization uses an indexed lookup.
 
 Tests apply that schema file. Coverage includes ownership and move constraints, permission-scope maintenance, nested group and role revocation, deletion tombstones, WebDAV protocol behavior and locking, exact values through REST, head/published search and blobs, typed index rebuilds, schema/history immutability, authorized pagination, and concurrent optimistic updates. Concurrent-client load testing, restoration exercises, quotas and idempotency keys beyond operation requests, malware scanning and observability exports remain deployment/application work.
 

@@ -2,10 +2,8 @@ package dal
 
 import (
 	"context"
-	"crypto/sha256"
 	"database/sql"
 	_ "embed"
-	"encoding/base64"
 	"fmt"
 	"math/rand/v2"
 	"strings"
@@ -337,7 +335,8 @@ func (s *Store) Dialect() Dialect {
 	return s.dialect
 }
 
-// Migrate applies the embedded clean DDL schema for the store's dialect.
+// Migrate installs the schema master of the store's dialect into an empty
+// database, at the latest schema version.
 func (s *Store) Migrate(ctx context.Context) error {
 	ddl := PostgresSchema
 	if s.dialect == DialectSQLite {
@@ -347,7 +346,7 @@ func (s *Store) Migrate(ctx context.Context) error {
 		if _, err := s.tx.ExecContext(ctx, ddl); err != nil {
 			return dberr.Translate(err)
 		}
-		_, err := s.tx.ExecContext(ctx, `INSERT INTO schema_metadata(id,hash) VALUES(1,$1)`, s.SchemaHash())
+		_, err := s.tx.ExecContext(ctx, `INSERT INTO schema_metadata(id,version) VALUES(1,$1)`, SchemaVersion())
 		return dberr.Translate(err)
 	}
 	tx, err := s.sqlDB.BeginTx(ctx, nil)
@@ -358,7 +357,7 @@ func (s *Store) Migrate(ctx context.Context) error {
 	if _, err := tx.ExecContext(ctx, ddl); err != nil {
 		return dberr.Translate(err)
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO schema_metadata(id,hash) VALUES(1,$1)`, s.SchemaHash()); err != nil {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO schema_metadata(id,version) VALUES(1,$1)`, SchemaVersion()); err != nil {
 		return dberr.Translate(err)
 	}
 	return dberr.Translate(tx.Commit())
@@ -439,22 +438,26 @@ func (s *Store) Savepoint(ctx context.Context, name string, fn func() (undo bool
 	return dberr.Translate(err)
 }
 
-// SchemaHash identifies the authoritative schema for this store's engine.
-func (s *Store) SchemaHash() string {
-	schema := SQLiteSchema
-	if s.dialect == DialectPostgres {
-		schema = PostgresSchema
+// InstalledVersion reads the database's schema version.
+func (s *Store) InstalledVersion(ctx context.Context) (int, error) {
+	var version int
+	if err := s.queryRowContext(ctx, `SELECT version FROM schema_metadata WHERE id=1`).Scan(&version); err != nil {
+		return 0, fmt.Errorf("database has no initialized DAL schema: %w", err)
 	}
-	sum := sha256.Sum256([]byte(schema))
-	return base64.StdEncoding.EncodeToString(sum[:])
+	return version, nil
 }
+
+// CheckSchema checks that the database is at this build's schema version.
 func (s *Store) CheckSchema(ctx context.Context) error {
-	var actual string
-	if err := s.queryRowContext(ctx, `SELECT hash FROM schema_metadata WHERE id=1`).Scan(&actual); err != nil {
-		return fmt.Errorf("database has no initialized DAL schema: %w", err)
+	installed, err := s.InstalledVersion(ctx)
+	if err != nil {
+		return err
 	}
-	if actual != s.SchemaHash() {
-		return fmt.Errorf("database schema differs from this application; initialize a fresh database")
+	switch {
+	case installed > SchemaVersion():
+		return fmt.Errorf("database schema version %d is newer than this PaperGo's %d; downgrades are unsupported", installed, SchemaVersion())
+	case installed < SchemaVersion():
+		return fmt.Errorf("database schema version %d is older than this PaperGo's %d; start PaperGo to upgrade it", installed, SchemaVersion())
 	}
 	return nil
 }

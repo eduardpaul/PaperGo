@@ -39,6 +39,8 @@ type Database struct {
 	DAL *dal.Store
 	// URL is the PostgreSQL database's connection URL; empty for SQLite.
 	URL string
+	// Path is the SQLite file's absolute path; empty for PostgreSQL.
+	Path string
 }
 
 // Options are the connection settings of a handle on the PaperGo SQLite file.
@@ -119,8 +121,9 @@ func Open(ctx context.Context, path string) (*Database, error) {
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
 	return &Database{
-		SQL: db,
-		DAL: dal.NewStoreWithDialect(db, dal.DialectSQLite),
+		SQL:  db,
+		DAL:  dal.NewStoreWithDialect(db, dal.DialectSQLite),
+		Path: abs,
 	}, nil
 }
 

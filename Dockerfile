@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # PaperGo's one Dockerfile, and the one place its toolchain is pinned:
-#   toolchain    Go, Node, Python, compilers, native SDKs, sqlite3def and the
+#   toolchain    Go, Node, Python, compilers, native SDKs and the
 #                PostgreSQL client; the application is built in it
 #   development  the toolchain with editor and analysis tools: the
 #                devcontainer, CI's container jobs and scripts/ci.sh
@@ -64,9 +64,6 @@ COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -s /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
     && pip3 install --break-system-packages --no-cache-dir cmake==${CMAKE_VERSION}
-# The release planner is a build tool, never a production runtime dependency.
-COPY scripts/sqlite3def.py /opt/papergo/tools/
-RUN python3 /opt/papergo/tools/sqlite3def.py --directory /usr/local/bin
 # CI jobs run as root on a checkout another user owns; Git, and the VCS
 # stamping of go list and go build, would otherwise refuse the repository.
 RUN git config --system --add safe.directory '*'

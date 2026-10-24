@@ -105,11 +105,13 @@ opened outside the store must use `_txlock=immediate` to avoid read-to-write
 snapshot upgrade failures. Reads may still use deferred, read-only transactions.
 
 `Store.Migrate(ctx)` installs the embedded dialect schema atomically in a fresh
-database. It is not an upgrade mechanism or an idempotent startup check. The
-schema masters are `internal/dal/schema/sqlite.sql` and
-`internal/dal/schema/postgres.sql`. Edit these files directly. Initialization,
-test fixtures and release tooling must consume the selected DAL schema;
-`migrations/` and `ent/schema` do not define it.
+database, at the latest schema version. The schema masters are
+`internal/dal/schema/sqlite.sql` and `internal/dal/schema/postgres.sql`; edit
+these files directly. Initialization and test fixtures consume them. An
+existing database reaches the masters through the hand-written migrations in
+`migrations/sqlite/` and `migrations/postgres/`, which
+`database.Database.Upgrade` applies at startup; see
+[Database upgrades](../../docs/releases.md#database-upgrades).
 
 ## Transactions and queries
 

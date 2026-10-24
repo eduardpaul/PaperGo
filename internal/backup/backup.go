@@ -20,9 +20,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"papergo/internal/dal"
 	"papergo/internal/dal/database"
 	"papergo/internal/dal/integrations"
-	"papergo/internal/dal/migrations"
 )
 
 const format = "papergo-backup/1"
@@ -49,7 +49,7 @@ type fileEntry struct {
 type manifest struct {
 	Format      string      `json:"format"`
 	CreatedAt   time.Time   `json:"created_at"`
-	SchemaHash  string      `json:"schema_hash"`
+	Schema      int         `json:"schema_version"`
 	SearchStore string      `json:"search_store,omitempty"`
 	Files       []fileEntry `json:"files"`
 }
@@ -192,7 +192,7 @@ func Create(ctx context.Context, in Options) (err error) {
 	if err != nil {
 		return err
 	}
-	m := manifest{Format: format, CreatedAt: time.Now().UTC(), SchemaHash: migrations.SchemaHash(), Files: append([]fileEntry{{Path: "database.sqlite", Size: size, SHA256: hash}}, blobs...)}
+	m := manifest{Format: format, CreatedAt: time.Now().UTC(), Schema: dal.SchemaVersion(), Files: append([]fileEntry{{Path: "database.sqlite", Size: size, SHA256: hash}}, blobs...)}
 	keyPath := in.DatabasePath + ".integrations.key"
 	if _, e := os.Lstat(keyPath); e == nil {
 		keySize, keyHash, e := digest(ctx, keyPath)
@@ -470,7 +470,7 @@ func extract(ctx context.Context, archive, work, blobs, searchStage string) erro
 	if err = decoder.Decode(new(any)); err != io.EOF {
 		return errors.New("invalid trailing manifest data")
 	}
-	if m.Format != format || m.SchemaHash != migrations.SchemaHash() || m.CreatedAt.IsZero() || len(m.Files) < 1 {
+	if m.Format != format || m.Schema != dal.SchemaVersion() || m.CreatedAt.IsZero() || len(m.Files) < 1 {
 		return errors.New("archive format or schema does not match this build")
 	}
 	if m.SearchStore != "" && (m.SearchStore != "zvec" || searchStage == "") {

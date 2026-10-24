@@ -148,7 +148,7 @@ def exercise_native(base, workspace):
         raise RuntimeError('shared OCR workflow did not complete')
 
 
-def exercise(binary, admin, directory, expected_version=None, model='embeddinggemma-2'):
+def exercise(binary, admin, directory, model='embeddinggemma-2'):
     directory.mkdir(parents=True, exist_ok=True)
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
@@ -206,9 +206,10 @@ def exercise(binary, admin, directory, expected_version=None, model='embeddingge
     # release's own SQLite; the schema uses functions older ones lack.
     subprocess.run([str(admin), "backup", "--search-store", "zvec", "--file", str(directory / "backup.tar.gz")],
                    cwd=directory, env=env, check=True)
-    if expected_version:
-        with closing(sqlite3.connect(directory / "papergo.db")) as db:
-            assert db.execute("SELECT hash FROM schema_metadata").fetchone()[0] == expected_version
+    # A new database is at the schema version of the last migration.
+    migrations = len(list((ROOT / "internal/dal/migrations/sqlite").glob("*.sql")))
+    with closing(sqlite3.connect(directory / "papergo.db")) as db:
+        assert db.execute("SELECT version FROM schema_metadata").fetchone()[0] == migrations
 
 
 def extract_zip(path, directory):
@@ -245,8 +246,7 @@ def main():
                 raise ValueError('Expected one packaged platform ZIP')
             extract_zip(archives[0], package)
             assert not (package / 'assets').exists(), 'Models must ship in the shared assets ZIP'
-            bundle = json.loads((package / 'release-database.json').read_text())
-            current = bundle['releases'][-1]
+            current = archives[0].name.split('_')[1]
         if args.assets:
             extract_zip(args.assets, package)
         assert (package / 'assets/models/paddleocr').is_dir()
@@ -256,12 +256,11 @@ def main():
         binary, admin = package / f'papergo{suffix}', package / f'papergo-admin{suffix}'
         for executable in (binary, admin, package / f'papergo-mcp{suffix}'):
             version = subprocess.check_output([str(executable), '--version'], cwd=directory, text=True)
-            assert (current['version'] if current else 'PaperGo') in version
+            assert (current or 'PaperGo') in version
         # Use an unrelated working directory: native libraries and shared models
         # must be found beside the executable without development loader paths.
-        expected = current['schema_hash'] if current else None
-        exercise(binary, admin, directory / 'fresh', expected)
-        exercise(binary, admin, directory / 'harrier', expected, model='harrier-oss-v1-0.6b')
+        exercise(binary, admin, directory / 'fresh')
+        exercise(binary, admin, directory / 'harrier', model='harrier-oss-v1-0.6b')
     print('Platform binaries plus shared assets: versions, UI, zvec, PDF previews, PaddleOCR, Laya, both embedding presets and backup passed.')
 
 
