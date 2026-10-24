@@ -7,7 +7,8 @@ see [Database upgrades](#database-upgrades).
 
 ## Publish a version
 
-Merge the desired changes, then push an annotated tag:
+Merge the desired changes, wait for the `verify` run of that commit on `main`
+to pass, then push an annotated tag on it:
 
 ```sh
 git tag -a v0.1.0 -m 'PaperGo 0.1.0'
@@ -15,43 +16,38 @@ git push origin v0.1.0
 ```
 
 Use `vX.Y.Z` for stable releases and `vX.Y.Z-rc.N` for release candidates.
-The release workflow runs the existing CI and vulnerability workflows against
-that tag and checks that the tag is newer than the latest published release. It builds and runs native smoke tests for Linux amd64/arm64 and Windows amd64, using [GitHub hosted runners](https://docs.github.com/en/actions/reference/runners/github-hosted-runners). Each archive includes `papergo`,
+The release workflow does not run CI again. It first checks that the tag is
+newer than the latest published release, has no release yet, and names a
+commit whose `verify` run on `main` succeeded. A commit that a newer push to
+`main` superseded before its run finished has no such run; tag the newer one.
+It then builds and runs native smoke tests for Linux amd64/arm64 and Windows amd64, using [GitHub hosted runners](https://docs.github.com/en/actions/reference/runners/github-hosted-runners). Each archive includes `papergo`,
 `papergo-admin`, the optional [MCP server](mcp.md) `papergo-mcp` and this guide. Every executable supports `--version`; version, commit and commit date are injected into the build.
 Each platform ZIP includes the executables, native libraries, compiler runtimes, license notices, sample `config.yaml` and operator documentation. Linux libraries live in `lib/`; Windows DLLs sit beside the executables. macOS release and native CI builds are temporarily commented out.
 
-One platform-independent `papergo_vX.Y.Z_assets.zip` contains PaddleOCR, Laya multilingual FP32, EmbeddingGemma 2 Q4 and Harrier Q4 models, tokenizers and model notices. Extract it into the platform installation directory: `assets/` must sit beside the main executable and `config.yaml`. The application finds native libraries and models relative to its executable and loads them directly from disk. The web UI, database schema and migrations remain embedded. Linux requires the target system's glibc; WebP and tokenizers are statically linked. OCR and local decisions use the shared assets automatically. For local embeddings set `AI_EMBEDDINGS_PROVIDER=local` and choose `AI_EMBEDDINGS_MODEL=embeddinggemma-2` or `harrier-oss-v1-0.6b`. Explicit `ONNXRUNTIME_LIB`, `OCR_MODELS`, `AI_DECISION_MODELS_PATH` and `AI_EMBEDDINGS_MODELS_PATH` settings select alternative inference assets. CI prepares and checksum-verifies the models once on Linux, packages one shared ZIP, and tests each platform ZIP with those same assets. The Docker image uses the same directory layout under `/opt/papergo`.
+One platform-independent `papergo_vX.Y.Z_assets.zip` contains PaddleOCR, Laya multilingual FP32, EmbeddingGemma 2 Q4 and Harrier Q4 models, tokenizers and model notices. Extract it into the platform installation directory: `assets/` must sit beside the main executable and `config.yaml`. The application finds native libraries and models relative to its executable and loads them directly from disk. The web UI, database schema and migrations remain embedded. Linux requires the target system's glibc; WebP and tokenizers are statically linked. OCR and local decisions use the shared assets automatically. For local embeddings set `AI_EMBEDDINGS_PROVIDER=local` and choose `AI_EMBEDDINGS_MODEL=embeddinggemma-2` or `harrier-oss-v1-0.6b`. Explicit `ONNXRUNTIME_LIB`, `OCR_MODELS`, `AI_DECISION_MODELS_PATH` and `AI_EMBEDDINGS_MODELS_PATH` settings select alternative inference assets. The release downloads and checksum-verifies the models once on Linux, packages one shared ZIP, and tests each platform ZIP with those same assets. The Docker image uses the same directory layout under `/opt/papergo`.
 
-Publication creates a draft, uploads all three platform ZIPs and the shared assets ZIP plus
-`SHA256SUMS`, then publishes it. Stable releases become
+When every build and image test has passed, the workflow creates the GitHub
+release with all three platform ZIPs, the shared assets ZIP and `SHA256SUMS`,
+and release notes generated since the previous release. Stable releases become
 Latest; release candidates are marked as prereleases. No personal access token
-is required: the publication job uses GitHub's repository token with
-`contents: write`. Verify Actions is enabled and organization policy permits
-that permission and the native hosted runners. Linux ARM runners require runner
-availability for the repository's plan; a repository without that runner must
-provide a native ARM runner with an appropriate label.
+is required: the workflow uses GitHub's repository token with
+`contents: write` and `packages: write`. Verify Actions is enabled and
+organization policy permits those permissions and the native hosted runners.
+Linux ARM runners require runner availability for the repository's plan; a
+repository without that runner must provide a native ARM runner with an
+appropriate label.
 
-If a build fails, fix it and tag a new version. If a transient failure occurs,
-rerun the failed workflow or use the release workflow's manual dispatch with the
-same existing tag. For a fix to the workflow itself, start a new manual run from
-`main` and enter the original version tag. Rerunning an old execution uses that
-execution's workflow revision. Release tooling comes from the selected workflow
-revision, while application code is checked out at the original tag.
+If a build or test fails, fix it and tag a new version. After a transient
+failure, rerun the failed jobs. The manual dispatch takes an existing tag and
+runs the whole workflow again, as long as that tag has no release. Once the
+release exists, it is complete: a failure after that, in the image jobs, is
+fixed by rerunning those jobs or by a new version. Protect `v*` tags from
+updates and deletion, and enable GitHub immutable releases in repository
+settings; see [GitHub's immutable release documentation](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases).
 
-An existing published release with no uploaded assets can receive its binaries
-if it is mutable, so creating a release through GitHub's UI also works. Completed
-published binary releases retain their assets on rerun. Image publication is checked separately, so reruns can finish a missing GHCR image after the binary release has been published. Only drafts may have their
-assets replaced. Partially populated published releases cannot be rebuilt over
-existing files: complete them with the original build artifacts or publish a new
-version. Immutable releases missing assets require a new version. Protect `v*` tags
-from updates/deletion and enable GitHub immutable releases in repository
-settings. Uploading assets to the draft before publication works with immutable
-releases. See [GitHub's immutable release documentation](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases).
-
-Use GitHub's generated release notes to list changes since the previous release.
 The release-note configuration groups feature, fix, and maintenance PRs by label.
 Version numbering is chosen by the maintainer; tagging and GitHub Releases are
-the only publishing operations. The workflow publishes downloadable binaries and the container image; it does not install updates on customer machines.
+the only publishing operations. The workflow publishes downloadable binaries and the container images; it does not install updates on customer machines.
 The Windows archive is not Authenticode-signed; OS trust prompts
 remain possible until platform signing credentials are configured.
 
@@ -59,13 +55,11 @@ remain possible until platform signing credentials are configured.
 
 Each release also builds the root Dockerfile on native Linux amd64 and arm64 runners. The build injects the version, commit and commit date. Verified shared models are supplied as a separate BuildKit context and image layer. OCI labels identify the source, version and revision.
 
-Candidate images are uploaded by digest with BuildKit SBOM and provenance attestations. Each exact digest is pulled and tested with production local authentication, persistent `/data`, read-only code, health, graceful shutdown, PDF rendering, OCR, Laya and both embedding models. Only after the binary and image checks pass and GitHub Releases publication succeeds does the workflow expose the tested images as `ghcr.io/eduardpaul/papergo:vX.Y.Z` (or `vX.Y.Z-rc.N`). The multi-platform index includes both native architectures and their attestations. Only the current stable GitHub release can update `latest`; retrying an older release cannot move it backwards.
+Each platform's image is pushed by digest with BuildKit SBOM and provenance attestations, then pulled and tested with production local authentication, persistent `/data`, read-only code, health, graceful shutdown, PDF rendering, OCR, Laya and both embedding models. After the GitHub release is created, the workflow tags the tested digests as one multi-platform `ghcr.io/eduardpaul/papergo:vX.Y.Z` (or `vX.Y.Z-rc.N`) with both architectures and their attestations. A stable release also moves `latest`. An untested digest is never tagged; a failed run can leave untagged digests in GHCR.
 
-An existing version image is checked for its source revision and both platforms and is never replaced. A missing image can be completed by rerunning the release workflow. Authentication errors fail the workflow instead of being treated as absent tags. A failed image build can leave untagged candidate digests in GHCR; these are not release version tags.
+The optional [MCP server](mcp.md) has its own image, built from `extensions/mcp/Dockerfile` by cross-compiling its pure Go executable for both platforms in one build. After the GitHub release is created, the workflow pushes it by digest with SBOM and provenance attestations, runs its `--version`, and tags it `ghcr.io/eduardpaul/papergo-mcp:vX.Y.Z`, plus `latest` for a stable release.
 
-The optional [MCP server](mcp.md) has its own image, built from `extensions/mcp/Dockerfile` by cross-compiling its pure Go executable for both platforms in one build. After GitHub Releases publication, the workflow checks for an existing `ghcr.io/eduardpaul/papergo-mcp:vX.Y.Z`, uploads a candidate by digest with SBOM and provenance attestations, runs the exact candidate's `--version`, and publishes it with the same rules: an existing version is checked and never replaced, and only the current stable release updates `latest`.
-
-The registry jobs use `GITHUB_TOKEN` with `packages: write`; inspection uses `packages: read`. The package is linked to the source repository. An existing manually created package must grant this repository Actions access. GitHub creates packages as private: set the package Public after first publication if anonymous `docker pull` is intended, or keep it private and authenticate consumers with `read:packages`. See [GitHub's registry instructions](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry) and the [Docker deployment guide](https://github.com/eduardpaul/PaperGo/blob/main/docs/docker.md).
+The package is linked to the source repository. An existing manually created package must grant this repository Actions access. GitHub creates packages as private: set the package Public after first publication if anonymous `docker pull` is intended, or keep it private and authenticate consumers with `read:packages`. See [GitHub's registry instructions](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry) and the [Docker deployment guide](https://github.com/eduardpaul/PaperGo/blob/main/docs/docker.md).
 
 ## Database upgrades
 

@@ -11,7 +11,8 @@ Stages:
   race     the Go suite with race detection
   web      frontend typecheck, lint and tests
   native   real decision, embedding and OCR models
-  zvec     native search store conformance, parity, soak and fuzzing
+  zvec     native search store conformance and parity
+  soak     native search soak at real dimensions and timed fuzzing
   release  build, package and run the release executables
   docker   build and smoke test the container images
   vuln     reachable Go dependency vulnerabilities
@@ -29,7 +30,7 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parent.parent
-STAGES = ['quick', 'lint', 'test', 'race', 'web', 'native', 'zvec', 'release', 'docker', 'vuln']
+STAGES = ['quick', 'lint', 'test', 'race', 'web', 'native', 'zvec', 'soak', 'release', 'docker', 'vuln']
 # Suites whose tests open databases through internal/dal/daltest, which run on
 # PostgreSQL in the test stage, with the DAL packages postgres_packages adds.
 POSTGRES_PACKAGES = ['./internal/dms', './internal/httpapi', './internal/identity', './internal/scriptrun',
@@ -334,6 +335,11 @@ def stage_zvec(args):
     go_tests('zvec', ['-race', '-count=1'], ['./internal/dal/search/zvecstore', './internal/backup', './cmd/admin'], env=sqlite_environment())
     go_tests('zvec-parity', ['-race', '-count=1', '-run', '(Search|Content|Receipt|Contract|AIComplete|Prefix|SmartFolder|View|Listing|Query)'],
              ['./internal/dms', './internal/httpapi', './internal/scriptrun'], env=sqlite_environment(PAPERGO_TEST_SEARCH_STORE='zvec'))
+
+
+def stage_soak(args):
+    prepare_go()
+    prepare_frontend(args.setup)
     go_tests('zvec-soak', ['-count=1', '-run', '^TestRealDimensionsSoak$', '-v'], ['./internal/dal/search/zvecstore'],
              env=sqlite_environment(PAPERGO_ZVEC_SOAK='1'))
     for target in ('FuzzNativeFilter', 'FuzzNativeText'):

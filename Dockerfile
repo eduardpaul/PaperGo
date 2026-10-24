@@ -21,7 +21,9 @@ COPY web ./
 COPY sdk/dist/workflow.d.ts /src/sdk/dist/
 RUN npm run build
 
-# Export once on a fixed CPU platform; every target uses this verified graph.
+# Exports the pinned Laya graph on a fixed CPU platform. Only the models
+# workflow builds these two stages; it publishes the result, which builds
+# download through scripts/decision-model/bundle.json.
 FROM --platform=linux/amd64 python:3.13-slim-bookworm AS laya-export
 WORKDIR /src
 COPY scripts/decision-model/requirements.txt scripts/decision-model/
@@ -47,11 +49,12 @@ COPY --from=laya-export /src/.tools/decision-build/model/tokenizer/tokenizer.jso
 FROM python:3.12-slim-bookworm AS model-assets
 WORKDIR /src
 COPY scripts/build-assets.py scripts/prepare-preset-models.py scripts/fetch-embedding-models.py scripts/
+COPY scripts/decision-model/install.py scripts/decision-model/bundle.json scripts/decision-model/
 COPY scripts/model-notices scripts/model-notices
 COPY internal/decision/manifest.json internal/decision/
 COPY models/paddleocr models/paddleocr
-COPY --from=laya-model / /src/.tools/decision/model/
 RUN --mount=type=cache,target=/src/.tools/embedding/models \
+    --mount=type=cache,target=/src/.tools/decision \
     python3 scripts/build-assets.py --output-dir /assets
 
 FROM golang:${GO_VERSION}-bookworm AS toolchain
