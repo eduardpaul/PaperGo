@@ -47,7 +47,10 @@ func Generate(ctx context.Context, data []byte, media string, pdf doctext.PDF, m
 		}
 		img, err = doc.Render(0, 100, int64(MaxDimension*MaxDimension))
 	case "image/tiff":
-		img, err = imaging.DecodeTIFFPage(data, 0, maxPixels)
+		var doc *imaging.TIFF
+		if doc, err = imaging.OpenTIFF(data); err == nil {
+			img, err = doc.Decode(0, maxPixels)
+		}
 	default:
 		var decoded imaging.Image
 		decoded, err = imaging.Decode(data, maxPixels)

@@ -271,12 +271,12 @@ func extractImage(ctx context.Context, data []byte, mediaType string, o Options,
 
 // extractTIFF reads every page of a TIFF scan, up to MaxPages, with OCR.
 func extractTIFF(ctx context.Context, data []byte, o Options, engine ocr.Engine) (Result, error) {
-	pages, err := imaging.TIFFPages(data)
+	doc, err := imaging.OpenTIFF(data)
 	if err != nil {
 		return Result{}, fmt.Errorf("%w: %w", ErrUnsupported, err)
 	}
 	var r Result
-	n := len(pages)
+	n := doc.Pages()
 	if n > o.MaxPages {
 		n, r.Truncated = o.MaxPages, true
 	}
@@ -290,7 +290,7 @@ func extractTIFF(ctx context.Context, data []byte, o Options, engine ocr.Engine)
 			r.Pages = append(r.Pages, page)
 			continue
 		}
-		img, err := imaging.DecodeTIFFPage(data, i, o.MaxPixels)
+		img, err := doc.Decode(i, o.MaxPixels)
 		if errors.Is(err, imaging.ErrTIFF) {
 			return Result{}, fmt.Errorf("%w: page %d: %w", ErrUnsupported, i+1, err)
 		}

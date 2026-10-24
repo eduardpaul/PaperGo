@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/kolesa-team/go-webp/webp"
@@ -32,7 +33,8 @@ func TestPageRenditions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := &documentpreview.Renderer{Storage: store, PDF: doctexttest.PDF(t)}
+	reads := &countingStore{Store: store}
+	r := &documentpreview.Renderer{Storage: reads, PDF: doctexttest.PDF(t)}
 	if err = r.Register(s); err != nil {
 		t.Fatal(err)
 	}
@@ -107,6 +109,10 @@ func TestPageRenditions(t *testing.T) {
 	if res := call("GET", "/v1/items/"+scan.ID+"/pages/3", "", "If-None-Match", first.Header().Get("ETag")); res.Code != 304 {
 		t.Fatal("a repeated page was not cached by the browser", res.Code)
 	}
+	// The scan was read from storage once for its list and every page.
+	if n := reads.opens.Load(); n != 1 {
+		t.Fatalf("the scan was read %d times", n)
+	}
 	page("/v1/items/"+scan.ID+"/pages/4", 404)
 	page("/v1/items/"+scan.ID+"/pages/0", 404)
 	page("/v1/items/"+scan.ID+"/pages/1?width=-3", 422)
@@ -156,4 +162,15 @@ func TestPageRenditions(t *testing.T) {
 	if res := call("GET", "/v1/items/"+broken.ID+"/pages", ""); res.Code != 422 || !strings.Contains(res.Body.String(), "unreadable_file") {
 		t.Fatal(res.Code, res.Body.String())
 	}
+}
+
+// countingStore counts the files opened for reading.
+type countingStore struct {
+	storage.Store
+	opens atomic.Int32
+}
+
+func (c *countingStore) Open(ctx context.Context, key string) (storage.ReadSeekCloser, error) {
+	c.opens.Add(1)
+	return c.Store.Open(ctx, key)
 }

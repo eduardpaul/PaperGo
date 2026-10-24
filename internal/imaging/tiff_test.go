@@ -10,15 +10,15 @@ import (
 
 func TestTIFFPagesDecodeOneByOne(t *testing.T) {
 	data := imagingtest.TIFF(imagingtest.Page(30, 20, 10), imagingtest.Page(40, 50, 200), imagingtest.Page(5, 5, 90))
-	pages, err := TIFFPages(data)
-	if err != nil || len(pages) != 3 {
-		t.Fatal(pages, err)
+	doc, err := OpenTIFF(data)
+	if err != nil || doc.Pages() != 3 {
+		t.Fatal(doc, err)
 	}
 	for i, want := range []struct {
 		w, h  int
 		shade uint8
 	}{{30, 20, 10}, {40, 50, 200}, {5, 5, 90}} {
-		img, err := DecodeTIFFPage(data, i, 1<<20)
+		img, err := doc.Decode(i, 1<<20)
 		if err != nil {
 			t.Fatal(i, err)
 		}
@@ -29,28 +29,28 @@ func TestTIFFPagesDecodeOneByOne(t *testing.T) {
 			t.Fatalf("page %d shade %d", i, g.Y)
 		}
 	}
-	if _, err = DecodeTIFFPage(data, 3, 1<<20); !errors.Is(err, ErrTIFF) {
+	if _, err = doc.Decode(3, 1<<20); !errors.Is(err, ErrTIFF) {
 		t.Fatal("a page past the end decoded", err)
 	}
-	if _, err = DecodeTIFFPage(data, 1, 100); !errors.Is(err, ErrTooLarge) {
+	if _, err = doc.Decode(1, 100); !errors.Is(err, ErrTooLarge) {
 		t.Fatal("a page above the pixel bound decoded", err)
 	}
 	// The original bytes are untouched.
-	if again, _ := TIFFPages(data); again[0] != pages[0] {
+	if cfg, err := doc.Config(0); err != nil || cfg.Width != 30 {
 		t.Fatal("decoding changed the file")
 	}
-	if _, err = TIFFPages([]byte("II+\x00........")); err == nil {
+	if _, err = OpenTIFF([]byte("II+\x00........")); err == nil {
 		t.Fatal("BigTIFF was read")
 	}
 }
 
 func TestTIFFPagesStopAtLoops(t *testing.T) {
 	data := imagingtest.TIFF(imagingtest.Page(4, 4, 1), imagingtest.Page(4, 4, 2))
-	pages, _ := TIFFPages(data)
+	doc, _ := OpenTIFF(data)
 	// Point the last page back at the first.
-	last := int(pages[1]) + 2 + 9*12
+	last := int(doc.pages[1]) + 2 + 9*12
 	copy(data[last:], data[4:8])
-	if again, err := TIFFPages(data); err != nil || len(again) != 2 {
+	if again, err := OpenTIFF(data); err != nil || again.Pages() != 2 {
 		t.Fatal(again, err)
 	}
 }

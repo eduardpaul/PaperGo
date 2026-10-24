@@ -17,9 +17,16 @@ var ErrTIFF = errors.New("the TIFF cannot be read")
 // MaxTIFFPages bounds the pages TIFFPages lists.
 const MaxTIFFPages = 2000
 
-// TIFFPages returns the offsets of the pages (image file directories) of a
-// classic TIFF, in order, at most MaxTIFFPages. BigTIFF is not read.
-func TIFFPages(data []byte) ([]uint32, error) {
+// TIFF is a classic TIFF (BigTIFF is not read) whose pages (image file
+// directories) were found once, at most MaxTIFFPages of them, so each page
+// is then sized or decoded without walking the file again.
+type TIFF struct {
+	data  []byte
+	pages []uint32
+}
+
+// OpenTIFF finds the pages of data.
+func OpenTIFF(data []byte) (*TIFF, error) {
 	order, first, err := tiffHeader(data)
 	if err != nil {
 		return nil, err
@@ -42,8 +49,11 @@ func TIFFPages(data []byte) ([]uint32, error) {
 	if len(pages) == 0 {
 		return nil, ErrTIFF
 	}
-	return pages, nil
+	return &TIFF{data: data, pages: pages}, nil
 }
+
+// Pages returns how many pages the TIFF has, at most MaxTIFFPages.
+func (t *TIFF) Pages() int { return len(t.pages) }
 
 func tiffHeader(data []byte) (binary.ByteOrder, uint32, error) {
 	if len(data) < 8 {
@@ -90,16 +100,9 @@ func (o overlay) ReadAt(p []byte, off int64) (int, error) {
 	return n, err
 }
 
-// TIFFPageConfig returns the size of a TIFF page from 0.
-func TIFFPageConfig(data []byte, page int) (image.Config, error) {
-	pages, err := TIFFPages(data)
-	if err != nil {
-		return image.Config{}, err
-	}
-	if page < 0 || page >= len(pages) {
-		return image.Config{}, fmt.Errorf("%w: the TIFF has %d pages", ErrTIFF, len(pages))
-	}
-	r, err := tiffPage(data, pages[page])
+// Config returns the size of page i from 0.
+func (t *TIFF) Config(i int) (image.Config, error) {
+	r, err := t.page(i)
 	if err != nil {
 		return image.Config{}, err
 	}
@@ -110,17 +113,16 @@ func TIFFPageConfig(data []byte, page int) (image.Config, error) {
 	return cfg, nil
 }
 
-// DecodeTIFFPage decodes a TIFF page from 0 of at most maxPixels.
-func DecodeTIFFPage(data []byte, page int, maxPixels int64) (image.Image, error) {
-	cfg, err := TIFFPageConfig(data, page)
+// Decode decodes page i from 0, of at most maxPixels.
+func (t *TIFF) Decode(i int, maxPixels int64) (image.Image, error) {
+	cfg, err := t.Config(i)
 	if err != nil {
 		return nil, err
 	}
 	if cfg.Width <= 0 || cfg.Height <= 0 || int64(cfg.Width)*int64(cfg.Height) > maxPixels {
 		return nil, fmt.Errorf("%w: %d×%d is above %d", ErrTooLarge, cfg.Width, cfg.Height, maxPixels)
 	}
-	pages, _ := TIFFPages(data)
-	r, err := tiffPage(data, pages[page])
+	r, err := t.page(i)
 	if err != nil {
 		return nil, err
 	}
@@ -129,4 +131,11 @@ func DecodeTIFFPage(data []byte, page int, maxPixels int64) (image.Image, error)
 		return nil, fmt.Errorf("%w: %w", ErrTIFF, err)
 	}
 	return img, nil
+}
+
+func (t *TIFF) page(i int) (io.Reader, error) {
+	if i < 0 || i >= len(t.pages) {
+		return nil, fmt.Errorf("%w: the TIFF has %d pages", ErrTIFF, len(t.pages))
+	}
+	return tiffPage(t.data, t.pages[i])
 }

@@ -34,6 +34,11 @@ const pagePixels = 2048 * 4096
 // renditionCacheBytes bounds the rendered pages kept in memory.
 const renditionCacheBytes = 64 << 20
 
+// sourceCacheBytes bounds the files kept in memory between page requests,
+// so scrolling through a scan reads it from storage once. A larger file is
+// read again for each page.
+const sourceCacheBytes = 128 << 20
+
 // PageSize is a page's size in CSS pixels at 100 %: points at 96 DPI for
 // PDF pages, pixels for images.
 type PageSize struct {
@@ -54,15 +59,37 @@ const maxListedPages = imaging.MaxTIFFPages
 
 // pages renders page images on request: every page of PDFs and TIFFs, and
 // the one page of other images, for viewers that cannot draw the file
-// themselves. Renders run a few at a time and are kept in memory.
+// themselves. Files are read and worked on a few at a time, and recent
+// files and renders are kept in memory.
 type pages struct {
 	renderer *Renderer
 	slots    chan struct{}
 	cache    *renditions
+	sources  *renditions
 }
 
 func newPages(r *Renderer) *pages {
-	return &pages{renderer: r, slots: make(chan struct{}, max(1, runtime.NumCPU()/2)), cache: newRenditions(renditionCacheBytes)}
+	return &pages{renderer: r, slots: make(chan struct{}, max(1, runtime.NumCPU()/2)), cache: newRenditions(renditionCacheBytes), sources: newRenditions(sourceCacheBytes)}
+}
+
+// read calls use with the file's bytes while holding a slot, so the files
+// held in memory at once are bounded by the slots and the source cache.
+func (p *pages) read(ctx context.Context, file *blobs.Blob, use func(data []byte) error) error {
+	select {
+	case p.slots <- struct{}{}:
+		defer func() { <-p.slots }()
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	data := p.sources.get(file.Sha256)
+	if data == nil {
+		var err error
+		if data, err = p.bytes(ctx, file); err != nil {
+			return err
+		}
+		p.sources.put(file.Sha256, data)
+	}
+	return use(data)
 }
 
 func (p *pages) list(w http.ResponseWriter, r *http.Request, in httpapi.Request) error {
@@ -70,12 +97,12 @@ func (p *pages) list(w http.ResponseWriter, r *http.Request, in httpapi.Request)
 	if err != nil {
 		return err
 	}
-	data, err := p.bytes(r.Context(), file)
-	if err != nil {
+	var sizes []PageSize
+	var truncated bool
+	if err = p.read(r.Context(), file, func(data []byte) (err error) {
+		sizes, truncated, err = p.sizes(r.Context(), data, string(file.ContentType))
 		return err
-	}
-	sizes, truncated, err := p.sizes(r.Context(), data, string(file.ContentType))
-	if err != nil {
+	}); err != nil {
 		return err
 	}
 	httpapi.Respond(w, r, http.StatusOK, PageList{BlobID: file.ID, Pages: sizes, Truncated: truncated})
@@ -99,11 +126,10 @@ func (p *pages) page(w http.ResponseWriter, r *http.Request, in httpapi.Request)
 	key := fmt.Sprintf("%s/%d/%d", file.Sha256, number, width)
 	webp := p.cache.get(key)
 	if webp == nil {
-		data, err := p.bytes(r.Context(), file)
-		if err != nil {
+		if err = p.read(r.Context(), file, func(data []byte) (err error) {
+			webp, err = p.render(r.Context(), data, string(file.ContentType), number-1, width)
 			return err
-		}
-		if webp, err = p.render(r.Context(), data, string(file.ContentType), number-1, width); err != nil {
+		}); err != nil {
 			return err
 		}
 		p.cache.put(key, webp)
@@ -194,13 +220,13 @@ func (p *pages) sizes(ctx context.Context, data []byte, media string) ([]PageSiz
 		}
 		return out, doc.Pages() > n, nil
 	case "image/tiff":
-		offsets, err := imaging.TIFFPages(data)
+		doc, err := imaging.OpenTIFF(data)
 		if err != nil {
 			return nil, false, unreadable(err)
 		}
-		out := make([]PageSize, 0, len(offsets))
-		for i := range offsets {
-			cfg, err := imaging.TIFFPageConfig(data, i)
+		out := make([]PageSize, 0, doc.Pages())
+		for i := range doc.Pages() {
+			cfg, err := doc.Config(i)
 			if err != nil {
 				return nil, false, unreadable(err)
 			}
@@ -218,14 +244,8 @@ func (p *pages) sizes(ctx context.Context, data []byte, media string) ([]PageSiz
 }
 
 // render draws page i at width pixels, or narrower for a tall page or a
-// smaller image, as WebP.
+// smaller image, as WebP. Callers hold a slot.
 func (p *pages) render(ctx context.Context, data []byte, media string, i, width int) ([]byte, error) {
-	select {
-	case p.slots <- struct{}{}:
-		defer func() { <-p.slots }()
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
 	var img image.Image
 	switch media {
 	case "application/pdf":
@@ -248,14 +268,14 @@ func (p *pages) render(ctx context.Context, data []byte, media string, i, width 
 			return nil, unreadable(err)
 		}
 	case "image/tiff":
-		pages, err := imaging.TIFFPages(data)
+		doc, err := imaging.OpenTIFF(data)
 		if err != nil {
 			return nil, unreadable(err)
 		}
-		if i >= len(pages) {
-			return nil, &httpapi.Problem{Status: http.StatusNotFound, Code: "page_not_found", Detail: fmt.Sprintf("the file has %d pages", len(pages))}
+		if i >= doc.Pages() {
+			return nil, &httpapi.Problem{Status: http.StatusNotFound, Code: "page_not_found", Detail: fmt.Sprintf("the file has %d pages", doc.Pages())}
 		}
-		if img, err = imaging.DecodeTIFFPage(data, i, p.maxPixels()); err != nil {
+		if img, err = doc.Decode(i, p.maxPixels()); err != nil {
 			return nil, unreadable(err)
 		}
 	default:
