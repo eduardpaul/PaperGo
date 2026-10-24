@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { ChevronDown, ChevronUp, RotateCw, Search, X, ZoomIn, ZoomOut } from 'lucide-react';
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { api } from '@/api/http';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/feedback';
@@ -161,7 +161,7 @@ export function PageImages({ file, page, onPage, find: initialFind, notice }: Vi
       <div ref={frame} onScroll={onScroll} tabIndex={0} aria-label={`Pages of ${file.filename}`} className="relative min-h-0 flex-1 overflow-auto bg-surface-muted px-4 py-4 outline-none">
         <div className="mx-auto flex w-max min-w-full flex-col items-center gap-4">
           {pages.map((size, index) => (
-            <PageImage key={index} file={file} number={index + 1} size={size} width={displayWidth(size)} rotation={rotation} highlighted={finding && matches.includes(index + 1)} />
+            <PageImage key={index} scroller={frame} file={file} number={index + 1} size={size} width={displayWidth(size)} rotation={rotation} highlighted={finding && matches.includes(index + 1)} />
           ))}
           {list.data.truncated && <p className="text-[13px] text-muted">Only the first {total} pages are shown. Download the file for the rest.</p>}
         </div>
@@ -214,17 +214,50 @@ export function PageImages({ file, page, onPage, find: initialFind, notice }: Vi
   );
 }
 
-/** One page: a box of the page's shape until it nears the view, then its image. */
-function PageImage({ file, number, size, width, rotation, highlighted }: { file: FileRef; number: number; size: { width: number; height: number }; width: number; rotation: number; highlighted: boolean }) {
+/**
+ * Pages load their image as they come within loadMargin of the view and let
+ * it go once they are beyond unloadMargin, so a long scan holds only the
+ * images around where the person reads, however far they scroll.
+ */
+const loadMargin = '600px 0px';
+const unloadMargin = '2400px 0px';
+/** How long a page's image stays in memory after it scrolls away, for scrolling back. */
+const keepImage = 10_000;
+
+/** One page: a box of the page's shape, with its image while it is near the view. */
+function PageImage({
+  scroller,
+  file,
+  number,
+  size,
+  width,
+  rotation,
+  highlighted,
+}: {
+  scroller: RefObject<HTMLDivElement | null>;
+  file: FileRef;
+  number: number;
+  size: { width: number; height: number };
+  width: number;
+  rotation: number;
+  highlighted: boolean;
+}) {
   const box = useRef<HTMLDivElement>(null);
   const [near, setNear] = useState(false);
   useEffect(() => {
     const element = box.current;
-    if (!element || near) return;
-    const observer = new IntersectionObserver((entries) => entries.some((entry) => entry.isIntersecting) && setNear(true), { rootMargin: '600px 0px' });
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [near]);
+    if (!element) return;
+    // Distances count within the scrolling pages, which clip what the window sees.
+    const root = scroller.current;
+    const load = new IntersectionObserver((entries) => entries.some((entry) => entry.isIntersecting) && setNear(true), { root, rootMargin: loadMargin });
+    const unload = new IntersectionObserver((entries) => entries.every((entry) => !entry.isIntersecting) && setNear(false), { root, rootMargin: unloadMargin });
+    load.observe(element);
+    unload.observe(element);
+    return () => {
+      load.disconnect();
+      unload.disconnect();
+    };
+  }, [scroller]);
   const turned = rotation % 180 !== 0;
   const ratio = turned ? size.width / size.height : size.height / size.width;
   const height = Math.round(width * ratio);
@@ -233,7 +266,7 @@ function PageImage({ file, number, size, width, rotation, highlighted }: { file:
   const drawnHeight = turned ? width : height;
   const pixels = renditionWidth(Math.round(drawnWidth * (window.devicePixelRatio || 1)));
   const path = near ? `/v1/items/${file.itemId}/pages/${number}?width=${pixels}&blob_id=${file.blobId}` : undefined;
-  const image = useBlobUrl(path);
+  const image = useBlobUrl(path, { keep: keepImage });
   return (
     <div
       ref={box}
