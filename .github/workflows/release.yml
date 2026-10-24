@@ -267,7 +267,8 @@ jobs:
           name: shared-assets
           path: dist
       - name: Write asset checksums
-        run: python3 scripts/release-checksum.py dist
+        working-directory: dist
+        run: sha256sum -- * > SHA256SUMS
       - name: Publish prepared assets or finish an empty existing release
         env:
           GH_TOKEN: ${{ github.token }}

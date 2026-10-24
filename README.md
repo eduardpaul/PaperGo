@@ -62,7 +62,7 @@ With globally installed tools, run `npm ci --prefix web` and `npm --prefix web r
 ./scripts/check.ps1
 ```
 
-Tests initialize temporary databases from the DAL schema masters and verify repository invariants on SQLite and PostgreSQL. Pull requests run the lint and test stages; pushes to main, a nightly schedule and releases add the Go race detector, real models, native search, packaging, the container image and the dependency vulnerability scan. The Docker smoke test runs the built image directly with production authentication, a persistent data volume and a read-only root filesystem, and checks the UI, health, graceful shutdown, native search, PDFs, OCR, Laya and both embedding presets. `scripts/ci.sh docker` builds the image and runs it.
+Tests initialize temporary databases from the DAL schema masters and verify repository invariants on SQLite and PostgreSQL. Pull requests run the lint and test stages; pushes to main, a weekly schedule and releases add the Go race detector, real models, native search, packaging, the container image and the dependency vulnerability scan. The Docker smoke test runs the built image directly with production authentication, a persistent data volume and a read-only root filesystem, and checks the UI, health, graceful shutdown, native search, PDFs, OCR, Laya and both embedding presets. `scripts/ci.sh docker` builds the image and runs it.
 
 The machine-readable REST contract is in [`api/openapi.json`](api/openapi.json).
 

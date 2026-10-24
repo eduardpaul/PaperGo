@@ -1,9 +1,10 @@
 name: verify
 # Every job runs one stage of scripts/check.py; scripts/ci.sh runs the same
 # stages locally in the same toolchain image. Pull requests run the lint and
-# test stages. Pushes to main, the nightly schedule and releases also run the
-# race suite, real models, native search, packaging, the container image,
-# the devcontainer and the dependency scan.
+# test stages. Pushes to main, the weekly schedule and releases also run the
+# race suite, real models, native search, packaging, the container image and
+# the dependency scan. The weekly schedule and manual runs also exercise the
+# devcontainer.
 on:
   workflow_call:
     inputs:
@@ -14,8 +15,10 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Weekly, for changes outside the repository: dependency advisories, model
+  # downloads, runner and base images.
   schedule:
-    - cron: '23 3 * * *'
+    - cron: '23 3 * * 1'
   workflow_dispatch:
 permissions:
   contents: read
@@ -89,20 +92,24 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref || github.ref }}
-      # Pull requests restore the caches runs on main save: uploading a
-      # fresh cache from every job took about a minute and a half.
-      - uses: actions/cache/restore@v4
+      # Each kind of job keeps one cache per week and lockfile state, saved
+      # by its first matrix entry on main when no exact match was restored.
+      # Pull requests only read them.
+      - id: week
+        run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+      - id: restore
+        uses: actions/cache/restore@v4
         with: &caches
           path: &cache-paths |
             /home/vscode/go/pkg/mod
             /home/vscode/.cache
-          key: &cache-key toolchain-${{ github.job }}-${{ hashFiles('go.sum', 'web/package-lock.json', 'sdk/package-lock.json') }}-${{ github.run_id }}
+          key: &cache-key toolchain-${{ github.job }}-${{ hashFiles('go.sum', 'web/package-lock.json', 'sdk/package-lock.json') }}-${{ steps.week.outputs.week }}
           restore-keys: |
             toolchain-${{ github.job }}-${{ hashFiles('go.sum', 'web/package-lock.json', 'sdk/package-lock.json') }}-
             toolchain-${{ github.job }}-
       - run: python3 scripts/check.py lint --setup
       - uses: actions/cache/save@v4
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && strategy.job-index == 0 && steps.restore.outputs.cache-hit != 'true'
         with: &save-caches
           path: *cache-paths
           key: *cache-key
@@ -127,11 +134,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref || github.ref }}
-      - uses: actions/cache/restore@v4
+      - id: week
+        run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+      - id: restore
+        uses: actions/cache/restore@v4
         with: *caches
       - run: python3 scripts/check.py test ${{ matrix.arguments }} --setup
       - uses: actions/cache/save@v4
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && strategy.job-index == 0 && steps.restore.outputs.cache-hit != 'true'
         with: *save-caches
       - uses: actions/upload-artifact@v4
         if: always()
@@ -142,7 +152,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-  # Everything below runs on main, nightly and for releases.
+  # Everything below runs on main, weekly and for releases.
   race:
     name: Race (${{ matrix.shard }})
     if: github.event_name != 'pull_request'
@@ -158,10 +168,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref || github.ref }}
-      - uses: actions/cache/restore@v4
+      - id: week
+        run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+      - id: restore
+        uses: actions/cache/restore@v4
         with: *caches
       - run: python3 scripts/check.py race --shard ${{ matrix.shard }} --setup
       - uses: actions/cache/save@v4
+        if: github.event_name != 'pull_request' && strategy.job-index == 0 && steps.restore.outputs.cache-hit != 'true'
         with: *save-caches
       - uses: actions/upload-artifact@v4
         if: always()
@@ -214,7 +228,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref || github.ref }}
-      - uses: actions/cache/restore@v4
+      - id: week
+        run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+      - id: restore
+        uses: actions/cache/restore@v4
         with: *caches
       - uses: actions/download-artifact@v4
         with:
@@ -222,6 +239,7 @@ jobs:
           path: .tools
       - run: python3 scripts/check.py ${{ matrix.stage }} --setup
       - uses: actions/cache/save@v4
+        if: github.event_name != 'pull_request' && strategy.job-index == 0 && steps.restore.outputs.cache-hit != 'true'
         with: *save-caches
 
   platforms:
@@ -265,9 +283,11 @@ jobs:
           path: .tools
       - run: python3 scripts/check.py docker
 
+  # It builds the development image afresh, which the toolchain job already
+  # builds and every container job uses, so it only runs weekly and on demand.
   devcontainer:
     name: Development container
-    if: github.event_name != 'pull_request'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
