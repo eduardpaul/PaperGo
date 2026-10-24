@@ -1731,6 +1731,15 @@ export function createFieldOptionsFromDiscriminatorValue(parseNode: ParseNode | 
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {FileSummary}
+ */
+// @ts-ignore
+export function createFileSummaryFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoFileSummary;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {FileVersion}
  */
 // @ts-ignore
@@ -4544,6 +4553,21 @@ export function deserializeIntoFieldOptions(fieldOptions: Partial<FieldOptions> 
 }
 /**
  * The deserialization information for the current model
+ * @param FileSummary The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoFileSummary(fileSummary: Partial<FileSummary> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "blob_id": n => { fileSummary.blobId = n.getGuidValue(); },
+        "content_type": n => { fileSummary.contentType = n.getStringValue(); },
+        "filename": n => { fileSummary.filename = n.getStringValue(); },
+        "size": n => { fileSummary.size = n.getNumberValue(); },
+        "version": n => { fileSummary.version = n.getNumberValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
  * @param FileVersion The instance to deserialize into.
  * @returns {Record<string, (node: ParseNode) => void>}
  */
@@ -5608,6 +5632,7 @@ export function deserializeIntoResource(resource: Partial<Resource> | undefined 
         "default_currency": n => { resource.defaultCurrency = n.getStringValue(); },
         "description": n => { resource.description = n.getStringValue(); },
         "duplicate_policy": n => { resource.duplicatePolicy = n.getEnumValue<Resource_duplicate_policy>(Resource_duplicate_policyObject); },
+        "file": n => { resource.file = n.getObjectValue<FileSummary>(createFileSummaryFromDiscriminatorValue); },
         "head_revision_id": n => { resource.headRevisionId = n.getGuidValue(); },
         "id": n => { resource.id = n.getGuidValue(); },
         "inherit_permissions": n => { resource.inheritPermissions = n.getBooleanValue(); },
@@ -5799,6 +5824,7 @@ export function deserializeIntoSearchHit(searchHit: Partial<SearchHit> | undefin
         "archived_by": n => { searchHit.archivedBy = n.getStringValue(); },
         "collection_id": n => { searchHit.collectionId = n.getGuidValue(); },
         "content_type_id": n => { searchHit.contentTypeId = n.getStringValue(); },
+        "file": n => { searchHit.file = n.getObjectValue<FileSummary>(createFileSummaryFromDiscriminatorValue); },
         "highlights": n => { searchHit.highlights = n.getObjectValue<UntypedNode>(createUntypedNodeFromDiscriminatorValue); },
         "id": n => { searchHit.id = n.getGuidValue(); },
         "kind": n => { searchHit.kind = n.getEnumValue<SearchHit_kind>(SearchHit_kindObject); },
@@ -7196,6 +7222,31 @@ export interface FieldOptions extends Parsable {
     unique?: boolean | null;
 }
 export type FieldOptions_search_weight = (typeof FieldOptions_search_weightObject)[keyof typeof FieldOptions_search_weightObject];
+/**
+ * The file of an item's selected revision: the one the caller reads (the draft for draft readers, otherwise the published file).
+ */
+export interface FileSummary extends AdditionalDataHolder, Parsable {
+    /**
+     * The file version, as blob_id on content, preview and text routes.
+     */
+    blobId?: Guid | null;
+    /**
+     * Media type identified from the file's bytes.
+     */
+    contentType?: string | null;
+    /**
+     * The filename property
+     */
+    filename?: string | null;
+    /**
+     * The size property
+     */
+    size?: number | null;
+    /**
+     * File version number, independent of the resource version.
+     */
+    version?: number | null;
+}
 export interface FileVersion extends AdditionalDataHolder, Parsable {
     /**
      * available while the bytes are kept, pending after reclamation is requested, or reclaimed after the grace period. A reclaimed version keeps its identity and metadata; its download and restore report that the content is unavailable.
@@ -8755,6 +8806,10 @@ export interface Resource extends AdditionalDataHolder, Parsable {
      */
     duplicatePolicy?: Resource_duplicate_policy | null;
     /**
+     * Library items with a file only.
+     */
+    file?: FileSummary | null;
+    /**
      * Omitted from published read surfaces.
      */
     headRevisionId?: Guid | null;
@@ -9077,6 +9132,10 @@ export interface SearchHit extends Parsable {
      * The content_type_id property
      */
     contentTypeId?: string | null;
+    /**
+     * The file of a library item hit, on the hit's surface.
+     */
+    file?: FileSummary | null;
     /**
      * Byte ranges of matches in snippet.
      */
@@ -10360,6 +10419,22 @@ export function serializeFieldOptions(writer: SerializationWriter, fieldOptions:
 }
 /**
  * Serializes information the current object
+ * @param FileSummary The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeFileSummary(writer: SerializationWriter, fileSummary: Partial<FileSummary> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!fileSummary || isSerializingDerivedType) { return; }
+    writer.writeGuidValue("blob_id", fileSummary.blobId);
+    writer.writeStringValue("content_type", fileSummary.contentType);
+    writer.writeStringValue("filename", fileSummary.filename);
+    writer.writeNumberValue("size", fileSummary.size);
+    writer.writeNumberValue("version", fileSummary.version);
+    writer.writeAdditionalData(fileSummary.additionalData);
+}
+/**
+ * Serializes information the current object
  * @param FileVersion The instance to serialize from.
  * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
  * @param writer Serialization writer to use to serialize this model
@@ -11436,6 +11511,7 @@ export function serializeResource(writer: SerializationWriter, resource: Partial
     writer.writeStringValue("default_currency", resource.defaultCurrency);
     writer.writeStringValue("description", resource.description);
     writer.writeEnumValue<Resource_duplicate_policy>("duplicate_policy", resource.duplicatePolicy);
+    writer.writeObjectValue<FileSummary>("file", resource.file, serializeFileSummary);
     writer.writeGuidValue("head_revision_id", resource.headRevisionId);
     writer.writeGuidValue("id", resource.id);
     writer.writeBooleanValue("inherit_permissions", resource.inheritPermissions);
@@ -11626,6 +11702,7 @@ export function serializeSearchHit(writer: SerializationWriter, searchHit: Parti
     if (!searchHit || isSerializingDerivedType) { return; }
     writer.writeGuidValue("collection_id", searchHit.collectionId);
     writer.writeStringValue("content_type_id", searchHit.contentTypeId);
+    writer.writeObjectValue<FileSummary>("file", searchHit.file, serializeFileSummary);
     writer.writeObjectValue("highlights", searchHit.highlights);
     writer.writeGuidValue("id", searchHit.id);
     writer.writeEnumValue<SearchHit_kind>("kind", searchHit.kind);

@@ -398,23 +398,9 @@ func (s *Service) visibleFiles(ctx context.Context, subject string, f resources.
 	if len(rows) > MaxFolderEntries {
 		return nil, invalid("folders with more than " + strconv.Itoa(MaxFolderEntries) + " entries cannot be listed as files")
 	}
-	revisions, err := s.overlayPage(ctx, subject, "auto", rows, nil)
+	revisions, contents, err := s.overlayPageFiles(ctx, subject, "auto", rows, nil)
 	if err != nil {
 		return nil, err
-	}
-	blobIDs := []string{}
-	for _, rev := range revisions {
-		if rev.BlobID != nil {
-			blobIDs = append(blobIDs, *rev.BlobID)
-		}
-	}
-	contents := map[string]*blobs.Blob{}
-	found, err := s.DAL.Blobs().Blobs(ctx, blobs.BlobFilter{IDs: blobIDs})
-	if err != nil {
-		return nil, err
-	}
-	for i, b := range found {
-		contents[b.ID] = &found[i]
 	}
 	out := make([]*File, 0, len(rows))
 	for _, r := range rows {

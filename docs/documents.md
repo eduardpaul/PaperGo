@@ -6,7 +6,7 @@ Example metadata: `{"name":"Invoice","folder_id":"<folder UUID>","values":{"amou
 
 The file streams under the configured upload limit; metadata is limited to 64 KiB and multipart overhead to an additional 128 KiB. Successful creation returns `201` with `item`, `file`, `duplicates`, `Location` and the new item ETag. Its first content revision already contains both metadata and file. Malformed requests, invalid metadata, duplicate blocking and failed writes leave no item and remove the stored object. The library's normal publishing setting controls whether that first revision is published or a draft.
 
-A library item holds metadata and immutable file versions. `PUT /v1/items/{id}/content` streams a new file using `X-Filename`, `Content-Type` and the current numeric `If-Match`. The response includes the file version number and the new resource ETag. File version numbers, metadata revision numbers and resource lock versions are independent.
+A library item holds metadata and immutable file versions. Item resources, listings, queries, smart folders and search hits carry a `file` summary of the file the caller reads (the draft for draft readers, otherwise the published file): `blob_id`, `content_type`, `filename`, `size` and `version`. It is absent before the first upload. `PUT /v1/items/{id}/content` streams a new file using `X-Filename`, `Content-Type` and the current numeric `If-Match`. The response includes the file version number and the new resource ETag. File version numbers, metadata revision numbers and resource lock versions are independent.
 
 Lists and libraries, including Documents templates and personal Home libraries,
 default to versioning off. With versioning off, replacing a file queues its

@@ -139,6 +139,9 @@ func TestContentSteps(t *testing.T) {
 	if err != nil || len(found.Hits) != 1 {
 		t.Fatalf("%+v %v", found, err)
 	}
+	if file := found.Hits[0].File; file == nil || file.ContentType != "application/pdf" || file.Version != 1 {
+		t.Fatalf("hit file: %+v", file)
+	}
 	// A newer file makes the old generation stale.
 	stale := accepted(chunks, `{"text":"An older reading","chunker":"whole"}`)
 	upload("2", "%PDF-letter again")

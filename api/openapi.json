@@ -23159,6 +23159,10 @@
             "additionalProperties": true,
             "description": "Custom fields on items and folders, validated against their attached collection content type. Folder fields are optional and receive no creation defaults. Folder edits are immediately visible; items follow publishing settings."
           },
+          "file": {
+            "$ref": "#/components/schemas/FileSummary",
+            "description": "Library items with a file only."
+          },
           "webdav_enabled": {
             "type": "boolean",
             "default": false,
@@ -30117,6 +30121,10 @@
           "name": {
             "type": "string"
           },
+          "file": {
+            "$ref": "#/components/schemas/FileSummary",
+            "description": "The file of a library item hit, on the hit's surface."
+          },
           "snippet": {
             "type": "string",
             "description": "Body text around the first match."
@@ -32974,6 +32982,41 @@
           }
         },
         "additionalProperties": false
+      },
+      "FileSummary": {
+        "type": "object",
+        "description": "The file of an item's selected revision: the one the caller reads (the draft for draft readers, otherwise the published file).",
+        "properties": {
+          "blob_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The file version, as blob_id on content, preview and text routes."
+          },
+          "content_type": {
+            "type": "string",
+            "description": "Media type identified from the file's bytes."
+          },
+          "filename": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "File version number, independent of the resource version."
+          }
+        },
+        "required": [
+          "blob_id",
+          "content_type",
+          "filename",
+          "size",
+          "version"
+        ]
       }
     },
     "parameters": {
