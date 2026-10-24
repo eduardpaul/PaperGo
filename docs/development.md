@@ -177,13 +177,14 @@ volumes.
 ### Continuous integration
 
 Pull requests run `lint` and `test`: Go in two shards, PostgreSQL and the
-frontend, about ten minutes on warm caches. Pushes to `main`, a nightly
+frontend, about ten minutes on warm caches. Pushes to `main`, a weekly
 schedule and releases also run `race` in three shards, `native`, `zvec`,
 `release` and `vuln` in the toolchain image, `release` on Windows and `zvec` on
-Linux arm64 with natively installed SDKs, `docker`, and the devcontainer smoke
-test. The first job of each run publishes the toolchain image when its inputs
-changed. Jobs restore the Go, npm and Staticcheck caches that runs on `main`
-save; pull requests only read them. Go test reports are uploaded even when tests
+Linux arm64 with natively installed SDKs, and `docker`. The weekly schedule and
+manual runs also build the devcontainer and run its smoke test. The first job
+of each run publishes the toolchain image when its inputs changed. Each kind of
+job restores its Go, npm and Staticcheck cache; runs on `main` save a new one
+once a week or when a lockfile changes, and pull requests only read them. Go test reports are uploaded even when tests
 fail. Superseded branch
 and pull request runs are cancelled; release validation keeps its serialized
 publication policy.
