@@ -28,18 +28,20 @@ import (
 
 // WorkflowRun is an object representing the database table.
 type WorkflowRun struct {
-	ID              string                      `db:"id,pk" `
-	CreatedAt       time.Time                   `db:"created_at" `
-	WorkflowID      string                      `db:"workflow_id" `
-	WorkflowVersion int64                       `db:"workflow_version" `
-	WorkspaceID     string                      `db:"workspace_id" `
-	ItemID          null.Val[string]            `db:"item_id" `
-	EventID         string                      `db:"event_id" `
-	EventType       string                      `db:"event_type" `
-	Depth           int64                       `db:"depth" `
-	Actor           string                      `db:"actor" `
-	RetryOf         null.Val[string]            `db:"retry_of" `
-	Logs            types.JSON[json.RawMessage] `db:"logs" `
+	ID              string                                `db:"id,pk" `
+	CreatedAt       time.Time                             `db:"created_at" `
+	WorkflowID      string                                `db:"workflow_id" `
+	WorkflowVersion int64                                 `db:"workflow_version" `
+	WorkspaceID     string                                `db:"workspace_id" `
+	ItemID          null.Val[string]                      `db:"item_id" `
+	EventID         string                                `db:"event_id" `
+	EventType       string                                `db:"event_type" `
+	Depth           int64                                 `db:"depth" `
+	Actor           string                                `db:"actor" `
+	RetryOf         null.Val[string]                      `db:"retry_of" `
+	Generation      int64                                 `db:"generation" `
+	State           null.Val[types.JSON[json.RawMessage]] `db:"state" `
+	Logs            types.JSON[json.RawMessage]           `db:"logs" `
 
 	R workflowRunR `db:"-" `
 }
@@ -84,7 +86,7 @@ type workflowRunRLoaded struct {
 
 func buildWorkflowRunColumns(tableName string) workflowRunColumns {
 	columnsExpr := expr.NewColumnsExpr(
-		"id", "created_at", "workflow_id", "workflow_version", "workspace_id", "item_id", "event_id", "event_type", "depth", "actor", "retry_of", "logs",
+		"id", "created_at", "workflow_id", "workflow_version", "workspace_id", "item_id", "event_id", "event_type", "depth", "actor", "retry_of", "generation", "state", "logs",
 	)
 
 	if tableName != "" {
@@ -105,6 +107,8 @@ func buildWorkflowRunColumns(tableName string) workflowRunColumns {
 		Depth:           buildWorkflowRunColumn(tableName, "depth"),
 		Actor:           buildWorkflowRunColumn(tableName, "actor"),
 		RetryOf:         buildWorkflowRunColumn(tableName, "retry_of"),
+		Generation:      buildWorkflowRunColumn(tableName, "generation"),
+		State:           buildWorkflowRunColumn(tableName, "state"),
 		Logs:            buildWorkflowRunColumn(tableName, "logs"),
 	}
 }
@@ -123,6 +127,8 @@ type workflowRunColumns struct {
 	Depth           workflowRunColumn
 	Actor           workflowRunColumn
 	RetryOf         workflowRunColumn
+	Generation      workflowRunColumn
+	State           workflowRunColumn
 	Logs            workflowRunColumn
 }
 
@@ -169,22 +175,24 @@ func (c workflowRunColumn) ShouldOmitParens() bool {
 // All values are optional, and do not have to be set
 // Generated columns are not included
 type WorkflowRunSetter struct {
-	ID              omit.Val[string]                      `db:"id,pk" `
-	CreatedAt       omit.Val[time.Time]                   `db:"created_at" `
-	WorkflowID      omit.Val[string]                      `db:"workflow_id" `
-	WorkflowVersion omit.Val[int64]                       `db:"workflow_version" `
-	WorkspaceID     omit.Val[string]                      `db:"workspace_id" `
-	ItemID          omitnull.Val[string]                  `db:"item_id" `
-	EventID         omit.Val[string]                      `db:"event_id" `
-	EventType       omit.Val[string]                      `db:"event_type" `
-	Depth           omit.Val[int64]                       `db:"depth" `
-	Actor           omit.Val[string]                      `db:"actor" `
-	RetryOf         omitnull.Val[string]                  `db:"retry_of" `
-	Logs            omit.Val[types.JSON[json.RawMessage]] `db:"logs" `
+	ID              omit.Val[string]                          `db:"id,pk" `
+	CreatedAt       omit.Val[time.Time]                       `db:"created_at" `
+	WorkflowID      omit.Val[string]                          `db:"workflow_id" `
+	WorkflowVersion omit.Val[int64]                           `db:"workflow_version" `
+	WorkspaceID     omit.Val[string]                          `db:"workspace_id" `
+	ItemID          omitnull.Val[string]                      `db:"item_id" `
+	EventID         omit.Val[string]                          `db:"event_id" `
+	EventType       omit.Val[string]                          `db:"event_type" `
+	Depth           omit.Val[int64]                           `db:"depth" `
+	Actor           omit.Val[string]                          `db:"actor" `
+	RetryOf         omitnull.Val[string]                      `db:"retry_of" `
+	Generation      omit.Val[int64]                           `db:"generation" `
+	State           omitnull.Val[types.JSON[json.RawMessage]] `db:"state" `
+	Logs            omit.Val[types.JSON[json.RawMessage]]     `db:"logs" `
 }
 
 func (s WorkflowRunSetter) SetColumns() []string {
-	vals := make([]string, 0, 12)
+	vals := make([]string, 0, 14)
 	if s.ID.IsValue() {
 		vals = append(vals, "id")
 	}
@@ -217,6 +225,12 @@ func (s WorkflowRunSetter) SetColumns() []string {
 	}
 	if s.RetryOf.IsValue() || s.RetryOf.IsNull() {
 		vals = append(vals, "retry_of")
+	}
+	if s.Generation.IsValue() {
+		vals = append(vals, "generation")
+	}
+	if s.State.IsValue() || s.State.IsNull() {
+		vals = append(vals, "state")
 	}
 	if s.Logs.IsValue() {
 		vals = append(vals, "logs")
@@ -257,6 +271,12 @@ func (s WorkflowRunSetter) Overwrite(t *WorkflowRun) {
 	}
 	if s.RetryOf.IsValue() || s.RetryOf.IsNull() {
 		t.RetryOf = s.RetryOf.MustGetNull()
+	}
+	if s.Generation.IsValue() {
+		t.Generation = s.Generation.MustGet()
+	}
+	if s.State.IsValue() || s.State.IsNull() {
+		t.State = s.State.MustGetNull()
 	}
 	if s.Logs.IsValue() {
 		t.Logs = s.Logs.MustGet()
@@ -325,6 +345,16 @@ func (s *WorkflowRunSetter) Apply(q *dialect.InsertQuery) {
 			}
 			return psql.Arg(s.RetryOf.MustGetNull()).WriteSQL(ctx, w, d, start)
 		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.Generation.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.Generation.MustGet()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.State.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.State.MustGetNull()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
 			if s.Logs.IsUnset() {
 				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
 			}
@@ -337,7 +367,7 @@ func (s WorkflowRunSetter) UpdateMod() bob.Mod[*dialect.UpdateQuery] {
 }
 
 func (s WorkflowRunSetter) Expressions(prefix ...string) []bob.Expression {
-	exprs := make([]bob.Expression, 0, 12)
+	exprs := make([]bob.Expression, 0, 14)
 
 	if s.ID.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
@@ -416,6 +446,20 @@ func (s WorkflowRunSetter) Expressions(prefix ...string) []bob.Expression {
 		}})
 	}
 
+	if s.Generation.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "generation")...),
+			psql.Arg(s.Generation),
+		}})
+	}
+
+	if s.State.IsValue() || s.State.IsNull() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "state")...),
+			psql.Arg(s.State),
+		}})
+	}
+
 	if s.Logs.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
 			psql.Quote(append(prefix, "logs")...),
@@ -433,7 +477,7 @@ func workflowRunScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc,
 		idx int
 		dst func(o *WorkflowRun) any
 	}
-	targets := make([]target, 0, 12)
+	targets := make([]target, 0, 14)
 	for i, col := range cols {
 		switch col {
 		case "id":
@@ -458,6 +502,10 @@ func workflowRunScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc,
 			targets = append(targets, target{i, func(o *WorkflowRun) any { return &o.Actor }})
 		case "retry_of":
 			targets = append(targets, target{i, func(o *WorkflowRun) any { return &o.RetryOf }})
+		case "generation":
+			targets = append(targets, target{i, func(o *WorkflowRun) any { return &o.Generation }})
+		case "state":
+			targets = append(targets, target{i, func(o *WorkflowRun) any { return &o.State }})
 		case "logs":
 			targets = append(targets, target{i, func(o *WorkflowRun) any { return &o.Logs }})
 		}
@@ -1389,6 +1437,8 @@ type workflowRunWhere[Q psql.Filterable] struct {
 	Depth           psql.WhereMod[Q, int64]
 	Actor           psql.WhereMod[Q, string]
 	RetryOf         psql.WhereNullMod[Q, string]
+	Generation      psql.WhereMod[Q, int64]
+	State           psql.WhereNullMod[Q, types.JSON[json.RawMessage]]
 	Logs            psql.WhereMod[Q, types.JSON[json.RawMessage]]
 	R               workflowRunWhereR[Q]
 }
@@ -1411,6 +1461,8 @@ func buildWorkflowRunWhere[Q psql.Filterable](cols workflowRunColumns) workflowR
 		Depth:           psql.Where[Q, int64](cols.Depth.Expression),
 		Actor:           psql.Where[Q, string](cols.Actor.Expression),
 		RetryOf:         psql.WhereNull[Q, string](cols.RetryOf.Expression),
+		Generation:      psql.Where[Q, int64](cols.Generation.Expression),
+		State:           psql.WhereNull[Q, types.JSON[json.RawMessage]](cols.State.Expression),
 		Logs:            psql.Where[Q, types.JSON[json.RawMessage]](cols.Logs.Expression),
 		R:               workflowRunWhereR[Q]{cols: cols},
 	}

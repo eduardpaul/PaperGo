@@ -415,6 +415,44 @@ func (s *Service) FinishedOperations(ctx context.Context, ids []string) ([]opera
 	return s.DAL.Operations().Finished(ctx, ids)
 }
 
+// OwnedOperation returns operation id as the API shows it when one of
+// owners owns it, such as a run that a workflow run called, whoever
+// created it.
+func (s *Service) OwnedOperation(ctx context.Context, owners []string, id string) (*OperationView, error) {
+	return read(ctx, s, func(t *Service) (*OperationView, error) {
+		op, e := t.DAL.Operations().Find(ctx, id)
+		if dberr.IsNotFound(e) || e == nil && (op.ParentID == "" || !slices.Contains(owners, op.ParentID)) {
+			return nil, ErrNotFound
+		}
+		if e != nil {
+			return nil, e
+		}
+		return viewOperation(op, time.Now()), nil
+	})
+}
+
+// EndedOperations returns those of ids that ended as the API shows them,
+// in the order of ids. It does not check who may read them: it is for
+// callers that checked when they began to wait, such as a run.
+func (s *Service) EndedOperations(ctx context.Context, ids []string) ([]*OperationView, error) {
+	ended, err := s.DAL.Operations().Finished(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	byID := make(map[string]operations.Operation, len(ended))
+	for _, op := range ended {
+		byID[op.ID] = op
+	}
+	out := make([]*OperationView, 0, len(ids))
+	now := time.Now()
+	for _, id := range ids {
+		if op, ok := byID[id]; ok {
+			out = append(out, viewOperation(op, now))
+		}
+	}
+	return out, nil
+}
+
 // queryable reports whether queries may filter, sort or group by a field.
 func queryable(d *catalog.FieldDefinition) bool {
 	return d.Indexed && d.IndexStatus == catalog.IndexReady

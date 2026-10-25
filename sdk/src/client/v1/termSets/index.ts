@@ -13,6 +13,12 @@ import { type BaseRequestBuilder, type KeysToExcludeForNavigationMetadata, type 
  */
 export interface TermSetsRequestBuilder extends BaseRequestBuilder<TermSetsRequestBuilder> {
     /**
+     * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+     * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+     * @returns {Promise<NonNullable<TermSetPage["value"]>>}
+     */
+     all(requestConfiguration?: RequestConfiguration<TermSetsRequestBuilderGetQueryParameters> | undefined) : Promise<NonNullable<TermSetPage["value"]>>;
+    /**
      * Gets an item from the PaperGo.v1.termSets.item collection
      * @param id Unique identifier of the item
      * @returns {TermSetsItemRequestBuilder}
@@ -95,7 +101,7 @@ const TermSetsRequestBuilderGetQueryParametersMapper: Record<string, string> = {
 /**
  * Metadata for all the navigation properties in the request builder.
  */
-export const TermSetsRequestBuilderNavigationMetadata: Record<Exclude<keyof TermSetsRequestBuilder, KeysToExcludeForNavigationMetadata>, NavigationMetadata> = {
+export const TermSetsRequestBuilderNavigationMetadata: Record<Exclude<keyof TermSetsRequestBuilder, KeysToExcludeForNavigationMetadata | "all">, NavigationMetadata> = {
     byId: {
         requestsMetadata: TermSetsItemRequestBuilderRequestsMetadata,
         navigationMetadata: TermSetsItemRequestBuilderNavigationMetadata,

@@ -19,6 +19,12 @@ export type GetScopeQueryParameterType = (typeof GetScopeQueryParameterTypeObjec
  */
 export interface RelationshipsRequestBuilder extends BaseRequestBuilder<RelationshipsRequestBuilder> {
     /**
+     * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+     * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+     * @returns {Promise<NonNullable<WorkspaceRelationshipPage["value"]>>}
+     */
+     all(requestConfiguration?: RequestConfiguration<RelationshipsRequestBuilderGetQueryParameters> | undefined) : Promise<NonNullable<WorkspaceRelationshipPage["value"]>>;
+    /**
      * The items property
      */
     get items(): ItemsRequestBuilder;
@@ -111,7 +117,7 @@ const RelationshipsRequestBuilderGetQueryParametersMapper: Record<string, string
 /**
  * Metadata for all the navigation properties in the request builder.
  */
-export const RelationshipsRequestBuilderNavigationMetadata: Record<Exclude<keyof RelationshipsRequestBuilder, KeysToExcludeForNavigationMetadata>, NavigationMetadata> = {
+export const RelationshipsRequestBuilderNavigationMetadata: Record<Exclude<keyof RelationshipsRequestBuilder, KeysToExcludeForNavigationMetadata | "all">, NavigationMetadata> = {
     items: {
         requestsMetadata: ItemsRequestBuilderRequestsMetadata,
     },

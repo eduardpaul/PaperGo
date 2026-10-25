@@ -222,6 +222,14 @@ func WithIdempotencyKey(ctx context.Context, key string) (context.Context, error
 	return context.WithValue(ctx, idempotencyKey{}, key), nil
 }
 
+// IdempotencyKey returns the idempotency key WithIdempotencyKey put on ctx,
+// for work that a request records without accepting an operation, such as
+// a manual workflow start.
+func IdempotencyKey(ctx context.Context) string {
+	key, _ := ctx.Value(idempotencyKey{}).(string)
+	return key
+}
+
 // ErrIdempotencyConflict means the caller's idempotency key already names an
 // operation with another payload.
 var ErrIdempotencyConflict = operations.ErrIdempotencyConflict

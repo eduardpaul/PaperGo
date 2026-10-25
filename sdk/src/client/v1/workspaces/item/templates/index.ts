@@ -11,6 +11,12 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface TemplatesRequestBuilder extends BaseRequestBuilder<TemplatesRequestBuilder> {
     /**
+     * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+     * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+     * @returns {Promise<NonNullable<SchemaTemplatePage["value"]>>}
+     */
+     all(requestConfiguration?: RequestConfiguration<TemplatesRequestBuilderGetQueryParameters> | undefined) : Promise<NonNullable<SchemaTemplatePage["value"]>>;
+    /**
      *  Required module scopes: contentType.read. Resource ACLs and any additional use-case checks also apply.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<SchemaTemplatePage>}

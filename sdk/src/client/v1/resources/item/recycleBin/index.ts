@@ -13,6 +13,12 @@ import { type BaseRequestBuilder, type Guid, type KeysToExcludeForNavigationMeta
  */
 export interface RecycleBinRequestBuilder extends BaseRequestBuilder<RecycleBinRequestBuilder> {
     /**
+     * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+     * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+     * @returns {Promise<NonNullable<RecycleBinPage["value"]>>}
+     */
+     all(requestConfiguration?: RequestConfiguration<RecycleBinRequestBuilderGetQueryParameters> | undefined) : Promise<NonNullable<RecycleBinPage["value"]>>;
+    /**
      * Gets an item from the PaperGo.v1.resources.item.recycleBin.item collection
      * @param itemID Unique identifier of the item
      * @returns {WithItemItemRequestBuilder}
@@ -59,7 +65,7 @@ const RecycleBinRequestBuilderGetQueryParametersMapper: Record<string, string> =
 /**
  * Metadata for all the navigation properties in the request builder.
  */
-export const RecycleBinRequestBuilderNavigationMetadata: Record<Exclude<keyof RecycleBinRequestBuilder, KeysToExcludeForNavigationMetadata>, NavigationMetadata> = {
+export const RecycleBinRequestBuilderNavigationMetadata: Record<Exclude<keyof RecycleBinRequestBuilder, KeysToExcludeForNavigationMetadata | "all">, NavigationMetadata> = {
     byItemID: {
         requestsMetadata: WithItemItemRequestBuilderRequestsMetadata,
         navigationMetadata: WithItemItemRequestBuilderNavigationMetadata,

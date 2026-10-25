@@ -789,6 +789,10 @@ CREATE TABLE workflow_runs (
     depth INTEGER NOT NULL CHECK (depth >= 0),
     actor TEXT NOT NULL,
     retry_of TEXT,
+    -- A run that continued as new counts its generations; state is what the
+    -- last one carried into the current one, the script's ctx.state.
+    generation INTEGER NOT NULL DEFAULT 0 CHECK (generation >= 0),
+    state TEXT CHECK (state IS NULL OR json_valid(state)),
     logs TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(logs) AND json_type(logs) = 'array')
 );
 CREATE UNIQUE INDEX workflowrun_workflow_id_event_id ON workflow_runs(workflow_id, event_id);
@@ -1023,7 +1027,10 @@ CREATE TABLE workflow_steps (
     input_hash TEXT NOT NULL CHECK (length(input_hash) = 64),
     status TEXT NOT NULL CHECK (status IN ('pending', 'completed', 'failed')),
     "input" TEXT CHECK ("input" IS NULL OR json_valid("input")),
+    -- zstd-compressed when larger than 256 bytes; output_size is its size
+    -- uncompressed, kept when a finished run drops the output.
     "output" BLOB,
+    output_size INTEGER NOT NULL DEFAULT 0 CHECK (output_size >= 0),
     error TEXT,
     started_at DATETIME NOT NULL,
     completed_at DATETIME,

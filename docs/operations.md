@@ -40,7 +40,7 @@ An operation is `pending` until it ends as `succeeded`, `failed`, `superseded` o
 
 ## Ownership and dependencies
 
-An operation **owns** the operations created on its behalf: those a workflow run's requests start, and those a handler starts while it executes. The owner is the operation's `parent_id`. Ownership is fixed at creation. An operation that a request finds rather than creates keeps its owner, for example one an idempotency key replays.
+An operation **owns** the operations created on its behalf: those a workflow run's requests start, such as the tasks it asks and the runs it [calls](workflows.md#calling-workflows), and those a handler starts while it executes. The owner is the operation's `parent_id`. Ownership is fixed at creation. An operation that a request finds rather than creates keeps its owner, for example one an idempotency key replays.
 
 - **Cancellation follows ownership.** Cancelling an operation cancels the pending operations it owns, and theirs in turn.
 - **Waiting is a dependency, not ownership.** A workflow that waits for an operation resumes when it ends. Cancelling the workflow leaves that operation alone, because another run, a person or a module may depend on it too.

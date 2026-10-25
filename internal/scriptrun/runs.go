@@ -89,7 +89,18 @@ func (r *Runner) slice(ctx context.Context, s *dms.Service, op *operations.Opera
 	if err != nil {
 		return err
 	}
-	out, err := r.engine.Execute(ctx, script.Run{ID: op.ID, Author: op.CreatedBy, Claim: op.Claim, Artifact: workflow.Artifact(v), Context: p.Context()})
+	row, err := s.DAL.Runs().Find(ctx, op.ID)
+	if err != nil {
+		return err
+	}
+	// A run that continued as new starts its script again with what its
+	// last generation carried.
+	run := p.Context()
+	run["generation"] = row.Generation
+	if row.State != nil {
+		run["state"] = row.State
+	}
+	out, err := r.engine.Execute(ctx, script.Run{ID: op.ID, Author: op.CreatedBy, Claim: op.Claim, Artifact: workflow.Artifact(v), Context: run})
 	if err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -115,6 +126,17 @@ func (r *Runner) slice(ctx context.Context, s *dms.Service, op *operations.Opera
 			return complete(ctx, t, op, p, output)
 		case out.Status == script.Failed:
 			return fail(ctx, t, op, out.Error)
+		case out.Status == script.Continued:
+			// The next generation replaces the journal; what it started, such
+			// as tasks, still belongs to the run.
+			if err := t.DAL.Runs().Continue(ctx, op.ID, row.Generation, out.State); err != nil {
+				return err
+			}
+			next := []runstore.Log{{Level: "info", Message: fmt.Sprintf("Continued as new: generation %d", row.Generation+1), At: time.Now().UTC()}}
+			if err := t.DAL.Runs().AddLogs(ctx, op.ID, next); err != nil {
+				return err
+			}
+			return t.ReleaseOperation(ctx, op)
 		case out.Until != nil:
 			return t.SleepOperation(ctx, op, *out.Until)
 		default:
@@ -173,6 +195,10 @@ func complete(ctx context.Context, t *dms.Service, op *operations.Operation, p w
 	if err := t.DiscardStagedFiles(ctx, blobs.StagedSelection{RunIDs: []string{op.ID}}); err != nil {
 		return err
 	}
+	// A completed run never replays: its journal keeps small outputs only.
+	if err := t.DAL.Runs().DropOutputs(ctx, op.ID); err != nil {
+		return err
+	}
 	return finished(ctx, t, p)
 }
 
@@ -188,8 +214,9 @@ func fail(ctx context.Context, t *dms.Service, op *operations.Operation, message
 }
 
 // ended cleans up after a run that did not complete: failed with message,
-// or cancelled without one. A failed run keeps its staged files for a
-// retry to use; a cancelled one discards them. Cancelling a run also
+// or cancelled without one. A failed run keeps its staged files and its
+// journal's outputs for a retry to use; a cancelled one discards them, and
+// keeps small outputs only, as a completed run does. Cancelling a run also
 // cancels the work its requests started, such as tasks, which it owns;
 // operations it only waited for go on.
 func ended(ctx context.Context, t *dms.Service, op *operations.Operation, message string) error {
@@ -202,8 +229,13 @@ func ended(ctx context.Context, t *dms.Service, op *operations.Operation, messag
 		if err := failed(ctx, t, op, p, message); err != nil {
 			return err
 		}
-	} else if err := t.DiscardStagedFiles(ctx, blobs.StagedSelection{RunIDs: []string{op.ID}}); err != nil {
-		return err
+	} else {
+		if err := t.DiscardStagedFiles(ctx, blobs.StagedSelection{RunIDs: []string{op.ID}}); err != nil {
+			return err
+		}
+		if err := t.DAL.Runs().DropOutputs(ctx, op.ID); err != nil {
+			return err
+		}
 	}
 	return finished(ctx, t, p)
 }

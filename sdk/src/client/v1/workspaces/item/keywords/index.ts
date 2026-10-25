@@ -11,6 +11,12 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface KeywordsRequestBuilder extends BaseRequestBuilder<KeywordsRequestBuilder> {
     /**
+     * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+     * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+     * @returns {Promise<NonNullable<WorkspaceKeywordCountPage["value"]>>}
+     */
+     all(requestConfiguration?: RequestConfiguration<KeywordsRequestBuilderGetQueryParameters> | undefined) : Promise<NonNullable<WorkspaceKeywordCountPage["value"]>>;
+    /**
      * Shared keywords used in this workspace, with names and counts of distinct readable resources. Includes intrinsic keywords and keywords fields on the visible head/published surface. Sorted by normalized name and ID; follow the opaque continuation cursor.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<WorkspaceKeywordCountPage>}

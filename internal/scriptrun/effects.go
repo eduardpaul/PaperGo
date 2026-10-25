@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"time"
 
@@ -132,12 +133,25 @@ func serve(ctx context.Context, handler http.Handler, req script.Request) (scrip
 // Wait records a wait for operations the author can read. It is over when
 // none of them is pending; otherwise ReleaseWaits completes it once the last
 // one ends, and ReconcileWaits if that release was missed.
-func (e *Effects) Wait(ctx context.Context, run script.Run, unsaved []runs.Step, step runs.Step) (bool, error) {
+func (e *Effects) Wait(ctx context.Context, run script.Run, unsaved []runs.Step, step runs.Step) (json.RawMessage, bool, error) {
 	done := true
 	err := e.write(ctx, run, func(t *dms.Service) error {
-		done = true
-		for _, id := range step.Operations {
+		done, step.Status, step.Output = true, runs.StepPending, nil
+		ended := make([]*dms.OperationView, len(step.Operations))
+		var owners []string
+		for i, id := range step.Operations {
+			// A run waits for operations its author can read, and for those it
+			// or an attempt it retries owns, such as runs it called of a
+			// workflow another author wrote.
 			op, err := t.Operation(ctx, run.Author, id)
+			if errors.Is(err, dms.ErrNotFound) || errors.Is(err, dms.ErrForbidden) {
+				if owners == nil {
+					if owners, err = attempts(ctx, t, run.ID); err != nil {
+						return err
+					}
+				}
+				op, err = t.OwnedOperation(ctx, owners, id)
+			}
 			if errors.Is(err, dms.ErrNotFound) || errors.Is(err, dms.ErrForbidden) {
 				return fmt.Errorf("%w: %s", script.ErrUnknownOperation, id)
 			}
@@ -147,13 +161,35 @@ func (e *Effects) Wait(ctx context.Context, run script.Run, unsaved []runs.Step,
 			if op.Status == operations.StatusPending {
 				done = false
 			}
+			ended[i] = op
 		}
 		if done {
-			step.Status = runs.StepCompleted
+			output, err := json.Marshal(ended)
+			if err != nil {
+				return err
+			}
+			step.Status, step.Output = runs.StepCompleted, output
 		}
 		return t.DAL.Runs().RecordSteps(ctx, append(unsaved, step))
 	})
-	return done, err
+	return step.Output, done, err
+}
+
+// attempts returns a run and the runs it retries, newest first: a retry
+// replays what they started, so it may wait for it.
+func attempts(ctx context.Context, t *dms.Service, runID string) ([]string, error) {
+	out := []string{runID}
+	for id := runID; ; {
+		row, err := t.DAL.Runs().Find(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		if row.RetryOf == "" || slices.Contains(out, row.RetryOf) {
+			return out, nil
+		}
+		id = row.RetryOf
+		out = append(out, id)
+	}
 }
 
 // Sleep records a sleep step; the run's worker makes it wait until then.

@@ -45,6 +45,12 @@ export interface RelationshipsGetResponse extends Parsable {
  */
 export interface RelationshipsRequestBuilder extends BaseRequestBuilder<RelationshipsRequestBuilder> {
     /**
+     * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+     * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+     * @returns {Promise<NonNullable<RelationshipsGetResponse["value"]>>}
+     */
+     all(requestConfiguration?: RequestConfiguration<RelationshipsRequestBuilderGetQueryParameters> | undefined) : Promise<NonNullable<RelationshipsGetResponse["value"]>>;
+    /**
      * Gets an item from the PaperGo.v1.items.item.relationships.item collection
      * @param linkID Unique identifier of the item
      * @returns {WithLinkItemRequestBuilder}
@@ -128,7 +134,7 @@ const RelationshipsRequestBuilderGetQueryParametersMapper: Record<string, string
 /**
  * Metadata for all the navigation properties in the request builder.
  */
-export const RelationshipsRequestBuilderNavigationMetadata: Record<Exclude<keyof RelationshipsRequestBuilder, KeysToExcludeForNavigationMetadata>, NavigationMetadata> = {
+export const RelationshipsRequestBuilderNavigationMetadata: Record<Exclude<keyof RelationshipsRequestBuilder, KeysToExcludeForNavigationMetadata | "all">, NavigationMetadata> = {
     byLinkID: {
         requestsMetadata: WithLinkItemRequestBuilderRequestsMetadata,
         pathParametersMappings: ["linkID"],

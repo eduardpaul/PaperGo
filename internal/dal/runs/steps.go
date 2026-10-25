@@ -37,14 +37,17 @@ func (s StepStatus) Valid() bool { return s == StepPending || s == StepCompleted
 // repeating it. InputHash identifies what was asked, so a replay that asks
 // for something else at the same position is detected.
 type Step struct {
-	RunID       string
-	Seq         int
-	Kind        StepKind
-	Name        string
-	InputHash   string
-	Status      StepStatus
-	Input       json.RawMessage
+	RunID     string
+	Seq       int
+	Kind      StepKind
+	Name      string
+	InputHash string
+	Status    StepStatus
+	Input     json.RawMessage
+	// Output is nil when a finished run dropped it; OutputSize is its size
+	// in bytes either way.
 	Output      json.RawMessage
+	OutputSize  int
 	Error       string
 	StartedAt   time.Time
 	CompletedAt *time.Time
@@ -53,7 +56,8 @@ type Step struct {
 	Operations []string
 }
 
-// StepQueries are the statements a driver runs for script steps.
+// StepQueries are the statements a driver runs for script steps. Outputs
+// cross them as stored, compressed by pack.
 type StepQueries interface {
 	// RunSteps returns a run's steps ordered by Seq.
 	RunSteps(ctx context.Context, runID string) ([]Step, error)
@@ -61,19 +65,44 @@ type StepQueries interface {
 	InsertStepOperations(ctx context.Context, runID string, seq int, operationIDs []string) error
 	// FinishRunStep completes or fails a pending step and reports whether it
 	// was pending.
-	FinishRunStep(ctx context.Context, runID string, seq int, status StepStatus, output json.RawMessage, message string, at time.Time) (bool, error)
-	// ReleaseWaits completes the pending waits for any of operationIDs, or
+	FinishRunStep(ctx context.Context, runID string, seq int, status StepStatus, output []byte, size int, message string, at time.Time) (bool, error)
+	// ReleasableWaits returns the pending waits for any of operationIDs, or
 	// every pending wait when there are none, whose operations have all
-	// ended, and returns the runs whose waits it completed.
-	ReleaseWaits(ctx context.Context, operationIDs []string, at time.Time) ([]string, error)
+	// ended, with those operations.
+	ReleasableWaits(ctx context.Context, operationIDs []string) ([]Wait, error)
+	// RunWaiting reports whether a run has a pending step.
+	RunWaiting(ctx context.Context, runID string) (bool, error)
+	// DropRunOutputs drops the outputs of a run's steps that are stored
+	// larger than limit bytes.
+	DropRunOutputs(ctx context.Context, runID string, limit int) error
 	// CopyRunSteps copies a run's steps before a position, with the
 	// operations they name, to another run.
 	CopyRunSteps(ctx context.Context, target, source string, before int) error
+	// DeleteRunSteps deletes a run's steps with the operations they name.
+	DeleteRunSteps(ctx context.Context, runID string) error
+	// SetRunStepOutput replaces a recorded step's output.
+	SetRunStepOutput(ctx context.Context, runID string, seq int, output []byte, size int) error
+}
+
+// Wait is a pending wait step and the operations it waits for.
+type Wait struct {
+	RunID      string
+	Seq        int
+	Operations []string
 }
 
 // Steps returns a run's recorded steps in order.
 func (r *Repo) Steps(ctx context.Context, runID string) ([]Step, error) {
-	return r.read.RunSteps(ctx, runID)
+	steps, err := r.read.RunSteps(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range steps {
+		if steps[i].Output, err = unpack(steps[i].Output); err != nil {
+			return nil, fmt.Errorf("step %d of %s: %w", steps[i].Seq, runID, err)
+		}
+	}
+	return steps, nil
 }
 
 // RecordSteps appends steps to their runs. Only a wait can be pending, and
@@ -98,6 +127,7 @@ func (r *Repo) RecordSteps(ctx context.Context, steps []Step) error {
 			if s.Status != StepPending && s.CompletedAt == nil {
 				s.CompletedAt = &at
 			}
+			s.OutputSize, s.Output = len(s.Output), pack(s.Output)
 			if err := q.InsertRunStep(ctx, s); err != nil {
 				return err
 			}
@@ -122,39 +152,40 @@ func (r *Repo) FinishStep(ctx context.Context, runID string, seq int, output jso
 	var done bool
 	err := r.write(ctx, func(q Queries) error {
 		var err error
-		done, err = q.FinishRunStep(ctx, runID, seq, status, output, failure, now())
+		done, err = q.FinishRunStep(ctx, runID, seq, status, pack(output), len(output), failure, now())
 		return err
 	})
 	return done, err
 }
 
-// ReleaseWaits completes the pending waits for any of operationIDs whose
-// operations have all ended, and returns the runs whose waits it
-// completed, which can continue. Without IDs it reconciles every pending
-// wait, for waits whose last operation ended while nobody released them,
-// such as before a crash.
-func (r *Repo) ReleaseWaits(ctx context.Context, operationIDs []string) ([]string, error) {
-	var released []string
-	err := r.write(ctx, func(q Queries) error {
-		var err error
-		released, err = q.ReleaseWaits(ctx, operationIDs, now())
-		return err
-	})
-	return released, err
+// ReleasableWaits returns the pending waits for any of operationIDs whose
+// operations have all ended, which FinishStep completes with what they
+// ended as. Without IDs it returns every such wait, for waits whose last
+// operation ended while nobody released them, such as before a crash.
+func (r *Repo) ReleasableWaits(ctx context.Context, operationIDs []string) ([]Wait, error) {
+	return r.read.ReleasableWaits(ctx, operationIDs)
 }
 
 // Waiting reports whether a run has a pending wait.
 func (r *Repo) Waiting(ctx context.Context, runID string) (bool, error) {
-	steps, err := r.read.RunSteps(ctx, runID)
-	if err != nil {
-		return false, err
-	}
-	for _, s := range steps {
-		if s.Status == StepPending {
-			return true, nil
-		}
-	}
-	return false, nil
+	return r.read.RunWaiting(ctx, runID)
+}
+
+// KeptOutput is the stored size up to which a finished run keeps a step's
+// output, so its details show what small responses said.
+const KeptOutput = 4 << 10
+
+// DropOutputs drops the outputs a run that completed or was cancelled no
+// longer replays, except those stored in at most KeptOutput bytes. Their
+// sizes stay. A failed run keeps them for its retry.
+func (r *Repo) DropOutputs(ctx context.Context, runID string) error {
+	return r.write(ctx, func(q Queries) error { return q.DropRunOutputs(ctx, runID, KeptOutput) })
+}
+
+// ReplaceOutput replaces what a run's step returns when it replays, such as
+// a forked call whose failed runs a retry runs again.
+func (r *Repo) ReplaceOutput(ctx context.Context, runID string, seq int, output json.RawMessage) error {
+	return r.write(ctx, func(q Queries) error { return q.SetRunStepOutput(ctx, runID, seq, pack(output), len(output)) })
 }
 
 // ForkSteps gives a run the steps another recorded before a position, so

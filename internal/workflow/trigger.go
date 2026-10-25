@@ -17,14 +17,18 @@ import (
 const MaxTriggerBytes = 64 << 10
 
 // TriggerObject is the content that caused a run. Kind discriminates manual
-// selections, items, folders and files. The SDK adds manual input and primary
-// item aliases from the run payload, without persisting another copy.
+// selections, calls, items, folders and files. The SDK adds manual and call
+// input and the primary item alias from the run payload, without persisting
+// another copy. A call carries no snapshot, so a run that calls a workflow
+// on many items stays small: the called run reads its item.
 type TriggerObject struct {
-	Kind   string             `json:"kind"`
-	Item   *TriggerResource   `json:"item,omitempty"`
-	Folder *TriggerResource   `json:"folder,omitempty"`
-	File   *TriggerFile       `json:"file,omitempty"`
-	Items  []TriggerSelection `json:"items,omitempty"`
+	Kind string `json:"kind"`
+	// ParentRunID is the run that called this one.
+	ParentRunID string             `json:"parent_run_id,omitempty"`
+	Item        *TriggerResource   `json:"item,omitempty"`
+	Folder      *TriggerResource   `json:"folder,omitempty"`
+	File        *TriggerFile       `json:"file,omitempty"`
+	Items       []TriggerSelection `json:"items,omitempty"`
 }
 
 // TriggerSelection preserves every selected ID in launch order, including
@@ -63,6 +67,10 @@ type TriggerFile struct {
 // retain their revisions. Missing/inaccessible content has no snapshot; this
 // must not grant an event consumer access to another author's draft.
 func triggerObject(ctx context.Context, t *dms.Service, author string, e dms.Event) (*TriggerObject, error) {
+	if e.Type == TriggerCall {
+		parent, _ := e.Data["parent_run_id"].(string)
+		return &TriggerObject{Kind: TriggerCall, ParentRunID: parent}, nil
+	}
 	if e.Type == TriggerManual || e.Type == TestStart {
 		object := &TriggerObject{Kind: TriggerManual, Items: []TriggerSelection{}}
 		for _, id := range eventMembers(e) {

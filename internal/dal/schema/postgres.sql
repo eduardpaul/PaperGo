@@ -793,6 +793,10 @@ CREATE TABLE workflow_runs (
     depth BIGINT NOT NULL CHECK (depth >= 0),
     actor TEXT NOT NULL,
     retry_of TEXT,
+    -- A run that continued as new counts its generations; state is what the
+    -- last one carried into the current one, the script's ctx.state.
+    generation BIGINT NOT NULL DEFAULT 0 CHECK (generation >= 0),
+    state JSONB,
     logs JSONB NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(logs) = 'array')
 );
 CREATE UNIQUE INDEX workflowrun_workflow_id_event_id ON workflow_runs(workflow_id, event_id);
@@ -1027,7 +1031,10 @@ CREATE TABLE workflow_steps (
     input_hash TEXT NOT NULL CHECK (length(input_hash) = 64),
     status TEXT NOT NULL CHECK (status IN ('pending', 'completed', 'failed')),
     "input" JSONB,
+    -- zstd-compressed when larger than 256 bytes; output_size is its size
+    -- uncompressed, kept when a finished run drops the output.
     "output" BYTEA,
+    output_size INTEGER NOT NULL DEFAULT 0 CHECK (output_size >= 0),
     error TEXT,
     started_at TIMESTAMPTZ NOT NULL,
     completed_at TIMESTAMPTZ,

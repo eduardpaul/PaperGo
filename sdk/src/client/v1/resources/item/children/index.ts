@@ -25,6 +25,12 @@ export interface ChildrenGetResponse extends Parsable {
  */
 export interface ChildrenRequestBuilder extends BaseRequestBuilder<ChildrenRequestBuilder> {
     /**
+     * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+     * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+     * @returns {Promise<NonNullable<ChildrenGetResponse["value"]>>}
+     */
+     all(requestConfiguration?: RequestConfiguration<ChildrenRequestBuilderGetQueryParameters> | undefined) : Promise<NonNullable<ChildrenGetResponse["value"]>>;
+    /**
      * Browse visible direct children
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<ChildrenGetResponse>}

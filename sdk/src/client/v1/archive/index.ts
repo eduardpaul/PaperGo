@@ -21,6 +21,12 @@ export interface ArchiveGetResponse extends Parsable {
  */
 export interface ArchiveRequestBuilder extends BaseRequestBuilder<ArchiveRequestBuilder> {
     /**
+     * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+     * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+     * @returns {Promise<NonNullable<ArchiveGetResponse["value"]>>}
+     */
+     all(requestConfiguration?: RequestConfiguration<ArchiveRequestBuilderGetQueryParameters> | undefined) : Promise<NonNullable<ArchiveGetResponse["value"]>>;
+    /**
      * Database-backed name search and filters; newest archived first with keyset pagination. Works without a search service. Requires item.read. Archive date bounds are inclusive.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<ArchiveGetResponse>}

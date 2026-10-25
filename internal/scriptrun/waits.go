@@ -2,7 +2,9 @@ package scriptrun
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
+	"slices"
 	"time"
 
 	"papergo/internal/dms"
@@ -32,11 +34,33 @@ func ReconcileWaits(ctx context.Context, s *dms.Service) error {
 }
 
 // release completes the waits for operationIDs, or every wait whose
-// operations ended when there are none, and unparks their runs.
+// operations ended when there are none, and unparks their runs. A wait
+// records its operations as they ended, which its replay returns.
 func release(ctx context.Context, t *dms.Service, operationIDs []string) error {
-	runs, err := t.DAL.Runs().ReleaseWaits(ctx, operationIDs)
-	if err != nil || len(runs) == 0 {
+	waits, err := t.DAL.Runs().ReleasableWaits(ctx, operationIDs)
+	if err != nil || len(waits) == 0 {
 		return err
+	}
+	var runs []string
+	for _, w := range waits {
+		ended, err := t.EndedOperations(ctx, w.Operations)
+		if err != nil {
+			return err
+		}
+		output, err := json.Marshal(ended)
+		if err != nil {
+			return err
+		}
+		done, err := t.DAL.Runs().FinishStep(ctx, w.RunID, w.Seq, output, "")
+		if err != nil {
+			return err
+		}
+		if done && !slices.Contains(runs, w.RunID) {
+			runs = append(runs, w.RunID)
+		}
+	}
+	if len(runs) == 0 {
+		return nil
 	}
 	return t.UnparkOperations(ctx, waitExecution, runs, time.Now(), "")
 }

@@ -2,7 +2,7 @@ import type { Resource, Workflow } from '@/api/types';
 import type { Trigger, WorkflowDefinition } from './model';
 
 export function triggerLabel(trigger: Trigger): string {
-  const labels: Record<string, string> = { manual: 'Run on demand', 'file.added': 'When a file is added', 'file.updated': 'When a file is replaced', 'item.created': 'When an item is created', 'item.updated': 'When metadata changes', 'item.published': 'When an item is published', 'permissions.changed': 'When permissions change', 'term.changed': 'When a term changes', 'term.merged': 'When terms merge', 'term.moved': 'When a term moves', 'task.completed': 'When a task is completed' };
+  const labels: Record<string, string> = { manual: 'Run on demand', call: 'When another workflow calls it', 'file.added': 'When a file is added', 'file.updated': 'When a file is replaced', 'item.created': 'When an item is created', 'item.updated': 'When metadata changes', 'item.published': 'When an item is published', 'permissions.changed': 'When permissions change', 'term.changed': 'When a term changes', 'term.merged': 'When terms merge', 'term.moved': 'When a term moves', 'task.completed': 'When a task is completed' };
   if (trigger.type === 'schedule') {
     if (trigger.cron === '* * * * *') return 'Every minute';
     const daily = /^(\d+) (\d+) \* \* \*$/.exec(trigger.cron ?? '');
@@ -13,7 +13,8 @@ export function triggerLabel(trigger: Trigger): string {
 
 export function automaticSummary(workflow: Workflow, collections: Resource[] = []) {
   if (workflow.state !== 'published') return `Off · ${workflow.state === 'draft' ? 'Draft' : 'Archived'}`;
-  const triggers = (workflow.definition as WorkflowDefinition).triggers.filter(trigger => trigger.type !== 'manual');
+  // Manual starts and calls do not depend on automatic processing.
+  const triggers = (workflow.definition as WorkflowDefinition).triggers.filter(trigger => trigger.type !== 'manual' && trigger.type !== 'call');
   if (!triggers.length) return 'Not configured';
   if (!workflow.automatic_enabled) return 'Off';
   const active = triggers.filter(trigger => !trigger.disabled);
@@ -31,4 +32,4 @@ export function manualSummary(workflow: Workflow) {
 }
 
 export const runStatusLabel = (status: string) => ({ queued: 'Queued', running: 'Running', waiting: 'Waiting', completed: 'Completed', failed: 'Failed', cancelled: 'Cancelled' })[status] ?? status;
-export const runOriginLabel = (event = 'unknown') => event === 'manual' ? 'Manual' : event === 'schedule' ? 'Scheduled' : event === 'test' ? 'Test' : `Automatic · ${triggerLabel({ type: event })}`;
+export const runOriginLabel = (event = 'unknown') => event === 'manual' ? 'Manual' : event === 'schedule' ? 'Scheduled' : event === 'test' ? 'Test' : event === 'call' ? 'Called' : `Automatic · ${triggerLabel({ type: event })}`;

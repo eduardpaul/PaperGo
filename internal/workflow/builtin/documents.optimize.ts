@@ -37,13 +37,12 @@ export default workflow<unknown, unknown, Params>({
     if (!result.artifact_id) return { kept: result.reason };
     const staged = (await ctx.api.v1.artifacts.byId(result.artifact_id).stage.post())!;
     const item = await ctx.api.v1.resources.byId(id).get();
-    const review = await ctx.api.v1.workspaces.byId(ctx.run.workspace_id).tasks.post({
+    const answer = await ctx.ask({
       kind: "approval", itemId: id, assignees: p.approvers,
       title: `Review a smaller file for ${item?.name}`,
       description: "The proposed WebP file is shown beside the current file at full size. Approve if its smallest text is still readable.",
       review: { type: "file.compare", stagedFileId: staged.id },
     });
-    const answer = plain((await ctx.wait(review!.operationId!)).result) as { outcome: string };
     const file = ctx.api.v1.stagedFiles.byId(staged.id!);
     if (answer.outcome !== "approved") {
       await file.discard.post();

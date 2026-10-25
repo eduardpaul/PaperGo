@@ -22,10 +22,12 @@ import (
 
 // Trigger types. Item triggers react to committed item writes, schedule
 // triggers to cron occurrences, manual triggers to starts through the API,
-// and workflow events (wf.{key}.{event}) to other runs.
+// call triggers to other runs' ctx.call, and workflow events
+// (wf.{key}.{event}) to other runs ending.
 const (
 	TriggerManual   = "manual"
 	TriggerSchedule = "schedule"
+	TriggerCall     = "call"
 )
 
 // ItemTriggers are the trigger types raised by item writes.
@@ -215,7 +217,7 @@ func (d Definition) validate() error {
 	if len(d.Triggers) == 0 || len(d.Triggers) > MaxTriggers {
 		return dms.Invalid(fmt.Sprintf("a workflow needs 1 to %d triggers", MaxTriggers))
 	}
-	manual := 0
+	manual, calls := 0, 0
 	for i, t := range d.Triggers {
 		if t.Type == TriggerManual && t.Disabled {
 			return dms.Invalid("use manual_enabled to control manual runs")
@@ -311,6 +313,11 @@ func (d Definition) validate() error {
 			if t.Cron != "" || t.TimeZone != "" || t.ContentTypeID != "" {
 				return dms.Invalid(at + "manual triggers take only collection_id and selection")
 			}
+		case t.Type == TriggerCall:
+			calls++
+			if t.Cron != "" || t.TimeZone != "" || t.ContentTypeID != "" {
+				return dms.Invalid(at + "call triggers take only collection_id")
+			}
 		case slices.Contains(tasks.Events, t.Type):
 			if t.Cron != "" || t.TimeZone != "" || t.ContentTypeID != "" {
 				return dms.Invalid(at + "task triggers take collection_id and task_key")
@@ -347,12 +354,12 @@ func (d Definition) validate() error {
 			return dms.Invalid(at + "a condition needs collection_id on every trigger")
 		}
 	}
-	if manual > 1 {
-		return dms.Invalid("a workflow has at most one manual trigger")
+	if manual > 1 || calls > 1 {
+		return dms.Invalid("a workflow has at most one manual trigger and one call trigger")
 	}
 	if d.InputSchema != nil {
-		if manual == 0 {
-			return dms.Invalid("input_schema belongs to workflows with a manual trigger")
+		if manual == 0 && calls == 0 {
+			return dms.Invalid("input_schema belongs to workflows with a manual or call trigger")
 		}
 		if err := forms.ValidateLaunch(d.InputSchema, "input_schema"); err != nil {
 			return dms.Invalid(err.Error())

@@ -18,6 +18,8 @@ import { TasksRequestBuilderRequestsMetadata, type TasksRequestBuilder } from '.
 // @ts-ignore
 import { TemplatesRequestBuilderRequestsMetadata, type TemplatesRequestBuilder } from './templates/index.js';
 // @ts-ignore
+import { type WorkflowCallsRequestBuilder, WorkflowCallsRequestBuilderRequestsMetadata } from './workflowCalls/index.js';
+// @ts-ignore
 import { type BaseRequestBuilder, type KeysToExcludeForNavigationMetadata, type NavigationMetadata } from '@microsoft/kiota-abstractions';
 
 /**
@@ -56,6 +58,10 @@ export interface WorkspacesItemRequestBuilder extends BaseRequestBuilder<Workspa
      * The templates property
      */
     get templates(): TemplatesRequestBuilder;
+    /**
+     * The workflowCalls property
+     */
+    get workflowCalls(): WorkflowCallsRequestBuilder;
 }
 /**
  * Uri template for the request builder.
@@ -90,6 +96,9 @@ export const WorkspacesItemRequestBuilderNavigationMetadata: Record<Exclude<keyo
     },
     templates: {
         requestsMetadata: TemplatesRequestBuilderRequestsMetadata,
+    },
+    workflowCalls: {
+        requestsMetadata: WorkflowCallsRequestBuilderRequestsMetadata,
     },
 };
 /* tslint:enable */

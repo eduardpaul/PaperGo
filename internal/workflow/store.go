@@ -20,6 +20,8 @@ import (
 	"papergo/internal/dal/workflows"
 	"papergo/internal/dms"
 	"papergo/internal/forms"
+
+	"github.com/google/uuid"
 )
 
 // Service manages workflows and their runs on top of the DMS: the same
@@ -534,7 +536,7 @@ func index(ctx context.Context, t *dms.Service, w *workflows.Workflow, def Defin
 	if w.AutomaticEnabled && w.State == workflows.StatePublished && w.DeletedAt == nil && !(w.Role != "" && w.CollectionID != "" && !w.AutomaticProvider) {
 		now := time.Now().UTC()
 		for i, tr := range def.Triggers {
-			if tr.Type == TriggerManual || tr.Disabled {
+			if tr.Type == TriggerManual || tr.Type == TriggerCall || tr.Disabled {
 				continue
 			}
 			entry := workflows.TriggerInput{CollectionID: tr.CollectionID, Type: tr.Type, Position: i}
@@ -669,13 +671,49 @@ func (s *Service) StartTest(ctx context.Context, subject, id string, in TestRun)
 // manage access to the workspace. Everything is checked before any run
 // starts. The start is logged as events with the request's transaction; the
 // dispatcher starts the runs moments later.
+//
+// With an idempotency key on ctx (dms.WithIdempotencyKey) the start's
+// events are named after the caller, the workflow and the key, so a retry
+// returns the runs the first start made, while its events are kept
+// (RUN_RETENTION); the same key with another start is
+// dms.ErrIdempotencyConflict.
 func (s *Service) StartRuns(ctx context.Context, subject, id string, in Start) (runs []string, err error) {
 	err = s.DMS.Write(ctx, func(t *dms.Service) error {
+		key := dms.IdempotencyKey(ctx)
+		fingerprint := ""
+		if key != "" {
+			body, err := json.Marshal(in)
+			if err != nil {
+				return err
+			}
+			sum := sha256.Sum256(body)
+			fingerprint = hex.EncodeToString(sum[:])
+			for i := 0; ; i++ {
+				e, err := t.DAL.Events().Find(ctx, startEventID(subject, id, key, i))
+				if dberr.IsNotFound(err) {
+					break
+				}
+				if err != nil {
+					return err
+				}
+				if e.Actor != subject || e.Data["workflow_id"] != id || e.Data[startFingerprint] != fingerprint {
+					return dms.ErrIdempotencyConflict
+				}
+				runs = append(runs, RunID(id, e.ID))
+			}
+			if len(runs) > 0 {
+				return nil
+			}
+		}
 		events, e := s.planStart(ctx, t, subject, id, in, true)
 		if e != nil {
 			return e
 		}
-		for _, event := range events {
+		for i, event := range events {
+			if key != "" {
+				event.ID = startEventID(subject, id, key, i)
+				event.Data[startFingerprint] = fingerprint
+			}
 			t.Emit(ctx, event)
 			runs = append(runs, RunID(id, event.ID))
 		}
@@ -683,6 +721,18 @@ func (s *Service) StartRuns(ctx context.Context, subject, id string, in Start) (
 	})
 	return
 }
+
+// startFingerprint is the data of a manual start's event that records the
+// start an idempotency key made, which the run's script does not see.
+const startFingerprint = "idempotency"
+
+// startEventID names the event of the i-th run of a start made with an
+// idempotency key.
+func startEventID(subject, workflowID, key string, i int) string {
+	return uuid.NewSHA1(startNamespace, []byte(fmt.Sprintf("%s\x00%s\x00%s\x00%d", subject, workflowID, key, i))).String()
+}
+
+var startNamespace = uuid.MustParse("5e2f3c1a-9b7d-4f0e-8a6c-2d1b4e7f9a03")
 
 func (s *Service) planStart(ctx context.Context, t *dms.Service, subject, id string, in Start, checkInputs bool) (events []dms.Event, err error) {
 	err = func() error {
@@ -853,9 +903,15 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event) (started []s
 				continue
 			}
 		}
+		// Manual starts and calls ask for a run and keep its ID, whatever
+		// their workflow's concurrency; their checks ran when they were made.
+		explicit := e.Type == TriggerManual || e.Type == TriggerCall
+		// Test runs, and the runs they call, raise no workflow events and
+		// ignore concurrency.
+		test := e.Type == TestStart || e.Type == TriggerCall && e.Data[callTest] == true
 		var candidates []*workflows.Workflow
 		switch e.Type {
-		case TriggerManual, TriggerSchedule, TestStart:
+		case TriggerManual, TriggerCall, TriggerSchedule, TestStart:
 			id, _ := e.Data["workflow_id"].(string)
 			w, err := findWorkflow(ctx, t, id)
 			if err != nil {
@@ -889,17 +945,17 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event) (started []s
 			lookups[key] = candidates
 		}
 		for _, w := range candidates {
-			if e.Type != TriggerManual && e.Type != TestStart && w.Role != "" && (w.CollectionID == "" || e.CollectionID != "" && w.CollectionID != e.CollectionID || !w.AutomaticProvider) {
+			if !explicit && e.Type != TestStart && w.Role != "" && (w.CollectionID == "" || e.CollectionID != "" && w.CollectionID != e.CollectionID || !w.AutomaticProvider) {
 				continue
 			}
 			versionKey := w.ID
-			if e.Type == TriggerManual || e.Type == TestStart {
+			if explicit || e.Type == TestStart {
 				versionKey += fmt.Sprint(e.Data["workflow_version"])
 			}
 			m := versions[versionKey]
 			if m == nil {
 				v, err := current(ctx, t, w)
-				if e.Type == TriggerManual || e.Type == TestStart {
+				if explicit || e.Type == TestStart {
 					number, ok := forms.Number(e.Data["workflow_version"])
 					if !ok {
 						return nil, nil, dms.Invalid("manual event requires its accepted workflow version")
@@ -931,7 +987,7 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event) (started []s
 				}
 			}
 			startError := ""
-			if m.def.Condition != nil && e.Type != TriggerManual && e.Type != TriggerSchedule && e.Type != TestStart {
+			if m.def.Condition != nil && !explicit && e.Type != TriggerSchedule && e.Type != TestStart {
 				if e.ResourceID == "" || e.CollectionID == "" {
 					continue
 				}
@@ -954,7 +1010,7 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event) (started []s
 			// A coalescing workflow runs one item at a time: a run that starts
 			// while another is active waits for it.
 			waiting := false
-			if c := m.def.Concurrency; c != "" && c != ConcurrencyParallel && len(members) > 0 && e.Type != TestStart {
+			if c := m.def.Concurrency; c != "" && c != ConcurrencyParallel && len(members) > 0 && !test {
 				busy, err := activeRuns(ctx, t, w.ID, members)
 				if err != nil {
 					return nil, nil, err
@@ -969,10 +1025,10 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event) (started []s
 				switch c {
 				case ConcurrencySkip:
 					if len(busy) > 0 {
-						if e.Type != TriggerManual {
+						if !explicit {
 							continue
 						}
-						startError = "manual launch skipped because another run is active"
+						startError = e.Type + " skipped because another run is active"
 					}
 				case ConcurrencyReplace:
 					ids := make([]string, 0, len(busy))
@@ -987,7 +1043,7 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event) (started []s
 					for _, run := range busy {
 						queued = queued || run.Status == runstore.StatusQueued || strings.HasPrefix(run.ExecutionID, SerialExecution(""))
 					}
-					if queued && e.Type != TriggerManual {
+					if queued && !explicit {
 						continue
 					}
 					waiting = len(busy) > 0
@@ -1016,11 +1072,11 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event) (started []s
 					payload.StartError = err.Error()
 				}
 			}
-			if m.def.Concurrency == ConcurrencyCoalesce && len(members) > 0 && e.Type != TestStart {
+			if m.def.Concurrency == ConcurrencyCoalesce && len(members) > 0 && !test {
 				payload.Serial = w.ID + ":" + members[0]
 			}
-			payload.Test = e.Type == TestStart
-			if e.Type == TriggerManual || e.Type == TestStart {
+			payload.Test = test
+			if explicit || e.Type == TestStart {
 				if inputs, ok := e.Data["inputs"].(map[string]any); ok {
 					payload.Input = inputs
 				}
@@ -1043,12 +1099,13 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event) (started []s
 // runEvent is how a run's script sees the event that started it.
 func runEvent(e dms.Event) RunEvent {
 	data := e.Data
-	if e.Type == TriggerManual || e.Type == TestStart {
+	if e.Type == TriggerManual || e.Type == TriggerCall || e.Type == TestStart {
 		// The run stores validated form input separately. The SDK exposes it
 		// as manual trigger.input and run(ctx, input), without a second copy
 		// inside the script's event metadata. Keep the logged event intact.
 		data = maps.Clone(data)
 		delete(data, "inputs")
+		delete(data, startFingerprint)
 	}
 	if data == nil {
 		data = map[string]any{}
@@ -1123,7 +1180,7 @@ func (m *matchable) params() map[string]any {
 
 // accepts reports whether any trigger of e's type accepts e.
 func (m *matchable) accepts(ctx context.Context, t *dms.Service, e dms.Event) (bool, error) {
-	if e.Type == TriggerManual || e.Type == TriggerSchedule || e.Type == TestStart {
+	if e.Type == TriggerManual || e.Type == TriggerCall || e.Type == TriggerSchedule || e.Type == TestStart {
 		// Targeted events were checked when they were raised.
 		return true, nil
 	}

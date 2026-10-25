@@ -12,8 +12,32 @@
 //     },
 //   });
 //
+// A long loop continues as new to keep its journal short: the run starts its
+// script again, with what it carries as ctx.state and a fresh journal.
+//
+//   const { cursor } = (ctx.state ?? {}) as { cursor?: string };
+//   ... process one page ...
+//   if (next) ctx.continueAsNew({ cursor: next });
+//
 // Long work, such as OCR or an approval, is an API call that returns a
 // pending operation. ctx.wait(operation) unloads the run until it finishes.
+// Waits a script starts together, such as those of tasks it asks in a
+// Promise.all, are one wait: the run unloads once, until all have finished.
+//
+//   const [legal, finance] = await Promise.all([
+//     ctx.ask({ title: "Legal review", assignees: ["group:legal"] }),
+//     ctx.ask({ title: "Budget check", assignees: ["group:finance"] }),
+//   ]);
+//
+// Work on many items fans out to runs of a workflow with a call trigger,
+// each with its own small journal, running in parallel:
+//
+//   const totals = await Promise.all(items.map((id) => ctx.call("check-invoice", {}, { itemId: id })));
+//
+// A list that comes in pages, such as a folder's children, also has all(),
+// which reads every page and returns their values:
+//
+//   const children = await ctx.api.v1.resources.byId(folderId).children.all();
 //
 // The engine replays a run from the start each time it resumes it. Every API
 // call, wait, sleep, clock read and random value is a recorded step: on
@@ -22,10 +46,11 @@
 // the globals the runtime replaces (Date, Math.random, crypto.randomUUID).
 
 import { isUntypedArray, isUntypedNode, isUntypedObject, type UntypedNode } from "@microsoft/kiota-abstractions";
-import { createPaperGoClient, type PaperGoClient } from "./client/paperGoClient.js";
-import type { Operation } from "./client/models/index.js";
-import { HostRequestAdapter } from "./adapter.js";
+import { createPaperGoClient, PaperGoClientNavigationMetadata, type PaperGoClient } from "./client/paperGoClient.js";
+import { createOperationFromDiscriminatorValue, type NotificationSend, type NotificationSendResult, type Operation, type TaskCreate } from "./client/models/index.js";
+import { HostRequestAdapter, parseCollection } from "./adapter.js";
 import { host } from "./host.js";
+import { client } from "./builders.js";
 
 export type { PaperGoClient } from "./client/paperGoClient.js";
 export * as models from "./client/models/index.js";
@@ -111,9 +136,19 @@ export interface ManualTrigger<I = unknown> {
   readonly items: readonly TriggerSelection[];
 }
 
-/** Narrow on kind to access manual inputs and selection, or the triggering item, folder or file. */
+/** A run another run started with ctx.call. The called run reads its item through the API. */
+export interface CallTrigger<I = unknown> {
+  readonly kind: "call";
+  /** The call's input; the same object as run(ctx, input)'s second argument. */
+  readonly input: I;
+  /** The run that called this one. */
+  readonly parent_run_id: string;
+}
+
+/** Narrow on kind to access manual inputs and selection, a call, or the triggering item, folder or file. */
 export type TriggerObject<I = unknown> =
   | ManualTrigger<I>
+  | CallTrigger<I>
   | { readonly kind: "item"; readonly item: TriggerResource }
   | { readonly kind: "folder"; readonly folder: TriggerResource }
   | { readonly kind: "file"; readonly item: TriggerResource; readonly file: TriggerFile };
@@ -133,6 +168,59 @@ export interface Run<P = Record<string, unknown>, I = unknown> {
   /** Who caused the run. */
   actor: string;
   params: P;
+  /** How many times the run continued as new. */
+  generation: number;
+  /** What the run's last generation carried into this one; absent in the first. */
+  state?: unknown;
+}
+
+/** A task ctx.ask creates: the API's task fields, with its form and values as plain JSON. */
+export type TaskRequest<V = Record<string, unknown>> = Omit<TaskCreate, "title" | "inputSchema" | "values"> & {
+  title: string;
+  /** The answer's form, a JSON Schema form; see docs/workflows.md#forms. */
+  inputSchema?: Record<string, unknown>;
+  /** Values that prefill the form. */
+  values?: Partial<V>;
+  /** The workspace of the task; the run's by default. */
+  workspaceId?: string;
+};
+
+/** One person's answer to a task. */
+export interface TaskResponse {
+  readonly subject: string;
+  /** The assignee entry answered for: the subject or group:<id>. */
+  readonly assignee: string;
+  readonly outcome: string;
+  readonly comment: string;
+  readonly input?: Record<string, unknown>;
+}
+
+/** How a task ended. V is the shape of its form's values. */
+export interface TaskResult<V = Record<string, unknown>> {
+  readonly task_id: string;
+  readonly status: "completed" | "expired";
+  /** The key of the outcome the task completed with. */
+  readonly outcome: string;
+  readonly comment: string;
+  readonly completed_by?: string;
+  /** The form values of the completing answer. */
+  readonly input?: V;
+  /** Every answer, oldest first. */
+  readonly responses: readonly TaskResponse[];
+}
+
+/** A message ctx.notify sends: the API's fields, in the run's workspace by default. */
+export type NotificationRequest = Omit<NotificationSend, "recipients" | "title"> & {
+  /** People, group:<id>, role:owners, role:members, creator, actor or field:<key>. */
+  recipients: string[];
+  title: string;
+  workspaceId?: string;
+};
+
+/** Where a called run works. */
+export interface CallOptions {
+  /** The item the called run works on; none for a workflow called without one. */
+  itemId?: string;
 }
 
 export interface Context<P = Record<string, unknown>, I = unknown> {
@@ -142,6 +230,10 @@ export interface Context<P = Record<string, unknown>, I = unknown> {
   readonly params: P;
   /** The run's item, when it has one. */
   readonly itemId?: string;
+  /** What the last generation passed to continueAsNew; undefined in the first. Cast it to its shape. */
+  readonly state?: unknown;
+  /** How many times the run continued as new; 0 in the first generation. */
+  readonly generation: number;
   /**
    * Triggering revision content, persisted for replay (up to 64 KiB).
    * File events include file metadata and their item. Manual/test starts
@@ -150,19 +242,58 @@ export interface Context<P = Record<string, unknown>, I = unknown> {
    * Coalescing workflows should use the API when they need current state.
    */
   readonly trigger?: TriggerObject<I>;
-  /** The PaperGo REST API, acting as the workflow version's author. Each call is one exactly-once step. */
+  /**
+   * The PaperGo REST API, acting as the workflow version's author. Each call is one exactly-once step.
+   * Paged lists have all(), which reads every page, one step each, and returns their values.
+   */
   readonly api: PaperGoClient;
   /**
    * Waits until operations have finished and returns them as they ended:
    * operations the API returned, or their IDs, such as a task's
-   * operation_id. The run is unloaded while it waits. Waiting for several
-   * at once lets them run in parallel. A failed or cancelled operation
-   * throws an OperationError.
+   * operation_id. The run is unloaded while it waits. Waits started
+   * together, such as in a Promise.all, are one: the run unloads once,
+   * until all have finished. A failed or cancelled operation throws an
+   * OperationError.
    */
   wait(operation: Operation | string): Promise<Operation>;
   wait(operations: (Operation | string)[]): Promise<Operation[]>;
+  /**
+   * Creates a task and returns its result once people have answered it. The
+   * task is created at once; the run waits only when it awaits the result,
+   * so tasks asked together wait together:
+   *
+   *     const [a, b] = await Promise.all([ctx.ask(first), ctx.ask(second)]);
+   *
+   * A cancelled task throws an OperationError.
+   */
+  ask<V = Record<string, unknown>>(task: TaskRequest<V>): Promise<TaskResult<V>>;
+  /** Sends a message to people's inboxes; it needs no answer. Sending again with the same dedupKey reaches only people who do not have it. */
+  notify(message: NotificationRequest): Promise<NotificationSendResult>;
+  /**
+   * Runs the workflow with key workflow, which must declare a call trigger,
+   * with input and, in options, the item it works on, and returns what it
+   * returned. The run starts at once and belongs to this one: cancelling
+   * this run cancels it. It acts as its own version's author. Calls made
+   * together start in batches and wait together, so a fan-out over many
+   * items costs this run a few steps:
+   *
+   *     await Promise.all(ids.map((id) => ctx.call("check-invoice", {}, { itemId: id })));
+   *
+   * A called run that fails throws an OperationError.
+   */
+  call<O = unknown, CI = Record<string, unknown>>(workflow: string, input?: CI, options?: CallOptions): Promise<O>;
   /** Unloads the run for ms milliseconds, or until a time. */
   sleep(duration: number | { until: Date | string }): Promise<void>;
+  /**
+   * Ends this generation of the run and starts its script again with a
+   * fresh journal, reading state, at most 64 KiB of JSON, as ctx.state. The
+   * run keeps its ID, input, item, logs and what it started, and whoever
+   * waits for it waits for its last generation. Every replay repeats the
+   * whole journal, so a loop over many pages or items that continues every
+   * few hundred steps stays fast. Await the calls and waits it started
+   * first. It does not return.
+   */
+  continueAsNew(state?: unknown): never;
   /** Writes to the run's log. A replay does not repeat earlier entries. */
   log(...values: unknown[]): void;
   warn(...values: unknown[]): void;
@@ -231,7 +362,10 @@ function format(values: unknown[]): string {
     .join(" ");
 }
 
-const api = createPaperGoClient(new HostRequestAdapter());
+const adapter = new HostRequestAdapter();
+// Kiota's client registers the serializers; scripts use the SDK's builders.
+createPaperGoClient(adapter);
+const api = client<PaperGoClient>(adapter, PaperGoClientNavigationMetadata);
 
 (globalThis as Record<string, unknown>).crypto = { randomUUID: () => host.uuid() };
 // console writes to the run's log, like ctx.log.
@@ -243,22 +377,141 @@ const api = createPaperGoClient(new HostRequestAdapter());
   error: (...values: unknown[]) => host.log("error", format(values)),
 };
 
-async function wait(operations: (Operation | string)[]): Promise<Operation[]> {
-  const ids = operations.map((op) => {
-    const id = typeof op === "string" ? op : op?.id;
-    if (!id) throw new TypeError("ctx.wait needs operations returned by the API, or their IDs");
-    return id;
+// A wait the script started that the engine has not yet waited for.
+interface Waiting {
+  ids: string[];
+  resolve(operations: Operation[]): void;
+  reject(error: unknown): void;
+}
+
+let waiting: Waiting[] = [];
+
+// The most operations one wait step takes (maxWaits in internal/script).
+const waitLimit = 64;
+
+function wait(operations: (Operation | string)[]): Promise<Operation[]> {
+  return new Promise((resolve, reject) => {
+    const ids = operations.map((op) => {
+      const id = typeof op === "string" ? op : op?.id;
+      if (!id) throw new TypeError("ctx.wait needs operations returned by the API, or their IDs");
+      return id;
+    });
+    waiting.push({ ids, resolve, reject });
   });
-  host.wait(ids);
-  const finished: Operation[] = [];
-  for (const id of ids) {
-    const op = await api.v1.operations.byId(id).get();
-    if (!op) throw new Error(`operation ${id} is gone`);
-    finished.push(op);
+}
+
+// A call the script made that has not been sent yet.
+interface Calling {
+  workspace: string;
+  workflow: string;
+  itemId?: string;
+  input?: Record<string, unknown>;
+  resolve(runId: string): void;
+  reject(error: unknown): void;
+}
+
+let calling: Calling[] = [];
+
+// The most calls one request makes (workflow.MaxCalls).
+const callLimit = 500;
+
+// The engine calls __papergoIdle when the script has nothing left to run
+// but its run is not over. It first sends the calls made since, a request
+// per workflow and 500 calls, then their waits start with the others: every
+// wait started since is one wait step, so the run unloads once, until all
+// its operations have finished. It returns whether it sent or waited.
+function idle(): boolean {
+  if (calling.length > 0) {
+    const made = calling;
+    calling = [];
+    void send(made);
+    return true;
   }
-  const failed = finished.find((op) => op.status !== "succeeded");
-  if (failed) throw new OperationError(failed, finished);
-  return finished;
+  if (waiting.length === 0) return false;
+  const started = waiting;
+  waiting = [];
+  finish(started);
+  return true;
+}
+
+// finish waits for the operations of started, which the wait step returns
+// as they ended, and settles each wait.
+function finish(started: Waiting[]): void {
+  const ids = [...new Set(started.flatMap((w) => w.ids))];
+  const ended = new Map<string, Operation>();
+  try {
+    for (let i = 0; i < ids.length; i += waitLimit) {
+      for (const op of parseCollection<Operation>(host.wait(ids.slice(i, i + waitLimit)), createOperationFromDiscriminatorValue)) ended.set(op.id!, op);
+    }
+  } catch (error) {
+    for (const w of started) w.reject(error);
+    return;
+  }
+  for (const w of started) {
+    const gone = w.ids.find((id) => !ended.has(id));
+    if (gone) {
+      w.reject(new Error(`operation ${gone} is gone`));
+      continue;
+    }
+    const operations = w.ids.map((id) => ended.get(id)!);
+    const failed = operations.find((op) => op.status !== "succeeded");
+    if (failed) w.reject(new OperationError(failed, operations));
+    else w.resolve(operations);
+  }
+}
+
+(globalThis as Record<string, unknown>).__papergoIdle = idle;
+
+async function send(made: Calling[]): Promise<void> {
+  const byWorkflow = new Map<string, Calling[]>();
+  for (const c of made) {
+    const key = `${c.workspace}/${c.workflow}`;
+    byWorkflow.set(key, [...(byWorkflow.get(key) ?? []), c]);
+  }
+  for (const calls of byWorkflow.values()) {
+    for (let i = 0; i < calls.length; i += callLimit) {
+      const batch = calls.slice(i, i + callLimit);
+      try {
+        const started = await api.v1.workspaces.byId(batch[0].workspace).workflowCalls.post({
+          workflow: batch[0].workflow,
+          calls: batch.map((c) => ({ itemId: c.itemId, input: c.input && json(c.input) })),
+        });
+        batch.forEach((c, n) => c.resolve(started!.runIds![n]));
+      } catch (error) {
+        for (const c of batch) c.reject(error);
+      }
+    }
+  }
+}
+
+async function call<O>(workspace: string, workflow: string, input: Record<string, unknown> | undefined, options: CallOptions | undefined): Promise<O> {
+  const runId = await new Promise<string>((resolve, reject) => calling.push({ workspace, workflow, itemId: options?.itemId, input, resolve, reject }));
+  const [operation] = await wait([runId]);
+  return plain(operation.result) as O;
+}
+
+async function ask<V>(workspaceId: string, request: TaskRequest<V>): Promise<TaskResult<V>> {
+  const { workspaceId: workspace, inputSchema, values, ...task } = request;
+  const body: TaskCreate = { ...task };
+  if (inputSchema) body.inputSchema = json(inputSchema);
+  if (values) body.values = json(values as Record<string, unknown>);
+  const created = await api.v1.workspaces.byId(workspace ?? workspaceId).tasks.post(body);
+  const [operation] = await wait([created!.operationId!]);
+  return plain(operation.result) as TaskResult<V>;
+}
+
+async function notify(workspaceId: string, message: NotificationRequest): Promise<NotificationSendResult> {
+  const { workspaceId: workspace, ...send } = message;
+  return (await api.v1.workspaces.byId(workspace ?? workspaceId).notifications.post(send))!;
+}
+
+function continueAsNew(state: unknown): never {
+  if (calling.length > 0 || waiting.length > 0) {
+    throw new TypeError("await ctx.call and ctx.wait before ctx.continueAsNew: the next generation would not see what they return");
+  }
+  host.continue(JSON.stringify(state ?? null));
+  // The engine stops the script; nothing runs after host.continue.
+  throw new Error("the run continued as new");
 }
 
 async function sleep(duration: number | { until: Date | string }): Promise<void> {
@@ -280,9 +533,15 @@ function context<P, I>(run: Run<P, I>): Context<P, I> {
     params: run.params,
     itemId: run.item_id,
     trigger: run.trigger,
+    state: run.state ?? undefined,
+    generation: run.generation ?? 0,
+    continueAsNew,
     api,
     wait: ((operations: Operation | string | (Operation | string)[]) =>
       Array.isArray(operations) ? wait(operations) : wait([operations]).then((all) => all[0])) as Context<P, I>["wait"],
+    ask: (task) => ask(run.workspace_id, task),
+    notify: (message) => notify(run.workspace_id, message),
+    call: (<O>(workflow: string, input?: Record<string, unknown>, options?: CallOptions) => call<O>(run.workspace_id, workflow, input, options)) as Context<P, I>["call"],
     sleep,
     log: (...values) => host.log("info", format(values)),
     warn: (...values) => host.log("warn", format(values)),
@@ -303,7 +562,9 @@ function check(definition: unknown): Workflow {
  */
 export async function __start(definition: unknown, run: string): Promise<string> {
   const { input: providedInput, ...info } = JSON.parse(run) as Run & { input: unknown };
-  const input = info.trigger?.kind === "manual" ? providedInput ?? {} : providedInput;
+  const kind = info.trigger?.kind;
+  const input = kind === "manual" || kind === "call" ? providedInput ?? {} : providedInput;
+  if (info.trigger?.kind === "call") Object.assign(info.trigger, { input });
   if (info.trigger?.kind === "manual") {
     // Input and the primary snapshot are already persisted once. Expose
     // references here instead of duplicating them in the run payload.

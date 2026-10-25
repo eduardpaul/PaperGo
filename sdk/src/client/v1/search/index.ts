@@ -23,6 +23,13 @@ export type GetSurfaceQueryParameterType = (typeof GetSurfaceQueryParameterTypeO
  */
 export interface SearchRequestBuilder extends BaseRequestBuilder<SearchRequestBuilder> {
     /**
+     * Reads every page of the POST request, following @odata.nextLink, and returns their values in order. Each page is one request.
+     * @param body The request body, sent again for every page
+     * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+     * @returns {Promise<NonNullable<SearchPage["value"]>>}
+     */
+     all(body: SearchRequest, requestConfiguration?: RequestConfiguration<SearchRequestBuilderPostQueryParameters> | undefined) : Promise<NonNullable<SearchPage["value"]>>;
+    /**
      * The contentTypes property
      */
     get contentTypes(): ContentTypesRequestBuilder;
@@ -200,7 +207,7 @@ const SearchRequestBuilderGetQueryParametersMapper: Record<string, string> = {
 /**
  * Metadata for all the navigation properties in the request builder.
  */
-export const SearchRequestBuilderNavigationMetadata: Record<Exclude<keyof SearchRequestBuilder, KeysToExcludeForNavigationMetadata>, NavigationMetadata> = {
+export const SearchRequestBuilderNavigationMetadata: Record<Exclude<keyof SearchRequestBuilder, KeysToExcludeForNavigationMetadata | "all">, NavigationMetadata> = {
     contentTypes: {
         requestsMetadata: ContentTypesRequestBuilderRequestsMetadata,
     },

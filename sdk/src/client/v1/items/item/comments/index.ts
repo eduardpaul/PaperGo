@@ -11,6 +11,12 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface CommentsRequestBuilder extends BaseRequestBuilder<CommentsRequestBuilder> {
     /**
+     * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+     * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+     * @returns {Promise<NonNullable<CommentThreadList["value"]>>}
+     */
+     all(requestConfiguration?: RequestConfiguration<CommentsRequestBuilderGetQueryParameters> | undefined) : Promise<NonNullable<CommentThreadList["value"]>>;
+    /**
      * The item's threads, oldest first, each with its replies, and what the caller may do in the discussion. Where the collection's mode turns comments off or the caller may not read the discussion, it lists none; mode, mode_from and can_read say why. status selects open (default), resolved or all threads.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<CommentThreadList>}

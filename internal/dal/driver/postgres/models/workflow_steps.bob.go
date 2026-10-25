@@ -36,6 +36,7 @@ type WorkflowStep struct {
 	Status      string                                `db:"status" `
 	Input       null.Val[types.JSON[json.RawMessage]] `db:"input" `
 	Output      null.Val[[]byte]                      `db:"output" `
+	OutputSize  int32                                 `db:"output_size" `
 	Error       null.Val[string]                      `db:"error" `
 	StartedAt   time.Time                             `db:"started_at" `
 	CompletedAt null.Val[time.Time]                   `db:"completed_at" `
@@ -71,7 +72,7 @@ type workflowStepRLoaded struct {
 
 func buildWorkflowStepColumns(tableName string) workflowStepColumns {
 	columnsExpr := expr.NewColumnsExpr(
-		"run_id", "seq", "kind", "name", "input_hash", "status", "input", "output", "error", "started_at", "completed_at",
+		"run_id", "seq", "kind", "name", "input_hash", "status", "input", "output", "output_size", "error", "started_at", "completed_at",
 	)
 
 	if tableName != "" {
@@ -89,6 +90,7 @@ func buildWorkflowStepColumns(tableName string) workflowStepColumns {
 		Status:      buildWorkflowStepColumn(tableName, "status"),
 		Input:       buildWorkflowStepColumn(tableName, "input"),
 		Output:      buildWorkflowStepColumn(tableName, "output"),
+		OutputSize:  buildWorkflowStepColumn(tableName, "output_size"),
 		Error:       buildWorkflowStepColumn(tableName, "error"),
 		StartedAt:   buildWorkflowStepColumn(tableName, "started_at"),
 		CompletedAt: buildWorkflowStepColumn(tableName, "completed_at"),
@@ -106,6 +108,7 @@ type workflowStepColumns struct {
 	Status      workflowStepColumn
 	Input       workflowStepColumn
 	Output      workflowStepColumn
+	OutputSize  workflowStepColumn
 	Error       workflowStepColumn
 	StartedAt   workflowStepColumn
 	CompletedAt workflowStepColumn
@@ -162,13 +165,14 @@ type WorkflowStepSetter struct {
 	Status      omit.Val[string]                          `db:"status" `
 	Input       omitnull.Val[types.JSON[json.RawMessage]] `db:"input" `
 	Output      omitnull.Val[[]byte]                      `db:"output" `
+	OutputSize  omit.Val[int32]                           `db:"output_size" `
 	Error       omitnull.Val[string]                      `db:"error" `
 	StartedAt   omit.Val[time.Time]                       `db:"started_at" `
 	CompletedAt omitnull.Val[time.Time]                   `db:"completed_at" `
 }
 
 func (s WorkflowStepSetter) SetColumns() []string {
-	vals := make([]string, 0, 11)
+	vals := make([]string, 0, 12)
 	if s.RunID.IsValue() {
 		vals = append(vals, "run_id")
 	}
@@ -192,6 +196,9 @@ func (s WorkflowStepSetter) SetColumns() []string {
 	}
 	if s.Output.IsValue() || s.Output.IsNull() {
 		vals = append(vals, "output")
+	}
+	if s.OutputSize.IsValue() {
+		vals = append(vals, "output_size")
 	}
 	if s.Error.IsValue() || s.Error.IsNull() {
 		vals = append(vals, "error")
@@ -229,6 +236,9 @@ func (s WorkflowStepSetter) Overwrite(t *WorkflowStep) {
 	}
 	if s.Output.IsValue() || s.Output.IsNull() {
 		t.Output = s.Output.MustGetNull()
+	}
+	if s.OutputSize.IsValue() {
+		t.OutputSize = s.OutputSize.MustGet()
 	}
 	if s.Error.IsValue() || s.Error.IsNull() {
 		t.Error = s.Error.MustGetNull()
@@ -288,6 +298,11 @@ func (s *WorkflowStepSetter) Apply(q *dialect.InsertQuery) {
 			}
 			return psql.Arg(s.Output.MustGetNull()).WriteSQL(ctx, w, d, start)
 		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.OutputSize.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.OutputSize.MustGet()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
 			if s.Error.IsUnset() {
 				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
 			}
@@ -310,7 +325,7 @@ func (s WorkflowStepSetter) UpdateMod() bob.Mod[*dialect.UpdateQuery] {
 }
 
 func (s WorkflowStepSetter) Expressions(prefix ...string) []bob.Expression {
-	exprs := make([]bob.Expression, 0, 11)
+	exprs := make([]bob.Expression, 0, 12)
 
 	if s.RunID.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
@@ -368,6 +383,13 @@ func (s WorkflowStepSetter) Expressions(prefix ...string) []bob.Expression {
 		}})
 	}
 
+	if s.OutputSize.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "output_size")...),
+			psql.Arg(s.OutputSize),
+		}})
+	}
+
 	if s.Error.IsValue() || s.Error.IsNull() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
 			psql.Quote(append(prefix, "error")...),
@@ -399,7 +421,7 @@ func workflowStepScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc
 		idx int
 		dst func(o *WorkflowStep) any
 	}
-	targets := make([]target, 0, 11)
+	targets := make([]target, 0, 12)
 	for i, col := range cols {
 		switch col {
 		case "run_id":
@@ -418,6 +440,8 @@ func workflowStepScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc
 			targets = append(targets, target{i, func(o *WorkflowStep) any { return &o.Input }})
 		case "output":
 			targets = append(targets, target{i, func(o *WorkflowStep) any { return &o.Output }})
+		case "output_size":
+			targets = append(targets, target{i, func(o *WorkflowStep) any { return &o.OutputSize }})
 		case "error":
 			targets = append(targets, target{i, func(o *WorkflowStep) any { return &o.Error }})
 		case "started_at":
@@ -881,6 +905,7 @@ type workflowStepWhere[Q psql.Filterable] struct {
 	Status      psql.WhereMod[Q, string]
 	Input       psql.WhereNullMod[Q, types.JSON[json.RawMessage]]
 	Output      psql.WhereNullMod[Q, []byte]
+	OutputSize  psql.WhereMod[Q, int32]
 	Error       psql.WhereNullMod[Q, string]
 	StartedAt   psql.WhereMod[Q, time.Time]
 	CompletedAt psql.WhereNullMod[Q, time.Time]
@@ -902,6 +927,7 @@ func buildWorkflowStepWhere[Q psql.Filterable](cols workflowStepColumns) workflo
 		Status:      psql.Where[Q, string](cols.Status.Expression),
 		Input:       psql.WhereNull[Q, types.JSON[json.RawMessage]](cols.Input.Expression),
 		Output:      psql.WhereNull[Q, []byte](cols.Output.Expression),
+		OutputSize:  psql.Where[Q, int32](cols.OutputSize.Expression),
 		Error:       psql.WhereNull[Q, string](cols.Error.Expression),
 		StartedAt:   psql.Where[Q, time.Time](cols.StartedAt.Expression),
 		CompletedAt: psql.WhereNull[Q, time.Time](cols.CompletedAt.Expression),

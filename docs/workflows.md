@@ -15,7 +15,7 @@ Every save that changes the script or its parameters creates a new immutable **v
 ## Example
 
 ```ts
-import { plain, workflow } from "@papergo/workflow";
+import { workflow } from "@papergo/workflow";
 
 export default workflow<{ reviewer: string }>({
   triggers: [
@@ -29,13 +29,12 @@ export default workflow<{ reviewer: string }>({
   },
   async run(ctx, input) {
     const item = await ctx.api.v1.resources.byId(ctx.itemId!).get();
-    const task = await ctx.api.v1.workspaces.byId(ctx.run.workspace_id).tasks.post({
+    const answer = await ctx.ask({
       kind: "approval",
       itemId: ctx.itemId,
       title: `Review ${item!.name}`,
       assignees: input?.reviewer ? [input.reviewer] : undefined,
     });
-    const answer = plain((await ctx.wait(task!.operationId!)).result) as { outcome: string };
     ctx.log("review", answer.outcome);
     return { approved: answer.outcome === "approved" };
   },
@@ -45,6 +44,13 @@ export default workflow<{ reviewer: string }>({
 ## Scripts
 
 A script imports `@papergo/workflow`, the workflow SDK, and may be split into its own functions, but not into other files. It runs in an embedded JavaScript engine without network or file access. Its only way to act is `ctx.api`, a client of the [PaperGo REST API](application-foundation.md) generated from the OpenAPI contract, with typed requests and responses. The [SDK README](../sdk/README.md) describes the client and how it is regenerated.
+
+A list the API returns in pages linked by `@odata.nextLink` (any request that takes `$skiptoken`) also has `all()`, which takes the same arguments as the request, reads every page and returns their values in order. Each page is a step of its own; `$top` sets the page size. Where a list pages by both GET and POST, as `/v1/search` does, `all()` posts.
+
+```ts
+const children = await ctx.api.v1.resources.byId(folderId).children.all({ queryParameters: { kind: "item" } });
+const rows = await ctx.api.v1.resources.byId(listId).query.all({ surface: "published" });
+```
 
 The web app's workflow editor checks scripts as you type: it completes the SDK and the API client, shows their documentation on hover, and marks type errors, against ECMAScript 2022 and the runtime's globals only.
 
@@ -58,7 +64,11 @@ The web app's workflow editor checks scripts as you type: it completes the SDK a
 | `ctx.params` | the workflow's [parameters](#parameters) |
 | `ctx.api` | the REST API, acting as the version's author |
 | `ctx.wait(operation)` | waits until operations finish; see [waiting](#waiting) |
+| `ctx.ask(task)` | creates a [task](#tasks) and returns its result once people have answered |
+| `ctx.notify(message)` | sends people a [message](notifications.md#sending-messages) |
+| `ctx.call(workflow, input, { itemId })` | runs a workflow with a call trigger and returns its output; see [calling workflows](#calling-workflows) |
 | `ctx.sleep(ms)`, `ctx.sleep({ until })` | unloads the run until a time |
+| `ctx.continueAsNew(state)`, `ctx.state`, `ctx.generation` | starts the script again with a fresh journal, carrying `state`; see [long loops](#long-loops) |
 | `ctx.log(...)`, `ctx.warn(...)`, `ctx.error(...)` | write to the run's log, as `console` does |
 
 What `run` returns is the run's [output](#outputs). An exception fails the run with its message and stack; an API error is an exception with the response's status and problem.
@@ -92,15 +102,17 @@ An event with a `revision_id` captures that revision, even if the item changes b
 
 Snapshots have a 64 KiB JSON budget shared by the complete selection. If field values would exceed it, `values` is absent and `values_omitted` is `true`; otherwise `values_omitted` is `false`. Form results use the run's separately stored input, and the primary item references its selection snapshot. This keeps workflows that only need identity or file metadata usable for large items. Oversized remaining metadata fails the run with a visible error. File bytes, storage keys, permissions, relationships and history are excluded. An API read returns current state, which coalescing workflows may need; snapshots contain no current ETag, so obtain one through the API before a conditional write.
 
-**Steps and replay.** Each API request, wait, sleep, clock reading (`Date`), random value (`Math.random`, `crypto.randomUUID`) is a recorded **step**. A request runs in-process through the same handlers as an HTTP request. One that may change something (any method but `GET` and `HEAD`) runs in a transaction that also records its response, so a crash either keeps both or neither: its database writes happen once. A read runs as an API client's read does, outside the run's transactions, and its response is recorded with the next such step, every 256 reads or 4 MiB of responses, or when the run ends; a crash before then only repeats the read. A run executes in **slices**: a slice replays the script from the start, answering each recorded step from the journal instead of repeating it, and continues until the script returns, throws, waits or sleeps. A run therefore continues where it was after a restart, and nothing it wrote to the database is written twice. Work a request starts, such as OCR or a model call, runs as its own operation, which may repeat its work outside the database under its module's [recovery protocol](architecture.md#durability-boundaries).
+**Steps and replay.** Each API request, wait, sleep, clock reading (`Date`), random value (`Math.random`, `crypto.randomUUID`) is a recorded **step**. A request runs in-process through the same handlers as an HTTP request. One that may change something (any method but `GET` and `HEAD`) runs in a transaction that also records its response, so a crash either keeps both or neither: its database writes happen once. A read runs as an API client's read does, outside the run's transactions, and its response is recorded with the next such step, every 256 reads or 4 MiB of responses, or when the run ends; a crash before then only repeats the read. A run executes in **slices**: a slice replays the script from the start, answering each recorded step from the journal instead of repeating it, and continues until the script returns, throws, waits or sleeps. A run therefore continues where it was after a restart, and nothing it wrote to the database is written twice. A wait records the operations it waited for as they ended, which `ctx.wait` returns without reading them again. The journal stores outputs larger than 256 bytes zstd-compressed. Work a request starts, such as OCR or a model call, runs as its own operation, which may repeat its work outside the database under its module's [recovery protocol](architecture.md#durability-boundaries).
 
 Keep scripts deterministic: read time, randomness and data only through `ctx` and the globals the engine replaces. A replay that asks for a different step at a recorded position fails the run as nondeterministic, so a script edited while runs are active applies to new runs only: runs keep their version.
 
-**Limits.** A slice may run JavaScript for 5 seconds before it waits; a script that computes longer fails. Each recorded response is bounded at 1 MiB, a longer one is recorded as a `413` asking for a smaller page. A run's output is bounded at 16 KiB, a script's source at 1 MiB and its log at the last 500 entries. One wait takes at most 64 operations.
+**Limits.** A slice may run JavaScript for 5 seconds before it waits; a script that computes longer fails. Each recorded response is bounded at 1 MiB, a longer one is recorded as a `413` asking for a smaller page. A run's recorded responses are bounded at 32 MiB in all, since every slice loads and replays them: a run that outgrows this fails, so split large work across [called runs](#calling-workflows) or [continue as new](#long-loops). What a run carries into its next generation is bounded at 64 KiB. A run's output is bounded at 16 KiB, a script's source at 1 MiB and its log at the last 500 entries. A wait step takes at most 64 operations; a wait for more is recorded as one step per 64.
 
 ## Waiting
 
 Long work is an API request that returns an **operation** (`202 Accepted`): reading a file's text, composing a PDF, an AI completion, a task. `ctx.wait(operation)` unloads the run until the operation finishes and returns it as it ended; a failed or cancelled operation throws an `OperationError`. `ctx.wait([a, b])` waits for several at once, which run in parallel. A run that waits shows as `waiting`, holds no worker, and continues moments after the operation ends.
+
+Waits a script starts together are one wait. Once the script has nothing left to run but awaits, every `ctx.wait` it started since, such as those of the tasks in a `Promise.all`, is recorded as one wait step: the run unloads once and continues when all of them have ended. Each wait still settles on its own, so `Promise.allSettled` sees which failed.
 
 ```ts
 const read = await ctx.wait((await ctx.api.v1.items.byId(ctx.itemId!).text.post({ ocr: "auto" }))!);
@@ -112,6 +124,63 @@ const text = plain(read.result) as { text_id: string; pages: number };
 `ctx.sleep(ms)` and `ctx.sleep({ until })` unload the run until a time; the run shows as `waiting` with `waiting_until`.
 
 Cancelling a run cancels the operations its requests started, such as its tasks, which it [owns](operations.md#ownership-and-dependencies). Operations it only waits for, such as another run's task, go on: waiting is a dependency, not ownership.
+
+## Calling workflows
+
+A workflow that declares a `call` trigger can be called by other runs, like a function: `ctx.call(key, input, { itemId })` starts a run of the workflow with that key in the run's workspace and returns what it returned. Work on many items fans out this way: each item gets its own run, with its own small journal, and the runs execute in parallel on the workflow workers, so the calling run stays short however many items there are.
+
+```ts
+// check-invoice: called on one invoice at a time.
+export default workflow<{ strict: boolean }>({
+  triggers: [{ type: "call", collection_id: "<invoices list>" }],
+  input_schema: { type: "object", properties: { strict: { type: "boolean", default: false } } },
+  async run(ctx, input) {
+    const invoice = await ctx.api.v1.resources.byId(ctx.itemId!).get();
+    return { total: Number(invoice?.values?.additionalData?.total ?? 0) };
+  },
+});
+
+// The caller: one call per invoice, started and awaited together.
+const invoices = await ctx.api.v1.resources.byId(list).children.all({ queryParameters: { kind: "item" } });
+const checked = await Promise.all(invoices.map((invoice) => ctx.call<{ total: number }>("check-invoice", { strict: true }, { itemId: invoice.id! })));
+```
+
+- **Calls made together are batched.** Calls a script starts before it next waits go out as one request per workflow and 500 calls, and their runs are waited for together, 64 operations per wait step. Calling a workflow on 1,000 items costs the caller two requests and 16 short steps. The server checks a request as a whole, so a call it refuses, such as one on an item the author cannot write, fails every call sent with it.
+- **The trigger** takes `collection_id`, which then requires every call to name an item of that collection; without it a call names any item of the workspace, or none. `input_schema` is the form of a call's input, with defaults applied and values checked as for a manual start. `disabled: true` stops calls. Calls need the workflow published; `manual_enabled` and `automatic_enabled` do not apply.
+- **Who may call.** The calling run's author needs write access to each item, or workspace manage for a call on no item, and the `item.write` scope, as a manual start does. A called run acts as its own version's author.
+- **The called run** sees `ctx.trigger` as `{ kind: "call", input, parent_run_id }` and its input as `run(ctx, input)`'s second argument. It carries no item snapshot: it reads its item through the API. Its run shows the caller as `parent_run_id`, and run lists filter called runs with `origin=call`.
+- **It belongs to the caller.** Cancelling the calling run cancels the runs it called that are still active; a caller can wait for them even when another author wrote the called workflow. A called run that fails or is cancelled throws an `OperationError` in the caller; use `Promise.allSettled` to go on with the others.
+- **Retrying a caller.** [Retrying](#runs) a caller that failed also retries the runs it called that failed, all the way down, and its replay receives their retries in their place: fix what made them fail, such as an item's values, and retry the caller. Runs it called that succeeded replay what they returned, so nothing they did happens twice, and a retry can wait for runs an earlier attempt called. Cancelled runs are not retried.
+- **Depth.** A called run is one level deeper than its caller, and a run at depth 4 cannot call, so workflows that call each other stop.
+- **Concurrency** applies as to manual starts: a call always starts a run, which fails at once when `skip` finds another run active. A call that would wait for, skip or replace one of its own callers, such as a `coalesce` workflow calling itself on its item, is refused with `caller_busy`, since that run could never return.
+- **Test runs.** The calls a [test run](#testing) makes start test runs: they raise no workflow events and ignore concurrency, all the way down.
+
+`POST /v1/workspaces/{id}/workflow-calls` is the request behind `ctx.call`: `{"workflow": "<key>", "calls": [{"item_id", "input"}]}` (202 with `run_ids`, in the order of calls). Only workflow runs make it.
+
+## Long loops
+
+Every slice replays the run's whole journal, at about a quarter of a millisecond per recorded request, so a run that works through thousands of pages or items one after another gets slower with every step, and fails once a slice needs more than its 5 seconds. A long loop therefore **continues as new**: `ctx.continueAsNew(state)` ends the run's current generation and starts its script again with a fresh journal, reading `state` as `ctx.state`.
+
+```ts
+export default workflow({
+  triggers: [{ type: "schedule", cron: "0 2 * * *" }],
+  async run(ctx) {
+    const state = (ctx.state ?? { archived: 0 }) as { cursor?: string; archived: number };
+    const page = await ctx.api.v1.resources.byId(list).children.get({ queryParameters: { top: 200, skiptoken: state.cursor } });
+    const archived = state.archived + await archiveOld(ctx, page!.value!);
+    const next = /[?&]%24skiptoken=([^&]+)/.exec(page!.odataNextLink ?? "");
+    if (next) ctx.continueAsNew({ cursor: decodeURIComponent(next[1]), archived });
+    return { archived, pages: ctx.generation + 1 };
+  },
+});
+```
+
+- **It is the same run.** The run keeps its ID, operation, input, item, parameters, logs and the operations and tasks it started. A run that [called](#calling-workflows) it, `ctx.wait`, `wf.{key}.completed` and concurrency see one run, which ends when its last generation returns. Cancelling it cancels the whole loop.
+- **The journal starts over.** The steps of the generation that continued are deleted, so the run's details show the current generation's steps, its `generation` (how many times it continued) and its `state`. Its log notes each continuation.
+- **State** is at most 64 KiB of JSON: cursors, counters and IDs, not content. `ctx.state` is `undefined` in the first generation and `ctx.generation` counts from 0.
+- **Await first.** `ctx.continueAsNew` throws while calls or waits the script started are not awaited, since the next generation would not see what they return. It does not return: like a wait, it ends the slice whatever the script catches. Reads since the last request that changed something are not recorded, so a crash at that point repeats them.
+- **When.** Continue every few hundred requests, or after each page or batch of calls: a generation then replays in well under a second. Combined with [calls](#calling-workflows), a run can work through any number of items: each generation calls a workflow on one page of them and waits.
+- **Retries.** Retrying a run that failed goes on from the generation that failed, with its state.
 
 ## Parameters
 
@@ -170,6 +239,7 @@ a workflow. The server rechecks write permission on every item before starting.
 | `permissions.changed` | an item's or folder's effective permissions change: its own or an ancestor's ACL is replaced, it moves into another permission scope, or workspace membership changes. Delivered once **per affected item and folder** (see below) | the item or folder |
 | `schedule` | a cron occurrence: `cron` (5 fields) and `time_zone` (IANA, default UTC) | see below |
 | `manual` | someone starts it through the API or the web app | each chosen item, the selection's primary item, or none |
+| `call` | another run calls it with `ctx.call` (see [calling workflows](#calling-workflows)) | the called item, or none |
 | `term.merged` | a term is merged into another (see [taxonomy](application-foundation.md#controlled-taxonomy)) | none |
 | `term.moved` | a term moves under another parent, or a keyword is promoted into another set | none |
 | `term.changed` | a term's name, localized labels or other editable properties change through PUT `/v1/terms/{id}` | none |
@@ -219,6 +289,7 @@ The `data` for each event type:
 - `item.unpublished`: `revision_id`
 - `schedule`: `workflow_id`, `occurrence`; item-associated schedules also include `surface` (`head` or `published`)
 - `manual`: `workflow_id`; form results are available as `ctx.trigger.input` and `run(ctx, input)`'s second argument
+- `call`: `workflow_id`, `parent_run_id`; the input is `ctx.trigger.input` and `run(ctx, input)`'s second argument
 - `term.merged`: `source_term_id`, `target_term_id`, `term_set_id`
 - `term.moved`: `term_id`, `term_set_id`, `previous_term_set_id`, `parent_id`, `previous_parent_id` (empty at the root)
 - `term.changed`: `term_id`, `term_set_id`, `version`, sorted `changed_fields`, and `previous` / `current` term properties (`name`, `parent_id`, `description`, `color`, `sort_order`, `labels`, `synonyms`, `deprecated`, `available_as_keyword`; absent optional fields mean unset). The event has no `resource_id` because the term is organization taxonomy, not a workspace resource.
@@ -348,7 +419,7 @@ A task asks people to do something and say so: approve, confirm data, fill in a 
 The Tasks screen offers Waiting for me, Approvals, Completed and All views. **Load more** appends the next page of the selected view while keeping the current task open.
 
 ```ts
-const task = await ctx.api.v1.workspaces.byId(ctx.run.workspace_id).tasks.post({
+const answer = await ctx.ask<{ total: number }>({
   title: `Check the invoice data of ${item!.name}`,
   itemId: ctx.itemId,
   assignees: ["role:members"],
@@ -357,14 +428,24 @@ const task = await ctx.api.v1.workspaces.byId(ctx.run.workspace_id).tasks.post({
     { key: "correct", label: "Correct", style: "primary" },
     { key: "fix", label: "Needs a fix", comment: "required", skipForm: true },
   ],
-  inputSchema: json({ type: "object", required: ["total"], properties: { total: { type: "number", title: "Total" } } }),
-  values: json({ total: 12.5 }),
+  inputSchema: { type: "object", required: ["total"], properties: { total: { type: "number", title: "Total" } } },
+  values: { total: 12.5 },
   dueAt: new Date(Date.now() + 48 * 3600 * 1000),
 });
-const answer = plain((await ctx.wait(task!.operationId!)).result) as { outcome: string; input?: { total: number } };
+if (answer.outcome === "correct") ctx.log("total", answer.input?.total);
 ```
 
-- **Workflow tasks.** A task a run creates belongs to its workflow and run (`source: "workflow"`) and has an `operation_id`: the operation its answer ends. `ctx.wait` on it returns, as the operation's result, `task_id`, `status`, `outcome`, `completed_by`, `comment`, `input` and every answer in `responses`; a cancelled task throws an `OperationError`. Cancelling a run cancels the tasks it waits for. Tasks it created without waiting, such as a follow-up, outlive it, and other workflows react to them with `task.*` triggers, until [their item or workflow is deleted](#deleting-items-and-workflows).
+`ctx.ask(task)` takes the fields of `POST /v1/workspaces/{id}/tasks`, with the form and its values as plain JSON, creates the task in the run's workspace (or `workspaceId`) and returns its result once it is answered. The task is created at once and the run waits only when it awaits the result, so tasks asked together are open together and [wait together](#waiting):
+
+```ts
+const [legal, finance] = await Promise.all([
+  ctx.ask({ kind: "approval", itemId: ctx.itemId, title: "Legal review", assignees: ["group:legal"] }),
+  ctx.ask({ kind: "approval", itemId: ctx.itemId, title: "Budget check", assignees: ["group:finance"] }),
+]);
+const approved = legal.outcome === "approved" && finance.outcome === "approved";
+```
+
+- **Workflow tasks.** A task a run creates belongs to its workflow and run (`source: "workflow"`) and has an `operation_id`: the operation its answer ends. Its result, what `ctx.ask` returns and the operation's result, has `task_id`, `status`, `outcome`, `completed_by`, `comment`, `input` (the completing answer's form values) and every answer in `responses`; a cancelled task throws an `OperationError`. Cancelling a run cancels the tasks it waits for. Tasks it created without waiting, such as a follow-up, outlive it, and other workflows react to them with `task.*` triggers, until [their item or workflow is deleted](#deleting-items-and-workflows).
 - **Assignees** are recipient entries:
   - a person's subject;
   - `group:<id>`, nested groups included;
@@ -388,7 +469,7 @@ const answer = plain((await ctx.wait(task!.operationId!)).result) as { outcome: 
 
 Answers and their form values stay on the task after it completes, and completed tasks are kept when their runs are deleted. Creating and answering tasks are recorded in the workspace's audit trail (`task.create`, `task.respond`).
 
-Assignees are [notified](notifications.md) when a task is created or reassigned to them, and the creator of a person's task when it is answered. A script tells people anything else with `ctx.api.v1.workspaces.byId(id).notifications.post(...)`; a failed run notifies the author of its workflow version.
+Assignees are [notified](notifications.md) when a task is created or reassigned to them, and the creator of a person's task when it is answered. A script tells people anything else with `ctx.notify(...)`; a failed run notifies the author of its workflow version.
 
 ## Selection runs
 
@@ -468,9 +549,9 @@ Some processes are **roles**: product processes that one workflow fills, which p
 | `failed` | the script threw, broke a limit, replayed differently, or could not start |
 | `cancelled` | stopped by a manager, replaced, or its item or workflow was deleted |
 
-`GET /v1/workflow-runs/{id}` shows the run's result, its launch `inputs`, its log and its recorded steps: each API request with its response, each wait with the operations it waited for, and each value the script read.
+`GET /v1/workflow-runs/{id}` shows the run's result, its launch `inputs`, its log and its recorded steps: each API request with its response, each wait with the operations it waited for and how they ended, and each value the script read, with each output's `size`. A run that completed or was cancelled never replays, so it keeps only the outputs stored in at most 4 KiB, which compressed covers most single responses and many pages, and the size of the others. A failed run keeps every output for its retry.
 
-- **Retry** (`POST .../retry`) runs a failed run again as a new run of the same version, inputs and parameters, with `retry_of`. Its steps before the last request, wait or sleep of the failed run replay their recorded results, so nothing they wrote is written twice; that last step and what followed run again.
+- **Retry** (`POST .../retry`) runs a failed run again as a new run of the same version, inputs and parameters, with `retry_of`, from the [generation](#long-loops) that failed and with its state. Runs it called that failed are retried with it (see [calling workflows](#calling-workflows)). Its steps before the last request, wait or sleep of the failed run replay their recorded results, so nothing they wrote is written twice; that last step and what followed run again.
 - **Cancel** (`POST .../cancel`) stops a queued, running or waiting run, with the operations its requests started and the tasks it waits for.
 
 **How runs start.** A change and its events commit together in the domain event log (`domain_events`), so a change that rolls back raises nothing, and the write does no workflow work. The dispatcher takes logged events in order, matches them to workflows, and starts the runs. The runs and the events' dispatched mark commit together, and each event starts at most one run per workflow, so a crash dispatches events again without duplicates. The dispatcher wakes when a change commits and also checks every few seconds, so it picks up events a restart left behind.
@@ -517,8 +598,10 @@ Audit events and publication snapshots are a separate product record. Run retent
 | Create, change, delete workflows; turn on, configure and copy built-ins | workspace `manage` (built-ins per collection also need collection `manage`) |
 | Start a manual workflow on items | `write` on each item |
 | Start a manual workflow with no item | workspace `manage` |
+| Call a workflow from a run | for the run's author: `write` on the item, or workspace `manage` for a call on no item |
 | Start a test run | workspace `manage`, and `write` on each item |
 | See, cancel and retry runs | workspace `manage` |
+| See a run you started by hand: its status, inputs, result and error | workspace `read` |
 | Answer a task | being an assignee (or in an assigned group) who can read the workspace and the item's draft |
 | Create a task | workspace `read`, and `write` on the item when it concerns one |
 | Cancel a task | its creator or a workspace owner |
@@ -532,7 +615,8 @@ Audit events and publication snapshots are a separate product record. Run retent
 | GET / POST | /v1/workspaces/{id}/workflows | List or create workflows: `{"name", "description", "source", "parameters", "automatic_enabled", "manual_enabled", "state"}` |
 | GET / PUT / DELETE | /v1/workflows/{id} | Read, replace (If-Match), delete (If-Match) |
 | GET | /v1/workflows/{id}/versions | Versions with their scripts, newest first |
-| POST | /v1/workflows/{id}/runs | Manual start: `{"item_ids": [...], "inputs": {...}, "workflow_version": 1}` (202 with `run_ids`) |
+| POST | /v1/workflows/{id}/runs | Manual start: `{"item_ids": [...], "inputs": {...}, "workflow_version": 1}` (202 with `run_ids`); takes `Idempotency-Key` |
+| POST | /v1/workspaces/{id}/workflow-calls | [Calls](#calling-workflows) from a run: `{"workflow": "<key>", "calls": [{"item_id", "input"}]}` (202 with `run_ids`) |
 | POST | /v1/workflows/{id}/test-runs | [Test run](#testing) of the current version, draft or published: `{"item_ids": [...], "primary_item_id", "inputs": {...}}` (202 with `run_id`) |
 | POST | /v1/workflows/{id}/check | Read-only manual preflight with the same launch body |
 | POST | /v1/workspaces/{id}/workflow-actions | Manual actions and availability reasons for a selection |
@@ -540,8 +624,8 @@ Audit events and publication snapshots are a separate product record. Run retent
 | GET | /v1/workspaces/{id}/workflow-builtins | Built-ins with the workspace's built-in workflows |
 | PUT | /v1/workspaces/{id}/workflow-builtins/{key} | Turn on/off, set parameters |
 | POST | /v1/workspaces/{id}/workflow-builtins/{key}/copy | Copy into an editable workflow |
-| GET | /v1/workspaces/{id}/workflow-runs | Runs, newest first (`workflow_id`, `item_id`, `origin` (`manual`, `schedule`, `test` or `automatic`), `status`, `include_system`, `$skiptoken`, `$top`) |
-| GET | /v1/workflow-runs/{id} | A run with its result, steps and log |
+| GET | /v1/workspaces/{id}/workflow-runs | Runs, newest first (`workflow_id`, `item_id`, `origin` (`manual`, `schedule`, `test`, `call` or `automatic`), `status`, `include_system`, `$skiptoken`, `$top`) |
+| GET | /v1/workflow-runs/{id} | A run with its result, steps and log; `wait` (seconds, up to 25) answers once it ended |
 | POST | /v1/workflow-runs/{id}/cancel, /retry | Cancel, or retry a failed run |
 | GET | /v1/me/tasks | The caller's tasks (`waiting=true` for those still to answer, `status`, `kind`, `key`, `workspace_id`, `item_id`, `$top`); open ones by due time, in pages linked by `@odata.nextLink` like the other task lists |
 | GET / POST | /v1/workspaces/{id}/tasks | A workspace's tasks, for its owners; create a task: `{"title", "description", "assignees", "item_id", "kind", "key", "completion", "outcomes", "input_schema", "values", "review", "priority", "due_at"}` |
@@ -550,6 +634,29 @@ Audit events and publication snapshots are a separate product record. Run retent
 | POST | /v1/tasks/{id}/responses | Answer: `{"outcome", "comment", "input"}` |
 | POST | /v1/tasks/{id}/reassign | Replace an open task's `assignees` (owners, and the creator of a person's task) |
 | POST | /v1/tasks/{id}/cancel | Cancel an open task |
+
+## Running workflows from other apps
+
+Another application runs a manual workflow through the API like a person does, and reads what it returned:
+
+1. Create an [integration access token](identity.md#integration-access-tokens) with the `item.read` and `item.write` scopes: starting a run needs `item.write`, reading it read access to the workspace. The run itself acts as its workflow's author, whatever the token may do. Add its service identity to the workspace: as a member to run workflows on items it may write, as an owner to run standalone workflows, which need workspace manage.
+2. Find the workflow's ID with `GET /v1/workspaces/{id}/workflows`. It must be published, allow manual runs and have a `manual` trigger; its `input_schema` is the request's `inputs`.
+3. Start it, with an `Idempotency-Key` so a retry after a timeout starts nothing twice, and wait for the result:
+
+```sh
+curl -sS -X POST "$PAPERGO/v1/workflows/$WORKFLOW/runs" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -H "Idempotency-Key: order-4711" \
+  -d '{"item_ids": ["'$ITEM'"], "inputs": {"style": "short"}}'
+# {"run_ids": ["wf:…"]}
+
+curl -sS "$PAPERGO/v1/workflow-runs/$RUN?wait=25" -H "Authorization: Bearer $TOKEN"
+# {"id": "wf:…", "status": "completed", "result": {"summary": "…"}, …}
+```
+
+- **Starting.** The response lists one run per item (one for a standalone or selection start). A retry with the same key and body returns the same runs while the start's events are kept (`RUN_RETENTION`); the same key with another body is `409 idempotency_conflict`.
+- **Waiting.** `GET /v1/workflow-runs/{id}?wait=25` answers as soon as the run has `completed`, `failed` or been `cancelled`, or after 25 seconds with its current status; ask again to go on waiting. A run that waits for people, such as an approval, can take longer than any request: keep asking, or react to its end with a `wf.{key}.completed` workflow.
+- **What the starter sees.** The person or app that started a run reads its status, `inputs`, `result` (what the script returned, checked against `output_schema`) and `error`, but not its steps, log or state, which hold what the workflow's author could read. Workspace managers see everything.
 
 ## Runtime
 

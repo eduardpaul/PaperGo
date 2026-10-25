@@ -11,6 +11,12 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface TermsRequestBuilder extends BaseRequestBuilder<TermsRequestBuilder> {
     /**
+     * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+     * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+     * @returns {Promise<NonNullable<TermPage["value"]>>}
+     */
+     all(requestConfiguration?: RequestConfiguration<TermsRequestBuilderGetQueryParameters> | undefined) : Promise<NonNullable<TermPage["value"]>>;
+    /**
      * Ordered by sort_order, then name. Merged terms are never listed. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.read. Workspace membership and resource ACLs do not govern taxonomy.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<TermPage>}

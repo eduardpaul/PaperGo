@@ -44,6 +44,12 @@ export interface RevisionsGetResponse extends AdditionalDataHolder, Parsable {
  */
 export interface RevisionsRequestBuilder extends BaseRequestBuilder<RevisionsRequestBuilder> {
     /**
+     * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+     * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+     * @returns {Promise<NonNullable<RevisionsGetResponse["value"]>>}
+     */
+     all(requestConfiguration?: RequestConfiguration<RevisionsRequestBuilderGetQueryParameters> | undefined) : Promise<NonNullable<RevisionsGetResponse["value"]>>;
+    /**
      * Gets an item from the PaperGo.v1.items.item.revisions.item collection
      * @param number Unique identifier of the item
      * @returns {WithNumberItemRequestBuilder}
@@ -103,7 +109,7 @@ const RevisionsRequestBuilderGetQueryParametersMapper: Record<string, string> = 
 /**
  * Metadata for all the navigation properties in the request builder.
  */
-export const RevisionsRequestBuilderNavigationMetadata: Record<Exclude<keyof RevisionsRequestBuilder, KeysToExcludeForNavigationMetadata>, NavigationMetadata> = {
+export const RevisionsRequestBuilderNavigationMetadata: Record<Exclude<keyof RevisionsRequestBuilder, KeysToExcludeForNavigationMetadata | "all">, NavigationMetadata> = {
     byNumber: {
         requestsMetadata: WithNumberItemRequestBuilderRequestsMetadata,
         navigationMetadata: WithNumberItemRequestBuilderNavigationMetadata,

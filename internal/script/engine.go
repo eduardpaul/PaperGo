@@ -61,10 +61,14 @@ type Effects interface {
 	// last durable step, so a long run of reads keeps its journal.
 	Record(ctx context.Context, run Run, unsaved []runs.Step) error
 	// Wait records the wait step for step.Operations, which the author must
-	// be able to read: completed when none of them is pending, else pending
-	// until the last one finishes. It reports whether the wait is over.
-	// An operation the author cannot read is ErrUnknownOperation.
-	Wait(ctx context.Context, run Run, unsaved []runs.Step, step runs.Step) (bool, error)
+	// be able to read or the run must own: completed when none of them is
+	// pending, else pending
+	// until the last one finishes. A completed wait's output is its
+	// operations as they ended, a JSON array of their API representations;
+	// Wait returns it when the wait is already over, and releasing a
+	// pending wait records it. An operation the author cannot read is
+	// ErrUnknownOperation.
+	Wait(ctx context.Context, run Run, unsaved []runs.Step, step runs.Step) (output json.RawMessage, done bool, err error)
 	// Sleep records a sleep step, pending unless step is completed.
 	Sleep(ctx context.Context, run Run, unsaved []runs.Step, step runs.Step) error
 	// Wake completes a pending sleep step whose time came.
@@ -86,6 +90,9 @@ const (
 	Suspended OutcomeStatus = "suspended"
 	// Failed: the script threw, broke a limit or replayed differently.
 	Failed OutcomeStatus = "failed"
+	// Continued: the script continued as new with State: the run goes on
+	// from the start of its script with a fresh journal.
+	Continued OutcomeStatus = "continued"
 )
 
 // Outcome is the result of one execution slice.
@@ -95,6 +102,8 @@ type Outcome struct {
 	Error  string
 	// Until is when a run that sleeps continues.
 	Until *time.Time
+	// State is what a run that continued carries into its next generation.
+	State json.RawMessage
 	// Logs are the entries this slice wrote after replaying earlier ones.
 	Logs []Log
 	// Unsaved are the value and read steps a completed or failed run
@@ -115,15 +124,27 @@ var ErrNondeterministic = errors.New("the workflow replayed differently")
 
 var (
 	errSuspended = errors.New("workflow suspended")
-	errSlice     = errors.New("the workflow ran longer than its time slice without waiting")
+	errContinued = errors.New("workflow continued as new")
+	// errJournal fails a run whose recorded outputs outgrow maxJournal.
+	errJournal = fmt.Errorf("the run recorded more than %d MiB of responses; split the work across runs, or read smaller pages", maxJournal>>20)
+	errSlice   = errors.New("the workflow ran longer than its time slice without waiting")
 )
 
 const (
 	defaultSlice = 5 * time.Second
 	// Output and request limits keep a run's journal small.
-	maxOutput    = 256 << 10
-	maxWaits     = 64
-	maxCallStack = 4096
+	maxOutput = 256 << 10
+	maxWaits  = 64
+	// maxState bounds what a run carries into its next generation: IDs
+	// and cursors, not content.
+	maxState = 64 << 10
+	// maxOperationID bounds an operation ID a wait names.
+	maxOperationID = 128
+	maxCallStack   = 4096
+	// maxJournal bounds the outputs a run records. Every slice loads and
+	// replays all of them, so the bound keeps a slice's memory and time in
+	// proportion.
+	maxJournal = 32 << 20
 )
 
 // Engine executes script runs. It is safe for concurrent use; each slice
@@ -174,6 +195,9 @@ func (e *Engine) Execute(ctx context.Context, run Run) (Outcome, error) {
 		return Outcome{}, err
 	}
 	h := &host{ctx: ctx, run: run, effects: e.effects, recorded: recorded}
+	for _, step := range recorded {
+		h.journal += step.OutputSize
+	}
 	rt := h.runtime()
 	h.watch = newWatchdog(e.slice, func() { rt.Interrupt(errSlice) })
 	defer h.watch.stop()
@@ -191,13 +215,37 @@ func (e *Engine) Execute(ctx context.Context, run Run) (Outcome, error) {
 		if !ok {
 			return nil, errors.New("the script has no workflow entry point")
 		}
-		return main(goja.Undefined(), rt.ToValue(string(raw)))
+		value, err := main(goja.Undefined(), rt.ToValue(string(raw)))
+		if err != nil {
+			return nil, err
+		}
+		return value, h.settle(value)
 	}()
 	out, err := h.outcome(value, err)
 	if out.Status == Completed || out.Status == Failed {
 		out.Unsaved = h.unsaved
 	}
 	return out, err
+}
+
+// settle runs the SDK's __papergoIdle each time the script has run out of
+// promise jobs while its run is pending. The SDK then starts, as one wait
+// step, every wait the script began since, so operations waited for
+// together, such as tasks in a Promise.all, suspend the run once. It ends
+// when the run settles or suspends, or when nothing was waiting.
+func (h *host) settle(value goja.Value) error {
+	idle, ok := goja.AssertFunction(h.rt.Get("__papergoIdle"))
+	promise, pending := value.Export().(*goja.Promise)
+	for ok && pending && promise.State() == goja.PromiseStatePending && !h.stopped() {
+		waited, err := idle(goja.Undefined())
+		if err != nil {
+			return err
+		}
+		if !waited.ToBoolean() {
+			return nil
+		}
+	}
+	return nil
 }
 
 // manifestSlice bounds the JavaScript a manifest evaluation runs.
@@ -244,12 +292,14 @@ func (e *Engine) Manifest(ctx context.Context, artifact Artifact, params map[str
 func (h *host) outcome(value goja.Value, err error) (Outcome, error) {
 	logs := h.logs
 	switch {
-	case h.abort != nil && errors.Is(h.abort, ErrNondeterministic):
+	case h.abort != nil && (errors.Is(h.abort, ErrNondeterministic) || errors.Is(h.abort, errJournal)):
 		return Outcome{Status: Failed, Error: h.abort.Error(), Logs: logs}, nil
 	case h.abort != nil:
 		return Outcome{}, h.abort
 	case h.suspended:
 		return Outcome{Status: Suspended, Until: h.until, Logs: logs}, nil
+	case h.state != nil:
+		return Outcome{Status: Continued, State: h.state, Logs: logs}, nil
 	}
 	if err != nil {
 		var interrupted *goja.InterruptedError

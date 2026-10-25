@@ -22,22 +22,20 @@ export default workflow<unknown, unknown, Params>({
     }))!)).result) as { term_ids: string[]; source: { item_version: number } };
     if (decided.term_ids.length === 0) return { reviewed: false };
     const item = await ctx.api.v1.resources.byId(id).get();
-    const tasks = ctx.api.v1.workspaces.byId(ctx.run.workspace_id).tasks;
-    const review = await tasks.post({
+    const answer = await ctx.ask<{ terms: string[] }>({
       kind: "approval", itemId: id, assignees: ["role:owners"], title: `Review topics for ${item!.name}`,
-      inputSchema: json({
+      inputSchema: {
         type: "object", required: ["terms"],
         properties: { terms: { type: "array", title: "Approved topics", uniqueItems: true, items: { type: "string" }, "x-papergo": { kind: "terms", term_set_id: p.term_set } } },
-      }),
-      values: json({ terms: decided.term_ids }),
+      },
+      values: { terms: decided.term_ids },
     });
-    const answer = plain((await ctx.wait(review!.operationId!)).result) as { outcome: string; input?: { terms: string[] } };
     if (answer.outcome !== "approved") return { reviewed: true, applied: false };
     try {
       // The version the decision read: a newer file or edit refuses it.
       await ctx.api.v1.resources.byId(id).patch({ values: json({ [p.field]: answer.input!.terms }) }, { headers: { "If-Match": `"${decided.source.item_version}"` } });
     } catch {
-      await tasks.post({
+      await ctx.api.v1.workspaces.byId(ctx.run.workspace_id).tasks.post({
         itemId: id, assignees: ["role:owners"], title: `Classification needs recomputation for ${item!.name}`,
         description: "The file or the item's metadata changed during review. Run Taxonomy review again to get new suggestions.",
       });

@@ -13,6 +13,13 @@ import { type BaseRequestBuilder, type KeysToExcludeForNavigationMetadata, type 
  */
 export interface QueryRequestBuilder extends BaseRequestBuilder<QueryRequestBuilder> {
     /**
+     * Reads every page of the POST request, following @odata.nextLink, and returns their values in order. Each page is one request.
+     * @param body The request body, sent again for every page
+     * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+     * @returns {Promise<NonNullable<SmartFolderResult["value"]>>}
+     */
+     all(body: SmartFolderQueryRequest, requestConfiguration?: RequestConfiguration<QueryRequestBuilderPostQueryParameters> | undefined) : Promise<NonNullable<SmartFolderResult["value"]>>;
+    /**
      * The groups property
      */
     get groups(): GroupsRequestBuilder;
@@ -49,7 +56,7 @@ export const QueryRequestBuilderUriTemplate = "{+baseurl}/v1/smart-folders/{id}/
 /**
  * Metadata for all the navigation properties in the request builder.
  */
-export const QueryRequestBuilderNavigationMetadata: Record<Exclude<keyof QueryRequestBuilder, KeysToExcludeForNavigationMetadata>, NavigationMetadata> = {
+export const QueryRequestBuilderNavigationMetadata: Record<Exclude<keyof QueryRequestBuilder, KeysToExcludeForNavigationMetadata | "all">, NavigationMetadata> = {
     groups: {
         requestsMetadata: GroupsRequestBuilderRequestsMetadata,
     },

@@ -105,6 +105,12 @@ export interface WorkspacesPostRequestBody extends Parsable {
  */
 export interface WorkspacesRequestBuilder extends BaseRequestBuilder<WorkspacesRequestBuilder> {
     /**
+     * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+     * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+     * @returns {Promise<NonNullable<WorkspacesGetResponse["value"]>>}
+     */
+     all(requestConfiguration?: RequestConfiguration<WorkspacesRequestBuilderGetQueryParameters> | undefined) : Promise<NonNullable<WorkspacesGetResponse["value"]>>;
+    /**
      * Gets an item from the PaperGo.v1.workspaces.item collection
      * @param id Unique identifier of the item
      * @returns {WorkspacesItemRequestBuilder}
@@ -166,7 +172,7 @@ const WorkspacesRequestBuilderGetQueryParametersMapper: Record<string, string> =
 /**
  * Metadata for all the navigation properties in the request builder.
  */
-export const WorkspacesRequestBuilderNavigationMetadata: Record<Exclude<keyof WorkspacesRequestBuilder, KeysToExcludeForNavigationMetadata>, NavigationMetadata> = {
+export const WorkspacesRequestBuilderNavigationMetadata: Record<Exclude<keyof WorkspacesRequestBuilder, KeysToExcludeForNavigationMetadata | "all">, NavigationMetadata> = {
     byId: {
         navigationMetadata: WorkspacesItemRequestBuilderNavigationMetadata,
         pathParametersMappings: ["id"],

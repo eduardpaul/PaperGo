@@ -450,6 +450,8 @@ export interface WorkflowRunStep {
   status: 'pending' | 'completed' | 'failed';
   input?: unknown;
   output?: unknown;
+  /** The output's size in bytes; a finished run drops large outputs and keeps this. */
+  size?: number;
   operations?: string[];
   error?: string;
   started_at?: string;
@@ -459,12 +461,19 @@ export interface WorkflowRunStep {
 export interface WorkflowRun {
   id: string;
   workflow_id: string;
+  workspace_id: string;
   workflow_version?: number;
   status: string;
   event_type?: string;
   item_id?: string;
   items?: string[];
   retry_of?: string;
+  /** The run that called this one with ctx.call. */
+  parent_run_id?: string;
+  /** How many times the run continued as new. */
+  generation?: number;
+  /** What the last generation carried into the current one. */
+  state?: unknown;
   error?: string;
   created_at: string;
   updated_at?: string;

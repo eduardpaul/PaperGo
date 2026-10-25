@@ -20,11 +20,14 @@ type memory struct {
 	requests   []Request
 	waits      int
 	operations map[string]string
-	answer     func(Request) Response
+	// results are the results of operations that do not end as bulk
+	// updates do, such as tasks.
+	results map[string]string
+	answer  func(Request) Response
 }
 
 func newMemory(answer func(Request) Response) *memory {
-	return &memory{steps: map[string][]runs.Step{}, operations: map[string]string{}, answer: answer}
+	return &memory{steps: map[string][]runs.Step{}, operations: map[string]string{}, results: map[string]string{}, answer: answer}
 }
 
 func (m *memory) Steps(_ context.Context, run Run) ([]runs.Step, error) {
@@ -74,17 +77,32 @@ func (m *memory) respond(req Request) Response {
 		m.operations[id] = "pending"
 		response = jsonResponse(202, `{"id":"`+id+`","status":"pending"}`)
 	case req.Method == "GET" && strings.HasPrefix(req.URL, "/v1/operations/"):
-		id := strings.TrimPrefix(req.URL, "/v1/operations/")
-		status := m.operations[id]
-		body := `{"id":"` + id + `","status":"` + status + `","result":{"updated":2,"ids":["a","b"]}}`
-		if status == "failed" {
-			body = `{"id":"` + id + `","status":"failed","error":"the list is locked"}`
-		}
-		response = jsonResponse(200, body)
+		response = jsonResponse(200, m.operation(strings.TrimPrefix(req.URL, "/v1/operations/")))
 	default:
 		response = m.answer(req)
 	}
 	return response
+}
+
+// operation is an operation as the API shows it; the caller holds m.mu.
+func (m *memory) operation(id string) string {
+	status := m.operations[id]
+	if status == "failed" {
+		return `{"id":"` + id + `","status":"failed","error":"the list is locked"}`
+	}
+	if result, ok := m.results[id]; ok {
+		return `{"id":"` + id + `","status":"` + status + `","result":` + result + `}`
+	}
+	return `{"id":"` + id + `","status":"` + status + `","result":{"updated":2,"ids":["a","b"]}}`
+}
+
+// ended is the output of a wait for step's operations, which have ended.
+func (m *memory) ended(step runs.Step) json.RawMessage {
+	ops := make([]string, len(step.Operations))
+	for i, id := range step.Operations {
+		ops[i] = m.operation(id)
+	}
+	return json.RawMessage("[" + strings.Join(ops, ",") + "]")
 }
 
 func (m *memory) over(step runs.Step) bool {
@@ -96,21 +114,21 @@ func (m *memory) over(step runs.Step) bool {
 	return true
 }
 
-func (m *memory) Wait(_ context.Context, _ Run, unsaved []runs.Step, step runs.Step) (bool, error) {
+func (m *memory) Wait(_ context.Context, _ Run, unsaved []runs.Step, step runs.Step) (json.RawMessage, bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, id := range step.Operations {
 		if _, ok := m.operations[id]; !ok {
-			return false, ErrUnknownOperation
+			return nil, false, ErrUnknownOperation
 		}
 	}
 	m.waits++
 	done := m.over(step)
 	if done {
-		step.Status = runs.StepCompleted
+		step.Status, step.Output = runs.StepCompleted, m.ended(step)
 	}
 	m.record(append(unsaved, step)...)
-	return done, nil
+	return step.Output, done, nil
 }
 
 // finish ends an operation and releases the waits it completes, as the
@@ -121,8 +139,8 @@ func (m *memory) finish(id, status string) {
 	m.operations[id] = status
 	for _, steps := range m.steps {
 		for i := range steps {
-			if steps[i].Kind == runs.StepWait && steps[i].Status == runs.StepPending && m.over(steps[i]) {
-				steps[i].Status = runs.StepCompleted
+			if steps[i].Kind == runs.StepWait && steps[i].Status == runs.StepPending && len(steps[i].Operations) > 0 && m.over(steps[i]) {
+				steps[i].Status, steps[i].Output = runs.StepCompleted, m.ended(steps[i])
 			}
 		}
 	}
@@ -240,6 +258,40 @@ export default workflow({
 	}
 }
 
+// The API links a page to the next with the origin it was asked on, which
+// is none in-process; all() asks the SDK's origin with the link's query.
+func TestPagedListsReadEveryPage(t *testing.T) {
+	m := newMemory(func(req Request) Response {
+		children := "/v1/resources/" + listID + "/children"
+		query := "/v1/resources/" + listID + "/query"
+		switch {
+		case req.Method == "GET" && req.URL == children+"?%24top=2":
+			return jsonResponse(200, `{"value":[{"name":"A"},{"name":"B"}],"@odata.nextLink":"http:///v1/resources/`+listID+`/children?%24skiptoken=t1&%24top=2"}`)
+		case req.Method == "GET" && req.URL == children+"?%24skiptoken=t1&%24top=2":
+			return jsonResponse(200, `{"value":[{"name":"C"}],"@odata.nextLink":null}`)
+		case req.Method == "POST" && req.URL == query && string(req.Body) == `{"surface":"head"}`:
+			return jsonResponse(200, `{"value":[{"name":"D"}],"@odata.nextLink":"https://papergo.example/v1/resources/`+listID+`/query?%24skiptoken=t2"}`)
+		case req.Method == "POST" && req.URL == query+"?%24skiptoken=t2" && string(req.Body) == `{"surface":"head"}`:
+			return jsonResponse(200, `{"value":[{"name":"E"}]}`)
+		}
+		return jsonResponse(404, `{"code":"not_found","detail":"route not found"}`)
+	})
+	out := execute(t, New(m, 0), Run{ID: "run-pages", Artifact: bundle(t, `
+import { workflow } from "@papergo/workflow";
+export default workflow({
+  async run(ctx) {
+    const list = ctx.api.v1.resources.byId("`+listID+`");
+    const children = await list.children.all({ queryParameters: { top: 2 } });
+    const rows = await list.query.all({ surface: "head" });
+    return [...children, ...rows].map((r) => r.name);
+  },
+});
+`)})
+	if out.Status != Completed || string(out.Output) != `["A","B","C","D","E"]` || len(m.requests) != 4 {
+		t.Fatalf("outcome: %+v after %d requests", out, len(m.requests))
+	}
+}
+
 const listID = "0b0e3e2a-6f39-4a39-9a0e-2a7b5d1c9f01"
 
 func TestWaitsSuspendAndResume(t *testing.T) {
@@ -272,7 +324,8 @@ export default workflow({
 	if out.Status != Completed || string(out.Output) != `{"status":"succeeded","result":{"updated":2,"ids":["a","b"]}}` {
 		t.Fatalf("last slice: %+v", out)
 	}
-	if len(out.Logs) != 1 || out.Logs[0].Message != "finished succeeded" || len(m.requests) != 2 {
+	// The wait returns the operation as it ended, without reading it again.
+	if len(out.Logs) != 1 || out.Logs[0].Message != "finished succeeded" || len(m.requests) != 1 {
 		t.Fatalf("last slice logs %+v after %d requests", out.Logs, len(m.requests))
 	}
 }
@@ -301,6 +354,218 @@ export default workflow({
 	m.finish("00000000-0000-4000-8000-000000000001", "succeeded")
 	if out := execute(t, e, run); out.Status != Completed || string(out.Output) != `["succeeded","succeeded"]` || m.waits != 1 {
 		t.Fatalf("outcome: %+v", out)
+	}
+}
+
+func TestWaitsStartedTogetherSuspendOnce(t *testing.T) {
+	m := newMemory(nil)
+	e := New(m, 0)
+	run := Run{ID: "run-together", Context: withInput(`{"list":"` + listID + `"}`), Artifact: bundle(t, `
+import { OperationError, workflow } from "@papergo/workflow";
+export default workflow({
+  async run(ctx, input: { list: string }) {
+    const update = async (status: string) => {
+      const op = await ctx.api.v1.resources.byId(input.list).bulkUpdate.post({ values: { status } });
+      return (await ctx.wait(op!)).status;
+    };
+    const settled = await Promise.allSettled([update("a"), update("b"), update("c")]);
+    return settled.map((s) => s.status === "fulfilled" ? s.value : (s.reason as OperationError).operation.status);
+  },
+});
+`)}
+	if out := execute(t, e, run); out.Status != Suspended || m.waits != 1 || len(m.requests) != 3 {
+		t.Fatalf("outcome: %+v after %d waits and %d requests", out, m.waits, len(m.requests))
+	}
+	m.finish("00000000-0000-4000-8000-000000000001", "succeeded")
+	m.finish("00000000-0000-4000-8000-000000000002", "failed")
+	if out := execute(t, e, run); out.Status != Suspended {
+		t.Fatalf("the wait must last until every operation finished: %+v", out)
+	}
+	m.finish("00000000-0000-4000-8000-000000000003", "succeeded")
+	if out := execute(t, e, run); out.Status != Completed || string(out.Output) != `["succeeded","failed","succeeded"]` || m.waits != 1 {
+		t.Fatalf("outcome: %+v after %d waits", out, m.waits)
+	}
+}
+
+func TestTasksAskedTogetherAreAnsweredTogether(t *testing.T) {
+	const ws = "7c1e0d52-8f0e-4b8b-9d0e-3c7f6a2b1e01"
+	var m *memory
+	var posted []string
+	m = newMemory(func(req Request) Response {
+		switch {
+		case req.Method == "POST" && req.URL == "/v1/workspaces/"+ws+"/tasks":
+			posted = append(posted, string(req.Body))
+			id := fmt.Sprintf("00000000-0000-4000-9000-%012d", len(posted))
+			m.operations[id] = "pending"
+			return jsonResponse(201, `{"id":"task-`+id+`","title":"t","operation_id":"`+id+`"}`)
+		case req.Method == "POST" && req.URL == "/v1/workspaces/"+ws+"/notifications":
+			posted = append(posted, string(req.Body))
+			return jsonResponse(200, `{"sent":2,"skipped":0,"deduplicated":1}`)
+		}
+		return jsonResponse(404, `{"code":"not_found","detail":"route not found"}`)
+	})
+	e := New(m, 0)
+	run := Run{ID: "run-ask", Context: map[string]any{"workspace_id": ws}, Artifact: bundle(t, `
+import { workflow } from "@papergo/workflow";
+export default workflow({
+  async run(ctx) {
+    const [legal, finance] = await Promise.all([
+      ctx.ask<{ amount: number }>({
+        title: "Legal review", assignees: ["group:legal"],
+        inputSchema: { type: "object", properties: { amount: { type: "number" } } }, values: { amount: 3 },
+      }),
+      ctx.ask({ title: "Budget check", kind: "approval" }),
+    ]);
+    const sent = await ctx.notify({ recipients: ["actor"], title: "Reviewed", dedupKey: "reviewed" });
+    return [legal.outcome, legal.input?.amount, legal.responses.length, finance.outcome, sent.sent];
+  },
+});
+`)}
+	if out := execute(t, e, run); out.Status != Suspended || m.waits != 1 || len(posted) != 2 {
+		t.Fatalf("outcome: %+v after %d waits and %d tasks", out, m.waits, len(posted))
+	}
+	if posted[0] != `{"assignees":["group:legal"],"input_schema":{"type":"object","properties":{"amount":{"type":"number"}}},"title":"Legal review","values":{"amount":3}}` ||
+		posted[1] != `{"kind":"approval","title":"Budget check"}` {
+		t.Fatalf("tasks: %v", posted)
+	}
+	m.results["00000000-0000-4000-9000-000000000001"] = `{"task_id":"a","status":"completed","outcome":"done","comment":"","input":{"amount":4},"responses":[{"subject":"bob","assignee":"group:legal","outcome":"done","comment":""}]}`
+	m.results["00000000-0000-4000-9000-000000000002"] = `{"task_id":"b","status":"completed","outcome":"approved","comment":"","responses":[]}`
+	m.finish("00000000-0000-4000-9000-000000000002", "succeeded")
+	if out := execute(t, e, run); out.Status != Suspended {
+		t.Fatalf("one answered task must not end the wait: %+v", out)
+	}
+	m.finish("00000000-0000-4000-9000-000000000001", "succeeded")
+	out := execute(t, e, run)
+	if out.Status != Completed || string(out.Output) != `["done",4,1,"approved",2]` || m.waits != 1 {
+		t.Fatalf("outcome: %+v after %d waits", out, m.waits)
+	}
+	if len(posted) != 3 || posted[2] != `{"dedup_key":"reviewed","recipients":["actor"],"title":"Reviewed"}` {
+		t.Fatalf("notification: %v", posted)
+	}
+}
+
+func TestCallsMadeTogetherStartAndWaitTogether(t *testing.T) {
+	const ws = "7c1e0d52-8f0e-4b8b-9d0e-3c7f6a2b1e01"
+	var m *memory
+	var bodies []string
+	m = newMemory(func(req Request) Response {
+		if req.Method != "POST" || req.URL != "/v1/workspaces/"+ws+"/workflow-calls" {
+			return jsonResponse(404, `{"code":"not_found","detail":"route not found"}`)
+		}
+		bodies = append(bodies, string(req.Body))
+		var in struct {
+			Calls []json.RawMessage `json:"calls"`
+		}
+		_ = json.Unmarshal(req.Body, &in)
+		ids := make([]string, len(in.Calls))
+		for i := range in.Calls {
+			ids[i] = fmt.Sprintf(`"wf:check:%d"`, len(m.operations))
+			m.operations[strings.Trim(ids[i], `"`)] = "pending"
+		}
+		return jsonResponse(202, `{"run_ids":[`+strings.Join(ids, ",")+`]}`)
+	})
+	e := New(m, 0)
+	run := Run{ID: "run-calls", Context: map[string]any{"workspace_id": ws}, Artifact: bundle(t, `
+import { OperationError, workflow } from "@papergo/workflow";
+export default workflow({
+  async run(ctx) {
+    const results = await Promise.allSettled(["a", "b", "c"].map((id) => ctx.call<{ total: number }>("check", { strict: true }, { itemId: id })));
+    return results.map((r) => r.status === "fulfilled" ? r.value.total : (r.reason as OperationError).operation.status);
+  },
+});
+`)}
+	if out := execute(t, e, run); out.Status != Suspended || len(bodies) != 1 || m.waits != 1 {
+		t.Fatalf("outcome: %+v after %d call requests and %d waits", out, len(bodies), m.waits)
+	}
+	if bodies[0] != `{"calls":[{"input":{"strict":true},"item_id":"a"},{"input":{"strict":true},"item_id":"b"},{"input":{"strict":true},"item_id":"c"}],"workflow":"check"}` {
+		t.Fatalf("call request: %s", bodies[0])
+	}
+	m.results["wf:check:0"], m.results["wf:check:2"] = `{"total":1}`, `{"total":3}`
+	m.finish("wf:check:0", "succeeded")
+	m.finish("wf:check:1", "failed")
+	m.finish("wf:check:2", "succeeded")
+	if out := execute(t, e, run); out.Status != Completed || string(out.Output) != `[1,"failed",3]` || len(bodies) != 1 || m.waits != 1 {
+		t.Fatalf("outcome: %+v after %d call requests and %d waits", out, len(bodies), m.waits)
+	}
+}
+
+func TestRunsContinueAsNew(t *testing.T) {
+	m := newMemory(func(Request) Response {
+		return jsonResponse(200, `{"id":"`+listID+`","kind":"list","name":"Records"}`)
+	})
+	e := New(m, 0)
+	source := bundle(t, `
+import { workflow } from "@papergo/workflow";
+export default workflow({
+  async run(ctx) {
+    const n = (ctx.state as { n: number } | undefined)?.n ?? 0;
+    await ctx.api.v1.resources.byId("`+listID+`").get();
+    try {
+      if (n < 2) ctx.continueAsNew({ n: n + 1 });
+    } catch {
+      return "caught";
+    }
+    return { n, generation: ctx.generation };
+  },
+});
+`)
+	// The runner starts each generation with a fresh journal and the state.
+	context := map[string]any{"generation": 0}
+	for generation := range 3 {
+		run := Run{ID: "run-continue", Context: context, Artifact: source}
+		m.steps[run.ID] = nil
+		out := execute(t, e, run)
+		if generation < 2 {
+			want := fmt.Sprintf(`{"n":%d}`, generation+1)
+			if out.Status != Continued || string(out.State) != want {
+				t.Fatalf("generation %d: %+v", generation, out)
+			}
+			// A replay of the generation continues the same way.
+			if again := execute(t, e, run); again.Status != Continued || string(again.State) != want {
+				t.Fatalf("replayed generation %d: %+v", generation, again)
+			}
+			context = map[string]any{"generation": generation + 1, "state": out.State}
+			continue
+		}
+		if out.Status != Completed || string(out.Output) != `{"n":2,"generation":2}` {
+			t.Fatalf("last generation: %+v", out)
+		}
+	}
+	// A read is recorded with the next durable step, and a generation ends
+	// before one: replaying a generation repeats its read, as a crash would.
+	if len(m.requests) != 5 {
+		t.Fatalf("%d requests for three generations, two of them replayed", len(m.requests))
+	}
+
+	// A run that continues with work it has not awaited is told so.
+	pending := execute(t, New(newMemory(nil), 0), Run{ID: "run-pending", Context: withInput(`{"list":"` + listID + `"}`), Artifact: bundle(t, `
+import { workflow } from "@papergo/workflow";
+export default workflow({
+  async run(ctx, input: { list: string }) {
+    const op = await ctx.api.v1.resources.byId(input.list).bulkUpdate.post({ values: { status: "a" } });
+    void ctx.wait(op!);
+    ctx.continueAsNew({});
+  },
+});
+`)})
+	if pending.Status != Failed || !strings.Contains(pending.Error, "await ctx.call and ctx.wait before ctx.continueAsNew") {
+		t.Fatalf("continuing with a pending wait: %+v", pending)
+	}
+}
+
+func TestJournalsAreBounded(t *testing.T) {
+	page := jsonResponse(200, `{"value":[],"padding":"`+strings.Repeat("x", 1<<20)+`"}`)
+	m := newMemory(func(Request) Response { return page })
+	out := execute(t, New(m, 0), Run{ID: "run-journal", Artifact: bundle(t, `
+import { workflow } from "@papergo/workflow";
+export default workflow({
+  async run(ctx) {
+    for (;;) await ctx.api.v1.resources.byId("`+listID+`").children.get();
+  },
+});
+`)})
+	if out.Status != Failed || !strings.Contains(out.Error, "more than 32 MiB") || len(m.requests) != maxJournal/(1<<20) {
+		t.Fatalf("outcome: %+v after %d requests", out, len(m.requests))
 	}
 }
 
@@ -767,7 +1032,7 @@ export default workflow({
 			t.Fatalf("snapshot lost on replay: %+v", out)
 		}
 	}
-	if len(m.requests) != 1 || m.requests[0].URL != "/v1/operations/"+operationID {
+	if len(m.requests) != 0 {
 		t.Fatal("snapshot access fetched the resource", m.requests)
 	}
 }
@@ -813,7 +1078,7 @@ export default workflow<{note: string}>({
 					t.Fatalf("manual form/selection lost on replay: %+v", out)
 				}
 			}
-			if len(m.requests) != 1 || m.requests[0].URL != "/v1/operations/"+operationID {
+			if len(m.requests) != 0 {
 				t.Fatal("manual context fetched resources", m.requests)
 			}
 		})
