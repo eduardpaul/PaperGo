@@ -78,6 +78,8 @@ type StepQueries interface {
 	// CopyRunSteps copies a run's steps before a position, with the
 	// operations they name, to another run.
 	CopyRunSteps(ctx context.Context, target, source string, before int) error
+	// DeleteRunSteps deletes a run's steps with the operations they name.
+	DeleteRunSteps(ctx context.Context, runID string) error
 }
 
 // Wait is a pending wait step and the operations it waits for.

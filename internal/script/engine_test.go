@@ -489,6 +489,70 @@ export default workflow({
 	}
 }
 
+func TestRunsContinueAsNew(t *testing.T) {
+	m := newMemory(func(Request) Response {
+		return jsonResponse(200, `{"id":"`+listID+`","kind":"list","name":"Records"}`)
+	})
+	e := New(m, 0)
+	source := bundle(t, `
+import { workflow } from "@papergo/workflow";
+export default workflow({
+  async run(ctx) {
+    const n = (ctx.state as { n: number } | undefined)?.n ?? 0;
+    await ctx.api.v1.resources.byId("`+listID+`").get();
+    try {
+      if (n < 2) ctx.continueAsNew({ n: n + 1 });
+    } catch {
+      return "caught";
+    }
+    return { n, generation: ctx.generation };
+  },
+});
+`)
+	// The runner starts each generation with a fresh journal and the state.
+	context := map[string]any{"generation": 0}
+	for generation := range 3 {
+		run := Run{ID: "run-continue", Context: context, Artifact: source}
+		m.steps[run.ID] = nil
+		out := execute(t, e, run)
+		if generation < 2 {
+			want := fmt.Sprintf(`{"n":%d}`, generation+1)
+			if out.Status != Continued || string(out.State) != want {
+				t.Fatalf("generation %d: %+v", generation, out)
+			}
+			// A replay of the generation continues the same way.
+			if again := execute(t, e, run); again.Status != Continued || string(again.State) != want {
+				t.Fatalf("replayed generation %d: %+v", generation, again)
+			}
+			context = map[string]any{"generation": generation + 1, "state": out.State}
+			continue
+		}
+		if out.Status != Completed || string(out.Output) != `{"n":2,"generation":2}` {
+			t.Fatalf("last generation: %+v", out)
+		}
+	}
+	// A read is recorded with the next durable step, and a generation ends
+	// before one: replaying a generation repeats its read, as a crash would.
+	if len(m.requests) != 5 {
+		t.Fatalf("%d requests for three generations, two of them replayed", len(m.requests))
+	}
+
+	// A run that continues with work it has not awaited is told so.
+	pending := execute(t, New(newMemory(nil), 0), Run{ID: "run-pending", Context: withInput(`{"list":"` + listID + `"}`), Artifact: bundle(t, `
+import { workflow } from "@papergo/workflow";
+export default workflow({
+  async run(ctx, input: { list: string }) {
+    const op = await ctx.api.v1.resources.byId(input.list).bulkUpdate.post({ values: { status: "a" } });
+    void ctx.wait(op!);
+    ctx.continueAsNew({});
+  },
+});
+`)})
+	if pending.Status != Failed || !strings.Contains(pending.Error, "await ctx.call and ctx.wait before ctx.continueAsNew") {
+		t.Fatalf("continuing with a pending wait: %+v", pending)
+	}
+}
+
 func TestJournalsAreBounded(t *testing.T) {
 	page := jsonResponse(200, `{"value":[],"padding":"`+strings.Repeat("x", 1<<20)+`"}`)
 	m := newMemory(func(Request) Response { return page })

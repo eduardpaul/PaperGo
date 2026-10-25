@@ -27870,6 +27870,14 @@
             "type": "string",
             "description": "The run that called this one."
           },
+          "generation": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "How many times the run continued as new, each time with a fresh journal."
+          },
+          "state": {
+            "description": "What the run's last generation carried into the current one with ctx.continueAsNew; the script reads it as ctx.state."
+          },
           "status": {
             "type": "string",
             "enum": [

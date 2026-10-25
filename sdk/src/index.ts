@@ -12,6 +12,13 @@
 //     },
 //   });
 //
+// A long loop continues as new to keep its journal short: the run starts its
+// script again, with what it carries as ctx.state and a fresh journal.
+//
+//   const { cursor } = (ctx.state ?? {}) as { cursor?: string };
+//   ... process one page ...
+//   if (next) ctx.continueAsNew({ cursor: next });
+//
 // Long work, such as OCR or an approval, is an API call that returns a
 // pending operation. ctx.wait(operation) unloads the run until it finishes.
 // Waits a script starts together, such as those of tasks it asks in a
@@ -161,6 +168,10 @@ export interface Run<P = Record<string, unknown>, I = unknown> {
   /** Who caused the run. */
   actor: string;
   params: P;
+  /** How many times the run continued as new. */
+  generation: number;
+  /** What the run's last generation carried into this one; absent in the first. */
+  state?: unknown;
 }
 
 /** A task ctx.ask creates: the API's task fields, with its form and values as plain JSON. */
@@ -219,6 +230,10 @@ export interface Context<P = Record<string, unknown>, I = unknown> {
   readonly params: P;
   /** The run's item, when it has one. */
   readonly itemId?: string;
+  /** What the last generation passed to continueAsNew; undefined in the first. Cast it to its shape. */
+  readonly state?: unknown;
+  /** How many times the run continued as new; 0 in the first generation. */
+  readonly generation: number;
   /**
    * Triggering revision content, persisted for replay (up to 64 KiB).
    * File events include file metadata and their item. Manual/test starts
@@ -269,6 +284,16 @@ export interface Context<P = Record<string, unknown>, I = unknown> {
   call<O = unknown, CI = Record<string, unknown>>(workflow: string, input?: CI, options?: CallOptions): Promise<O>;
   /** Unloads the run for ms milliseconds, or until a time. */
   sleep(duration: number | { until: Date | string }): Promise<void>;
+  /**
+   * Ends this generation of the run and starts its script again with a
+   * fresh journal, reading state, at most 64 KiB of JSON, as ctx.state. The
+   * run keeps its ID, input, item, logs and what it started, and whoever
+   * waits for it waits for its last generation. Every replay repeats the
+   * whole journal, so a loop over many pages or items that continues every
+   * few hundred steps stays fast. Await the calls and waits it started
+   * first. It does not return.
+   */
+  continueAsNew(state?: unknown): never;
   /** Writes to the run's log. A replay does not repeat earlier entries. */
   log(...values: unknown[]): void;
   warn(...values: unknown[]): void;
@@ -477,6 +502,15 @@ async function notify(workspaceId: string, message: NotificationRequest): Promis
   return (await api.v1.workspaces.byId(workspace ?? workspaceId).notifications.post(send))!;
 }
 
+function continueAsNew(state: unknown): never {
+  if (calling.length > 0 || waiting.length > 0) {
+    throw new TypeError("await ctx.call and ctx.wait before ctx.continueAsNew: the next generation would not see what they return");
+  }
+  host.continue(JSON.stringify(state ?? null));
+  // The engine stops the script; nothing runs after host.continue.
+  throw new Error("the run continued as new");
+}
+
 async function sleep(duration: number | { until: Date | string }): Promise<void> {
   let until: number;
   if (typeof duration === "number") {
@@ -496,6 +530,9 @@ function context<P, I>(run: Run<P, I>): Context<P, I> {
     params: run.params,
     itemId: run.item_id,
     trigger: run.trigger,
+    state: run.state ?? undefined,
+    generation: run.generation ?? 0,
+    continueAsNew,
     api,
     wait: ((operations: Operation | string | (Operation | string)[]) =>
       Array.isArray(operations) ? wait(operations) : wait([operations]).then((all) => all[0])) as Context<P, I>["wait"],

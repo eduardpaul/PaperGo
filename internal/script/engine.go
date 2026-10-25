@@ -90,6 +90,9 @@ const (
 	Suspended OutcomeStatus = "suspended"
 	// Failed: the script threw, broke a limit or replayed differently.
 	Failed OutcomeStatus = "failed"
+	// Continued: the script continued as new with State: the run goes on
+	// from the start of its script with a fresh journal.
+	Continued OutcomeStatus = "continued"
 )
 
 // Outcome is the result of one execution slice.
@@ -99,6 +102,8 @@ type Outcome struct {
 	Error  string
 	// Until is when a run that sleeps continues.
 	Until *time.Time
+	// State is what a run that continued carries into its next generation.
+	State json.RawMessage
 	// Logs are the entries this slice wrote after replaying earlier ones.
 	Logs []Log
 	// Unsaved are the value and read steps a completed or failed run
@@ -119,6 +124,7 @@ var ErrNondeterministic = errors.New("the workflow replayed differently")
 
 var (
 	errSuspended = errors.New("workflow suspended")
+	errContinued = errors.New("workflow continued as new")
 	// errJournal fails a run whose recorded outputs outgrow maxJournal.
 	errJournal = fmt.Errorf("the run recorded more than %d MiB of responses; split the work across runs, or read smaller pages", maxJournal>>20)
 	errSlice   = errors.New("the workflow ran longer than its time slice without waiting")
@@ -129,6 +135,9 @@ const (
 	// Output and request limits keep a run's journal small.
 	maxOutput = 256 << 10
 	maxWaits  = 64
+	// maxState bounds what a run carries into its next generation: IDs
+	// and cursors, not content.
+	maxState = 64 << 10
 	// maxOperationID bounds an operation ID a wait names.
 	maxOperationID = 128
 	maxCallStack   = 4096
@@ -227,7 +236,7 @@ func (e *Engine) Execute(ctx context.Context, run Run) (Outcome, error) {
 func (h *host) settle(value goja.Value) error {
 	idle, ok := goja.AssertFunction(h.rt.Get("__papergoIdle"))
 	promise, pending := value.Export().(*goja.Promise)
-	for ok && pending && promise.State() == goja.PromiseStatePending && !h.suspended && h.abort == nil {
+	for ok && pending && promise.State() == goja.PromiseStatePending && !h.stopped() {
 		waited, err := idle(goja.Undefined())
 		if err != nil {
 			return err
@@ -289,6 +298,8 @@ func (h *host) outcome(value goja.Value, err error) (Outcome, error) {
 		return Outcome{}, h.abort
 	case h.suspended:
 		return Outcome{Status: Suspended, Until: h.until, Logs: logs}, nil
+	case h.state != nil:
+		return Outcome{Status: Continued, State: h.state, Logs: logs}, nil
 	}
 	if err != nil {
 		var interrupted *goja.InterruptedError

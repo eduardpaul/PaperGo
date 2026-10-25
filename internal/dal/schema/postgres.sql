@@ -793,6 +793,10 @@ CREATE TABLE workflow_runs (
     depth BIGINT NOT NULL CHECK (depth >= 0),
     actor TEXT NOT NULL,
     retry_of TEXT,
+    -- A run that continued as new counts its generations; state is what the
+    -- last one carried into the current one, the script's ctx.state.
+    generation BIGINT NOT NULL DEFAULT 0 CHECK (generation >= 0),
+    state JSONB,
     logs JSONB NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(logs) = 'array')
 );
 CREATE UNIQUE INDEX workflowrun_workflow_id_event_id ON workflow_runs(workflow_id, event_id);

@@ -51,7 +51,9 @@ type host struct {
 	// interrupts the runtime, which JavaScript cannot catch.
 	suspended bool
 	until     *time.Time
-	abort     error
+	// state is set when the run continues as new, with what it carries.
+	state json.RawMessage
+	abort error
 	// manifest is set while a version's definition is read: the script
 	// makes no effects then.
 	manifest bool
@@ -72,6 +74,7 @@ func (h *host) runtime() *goja.Runtime {
 	_ = papergo.Set("request", h.request)
 	_ = papergo.Set("wait", h.wait)
 	_ = papergo.Set("sleep", h.sleep)
+	_ = papergo.Set("continue", h.continueAsNew)
 	_ = papergo.Set("uuid", h.uuid)
 	_ = papergo.Set("log", func(level, message string) { h.log(level, message) })
 	_ = rt.Set("__papergo", papergo)
@@ -133,7 +136,7 @@ func (h *host) newStep(kind runs.StepKind, name, hash string) runs.Step {
 
 // value replays or records a value step: a clock reading or random value.
 func (h *host) value(name string, generate func() json.RawMessage) (json.RawMessage, bool) {
-	if h.abort != nil || h.suspended {
+	if h.stopped() {
 		return nil, false
 	}
 	hash := digest(string(runs.StepValue), name)
@@ -182,6 +185,10 @@ func (h *host) observe(step runs.Step) {
 	}
 	h.saved()
 }
+
+// stopped reports whether the slice ended: the run waits, continued as
+// new, or must stop. Host functions do nothing then.
+func (h *host) stopped() bool { return h.abort != nil || h.suspended || h.state != nil }
 
 // grow counts a new step's output toward the run's journal and stops a run
 // whose journal outgrew maxJournal. It reports whether the run goes on.
@@ -264,7 +271,7 @@ func ResponseOutput(response Response) json.RawMessage {
 // string and a binary one an ArrayBuffer; a response's binary body comes back
 // as the ArrayBuffer bytes.
 func (h *host) request(method, rawURL string, headers map[string]string, body goja.Value) goja.Value {
-	if h.abort != nil || h.suspended {
+	if h.stopped() {
 		return goja.Undefined()
 	}
 	h.effect()
@@ -361,7 +368,7 @@ func (h *host) request(method, rawURL string, headers map[string]string, body go
 // suspends; a wait that failed, such as by timing out, throws an error the
 // script can catch.
 func (h *host) wait(ids []string) goja.Value {
-	if h.abort != nil || h.suspended {
+	if h.stopped() {
 		return goja.Undefined()
 	}
 	h.effect()
@@ -418,6 +425,26 @@ func (h *host) wait(ids []string) goja.Value {
 	}
 }
 
+// continueAsNew ends the run's generation where its journal ends: the run
+// starts its script again with state and a fresh journal. Like a wait, it
+// stops the slice whatever the script catches.
+func (h *host) continueAsNew(state string) goja.Value {
+	if h.stopped() {
+		return goja.Undefined()
+	}
+	h.effect()
+	if !json.Valid([]byte(state)) || len(state) > maxState {
+		panic(h.rt.NewTypeError("ctx.continueAsNew takes JSON values of at most %d KiB", maxState>>10))
+	}
+	if h.next < len(h.recorded) {
+		s := h.recorded[h.next]
+		return h.stop(fmt.Errorf("%w: step %d was recorded as %s %q, the script now continues as new", ErrNondeterministic, s.Seq, s.Kind, s.Name))
+	}
+	h.state = json.RawMessage(state)
+	h.rt.Interrupt(errContinued)
+	return goja.Undefined()
+}
+
 // effect refuses effects while a definition is read.
 func (h *host) effect() {
 	if h.manifest {
@@ -428,7 +455,7 @@ func (h *host) effect() {
 // sleep replays or records a sleep until a time in milliseconds since the
 // epoch. A sleep whose time has not come suspends the run until then.
 func (h *host) sleep(untilMillis int64) goja.Value {
-	if h.abort != nil || h.suspended {
+	if h.stopped() {
 		return goja.Undefined()
 	}
 	h.effect()

@@ -45,6 +45,8 @@ export function RunView({ id, interval = 3000 }: { id: string; interval?: number
     <QueryFeedback query={act} />
     {run && <>
       <p>{runStatusLabel(run.status)} · {run.event_type} · {run.actor}{run.workflow_version ? ` · version ${run.workflow_version}` : ''}</p>
+      {run.generation ? <p className="text-sm text-muted">The run continued as new {run.generation === 1 ? 'once' : `${run.generation} times`}; the steps are its current generation's.</p> : null}
+      {run.state !== undefined && run.state !== null && <details><summary className="text-sm">Carried state</summary><pre className="overflow-auto whitespace-pre-wrap text-xs">{stringifyJSON(run.state)}</pre></details>}
       {run.parent_run_id && <p className="text-sm text-muted">Called by <a className="text-accent underline" href={`/w/${run.workspace_id}/settings/runs?run=${encodeURIComponent(run.parent_run_id)}`}>another run</a></p>}
       {run.waiting_until && run.status === 'waiting' && <p className="text-sm text-muted">Continues at {format.dateTime(run.waiting_until)}</p>}
       {run.error && <pre className="overflow-auto whitespace-pre-wrap text-xs text-danger">{run.error}</pre>}

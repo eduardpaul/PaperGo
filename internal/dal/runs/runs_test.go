@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"papergo/internal/dal"
 	"papergo/internal/dal/daltest"
@@ -194,5 +195,50 @@ func testStepJournal(t *testing.T, s *dal.Store) {
 	if string(read[0].Output) != string(outputs[0]) || read[1].Output != nil || read[1].OutputSize != len(outputs[1]) ||
 		string(read[2].Output) != string(outputs[2]) || string(read[3].Output) != string(ended) {
 		t.Fatalf("kept outputs: %d %d %d %d bytes", len(read[0].Output), len(read[1].Output), len(read[2].Output), len(read[3].Output))
+	}
+}
+
+func TestContinueRun_SQLite(t *testing.T)   { testContinueRun(t, daltest.SQLiteStore(t)) }
+func TestContinueRun_Postgres(t *testing.T) { testContinueRun(t, daltest.PostgresStore(t)) }
+
+// Continuing a run replaces its journal and carries state; a retry goes on
+// from the generation that failed.
+func testContinueRun(t *testing.T, s *dal.Store) {
+	ctx := context.Background()
+	f := daltest.NewFixture(t, s)
+	wf, err := s.Workflows().Create(ctx, workflows.CreateInput{WorkspaceID: f.Workspace, Key: "loop", Name: "Loop", Content: daltest.Script, CreatedBy: "alice"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := daltest.Run(ctx, s, runstore.CreateInput{ID: "loop", WorkflowID: wf.ID, WorkflowVersion: 1, WorkspaceID: f.Workspace, EventID: "event-loop", EventType: "manual", Actor: "alice"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Runs().RecordSteps(ctx, []runstore.Step{
+		{RunID: "loop", Seq: 0, Kind: runstore.StepRequest, Name: "GET /v1/items", InputHash: strings.Repeat("a", 64), Status: runstore.StepCompleted, Output: []byte(`{}`)},
+		{RunID: "loop", Seq: 1, Kind: runstore.StepWait, Name: "operations", InputHash: strings.Repeat("b", 64), Status: runstore.StepCompleted, Operations: []string{"loop"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for generation, state := range []string{`{"cursor":"a"}`, `{"cursor":"b"}`} {
+		if err := s.Runs().Continue(ctx, "loop", generation, json.RawMessage(state)); err != nil {
+			t.Fatal(err)
+		}
+		run, err := s.Runs().Find(ctx, "loop")
+		if err != nil || run.Generation != generation+1 || !jsonutil.Equal(run.State, []byte(state)) {
+			t.Fatalf("after generation %d: %+v %v", generation, run, err)
+		}
+	}
+	if steps, err := s.Runs().Steps(ctx, "loop"); err != nil || len(steps) != 0 {
+		t.Fatalf("the journal outlived its generation: %+v %v", steps, err)
+	}
+	if err := s.Runs().Continue(ctx, "loop", 1, json.RawMessage(`{}`)); !errors.Is(err, runstore.ErrStaleGeneration) {
+		t.Fatalf("a stale continuation: %v", err)
+	}
+	if err := daltest.Run(ctx, s, runstore.CreateInput{ID: "loop-retry", WorkflowID: wf.ID, WorkflowVersion: 1, WorkspaceID: f.Workspace, EventID: "event-loop-retry", EventType: "manual", Actor: "alice", RetryOf: "loop"}); err != nil {
+		t.Fatal(err)
+	}
+	retry, err := s.Runs().Find(ctx, "loop-retry")
+	if err != nil || retry.Generation != 2 || !jsonutil.Equal(retry.State, []byte(`{"cursor":"b"}`)) {
+		t.Fatalf("retry: %+v %v", retry, err)
 	}
 }

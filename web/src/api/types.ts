@@ -470,6 +470,10 @@ export interface WorkflowRun {
   retry_of?: string;
   /** The run that called this one with ctx.call. */
   parent_run_id?: string;
+  /** How many times the run continued as new. */
+  generation?: number;
+  /** What the last generation carried into the current one. */
+  state?: unknown;
   error?: string;
   created_at: string;
   updated_at?: string;

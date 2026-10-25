@@ -113,6 +113,11 @@ SELECT ?, seq, operation_id FROM workflow_step_operations WHERE run_id = ? AND s
 	return dberr.Translate(err)
 }
 
+func (q Queries) DeleteRunSteps(ctx context.Context, runID string) error {
+	_, err := models.WorkflowSteps.Delete(models.DeleteWhere.WorkflowSteps.RunID.EQ(runID)).Exec(ctx, q.exec)
+	return dberr.Translate(err)
+}
+
 func stepOutput(output []byte) omitnull.Val[[]byte] {
 	if len(output) == 0 {
 		return omitnull.FromPtr[[]byte](nil)

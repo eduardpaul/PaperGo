@@ -31,7 +31,11 @@ type Run struct {
 	Actor     string   `json:"actor"`
 	RetryOf   *string  `json:"retry_of,omitempty"`
 	// ParentRunID is the run that called this one.
-	ParentRunID  *string              `json:"parent_run_id,omitempty"`
+	ParentRunID *string `json:"parent_run_id,omitempty"`
+	// Generation counts the times the run continued as new; State is what
+	// its last generation carried into the current one.
+	Generation   int                  `json:"generation,omitempty"`
+	State        any                  `json:"state,omitempty"`
 	Status       runstore.Status      `json:"status"`
 	Error        string               `json:"error,omitempty"`
 	ErrorCode    operations.ErrorCode `json:"error_code,omitempty"`
@@ -88,7 +92,7 @@ func (p RunPage) APIPage() (map[string]any, string) {
 
 func toRun(row runstore.Run) Run {
 	out := Run{ID: row.ID, WorkflowID: row.WorkflowID, WorkflowVersion: row.WorkflowVersion, WorkspaceID: row.WorkspaceID, ItemID: optional(row.ItemID), EventID: row.EventID, EventType: row.EventType,
-		Depth: row.Depth, Actor: row.Actor, RetryOf: optional(row.RetryOf), Status: row.Status, Error: row.Error, ErrorCode: row.ErrorCode, CreatedAt: row.CreatedAt,
+		Depth: row.Depth, Actor: row.Actor, RetryOf: optional(row.RetryOf), Generation: row.Generation, Status: row.Status, Error: row.Error, ErrorCode: row.ErrorCode, CreatedAt: row.CreatedAt,
 		StartedAt: row.StartedAt, CompletedAt: row.CompletedAt, WaitingUntil: row.WaitingUntil}
 	if !row.UpdatedAt.IsZero() {
 		at := row.UpdatedAt
@@ -271,7 +275,7 @@ func (s *Service) Run(ctx context.Context, subject, id string) (Run, error) {
 			return Run{}, err
 		}
 		run := runs[0]
-		run.Result, run.Logs = row.Output, row.Logs
+		run.Result, run.Logs, run.State = row.Output, row.Logs, decode(row.State)
 		op, err := t.DAL.Operations().Find(ctx, id)
 		if err != nil {
 			return Run{}, err

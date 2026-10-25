@@ -7,6 +7,7 @@ package runs
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"time"
@@ -53,6 +54,10 @@ type Run struct {
 	Actor, RetryOf                                          string
 	WorkflowVersion, Depth                                  int
 	CreatedAt                                               time.Time
+	// Generation counts the times the run continued as new, with a fresh
+	// journal; State is what the last generation carried into this one.
+	Generation int
+	State      json.RawMessage
 	// Status and the rest are the operation's: queued until a slice ran,
 	// running while one runs or the run can continue, and waiting while it
 	// waits for operations or a time.
@@ -177,6 +182,9 @@ type Queries interface {
 	// them to runs whose operations have one of those statuses.
 	WorkflowRuns(ctx context.Context, f Filter, operationStatuses []operations.Status) ([]Run, error)
 	InsertWorkflowRun(ctx context.Context, r Run) error
+	// ContinueRun moves a run from generation to the next with state and
+	// reports whether it was at generation.
+	ContinueRun(ctx context.Context, id string, generation int, state json.RawMessage) (bool, error)
 	SetRunLogs(ctx context.Context, id string, logs []Log) error
 	// RunItems returns selection items ordered by run and position; empty
 	// arguments match every run or item.
@@ -247,6 +255,8 @@ func (r *Repo) Create(ctx context.Context, in CreateInput) (Run, error) {
 			if origin.WorkflowID != in.WorkflowID || origin.WorkspaceID != in.WorkspaceID || origin.WorkflowVersion != in.WorkflowVersion {
 				return fmt.Errorf("%w: retry origin must belong to the same workflow version and workspace", dberr.ErrInvalidReference)
 			}
+			// A retry goes on from the generation that failed.
+			run.Generation, run.State = origin.Generation, origin.State
 		}
 		if err := q.InsertWorkflowRun(ctx, run); err != nil {
 			return err
@@ -377,4 +387,23 @@ func (r *Repo) AddLogs(ctx context.Context, id string, logs []Log) error {
 // Purged reports whether a run was purged with its workspace's content.
 func (r *Repo) Purged(ctx context.Context, id string) (bool, error) {
 	return r.read.AuditRecorded(ctx, "workflow_run", id, "run.purge")
+}
+
+// ErrStaleGeneration reports a continuation of a run that already moved on.
+var ErrStaleGeneration = errors.New("the run is no longer at that generation")
+
+// Continue starts a run's next generation: the run, at generation, keeps
+// its ID, operation and logs and carries state into a fresh journal. Its
+// steps are deleted.
+func (r *Repo) Continue(ctx context.Context, id string, generation int, state json.RawMessage) error {
+	return r.write(ctx, func(q Queries) error {
+		moved, err := q.ContinueRun(ctx, id, generation, state)
+		if err != nil {
+			return err
+		}
+		if !moved {
+			return ErrStaleGeneration
+		}
+		return q.DeleteRunSteps(ctx, id)
+	})
 }

@@ -68,6 +68,7 @@ The web app's workflow editor checks scripts as you type: it completes the SDK a
 | `ctx.notify(message)` | sends people a [message](notifications.md#sending-messages) |
 | `ctx.call(workflow, input, { itemId })` | runs a workflow with a call trigger and returns its output; see [calling workflows](#calling-workflows) |
 | `ctx.sleep(ms)`, `ctx.sleep({ until })` | unloads the run until a time |
+| `ctx.continueAsNew(state)`, `ctx.state`, `ctx.generation` | starts the script again with a fresh journal, carrying `state`; see [long loops](#long-loops) |
 | `ctx.log(...)`, `ctx.warn(...)`, `ctx.error(...)` | write to the run's log, as `console` does |
 
 What `run` returns is the run's [output](#outputs). An exception fails the run with its message and stack; an API error is an exception with the response's status and problem.
@@ -105,7 +106,7 @@ Snapshots have a 64 KiB JSON budget shared by the complete selection. If field v
 
 Keep scripts deterministic: read time, randomness and data only through `ctx` and the globals the engine replaces. A replay that asks for a different step at a recorded position fails the run as nondeterministic, so a script edited while runs are active applies to new runs only: runs keep their version.
 
-**Limits.** A slice may run JavaScript for 5 seconds before it waits; a script that computes longer fails. Each recorded response is bounded at 1 MiB, a longer one is recorded as a `413` asking for a smaller page. A run's recorded responses are bounded at 32 MiB in all, since every slice loads and replays them: a run that outgrows this fails, so split large work across runs or read smaller pages. A run's output is bounded at 16 KiB, a script's source at 1 MiB and its log at the last 500 entries. A wait step takes at most 64 operations; a wait for more is recorded as one step per 64.
+**Limits.** A slice may run JavaScript for 5 seconds before it waits; a script that computes longer fails. Each recorded response is bounded at 1 MiB, a longer one is recorded as a `413` asking for a smaller page. A run's recorded responses are bounded at 32 MiB in all, since every slice loads and replays them: a run that outgrows this fails, so split large work across [called runs](#calling-workflows) or [continue as new](#long-loops). What a run carries into its next generation is bounded at 64 KiB. A run's output is bounded at 16 KiB, a script's source at 1 MiB and its log at the last 500 entries. A wait step takes at most 64 operations; a wait for more is recorded as one step per 64.
 
 ## Waiting
 
@@ -153,6 +154,31 @@ const checked = await Promise.all(invoices.map((invoice) => ctx.call<{ total: nu
 - **Concurrency** applies as to manual starts: a call always starts a run, which fails at once when `skip` finds another run active.
 
 `POST /v1/workspaces/{id}/workflow-calls` is the request behind `ctx.call`: `{"workflow": "<key>", "calls": [{"item_id", "input"}]}` (202 with `run_ids`, in the order of calls). Only workflow runs make it.
+
+## Long loops
+
+Every slice replays the run's whole journal, at roughly a millisecond per recorded request, so a run that works through thousands of pages or items one after another gets slower with every step, and fails once a slice needs more than its 5 seconds. A long loop therefore **continues as new**: `ctx.continueAsNew(state)` ends the run's current generation and starts its script again with a fresh journal, reading `state` as `ctx.state`.
+
+```ts
+export default workflow({
+  triggers: [{ type: "schedule", cron: "0 2 * * *" }],
+  async run(ctx) {
+    const state = (ctx.state ?? { archived: 0 }) as { cursor?: string; archived: number };
+    const page = await ctx.api.v1.resources.byId(list).children.get({ queryParameters: { top: 200, skiptoken: state.cursor } });
+    const archived = state.archived + await archiveOld(ctx, page!.value!);
+    const next = /[?&]%24skiptoken=([^&]+)/.exec(page!.odataNextLink ?? "");
+    if (next) ctx.continueAsNew({ cursor: decodeURIComponent(next[1]), archived });
+    return { archived, pages: ctx.generation + 1 };
+  },
+});
+```
+
+- **It is the same run.** The run keeps its ID, operation, input, item, parameters, logs and the operations and tasks it started. A run that [called](#calling-workflows) it, `ctx.wait`, `wf.{key}.completed` and concurrency see one run, which ends when its last generation returns. Cancelling it cancels the whole loop.
+- **The journal starts over.** The steps of the generation that continued are deleted, so the run's details show the current generation's steps, its `generation` (how many times it continued) and its `state`. Its log notes each continuation.
+- **State** is at most 64 KiB of JSON: cursors, counters and IDs, not content. `ctx.state` is `undefined` in the first generation and `ctx.generation` counts from 0.
+- **Await first.** `ctx.continueAsNew` throws while calls or waits the script started are not awaited, since the next generation would not see what they return. It does not return: like a wait, it ends the slice whatever the script catches. Reads since the last request that changed something are not recorded, so a crash at that point repeats them.
+- **When.** Continue every few hundred requests, or after each page or batch of calls: a generation then replays in well under a second. Combined with [calls](#calling-workflows), a run can work through any number of items: each generation calls a workflow on one page of them and waits.
+- **Retries.** Retrying a run that failed goes on from the generation that failed, with its state.
 
 ## Parameters
 
@@ -523,7 +549,7 @@ Some processes are **roles**: product processes that one workflow fills, which p
 
 `GET /v1/workflow-runs/{id}` shows the run's result, its launch `inputs`, its log and its recorded steps: each API request with its response, each wait with the operations it waited for and how they ended, and each value the script read, with each output's `size`. A run that completed or was cancelled never replays, so it keeps only the outputs stored in at most 4 KiB, which compressed covers most single responses and many pages, and the size of the others. A failed run keeps every output for its retry.
 
-- **Retry** (`POST .../retry`) runs a failed run again as a new run of the same version, inputs and parameters, with `retry_of`. Its steps before the last request, wait or sleep of the failed run replay their recorded results, so nothing they wrote is written twice; that last step and what followed run again.
+- **Retry** (`POST .../retry`) runs a failed run again as a new run of the same version, inputs and parameters, with `retry_of`, from the [generation](#long-loops) that failed and with its state. Its steps before the last request, wait or sleep of the failed run replay their recorded results, so nothing they wrote is written twice; that last step and what followed run again.
 - **Cancel** (`POST .../cancel`) stops a queued, running or waiting run, with the operations its requests started and the tasks it waits for.
 
 **How runs start.** A change and its events commit together in the domain event log (`domain_events`), so a change that rolls back raises nothing, and the write does no workflow work. The dispatcher takes logged events in order, matches them to workflows, and starts the runs. The runs and the events' dispatched mark commit together, and each event starts at most one run per workflow, so a crash dispatches events again without duplicates. The dispatcher wakes when a change commits and also checks every few seconds, so it picks up events a restart left behind.

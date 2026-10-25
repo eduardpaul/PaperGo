@@ -13732,6 +13732,10 @@ export interface Run<P = Record<string, unknown>, I = unknown> {
 	/** Who caused the run. */
 	actor: string;
 	params: P;
+	/** How many times the run continued as new. */
+	generation: number;
+	/** What the run's last generation carried into this one; absent in the first. */
+	state?: unknown;
 }
 /** A task ctx.ask creates: the API's task fields, with its form and values as plain JSON. */
 export type TaskRequest<V = Record<string, unknown>> = Omit<TaskCreate, "title" | "inputSchema" | "values"> & {
@@ -13784,6 +13788,10 @@ export interface Context<P = Record<string, unknown>, I = unknown> {
 	readonly params: P;
 	/** The run's item, when it has one. */
 	readonly itemId?: string;
+	/** What the last generation passed to continueAsNew; undefined in the first. Cast it to its shape. */
+	readonly state?: unknown;
+	/** How many times the run continued as new; 0 in the first generation. */
+	readonly generation: number;
 	/**
 	 * Triggering revision content, persisted for replay (up to 64 KiB).
 	 * File events include file metadata and their item. Manual/test starts
@@ -13836,6 +13844,16 @@ export interface Context<P = Record<string, unknown>, I = unknown> {
 	sleep(duration: number | {
 		until: Date | string;
 	}): Promise<void>;
+	/**
+	 * Ends this generation of the run and starts its script again with a
+	 * fresh journal, reading state, at most 64 KiB of JSON, as ctx.state. The
+	 * run keeps its ID, input, item, logs and what it started, and whoever
+	 * waits for it waits for its last generation. Every replay repeats the
+	 * whole journal, so a loop over many pages or items that continues every
+	 * few hundred steps stays fast. Await the calls and waits it started
+	 * first. It does not return.
+	 */
+	continueAsNew(state?: unknown): never;
 	/** Writes to the run's log. A replay does not repeat earlier entries. */
 	log(...values: unknown[]): void;
 	warn(...values: unknown[]): void;

@@ -26,6 +26,11 @@ interface Host {
    * run is unloaded while it sleeps.
    */
   sleep(until: number): void;
+  /**
+   * Ends the run's generation with state, JSON text: the run starts its
+   * script again with a fresh journal. It does not return.
+   */
+  continue(state: string): never;
   uuid(): string;
   log(level: LogLevel, message: string): void;
 }
@@ -36,6 +41,7 @@ export const host: Host = {
   request: (method, url, headers, body) => __papergo.request(method, url, headers, body),
   wait: (operationIds) => __papergo.wait(operationIds),
   sleep: (until) => __papergo.sleep(until),
+  continue: (state) => __papergo.continue(state),
   uuid: () => __papergo.uuid(),
   log: (level, message) => __papergo.log(level, message),
 };

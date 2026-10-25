@@ -89,7 +89,18 @@ func (r *Runner) slice(ctx context.Context, s *dms.Service, op *operations.Opera
 	if err != nil {
 		return err
 	}
-	out, err := r.engine.Execute(ctx, script.Run{ID: op.ID, Author: op.CreatedBy, Claim: op.Claim, Artifact: workflow.Artifact(v), Context: p.Context()})
+	row, err := s.DAL.Runs().Find(ctx, op.ID)
+	if err != nil {
+		return err
+	}
+	// A run that continued as new starts its script again with what its
+	// last generation carried.
+	run := p.Context()
+	run["generation"] = row.Generation
+	if row.State != nil {
+		run["state"] = row.State
+	}
+	out, err := r.engine.Execute(ctx, script.Run{ID: op.ID, Author: op.CreatedBy, Claim: op.Claim, Artifact: workflow.Artifact(v), Context: run})
 	if err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -115,6 +126,17 @@ func (r *Runner) slice(ctx context.Context, s *dms.Service, op *operations.Opera
 			return complete(ctx, t, op, p, output)
 		case out.Status == script.Failed:
 			return fail(ctx, t, op, out.Error)
+		case out.Status == script.Continued:
+			// The next generation replaces the journal; what it started, such
+			// as tasks, still belongs to the run.
+			if err := t.DAL.Runs().Continue(ctx, op.ID, row.Generation, out.State); err != nil {
+				return err
+			}
+			next := []runstore.Log{{Level: "info", Message: fmt.Sprintf("Continued as new: generation %d", row.Generation+1), At: time.Now().UTC()}}
+			if err := t.DAL.Runs().AddLogs(ctx, op.ID, next); err != nil {
+				return err
+			}
+			return t.ReleaseOperation(ctx, op)
 		case out.Until != nil:
 			return t.SleepOperation(ctx, op, *out.Until)
 		default:

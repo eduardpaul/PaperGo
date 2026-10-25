@@ -127,8 +127,16 @@ func (q Queries) InsertWorkflowRun(ctx context.Context, r runs.Run) error {
 		ID: omit.From(r.ID), CreatedAt: omit.From(r.CreatedAt), WorkflowID: omit.From(r.WorkflowID), WorkflowVersion: omit.From(int64(r.WorkflowVersion)),
 		WorkspaceID: omit.From(r.WorkspaceID), ItemID: nullable.String(r.ItemID), EventID: omit.From(r.EventID), EventType: omit.From(r.EventType),
 		Depth: omit.From(int64(r.Depth)), Actor: omit.From(r.Actor), RetryOf: nullable.String(r.RetryOf),
+		Generation: omit.From(int64(r.Generation)), State: nullable.JSON(r.State),
 	}).Exec(ctx, q.exec)
 	return dberr.Translate(err)
+}
+
+func (q Queries) ContinueRun(ctx context.Context, id string, generation int, state json.RawMessage) (bool, error) {
+	set := &models.WorkflowRunSetter{Generation: omit.From(int64(generation + 1)), State: nullable.JSON(state)}
+	w := models.UpdateWhere.WorkflowRuns
+	n, err := models.WorkflowRuns.Update(set.UpdateMod(), w.ID.EQ(id), w.Generation.EQ(int64(generation))).Exec(ctx, q.exec)
+	return n == 1, dberr.Translate(err)
 }
 
 func (q Queries) RunItems(ctx context.Context, runIDs []string, itemID string) ([]runs.Item, error) {
@@ -163,7 +171,7 @@ func runRecord(r *models.WorkflowRun) runs.Run {
 	return runs.Run{
 		ID: r.ID, WorkflowID: r.WorkflowID, WorkspaceID: r.WorkspaceID, ItemID: r.ItemID.GetOrZero(), EventID: r.EventID, EventType: r.EventType,
 		Actor: r.Actor, RetryOf: r.RetryOf.GetOrZero(), WorkflowVersion: int(r.WorkflowVersion), Depth: int(r.Depth),
-		CreatedAt: r.CreatedAt.UTC(), Logs: runLogs(r.Logs.Val),
+		CreatedAt: r.CreatedAt.UTC(), Logs: runLogs(r.Logs.Val), Generation: int(r.Generation), State: r.State.GetOrZero().Val,
 	}
 }
 

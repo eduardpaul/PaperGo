@@ -789,6 +789,10 @@ CREATE TABLE workflow_runs (
     depth INTEGER NOT NULL CHECK (depth >= 0),
     actor TEXT NOT NULL,
     retry_of TEXT,
+    -- A run that continued as new counts its generations; state is what the
+    -- last one carried into the current one, the script's ctx.state.
+    generation INTEGER NOT NULL DEFAULT 0 CHECK (generation >= 0),
+    state TEXT CHECK (state IS NULL OR json_valid(state)),
     logs TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(logs) AND json_type(logs) = 'array')
 );
 CREATE UNIQUE INDEX workflowrun_workflow_id_event_id ON workflow_runs(workflow_id, event_id);
