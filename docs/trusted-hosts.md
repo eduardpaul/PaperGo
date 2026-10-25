@@ -5,7 +5,7 @@ The organization keeps one list of **trusted hosts**: the outside hosts PaperGo 
 | Feature | Host on the list | Host not on the list |
 | --- | --- | --- |
 | Images in Markdown | Load with the document; images stored in PaperGo always load, fetched with the reader's credentials | A placeholder naming the host, with **Show once** and **Show all images in this file**; administrators also get **Trust host** |
-| Links in Markdown, PDFs and URL fields | Open in a new tab without a referrer | They carry no address the browser can open by itself, so a click, middle click or Enter brings a confirmation, "You're leaving PaperGo for *host*", showing the whole address before it opens |
+| Links in Markdown, PDFs and URL fields | Open in a new tab without a referrer | A click, middle click or Enter brings a confirmation (links in Markdown and URL fields carry no address the browser could open by itself, and PDF links withhold the browser's menu), "You're leaving PaperGo for *host*", showing the whole address before it opens |
 | [List integrations](list-integrations.md) | Refresh | Refused when added or edited ("*host* isn't a trusted host. Ask an administrator to trust it."); an existing integration stops refreshing and shows **Host no longer trusted**, keeps its items, and resumes once the host is trusted again |
 
 Links and images inside PaperGo itself are always trusted. Images embedded in a file are part of the file and always show.
