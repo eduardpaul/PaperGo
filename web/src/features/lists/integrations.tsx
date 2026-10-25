@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { api } from '@/api/http';
@@ -10,10 +11,15 @@ import { Button } from '@/components/ui/button';
 
 import { Input, Label } from '@/components/ui/input';
 import { Checkbox, Select } from '@/components/ui/select';
-import { QueryFeedback } from '@/features/admin/common';
+import { QueryFeedback, useHasScope } from '@/features/admin/common';
 import { OperationProgress, type Operation } from '@/features/admin/operation-progress';
+import { hostOf, useTrustHost } from '@/features/files/trust';
 import { ConfirmDialog, SettingsSection } from '@/features/settings/section';
+import { problemMessage } from '@/lib/errors';
 import { useFormat } from '@/lib/preferences';
+
+/** The error of an integration whose host the organization stopped trusting. */
+const hostNotTrusted = 'Host no longer trusted';
 
 export interface ListIntegration {
   id: string;
@@ -30,6 +36,7 @@ export interface ListIntegration {
 export function ListIntegrations({ listId, canManage }: { listId: string; canManage: boolean }) {
   const client = useQueryClient();
   const format = useFormat();
+  const administrator = useHasScope('organization.manage');
   const path = `/v1/resources/${listId}/integrations`;
   const sources = useQuery({
     queryKey: ['resources', listId, 'integrations'],
@@ -64,7 +71,19 @@ export function ListIntegrations({ listId, canManage }: { listId: string; canMan
               <div className="flex items-center gap-2"><strong className="text-sm">{source.name}</strong><Badge>{source.paused ? 'Paused' : 'Active'}</Badge></div>
               <p className="text-xs text-muted">HTTPS iCalendar · {source.item_count ?? 0} event series</p>
               <p className="text-xs text-muted">{source.last_success_at ? `Last refreshed ${format.dateTime(source.last_success_at)}` : 'Awaiting first successful refresh'}</p>
-              {source.error && <p role="alert" className="text-sm text-danger">{source.error}</p>}
+              {source.error && (
+                <p role="alert" className="text-sm text-danger">
+                  {source.error === hostNotTrusted ? "This feed's host is no longer trusted. It fetches nothing and keeps its events until the host is trusted again." : source.error}
+                  {source.error === hostNotTrusted && administrator && (
+                    <>
+                      {' '}
+                      <Link to="/admin/trusted-hosts" className="font-medium underline underline-offset-2">
+                        Review trusted hosts
+                      </Link>
+                    </>
+                  )}
+                </p>
+              )}
               {canManage && <div className="flex flex-wrap gap-2">
                 <Button size="sm" disabled={source.paused || refresh.isPending} onClick={() => refresh.mutate(source)}>Refresh now</Button>
                 <Button size="sm" disabled={pause.isPending} onClick={() => pause.mutate(source)}>{source.paused ? 'Resume' : 'Pause'}</Button>
@@ -89,6 +108,7 @@ function IntegrationForm({ listId, integration, onClose }: { listId: string; int
   const [name, setName] = useState(integration?.name ?? '');
   const [url, setURL] = useState('');
   const [reset, setReset] = useState(false);
+  const { allowed, trust } = useTrustHost();
   const save = useMutation({
     mutationFn: () => api(`/v1/resources/${listId}/integrations${integration ? `/${integration.id}` : ''}`, {
       method: integration ? 'PATCH' : 'POST', ifMatch: integration?.version,
@@ -105,6 +125,11 @@ function IntegrationForm({ listId, integration, onClose }: { listId: string; int
       <p className="text-xs text-muted">Use a public HTTPS iCalendar feed, including Google Calendar’s secret iCal address. The stored URL is kept private. Adding the integration attaches the Event content type to this ordinary list.</p>
       {integration && <label className="flex items-start gap-2 text-sm"><Checkbox checked={reset} disabled={!url.trim()} onChange={(event) => setReset(event.target.checked)} />This is a different feed: keep existing items local and import with new identities.</label>}
       <QueryFeedback query={save} />
+      {allowed && !!save.error && problemMessage(save.error).includes("isn't a trusted host") && hostOf(url.trim()) && (
+        <Button size="sm" disabled={trust.isPending} onClick={() => trust.mutate(hostOf(url.trim()), { onSuccess: () => save.mutate() })}>
+          Trust {hostOf(url.trim())} and add
+        </Button>
+      )}
     </FormDialog>
   );
 }

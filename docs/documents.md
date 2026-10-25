@@ -6,7 +6,20 @@ Example metadata: `{"name":"Invoice","folder_id":"<folder UUID>","values":{"amou
 
 The file streams under the configured upload limit; metadata is limited to 64 KiB and multipart overhead to an additional 128 KiB. Successful creation returns `201` with `item`, `file`, `duplicates`, `Location` and the new item ETag. Its first content revision already contains both metadata and file. Malformed requests, invalid metadata, duplicate blocking and failed writes leave no item and remove the stored object. The library's normal publishing setting controls whether that first revision is published or a draft.
 
-A library item holds metadata and immutable file versions. `PUT /v1/items/{id}/content` streams a new file using `X-Filename`, `Content-Type` and the current numeric `If-Match`. The response includes the file version number and the new resource ETag. File version numbers, metadata revision numbers and resource lock versions are independent.
+## File types
+
+A library stores any file. PaperGo names each file's media type from its bytes and filename, never from the `Content-Type` a client declares:
+
+- A signature that proves a type wins: PDF, TIFF, JPEG, PNG, WebP, GIF, ZIP, 7z, gzip, MP3, WAV, M4A, MP4, QuickTime and WebM, among others.
+- ZIP and OLE containers also need their extension: `.docx`, `.xlsx`, `.pptx`, `.odt`, `.ods`, `.odp` and `.epub` are ZIP, and `.doc`, `.xls`, `.ppt` and `.msg` are OLE. A container with another extension stays a ZIP or a generic file.
+- Text types (Markdown, plain text, CSV, JSON, XML, HTML, SVG, RTF, email and calendar files) need their extension and valid UTF-8 without NUL bytes.
+- Anything else is `application/octet-stream`.
+
+`/auth/config` lists the known types in `features.file_types`, each with its `media_type`, `label` (such as "Word document"), icon `family`, `extensions`, and whether PaperGo can `preview` it or read its `text`. Every route that returns stored bytes sends them as attachments with `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox; default-src 'none'`, so a stored file never runs in the browser.
+
+Processing follows each type's capabilities. Previews, reading text, OCR and image optimization answer `415 unsupported_file_type` up front for files they cannot read, and built-in workflows skip those files. Markdown and plain text are read as text without OCR, in pages of 20,000 characters.
+
+A library item holds metadata and immutable file versions. Item resources, listings, queries, smart folders and search hits carry a `file` summary of the file the caller reads (the draft for draft readers, otherwise the published file): `blob_id`, `content_type`, `filename`, `size` and `version`. It is absent before the first upload. `PUT /v1/items/{id}/content` streams a new file using `X-Filename`, `Content-Type` and the current numeric `If-Match`. The response includes the file version number and the new resource ETag. File version numbers, metadata revision numbers and resource lock versions are independent.
 
 Lists and libraries, including Documents templates and personal Home libraries,
 default to versioning off. With versioning off, replacing a file queues its
@@ -24,12 +37,66 @@ Libraries accept `duplicate_policy: "allow" | "warn" | "block"` on creation and 
 
 `POST /v1/items/{id}/content/versions/{number}/restore` restores an earlier file that still has its bytes as a new file version. A reclaimed version answers `410 content_unavailable`. It requires item write permission, `item.write` and `document.write` and the current resource `If-Match`. It retains current metadata, restores the selected bytes and filename, and follows the library's publication settings. In a library with explicit publishing, restoring creates a draft and leaves the publication unchanged. Earlier files and metadata revisions remain immutable. Identical SHA-256 and size reuse one stored byte object across items and workspaces. File names, media types, language hints and access remain specific to each file version. Purging an item queues its objects once; cleanup rechecks all file-version references while holding the database write lock. Bytes shared by another item remain available. A periodic collector runs each minute and removes unreferenced completed objects older than one hour, including objects left by interrupted uploads. Failed storage deletion stays queued for retry.
 
+## Viewing files
+
+The web app opens an item's whole file full screen, above the list it belongs to. A **file handler** shows each kind of file:
+
+- **PDFs:** every page, with find, text selection, zoom, rotation, page links and [comments on an area](comments.md#web-app) of a page. Find also names the scanned pages whose [read text](#reading-text) matches, since a scan has no text to highlight. On phones and tablets with little memory, a PDF over 25 MB opens as [page images](previews.md#page-renditions) the server renders, with **Open the full viewer** beside them; a PDF that PDF.js cannot draw offers them too.
+- **Images:** JPEG, PNG, WebP and GIF at full resolution, with zoom, pan and rotation.
+- **TIFF scans:** every page, as page images the server renders at the width the screen needs, with page numbers, zoom, rotation and find in their read text.
+- **Markdown:** rendered with GitHub syntax (tables, task lists, strikethrough), with an outline of its headings on wide screens. Raw HTML shows as text.
+- **Plain text:** with line numbers, or wrapped to the window.
+- **Word documents** (`.docx`): laid out in the browser with pages, fonts, tables, headers, footers and footnotes, inside a frame that runs no scripts and loads nothing from outside the file: pictures and fonts embedded in it show, and pictures it only links to do not. The layout is close to Word's but simplified: fields, tracked changes, comments and floating objects may differ, as the viewer notes. Links in the document follow trusted hosts.
+- **CSV files:** as a table, with the first row naming the columns (switchable), numbered rows, a row filter, and the delimiter (comma, semicolon or tab) detected. Files up to 20 MB are shown, up to their first 100,000 rows, 200 columns and 2 million cells, and the table says when it shows less.
+
+A file no handler shows offers **Download**, with its type's icon and name.
+
+Clicking an item still opens its details. Its file is one click away everywhere:
+
+- the **file bar** above the details sheet's tabs: thumbnail, type, size, version and **Open** or **Download**;
+- the button at the end of a row's name, and on a gallery or board card, shown on hover and always on touch screens;
+- double-clicking a row or card, or pressing **O** on a row (**D** downloads);
+- **Open file** in the right-click menu and the command palette (Ctrl/⌘ K);
+- **Open** on a global search hit, at the page the text matched, with the searched words found and highlighted in the file;
+- **Open** on each file version in the File tab, and on a finished upload.
+
+The viewer lives in the URL (`?item=<id>&open=file`, with `page` for a page, `blob` for an earlier version, `edit` for the editor, `find` for words to find and `comment` for a comment thread), so its links can be shared, opened in a new tab and reloaded. Back or Esc returns to where it was opened. The viewer is a modal dialog: keyboard focus stays inside it, the page behind is hidden from assistive technology, and closing returns focus to what opened it. ← and → (or J and K) step through the items the list shows, **I** shows the item's details, discussion and versions beside the file, and **Copy file link** copies the current page's link. Handlers read the file through `GET /v1/items/{id}/content` with the caller's credentials and byte ranges; draft readers see the draft file and ordinary readers the published one, as with downloads. PDFs render with PDF.js without running document scripts. Links in documents and URL fields follow the organization's [trusted hosts](trusted-hosts.md): links to trusted hosts open in a new tab, others ask first, and remote images in Markdown load only from trusted hosts or when someone chooses **Show once**.
+
+### Editing Markdown and text
+
+People who may write an item edit its Markdown or text file in the viewer: **Edit** in the viewer header (or **E**), on the file bar, and in the right-click menu. **New Markdown document** in a library's menu creates an item with a starter file and opens it in the editor. The editor is Monaco with Markdown highlighting (a plain text area on touch screens); on wide screens a Markdown preview sits beside it, and narrower screens switch between **Write** and **Preview**.
+
+- **Save** (Ctrl/⌘ S) replaces the file through `PUT /v1/items/{id}/content` with the item version the text was read at, so a save is an ordinary new file version with its history, audit, events and publishing rules. A change to the item's details alone does not stop a save; a newer file does.
+- **Conflicts:** when someone else saved the file first, the editor offers three ways on:
+  - **Load their version.** Your text goes to the clipboard first; when the browser refuses, it stays in a box to copy and a file to download until you choose to load theirs.
+  - **Save mine anyway.** In a library with versioning, theirs becomes an earlier version. With versioning off, the dialog says theirs is not kept.
+  - **Save mine as a new file.** Your text becomes a new item beside it, named "name (copy).ext" (numbered when taken), with the item's content type, keywords and values.
+- **Drafts:** unsaved text is kept in the browser, one draft per item with the version it started from, written when typing pauses and before the page closes, and offered back when the file is opened again; a restored draft still meets a newer file as a conflict. Drafts nobody returns to for 30 days are dropped. Closing the viewer, stepping to another item, the browser's Back and Forward and links elsewhere ask first with unsaved text; leaving keeps the draft.
+- A clean editor follows the file: when someone saves a new version, reading and editing both show it.
+- **Size:** files up to `FILE_EDIT_MAX_BYTES` (YAML `storage.edit_max_mb`, default 2 MiB, at most the upload limit) edit in the browser; larger ones open read-only. `/auth/config` reports the limit as `features.file_edit_max_bytes`.
+
+Text files show their first lines as their thumbnail in galleries and on the file bar.
+
+### Opening in Word, Excel and PowerPoint
+
+In a library shared over [WebDAV](../README.md#webdav), Word, Excel and PowerPoint files (including the older `.doc`, `.xls` and `.ppt`) offer **Open in Word**, **Open in Excel** or **Open in PowerPoint**: in the viewer, on the file bar and in the right-click menu. It opens the file from its WebDAV address in the desktop app installed on the computer (`ms-word:ofe|u|https://<host>/webdav/<library>/<folders>/<name>`), which signs in to WebDAV as usual. Each save in the app is a new file version, with the library's permissions, publishing and workflows, and Office's lock files never become items.
+
+### Comparing versions
+
+Markdown and text files compare any earlier version with the current file, line by line and side by side (inline on narrow screens), with the number of changes and buttons to step through them: **Compare** on a version in the File tab, or **Compare with the current file** while viewing an earlier version.
+
+### Reviews
+
+When a workflow asks someone to review a file it made, such as a PDF composed from photos, the task shows the file with the viewer's handler for its type, in the task itself: PDFs with their pages, find and zoom, images with zoom and rotation. Keys reach that view only while focus is inside it. Reviews that compare a smaller image with the original show both at their own pixels, side by side.
+
 ## Reading text
 
 `POST /v1/items/{id}/text` reads the text of the item's current file as a background operation (`202 Accepted`), for API clients and workflow scripts alike: `ocr` (`auto`, `always`, `never`), `max_pages` (default 500, at most 2,000) and `languages` (OCR codes such as `eng+deu`; default the file's). It requires `document.write` and write access to the item.
 
 - **PDFs:** each page's text layer is read with the linked PDFium SDK. With `ocr: auto`, a page without a text layer is rendered at 200 DPI and read by [OCR](ocr.md); `always` OCRs every page; `never` reads text layers only. PaperGo's own searchable PDFs (Photos to PDF) carry their OCR text, so they are not OCRed again.
-- **Images** (JPEG, PNG, WebP, and the first page of a TIFF) are turned upright and read by OCR.
+- **Images** (JPEG, PNG and WebP) are turned upright and read by OCR, and so is every page of a TIFF, up to `max_pages`.
+- **Text, Markdown and CSV files** are read as text, in pages of 20,000 characters.
+- **Word, Excel and PowerPoint files** (`.docx`, `.xlsx`, `.pptx`) are read without OCR: a Word document's paragraphs and tables (cells separated by tabs), footnotes and endnotes, with a new page at each page break it holds; each worksheet as a page, named first, with its rows as lines; each slide as a page, with its speaker notes. Reading is bounded, so a damaged or oversized file fails or is truncated rather than exhausting the server.
 - **Without OCR** configured, `auto` reads text layers only and counts the pages it could not read in `skipped_pages`; `always` is refused.
 - **Language:** the file's language hint (`languages` on upload, `X-OCR-Languages`) when it names one language, else the language detected among the hinted ones or `SEARCH_LANGUAGES`, else none.
 

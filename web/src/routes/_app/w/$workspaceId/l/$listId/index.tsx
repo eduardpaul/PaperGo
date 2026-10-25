@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { CollectionPage, type CollectionSearch } from '@/features/lists/collection-page';
-import { textParam } from '@/lib/search';
+import { flagParam, pageParam, textParam } from '@/lib/search';
 
 export const Route = createFileRoute('/_app/w/$workspaceId/l/$listId/')({
   validateSearch: (search: Record<string, unknown>): CollectionSearch => ({
@@ -8,6 +8,11 @@ export const Route = createFileRoute('/_app/w/$workspaceId/l/$listId/')({
     folder: textParam(search.folder),
     view: textParam(search.view),
     item: textParam(search.item),
+    open: search.open === 'file' ? 'file' : undefined,
+    page: pageParam(search.page),
+    blob: textParam(search.blob),
+    edit: flagParam(search.edit),
+    find: textParam(search.find),
     tab: textParam(search.tab),
     comment: textParam(search.comment),
     q: textParam(search.q),
@@ -27,7 +32,7 @@ function CollectionRoute() {
       workspaceId={workspaceId}
       listId={listId}
       search={search}
-      onSearch={(patch, replace) => void navigate({ search: (current) => ({ ...current, ...patch }), replace })}
+      onSearch={(patch, replace, keepScroll) => void navigate({ search: (current) => ({ ...current, ...patch }), replace, resetScroll: keepScroll ? false : undefined })}
       onMoved={(moved) => {
         const destination = moved.container_id ?? listId;
         if (moved.workspace_id !== workspaceId || destination !== listId) {

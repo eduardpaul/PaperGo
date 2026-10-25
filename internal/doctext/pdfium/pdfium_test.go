@@ -29,6 +29,12 @@ func TestReadAndRender(t *testing.T) {
 	if _, err = doc.Text(2); err == nil {
 		t.Fatal("a page past the end")
 	}
+	if w, h, err := doc.Size(1); err != nil || w != 612 || h != 792 {
+		t.Fatalf("size: %v×%v %v", w, h, err)
+	}
+	if _, _, err = doc.Size(2); err == nil {
+		t.Fatal("the size of a page past the end")
+	}
 	// Letter size at 100 DPI, and lowered to stay within the pixel bound.
 	img, err := doc.Render(0, 100, 64_000_000)
 	if err != nil || img.Bounds().Dx() != 850 || img.Bounds().Dy() != 1100 {

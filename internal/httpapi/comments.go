@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -33,7 +34,7 @@ func (a *API) comments(r *http.Request) *comments.Service {
 func (a *API) itemComments(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	limit, _ := strconv.Atoi(q.Get("$top"))
-	out, err := a.comments(r).Threads(r.Context(), subject(r), r.PathValue("id"), comments.Status(q.Get("status")), limit, q.Get("$skiptoken"))
+	out, err := a.comments(r).Threads(r.Context(), subject(r), r.PathValue("id"), comments.Query{Status: comments.Status(q.Get("status")), AnchorKind: q.Get("anchor_kind"), Limit: limit, After: q.Get("$skiptoken")})
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -43,8 +44,9 @@ func (a *API) itemComments(w http.ResponseWriter, r *http.Request) {
 
 // commentInput is a comment as POST /v1/items/{id}/comments takes it.
 type commentInput struct {
-	Body     string `json:"body"`
-	ThreadID string `json:"thread_id"`
+	Body     string          `json:"body"`
+	ThreadID string          `json:"thread_id"`
+	Anchor   json.RawMessage `json:"anchor"`
 }
 
 func (a *API) createComment(w http.ResponseWriter, r *http.Request) {
@@ -52,7 +54,7 @@ func (a *API) createComment(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &in) {
 		return
 	}
-	out, err := a.comments(r).Create(r.Context(), subject(r), runOf(r), r.PathValue("id"), comments.Input{Body: in.Body, ThreadID: in.ThreadID})
+	out, err := a.comments(r).Create(r.Context(), subject(r), runOf(r), r.PathValue("id"), comments.Input{Body: in.Body, ThreadID: in.ThreadID, Anchor: in.Anchor})
 	if err != nil {
 		a.failure(w, r, err)
 		return

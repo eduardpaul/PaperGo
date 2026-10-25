@@ -86,6 +86,24 @@ func (d *document) Text(index int) (string, error) {
 	}
 	return text.Text, nil
 }
+func (d *document) Size(index int) (float64, float64, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.size(index)
+}
+func (d *document) size(index int) (float64, float64, error) {
+	if index < 0 || index >= d.pages {
+		return 0, 0, fmt.Errorf("page %d is not in the PDF", index+1)
+	}
+	size, err := d.instance.FPDF_GetPageSizeByIndex(&requests.FPDF_GetPageSizeByIndex{Document: d.doc, Index: index})
+	if err != nil {
+		return 0, 0, err
+	}
+	if size.Width <= 0 || size.Height <= 0 || math.IsNaN(size.Width*size.Height) || math.IsInf(size.Width*size.Height, 0) {
+		return 0, 0, errors.New("the page has no size")
+	}
+	return size.Width, size.Height, nil
+}
 func (d *document) Render(index, dpi int, maxPixels int64) (image.Image, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -93,14 +111,11 @@ func (d *document) Render(index, dpi int, maxPixels int64) (image.Image, error) 
 	if err != nil {
 		return nil, err
 	}
-	size, err := d.instance.FPDF_GetPageSizeByIndex(&requests.FPDF_GetPageSizeByIndex{Document: d.doc, Index: index})
+	pw, ph, err := d.size(index)
 	if err != nil {
 		return nil, err
 	}
-	w, h := size.Width/72, size.Height/72
-	if w <= 0 || h <= 0 || math.IsNaN(w*h) || math.IsInf(w*h, 0) {
-		return nil, errors.New("the page has no size")
-	}
+	w, h := pw/72, ph/72
 	scale := float64(dpi)
 	if scale*scale*w*h > float64(maxPixels) {
 		scale = math.Sqrt(float64(maxPixels) / (w * h))

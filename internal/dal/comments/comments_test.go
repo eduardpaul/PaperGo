@@ -2,8 +2,11 @@ package comments_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
+	"strings"
 	"testing"
 
 	"papergo/internal/dal"
@@ -151,6 +154,63 @@ func runCommentSuite(t *testing.T, newStore func(testing.TB) *dal.Store) {
 			}
 		}
 	})
+	t.Run("AnchorsPlaceThreads", func(t *testing.T) {
+		ctx := context.Background()
+		s := newStore(t)
+		if _, err := s.Directory().CreateUser(ctx, "alice", "alice", "", true, false); err != nil {
+			t.Fatal(err)
+		}
+		f := daltest.NewFixture(t, s)
+		repo := s.Comments()
+		region := json.RawMessage(`{ "kind": "file.region", "blob_id": "b1", "page": 2, "x": 0.1, "y": 0.2, "w": 0.3, "h": 0.1 }`)
+		pinned, err := repo.Create(ctx, comments.Comment{ItemID: f.Item, Author: "alice", Source: comments.SourceUser, Body: "This clause", Anchor: region})
+		if err != nil || comments.AnchorKind(pinned.Anchor) != "file.region" || strings.Contains(string(pinned.Anchor), " ") {
+			t.Fatalf("anchored: %s %v", pinned.Anchor, err)
+		}
+		plain, err := repo.Create(ctx, comments.Comment{ItemID: f.Item, Author: "alice", Source: comments.SourceUser, Body: "General"})
+		if err != nil || plain.Anchor != nil {
+			t.Fatalf("plain: %s %v", plain.Anchor, err)
+		}
+		if _, err = repo.Create(ctx, comments.Comment{ItemID: f.Item, ThreadID: pinned.ID, Author: "alice", Source: comments.SourceUser, Body: "Reply", Anchor: region}); !errors.Is(err, dberr.ErrCheckViolation) {
+			t.Fatalf("an anchored reply: %v", err)
+		}
+		for _, bad := range []string{`[]`, `"x"`, `{"page":1}`, `{"kind":"File Region"}`, `{"kind":"file.region","note":"` + strings.Repeat("x", comments.MaxAnchor) + `"}`} {
+			if _, err = repo.Create(ctx, comments.Comment{ItemID: f.Item, Author: "alice", Source: comments.SourceUser, Body: "Bad", Anchor: json.RawMessage(bad)}); !errors.Is(err, dberr.ErrCheckViolation) {
+				t.Errorf("anchor %.40s: %v", bad, err)
+			}
+		}
+		// The bound is on compact JSON on every engine, however the database writes it out.
+		var wide strings.Builder
+		wide.WriteString(`{"kind":"wide","big":1e300`)
+		for i := 0; wide.Len() < comments.MaxAnchor-16; i++ {
+			fmt.Fprintf(&wide, `,"f%d":[1,2]`, i)
+		}
+		wide.WriteString(`}`)
+		if _, err = repo.Create(ctx, comments.Comment{ItemID: f.Item, Author: "alice", Source: comments.SourceUser, Body: "Wide", Anchor: json.RawMessage(wide.String())}); err != nil {
+			t.Fatalf("an anchor of %d compact bytes: %v", wide.Len(), err)
+		}
+		roots, err := repo.Roots(ctx, comments.Threads{ItemID: f.Item, AnchorKind: "file.region"})
+		if err != nil || len(roots) != 1 || roots[0].ID != pinned.ID || comments.AnchorKind(roots[0].Anchor) != "file.region" {
+			t.Fatalf("anchored roots: %+v %v", roots, err)
+		}
+		if roots, err = repo.Roots(ctx, comments.Threads{ItemID: f.Item}); err != nil || len(roots) != 3 {
+			t.Fatalf("all roots: %d %v", len(roots), err)
+		}
+		// Edits, resolving and deleting keep the thread where it is.
+		resolved, err := repo.Resolve(ctx, pinned.ID, pinned.Version, true, "alice")
+		if err != nil || !sameJSON(resolved.Anchor, pinned.Anchor) {
+			t.Fatalf("resolved: %s %v", resolved.Anchor, err)
+		}
+		if again, err := repo.Find(ctx, pinned.ID); err != nil || !sameJSON(again.Anchor, pinned.Anchor) {
+			t.Fatalf("read back: %s %v", again.Anchor, err)
+		}
+	})
 }
 
 func TestComments(t *testing.T) { daltest.Engines(t, runCommentSuite) }
+
+// sameJSON compares JSON by value: PostgreSQL stores JSONB in its own form.
+func sameJSON(a, b json.RawMessage) bool {
+	var x, y any
+	return json.Unmarshal(a, &x) == nil && json.Unmarshal(b, &y) == nil && reflect.DeepEqual(x, y)
+}

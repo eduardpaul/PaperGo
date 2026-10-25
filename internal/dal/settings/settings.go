@@ -20,9 +20,11 @@ type Key string
 const (
 	// KeyComments are the comment settings.
 	KeyComments Key = "comments"
+	// KeyTrustedHosts is the organization's list of trusted outside hosts.
+	KeyTrustedHosts Key = "trusted_hosts"
 )
 
-func (k Key) Valid() bool { return k == KeyComments }
+func (k Key) Valid() bool { return k == KeyComments || k == KeyTrustedHosts }
 
 // Setting is one feature's value at one level: the organization's when
 // ResourceID is empty.

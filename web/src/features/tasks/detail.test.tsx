@@ -153,3 +153,23 @@ it('sends no comment with an outcome that takes none', async () => {
   const [, init] = fetch.mock.calls.find(([url]) => String(url).endsWith('/responses'))!;
   expect(parseJSON(String(init?.body))).toEqual({ outcome: 'ok' });
 });
+
+it('shows a staged document with the viewer handler for its type', async () => {
+  const task: Task = { ...base, kind: 'approval', title: 'Review photos as PDF', review: { type: 'file.preview', staged_file_id: 'staged' } };
+  vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: () => 'blob:staged', revokeObjectURL: () => {} }));
+  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} });
+  const fetch = stub((path) => {
+    if (path.endsWith('/v1/staged-files/staged/content')) return new Response('image', { headers: { 'Content-Type': 'image/png' } });
+    if (path.endsWith('/v1/staged-files/staged'))
+      return new Response(
+        stringifyJSON({ id: 'staged', item_id: 'item', artifact_id: 'artifact', filename: 'photo.png', content_type: 'image/png', size: 10, sha256: 'x', metrics: {}, sources: [], state: 'pending', fresh: true, created_at: '2026-10-13T10:00:00Z' }),
+      );
+    return undefined;
+  });
+  show(task);
+  // The image handler draws it, from the staged file only; it shows once the browser has loaded it.
+  await screen.findByLabelText('Image photo.png');
+  await waitFor(() => expect(document.querySelector('img[alt="photo.png"]')?.getAttribute('src')).toBe('blob:staged'));
+  expect(fetch.mock.calls.some(([url]) => String(url).endsWith('/v1/staged-files/staged/content'))).toBe(true);
+  expect(fetch.mock.calls.every(([url]) => !String(url).includes('/v1/items/'))).toBe(true);
+});

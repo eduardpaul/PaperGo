@@ -144,6 +144,9 @@ func (r *Reader) Start(ctx context.Context, s *dms.Service, subject, itemID stri
 	if err != nil {
 		return nil, err
 	}
+	if !doctext.Supported(string(b.ContentType)) {
+		return nil, fmt.Errorf("%w: PaperGo does not read the text of %s files", storage.ErrUnsupportedFile, b.ContentType)
+	}
 	o.Hints = b.Languages
 	if hints := strings.TrimSpace(in.Languages); hints != "" {
 		o.Hints = hints

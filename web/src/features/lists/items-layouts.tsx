@@ -12,7 +12,8 @@ import {
 import { File, Folder, MoreHorizontal } from 'lucide-react';
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import { toast } from 'sonner';
-import { FilePreview } from '@/features/documents/preview';
+import { FileAction, FileThumb, useClickOrOpenFile } from '@/features/files/file-action';
+import { FileTypeIcon } from '@/features/files/file-types';
 import { api } from '@/api/http';
 import { useApiPages } from '@/api/pages';
 import { keys } from '@/api/queries';
@@ -33,6 +34,7 @@ import { FieldDisplay } from '@/features/fields/display';
 import { useValueNames } from '@/features/fields/names';
 import { problemMessage } from '@/lib/errors';
 import { useFormat } from '@/lib/preferences';
+import { cn } from '@/lib/utils';
 
 type LayoutProps = {
   previewItems?: ReadonlySet<string>;
@@ -44,6 +46,16 @@ type LayoutProps = {
   names?: Map<string, string>;
   onOpen: (item: Resource) => void;
 };
+
+/** A card's Open or Download, over its corner: shown on hover and focus, always on touch screens. */
+function CardFileAction({ item, className }: { item: Resource; className?: string }) {
+  return (
+    <FileAction
+      item={item}
+      className={cn('absolute top-2 right-2 bg-surface/90 shadow-sm opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100', className)}
+    />
+  );
+}
 
 function CardFields({ item, fields, names }: { item: Resource; fields: FieldDefinition[]; names?: Map<string, string> }) {
   return (
@@ -59,23 +71,29 @@ function CardFields({ item, fields, names }: { item: Resource; fields: FieldDefi
 }
 
 export function ItemsGallery({ items, fields, names, onOpen, renderItem, provenance, previewItems }: LayoutProps) {
+  const clicks = useClickOrOpenFile(onOpen);
   return (
     <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {items.map((item) => {
-        const card = <button
+        // The card opens details; its file action sits on top of it, not inside the button.
+        const card = <div className="group relative">
+          <button
             type="button"
             className="grid w-full gap-2 rounded-lg border bg-surface p-3 text-left shadow-xs hover:border-accent"
-            onClick={() => onOpen(item)}
+            onClick={(event) => clicks.click(item, event)}
+            onDoubleClick={() => clicks.doubleClick(item)}
           >
-            <span className="flex items-center gap-2 font-medium">
-              {item.kind === 'folder' ? <Folder className="size-4" /> : <File className="size-4" />}
+            <span className="flex items-center gap-2 pr-8 font-medium">
+              {item.kind === 'folder' ? <Folder className="size-4" /> : item.file ? <FileTypeIcon media={item.file.content_type} /> : <File className="size-4" />}
               {item.name}
               {item.archived && <Badge>Archived</Badge>}
               {provenance?.get(item.id) && <Badge>{provenance.get(item.id)}</Badge>}
             </span>
-            {previewItems?.has(item.id) && item.kind === 'item' && <FilePreview itemId={item.id} version={item.version} alt="" className="h-36" />}
+            {previewItems?.has(item.id) && item.kind === 'item' && <FileThumb item={item} className="h-36" iconClassName="size-10" />}
             <CardFields item={item} fields={fields} names={names} />
-          </button>;
+          </button>
+          {item.file && <CardFileAction item={item} />}
+        </div>;
         return <li key={item.id}>{renderItem ? renderItem(item, card) : card}</li>;
       })}
     </ul>
@@ -238,7 +256,7 @@ function BoardColumn({
             onDragStart={(event) =>
               event.dataTransfer.setData(dragType, JSON.stringify({ id: item.id, version: item.version, from: column }))
             }
-            className="grid gap-2 rounded border bg-surface p-3"
+            className="group relative grid gap-2 rounded border bg-surface p-3"
           >
             <div className="flex items-start gap-2">
               <button type="button" className="flex-1 text-left font-medium" onClick={() => onOpen(item)}>
@@ -260,7 +278,12 @@ function BoardColumn({
                 </DropdownMenu>
               )}
             </div>
-            {filePreviews && item.kind === 'item' && <FilePreview itemId={item.id} version={item.version} alt="" className="h-28" />}
+            {filePreviews && item.kind === 'item' && (
+              <div className="relative">
+                <FileThumb item={item} className="h-28" iconClassName="size-8" />
+                {item.file && <CardFileAction item={item} className="top-1 right-1" />}
+              </div>
+            )}
             <CardFields item={item} fields={fields} names={names} />
           </li>;
           return renderItem ? renderItem(item, card) : card;

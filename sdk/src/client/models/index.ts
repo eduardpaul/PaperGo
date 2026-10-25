@@ -688,6 +688,10 @@ export type CollectionTemplate_kind = (typeof CollectionTemplate_kindObject)[key
 export type CollectionTemplate_versioning = (typeof CollectionTemplate_versioningObject)[keyof typeof CollectionTemplate_versioningObject];
 export interface Comment extends AdditionalDataHolder, Parsable {
     /**
+     * On a thread's first comment: where in the item the thread is.
+     */
+    anchor?: CommentAnchor | null;
+    /**
      * The author property
      */
     author?: CommentPerson | null;
@@ -761,6 +765,15 @@ export interface Comment extends AdditionalDataHolder, Parsable {
     workflowId?: string | null;
 }
 export type Comment_source = (typeof Comment_sourceObject)[keyof typeof Comment_sourceObject];
+/**
+ * Places a thread in its item. kind names what interprets the rest, as dotted lowercase names; at most 2,048 bytes of JSON. The web app's PDF viewer writes file.region: blob_id (the file version), page (from 1), and x, y, w, h as fractions of the page's width and height from its top left.
+ */
+export interface CommentAnchor extends AdditionalDataHolder, Parsable {
+    /**
+     * The kind property
+     */
+    kind?: string | null;
+}
 export interface CommentCounts extends AdditionalDataHolder, Parsable {
     /**
      * The counts property
@@ -776,6 +789,10 @@ export interface CommentCountsRequest extends Parsable {
     itemIds?: string[] | null;
 }
 export interface CommentCreate extends Parsable {
+    /**
+     * Places a new thread in its item; replies have none.
+     */
+    anchor?: CommentAnchor | null;
     /**
      * The body property
      */
@@ -1323,6 +1340,15 @@ export function createCollectionTemplateFromDiscriminatorValue(parseNode: ParseN
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {CommentAnchor}
+ */
+// @ts-ignore
+export function createCommentAnchorFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoCommentAnchor;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {CommentCounts_counts}
  */
 // @ts-ignore
@@ -1731,6 +1757,15 @@ export function createFieldOptionsFromDiscriminatorValue(parseNode: ParseNode | 
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {FileSummary}
+ */
+// @ts-ignore
+export function createFileSummaryFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoFileSummary;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {FileVersion}
  */
 // @ts-ignore
@@ -2083,6 +2118,24 @@ export function createOperationPageFromDiscriminatorValue(parseNode: ParseNode |
 // @ts-ignore
 export function createOptimizeImageFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoOptimizeImage;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {PageList}
+ */
+// @ts-ignore
+export function createPageListFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoPageList;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {PageSize}
+ */
+// @ts-ignore
+export function createPageSizeFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoPageSize;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -3972,6 +4025,7 @@ export function deserializeIntoCollectionTemplate(collectionTemplate: Partial<Co
 // @ts-ignore
 export function deserializeIntoComment(comment: Partial<Comment> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
+        "anchor": n => { comment.anchor = n.getObjectValue<CommentAnchor>(createCommentAnchorFromDiscriminatorValue); },
         "author": n => { comment.author = n.getObjectValue<CommentPerson>(createCommentPersonFromDiscriminatorValue); },
         "body": n => { comment.body = n.getStringValue(); },
         "can_delete": n => { comment.canDelete = n.getBooleanValue(); },
@@ -3990,6 +4044,17 @@ export function deserializeIntoComment(comment: Partial<Comment> | undefined = {
         "updated_at": n => { comment.updatedAt = n.getDateValue(); },
         "version": n => { comment.version = n.getNumberValue(); },
         "workflow_id": n => { comment.workflowId = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param CommentAnchor The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoCommentAnchor(commentAnchor: Partial<CommentAnchor> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "kind": n => { commentAnchor.kind = n.getStringValue(); },
     }
 }
 /**
@@ -4032,6 +4097,7 @@ export function deserializeIntoCommentCountsRequest(commentCountsRequest: Partia
 // @ts-ignore
 export function deserializeIntoCommentCreate(commentCreate: Partial<CommentCreate> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
+        "anchor": n => { commentCreate.anchor = n.getObjectValue<CommentAnchor>(createCommentAnchorFromDiscriminatorValue); },
         "body": n => { commentCreate.body = n.getStringValue(); },
         "thread_id": n => { commentCreate.threadId = n.getStringValue(); },
     }
@@ -4540,6 +4606,21 @@ export function deserializeIntoFieldOptions(fieldOptions: Partial<FieldOptions> 
         "search_weight": n => { fieldOptions.searchWeight = n.getEnumValue<FieldOptions_search_weight>(FieldOptions_search_weightObject); },
         "term_set_id": n => { fieldOptions.termSetId = n.getStringValue(); },
         "unique": n => { fieldOptions.unique = n.getBooleanValue() ?? false; },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param FileSummary The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoFileSummary(fileSummary: Partial<FileSummary> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "blob_id": n => { fileSummary.blobId = n.getGuidValue(); },
+        "content_type": n => { fileSummary.contentType = n.getStringValue(); },
+        "filename": n => { fileSummary.filename = n.getStringValue(); },
+        "size": n => { fileSummary.size = n.getNumberValue(); },
+        "version": n => { fileSummary.version = n.getNumberValue(); },
     }
 }
 /**
@@ -5097,6 +5178,31 @@ export function deserializeIntoOptimizeImage(optimizeImage: Partial<OptimizeImag
 }
 /**
  * The deserialization information for the current model
+ * @param PageList The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoPageList(pageList: Partial<PageList> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "blob_id": n => { pageList.blobId = n.getGuidValue(); },
+        "pages": n => { pageList.pages = n.getCollectionOfObjectValues<PageSize>(createPageSizeFromDiscriminatorValue); },
+        "truncated": n => { pageList.truncated = n.getBooleanValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param PageSize The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoPageSize(pageSize: Partial<PageSize> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "height": n => { pageSize.height = n.getNumberValue(); },
+        "width": n => { pageSize.width = n.getNumberValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
  * @param Permissions The instance to deserialize into.
  * @returns {Record<string, (node: ParseNode) => void>}
  */
@@ -5608,6 +5714,7 @@ export function deserializeIntoResource(resource: Partial<Resource> | undefined 
         "default_currency": n => { resource.defaultCurrency = n.getStringValue(); },
         "description": n => { resource.description = n.getStringValue(); },
         "duplicate_policy": n => { resource.duplicatePolicy = n.getEnumValue<Resource_duplicate_policy>(Resource_duplicate_policyObject); },
+        "file": n => { resource.file = n.getObjectValue<FileSummary>(createFileSummaryFromDiscriminatorValue); },
         "head_revision_id": n => { resource.headRevisionId = n.getGuidValue(); },
         "id": n => { resource.id = n.getGuidValue(); },
         "inherit_permissions": n => { resource.inheritPermissions = n.getBooleanValue(); },
@@ -5799,6 +5906,7 @@ export function deserializeIntoSearchHit(searchHit: Partial<SearchHit> | undefin
         "archived_by": n => { searchHit.archivedBy = n.getStringValue(); },
         "collection_id": n => { searchHit.collectionId = n.getGuidValue(); },
         "content_type_id": n => { searchHit.contentTypeId = n.getStringValue(); },
+        "file": n => { searchHit.file = n.getObjectValue<FileSummary>(createFileSummaryFromDiscriminatorValue); },
         "highlights": n => { searchHit.highlights = n.getObjectValue<UntypedNode>(createUntypedNodeFromDiscriminatorValue); },
         "id": n => { searchHit.id = n.getGuidValue(); },
         "kind": n => { searchHit.kind = n.getEnumValue<SearchHit_kind>(SearchHit_kindObject); },
@@ -7196,6 +7304,31 @@ export interface FieldOptions extends Parsable {
     unique?: boolean | null;
 }
 export type FieldOptions_search_weight = (typeof FieldOptions_search_weightObject)[keyof typeof FieldOptions_search_weightObject];
+/**
+ * The file of an item's selected revision: the one the caller reads (the draft for draft readers, otherwise the published file).
+ */
+export interface FileSummary extends AdditionalDataHolder, Parsable {
+    /**
+     * The file version, as blob_id on content, preview and text routes.
+     */
+    blobId?: Guid | null;
+    /**
+     * Media type identified from the file's bytes.
+     */
+    contentType?: string | null;
+    /**
+     * The filename property
+     */
+    filename?: string | null;
+    /**
+     * The size property
+     */
+    size?: number | null;
+    /**
+     * File version number, independent of the resource version.
+     */
+    version?: number | null;
+}
 export interface FileVersion extends AdditionalDataHolder, Parsable {
     /**
      * available while the bytes are kept, pending after reclamation is requested, or reclaimed after the grace period. A reclaimed version keeps its identity and metadata; its download and restore report that the content is unavailable.
@@ -8028,6 +8161,30 @@ export interface OptimizeImage extends Parsable {
      */
     targetHeight?: number | null;
 }
+export interface PageList extends AdditionalDataHolder, Parsable {
+    /**
+     * The file version listed.
+     */
+    blobId?: Guid | null;
+    /**
+     * The pages property
+     */
+    pages?: PageSize[] | null;
+    /**
+     * The file has more pages than are listed and rendered.
+     */
+    truncated?: boolean | null;
+}
+export interface PageSize extends AdditionalDataHolder, Parsable {
+    /**
+     * The height property
+     */
+    height?: number | null;
+    /**
+     * The width property
+     */
+    width?: number | null;
+}
 /**
  * SharePoint-style exclusive scopes. An inherited resource has no local grants. Grants at the nearest exclusive ancestor apply; ancestors beyond it do not. Grants within a scope are additive. Reset with inherit=true and no grants. Denies are rejected.
  */
@@ -8755,6 +8912,10 @@ export interface Resource extends AdditionalDataHolder, Parsable {
      */
     duplicatePolicy?: Resource_duplicate_policy | null;
     /**
+     * Library items with a file only.
+     */
+    file?: FileSummary | null;
+    /**
      * Omitted from published read surfaces.
      */
     headRevisionId?: Guid | null;
@@ -9077,6 +9238,10 @@ export interface SearchHit extends Parsable {
      * The content_type_id property
      */
     contentTypeId?: string | null;
+    /**
+     * The file of a library item hit, on the hit's surface.
+     */
+    file?: FileSummary | null;
     /**
      * Byte ranges of matches in snippet.
      */
@@ -9771,6 +9936,7 @@ export function serializeCollectionTemplate(writer: SerializationWriter, collect
 // @ts-ignore
 export function serializeComment(writer: SerializationWriter, comment: Partial<Comment> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!comment || isSerializingDerivedType) { return; }
+    writer.writeObjectValue<CommentAnchor>("anchor", comment.anchor, serializeCommentAnchor);
     writer.writeObjectValue<CommentPerson>("author", comment.author, serializeCommentPerson);
     writer.writeStringValue("body", comment.body);
     writer.writeBooleanValue("can_delete", comment.canDelete);
@@ -9790,6 +9956,18 @@ export function serializeComment(writer: SerializationWriter, comment: Partial<C
     writer.writeNumberValue("version", comment.version);
     writer.writeStringValue("workflow_id", comment.workflowId);
     writer.writeAdditionalData(comment.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param CommentAnchor The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeCommentAnchor(writer: SerializationWriter, commentAnchor: Partial<CommentAnchor> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!commentAnchor || isSerializingDerivedType) { return; }
+    writer.writeStringValue("kind", commentAnchor.kind);
+    writer.writeAdditionalData(commentAnchor.additionalData);
 }
 /**
  * Serializes information the current object
@@ -9834,6 +10012,7 @@ export function serializeCommentCountsRequest(writer: SerializationWriter, comme
 // @ts-ignore
 export function serializeCommentCreate(writer: SerializationWriter, commentCreate: Partial<CommentCreate> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!commentCreate || isSerializingDerivedType) { return; }
+    writer.writeObjectValue<CommentAnchor>("anchor", commentCreate.anchor, serializeCommentAnchor);
     writer.writeStringValue("body", commentCreate.body);
     writer.writeStringValue("thread_id", commentCreate.threadId);
 }
@@ -10357,6 +10536,22 @@ export function serializeFieldOptions(writer: SerializationWriter, fieldOptions:
     writer.writeEnumValue<FieldOptions_search_weight>("search_weight", fieldOptions.searchWeight);
     writer.writeStringValue("term_set_id", fieldOptions.termSetId);
     writer.writeBooleanValue("unique", fieldOptions.unique);
+}
+/**
+ * Serializes information the current object
+ * @param FileSummary The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeFileSummary(writer: SerializationWriter, fileSummary: Partial<FileSummary> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!fileSummary || isSerializingDerivedType) { return; }
+    writer.writeGuidValue("blob_id", fileSummary.blobId);
+    writer.writeStringValue("content_type", fileSummary.contentType);
+    writer.writeStringValue("filename", fileSummary.filename);
+    writer.writeNumberValue("size", fileSummary.size);
+    writer.writeNumberValue("version", fileSummary.version);
+    writer.writeAdditionalData(fileSummary.additionalData);
 }
 /**
  * Serializes information the current object
@@ -10922,6 +11117,33 @@ export function serializeOptimizeImage(writer: SerializationWriter, optimizeImag
 /**
  * Serializes information the current object
  * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param PageList The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializePageList(writer: SerializationWriter, pageList: Partial<PageList> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!pageList || isSerializingDerivedType) { return; }
+    writer.writeGuidValue("blob_id", pageList.blobId);
+    writer.writeCollectionOfObjectValues<PageSize>("pages", pageList.pages, serializePageSize);
+    writer.writeBooleanValue("truncated", pageList.truncated);
+    writer.writeAdditionalData(pageList.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param PageSize The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializePageSize(writer: SerializationWriter, pageSize: Partial<PageSize> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!pageSize || isSerializingDerivedType) { return; }
+    writer.writeNumberValue("height", pageSize.height);
+    writer.writeNumberValue("width", pageSize.width);
+    writer.writeAdditionalData(pageSize.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
  * @param Permissions The instance to serialize from.
  * @param writer Serialization writer to use to serialize this model
  */
@@ -11436,6 +11658,7 @@ export function serializeResource(writer: SerializationWriter, resource: Partial
     writer.writeStringValue("default_currency", resource.defaultCurrency);
     writer.writeStringValue("description", resource.description);
     writer.writeEnumValue<Resource_duplicate_policy>("duplicate_policy", resource.duplicatePolicy);
+    writer.writeObjectValue<FileSummary>("file", resource.file, serializeFileSummary);
     writer.writeGuidValue("head_revision_id", resource.headRevisionId);
     writer.writeGuidValue("id", resource.id);
     writer.writeBooleanValue("inherit_permissions", resource.inheritPermissions);
@@ -11626,6 +11849,7 @@ export function serializeSearchHit(writer: SerializationWriter, searchHit: Parti
     if (!searchHit || isSerializingDerivedType) { return; }
     writer.writeGuidValue("collection_id", searchHit.collectionId);
     writer.writeStringValue("content_type_id", searchHit.contentTypeId);
+    writer.writeObjectValue<FileSummary>("file", searchHit.file, serializeFileSummary);
     writer.writeObjectValue("highlights", searchHit.highlights);
     writer.writeGuidValue("id", searchHit.id);
     writer.writeEnumValue<SearchHit_kind>("kind", searchHit.kind);

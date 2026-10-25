@@ -188,7 +188,7 @@ func (a *API) stagedFileContent(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 	w.Header().Set("Content-Type", art.ContentType)
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("inline", map[string]string{"filename": art.Filename}))
+	transfer.StoredFile(w)
 	w.Header().Set("ETag", strconv.Quote(art.Sha256))
-	w.Header().Set("X-Content-Type-Options", "nosniff")
 	http.ServeContent(transfer.Writer(w), r, art.Filename, art.CreatedAt, file)
 }

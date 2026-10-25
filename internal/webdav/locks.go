@@ -229,9 +229,13 @@ func (h *Handler) lock(w http.ResponseWriter, r *request) error {
 	default:
 		return badRequest("lock depth must be 0 or infinity")
 	}
-	existing, err := h.DMS.WriteTarget(r.Context(), r.subject, r.library, r.path, dms.FileConditions{})
-	if err != nil {
-		return err
+	// A housekeeping file is in the scratch area, which scratch has checked.
+	scratch := len(r.path) > 0 && scratchName(r.path[len(r.path)-1])
+	var existing *dms.File
+	if !scratch {
+		if existing, err = h.DMS.WriteTarget(r.Context(), r.subject, r.library, r.path, dms.FileConditions{}); err != nil {
+			return err
+		}
 	}
 	collection := existing != nil && existing.Collection()
 	l := &lock{key: lockKey(r.library, r.path), href: href(r.library, r.path, collection), exclusive: info.LockScope.Exclusive != nil, infinite: infinite && collection, owner: r.subject, timeout: timeout}
@@ -252,7 +256,15 @@ func (h *Handler) lock(w http.ResponseWriter, r *request) error {
 		return err
 	}
 	status := http.StatusOK
-	if existing == nil {
+	if scratch {
+		if _, found := h.scratchFiles.get(l.key); !found {
+			if _, err = h.scratchFiles.put(l.key, r.subject, nil); err != nil {
+				h.locks.remove(l.token)
+				return err
+			}
+			status = http.StatusCreated
+		}
+	} else if existing == nil {
 		// Locking an unmapped URL creates an empty file (RFC 4918 §7.3).
 		if _, err = h.DMS.MakeEmptyFile(r.Context(), r.subject, r.library, r.path, dms.CreateResource{}, dms.FileConditions{IfNoneMatch: "*"}); err != nil {
 			h.locks.remove(l.token)

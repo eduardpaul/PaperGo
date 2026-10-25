@@ -20,3 +20,7 @@ export function ContextMenuSubContent(props: ComponentProps<typeof Primitive.Sub
   return <Primitive.Portal><Primitive.SubContent {...props} className={cn(contentClass, props.className)} /></Primitive.Portal>;
 }
 export function ContextMenuSeparator() { return <Primitive.Separator className="-mx-1 my-1 h-px bg-border" />; }
+/** The key that does the same from the list, shown at the end of an item. */
+export function ContextMenuShortcut({ children }: { children: string }) {
+  return <kbd aria-hidden className="ml-auto pl-4 font-sans text-xs text-muted">{children}</kbd>;
+}

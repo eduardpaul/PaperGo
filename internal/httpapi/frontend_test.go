@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -14,7 +15,7 @@ func TestAuthConfigNamesTheDeploymentsFeatures(t *testing.T) {
 	endpoint, _ := url.Parse("https://docs.example.com/v1/mcp")
 	h := (&API{DMS: s, Auth: auth.Development{Token: testToken, Subject: "alice"}, Logger: slog.Default(), MCPURL: endpoint, CommentsOff: true}).Handler()
 	config := request(h, "GET", "/auth/config", "", "", "", "")
-	if config.Code != 200 || strings.TrimSpace(config.Body.String()) != `{"mode":"bearer","features":{"comments":false,"mcp":{"url":"https://docs.example.com/v1/mcp"}}}` {
+	if config.Code != 200 || discoveredCore(config.Body.String()) != `{"mode":"bearer","features":{"comments":false,"mcp":{"url":"https://docs.example.com/v1/mcp"}}}` {
 		t.Fatal(config.Code, config.Body.String())
 	}
 	if w := request(h, "GET", "/v1/items/x/comments", "", testToken, "", ""); w.Code != 404 {
@@ -25,7 +26,7 @@ func TestAuthConfigNamesTheDeploymentsFeatures(t *testing.T) {
 func TestPublicFrontendAndReservedNamespaces(t *testing.T) {
 	h, _, _ := setup(t)
 	config := request(h, "GET", "/auth/config", "", "", "", "")
-	if config.Code != 200 || strings.TrimSpace(config.Body.String()) != `{"mode":"bearer","features":{"comments":true}}` {
+	if config.Code != 200 || discoveredCore(config.Body.String()) != `{"mode":"bearer","features":{"comments":true}}` {
 		t.Fatal("bearer capability discovery", config.Code, config.Body.String())
 	}
 	for _, route := range []string{"/", "/login", "/admin/users", "/w/workspace/l/collection"} {
@@ -58,7 +59,53 @@ func TestAuthConfigAdvertisesBrowserSignIn(t *testing.T) {
 	h := (&API{DMS: s, Auth: auth.Development{Token: testToken, Subject: "alice"}, Logger: slog.Default(), BrowserSignIn: signIn}).Handler()
 	config := request(h, "GET", "/auth/config", "", "", "", "")
 	want := `{"mode":"bearer","oidc":{"issuer":"https://auth.example.com/application/o/papergo/","client_id":"papergo","scope":"openid profile email offline_access"},"features":{"comments":true}}`
-	if config.Code != 200 || strings.TrimSpace(config.Body.String()) != want || config.Header().Get("Cache-Control") != "private, no-store" {
+	if config.Code != 200 || discoveredCore(config.Body.String()) != want || config.Header().Get("Cache-Control") != "private, no-store" {
 		t.Fatal("browser sign-in discovery", config.Code, config.Body.String(), config.Header())
+	}
+}
+
+// discoveredCore is an /auth/config body without its file descriptions,
+// which TestAuthConfigDescribesFiles checks.
+func discoveredCore(body string) string {
+	body = strings.TrimSpace(body)
+	start, end := strings.Index(body, `,"file_types":`), strings.Index(body, `,"file_edit_max_bytes":`)
+	if start < 0 || end < 0 {
+		return body
+	}
+	rest := body[end+len(`,"file_edit_max_bytes":`):]
+	return body[:start] + rest[strings.IndexByte(rest, '}'):]
+}
+
+func TestAuthConfigDescribesFiles(t *testing.T) {
+	_, s, _ := setup(t)
+	h := (&API{DMS: s, Auth: auth.Development{Token: testToken, Subject: "alice"}, Logger: slog.Default(), FileEditMax: 1234}).Handler()
+	var config struct {
+		Features struct {
+			FileTypes []struct {
+				MediaType  string   `json:"media_type"`
+				Label      string   `json:"label"`
+				Extensions []string `json:"extensions"`
+				Preview    bool     `json:"preview"`
+				Text       bool     `json:"text"`
+			} `json:"file_types"`
+			FileEditMax int64 `json:"file_edit_max_bytes"`
+		} `json:"features"`
+	}
+	res := request(h, "GET", "/auth/config", "", "", "", "")
+	if res.Code != 200 || json.Unmarshal(res.Body.Bytes(), &config) != nil || config.Features.FileEditMax != 1234 {
+		t.Fatal(res.Code, res.Body.String())
+	}
+	found := map[string]bool{}
+	for _, f := range config.Features.FileTypes {
+		found[f.MediaType] = true
+		if f.Label == "" || f.Extensions == nil {
+			t.Fatalf("%+v", f)
+		}
+		if f.MediaType == "application/pdf" && (!f.Preview || !f.Text) || f.MediaType == "application/zip" && (f.Preview || f.Text) {
+			t.Fatalf("capabilities %+v", f)
+		}
+	}
+	if !found["application/pdf"] || !found["application/vnd.openxmlformats-officedocument.wordprocessingml.document"] {
+		t.Fatal(found)
 	}
 }

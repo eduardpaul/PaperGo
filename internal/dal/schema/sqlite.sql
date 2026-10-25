@@ -327,7 +327,7 @@ CREATE TABLE blobs (
     version INTEGER NOT NULL CHECK (version > 0),
     object_key TEXT NOT NULL,
     filename TEXT NOT NULL,
-    content_type TEXT NOT NULL CHECK (content_type IN ('application/pdf', 'image/tiff', 'image/jpeg', 'image/png', 'image/webp')),
+    content_type TEXT NOT NULL CHECK (length(content_type) BETWEEN 3 AND 127 AND content_type LIKE '%/%'),
     languages TEXT NOT NULL DEFAULT '' CHECK (length(languages) <= 191),
     size INTEGER NOT NULL CHECK (size >= 0),
     sha256 TEXT NOT NULL CHECK (length(sha256) = 64),
@@ -918,7 +918,7 @@ CREATE TABLE settings (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     resource_id TEXT REFERENCES resources(id) ON DELETE CASCADE,
-    "key" TEXT NOT NULL CHECK ("key" IN ('comments')),
+    "key" TEXT NOT NULL CHECK ("key" IN ('comments', 'trusted_hosts')),
     "value" TEXT NOT NULL CHECK (json_valid("value") AND json_type("value") = 'object'),
     version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0),
     updated_by TEXT NOT NULL DEFAULT ''
@@ -944,9 +944,14 @@ CREATE TABLE comments (
     deleted_by TEXT,
     resolved_at DATETIME,
     resolved_by TEXT,
+    -- anchor places a thread in its item's file, such as a region of a PDF
+    -- page: an object whose kind names what interprets the rest. Its size
+    -- is bounded as compact JSON by comments.Anchor.
+    anchor TEXT CHECK (anchor IS NULL OR (json_valid(anchor) AND json_type(anchor) = 'object' AND json_type(anchor, '$.kind') = 'text')),
     CHECK ((deleted_at IS NULL) = (deleted_by IS NULL)),
     CHECK ((resolved_at IS NULL) = (resolved_by IS NULL)),
     CHECK (resolved_at IS NULL OR thread_id = id),
+    CHECK (anchor IS NULL OR thread_id = id),
     CHECK (deleted_at IS NOT NULL OR length(body) >= 1)
 );
 CREATE INDEX comment_item_created ON comments(item_id, created_at, id);

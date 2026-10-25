@@ -56,7 +56,7 @@ type Image struct {
 // Decode decodes a static JPEG, PNG or WebP file of at most maxPixels and
 // turns it upright.
 func Decode(data []byte, maxPixels int64) (Image, error) {
-	media := storage.DocumentType(data[:min(len(data), 16)])
+	media := storage.Signature(data[:min(len(data), 16)])
 	if media != "image/jpeg" && media != "image/png" && media != "image/webp" {
 		return Image{}, ErrUnsupported
 	}

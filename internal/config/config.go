@@ -49,6 +49,8 @@ type Config struct {
 	Issuer       string
 	Audience     string
 	MaxUpload    int64
+	// FileEditMax is the largest file the web app edits in the browser.
+	FileEditMax int64
 	// MaxInFlight bounds concurrent API requests; excess requests are shed with 503.
 	MaxInFlight int
 	// RequestTimeout cancels API reads that outlive it; mutations and blob transfers are exempt.
@@ -176,7 +178,7 @@ func loadFrom(getenv func(string) string, yamlText, directory string) (Config, e
 		}
 		return fallback
 	}
-	c := Config{Env: value("APP_ENV", "development"), Address: value("HTTP_ADDR", "127.0.0.1:8080"), DatabasePath: value("DATABASE_PATH", "data/papergo.db"), BlobPath: value("BLOB_PATH", "data/blobs"), AuthMode: value("AUTH_MODE", "local"), DevToken: lookup("DEV_TOKEN"), DevSubject: value("DEV_SUBJECT", "local-admin"), Issuer: lookup("OIDC_ISSUER"), Audience: lookup("OIDC_AUDIENCE"), MaxUpload: 64 * 1024 * 1024, MaxInFlight: 32, RequestTimeout: 30 * time.Second, RunRetention: 30 * 24 * time.Hour, SystemRunRetention: 24 * time.Hour, ResultCacheTTL: 30 * 24 * time.Hour}
+	c := Config{Env: value("APP_ENV", "development"), Address: value("HTTP_ADDR", "127.0.0.1:8080"), DatabasePath: value("DATABASE_PATH", "data/papergo.db"), BlobPath: value("BLOB_PATH", "data/blobs"), AuthMode: value("AUTH_MODE", "local"), DevToken: lookup("DEV_TOKEN"), DevSubject: value("DEV_SUBJECT", "local-admin"), Issuer: lookup("OIDC_ISSUER"), Audience: lookup("OIDC_AUDIENCE"), MaxUpload: 64 * 1024 * 1024, FileEditMax: 2 * 1024 * 1024, MaxInFlight: 32, RequestTimeout: 30 * time.Second, RunRetention: 30 * 24 * time.Hour, SystemRunRetention: 24 * time.Hour, ResultCacheTTL: 30 * 24 * time.Hour}
 	c.DatabaseURL = lookup("DATABASE_URL")
 	if c.DatabaseURL != "" {
 		if u, err := url.Parse(c.DatabaseURL); err != nil || u.Scheme != "postgres" && u.Scheme != "postgresql" {
@@ -239,6 +241,15 @@ func loadFrom(getenv func(string) string, yamlText, directory string) (Config, e
 		}
 		c.MaxUpload = n
 	}
+	if v := lookup("FILE_EDIT_MAX_BYTES"); v != "" {
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || n < 1 || n > 1024*1024*1024 {
+			return c, fmt.Errorf("FILE_EDIT_MAX_BYTES must be between 1 and 1073741824")
+		}
+		c.FileEditMax = n
+	}
+	// Edits are uploads, so they cannot be larger.
+	c.FileEditMax = min(c.FileEditMax, c.MaxUpload)
 	if v := lookup("MAX_IN_FLIGHT"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 1 || n > 10000 {

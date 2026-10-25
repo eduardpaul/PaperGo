@@ -5,6 +5,9 @@ import type { FieldDefinition, Resource } from '@/api/types';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/select';
 import { FieldDisplay } from '@/features/fields/display';
+import { downloadContent } from '@/features/documents/transfer';
+import { FileAction, useClickOrOpenFile, useOpenFile } from '@/features/files/file-action';
+import { FileTypeIcon } from '@/features/files/file-types';
 import { useFormat } from '@/lib/preferences';
 import { cn } from '@/lib/utils';
 import type { ListingSort } from '@/api/requests';
@@ -16,7 +19,8 @@ const estimatedRowHeight = 41;
 
 /**
  * Rows of a list or library: a click opens the item (or the folder); the checkbox selects it. From the keyboard, the
- * arrow keys, Home and End move between rows, Enter opens one and x (or Space) selects it.
+ * arrow keys, Home and End move between rows, Enter opens one and x (or Space) selects it. An item's file opens with
+ * its row's Open button, a double-click or o, and downloads with d.
  */
 export function ItemsTable({
   rows,
@@ -60,6 +64,8 @@ export function ItemsTable({
   locations?: Map<string, string>;
 }) {
   const format = useFormat();
+  const openFile = useOpenFile();
+  const clicks = useClickOrOpenFile(onOpen);
   const all = rows.length > 0 && rows.every((row) => selected.has(row.id));
   const some = !all && rows.some((row) => selected.has(row.id));
   const allRef = useRef<HTMLInputElement>(null);
@@ -128,6 +134,7 @@ export function ItemsTable({
       Home: () => focusRow(0),
       End: () => focusRow(rows.length - 1),
       Enter: () => onOpen(resource),
+      ...(resource.file ? { o: () => openFile(resource), d: () => void downloadContent(resource.id, resource.file?.filename ?? resource.name) } : {}),
       ...(selectable
         ? { x: () => onToggle(resource, !selected.has(resource.id)), ' ': () => onToggle(resource, !selected.has(resource.id)) }
         : {}),
@@ -209,6 +216,7 @@ export function ItemsTable({
               <tr
                 key={resource.id}
                 data-index={index}
+                data-item={resource.id}
                 aria-rowindex={virtualize ? index + 2 : undefined}
                 ref={(element) => {
                   rowRefs.current[index] = element;
@@ -217,9 +225,10 @@ export function ItemsTable({
                 tabIndex={index === current ? 0 : -1}
                 onFocus={() => setFocusIndex(index)}
                 onKeyDown={(event) => onRowKey(event, index, resource)}
-                onClick={() => onOpen(resource)}
+                onClick={(event) => clicks.click(resource, event)}
+                onDoubleClick={() => clicks.doubleClick(resource)}
                 className={cn(
-                  'cursor-pointer border-b outline-none last:border-0 hover:bg-surface-muted/50',
+                  'group cursor-pointer border-b outline-none last:border-0 hover:bg-surface-muted/50',
                   'focus-visible:bg-surface-muted focus-visible:shadow-[inset_3px_0_0_var(--color-accent)]',
                   selected.has(resource.id) && 'bg-accent-soft/40',
                   activeId === resource.id && 'bg-accent-soft/70',
@@ -238,17 +247,19 @@ export function ItemsTable({
                 {columns.map((column) => (
                   <td key={column} className="max-w-xs px-3 py-2 align-top">
                     {column === '$name' ? (
-                      <>
+                      <div className="flex items-start gap-1">
+                        <div className="min-w-0 flex-1">
                         <button
                           type="button"
                           tabIndex={-1}
                           className="inline-flex max-w-full items-center gap-2 text-left font-medium hover:underline"
                           onClick={(event) => {
                             event.stopPropagation();
-                            onOpen(resource);
+                            clicks.click(resource, event);
                           }}
                         >
                           {resource.kind === 'folder' && <Folder className="size-4 shrink-0 text-muted" />}
+                          {resource.file && <FileTypeIcon media={resource.file.content_type} />}
                           <span className="truncate">{resource.name}</span>
                           {resource.archived && <Badge>Archived</Badge>}
                           {provenance?.get(resource.id) && <Badge>{provenance.get(resource.id)}</Badge>}
@@ -259,7 +270,17 @@ export function ItemsTable({
                             <FolderOpen className="size-3" /> in {locations.get(resource.parent_id)}
                           </span>
                         )}
-                      </>
+                        </div>
+                        {resource.file && (
+                          <FileAction
+                            item={resource}
+                            className={cn(
+                              '-my-1.5 size-7 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100',
+                              activeId === resource.id && 'opacity-100',
+                            )}
+                          />
+                        )}
+                      </div>
                     ) : (
                       <Cell column={column} resource={resource} fields={fields} names={names} formatDate={format.dateTime} />
                     )}

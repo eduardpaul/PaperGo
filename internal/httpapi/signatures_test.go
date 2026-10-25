@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-func TestUploadUsesSignatureAndRejectsUnsupportedBytes(t *testing.T) {
+func TestUploadsStoreAnyFileAndNameItsType(t *testing.T) {
 	h, s, dir := setup(t)
 	ctx := t.Context()
 	w, err := s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Signatures"})
@@ -26,30 +26,34 @@ func TestUploadUsesSignatureAndRejectsUnsupportedBytes(t *testing.T) {
 		t.Fatal(err)
 	}
 	endpoint := "/v1/items/" + item.ID + "/content"
+	// The filename has a .txt suffix and the declared type is JPEG, but the
+	// bytes are a PDF.
 	response := request(h, "PUT", endpoint, "%PDF-1.7", testToken, `"1"`, "image/jpeg")
 	if response.Code != 201 || !strings.Contains(response.Body.String(), `"content_type":"application/pdf"`) {
 		t.Fatal(response.Code, response.Body.String())
 	}
-	// The filename has a .txt suffix and the declared type was JPEG, but the
-	// signature is PDF. Unsupported replacements do not change the head.
+	// Bytes no type describes are stored as they are.
 	response = request(h, "PUT", endpoint, "plain text", testToken, `"2"`, "application/pdf")
-	if response.Code != 415 {
+	if response.Code != 201 || !strings.Contains(response.Body.String(), `"content_type":"application/octet-stream"`) {
 		t.Fatal(response.Code, response.Body.String())
 	}
 	response = request(h, "GET", endpoint, "", testToken, "", "")
-	if response.Code != 200 || response.Header().Get("Content-Type") != "application/pdf" || response.Body.String() != "%PDF-1.7" {
-		t.Fatal(response.Code, response.Body.String())
+	if response.Code != 200 || response.Header().Get("Content-Type") != "application/octet-stream" || response.Body.String() != "plain text" ||
+		response.Header().Get("Content-Security-Policy") != "sandbox; default-src 'none'" || !strings.HasPrefix(response.Header().Get("Content-Disposition"), "attachment") {
+		t.Fatal(response.Code, response.Header(), response.Body.String())
 	}
 	files, err := os.ReadDir(dir)
-	if err != nil || len(files) != 1 {
+	if err != nil || len(files) != 2 {
 		t.Fatal(files, err)
 	}
-	response = documentRequest(t, h, "/v1/resources/"+l.ID+"/documents", documentPart{"file", "fake.pdf", "plain text"})
-	if response.Code != 415 {
-		t.Fatal(response.Code, response.Body.String())
+	for name, want := range map[string]string{"page.html": "text/html", "fake.pdf": "application/octet-stream", "rows.csv": "text/csv"} {
+		response = documentRequest(t, h, "/v1/resources/"+l.ID+"/documents", documentPart{"file", name, "<p>plain text</p>"})
+		if response.Code != 201 || !strings.Contains(response.Body.String(), `"content_type":"`+want+`"`) {
+			t.Fatal(name, response.Code, response.Body.String())
+		}
 	}
-	if count, _ := s.DAL.Resources().Count(ctx, resources.Filter{}); count != 3 {
-		t.Fatal("unsupported creation wrote metadata", count)
+	if count, _ := s.DAL.Resources().Count(ctx, resources.Filter{}); count != 6 {
+		t.Fatal("documents not created", count)
 	}
 	if !transferRequest(httptest.NewRequest(http.MethodPut, endpoint, nil)) {
 		t.Fatal("upload not classified as transfer")

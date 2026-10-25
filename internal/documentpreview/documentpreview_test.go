@@ -105,4 +105,19 @@ func TestRenderPreview(t *testing.T) {
 	if got := render("broken.pdf", "application/pdf", []byte("%PDF-broken")); got.Ready {
 		t.Fatalf("%+v", got)
 	}
+	// Kinds of file previews do not render are refused before any operation,
+	// and their preview is unavailable at once rather than pending.
+	other, err := s.Create(ctx, "alice", lib.ID, dms.CreateResource{Kind: "item", Name: "notes.zip"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res := call("PUT", "/v1/items/"+other.ID+"/content", "PK\x03\x04zip", "If-Match", `"1"`, "Content-Type", "application/zip", "X-Filename", "notes.zip"); res.Code != 201 {
+		t.Fatal(res.Code, res.Body.String())
+	}
+	if res := call("POST", "/v1/items/"+other.ID+"/preview", ""); res.Code != 415 {
+		t.Fatal(res.Code, res.Body.String())
+	}
+	if res := call("GET", "/v1/items/"+other.ID+"/preview", ""); res.Code != 200 || !strings.Contains(res.Body.String(), `"unavailable"`) {
+		t.Fatal(res.Code, res.Body.String())
+	}
 }

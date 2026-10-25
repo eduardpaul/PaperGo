@@ -40,8 +40,8 @@ func testBlobFiles(t *testing.T, s *dal.Store) {
 	if _, err = r.AddBlob(ctx, blobs.Blob{ItemID: f.Folder, ObjectKey: "x", Filename: "x.pdf", ContentType: blobs.MediaPDF, Sha256: sha, Size: 10}); !errors.Is(err, dberr.ErrInvalidContainment) {
 		t.Fatalf("blob on a folder: %v", err)
 	}
-	if _, err = r.AddBlob(ctx, blobs.Blob{ItemID: f.Item, ObjectKey: "x", Filename: "x.txt", ContentType: "text/plain", Sha256: sha, Size: 10}); !errors.Is(err, dberr.ErrCheckViolation) {
-		t.Fatalf("unsupported media type: %v", err)
+	if _, err = r.AddBlob(ctx, blobs.Blob{ItemID: f.Item, ObjectKey: "x", Filename: "x.txt", ContentType: "not a media type", Sha256: sha, Size: 10}); !errors.Is(err, dberr.ErrCheckViolation) {
+		t.Fatalf("malformed media type: %v", err)
 	}
 	if found, err := r.ItemVersion(ctx, f.Item, 1); err != nil || found.ID != first.ID {
 		t.Fatalf("item version: %+v %v", found, err)

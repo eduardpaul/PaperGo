@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"papergo/internal/hosts"
 )
 
 const MaxBytes = 10 << 20
@@ -80,10 +82,16 @@ func resolve(ctx context.Context, host string) ([]netip.Addr, error) {
 	}
 	return ips, nil
 }
-func ValidateURL(ctx context.Context, raw string) (string, error) {
+
+// ValidateURL checks a subscription URL before it is saved: its form, that
+// trusted accepts its host, and that the host resolves to public addresses.
+func ValidateURL(ctx context.Context, raw string, trusted func(host string) bool) (string, error) {
 	u, err := ParseURL(raw)
 	if err != nil {
 		return "", err
+	}
+	if !trusted(u.Hostname()) {
+		return "", hosts.NotTrusted(u.Hostname())
 	}
 	if _, err = resolve(ctx, u.Hostname()); err != nil {
 		return "", err
@@ -112,12 +120,21 @@ func NewFetcher() *Fetcher {
 		}, TLSHandshakeTimeout: 10 * time.Second, ResponseHeaderTimeout: 15 * time.Second,
 		MaxResponseHeaderBytes: 64 << 10, DisableKeepAlives: true,
 	}
-	return &Fetcher{client: &http.Client{Transport: tr, Timeout: 45 * time.Second, CheckRedirect: func(req *http.Request, via []*http.Request) error {
+	return &Fetcher{client: &http.Client{Transport: tr, Timeout: 45 * time.Second}}
+}
+
+// redirects follows at most five redirects to URLs a subscription could use,
+// on hosts trusted accepts.
+func redirects(trusted func(string) bool) func(*http.Request, []*http.Request) error {
+	return func(req *http.Request, via []*http.Request) error {
 		if len(via) >= 5 {
 			return errors.New("too many calendar redirects")
 		}
 		if _, err := ParseURL(req.URL.String()); err != nil {
 			return err
+		}
+		if !trusted(req.URL.Hostname()) {
+			return hosts.NotTrusted(req.URL.Hostname())
 		}
 		// Conditional validators belong to the original origin only.
 		if len(via) > 0 && req.URL.Host != via[0].URL.Host {
@@ -125,13 +142,19 @@ func NewFetcher() *Fetcher {
 			req.Header.Del("If-Modified-Since")
 		}
 		return nil
-	}}}
+	}
 }
-func (f *Fetcher) Fetch(ctx context.Context, raw, etag, modified string) (Download, error) {
+
+// Fetch downloads a subscription when trusted accepts its host and the host
+// of every redirect; a refusal is hosts.ErrNotTrusted.
+func (f *Fetcher) Fetch(ctx context.Context, raw, etag, modified string, trusted func(host string) bool) (Download, error) {
 	var out Download
 	u, err := ParseURL(raw)
 	if err != nil {
 		return out, err
+	}
+	if !trusted(u.Hostname()) {
+		return out, hosts.NotTrusted(u.Hostname())
 	}
 	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
 	if err != nil {
@@ -145,7 +168,13 @@ func (f *Fetcher) Fetch(ctx context.Context, raw, etag, modified string) (Downlo
 	if modified != "" {
 		req.Header.Set("If-Modified-Since", modified)
 	}
-	res, err := f.client.Do(req)
+	client := *f.client
+	client.CheckRedirect = redirects(trusted)
+	res, err := client.Do(req)
+	// The refusal names the host only, never the URL.
+	if refused := (*url.Error)(nil); errors.As(err, &refused) && errors.Is(refused.Err, hosts.ErrNotTrusted) {
+		return out, refused.Err
+	}
 	if err != nil {
 		return out, errors.New("calendar download failed; check the URL and public HTTPS access")
 	}

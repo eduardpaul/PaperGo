@@ -62,7 +62,9 @@ type Hit struct {
 	CollectionID  string     `json:"collection_id"`
 	ContentTypeID string     `json:"content_type_id,omitempty"`
 	Name          string     `json:"name"`
-	Snippet       string     `json:"snippet,omitempty"`
+	// File is the file of a library item's matching surface.
+	File    *resources.FileSummary `json:"file,omitempty"`
+	Snippet string                 `json:"snippet,omitempty"`
 	// Page is the page of the file the snippet is on, when the file's text
 	// matched.
 	Page       int       `json:"page,omitempty"`
@@ -243,13 +245,34 @@ func (x *Search) search(ctx context.Context, s *dms.Service, subject string, in 
 			out.Hits = append(out.Hits, hit)
 		}
 		if offset >= res.Total || len(res.Hits) == 0 {
-			return out, nil
+			return out, files(ctx, s, out.Hits)
 		}
 	}
 	if offset < out.Total {
 		out.NextOffset = offset
 	}
-	return out, nil
+	return out, files(ctx, s, out.Hits)
+}
+
+// files sets the file of each item hit.
+func files(ctx context.Context, s *dms.Service, hits []Hit) error {
+	items := map[string]refs.Surface{}
+	for _, h := range hits {
+		if h.Kind == string(refs.KindItem) {
+			items[h.ID] = refs.Surface(h.Surface)
+		}
+	}
+	if len(items) == 0 {
+		return nil
+	}
+	found, err := s.FileSummaries(ctx, items)
+	if err != nil {
+		return err
+	}
+	for i := range hits {
+		hits[i].File = found[hits[i].ID]
+	}
+	return nil
 }
 
 // embedSearch settles the request's mode and, for semantic and hybrid

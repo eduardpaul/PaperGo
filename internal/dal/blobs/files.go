@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -12,7 +13,7 @@ import (
 	"papergo/internal/model"
 )
 
-// MediaType is the format of a document's bytes.
+// MediaType is the format of a file's bytes, named by storage.Identify.
 type MediaType string
 
 const (
@@ -23,12 +24,10 @@ const (
 	MediaWebP MediaType = "image/webp"
 )
 
+// Valid reports whether m has the shape the schema checks. Files of every
+// type are stored; the constants name the types core processes.
 func (m MediaType) Valid() bool {
-	switch m {
-	case MediaPDF, MediaTIFF, MediaJPEG, MediaPNG, MediaWebP:
-		return true
-	}
-	return false
+	return len(m) >= 3 && len(m) <= 127 && strings.Count(string(m), "/") == 1
 }
 
 // StagedState is where a staged file stands.

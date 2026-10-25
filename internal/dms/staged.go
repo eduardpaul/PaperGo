@@ -155,8 +155,8 @@ func (s *Service) AddArtifact(ctx context.Context, subject string, in ArtifactIn
 				return e
 			}
 		}
-		if !storage.SupportedDocumentType(in.ContentType) {
-			return storage.ErrUnsupportedFile
+		if !storage.ValidMediaType(in.ContentType) {
+			return invalid("invalid artifact media type")
 		}
 		if !filenameValid(in.Filename) || in.Size < 0 || len(in.SHA256) != 64 || in.ObjectKey == "" || len(in.InputKey) != 64 {
 			return invalid("invalid artifact")

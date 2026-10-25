@@ -36,6 +36,8 @@ export interface Resource {
   template_keys?: string[] | null;
   keywords?: string[] | null;
   values?: Record<string, unknown> | null;
+  /** The file of a library item's selected revision, the one the caller reads. */
+  file?: FileSummary | null;
   inherit_permissions?: boolean;
   version: number;
   head_revision_id?: string;
@@ -55,6 +57,22 @@ export interface Resource {
   access?: AccessAction[];
 }
 
+/** The organization's trusted hosts (GET /v1/organization/settings/trusted-hosts). */
+export interface TrustedHosts {
+  /** Host names, *.domain wildcards, or * for every public host. */
+  hosts: string[];
+  version: number;
+}
+
+/** The file an item shows: what a viewer needs to pick a handler. */
+export interface FileSummary {
+  blob_id: string;
+  content_type: string;
+  filename: string;
+  size: number;
+  version: number;
+}
+
 /** A hit of global search (GET /v1/search). */
 export interface SearchHit {
   archived?: boolean;
@@ -67,6 +85,8 @@ export interface SearchHit {
   collection_id: string;
   content_type_id?: string;
   name: string;
+  /** The file of a library item hit, on the hit's surface. */
+  file?: FileSummary | null;
   snippet?: string;
   /** UTF-8 byte ranges of matches in snippet. */
   highlights?: [number, number][];
@@ -577,6 +597,8 @@ export interface Comment {
   can_edit: boolean;
   can_delete: boolean;
   can_resolve?: boolean;
+  /** On a thread's first comment: where in the item it is, such as a file.region on a page. */
+  anchor?: { kind: string; [key: string]: unknown };
 }
 
 export interface CommentThread extends Comment {

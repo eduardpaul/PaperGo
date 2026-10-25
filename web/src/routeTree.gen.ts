@@ -29,6 +29,7 @@ import { Route as AppAdminRelationshipTypesRouteImport } from './routes/_app/adm
 import { Route as AppAdminRolesRouteImport } from './routes/_app/admin/roles'
 import { Route as AppAdminTermsRouteImport } from './routes/_app/admin/terms'
 import { Route as AppAdminTokensRouteImport } from './routes/_app/admin/tokens'
+import { Route as AppAdminTrustedHostsRouteImport } from './routes/_app/admin/trusted-hosts'
 import { Route as AppAdminUsersRouteImport } from './routes/_app/admin/users'
 import { Route as AppFFolderIdRouteImport } from './routes/_app/f/$folderId'
 import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings/index'
@@ -153,6 +154,11 @@ const AppAdminTermsRoute = AppAdminTermsRouteImport.update({
 const AppAdminTokensRoute = AppAdminTokensRouteImport.update({
   id: '/tokens',
   path: '/tokens',
+  getParentRoute: () => AppAdminRoute,
+} as any)
+const AppAdminTrustedHostsRoute = AppAdminTrustedHostsRouteImport.update({
+  id: '/trusted-hosts',
+  path: '/trusted-hosts',
   getParentRoute: () => AppAdminRoute,
 } as any)
 const AppAdminUsersRoute = AppAdminUsersRouteImport.update({
@@ -314,6 +320,7 @@ export interface FileRoutesByFullPath {
   '/admin/roles': typeof AppAdminRolesRoute
   '/admin/terms': typeof AppAdminTermsRoute
   '/admin/tokens': typeof AppAdminTokensRoute
+  '/admin/trusted-hosts': typeof AppAdminTrustedHostsRoute
   '/admin/users': typeof AppAdminUsersRoute
   '/f/$folderId': typeof AppFFolderIdRoute
   '/settings/assistants': typeof AppSettingsAssistantsRoute
@@ -358,6 +365,7 @@ export interface FileRoutesByTo {
   '/admin/roles': typeof AppAdminRolesRoute
   '/admin/terms': typeof AppAdminTermsRoute
   '/admin/tokens': typeof AppAdminTokensRoute
+  '/admin/trusted-hosts': typeof AppAdminTrustedHostsRoute
   '/admin/users': typeof AppAdminUsersRoute
   '/f/$folderId': typeof AppFFolderIdRoute
   '/settings/assistants': typeof AppSettingsAssistantsRoute
@@ -404,6 +412,7 @@ export interface FileRoutesById {
   '/_app/admin/roles': typeof AppAdminRolesRoute
   '/_app/admin/terms': typeof AppAdminTermsRoute
   '/_app/admin/tokens': typeof AppAdminTokensRoute
+  '/_app/admin/trusted-hosts': typeof AppAdminTrustedHostsRoute
   '/_app/admin/users': typeof AppAdminUsersRoute
   '/_app/f/$folderId': typeof AppFFolderIdRoute
   '/_app/settings/assistants': typeof AppSettingsAssistantsRoute
@@ -452,6 +461,7 @@ export interface FileRouteTypes {
     | '/admin/roles'
     | '/admin/terms'
     | '/admin/tokens'
+    | '/admin/trusted-hosts'
     | '/admin/users'
     | '/f/$folderId'
     | '/settings/assistants'
@@ -496,6 +506,7 @@ export interface FileRouteTypes {
     | '/admin/roles'
     | '/admin/terms'
     | '/admin/tokens'
+    | '/admin/trusted-hosts'
     | '/admin/users'
     | '/f/$folderId'
     | '/settings/assistants'
@@ -541,6 +552,7 @@ export interface FileRouteTypes {
     | '/_app/admin/roles'
     | '/_app/admin/terms'
     | '/_app/admin/tokens'
+    | '/_app/admin/trusted-hosts'
     | '/_app/admin/users'
     | '/_app/f/$folderId'
     | '/_app/settings/assistants'
@@ -715,6 +727,13 @@ declare module '@tanstack/react-router' {
       path: '/tokens'
       fullPath: '/admin/tokens'
       preLoaderRoute: typeof AppAdminTokensRouteImport
+      parentRoute: typeof AppAdminRoute
+    }
+    '/_app/admin/trusted-hosts': {
+      id: '/_app/admin/trusted-hosts'
+      path: '/trusted-hosts'
+      fullPath: '/admin/trusted-hosts'
+      preLoaderRoute: typeof AppAdminTrustedHostsRouteImport
       parentRoute: typeof AppAdminRoute
     }
     '/_app/admin/users': {
@@ -904,6 +923,7 @@ interface AppAdminRouteChildren {
   AppAdminRolesRoute: typeof AppAdminRolesRoute
   AppAdminTermsRoute: typeof AppAdminTermsRoute
   AppAdminTokensRoute: typeof AppAdminTokensRoute
+  AppAdminTrustedHostsRoute: typeof AppAdminTrustedHostsRoute
   AppAdminUsersRoute: typeof AppAdminUsersRoute
   AppAdminIndexRoute: typeof AppAdminIndexRoute
 }
@@ -917,6 +937,7 @@ const AppAdminRouteChildren: AppAdminRouteChildren = {
   AppAdminRolesRoute: AppAdminRolesRoute,
   AppAdminTermsRoute: AppAdminTermsRoute,
   AppAdminTokensRoute: AppAdminTokensRoute,
+  AppAdminTrustedHostsRoute: AppAdminTrustedHostsRoute,
   AppAdminUsersRoute: AppAdminUsersRoute,
   AppAdminIndexRoute: AppAdminIndexRoute,
 }

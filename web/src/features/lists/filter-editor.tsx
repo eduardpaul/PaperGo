@@ -1,5 +1,7 @@
 import { useId } from 'react';
 import { numericInput } from '@/api/json';
+import { fileTypes } from '@/api/auth';
+import { fileTypeLabel } from '@/features/files/file-types';
 import type { FieldDefinition, FilterExpr } from '@/api/types';
 import { FieldEditor } from '@/features/fields/editor';
 import { Button } from '@/components/ui/button';
@@ -20,8 +22,10 @@ export const systemFields: FieldDefinition[] = [
 
 export const comparisonLabels: Record<string, string> = { eq: 'is', ne: 'is not', in: 'is one of', missing: 'is empty', present: 'has a value', gt: 'is after / greater than', gte: 'is on or after / at least', lt: 'is before / less than', lte: 'is on or before / at most', contains: 'contains', under: 'is in this topic' };
 export const relativeLabels: Record<string, string> = { today: 'Today', yesterday: 'Yesterday', tomorrow: 'Tomorrow', last7Days: 'Past week', next7Days: 'Next week', last30Days: 'Past month', next30Days: 'Next month', weekStart: 'Start of week', weekEnd: 'End of week', monthStart: 'Start of month', monthEnd: 'End of month', me: 'Current user' };
-export const fileTypeLabels: Record<string, string> = { 'application/pdf': 'PDF document', 'image/tiff': 'TIFF image', 'image/jpeg': 'JPEG image', 'image/png': 'PNG image', 'image/webp': 'WebP image' };
-export const fileTypeField: FieldDefinition = { id: '$file_type', key: '$file_type', label: 'File type', type: 'choice', indexed: true, choices: Object.keys(fileTypeLabels) };
+/** The file type filter: the kinds of file the server names, and files it does not recognize. */
+export function fileTypeField(): FieldDefinition {
+  return { id: '$file_type', key: '$file_type', label: 'File type', type: 'choice', indexed: true, choices: [...fileTypes().map((type) => type.media_type), 'application/octet-stream'] };
+}
 
 export function normalizeFilter(filter: FilterExpr | undefined, fields: FieldDefinition[]): FilterExpr | undefined {
   if (!filter) return undefined;
@@ -149,7 +153,7 @@ export function FilterEditor({
         <option value="">Choose…</option>
         {field.choices?.map((choice) => (
           <option key={choice} value={choice}>
-            {field.key === '$file_type' ? fileTypeLabels[choice] ?? choice : choice}
+            {field.key === '$file_type' ? fileTypeLabel(choice) : choice}
           </option>
         ))}
       </Select>

@@ -19,6 +19,7 @@ Direct Go modules and the licences they ship under. Add a row when a change adds
 | `github.com/go-jose/go-jose/v4` | JWT handling | Apache-2.0 |
 | `github.com/google/uuid` | identifiers | BSD-3-Clause |
 | `golang.org/x/image` | image resampling for OCR, WebP decoding in `cmd/ocr`, fonts in OCR tests | BSD-3-Clause |
+| `golang.org/x/net` | international host names in their ASCII form for [trusted hosts](trusted-hosts.md) (`internal/hosts`, `idna`) | BSD-3-Clause |
 | `golang.org/x/oauth2` | bearer-token transport for OIDC UserInfo | BSD-3-Clause |
 | `github.com/robfig/cron/v3` | parsing workflow schedule triggers | MIT |
 | `modernc.org/sqlite` | SQLite driver | BSD-3-Clause |
@@ -51,6 +52,10 @@ Web numeric transport, long tables and component tests use these direct packages
 | `lossless-json` | exact JSON numeric fields in API responses, mutations and upload metadata | MIT |
 | `oidc-client-ts` | web sign-in at the OIDC provider: authorization code with PKCE, refresh and sign-out (brings `jwt-decode`, MIT) | Apache-2.0 |
 | `@tanstack/react-virtual` | rendering only the visible rows of long list tables | MIT |
+| `pdfjs-dist` | the PDF file handler: rendering, text layer and find, loaded only when a PDF opens; its legacy build carries the polyfills older browsers need, and its CMaps, standard fonts, ICC profiles and image decoders ship as versioned assets | Apache-2.0 |
+| `docx-preview` | the Word file handler: laying out `.docx` pages in the browser, loaded only when a Word file opens | Apache-2.0 |
+| `jszip` | reading the `.docx` archive for `docx-preview` | MIT (dual-licensed MIT or GPL-3.0; used under MIT) |
+| `react-markdown`, `remark-gfm` | the Markdown file handler: rendering GitHub-flavoured Markdown (tables, task lists, strikethrough) to React elements without raw HTML, loaded only when a Markdown file opens | MIT |
 | `@testing-library/react` | tests of rendered forms and user interactions | MIT |
 | `jsdom` | DOM environment for component tests | MIT |
 

@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"papergo/internal/dal/blobs"
+	previewer "papergo/internal/preview"
 	"papergo/internal/transfer"
 )
 
@@ -12,6 +13,11 @@ func (a *API) preview(w http.ResponseWriter, r *http.Request) {
 	file, preview, err := a.dms(r).ItemPreview(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("blob_id"))
 	if err != nil {
 		a.failure(w, r, err)
+		return
+	}
+	// Kinds of file no renderer handles never get one.
+	if preview == nil && !previewer.Supported(string(file.ContentType)) {
+		respond(w, r, 200, map[string]any{"status": "unavailable", "blob_id": file.ID})
 		return
 	}
 	if preview == nil {
@@ -31,6 +37,7 @@ func (a *API) preview(w http.ResponseWriter, r *http.Request) {
 	defer data.Close()
 	w.Header().Set("Content-Type", "image/webp")
 	w.Header().Set("Content-Disposition", `inline; filename="preview.webp"`)
+	transfer.StoredFile(w)
 	w.Header().Set("ETag", strconv.Quote(preview.ObjectSHA256))
 	w.Header().Set("X-Preview-Blob-ID", file.ID)
 	http.ServeContent(transfer.Writer(w), r, "preview.webp", preview.CreatedAt, data)

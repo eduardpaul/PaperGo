@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"papergo/internal/dal/access"
+	"papergo/internal/dal/blobs"
 	"papergo/internal/dal/catalog"
 	"papergo/internal/dal/dberr"
 	"papergo/internal/dal/grants"
@@ -59,43 +60,55 @@ func (k SystemKey) Valid() bool { return k == SystemDocuments || k == SystemInbo
 // carry the content of their head revision; the deletion columns mark a
 // tombstone in the recycle bin.
 type Resource struct {
-	Archived            bool              `json:"archived"`
-	ArchivedAt          *time.Time        `json:"archived_at,omitempty"`
-	ArchivedBy          *string           `json:"archived_by,omitempty"`
-	ID                  string            `json:"id,omitempty"`
-	CreatedAt           time.Time         `json:"created_at,omitempty"`
-	WorkspaceID         string            `json:"workspace_id,omitempty"`
-	PersonalOwnerID     *string           `json:"personal_owner_id,omitempty"`
-	SystemKey           *SystemKey        `json:"system_key,omitempty"`
-	ParentID            *string           `json:"parent_id,omitempty"`
-	ContainerID         *string           `json:"container_id,omitempty"`
-	ContentTypeID       *string           `json:"content_type_id,omitempty"`
-	Kind                refs.ResourceKind `json:"kind,omitempty"`
-	Name                string            `json:"name,omitempty"`
-	Description         string            `json:"description,omitempty"`
-	DefaultCurrency     string            `json:"default_currency,omitempty"`
-	AllowFolders        bool              `json:"allow_folders,omitempty"`
-	Keywords            []string          `json:"keywords,omitempty"`
-	TemplateKeys        []string          `json:"template_keys,omitempty"`
-	Values              map[string]any    `json:"values,omitempty"`
-	InheritPermissions  bool              `json:"inherit_permissions,omitempty"`
-	Version             int               `json:"version,omitempty"`
-	HeadRevisionID      *string           `json:"head_revision_id,omitempty"`
-	PublishedRevisionID *string           `json:"published_revision_id,omitempty"`
-	SchemaHeadID        *string           `json:"schema_head_id,omitempty"`
-	NextRevisionNumber  int               `json:"next_revision_number,omitempty"`
-	PublishingEnabled   bool              `json:"publishing_enabled,omitempty"`
-	Versioning          Versioning        `json:"versioning,omitempty"`
-	MaxVersions         int               `json:"max_versions,omitempty"`
-	WebdavEnabled       bool              `json:"webdav_enabled,omitempty"`
-	DuplicatePolicy     DuplicatePolicy   `json:"duplicate_policy,omitempty"`
-	UpdatedAt           time.Time         `json:"updated_at,omitempty"`
-	CreatedBy           string            `json:"created_by,omitempty"`
-	UpdatedBy           string            `json:"updated_by,omitempty"`
-	ScopeID             *string           `json:"scope_id,omitempty"`
-	NameKey             *string           `json:"-"`
-	DeletedAt           *time.Time        `json:"-"`
-	DeletedBy           *string           `json:"-"`
+	Archived        bool              `json:"archived"`
+	ArchivedAt      *time.Time        `json:"archived_at,omitempty"`
+	ArchivedBy      *string           `json:"archived_by,omitempty"`
+	ID              string            `json:"id,omitempty"`
+	CreatedAt       time.Time         `json:"created_at,omitempty"`
+	WorkspaceID     string            `json:"workspace_id,omitempty"`
+	PersonalOwnerID *string           `json:"personal_owner_id,omitempty"`
+	SystemKey       *SystemKey        `json:"system_key,omitempty"`
+	ParentID        *string           `json:"parent_id,omitempty"`
+	ContainerID     *string           `json:"container_id,omitempty"`
+	ContentTypeID   *string           `json:"content_type_id,omitempty"`
+	Kind            refs.ResourceKind `json:"kind,omitempty"`
+	Name            string            `json:"name,omitempty"`
+	Description     string            `json:"description,omitempty"`
+	DefaultCurrency string            `json:"default_currency,omitempty"`
+	AllowFolders    bool              `json:"allow_folders,omitempty"`
+	Keywords        []string          `json:"keywords,omitempty"`
+	TemplateKeys    []string          `json:"template_keys,omitempty"`
+	Values          map[string]any    `json:"values,omitempty"`
+	// File is the file of an item's selected revision; nil without one.
+	File                *FileSummary    `json:"file,omitempty"`
+	InheritPermissions  bool            `json:"inherit_permissions,omitempty"`
+	Version             int             `json:"version,omitempty"`
+	HeadRevisionID      *string         `json:"head_revision_id,omitempty"`
+	PublishedRevisionID *string         `json:"published_revision_id,omitempty"`
+	SchemaHeadID        *string         `json:"schema_head_id,omitempty"`
+	NextRevisionNumber  int             `json:"next_revision_number,omitempty"`
+	PublishingEnabled   bool            `json:"publishing_enabled,omitempty"`
+	Versioning          Versioning      `json:"versioning,omitempty"`
+	MaxVersions         int             `json:"max_versions,omitempty"`
+	WebdavEnabled       bool            `json:"webdav_enabled,omitempty"`
+	DuplicatePolicy     DuplicatePolicy `json:"duplicate_policy,omitempty"`
+	UpdatedAt           time.Time       `json:"updated_at,omitempty"`
+	CreatedBy           string          `json:"created_by,omitempty"`
+	UpdatedBy           string          `json:"updated_by,omitempty"`
+	ScopeID             *string         `json:"scope_id,omitempty"`
+	NameKey             *string         `json:"-"`
+	DeletedAt           *time.Time      `json:"-"`
+	DeletedBy           *string         `json:"-"`
+}
+
+// FileSummary describes the file of an item's selected revision: enough to
+// pick a viewer and label it without reading the file's versions.
+type FileSummary struct {
+	BlobID      string          `json:"blob_id"`
+	ContentType blobs.MediaType `json:"content_type"`
+	Filename    string          `json:"filename"`
+	Size        int64           `json:"size"`
+	Version     int             `json:"version"`
 }
 
 // Collection reports whether r is a list or library.

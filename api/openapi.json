@@ -1987,7 +1987,7 @@
           "item.write",
           "document.write"
         ],
-        "description": "Checks the library duplicate policy in the same transaction as the new file revision. Warn returns duplicates; block returns 409 duplicate_file and stores no revision. Self, deleted items, historical files and inaccessible content do not count. Requires item.write and document.write and item write access with current If-Match. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts only PDF, TIFF, JPEG, PNG and WebP detected from file signatures; filenames and declared MIME types do not determine stored content_type. Unsupported bytes return 415 without item/revision changes. Size limits apply while streaming."
+        "description": "Checks the library duplicate policy in the same transaction as the new file revision. Warn returns duplicates; block returns 409 duplicate_file and stores no revision. Self, deleted items, historical files and inaccessible content do not count. Requires item.write and document.write and item write access with current If-Match. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts any file. The stored content_type is identified from the file's first bytes and its filename: bytes that prove a format win (a PDF named notes.txt is a PDF), container formats such as Word and Excel need both their signature and their extension, text types need UTF-8 text, and a file no type describes is application/octet-stream. Declared MIME types are ignored. GET /auth/config lists the types. Size limits apply while streaming."
       },
       "get": {
         "summary": "Download selected head/published blob; supports byte ranges",
@@ -13450,7 +13450,7 @@
       "post": {
         "operationId": "createDocument",
         "summary": "Create a document, metadata and content from one multipart upload",
-        "description": "Requires document.write, item.read and item.write and write access to the library and selected folder. One file part is required; one metadata JSON form field is optional. Either order is accepted. File bytes stream under the configured upload limit; metadata is limited to 64 KiB and request framing to an additional 128 KiB. Metadata, first file version, first revision, indexes, publication and events commit together. Invalid metadata, malformed multipart, duplicate blocking and failed writes create no item and clean up stored bytes. Returns 201 with the new item, file, duplicate warnings, Location and numeric ETag. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts only PDF, TIFF, JPEG, PNG and WebP detected from file signatures; filenames and declared MIME types do not determine stored content_type. Unsupported bytes return 415 without item/revision changes. Size limits apply while streaming.",
+        "description": "Requires document.write, item.read and item.write and write access to the library and selected folder. One file part is required; one metadata JSON form field is optional. Either order is accepted. File bytes stream under the configured upload limit; metadata is limited to 64 KiB and request framing to an additional 128 KiB. Metadata, first file version, first revision, indexes, publication and events commit together. Invalid metadata, malformed multipart, duplicate blocking and failed writes create no item and clean up stored bytes. Returns 201 with the new item, file, duplicate warnings, Location and numeric ETag. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts any file. The stored content_type is identified from the file's first bytes and its filename: bytes that prove a format win (a PDF named notes.txt is a PDF), container formats such as Word and Excel need both their signature and their extension, text types need UTF-8 text, and a file no type describes is application/octet-stream. Declared MIME types are ignored. GET /auth/config lists the types. Size limits apply while streaming.",
         "x-module-scopes": [
           "document.write",
           "item.read",
@@ -14478,7 +14478,8 @@
                 "schema": {
                   "type": "object",
                   "required": [
-                    "mode"
+                    "mode",
+                    "features"
                   ],
                   "additionalProperties": false,
                   "properties": {
@@ -14510,6 +14511,86 @@
                         "scope": {
                           "type": "string",
                           "description": "Space-separated scopes requested at sign-in."
+                        }
+                      }
+                    },
+                    "features": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "description": "The optional parts this deployment runs, and what the web app needs to know about files.",
+                      "required": [
+                        "comments",
+                        "file_types",
+                        "file_edit_max_bytes"
+                      ],
+                      "properties": {
+                        "comments": {
+                          "type": "boolean",
+                          "description": "False when the deployment runs without discussions (COMMENTS=off)."
+                        },
+                        "mcp": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "url"
+                          ],
+                          "properties": {
+                            "url": {
+                              "type": "string",
+                              "format": "uri"
+                            }
+                          },
+                          "description": "Present when MCP_PUBLIC_URL names the deployment's MCP server."
+                        },
+                        "file_types": {
+                          "type": "array",
+                          "description": "The kinds of file PaperGo names, in matching order. Every file is stored; a file no type describes is application/octet-stream.",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "media_type",
+                              "label",
+                              "family",
+                              "extensions",
+                              "preview",
+                              "text"
+                            ],
+                            "properties": {
+                              "media_type": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string",
+                                "description": "The type's name for people, such as PDF document."
+                              },
+                              "family": {
+                                "type": "string",
+                                "description": "An icon family: pdf, image, text, document, spreadsheet, presentation, archive, audio, video, email or code."
+                              },
+                              "extensions": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "description": "Lower-case file extensions with their dot; empty for types recognized by their bytes alone."
+                              },
+                              "preview": {
+                                "type": "boolean",
+                                "description": "Previews are rendered for these files."
+                              },
+                              "text": {
+                                "type": "boolean",
+                                "description": "POST /v1/items/{id}/text reads these files."
+                              }
+                            }
+                          }
+                        },
+                        "file_edit_max_bytes": {
+                          "type": "integer",
+                          "format": "int64",
+                          "minimum": 1,
+                          "description": "The largest file the web app edits in the browser (FILE_EDIT_MAX_BYTES, at most MAX_UPLOAD_BYTES)."
                         }
                       }
                     }
@@ -17765,7 +17846,7 @@
         ],
         "operationId": "readItemText",
         "summary": "Read the text of the item's current file",
-        "description": "Starts reading the text of the item's current file as a background operation: the text layer of PDF pages, and OCR of pages without one and of images when the deployment has OCR. The operation reads the file version that is current now, even if the item gets another file meanwhile. Text already read from the same bytes with the same settings is reused. Requires document.write and write access to the item. When the operation succeeds, its result is a ReadTextResult and GET /v1/items/{id}/text returns the pages. A file whose text cannot be read (another format, a protected or broken PDF) fails the operation. The body is optional. 422 refuses ocr=always without an OCR engine.",
+        "description": "Starts reading the text of the item's current file as a background operation: the text layer of PDF pages, and OCR of pages without one and of images when the deployment has OCR. The operation reads the file version that is current now, even if the item gets another file meanwhile. Text already read from the same bytes with the same settings is reused. Requires document.write and write access to the item. When the operation succeeds, its result is a ReadTextResult and GET /v1/items/{id}/text returns the pages. Kinds of file PaperGo does not read (GET /auth/config marks the ones it does with text) are refused with 415 unsupported_file_type before any operation starts; a file whose text still cannot be read, such as a protected or broken PDF, fails the operation. The body is optional. 422 refuses ocr=always without an OCR engine.",
         "x-required-scopes": [
           "document.write"
         ],
@@ -18169,7 +18250,7 @@
       "get": {
         "operationId": "getItemPreview",
         "summary": "Read a lightweight rendition of the authorized visible file",
-        "description": "Requires item.read and document.read, plus resource ACL access. Resolves the visible published/head revision before selecting a rendition. Identical source bytes share a preview; original bytes are never returned. The default file.preview workflow generates previews asynchronously.",
+        "description": "Requires item.read and document.read, plus resource ACL access. Resolves the visible published/head revision before selecting a rendition. Identical source bytes share a preview; original bytes are never returned. The default file.preview workflow generates previews asynchronously. Kinds of file previews are not rendered for answer unavailable at once.",
         "x-module-scopes": [
           "item.read",
           "document.read"
@@ -18270,7 +18351,7 @@
         ],
         "operationId": "renderItemPreview",
         "summary": "Render a preview of the item's current file",
-        "description": "Starts rendering a first-page WebP preview, under 100 KiB and 800 pixels, of the item's current file as a background operation; GET /v1/items/{id}/preview serves it. Previews are kept once per file bytes, so bytes rendered before finish at once. Requires document.write and write access to the item.",
+        "description": "Starts rendering a first-page WebP preview, under 100 KiB and 800 pixels, of the item's current file as a background operation; GET /v1/items/{id}/preview serves it. Previews are kept once per file bytes, so bytes rendered before finish at once. Requires document.write and write access to the item. Kinds of file previews are not rendered for (GET /auth/config marks the ones they are with preview) are refused with 415 unsupported_file_type.",
         "x-required-scopes": [
           "document.write"
         ],
@@ -18365,6 +18446,139 @@
                 }
               }
             }
+          },
+          "415": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/items/{id}/pages": {
+      "get": {
+        "tags": [
+          "Documents"
+        ],
+        "operationId": "listItemPages",
+        "summary": "List the pages of the item's file",
+        "description": "The pages of the caller's file (or an earlier version), with each page's size in CSS pixels at 100 %: points at 96 DPI for PDF pages, pixels for images. Every page of PDFs and multi-page TIFFs is listed, up to 2,000, and a JPEG, PNG or WebP image has one. Requires document.read and read access to the item. Other kinds of file answer 415 unsupported_file_type; a file whose pages cannot be read answers 422 unreadable_file.",
+        "x-required-scopes": [
+          "document.read"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "blob_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "An earlier file version; draft readers only. Without it, the file the caller reads: the draft for draft readers, otherwise the published file."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The pages.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageList"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/items/{id}/pages/{page}": {
+      "get": {
+        "tags": [
+          "Documents"
+        ],
+        "operationId": "getItemPage",
+        "summary": "Render one page of the item's file",
+        "description": "One page, from 1, of the caller's file (or an earlier version) as WebP, for viewers that cannot draw the file themselves, such as multi-page TIFFs. Pages render on request at the smallest of 320, 480, 640, 960, 1280, 1600 and 2048 pixels wide that is at least `width` (default 960); tall pages render narrower to stay within about 8 megapixels, and images are never enlarged. Renders are shared by everyone reading the same bytes. With blob_id the response is cacheable for a year; without it, it revalidates with its ETag. Requires document.read and read access to the item.",
+        "x-required-scopes": [
+          "document.read"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2000
+            }
+          },
+          {
+            "name": "width",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "blob_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "An earlier file version; draft readers only. Without it, the file the caller reads: the draft for draft readers, otherwise the published file."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The page as WebP.",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Page-Blob-ID": {
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "description": "The file version rendered."
+              }
+            },
+            "content": {
+              "image/webp": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Not modified."
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
           }
         }
       }
@@ -21089,6 +21303,14 @@
             }
           },
           {
+            "name": "anchor_kind",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Keeps the threads anchored with this kind, such as file.region."
+          },
+          {
             "name": "$top",
             "in": "query",
             "schema": {
@@ -22702,6 +22924,352 @@
           }
         }
       }
+    },
+    "/v1/organization/settings/trusted-hosts": {
+      "get": {
+        "summary": "Get Trusted Hosts",
+        "operationId": "getTrustedHosts",
+        "description": "The outside hosts PaperGo fetches from and shows without asking: links and images in documents, URL fields and integrations follow them. Any active account may read them. A new organization trusts every public host (*).",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrustedHosts"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Set Trusted Hosts",
+        "operationId": "setTrustedHosts",
+        "description": "Replaces the trusted hosts. Entries are host names, *.domain for its subdomains, or * for every public host; IP addresses and ports are refused. Integrations on hosts the new list leaves out stop refreshing. Needs organization.manage.",
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The setting's quoted version; \"0\" when it was never set."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrustedHostsInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrustedHosts"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/organization/settings/trusted-hosts/usage": {
+      "get": {
+        "summary": "Get Trusted Host Usage",
+        "operationId": "getTrustedHostUsage",
+        "description": "The outside hosts configured features fetch from, with how many integrations use each, so administrators see what a narrower list stops. Needs organization.manage.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrustedHostUsagePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -23158,6 +23726,10 @@
             "type": "object",
             "additionalProperties": true,
             "description": "Custom fields on items and folders, validated against their attached collection content type. Folder fields are optional and receive no creation defaults. Folder edits are immediately visible; items follow publishing settings."
+          },
+          "file": {
+            "$ref": "#/components/schemas/FileSummary",
+            "description": "Library items with a file only."
           },
           "webdav_enabled": {
             "type": "boolean",
@@ -30117,6 +30689,10 @@
           "name": {
             "type": "string"
           },
+          "file": {
+            "$ref": "#/components/schemas/FileSummary",
+            "description": "The file of a library item hit, on the hit's surface."
+          },
           "snippet": {
             "type": "string",
             "description": "Body text around the first match."
@@ -32682,6 +33258,10 @@
           },
           "can_resolve": {
             "type": "boolean"
+          },
+          "anchor": {
+            "$ref": "#/components/schemas/CommentAnchor",
+            "description": "On a thread's first comment: where in the item the thread is."
           }
         }
       },
@@ -32766,6 +33346,17 @@
           "thread_id": {
             "type": "string",
             "description": "The thread to answer; none starts one."
+          },
+          "anchor": {
+            "description": "Places a new thread in its item; replies have none.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CommentAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false
@@ -32974,6 +33565,164 @@
           }
         },
         "additionalProperties": false
+      },
+      "FileSummary": {
+        "type": "object",
+        "description": "The file of an item's selected revision: the one the caller reads (the draft for draft readers, otherwise the published file).",
+        "properties": {
+          "blob_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The file version, as blob_id on content, preview and text routes."
+          },
+          "content_type": {
+            "type": "string",
+            "description": "Media type identified from the file's bytes."
+          },
+          "filename": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "File version number, independent of the resource version."
+          }
+        },
+        "required": [
+          "blob_id",
+          "content_type",
+          "filename",
+          "size",
+          "version"
+        ]
+      },
+      "TrustedHosts": {
+        "type": "object",
+        "required": [
+          "hosts",
+          "version"
+        ],
+        "properties": {
+          "hosts": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "type": "string"
+            },
+            "description": "Lowercase ASCII host names, *.domain wildcards (which do not match the domain itself), or *."
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "description": "0 until the list is first changed."
+          }
+        }
+      },
+      "TrustedHostsInput": {
+        "type": "object",
+        "required": [
+          "hosts"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "hosts": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "TrustedHostUse": {
+        "type": "object",
+        "required": [
+          "host",
+          "integrations"
+        ],
+        "properties": {
+          "host": {
+            "type": "string"
+          },
+          "integrations": {
+            "type": "integer",
+            "description": "Integrations that fetch from the host."
+          }
+        }
+      },
+      "TrustedHostUsagePage": {
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "value": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TrustedHostUse"
+            }
+          }
+        }
+      },
+      "PageList": {
+        "type": "object",
+        "required": [
+          "blob_id",
+          "pages",
+          "truncated"
+        ],
+        "properties": {
+          "blob_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The file version listed."
+          },
+          "pages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PageSize"
+            }
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "The file has more pages than are listed and rendered."
+          }
+        }
+      },
+      "PageSize": {
+        "type": "object",
+        "required": [
+          "width",
+          "height"
+        ],
+        "properties": {
+          "width": {
+            "type": "integer"
+          },
+          "height": {
+            "type": "integer"
+          }
+        }
+      },
+      "CommentAnchor": {
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "additionalProperties": true,
+        "description": "Places a thread in its item. kind names what interprets the rest, as dotted lowercase names; at most 2,048 bytes of JSON. The web app's PDF viewer writes file.region: blob_id (the file version), page (from 1), and x, y, w, h as fractions of the page's width and height from its top left.",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z][a-z0-9_-]*)*$",
+            "maxLength": 64
+          }
+        }
       }
     },
     "parameters": {

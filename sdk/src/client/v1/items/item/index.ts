@@ -18,6 +18,8 @@ import { MoveRequestBuilderRequestsMetadata, type MoveRequestBuilder } from './m
 // @ts-ignore
 import { OptimizeImageRequestBuilderRequestsMetadata, type OptimizeImageRequestBuilder } from './optimizeImage/index.js';
 // @ts-ignore
+import { PagesRequestBuilderNavigationMetadata, PagesRequestBuilderRequestsMetadata, type PagesRequestBuilder } from './pages/index.js';
+// @ts-ignore
 import { PreviewRequestBuilderRequestsMetadata, type PreviewRequestBuilder } from './preview/index.js';
 // @ts-ignore
 import { PublicationsRequestBuilderRequestsMetadata, type PublicationsRequestBuilder } from './publications/index.js';
@@ -76,6 +78,10 @@ export interface ItemsItemRequestBuilder extends BaseRequestBuilder<ItemsItemReq
      * The optimizeImage property
      */
     get optimizeImage(): OptimizeImageRequestBuilder;
+    /**
+     * The pages property
+     */
+    get pages(): PagesRequestBuilder;
     /**
      * The preview property
      */
@@ -149,6 +155,10 @@ export const ItemsItemRequestBuilderNavigationMetadata: Record<Exclude<keyof Ite
     },
     optimizeImage: {
         requestsMetadata: OptimizeImageRequestBuilderRequestsMetadata,
+    },
+    pages: {
+        requestsMetadata: PagesRequestBuilderRequestsMetadata,
+        navigationMetadata: PagesRequestBuilderNavigationMetadata,
     },
     preview: {
         requestsMetadata: PreviewRequestBuilderRequestsMetadata,

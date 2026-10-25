@@ -328,7 +328,7 @@ CREATE TABLE blobs (
     version BIGINT NOT NULL CHECK (version > 0),
     object_key TEXT NOT NULL,
     filename TEXT NOT NULL,
-    content_type TEXT COLLATE "C" NOT NULL CHECK (content_type IN ('application/pdf', 'image/tiff', 'image/jpeg', 'image/png', 'image/webp')),
+    content_type TEXT COLLATE "C" NOT NULL CHECK (length(content_type) BETWEEN 3 AND 127 AND content_type LIKE '%/%'),
     languages TEXT NOT NULL DEFAULT '' CHECK (length(languages) <= 191),
     size BIGINT NOT NULL CHECK (size >= 0),
     sha256 TEXT NOT NULL CHECK (length(sha256) = 64),
@@ -922,7 +922,7 @@ CREATE TABLE settings (
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     resource_id TEXT REFERENCES resources(id) ON DELETE CASCADE DEFERRABLE,
-    "key" TEXT NOT NULL CHECK ("key" IN ('comments')),
+    "key" TEXT NOT NULL CHECK ("key" IN ('comments', 'trusted_hosts')),
     "value" JSONB NOT NULL CHECK (jsonb_typeof("value") = 'object'),
     version BIGINT NOT NULL DEFAULT 1 CHECK (version > 0),
     updated_by TEXT NOT NULL DEFAULT ''
@@ -948,9 +948,14 @@ CREATE TABLE comments (
     deleted_by TEXT,
     resolved_at TIMESTAMPTZ,
     resolved_by TEXT,
+    -- anchor places a thread in its item's file, such as a region of a PDF
+    -- page: an object whose kind names what interprets the rest. Its size
+    -- is bounded as compact JSON by comments.Anchor.
+    anchor JSONB CHECK (anchor IS NULL OR (jsonb_typeof(anchor) = 'object' AND jsonb_typeof(anchor -> 'kind') = 'string')),
     CHECK ((deleted_at IS NULL) = (deleted_by IS NULL)),
     CHECK ((resolved_at IS NULL) = (resolved_by IS NULL)),
     CHECK (resolved_at IS NULL OR thread_id = id),
+    CHECK (anchor IS NULL OR thread_id = id),
     CHECK (deleted_at IS NOT NULL OR length(body) >= 1)
 );
 CREATE INDEX comment_item_created ON comments(item_id, created_at, id);

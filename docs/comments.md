@@ -12,6 +12,7 @@ People discuss an item where it lives, in threads of comments, and bring others 
 - **Resolving** marks a thread done, and reopening opens it again: the thread's author, people who may change the item and its managers may. Threads list as open (the default), resolved or all.
 - Each change carries a version: edits, deletions and resolving need the comment's ETag in `If-Match`.
 - A comment written by a workflow run shows the workflow (`source: "workflow"`).
+- A thread may be **anchored** to a place in the item: its first comment carries an `anchor`, a JSON object of up to 2 KB whose `kind` names what it points at. PaperGo stores, returns and filters anchors without reading them; the handler that shows the place interprets its kind. Replies take the thread's place and carry none, and an anchor never changes after the thread starts.
 - Purging an item removes its discussion. Deleting an item to the recycle bin hides it with the item, and restoring brings it back.
 
 ## Who takes part
@@ -52,8 +53,8 @@ Only people who may read the discussion are told, never the comment's author. A 
 
 | Route | Does |
 | --- | --- |
-| `GET /v1/items/{id}/comments?status=open\|resolved\|all` | the item's threads, oldest first, each with its replies, paged with `$top` (up to 100) and `$skiptoken`; with `mode`, `mode_from`, `can_read` and `can_post`. Where comments are off or the caller may not read the discussion, it lists none and says why |
-| `POST /v1/items/{id}/comments` | `{body, thread_id?}`: starts or answers a thread |
+| `GET /v1/items/{id}/comments?status=open\|resolved\|all` | the item's threads, oldest first, each with its replies, paged with `$top` (up to 100) and `$skiptoken`; with `mode`, `mode_from`, `can_read` and `can_post`. `anchor_kind` lists only the threads anchored with that kind. Where comments are off or the caller may not read the discussion, it lists none and says why |
+| `POST /v1/items/{id}/comments` | `{body, thread_id?, anchor?}`: starts or answers a thread; only a thread's first comment takes an `anchor` |
 | `GET`, `PATCH` (`{body}`), `DELETE /v1/comments/{id}` | reads, edits or deletes a comment |
 | `POST /v1/comments/{id}/resolve`, `/reopen` | resolves or reopens a thread |
 | `POST /v1/comments/counts` | `{item_ids}`, up to 200: open and resolved thread counts of the items whose discussions the caller may read |
@@ -63,10 +64,20 @@ Only people who may read the discussion are told, never the comment's author. A 
 
 Changes are recorded in the workspace's audit trail: `comment.create`, `comment.edit`, `comment.delete`, `comment.resolve`, `comment.reopen` and `settings.comments`. The [live stream](application-foundation.md#live-api-updates) sends a `comment` frame, naming the comment, its item and thread, to the connections of people who may read the discussion.
 
+### Anchor kinds
+
+| Kind | Fields | Meaning |
+| --- | --- | --- |
+| `file.region` | `blob_id`, `page` (from 1), `x`, `y`, `w`, `h` | a rectangle on a page of one file version, as fractions from 0 to 1 of the upright page's width and height, from its top left |
+
+Kinds are lowercase words joined by dots, up to 64 characters. A client that does not know a kind shows the thread without its place.
+
 Workflow scripts comment through the same route: `ctx.api.v1.items.byId(id).comments.post({ body })`.
 
 ## Web app
 
-An item's panel has a **Discussion** tab with the open, resolved and all threads, their replies, and a box to start a thread; **Load more threads** continues past the first 50. Typing `@` suggests the people the item is shared with; a person picked appears as `@Name`, or `@Name (subject)` when someone else mentioned shares the name, so editing a comment never swaps one person for another. Opening a mention or reply notification shows every thread, loads pages until the comment's thread is there, and brings it into view, resolved or not. Each comment offers edit and delete to those who may, and each thread offers reply, resolve and reopen. The tab says when comments are off and which level turned them off, or that the discussion is for collaborators.
+An item's panel has a **Discussion** tab with the open, resolved and all threads, their replies, and a box to start a thread; **Load more threads** continues past the first 50. Typing `@` suggests the people the item is shared with; a person picked appears as `@Name`, or `@Name (subject)` when someone else mentioned shares the name, so editing a comment never swaps one person for another. Opening a mention or reply notification shows every thread, loads pages until the comment's thread is there, and brings it into view, resolved or not. Each comment offers edit and delete to those who may, and each thread offers reply, resolve and reopen. A thread on an area of a PDF shows **On page N** (with "of an earlier version" when it was placed on another file version), which opens the file at that page with the thread's area highlighted. The tab says when comments are off and which level turned them off, or that the discussion is for collaborators.
+
+In the PDF viewer, **Comment** (or **C**) lets people who may comment drag over an area, or click a spot, and write about it. Each thread placed on the open version shows on its page as an outline and a numbered pin, dimmed once resolved; a pin opens its thread in the Discussion tab beside the file. Areas follow the page through zoom and rotation.
 
 Lists, libraries and workspaces choose their mode on their settings page; the organization turns comments on or off and chooses the default mode under Administration. The Notifications page has a **Mentions** view, and a folded reply shows how many it stands for.

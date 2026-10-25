@@ -242,12 +242,21 @@ func (h *Handler) proppatch(w http.ResponseWriter, r *request) error {
 	if err := h.confirm(r, r.path, false); err != nil {
 		return err
 	}
-	existing, err := h.DMS.WriteTarget(r.Context(), r.subject, r.library, r.path, dms.FileConditions{})
-	if err != nil {
-		return err
-	}
-	if existing == nil {
-		return dms.ErrNotFound
+	var existing *dms.File
+	if len(r.path) > 0 && scratchName(r.path[len(r.path)-1]) {
+		f, ok := h.scratchFiles.get(lockKey(r.library, r.path))
+		if !ok {
+			return dms.ErrNotFound
+		}
+		existing = f.file(r.path[len(r.path)-1])
+	} else {
+		var err error
+		if existing, err = h.DMS.WriteTarget(r.Context(), r.subject, r.library, r.path, dms.FileConditions{}); err != nil {
+			return err
+		}
+		if existing == nil {
+			return dms.ErrNotFound
+		}
 	}
 	body, err := readBody(r)
 	if err != nil {

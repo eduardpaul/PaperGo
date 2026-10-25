@@ -15,6 +15,7 @@ import (
 	"papergo/internal/dal/refs"
 	"papergo/internal/dal/relationships"
 	"papergo/internal/dal/resources"
+	"papergo/internal/dal/revisions"
 	"papergo/internal/dal/workflows"
 	"papergo/internal/identity"
 	"papergo/internal/model"
@@ -519,10 +520,26 @@ type UpdateResource struct {
 func (s *Service) Update(ctx context.Context, subject, id string, version int, in UpdateResource) (out *resources.Resource, err error) {
 	err = s.write(ctx, func(t *Service) error {
 		var e error
-		out, e = t.update(ctx, subject, id, version, in)
-		return e
+		if out, e = t.update(ctx, subject, id, version, in); e != nil {
+			return e
+		}
+		return t.attachHeadFile(ctx, out)
 	})
 	return
+}
+
+// attachHeadFile sets the File of an item's head revision, the one its
+// writer sees after a change.
+func (s *Service) attachHeadFile(ctx context.Context, r *resources.Resource) error {
+	if r.Kind != refs.KindItem || r.HeadRevisionID == nil {
+		return nil
+	}
+	rev, err := s.revision(ctx, *r.HeadRevisionID)
+	if err != nil {
+		return err
+	}
+	_, err = s.attachFiles(ctx, []*resources.Resource{r}, map[string]*revisions.Revision{r.ID: rev})
+	return err
 }
 func (s *Service) update(ctx context.Context, subject, id string, version int, in UpdateResource) (*resources.Resource, error) {
 	content := in.Name != nil || in.Description != nil || in.Keywords != nil || in.Values != nil || in.ContentTypeID != nil

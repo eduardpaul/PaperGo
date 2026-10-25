@@ -1,5 +1,5 @@
 import { createFileRoute, Outlet } from '@tanstack/react-router';
-import { Building2, Download, KeyRound, FolderTree, ScrollText, ShieldCheck, ShieldHalf, UserRound, Users } from 'lucide-react';
+import { Building2, Download, Globe, KeyRound, FolderTree, ScrollText, ShieldCheck, ShieldHalf, UserRound, Users } from 'lucide-react';
 import { Page, PageHeader } from '@/components/page';
 import { SubNav, SubNavLayout, SubNavLink } from '@/components/sub-nav';
 import { useHasScope } from '@/features/admin/common';
@@ -59,6 +59,11 @@ function Administration() {
               </SubNavLink>
             )}
             {maintenance && <SubNavLink to="/admin/tokens"><KeyRound /> Access tokens</SubNavLink>}
+            {maintenance && (
+              <SubNavLink to="/admin/trusted-hosts">
+                <Globe /> Trusted hosts
+              </SubNavLink>
+            )}
             {maintenance && (
               <SubNavLink to="/admin/maintenance">
                 <Download /> Export and import

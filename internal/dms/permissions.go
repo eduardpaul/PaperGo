@@ -7,6 +7,7 @@ import (
 	"papergo/internal/dal/dberr"
 	"papergo/internal/dal/refs"
 	"papergo/internal/dal/resources"
+	"papergo/internal/dal/revisions"
 	"papergo/internal/dal/surfaces"
 	"papergo/internal/identity"
 )
@@ -124,6 +125,9 @@ func (s *Service) GetSurface(ctx context.Context, subject, id, surface string) (
 		return nil, err
 	}
 	if err = overlayRevision(r, revision); err != nil {
+		return nil, err
+	}
+	if _, err = s.attachFiles(ctx, []*resources.Resource{r}, map[string]*revisions.Revision{id: revision}); err != nil {
 		return nil, err
 	}
 	projections, err := s.DAL.Surfaces().Surfaces(ctx, surfaces.Filter{ItemID: id, RevisionID: *selected, Fields: []string{}, Limit: 1})

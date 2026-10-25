@@ -3,6 +3,7 @@ package dms
 import (
 	"context"
 	"maps"
+	"papergo/internal/dal/blobs"
 	"papergo/internal/dal/content"
 	"papergo/internal/dal/refs"
 	"papergo/internal/dal/resources"
@@ -189,6 +190,22 @@ func (s *Service) browseMatchScope(ctx context.Context, subject string, in Brows
 // selected surface row is read. A non-nil fields limits Values to those keys,
 // extracted in SQL, so list rows never decode payloads they discard.
 func (s *Service) overlayPage(ctx context.Context, subject, surface string, rows []*resources.Resource, fields []string) (map[string]*revisions.Revision, error) {
+	selected, _, err := s.overlayPageFiles(ctx, subject, surface, rows, fields)
+	return selected, err
+}
+
+// overlayPageFiles is overlayPage that also sets each item's File and returns
+// the blobs of the selected revisions by ID.
+func (s *Service) overlayPageFiles(ctx context.Context, subject, surface string, rows []*resources.Resource, fields []string) (map[string]*revisions.Revision, map[string]*blobs.Blob, error) {
+	selected, err := s.overlaySurfaces(ctx, subject, surface, rows, fields)
+	if err != nil {
+		return nil, nil, err
+	}
+	files, err := s.attachFiles(ctx, rows, selected)
+	return selected, files, err
+}
+
+func (s *Service) overlaySurfaces(ctx context.Context, subject, surface string, rows []*resources.Resource, fields []string) (map[string]*revisions.Revision, error) {
 	ids := []string{}
 	items := []*resources.Resource{}
 	for _, r := range rows {
@@ -273,4 +290,80 @@ func (s *Service) overlayPage(ctx context.Context, subject, surface string, rows
 		}
 	}
 	return selectedRevisions, nil
+}
+
+// attachFiles sets File on each row whose selected revision has a file, and
+// returns those files by blob ID.
+func (s *Service) attachFiles(ctx context.Context, rows []*resources.Resource, selected map[string]*revisions.Revision) (map[string]*blobs.Blob, error) {
+	ids := []string{}
+	for _, rev := range selected {
+		if rev.BlobID != nil {
+			ids = append(ids, *rev.BlobID)
+		}
+	}
+	if len(ids) == 0 {
+		return map[string]*blobs.Blob{}, nil
+	}
+	found, err := s.DAL.Blobs().Blobs(ctx, blobs.BlobFilter{IDs: ids})
+	if err != nil {
+		return nil, err
+	}
+	files := make(map[string]*blobs.Blob, len(found))
+	for i := range found {
+		files[found[i].ID] = &found[i]
+	}
+	for _, r := range rows {
+		if rev := selected[r.ID]; rev != nil && rev.BlobID != nil {
+			if b := files[*rev.BlobID]; b != nil {
+				r.File = &resources.FileSummary{BlobID: b.ID, ContentType: b.ContentType, Filename: rev.Filename, Size: b.Size, Version: b.Version}
+			}
+		}
+	}
+	return files, nil
+}
+
+// FileSummaries describes the file each item has on a surface, by item ID,
+// for callers that found the items elsewhere, such as search. Items without
+// a file are left out; callers check access first.
+func (s *Service) FileSummaries(ctx context.Context, items map[string]refs.Surface) (map[string]*resources.FileSummary, error) {
+	return read(ctx, s, func(t *Service) (map[string]*resources.FileSummary, error) {
+		bySurface := map[refs.Surface][]string{}
+		for id, sf := range items {
+			bySurface[sf] = append(bySurface[sf], id)
+		}
+		revisionOf := map[string]string{}
+		revisionIDs := []string{}
+		for sf, ids := range bySurface {
+			projections, err := t.DAL.Surfaces().Surfaces(ctx, surfaces.Filter{Surface: sf, ItemIDs: ids, Fields: []string{}})
+			if err != nil {
+				return nil, err
+			}
+			for _, p := range projections {
+				revisionOf[p.ItemID] = p.RevisionID
+				revisionIDs = append(revisionIDs, p.RevisionID)
+			}
+		}
+		found, err := t.revisionsByID(ctx, revisionIDs)
+		if err != nil {
+			return nil, err
+		}
+		selected := map[string]*revisions.Revision{}
+		rows := []*resources.Resource{}
+		for id, revisionID := range revisionOf {
+			if rev := found[revisionID]; rev != nil {
+				selected[id] = rev
+				rows = append(rows, &resources.Resource{ID: id})
+			}
+		}
+		if _, err = t.attachFiles(ctx, rows, selected); err != nil {
+			return nil, err
+		}
+		out := map[string]*resources.FileSummary{}
+		for _, r := range rows {
+			if r.File != nil {
+				out[r.ID] = r.File
+			}
+		}
+		return out, nil
+	})
 }

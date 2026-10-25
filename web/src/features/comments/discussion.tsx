@@ -1,13 +1,16 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, MessageSquare, MoreHorizontal, RotateCcw } from 'lucide-react';
+import { Link } from '@tanstack/react-router';
+import { CheckCircle2, MapPin, MessageSquare, MoreHorizontal, RotateCcw } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { api } from '@/api/http';
-import { commentsQuery, keys } from '@/api/queries';
+import { commentsQuery, keys, resourceQuery } from '@/api/queries';
 import type { Comment, CommentPage, CommentPerson, CommentThread, MentionCandidate } from '@/api/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Alert, EmptyState, Skeleton } from '@/components/ui/feedback';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/menu';
+import { useOpenFileLink } from '@/features/files/file-action';
+import { fileRegion } from '@/features/files/regions';
 import { problemMessage } from '@/lib/errors';
 import { useFormat } from '@/lib/preferences';
 import { cn } from '@/lib/utils';
@@ -206,6 +209,28 @@ function Composer({
   );
 }
 
+/**
+ * Where a thread is in its item's file, as a link that opens the file
+ * there: a page of the current file, or of the earlier version it was
+ * written on.
+ */
+function ThreadPlace({ thread, itemId }: { thread: CommentThread; itemId: string }) {
+  const region = fileRegion(thread.anchor);
+  const item = useQuery({ ...resourceQuery(itemId), enabled: !!region });
+  const link = useOpenFileLink();
+  if (!region || !item.data?.file) return null;
+  const earlier = region.blob_id !== item.data.file.blob_id;
+  return (
+    <Link
+      {...link(item.data, { page: region.page, blob: earlier ? region.blob_id : undefined, comment: thread.id })}
+      className="flex w-fit items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 hover:underline dark:bg-amber-900/40 dark:text-amber-100"
+    >
+      <MapPin className="size-3.5" /> On page {region.page}
+      {earlier && ' of an earlier version'}
+    </Link>
+  );
+}
+
 /** One comment: who, when, its text and what the reader may do with it. */
 function CommentEntry({ comment, itemId, compact }: { comment: Comment; itemId: string; compact?: boolean }) {
   const format = useFormat();
@@ -313,6 +338,7 @@ function ThreadCard({
         focused && 'border-accent ring-2 ring-accent/30',
       )}
     >
+      <ThreadPlace thread={thread} itemId={itemId} />
       <CommentEntry comment={thread} itemId={itemId} />
       {thread.replies.map((r) => (
         <CommentEntry key={r.id} comment={r} itemId={itemId} compact />

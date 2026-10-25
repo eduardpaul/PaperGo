@@ -11,6 +11,9 @@ import { CollectionPage, type CollectionSearch } from './collection-page';
 
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ children, onDrop, onDragOver, onDragLeave, className }: { children: ReactNode } & React.HTMLAttributes<HTMLAnchorElement>) => <a href="#collection" onDrop={onDrop} onDragOver={onDragOver} onDragLeave={onDragLeave} className={className}>{children}</a>,
+  useNavigate: () => vi.fn(),
+  useRouter: () => ({ history: { back: vi.fn() } }),
+  useCanGoBack: () => false,
 }));
 const uploads = vi.hoisted(() => ({ upload: vi.fn(async () => []) }));
 vi.mock('@/features/documents/uploads', () => ({ useUploads: () => uploads }));

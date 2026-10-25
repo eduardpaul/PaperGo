@@ -160,6 +160,7 @@ Every `/v1` request requires authentication: HTTP Basic or a session cookie in l
 | GET | `/v1/items/{id}/schema?surface=auto` | Immutable schema of the caller's visible content revision |
 | PUT / GET | `/v1/items/{id}/content` | Upload a blob / download the selected revision's blob; draft readers may request historical `blob_id` |
 | POST | `/v1/resources/{id}/documents` | Create a library document using multipart `file` and optional `metadata` JSON; see [documents](docs/documents.md) |
+| GET | `/v1/items/{id}/pages`, `/v1/items/{id}/pages/{page}` | The pages of the item's file, and one page rendered as WebP at a requested width, for PDFs, TIFF scans and images; see [previews](docs/previews.md#page-renditions) |
 | GET | `/v1/items/{id}/content/versions` | Retained file versions, newest first: number, file name, type, size, SHA-256, who added it, and the current one. Ordinary readers see only the published file |
 | POST | `/v1/items/{id}/content/versions/{number}/restore` | Restore an earlier file as a new version; requires current numeric `If-Match` |
 | GET | `/v1/audit` | Organization-wide feed requiring `audit.read`; actor/entity/workspace/date filters, changed properties, trace IDs and newest-first paging |
@@ -209,7 +210,7 @@ POST the library's `/children`:
 {"kind":"item","name":"Supplier agreement","values":{"status":"draft"},"keywords":["supplier"]}
 ```
 
-Upload bytes to the item's `/content` with `Content-Type: application/pdf`, `X-Filename: agreement.pdf`, and `If-Match: "1"`. PDF, TIFF, JPEG, PNG and WebP are accepted by their actual byte signatures; filenames and declared media types do not select the stored type. Unsupported content returns 415 without a new revision. The same policy applies to multipart creation, WebDAV PUT and package import. Upload returns blob metadata and the new item ETag; GET supports Range requests and always sends an attachment disposition. Publish with POST `/publications` and the new `If-Match` value.
+Upload bytes to the item's `/content` with `Content-Type: application/pdf`, `X-Filename: agreement.pdf`, and `If-Match: "1"`. Any file is accepted. PaperGo names its media type from its bytes and filename (see [file types](docs/documents.md#file-types)), never from the declared `Content-Type`, and the same rule applies to multipart creation, WebDAV PUT and package import. Upload returns blob metadata and the new item ETag; GET supports Range requests and always sends an attachment disposition. Publish with POST `/publications` and the new `If-Match` value.
 
 When publishing is disabled, library metadata is visible immediately, including before the first upload; downloading returns 404 until a blob exists. Explicit publication in an enabled library requires a blob. Enabling publishing keeps existing published content and makes future changes drafts. Disabling it requires manage access and publishes all current heads atomically, advancing affected item lock versions.
 
@@ -252,6 +253,10 @@ To connect from Windows, choose **Map network drive** in Explorer and enter `htt
 | DELETE | Delete a file or a folder and its contents atomically, requiring write access to every descendant. |
 | LOCK / UNLOCK | Exclusive or shared write locks of at most one hour, refreshable, held in memory and released on restart. |
 | PROPPATCH | Live DAV properties are refused; others, such as Windows timestamps, are acknowledged but not stored. |
+
+Word, Excel and PowerPoint files in a WebDAV library open straight from the web app with **Open in Word** (Excel, PowerPoint), which hands the file's WebDAV address to the desktop app; saving there adds a file version. See [documents](docs/documents.md#opening-in-word-excel-and-powerpoint).
+
+Housekeeping files that operating systems and office suites write beside the files people work on (`~$` owner files, `.~lock.*#` LibreOffice locks, `._` resource forks, `Thumbs.db`, `desktop.ini`, `.DS_Store`) never become items. Each is kept in memory for an hour after its last write, up to 1 MiB each; a person holds at most 2,000 of them and 16 MiB, and the server 10,000 and 128 MiB in all, beyond which writes get 507. They are listed, read, locked and deleted like a file, and writing or deleting one needs its lock like a file, so editors that need them work while libraries stay clean and no workflow starts.
 
 New files take the library's field defaults; a library with a required field that has no default refuses new files with 403 and the reason. In a library with publishing enabled, writes are drafts: readers keep the published names and bytes until an editor publishes. File names follow the library rules above, and each saved version (Windows writes an empty file before its content) becomes a content revision.
 
@@ -342,7 +347,7 @@ Stop the API before restoring. Restore rejects active API leases and existing de
 
 Conditional writes accept quoted numeric ETags, including `W/"n"`. Stale versions return HTTP 412 with a `precondition_failed` problem; duplicate names, keys and cardinality conflicts return 409. Missing required `If-Match` returns 428. Paged REST responses expose `value` and `@odata.nextLink`; query selection and filtering use the native typed request contract.
 
-List settings support [integrations](docs/list-integrations.md), including HTTPS iCalendar subscriptions on ordinary lists, automatic refresh, source-managed fields and recurring calendar events.
+List settings support [integrations](docs/list-integrations.md), which follow the organization's [trusted hosts](docs/trusted-hosts.md), including HTTPS iCalendar subscriptions on ordinary lists, automatic refresh, source-managed fields and recurring calendar events.
 
 Local workflow decisions automatically use the bundled Laya model and shared
 ONNX Runtime; explicit `AI_DECISION_MODELS_PATH` and `ONNXRUNTIME_LIB` settings override them. Both `/v1/ai/decisions` and `/v1/ai/taxonomy-decisions` use the verified Laya

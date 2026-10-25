@@ -2,13 +2,12 @@
 package preview
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"image"
 	"math"
+	"slices"
 
-	_ "golang.org/x/image/tiff"
 	"papergo/internal/doctext"
 	"papergo/internal/imaging"
 )
@@ -20,6 +19,12 @@ type Result struct {
 	WebP          []byte
 	Width, Height int
 }
+
+// Media are the types Generate renders.
+var Media = []string{"application/pdf", "image/tiff", "image/jpeg", "image/png", "image/webp"}
+
+// Supported reports whether Generate renders files of media.
+func Supported(media string) bool { return slices.Contains(Media, media) }
 
 func Generate(ctx context.Context, data []byte, media string, pdf doctext.PDF, maxPixels int64) (Result, error) {
 	if err := ctx.Err(); err != nil {
@@ -42,14 +47,10 @@ func Generate(ctx context.Context, data []byte, media string, pdf doctext.PDF, m
 		}
 		img, err = doc.Render(0, 100, int64(MaxDimension*MaxDimension))
 	case "image/tiff":
-		cfg, _, e := image.DecodeConfig(bytes.NewReader(data))
-		if e != nil {
-			return Result{}, e
+		var doc *imaging.TIFF
+		if doc, err = imaging.OpenTIFF(data); err == nil {
+			img, err = doc.Decode(0, maxPixels)
 		}
-		if cfg.Width <= 0 || cfg.Height <= 0 || int64(cfg.Width)*int64(cfg.Height) > maxPixels {
-			return Result{}, imaging.ErrTooLarge
-		}
-		img, _, err = image.Decode(bytes.NewReader(data))
 	default:
 		var decoded imaging.Image
 		decoded, err = imaging.Decode(data, maxPixels)

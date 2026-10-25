@@ -15,10 +15,13 @@ interface Params {
   approvers?: string[];
 }
 
+// The images optimization reads; other files start no run.
+const images = ["image/jpeg", "image/png", "image/webp"];
+
 export default workflow<unknown, unknown, Params>({
   triggers: (p) => [
-    { type: "file.added", collection_id: p.collection },
-    { type: "file.updated", collection_id: p.collection },
+    { type: "file.added", collection_id: p.collection, media_types: images },
+    { type: "file.updated", collection_id: p.collection, media_types: images },
     { type: "manual", collection_id: p.collection, selection: "per_item" },
   ],
   concurrency: "replace",

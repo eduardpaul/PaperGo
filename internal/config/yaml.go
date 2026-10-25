@@ -38,6 +38,7 @@ type yamlConfig struct {
 	Storage  struct {
 		BlobPath    string `yaml:"blob_path"`
 		MaxUploadMB *int   `yaml:"max_upload_mb"`
+		EditMaxMB   *int   `yaml:"edit_max_mb"`
 	} `yaml:"storage"`
 	OIDC struct {
 		Issuer             string `yaml:"issuer"`
@@ -166,6 +167,13 @@ func parseYAML(text string) (yamlFile, error) {
 			return file, fmt.Errorf("storage max_upload_mb must be between 1 and 1024")
 		}
 		file.values["MAX_UPLOAD_BYTES"] = strconv.FormatInt(int64(mb)*1024*1024, 10)
+	}
+	if in.Storage.EditMaxMB != nil {
+		mb := *in.Storage.EditMaxMB
+		if mb < 1 || mb > 1024 {
+			return file, fmt.Errorf("storage edit_max_mb must be between 1 and 1024")
+		}
+		file.values["FILE_EDIT_MAX_BYTES"] = strconv.FormatInt(int64(mb)*1024*1024, 10)
 	}
 	if password := in.Auth.AdminPassword; password.Kind != 0 {
 		file.passwordSpecified = true

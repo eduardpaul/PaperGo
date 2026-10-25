@@ -142,6 +142,7 @@ func (a *API) routes() (api *router, err error) {
 	a.registerTasks(api)
 	a.registerNotifications(api)
 	a.registerComments(api)
+	a.registerTrustedHosts(api)
 	a.registerResources(api)
 	if err := a.registerModules(api); err != nil {
 		return nil, err

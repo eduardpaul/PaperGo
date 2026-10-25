@@ -19,8 +19,8 @@ import (
 
 // Runtime dependencies belong to the provider; persistent storage is generic.
 type iCalendarRuntime struct {
-	validateURL func(context.Context, string) (string, error)
-	download    func(context.Context, string, string, string) (calendar.Download, error)
+	validateURL func(context.Context, string, func(string) bool) (string, error)
+	download    func(context.Context, string, string, string, func(string) bool) (calendar.Download, error)
 }
 
 func newICalendarRuntime() *iCalendarRuntime {
@@ -149,7 +149,11 @@ func (s *Service) refreshIntegrationOperation(ctx context.Context, op *operation
 	if json.Unmarshal([]byte(configJSON), &config) != nil || json.Unmarshal(source.State, &state) != nil {
 		return errors.New("invalid iCalendar integration configuration")
 	}
-	downloaded, err := s.integrations.ical.download(ctx, config.URL, state.ETag, state.LastModified)
+	trusted, err := s.trustedHost(ctx)
+	if err != nil {
+		return err
+	}
+	downloaded, err := s.integrations.ical.download(ctx, config.URL, state.ETag, state.LastModified, trusted)
 	if err != nil {
 		return err
 	}

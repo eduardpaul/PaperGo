@@ -25,6 +25,7 @@ import type {
   SmartFolder,
   StagedFile,
   Term,
+  TrustedHosts,
   UserProfile,
   Workflow,
   WorkflowRun,
@@ -125,6 +126,14 @@ export const commentSettingsQuery = (resourceId: string) =>
 export const organizationCommentSettingsQuery = queryOptions({
   queryKey: keys.organizationCommentSettings,
   queryFn: async () => (await api<OrganizationCommentSettings>('/v1/organization/settings/comments')).data,
+});
+
+/** The organization's trusted hosts: what documents may load and link to without asking. */
+export const trustedHostsQuery = queryOptions({
+  queryKey: ['organization', 'settings', 'trusted-hosts'],
+  queryFn: async () => (await api<TrustedHosts>('/v1/organization/settings/trusted-hosts')).data,
+  staleTime: 5 * 60_000,
+  refetchOnWindowFocus: 'always',
 });
 
 export const taskQuery = (id: string) =>
