@@ -42,7 +42,10 @@ type host struct {
 	unsaved  []runs.Step
 	// unsavedBytes is the size of the unsaved steps' outputs.
 	unsavedBytes int
-	logs         []Log
+	// journal is the size of the outputs the run recorded, replayed ones
+	// included.
+	journal int
+	logs    []Log
 	// suspended is set when the run waits for operations or sleeps, until
 	// until; abort when the slice must stop for another reason. Either
 	// interrupts the runtime, which JavaScript cannot catch.
@@ -146,6 +149,9 @@ func (h *host) value(name string, generate func() json.RawMessage) (json.RawMess
 	step := h.newStep(runs.StepValue, name, hash)
 	step.Seq = h.next - 1
 	step.Output = generate()
+	if !h.grow(step.Output) {
+		return nil, false
+	}
 	h.observe(step)
 	return step.Output, true
 }
@@ -175,6 +181,17 @@ func (h *host) observe(step runs.Step) {
 		return
 	}
 	h.saved()
+}
+
+// grow counts a new step's output toward the run's journal and stops a run
+// whose journal outgrew maxJournal. It reports whether the run goes on.
+func (h *host) grow(output []byte) bool {
+	h.journal += len(output)
+	if h.journal <= maxJournal {
+		return true
+	}
+	h.stop(errJournal)
+	return false
 }
 
 // saved forgets the unsaved steps once a durable step recorded them.
@@ -293,6 +310,9 @@ func (h *host) request(method, rawURL string, headers map[string]string, body go
 		step := h.newStep(runs.StepRequest, name, hash)
 		step.Output = ResponseOutput(response)
 		output = step.Output
+		if !h.grow(output) {
+			return goja.Undefined()
+		}
 		if h.observe(step); h.abort != nil {
 			return goja.Undefined()
 		}
@@ -306,6 +326,10 @@ func (h *host) request(method, rawURL string, headers map[string]string, body go
 		}
 		h.saved()
 		output = ResponseOutput(response)
+		// The request is recorded; a journal it outgrew ends the run here.
+		if !h.grow(output) {
+			return goja.Undefined()
+		}
 	}
 	h.next++
 	var out hostResponse
@@ -332,9 +356,10 @@ func (h *host) request(method, rawURL string, headers map[string]string, body go
 	return obj
 }
 
-// wait replays a recorded wait or records one. A run whose operations have
-// not all finished suspends; a wait that failed, such as by timing out,
-// throws an error the script can catch.
+// wait replays a recorded wait or records one and returns its operations
+// as they ended, as JSON text. A run whose operations have not all finished
+// suspends; a wait that failed, such as by timing out, throws an error the
+// script can catch.
 func (h *host) wait(ids []string) goja.Value {
 	if h.abort != nil || h.suspended {
 		return goja.Undefined()
@@ -360,7 +385,7 @@ func (h *host) wait(ids []string) goja.Value {
 		step.Status, step.Operations = runs.StepPending, ids
 		step.Input, _ = json.Marshal(map[string][]string{"operations": ids})
 		h.watch.pause()
-		done, err := h.effects.Wait(h.ctx, h.run, h.unsaved, step)
+		output, done, err := h.effects.Wait(h.ctx, h.run, h.unsaved, step)
 		h.watch.resume()
 		if errors.Is(err, ErrUnknownOperation) {
 			panic(h.rt.NewTypeError("ctx.wait: %v", err))
@@ -370,15 +395,18 @@ func (h *host) wait(ids []string) goja.Value {
 		}
 		h.saved()
 		h.next++
-		if done {
+		if !done {
+			return h.stop(errSuspended)
+		}
+		if !h.grow(output) {
 			return goja.Undefined()
 		}
-		return h.stop(errSuspended)
+		return h.rt.ToValue(string(output))
 	}
 	h.next++
 	switch recorded.Status {
 	case runs.StepCompleted:
-		return goja.Undefined()
+		return h.rt.ToValue(string(recorded.Output))
 	case runs.StepFailed:
 		panic(h.rt.NewGoError(errors.New(recorded.Error)))
 	default:

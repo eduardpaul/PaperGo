@@ -35,6 +35,7 @@ type WorkflowStep struct {
 	Status      string                                `db:"status" `
 	Input       null.Val[types.JSON[json.RawMessage]] `db:"input" `
 	Output      null.Val[[]byte]                      `db:"output" `
+	OutputSize  int64                                 `db:"output_size" `
 	Error       null.Val[string]                      `db:"error" `
 	StartedAt   time.Time                             `db:"started_at" `
 	CompletedAt null.Val[time.Time]                   `db:"completed_at" `
@@ -70,7 +71,7 @@ type workflowStepRLoaded struct {
 
 func buildWorkflowStepColumns(tableName string) workflowStepColumns {
 	columnsExpr := expr.NewColumnsExpr(
-		"run_id", "seq", "kind", "name", "input_hash", "status", "input", "output", "error", "started_at", "completed_at",
+		"run_id", "seq", "kind", "name", "input_hash", "status", "input", "output", "output_size", "error", "started_at", "completed_at",
 	)
 
 	if tableName != "" {
@@ -88,6 +89,7 @@ func buildWorkflowStepColumns(tableName string) workflowStepColumns {
 		Status:      buildWorkflowStepColumn(tableName, "status"),
 		Input:       buildWorkflowStepColumn(tableName, "input"),
 		Output:      buildWorkflowStepColumn(tableName, "output"),
+		OutputSize:  buildWorkflowStepColumn(tableName, "output_size"),
 		Error:       buildWorkflowStepColumn(tableName, "error"),
 		StartedAt:   buildWorkflowStepColumn(tableName, "started_at"),
 		CompletedAt: buildWorkflowStepColumn(tableName, "completed_at"),
@@ -105,6 +107,7 @@ type workflowStepColumns struct {
 	Status      workflowStepColumn
 	Input       workflowStepColumn
 	Output      workflowStepColumn
+	OutputSize  workflowStepColumn
 	Error       workflowStepColumn
 	StartedAt   workflowStepColumn
 	CompletedAt workflowStepColumn
@@ -161,13 +164,14 @@ type WorkflowStepSetter struct {
 	Status      omit.Val[string]                          `db:"status" `
 	Input       omitnull.Val[types.JSON[json.RawMessage]] `db:"input" `
 	Output      omitnull.Val[[]byte]                      `db:"output" `
+	OutputSize  omit.Val[int64]                           `db:"output_size" `
 	Error       omitnull.Val[string]                      `db:"error" `
 	StartedAt   omit.Val[time.Time]                       `db:"started_at" `
 	CompletedAt omitnull.Val[time.Time]                   `db:"completed_at" `
 }
 
 func (s WorkflowStepSetter) SetColumns() []string {
-	vals := make([]string, 0, 11)
+	vals := make([]string, 0, 12)
 	if s.RunID.IsValue() {
 		vals = append(vals, "run_id")
 	}
@@ -191,6 +195,9 @@ func (s WorkflowStepSetter) SetColumns() []string {
 	}
 	if s.Output.IsValue() || s.Output.IsNull() {
 		vals = append(vals, "output")
+	}
+	if s.OutputSize.IsValue() {
+		vals = append(vals, "output_size")
 	}
 	if s.Error.IsValue() || s.Error.IsNull() {
 		vals = append(vals, "error")
@@ -228,6 +235,9 @@ func (s WorkflowStepSetter) Overwrite(t *WorkflowStep) {
 	}
 	if s.Output.IsValue() || s.Output.IsNull() {
 		t.Output = s.Output.MustGetNull()
+	}
+	if s.OutputSize.IsValue() {
+		t.OutputSize = s.OutputSize.MustGet()
 	}
 	if s.Error.IsValue() || s.Error.IsNull() {
 		t.Error = s.Error.MustGetNull()
@@ -312,6 +322,13 @@ func (s *WorkflowStepSetter) Apply(q *dialect.InsertQuery) {
 				}
 				return sqlite.Arg(s.Output.MustGetNull()).WriteSQL(ctx, w, d, start)
 			}))
+		case "output_size":
+			vals = append(vals, bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+				if s.OutputSize.IsUnset() {
+					return sqlite.Arg(nil).WriteSQL(ctx, w, d, start)
+				}
+				return sqlite.Arg(s.OutputSize.MustGet()).WriteSQL(ctx, w, d, start)
+			}))
 		case "error":
 			vals = append(vals, bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
 				if s.Error.IsUnset() {
@@ -344,7 +361,7 @@ func (s WorkflowStepSetter) UpdateMod() bob.Mod[*dialect.UpdateQuery] {
 }
 
 func (s WorkflowStepSetter) Expressions(prefix ...string) []bob.Expression {
-	exprs := make([]bob.Expression, 0, 11)
+	exprs := make([]bob.Expression, 0, 12)
 
 	if s.RunID.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
@@ -402,6 +419,13 @@ func (s WorkflowStepSetter) Expressions(prefix ...string) []bob.Expression {
 		}})
 	}
 
+	if s.OutputSize.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			sqlite.Quote(append(prefix, "output_size")...),
+			sqlite.Arg(s.OutputSize),
+		}})
+	}
+
 	if s.Error.IsValue() || s.Error.IsNull() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
 			sqlite.Quote(append(prefix, "error")...),
@@ -433,7 +457,7 @@ func workflowStepScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc
 		idx int
 		dst func(o *WorkflowStep) any
 	}
-	targets := make([]target, 0, 11)
+	targets := make([]target, 0, 12)
 	for i, col := range cols {
 		switch col {
 		case "run_id":
@@ -452,6 +476,8 @@ func workflowStepScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc
 			targets = append(targets, target{i, func(o *WorkflowStep) any { return &o.Input }})
 		case "output":
 			targets = append(targets, target{i, func(o *WorkflowStep) any { return &o.Output }})
+		case "output_size":
+			targets = append(targets, target{i, func(o *WorkflowStep) any { return &o.OutputSize }})
 		case "error":
 			targets = append(targets, target{i, func(o *WorkflowStep) any { return &o.Error }})
 		case "started_at":
@@ -864,6 +890,7 @@ type workflowStepWhere[Q sqlite.Filterable] struct {
 	Status      sqlite.WhereMod[Q, string]
 	Input       sqlite.WhereNullMod[Q, types.JSON[json.RawMessage]]
 	Output      sqlite.WhereNullMod[Q, []byte]
+	OutputSize  sqlite.WhereMod[Q, int64]
 	Error       sqlite.WhereNullMod[Q, string]
 	StartedAt   sqlite.WhereMod[Q, time.Time]
 	CompletedAt sqlite.WhereNullMod[Q, time.Time]
@@ -885,6 +912,7 @@ func buildWorkflowStepWhere[Q sqlite.Filterable](cols workflowStepColumns) workf
 		Status:      sqlite.Where[Q, string](cols.Status.Expression),
 		Input:       sqlite.WhereNull[Q, types.JSON[json.RawMessage]](cols.Input.Expression),
 		Output:      sqlite.WhereNull[Q, []byte](cols.Output.Expression),
+		OutputSize:  sqlite.Where[Q, int64](cols.OutputSize.Expression),
 		Error:       sqlite.WhereNull[Q, string](cols.Error.Expression),
 		StartedAt:   sqlite.Where[Q, time.Time](cols.StartedAt.Expression),
 		CompletedAt: sqlite.WhereNull[Q, time.Time](cols.CompletedAt.Expression),

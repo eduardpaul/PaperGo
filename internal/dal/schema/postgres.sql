@@ -1027,7 +1027,10 @@ CREATE TABLE workflow_steps (
     input_hash TEXT NOT NULL CHECK (length(input_hash) = 64),
     status TEXT NOT NULL CHECK (status IN ('pending', 'completed', 'failed')),
     "input" JSONB,
+    -- zstd-compressed when larger than 256 bytes; output_size is its size
+    -- uncompressed, kept when a finished run drops the output.
     "output" BYTEA,
+    output_size INTEGER NOT NULL DEFAULT 0 CHECK (output_size >= 0),
     error TEXT,
     started_at TIMESTAMPTZ NOT NULL,
     completed_at TIMESTAMPTZ,

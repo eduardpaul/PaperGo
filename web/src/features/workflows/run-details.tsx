@@ -64,11 +64,15 @@ export function RunView({ id, interval = 3000 }: { id: string; interval?: number
 }
 
 function Step({ step }: { step: WorkflowRunStep }) {
+  const format = useFormat();
+  const output = step.kind === 'request' ? 'Response' : 'Output';
+  const kept = step.output !== undefined && step.output !== null;
   return <li className="rounded border p-2 text-sm">
     <p><strong>{stepKind[step.kind] ?? step.kind}</strong> · {step.name}{step.status === 'pending' ? ' · waiting' : step.status === 'failed' ? ' · failed' : ''}</p>
     {!!step.operations?.length && <p className="text-xs text-muted">Operations: {step.operations.join(', ')}</p>}
     {step.error && <p className="text-danger">{step.error}</p>}
     {step.input !== undefined && step.input !== null && <details><summary>Request</summary><pre className="overflow-auto whitespace-pre-wrap text-xs">{stringifyJSON(step.input)}</pre></details>}
-    {step.output !== undefined && step.output !== null && <details><summary>{step.kind === 'request' ? 'Response' : 'Output'}</summary><pre className="overflow-auto whitespace-pre-wrap text-xs">{stringifyJSON(step.output)}</pre></details>}
+    {kept && <details><summary>{output}{step.size ? ` · ${format.fileSize(step.size)}` : ''}</summary><pre className="overflow-auto whitespace-pre-wrap text-xs">{stringifyJSON(step.output)}</pre></details>}
+    {!kept && !!step.size && <p className="text-xs text-muted">{output} of {format.fileSize(step.size)}, not kept after the run ended</p>}
   </li>;
 }

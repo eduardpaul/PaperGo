@@ -173,6 +173,10 @@ func complete(ctx context.Context, t *dms.Service, op *operations.Operation, p w
 	if err := t.DiscardStagedFiles(ctx, blobs.StagedSelection{RunIDs: []string{op.ID}}); err != nil {
 		return err
 	}
+	// A completed run never replays: its journal keeps small outputs only.
+	if err := t.DAL.Runs().DropOutputs(ctx, op.ID); err != nil {
+		return err
+	}
 	return finished(ctx, t, p)
 }
 
@@ -188,8 +192,9 @@ func fail(ctx context.Context, t *dms.Service, op *operations.Operation, message
 }
 
 // ended cleans up after a run that did not complete: failed with message,
-// or cancelled without one. A failed run keeps its staged files for a
-// retry to use; a cancelled one discards them. Cancelling a run also
+// or cancelled without one. A failed run keeps its staged files and its
+// journal's outputs for a retry to use; a cancelled one discards them, and
+// keeps small outputs only, as a completed run does. Cancelling a run also
 // cancels the work its requests started, such as tasks, which it owns;
 // operations it only waited for go on.
 func ended(ctx context.Context, t *dms.Service, op *operations.Operation, message string) error {
@@ -202,8 +207,13 @@ func ended(ctx context.Context, t *dms.Service, op *operations.Operation, messag
 		if err := failed(ctx, t, op, p, message); err != nil {
 			return err
 		}
-	} else if err := t.DiscardStagedFiles(ctx, blobs.StagedSelection{RunIDs: []string{op.ID}}); err != nil {
-		return err
+	} else {
+		if err := t.DiscardStagedFiles(ctx, blobs.StagedSelection{RunIDs: []string{op.ID}}); err != nil {
+			return err
+		}
+		if err := t.DAL.Runs().DropOutputs(ctx, op.ID); err != nil {
+			return err
+		}
 	}
 	return finished(ctx, t, p)
 }

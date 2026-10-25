@@ -167,7 +167,7 @@ func TestEffectsRejectLostClaims(t *testing.T) {
 			if err = e.Sleep(ctx, run, nil, step); !errors.Is(err, operations.ErrClaimLost) {
 				t.Fatalf("sleep: %v", err)
 			}
-			if _, err = e.Wait(ctx, run, nil, step); !errors.Is(err, operations.ErrClaimLost) {
+			if _, _, err = e.Wait(ctx, run, nil, step); !errors.Is(err, operations.ErrClaimLost) {
 				t.Fatalf("wait: %v", err)
 			}
 			if err = e.Wake(ctx, run, 0); !errors.Is(err, operations.ErrClaimLost) {

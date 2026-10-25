@@ -27668,7 +27668,12 @@
             "description": "What a wait waits for."
           },
           "output": {
-            "description": "A request's response (status, headers, body), or a value."
+            "description": "A request's response (status, headers, body), a finished wait's operations as they ended, or a value. A run that completed or was cancelled keeps only outputs stored in at most 4 KiB, so a larger one is absent then."
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "The output's size in bytes, kept when the output is not."
           },
           "operations": {
             "type": "array",

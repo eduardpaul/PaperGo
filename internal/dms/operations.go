@@ -415,6 +415,28 @@ func (s *Service) FinishedOperations(ctx context.Context, ids []string) ([]opera
 	return s.DAL.Operations().Finished(ctx, ids)
 }
 
+// EndedOperations returns those of ids that ended as the API shows them,
+// in the order of ids. It does not check who may read them: it is for
+// callers that checked when they began to wait, such as a run.
+func (s *Service) EndedOperations(ctx context.Context, ids []string) ([]*OperationView, error) {
+	ended, err := s.DAL.Operations().Finished(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	byID := make(map[string]operations.Operation, len(ended))
+	for _, op := range ended {
+		byID[op.ID] = op
+	}
+	out := make([]*OperationView, 0, len(ids))
+	now := time.Now()
+	for _, id := range ids {
+		if op, ok := byID[id]; ok {
+			out = append(out, viewOperation(op, now))
+		}
+	}
+	return out, nil
+}
+
 // queryable reports whether queries may filter, sort or group by a field.
 func queryable(d *catalog.FieldDefinition) bool {
 	return d.Indexed && d.IndexStatus == catalog.IndexReady

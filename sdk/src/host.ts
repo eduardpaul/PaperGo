@@ -16,10 +16,11 @@ interface Host {
   /** Runs an API request in-process as the workflow version's author. */
   request(method: string, url: string, headers: Record<string, string>, body: string | ArrayBuffer | undefined): HostResponse;
   /**
-   * Returns once none of the operations is pending. The run is unloaded
-   * while it waits and replayed when the last one finishes.
+   * Returns once none of the operations is pending, with them as they
+   * ended: a JSON array of operations. The run is unloaded while it waits
+   * and replayed when the last one finishes.
    */
-  wait(operationIds: string[]): void;
+  wait(operationIds: string[]): string;
   /**
    * Returns at or after a time, given in milliseconds since the epoch. The
    * run is unloaded while it sleeps.

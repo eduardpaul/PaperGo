@@ -35,8 +35,8 @@
 
 import { isUntypedArray, isUntypedNode, isUntypedObject, type UntypedNode } from "@microsoft/kiota-abstractions";
 import { createPaperGoClient, PaperGoClientNavigationMetadata, type PaperGoClient } from "./client/paperGoClient.js";
-import type { NotificationSend, NotificationSendResult, Operation, TaskCreate } from "./client/models/index.js";
-import { HostRequestAdapter } from "./adapter.js";
+import { createOperationFromDiscriminatorValue, type NotificationSend, type NotificationSendResult, type Operation, type TaskCreate } from "./client/models/index.js";
+import { HostRequestAdapter, parseCollection } from "./adapter.js";
 import { host } from "./host.js";
 import { withPages } from "./pages.js";
 
@@ -346,25 +346,29 @@ function idle(): boolean {
   if (waiting.length === 0) return false;
   const started = waiting;
   waiting = [];
-  void finish(started);
+  finish(started);
   return true;
 }
 
-async function finish(started: Waiting[]): Promise<void> {
+// finish waits for the operations of started, which the wait step returns
+// as they ended, and settles each wait.
+function finish(started: Waiting[]): void {
   const ids = [...new Set(started.flatMap((w) => w.ids))];
   const ended = new Map<string, Operation>();
   try {
-    for (let i = 0; i < ids.length; i += waitLimit) host.wait(ids.slice(i, i + waitLimit));
-    for (const id of ids) {
-      const op = await api.v1.operations.byId(id).get();
-      if (!op) throw new Error(`operation ${id} is gone`);
-      ended.set(id, op);
+    for (let i = 0; i < ids.length; i += waitLimit) {
+      for (const op of parseCollection<Operation>(host.wait(ids.slice(i, i + waitLimit)), createOperationFromDiscriminatorValue)) ended.set(op.id!, op);
     }
   } catch (error) {
     for (const w of started) w.reject(error);
     return;
   }
   for (const w of started) {
+    const gone = w.ids.find((id) => !ended.has(id));
+    if (gone) {
+      w.reject(new Error(`operation ${gone} is gone`));
+      continue;
+    }
     const operations = w.ids.map((id) => ended.get(id)!);
     const failed = operations.find((op) => op.status !== "succeeded");
     if (failed) w.reject(new OperationError(failed, operations));

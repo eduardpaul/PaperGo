@@ -62,9 +62,12 @@ type Effects interface {
 	Record(ctx context.Context, run Run, unsaved []runs.Step) error
 	// Wait records the wait step for step.Operations, which the author must
 	// be able to read: completed when none of them is pending, else pending
-	// until the last one finishes. It reports whether the wait is over.
-	// An operation the author cannot read is ErrUnknownOperation.
-	Wait(ctx context.Context, run Run, unsaved []runs.Step, step runs.Step) (bool, error)
+	// until the last one finishes. A completed wait's output is its
+	// operations as they ended, a JSON array of their API representations;
+	// Wait returns it when the wait is already over, and releasing a
+	// pending wait records it. An operation the author cannot read is
+	// ErrUnknownOperation.
+	Wait(ctx context.Context, run Run, unsaved []runs.Step, step runs.Step) (output json.RawMessage, done bool, err error)
 	// Sleep records a sleep step, pending unless step is completed.
 	Sleep(ctx context.Context, run Run, unsaved []runs.Step, step runs.Step) error
 	// Wake completes a pending sleep step whose time came.
@@ -115,7 +118,9 @@ var ErrNondeterministic = errors.New("the workflow replayed differently")
 
 var (
 	errSuspended = errors.New("workflow suspended")
-	errSlice     = errors.New("the workflow ran longer than its time slice without waiting")
+	// errJournal fails a run whose recorded outputs outgrow maxJournal.
+	errJournal = fmt.Errorf("the run recorded more than %d MiB of responses; split the work across runs, or read smaller pages", maxJournal>>20)
+	errSlice   = errors.New("the workflow ran longer than its time slice without waiting")
 )
 
 const (
@@ -124,6 +129,10 @@ const (
 	maxOutput    = 256 << 10
 	maxWaits     = 64
 	maxCallStack = 4096
+	// maxJournal bounds the outputs a run records. Every slice loads and
+	// replays all of them, so the bound keeps a slice's memory and time in
+	// proportion.
+	maxJournal = 32 << 20
 )
 
 // Engine executes script runs. It is safe for concurrent use; each slice
@@ -174,6 +183,9 @@ func (e *Engine) Execute(ctx context.Context, run Run) (Outcome, error) {
 		return Outcome{}, err
 	}
 	h := &host{ctx: ctx, run: run, effects: e.effects, recorded: recorded}
+	for _, step := range recorded {
+		h.journal += step.OutputSize
+	}
 	rt := h.runtime()
 	h.watch = newWatchdog(e.slice, func() { rt.Interrupt(errSlice) })
 	defer h.watch.stop()
@@ -268,7 +280,7 @@ func (e *Engine) Manifest(ctx context.Context, artifact Artifact, params map[str
 func (h *host) outcome(value goja.Value, err error) (Outcome, error) {
 	logs := h.logs
 	switch {
-	case h.abort != nil && errors.Is(h.abort, ErrNondeterministic):
+	case h.abort != nil && (errors.Is(h.abort, ErrNondeterministic) || errors.Is(h.abort, errJournal)):
 		return Outcome{Status: Failed, Error: h.abort.Error(), Logs: logs}, nil
 	case h.abort != nil:
 		return Outcome{}, h.abort

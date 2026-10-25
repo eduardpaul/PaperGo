@@ -77,20 +77,32 @@ func (m *memory) respond(req Request) Response {
 		m.operations[id] = "pending"
 		response = jsonResponse(202, `{"id":"`+id+`","status":"pending"}`)
 	case req.Method == "GET" && strings.HasPrefix(req.URL, "/v1/operations/"):
-		id := strings.TrimPrefix(req.URL, "/v1/operations/")
-		status := m.operations[id]
-		body := `{"id":"` + id + `","status":"` + status + `","result":{"updated":2,"ids":["a","b"]}}`
-		if result, ok := m.results[id]; ok {
-			body = `{"id":"` + id + `","status":"` + status + `","result":` + result + `}`
-		}
-		if status == "failed" {
-			body = `{"id":"` + id + `","status":"failed","error":"the list is locked"}`
-		}
-		response = jsonResponse(200, body)
+		response = jsonResponse(200, m.operation(strings.TrimPrefix(req.URL, "/v1/operations/")))
 	default:
 		response = m.answer(req)
 	}
 	return response
+}
+
+// operation is an operation as the API shows it; the caller holds m.mu.
+func (m *memory) operation(id string) string {
+	status := m.operations[id]
+	if status == "failed" {
+		return `{"id":"` + id + `","status":"failed","error":"the list is locked"}`
+	}
+	if result, ok := m.results[id]; ok {
+		return `{"id":"` + id + `","status":"` + status + `","result":` + result + `}`
+	}
+	return `{"id":"` + id + `","status":"` + status + `","result":{"updated":2,"ids":["a","b"]}}`
+}
+
+// ended is the output of a wait for step's operations, which have ended.
+func (m *memory) ended(step runs.Step) json.RawMessage {
+	ops := make([]string, len(step.Operations))
+	for i, id := range step.Operations {
+		ops[i] = m.operation(id)
+	}
+	return json.RawMessage("[" + strings.Join(ops, ",") + "]")
 }
 
 func (m *memory) over(step runs.Step) bool {
@@ -102,21 +114,21 @@ func (m *memory) over(step runs.Step) bool {
 	return true
 }
 
-func (m *memory) Wait(_ context.Context, _ Run, unsaved []runs.Step, step runs.Step) (bool, error) {
+func (m *memory) Wait(_ context.Context, _ Run, unsaved []runs.Step, step runs.Step) (json.RawMessage, bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, id := range step.Operations {
 		if _, ok := m.operations[id]; !ok {
-			return false, ErrUnknownOperation
+			return nil, false, ErrUnknownOperation
 		}
 	}
 	m.waits++
 	done := m.over(step)
 	if done {
-		step.Status = runs.StepCompleted
+		step.Status, step.Output = runs.StepCompleted, m.ended(step)
 	}
 	m.record(append(unsaved, step)...)
-	return done, nil
+	return step.Output, done, nil
 }
 
 // finish ends an operation and releases the waits it completes, as the
@@ -127,8 +139,8 @@ func (m *memory) finish(id, status string) {
 	m.operations[id] = status
 	for _, steps := range m.steps {
 		for i := range steps {
-			if steps[i].Kind == runs.StepWait && steps[i].Status == runs.StepPending && m.over(steps[i]) {
-				steps[i].Status = runs.StepCompleted
+			if steps[i].Kind == runs.StepWait && steps[i].Status == runs.StepPending && len(steps[i].Operations) > 0 && m.over(steps[i]) {
+				steps[i].Status, steps[i].Output = runs.StepCompleted, m.ended(steps[i])
 			}
 		}
 	}
@@ -312,7 +324,8 @@ export default workflow({
 	if out.Status != Completed || string(out.Output) != `{"status":"succeeded","result":{"updated":2,"ids":["a","b"]}}` {
 		t.Fatalf("last slice: %+v", out)
 	}
-	if len(out.Logs) != 1 || out.Logs[0].Message != "finished succeeded" || len(m.requests) != 2 {
+	// The wait returns the operation as it ended, without reading it again.
+	if len(out.Logs) != 1 || out.Logs[0].Message != "finished succeeded" || len(m.requests) != 1 {
 		t.Fatalf("last slice logs %+v after %d requests", out.Logs, len(m.requests))
 	}
 }
@@ -428,6 +441,22 @@ export default workflow({
 	}
 	if len(posted) != 3 || posted[2] != `{"dedup_key":"reviewed","recipients":["actor"],"title":"Reviewed"}` {
 		t.Fatalf("notification: %v", posted)
+	}
+}
+
+func TestJournalsAreBounded(t *testing.T) {
+	page := jsonResponse(200, `{"value":[],"padding":"`+strings.Repeat("x", 1<<20)+`"}`)
+	m := newMemory(func(Request) Response { return page })
+	out := execute(t, New(m, 0), Run{ID: "run-journal", Artifact: bundle(t, `
+import { workflow } from "@papergo/workflow";
+export default workflow({
+  async run(ctx) {
+    for (;;) await ctx.api.v1.resources.byId("`+listID+`").children.get();
+  },
+});
+`)})
+	if out.Status != Failed || !strings.Contains(out.Error, "more than 32 MiB") || len(m.requests) != maxJournal/(1<<20) {
+		t.Fatalf("outcome: %+v after %d requests", out, len(m.requests))
 	}
 }
 
@@ -894,7 +923,7 @@ export default workflow({
 			t.Fatalf("snapshot lost on replay: %+v", out)
 		}
 	}
-	if len(m.requests) != 1 || m.requests[0].URL != "/v1/operations/"+operationID {
+	if len(m.requests) != 0 {
 		t.Fatal("snapshot access fetched the resource", m.requests)
 	}
 }
@@ -940,7 +969,7 @@ export default workflow<{note: string}>({
 					t.Fatalf("manual form/selection lost on replay: %+v", out)
 				}
 			}
-			if len(m.requests) != 1 || m.requests[0].URL != "/v1/operations/"+operationID {
+			if len(m.requests) != 0 {
 				t.Fatal("manual context fetched resources", m.requests)
 			}
 		})

@@ -450,6 +450,8 @@ export interface WorkflowRunStep {
   status: 'pending' | 'completed' | 'failed';
   input?: unknown;
   output?: unknown;
+  /** The output's size in bytes; a finished run drops large outputs and keeps this. */
+  size?: number;
   operations?: string[];
   error?: string;
   started_at?: string;

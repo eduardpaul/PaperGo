@@ -132,11 +132,12 @@ func serve(ctx context.Context, handler http.Handler, req script.Request) (scrip
 // Wait records a wait for operations the author can read. It is over when
 // none of them is pending; otherwise ReleaseWaits completes it once the last
 // one ends, and ReconcileWaits if that release was missed.
-func (e *Effects) Wait(ctx context.Context, run script.Run, unsaved []runs.Step, step runs.Step) (bool, error) {
+func (e *Effects) Wait(ctx context.Context, run script.Run, unsaved []runs.Step, step runs.Step) (json.RawMessage, bool, error) {
 	done := true
 	err := e.write(ctx, run, func(t *dms.Service) error {
-		done = true
-		for _, id := range step.Operations {
+		done, step.Status, step.Output = true, runs.StepPending, nil
+		ended := make([]*dms.OperationView, len(step.Operations))
+		for i, id := range step.Operations {
 			op, err := t.Operation(ctx, run.Author, id)
 			if errors.Is(err, dms.ErrNotFound) || errors.Is(err, dms.ErrForbidden) {
 				return fmt.Errorf("%w: %s", script.ErrUnknownOperation, id)
@@ -147,13 +148,18 @@ func (e *Effects) Wait(ctx context.Context, run script.Run, unsaved []runs.Step,
 			if op.Status == operations.StatusPending {
 				done = false
 			}
+			ended[i] = op
 		}
 		if done {
-			step.Status = runs.StepCompleted
+			output, err := json.Marshal(ended)
+			if err != nil {
+				return err
+			}
+			step.Status, step.Output = runs.StepCompleted, output
 		}
 		return t.DAL.Runs().RecordSteps(ctx, append(unsaved, step))
 	})
-	return done, err
+	return step.Output, done, err
 }
 
 // Sleep records a sleep step; the run's worker makes it wait until then.

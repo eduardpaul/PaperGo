@@ -34,6 +34,11 @@ function mediaType(contentType: string | undefined): string {
   return (contentType ?? "").split(";")[0].trim().toLowerCase();
 }
 
+/** Reads JSON text the engine returns, such as a wait's operations, as models. */
+export function parseCollection<T extends Parsable>(text: string, factory: ParsableFactory<T>): T[] {
+  return new HostParseNode(JSON.parse(text), undefined).getCollectionOfObjectValues(factory) ?? [];
+}
+
 export class HostRequestAdapter implements RequestAdapter {
   baseUrl = baseUrl;
   private readonly parseNodes = new ParseNodeFactoryRegistry();

@@ -2,7 +2,9 @@ package scriptrun
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -128,8 +130,10 @@ func (r *runtime) start(t *testing.T, w workflow.Workflow, inputs map[string]any
 // await waits until run id is in status and returns it as the API shows it.
 func (r *runtime) await(t *testing.T, id string, status runstore.Status) workflow.Run {
 	t.Helper()
-	var run workflow.Run
 	for deadline := time.Now().Add(20 * time.Second); ; time.Sleep(20 * time.Millisecond) {
+		// A fresh run each time: decoding into the last one would keep the
+		// fields this response leaves out, such as outputs a run dropped.
+		var run workflow.Run
 		r.call(t, "GET", "/v1/workflow-runs/"+id, "", 200, &run)
 		if run.Status == status {
 			return run
@@ -223,6 +227,86 @@ export default workflow({
 	described := r.await(t, page.Value[0].ID, runstore.StatusCompleted)
 	if string(described.Result) != `{"event":"item.created","name":"Invoice 9"}` && string(described.Result) != `{"name":"Invoice 9","event":"item.created"}` {
 		t.Fatalf("automatic run output: %s", described.Result)
+	}
+}
+
+// Tasks asked together are one wait, which records their operations as they
+// ended; a completed run keeps its small outputs and the size of the rest.
+func TestTasksAskedTogetherEndOneWait(t *testing.T) {
+	r := run(t)
+	itemID := r.item(t, "Contract")
+	// Random names keep the page from compressing below what a run keeps.
+	for i := range 120 {
+		name := make([]byte, 64)
+		_, _ = rand.Read(name)
+		r.item(t, fmt.Sprintf("Invoice %d %x", i, name))
+	}
+	w := r.workflow(t, "Two reviews", `import { workflow } from "@papergo/workflow";
+
+export default workflow({
+  triggers: [{ type: "manual", collection_id: "`+r.list+`" }],
+  async run(ctx) {
+    const items = await ctx.api.v1.resources.byId("`+r.list+`").children.all({ queryParameters: { top: 500 } });
+    const [legal, finance] = await Promise.all([
+      ctx.ask({ kind: "approval", itemId: ctx.itemId, title: "Legal" }),
+      ctx.ask<{ amount: number }>({ itemId: ctx.itemId, title: "Finance", outcomes: [{ key: "done", label: "Done" }],
+        inputSchema: { type: "object", properties: { amount: { type: "number" } } }, values: { amount: 1 } }),
+    ]);
+    return { items: items.length, legal: legal.outcome, finance: finance.input?.amount };
+  },
+});
+`)
+	id := r.start(t, w, nil, itemID)
+	waiting := r.await(t, id, runstore.StatusWaiting)
+	if last := waiting.Steps[len(waiting.Steps)-1]; last.Kind != string(runstore.StepWait) || last.Status != string(runstore.StepPending) {
+		t.Fatalf("steps of a run waiting for two tasks: %+v", waiting.Steps)
+	}
+	var tasks struct {
+		Value []struct {
+			ID    string `json:"id"`
+			Title string `json:"title"`
+		} `json:"value"`
+	}
+	r.call(t, "GET", "/v1/items/"+itemID+"/tasks", "", 200, &tasks)
+	if len(tasks.Value) != 2 {
+		t.Fatalf("tasks: %+v", tasks)
+	}
+	for _, task := range tasks.Value {
+		answer := `{"outcome":"approved","comment":"fine"}`
+		if task.Title == "Finance" {
+			answer = `{"outcome":"done","input":{"amount":7}}`
+		}
+		r.call(t, "POST", "/v1/tasks/"+task.ID+"/responses", answer, 200, nil)
+	}
+	done := r.await(t, id, runstore.StatusCompleted)
+	var result struct {
+		Items   int    `json:"items"`
+		Legal   string `json:"legal"`
+		Finance int    `json:"finance"`
+	}
+	if err := json.Unmarshal(done.Result, &result); err != nil || result.Items != 121 || result.Legal != "approved" || result.Finance != 7 {
+		t.Fatalf("output: %s", done.Result)
+	}
+	var waits, pages int
+	for _, step := range done.Steps {
+		switch {
+		case strings.HasPrefix(step.Name, "GET /v1/operations/"):
+			t.Fatalf("the run read an operation it waited for: %+v", step)
+		case step.Kind == string(runstore.StepWait):
+			waits++
+			ended, ok := step.Output.([]any)
+			if !ok || len(ended) != 2 || step.Size == 0 {
+				t.Fatalf("the wait did not record both tasks' operations: %+v", step)
+			}
+		case strings.HasSuffix(step.Name, "/children"):
+			pages++
+			if step.Output != nil || step.Size < runstore.KeptOutput {
+				t.Fatalf("the completed run kept its page, or lost its size: %d bytes, output kept %v", step.Size, step.Output != nil)
+			}
+		}
+	}
+	if waits != 1 || pages != 1 {
+		t.Fatalf("%d waits and %d pages in %+v", waits, pages, done.Steps)
 	}
 }
 

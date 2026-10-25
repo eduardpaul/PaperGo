@@ -53,6 +53,7 @@ type Step struct {
 	Status      string     `json:"status"`
 	Input       any        `json:"input,omitempty"`
 	Output      any        `json:"output,omitempty"`
+	Size        int        `json:"size,omitempty"`
 	Operations  []string   `json:"operations,omitempty"`
 	Error       string     `json:"error,omitempty"`
 	StartedAt   *time.Time `json:"started_at,omitempty"`
@@ -284,7 +285,7 @@ func (s *Service) Run(ctx context.Context, subject, id string) (Run, error) {
 		run.Steps = make([]Step, len(steps))
 		for i, step := range steps {
 			started := step.StartedAt
-			run.Steps[i] = Step{Seq: step.Seq, Kind: string(step.Kind), Name: step.Name, Status: string(step.Status), Input: decode(step.Input), Output: stepOutput(step),
+			run.Steps[i] = Step{Seq: step.Seq, Kind: string(step.Kind), Name: step.Name, Status: string(step.Status), Input: decode(step.Input), Output: stepOutput(step), Size: step.OutputSize,
 				Operations: step.Operations, Error: step.Error, StartedAt: &started, CompletedAt: step.CompletedAt}
 		}
 		return run, nil
