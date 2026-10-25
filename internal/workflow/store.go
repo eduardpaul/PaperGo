@@ -906,6 +906,9 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event) (started []s
 		// Manual starts and calls ask for a run and keep its ID, whatever
 		// their workflow's concurrency; their checks ran when they were made.
 		explicit := e.Type == TriggerManual || e.Type == TriggerCall
+		// Test runs, and the runs they call, raise no workflow events and
+		// ignore concurrency.
+		test := e.Type == TestStart || e.Type == TriggerCall && e.Data[callTest] == true
 		var candidates []*workflows.Workflow
 		switch e.Type {
 		case TriggerManual, TriggerCall, TriggerSchedule, TestStart:
@@ -1007,7 +1010,7 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event) (started []s
 			// A coalescing workflow runs one item at a time: a run that starts
 			// while another is active waits for it.
 			waiting := false
-			if c := m.def.Concurrency; c != "" && c != ConcurrencyParallel && len(members) > 0 && e.Type != TestStart {
+			if c := m.def.Concurrency; c != "" && c != ConcurrencyParallel && len(members) > 0 && !test {
 				busy, err := activeRuns(ctx, t, w.ID, members)
 				if err != nil {
 					return nil, nil, err
@@ -1069,10 +1072,10 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event) (started []s
 					payload.StartError = err.Error()
 				}
 			}
-			if m.def.Concurrency == ConcurrencyCoalesce && len(members) > 0 && e.Type != TestStart {
+			if m.def.Concurrency == ConcurrencyCoalesce && len(members) > 0 && !test {
 				payload.Serial = w.ID + ":" + members[0]
 			}
-			payload.Test = e.Type == TestStart
+			payload.Test = test
 			if explicit || e.Type == TestStart {
 				if inputs, ok := e.Data["inputs"].(map[string]any); ok {
 					payload.Input = inputs

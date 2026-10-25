@@ -80,6 +80,8 @@ type StepQueries interface {
 	CopyRunSteps(ctx context.Context, target, source string, before int) error
 	// DeleteRunSteps deletes a run's steps with the operations they name.
 	DeleteRunSteps(ctx context.Context, runID string) error
+	// SetRunStepOutput replaces a recorded step's output.
+	SetRunStepOutput(ctx context.Context, runID string, seq int, output []byte, size int) error
 }
 
 // Wait is a pending wait step and the operations it waits for.
@@ -178,6 +180,12 @@ const KeptOutput = 4 << 10
 // sizes stay. A failed run keeps them for its retry.
 func (r *Repo) DropOutputs(ctx context.Context, runID string) error {
 	return r.write(ctx, func(q Queries) error { return q.DropRunOutputs(ctx, runID, KeptOutput) })
+}
+
+// ReplaceOutput replaces what a run's step returns when it replays, such as
+// a forked call whose failed runs a retry runs again.
+func (r *Repo) ReplaceOutput(ctx context.Context, runID string, seq int, output json.RawMessage) error {
+	return r.write(ctx, func(q Queries) error { return q.SetRunStepOutput(ctx, runID, seq, pack(output), len(output)) })
 }
 
 // ForkSteps gives a run the steps another recorded before a position, so

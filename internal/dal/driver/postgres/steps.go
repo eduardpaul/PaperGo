@@ -113,6 +113,13 @@ SELECT ?, seq, operation_id FROM workflow_step_operations WHERE run_id = ? AND s
 	return dberr.Translate(err)
 }
 
+func (q Queries) SetRunStepOutput(ctx context.Context, runID string, seq int, output []byte, size int) error {
+	set := &models.WorkflowStepSetter{Output: stepOutput(output), OutputSize: omit.From(int32(size))}
+	w := models.UpdateWhere.WorkflowSteps
+	_, err := models.WorkflowSteps.Update(set.UpdateMod(), w.RunID.EQ(runID), w.Seq.EQ(int64(seq))).Exec(ctx, q.exec)
+	return dberr.Translate(err)
+}
+
 func (q Queries) DeleteRunSteps(ctx context.Context, runID string) error {
 	_, err := models.WorkflowSteps.Delete(models.DeleteWhere.WorkflowSteps.RunID.EQ(runID)).Exec(ctx, q.exec)
 	return dberr.Translate(err)

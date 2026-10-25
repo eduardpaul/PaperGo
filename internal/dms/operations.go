@@ -415,12 +415,13 @@ func (s *Service) FinishedOperations(ctx context.Context, ids []string) ([]opera
 	return s.DAL.Operations().Finished(ctx, ids)
 }
 
-// OwnedOperation returns operation id as the API shows it when owner owns
-// it, such as a run that a workflow run called, whoever created it.
-func (s *Service) OwnedOperation(ctx context.Context, owner, id string) (*OperationView, error) {
+// OwnedOperation returns operation id as the API shows it when one of
+// owners owns it, such as a run that a workflow run called, whoever
+// created it.
+func (s *Service) OwnedOperation(ctx context.Context, owners []string, id string) (*OperationView, error) {
 	return read(ctx, s, func(t *Service) (*OperationView, error) {
 		op, e := t.DAL.Operations().Find(ctx, id)
-		if dberr.IsNotFound(e) || e == nil && op.ParentID != owner {
+		if dberr.IsNotFound(e) || e == nil && (op.ParentID == "" || !slices.Contains(owners, op.ParentID)) {
 			return nil, ErrNotFound
 		}
 		if e != nil {

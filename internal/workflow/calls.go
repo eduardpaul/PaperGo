@@ -2,7 +2,9 @@ package workflow
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"slices"
 
 	"papergo/internal/dal/workflows"
 	"papergo/internal/dms"
@@ -33,7 +35,9 @@ type Calls struct {
 // calling run owns, so cancelling the caller cancels it, and the caller can
 // wait for it like any operation it started; it acts as its own version's
 // author. A called run is one level deeper than its caller, and calls stop
-// at MaxDepth. Concurrency applies as to manual starts.
+// at MaxDepth. Concurrency applies as to manual starts, except that a call
+// that would wait for, skip or replace one of its callers is refused. A
+// test run's calls are test runs.
 func (s *Service) StartCalls(ctx context.Context, subject, parent, workspaceID string, in Calls) (runs []string, err error) {
 	err = s.DMS.Write(ctx, func(t *dms.Service) error {
 		if parent == "" {
@@ -54,6 +58,10 @@ func (s *Service) StartCalls(ctx context.Context, subject, parent, workspaceID s
 			return dms.Invalid(fmt.Sprintf("a request makes 1 to %d calls", MaxCalls))
 		}
 		if err = t.RequireScope(ctx, subject, "item.write"); err != nil {
+			return err
+		}
+		test, callers, err := lineage(ctx, t, parent)
+		if err != nil {
 			return err
 		}
 		found, err := listWorkflows(ctx, t, workflows.Filter{WorkspaceID: workspaceID, Key: in.Workflow, LiveOnly: true})
@@ -96,6 +104,9 @@ func (s *Service) StartCalls(ctx context.Context, subject, parent, workspaceID s
 			}
 			e := dms.Event{ID: dms.NewEventID(), Type: TriggerCall, WorkspaceID: workspaceID, Actor: caller.Actor, CauseRunID: parent, Depth: depth,
 				Data: map[string]any{"workflow_id": w.ID, "workflow_version": v.Number, "inputs": inputs, "parent_run_id": parent}}
+			if test {
+				e.Data[callTest] = true
+			}
 			if c.ItemID == "" {
 				if trigger.CollectionID != "" {
 					return issue("selection_required", at+": workflow "+in.Workflow+" is called on an item of its library or list")
@@ -120,6 +131,19 @@ func (s *Service) StartCalls(ctx context.Context, subject, parent, workspaceID s
 				return issue("wrong_collection", at+": workflow "+in.Workflow+" is called on items of its library or list")
 			}
 			e.CollectionID, e.ResourceID = *r.ContainerID, c.ItemID
+			// A run that waits for its caller to end, or skips or cancels it,
+			// can never return to it.
+			if def.Concurrency != "" && def.Concurrency != ConcurrencyParallel && !test {
+				busy, err := activeRuns(ctx, t, w.ID, []string{c.ItemID})
+				if err != nil {
+					return err
+				}
+				for id := range busy {
+					if slices.Contains(callers, id) {
+						return issue("caller_busy", at+": workflow "+in.Workflow+" runs one at a time on item "+c.ItemID+" ("+def.Concurrency+"), and its caller is the run active on it")
+					}
+				}
+			}
 			if def.Condition != nil {
 				holds, err := matches(ctx, t, v.CreatedBy, e.CollectionID, c.ItemID, def.Condition)
 				if err != nil {
@@ -145,4 +169,32 @@ func (s *Service) StartCalls(ctx context.Context, subject, parent, workspaceID s
 		return nil
 	})
 	return
+}
+
+// callTest marks the event of a call a test run makes, which starts a test
+// run: it raises no workflow events and ignores concurrency.
+const callTest = "test"
+
+// lineage reports whether run is a test run, and returns it with the runs
+// that called it, nearest first.
+func lineage(ctx context.Context, t *dms.Service, run string) (test bool, callers []string, err error) {
+	for id := run; id != "" && !slices.Contains(callers, id); {
+		op, err := t.DAL.Operations().Find(ctx, id)
+		if err != nil {
+			return false, nil, err
+		}
+		if op.Kind != dms.OperationKindRun {
+			break
+		}
+		if id == run {
+			var p RunPayload
+			if err := json.Unmarshal(op.Payload, &p); err != nil {
+				return false, nil, err
+			}
+			test = p.Test
+		}
+		callers = append(callers, id)
+		id = op.ParentID
+	}
+	return test, callers, nil
 }

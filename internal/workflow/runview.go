@@ -390,45 +390,174 @@ func (s *Service) CancelRun(ctx context.Context, subject, id string) (Run, error
 // RetryRun runs a failed run again as a new run of the same version, input
 // and parameters. The steps its script recorded replay, except the last
 // request, wait or sleep and what followed it, which run again: what the
-// run wrote before is not written twice.
+// run wrote before is not written twice. Runs it called that failed are
+// retried too, and its replayed calls return their retries in their place;
+// those that succeeded replay what they returned.
 func (s *Service) RetryRun(ctx context.Context, subject, id string) (Run, error) {
-	retryID := "retry:" + uuid.NewString()
+	var retryID string
 	err := s.DMS.Write(ctx, func(t *dms.Service) error {
-		row, err := managedRun(ctx, t, subject, id)
-		if err != nil {
-			return err
-		}
-		if row.Status != runstore.StatusFailed {
-			return dms.Invalid("only failed runs can be retried")
-		}
-		op, err := t.DAL.Operations().Find(ctx, id)
-		if err != nil {
-			return err
-		}
-		var payload RunPayload
-		if err = json.Unmarshal(op.Payload, &payload); err != nil {
-			return err
-		}
-		payload.StartError = ""
-		run := runstore.CreateInput{ID: retryID, WorkflowID: row.WorkflowID, WorkflowVersion: row.WorkflowVersion, WorkspaceID: row.WorkspaceID, EventID: retryID,
-			EventType: row.EventType, Depth: row.Depth, Actor: subject, RetryOf: row.ID, ItemID: row.ItemID}
-		if err = newRun(ctx, t, op.CreatedBy, run, payload, false); err != nil {
-			return err
-		}
-		steps, err := t.DAL.Runs().Steps(ctx, id)
-		if err != nil {
-			return err
-		}
-		last := 0
-		for _, step := range steps {
-			if step.Kind != runstore.StepValue {
-				last = step.Seq
-			}
-		}
-		return t.DAL.Runs().ForkSteps(ctx, retryID, id, last)
+		var err error
+		retryID, err = retry(ctx, t, subject, id, "")
+		return err
 	})
 	if err != nil {
 		return Run{}, err
 	}
 	return s.Run(ctx, subject, retryID)
+}
+
+// retry starts failed run id again and returns the new run's ID. A called
+// run's retry belongs to parent, the retry of its caller.
+func retry(ctx context.Context, t *dms.Service, subject, id, parent string) (string, error) {
+	retryID := "retry:" + uuid.NewString()
+	row, err := managedRun(ctx, t, subject, id)
+	if err != nil {
+		return "", err
+	}
+	if row.Status != runstore.StatusFailed {
+		return "", dms.Invalid("only failed runs can be retried")
+	}
+	op, err := t.DAL.Operations().Find(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	var payload RunPayload
+	if err = json.Unmarshal(op.Payload, &payload); err != nil {
+		return "", err
+	}
+	payload.StartError = ""
+	if parent != "" && payload.Trigger != nil {
+		called := *payload.Trigger
+		called.ParentRunID = parent
+		payload.Trigger = &called
+		ctx = dms.WithParentOperation(ctx, parent)
+	}
+	run := runstore.CreateInput{ID: retryID, WorkflowID: row.WorkflowID, WorkflowVersion: row.WorkflowVersion, WorkspaceID: row.WorkspaceID, EventID: retryID,
+		EventType: row.EventType, Depth: row.Depth, Actor: subject, RetryOf: row.ID, ItemID: row.ItemID}
+	if err = newRun(ctx, t, op.CreatedBy, run, payload, false); err != nil {
+		return "", err
+	}
+	steps, err := t.DAL.Runs().Steps(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	last := 0
+	for _, step := range steps {
+		if step.Kind != runstore.StepValue {
+			last = step.Seq
+		}
+	}
+	// The runs that replayed calls started and that failed run again. A wait
+	// for one of them runs again too, with what follows it, since it now
+	// waits for the retry.
+	calls := map[int][]string{}
+	failed := map[string]bool{}
+	for _, step := range steps {
+		if step.Seq >= last || step.Kind != runstore.StepRequest || !strings.HasPrefix(step.Name, "POST ") || !strings.HasSuffix(step.Name, "/workflow-calls") {
+			continue
+		}
+		ids := calledRuns(step.Output)
+		calls[step.Seq] = ids
+		for _, called := range ids {
+			r, err := t.DAL.Runs().Find(ctx, called)
+			if err != nil && !dberr.IsNotFound(err) {
+				return "", err
+			}
+			if err == nil && r.Status == runstore.StatusFailed {
+				failed[called] = true
+			}
+		}
+	}
+	for _, step := range steps {
+		if step.Seq >= last {
+			break
+		}
+		if step.Kind == runstore.StepWait && waitsFor(step, failed) {
+			last = step.Seq
+			break
+		}
+	}
+	if err = t.DAL.Runs().ForkSteps(ctx, retryID, id, last); err != nil {
+		return "", err
+	}
+	for seq, ids := range calls {
+		if seq >= last {
+			continue
+		}
+		replaced := false
+		for i, called := range ids {
+			if failed[called] {
+				if ids[i], err = retry(ctx, t, subject, called, retryID); err != nil {
+					return "", err
+				}
+				replaced = true
+			}
+		}
+		if !replaced {
+			continue
+		}
+		for _, step := range steps {
+			if step.Seq == seq {
+				output, err := withCalledRuns(step.Output, ids)
+				if err != nil {
+					return "", err
+				}
+				if err = t.DAL.Runs().ReplaceOutput(ctx, retryID, seq, output); err != nil {
+					return "", err
+				}
+			}
+		}
+	}
+	return retryID, nil
+}
+
+// recorded is a request step's output, as the script engine records it.
+type recorded struct {
+	Status  int               `json:"status"`
+	Headers map[string]string `json:"headers"`
+	Body    string            `json:"body"`
+	Base64  bool              `json:"base64"`
+}
+
+// calledRuns returns the runs a recorded call request started.
+func calledRuns(output json.RawMessage) []string {
+	var response recorded
+	var started struct {
+		RunIDs []string `json:"run_ids"`
+	}
+	if json.Unmarshal(output, &response) != nil || response.Status != 202 || json.Unmarshal([]byte(response.Body), &started) != nil {
+		return nil
+	}
+	return started.RunIDs
+}
+
+// withCalledRuns returns a recorded call request's output with ids as the
+// runs it started.
+func withCalledRuns(output json.RawMessage, ids []string) (json.RawMessage, error) {
+	var response recorded
+	if err := json.Unmarshal(output, &response); err != nil {
+		return nil, err
+	}
+	body, err := json.Marshal(map[string][]string{"run_ids": ids})
+	if err != nil {
+		return nil, err
+	}
+	response.Body = string(body)
+	return json.Marshal(response)
+}
+
+// waitsFor reports whether wait step waits for one of ids.
+func waitsFor(step runstore.Step, ids map[string]bool) bool {
+	var input struct {
+		Operations []string `json:"operations"`
+	}
+	if json.Unmarshal(step.Input, &input) != nil {
+		return false
+	}
+	for _, id := range input.Operations {
+		if ids[id] {
+			return true
+		}
+	}
+	return false
 }
