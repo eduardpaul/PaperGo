@@ -56,10 +56,10 @@ Anything else a process wants to tell people, such as "your document was publish
 - The caller needs read access to the workspace and to `item_id`, an item of the workspace, and the `item.write` scope: sending writes to other people's inboxes, so a read-only access token cannot.
 - `dedup_key` has up to 175 characters.
 - The answer counts what happened: `{"sent": 2, "skipped": 1, "deduplicated": 0}`. `skipped` counts people who cannot read the item or workspace.
-- A workflow's request sends the message from its workflow (`source: "workflow"`). The request is an exactly-once step, so a replayed run does not send it again:
+- A workflow sends a message from its workflow (`source: "workflow"`) with `ctx.notify`, which sends it in the run's workspace (or `workspaceId`) and returns the counts. The request is an exactly-once step, so a replayed run does not send it again:
 
 ```ts
-await ctx.api.v1.workspaces.byId(ctx.run.workspace_id).notifications.post({
+await ctx.notify({
   recipients: ["creator"],
   title: `${item!.name} was not approved`,
   body: answer.comment,

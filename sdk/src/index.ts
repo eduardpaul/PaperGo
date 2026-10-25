@@ -14,6 +14,13 @@
 //
 // Long work, such as OCR or an approval, is an API call that returns a
 // pending operation. ctx.wait(operation) unloads the run until it finishes.
+// Waits a script starts together, such as those of tasks it asks in a
+// Promise.all, are one wait: the run unloads once, until all have finished.
+//
+//   const [legal, finance] = await Promise.all([
+//     ctx.ask({ title: "Legal review", assignees: ["group:legal"] }),
+//     ctx.ask({ title: "Budget check", assignees: ["group:finance"] }),
+//   ]);
 //
 // A list that comes in pages, such as a folder's children, also has all(),
 // which reads every page and returns their values:
@@ -28,7 +35,7 @@
 
 import { isUntypedArray, isUntypedNode, isUntypedObject, type UntypedNode } from "@microsoft/kiota-abstractions";
 import { createPaperGoClient, PaperGoClientNavigationMetadata, type PaperGoClient } from "./client/paperGoClient.js";
-import type { Operation } from "./client/models/index.js";
+import type { NotificationSend, NotificationSendResult, Operation, TaskCreate } from "./client/models/index.js";
 import { HostRequestAdapter } from "./adapter.js";
 import { host } from "./host.js";
 import { withPages } from "./pages.js";
@@ -141,6 +148,49 @@ export interface Run<P = Record<string, unknown>, I = unknown> {
   params: P;
 }
 
+/** A task ctx.ask creates: the API's task fields, with its form and values as plain JSON. */
+export type TaskRequest<V = Record<string, unknown>> = Omit<TaskCreate, "title" | "inputSchema" | "values"> & {
+  title: string;
+  /** The answer's form, a JSON Schema form; see docs/workflows.md#forms. */
+  inputSchema?: Record<string, unknown>;
+  /** Values that prefill the form. */
+  values?: Partial<V>;
+  /** The workspace of the task; the run's by default. */
+  workspaceId?: string;
+};
+
+/** One person's answer to a task. */
+export interface TaskResponse {
+  readonly subject: string;
+  /** The assignee entry answered for: the subject or group:<id>. */
+  readonly assignee: string;
+  readonly outcome: string;
+  readonly comment: string;
+  readonly input?: Record<string, unknown>;
+}
+
+/** How a task ended. V is the shape of its form's values. */
+export interface TaskResult<V = Record<string, unknown>> {
+  readonly task_id: string;
+  readonly status: "completed" | "expired";
+  /** The key of the outcome the task completed with. */
+  readonly outcome: string;
+  readonly comment: string;
+  readonly completed_by?: string;
+  /** The form values of the completing answer. */
+  readonly input?: V;
+  /** Every answer, oldest first. */
+  readonly responses: readonly TaskResponse[];
+}
+
+/** A message ctx.notify sends: the API's fields, in the run's workspace by default. */
+export type NotificationRequest = Omit<NotificationSend, "recipients" | "title"> & {
+  /** People, group:<id>, role:owners, role:members, creator, actor or field:<key>. */
+  recipients: string[];
+  title: string;
+  workspaceId?: string;
+};
+
 export interface Context<P = Record<string, unknown>, I = unknown> {
   readonly runId: string;
   readonly run: Run<P, I>;
@@ -164,12 +214,25 @@ export interface Context<P = Record<string, unknown>, I = unknown> {
   /**
    * Waits until operations have finished and returns them as they ended:
    * operations the API returned, or their IDs, such as a task's
-   * operation_id. The run is unloaded while it waits. Waiting for several
-   * at once lets them run in parallel. A failed or cancelled operation
-   * throws an OperationError.
+   * operation_id. The run is unloaded while it waits. Waits started
+   * together, such as in a Promise.all, are one: the run unloads once,
+   * until all have finished. A failed or cancelled operation throws an
+   * OperationError.
    */
   wait(operation: Operation | string): Promise<Operation>;
   wait(operations: (Operation | string)[]): Promise<Operation[]>;
+  /**
+   * Creates a task and returns its result once people have answered it. The
+   * task is created at once; the run waits only when it awaits the result,
+   * so tasks asked together wait together:
+   *
+   *     const [a, b] = await Promise.all([ctx.ask(first), ctx.ask(second)]);
+   *
+   * A cancelled task throws an OperationError.
+   */
+  ask<V = Record<string, unknown>>(task: TaskRequest<V>): Promise<TaskResult<V>>;
+  /** Sends a message to people's inboxes; it needs no answer. Sending again with the same dedupKey reaches only people who do not have it. */
+  notify(message: NotificationRequest): Promise<NotificationSendResult>;
   /** Unloads the run for ms milliseconds, or until a time. */
   sleep(duration: number | { until: Date | string }): Promise<void>;
   /** Writes to the run's log. A replay does not repeat earlier entries. */
@@ -252,22 +315,78 @@ const api = withPages(createPaperGoClient(new HostRequestAdapter()), PaperGoClie
   error: (...values: unknown[]) => host.log("error", format(values)),
 };
 
-async function wait(operations: (Operation | string)[]): Promise<Operation[]> {
-  const ids = operations.map((op) => {
-    const id = typeof op === "string" ? op : op?.id;
-    if (!id) throw new TypeError("ctx.wait needs operations returned by the API, or their IDs");
-    return id;
+// A wait the script started that the engine has not yet waited for.
+interface Waiting {
+  ids: string[];
+  resolve(operations: Operation[]): void;
+  reject(error: unknown): void;
+}
+
+let waiting: Waiting[] = [];
+
+// The most operations one wait step takes (maxWaits in internal/script).
+const waitLimit = 64;
+
+function wait(operations: (Operation | string)[]): Promise<Operation[]> {
+  return new Promise((resolve, reject) => {
+    const ids = operations.map((op) => {
+      const id = typeof op === "string" ? op : op?.id;
+      if (!id) throw new TypeError("ctx.wait needs operations returned by the API, or their IDs");
+      return id;
+    });
+    waiting.push({ ids, resolve, reject });
   });
-  host.wait(ids);
-  const finished: Operation[] = [];
-  for (const id of ids) {
-    const op = await api.v1.operations.byId(id).get();
-    if (!op) throw new Error(`operation ${id} is gone`);
-    finished.push(op);
+}
+
+// The engine calls __papergoIdle when the script has nothing left to run
+// but its run is not over. Every wait started since is one wait step, so
+// the run unloads once, until all its operations have finished. It returns
+// whether there was a wait.
+function idle(): boolean {
+  if (waiting.length === 0) return false;
+  const started = waiting;
+  waiting = [];
+  void finish(started);
+  return true;
+}
+
+async function finish(started: Waiting[]): Promise<void> {
+  const ids = [...new Set(started.flatMap((w) => w.ids))];
+  const ended = new Map<string, Operation>();
+  try {
+    for (let i = 0; i < ids.length; i += waitLimit) host.wait(ids.slice(i, i + waitLimit));
+    for (const id of ids) {
+      const op = await api.v1.operations.byId(id).get();
+      if (!op) throw new Error(`operation ${id} is gone`);
+      ended.set(id, op);
+    }
+  } catch (error) {
+    for (const w of started) w.reject(error);
+    return;
   }
-  const failed = finished.find((op) => op.status !== "succeeded");
-  if (failed) throw new OperationError(failed, finished);
-  return finished;
+  for (const w of started) {
+    const operations = w.ids.map((id) => ended.get(id)!);
+    const failed = operations.find((op) => op.status !== "succeeded");
+    if (failed) w.reject(new OperationError(failed, operations));
+    else w.resolve(operations);
+  }
+}
+
+(globalThis as Record<string, unknown>).__papergoIdle = idle;
+
+async function ask<V>(workspaceId: string, request: TaskRequest<V>): Promise<TaskResult<V>> {
+  const { workspaceId: workspace, inputSchema, values, ...task } = request;
+  const body: TaskCreate = { ...task };
+  if (inputSchema) body.inputSchema = json(inputSchema);
+  if (values) body.values = json(values as Record<string, unknown>);
+  const created = await api.v1.workspaces.byId(workspace ?? workspaceId).tasks.post(body);
+  const [operation] = await wait([created!.operationId!]);
+  return plain(operation.result) as TaskResult<V>;
+}
+
+async function notify(workspaceId: string, message: NotificationRequest): Promise<NotificationSendResult> {
+  const { workspaceId: workspace, ...send } = message;
+  return (await api.v1.workspaces.byId(workspace ?? workspaceId).notifications.post(send))!;
 }
 
 async function sleep(duration: number | { until: Date | string }): Promise<void> {
@@ -292,6 +411,8 @@ function context<P, I>(run: Run<P, I>): Context<P, I> {
     api,
     wait: ((operations: Operation | string | (Operation | string)[]) =>
       Array.isArray(operations) ? wait(operations) : wait([operations]).then((all) => all[0])) as Context<P, I>["wait"],
+    ask: (task) => ask(run.workspace_id, task),
+    notify: (message) => notify(run.workspace_id, message),
     sleep,
     log: (...values) => host.log("info", format(values)),
     warn: (...values) => host.log("warn", format(values)),

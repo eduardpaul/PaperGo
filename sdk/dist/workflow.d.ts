@@ -13650,6 +13650,45 @@ export interface Run<P = Record<string, unknown>, I = unknown> {
 	actor: string;
 	params: P;
 }
+/** A task ctx.ask creates: the API's task fields, with its form and values as plain JSON. */
+export type TaskRequest<V = Record<string, unknown>> = Omit<TaskCreate, "title" | "inputSchema" | "values"> & {
+	title: string;
+	/** The answer's form, a JSON Schema form; see docs/workflows.md#forms. */
+	inputSchema?: Record<string, unknown>;
+	/** Values that prefill the form. */
+	values?: Partial<V>;
+	/** The workspace of the task; the run's by default. */
+	workspaceId?: string;
+};
+/** One person's answer to a task. */
+export interface TaskResponse {
+	readonly subject: string;
+	/** The assignee entry answered for: the subject or group:<id>. */
+	readonly assignee: string;
+	readonly outcome: string;
+	readonly comment: string;
+	readonly input?: Record<string, unknown>;
+}
+/** How a task ended. V is the shape of its form's values. */
+export interface TaskResult<V = Record<string, unknown>> {
+	readonly task_id: string;
+	readonly status: "completed" | "expired";
+	/** The key of the outcome the task completed with. */
+	readonly outcome: string;
+	readonly comment: string;
+	readonly completed_by?: string;
+	/** The form values of the completing answer. */
+	readonly input?: V;
+	/** Every answer, oldest first. */
+	readonly responses: readonly TaskResponse[];
+}
+/** A message ctx.notify sends: the API's fields, in the run's workspace by default. */
+export type NotificationRequest = Omit<NotificationSend, "recipients" | "title"> & {
+	/** People, group:<id>, role:owners, role:members, creator, actor or field:<key>. */
+	recipients: string[];
+	title: string;
+	workspaceId?: string;
+};
 export interface Context<P = Record<string, unknown>, I = unknown> {
 	readonly runId: string;
 	readonly run: Run<P, I>;
@@ -13673,12 +13712,25 @@ export interface Context<P = Record<string, unknown>, I = unknown> {
 	/**
 	 * Waits until operations have finished and returns them as they ended:
 	 * operations the API returned, or their IDs, such as a task's
-	 * operation_id. The run is unloaded while it waits. Waiting for several
-	 * at once lets them run in parallel. A failed or cancelled operation
-	 * throws an OperationError.
+	 * operation_id. The run is unloaded while it waits. Waits started
+	 * together, such as in a Promise.all, are one: the run unloads once,
+	 * until all have finished. A failed or cancelled operation throws an
+	 * OperationError.
 	 */
 	wait(operation: Operation | string): Promise<Operation>;
 	wait(operations: (Operation | string)[]): Promise<Operation[]>;
+	/**
+	 * Creates a task and returns its result once people have answered it. The
+	 * task is created at once; the run waits only when it awaits the result,
+	 * so tasks asked together wait together:
+	 *
+	 *     const [a, b] = await Promise.all([ctx.ask(first), ctx.ask(second)]);
+	 *
+	 * A cancelled task throws an OperationError.
+	 */
+	ask<V = Record<string, unknown>>(task: TaskRequest<V>): Promise<TaskResult<V>>;
+	/** Sends a message to people's inboxes; it needs no answer. Sending again with the same dedupKey reaches only people who do not have it. */
+	notify(message: NotificationRequest): Promise<NotificationSendResult>;
 	/** Unloads the run for ms milliseconds, or until a time. */
 	sleep(duration: number | {
 		until: Date | string;

@@ -20,11 +20,14 @@ type memory struct {
 	requests   []Request
 	waits      int
 	operations map[string]string
-	answer     func(Request) Response
+	// results are the results of operations that do not end as bulk
+	// updates do, such as tasks.
+	results map[string]string
+	answer  func(Request) Response
 }
 
 func newMemory(answer func(Request) Response) *memory {
-	return &memory{steps: map[string][]runs.Step{}, operations: map[string]string{}, answer: answer}
+	return &memory{steps: map[string][]runs.Step{}, operations: map[string]string{}, results: map[string]string{}, answer: answer}
 }
 
 func (m *memory) Steps(_ context.Context, run Run) ([]runs.Step, error) {
@@ -77,6 +80,9 @@ func (m *memory) respond(req Request) Response {
 		id := strings.TrimPrefix(req.URL, "/v1/operations/")
 		status := m.operations[id]
 		body := `{"id":"` + id + `","status":"` + status + `","result":{"updated":2,"ids":["a","b"]}}`
+		if result, ok := m.results[id]; ok {
+			body = `{"id":"` + id + `","status":"` + status + `","result":` + result + `}`
+		}
 		if status == "failed" {
 			body = `{"id":"` + id + `","status":"failed","error":"the list is locked"}`
 		}
@@ -335,6 +341,93 @@ export default workflow({
 	m.finish("00000000-0000-4000-8000-000000000001", "succeeded")
 	if out := execute(t, e, run); out.Status != Completed || string(out.Output) != `["succeeded","succeeded"]` || m.waits != 1 {
 		t.Fatalf("outcome: %+v", out)
+	}
+}
+
+func TestWaitsStartedTogetherSuspendOnce(t *testing.T) {
+	m := newMemory(nil)
+	e := New(m, 0)
+	run := Run{ID: "run-together", Context: withInput(`{"list":"` + listID + `"}`), Artifact: bundle(t, `
+import { OperationError, workflow } from "@papergo/workflow";
+export default workflow({
+  async run(ctx, input: { list: string }) {
+    const update = async (status: string) => {
+      const op = await ctx.api.v1.resources.byId(input.list).bulkUpdate.post({ values: { status } });
+      return (await ctx.wait(op!)).status;
+    };
+    const settled = await Promise.allSettled([update("a"), update("b"), update("c")]);
+    return settled.map((s) => s.status === "fulfilled" ? s.value : (s.reason as OperationError).operation.status);
+  },
+});
+`)}
+	if out := execute(t, e, run); out.Status != Suspended || m.waits != 1 || len(m.requests) != 3 {
+		t.Fatalf("outcome: %+v after %d waits and %d requests", out, m.waits, len(m.requests))
+	}
+	m.finish("00000000-0000-4000-8000-000000000001", "succeeded")
+	m.finish("00000000-0000-4000-8000-000000000002", "failed")
+	if out := execute(t, e, run); out.Status != Suspended {
+		t.Fatalf("the wait must last until every operation finished: %+v", out)
+	}
+	m.finish("00000000-0000-4000-8000-000000000003", "succeeded")
+	if out := execute(t, e, run); out.Status != Completed || string(out.Output) != `["succeeded","failed","succeeded"]` || m.waits != 1 {
+		t.Fatalf("outcome: %+v after %d waits", out, m.waits)
+	}
+}
+
+func TestTasksAskedTogetherAreAnsweredTogether(t *testing.T) {
+	const ws = "7c1e0d52-8f0e-4b8b-9d0e-3c7f6a2b1e01"
+	var m *memory
+	var posted []string
+	m = newMemory(func(req Request) Response {
+		switch {
+		case req.Method == "POST" && req.URL == "/v1/workspaces/"+ws+"/tasks":
+			posted = append(posted, string(req.Body))
+			id := fmt.Sprintf("00000000-0000-4000-9000-%012d", len(posted))
+			m.operations[id] = "pending"
+			return jsonResponse(201, `{"id":"task-`+id+`","title":"t","operation_id":"`+id+`"}`)
+		case req.Method == "POST" && req.URL == "/v1/workspaces/"+ws+"/notifications":
+			posted = append(posted, string(req.Body))
+			return jsonResponse(200, `{"sent":2,"skipped":0,"deduplicated":1}`)
+		}
+		return jsonResponse(404, `{"code":"not_found","detail":"route not found"}`)
+	})
+	e := New(m, 0)
+	run := Run{ID: "run-ask", Context: map[string]any{"workspace_id": ws}, Artifact: bundle(t, `
+import { workflow } from "@papergo/workflow";
+export default workflow({
+  async run(ctx) {
+    const [legal, finance] = await Promise.all([
+      ctx.ask<{ amount: number }>({
+        title: "Legal review", assignees: ["group:legal"],
+        inputSchema: { type: "object", properties: { amount: { type: "number" } } }, values: { amount: 3 },
+      }),
+      ctx.ask({ title: "Budget check", kind: "approval" }),
+    ]);
+    const sent = await ctx.notify({ recipients: ["actor"], title: "Reviewed", dedupKey: "reviewed" });
+    return [legal.outcome, legal.input?.amount, legal.responses.length, finance.outcome, sent.sent];
+  },
+});
+`)}
+	if out := execute(t, e, run); out.Status != Suspended || m.waits != 1 || len(posted) != 2 {
+		t.Fatalf("outcome: %+v after %d waits and %d tasks", out, m.waits, len(posted))
+	}
+	if posted[0] != `{"assignees":["group:legal"],"input_schema":{"type":"object","properties":{"amount":{"type":"number"}}},"title":"Legal review","values":{"amount":3}}` ||
+		posted[1] != `{"kind":"approval","title":"Budget check"}` {
+		t.Fatalf("tasks: %v", posted)
+	}
+	m.results["00000000-0000-4000-9000-000000000001"] = `{"task_id":"a","status":"completed","outcome":"done","comment":"","input":{"amount":4},"responses":[{"subject":"bob","assignee":"group:legal","outcome":"done","comment":""}]}`
+	m.results["00000000-0000-4000-9000-000000000002"] = `{"task_id":"b","status":"completed","outcome":"approved","comment":"","responses":[]}`
+	m.finish("00000000-0000-4000-9000-000000000002", "succeeded")
+	if out := execute(t, e, run); out.Status != Suspended {
+		t.Fatalf("one answered task must not end the wait: %+v", out)
+	}
+	m.finish("00000000-0000-4000-9000-000000000001", "succeeded")
+	out := execute(t, e, run)
+	if out.Status != Completed || string(out.Output) != `["done",4,1,"approved",2]` || m.waits != 1 {
+		t.Fatalf("outcome: %+v after %d waits", out, m.waits)
+	}
+	if len(posted) != 3 || posted[2] != `{"dedup_key":"reviewed","recipients":["actor"],"title":"Reviewed"}` {
+		t.Fatalf("notification: %v", posted)
 	}
 }
 

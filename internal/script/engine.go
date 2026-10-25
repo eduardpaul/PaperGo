@@ -191,13 +191,37 @@ func (e *Engine) Execute(ctx context.Context, run Run) (Outcome, error) {
 		if !ok {
 			return nil, errors.New("the script has no workflow entry point")
 		}
-		return main(goja.Undefined(), rt.ToValue(string(raw)))
+		value, err := main(goja.Undefined(), rt.ToValue(string(raw)))
+		if err != nil {
+			return nil, err
+		}
+		return value, h.settle(value)
 	}()
 	out, err := h.outcome(value, err)
 	if out.Status == Completed || out.Status == Failed {
 		out.Unsaved = h.unsaved
 	}
 	return out, err
+}
+
+// settle runs the SDK's __papergoIdle each time the script has run out of
+// promise jobs while its run is pending. The SDK then starts, as one wait
+// step, every wait the script began since, so operations waited for
+// together, such as tasks in a Promise.all, suspend the run once. It ends
+// when the run settles or suspends, or when nothing was waiting.
+func (h *host) settle(value goja.Value) error {
+	idle, ok := goja.AssertFunction(h.rt.Get("__papergoIdle"))
+	promise, pending := value.Export().(*goja.Promise)
+	for ok && pending && promise.State() == goja.PromiseStatePending && !h.suspended && h.abort == nil {
+		waited, err := idle(goja.Undefined())
+		if err != nil {
+			return err
+		}
+		if !waited.ToBoolean() {
+			return nil
+		}
+	}
+	return nil
 }
 
 // manifestSlice bounds the JavaScript a manifest evaluation runs.

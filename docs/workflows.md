@@ -15,7 +15,7 @@ Every save that changes the script or its parameters creates a new immutable **v
 ## Example
 
 ```ts
-import { plain, workflow } from "@papergo/workflow";
+import { workflow } from "@papergo/workflow";
 
 export default workflow<{ reviewer: string }>({
   triggers: [
@@ -29,13 +29,12 @@ export default workflow<{ reviewer: string }>({
   },
   async run(ctx, input) {
     const item = await ctx.api.v1.resources.byId(ctx.itemId!).get();
-    const task = await ctx.api.v1.workspaces.byId(ctx.run.workspace_id).tasks.post({
+    const answer = await ctx.ask({
       kind: "approval",
       itemId: ctx.itemId,
       title: `Review ${item!.name}`,
       assignees: input?.reviewer ? [input.reviewer] : undefined,
     });
-    const answer = plain((await ctx.wait(task!.operationId!)).result) as { outcome: string };
     ctx.log("review", answer.outcome);
     return { approved: answer.outcome === "approved" };
   },
@@ -65,6 +64,8 @@ The web app's workflow editor checks scripts as you type: it completes the SDK a
 | `ctx.params` | the workflow's [parameters](#parameters) |
 | `ctx.api` | the REST API, acting as the version's author |
 | `ctx.wait(operation)` | waits until operations finish; see [waiting](#waiting) |
+| `ctx.ask(task)` | creates a [task](#tasks) and returns its result once people have answered |
+| `ctx.notify(message)` | sends people a [message](notifications.md#sending-messages) |
 | `ctx.sleep(ms)`, `ctx.sleep({ until })` | unloads the run until a time |
 | `ctx.log(...)`, `ctx.warn(...)`, `ctx.error(...)` | write to the run's log, as `console` does |
 
@@ -103,11 +104,13 @@ Snapshots have a 64 KiB JSON budget shared by the complete selection. If field v
 
 Keep scripts deterministic: read time, randomness and data only through `ctx` and the globals the engine replaces. A replay that asks for a different step at a recorded position fails the run as nondeterministic, so a script edited while runs are active applies to new runs only: runs keep their version.
 
-**Limits.** A slice may run JavaScript for 5 seconds before it waits; a script that computes longer fails. Each recorded response is bounded at 1 MiB, a longer one is recorded as a `413` asking for a smaller page. A run's output is bounded at 16 KiB, a script's source at 1 MiB and its log at the last 500 entries. One wait takes at most 64 operations.
+**Limits.** A slice may run JavaScript for 5 seconds before it waits; a script that computes longer fails. Each recorded response is bounded at 1 MiB, a longer one is recorded as a `413` asking for a smaller page. A run's output is bounded at 16 KiB, a script's source at 1 MiB and its log at the last 500 entries. A wait step takes at most 64 operations; a wait for more is recorded as one step per 64.
 
 ## Waiting
 
 Long work is an API request that returns an **operation** (`202 Accepted`): reading a file's text, composing a PDF, an AI completion, a task. `ctx.wait(operation)` unloads the run until the operation finishes and returns it as it ended; a failed or cancelled operation throws an `OperationError`. `ctx.wait([a, b])` waits for several at once, which run in parallel. A run that waits shows as `waiting`, holds no worker, and continues moments after the operation ends.
+
+Waits a script starts together are one wait. Once the script has nothing left to run but awaits, every `ctx.wait` it started since, such as those of the tasks in a `Promise.all`, is recorded as one wait step: the run unloads once and continues when all of them have ended. Each wait still settles on its own, so `Promise.allSettled` sees which failed.
 
 ```ts
 const read = await ctx.wait((await ctx.api.v1.items.byId(ctx.itemId!).text.post({ ocr: "auto" }))!);
@@ -355,7 +358,7 @@ A task asks people to do something and say so: approve, confirm data, fill in a 
 The Tasks screen offers Waiting for me, Approvals, Completed and All views. **Load more** appends the next page of the selected view while keeping the current task open.
 
 ```ts
-const task = await ctx.api.v1.workspaces.byId(ctx.run.workspace_id).tasks.post({
+const answer = await ctx.ask<{ total: number }>({
   title: `Check the invoice data of ${item!.name}`,
   itemId: ctx.itemId,
   assignees: ["role:members"],
@@ -364,14 +367,24 @@ const task = await ctx.api.v1.workspaces.byId(ctx.run.workspace_id).tasks.post({
     { key: "correct", label: "Correct", style: "primary" },
     { key: "fix", label: "Needs a fix", comment: "required", skipForm: true },
   ],
-  inputSchema: json({ type: "object", required: ["total"], properties: { total: { type: "number", title: "Total" } } }),
-  values: json({ total: 12.5 }),
+  inputSchema: { type: "object", required: ["total"], properties: { total: { type: "number", title: "Total" } } },
+  values: { total: 12.5 },
   dueAt: new Date(Date.now() + 48 * 3600 * 1000),
 });
-const answer = plain((await ctx.wait(task!.operationId!)).result) as { outcome: string; input?: { total: number } };
+if (answer.outcome === "correct") ctx.log("total", answer.input?.total);
 ```
 
-- **Workflow tasks.** A task a run creates belongs to its workflow and run (`source: "workflow"`) and has an `operation_id`: the operation its answer ends. `ctx.wait` on it returns, as the operation's result, `task_id`, `status`, `outcome`, `completed_by`, `comment`, `input` and every answer in `responses`; a cancelled task throws an `OperationError`. Cancelling a run cancels the tasks it waits for. Tasks it created without waiting, such as a follow-up, outlive it, and other workflows react to them with `task.*` triggers, until [their item or workflow is deleted](#deleting-items-and-workflows).
+`ctx.ask(task)` takes the fields of `POST /v1/workspaces/{id}/tasks`, with the form and its values as plain JSON, creates the task in the run's workspace (or `workspaceId`) and returns its result once it is answered. The task is created at once and the run waits only when it awaits the result, so tasks asked together are open together and [wait together](#waiting):
+
+```ts
+const [legal, finance] = await Promise.all([
+  ctx.ask({ kind: "approval", itemId: ctx.itemId, title: "Legal review", assignees: ["group:legal"] }),
+  ctx.ask({ kind: "approval", itemId: ctx.itemId, title: "Budget check", assignees: ["group:finance"] }),
+]);
+const approved = legal.outcome === "approved" && finance.outcome === "approved";
+```
+
+- **Workflow tasks.** A task a run creates belongs to its workflow and run (`source: "workflow"`) and has an `operation_id`: the operation its answer ends. Its result, what `ctx.ask` returns and the operation's result, has `task_id`, `status`, `outcome`, `completed_by`, `comment`, `input` (the completing answer's form values) and every answer in `responses`; a cancelled task throws an `OperationError`. Cancelling a run cancels the tasks it waits for. Tasks it created without waiting, such as a follow-up, outlive it, and other workflows react to them with `task.*` triggers, until [their item or workflow is deleted](#deleting-items-and-workflows).
 - **Assignees** are recipient entries:
   - a person's subject;
   - `group:<id>`, nested groups included;
@@ -395,7 +408,7 @@ const answer = plain((await ctx.wait(task!.operationId!)).result) as { outcome: 
 
 Answers and their form values stay on the task after it completes, and completed tasks are kept when their runs are deleted. Creating and answering tasks are recorded in the workspace's audit trail (`task.create`, `task.respond`).
 
-Assignees are [notified](notifications.md) when a task is created or reassigned to them, and the creator of a person's task when it is answered. A script tells people anything else with `ctx.api.v1.workspaces.byId(id).notifications.post(...)`; a failed run notifies the author of its workflow version.
+Assignees are [notified](notifications.md) when a task is created or reassigned to them, and the creator of a person's task when it is answered. A script tells people anything else with `ctx.notify(...)`; a failed run notifies the author of its workflow version.
 
 ## Selection runs
 
