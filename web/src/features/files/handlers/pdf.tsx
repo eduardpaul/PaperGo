@@ -13,7 +13,7 @@ import type { FileRef, ViewerProps } from '../handlers';
 import { PageRegions, threadsOn, useRegionThreads } from '../regions';
 import { PageMatches, pagesMatching, useReadText } from '../text-find';
 import { typing, useViewerKeys, ViewerBar, ViewerMessage } from '../viewer-kit';
-import { useFollowLink } from '../trust';
+import { useFollowLink, useTrust } from '../trust';
 import { PageImages } from './pages';
 
 declare const __PDFJS_ASSETS__: string;
@@ -89,9 +89,10 @@ function PdfDocument({ file, source, page, onPage, find: initialFind, comment, o
   const container = useRef<HTMLDivElement>(null);
   const pages = useRef<HTMLDivElement>(null);
   const { follow, dialog } = useFollowLink();
-  const followLink = useRef(follow);
+  const { trusted } = useTrust();
+  const links = useRef({ follow, trusted });
   useEffect(() => {
-    followLink.current = follow;
+    links.current = { follow, trusted };
   });
   const viewer = useRef<Viewer>(null);
   const bus = useRef<Bus>(null);
@@ -219,24 +220,34 @@ function PdfDocument({ file, source, page, onPage, find: initialFind, comment, o
     return () => observer.disconnect();
   }, [pageLayers]);
 
-  // Links out of the document follow the organization's trusted hosts, by click, Enter or middle click; links to
-  // places in the document keep their own handling.
+  // Links out of the document follow the organization's trusted hosts, by click, Enter or middle click, and an
+  // untrusted one offers no browser menu to open it from; links to places in the document keep their own handling.
   useEffect(() => {
     const element = container.current;
     if (!element) return;
-    const onClick = (event: MouseEvent) => {
+    const outside = (event: MouseEvent) => {
       const link = (event.target as Element | null)?.closest?.('.annotationLayer a[href]');
       const href = link?.getAttribute('href') ?? '';
-      if (!link || href.startsWith('#') || link.classList.contains('internalLink')) return;
+      return !link || href.startsWith('#') || link.classList.contains('internalLink') ? undefined : href;
+    };
+    const onClick = (event: MouseEvent) => {
+      const href = outside(event);
+      if (href === undefined) return;
       event.preventDefault();
       event.stopPropagation();
-      if (event.type === 'click' || event.button === 1) followLink.current(href);
+      if (event.type === 'click' || event.button === 1) links.current.follow(href);
+    };
+    const onMenu = (event: MouseEvent) => {
+      const href = outside(event);
+      if (href !== undefined && !links.current.trusted(href)) event.preventDefault();
     };
     element.addEventListener('click', onClick, true);
     element.addEventListener('auxclick', onClick, true);
+    element.addEventListener('contextmenu', onMenu, true);
     return () => {
       element.removeEventListener('click', onClick, true);
       element.removeEventListener('auxclick', onClick, true);
+      element.removeEventListener('contextmenu', onMenu, true);
     };
   }, []);
 

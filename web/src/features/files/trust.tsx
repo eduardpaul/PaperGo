@@ -8,6 +8,7 @@ import type { TrustedHosts } from '@/api/types';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useHasScope } from '@/features/admin/common';
+import { useBlobUrl } from '@/lib/use-blob-url';
 
 /** Whether hosts trust url: this app's own origin, or a web URL on a listed host. */
 export function trusts(hosts: string[] | undefined, url: string): boolean {
@@ -77,28 +78,40 @@ export function useTrustHost() {
   return { allowed, trust };
 }
 
+const linkStyle = 'cursor-pointer text-accent underline underline-offset-2 hover:no-underline';
+
 /**
  * A link out of a document. Links to trusted hosts open in a new tab; others
  * ask first, naming the host and the whole address. Addresses that are not
- * web links are shown as text.
+ * web links are shown as text. An untrusted link carries no address the
+ * browser could open by itself, so middle clicks, modifier clicks and the
+ * context menu's new tab ask too, or do nothing.
  */
 export function TrustedLink({ href, children }: { href?: string; children?: ReactNode }) {
   const { trusted } = useTrust();
   const [asking, setAsking] = useState(false);
   const host = href ? hostOf(href) : '';
   if (!href || !host) return <span>{children}</span>;
+  if (trusted(href))
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer nofollow" className={linkStyle}>
+        {children}
+      </a>
+    );
+  const ask = (event: React.SyntheticEvent) => {
+    event.preventDefault();
+    setAsking(true);
+  };
   return (
     <>
       <a
-        href={href}
-        target="_blank"
-        rel="noopener noreferrer nofollow"
-        className="text-accent underline underline-offset-2 hover:no-underline"
-        onClick={(event) => {
-          if (trusted(href)) return;
-          event.preventDefault();
-          setAsking(true);
-        }}
+        role="link"
+        tabIndex={0}
+        title={href}
+        className={linkStyle}
+        onClick={ask}
+        onAuxClick={(event) => event.button === 1 && ask(event)}
+        onKeyDown={(event) => event.key === 'Enter' && ask(event)}
       >
         {children}
       </a>
@@ -153,17 +166,36 @@ function LeavingDialog({ href, host, onClose }: { href: string; host: string; on
   );
 }
 
+/** The path of a URL on this app's own origin, which needs the app's credentials; undefined for other origins. */
+function ownPath(src: string | undefined) {
+  if (!src) return undefined;
+  try {
+    const url = new URL(src, window.location.href);
+    return url.origin === window.location.origin ? url.pathname + url.search : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * An image a document loads from elsewhere. Images from trusted hosts load;
  * others wait for Show once (or Show all images in this file), so opening a
- * document never tells another site who read it.
+ * document never tells another site who read it. Images stored in PaperGo
+ * are fetched with the reader's credentials, as with a bearer token the
+ * browser would not send them by itself.
  */
 export function RemoteImage({ src, alt, shown, onShow }: { src?: string; alt?: string; shown: boolean; onShow: (all: boolean) => void }) {
   const { trusted } = useTrust();
   const { allowed, trust } = useTrustHost();
   const [once, setOnce] = useState(false);
+  const own = ownPath(src);
+  const stored = useBlobUrl(own);
   const host = src ? hostOf(src) : '';
-  if (!src || (!host && !src.startsWith('/'))) return <span className="text-muted">[{alt || 'image'}]</span>;
+  if (own) {
+    if (stored.url) return <img src={stored.url} alt={alt ?? ''} loading="lazy" className="max-w-full rounded" />;
+    return <span className="text-muted">[{stored.error ? `${alt || 'image'} could not be loaded` : alt || 'image'}]</span>;
+  }
+  if (!src || !host) return <span className="text-muted">[{alt || 'image'}]</span>;
   if (once || shown || trusted(src)) return <img src={src} alt={alt ?? ''} referrerPolicy="no-referrer" loading="lazy" className="max-w-full rounded" />;
   return (
     <span role="note" className="my-2 flex flex-wrap items-center gap-2 rounded-md border border-dashed px-3 py-2 text-xs text-muted">
