@@ -1,8 +1,13 @@
 package httpapi
 
 import (
+	"fmt"
 	"net/http"
+	"slices"
+	"strconv"
+	"time"
 
+	runstore "papergo/internal/dal/runs"
 	"papergo/internal/dms"
 	"papergo/internal/tasks"
 	"papergo/internal/workflow"
@@ -16,7 +21,7 @@ func (a *API) registerWorkflows(api *router) {
 	api.HandleFunc("PUT /v1/workflows/{id}", a.updateWorkflow)
 	api.HandleFunc("DELETE /v1/workflows/{id}", a.deleteWorkflow)
 	api.HandleFunc("GET /v1/workflows/{id}/versions", a.workflowVersions)
-	api.HandleFunc("POST /v1/workflows/{id}/runs", a.startWorkflow)
+	api.HandleFunc("POST /v1/workflows/{id}/runs", a.idempotent(a.startWorkflow))
 	api.HandleFunc("POST /v1/workspaces/{id}/workflow-calls", a.callWorkflow)
 	api.HandleFunc("POST /v1/workflows/{id}/test-runs", a.testWorkflow)
 	api.HandleFunc("POST /v1/workflows/{id}/check", a.checkWorkflow)
@@ -251,13 +256,41 @@ func (a *API) workflowRuns(w http.ResponseWriter, r *http.Request) {
 	respond(w, r, 200, out)
 }
 
+// maxRunWait bounds how long a request for a run waits for it to end,
+// within the API's request timeout.
+const maxRunWait = 25 * time.Second
+
+// workflowRun returns a run. With wait (seconds), it answers once the run
+// ended or the time passed, so a client that started a run can await its
+// result without polling.
 func (a *API) workflowRun(w http.ResponseWriter, r *http.Request) {
-	out, err := a.Workflows.Run(r.Context(), subject(r), r.PathValue("id"))
-	if err != nil {
-		a.failure(w, r, err)
-		return
+	var wait time.Duration
+	if raw := r.URL.Query().Get("wait"); raw != "" {
+		seconds, err := strconv.Atoi(raw)
+		if err != nil || seconds < 0 || time.Duration(seconds)*time.Second > maxRunWait {
+			a.failure(w, r, dms.Invalid(fmt.Sprintf("wait is 0 to %d seconds", int(maxRunWait.Seconds()))))
+			return
+		}
+		wait = time.Duration(seconds) * time.Second
 	}
-	respond(w, r, 200, out)
+	deadline := time.Now().Add(wait)
+	for poll := 100 * time.Millisecond; ; poll = min(2*poll, time.Second) {
+		out, err := a.Workflows.Run(r.Context(), subject(r), r.PathValue("id"))
+		if err != nil {
+			a.failure(w, r, err)
+			return
+		}
+		left := time.Until(deadline)
+		if !slices.Contains(runstore.Active, out.Status) || left <= 0 {
+			respond(w, r, 200, out)
+			return
+		}
+		select {
+		case <-r.Context().Done():
+			return
+		case <-time.After(min(poll, left)):
+		}
+	}
 }
 
 func (a *API) cancelWorkflowRun(w http.ResponseWriter, r *http.Request) {

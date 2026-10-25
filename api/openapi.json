@@ -6757,7 +6757,7 @@
       "post": {
         "summary": "Start Workflow",
         "operationId": "startWorkflow",
-        "description": "Accept a manual run for a published workflow with manual_enabled and a manual entry point. Automatic processing may be off. Item starts require write access to every item; standalone starts require workspace manage. Accepted invocations pin their definition version and are queued after commit. Automatic provider selection never suppresses a targeted manual invocation.",
+        "description": "Accept a manual run for a published workflow with manual_enabled and a manual entry point. Automatic processing may be off. Item starts require write access to every item; standalone starts require workspace manage. Accepted invocations pin their definition version and are queued after commit. Automatic provider selection never suppresses a targeted manual invocation. With Idempotency-Key, a retry by the same caller with the same body returns the runs the first start made, while its events are kept (RUN_RETENTION); the same key with another body is 409 idempotency_conflict. Whoever starts a run can read it with GET /v1/workflow-runs/{id}, and wait for it there.",
         "parameters": [
           {
             "name": "id",
@@ -6766,6 +6766,9 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -7639,7 +7642,7 @@
       "get": {
         "summary": "Workflow Run",
         "operationId": "workflowRun",
-        "description": "A run with its result and recorded steps.",
+        "description": "A run with its result. Workspace managers see its recorded steps, log and carried state too; the person who started a run by hand sees its status, inputs, result and error. With wait, the response comes once the run has ended or after that many seconds, whichever is first.",
         "parameters": [
           {
             "name": "id",
@@ -7648,6 +7651,17 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "wait",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 25
+            },
+            "description": "Seconds to wait for the run to end before answering with its current state."
           }
         ],
         "responses": {

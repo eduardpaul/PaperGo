@@ -249,7 +249,7 @@ func pending(ctx context.Context, t *dms.Service, subject, id string) (Run, erro
 	if err != nil {
 		return Run{}, err
 	}
-	if err = manage(ctx, t, subject, e.WorkspaceID); err != nil {
+	if _, err = viewer(ctx, t, subject, e.WorkspaceID, e.Type, e.Actor); err != nil {
 		return Run{}, err
 	}
 	run := Run{ID: id, WorkflowID: workflowID, WorkspaceID: e.WorkspaceID, EventID: e.ID, EventType: e.Type, Depth: e.Depth, Actor: e.Actor, Status: runstore.StatusQueued, CreatedAt: e.CreatedAt}
@@ -259,14 +259,35 @@ func pending(ctx context.Context, t *dms.Service, subject, id string) (Run, erro
 	return run, nil
 }
 
+// viewer reports whether subject sees a run of workspaceID started by
+// event type by actor as a workspace manager, with its steps, logs and
+// state, or else as the person who started it by hand: its status, inputs,
+// result and error. Steps, logs and state hold what the workflow's author
+// could read, so only managers see them.
+func viewer(ctx context.Context, t *dms.Service, subject, workspaceID, eventType, actor string) (managed bool, err error) {
+	err = manage(ctx, t, subject, workspaceID)
+	if err == nil || !errors.Is(err, dms.ErrForbidden) && !errors.Is(err, dms.ErrNotFound) {
+		return err == nil, err
+	}
+	if eventType != TriggerManual || actor != subject {
+		return false, err
+	}
+	return false, workspace(ctx, t, subject, workspaceID, "read")
+}
+
 // Run returns one run with its inputs, result, steps and logs to workspace
-// managers.
+// managers, and the runs people started by hand, without steps, logs and
+// state, to them.
 func (s *Service) Run(ctx context.Context, subject, id string) (Run, error) {
 	return dms.Read(ctx, s.DMS, func(t *dms.Service) (Run, error) {
-		row, err := managedRun(ctx, t, subject, id)
-		if errors.Is(err, dms.ErrNotFound) {
+		row, err := t.DAL.Runs().Find(ctx, id)
+		if dberr.IsNotFound(err) {
 			return pending(ctx, t, subject, id)
 		}
+		if err != nil {
+			return Run{}, err
+		}
+		managed, err := viewer(ctx, t, subject, row.WorkspaceID, row.EventType, row.Actor)
 		if err != nil {
 			return Run{}, err
 		}
@@ -287,6 +308,10 @@ func (s *Service) Run(ctx context.Context, subject, id string) (Run, error) {
 		run.Inputs = payload.Input
 		if payload.Trigger != nil && payload.Trigger.ParentRunID != "" {
 			run.ParentRunID = &payload.Trigger.ParentRunID
+		}
+		if !managed {
+			run.Logs, run.State = nil, nil
+			return run, nil
 		}
 		steps, err := t.DAL.Runs().Steps(ctx, id)
 		if err != nil {

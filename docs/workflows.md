@@ -157,7 +157,7 @@ const checked = await Promise.all(invoices.map((invoice) => ctx.call<{ total: nu
 
 ## Long loops
 
-Every slice replays the run's whole journal, at roughly a millisecond per recorded request, so a run that works through thousands of pages or items one after another gets slower with every step, and fails once a slice needs more than its 5 seconds. A long loop therefore **continues as new**: `ctx.continueAsNew(state)` ends the run's current generation and starts its script again with a fresh journal, reading `state` as `ctx.state`.
+Every slice replays the run's whole journal, at about a quarter of a millisecond per recorded request, so a run that works through thousands of pages or items one after another gets slower with every step, and fails once a slice needs more than its 5 seconds. A long loop therefore **continues as new**: `ctx.continueAsNew(state)` ends the run's current generation and starts its script again with a fresh journal, reading `state` as `ctx.state`.
 
 ```ts
 export default workflow({
@@ -599,6 +599,7 @@ Audit events and publication snapshots are a separate product record. Run retent
 | Call a workflow from a run | for the run's author: `write` on the item, or workspace `manage` for a call on no item |
 | Start a test run | workspace `manage`, and `write` on each item |
 | See, cancel and retry runs | workspace `manage` |
+| See a run you started by hand: its status, inputs, result and error | workspace `read` |
 | Answer a task | being an assignee (or in an assigned group) who can read the workspace and the item's draft |
 | Create a task | workspace `read`, and `write` on the item when it concerns one |
 | Cancel a task | its creator or a workspace owner |
@@ -612,7 +613,7 @@ Audit events and publication snapshots are a separate product record. Run retent
 | GET / POST | /v1/workspaces/{id}/workflows | List or create workflows: `{"name", "description", "source", "parameters", "automatic_enabled", "manual_enabled", "state"}` |
 | GET / PUT / DELETE | /v1/workflows/{id} | Read, replace (If-Match), delete (If-Match) |
 | GET | /v1/workflows/{id}/versions | Versions with their scripts, newest first |
-| POST | /v1/workflows/{id}/runs | Manual start: `{"item_ids": [...], "inputs": {...}, "workflow_version": 1}` (202 with `run_ids`) |
+| POST | /v1/workflows/{id}/runs | Manual start: `{"item_ids": [...], "inputs": {...}, "workflow_version": 1}` (202 with `run_ids`); takes `Idempotency-Key` |
 | POST | /v1/workspaces/{id}/workflow-calls | [Calls](#calling-workflows) from a run: `{"workflow": "<key>", "calls": [{"item_id", "input"}]}` (202 with `run_ids`) |
 | POST | /v1/workflows/{id}/test-runs | [Test run](#testing) of the current version, draft or published: `{"item_ids": [...], "primary_item_id", "inputs": {...}}` (202 with `run_id`) |
 | POST | /v1/workflows/{id}/check | Read-only manual preflight with the same launch body |
@@ -622,7 +623,7 @@ Audit events and publication snapshots are a separate product record. Run retent
 | PUT | /v1/workspaces/{id}/workflow-builtins/{key} | Turn on/off, set parameters |
 | POST | /v1/workspaces/{id}/workflow-builtins/{key}/copy | Copy into an editable workflow |
 | GET | /v1/workspaces/{id}/workflow-runs | Runs, newest first (`workflow_id`, `item_id`, `origin` (`manual`, `schedule`, `test`, `call` or `automatic`), `status`, `include_system`, `$skiptoken`, `$top`) |
-| GET | /v1/workflow-runs/{id} | A run with its result, steps and log |
+| GET | /v1/workflow-runs/{id} | A run with its result, steps and log; `wait` (seconds, up to 25) answers once it ended |
 | POST | /v1/workflow-runs/{id}/cancel, /retry | Cancel, or retry a failed run |
 | GET | /v1/me/tasks | The caller's tasks (`waiting=true` for those still to answer, `status`, `kind`, `key`, `workspace_id`, `item_id`, `$top`); open ones by due time, in pages linked by `@odata.nextLink` like the other task lists |
 | GET / POST | /v1/workspaces/{id}/tasks | A workspace's tasks, for its owners; create a task: `{"title", "description", "assignees", "item_id", "kind", "key", "completion", "outcomes", "input_schema", "values", "review", "priority", "due_at"}` |
@@ -631,6 +632,29 @@ Audit events and publication snapshots are a separate product record. Run retent
 | POST | /v1/tasks/{id}/responses | Answer: `{"outcome", "comment", "input"}` |
 | POST | /v1/tasks/{id}/reassign | Replace an open task's `assignees` (owners, and the creator of a person's task) |
 | POST | /v1/tasks/{id}/cancel | Cancel an open task |
+
+## Running workflows from other apps
+
+Another application runs a manual workflow through the API like a person does, and reads what it returned:
+
+1. Create an [integration access token](identity.md#integration-access-tokens) with the `item.read` and `item.write` scopes: starting a run needs `item.write`, reading it read access to the workspace. The run itself acts as its workflow's author, whatever the token may do. Add its service identity to the workspace: as a member to run workflows on items it may write, as an owner to run standalone workflows, which need workspace manage.
+2. Find the workflow's ID with `GET /v1/workspaces/{id}/workflows`. It must be published, allow manual runs and have a `manual` trigger; its `input_schema` is the request's `inputs`.
+3. Start it, with an `Idempotency-Key` so a retry after a timeout starts nothing twice, and wait for the result:
+
+```sh
+curl -sS -X POST "$PAPERGO/v1/workflows/$WORKFLOW/runs" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -H "Idempotency-Key: order-4711" \
+  -d '{"item_ids": ["'$ITEM'"], "inputs": {"style": "short"}}'
+# {"run_ids": ["wf:…"]}
+
+curl -sS "$PAPERGO/v1/workflow-runs/$RUN?wait=25" -H "Authorization: Bearer $TOKEN"
+# {"id": "wf:…", "status": "completed", "result": {"summary": "…"}, …}
+```
+
+- **Starting.** The response lists one run per item (one for a standalone or selection start). A retry with the same key and body returns the same runs while the start's events are kept (`RUN_RETENTION`); the same key with another body is `409 idempotency_conflict`.
+- **Waiting.** `GET /v1/workflow-runs/{id}?wait=25` answers as soon as the run has `completed`, `failed` or been `cancelled`, or after 25 seconds with its current status; ask again to go on waiting. A run that waits for people, such as an approval, can take longer than any request: keep asking, or react to its end with a `wf.{key}.completed` workflow.
+- **What the starter sees.** The person or app that started a run reads its status, `inputs`, `result` (what the script returned, checked against `output_schema`) and `error`, but not its steps, log or state, which hold what the workflow's author could read. Workspace managers see everything.
 
 ## Runtime
 
