@@ -50,7 +50,7 @@ import { createPaperGoClient, PaperGoClientNavigationMetadata, type PaperGoClien
 import { createOperationFromDiscriminatorValue, type NotificationSend, type NotificationSendResult, type Operation, type TaskCreate } from "./client/models/index.js";
 import { HostRequestAdapter, parseCollection } from "./adapter.js";
 import { host } from "./host.js";
-import { withPages } from "./pages.js";
+import { client } from "./builders.js";
 
 export type { PaperGoClient } from "./client/paperGoClient.js";
 export * as models from "./client/models/index.js";
@@ -362,7 +362,10 @@ function format(values: unknown[]): string {
     .join(" ");
 }
 
-const api = withPages(createPaperGoClient(new HostRequestAdapter()), PaperGoClientNavigationMetadata);
+const adapter = new HostRequestAdapter();
+// Kiota's client registers the serializers; scripts use the SDK's builders.
+createPaperGoClient(adapter);
+const api = client<PaperGoClient>(adapter, PaperGoClientNavigationMetadata);
 
 (globalThis as Record<string, unknown>).crypto = { randomUUID: () => host.uuid() };
 // console writes to the run's log, like ctx.log.

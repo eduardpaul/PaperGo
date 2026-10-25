@@ -18,6 +18,7 @@ import {
   type PrimitiveTypesForDeserializationForCollection,
   type RequestAdapter,
   type RequestInformation,
+  type RequestMetadata,
   InMemoryBackingStoreFactory,
 } from "@microsoft/kiota-abstractions";
 import { host, type HostResponse } from "./host.js";
@@ -62,43 +63,16 @@ export class HostRequestAdapter implements RequestAdapter {
   }
 
   async send<T extends Parsable>(info: RequestInformation, factory: ParsableFactory<T>, errors: ErrorMappings | undefined): Promise<T | undefined> {
-    const node = this.content(this.exchange(info), errors);
-    return node?.getObjectValue(factory);
+    return this.content(this.exchange(info), errors)?.getObjectValue(factory);
   }
   async sendCollection<T extends Parsable>(info: RequestInformation, factory: ParsableFactory<T>, errors: ErrorMappings | undefined): Promise<T[] | undefined> {
-    const node = this.content(this.exchange(info), errors);
-    return node?.getCollectionOfObjectValues(factory);
+    return this.content(this.exchange(info), errors)?.getCollectionOfObjectValues(factory);
   }
   async sendCollectionOfPrimitive<T>(info: RequestInformation, type: PrimitiveTypesForDeserializationForCollection, errors: ErrorMappings | undefined): Promise<T[] | undefined> {
-    const node = this.content(this.exchange(info), errors);
-    return node?.getCollectionOfPrimitiveValues<T>(type);
+    return this.content(this.exchange(info), errors)?.getCollectionOfPrimitiveValues<T>(type);
   }
   async sendPrimitive<T>(info: RequestInformation, type: PrimitiveTypesForDeserialization, errors: ErrorMappings | undefined): Promise<T | undefined> {
-    const response = this.exchange(info);
-    if (type === "ArrayBuffer") {
-      this.check(response, errors);
-      return (isEmpty(response) ? undefined : bytes(response)) as T | undefined;
-    }
-    const node = this.content(response, errors);
-    if (!node) return undefined;
-    switch (type) {
-      case "string":
-        return node.getStringValue() as T;
-      case "number":
-        return node.getNumberValue() as T;
-      case "boolean":
-        return node.getBooleanValue() as T;
-      case "Date":
-        return node.getDateValue() as T;
-      case "DateOnly":
-        return node.getDateOnlyValue() as T;
-      case "TimeOnly":
-        return node.getTimeOnlyValue() as T;
-      case "Duration":
-        return node.getDurationValue() as T;
-      default:
-        throw new Error(`unsupported primitive response type ${String(type)}`);
-    }
+    return this.primitive(this.exchange(info), type, errors) as T | undefined;
   }
   async sendNoResponseContent(info: RequestInformation, errors: ErrorMappings | undefined): Promise<void> {
     this.check(this.exchange(info), errors);
@@ -110,6 +84,63 @@ export class HostRequestAdapter implements RequestAdapter {
     return this.content(this.exchange(info), errors)?.getCollectionOfEnumValues(type);
   }
 
+  /**
+   * Sends a request the SDK's builders made (src/builders.ts) and reads its
+   * response as metadata says, as Kiota's send methods do. headers have
+   * lower-case names.
+   */
+  async call(metadata: RequestMetadata, method: string, url: string, headers: Record<string, string>, content: ArrayBuffer | undefined): Promise<unknown> {
+    const response = this.request(method, url, headers, content);
+    const errors = metadata.errorMappings;
+    const factory = metadata.responseBodyFactory as ParsableFactory<Parsable>;
+    switch (metadata.adapterMethodName) {
+      case "send":
+        return this.content(response, errors)?.getObjectValue(factory);
+      case "sendCollection":
+        return this.content(response, errors)?.getCollectionOfObjectValues(factory);
+      case "sendCollectionOfPrimitive":
+        return this.content(response, errors)?.getCollectionOfPrimitiveValues(metadata.responseBodyFactory as unknown as PrimitiveTypesForDeserializationForCollection);
+      case "sendPrimitive":
+        return this.primitive(response, metadata.responseBodyFactory as unknown as PrimitiveTypesForDeserialization, errors);
+      case "sendNoResponseContent":
+        this.check(response, errors);
+        return undefined;
+      case "sendEnum":
+        return this.content(response, errors)?.getEnumValue(metadata.enumObject);
+      case "sendCollectionOfEnum":
+        return this.content(response, errors)?.getCollectionOfEnumValues(metadata.enumObject);
+      default:
+        throw new Error("couldn't find adapter method");
+    }
+  }
+
+  private primitive(response: HostResponse, type: PrimitiveTypesForDeserialization, errors: ErrorMappings | undefined): unknown {
+    if (type === "ArrayBuffer") {
+      this.check(response, errors);
+      return isEmpty(response) ? undefined : bytes(response);
+    }
+    const node = this.content(response, errors);
+    if (!node) return undefined;
+    switch (type) {
+      case "string":
+        return node.getStringValue();
+      case "number":
+        return node.getNumberValue();
+      case "boolean":
+        return node.getBooleanValue();
+      case "Date":
+        return node.getDateValue();
+      case "DateOnly":
+        return node.getDateOnlyValue();
+      case "TimeOnly":
+        return node.getTimeOnlyValue();
+      case "Duration":
+        return node.getDurationValue();
+      default:
+        throw new Error(`unsupported primitive response type ${String(type)}`);
+    }
+  }
+
   private exchange(info: RequestInformation): HostResponse {
     info.pathParameters["baseurl"] = this.baseUrl;
     const headers: Record<string, string> = {};
@@ -118,12 +149,16 @@ export class HostRequestAdapter implements RequestAdapter {
     info.headers.forEach((values, name) => {
       headers[name.toLowerCase()] = Array.from(values).join(", ");
     });
-    let body: string | ArrayBuffer | undefined = info.content;
-    if (body !== undefined && textType.test(mediaType(headers["content-type"]))) body = new TextDecoder().decode(body);
     // RequestInformation.URL expands with std-uritemplate; see uritemplate.ts.
     const raw = info.pathParameters["request-raw-url"];
     const url = typeof raw === "string" ? raw : expand(info.urlTemplate ?? "", { ...info.queryParameters, ...info.pathParameters });
-    return host.request(info.httpMethod ?? "GET", url, headers, body);
+    return this.request(info.httpMethod ?? "GET", url, headers, info.content);
+  }
+
+  private request(method: string, url: string, headers: Record<string, string>, content: ArrayBuffer | undefined): HostResponse {
+    let body: string | ArrayBuffer | undefined = content;
+    if (body !== undefined && textType.test(mediaType(headers["content-type"]))) body = new TextDecoder().decode(body);
+    return host.request(method, url, headers, body);
   }
 
   private content(response: HostResponse, errors: ErrorMappings | undefined): ParseNode | undefined {

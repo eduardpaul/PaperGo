@@ -2,10 +2,10 @@
 // @odata.nextLink through the request adapter until the last page.
 
 import type { NavigationMetadata } from "@microsoft/kiota-abstractions";
-import { createPaperGoClient, PaperGoClientNavigationMetadata } from "../src/client/paperGoClient.js";
+import { createPaperGoClient, PaperGoClientNavigationMetadata, type PaperGoClient } from "../src/client/paperGoClient.js";
 import { HostRequestAdapter } from "../src/adapter.js";
 import type { HostResponse } from "../src/host.js";
-import { withPages } from "../src/pages.js";
+import { client } from "../src/builders.js";
 import openapi from "../../api/openapi.json";
 import scope from "../scope.json";
 
@@ -54,7 +54,9 @@ let pages: Record<string, unknown>[] = [];
     return { status: 200, headers: { "content-type": "application/json" }, body: JSON.stringify(pages.shift()) };
   },
 };
-const api = withPages(createPaperGoClient(new HostRequestAdapter()), PaperGoClientNavigationMetadata);
+const adapter = new HostRequestAdapter();
+createPaperGoClient(adapter);
+const api = client<PaperGoClient>(adapter, PaperGoClientNavigationMetadata);
 
 pages = [
   { value: [{ id: "a" }, { id: "b" }], "@odata.nextLink": "http:///v1/term-sets/s/terms?%24skiptoken=t1&%24top=2&q=x" },

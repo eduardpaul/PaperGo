@@ -2,8 +2,9 @@
 // Kiota's JsonParseNode, whose results it must equal (scripts/test.mjs
 // checks every model), at a fraction of the allocations: its methods are
 // shared on the prototype instead of made per node, an object's field
-// deserializers are made once instead of three times, and the fields of an
-// object are read through one reused child node.
+// deserializers are made once per type and reused from a pool instead of
+// three times per object, and the fields of an object are read through one
+// reused child node.
 
 import {
   DateOnly,
@@ -17,7 +18,6 @@ import {
   createUntypedNumber,
   createUntypedObject,
   createUntypedString,
-  getEnumValueFromStringValue,
   inNodeEnv,
   isBackingStoreEnabled,
   isUntypedNode,
@@ -30,6 +30,30 @@ import {
   type PrimitiveTypesForDeserializationForCollection,
   type UntypedNode,
 } from "@microsoft/kiota-abstractions";
+
+// Kiota's getEnumValueFromStringValue reverses the enum's record on every
+// value; enum records are constant, so each is reversed once.
+const reversed = new WeakMap<object, Record<string, string>>();
+
+function enumValue(value: string, type: Record<string, unknown>): unknown {
+  let names = reversed.get(type);
+  if (names === undefined) {
+    names = Object.fromEntries(Object.entries(type).map(([key, v]) => [v, key])) as Record<string, string>;
+    reversed.set(type, names);
+  }
+  return type[names[value]];
+}
+
+// Deserializers make a record of closures for the object they fill. Slots
+// keep such records with the objects they fill, by deserializer, for reuse;
+// a slot is out of its pool while it reads, so nested objects of one type
+// take their own.
+interface Slot {
+  target: Record<string, unknown>;
+  fields: Record<string, (node: ParseNode) => void>;
+}
+// null marks deserializers of untyped and backed models, which are not pooled.
+const pools = new WeakMap<object, Slot[] | null>();
 
 export class HostParseNode implements ParseNode {
   onBeforeAssignFieldValues: ((value: Parsable) => void) | undefined;
@@ -102,8 +126,13 @@ export class HostParseNode implements ParseNode {
   }
 
   getObjectValue<T extends Parsable>(factory: ParsableFactory<T>): T {
+    const deserializer = factory(this);
+    if (!this.onBeforeAssignFieldValues && !this.onAfterAssignFieldValues) {
+      const pooled = this.pooled(deserializer);
+      if (pooled) return pooled as T;
+    }
     const temp = {} as T;
-    let fields = factory(this)(temp);
+    let fields = deserializer(temp);
     if (isUntypedNode(fields)) return this.untyped() as unknown as T;
     let model = temp;
     if (isBackingStoreEnabled(fields) && this.store) {
@@ -130,6 +159,48 @@ export class HostParseNode implements ParseNode {
     return model;
   }
 
+  // pooled reads the node with deserializer's fields from its pool, or
+  // returns undefined for models it does not pool: untyped and backed ones.
+  // The fields assign to their slot's target; the values then move to the
+  // model in the order they were assigned, and the slot goes back.
+  private pooled(deserializer: (instance?: Parsable) => Record<string, (node: ParseNode) => void>): Parsable | undefined {
+    let pool = pools.get(deserializer);
+    if (pool === null) return undefined;
+    if (!pool) pools.set(deserializer, (pool = []));
+    let slot = pool.pop();
+    if (!slot) {
+      const target: Record<string, unknown> = {};
+      const fields = deserializer(target as Parsable);
+      if (isUntypedNode(fields) || isBackingStoreEnabled(fields)) {
+        pools.set(deserializer, null);
+        return undefined;
+      }
+      slot = { target, fields };
+    }
+    const { target, fields } = slot;
+    const value = this.value;
+    if (value) {
+      for (const key of Object.keys(value as object)) {
+        const v = (value as Record<string, unknown>)[key];
+        const deserialize = fields[key];
+        if (deserialize) {
+          deserialize(this.at(v));
+        } else {
+          const holder = target as { additionalData?: Record<string, unknown> };
+          holder.additionalData ??= {};
+          holder.additionalData[key] = v;
+        }
+      }
+    }
+    const model: Record<string, unknown> = {};
+    for (const key of Object.keys(target)) {
+      model[key] = target[key];
+      delete target[key];
+    }
+    pool.push(slot);
+    return model as Parsable;
+  }
+
   // untyped reads the node as Kiota's untyped values, as JsonParseNode does.
   private untyped(): UntypedNode {
     const value = this.value;
@@ -154,7 +225,7 @@ export class HostParseNode implements ParseNode {
     if (!Array.isArray(this.value)) return [];
     const out: T[] = [];
     for (const x of this.value) {
-      const v = typeof x === "string" ? getEnumValueFromStringValue(x, type) : undefined;
+      const v = typeof x === "string" ? enumValue(x, type) : undefined;
       if (v !== undefined) out.push(v as T);
     }
     return out;
@@ -163,7 +234,7 @@ export class HostParseNode implements ParseNode {
   getEnumValue<T>(type: any): T | undefined {
     const raw = stringOf(this.value);
     if (!raw) return undefined;
-    return getEnumValueFromStringValue(raw, type) as T | undefined;
+    return enumValue(raw, type) as T | undefined;
   }
 
   getByteArrayValue(): ArrayBuffer | undefined {

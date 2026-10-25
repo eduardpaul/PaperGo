@@ -61,7 +61,7 @@ if (stripped === 0) {
 }
 
 // A GET or POST that takes $skiptoken returns a page of a list linked to the
-// next by @odata.nextLink. Its builder gets all(), which src/pages.ts
+// next by @odata.nextLink. Its builder gets all(), which src/builders.ts
 // implements: it reads every page and returns their values. Where both page
 // (/v1/search), all() posts, since the body carries the GET parameters too.
 const paged = /^     (post|get)\(((?:body: \w+, )?requestConfiguration\?: RequestConfiguration<(\w+QueryParameters)> \| undefined)\) : Promise<(\w+) \| undefined>;$/gm;
