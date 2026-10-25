@@ -3355,11 +3355,47 @@ export function createViewSettingsFromDiscriminatorValue(parseNode: ParseNode | 
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {WorkflowCall_input}
+ */
+// @ts-ignore
+export function createWorkflowCall_inputFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoWorkflowCall_input;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {WorkflowCall}
+ */
+// @ts-ignore
+export function createWorkflowCallFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoWorkflowCall;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {WorkflowCalls}
+ */
+// @ts-ignore
+export function createWorkflowCallsFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoWorkflowCalls;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {WorkflowForm}
  */
 // @ts-ignore
 export function createWorkflowFormFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoWorkflowForm;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {WorkflowStarted}
+ */
+// @ts-ignore
+export function createWorkflowStartedFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoWorkflowStarted;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -7032,12 +7068,57 @@ export function deserializeIntoViewSettings(viewSettings: Partial<ViewSettings> 
 }
 /**
  * The deserialization information for the current model
+ * @param WorkflowCall The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoWorkflowCall(workflowCall: Partial<WorkflowCall> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "input": n => { workflowCall.input = n.getObjectValue<WorkflowCall_input>(createWorkflowCall_inputFromDiscriminatorValue); },
+        "item_id": n => { workflowCall.itemId = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param WorkflowCall_input The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoWorkflowCall_input(workflowCall_input: Partial<WorkflowCall_input> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param WorkflowCalls The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoWorkflowCalls(workflowCalls: Partial<WorkflowCalls> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "calls": n => { workflowCalls.calls = n.getCollectionOfObjectValues<WorkflowCall>(createWorkflowCallFromDiscriminatorValue); },
+        "workflow": n => { workflowCalls.workflow = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
  * @param WorkflowForm The instance to deserialize into.
  * @returns {Record<string, (node: ParseNode) => void>}
  */
 // @ts-ignore
 export function deserializeIntoWorkflowForm(workflowForm: Partial<WorkflowForm> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param WorkflowStarted The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoWorkflowStarted(workflowStarted: Partial<WorkflowStarted> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "run_ids": n => { workflowStarted.runIds = n.getCollectionOfPrimitiveValues<string>("string"); },
     }
 }
 /**
@@ -13003,6 +13084,41 @@ export function serializeViewSettings(writer: SerializationWriter, viewSettings:
 /**
  * Serializes information the current object
  * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param WorkflowCall The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeWorkflowCall(writer: SerializationWriter, workflowCall: Partial<WorkflowCall> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!workflowCall || isSerializingDerivedType) { return; }
+    writer.writeObjectValue<WorkflowCall_input>("input", workflowCall.input, serializeWorkflowCall_input);
+    writer.writeStringValue("item_id", workflowCall.itemId);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param WorkflowCall_input The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeWorkflowCall_input(writer: SerializationWriter, workflowCall_input: Partial<WorkflowCall_input> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!workflowCall_input || isSerializingDerivedType) { return; }
+    writer.writeAdditionalData(workflowCall_input.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param WorkflowCalls The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeWorkflowCalls(writer: SerializationWriter, workflowCalls: Partial<WorkflowCalls> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!workflowCalls || isSerializingDerivedType) { return; }
+    writer.writeCollectionOfObjectValues<WorkflowCall>("calls", workflowCalls.calls, serializeWorkflowCall);
+    writer.writeStringValue("workflow", workflowCalls.workflow);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
  * @param WorkflowForm The instance to serialize from.
  * @param writer Serialization writer to use to serialize this model
  */
@@ -13010,6 +13126,17 @@ export function serializeViewSettings(writer: SerializationWriter, viewSettings:
 export function serializeWorkflowForm(writer: SerializationWriter, workflowForm: Partial<WorkflowForm> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!workflowForm || isSerializingDerivedType) { return; }
     writer.writeAdditionalData(workflowForm.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param WorkflowStarted The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeWorkflowStarted(writer: SerializationWriter, workflowStarted: Partial<WorkflowStarted> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!workflowStarted || isSerializingDerivedType) { return; }
+    writer.writeCollectionOfPrimitiveValues<string>("run_ids", workflowStarted.runIds);
 }
 /**
  * Serializes information the current object
@@ -14560,10 +14687,41 @@ export interface ViewSettings extends Parsable {
     match?: ViewSettings_match | null;
 }
 export type ViewSettings_match = (typeof ViewSettings_matchObject)[keyof typeof ViewSettings_matchObject];
+export interface WorkflowCall extends Parsable {
+    /**
+     * The run's input, checked against the called workflow's input_schema.
+     */
+    input?: WorkflowCall_input | null;
+    /**
+     * The item the called run works on; none for a standalone call.
+     */
+    itemId?: string | null;
+}
+/**
+ * The run's input, checked against the called workflow's input_schema.
+ */
+export interface WorkflowCall_input extends AdditionalDataHolder, Parsable {
+}
+export interface WorkflowCalls extends Parsable {
+    /**
+     * The calls property
+     */
+    calls?: WorkflowCall[] | null;
+    /**
+     * The key of the called workflow.
+     */
+    workflow?: string | null;
+}
 /**
  * A JSON Schema form (draft-07 subset; see docs/workflows.md#forms): type, title, description, default, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, uniqueItems, items, properties, required, additionalProperties (boolean or a schema; objects are closed by default). x-papergo on a property makes it a domain picker (item, collection, relationship, terms, keywords, people). The terms picker selects term IDs by default; select: sets selects term-set IDs, optionally narrowed by group_id.
  */
 export interface WorkflowForm extends AdditionalDataHolder, Parsable {
+}
+export interface WorkflowStarted extends Parsable {
+    /**
+     * The run_ids property
+     */
+    runIds?: string[] | null;
 }
 export interface WorkspaceKeywordCount extends Parsable {
     /**

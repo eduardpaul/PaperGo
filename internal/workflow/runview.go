@@ -24,12 +24,14 @@ type Run struct {
 	WorkspaceID     string  `json:"workspace_id"`
 	ItemID          *string `json:"item_id,omitempty"`
 	// Items is a selection run's ordered membership; ItemID is its primary.
-	Items        []string             `json:"items,omitempty"`
-	EventID      string               `json:"event_id"`
-	EventType    string               `json:"event_type"`
-	Depth        int                  `json:"depth"`
-	Actor        string               `json:"actor"`
-	RetryOf      *string              `json:"retry_of,omitempty"`
+	Items     []string `json:"items,omitempty"`
+	EventID   string   `json:"event_id"`
+	EventType string   `json:"event_type"`
+	Depth     int      `json:"depth"`
+	Actor     string   `json:"actor"`
+	RetryOf   *string  `json:"retry_of,omitempty"`
+	// ParentRunID is the run that called this one.
+	ParentRunID  *string              `json:"parent_run_id,omitempty"`
 	Status       runstore.Status      `json:"status"`
 	Error        string               `json:"error,omitempty"`
 	ErrorCode    operations.ErrorCode `json:"error_code,omitempty"`
@@ -38,7 +40,8 @@ type Run struct {
 	StartedAt    *time.Time           `json:"started_at,omitempty"`
 	CompletedAt  *time.Time           `json:"completed_at,omitempty"`
 	WaitingUntil *time.Time           `json:"waiting_until,omitempty"`
-	// Inputs are the launch form's values of a manual run, defaults applied.
+	// Inputs are the launch form's values of a manual run, or a call's
+	// input, defaults applied.
 	Inputs map[string]any  `json:"inputs,omitempty"`
 	Result json.RawMessage `json:"result,omitempty"`
 	Steps  []Step          `json:"steps,omitempty"`
@@ -124,8 +127,8 @@ func (s *Service) Runs(ctx context.Context, subject, workspaceID string, f RunFi
 			restricted = true
 		}
 		filter := runstore.Filter{WorkspaceID: workspaceID, WorkflowID: f.WorkflowID, Origin: f.Origin, Limit: f.Limit + 1}
-		if f.Origin != "" && f.Origin != "manual" && f.Origin != "schedule" && f.Origin != TestStart && f.Origin != "automatic" {
-			return RunPage{}, dms.Invalid("origin must be manual, schedule, test or automatic")
+		if f.Origin != "" && f.Origin != TriggerManual && f.Origin != TriggerSchedule && f.Origin != TestStart && f.Origin != TriggerCall && f.Origin != "automatic" {
+			return RunPage{}, dms.Invalid("origin must be manual, schedule, test, call or automatic")
 		}
 		if f.Status != "" {
 			if !runstore.Status(f.Status).Valid() {
@@ -278,6 +281,9 @@ func (s *Service) Run(ctx context.Context, subject, id string) (Run, error) {
 			return Run{}, err
 		}
 		run.Inputs = payload.Input
+		if payload.Trigger != nil && payload.Trigger.ParentRunID != "" {
+			run.ParentRunID = &payload.Trigger.ParentRunID
+		}
 		steps, err := t.DAL.Runs().Steps(ctx, id)
 		if err != nil {
 			return Run{}, err

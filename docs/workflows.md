@@ -66,6 +66,7 @@ The web app's workflow editor checks scripts as you type: it completes the SDK a
 | `ctx.wait(operation)` | waits until operations finish; see [waiting](#waiting) |
 | `ctx.ask(task)` | creates a [task](#tasks) and returns its result once people have answered |
 | `ctx.notify(message)` | sends people a [message](notifications.md#sending-messages) |
+| `ctx.call(workflow, input, { itemId })` | runs a workflow with a call trigger and returns its output; see [calling workflows](#calling-workflows) |
 | `ctx.sleep(ms)`, `ctx.sleep({ until })` | unloads the run until a time |
 | `ctx.log(...)`, `ctx.warn(...)`, `ctx.error(...)` | write to the run's log, as `console` does |
 
@@ -122,6 +123,36 @@ const text = plain(read.result) as { text_id: string; pages: number };
 `ctx.sleep(ms)` and `ctx.sleep({ until })` unload the run until a time; the run shows as `waiting` with `waiting_until`.
 
 Cancelling a run cancels the operations its requests started, such as its tasks, which it [owns](operations.md#ownership-and-dependencies). Operations it only waits for, such as another run's task, go on: waiting is a dependency, not ownership.
+
+## Calling workflows
+
+A workflow that declares a `call` trigger can be called by other runs, like a function: `ctx.call(key, input, { itemId })` starts a run of the workflow with that key in the run's workspace and returns what it returned. Work on many items fans out this way: each item gets its own run, with its own small journal, and the runs execute in parallel on the workflow workers, so the calling run stays short however many items there are.
+
+```ts
+// check-invoice: called on one invoice at a time.
+export default workflow<{ strict: boolean }>({
+  triggers: [{ type: "call", collection_id: "<invoices list>" }],
+  input_schema: { type: "object", properties: { strict: { type: "boolean", default: false } } },
+  async run(ctx, input) {
+    const invoice = await ctx.api.v1.resources.byId(ctx.itemId!).get();
+    return { total: Number(invoice?.values?.additionalData?.total ?? 0) };
+  },
+});
+
+// The caller: one call per invoice, started and awaited together.
+const invoices = await ctx.api.v1.resources.byId(list).children.all({ queryParameters: { kind: "item" } });
+const checked = await Promise.all(invoices.map((invoice) => ctx.call<{ total: number }>("check-invoice", { strict: true }, { itemId: invoice.id! })));
+```
+
+- **Calls made together are batched.** Calls a script starts before it next waits go out as one request per workflow and 500 calls, and their runs are waited for together, 64 operations per wait step. Calling a workflow on 1,000 items costs the caller two requests and 16 short steps. The server checks a request as a whole, so a call it refuses, such as one on an item the author cannot write, fails every call sent with it.
+- **The trigger** takes `collection_id`, which then requires every call to name an item of that collection; without it a call names any item of the workspace, or none. `input_schema` is the form of a call's input, with defaults applied and values checked as for a manual start. `disabled: true` stops calls. Calls need the workflow published; `manual_enabled` and `automatic_enabled` do not apply.
+- **Who may call.** The calling run's author needs write access to each item, or workspace manage for a call on no item, and the `item.write` scope, as a manual start does. A called run acts as its own version's author.
+- **The called run** sees `ctx.trigger` as `{ kind: "call", input, parent_run_id }` and its input as `run(ctx, input)`'s second argument. It carries no item snapshot: it reads its item through the API. Its run shows the caller as `parent_run_id`, and run lists filter called runs with `origin=call`.
+- **It belongs to the caller.** Cancelling the calling run cancels the runs it called that are still active; a caller can wait for them even when another author wrote the called workflow. A called run that fails or is cancelled throws an `OperationError` in the caller; use `Promise.allSettled` to go on with the others.
+- **Depth.** A called run is one level deeper than its caller, and a run at depth 4 cannot call, so workflows that call each other stop.
+- **Concurrency** applies as to manual starts: a call always starts a run, which fails at once when `skip` finds another run active.
+
+`POST /v1/workspaces/{id}/workflow-calls` is the request behind `ctx.call`: `{"workflow": "<key>", "calls": [{"item_id", "input"}]}` (202 with `run_ids`, in the order of calls). Only workflow runs make it.
 
 ## Parameters
 
@@ -180,6 +211,7 @@ a workflow. The server rechecks write permission on every item before starting.
 | `permissions.changed` | an item's or folder's effective permissions change: its own or an ancestor's ACL is replaced, it moves into another permission scope, or workspace membership changes. Delivered once **per affected item and folder** (see below) | the item or folder |
 | `schedule` | a cron occurrence: `cron` (5 fields) and `time_zone` (IANA, default UTC) | see below |
 | `manual` | someone starts it through the API or the web app | each chosen item, the selection's primary item, or none |
+| `call` | another run calls it with `ctx.call` (see [calling workflows](#calling-workflows)) | the called item, or none |
 | `term.merged` | a term is merged into another (see [taxonomy](application-foundation.md#controlled-taxonomy)) | none |
 | `term.moved` | a term moves under another parent, or a keyword is promoted into another set | none |
 | `term.changed` | a term's name, localized labels or other editable properties change through PUT `/v1/terms/{id}` | none |
@@ -229,6 +261,7 @@ The `data` for each event type:
 - `item.unpublished`: `revision_id`
 - `schedule`: `workflow_id`, `occurrence`; item-associated schedules also include `surface` (`head` or `published`)
 - `manual`: `workflow_id`; form results are available as `ctx.trigger.input` and `run(ctx, input)`'s second argument
+- `call`: `workflow_id`, `parent_run_id`; the input is `ctx.trigger.input` and `run(ctx, input)`'s second argument
 - `term.merged`: `source_term_id`, `target_term_id`, `term_set_id`
 - `term.moved`: `term_id`, `term_set_id`, `previous_term_set_id`, `parent_id`, `previous_parent_id` (empty at the root)
 - `term.changed`: `term_id`, `term_set_id`, `version`, sorted `changed_fields`, and `previous` / `current` term properties (`name`, `parent_id`, `description`, `color`, `sort_order`, `labels`, `synonyms`, `deprecated`, `available_as_keyword`; absent optional fields mean unset). The event has no `resource_id` because the term is organization taxonomy, not a workspace resource.
@@ -537,6 +570,7 @@ Audit events and publication snapshots are a separate product record. Run retent
 | Create, change, delete workflows; turn on, configure and copy built-ins | workspace `manage` (built-ins per collection also need collection `manage`) |
 | Start a manual workflow on items | `write` on each item |
 | Start a manual workflow with no item | workspace `manage` |
+| Call a workflow from a run | for the run's author: `write` on the item, or workspace `manage` for a call on no item |
 | Start a test run | workspace `manage`, and `write` on each item |
 | See, cancel and retry runs | workspace `manage` |
 | Answer a task | being an assignee (or in an assigned group) who can read the workspace and the item's draft |
@@ -553,6 +587,7 @@ Audit events and publication snapshots are a separate product record. Run retent
 | GET / PUT / DELETE | /v1/workflows/{id} | Read, replace (If-Match), delete (If-Match) |
 | GET | /v1/workflows/{id}/versions | Versions with their scripts, newest first |
 | POST | /v1/workflows/{id}/runs | Manual start: `{"item_ids": [...], "inputs": {...}, "workflow_version": 1}` (202 with `run_ids`) |
+| POST | /v1/workspaces/{id}/workflow-calls | [Calls](#calling-workflows) from a run: `{"workflow": "<key>", "calls": [{"item_id", "input"}]}` (202 with `run_ids`) |
 | POST | /v1/workflows/{id}/test-runs | [Test run](#testing) of the current version, draft or published: `{"item_ids": [...], "primary_item_id", "inputs": {...}}` (202 with `run_id`) |
 | POST | /v1/workflows/{id}/check | Read-only manual preflight with the same launch body |
 | POST | /v1/workspaces/{id}/workflow-actions | Manual actions and availability reasons for a selection |
@@ -560,7 +595,7 @@ Audit events and publication snapshots are a separate product record. Run retent
 | GET | /v1/workspaces/{id}/workflow-builtins | Built-ins with the workspace's built-in workflows |
 | PUT | /v1/workspaces/{id}/workflow-builtins/{key} | Turn on/off, set parameters |
 | POST | /v1/workspaces/{id}/workflow-builtins/{key}/copy | Copy into an editable workflow |
-| GET | /v1/workspaces/{id}/workflow-runs | Runs, newest first (`workflow_id`, `item_id`, `origin` (`manual`, `schedule`, `test` or `automatic`), `status`, `include_system`, `$skiptoken`, `$top`) |
+| GET | /v1/workspaces/{id}/workflow-runs | Runs, newest first (`workflow_id`, `item_id`, `origin` (`manual`, `schedule`, `test`, `call` or `automatic`), `status`, `include_system`, `$skiptoken`, `$top`) |
 | GET | /v1/workflow-runs/{id} | A run with its result, steps and log |
 | POST | /v1/workflow-runs/{id}/cancel, /retry | Cancel, or retry a failed run |
 | GET | /v1/me/tasks | The caller's tasks (`waiting=true` for those still to answer, `status`, `kind`, `key`, `workspace_id`, `item_id`, `$top`); open ones by due time, in pages linked by `@odata.nextLink` like the other task lists |

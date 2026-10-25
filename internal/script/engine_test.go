@@ -444,6 +444,51 @@ export default workflow({
 	}
 }
 
+func TestCallsMadeTogetherStartAndWaitTogether(t *testing.T) {
+	const ws = "7c1e0d52-8f0e-4b8b-9d0e-3c7f6a2b1e01"
+	var m *memory
+	var bodies []string
+	m = newMemory(func(req Request) Response {
+		if req.Method != "POST" || req.URL != "/v1/workspaces/"+ws+"/workflow-calls" {
+			return jsonResponse(404, `{"code":"not_found","detail":"route not found"}`)
+		}
+		bodies = append(bodies, string(req.Body))
+		var in struct {
+			Calls []json.RawMessage `json:"calls"`
+		}
+		_ = json.Unmarshal(req.Body, &in)
+		ids := make([]string, len(in.Calls))
+		for i := range in.Calls {
+			ids[i] = fmt.Sprintf(`"wf:check:%d"`, len(m.operations))
+			m.operations[strings.Trim(ids[i], `"`)] = "pending"
+		}
+		return jsonResponse(202, `{"run_ids":[`+strings.Join(ids, ",")+`]}`)
+	})
+	e := New(m, 0)
+	run := Run{ID: "run-calls", Context: map[string]any{"workspace_id": ws}, Artifact: bundle(t, `
+import { OperationError, workflow } from "@papergo/workflow";
+export default workflow({
+  async run(ctx) {
+    const results = await Promise.allSettled(["a", "b", "c"].map((id) => ctx.call<{ total: number }>("check", { strict: true }, { itemId: id })));
+    return results.map((r) => r.status === "fulfilled" ? r.value.total : (r.reason as OperationError).operation.status);
+  },
+});
+`)}
+	if out := execute(t, e, run); out.Status != Suspended || len(bodies) != 1 || m.waits != 1 {
+		t.Fatalf("outcome: %+v after %d call requests and %d waits", out, len(bodies), m.waits)
+	}
+	if bodies[0] != `{"calls":[{"input":{"strict":true},"item_id":"a"},{"input":{"strict":true},"item_id":"b"},{"input":{"strict":true},"item_id":"c"}],"workflow":"check"}` {
+		t.Fatalf("call request: %s", bodies[0])
+	}
+	m.results["wf:check:0"], m.results["wf:check:2"] = `{"total":1}`, `{"total":3}`
+	m.finish("wf:check:0", "succeeded")
+	m.finish("wf:check:1", "failed")
+	m.finish("wf:check:2", "succeeded")
+	if out := execute(t, e, run); out.Status != Completed || string(out.Output) != `[1,"failed",3]` || len(bodies) != 1 || m.waits != 1 {
+		t.Fatalf("outcome: %+v after %d call requests and %d waits", out, len(bodies), m.waits)
+	}
+}
+
 func TestJournalsAreBounded(t *testing.T) {
 	page := jsonResponse(200, `{"value":[],"padding":"`+strings.Repeat("x", 1<<20)+`"}`)
 	m := newMemory(func(Request) Response { return page })

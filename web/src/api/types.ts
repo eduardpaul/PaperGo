@@ -461,12 +461,15 @@ export interface WorkflowRunStep {
 export interface WorkflowRun {
   id: string;
   workflow_id: string;
+  workspace_id: string;
   workflow_version?: number;
   status: string;
   event_type?: string;
   item_id?: string;
   items?: string[];
   retry_of?: string;
+  /** The run that called this one with ctx.call. */
+  parent_run_id?: string;
   error?: string;
   created_at: string;
   updated_at?: string;

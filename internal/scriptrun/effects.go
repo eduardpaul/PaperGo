@@ -138,7 +138,12 @@ func (e *Effects) Wait(ctx context.Context, run script.Run, unsaved []runs.Step,
 		done, step.Status, step.Output = true, runs.StepPending, nil
 		ended := make([]*dms.OperationView, len(step.Operations))
 		for i, id := range step.Operations {
+			// A run waits for operations its author can read, and for those it
+			// owns, such as runs it called of a workflow another author wrote.
 			op, err := t.Operation(ctx, run.Author, id)
+			if errors.Is(err, dms.ErrNotFound) || errors.Is(err, dms.ErrForbidden) {
+				op, err = t.OwnedOperation(ctx, run.ID, id)
+			}
 			if errors.Is(err, dms.ErrNotFound) || errors.Is(err, dms.ErrForbidden) {
 				return fmt.Errorf("%w: %s", script.ErrUnknownOperation, id)
 			}

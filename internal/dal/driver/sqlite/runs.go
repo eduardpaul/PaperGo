@@ -65,10 +65,10 @@ func (q Queries) WorkflowRuns(ctx context.Context, f runs.Filter, statuses []ope
 		query.Apply(w.EventType.NotIn(f.ExcludeEventTypes...))
 	}
 	switch f.Origin {
-	case "manual", "schedule", "test":
+	case "manual", "schedule", "test", "call":
 		query.Apply(w.EventType.EQ(f.Origin))
 	case "automatic":
-		query.Apply(w.EventType.NotIn("manual", "schedule", "test"))
+		query.Apply(w.EventType.NotIn("manual", "schedule", "test", "call"))
 	}
 	if f.CreatedBefore != nil {
 		query.Apply(w.CreatedAt.LT(f.CreatedBefore.UTC()))

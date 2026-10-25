@@ -7502,7 +7502,8 @@
                 "manual",
                 "automatic",
                 "schedule",
-                "test"
+                "test",
+                "call"
               ]
             }
           },
@@ -23270,6 +23271,135 @@
           }
         }
       }
+    },
+    "/v1/workspaces/{id}/workflow-calls": {
+      "post": {
+        "summary": "Call Workflow",
+        "operationId": "callWorkflow",
+        "description": "Start runs of a published workflow of the workspace that declares a call trigger, for the workflow run that makes the request: scripts call it with ctx.call. Each call names an item, or none, and an input checked against the workflow's input_schema. The calling run's author needs write access to each item, or workspace manage for a call on no item, and item.write. With collection_id, the call trigger requires an item of that collection. The runs start in the request's transaction and belong to the calling run: cancelling it cancels them, and it can wait for them. They act as their own version's author, one level deeper than the caller; calls stop at depth 5. Concurrency applies as to manual starts. The response lists the runs in the order of calls.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowCalls"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowStarted"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -27735,6 +27865,10 @@
           },
           "retry_of": {
             "type": "string"
+          },
+          "parent_run_id": {
+            "type": "string",
+            "description": "The run that called this one."
           },
           "status": {
             "type": "string",
@@ -33728,6 +33862,43 @@
             "maxLength": 64
           }
         }
+      },
+      "WorkflowCalls": {
+        "type": "object",
+        "properties": {
+          "workflow": {
+            "type": "string",
+            "description": "The key of the called workflow."
+          },
+          "calls": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 500,
+            "items": {
+              "$ref": "#/components/schemas/WorkflowCall"
+            }
+          }
+        },
+        "required": [
+          "workflow",
+          "calls"
+        ],
+        "additionalProperties": false
+      },
+      "WorkflowCall": {
+        "type": "object",
+        "properties": {
+          "item_id": {
+            "type": "string",
+            "description": "The item the called run works on; none for a standalone call."
+          },
+          "input": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "The run's input, checked against the called workflow's input_schema."
+          }
+        },
+        "additionalProperties": false
       }
     },
     "parameters": {

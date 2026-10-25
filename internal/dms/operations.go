@@ -415,6 +415,21 @@ func (s *Service) FinishedOperations(ctx context.Context, ids []string) ([]opera
 	return s.DAL.Operations().Finished(ctx, ids)
 }
 
+// OwnedOperation returns operation id as the API shows it when owner owns
+// it, such as a run that a workflow run called, whoever created it.
+func (s *Service) OwnedOperation(ctx context.Context, owner, id string) (*OperationView, error) {
+	return read(ctx, s, func(t *Service) (*OperationView, error) {
+		op, e := t.DAL.Operations().Find(ctx, id)
+		if dberr.IsNotFound(e) || e == nil && op.ParentID != owner {
+			return nil, ErrNotFound
+		}
+		if e != nil {
+			return nil, e
+		}
+		return viewOperation(op, time.Now()), nil
+	})
+}
+
 // EndedOperations returns those of ids that ended as the API shows them,
 // in the order of ids. It does not check who may read them: it is for
 // callers that checked when they began to wait, such as a run.

@@ -61,7 +61,8 @@ type Effects interface {
 	// last durable step, so a long run of reads keeps its journal.
 	Record(ctx context.Context, run Run, unsaved []runs.Step) error
 	// Wait records the wait step for step.Operations, which the author must
-	// be able to read: completed when none of them is pending, else pending
+	// be able to read or the run must own: completed when none of them is
+	// pending, else pending
 	// until the last one finishes. A completed wait's output is its
 	// operations as they ended, a JSON array of their API representations;
 	// Wait returns it when the wait is already over, and releasing a
@@ -126,9 +127,11 @@ var (
 const (
 	defaultSlice = 5 * time.Second
 	// Output and request limits keep a run's journal small.
-	maxOutput    = 256 << 10
-	maxWaits     = 64
-	maxCallStack = 4096
+	maxOutput = 256 << 10
+	maxWaits  = 64
+	// maxOperationID bounds an operation ID a wait names.
+	maxOperationID = 128
+	maxCallStack   = 4096
 	// maxJournal bounds the outputs a run records. Every slice loads and
 	// replays all of them, so the bound keeps a slice's memory and time in
 	// proportion.

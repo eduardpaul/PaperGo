@@ -22,6 +22,11 @@
 //     ctx.ask({ title: "Budget check", assignees: ["group:finance"] }),
 //   ]);
 //
+// Work on many items fans out to runs of a workflow with a call trigger,
+// each with its own small journal, running in parallel:
+//
+//   const totals = await Promise.all(items.map((id) => ctx.call("check-invoice", {}, { itemId: id })));
+//
 // A list that comes in pages, such as a folder's children, also has all(),
 // which reads every page and returns their values:
 //
@@ -124,9 +129,19 @@ export interface ManualTrigger<I = unknown> {
   readonly items: readonly TriggerSelection[];
 }
 
-/** Narrow on kind to access manual inputs and selection, or the triggering item, folder or file. */
+/** A run another run started with ctx.call. The called run reads its item through the API. */
+export interface CallTrigger<I = unknown> {
+  readonly kind: "call";
+  /** The call's input; the same object as run(ctx, input)'s second argument. */
+  readonly input: I;
+  /** The run that called this one. */
+  readonly parent_run_id: string;
+}
+
+/** Narrow on kind to access manual inputs and selection, a call, or the triggering item, folder or file. */
 export type TriggerObject<I = unknown> =
   | ManualTrigger<I>
+  | CallTrigger<I>
   | { readonly kind: "item"; readonly item: TriggerResource }
   | { readonly kind: "folder"; readonly folder: TriggerResource }
   | { readonly kind: "file"; readonly item: TriggerResource; readonly file: TriggerFile };
@@ -191,6 +206,12 @@ export type NotificationRequest = Omit<NotificationSend, "recipients" | "title">
   workspaceId?: string;
 };
 
+/** Where a called run works. */
+export interface CallOptions {
+  /** The item the called run works on; none for a workflow called without one. */
+  itemId?: string;
+}
+
 export interface Context<P = Record<string, unknown>, I = unknown> {
   readonly runId: string;
   readonly run: Run<P, I>;
@@ -233,6 +254,19 @@ export interface Context<P = Record<string, unknown>, I = unknown> {
   ask<V = Record<string, unknown>>(task: TaskRequest<V>): Promise<TaskResult<V>>;
   /** Sends a message to people's inboxes; it needs no answer. Sending again with the same dedupKey reaches only people who do not have it. */
   notify(message: NotificationRequest): Promise<NotificationSendResult>;
+  /**
+   * Runs the workflow with key workflow, which must declare a call trigger,
+   * with input and, in options, the item it works on, and returns what it
+   * returned. The run starts at once and belongs to this one: cancelling
+   * this run cancels it. It acts as its own version's author. Calls made
+   * together start in batches and wait together, so a fan-out over many
+   * items costs this run a few steps:
+   *
+   *     await Promise.all(ids.map((id) => ctx.call("check-invoice", {}, { itemId: id })));
+   *
+   * A called run that fails throws an OperationError.
+   */
+  call<O = unknown, CI = Record<string, unknown>>(workflow: string, input?: CI, options?: CallOptions): Promise<O>;
   /** Unloads the run for ms milliseconds, or until a time. */
   sleep(duration: number | { until: Date | string }): Promise<void>;
   /** Writes to the run's log. A replay does not repeat earlier entries. */
@@ -338,11 +372,33 @@ function wait(operations: (Operation | string)[]): Promise<Operation[]> {
   });
 }
 
+// A call the script made that has not been sent yet.
+interface Calling {
+  workspace: string;
+  workflow: string;
+  itemId?: string;
+  input?: Record<string, unknown>;
+  resolve(runId: string): void;
+  reject(error: unknown): void;
+}
+
+let calling: Calling[] = [];
+
+// The most calls one request makes (workflow.MaxCalls).
+const callLimit = 500;
+
 // The engine calls __papergoIdle when the script has nothing left to run
-// but its run is not over. Every wait started since is one wait step, so
-// the run unloads once, until all its operations have finished. It returns
-// whether there was a wait.
+// but its run is not over. It first sends the calls made since, a request
+// per workflow and 500 calls, then their waits start with the others: every
+// wait started since is one wait step, so the run unloads once, until all
+// its operations have finished. It returns whether it sent or waited.
 function idle(): boolean {
+  if (calling.length > 0) {
+    const made = calling;
+    calling = [];
+    void send(made);
+    return true;
+  }
   if (waiting.length === 0) return false;
   const started = waiting;
   waiting = [];
@@ -377,6 +433,34 @@ function finish(started: Waiting[]): void {
 }
 
 (globalThis as Record<string, unknown>).__papergoIdle = idle;
+
+async function send(made: Calling[]): Promise<void> {
+  const byWorkflow = new Map<string, Calling[]>();
+  for (const c of made) {
+    const key = `${c.workspace}/${c.workflow}`;
+    byWorkflow.set(key, [...(byWorkflow.get(key) ?? []), c]);
+  }
+  for (const calls of byWorkflow.values()) {
+    for (let i = 0; i < calls.length; i += callLimit) {
+      const batch = calls.slice(i, i + callLimit);
+      try {
+        const started = await api.v1.workspaces.byId(batch[0].workspace).workflowCalls.post({
+          workflow: batch[0].workflow,
+          calls: batch.map((c) => ({ itemId: c.itemId, input: c.input && json(c.input) })),
+        });
+        batch.forEach((c, n) => c.resolve(started!.runIds![n]));
+      } catch (error) {
+        for (const c of batch) c.reject(error);
+      }
+    }
+  }
+}
+
+async function call<O>(workspace: string, workflow: string, input: Record<string, unknown> | undefined, options: CallOptions | undefined): Promise<O> {
+  const runId = await new Promise<string>((resolve, reject) => calling.push({ workspace, workflow, itemId: options?.itemId, input, resolve, reject }));
+  const [operation] = await wait([runId]);
+  return plain(operation.result) as O;
+}
 
 async function ask<V>(workspaceId: string, request: TaskRequest<V>): Promise<TaskResult<V>> {
   const { workspaceId: workspace, inputSchema, values, ...task } = request;
@@ -417,6 +501,7 @@ function context<P, I>(run: Run<P, I>): Context<P, I> {
       Array.isArray(operations) ? wait(operations) : wait([operations]).then((all) => all[0])) as Context<P, I>["wait"],
     ask: (task) => ask(run.workspace_id, task),
     notify: (message) => notify(run.workspace_id, message),
+    call: (<O>(workflow: string, input?: Record<string, unknown>, options?: CallOptions) => call<O>(run.workspace_id, workflow, input, options)) as Context<P, I>["call"],
     sleep,
     log: (...values) => host.log("info", format(values)),
     warn: (...values) => host.log("warn", format(values)),
@@ -437,7 +522,9 @@ function check(definition: unknown): Workflow {
  */
 export async function __start(definition: unknown, run: string): Promise<string> {
   const { input: providedInput, ...info } = JSON.parse(run) as Run & { input: unknown };
-  const input = info.trigger?.kind === "manual" ? providedInput ?? {} : providedInput;
+  const kind = info.trigger?.kind;
+  const input = kind === "manual" || kind === "call" ? providedInput ?? {} : providedInput;
+  if (info.trigger?.kind === "call") Object.assign(info.trigger, { input });
   if (info.trigger?.kind === "manual") {
     // Input and the primary snapshot are already persisted once. Expose
     // references here instead of duplicating them in the run payload.

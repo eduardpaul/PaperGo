@@ -370,7 +370,11 @@ func (h *host) wait(ids []string) goja.Value {
 	}
 	seen := make(map[string]bool, len(ids))
 	for _, id := range ids {
-		if id == "" || len(id) > 64 || seen[id] {
+		// Run IDs, which runs that call workflows wait for, are the longest.
+		if id == "" || len(id) > maxOperationID {
+			panic(h.rt.NewTypeError("ctx.wait takes operation IDs of 1 to %d characters", maxOperationID))
+		}
+		if seen[id] {
 			panic(h.rt.NewTypeError("ctx.wait takes distinct operation IDs"))
 		}
 		seen[id] = true
