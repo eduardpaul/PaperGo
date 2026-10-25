@@ -11,6 +11,12 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface AuditRequestBuilder extends BaseRequestBuilder<AuditRequestBuilder> {
     /**
+     * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+     * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+     * @returns {Promise<NonNullable<AuditPage["value"]>>}
+     */
+     all(requestConfiguration?: RequestConfiguration<AuditRequestBuilderGetQueryParameters> | undefined) : Promise<NonNullable<AuditPage["value"]>>;
+    /**
      * Requires audit.read. Newest first by creation time then ID, with opaque keyset paging. Optional actor, entity type/ID, workspace and RFC3339 date filters. from is inclusive; to is exclusive. Properties contain changed names, without values. Trace IDs correlate requests or background writes. Identity, catalog, taxonomy, workflow and content changes share this feed.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<AuditPage>}

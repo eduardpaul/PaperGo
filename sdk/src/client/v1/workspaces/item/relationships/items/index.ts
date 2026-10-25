@@ -12,6 +12,12 @@ export type GetScopeQueryParameterType = (typeof GetScopeQueryParameterTypeObjec
  */
 export interface ItemsRequestBuilder extends BaseRequestBuilder<ItemsRequestBuilder> {
     /**
+     * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+     * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+     * @returns {Promise<NonNullable<RelationshipEndpointPage["value"]>>}
+     */
+     all(requestConfiguration?: RequestConfiguration<ItemsRequestBuilderGetQueryParameters> | undefined) : Promise<NonNullable<RelationshipEndpointPage["value"]>>;
+    /**
      * Pages unique readable endpoints of qualifying anchored relationships, including external peers. q is a case-insensitive item-name prefix on the selected surface. item_id locates one qualifying endpoint. With neither a nonempty q nor item_id, returns an empty page. Sorts by lower-case name and ID.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<RelationshipEndpointPage>}

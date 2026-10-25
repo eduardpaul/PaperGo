@@ -12,6 +12,12 @@ export type GetScopeQueryParameterType = (typeof GetScopeQueryParameterTypeObjec
  */
 export interface TypesRequestBuilder extends BaseRequestBuilder<TypesRequestBuilder> {
     /**
+     * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+     * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+     * @returns {Promise<NonNullable<WorkspaceRelationshipTypePage["value"]>>}
+     */
+     all(requestConfiguration?: RequestConfiguration<TypesRequestBuilderGetQueryParameters> | undefined) : Promise<NonNullable<WorkspaceRelationshipTypePage["value"]>>;
+    /**
      * Pages types having a readable, visible incident relationship in the anchored workspace. q matches names, localized labels and synonyms as literal case-insensitive substrings. Sorts by lower-case name and ID; no exact usage totals are calculated.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<WorkspaceRelationshipTypePage>}

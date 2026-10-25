@@ -56,6 +56,12 @@ export interface VersionsGetResponse extends Parsable {
  */
 export interface VersionsRequestBuilder extends BaseRequestBuilder<VersionsRequestBuilder> {
     /**
+     * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+     * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+     * @returns {Promise<NonNullable<VersionsGetResponse["value"]>>}
+     */
+     all(requestConfiguration?: RequestConfiguration<VersionsRequestBuilderGetQueryParameters> | undefined) : Promise<NonNullable<VersionsGetResponse["value"]>>;
+    /**
      * Gets an item from the PaperGo.v1.items.item.content.versions.item collection
      * @param number Unique identifier of the item
      * @returns {WithNumberItemRequestBuilder}
@@ -102,7 +108,7 @@ const VersionsRequestBuilderGetQueryParametersMapper: Record<string, string> = {
 /**
  * Metadata for all the navigation properties in the request builder.
  */
-export const VersionsRequestBuilderNavigationMetadata: Record<Exclude<keyof VersionsRequestBuilder, KeysToExcludeForNavigationMetadata>, NavigationMetadata> = {
+export const VersionsRequestBuilderNavigationMetadata: Record<Exclude<keyof VersionsRequestBuilder, KeysToExcludeForNavigationMetadata | "all">, NavigationMetadata> = {
     byNumber: {
         navigationMetadata: WithNumberItemRequestBuilderNavigationMetadata,
         pathParametersMappings: ["number"],

@@ -240,6 +240,40 @@ export default workflow({
 	}
 }
 
+// The API links a page to the next with the origin it was asked on, which
+// is none in-process; all() asks the SDK's origin with the link's query.
+func TestPagedListsReadEveryPage(t *testing.T) {
+	m := newMemory(func(req Request) Response {
+		children := "/v1/resources/" + listID + "/children"
+		query := "/v1/resources/" + listID + "/query"
+		switch {
+		case req.Method == "GET" && req.URL == children+"?%24top=2":
+			return jsonResponse(200, `{"value":[{"name":"A"},{"name":"B"}],"@odata.nextLink":"http:///v1/resources/`+listID+`/children?%24skiptoken=t1&%24top=2"}`)
+		case req.Method == "GET" && req.URL == children+"?%24skiptoken=t1&%24top=2":
+			return jsonResponse(200, `{"value":[{"name":"C"}],"@odata.nextLink":null}`)
+		case req.Method == "POST" && req.URL == query && string(req.Body) == `{"surface":"head"}`:
+			return jsonResponse(200, `{"value":[{"name":"D"}],"@odata.nextLink":"https://papergo.example/v1/resources/`+listID+`/query?%24skiptoken=t2"}`)
+		case req.Method == "POST" && req.URL == query+"?%24skiptoken=t2" && string(req.Body) == `{"surface":"head"}`:
+			return jsonResponse(200, `{"value":[{"name":"E"}]}`)
+		}
+		return jsonResponse(404, `{"code":"not_found","detail":"route not found"}`)
+	})
+	out := execute(t, New(m, 0), Run{ID: "run-pages", Artifact: bundle(t, `
+import { workflow } from "@papergo/workflow";
+export default workflow({
+  async run(ctx) {
+    const list = ctx.api.v1.resources.byId("`+listID+`");
+    const children = await list.children.all({ queryParameters: { top: 2 } });
+    const rows = await list.query.all({ surface: "head" });
+    return [...children, ...rows].map((r) => r.name);
+  },
+});
+`)})
+	if out.Status != Completed || string(out.Output) != `["A","B","C","D","E"]` || len(m.requests) != 4 {
+		t.Fatalf("outcome: %+v after %d requests", out, len(m.requests))
+	}
+}
+
 const listID = "0b0e3e2a-6f39-4a39-9a0e-2a7b5d1c9f01"
 
 func TestWaitsSuspendAndResume(t *testing.T) {

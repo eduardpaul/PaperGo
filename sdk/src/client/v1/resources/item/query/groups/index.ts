@@ -11,6 +11,13 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface GroupsRequestBuilder extends BaseRequestBuilder<GroupsRequestBuilder> {
     /**
+     * Reads every page of the POST request, following @odata.nextLink, and returns their values in order. Each page is one request.
+     * @param body The request body, sent again for every page
+     * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+     * @returns {Promise<NonNullable<QueryGroupPage["value"]>>}
+     */
+     all(body: QueryRequest, requestConfiguration?: RequestConfiguration<GroupsRequestBuilderPostQueryParameters> | undefined) : Promise<NonNullable<QueryGroupPage["value"]>>;
+    /**
      * Query Groups
      * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.

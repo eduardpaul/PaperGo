@@ -13,6 +13,12 @@ export type GetStatusQueryParameterType = (typeof GetStatusQueryParameterTypeObj
  */
 export interface TasksRequestBuilder extends BaseRequestBuilder<TasksRequestBuilder> {
     /**
+     * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+     * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+     * @returns {Promise<NonNullable<TaskList["value"]>>}
+     */
+     all(requestConfiguration?: RequestConfiguration<TasksRequestBuilderGetQueryParameters> | undefined) : Promise<NonNullable<TaskList["value"]>>;
+    /**
      * A workspace's tasks, for its owners.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<TaskList>}

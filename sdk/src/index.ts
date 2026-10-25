@@ -15,6 +15,11 @@
 // Long work, such as OCR or an approval, is an API call that returns a
 // pending operation. ctx.wait(operation) unloads the run until it finishes.
 //
+// A list that comes in pages, such as a folder's children, also has all(),
+// which reads every page and returns their values:
+//
+//   const children = await ctx.api.v1.resources.byId(folderId).children.all();
+//
 // The engine replays a run from the start each time it resumes it. Every API
 // call, wait, sleep, clock read and random value is a recorded step: on
 // replay it returns the recorded result instead of happening again. Keep
@@ -22,10 +27,11 @@
 // the globals the runtime replaces (Date, Math.random, crypto.randomUUID).
 
 import { isUntypedArray, isUntypedNode, isUntypedObject, type UntypedNode } from "@microsoft/kiota-abstractions";
-import { createPaperGoClient, type PaperGoClient } from "./client/paperGoClient.js";
+import { createPaperGoClient, PaperGoClientNavigationMetadata, type PaperGoClient } from "./client/paperGoClient.js";
 import type { Operation } from "./client/models/index.js";
 import { HostRequestAdapter } from "./adapter.js";
 import { host } from "./host.js";
+import { withPages } from "./pages.js";
 
 export type { PaperGoClient } from "./client/paperGoClient.js";
 export * as models from "./client/models/index.js";
@@ -150,7 +156,10 @@ export interface Context<P = Record<string, unknown>, I = unknown> {
    * Coalescing workflows should use the API when they need current state.
    */
   readonly trigger?: TriggerObject<I>;
-  /** The PaperGo REST API, acting as the workflow version's author. Each call is one exactly-once step. */
+  /**
+   * The PaperGo REST API, acting as the workflow version's author. Each call is one exactly-once step.
+   * Paged lists have all(), which reads every page, one step each, and returns their values.
+   */
   readonly api: PaperGoClient;
   /**
    * Waits until operations have finished and returns them as they ended:
@@ -231,7 +240,7 @@ function format(values: unknown[]): string {
     .join(" ");
 }
 
-const api = createPaperGoClient(new HostRequestAdapter());
+const api = withPages(createPaperGoClient(new HostRequestAdapter()), PaperGoClientNavigationMetadata);
 
 (globalThis as Record<string, unknown>).crypto = { randomUUID: () => host.uuid() };
 // console writes to the run's log, like ctx.log.

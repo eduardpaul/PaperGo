@@ -11,6 +11,13 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface NavigationRequestBuilder extends BaseRequestBuilder<NavigationRequestBuilder> {
     /**
+     * Reads every page of the POST request, following @odata.nextLink, and returns their values in order. Each page is one request.
+     * @param body The request body, sent again for every page
+     * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+     * @returns {Promise<NonNullable<NavigationPage["value"]>>}
+     */
+     all(body: NavigationRequest, requestConfiguration?: RequestConfiguration<NavigationRequestBuilderPostQueryParameters> | undefined) : Promise<NonNullable<NavigationPage["value"]>>;
+    /**
      * Lists one level of a field of a navigation view: the terms of field below parent_id (or the roots), in term order, each with the items of the view it lists and those at or below it. Counts follow the view's query, the caller's access and the surface read, and cover items, not folders. Required module scopes: item.read, taxonomy.read. Resource ACLs and any additional use-case checks also apply.
      * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.

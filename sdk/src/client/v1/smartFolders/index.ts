@@ -15,6 +15,12 @@ import { type BaseRequestBuilder, type Guid, type KeysToExcludeForNavigationMeta
  */
 export interface SmartFoldersRequestBuilder extends BaseRequestBuilder<SmartFoldersRequestBuilder> {
     /**
+     * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+     * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+     * @returns {Promise<NonNullable<SmartFolderPage["value"]>>}
+     */
+     all(requestConfiguration?: RequestConfiguration<SmartFoldersRequestBuilderGetQueryParameters> | undefined) : Promise<NonNullable<SmartFolderPage["value"]>>;
+    /**
      * The preview property
      */
     get preview(): PreviewRequestBuilder;
@@ -82,7 +88,7 @@ const SmartFoldersRequestBuilderGetQueryParametersMapper: Record<string, string>
 /**
  * Metadata for all the navigation properties in the request builder.
  */
-export const SmartFoldersRequestBuilderNavigationMetadata: Record<Exclude<keyof SmartFoldersRequestBuilder, KeysToExcludeForNavigationMetadata>, NavigationMetadata> = {
+export const SmartFoldersRequestBuilderNavigationMetadata: Record<Exclude<keyof SmartFoldersRequestBuilder, KeysToExcludeForNavigationMetadata | "all">, NavigationMetadata> = {
     byId: {
         requestsMetadata: SmartFoldersItemRequestBuilderRequestsMetadata,
         navigationMetadata: SmartFoldersItemRequestBuilderNavigationMetadata,

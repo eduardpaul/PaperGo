@@ -59,3 +59,44 @@ if (stripped === 0) {
   console.error("found no serialized defaults to strip; check the Kiota output");
   process.exit(1);
 }
+
+// A GET or POST that takes $skiptoken returns a page of a list linked to the
+// next by @odata.nextLink. Its builder gets all(), which src/pages.ts
+// implements: it reads every page and returns their values. Where both page
+// (/v1/search), all() posts, since the body carries the GET parameters too.
+const paged = /^     (post|get)\(((?:body: \w+, )?requestConfiguration\?: RequestConfiguration<(\w+QueryParameters)> \| undefined)\) : Promise<(\w+) \| undefined>;$/gm;
+let lists = 0;
+for (const entry of await readdir(join(sdk, "src", "client"), { recursive: true, withFileTypes: true })) {
+  if (!entry.isFile() || entry.name !== "index.ts") continue;
+  const file = join(entry.parentPath, entry.name);
+  const code = await readFile(file, "utf8");
+  const pages = [...code.matchAll(paged)].filter(([, , , parameters]) =>
+    /\n    skiptoken\?: string;\n/.test(code.match(new RegExp(`\\nexport interface ${parameters} \\{[\\s\\S]*?\\n\\}`))?.[0] ?? ""),
+  );
+  const page = pages.find(([, method]) => method === "post") ?? pages[0];
+  if (!page) continue;
+  const [, method, signature, , type] = page;
+  const body = method === "post" ? "\n     * @param body The request body, sent again for every page" : "";
+  const all = `    /**
+     * Reads every page of the ${method.toUpperCase()} request, following @odata.nextLink, and returns their values in order. Each page is one request.${body}
+     * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+     * @returns {Promise<NonNullable<${type}["value"]>>}
+     */
+     all(${signature}) : Promise<NonNullable<${type}["value"]>>;
+`;
+  const builder = code.match(/^export interface (\w+RequestBuilder) extends BaseRequestBuilder<\1> \{\n/m);
+  if (!builder) {
+    console.error(`${file}: found no request builder to add all() to`);
+    process.exit(1);
+  }
+  const out = code
+    .replace(builder[0], builder[0] + all)
+    // all() is a method, not a navigation property.
+    .replace(`Exclude<keyof ${builder[1]}, KeysToExcludeForNavigationMetadata>`, `Exclude<keyof ${builder[1]}, KeysToExcludeForNavigationMetadata | "all">`);
+  await writeFile(file, out);
+  lists++;
+}
+if (lists === 0) {
+  console.error("found no paged requests to add all() to; check the Kiota output");
+  process.exit(1);
+}

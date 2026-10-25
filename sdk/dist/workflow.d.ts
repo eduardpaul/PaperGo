@@ -7630,6 +7630,12 @@ export interface ArchiveGetResponse extends Parsable {
  */
 export interface ArchiveRequestBuilder extends BaseRequestBuilder<ArchiveRequestBuilder> {
 	/**
+	 * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<ArchiveGetResponse["value"]>>}
+	 */
+	all(requestConfiguration?: RequestConfiguration<ArchiveRequestBuilderGetQueryParameters> | undefined): Promise<NonNullable<ArchiveGetResponse["value"]>>;
+	/**
 	 * Database-backed name search and filters; newest archived first with keyset pagination. Works without a search service. Requires item.read. Archive date bounds are inclusive.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<ArchiveGetResponse>}
@@ -7752,6 +7758,12 @@ export interface ArtifactsRequestBuilder extends BaseRequestBuilder<ArtifactsReq
  * Builds and executes requests for operations under /v1/audit
  */
 export interface AuditRequestBuilder extends BaseRequestBuilder<AuditRequestBuilder> {
+	/**
+	 * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<AuditPage["value"]>>}
+	 */
+	all(requestConfiguration?: RequestConfiguration<AuditRequestBuilderGetQueryParameters> | undefined): Promise<NonNullable<AuditPage["value"]>>;
 	/**
 	 * Requires audit.read. Newest first by creation time then ID, with opaque keyset paging. Optional actor, entity type/ID, workspace and RFC3339 date filters. from is inclusive; to is exclusive. Properties contain changed names, without values. Trace IDs correlate requests or background writes. Identity, catalog, taxonomy, workflow and content changes share this feed.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
@@ -8137,6 +8149,12 @@ interface ArchiveRequestBuilder$1 extends BaseRequestBuilder<ArchiveRequestBuild
 }
 interface CommentsRequestBuilder$1 extends BaseRequestBuilder<CommentsRequestBuilder$1> {
 	/**
+	 * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<CommentThreadList["value"]>>}
+	 */
+	all(requestConfiguration?: RequestConfiguration<CommentsRequestBuilderGetQueryParameters> | undefined): Promise<NonNullable<CommentThreadList["value"]>>;
+	/**
 	 * The item's threads, oldest first, each with its replies, and what the caller may do in the discussion. Where the collection's mode turns comments off or the caller may not read the discussion, it lists none; mode, mode_from and can_read say why. status selects open (default), resolved or all threads.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<CommentThreadList>}
@@ -8294,6 +8312,12 @@ export interface VersionsGetResponse extends Parsable {
  * Builds and executes requests for operations under /v1/items/{id}/content/versions
  */
 export interface VersionsRequestBuilder extends BaseRequestBuilder<VersionsRequestBuilder> {
+	/**
+	 * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<VersionsGetResponse["value"]>>}
+	 */
+	all(requestConfiguration?: RequestConfiguration<VersionsRequestBuilderGetQueryParameters> | undefined): Promise<NonNullable<VersionsGetResponse["value"]>>;
 	/**
 	 * Gets an item from the PaperGo.v1.items.item.content.versions.item collection
 	 * @param number Unique identifier of the item
@@ -8600,6 +8624,12 @@ export interface PublicationsGetResponse extends Parsable {
  */
 export interface PublicationsRequestBuilder extends BaseRequestBuilder<PublicationsRequestBuilder> {
 	/**
+	 * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<PublicationsGetResponse["value"]>>}
+	 */
+	all(requestConfiguration?: RequestConfiguration<PublicationsRequestBuilderGetQueryParameters> | undefined): Promise<NonNullable<PublicationsGetResponse["value"]>>;
+	/**
 	 * Draft readers see lifecycle history. Ordinary readers see publish events for the current published revision only. Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<PublicationsGetResponse>}
@@ -8711,6 +8741,12 @@ export interface RelationshipsGetResponse extends Parsable {
  */
 export interface RelationshipsRequestBuilder extends BaseRequestBuilder<RelationshipsRequestBuilder> {
 	/**
+	 * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<RelationshipsGetResponse["value"]>>}
+	 */
+	all(requestConfiguration?: RequestConfiguration<RelationshipsRequestBuilderGetQueryParameters> | undefined): Promise<NonNullable<RelationshipsGetResponse["value"]>>;
+	/**
 	 * Gets an item from the PaperGo.v1.items.item.relationships.item collection
 	 * @param linkID Unique identifier of the item
 	 * @returns {WithLinkItemRequestBuilder}
@@ -8817,6 +8853,12 @@ export interface RevisionsGetResponse extends AdditionalDataHolder, Parsable {
  * Builds and executes requests for operations under /v1/items/{id}/revisions
  */
 export interface RevisionsRequestBuilder extends BaseRequestBuilder<RevisionsRequestBuilder> {
+	/**
+	 * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<RevisionsGetResponse["value"]>>}
+	 */
+	all(requestConfiguration?: RequestConfiguration<RevisionsRequestBuilderGetQueryParameters> | undefined): Promise<NonNullable<RevisionsGetResponse["value"]>>;
 	/**
 	 * Gets an item from the PaperGo.v1.items.item.revisions.item collection
 	 * @param number Unique identifier of the item
@@ -8948,6 +8990,12 @@ type GetStatusQueryParameterType$1 = (typeof GetStatusQueryParameterTypeObject$1
  * Builds and executes requests for operations under /v1/items/{id}/tasks
  */
 export interface TasksRequestBuilder extends BaseRequestBuilder<TasksRequestBuilder> {
+	/**
+	 * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<TaskList["value"]>>}
+	 */
+	all(requestConfiguration?: RequestConfiguration<TasksRequestBuilderGetQueryParameters> | undefined): Promise<NonNullable<TaskList["value"]>>;
 	/**
 	 * The tasks about an item that the caller may see.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
@@ -9444,6 +9492,12 @@ export interface RelationshipTypesItemRequestBuilder extends BaseRequestBuilder<
  */
 export interface RelationshipTypesRequestBuilder extends BaseRequestBuilder<RelationshipTypesRequestBuilder> {
 	/**
+	 * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<RelationshipTypePage["value"]>>}
+	 */
+	all(requestConfiguration?: RequestConfiguration<RelationshipTypesRequestBuilderGetQueryParameters> | undefined): Promise<NonNullable<RelationshipTypePage["value"]>>;
+	/**
 	 * Gets an item from the PaperGo.v1.relationshipTypes.item collection
 	 * @param id Unique identifier of the item
 	 * @returns {RelationshipTypesItemRequestBuilder}
@@ -9648,6 +9702,12 @@ export interface ChildrenGetResponse extends Parsable {
  */
 export interface ChildrenRequestBuilder extends BaseRequestBuilder<ChildrenRequestBuilder> {
 	/**
+	 * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<ChildrenGetResponse["value"]>>}
+	 */
+	all(requestConfiguration?: RequestConfiguration<ChildrenRequestBuilderGetQueryParameters> | undefined): Promise<NonNullable<ChildrenGetResponse["value"]>>;
+	/**
 	 * Browse visible direct children
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<ChildrenGetResponse>}
@@ -9796,6 +9856,12 @@ interface ContentTypesRequestBuilder$1 extends BaseRequestBuilder<ContentTypesRe
  * Builds and executes requests for operations under /v1/resources/{id}/delta
  */
 export interface DeltaRequestBuilder extends BaseRequestBuilder<DeltaRequestBuilder> {
+	/**
+	 * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<DeltaPage["value"]>>}
+	 */
+	all(requestConfiguration?: RequestConfiguration<DeltaRequestBuilderGetQueryParameters> | undefined): Promise<NonNullable<DeltaPage["value"]>>;
 	/**
 	 * Initial synchronization returns visible items and folders. Follow @odata.nextLink, then persist @odata.deltaLink to retrieve subsequent edits, deletions, moves and access changes. Tokens are bound to caller and collection, durable for 30 days; page continuations expire after five minutes. 410 requires a new initial synchronization. Each synchronization scans the current visible collection and compares stored fingerprints; transient changes that return to the same state between polls are coalesced. Required module scope: item.read.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
@@ -10076,6 +10142,12 @@ export interface MoveSelectionRequestBuilder extends BaseRequestBuilder<MoveSele
 }
 interface OperationsRequestBuilder$1 extends BaseRequestBuilder<OperationsRequestBuilder$1> {
 	/**
+	 * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<OperationPage["value"]>>}
+	 */
+	all(requestConfiguration?: RequestConfiguration<OperationsRequestBuilderGetQueryParameters> | undefined): Promise<NonNullable<OperationPage["value"]>>;
+	/**
 	 * Tracked field_index or bulk_update background operation. Indexing converges one field in short batches; later field changes supersede it. Filtered updates commit each item independently, survive restarts, and report failures without rolling back successful edits. Bulk details require the starter and collection read access. Terminal records and results expire 30 days after their last update; pending work survives restarts. Collection index operations are readable with collection access; other kinds require the initiating user. Organization operations additionally require organization.manage.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<OperationPage>}
@@ -10149,6 +10221,13 @@ export interface PermissionsRequestBuilder extends BaseRequestBuilder<Permission
  */
 export interface GroupsRequestBuilder extends BaseRequestBuilder<GroupsRequestBuilder> {
 	/**
+	 * Reads every page of the POST request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param body The request body, sent again for every page
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<QueryGroupPage["value"]>>}
+	 */
+	all(body: QueryRequest, requestConfiguration?: RequestConfiguration<GroupsRequestBuilderPostQueryParameters> | undefined): Promise<NonNullable<QueryGroupPage["value"]>>;
+	/**
 	 * Query Groups
 	 * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
@@ -10186,6 +10265,13 @@ export interface GroupsRequestBuilderPostQueryParameters {
  * Builds and executes requests for operations under /v1/resources/{id}/query
  */
 export interface QueryRequestBuilder extends BaseRequestBuilder<QueryRequestBuilder> {
+	/**
+	 * Reads every page of the POST request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param body The request body, sent again for every page
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<QueryResult["value"]>>}
+	 */
+	all(body: QueryRequest, requestConfiguration?: RequestConfiguration<QueryRequestBuilderPostQueryParameters> | undefined): Promise<NonNullable<QueryResult["value"]>>;
 	/**
 	 * The groups property
 	 */
@@ -10277,6 +10363,12 @@ export interface WithItemItemRequestBuilderDeleteQueryParameters {
  */
 export interface RecycleBinRequestBuilder extends BaseRequestBuilder<RecycleBinRequestBuilder> {
 	/**
+	 * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<RecycleBinPage["value"]>>}
+	 */
+	all(requestConfiguration?: RequestConfiguration<RecycleBinRequestBuilderGetQueryParameters> | undefined): Promise<NonNullable<RecycleBinPage["value"]>>;
+	/**
 	 * Gets an item from the PaperGo.v1.resources.item.recycleBin.item collection
 	 * @param itemID Unique identifier of the item
 	 * @returns {WithItemItemRequestBuilder}
@@ -10323,6 +10415,12 @@ export interface SchemasGetResponse extends AdditionalDataHolder, Parsable {
  * Builds and executes requests for operations under /v1/resources/{id}/schemas
  */
 export interface SchemasRequestBuilder extends BaseRequestBuilder<SchemasRequestBuilder> {
+	/**
+	 * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<SchemasGetResponse["value"]>>}
+	 */
+	all(requestConfiguration?: RequestConfiguration<SchemasRequestBuilderGetQueryParameters> | undefined): Promise<NonNullable<SchemasGetResponse["value"]>>;
 	/**
 	 * Read immutable schema history (manage required)
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
@@ -10459,6 +10557,12 @@ export interface TemplatesRequestBuilder extends BaseRequestBuilder<TemplatesReq
  * Builds and executes requests for operations under /v1/resources/{id}/views
  */
 export interface ViewsRequestBuilder extends BaseRequestBuilder<ViewsRequestBuilder> {
+	/**
+	 * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<ListViewPage["value"]>>}
+	 */
+	all(requestConfiguration?: RequestConfiguration<ViewsRequestBuilderGetQueryParameters> | undefined): Promise<NonNullable<ListViewPage["value"]>>;
 	/**
 	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
@@ -10681,6 +10785,12 @@ export interface ResourcesGetResponse extends Parsable {
  * Builds and executes requests for operations under /v1/resources
  */
 export interface ResourcesRequestBuilder extends BaseRequestBuilder<ResourcesRequestBuilder> {
+	/**
+	 * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<ResourcesGetResponse["value"]>>}
+	 */
+	all(requestConfiguration?: RequestConfiguration<ResourcesRequestBuilderGetQueryParameters> | undefined): Promise<NonNullable<ResourcesGetResponse["value"]>>;
 	/**
 	 * Gets an item from the PaperGo.v1.resources.item collection
 	 * @param id Unique identifier of the item
@@ -11018,6 +11128,13 @@ export type GetModeQueryParameterType = (typeof GetModeQueryParameterTypeObject)
 type GetSurfaceQueryParameterType$5 = (typeof GetSurfaceQueryParameterTypeObject$5)[keyof typeof GetSurfaceQueryParameterTypeObject$5];
 interface SearchRequestBuilder$1 extends BaseRequestBuilder<SearchRequestBuilder$1> {
 	/**
+	 * Reads every page of the POST request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param body The request body, sent again for every page
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<SearchPage["value"]>>}
+	 */
+	all(body: SearchRequest, requestConfiguration?: RequestConfiguration<SearchRequestBuilderPostQueryParameters> | undefined): Promise<NonNullable<SearchPage["value"]>>;
+	/**
 	 * The contentTypes property
 	 */
 	get contentTypes(): ContentTypesRequestBuilder$2;
@@ -11213,6 +11330,13 @@ interface ItemsRequestBuilder$1 extends BaseRequestBuilder<ItemsRequestBuilder$1
 }
 interface GroupsRequestBuilder$1 extends BaseRequestBuilder<GroupsRequestBuilder$1> {
 	/**
+	 * Reads every page of the POST request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param body The request body, sent again for every page
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<SmartFolderGroupsResult["value"]>>}
+	 */
+	all(body: SmartFolderQueryRequest, requestConfiguration?: RequestConfiguration<GroupsRequestBuilderPostQueryParameters$1> | undefined): Promise<NonNullable<SmartFolderGroupsResult["value"]>>;
+	/**
 	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink. An empty path returns all matching items even when group_by is configured.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
@@ -11236,6 +11360,13 @@ interface GroupsRequestBuilderPostQueryParameters$1 {
 	top?: number;
 }
 interface QueryRequestBuilder$1 extends BaseRequestBuilder<QueryRequestBuilder$1> {
+	/**
+	 * Reads every page of the POST request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param body The request body, sent again for every page
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<SmartFolderResult["value"]>>}
+	 */
+	all(body: SmartFolderQueryRequest, requestConfiguration?: RequestConfiguration<QueryRequestBuilderPostQueryParameters$1> | undefined): Promise<NonNullable<SmartFolderResult["value"]>>;
 	/**
 	 * The groups property
 	 */
@@ -11339,6 +11470,12 @@ interface PreviewRequestBuilder$1 extends BaseRequestBuilder<PreviewRequestBuild
  * Builds and executes requests for operations under /v1/smart-folders
  */
 export interface SmartFoldersRequestBuilder extends BaseRequestBuilder<SmartFoldersRequestBuilder> {
+	/**
+	 * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<SmartFolderPage["value"]>>}
+	 */
+	all(requestConfiguration?: RequestConfiguration<SmartFoldersRequestBuilderGetQueryParameters> | undefined): Promise<NonNullable<SmartFolderPage["value"]>>;
 	/**
 	 * The preview property
 	 */
@@ -11861,6 +11998,12 @@ export interface TermGroupsItemRequestBuilder extends BaseRequestBuilder<TermGro
  */
 export interface TermGroupsRequestBuilder extends BaseRequestBuilder<TermGroupsRequestBuilder> {
 	/**
+	 * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<TermGroupPage["value"]>>}
+	 */
+	all(requestConfiguration?: RequestConfiguration<TermGroupsRequestBuilderGetQueryParameters> | undefined): Promise<NonNullable<TermGroupPage["value"]>>;
+	/**
 	 * Gets an item from the PaperGo.v1.termGroups.item collection
 	 * @param id Unique identifier of the item
 	 * @returns {TermGroupsItemRequestBuilder}
@@ -12080,6 +12223,12 @@ export interface TermsRequestBuilderGetQueryParameters {
 }
 interface TermsRequestBuilder$1 extends BaseRequestBuilder<TermsRequestBuilder$1> {
 	/**
+	 * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<TermPage["value"]>>}
+	 */
+	all(requestConfiguration?: RequestConfiguration<TermsRequestBuilderGetQueryParameters$1> | undefined): Promise<NonNullable<TermPage["value"]>>;
+	/**
 	 * Ordered by sort_order, then name. Merged terms are never listed. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.read. Workspace membership and resource ACLs do not govern taxonomy.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<TermPage>}
@@ -12226,6 +12375,12 @@ export interface TermSetsItemRequestBuilder extends BaseRequestBuilder<TermSetsI
  */
 export interface TermSetsRequestBuilder extends BaseRequestBuilder<TermSetsRequestBuilder> {
 	/**
+	 * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<TermSetPage["value"]>>}
+	 */
+	all(requestConfiguration?: RequestConfiguration<TermSetsRequestBuilderGetQueryParameters> | undefined): Promise<NonNullable<TermSetPage["value"]>>;
+	/**
 	 * Gets an item from the PaperGo.v1.termSets.item collection
 	 * @param id Unique identifier of the item
 	 * @returns {TermSetsItemRequestBuilder}
@@ -12298,6 +12453,13 @@ export interface TermSetsRequestBuilderGetQueryParameters {
  */
 export interface NavigationRequestBuilder extends BaseRequestBuilder<NavigationRequestBuilder> {
 	/**
+	 * Reads every page of the POST request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param body The request body, sent again for every page
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<NavigationPage["value"]>>}
+	 */
+	all(body: NavigationRequest, requestConfiguration?: RequestConfiguration<NavigationRequestBuilderPostQueryParameters> | undefined): Promise<NonNullable<NavigationPage["value"]>>;
+	/**
 	 * Lists one level of a field of a navigation view: the terms of field below parent_id (or the roots), in term order, each with the items of the view it lists and those at or below it. Counts follow the view's query, the caller's access and the surface read, and cover items, not folders. Required module scopes: item.read, taxonomy.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
@@ -12333,6 +12495,13 @@ export interface NavigationRequestBuilderPostQueryParameters {
 }
 interface GroupsRequestBuilder$2 extends BaseRequestBuilder<GroupsRequestBuilder$2> {
 	/**
+	 * Reads every page of the POST request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param body The request body, sent again for every page
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<QueryGroupPage["value"]>>}
+	 */
+	all(body: ViewQueryRequest, requestConfiguration?: RequestConfiguration<GroupsRequestBuilderPostQueryParameters$2> | undefined): Promise<NonNullable<QueryGroupPage["value"]>>;
+	/**
 	 *  Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
@@ -12364,6 +12533,13 @@ interface GroupsRequestBuilderPostQueryParameters$2 {
 	top?: number;
 }
 interface QueryRequestBuilder$2 extends BaseRequestBuilder<QueryRequestBuilder$2> {
+	/**
+	 * Reads every page of the POST request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param body The request body, sent again for every page
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<QueryResult["value"]>>}
+	 */
+	all(body: ViewQueryRequest, requestConfiguration?: RequestConfiguration<QueryRequestBuilderPostQueryParameters$2> | undefined): Promise<NonNullable<QueryResult["value"]>>;
 	/**
 	 * The groups property
 	 */
@@ -12479,6 +12655,12 @@ interface ViewsRequestBuilder$1 extends BaseRequestBuilder<ViewsRequestBuilder$1
 	byId(id: string): ViewsItemRequestBuilder;
 }
 interface KeywordsRequestBuilder$1 extends BaseRequestBuilder<KeywordsRequestBuilder$1> {
+	/**
+	 * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<WorkspaceKeywordCountPage["value"]>>}
+	 */
+	all(requestConfiguration?: RequestConfiguration<KeywordsRequestBuilderGetQueryParameters$1> | undefined): Promise<NonNullable<WorkspaceKeywordCountPage["value"]>>;
 	/**
 	 * Shared keywords used in this workspace, with names and counts of distinct readable resources. Includes intrinsic keywords and keywords fields on the visible head/published surface. Sorted by normalized name and ID; follow the opaque continuation cursor.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
@@ -12616,6 +12798,12 @@ export interface NotificationsRequestBuilder extends BaseRequestBuilder<Notifica
 export type GetScopeQueryParameterType = (typeof GetScopeQueryParameterTypeObject)[keyof typeof GetScopeQueryParameterTypeObject];
 interface ItemsRequestBuilder$2 extends BaseRequestBuilder<ItemsRequestBuilder$2> {
 	/**
+	 * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<RelationshipEndpointPage["value"]>>}
+	 */
+	all(requestConfiguration?: RequestConfiguration<ItemsRequestBuilderGetQueryParameters> | undefined): Promise<NonNullable<RelationshipEndpointPage["value"]>>;
+	/**
 	 * Pages unique readable endpoints of qualifying anchored relationships, including external peers. q is a case-insensitive item-name prefix on the selected surface. item_id locates one qualifying endpoint. With neither a nonempty q nor item_id, returns an empty page. Sorts by lower-case name and ID.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<RelationshipEndpointPage>}
@@ -12740,6 +12928,12 @@ type GetScopeQueryParameterType$2 = (typeof GetScopeQueryParameterTypeObject$2)[
  */
 export interface TypesRequestBuilder extends BaseRequestBuilder<TypesRequestBuilder> {
 	/**
+	 * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<WorkspaceRelationshipTypePage["value"]>>}
+	 */
+	all(requestConfiguration?: RequestConfiguration<TypesRequestBuilderGetQueryParameters> | undefined): Promise<NonNullable<WorkspaceRelationshipTypePage["value"]>>;
+	/**
 	 * Pages types having a readable, visible incident relationship in the anchored workspace. q matches names, localized labels and synonyms as literal case-insensitive substrings. Sorts by lower-case name and ID; no exact usage totals are calculated.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<WorkspaceRelationshipTypePage>}
@@ -12786,6 +12980,12 @@ declare const GetScopeQueryParameterTypeObject$2: {
 type GetDirectionQueryParameterType$2 = (typeof GetDirectionQueryParameterTypeObject$2)[keyof typeof GetDirectionQueryParameterTypeObject$2];
 type GetScopeQueryParameterType$3 = (typeof GetScopeQueryParameterTypeObject$3)[keyof typeof GetScopeQueryParameterTypeObject$3];
 interface RelationshipsRequestBuilder$1 extends BaseRequestBuilder<RelationshipsRequestBuilder$1> {
+	/**
+	 * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<WorkspaceRelationshipPage["value"]>>}
+	 */
+	all(requestConfiguration?: RequestConfiguration<RelationshipsRequestBuilderGetQueryParameters$1> | undefined): Promise<NonNullable<WorkspaceRelationshipPage["value"]>>;
 	/**
 	 * The items property
 	 */
@@ -12976,6 +13176,12 @@ type GetKindQueryParameterType$3 = (typeof GetKindQueryParameterTypeObject$3)[ke
 type GetStatusQueryParameterType$2 = (typeof GetStatusQueryParameterTypeObject$2)[keyof typeof GetStatusQueryParameterTypeObject$2];
 interface TasksRequestBuilder$2 extends BaseRequestBuilder<TasksRequestBuilder$2> {
 	/**
+	 * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<TaskList["value"]>>}
+	 */
+	all(requestConfiguration?: RequestConfiguration<TasksRequestBuilderGetQueryParameters$1> | undefined): Promise<NonNullable<TaskList["value"]>>;
+	/**
 	 * A workspace's tasks, for its owners.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<TaskList>}
@@ -13041,6 +13247,12 @@ declare const GetStatusQueryParameterTypeObject$2: {
 	readonly Expired: "expired";
 };
 interface TemplatesRequestBuilder$2 extends BaseRequestBuilder<TemplatesRequestBuilder$2> {
+	/**
+	 * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<SchemaTemplatePage["value"]>>}
+	 */
+	all(requestConfiguration?: RequestConfiguration<TemplatesRequestBuilderGetQueryParameters> | undefined): Promise<NonNullable<SchemaTemplatePage["value"]>>;
 	/**
 	 *  Required module scopes: contentType.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
@@ -13164,6 +13376,12 @@ export interface WorkspacesPostRequestBody extends Parsable {
  * Builds and executes requests for operations under /v1/workspaces
  */
 export interface WorkspacesRequestBuilder extends BaseRequestBuilder<WorkspacesRequestBuilder> {
+	/**
+	 * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<WorkspacesGetResponse["value"]>>}
+	 */
+	all(requestConfiguration?: RequestConfiguration<WorkspacesRequestBuilderGetQueryParameters> | undefined): Promise<NonNullable<WorkspacesGetResponse["value"]>>;
 	/**
 	 * Gets an item from the PaperGo.v1.workspaces.item collection
 	 * @param id Unique identifier of the item
@@ -13447,7 +13665,10 @@ export interface Context<P = Record<string, unknown>, I = unknown> {
 	 * Coalescing workflows should use the API when they need current state.
 	 */
 	readonly trigger?: TriggerObject<I>;
-	/** The PaperGo REST API, acting as the workflow version's author. Each call is one exactly-once step. */
+	/**
+	 * The PaperGo REST API, acting as the workflow version's author. Each call is one exactly-once step.
+	 * Paged lists have all(), which reads every page, one step each, and returns their values.
+	 */
 	readonly api: PaperGoClient;
 	/**
 	 * Waits until operations have finished and returns them as they ended:

@@ -42,6 +42,12 @@ export interface PublicationsGetResponse extends Parsable {
  */
 export interface PublicationsRequestBuilder extends BaseRequestBuilder<PublicationsRequestBuilder> {
     /**
+     * Reads every page of the GET request, following @odata.nextLink, and returns their values in order. Each page is one request.
+     * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+     * @returns {Promise<NonNullable<PublicationsGetResponse["value"]>>}
+     */
+     all(requestConfiguration?: RequestConfiguration<PublicationsRequestBuilderGetQueryParameters> | undefined) : Promise<NonNullable<PublicationsGetResponse["value"]>>;
+    /**
      * Draft readers see lifecycle history. Ordinary readers see publish events for the current published revision only. Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<PublicationsGetResponse>}
