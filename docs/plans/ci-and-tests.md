@@ -43,9 +43,23 @@ Implemented on `claude/ci-simplify`:
 - Bob's PostgreSQL models are generated from a database on the test server
   instead of a testcontainers container, so no stage needs Docker inside Docker.
 
-Still open from this plan: test-cost reductions (step 2), fixture work and
-parallelism (step 3), duration-aware sharding (step 4) and input-based routing
-of specialized lanes on pull requests (step 5).
+## Status: race shards (2026-10-26)
+
+- The seek pagination test pages each query, sort and direction once, with
+  the reader and surface rotating: 70 combinations instead of 420, 26s instead
+  of 133s under race detection locally.
+- The race stage leaves the packages the native and zvec stages race-test to
+  those stages; the native stage also runs the OCR tests of compose and
+  optimize.
+- Shards take whole packages, balanced by the tests each declares, so no shard
+  lists or builds the whole suite first. DMS alone takes 279s under race
+  detection and bounds the shard time, so the race job runs in two shards:
+  302s and 154s locally, against 297s, 115s and 77s for three.
+
+Still open from this plan: the remaining test-cost reductions (step 2), fixture
+work and parallelism (step 3), which DMS's serial runtime now calls for, the
+cache work of step 4 and input-based routing of specialized lanes on pull
+requests (step 5).
 
 ## Recommendation
 
