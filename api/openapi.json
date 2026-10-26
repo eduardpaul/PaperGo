@@ -26437,6 +26437,21 @@
             },
             "uniqueItems": true,
             "description": "Inherited fields that forms leave out. A required field without a default cannot be hidden."
+          },
+          "field_order": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The type's fields, own or inherited, in the order forms show them; fields it leaves out follow in the order the type inherits. Applies after the ancestors' order."
+          },
+          "field_settings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldSetting"
+            },
+            "description": "The type's own field settings, at most one per field of the type."
           }
         },
         "description": "Organization catalog type. A new type derives from parent_id, or Item when it is omitted. Replacement validates every subtype and attached collection and advances their schema revisions atomically. Requires contentType.manage, independently of workspace membership."
@@ -26515,6 +26530,21 @@
             },
             "description": "Inherited fields that forms leave out. They stay part of the type."
           },
+          "field_order": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The type's fields, own or inherited, in the order forms show them; fields it leaves out follow in the order the type inherits. Applies after the ancestors' order."
+          },
+          "field_settings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldSetting"
+            },
+            "description": "The type's own field settings, at most one per field of the type."
+          },
           "parent_id": {
             "type": [
               "string",
@@ -26560,7 +26590,7 @@
               "hidden_field_ids",
               "rules"
             ],
-            "description": "What the type and its ancestors define together, the root's first.",
+            "description": "What the type and its ancestors define together: fields in form order, hidden fields, rules, and field settings merged with the nearest type winning.",
             "properties": {
               "field_ids": {
                 "type": "array",
@@ -26580,6 +26610,12 @@
                 "type": "array",
                 "items": {
                   "$ref": "#/components/schemas/ValidationRule"
+                }
+              },
+              "field_settings": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/FieldSetting"
                 }
               }
             }
@@ -34199,6 +34235,21 @@
             "uniqueItems": true,
             "description": "Inherited fields that forms leave out. A required field without a default cannot be hidden."
           },
+          "field_order": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The type's fields, own or inherited, in the order forms show them; fields it leaves out follow in the order the type inherits. Applies after the ancestors' order."
+          },
+          "field_settings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldSetting"
+            },
+            "description": "The type's own field settings, at most one per field of the type."
+          },
           "rules": {
             "type": "array",
             "items": {
@@ -34225,6 +34276,27 @@
               "format": "uuid"
             },
             "description": "The list types the New menu offers, in order, each by its own id or the catalog type it copies. It must include the default."
+          }
+        }
+      },
+      "FieldSetting": {
+        "type": "object",
+        "required": [
+          "field_id"
+        ],
+        "additionalProperties": false,
+        "description": "Changes, for a content type and its subtypes, whether one of its fields is required and its default. Omitted properties keep what the field or an ancestor says; the nearest type's setting wins.",
+        "properties": {
+          "field_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "required": {
+            "type": "boolean",
+            "description": "Whether items of the type must hold a value (or get the default)."
+          },
+          "default_value": {
+            "description": "Default for new items of the type, valid for the field like the field's own default; JSON null removes an inherited default."
           }
         }
       }

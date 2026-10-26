@@ -33,14 +33,19 @@ type ContentTypeInput struct {
 	FieldIds       []string               `json:"field_ids"`
 	HiddenFieldIds []string               `json:"hidden_field_ids,omitempty"`
 	Rules          []model.ValidationRule `json:"rules,omitempty"`
+	FieldOrder     []string               `json:"field_order,omitempty"`
+	FieldSettings  []catalog.FieldSetting `json:"field_settings,omitempty"`
 }
 
 // ListTypeInput customizes a collection's list type with fields, hidden
-// fields and rules of its own.
+// fields and rules of its own, the order of its fields and settings that
+// change whether a field is required and its default.
 type ListTypeInput struct {
 	FieldIds       []string               `json:"field_ids"`
 	HiddenFieldIds []string               `json:"hidden_field_ids,omitempty"`
 	Rules          []model.ValidationRule `json:"rules,omitempty"`
+	FieldOrder     []string               `json:"field_order,omitempty"`
+	FieldSettings  []catalog.FieldSetting `json:"field_settings,omitempty"`
 }
 
 // AttachContentTypeInput names the catalog type a collection accepts.
@@ -55,14 +60,46 @@ func (s *Service) collectionFields(ctx context.Context, collection string) ([]*c
 func (s *Service) collectionTypes(ctx context.Context, collection string) ([]*catalog.ContentType, error) {
 	return s.DAL.Catalog().ContentTypes(ctx, catalog.ContentTypeFilter{CollectionID: collection})
 }
+
+// selectTypeDefinitions returns the fields of a type, in its form order, as
+// its field settings change them.
 func selectTypeDefinitions(defs []*catalog.FieldDefinition, typ *catalog.ContentType) []*catalog.FieldDefinition {
-	out := []*catalog.FieldDefinition{}
+	byID := make(map[string]*catalog.FieldDefinition, len(defs))
 	for _, d := range defs {
-		if slices.Contains(typ.Effective.FieldIds, d.ID) {
-			out = append(out, d)
+		byID[d.ID] = d
+	}
+	out := []*catalog.FieldDefinition{}
+	for _, id := range typ.Effective.FieldIds {
+		if d := byID[id]; d != nil {
+			out = append(out, withSetting(d, typ.Effective.Setting(id)))
 		}
 	}
 	return out
+}
+
+// withSetting returns a field as a type's setting changes whether it is
+// required and its default; the field itself stays as it is.
+func withSetting(d *catalog.FieldDefinition, s catalog.FieldSetting) *catalog.FieldDefinition {
+	if s.Required == nil && s.DefaultValue == nil {
+		return d
+	}
+	out := *d
+	if s.Required != nil {
+		out.Required = *s.Required
+	}
+	if s.DefaultValue != nil {
+		out.Options.DefaultValue = nil
+		if string(s.DefaultValue) != "null" {
+			out.Options.DefaultValue = s.DefaultValue
+		}
+	}
+	return &out
+}
+
+// mandatory reports whether forms must fill a field: it is required and has
+// no default.
+func mandatory(d *catalog.FieldDefinition) bool {
+	return d.Required && len(d.Options.DefaultValue) == 0
 }
 func fieldKeys(defs []*catalog.FieldDefinition) []string {
 	out := []string{}
@@ -172,8 +209,9 @@ func (s *Service) validateTypeName(in *ContentTypeInput) error {
 // parent gives it. Own fields exist and are not inherited; hidden fields are
 // inherited and can be left out of forms; every field key is distinct and
 // the rules hold over all the fields.
-func (s *Service) validateTypeSchema(ctx context.Context, parent *catalog.ContentType, in *ListTypeInput) error {
+func (s *Service) validateTypeSchema(ctx context.Context, subject string, parent *catalog.ContentType, in *ListTypeInput) error {
 	in.FieldIds, in.HiddenFieldIds, in.Rules = nonNil(in.FieldIds), nonNil(in.HiddenFieldIds), nonNil(in.Rules)
+	in.FieldOrder, in.FieldSettings = nonNil(in.FieldOrder), nonNil(in.FieldSettings)
 	inherited, inheritedRules := []string{}, []model.ValidationRule{}
 	if parent != nil {
 		inherited, inheritedRules = parent.Effective.FieldIds, parent.Effective.Rules
@@ -202,13 +240,55 @@ func (s *Service) validateTypeSchema(ctx context.Context, parent *catalog.Conten
 			return invalid("the content type inherits field " + d.Key)
 		}
 	}
+	byID := make(map[string]*catalog.FieldDefinition, len(defs))
+	for _, d := range defs {
+		byID[d.ID] = d
+	}
+	for i, id := range in.FieldOrder {
+		if byID[id] == nil || slices.Contains(in.FieldOrder[:i], id) {
+			return invalid("field_order lists the type's fields, each at most once")
+		}
+	}
+	// A type's field as its ancestors' settings and its own change it.
+	field := func(id string) *catalog.FieldDefinition {
+		d := byID[id]
+		if parent != nil {
+			d = withSetting(d, parent.Effective.Setting(id))
+		}
+		if i := slices.IndexFunc(in.FieldSettings, func(setting catalog.FieldSetting) bool { return setting.FieldID == id }); i >= 0 {
+			d = withSetting(d, in.FieldSettings[i])
+		}
+		return d
+	}
+	for i := range in.FieldSettings {
+		setting := &in.FieldSettings[i]
+		d := byID[setting.FieldID]
+		if d == nil || slices.ContainsFunc(in.FieldSettings[:i], func(other catalog.FieldSetting) bool { return other.FieldID == setting.FieldID }) {
+			return invalid("field_settings set the type's fields, each at most once")
+		}
+		if setting.Required == nil && setting.DefaultValue == nil {
+			return invalid("a field setting changes required or default_value: " + d.Key)
+		}
+		if setting.DefaultValue == nil || string(setting.DefaultValue) == "null" {
+			continue
+		}
+		// The default holds as any default of the field does, with the
+		// type's required flag.
+		candidate := *field(d.ID)
+		if e := validateFieldDefinition(&candidate); e != nil {
+			return invalid(d.Key + ": " + e.Error())
+		}
+		if e := s.normalizeKeywordDefault(ctx, subject, &candidate); e != nil {
+			return e
+		}
+		setting.DefaultValue = candidate.Options.DefaultValue
+	}
 	for _, id := range in.HiddenFieldIds {
-		i := slices.IndexFunc(defs, func(d *catalog.FieldDefinition) bool { return d.ID == id })
-		if i < 0 || !slices.Contains(inherited, id) {
+		if byID[id] == nil || !slices.Contains(inherited, id) {
 			return invalid("hidden fields must be inherited fields")
 		}
-		if defs[i].Required && len(defs[i].Options.DefaultValue) == 0 {
-			return invalid("a required field without a default cannot be hidden: " + defs[i].Key)
+		if mandatory(field(id)) {
+			return invalid("a required field without a default cannot be hidden: " + byID[id].Key)
 		}
 	}
 	for _, rule := range in.Rules {
@@ -269,11 +349,12 @@ func (s *Service) CreateContentType(ctx context.Context, subject string, in Cont
 		if e != nil {
 			return e
 		}
-		schema := ListTypeInput{FieldIds: in.FieldIds, HiddenFieldIds: in.HiddenFieldIds, Rules: in.Rules}
-		if e = t.validateTypeSchema(ctx, parent, &schema); e != nil {
+		schema := ListTypeInput{FieldIds: in.FieldIds, HiddenFieldIds: in.HiddenFieldIds, Rules: in.Rules, FieldOrder: in.FieldOrder, FieldSettings: in.FieldSettings}
+		if e = t.validateTypeSchema(ctx, subject, parent, &schema); e != nil {
 			return e
 		}
-		out, e = t.DAL.Catalog().CreateContentType(ctx, catalog.ContentType{Key: in.Key, Name: in.Name, Group: in.Group, ParentID: &parent.ID, FieldIds: schema.FieldIds, HiddenFieldIds: schema.HiddenFieldIds, Rules: schema.Rules})
+		out, e = t.DAL.Catalog().CreateContentType(ctx, catalog.ContentType{Key: in.Key, Name: in.Name, Group: in.Group, ParentID: &parent.ID, FieldIds: schema.FieldIds, HiddenFieldIds: schema.HiddenFieldIds, Rules: schema.Rules,
+			FieldOrder: schema.FieldOrder, FieldSettings: schema.FieldSettings})
 		if errors.Is(e, dberr.ErrUniqueViolation) {
 			return invalid("content type key is taken: " + in.Key)
 		}
@@ -474,6 +555,38 @@ func (s *Service) checkSubtypes(ctx context.Context, id string) error {
 	return nil
 }
 
+// checkHiddenMandatory checks that no type deriving from a type hides a
+// field its settings now make one forms must fill.
+func (s *Service) checkHiddenMandatory(ctx context.Context, id string) error {
+	ids, err := s.DAL.Catalog().Descendants(ctx, []string{id})
+	if err != nil {
+		return err
+	}
+	types, err := s.DAL.Catalog().ContentTypes(ctx, catalog.ContentTypeFilter{IDs: ids, Detached: true})
+	if err != nil {
+		return err
+	}
+	hidden := []string{}
+	for _, typ := range types {
+		hidden = append(hidden, typ.Effective.HiddenFieldIds...)
+	}
+	if len(hidden) == 0 {
+		return nil
+	}
+	defs, err := s.DAL.Catalog().Fields(ctx, catalog.FieldFilter{IDs: hidden})
+	if err != nil {
+		return err
+	}
+	for _, typ := range types {
+		for _, d := range defs {
+			if slices.Contains(typ.Effective.HiddenFieldIds, d.ID) && mandatory(withSetting(d, typ.Effective.Setting(d.ID))) {
+				return invalid("content type " + typ.Name + " hides " + d.Key + "; show it in forms before making it required without a default")
+			}
+		}
+	}
+	return nil
+}
+
 func (s *Service) UpdateContentType(ctx context.Context, subject, id string, version int, in ContentTypeInput) (out *catalog.ContentType, err error) {
 	err = s.write(ctx, func(t *Service) error {
 		if e := t.RequireScope(ctx, subject, "contentType.manage"); e != nil {
@@ -504,8 +617,8 @@ func (s *Service) UpdateContentType(ctx context.Context, subject, id string, ver
 				return e
 			}
 		}
-		schema := ListTypeInput{FieldIds: in.FieldIds, HiddenFieldIds: in.HiddenFieldIds, Rules: in.Rules}
-		if e = t.validateTypeSchema(ctx, parent, &schema); e != nil {
+		schema := ListTypeInput{FieldIds: in.FieldIds, HiddenFieldIds: in.HiddenFieldIds, Rules: in.Rules, FieldOrder: in.FieldOrder, FieldSettings: in.FieldSettings}
+		if e = t.validateTypeSchema(ctx, subject, parent, &schema); e != nil {
 			return e
 		}
 		collections, e := t.attachedCollections(ctx, []string{id})
@@ -516,7 +629,8 @@ func (s *Service) UpdateContentType(ctx context.Context, subject, id string, ver
 		if e != nil {
 			return e
 		}
-		out, e = t.reviseContentType(ctx, old, catalog.ContentType{Name: in.Name, Group: in.Group, FieldIds: schema.FieldIds, HiddenFieldIds: schema.HiddenFieldIds, Rules: schema.Rules})
+		out, e = t.reviseContentType(ctx, old, catalog.ContentType{Name: in.Name, Group: in.Group, FieldIds: schema.FieldIds, HiddenFieldIds: schema.HiddenFieldIds, Rules: schema.Rules,
+			FieldOrder: schema.FieldOrder, FieldSettings: schema.FieldSettings})
 		if e != nil {
 			return e
 		}
@@ -525,6 +639,9 @@ func (s *Service) UpdateContentType(ctx context.Context, subject, id string, ver
 		switch {
 		case reshaped:
 			if e = t.checkSubtypes(ctx, id); e != nil {
+				return e
+			}
+			if e = t.checkHiddenMandatory(ctx, id); e != nil {
 				return e
 			}
 			if e = t.refreshCollections(ctx, subject, collections); e != nil {
@@ -567,16 +684,17 @@ func (s *Service) DeleteContentType(ctx context.Context, subject, id string, ver
 	})
 }
 
-// changedSchema reports whether a write changes a type's own fields or rules.
+// changedSchema reports whether a write changes a type's own fields, rules,
+// field order or field settings.
 func changedSchema(old *catalog.ContentType, next ListTypeInput) (bool, error) {
-	if !slices.Equal(old.FieldIds, next.FieldIds) {
+	if !slices.Equal(old.FieldIds, next.FieldIds) || !slices.Equal(old.FieldOrder, next.FieldOrder) {
 		return true, nil
 	}
-	before, err := json.Marshal(nonNil(old.Rules))
+	before, err := json.Marshal([]any{nonNil(old.Rules), nonNil(old.FieldSettings)})
 	if err != nil {
 		return false, err
 	}
-	after, err := json.Marshal(nonNil(next.Rules))
+	after, err := json.Marshal([]any{nonNil(next.Rules), nonNil(next.FieldSettings)})
 	return string(before) != string(after), err
 }
 
@@ -599,10 +717,10 @@ func (s *Service) UpdateListType(ctx context.Context, subject, collection, id st
 		if e != nil {
 			return e
 		}
-		if e = t.validateTypeSchema(ctx, parent, &in); e != nil {
+		if e = t.validateTypeSchema(ctx, subject, parent, &in); e != nil {
 			return e
 		}
-		if out, e = t.reviseContentType(ctx, typ, catalog.ContentType{FieldIds: in.FieldIds, HiddenFieldIds: in.HiddenFieldIds, Rules: in.Rules}); e != nil {
+		if out, e = t.reviseContentType(ctx, typ, catalog.ContentType{FieldIds: in.FieldIds, HiddenFieldIds: in.HiddenFieldIds, Rules: in.Rules, FieldOrder: in.FieldOrder, FieldSettings: in.FieldSettings}); e != nil {
 			return e
 		}
 		if e = t.refreshCollections(ctx, subject, []*resources.Resource{c}); e != nil {
@@ -677,6 +795,16 @@ type SchemaContentType struct {
 	FieldKeys []string               `json:"field_keys"`
 	Rules     []model.ValidationRule `json:"rules"`
 	IsDefault bool                   `json:"is_default"`
+	// FieldSettings change whether the type's fields are required and their
+	// defaults, by field key.
+	FieldSettings []SchemaFieldSetting `json:"field_settings,omitempty"`
+}
+
+// SchemaFieldSetting is a field setting of a frozen schema, by field key.
+type SchemaFieldSetting struct {
+	Key          string          `json:"key"`
+	Required     *bool           `json:"required,omitempty"`
+	DefaultValue json.RawMessage `json:"default_value,omitempty"`
 }
 
 // DetachContentType makes a collection stop accepting a list type. The list
@@ -743,7 +871,15 @@ func typedDefinitions(raw json.RawMessage, id string) ([]*catalog.FieldDefinitio
 	}
 	for _, typ := range schema.ContentTypes {
 		if typ.ID == id {
-			return selectDefinitions(defs, typ.FieldKeys), typ.Rules, nil
+			selected := selectDefinitions(defs, typ.FieldKeys)
+			for i, d := range selected {
+				for _, setting := range typ.FieldSettings {
+					if setting.Key == d.Key {
+						selected[i] = withSetting(d, catalog.FieldSetting{Required: setting.Required, DefaultValue: setting.DefaultValue})
+					}
+				}
+			}
+			return selected, typ.Rules, nil
 		}
 	}
 	return nil, nil, invalid("content type is missing from the effective schema")
@@ -754,7 +890,14 @@ func (s *Service) checkTypeHeads(ctx context.Context, subject string, c *resourc
 	if err != nil {
 		return err
 	}
+	typ, err := s.DAL.Catalog().ContentType(ctx, typeID)
+	if err != nil {
+		return err
+	}
 	defs = selectDefinitions(defs, keys)
+	for i, d := range defs {
+		defs[i] = withSetting(d, typ.Effective.Setting(d.ID))
+	}
 	for after := ""; ; {
 		items, err := s.DAL.Resources().Resources(ctx, resources.Filter{ContainerID: c.ID, ContentTypeID: typeID, State: resources.Live, AfterID: after, Limit: surfaceBatch})
 		if err != nil {
@@ -814,9 +957,16 @@ func (s *Service) reviseContentType(ctx context.Context, prior *catalog.ContentT
 		return nil, err
 	}
 	next.ID = prior.ID
-	// Schema changes name no type; they keep its name and group.
+	// Schema changes name no type; they keep its name and group. Changes
+	// to its fields alone keep its field order and settings.
 	if next.Name == "" {
 		next.Name, next.Group = prior.Name, prior.Group
+	}
+	if next.FieldOrder == nil {
+		next.FieldOrder = prior.FieldOrder
+	}
+	if next.FieldSettings == nil {
+		next.FieldSettings = prior.FieldSettings
 	}
 	updated, err := s.DAL.Catalog().SaveContentType(ctx, next, prior.Version)
 	if errors.Is(err, dberr.ErrConcurrentUpdate) {
@@ -825,7 +975,7 @@ func (s *Service) reviseContentType(ctx context.Context, prior *catalog.ContentT
 	if err != nil {
 		return nil, catalogError(err)
 	}
-	if err := s.trackAuditProperties(prior.ID, before, updated, "name", "group", "field_ids", "hidden_field_ids", "rules"); err != nil {
+	if err := s.trackAuditProperties(prior.ID, before, updated, "name", "group", "field_ids", "hidden_field_ids", "rules", "field_order", "field_settings"); err != nil {
 		return nil, err
 	}
 	return updated, nil

@@ -178,8 +178,12 @@ func (s *Service) checkRequiredFilled(ctx context.Context, containerID string, k
 	membership := map[string]map[string]bool{}
 	for _, typ := range types {
 		membership[typ.ID] = map[string]bool{}
-		for _, key := range fieldKeys(selectTypeDefinitions(defs, typ)) {
-			membership[typ.ID][key] = true
+		for _, d := range selectTypeDefinitions(defs, typ) {
+			// A type that sets the field's requirement or default decides
+			// for itself.
+			if setting := typ.Effective.Setting(d.ID); setting.Required == nil && (setting.DefaultValue == nil || string(setting.DefaultValue) == "null") {
+				membership[typ.ID][d.Key] = true
+			}
 		}
 	}
 	for after := ""; ; {

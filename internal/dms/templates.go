@@ -251,14 +251,14 @@ func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templ
 		if e != nil {
 			return e
 		}
-		schema := ListTypeInput{FieldIds: ids, HiddenFieldIds: typ.HiddenFieldIds, Rules: rules}
-		if e = t.validateTypeSchema(ctx, parent, &schema); e != nil {
+		schema := ListTypeInput{FieldIds: ids, HiddenFieldIds: typ.HiddenFieldIds, Rules: rules, FieldOrder: typ.FieldOrder, FieldSettings: typ.FieldSettings}
+		if e = t.validateTypeSchema(ctx, subject, parent, &schema); e != nil {
 			return e
 		}
 		if e = t.checkTypeHeads(ctx, subject, c, typ.ID, fieldKeys(defs), append(slices.Clone(parent.Effective.Rules), rules...)); e != nil {
 			return e
 		}
-		if _, e = t.reviseContentType(ctx, typ, catalog.ContentType{FieldIds: ids, HiddenFieldIds: schema.HiddenFieldIds, Rules: schema.Rules}); e != nil {
+		if _, e = t.reviseContentType(ctx, typ, catalog.ContentType{FieldIds: ids, HiddenFieldIds: schema.HiddenFieldIds, Rules: schema.Rules, FieldOrder: schema.FieldOrder, FieldSettings: schema.FieldSettings}); e != nil {
 			return e
 		}
 		affected, e := t.attachedCollections(ctx, []string{typ.ID})

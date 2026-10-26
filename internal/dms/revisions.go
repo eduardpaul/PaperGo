@@ -11,6 +11,7 @@ import (
 	"papergo/internal/dal/surfaces"
 	"papergo/internal/model"
 	"path"
+	"slices"
 	"time"
 )
 
@@ -60,7 +61,13 @@ func (s *Service) recordSchema(ctx context.Context, actor string, c *resources.R
 		return err
 	}
 	for _, typ := range types {
-		definition.ContentTypes = append(definition.ContentTypes, SchemaContentType{ID: typ.ID, Key: typ.Key, Name: typ.Name, FieldKeys: fieldKeys(selectTypeDefinitions(defs, typ)), Rules: typ.Effective.Rules, IsDefault: typ.ID == defaultType})
+		settings := []SchemaFieldSetting{}
+		for _, setting := range typ.Effective.FieldSettings {
+			if i := slices.IndexFunc(defs, func(d *catalog.FieldDefinition) bool { return d.ID == setting.FieldID }); i >= 0 {
+				settings = append(settings, SchemaFieldSetting{Key: defs[i].Key, Required: setting.Required, DefaultValue: setting.DefaultValue})
+			}
+		}
+		definition.ContentTypes = append(definition.ContentTypes, SchemaContentType{ID: typ.ID, Key: typ.Key, Name: typ.Name, FieldKeys: fieldKeys(selectTypeDefinitions(defs, typ)), Rules: typ.Effective.Rules, IsDefault: typ.ID == defaultType, FieldSettings: settings})
 	}
 	raw, err := json.Marshal(definition)
 	if err != nil {

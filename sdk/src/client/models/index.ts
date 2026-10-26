@@ -966,13 +966,21 @@ export interface ContentType extends AdditionalDataHolder, Parsable {
      */
     createdAt?: Date | null;
     /**
-     * What the type and its ancestors define together, the root's first.
+     * What the type and its ancestors define together: fields in form order, hidden fields, rules, and field settings merged with the nearest type winning.
      */
     effective?: ContentType_effective | null;
     /**
      * The type's own field IDs; ancestors' fields are in effective.
      */
     fieldIds?: Guid[] | null;
+    /**
+     * The type's fields, own or inherited, in the order forms show them; fields it leaves out follow in the order the type inherits. Applies after the ancestors' order.
+     */
+    fieldOrder?: Guid[] | null;
+    /**
+     * The type's own field settings, at most one per field of the type.
+     */
+    fieldSettings?: FieldSetting[] | null;
     /**
      * Catalog types: the heading the catalog files the type under, such as Finance. List types have none.
      */
@@ -1023,13 +1031,17 @@ export interface ContentType extends AdditionalDataHolder, Parsable {
     version?: number | null;
 }
 /**
- * What the type and its ancestors define together, the root's first.
+ * What the type and its ancestors define together: fields in form order, hidden fields, rules, and field settings merged with the nearest type winning.
  */
 export interface ContentType_effective extends AdditionalDataHolder, Parsable {
     /**
      * The field_ids property
      */
     fieldIds?: Guid[] | null;
+    /**
+     * The field_settings property
+     */
+    fieldSettings?: FieldSetting[] | null;
     /**
      * The hidden_field_ids property
      */
@@ -1047,6 +1059,14 @@ export interface ContentTypeInput extends Parsable {
      * The type's own field IDs, none of them inherited. Every key of the type and its ancestors is unique.
      */
     fieldIds?: Guid[] | null;
+    /**
+     * The type's fields, own or inherited, in the order forms show them; fields it leaves out follow in the order the type inherits. Applies after the ancestors' order.
+     */
+    fieldOrder?: Guid[] | null;
+    /**
+     * The type's own field settings, at most one per field of the type.
+     */
+    fieldSettings?: FieldSetting[] | null;
     /**
      * Heading the catalog files the type under; empty or omitted is none. Replacement sets it like the name.
      */
@@ -1811,6 +1831,15 @@ export function createFieldDefinitionFromDiscriminatorValue(parseNode: ParseNode
 // @ts-ignore
 export function createFieldOptionsFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoFieldOptions;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {FieldSetting}
+ */
+// @ts-ignore
+export function createFieldSettingFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoFieldSetting;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -4346,6 +4375,8 @@ export function deserializeIntoContentType(contentType: Partial<ContentType> | u
         "created_at": n => { contentType.createdAt = n.getDateValue(); },
         "effective": n => { contentType.effective = n.getObjectValue<ContentType_effective>(createContentType_effectiveFromDiscriminatorValue); },
         "field_ids": n => { contentType.fieldIds = n.getCollectionOfPrimitiveValues<Guid>("string"); },
+        "field_order": n => { contentType.fieldOrder = n.getCollectionOfPrimitiveValues<Guid>("string"); },
+        "field_settings": n => { contentType.fieldSettings = n.getCollectionOfObjectValues<FieldSetting>(createFieldSettingFromDiscriminatorValue); },
         "group": n => { contentType.group = n.getStringValue(); },
         "hidden_field_ids": n => { contentType.hiddenFieldIds = n.getCollectionOfPrimitiveValues<Guid>("string"); },
         "id": n => { contentType.id = n.getGuidValue(); },
@@ -4369,6 +4400,7 @@ export function deserializeIntoContentType(contentType: Partial<ContentType> | u
 export function deserializeIntoContentType_effective(contentType_effective: Partial<ContentType_effective> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
         "field_ids": n => { contentType_effective.fieldIds = n.getCollectionOfPrimitiveValues<Guid>("string"); },
+        "field_settings": n => { contentType_effective.fieldSettings = n.getCollectionOfObjectValues<FieldSetting>(createFieldSettingFromDiscriminatorValue); },
         "hidden_field_ids": n => { contentType_effective.hiddenFieldIds = n.getCollectionOfPrimitiveValues<Guid>("string"); },
         "rules": n => { contentType_effective.rules = n.getCollectionOfObjectValues<ValidationRuleMember1>(createValidationRuleMember1FromDiscriminatorValue) ?? n.getCollectionOfObjectValues<ValidationRuleMember2>(createValidationRuleMember2FromDiscriminatorValue); },
     }
@@ -4382,6 +4414,8 @@ export function deserializeIntoContentType_effective(contentType_effective: Part
 export function deserializeIntoContentTypeInput(contentTypeInput: Partial<ContentTypeInput> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
         "field_ids": n => { contentTypeInput.fieldIds = n.getCollectionOfPrimitiveValues<Guid>("string"); },
+        "field_order": n => { contentTypeInput.fieldOrder = n.getCollectionOfPrimitiveValues<Guid>("string"); },
+        "field_settings": n => { contentTypeInput.fieldSettings = n.getCollectionOfObjectValues<FieldSetting>(createFieldSettingFromDiscriminatorValue); },
         "group": n => { contentTypeInput.group = n.getStringValue(); },
         "hidden_field_ids": n => { contentTypeInput.hiddenFieldIds = n.getCollectionOfPrimitiveValues<Guid>("string"); },
         "key": n => { contentTypeInput.key = n.getStringValue(); },
@@ -4734,6 +4768,19 @@ export function deserializeIntoFieldOptions(fieldOptions: Partial<FieldOptions> 
 }
 /**
  * The deserialization information for the current model
+ * @param FieldSetting The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoFieldSetting(fieldSetting: Partial<FieldSetting> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "default_value": n => { fieldSetting.defaultValue = n.getObjectValue<UntypedNode>(createUntypedNodeFromDiscriminatorValue); },
+        "field_id": n => { fieldSetting.fieldId = n.getGuidValue(); },
+        "required": n => { fieldSetting.required = n.getBooleanValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
  * @param FileSummary The instance to deserialize into.
  * @returns {Record<string, (node: ParseNode) => void>}
  */
@@ -5026,6 +5073,8 @@ export function deserializeIntoListIntegration(listIntegration: Partial<ListInte
 export function deserializeIntoListTypeInput(listTypeInput: Partial<ListTypeInput> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
         "field_ids": n => { listTypeInput.fieldIds = n.getCollectionOfPrimitiveValues<Guid>("string"); },
+        "field_order": n => { listTypeInput.fieldOrder = n.getCollectionOfPrimitiveValues<Guid>("string"); },
+        "field_settings": n => { listTypeInput.fieldSettings = n.getCollectionOfObjectValues<FieldSetting>(createFieldSettingFromDiscriminatorValue); },
         "hidden_field_ids": n => { listTypeInput.hiddenFieldIds = n.getCollectionOfPrimitiveValues<Guid>("string"); },
         "rules": n => { listTypeInput.rules = n.getCollectionOfObjectValues<ValidationRuleMember1>(createValidationRuleMember1FromDiscriminatorValue) ?? n.getCollectionOfObjectValues<ValidationRuleMember2>(createValidationRuleMember2FromDiscriminatorValue); },
     }
@@ -7498,6 +7547,23 @@ export interface FieldOptions extends Parsable {
 }
 export type FieldOptions_search_weight = (typeof FieldOptions_search_weightObject)[keyof typeof FieldOptions_search_weightObject];
 /**
+ * Changes, for a content type and its subtypes, whether one of its fields is required and its default. Omitted properties keep what the field or an ancestor says; the nearest type's setting wins.
+ */
+export interface FieldSetting extends Parsable {
+    /**
+     * Default for new items of the type, valid for the field like the field's own default; JSON null removes an inherited default.
+     */
+    defaultValue?: UntypedNode | null;
+    /**
+     * The field_id property
+     */
+    fieldId?: Guid | null;
+    /**
+     * Whether items of the type must hold a value (or get the default).
+     */
+    required?: boolean | null;
+}
+/**
  * The file of an item's selected revision: the one the caller reads (the draft for draft readers, otherwise the published file).
  */
 export interface FileSummary extends AdditionalDataHolder, Parsable {
@@ -7942,6 +8008,14 @@ export interface ListTypeInput extends Parsable {
      * The list type's own field IDs, none of them inherited.
      */
     fieldIds?: Guid[] | null;
+    /**
+     * The type's fields, own or inherited, in the order forms show them; fields it leaves out follow in the order the type inherits. Applies after the ancestors' order.
+     */
+    fieldOrder?: Guid[] | null;
+    /**
+     * The type's own field settings, at most one per field of the type.
+     */
+    fieldSettings?: FieldSetting[] | null;
     /**
      * Inherited fields that forms leave out. A required field without a default cannot be hidden.
      */
@@ -10367,6 +10441,8 @@ export function serializeContentType(writer: SerializationWriter, contentType: P
     if (!contentType || isSerializingDerivedType) { return; }
     writer.writeDateValue("created_at", contentType.createdAt);
     writer.writeCollectionOfPrimitiveValues<Guid>("field_ids", contentType.fieldIds);
+    writer.writeCollectionOfPrimitiveValues<Guid>("field_order", contentType.fieldOrder);
+    writer.writeCollectionOfObjectValues<FieldSetting>("field_settings", contentType.fieldSettings, serializeFieldSetting);
     writer.writeStringValue("group", contentType.group);
     writer.writeCollectionOfPrimitiveValues<Guid>("hidden_field_ids", contentType.hiddenFieldIds);
     writer.writeGuidValue("id", contentType.id);
@@ -10387,6 +10463,7 @@ export function serializeContentType(writer: SerializationWriter, contentType: P
 export function serializeContentType_effective(writer: SerializationWriter, contentType_effective: Partial<ContentType_effective> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!contentType_effective || isSerializingDerivedType) { return; }
     writer.writeCollectionOfPrimitiveValues<Guid>("field_ids", contentType_effective.fieldIds);
+    writer.writeCollectionOfObjectValues<FieldSetting>("field_settings", contentType_effective.fieldSettings, serializeFieldSetting);
     writer.writeCollectionOfPrimitiveValues<Guid>("hidden_field_ids", contentType_effective.hiddenFieldIds);
     writer.writeCollectionOfObjectValues<ValidationRuleMember1 | ValidationRuleMember2>("rules", contentType_effective.rules, serializeValidationRule);
     writer.writeAdditionalData(contentType_effective.additionalData);
@@ -10401,6 +10478,8 @@ export function serializeContentType_effective(writer: SerializationWriter, cont
 export function serializeContentTypeInput(writer: SerializationWriter, contentTypeInput: Partial<ContentTypeInput> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!contentTypeInput || isSerializingDerivedType) { return; }
     writer.writeCollectionOfPrimitiveValues<Guid>("field_ids", contentTypeInput.fieldIds);
+    writer.writeCollectionOfPrimitiveValues<Guid>("field_order", contentTypeInput.fieldOrder);
+    writer.writeCollectionOfObjectValues<FieldSetting>("field_settings", contentTypeInput.fieldSettings, serializeFieldSetting);
     writer.writeStringValue("group", contentTypeInput.group);
     writer.writeCollectionOfPrimitiveValues<Guid>("hidden_field_ids", contentTypeInput.hiddenFieldIds);
     writer.writeStringValue("key", contentTypeInput.key);
@@ -10762,6 +10841,19 @@ export function serializeFieldOptions(writer: SerializationWriter, fieldOptions:
 }
 /**
  * Serializes information the current object
+ * @param FieldSetting The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeFieldSetting(writer: SerializationWriter, fieldSetting: Partial<FieldSetting> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!fieldSetting || isSerializingDerivedType) { return; }
+    writer.writeObjectValue("default_value", fieldSetting.defaultValue);
+    writer.writeGuidValue("field_id", fieldSetting.fieldId);
+    writer.writeBooleanValue("required", fieldSetting.required);
+}
+/**
+ * Serializes information the current object
  * @param FileSummary The instance to serialize from.
  * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
  * @param writer Serialization writer to use to serialize this model
@@ -11060,6 +11152,8 @@ export function serializeListIntegration(writer: SerializationWriter, listIntegr
 export function serializeListTypeInput(writer: SerializationWriter, listTypeInput: Partial<ListTypeInput> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!listTypeInput || isSerializingDerivedType) { return; }
     writer.writeCollectionOfPrimitiveValues<Guid>("field_ids", listTypeInput.fieldIds);
+    writer.writeCollectionOfPrimitiveValues<Guid>("field_order", listTypeInput.fieldOrder);
+    writer.writeCollectionOfObjectValues<FieldSetting>("field_settings", listTypeInput.fieldSettings, serializeFieldSetting);
     writer.writeCollectionOfPrimitiveValues<Guid>("hidden_field_ids", listTypeInput.hiddenFieldIds);
     writer.writeCollectionOfObjectValues<ValidationRuleMember1 | ValidationRuleMember2>("rules", listTypeInput.rules, serializeValidationRule);
 }

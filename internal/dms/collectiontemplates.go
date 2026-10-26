@@ -208,7 +208,7 @@ func (s *Service) provisionCollectionTypes(ctx context.Context, subject string, 
 			return nil, err
 		}
 		schema := ListTypeInput{FieldIds: fieldIDs, Rules: recipe.Rules}
-		if err = s.validateTypeSchema(ctx, root, &schema); err != nil {
+		if err = s.validateTypeSchema(ctx, subject, root, &schema); err != nil {
 			return nil, err
 		}
 		key := recipe.Key

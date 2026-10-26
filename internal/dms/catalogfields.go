@@ -124,9 +124,6 @@ func (s *Service) persistFieldDefinition(ctx context.Context, d *catalog.FieldDe
 // checkHiddenRequired rejects making a field one that forms must fill, required
 // without a default, while a content type hides it from forms.
 func (s *Service) checkHiddenRequired(ctx context.Context, d *catalog.FieldDefinition) error {
-	if !d.Required || len(d.Options.DefaultValue) > 0 {
-		return nil
-	}
 	owners, err := s.DAL.Catalog().ContentTypes(ctx, catalog.ContentTypeFilter{FieldID: d.ID, Detached: true})
 	if err != nil || len(owners) == 0 {
 		return err
@@ -143,7 +140,7 @@ func (s *Service) checkHiddenRequired(ctx context.Context, d *catalog.FieldDefin
 		return err
 	}
 	for _, typ := range types {
-		if slices.Contains(typ.Effective.HiddenFieldIds, d.ID) {
+		if slices.Contains(typ.Effective.HiddenFieldIds, d.ID) && mandatory(withSetting(d, typ.Effective.Setting(d.ID))) {
 			return invalid("content type " + typ.Name + " hides " + d.Key + "; show it in forms before making it required without a default")
 		}
 	}

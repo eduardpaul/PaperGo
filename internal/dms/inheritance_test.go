@@ -409,3 +409,72 @@ func TestNewMenuOrderAndVisibility(t *testing.T) {
 		t.Fatal("default offered", types, err)
 	}
 }
+
+// Types decide per field whether it is required and its default, and order
+// their fields, without changing the shared field or other types.
+func TestPerTypeFieldSettingsAndOrder(t *testing.T) {
+	s, w, l := fixture(t)
+	amount, err := s.CreateCatalogField(testContext, "alice", CreateField{Key: "amount", Label: "Amount", Type: "integer"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	note, err := s.CreateCatalogField(testContext, "alice", CreateField{Key: "note", Label: "Note", Type: "text"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	required := true
+	record, err := s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "record", Name: "Record", FieldIds: []string{amount.ID, note.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "bad", Name: "Bad", ParentID: record.ID, FieldSettings: []catalog.FieldSetting{{FieldID: amount.ID, DefaultValue: []byte(`"many"`)}}}); !isValidation(err) {
+		t.Fatal("default of the wrong type", err)
+	}
+	invoice, err := s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "invoice", Name: "Invoice", ParentID: record.ID, FieldSettings: []catalog.FieldSetting{{FieldID: amount.ID, Required: &required}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	quote, err := s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "quote", Name: "Quote", ParentID: record.ID, FieldOrder: []string{note.ID, amount.ID},
+		FieldSettings: []catalog.FieldSetting{{FieldID: amount.ID, Required: &required, DefaultValue: []byte(`7`)}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(quote.Effective.FieldIds, []string{note.ID, amount.ID}) || !slices.Equal(invoice.Effective.FieldIds, []string{amount.ID, note.ID}) {
+		t.Fatal("field order", quote.Effective.FieldIds, invoice.Effective.FieldIds)
+	}
+	invoiceType := attachOK(t, s, l.ID, invoice.ID, true)
+	attachOK(t, s, l.ID, quote.ID, false)
+	if _, err = s.Create(testContext, "alice", l.ID, CreateResource{Kind: "item", Name: "Bill", ContentTypeID: invoice.ID}); !isValidation(err) {
+		t.Fatal("invoice without its required amount", err)
+	}
+	if _, err = s.Create(testContext, "alice", l.ID, CreateResource{Kind: "item", Name: "Bill", ContentTypeID: invoice.ID, Values: map[string]any{"amount": json.Number("3")}}); err != nil {
+		t.Fatal(err)
+	}
+	offer, err := s.Create(testContext, "alice", l.ID, CreateResource{Kind: "item", Name: "Offer", ContentTypeID: quote.ID})
+	if err != nil || offer.Values["amount"] != json.Number("7") {
+		t.Fatal("quote default", offer, err)
+	}
+	// The field itself stays optional elsewhere.
+	other := create(t, s, w.ID, "list", "Records", nil)
+	attachOK(t, s, other.ID, record.ID, true)
+	if _, err = s.Create(testContext, "alice", other.ID, CreateResource{Kind: "item", Name: "Plain", ContentTypeID: record.ID}); err != nil {
+		t.Fatal("record without amount", err)
+	}
+	// An invoice list hides amount only with a default it fills it with.
+	if _, err = s.UpdateListType(testContext, "alice", l.ID, invoiceType.ID, invoiceType.Version, ListTypeInput{HiddenFieldIds: []string{amount.ID}}); !isValidation(err) {
+		t.Fatal("required field hidden", err)
+	}
+	if _, err = s.UpdateListType(testContext, "alice", l.ID, invoiceType.ID, invoiceType.Version, ListTypeInput{HiddenFieldIds: []string{amount.ID},
+		FieldSettings: []catalog.FieldSetting{{FieldID: amount.ID, DefaultValue: []byte(`1`)}}}); err != nil {
+		t.Fatal(err)
+	}
+	// Making amount required for every record checks the records that lack it.
+	record, err = s.GetContentType(testContext, "alice", record.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.UpdateContentType(testContext, "alice", record.ID, record.Version, ContentTypeInput{Name: record.Name, FieldIds: record.FieldIds,
+		FieldSettings: []catalog.FieldSetting{{FieldID: amount.ID, Required: &required}}}); !isValidation(err) {
+		t.Fatal("records without amount made invalid", err)
+	}
+}
