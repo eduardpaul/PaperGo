@@ -530,25 +530,72 @@ export function CollectionContentTypes({ collection, canManage }: { collection: 
       await refresh();
     },
   });
+  // The New menu offers these list types, in order.
+  const menu = (types.data ?? []).filter((type) => type.in_new_menu !== false).map((type) => type.id);
+  const setMenu = useMutation({
+    mutationFn: (ids: string[]) =>
+      api(`/v1/resources/${collection.id}/content-type-menu`, { method: 'PUT', ifMatch: collection.version, body: { content_type_ids: ids } }),
+    onSuccess: refresh,
+  });
+  const move = (id: string, by: number) => {
+    const next = [...menu];
+    const at = next.indexOf(id);
+    next.splice(at, 1);
+    next.splice(at + by, 0, id);
+    setMenu.mutate(next);
+  };
   // Each attached list type copies one catalog type.
   const available = typeTree(catalog.data?.filter((type) => !types.data?.some((attached) => attached.parent_id === type.id)) ?? []);
   return (
     <SettingsSection
       title="Content types"
-      description="Kinds of items this list holds. Each comes from the catalog with its columns; customizing one changes it for this list only. New items use the default type."
+      description="Kinds of items this list holds. Each comes from the catalog with its columns; customizing one changes it for this list only. New items use the default type; the New menu offers the checked types in this order."
     >
       <QueryFeedback query={types} />
+      <QueryFeedback query={setMenu} />
       <ul className="divide-y">
         {types.data?.map((type) => (
           <li key={type.id} className="flex items-center gap-2 py-2">
             <span className="flex-1 text-[13px] font-medium">
               {type.name} {type.is_default && <Badge>Default</Badge>}
+              {type.in_new_menu === false && <span className="ml-2 text-xs text-muted">Not in New menu</span>}
               {(!!type.field_ids?.length || !!type.hidden_field_ids?.length || !!type.rules?.length) && (
                 <span className="ml-2 text-xs text-muted">Customized</span>
               )}
             </span>
             {canManage && (
               <>
+                {(types.data?.length ?? 0) > 1 && (
+                  <>
+                    <label className="flex items-center gap-1 text-xs">
+                      <Checkbox
+                        aria-label={`Offer ${type.name} in the New menu`}
+                        checked={type.in_new_menu !== false}
+                        disabled={type.is_default || setMenu.isPending}
+                        onChange={(event) => setMenu.mutate(event.target.checked ? [...menu, type.id] : menu.filter((id) => id !== type.id))}
+                      />
+                      New menu
+                    </label>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      aria-label={`Move ${type.name} up`}
+                      disabled={menu.indexOf(type.id) <= 0 || setMenu.isPending}
+                      onClick={() => move(type.id, -1)}
+                    >
+                      ↑
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      aria-label={`Move ${type.name} down`}
+                      disabled={!menu.includes(type.id) || menu.indexOf(type.id) === menu.length - 1 || setMenu.isPending}
+                      onClick={() => move(type.id, 1)}
+                    >
+                      ↓
+                    </Button>
+                  </>
+                )}
                 {canReadCatalog && (
                   <Button size="sm" variant="ghost" onClick={() => setCustomizing(type)}>
                     {canManageTypes ? 'Customize' : 'View type'}

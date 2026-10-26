@@ -39,6 +39,8 @@ type ContentType struct {
 	CollectionID   null.Val[string]            `db:"collection_id" `
 	Attached       bool                        `db:"attached" `
 	IsDefault      bool                        `db:"is_default" `
+	InNewMenu      bool                        `db:"in_new_menu" `
+	MenuPosition   int32                       `db:"menu_position" `
 	FieldIds       types.JSON[[]string]        `db:"field_ids" `
 	HiddenFieldIds types.JSON[[]string]        `db:"hidden_field_ids" `
 	Rules          types.JSON[json.RawMessage] `db:"rules" `
@@ -83,7 +85,7 @@ type contentTypeRLoaded struct {
 
 func buildContentTypeColumns(tableName string) contentTypeColumns {
 	columnsExpr := expr.NewColumnsExpr(
-		"id", "created_at", "updated_at", "key", "name", "group_name", "template_key", "parent_id", "collection_id", "attached", "is_default", "field_ids", "hidden_field_ids", "rules", "version",
+		"id", "created_at", "updated_at", "key", "name", "group_name", "template_key", "parent_id", "collection_id", "attached", "is_default", "in_new_menu", "menu_position", "field_ids", "hidden_field_ids", "rules", "version",
 	)
 
 	if tableName != "" {
@@ -104,6 +106,8 @@ func buildContentTypeColumns(tableName string) contentTypeColumns {
 		CollectionID:   buildContentTypeColumn(tableName, "collection_id"),
 		Attached:       buildContentTypeColumn(tableName, "attached"),
 		IsDefault:      buildContentTypeColumn(tableName, "is_default"),
+		InNewMenu:      buildContentTypeColumn(tableName, "in_new_menu"),
+		MenuPosition:   buildContentTypeColumn(tableName, "menu_position"),
 		FieldIds:       buildContentTypeColumn(tableName, "field_ids"),
 		HiddenFieldIds: buildContentTypeColumn(tableName, "hidden_field_ids"),
 		Rules:          buildContentTypeColumn(tableName, "rules"),
@@ -125,6 +129,8 @@ type contentTypeColumns struct {
 	CollectionID   contentTypeColumn
 	Attached       contentTypeColumn
 	IsDefault      contentTypeColumn
+	InNewMenu      contentTypeColumn
+	MenuPosition   contentTypeColumn
 	FieldIds       contentTypeColumn
 	HiddenFieldIds contentTypeColumn
 	Rules          contentTypeColumn
@@ -185,6 +191,8 @@ type ContentTypeSetter struct {
 	CollectionID   omitnull.Val[string]                  `db:"collection_id" `
 	Attached       omit.Val[bool]                        `db:"attached" `
 	IsDefault      omit.Val[bool]                        `db:"is_default" `
+	InNewMenu      omit.Val[bool]                        `db:"in_new_menu" `
+	MenuPosition   omit.Val[int32]                       `db:"menu_position" `
 	FieldIds       omit.Val[types.JSON[[]string]]        `db:"field_ids" `
 	HiddenFieldIds omit.Val[types.JSON[[]string]]        `db:"hidden_field_ids" `
 	Rules          omit.Val[types.JSON[json.RawMessage]] `db:"rules" `
@@ -192,7 +200,7 @@ type ContentTypeSetter struct {
 }
 
 func (s ContentTypeSetter) SetColumns() []string {
-	vals := make([]string, 0, 15)
+	vals := make([]string, 0, 17)
 	if s.ID.IsValue() {
 		vals = append(vals, "id")
 	}
@@ -225,6 +233,12 @@ func (s ContentTypeSetter) SetColumns() []string {
 	}
 	if s.IsDefault.IsValue() {
 		vals = append(vals, "is_default")
+	}
+	if s.InNewMenu.IsValue() {
+		vals = append(vals, "in_new_menu")
+	}
+	if s.MenuPosition.IsValue() {
+		vals = append(vals, "menu_position")
 	}
 	if s.FieldIds.IsValue() {
 		vals = append(vals, "field_ids")
@@ -274,6 +288,12 @@ func (s ContentTypeSetter) Overwrite(t *ContentType) {
 	}
 	if s.IsDefault.IsValue() {
 		t.IsDefault = s.IsDefault.MustGet()
+	}
+	if s.InNewMenu.IsValue() {
+		t.InNewMenu = s.InNewMenu.MustGet()
+	}
+	if s.MenuPosition.IsValue() {
+		t.MenuPosition = s.MenuPosition.MustGet()
 	}
 	if s.FieldIds.IsValue() {
 		t.FieldIds = s.FieldIds.MustGet()
@@ -351,6 +371,16 @@ func (s *ContentTypeSetter) Apply(q *dialect.InsertQuery) {
 			}
 			return psql.Arg(s.IsDefault.MustGet()).WriteSQL(ctx, w, d, start)
 		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.InNewMenu.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.InNewMenu.MustGet()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.MenuPosition.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.MenuPosition.MustGet()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
 			if s.FieldIds.IsUnset() {
 				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
 			}
@@ -378,7 +408,7 @@ func (s ContentTypeSetter) UpdateMod() bob.Mod[*dialect.UpdateQuery] {
 }
 
 func (s ContentTypeSetter) Expressions(prefix ...string) []bob.Expression {
-	exprs := make([]bob.Expression, 0, 15)
+	exprs := make([]bob.Expression, 0, 17)
 
 	if s.ID.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
@@ -457,6 +487,20 @@ func (s ContentTypeSetter) Expressions(prefix ...string) []bob.Expression {
 		}})
 	}
 
+	if s.InNewMenu.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "in_new_menu")...),
+			psql.Arg(s.InNewMenu),
+		}})
+	}
+
+	if s.MenuPosition.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "menu_position")...),
+			psql.Arg(s.MenuPosition),
+		}})
+	}
+
 	if s.FieldIds.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
 			psql.Quote(append(prefix, "field_ids")...),
@@ -495,7 +539,7 @@ func contentTypeScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc,
 		idx int
 		dst func(o *ContentType) any
 	}
-	targets := make([]target, 0, 15)
+	targets := make([]target, 0, 17)
 	for i, col := range cols {
 		switch col {
 		case "id":
@@ -520,6 +564,10 @@ func contentTypeScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc,
 			targets = append(targets, target{i, func(o *ContentType) any { return &o.Attached }})
 		case "is_default":
 			targets = append(targets, target{i, func(o *ContentType) any { return &o.IsDefault }})
+		case "in_new_menu":
+			targets = append(targets, target{i, func(o *ContentType) any { return &o.InNewMenu }})
+		case "menu_position":
+			targets = append(targets, target{i, func(o *ContentType) any { return &o.MenuPosition }})
 		case "field_ids":
 			targets = append(targets, target{i, func(o *ContentType) any { return &o.FieldIds }})
 		case "hidden_field_ids":
@@ -1312,6 +1360,8 @@ type contentTypeWhere[Q psql.Filterable] struct {
 	CollectionID   psql.WhereNullMod[Q, string]
 	Attached       psql.WhereMod[Q, bool]
 	IsDefault      psql.WhereMod[Q, bool]
+	InNewMenu      psql.WhereMod[Q, bool]
+	MenuPosition   psql.WhereMod[Q, int32]
 	FieldIds       psql.WhereMod[Q, types.JSON[[]string]]
 	HiddenFieldIds psql.WhereMod[Q, types.JSON[[]string]]
 	Rules          psql.WhereMod[Q, types.JSON[json.RawMessage]]
@@ -1337,6 +1387,8 @@ func buildContentTypeWhere[Q psql.Filterable](cols contentTypeColumns) contentTy
 		CollectionID:   psql.WhereNull[Q, string](cols.CollectionID.Expression),
 		Attached:       psql.Where[Q, bool](cols.Attached.Expression),
 		IsDefault:      psql.Where[Q, bool](cols.IsDefault.Expression),
+		InNewMenu:      psql.Where[Q, bool](cols.InNewMenu.Expression),
+		MenuPosition:   psql.Where[Q, int32](cols.MenuPosition.Expression),
 		FieldIds:       psql.Where[Q, types.JSON[[]string]](cols.FieldIds.Expression),
 		HiddenFieldIds: psql.Where[Q, types.JSON[[]string]](cols.HiddenFieldIds.Expression),
 		Rules:          psql.Where[Q, types.JSON[json.RawMessage]](cols.Rules.Expression),

@@ -162,6 +162,8 @@ export interface ContentType {
   name: string;
   /** Catalog types: the heading the catalog files the type under. */
   group?: string;
+  /** List types: whether the New menu offers the type; the default always is. */
+  in_new_menu?: boolean;
   parent_id?: string | null;
   collection_id?: string | null;
   ancestor_ids?: string[];

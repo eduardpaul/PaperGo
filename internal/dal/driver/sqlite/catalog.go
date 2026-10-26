@@ -160,6 +160,7 @@ func (q Queries) InsertContentType(ctx context.Context, t *catalog.ContentType) 
 		return err
 	}
 	set.ID, set.CreatedAt, set.Key, set.Attached, set.IsDefault = omit.From(t.ID), omit.From(t.CreatedAt), omit.From(t.Key), omit.From(t.Attached), omit.From(t.IsDefault)
+	set.InNewMenu, set.MenuPosition = omit.From(t.InNewMenu), omit.From(int64(t.MenuPosition))
 	if t.TemplateKey != nil {
 		set.TemplateKey = nullable.String(*t.TemplateKey)
 	}
@@ -231,6 +232,12 @@ func (q Queries) SetAttached(ctx context.Context, id string, attached bool) erro
 	return dberr.Translate(err)
 }
 
+func (q Queries) SetNewMenu(ctx context.Context, id string, offered bool, position int) error {
+	set := &models.ContentTypeSetter{InNewMenu: omit.From(offered), MenuPosition: omit.From(int64(position))}
+	_, err := models.ContentTypes.Update(set.UpdateMod(), models.UpdateWhere.ContentTypes.ID.EQ(id)).Exec(ctx, q.exec)
+	return dberr.Translate(err)
+}
+
 // SetDefaultContentType clears the old default first: a collection has at
 // most one default at any time.
 func (q Queries) SetDefaultContentType(ctx context.Context, collectionID, id string) error {
@@ -239,7 +246,7 @@ func (q Queries) SetDefaultContentType(ctx context.Context, collectionID, id str
 	if _, err := models.ContentTypes.Update(off.UpdateMod(), w.CollectionID.EQ(collectionID), w.IsDefault.EQ(true)).Exec(ctx, q.exec); err != nil {
 		return dberr.Translate(err)
 	}
-	on := &models.ContentTypeSetter{IsDefault: omit.From(true)}
+	on := &models.ContentTypeSetter{IsDefault: omit.From(true), InNewMenu: omit.From(true)}
 	_, err := models.ContentTypes.Update(on.UpdateMod(), w.CollectionID.EQ(collectionID), w.ID.EQ(id)).Exec(ctx, q.exec)
 	return dberr.Translate(err)
 }
@@ -311,7 +318,7 @@ func contentTypeSetter(t *catalog.ContentType) (*models.ContentTypeSetter, error
 
 func contentTypeRecord(row *models.ContentType) (*catalog.ContentType, error) {
 	out := &catalog.ContentType{ID: row.ID, CreatedAt: row.CreatedAt.UTC(), UpdatedAt: row.UpdatedAt.UTC(), Key: row.Key, Name: row.Name, Group: row.GroupName.GetOr(""), TemplateKey: row.TemplateKey.Ptr(),
-		ParentID: row.ParentID.Ptr(), CollectionID: row.CollectionID.Ptr(), Attached: row.Attached, IsDefault: row.IsDefault,
+		ParentID: row.ParentID.Ptr(), CollectionID: row.CollectionID.Ptr(), Attached: row.Attached, IsDefault: row.IsDefault, InNewMenu: row.InNewMenu, MenuPosition: int(row.MenuPosition),
 		FieldIds: row.FieldIds.Val, HiddenFieldIds: row.HiddenFieldIds.Val, Version: int(row.Version)}
 	if out.FieldIds == nil {
 		out.FieldIds = []string{}

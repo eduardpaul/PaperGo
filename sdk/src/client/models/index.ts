@@ -986,6 +986,10 @@ export interface ContentType extends AdditionalDataHolder, Parsable {
      */
     id?: Guid | null;
     /**
+     * List types: whether the New menu offers the type when people create items. The default always is; the others stay accepted for moves, API writes and type changes.
+     */
+    inNewMenu?: boolean | null;
+    /**
      * List types: the type new items of the collection get.
      */
     isDefault?: boolean | null;
@@ -2127,6 +2131,15 @@ export function createNavigationRequestFromDiscriminatorValue(parseNode: ParseNo
 // @ts-ignore
 export function createNavigationSelectionFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoNavigationSelection;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {NewMenuInput}
+ */
+// @ts-ignore
+export function createNewMenuInputFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoNewMenuInput;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -4336,6 +4349,7 @@ export function deserializeIntoContentType(contentType: Partial<ContentType> | u
         "group": n => { contentType.group = n.getStringValue(); },
         "hidden_field_ids": n => { contentType.hiddenFieldIds = n.getCollectionOfPrimitiveValues<Guid>("string"); },
         "id": n => { contentType.id = n.getGuidValue(); },
+        "in_new_menu": n => { contentType.inNewMenu = n.getBooleanValue(); },
         "is_default": n => { contentType.isDefault = n.getBooleanValue(); },
         "key": n => { contentType.key = n.getStringValue(); },
         "name": n => { contentType.name = n.getStringValue(); },
@@ -5192,6 +5206,17 @@ export function deserializeIntoNavigationSelection(navigationSelection: Partial<
         "field": n => { navigationSelection.field = n.getStringValue(); },
         "no_value": n => { navigationSelection.noValue = n.getBooleanValue(); },
         "term_id": n => { navigationSelection.termId = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param NewMenuInput The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoNewMenuInput(newMenuInput: Partial<NewMenuInput> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "content_type_ids": n => { newMenuInput.contentTypeIds = n.getCollectionOfPrimitiveValues<Guid>("string"); },
     }
 }
 /**
@@ -8147,6 +8172,12 @@ export interface NavigationSelection extends Parsable {
      * A term of the field's term set: the items the view shows at it.
      */
     termId?: string | null;
+}
+export interface NewMenuInput extends Parsable {
+    /**
+     * The list types the New menu offers, in order, each by its own id or the catalog type it copies. It must include the default.
+     */
+    contentTypeIds?: Guid[] | null;
 }
 export interface NotificationSend extends Parsable {
     /**
@@ -11210,6 +11241,17 @@ export function serializeNavigationSelection(writer: SerializationWriter, naviga
     writer.writeStringValue("field", navigationSelection.field);
     writer.writeBooleanValue("no_value", navigationSelection.noValue);
     writer.writeStringValue("term_id", navigationSelection.termId);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param NewMenuInput The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeNewMenuInput(writer: SerializationWriter, newMenuInput: Partial<NewMenuInput> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!newMenuInput || isSerializingDerivedType) { return; }
+    writer.writeCollectionOfPrimitiveValues<Guid>("content_type_ids", newMenuInput.contentTypeIds);
 }
 /**
  * Serializes information the current object

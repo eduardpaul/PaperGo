@@ -12,6 +12,8 @@ import { CalendarRequestBuilderNavigationMetadata, type CalendarRequestBuilder }
 // @ts-ignore
 import { ChildrenRequestBuilderRequestsMetadata, type ChildrenRequestBuilder } from './children/index.js';
 // @ts-ignore
+import { ContentTypeMenuRequestBuilderRequestsMetadata, type ContentTypeMenuRequestBuilder } from './contentTypeMenu/index.js';
+// @ts-ignore
 import { ContentTypesRequestBuilderNavigationMetadata, ContentTypesRequestBuilderRequestsMetadata, type ContentTypesRequestBuilder } from './contentTypes/index.js';
 // @ts-ignore
 import { DeltaRequestBuilderRequestsMetadata, type DeltaRequestBuilder } from './delta/index.js';
@@ -63,6 +65,10 @@ export interface ResourcesItemRequestBuilder extends BaseRequestBuilder<Resource
      * The children property
      */
     get children(): ChildrenRequestBuilder;
+    /**
+     * The contentTypeMenu property
+     */
+    get contentTypeMenu(): ContentTypeMenuRequestBuilder;
     /**
      * The contentTypes property
      */
@@ -204,6 +210,9 @@ export const ResourcesItemRequestBuilderNavigationMetadata: Record<Exclude<keyof
     },
     children: {
         requestsMetadata: ChildrenRequestBuilderRequestsMetadata,
+    },
+    contentTypeMenu: {
+        requestsMetadata: ContentTypeMenuRequestBuilderRequestsMetadata,
     },
     contentTypes: {
         requestsMetadata: ContentTypesRequestBuilderRequestsMetadata,

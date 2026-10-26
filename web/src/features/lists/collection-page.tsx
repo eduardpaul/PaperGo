@@ -906,7 +906,9 @@ function CreateDialog({
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [keywords, setKeywords] = useState<string[]>([]);
   const typeList = types.data ?? [];
-  const defaultType = typeList.find((entry) => entry.is_default) ?? typeList[0];
+  // The collection's New menu: the types it offers, in its order.
+  const menu = typeList.filter((entry) => entry.in_new_menu !== false);
+  const defaultType = typeList.find((entry) => entry.is_default) ?? menu[0];
   const chosenType = type || defaultType?.id || '';
   const visible = kind !== 'folder' ? fieldsForType(fields.data ?? [], typeList, chosenType) : [];
   const create = useMutation({
@@ -951,11 +953,11 @@ function CreateDialog({
     >
       <Label htmlFor="draft-name">Name</Label>
       <Input id="draft-name" value={name} onChange={(event) => setName(event.target.value)} required autoFocus />
-      {kind !== 'folder' && typeList.length > 1 && (
+      {kind !== 'folder' && menu.length > 1 && (
         <>
           <Label htmlFor="draft-type">Content type</Label>
           <Select id="draft-type" value={chosenType} onChange={(event) => setType(event.target.value)}>
-            {typeList.map((entry) => (
+            {menu.map((entry) => (
               <option key={entry.id} value={entry.id}>
                 {entry.name}
               </option>

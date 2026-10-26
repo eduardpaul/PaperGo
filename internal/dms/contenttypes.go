@@ -299,8 +299,46 @@ func (s *Service) CollectionContentTypes(ctx context.Context, subject, collectio
 		if _, e := t.contentTypeResource(ctx, subject, collection, "read"); e != nil {
 			return nil, e
 		}
-		return t.collectionTypes(ctx, collection)
+		types, e := t.collectionTypes(ctx, collection)
+		if e == nil {
+			catalog.MenuOrder(types)
+		}
+		return types, e
 	})
+}
+
+// NewMenuInput lists the content types the New menu offers, in order.
+type NewMenuInput struct {
+	ContentTypeIDs []string `json:"content_type_ids"`
+}
+
+// SetNewMenu chooses the collection's list types people pick from when they
+// create items, in order; the others stay accepted for moves, API writes and
+// type changes. The default is always offered.
+func (s *Service) SetNewMenu(ctx context.Context, subject, collection string, version int, in NewMenuInput) (out []*catalog.ContentType, err error) {
+	err = s.write(ctx, func(t *Service) error {
+		if e := t.RequireScope(ctx, subject, "item.read"); e != nil {
+			return e
+		}
+		c, e := t.authorize(ctx, subject, collection, "manage")
+		if e != nil {
+			return e
+		}
+		if c.Version != version {
+			return ErrPreconditionFailed
+		}
+		if out, e = t.DAL.Catalog().SetNewMenu(ctx, c.ID, in.ContentTypeIDs); e != nil {
+			if dberr.IsNotFound(e) {
+				return invalid("content_type_ids must name content types the collection accepts")
+			}
+			return catalogError(e)
+		}
+		if e = t.DAL.Resources().Touch(ctx, c.ID, c.Version, subject); e != nil {
+			return e
+		}
+		return t.audit(ctx, subject, "content_type.menu", c, map[string]any{"content_type_ids": in.ContentTypeIDs})
+	})
+	return
 }
 
 // CollectionContentType reads a list type of a collection, by its id or the

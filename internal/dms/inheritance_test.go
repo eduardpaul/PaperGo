@@ -370,3 +370,42 @@ func TestContentTypeGroups(t *testing.T) {
 		t.Fatal("group cleared", typ, err)
 	}
 }
+
+// The New menu offers the chosen list types in order; the rest stay
+// accepted, and the default is always offered.
+func TestNewMenuOrderAndVisibility(t *testing.T) {
+	s, _, l := fixture(t)
+	invoice := typeOK(t, s, l.ID, ContentTypeInput{Key: "invoice", Name: "Invoice"})
+	memo := typeOK(t, s, l.ID, ContentTypeInput{Key: "memo", Name: "Memo"})
+	types, err := s.CollectionContentTypes(testContext, "alice", l.ID)
+	if err != nil || len(types) != 3 || types[1].ID != invoice.ID || types[2].ID != memo.ID {
+		t.Fatal("attached types come last", types, err)
+	}
+	item := types[0]
+	if _, err = s.SetNewMenu(testContext, "alice", l.ID, latest(t, s, l.ID).Version, NewMenuInput{ContentTypeIDs: []string{memo.ID}}); !isValidation(err) {
+		t.Fatal("default left out of the menu", err)
+	}
+	if _, err = s.SetNewMenu(testContext, "alice", l.ID, latest(t, s, l.ID).Version, NewMenuInput{ContentTypeIDs: []string{memo.ID, memo.ID, item.ID}}); !isValidation(err) {
+		t.Fatal("type listed twice", err)
+	}
+	// A catalog type id stands for the list type copying it.
+	version := latest(t, s, l.ID).Version
+	if types, err = s.SetNewMenu(testContext, "alice", l.ID, version, NewMenuInput{ContentTypeIDs: []string{*memo.ParentID, item.ID}}); err != nil {
+		t.Fatal(err)
+	}
+	if len(types) != 3 || types[0].ID != memo.ID || types[1].ID != item.ID || types[2].ID != invoice.ID || types[2].InNewMenu || !types[0].InNewMenu {
+		t.Fatal("menu order", types)
+	}
+	if latest(t, s, l.ID).Version != version+1 {
+		t.Fatal("collection version unchanged")
+	}
+	// A type left out of the menu is still accepted, and becomes offered as
+	// the default.
+	if _, err = s.Create(testContext, "alice", l.ID, CreateResource{Kind: "item", Name: "Bill", ContentTypeID: invoice.ID}); err != nil {
+		t.Fatal(err)
+	}
+	attachOK(t, s, l.ID, *invoice.ParentID, true)
+	if types, err = s.CollectionContentTypes(testContext, "alice", l.ID); err != nil || !slices.ContainsFunc(types, func(typ *catalog.ContentType) bool { return typ.ID == invoice.ID && typ.InNewMenu && typ.IsDefault }) {
+		t.Fatal("default offered", types, err)
+	}
+}

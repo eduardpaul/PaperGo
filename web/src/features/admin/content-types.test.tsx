@@ -39,7 +39,7 @@ const item: ContentType = { id: 'item', key: 'item', name: 'Item', field_ids: []
 const record: ContentType = { id: 'record', key: 'record', name: 'Record', parent_id: 'item', ancestor_ids: ['item'], field_ids: ['code', 'note'], effective: effective(['code', 'note']), version: 1 };
 const collection: Resource = { id: 'collection', workspace_id: 'workspace', kind: 'list', name: 'Records', version: 1, max_versions: 50 };
 
-function catalogAPI(scopes: string[], listType: ContentType, onWrite?: (path: string, body: Record<string, unknown>) => void, catalog: ContentType[] = [item, record]) {
+function catalogAPI(scopes: string[], listType: ContentType, onWrite?: (path: string, body: Record<string, unknown>) => void, catalog: ContentType[] = [item, record], listTypes: ContentType[] = []) {
   mockAPI((url, init) => {
     if (init.method === 'PUT' || init.method === 'POST' || init.method === 'DELETE') {
       onWrite?.(url.pathname, init.body ? (parseJSON(String(init.body)) as Record<string, unknown>) : { method: init.method, ifMatch: new Headers(init.headers).get('If-Match') });
@@ -48,7 +48,7 @@ function catalogAPI(scopes: string[], listType: ContentType, onWrite?: (path: st
     if (url.pathname === '/v1/identity/me') return { subject: 'alice', scopes };
     if (url.pathname === '/v1/content-types') return catalog;
     if (url.pathname === '/v1/fields') return fields;
-    if (url.pathname === '/v1/resources/collection/content-types') return [listType];
+    if (url.pathname === '/v1/resources/collection/content-types') return [listType, ...listTypes];
     return { value: [] };
   });
 }
@@ -146,5 +146,24 @@ describe('content type administration', () => {
     fireEvent.change(dialog.getByLabelText('Group'), { target: { value: ' Finance ' } });
     fireEvent.click(dialog.getByRole('button', { name: 'Save content type' }));
     await waitFor(() => expect(created).toMatchObject({ key: 'quote', group: 'Finance' }));
+  });
+
+  it('chooses and orders the types the New menu offers', async () => {
+    const writes: Record<string, unknown>[] = [];
+    const recordType: ContentType = { id: 'list-record', key: 'record', name: 'Record', parent_id: 'record', collection_id: 'collection', is_default: true, in_new_menu: true, field_ids: [], effective: effective([]), version: 1 };
+    const memo: ContentType = { ...recordType, id: 'list-memo', key: 'memo', name: 'Memo', parent_id: 'memo', is_default: false };
+    const note: ContentType = { ...memo, id: 'list-note', key: 'note', name: 'Note', parent_id: 'note', in_new_menu: false };
+    catalogAPI(['contentType.read', 'contentType.manage'], recordType, (path, body) => path.endsWith('/content-type-menu') && writes.push(body), [item, record], [memo, note]);
+    renderPage(<CollectionContentTypes collection={collection} canManage />);
+    const offerRecord = (await screen.findByLabelText('Offer Record in the New menu')) as HTMLInputElement;
+    // The default is always offered.
+    expect(offerRecord.disabled).toBe(true);
+    expect(screen.getByText('Not in New menu')).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('Offer Note in the New menu'));
+    await waitFor(() => expect(writes).toHaveLength(1));
+    expect(writes[0]).toEqual({ content_type_ids: ['list-record', 'list-memo', 'list-note'] });
+    fireEvent.click(screen.getByRole('button', { name: 'Move Memo up' }));
+    await waitFor(() => expect(writes).toHaveLength(2));
+    expect(writes[1]).toEqual({ content_type_ids: ['list-memo', 'list-record'] });
   });
 });

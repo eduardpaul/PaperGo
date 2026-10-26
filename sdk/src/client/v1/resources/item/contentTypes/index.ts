@@ -19,7 +19,7 @@ export interface ContentTypesRequestBuilder extends BaseRequestBuilder<ContentTy
      */
      byTypeID(typeID: Guid) : WithTypeItemRequestBuilder;
     /**
-     *  Required module scopes: contentType.read. Resource ACLs and any additional use-case checks also apply. Each list type copies one catalog type (parent_id) and carries its effective schema.
+     *  Required module scopes: contentType.read. Resource ACLs and any additional use-case checks also apply. Each list type copies one catalog type (parent_id) and carries its effective schema. Listed in New menu order, followed by the types the menu leaves out, by key.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<ContentType[]>}
      * @throws {Problem} error when the service returns a 4XX or 5XX status code
@@ -35,7 +35,7 @@ export interface ContentTypesRequestBuilder extends BaseRequestBuilder<ContentTy
      */
      post(body: AttachContentTypeInput, requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<Resource | undefined>;
     /**
-     *  Required module scopes: contentType.read. Resource ACLs and any additional use-case checks also apply. Each list type copies one catalog type (parent_id) and carries its effective schema.
+     *  Required module scopes: contentType.read. Resource ACLs and any additional use-case checks also apply. Each list type copies one catalog type (parent_id) and carries its effective schema. Listed in New menu order, followed by the types the menu leaves out, by key.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */

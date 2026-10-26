@@ -5105,7 +5105,7 @@
         "x-module-scopes": [
           "contentType.read"
         ],
-        "description": " Required module scopes: contentType.read. Resource ACLs and any additional use-case checks also apply. Each list type copies one catalog type (parent_id) and carries its effective schema."
+        "description": " Required module scopes: contentType.read. Resource ACLs and any additional use-case checks also apply. Each list type copies one catalog type (parent_id) and carries its effective schema. Listed in New menu order, followed by the types the menu leaves out, by key."
       },
       "post": {
         "operationId": "attachContentType",
@@ -23507,6 +23507,71 @@
           }
         }
       }
+    },
+    "/v1/resources/{id}/content-type-menu": {
+      "parameters": [
+        {
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "in": "path",
+          "name": "id"
+        }
+      ],
+      "put": {
+        "operationId": "setContentTypeMenu",
+        "summary": "Choose and order the content types the New menu offers",
+        "description": "Requires list.manage and manage ACL on the collection, with the collection If-Match; advances the collection ETag. Types left out stay accepted for moves, API writes and type changes. The default must be offered; making a type the default offers it. Returns the list types in menu order.",
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412.",
+            "schema": {
+              "type": "string",
+              "pattern": "^\"[1-9][0-9]*\"$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewMenuInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "maxItems": 32,
+                  "items": {
+                    "$ref": "#/components/schemas/ContentType"
+                  }
+                }
+              }
+            }
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "list.manage"
+        ]
+      }
     }
   },
   "components": {
@@ -26472,6 +26537,11 @@
             "type": "boolean",
             "readOnly": true,
             "description": "List types: the type new items of the collection get."
+          },
+          "in_new_menu": {
+            "type": "boolean",
+            "readOnly": true,
+            "description": "List types: whether the New menu offers the type when people create items. The default always is; the others stay accepted for moves, API writes and type changes."
           },
           "ancestor_ids": {
             "type": "array",
@@ -34136,6 +34206,25 @@
             },
             "maxItems": 32,
             "description": "The list type's own rules; keys differ from inherited rules."
+          }
+        }
+      },
+      "NewMenuInput": {
+        "type": "object",
+        "required": [
+          "content_type_ids"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "content_type_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The list types the New menu offers, in order, each by its own id or the catalog type it copies. It must include the default."
           }
         }
       }

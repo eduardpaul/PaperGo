@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -77,6 +78,10 @@ type ContentType struct {
 	IsDefault bool `json:"is_default,omitempty"`
 	// Attached is false once the collection stops accepting a list type.
 	Attached bool `json:"-"`
+	// InNewMenu offers a list type when people create items, in
+	// MenuPosition order; the default always is.
+	InNewMenu    bool `json:"in_new_menu"`
+	MenuPosition int  `json:"-"`
 	// FieldIds, HiddenFieldIds and Rules are the type's own. Hidden fields
 	// are inherited fields that forms leave out.
 	FieldIds       []string               `json:"field_ids"`
@@ -160,7 +165,10 @@ type Queries interface {
 	// SetAttached records whether a collection accepts a list type; a
 	// detached type is no default.
 	SetAttached(ctx context.Context, id string, attached bool) error
-	// SetDefaultContentType makes a list type its collection's default.
+	// SetNewMenu offers a list type in the New menu at a position, or not.
+	SetNewMenu(ctx context.Context, id string, offered bool, position int) error
+	// SetDefaultContentType makes a list type its collection's default,
+	// which the New menu offers.
 	SetDefaultContentType(ctx context.Context, collectionID, id string) error
 	// AttachedCollections lists the collections that accept a type deriving
 	// from any of the types.
@@ -535,7 +543,7 @@ func insertContentType(ctx context.Context, q Queries, t ContentType) (*ContentT
 			return nil, err
 		}
 	}
-	t.Version, t.Attached, t.CreatedAt = 1, true, time.Now().UTC()
+	t.Version, t.Attached, t.InNewMenu, t.CreatedAt = 1, true, true, time.Now().UTC()
 	t.UpdatedAt = t.CreatedAt
 	if err := q.InsertContentType(ctx, &t); err != nil {
 		return nil, err
@@ -850,12 +858,19 @@ func (r *Repo) Attach(ctx context.Context, collectionID, contentTypeID string, i
 			if len(attached) >= MaxCollectionTypes {
 				return Violation(fmt.Sprintf("at most %d content types per collection", MaxCollectionTypes))
 			}
+			// A newly accepted type comes last in the New menu.
+			position := 0
+			for _, t := range attached {
+				position = max(position, t.MenuPosition+1)
+			}
 			if current == nil {
 				id := collectionID
-				if current, err = insertContentType(ctx, q, ContentType{Key: parent.Key, Name: parent.Name, ParentID: &parent.ID, CollectionID: &id}); err != nil {
+				if current, err = insertContentType(ctx, q, ContentType{Key: parent.Key, Name: parent.Name, ParentID: &parent.ID, CollectionID: &id, MenuPosition: position}); err != nil {
 					return err
 				}
 			} else if err = q.SetAttached(ctx, current.ID, true); err != nil {
+				return err
+			} else if err = q.SetNewMenu(ctx, current.ID, true, position); err != nil {
 				return err
 			}
 		}
@@ -909,6 +924,70 @@ func (r *Repo) Detach(ctx context.Context, collectionID, contentTypeID string) e
 			return err
 		}
 		return q.SetDefaultContentType(ctx, collectionID, remaining[0].ID)
+	})
+}
+
+// SetNewMenu offers the collection's list types that ids name, by their own
+// id or the catalog type they copy, in that order when people create items,
+// and no others. The menu keeps the default and at least one type. It
+// returns the collection's types in menu order.
+func (r *Repo) SetNewMenu(ctx context.Context, collectionID string, ids []string) (out []*ContentType, err error) {
+	err = r.write(ctx, func(q Queries) error {
+		if err := q.LockWorkspace(ctx, collectionID); err != nil {
+			return err
+		}
+		if err := collection(ctx, q, collectionID); err != nil {
+			return err
+		}
+		attached, err := q.ContentTypes(ctx, ContentTypeFilter{CollectionID: collectionID})
+		if err != nil {
+			return err
+		}
+		positions := map[string]int{}
+		for i, id := range ids {
+			j := slices.IndexFunc(attached, func(t *ContentType) bool { return t.ID == id || *t.ParentID == id })
+			if j < 0 {
+				return dberr.ErrNotFound
+			}
+			if _, seen := positions[attached[j].ID]; seen {
+				return Violation("the New menu lists each content type once")
+			}
+			positions[attached[j].ID] = i
+		}
+		if len(positions) == 0 {
+			return Violation("the New menu offers at least one content type")
+		}
+		for _, t := range attached {
+			position, offered := positions[t.ID]
+			if t.IsDefault && !offered {
+				return Violation("the New menu offers the default content type")
+			}
+			if err = q.SetNewMenu(ctx, t.ID, offered, position); err != nil {
+				return err
+			}
+		}
+		if out, err = contentTypes(ctx, q, ContentTypeFilter{CollectionID: collectionID}); err == nil {
+			MenuOrder(out)
+		}
+		return err
+	})
+	return out, err
+}
+
+// MenuOrder sorts a collection's list types as its New menu offers them,
+// followed by those it leaves out, by key.
+func MenuOrder(types []*ContentType) {
+	slices.SortStableFunc(types, func(a, b *ContentType) int {
+		switch {
+		case a.InNewMenu != b.InNewMenu:
+			if a.InNewMenu {
+				return -1
+			}
+			return 1
+		case a.InNewMenu && a.MenuPosition != b.MenuPosition:
+			return a.MenuPosition - b.MenuPosition
+		}
+		return strings.Compare(a.Key, b.Key)
 	})
 }
 

@@ -233,6 +233,10 @@ CREATE TABLE content_types (
     -- items' history keeps it, and attaching the catalog type again restores it.
     attached BOOLEAN NOT NULL DEFAULT TRUE CHECK (collection_id IS NOT NULL OR attached),
     is_default BOOLEAN NOT NULL DEFAULT FALSE CHECK (NOT is_default OR (collection_id IS NOT NULL AND attached)),
+    -- in_new_menu offers a list type when people create items, in menu_position
+    -- order; the default always is.
+    in_new_menu BOOLEAN NOT NULL DEFAULT TRUE CHECK (in_new_menu OR NOT is_default),
+    menu_position INTEGER NOT NULL DEFAULT 0 CHECK (menu_position >= 0),
     field_ids JSONB NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(field_ids) = 'array'),
     -- hidden_field_ids are inherited fields forms leave out.
     hidden_field_ids JSONB NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(hidden_field_ids) = 'array'),
