@@ -255,7 +255,15 @@ func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templ
 		if e = t.validateTypeSchema(ctx, subject, parent, &schema); e != nil {
 			return e
 		}
-		if e = t.checkTypeHeads(ctx, subject, c, typ.ID, fieldKeys(defs), append(slices.Clone(parent.Effective.Rules), rules...)); e != nil {
+		fields, e := t.collectionFields(ctx, c.ID)
+		if e != nil {
+			return e
+		}
+		fields = selectDefinitions(fields, fieldKeys(defs))
+		for i, d := range fields {
+			fields[i] = withSetting(d, typ.Effective.Setting(d.ID))
+		}
+		if e = t.checkTypeHeads(ctx, subject, c, typ.ID, fields, append(slices.Clone(parent.Effective.Rules), rules...)); e != nil {
 			return e
 		}
 		if _, e = t.reviseContentType(ctx, typ, catalog.ContentType{FieldIds: ids, HiddenFieldIds: schema.HiddenFieldIds, Rules: schema.Rules, FieldOrder: schema.FieldOrder, FieldSettings: schema.FieldSettings}); e != nil {

@@ -521,7 +521,7 @@ func (s *Service) refreshCollections(ctx context.Context, subject string, collec
 			if e = validateRules(selected, typ.Effective.Rules); e != nil {
 				return e
 			}
-			if e = s.checkTypeHeads(ctx, subject, c, typ.ID, fieldKeys(selected), typ.Effective.Rules); e != nil {
+			if e = s.checkTypeHeads(ctx, subject, c, typ.ID, selected, typ.Effective.Rules); e != nil {
 				return e
 			}
 		}
@@ -897,19 +897,10 @@ func typedDefinitions(raw json.RawMessage, id string) ([]*catalog.FieldDefinitio
 	return nil, nil, invalid("content type is missing from the effective schema")
 }
 
-func (s *Service) checkTypeHeads(ctx context.Context, subject string, c *resources.Resource, typeID string, keys []string, rules []model.ValidationRule) error {
-	defs, err := s.collectionFields(ctx, c.ID)
-	if err != nil {
-		return err
-	}
-	typ, err := s.DAL.Catalog().ContentType(ctx, typeID)
-	if err != nil {
-		return err
-	}
-	defs = selectDefinitions(defs, keys)
-	for i, d := range defs {
-		defs[i] = withSetting(d, typ.Effective.Setting(d.ID))
-	}
+// checkTypeHeads checks the live items of a type in a collection against
+// its fields, as its settings change them, and rules.
+func (s *Service) checkTypeHeads(ctx context.Context, subject string, c *resources.Resource, typeID string, defs []*catalog.FieldDefinition, rules []model.ValidationRule) error {
+	keys := fieldKeys(defs)
 	for after := ""; ; {
 		items, err := s.DAL.Resources().Resources(ctx, resources.Filter{ContainerID: c.ID, ContentTypeID: typeID, State: resources.Live, AfterID: after, Limit: surfaceBatch})
 		if err != nil {
