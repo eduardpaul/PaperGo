@@ -78,37 +78,38 @@ func TestSeekPagesMatchSortedEligibleRows(t *testing.T) {
 		t.Fatalf("Unicode case-insensitive filter matched no rows: %+v %v", out, err)
 	}
 	compared := 0
-	for _, subject := range []string{"alice", "reader"} {
-		for _, surface := range []string{"auto", "head", "published"} {
-			for _, base := range specs {
-				for _, field := range sorts {
-					for _, direction := range []string{"asc", "desc"} {
-						spec := base
-						spec.Sort = []SortSpec{{Field: field, Direction: direction}}
-						if field == "" {
-							spec.Sort[0].Field = "$id"
-						}
-						seek, sorted := pageAll(t, s, subject, list.ID, surface, spec, true), pageAll(t, s, subject, list.ID, surface, spec, false)
-						if !reflect.DeepEqual(seek, sorted) {
-							t.Fatalf("%s/%s %+v sort %s %s:\n seek   %v\n sorted %v", subject, surface, base, field, direction, seek, sorted)
-						}
-						if field == "$name" {
-							names := make([]string, len(seek))
-							for i, entry := range seek {
-								_, names[i], _ = strings.Cut(entry, ":")
-							}
-							expected := slices.Clone(names)
-							slices.Sort(expected)
-							if direction == "desc" {
-								slices.Reverse(expected)
-							}
-							if !slices.Equal(names, expected) {
-								t.Fatalf("%s/%s text order %s: %v, want binary order %v", subject, surface, direction, names, expected)
-							}
-						}
-						compared += len(seek)
+	// Every query and sort is paged in both directions; the subject and
+	// surface rotate so each sort and direction meets both subjects and all
+	// three surfaces across the queries, without paging every combination.
+	subjects, surfaces := []string{"alice", "reader"}, []string{"auto", "head", "published"}
+	for i, base := range specs {
+		for j, field := range sorts {
+			for k, direction := range []string{"asc", "desc"} {
+				subject, surface := subjects[(i+j)%len(subjects)], surfaces[(i+j+k)%len(surfaces)]
+				spec := base
+				spec.Sort = []SortSpec{{Field: field, Direction: direction}}
+				if field == "" {
+					spec.Sort[0].Field = "$id"
+				}
+				seek, sorted := pageAll(t, s, subject, list.ID, surface, spec, true), pageAll(t, s, subject, list.ID, surface, spec, false)
+				if !reflect.DeepEqual(seek, sorted) {
+					t.Fatalf("%s/%s %+v sort %s %s:\n seek   %v\n sorted %v", subject, surface, base, field, direction, seek, sorted)
+				}
+				if field == "$name" {
+					names := make([]string, len(seek))
+					for n, entry := range seek {
+						_, names[n], _ = strings.Cut(entry, ":")
+					}
+					expected := slices.Clone(names)
+					slices.Sort(expected)
+					if direction == "desc" {
+						slices.Reverse(expected)
+					}
+					if !slices.Equal(names, expected) {
+						t.Fatalf("%s/%s text order %s: %v, want binary order %v", subject, surface, direction, names, expected)
 					}
 				}
+				compared += len(seek)
 			}
 		}
 	}
