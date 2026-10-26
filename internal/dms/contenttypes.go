@@ -25,8 +25,8 @@ const rootTypeKey = "item"
 // HiddenFieldIds and Rules are the type's own; it also has everything its
 // ancestors define. Hidden fields are inherited fields forms leave out.
 type ContentTypeInput struct {
-	Key            string                 `json:"key"`
-	Name           string                 `json:"name"`
+	Key  string `json:"key"`
+	Name string `json:"name"`
 	// Group files the type under a heading of the catalog; empty is none.
 	Group          string                 `json:"group,omitempty"`
 	ParentID       string                 `json:"parent_id,omitempty"`
