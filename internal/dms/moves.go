@@ -3,6 +3,7 @@ package dms
 import (
 	"context"
 	"encoding/json"
+	"papergo/internal/dal/dberr"
 	"papergo/internal/dal/refs"
 	"papergo/internal/dal/resources"
 )
@@ -62,7 +63,15 @@ func (s *Service) MoveItem(ctx context.Context, subject, id string, version int,
 		if e != nil {
 			return e
 		}
-		defs, rules, e := typedDefinitions(schema.Definition, *r.ContentTypeID)
+		// The item becomes the destination's list type of its catalog type.
+		typeID, e := t.DAL.Catalog().Counterpart(ctx, dest.ID, *r.ContentTypeID)
+		if dberr.IsNotFound(e) {
+			return invalid("the destination does not accept the item's content type")
+		}
+		if e != nil {
+			return e
+		}
+		defs, rules, e := typedDefinitions(schema.Definition, typeID)
 		if e != nil {
 			return e
 		}

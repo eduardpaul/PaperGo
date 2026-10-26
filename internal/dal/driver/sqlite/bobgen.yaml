@@ -58,7 +58,7 @@ sql:
     relationships: []
     field_definitions: []
     content_types: []
-    collection_types: []
+    content_type_ancestors: []
     schema_revisions: []
     schema_templates: []
     artifacts: []
@@ -258,7 +258,7 @@ replacements:
     replace: "types.JSON[json.RawMessage]"
   - tables: ["content_types"]
     match:
-      name: "field_ids"
+      name: "/^(field_ids|hidden_field_ids)$/"
     replace: "types.JSON[[]string]"
   - tables: ["content_types"]
     match:

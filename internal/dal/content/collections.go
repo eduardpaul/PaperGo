@@ -58,7 +58,7 @@ func (r *Repo) CollectionIDs(ctx context.Context, c Collections) ([]string, erro
 	if len(c.ContentTypes) > 0 {
 		key, keyArgs := r.named(c.ContentTypes, "ct.key")
 		name, nameArgs := r.named(c.ContentTypes, "ct.name")
-		add("EXISTS(SELECT 1 FROM collection_types ca JOIN content_types ct ON ct.id=ca.content_type_id WHERE ca.container_id=r.id AND ("+key+" OR "+name+"))", append(keyArgs, nameArgs...)...)
+		add("EXISTS(SELECT 1 FROM content_types lt JOIN content_type_ancestors a ON a.content_type_id=lt.id JOIN content_types ct ON ct.id=a.ancestor_id AND ct.collection_id IS NULL WHERE lt.collection_id=r.id AND lt.attached AND ("+key+" OR "+name+"))", append(keyArgs, nameArgs...)...)
 	}
 	query := "SELECT r.id FROM resources r WHERE " + strings.Join(where, " AND ") + " ORDER BY r.id"
 	if c.Limit > 0 {

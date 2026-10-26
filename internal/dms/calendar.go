@@ -54,7 +54,7 @@ func (s *Service) ensureEventType(ctx context.Context, subject string, c *resour
 	if _, err = s.attachContentType(ctx, subject, c.ID, c.Version, AttachContentTypeInput{ContentTypeID: ids[0]}); err != nil {
 		return nil, err
 	}
-	typ, err := s.DAL.Catalog().ContentType(ctx, ids[0])
+	typ, err := s.listType(ctx, c.ID, ids[0])
 	if err != nil {
 		return nil, err
 	}

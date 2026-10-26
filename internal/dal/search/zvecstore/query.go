@@ -84,7 +84,7 @@ func scalarMatch(d search.Document, f search.Filter) bool {
 	if !visible(d, f) || len(f.Kinds) > 0 && !slices.Contains(f.Kinds, d.Kind) || !f.Within.Holds(d.WorkspaceID, d.CollectionID) {
 		return false
 	}
-	if f.WorkspaceID != "" && d.WorkspaceID != f.WorkspaceID || f.CollectionID != "" && d.CollectionID != f.CollectionID || f.ContentTypeID != "" && d.ContentTypeID != f.ContentTypeID || f.CreatedBy != "" && d.CreatedBy != f.CreatedBy || f.ModifiedBy != "" && d.ModifiedBy != f.ModifiedBy || f.Keyword != "" && !slices.Contains(d.KeywordIDs, f.Keyword) {
+	if f.WorkspaceID != "" && d.WorkspaceID != f.WorkspaceID || f.CollectionID != "" && d.CollectionID != f.CollectionID || len(f.ContentTypeIDs) > 0 && !slices.Contains(f.ContentTypeIDs, d.ContentTypeID) || f.CreatedBy != "" && d.CreatedBy != f.CreatedBy || f.ModifiedBy != "" && d.ModifiedBy != f.ModifiedBy || f.Keyword != "" && !slices.Contains(d.KeywordIDs, f.Keyword) {
 		return false
 	}
 	if !f.ModifiedFrom.IsZero() && d.ModifiedAt.Before(f.ModifiedFrom) || !f.ModifiedTo.IsZero() && !d.ModifiedAt.Before(f.ModifiedTo) {

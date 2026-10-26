@@ -218,6 +218,33 @@ func (s *Service) TermFamily(ctx context.Context, id string) ([]string, error) {
 	})
 }
 
+// ContentTypeFamily expands a content type to itself and every type
+// deriving from it, as content type filters match.
+func (s *Service) ContentTypeFamily(ctx context.Context, id string) ([]string, error) {
+	return read(ctx, s, func(t *Service) ([]string, error) {
+		return t.DAL.Catalog().Descendants(ctx, []string{id})
+	})
+}
+
+// CatalogTypesOf maps content types to the catalog types they belong to: a
+// list type to the catalog type it copies, a catalog type to itself.
+func (s *Service) CatalogTypesOf(ctx context.Context, ids []string) (map[string]string, error) {
+	return read(ctx, s, func(t *Service) (map[string]string, error) {
+		types, err := t.DAL.Catalog().ContentTypes(ctx, catalog.ContentTypeFilter{IDs: ids, Detached: true})
+		if err != nil {
+			return nil, err
+		}
+		out := map[string]string{}
+		for _, typ := range types {
+			out[typ.ID] = typ.ID
+			if !typ.Catalog() {
+				out[typ.ID] = *typ.ParentID
+			}
+		}
+		return out, nil
+	})
+}
+
 // EntriesWithTerms lists, after an ID and in ID order, the live items of a
 // workspace whose surfaces hold any of the terms in their values, or apply
 // one of below as a parent or hold it as a keyword, optionally in one

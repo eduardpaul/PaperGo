@@ -414,24 +414,24 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 	out.Values = in.Values
 
 	if out.Kind == refs.KindList || out.Kind == refs.KindLibrary {
+		// A collection accepts catalog types through list types of its own;
+		// without a choice, it accepts Item.
 		ids := in.ContentTypeIDs
 		if len(ids) == 0 {
-			typ, e := s.persistContentType(ctx, ContentTypeInput{Key: "item", Name: "Item"}, "")
+			root, e := s.rootType(ctx, subject)
 			if e != nil {
 				return nil, e
 			}
-			ids = []string{typ.ID}
+			ids = []string{root.ID}
 		} else if e = s.RequireScope(ctx, subject, "contentType.read"); e != nil {
 			return nil, e
 		}
 		for i, id := range ids {
-			if _, e = s.DAL.Catalog().ContentType(ctx, id); dberr.IsNotFound(e) {
-				return nil, ErrNotFound
-			} else if e != nil {
+			if _, e = s.catalogType(ctx, id); e != nil {
 				return nil, e
 			}
-			if _, e = s.DAL.Catalog().Attach(ctx, out.ID, id, i == 0); e != nil {
-				return nil, e
+			if _, _, e = s.DAL.Catalog().Attach(ctx, out.ID, id, i == 0); e != nil {
+				return nil, catalogError(e)
 			}
 		}
 		if e = s.refreshCollections(ctx, subject, []*resources.Resource{out}); e != nil {
@@ -637,6 +637,17 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 	}
 	if in.ContentTypeID != nil && (!contentKind(r.Kind) || *in.ContentTypeID == "") {
 		return nil, invalid("content_type_id requires an attached content type")
+	}
+	if in.ContentTypeID != nil {
+		// A write may name the catalog type the list type copies.
+		typ, e := s.contentType(ctx, *r.ContainerID, *in.ContentTypeID)
+		if errors.Is(e, ErrNotFound) {
+			return nil, invalid("the collection does not accept the content type")
+		}
+		if e != nil {
+			return nil, e
+		}
+		in.ContentTypeID = &typ.ID
 	}
 	moved := in.ParentID != nil && (r.ParentID == nil || *in.ParentID != *r.ParentID)
 	changes := resources.Changes{Name: in.Name, Description: in.Description, ParentID: in.ParentID, ContentTypeID: in.ContentTypeID, AllowFolders: in.AllowFolders, DefaultCurrency: in.DefaultCurrency, MaxVersions: in.MaxVersions, PublishingEnabled: in.PublishingEnabled, WebdavEnabled: in.WebDAVEnabled, Keywords: in.Keywords}
@@ -1022,7 +1033,7 @@ func (s *Service) createField(ctx context.Context, subject string, c *resources.
 	if e != nil {
 		return nil, e
 	}
-	if _, e = s.reviseContentType(ctx, typ, typ.Name, append(append([]string{}, typ.FieldIds...), out.ID), typ.Rules); e != nil {
+	if _, e = s.reviseContentType(ctx, typ, catalog.ContentType{FieldIds: append(append([]string{}, typ.FieldIds...), out.ID), HiddenFieldIds: typ.HiddenFieldIds, Rules: typ.Rules}); e != nil {
 		return nil, e
 	}
 	return out, nil

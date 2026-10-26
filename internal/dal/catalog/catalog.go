@@ -6,6 +6,7 @@ package catalog
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -16,6 +17,9 @@ import (
 
 // MaxCollectionTypes bounds the content types a collection accepts.
 const MaxCollectionTypes = 32
+
+// MaxDepth bounds the ancestors of a content type.
+const MaxDepth = 8
 
 // Violation is a catalog rule a change breaks; its text explains it.
 type Violation string
@@ -45,29 +49,51 @@ type FieldDefinition struct {
 	Options     model.FieldOptions `json:"options,omitempty"`
 }
 
-// ContentType is an organization content type: the fields its items carry
-// and the rules their values follow.
+// ContentType is a content type: the fields its items carry and the rules
+// their values follow. A catalog type belongs to the organization. A list type
+// is the copy of one catalog type that a list or library customizes; it keeps
+// that type's key and name. Every type but a root derives from a parent and
+// has every field and rule of its ancestors; Effective holds them all.
 type ContentType struct {
-	ID          string                 `json:"id,omitempty"`
-	CreatedAt   time.Time              `json:"created_at,omitempty"`
-	UpdatedAt   time.Time              `json:"updated_at,omitempty"`
-	Key         string                 `json:"key,omitempty"`
-	Name        string                 `json:"name,omitempty"`
-	TemplateKey *string                `json:"template_key,omitempty"`
-	FieldIds    []string               `json:"field_ids,omitempty"`
-	Rules       []model.ValidationRule `json:"rules,omitempty"`
-	Version     int                    `json:"version,omitempty"`
+	ID          string    `json:"id,omitempty"`
+	CreatedAt   time.Time `json:"created_at,omitempty"`
+	UpdatedAt   time.Time `json:"updated_at,omitempty"`
+	Key         string    `json:"key,omitempty"`
+	Name        string    `json:"name,omitempty"`
+	TemplateKey *string   `json:"template_key,omitempty"`
+	// ParentID is the type this one derives from; it never changes.
+	ParentID *string `json:"parent_id,omitempty"`
+	// CollectionID is the list or library of a list type.
+	CollectionID *string `json:"collection_id,omitempty"`
+	// IsDefault marks the list type a collection's new items get.
+	IsDefault bool `json:"is_default,omitempty"`
+	// Attached is false once the collection stops accepting a list type.
+	Attached bool `json:"-"`
+	// FieldIds, HiddenFieldIds and Rules are the type's own. Hidden fields
+	// are inherited fields that forms leave out.
+	FieldIds       []string               `json:"field_ids"`
+	HiddenFieldIds []string               `json:"hidden_field_ids"`
+	Rules          []model.ValidationRule `json:"rules"`
+	// AncestorIDs lists the ancestors, nearest first.
+	AncestorIDs []string  `json:"ancestor_ids"`
+	Effective   Effective `json:"effective"`
+	Version     int       `json:"version,omitempty"`
 }
 
-// Attachment is a content type a collection accepts; one is its default.
-type Attachment struct {
-	ID, CollectionID, ContentTypeID string
-	IsDefault                       bool
-	CreatedAt                       time.Time
+// Effective is what a type and its ancestors define together, the root's
+// first.
+type Effective struct {
+	FieldIds       []string               `json:"field_ids"`
+	HiddenFieldIds []string               `json:"hidden_field_ids"`
+	Rules          []model.ValidationRule `json:"rules"`
 }
+
+// Catalog reports whether t is a catalog type rather than a list type.
+func (t *ContentType) Catalog() bool { return t.CollectionID == nil }
 
 // FieldFilter selects fields ordered by key. A nil list does not filter;
-// an empty one selects nothing.
+// an empty one selects nothing. CollectionID selects the fields of the types
+// a collection accepts.
 type FieldFilter struct {
 	IDs, Keys    []string
 	Types        []FieldType
@@ -78,11 +104,18 @@ type FieldFilter struct {
 // ContentTypeFilter selects content types ordered by key. A nil IDs does
 // not filter; an empty one selects nothing.
 type ContentTypeFilter struct {
-	IDs                                []string
-	CollectionID, TemplateKey, FieldID string
-	// CollectionIDs selects the types any of the collections accept; an
-	// empty list selects nothing.
+	IDs []string
+	// FieldID selects the types that own a field.
+	TemplateKey, FieldID, ParentID string
+	// Catalog selects catalog types.
+	Catalog bool
+	// CollectionID selects the list types a collection accepts, and
+	// CollectionIDs those any of the collections accept; an empty
+	// CollectionIDs selects nothing. Detached also selects the list types
+	// the collections no longer accept.
+	CollectionID  string
 	CollectionIDs []string
+	Detached      bool
 }
 
 // Queries are the statements a driver runs for the catalog. Each method
@@ -99,24 +132,37 @@ type Queries interface {
 	UpdateFieldDefinition(ctx context.Context, d *FieldDefinition) (bool, error)
 	DeleteFieldDefinition(ctx context.Context, id string) error
 	SetFieldIndexStatus(ctx context.Context, ids []string, status IndexStatus) (int, error)
+	// ContentTypes and ContentType read stored types; the repository adds
+	// their lineage and effective schema.
 	ContentTypes(ctx context.Context, f ContentTypeFilter) ([]*ContentType, error)
 	ContentType(ctx context.Context, id string) (*ContentType, error)
+	// InsertContentType adds t and its lineage from t.AncestorIDs.
 	InsertContentType(ctx context.Context, t *ContentType) error
-	// UpdateContentType writes t's name, fields and rules when its version
-	// still is t.Version-1.
+	// InsertLineage records the ancestors of a stored type, nearest first.
+	InsertLineage(ctx context.Context, id string, ancestorIDs []string) error
+	// UpdateContentType writes t's name, fields, hidden fields and rules when
+	// its version still is t.Version-1.
 	UpdateContentType(ctx context.Context, t *ContentType) (bool, error)
 	// BumpContentTypes advances the versions of content types.
 	BumpContentTypes(ctx context.Context, ids []string, at time.Time) error
-	// Attachments lists a collection's attachments by content type id.
-	Attachments(ctx context.Context, collectionID string) ([]Attachment, error)
-	InsertAttachment(ctx context.Context, a Attachment) error
-	SetDefaultAttachment(ctx context.Context, collectionID, contentTypeID string) error
-	DeleteAttachment(ctx context.Context, id string) error
-	// AttachedCollections lists the collections that accept any of the types.
+	// Lineages lists the ancestors of each type, nearest first.
+	Lineages(ctx context.Context, ids []string) (map[string][]string, error)
+	// Descendants lists the types and every type deriving from them.
+	Descendants(ctx context.Context, ids []string) ([]string, error)
+	// SetAttached records whether a collection accepts a list type; a
+	// detached type is no default.
+	SetAttached(ctx context.Context, id string, attached bool) error
+	// SetDefaultContentType makes a list type its collection's default.
+	SetDefaultContentType(ctx context.Context, collectionID, id string) error
+	// AttachedCollections lists the collections that accept a type deriving
+	// from any of the types.
 	AttachedCollections(ctx context.Context, contentTypeIDs []string) ([]string, error)
 	// ContentTypeInUse reports whether live resources of the collection have
 	// the content type.
 	ContentTypeInUse(ctx context.Context, collectionID, contentTypeID string) (bool, error)
+	// DeleteUnusedListTypes deletes the list types of a collection that no
+	// resource or revision has.
+	DeleteUnusedListTypes(ctx context.Context, collectionID string) error
 }
 
 // Repo applies the catalog's rules for every engine. read runs single
@@ -131,7 +177,24 @@ func NewRepo(read Queries, write func(context.Context, func(Queries) error) erro
 	return &Repo{read: read, write: write}
 }
 
+// Fields selects fields; a collection has every field of the types it
+// accepts.
 func (r *Repo) Fields(ctx context.Context, f FieldFilter) ([]*FieldDefinition, error) {
+	if f.CollectionID != "" {
+		types, err := r.ContentTypes(ctx, ContentTypeFilter{CollectionID: f.CollectionID})
+		if err != nil {
+			return nil, err
+		}
+		ids := []string{}
+		for _, t := range types {
+			for _, id := range t.Effective.FieldIds {
+				if f.IDs == nil || slices.Contains(f.IDs, id) {
+					ids = append(ids, id)
+				}
+			}
+		}
+		f.IDs, f.CollectionID = ids, ""
+	}
 	return r.read.FieldDefinitions(ctx, f)
 }
 
@@ -143,16 +206,16 @@ func (r *Repo) Field(ctx context.Context, id string) (*FieldDefinition, error) {
 // OneField returns the only field f selects: dberr.ErrNotFound when none
 // does, dberr.ErrUniqueViolation when several do.
 func (r *Repo) OneField(ctx context.Context, f FieldFilter) (*FieldDefinition, error) {
-	return one(r.read.FieldDefinitions(ctx, f))
+	return one(r.Fields(ctx, f))
 }
 
 func (r *Repo) FieldExists(ctx context.Context, f FieldFilter) (bool, error) {
-	rows, err := r.read.FieldDefinitions(ctx, f)
+	rows, err := r.Fields(ctx, f)
 	return len(rows) > 0, err
 }
 
 func (r *Repo) CountFields(ctx context.Context, f FieldFilter) (int, error) {
-	rows, err := r.read.FieldDefinitions(ctx, f)
+	rows, err := r.Fields(ctx, f)
 	return len(rows), err
 }
 
@@ -213,7 +276,7 @@ func (r *Repo) SaveField(ctx context.Context, in FieldDefinition, version int) (
 	return out, err
 }
 
-// DeleteField deletes a field no content type uses.
+// DeleteField deletes a field no content type has.
 func (r *Repo) DeleteField(ctx context.Context, id string) error {
 	return r.write(ctx, func(q Queries) error {
 		if _, err := q.FieldDefinition(ctx, id); err != nil {
@@ -249,17 +312,17 @@ func (r *Repo) SetIndexStatus(ctx context.Context, ids []string, status IndexSta
 }
 
 func (r *Repo) ContentTypes(ctx context.Context, f ContentTypeFilter) ([]*ContentType, error) {
-	return r.read.ContentTypes(ctx, f)
+	return contentTypes(ctx, r.read, f)
 }
 
 // ContentType returns a content type, or dberr.ErrNotFound.
 func (r *Repo) ContentType(ctx context.Context, id string) (*ContentType, error) {
-	return r.read.ContentType(ctx, id)
+	return contentType(ctx, r.read, id)
 }
 
 // OneContentType returns the only content type f selects.
 func (r *Repo) OneContentType(ctx context.Context, f ContentTypeFilter) (*ContentType, error) {
-	return one(r.read.ContentTypes(ctx, f))
+	return one(r.ContentTypes(ctx, f))
 }
 
 func (r *Repo) ContentTypeExists(ctx context.Context, f ContentTypeFilter) (bool, error) {
@@ -272,45 +335,198 @@ func (r *Repo) CountContentTypes(ctx context.Context, f ContentTypeFilter) (int,
 	return len(rows), err
 }
 
-// CollectionContentType returns a content type a collection accepts, or its
-// default when id is empty.
-func (r *Repo) CollectionContentType(ctx context.Context, collectionID, id string) (*ContentType, error) {
-	attachments, err := r.read.Attachments(ctx, collectionID)
+func contentTypes(ctx context.Context, q Queries, f ContentTypeFilter) ([]*ContentType, error) {
+	rows, err := q.ContentTypes(ctx, f)
 	if err != nil {
 		return nil, err
 	}
-	for _, a := range attachments {
-		if id == "" && a.IsDefault || id != "" && a.ContentTypeID == id {
-			return r.read.ContentType(ctx, a.ContentTypeID)
+	return rows, resolve(ctx, q, rows)
+}
+
+func contentType(ctx context.Context, q Queries, id string) (*ContentType, error) {
+	t, err := q.ContentType(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return t, resolve(ctx, q, []*ContentType{t})
+}
+
+// resolve fills in the lineage and effective schema of stored types. A list
+// type shows the current name of its catalog type. Hidden fields an ancestor
+// no longer has drop out.
+func resolve(ctx context.Context, q Queries, types []*ContentType) error {
+	if len(types) == 0 {
+		return nil
+	}
+	ids := make([]string, len(types))
+	for i, t := range types {
+		ids[i] = t.ID
+	}
+	lineages, err := q.Lineages(ctx, ids)
+	if err != nil {
+		return err
+	}
+	wanted := []string{}
+	for _, lineage := range lineages {
+		wanted = append(wanted, lineage...)
+	}
+	slices.Sort(wanted)
+	ancestors := map[string]*ContentType{}
+	if wanted = slices.Compact(wanted); len(wanted) > 0 {
+		rows, err := q.ContentTypes(ctx, ContentTypeFilter{IDs: wanted, Detached: true})
+		if err != nil {
+			return err
+		}
+		for _, row := range rows {
+			ancestors[row.ID] = row
+		}
+	}
+	for _, t := range types {
+		t.AncestorIDs = append([]string{}, lineages[t.ID]...)
+		chain := []*ContentType{}
+		for i := len(t.AncestorIDs) - 1; i >= 0; i-- {
+			a := ancestors[t.AncestorIDs[i]]
+			if a == nil {
+				return fmt.Errorf("%w: ancestor %s of content type %s", dberr.ErrNotFound, t.AncestorIDs[i], t.ID)
+			}
+			chain = append(chain, a)
+		}
+		inherited := effective(chain).FieldIds
+		t.HiddenFieldIds = slices.DeleteFunc(t.HiddenFieldIds, func(id string) bool { return !slices.Contains(inherited, id) })
+		t.Effective = effective(append(chain, t))
+		if !t.Catalog() && len(chain) > 0 {
+			t.Name = chain[len(chain)-1].Name
+		}
+	}
+	return nil
+}
+
+// effective combines a lineage, root first. A field appears once, where an
+// ancestor first has it; hidden fields are inherited fields.
+func effective(chain []*ContentType) Effective {
+	out := Effective{FieldIds: []string{}, HiddenFieldIds: []string{}, Rules: []model.ValidationRule{}}
+	for _, t := range chain {
+		inherited := slices.Clone(out.FieldIds)
+		for _, id := range t.HiddenFieldIds {
+			if slices.Contains(inherited, id) && !slices.Contains(out.HiddenFieldIds, id) {
+				out.HiddenFieldIds = append(out.HiddenFieldIds, id)
+			}
+		}
+		for _, id := range t.FieldIds {
+			if !slices.Contains(out.FieldIds, id) {
+				out.FieldIds = append(out.FieldIds, id)
+			}
+		}
+		out.Rules = append(out.Rules, t.Rules...)
+	}
+	return out
+}
+
+// CollectionContentType returns a list type a collection accepts, named by
+// its own id or by the catalog type it copies, or the default when id is
+// empty.
+func (r *Repo) CollectionContentType(ctx context.Context, collectionID, id string) (*ContentType, error) {
+	types, err := r.ContentTypes(ctx, ContentTypeFilter{CollectionID: collectionID})
+	if err != nil {
+		return nil, err
+	}
+	for _, t := range types {
+		if id == "" && t.IsDefault || id != "" && (t.ID == id || *t.ParentID == id) {
+			return t, nil
 		}
 	}
 	return nil, dberr.ErrNotFound
 }
 
-// CreateContentType adds a content type over existing fields with distinct
-// keys.
+// CreateContentType adds a catalog type. It derives from a catalog parent
+// unless it is a root; its own fields exist and every field of its lineage
+// has a distinct key.
 func (r *Repo) CreateContentType(ctx context.Context, t ContentType) (*ContentType, error) {
+	if t.CollectionID != nil {
+		return nil, fmt.Errorf("%w: list types are made by attaching a catalog type", dberr.ErrInvalidReference)
+	}
+	var out *ContentType
+	err := r.write(ctx, func(q Queries) error {
+		var err error
+		out, err = insertContentType(ctx, q, t)
+		return err
+	})
+	return out, err
+}
+
+func insertContentType(ctx context.Context, q Queries, t ContentType) (*ContentType, error) {
 	if t.ID == "" {
 		t.ID = uuid.NewString()
 	}
-	if t.FieldIds == nil {
-		t.FieldIds = []string{}
+	t.FieldIds, t.HiddenFieldIds, t.Rules = nonNil(t.FieldIds), nonNil(t.HiddenFieldIds), nonNil(t.Rules)
+	t.AncestorIDs = []string{}
+	if t.ParentID != nil {
+		parent, err := contentType(ctx, q, *t.ParentID)
+		if dberr.IsNotFound(err) {
+			return nil, fmt.Errorf("%w: parent content type %s does not exist", dberr.ErrInvalidReference, *t.ParentID)
+		}
+		if err != nil {
+			return nil, err
+		}
+		if !parent.Catalog() {
+			return nil, Violation("content types derive from catalog types")
+		}
+		if t.AncestorIDs = append([]string{parent.ID}, parent.AncestorIDs...); len(t.AncestorIDs) > MaxDepth {
+			return nil, Violation(fmt.Sprintf("content types have at most %d ancestors", MaxDepth))
+		}
 	}
-	if t.Rules == nil {
-		t.Rules = []model.ValidationRule{}
-	}
-	t.Version, t.CreatedAt = 1, time.Now().UTC()
+	t.Version, t.Attached, t.CreatedAt = 1, true, time.Now().UTC()
 	t.UpdatedAt = t.CreatedAt
-	return &t, r.write(ctx, func(q Queries) error {
-		if err := distinctFields(ctx, q, t.FieldIds); err != nil {
+	if err := q.InsertContentType(ctx, &t); err != nil {
+		return nil, err
+	}
+	out, err := contentType(ctx, q, t.ID)
+	if err != nil {
+		return nil, err
+	}
+	if err = inheritedHidden(t.HiddenFieldIds, out); err != nil {
+		return nil, err
+	}
+	return out, checkLineage(ctx, q, out)
+}
+
+// inheritedHidden checks that the hidden fields a write asked for are all
+// inherited: resolving a type keeps only those.
+func inheritedHidden(asked []string, t *ContentType) error {
+	for _, id := range asked {
+		if !slices.Contains(t.HiddenFieldIds, id) {
+			return fmt.Errorf("%w: hidden field %s is not inherited by content type %s", dberr.ErrInvalidReference, id, t.Key)
+		}
+	}
+	return nil
+}
+
+// RecordLineage records the lineage of a type stored without one, such as
+// an imported row, whose parent has its lineage.
+func (r *Repo) RecordLineage(ctx context.Context, id string) error {
+	return r.write(ctx, func(q Queries) error {
+		t, err := q.ContentType(ctx, id)
+		if err != nil {
 			return err
 		}
-		return q.InsertContentType(ctx, &t)
+		ancestors := []string{}
+		if t.ParentID != nil {
+			lineages, err := q.Lineages(ctx, []string{*t.ParentID})
+			if err != nil {
+				return err
+			}
+			ancestors = append([]string{*t.ParentID}, lineages[*t.ParentID]...)
+		}
+		if len(ancestors) > MaxDepth {
+			return Violation(fmt.Sprintf("content types have at most %d ancestors", MaxDepth))
+		}
+		return q.InsertLineage(ctx, id, ancestors)
 	})
 }
 
-// SaveContentType changes a content type's name, fields and rules at
-// version. Its key never changes.
+// SaveContentType changes a type's own fields, hidden fields and rules at
+// version, and a catalog type's name. Its key and parent never change. The
+// type and every type deriving from it keep distinct field keys.
 func (r *Repo) SaveContentType(ctx context.Context, in ContentType, version int) (*ContentType, error) {
 	var out *ContentType
 	err := r.write(ctx, func(q Queries) error {
@@ -321,20 +537,65 @@ func (r *Repo) SaveContentType(ctx context.Context, in ContentType, version int)
 		if t.Version != version {
 			return dberr.ErrConcurrentUpdate
 		}
-		if err := distinctFields(ctx, q, in.FieldIds); err != nil {
+		if t.Catalog() {
+			t.Name = in.Name
+		}
+		t.FieldIds, t.HiddenFieldIds, t.Rules = nonNil(in.FieldIds), nonNil(in.HiddenFieldIds), nonNil(in.Rules)
+		t.Version, t.UpdatedAt = version+1, time.Now().UTC()
+		if err = saved(q.UpdateContentType(ctx, t)); err != nil {
 			return err
 		}
-		t.Name, t.FieldIds, t.Rules, t.Version, t.UpdatedAt = in.Name, in.FieldIds, in.Rules, version+1, time.Now().UTC()
-		if t.FieldIds == nil {
-			t.FieldIds = []string{}
+		ids, err := q.Descendants(ctx, []string{t.ID})
+		if err != nil {
+			return err
 		}
-		if t.Rules == nil {
-			t.Rules = []model.ValidationRule{}
+		types, err := contentTypes(ctx, q, ContentTypeFilter{IDs: ids, Detached: true})
+		if err != nil {
+			return err
 		}
-		out = t
-		return saved(q.UpdateContentType(ctx, t))
+		others := []string{}
+		for _, typ := range types {
+			if err := checkLineage(ctx, q, typ); err != nil {
+				return err
+			}
+			if typ.ID == t.ID {
+				if err := inheritedHidden(t.HiddenFieldIds, typ); err != nil {
+					return err
+				}
+				out = typ
+			} else {
+				others = append(others, typ.ID)
+			}
+		}
+		if len(others) == 0 {
+			return nil
+		}
+		return q.BumpContentTypes(ctx, others, t.UpdatedAt)
 	})
 	return out, err
+}
+
+// checkLineage checks that a type's own fields exist and that its effective
+// fields have distinct keys.
+func checkLineage(ctx context.Context, q Queries, t *ContentType) error {
+	if err := distinctFields(ctx, q, t.FieldIds); err != nil {
+		return err
+	}
+	keys := map[string]string{}
+	for _, id := range t.Effective.FieldIds {
+		field, err := q.FieldDefinition(ctx, id)
+		if dberr.IsNotFound(err) {
+			return fmt.Errorf("%w: field %s does not exist", dberr.ErrInvalidReference, id)
+		}
+		if err != nil {
+			return err
+		}
+		if other, taken := keys[field.Key]; taken && other != id {
+			return Violation(fmt.Sprintf("field key %q appears twice in content type %q and its ancestors", field.Key, t.Key))
+		}
+		keys[field.Key] = id
+	}
+	return nil
 }
 
 func distinctFields(ctx context.Context, q Queries, ids []string) error {
@@ -356,10 +617,10 @@ func distinctFields(ctx context.Context, q Queries, ids []string) error {
 }
 
 // BumpContentTypesForField advances the versions of the content types that
-// use a field, so their ETags change with it.
+// have a field, so their ETags change with it.
 func (r *Repo) BumpContentTypesForField(ctx context.Context, id string) error {
 	return r.write(ctx, func(q Queries) error {
-		types, err := q.ContentTypes(ctx, ContentTypeFilter{FieldID: id})
+		types, err := q.ContentTypes(ctx, ContentTypeFilter{FieldID: id, Detached: true})
 		if err != nil || len(types) == 0 {
 			return err
 		}
@@ -367,13 +628,19 @@ func (r *Repo) BumpContentTypesForField(ctx context.Context, id string) error {
 		for i, t := range types {
 			ids[i] = t.ID
 		}
+		if ids, err = q.Descendants(ctx, ids); err != nil {
+			return err
+		}
 		return q.BumpContentTypes(ctx, ids, time.Now().UTC())
 	})
 }
 
-// Attachments lists the content types a collection accepts.
-func (r *Repo) Attachments(ctx context.Context, collectionID string) ([]Attachment, error) {
-	return r.read.Attachments(ctx, collectionID)
+// Descendants lists the types and every type deriving from them.
+func (r *Repo) Descendants(ctx context.Context, ids []string) ([]string, error) {
+	if len(ids) == 0 {
+		return []string{}, nil
+	}
+	return r.read.Descendants(ctx, ids)
 }
 
 // Accepts reports whether a collection accepts a content type.
@@ -381,18 +648,51 @@ func (r *Repo) Accepts(ctx context.Context, collectionID, contentTypeID string) 
 	return Accepts(ctx, r.read, collectionID, contentTypeID)
 }
 
-// Accepts reports whether a collection accepts a content type, on q.
+// Accepts reports whether a collection accepts a content type, on q: the
+// type is one of the collection's attached list types.
 func Accepts(ctx context.Context, q Queries, collectionID, contentTypeID string) (bool, error) {
-	attachments, err := q.Attachments(ctx, collectionID)
-	for _, a := range attachments {
-		if a.ContentTypeID == contentTypeID {
-			return true, err
-		}
+	t, err := q.ContentType(ctx, contentTypeID)
+	if dberr.IsNotFound(err) {
+		return false, nil
 	}
-	return false, err
+	if err != nil {
+		return false, err
+	}
+	return t.CollectionID != nil && *t.CollectionID == collectionID && t.Attached, nil
 }
 
-// AttachedCollections lists the collections that accept any of the types.
+// Counterpart returns the type a collection accepts in place of a list type
+// of another collection: the type itself when the collection accepts it,
+// otherwise the collection's list type of the same catalog type, or
+// dberr.ErrNotFound.
+func (r *Repo) Counterpart(ctx context.Context, collectionID, contentTypeID string) (string, error) {
+	return Counterpart(ctx, r.read, collectionID, contentTypeID)
+}
+
+// Counterpart is Repo.Counterpart on q.
+func Counterpart(ctx context.Context, q Queries, collectionID, contentTypeID string) (string, error) {
+	t, err := q.ContentType(ctx, contentTypeID)
+	if err != nil {
+		return "", err
+	}
+	if t.CollectionID != nil && *t.CollectionID == collectionID && t.Attached {
+		return t.ID, nil
+	}
+	if t.Catalog() || t.ParentID == nil {
+		return "", dberr.ErrNotFound
+	}
+	types, err := q.ContentTypes(ctx, ContentTypeFilter{CollectionID: collectionID, ParentID: *t.ParentID})
+	if err != nil {
+		return "", err
+	}
+	if len(types) == 0 {
+		return "", dberr.ErrNotFound
+	}
+	return types[0].ID, nil
+}
+
+// AttachedCollections lists the collections that accept a type deriving
+// from any of the types.
 func (r *Repo) AttachedCollections(ctx context.Context, contentTypeIDs []string) ([]string, error) {
 	if len(contentTypeIDs) == 0 {
 		return []string{}, nil
@@ -400,11 +700,12 @@ func (r *Repo) AttachedCollections(ctx context.Context, contentTypeIDs []string)
 	return r.read.AttachedCollections(ctx, contentTypeIDs)
 }
 
-// Attach makes a live list or library accept a content type, as its default
-// when isDefault is set. Keys stay unique within a collection, and a
-// collection accepts at most MaxCollectionTypes types. changed is false when
-// the collection already accepted the type that way.
-func (r *Repo) Attach(ctx context.Context, collectionID, contentTypeID string, isDefault bool) (changed bool, err error) {
+// Attach makes a live list or library accept a catalog type through its own
+// list type, as its default when isDefault is set. Attaching a type the
+// collection accepted before restores that list type with its
+// customizations. A collection accepts at most MaxCollectionTypes types.
+// changed is false when the collection already accepted the type that way.
+func (r *Repo) Attach(ctx context.Context, collectionID, contentTypeID string, isDefault bool) (out *ContentType, changed bool, err error) {
 	err = r.write(ctx, func(q Queries) error {
 		if err := q.LockWorkspace(ctx, collectionID); err != nil {
 			return err
@@ -412,66 +713,74 @@ func (r *Repo) Attach(ctx context.Context, collectionID, contentTypeID string, i
 		if err := collection(ctx, q, collectionID); err != nil {
 			return err
 		}
-		typ, err := q.ContentType(ctx, contentTypeID)
+		parent, err := q.ContentType(ctx, contentTypeID)
 		if err != nil {
 			return err
 		}
-		attachments, err := q.Attachments(ctx, collectionID)
+		if !parent.Catalog() {
+			return Violation("collections attach catalog types")
+		}
+		attached, err := q.ContentTypes(ctx, ContentTypeFilter{CollectionID: collectionID})
 		if err != nil {
 			return err
 		}
-		var current *Attachment
-		for i, a := range attachments {
-			if a.ContentTypeID == contentTypeID {
-				current = &attachments[i]
-			}
+		known, err := q.ContentTypes(ctx, ContentTypeFilter{CollectionID: collectionID, ParentID: parent.ID, Detached: true})
+		if err != nil {
+			return err
 		}
-		if current != nil && (!isDefault || current.IsDefault) {
-			return nil
+		var current *ContentType
+		if len(known) > 0 {
+			current = known[0]
+		}
+		if current != nil && current.Attached && (!isDefault || current.IsDefault) {
+			out, err = contentType(ctx, q, current.ID)
+			return err
 		}
 		changed = true
-		if current == nil {
-			if len(attachments) >= MaxCollectionTypes {
+		if current == nil || !current.Attached {
+			if len(attached) >= MaxCollectionTypes {
 				return Violation(fmt.Sprintf("at most %d content types per collection", MaxCollectionTypes))
 			}
-			others, err := q.ContentTypes(ctx, ContentTypeFilter{CollectionID: collectionID})
-			if err != nil {
-				return err
-			}
-			for _, other := range others {
-				if other.Key == typ.Key {
-					return fmt.Errorf("%w: duplicate collection content type key %q", dberr.ErrUniqueViolation, typ.Key)
+			if current == nil {
+				id := collectionID
+				if current, err = insertContentType(ctx, q, ContentType{Key: parent.Key, Name: parent.Name, ParentID: &parent.ID, CollectionID: &id}); err != nil {
+					return err
 				}
-			}
-			err = q.InsertAttachment(ctx, Attachment{ID: uuid.NewString(), CollectionID: collectionID, ContentTypeID: contentTypeID, CreatedAt: time.Now().UTC()})
-			if err != nil || !isDefault && len(attachments) > 0 {
+			} else if err = q.SetAttached(ctx, current.ID, true); err != nil {
 				return err
 			}
 		}
-		return q.SetDefaultAttachment(ctx, collectionID, contentTypeID)
+		if isDefault || len(attached) == 0 {
+			if err = q.SetDefaultContentType(ctx, collectionID, current.ID); err != nil {
+				return err
+			}
+		}
+		out, err = contentType(ctx, q, current.ID)
+		return err
 	})
-	return changed, err
+	return out, changed, err
 }
 
-// Detach makes a collection stop accepting a content type that none of its
-// live resources has. The collection keeps at least one type; when its
-// default goes, the remaining type with the lowest id becomes the default.
+// Detach makes a collection stop accepting a list type that none of its live
+// resources has. The collection keeps at least one type; when its default
+// goes, the remaining type with the lowest key becomes the default. The list
+// type stays for the history of its items.
 func (r *Repo) Detach(ctx context.Context, collectionID, contentTypeID string) error {
 	return r.write(ctx, func(q Queries) error {
 		if err := q.LockWorkspace(ctx, collectionID); err != nil {
 			return err
 		}
-		attachments, err := q.Attachments(ctx, collectionID)
+		attached, err := q.ContentTypes(ctx, ContentTypeFilter{CollectionID: collectionID})
 		if err != nil {
 			return err
 		}
-		var gone *Attachment
-		remaining := []Attachment{}
-		for i, a := range attachments {
-			if a.ContentTypeID == contentTypeID {
-				gone = &attachments[i]
+		var gone *ContentType
+		remaining := []*ContentType{}
+		for _, t := range attached {
+			if t.ID == contentTypeID {
+				gone = t
 			} else {
-				remaining = append(remaining, a)
+				remaining = append(remaining, t)
 			}
 		}
 		if gone == nil {
@@ -487,11 +796,32 @@ func (r *Repo) Detach(ctx context.Context, collectionID, contentTypeID string) e
 		if inUse {
 			return ErrContentTypeInUse
 		}
-		if err := q.DeleteAttachment(ctx, gone.ID); err != nil || !gone.IsDefault {
+		if err := q.SetAttached(ctx, gone.ID, false); err != nil || !gone.IsDefault {
 			return err
 		}
-		return q.SetDefaultAttachment(ctx, collectionID, remaining[0].ContentTypeID)
+		return q.SetDefaultContentType(ctx, collectionID, remaining[0].ID)
 	})
+}
+
+// SetDefault makes a list type its collection's default.
+func (r *Repo) SetDefault(ctx context.Context, collectionID, contentTypeID string) error {
+	return r.write(ctx, func(q Queries) error {
+		ok, err := Accepts(ctx, q, collectionID, contentTypeID)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return dberr.ErrNotFound
+		}
+		return q.SetDefaultContentType(ctx, collectionID, contentTypeID)
+	})
+}
+
+func nonNil[T any](values []T) []T {
+	if values == nil {
+		return []T{}
+	}
+	return values
 }
 
 // collection checks that id is a live list or library.

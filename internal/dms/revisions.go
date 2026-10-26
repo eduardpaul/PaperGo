@@ -60,7 +60,7 @@ func (s *Service) recordSchema(ctx context.Context, actor string, c *resources.R
 		return err
 	}
 	for _, typ := range types {
-		definition.ContentTypes = append(definition.ContentTypes, SchemaContentType{ID: typ.ID, Key: typ.Key, Name: typ.Name, FieldKeys: fieldKeys(selectTypeDefinitions(defs, typ)), Rules: typ.Rules, IsDefault: typ.ID == defaultType})
+		definition.ContentTypes = append(definition.ContentTypes, SchemaContentType{ID: typ.ID, Key: typ.Key, Name: typ.Name, FieldKeys: fieldKeys(selectTypeDefinitions(defs, typ)), Rules: typ.Effective.Rules, IsDefault: typ.ID == defaultType})
 	}
 	raw, err := json.Marshal(definition)
 	if err != nil {

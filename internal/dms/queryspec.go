@@ -380,12 +380,14 @@ func (s *Service) collectionPlan(ctx context.Context, subject string, c *resourc
 	}
 	plan := content.Plan{Archive: in.Query.Archive.Default(), Reader: principal(ctx, subject), CollectionID: c.ID, Publishes: c.PublishingEnabled, Surface: in.Surface, RowACL: in.rowACL}
 	if in.Query.ContentTypeID != "" {
-		typ, e := s.contentType(ctx, c.ID, in.Query.ContentTypeID)
+		// A type matches the collection's types deriving from it, on the
+		// fields they all share.
+		typ, family, e := s.typeFamily(ctx, c.ID, in.Query.ContentTypeID)
 		if e != nil {
 			return content.Plan{}, compiledQuery{}, e
 		}
 		compiler.defs = definitionMap(selectTypeDefinitions(defs, typ))
-		plan.ContentTypeID = in.Query.ContentTypeID
+		plan.ContentTypes = family
 	}
 	if len(in.Query.Sort) > 8 {
 		return content.Plan{}, compiledQuery{}, invalid("at most 8 sort keys")

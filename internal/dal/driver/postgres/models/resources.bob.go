@@ -85,7 +85,6 @@ type resourceR struct {
 	ItemBlobs                     BlobSlice            // blobs.blobs_item_id_fkey
 	ContainerBusinessKeys         BusinessKeySlice     // business_keys.business_keys_container_id_fkey
 	ItemBusinessKeys              BusinessKeySlice     // business_keys.business_keys_item_id_fkey
-	ContainerCollectionTypes      CollectionTypeSlice  // collection_types.collection_types_container_id_fkey
 	ItemComments                  CommentSlice         // comments.comments_item_id_fkey
 	ContainerFieldValues          FieldValueSlice      // field_values.field_values_container_id_fkey
 	ItemFieldValues               FieldValueSlice      // field_values.field_values_item_id_fkey
@@ -151,7 +150,6 @@ type resourceRLoaded struct {
 	ItemBlobs                     bool // blobs.blobs_item_id_fkey
 	ContainerBusinessKeys         bool // business_keys.business_keys_container_id_fkey
 	ItemBusinessKeys              bool // business_keys.business_keys_item_id_fkey
-	ContainerCollectionTypes      bool // collection_types.collection_types_container_id_fkey
 	ItemComments                  bool // comments.comments_item_id_fkey
 	ContainerFieldValues          bool // field_values.field_values_container_id_fkey
 	ItemFieldValues               bool // field_values.field_values_item_id_fkey
@@ -1523,29 +1521,6 @@ func (os ResourceSlice) ItemBusinessKeys(mods ...bob.Mod[*dialect.SelectQuery]) 
 
 	return BusinessKeys.Query(append(mods,
 		sm.Where(BusinessKeys.Columns.ItemID.EQ(PKArgExpr)),
-	)...)
-}
-
-// ContainerCollectionTypes starts a query for related objects on collection_types
-func (o *Resource) ContainerCollectionTypes(mods ...bob.Mod[*dialect.SelectQuery]) CollectionTypesQuery {
-	return CollectionTypes.Query(append(mods,
-		sm.Where(CollectionTypes.Columns.ContainerID.EQ(psql.Arg(o.ID))),
-	)...)
-}
-
-func (os ResourceSlice) ContainerCollectionTypes(mods ...bob.Mod[*dialect.SelectQuery]) CollectionTypesQuery {
-	pkID := make(pgtypes.Array[string], 0, len(os))
-
-	for _, o := range os {
-		if o == nil {
-			continue
-		}
-		pkID = append(pkID, o.ID)
-	}
-	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkID), "text[]"))
-
-	return CollectionTypes.Query(append(mods,
-		sm.Where(CollectionTypes.Columns.ContainerID.EQ(PKArgExpr)),
 	)...)
 }
 
@@ -3114,67 +3089,6 @@ func (resource0 *Resource) AttachItemBusinessKeys(ctx context.Context, exec bob.
 	}
 
 	resource0.R.ItemBusinessKeys = append(resource0.R.ItemBusinessKeys, businessKeys1...)
-
-	return nil
-}
-
-func insertResourceContainerCollectionTypes0(ctx context.Context, exec bob.Executor, collectionTypes1 []*CollectionTypeSetter, resource0 *Resource) (CollectionTypeSlice, error) {
-	for i := range collectionTypes1 {
-		collectionTypes1[i].ContainerID = omit.From(resource0.ID)
-	}
-
-	ret, err := CollectionTypes.Insert(bob.ToMods(collectionTypes1...)).All(ctx, exec)
-	if err != nil {
-		return ret, fmt.Errorf("insertResourceContainerCollectionTypes0: %w", err)
-	}
-
-	return ret, nil
-}
-
-func attachResourceContainerCollectionTypes0(ctx context.Context, exec bob.Executor, count int, collectionTypes1 CollectionTypeSlice, resource0 *Resource) (CollectionTypeSlice, error) {
-	setter := &CollectionTypeSetter{
-		ContainerID: omit.From(resource0.ID),
-	}
-
-	err := collectionTypes1.UpdateAll(ctx, exec, *setter)
-	if err != nil {
-		return nil, fmt.Errorf("attachResourceContainerCollectionTypes0: %w", err)
-	}
-
-	return collectionTypes1, nil
-}
-
-func (resource0 *Resource) InsertContainerCollectionTypes(ctx context.Context, exec bob.Executor, related ...*CollectionTypeSetter) error {
-	if len(related) == 0 {
-		return nil
-	}
-
-	var err error
-
-	collectionTypes1, err := insertResourceContainerCollectionTypes0(ctx, exec, related, resource0)
-	if err != nil {
-		return err
-	}
-
-	resource0.R.ContainerCollectionTypes = append(resource0.R.ContainerCollectionTypes, collectionTypes1...)
-
-	return nil
-}
-
-func (resource0 *Resource) AttachContainerCollectionTypes(ctx context.Context, exec bob.Executor, related ...*CollectionType) error {
-	if len(related) == 0 {
-		return nil
-	}
-
-	var err error
-	collectionTypes1 := CollectionTypeSlice(related)
-
-	_, err = attachResourceContainerCollectionTypes0(ctx, exec, len(related), collectionTypes1, resource0)
-	if err != nil {
-		return err
-	}
-
-	resource0.R.ContainerCollectionTypes = append(resource0.R.ContainerCollectionTypes, collectionTypes1...)
 
 	return nil
 }
@@ -6364,20 +6278,6 @@ func (w resourceWhereR[Q]) HasItemBusinessKeys(filters ...bob.Mod[*dialect.Selec
 		sm.Columns(psql.Raw("1")),
 		sm.From(BusinessKeys.NameExpr()),
 		sm.Where(BusinessKeys.Columns.ItemID.EQ(w.cols.ID)),
-	)
-	q.Apply(filters...)
-	return mods.Where[Q]{E: psql.Exists(q)}
-}
-
-// HasContainerCollectionTypes filters parents that have a matching ContainerCollectionTypes using a
-// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
-// multiply parent rows, so no DISTINCT is needed. The optional filters are
-// applied to the subquery (i.e. to CollectionTypes).
-func (w resourceWhereR[Q]) HasContainerCollectionTypes(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
-	q := psql.Select(
-		sm.Columns(psql.Raw("1")),
-		sm.From(CollectionTypes.NameExpr()),
-		sm.Where(CollectionTypes.Columns.ContainerID.EQ(w.cols.ID)),
 	)
 	q.Apply(filters...)
 	return mods.Where[Q]{E: psql.Exists(q)}

@@ -128,6 +128,9 @@ func (a *API) registerFoundation(m *router) {
 	m.HandleFunc("POST /v1/resources/{id}/content-types", foundationMutation(a, 201, true, func(r *http.Request, in dms.AttachContentTypeInput, v int) (any, error) {
 		return a.dms(r).AttachContentType(r.Context(), subject(r), r.PathValue("id"), v, in)
 	}))
+	m.HandleFunc("PUT /v1/resources/{id}/content-types/{typeID}", foundationMutation(a, 200, true, func(r *http.Request, in dms.ListTypeInput, v int) (any, error) {
+		return a.dms(r).UpdateListType(r.Context(), subject(r), r.PathValue("id"), r.PathValue("typeID"), v, in)
+	}))
 	m.HandleFunc("DELETE /v1/resources/{id}/content-types/{typeID}", func(w http.ResponseWriter, r *http.Request) {
 		v, ok := a.version(w, r)
 		if !ok {

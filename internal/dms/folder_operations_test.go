@@ -12,12 +12,12 @@ func TestFolderBulkRulesAndBusinessKeys(t *testing.T) {
 	for _, key := range []string{"start", "end"} {
 		fieldOK(t, s, c.ID, CreateField{Key: key, Label: key, Type: "integer", Required: true})
 	}
-	types, err := s.ContentTypes(testContext, "alice", c.ID)
+	types, err := s.CollectionContentTypes(testContext, "alice", c.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	typ := types[0]
-	if _, err = s.UpdateContentType(testContext, "alice", typ.ID, typ.Version, ContentTypeInput{Name: typ.Name, FieldIds: typ.FieldIds, Rules: []model.ValidationRule{{Key: "order", Field: "end", Op: "gte", OtherField: "start", Message: "End must follow start"}, {Key: "required", Field: "end", Op: "required_if", WhenField: "start", WhenValue: json.RawMessage(`1`), Message: "End required"}}}); err != nil {
+	if _, err = s.UpdateListType(testContext, "alice", c.ID, typ.ID, typ.Version, ListTypeInput{FieldIds: typ.FieldIds, Rules: []model.ValidationRule{{Key: "order", Field: "end", Op: "gte", OtherField: "start", Message: "End must follow start"}, {Key: "required", Field: "end", Op: "required_if", WhenField: "start", WhenValue: json.RawMessage(`1`), Message: "End required"}}}); err != nil {
 		t.Fatal(err)
 	}
 	f := create(t, s, c.ID, "folder", "Folder", map[string]any{"code": "unique", "start": json.Number("1")})

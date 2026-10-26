@@ -22,7 +22,7 @@ func testRevisions(t *testing.T, s *dal.Store) {
 	ctx := context.Background()
 	f := daltest.NewFixture(t, s)
 	r := s.Revisions()
-	base := revisions.Revision{ItemID: f.Item, ContainerID: f.Source, ContentTypeID: "type", SchemaRevisionID: f.Schema, Name: "Item", CreatedBy: "alice"}
+	base := revisions.Revision{ItemID: f.Item, ContainerID: f.Source, ContentTypeID: f.SourceType, SchemaRevisionID: f.Schema, Name: "Item", CreatedBy: "alice"}
 	other := base
 	other.ContentTypeID = "missing"
 	if _, err := s.Resources().Revise(ctx, other, nil, "alice"); !errors.Is(err, dberr.ErrInvalidReference) {

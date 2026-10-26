@@ -14,19 +14,30 @@ func TestSearchContentTypesRespectReadableCollections(t *testing.T) {
 	if _, err := s.SetPermissions(testContext, "alice", private.ID, latest(t, s, private.ID).Version, Permissions{Grants: []Permission{{PrincipalType: "user", PrincipalID: "alice", Action: "manage", Effect: "allow"}}}); err != nil {
 		t.Fatal(err)
 	}
+	// Lists that accept the same catalog type show it once, under Item.
+	second := create(t, s, workspace.ID, "list", "Second", nil)
+	attachOK(t, s, second.ID, *visible.ParentID, false)
 	for _, collection := range []string{"", list.ID, private.ID} {
 		types, err := s.SearchContentTypes(testContext, "reader", workspace.ID, collection)
 		if err != nil {
 			t.Fatal(err)
 		}
-		found := false
+		found, items := false, 0
 		for _, typ := range types {
-			if typ.ID == hidden.ID {
-				t.Fatal("private type leaked", typ)
+			if typ.ID == *hidden.ParentID || typ.ID == hidden.ID || typ.ID == visible.ID {
+				t.Fatal("private or list type listed", typ)
 			}
-			found = found || typ.ID == visible.ID
+			if typ.Key == rootTypeKey {
+				items++
+			}
+			if typ.ID == *visible.ParentID {
+				found = true
+				if typ.ParentID == "" {
+					t.Fatal("subtype without parent", typ)
+				}
+			}
 		}
-		if found != (collection != private.ID) {
+		if readable := collection != private.ID; found != readable || readable && items != 1 {
 			t.Fatal("wrong scoped catalog", collection, types)
 		}
 	}

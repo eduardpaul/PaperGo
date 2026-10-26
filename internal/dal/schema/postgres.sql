@@ -211,6 +211,11 @@ CREATE TABLE field_definitions (
 );
 CREATE INDEX fielddefinition_key ON field_definitions("key");
 
+-- A catalog type (no collection_id) is shared by the organization. A list
+-- type (collection_id) is the copy of one catalog type that a list or library
+-- customizes; it derives from that type and keeps its key and name. Every type
+-- but a root derives from a parent, which never changes. field_ids and rules
+-- are the type's own; a type also has every field and rule of its ancestors.
 CREATE TABLE content_types (
     id TEXT PRIMARY KEY NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -218,12 +223,35 @@ CREATE TABLE content_types (
     "key" TEXT NOT NULL,
     name TEXT NOT NULL,
     template_key TEXT,
+    parent_id TEXT REFERENCES content_types(id) ON DELETE RESTRICT DEFERRABLE,
+    -- Item history can outlive a purged collection, so collection_id has no
+    -- foreign key; purging a collection deletes the list types nothing uses.
+    collection_id TEXT,
+    -- attached is false once the collection stops accepting the type; its
+    -- items' history keeps it, and attaching the catalog type again restores it.
+    attached BOOLEAN NOT NULL DEFAULT TRUE CHECK (collection_id IS NOT NULL OR attached),
+    is_default BOOLEAN NOT NULL DEFAULT FALSE CHECK (NOT is_default OR (collection_id IS NOT NULL AND attached)),
     field_ids JSONB NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(field_ids) = 'array'),
+    -- hidden_field_ids are inherited fields forms leave out.
+    hidden_field_ids JSONB NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(hidden_field_ids) = 'array'),
     rules JSONB NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(rules) = 'array'),
-    version BIGINT NOT NULL DEFAULT 1 CHECK (version > 0)
+    version BIGINT NOT NULL DEFAULT 1 CHECK (version > 0),
+    CHECK (collection_id IS NULL OR (parent_id IS NOT NULL AND template_key IS NULL))
 );
-CREATE INDEX contenttype_key ON content_types("key");
+CREATE UNIQUE INDEX contenttype_key ON content_types("key") WHERE collection_id IS NULL;
 CREATE UNIQUE INDEX contenttype_template_key ON content_types(template_key);
+CREATE INDEX contenttype_parent_id ON content_types(parent_id);
+CREATE UNIQUE INDEX contenttype_collection_id_parent_id ON content_types(collection_id, parent_id) WHERE collection_id IS NOT NULL;
+CREATE UNIQUE INDEX contenttype_collection_id ON content_types(collection_id) WHERE is_default = TRUE;
+
+-- content_type_ancestors holds each type's lineage, itself at depth 0.
+CREATE TABLE content_type_ancestors (
+    content_type_id TEXT NOT NULL REFERENCES content_types(id) ON DELETE CASCADE DEFERRABLE,
+    ancestor_id TEXT NOT NULL REFERENCES content_types(id) ON DELETE CASCADE DEFERRABLE,
+    depth INTEGER NOT NULL CHECK (depth BETWEEN 0 AND 8),
+    PRIMARY KEY (ancestor_id, content_type_id)
+);
+CREATE UNIQUE INDEX contenttypeancestor_content_type_id_depth ON content_type_ancestors(content_type_id, depth);
 
 -- =============================================================================
 -- 4. Resources, Blobs, Revisions & Surfaces
@@ -299,17 +327,6 @@ CREATE TABLE resource_keywords (
     PRIMARY KEY (keyword, resource_id)
 );
 CREATE INDEX resource_keywords_by_resource ON resource_keywords(resource_id, keyword);
-
-CREATE TABLE collection_types (
-    id TEXT PRIMARY KEY NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    container_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE DEFERRABLE,
-    content_type_id TEXT NOT NULL REFERENCES content_types(id) ON DELETE RESTRICT DEFERRABLE,
-    is_default BOOLEAN NOT NULL DEFAULT FALSE
-);
-CREATE UNIQUE INDEX collectiontype_container_id_content_type_id ON collection_types(container_id, content_type_id);
-CREATE INDEX collectiontype_content_type_id_container_id ON collection_types(content_type_id, container_id);
-CREATE UNIQUE INDEX collectiontype_container_id ON collection_types(container_id) WHERE is_default = TRUE;
 
 CREATE TABLE schema_revisions (
     id TEXT PRIMARY KEY NOT NULL,
@@ -821,6 +838,8 @@ CREATE TABLE domain_events (
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     type TEXT NOT NULL,
     workspace_id TEXT NOT NULL,
+    -- Item history can outlive a purged collection, so collection_id has no
+    -- foreign key; purging a collection deletes the list types nothing uses.
     collection_id TEXT,
     resource_id TEXT,
     actor TEXT NOT NULL,

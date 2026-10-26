@@ -32,6 +32,7 @@ func TestReclassifyAndDetachHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Writes may name the catalog type; the item gets the list's own type.
 	r := request(h, "PATCH", "/v1/resources/"+i.ID, `{"content_type_id":"`+typ.ID+`"}`, testToken, `"1"`, "application/json")
 	if r.Code != 200 || r.Header().Get("ETag") != `"2"` {
 		t.Fatal(r.Code, r.Body.String())

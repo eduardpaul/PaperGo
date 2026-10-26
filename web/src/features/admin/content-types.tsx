@@ -13,6 +13,7 @@ import { ConfirmDialog, SettingsSection } from '@/features/settings/section';
 import { JsonInput } from '@/features/workflows/schema-form';
 import { Field, QueryFeedback, useHasScope } from './common';
 import { SystemProperties } from '@/features/lists/system-properties';
+import { treeLabel, typeTree } from '@/features/lists/schema';
 import { FieldDialog, fieldTypeLabel } from './field-dialog';
 
 export const catalogTypesQuery = {
@@ -36,17 +37,18 @@ export function ContentTypeCatalog() {
     <div className="grid gap-5">
       <SettingsSection
         title="Content types"
-        description="Reusable schemas shared by collections."
+        description="Reusable schemas shared by collections. A type inherits every field and rule of the type it derives from; lists customize their own copy."
         actions={canManage && <Button onClick={() => setType('new')}>New content type</Button>}
       >
         <QueryFeedback query={types} />
         <ul className="divide-y">
-          {types.data?.map((type) => (
-            <li key={type.id} className="flex items-center gap-2 py-3">
+          {typeTree(types.data ?? []).map(({ type, depth }) => (
+            <li key={type.id} className="flex items-center gap-2 py-3" style={{ paddingLeft: `${depth * 1.25}rem` }}>
               <span className="flex-1 font-medium">
                 {type.name}{' '}
                 <span className="text-xs text-muted">
-                  {type.key} · {type.field_ids?.length ?? 0} fields
+                  {type.key} · {type.effective?.field_ids.length ?? type.field_ids?.length ?? 0} fields
+                  {(type.field_ids?.length ?? 0) !== (type.effective?.field_ids.length ?? 0) && ` (${type.field_ids?.length ?? 0} own)`}
                 </span>
               </span>
               <Button onClick={() => setType(type)}>{canManage ? 'Edit' : 'View'}</Button>
@@ -65,6 +67,7 @@ export function ContentTypeCatalog() {
       {type && (
         <TypeDialog
           type={type === 'new' ? undefined : type}
+          types={types.data ?? []}
           fields={fields.data ?? []}
           canManage={canManage}
           onClose={() => setType(undefined)}
@@ -81,28 +84,131 @@ export function ContentTypeCatalog() {
   );
 }
 
+/** What a type defines itself, against what its parent gives it. */
+interface Schema {
+  ids: string[];
+  hidden: string[];
+  rules: ValidationRule[];
+}
+
+/**
+ * Edits a type's own fields, hidden inherited fields and own rules. Inherited
+ * fields stay; a required field without a default stays visible.
+ */
+function SchemaFields({
+  fields,
+  parent,
+  schema,
+  onChange,
+}: {
+  fields: FieldDefinition[];
+  parent?: ContentType;
+  schema: Schema;
+  onChange: (schema: Schema) => void;
+}) {
+  const inherited = parent?.effective?.field_ids ?? [];
+  const inheritedHidden = new Set(parent?.effective?.hidden_field_ids ?? []);
+  const byId = new Map(fields.map((field) => [field.id, field]));
+  const label = (field: FieldDefinition) => (
+    <>
+      {field.label} <span className="text-xs text-muted">{fieldTypeLabel(field.type)}</span>
+    </>
+  );
+  return (
+    <>
+      {parent && (
+        <fieldset>
+          <legend>Inherited from {parent.name}</legend>
+          {inherited.length === 0 && <p className="text-sm text-muted">{parent.name} has no fields.</p>}
+          {inherited.flatMap((id) => byId.get(id) ?? []).map((field) => (
+            <label key={field.id} className="flex gap-2 py-1">
+              <Checkbox
+                aria-label={`Show ${field.label} in forms`}
+                disabled={inheritedHidden.has(field.id) || (field.required && field.options?.default_value === undefined)}
+                checked={!inheritedHidden.has(field.id) && !schema.hidden.includes(field.id)}
+                onChange={(event) =>
+                  onChange({
+                    ...schema,
+                    hidden: event.target.checked ? schema.hidden.filter((id) => id !== field.id) : [...schema.hidden, field.id],
+                  })
+                }
+              />
+              {label(field)}
+              <span className="text-xs text-muted">{inheritedHidden.has(field.id) || schema.hidden.includes(field.id) ? 'Hidden in forms' : 'Shown in forms'}</span>
+            </label>
+          ))}
+        </fieldset>
+      )}
+      <fieldset>
+        <legend>{parent ? 'Own fields' : 'Fields'}</legend>
+        {fields
+          .filter((field) => !inherited.includes(field.id))
+          .map((field) => (
+            <label key={field.id} className="flex gap-2 py-1">
+              <Checkbox
+                checked={schema.ids.includes(field.id)}
+                onChange={(event) =>
+                  onChange({
+                    ...schema,
+                    ids: event.target.checked ? [...schema.ids, field.id] : schema.ids.filter((id) => id !== field.id),
+                  })
+                }
+              />
+              {label(field)}
+            </label>
+          ))}
+      </fieldset>
+      <p className="text-sm font-medium">Validation rules</p>
+      {!!parent?.effective?.rules.length && (
+        <p className="text-sm text-muted">{parent.effective.rules.length} inherited rules also apply.</p>
+      )}
+      <JsonInput
+        label="Content type validation rules"
+        value={schema.rules}
+        onChange={(value) => {
+          if (!Array.isArray(value)) throw new Error('Rules must be an array.');
+          onChange({ ...schema, rules: value as ValidationRule[] });
+        }}
+      />
+    </>
+  );
+}
+
 function TypeDialog({
   type,
+  types,
   fields,
   canManage,
   onClose,
 }: {
   type?: ContentType;
+  types: ContentType[];
   fields: FieldDefinition[];
   canManage: boolean;
   onClose: () => void;
 }) {
   const client = useQueryClient();
+  const root = types.find((entry) => !entry.parent_id);
   const [key, setKey] = useState(type?.key ?? '');
   const [name, setName] = useState(type?.name ?? '');
-  const [ids, setIds] = useState(type?.field_ids ?? []);
-  const [rules, setRules] = useState<ValidationRule[]>(type?.rules ?? []);
+  const [parentId, setParentId] = useState(type ? (type.parent_id ?? '') : (root?.id ?? ''));
+  const [schema, setSchema] = useState<Schema>({ ids: type?.field_ids ?? [], hidden: type?.hidden_field_ids ?? [], rules: type?.rules ?? [] });
+  const parent = types.find((entry) => entry.id === parentId);
+  // A type cannot derive from itself or its subtypes.
+  const parents = typeTree(types).filter(({ type: entry }) => !type || (entry.id !== type.id && !entry.ancestor_ids?.includes(type.id)));
   const save = useMutation({
     mutationFn: () =>
       api(type ? `/v1/content-types/${type.id}` : '/v1/content-types', {
         method: type ? 'PUT' : 'POST',
         ifMatch: type?.version,
-        body: { key: key.trim(), name: name.trim(), field_ids: ids, rules },
+        body: {
+          key: key.trim(),
+          name: name.trim(),
+          parent_id: type ? undefined : parentId || undefined,
+          field_ids: schema.ids.filter((id) => !parent?.effective?.field_ids.includes(id)),
+          hidden_field_ids: schema.hidden,
+          rules: schema.rules,
+        },
       }),
     onSuccess: async () => {
       await client.invalidateQueries({ queryKey: ['catalog'] });
@@ -114,7 +220,7 @@ function TypeDialog({
     <FormDialog
       open
       title={type ? `Content type ${type.name}` : 'New content type'}
-      description="Changes apply to all attached collections."
+      description="Changes apply to every type deriving from this one and to every list using them."
       submitLabel="Save content type"
       submitDisabled={!canManage}
       pending={save.isPending}
@@ -135,34 +241,71 @@ function TypeDialog({
         <Field id="content-type-name" label="Name">
           <Input id="content-type-name" required value={name} onChange={(event) => setName(event.target.value)} />
         </Field>
-        <fieldset>
-          <legend>Fields</legend>
-          {fields.map((field) => (
-            <label key={field.id} className="flex gap-2 py-1">
-              <Checkbox
-                checked={ids.includes(field.id)}
-                onChange={(event) =>
-                  setIds((current) =>
-                    event.target.checked ? [...current, field.id] : current.filter((id) => id !== field.id),
-                  )
-                }
-              />
-              {field.label}{' '}
-              <span className="text-xs text-muted">
-                {fieldTypeLabel(field.type)}
-              </span>
-            </label>
-          ))}
-        </fieldset>
-        <p className="text-sm font-medium">Validation rules</p>
-        <JsonInput
-          label="Content type validation rules"
-          value={rules}
-          onChange={(value) => {
-            if (!Array.isArray(value)) throw new Error('Rules must be an array.');
-            setRules(value as ValidationRule[]);
-          }}
-        />
+        {(!type || type.parent_id) && (
+          <Field id="content-type-parent" label="Derives from">
+            <Select
+              id="content-type-parent"
+              disabled={!!type}
+              value={parentId}
+              onChange={(event) => setParentId(event.target.value)}
+            >
+              {parents.map(({ type: entry, depth }) => (
+                <option key={entry.id} value={entry.id}>
+                  {treeLabel(entry.name, depth)}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
+        <SchemaFields fields={fields} parent={parent} schema={schema} onChange={setSchema} />
+      </fieldset>
+    </FormDialog>
+  );
+}
+
+/** Customizes a list type: own columns, hidden inherited ones and own rules. */
+function ListTypeDialog({
+  collection,
+  type,
+  canManage,
+  onClose,
+}: {
+  collection: Resource;
+  type: ContentType;
+  canManage: boolean;
+  onClose: () => void;
+}) {
+  const client = useQueryClient();
+  const catalog = useQuery(catalogTypesQuery);
+  const fields = useQuery(catalogFieldsQuery);
+  const parent = catalog.data?.find((entry) => entry.id === type.parent_id);
+  const [schema, setSchema] = useState<Schema>({ ids: type.field_ids ?? [], hidden: type.hidden_field_ids ?? [], rules: type.rules ?? [] });
+  const save = useMutation({
+    mutationFn: () =>
+      api(`/v1/resources/${collection.id}/content-types/${type.id}`, {
+        method: 'PUT',
+        ifMatch: type.version,
+        body: { field_ids: schema.ids, hidden_field_ids: schema.hidden, rules: schema.rules },
+      }),
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: keys.resources });
+      onClose();
+    },
+  });
+  return (
+    <FormDialog
+      open
+      title={`Customize ${type.name} in ${collection.name}`}
+      description={`Only this list changes. Everything ${type.name} defines stays, and stays in step with the catalog.`}
+      submitLabel="Save"
+      submitDisabled={!canManage}
+      pending={save.isPending}
+      onClose={onClose}
+      onSubmit={() => canManage && save.mutate()}
+    >
+      <QueryFeedback query={catalog} />
+      <fieldset className="grid gap-3" disabled={!canManage}>
+        {parent && <SchemaFields fields={fields.data ?? []} parent={parent} schema={schema} onChange={setSchema} />}
       </fieldset>
     </FormDialog>
   );
@@ -276,6 +419,7 @@ export function CollectionContentTypes({ collection, canManage }: { collection: 
   const [attachId, setAttachId] = useState('');
   const [makeDefault, setMakeDefault] = useState(false);
   const [detaching, setDetaching] = useState<ContentType>();
+  const [customizing, setCustomizing] = useState<ContentType>();
   const refresh = async () => {
     await client.invalidateQueries({ queryKey: keys.resources });
   };
@@ -299,11 +443,12 @@ export function CollectionContentTypes({ collection, canManage }: { collection: 
       await refresh();
     },
   });
-  const available = catalog.data?.filter((type) => !types.data?.some((attached) => attached.id === type.id)) ?? [];
+  // Each attached list type copies one catalog type.
+  const available = typeTree(catalog.data?.filter((type) => !types.data?.some((attached) => attached.parent_id === type.id)) ?? []);
   return (
     <SettingsSection
       title="Content types"
-      description="Kinds of items this list holds, each with its own columns. New items use the default type."
+      description="Kinds of items this list holds. Each comes from the catalog with its columns; customizing one changes it for this list only. New items use the default type."
     >
       <QueryFeedback query={types} />
       <ul className="divide-y">
@@ -311,14 +456,22 @@ export function CollectionContentTypes({ collection, canManage }: { collection: 
           <li key={type.id} className="flex items-center gap-2 py-2">
             <span className="flex-1 text-[13px] font-medium">
               {type.name} {type.is_default && <Badge>Default</Badge>}
+              {(!!type.field_ids?.length || !!type.hidden_field_ids?.length || !!type.rules?.length) && (
+                <span className="ml-2 text-xs text-muted">Customized</span>
+              )}
             </span>
             {canManage && (
               <>
+                {canReadCatalog && (
+                  <Button size="sm" variant="ghost" onClick={() => setCustomizing(type)}>
+                    Customize
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   variant="ghost"
-                  disabled={type.is_default || attach.isPending}
-                  onClick={() => attach.mutate({ id: type.id, isDefault: true })}
+                  disabled={type.is_default || attach.isPending || !type.parent_id}
+                  onClick={() => type.parent_id && attach.mutate({ id: type.parent_id, isDefault: true })}
                 >
                   Make default
                 </Button>
@@ -344,9 +497,9 @@ export function CollectionContentTypes({ collection, canManage }: { collection: 
             onChange={(event) => setAttachId(event.target.value)}
           >
             <option value="">Add a content type…</option>
-            {available.map((type) => (
+            {available.map(({ type, depth }) => (
               <option key={type.id} value={type.id}>
-                {type.name}
+                {treeLabel(type.name, depth)}
               </option>
             ))}
           </Select>
@@ -366,12 +519,15 @@ export function CollectionContentTypes({ collection, canManage }: { collection: 
         open={!!detaching}
         onOpenChange={(open) => !open && setDetaching(undefined)}
         title={`Remove ${detaching?.name ?? ''} from this list?`}
-        description="The content type stays available to other lists. A type still used by items cannot be removed."
+        description="The content type stays available to other lists, and this list keeps its customizations if you add it again. A type still used by items cannot be removed."
         confirm="Remove content type"
         busy={detach.isPending}
         error={detach.error}
         onConfirm={() => detaching && detach.mutate(detaching)}
       />
+      {customizing && (
+        <ListTypeDialog collection={collection} type={customizing} canManage={canManage} onClose={() => setCustomizing(undefined)} />
+      )}
     </SettingsSection>
   );
 }

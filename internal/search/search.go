@@ -127,11 +127,13 @@ type Filter struct {
 	Access                   Access
 	// Surface is auto (drafts where the caller may, else published), head
 	// (drafts only) or published.
-	Surface       string
-	Kinds         []string
-	WorkspaceID   string
-	CollectionID  string
-	ContentTypeID string
+	Surface      string
+	Kinds        []string
+	WorkspaceID  string
+	CollectionID string
+	// ContentTypeIDs matches documents of any of them; the service adds the
+	// types deriving from a requested type.
+	ContentTypeIDs []string
 	// TermIDs matches documents holding any of them; the service adds the
 	// descendants of a requested term and terms merged into it.
 	TermIDs      []string

@@ -279,7 +279,7 @@ func (h *Handler) copyTree(r *request, f *dms.File, from, to []string, infinite 
 			defer file.Close()
 			content = file
 		}
-		typ, err := h.DMS.GetContentType(r.Context(), r.subject, *f.Resource.ContentTypeID)
+		typ, err := h.DMS.CollectionContentType(r.Context(), r.subject, r.library, *f.Resource.ContentTypeID)
 		if err != nil {
 			return err
 		}
@@ -289,7 +289,7 @@ func (h *Handler) copyTree(r *request, f *dms.File, from, to []string, infinite 
 			return err
 		}
 		for _, d := range defs {
-			if !slices.Contains(typ.FieldIds, d.ID) {
+			if !slices.Contains(typ.Effective.FieldIds, d.ID) {
 				continue
 			}
 			key := d.Key

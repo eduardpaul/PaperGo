@@ -67,7 +67,7 @@ type workflowR struct {
 	Notifications      NotificationSlice    // fk_notifications_0
 	Tasks              TaskSlice            // fk_tasks_2
 	WorkflowRuns       WorkflowRunSlice     // fk_workflow_runs_1
-	WorkflowTriggers   WorkflowTriggerSlice // fk_workflow_triggers_2
+	WorkflowTriggers   WorkflowTriggerSlice // fk_workflow_triggers_1
 	WorkflowVersions   WorkflowVersionSlice // fk_workflow_versions_0
 	CollectionResource *Resource            // fk_workflows_0
 	WorkspaceResource  *Resource            // fk_workflows_1
@@ -83,7 +83,7 @@ type workflowRLoaded struct {
 	Notifications      bool // fk_notifications_0
 	Tasks              bool // fk_tasks_2
 	WorkflowRuns       bool // fk_workflow_runs_1
-	WorkflowTriggers   bool // fk_workflow_triggers_2
+	WorkflowTriggers   bool // fk_workflow_triggers_1
 	WorkflowVersions   bool // fk_workflow_versions_0
 	CollectionResource bool // fk_workflows_0
 	WorkspaceResource  bool // fk_workflows_1

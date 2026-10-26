@@ -82,7 +82,8 @@ A revoked permission or membership therefore applies to the next search at once,
 | `mode` | `keyword`, `semantic` or `hybrid`; the default is `hybrid` when an embedding model is configured and `q` is given, else `keyword` |
 | `surface` | `auto` (default), `head` or `published` |
 | `kind` | `item` (default), `folder`, or both comma-separated |
-| `workspace_id`, `collection_id`, `content_type_id` | restrict to one |
+| `workspace_id`, `collection_id` | restrict to one |
+| `content_type_id` | restrict to a content type and every type deriving from it |
 | `term_id` | items holding the term, a descendant of it, or a term merged into it |
 | `keyword` | shared keyword term ID or label; matches intrinsic keywords and keywords fields, and the parent terms intrinsic keywords and keywords fields with `apply_parents` apply |
 | `created_by`, `modified_by` | exact values |
@@ -176,9 +177,9 @@ For the other direction, use `--from zvec --to sqlite`. `--database`, `--sqlite`
 | POST | /v1/workspaces/{id}/search/sync | Queue entries to be written (operation) |
 | GET | /v1/workspaces/{id}/search/term-entries | Entries holding terms |
 
-These routes, and the [content steps](#content-steps), are served when the deployment runs search. `GET /v1/search/fields` and `GET /v1/search/content-types` belong to the core, since smart folders filter on the same fields: they list the fields the caller can filter on, and the content types of readable collections.
+These routes, and the [content steps](#content-steps), are served when the deployment runs search. `GET /v1/search/fields` and `GET /v1/search/content-types` belong to the core, since smart folders filter on the same fields: they list the fields the caller can filter on, and the catalog types of readable collections.
 
-The search page offers a content-type selector and matching type facets. `GET /v1/search/content-types` lists IDs, keys and names attached to readable collections, optionally narrowed by `workspace_id` and `collection_id`; pass `content_type_id` to `/v1/search` to filter. Expand Relationships on a result to load its authorized incoming/outgoing links and open a related item.
+The search page offers a content-type selector, shown as the type tree, and matching type facets. `GET /v1/search/content-types` lists each catalog type that a readable collection accepts once, with its ancestors and `parent_id`, optionally narrowed by `workspace_id` and `collection_id`; pass `content_type_id` to `/v1/search` to filter by a type and its subtypes. The content type facet counts entries by the catalog type their list type copies. Expand Relationships on a result to load its authorized incoming/outgoing links and open a related item.
 
 ## Archived items
 

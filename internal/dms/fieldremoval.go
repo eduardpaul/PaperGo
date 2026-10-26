@@ -54,7 +54,20 @@ func (s *Service) deleteCatalogField(ctx context.Context, subject string, d *cat
 	if err != nil {
 		return err
 	}
-	for _, typ := range types {
+	// Subtypes inherit the field and may have rules on it.
+	owners := make([]string, len(types))
+	for i, typ := range types {
+		owners[i] = typ.ID
+	}
+	subtree, err := s.DAL.Catalog().Descendants(ctx, owners)
+	if err != nil {
+		return err
+	}
+	dependents, err := s.DAL.Catalog().ContentTypes(ctx, catalog.ContentTypeFilter{IDs: subtree, Detached: true})
+	if err != nil {
+		return err
+	}
+	for _, typ := range dependents {
 		for _, rule := range typ.Rules {
 			if rule.Field == d.Key || rule.OtherField == d.Key || rule.WhenField == d.Key {
 				return invalid("remove dependent content-type rules before deleting this field")
@@ -79,7 +92,7 @@ func (s *Service) deleteCatalogField(ctx context.Context, subject string, d *cat
 	for _, typ := range types {
 		if slices.Contains(typ.FieldIds, d.ID) {
 			ids := slices.DeleteFunc(slices.Clone(typ.FieldIds), func(id string) bool { return id == d.ID })
-			if _, err := s.reviseContentType(ctx, typ, typ.Name, ids, typ.Rules); err != nil {
+			if _, err := s.reviseContentType(ctx, typ, catalog.ContentType{FieldIds: ids, HiddenFieldIds: typ.HiddenFieldIds, Rules: typ.Rules}); err != nil {
 				return err
 			}
 		}

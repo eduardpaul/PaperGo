@@ -49,9 +49,8 @@ type WorkflowTriggersQuery = *sqlite.ViewQuery[*WorkflowTrigger, WorkflowTrigger
 
 // workflowTriggerR is where relationships are stored.
 type workflowTriggerR struct {
-	CollectionResource *Resource // fk_workflow_triggers_0
-	WorkspaceResource  *Resource // fk_workflow_triggers_1
-	Workflow           *Workflow // fk_workflow_triggers_2
+	WorkspaceResource *Resource // fk_workflow_triggers_0
+	Workflow          *Workflow // fk_workflow_triggers_1
 	// Loaded reports whether each relationship has been loaded.
 	// A relationship's bool is set by Load*, Preload, ThenLoad, factory builds,
 	// and to-one Attach/Insert operations. To-many Attach/Insert operations leave it unchanged.
@@ -60,9 +59,8 @@ type workflowTriggerR struct {
 
 // workflowTriggerRLoaded tracks which relationships on WorkflowTrigger have been loaded.
 type workflowTriggerRLoaded struct {
-	CollectionResource bool // fk_workflow_triggers_0
-	WorkspaceResource  bool // fk_workflow_triggers_1
-	Workflow           bool // fk_workflow_triggers_2
+	WorkspaceResource bool // fk_workflow_triggers_0
+	Workflow          bool // fk_workflow_triggers_1
 }
 
 func buildWorkflowTriggerColumns(tableName string) workflowTriggerColumns {
@@ -625,25 +623,6 @@ func (o WorkflowTriggerSlice) ReloadAll(ctx context.Context, exec bob.Executor) 
 	return nil
 }
 
-// CollectionResource starts a query for related objects on resources
-func (o *WorkflowTrigger) CollectionResource(mods ...bob.Mod[*dialect.SelectQuery]) ResourcesQuery {
-	return Resources.Query(append(mods,
-		sm.Where(Resources.Columns.ID.EQ(sqlite.Arg(o.CollectionID))),
-	)...)
-}
-
-func (os WorkflowTriggerSlice) CollectionResource(mods ...bob.Mod[*dialect.SelectQuery]) ResourcesQuery {
-	PKArgSlice := make([]bob.Expression, len(os))
-	for i, o := range os {
-		PKArgSlice[i] = sqlite.ArgGroup(o.CollectionID)
-	}
-	PKArgExpr := sqlite.Group(PKArgSlice...)
-
-	return Resources.Query(append(mods,
-		sm.Where(sqlite.Group(Resources.Columns.ID).OP("IN", PKArgExpr)),
-	)...)
-}
-
 // WorkspaceResource starts a query for related objects on resources
 func (o *WorkflowTrigger) WorkspaceResource(mods ...bob.Mod[*dialect.SelectQuery]) ResourcesQuery {
 	return Resources.Query(append(mods,
@@ -680,52 +659,6 @@ func (os WorkflowTriggerSlice) Workflow(mods ...bob.Mod[*dialect.SelectQuery]) W
 	return Workflows.Query(append(mods,
 		sm.Where(sqlite.Group(Workflows.Columns.ID).OP("IN", PKArgExpr)),
 	)...)
-}
-
-func attachWorkflowTriggerCollectionResource0(ctx context.Context, exec bob.Executor, count int, workflowTrigger0 *WorkflowTrigger, resource1 *Resource) (*WorkflowTrigger, error) {
-	setter := &WorkflowTriggerSetter{
-		CollectionID: omitnull.From(resource1.ID),
-	}
-
-	err := workflowTrigger0.Update(ctx, exec, setter)
-	if err != nil {
-		return nil, fmt.Errorf("attachWorkflowTriggerCollectionResource0: %w", err)
-	}
-
-	return workflowTrigger0, nil
-}
-
-func (workflowTrigger0 *WorkflowTrigger) InsertCollectionResource(ctx context.Context, exec bob.Executor, related *ResourceSetter) error {
-	var err error
-
-	resource1, err := Resources.Insert(related).One(ctx, exec)
-	if err != nil {
-		return fmt.Errorf("inserting related objects: %w", err)
-	}
-
-	_, err = attachWorkflowTriggerCollectionResource0(ctx, exec, 1, workflowTrigger0, resource1)
-	if err != nil {
-		return err
-	}
-
-	workflowTrigger0.R.CollectionResource = resource1
-	workflowTrigger0.R.Loaded.CollectionResource = true
-
-	return nil
-}
-
-func (workflowTrigger0 *WorkflowTrigger) AttachCollectionResource(ctx context.Context, exec bob.Executor, resource1 *Resource) error {
-	var err error
-
-	_, err = attachWorkflowTriggerCollectionResource0(ctx, exec, 1, workflowTrigger0, resource1)
-	if err != nil {
-		return err
-	}
-
-	workflowTrigger0.R.CollectionResource = resource1
-	workflowTrigger0.R.Loaded.CollectionResource = true
-
-	return nil
 }
 
 func attachWorkflowTriggerWorkspaceResource0(ctx context.Context, exec bob.Executor, count int, workflowTrigger0 *WorkflowTrigger, resource1 *Resource) (*WorkflowTrigger, error) {
@@ -857,20 +790,6 @@ func buildWorkflowTriggerWhere[Q sqlite.Filterable](cols workflowTriggerColumns)
 // R struct — so they cannot collide with column-based filter fields.
 type workflowTriggerWhereR[Q sqlite.Filterable] struct {
 	cols workflowTriggerColumns
-}
-
-// HasCollectionResource filters parents that have a matching CollectionResource using a
-// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
-// multiply parent rows, so no DISTINCT is needed. The optional filters are
-// applied to the subquery (i.e. to Resources).
-func (w workflowTriggerWhereR[Q]) HasCollectionResource(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
-	q := sqlite.Select(
-		sm.Columns(sqlite.Raw("1")),
-		sm.From(Resources.NameExpr()),
-		sm.Where(Resources.Columns.ID.EQ(w.cols.CollectionID)),
-	)
-	q.Apply(filters...)
-	return mods.Where[Q]{E: sqlite.Exists(q)}
 }
 
 // HasWorkspaceResource filters parents that have a matching WorkspaceResource using a

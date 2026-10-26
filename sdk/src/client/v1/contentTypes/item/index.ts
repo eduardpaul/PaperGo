@@ -11,15 +11,15 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface ContentTypesItemRequestBuilder extends BaseRequestBuilder<ContentTypesItemRequestBuilder> {
     /**
-     * Organization catalog definition. Module scope applies independently of workspace ACLs. Updates advance every attached collection atomically.
+     * Organization catalog type; list types are read through their collection. Module scope applies independently of workspace ACLs.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<ContentType>}
      * @throws {Problem} error when the service returns a 4XX or 5XX status code
      */
      get(requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<ContentType | undefined>;
     /**
-     * Organization catalog definition. Module scope applies independently of workspace ACLs. Updates advance every attached collection atomically.
-     * @param body Organization catalog definition. Replacement validates all attached collections and advances their schema revisions atomically. Requires contentType.manage, independently of workspace membership.
+     * Organization catalog type. Module scope applies independently of workspace ACLs. Updates reach every subtype and every list type deriving from it, and advance every affected collection atomically.
+     * @param body Organization catalog type. A new type derives from parent_id, or Item when it is omitted. Replacement validates every subtype and attached collection and advances their schema revisions atomically. Requires contentType.manage, independently of workspace membership.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<ContentType>}
      * @throws {Problem} error when the service returns a 412 status code
@@ -27,14 +27,14 @@ export interface ContentTypesItemRequestBuilder extends BaseRequestBuilder<Conte
      */
      put(body: ContentTypeInput, requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<ContentType | undefined>;
     /**
-     * Organization catalog definition. Module scope applies independently of workspace ACLs. Updates advance every attached collection atomically.
+     * Organization catalog type; list types are read through their collection. Module scope applies independently of workspace ACLs.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */
      toGetRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined) : RequestInformation;
     /**
-     * Organization catalog definition. Module scope applies independently of workspace ACLs. Updates advance every attached collection atomically.
-     * @param body Organization catalog definition. Replacement validates all attached collections and advances their schema revisions atomically. Requires contentType.manage, independently of workspace membership.
+     * Organization catalog type. Module scope applies independently of workspace ACLs. Updates reach every subtype and every list type deriving from it, and advance every affected collection atomically.
+     * @param body Organization catalog type. A new type derives from parent_id, or Item when it is omitted. Replacement validates every subtype and attached collection and advances their schema revisions atomically. Requires contentType.manage, independently of workspace membership.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */

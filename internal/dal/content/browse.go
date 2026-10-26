@@ -18,7 +18,8 @@ import (
 type Browse struct {
 	Archive refs.ArchiveSelection
 	// GlobalItems selects items in every collection, or in WorkspaceID.
-	GlobalItems                             bool
+	GlobalItems bool
+	// ContentTypeID matches the type and every type deriving from it.
 	CollectionID, ContentTypeID, ArchivedBy string
 	ArchivedFrom, ArchivedTo                time.Time
 	// BeforeArchivedAt and BeforeArchivedID page NewestArchived: items
@@ -204,7 +205,7 @@ func (r *Repo) BrowseIDs(ctx context.Context, b Browse) ([]string, error) {
 		add("r.container_id=?", b.CollectionID)
 	}
 	if b.ContentTypeID != "" {
-		add("r.content_type_id=?", b.ContentTypeID)
+		add("r.content_type_id IN (SELECT content_type_id FROM content_type_ancestors WHERE ancestor_id=?)", b.ContentTypeID)
 	}
 	if b.ArchivedBy != "" {
 		add("r.archived_by=?", b.ArchivedBy)

@@ -32,10 +32,11 @@ func testIntegrations(t *testing.T, s *dal.Store) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Catalog().Attach(ctx, list.ID, "type", true); err != nil {
+	listType, _, err := s.Catalog().Attach(ctx, list.ID, "type", true)
+	if err != nil {
 		t.Fatal(err)
 	}
-	item, err := s.Resources().Create(ctx, resources.New{ID: "entry", WorkspaceID: f.Workspace, ParentID: list.ID, ContainerID: list.ID, ContentTypeID: "type", Kind: refs.KindItem, Name: "Entry"})
+	item, err := s.Resources().Create(ctx, resources.New{ID: "entry", WorkspaceID: f.Workspace, ParentID: list.ID, ContainerID: list.ID, ContentTypeID: listType.ID, Kind: refs.KindItem, Name: "Entry"})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -84,7 +84,6 @@ type resourceR struct {
 	ItemBlobs                     BlobSlice            // fk_blobs_0
 	ItemBusinessKeys              BusinessKeySlice     // fk_business_keys_0
 	ContainerBusinessKeys         BusinessKeySlice     // fk_business_keys_1
-	ContainerCollectionTypes      CollectionTypeSlice  // fk_collection_types_1
 	ItemComments                  CommentSlice         // fk_comments_2
 	ItemFieldValues               FieldValueSlice      // fk_field_values_0
 	ContainerFieldValues          FieldValueSlice      // fk_field_values_1
@@ -133,8 +132,7 @@ type resourceR struct {
 	ItemTasks                     TaskSlice            // fk_tasks_3
 	WorkspaceTasks                TaskSlice            // fk_tasks_4
 	WorkspaceWorkflowRuns         WorkflowRunSlice     // fk_workflow_runs_0
-	CollectionWorkflowTriggers    WorkflowTriggerSlice // fk_workflow_triggers_0
-	WorkspaceWorkflowTriggers     WorkflowTriggerSlice // fk_workflow_triggers_1
+	WorkspaceWorkflowTriggers     WorkflowTriggerSlice // fk_workflow_triggers_0
 	CollectionWorkflows           WorkflowSlice        // fk_workflows_0
 	WorkspaceWorkflows            WorkflowSlice        // fk_workflows_1
 	// Loaded reports whether each relationship has been loaded.
@@ -150,7 +148,6 @@ type resourceRLoaded struct {
 	ItemBlobs                     bool // fk_blobs_0
 	ItemBusinessKeys              bool // fk_business_keys_0
 	ContainerBusinessKeys         bool // fk_business_keys_1
-	ContainerCollectionTypes      bool // fk_collection_types_1
 	ItemComments                  bool // fk_comments_2
 	ItemFieldValues               bool // fk_field_values_0
 	ContainerFieldValues          bool // fk_field_values_1
@@ -199,8 +196,7 @@ type resourceRLoaded struct {
 	ItemTasks                     bool // fk_tasks_3
 	WorkspaceTasks                bool // fk_tasks_4
 	WorkspaceWorkflowRuns         bool // fk_workflow_runs_0
-	CollectionWorkflowTriggers    bool // fk_workflow_triggers_0
-	WorkspaceWorkflowTriggers     bool // fk_workflow_triggers_1
+	WorkspaceWorkflowTriggers     bool // fk_workflow_triggers_0
 	CollectionWorkflows           bool // fk_workflows_0
 	WorkspaceWorkflows            bool // fk_workflows_1
 }
@@ -1560,25 +1556,6 @@ func (os ResourceSlice) ContainerBusinessKeys(mods ...bob.Mod[*dialect.SelectQue
 	)...)
 }
 
-// ContainerCollectionTypes starts a query for related objects on collection_types
-func (o *Resource) ContainerCollectionTypes(mods ...bob.Mod[*dialect.SelectQuery]) CollectionTypesQuery {
-	return CollectionTypes.Query(append(mods,
-		sm.Where(CollectionTypes.Columns.ContainerID.EQ(sqlite.Arg(o.ID))),
-	)...)
-}
-
-func (os ResourceSlice) ContainerCollectionTypes(mods ...bob.Mod[*dialect.SelectQuery]) CollectionTypesQuery {
-	PKArgSlice := make([]bob.Expression, len(os))
-	for i, o := range os {
-		PKArgSlice[i] = sqlite.ArgGroup(o.ID)
-	}
-	PKArgExpr := sqlite.Group(PKArgSlice...)
-
-	return CollectionTypes.Query(append(mods,
-		sm.Where(sqlite.Group(CollectionTypes.Columns.ContainerID).OP("IN", PKArgExpr)),
-	)...)
-}
-
 // ItemComments starts a query for related objects on comments
 func (o *Resource) ItemComments(mods ...bob.Mod[*dialect.SelectQuery]) CommentsQuery {
 	return Comments.Query(append(mods,
@@ -2496,25 +2473,6 @@ func (os ResourceSlice) WorkspaceWorkflowRuns(mods ...bob.Mod[*dialect.SelectQue
 	)...)
 }
 
-// CollectionWorkflowTriggers starts a query for related objects on workflow_triggers
-func (o *Resource) CollectionWorkflowTriggers(mods ...bob.Mod[*dialect.SelectQuery]) WorkflowTriggersQuery {
-	return WorkflowTriggers.Query(append(mods,
-		sm.Where(WorkflowTriggers.Columns.CollectionID.EQ(sqlite.Arg(o.ID))),
-	)...)
-}
-
-func (os ResourceSlice) CollectionWorkflowTriggers(mods ...bob.Mod[*dialect.SelectQuery]) WorkflowTriggersQuery {
-	PKArgSlice := make([]bob.Expression, len(os))
-	for i, o := range os {
-		PKArgSlice[i] = sqlite.ArgGroup(o.ID)
-	}
-	PKArgExpr := sqlite.Group(PKArgSlice...)
-
-	return WorkflowTriggers.Query(append(mods,
-		sm.Where(sqlite.Group(WorkflowTriggers.Columns.CollectionID).OP("IN", PKArgExpr)),
-	)...)
-}
-
 // WorkspaceWorkflowTriggers starts a query for related objects on workflow_triggers
 func (o *Resource) WorkspaceWorkflowTriggers(mods ...bob.Mod[*dialect.SelectQuery]) WorkflowTriggersQuery {
 	return WorkflowTriggers.Query(append(mods,
@@ -2873,67 +2831,6 @@ func (resource0 *Resource) AttachContainerBusinessKeys(ctx context.Context, exec
 	}
 
 	resource0.R.ContainerBusinessKeys = append(resource0.R.ContainerBusinessKeys, businessKeys1...)
-
-	return nil
-}
-
-func insertResourceContainerCollectionTypes0(ctx context.Context, exec bob.Executor, collectionTypes1 []*CollectionTypeSetter, resource0 *Resource) (CollectionTypeSlice, error) {
-	for i := range collectionTypes1 {
-		collectionTypes1[i].ContainerID = omit.From(resource0.ID)
-	}
-
-	ret, err := CollectionTypes.Insert(bob.ToMods(collectionTypes1...)).All(ctx, exec)
-	if err != nil {
-		return ret, fmt.Errorf("insertResourceContainerCollectionTypes0: %w", err)
-	}
-
-	return ret, nil
-}
-
-func attachResourceContainerCollectionTypes0(ctx context.Context, exec bob.Executor, count int, collectionTypes1 CollectionTypeSlice, resource0 *Resource) (CollectionTypeSlice, error) {
-	setter := &CollectionTypeSetter{
-		ContainerID: omit.From(resource0.ID),
-	}
-
-	err := collectionTypes1.UpdateAll(ctx, exec, *setter)
-	if err != nil {
-		return nil, fmt.Errorf("attachResourceContainerCollectionTypes0: %w", err)
-	}
-
-	return collectionTypes1, nil
-}
-
-func (resource0 *Resource) InsertContainerCollectionTypes(ctx context.Context, exec bob.Executor, related ...*CollectionTypeSetter) error {
-	if len(related) == 0 {
-		return nil
-	}
-
-	var err error
-
-	collectionTypes1, err := insertResourceContainerCollectionTypes0(ctx, exec, related, resource0)
-	if err != nil {
-		return err
-	}
-
-	resource0.R.ContainerCollectionTypes = append(resource0.R.ContainerCollectionTypes, collectionTypes1...)
-
-	return nil
-}
-
-func (resource0 *Resource) AttachContainerCollectionTypes(ctx context.Context, exec bob.Executor, related ...*CollectionType) error {
-	if len(related) == 0 {
-		return nil
-	}
-
-	var err error
-	collectionTypes1 := CollectionTypeSlice(related)
-
-	_, err = attachResourceContainerCollectionTypes0(ctx, exec, len(related), collectionTypes1, resource0)
-	if err != nil {
-		return err
-	}
-
-	resource0.R.ContainerCollectionTypes = append(resource0.R.ContainerCollectionTypes, collectionTypes1...)
 
 	return nil
 }
@@ -5719,67 +5616,6 @@ func (resource0 *Resource) AttachWorkspaceWorkflowRuns(ctx context.Context, exec
 	return nil
 }
 
-func insertResourceCollectionWorkflowTriggers0(ctx context.Context, exec bob.Executor, workflowTriggers1 []*WorkflowTriggerSetter, resource0 *Resource) (WorkflowTriggerSlice, error) {
-	for i := range workflowTriggers1 {
-		workflowTriggers1[i].CollectionID = omitnull.From(resource0.ID)
-	}
-
-	ret, err := WorkflowTriggers.Insert(bob.ToMods(workflowTriggers1...)).All(ctx, exec)
-	if err != nil {
-		return ret, fmt.Errorf("insertResourceCollectionWorkflowTriggers0: %w", err)
-	}
-
-	return ret, nil
-}
-
-func attachResourceCollectionWorkflowTriggers0(ctx context.Context, exec bob.Executor, count int, workflowTriggers1 WorkflowTriggerSlice, resource0 *Resource) (WorkflowTriggerSlice, error) {
-	setter := &WorkflowTriggerSetter{
-		CollectionID: omitnull.From(resource0.ID),
-	}
-
-	err := workflowTriggers1.UpdateAll(ctx, exec, *setter)
-	if err != nil {
-		return nil, fmt.Errorf("attachResourceCollectionWorkflowTriggers0: %w", err)
-	}
-
-	return workflowTriggers1, nil
-}
-
-func (resource0 *Resource) InsertCollectionWorkflowTriggers(ctx context.Context, exec bob.Executor, related ...*WorkflowTriggerSetter) error {
-	if len(related) == 0 {
-		return nil
-	}
-
-	var err error
-
-	workflowTriggers1, err := insertResourceCollectionWorkflowTriggers0(ctx, exec, related, resource0)
-	if err != nil {
-		return err
-	}
-
-	resource0.R.CollectionWorkflowTriggers = append(resource0.R.CollectionWorkflowTriggers, workflowTriggers1...)
-
-	return nil
-}
-
-func (resource0 *Resource) AttachCollectionWorkflowTriggers(ctx context.Context, exec bob.Executor, related ...*WorkflowTrigger) error {
-	if len(related) == 0 {
-		return nil
-	}
-
-	var err error
-	workflowTriggers1 := WorkflowTriggerSlice(related)
-
-	_, err = attachResourceCollectionWorkflowTriggers0(ctx, exec, len(related), workflowTriggers1, resource0)
-	if err != nil {
-		return err
-	}
-
-	resource0.R.CollectionWorkflowTriggers = append(resource0.R.CollectionWorkflowTriggers, workflowTriggers1...)
-
-	return nil
-}
-
 func insertResourceWorkspaceWorkflowTriggers0(ctx context.Context, exec bob.Executor, workflowTriggers1 []*WorkflowTriggerSetter, resource0 *Resource) (WorkflowTriggerSlice, error) {
 	for i := range workflowTriggers1 {
 		workflowTriggers1[i].WorkspaceID = omit.From(resource0.ID)
@@ -6123,20 +5959,6 @@ func (w resourceWhereR[Q]) HasContainerBusinessKeys(filters ...bob.Mod[*dialect.
 		sm.Columns(sqlite.Raw("1")),
 		sm.From(BusinessKeys.NameExpr()),
 		sm.Where(BusinessKeys.Columns.ContainerID.EQ(w.cols.ID)),
-	)
-	q.Apply(filters...)
-	return mods.Where[Q]{E: sqlite.Exists(q)}
-}
-
-// HasContainerCollectionTypes filters parents that have a matching ContainerCollectionTypes using a
-// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
-// multiply parent rows, so no DISTINCT is needed. The optional filters are
-// applied to the subquery (i.e. to CollectionTypes).
-func (w resourceWhereR[Q]) HasContainerCollectionTypes(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
-	q := sqlite.Select(
-		sm.Columns(sqlite.Raw("1")),
-		sm.From(CollectionTypes.NameExpr()),
-		sm.Where(CollectionTypes.Columns.ContainerID.EQ(w.cols.ID)),
 	)
 	q.Apply(filters...)
 	return mods.Where[Q]{E: sqlite.Exists(q)}
@@ -6819,20 +6641,6 @@ func (w resourceWhereR[Q]) HasWorkspaceWorkflowRuns(filters ...bob.Mod[*dialect.
 		sm.Columns(sqlite.Raw("1")),
 		sm.From(WorkflowRuns.NameExpr()),
 		sm.Where(WorkflowRuns.Columns.WorkspaceID.EQ(w.cols.ID)),
-	)
-	q.Apply(filters...)
-	return mods.Where[Q]{E: sqlite.Exists(q)}
-}
-
-// HasCollectionWorkflowTriggers filters parents that have a matching CollectionWorkflowTriggers using a
-// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
-// multiply parent rows, so no DISTINCT is needed. The optional filters are
-// applied to the subquery (i.e. to WorkflowTriggers).
-func (w resourceWhereR[Q]) HasCollectionWorkflowTriggers(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
-	q := sqlite.Select(
-		sm.Columns(sqlite.Raw("1")),
-		sm.From(WorkflowTriggers.NameExpr()),
-		sm.Where(WorkflowTriggers.Columns.CollectionID.EQ(w.cols.ID)),
 	)
 	q.Apply(filters...)
 	return mods.Where[Q]{E: sqlite.Exists(q)}

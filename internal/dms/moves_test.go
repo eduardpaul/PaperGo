@@ -67,9 +67,15 @@ func TestMoveInboxFileToWritableFolderInAnotherWorkspace(t *testing.T) {
 	}
 }
 
+// moveDestination is a collection that accepts the catalog type of a list
+// type.
 func moveDestination(t *testing.T, s *Service, workspace, kind, typeID string) *resources.Resource {
 	t.Helper()
-	c, err := s.Create(testContext, "alice", workspace, CreateResource{Kind: kind, Name: "Destination", ContentTypeIDs: []string{typeID}, PublishingEnabled: true})
+	typ, err := s.DAL.Catalog().ContentType(testContext, typeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := s.Create(testContext, "alice", workspace, CreateResource{Kind: kind, Name: "Destination", ContentTypeIDs: []string{*typ.ParentID}, PublishingEnabled: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +185,14 @@ func TestMoveItemDestinationAccessAndNameConflicts(t *testing.T) {
 func TestMoveItemFailuresAreAtomic(t *testing.T) {
 	s, w, c := fixture(t)
 	item := create(t, s, c.ID, "item", "Item", nil)
-	unsupported := create(t, s, w.ID, "list", "Unsupported", nil)
+	other, err := s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "other", Name: "Other"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	unsupported, err := s.Create(testContext, "alice", w.ID, CreateResource{Kind: "list", Name: "Unsupported", ContentTypeIDs: []string{other.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err := s.MoveItem(testContext, "alice", item.ID, item.Version, MoveItem{CollectionID: unsupported.ID}); err == nil {
 		t.Fatal("unsupported type accepted")
 	}

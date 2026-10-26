@@ -99,7 +99,7 @@ export interface SearchRequestBuilderGetQueryParameters {
      */
     collectionId?: string;
     /**
-     * Only this content type.
+     * A content type; matches it and every type deriving from it.
      */
     contentTypeId?: string;
     /**

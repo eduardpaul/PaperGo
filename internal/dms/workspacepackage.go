@@ -116,7 +116,7 @@ func selectWorkspacePackage(p *corePackage) error {
 	}
 	// Owned rows are selected by their owner, never by the incidental appearance
 	// of an ID elsewhere. This also excludes personal saved queries.
-	owners := map[string]string{"collection_types": "container_id", "schema_revisions": "container_id", "schema_templates": "workspace_id", "list_views": "container_id", "smart_folders": "workspace_id", "blobs": "item_id", "item_revisions": "item_id", "integration_items": "item_id", "item_histories": "item_id", "publications": "item_id", "item_surfaces": "item_id", "business_keys": "item_id", "grants": "resource_id", "workflows": "workspace_id", "workflow_triggers": "workspace_id", "group_inboxes": "library_id"}
+	owners := map[string]string{"content_types": "collection_id", "schema_revisions": "container_id", "schema_templates": "workspace_id", "list_views": "container_id", "smart_folders": "workspace_id", "blobs": "item_id", "item_revisions": "item_id", "integration_items": "item_id", "item_histories": "item_id", "publications": "item_id", "item_surfaces": "item_id", "business_keys": "item_id", "grants": "resource_id", "workflows": "workspace_id", "workflow_triggers": "workspace_id", "group_inboxes": "library_id"}
 	for table, owner := range owners {
 		for _, row := range packageMaps(p.Tables[table]) {
 			if selected["resources"][fmt.Sprint(row[owner])] && (table != "smart_folders" || row["owner_id"] == nil) {
@@ -189,7 +189,7 @@ func selectWorkspacePackage(p *corePackage) error {
 				return err
 			}
 			for _, row := range allRows["content_types"] {
-				if slices.Contains(definition.ContentTypes, fmt.Sprint(row["key"])) {
+				if row["collection_id"] == nil && slices.Contains(definition.ContentTypes, fmt.Sprint(row["key"])) {
 					add("content_types", row)
 				}
 			}
@@ -437,10 +437,11 @@ func (s *Service) prepareWorkspacePackage(ctx context.Context, p corePackage, na
 			case "term_sets":
 				match = portable.Row{"key": row["key"]}
 			case "content_types":
-				if row["template_key"] == nil {
+				// Catalog keys are unique; a list type belongs to its new collection.
+				if row["collection_id"] != nil {
 					continue
 				}
-				match = portable.Row{"template_key": row["template_key"]}
+				match = portable.Row{"key": row["key"], "collection_id": nil}
 			case "blob_previews":
 				match = portable.Row{"sha256": row["sha256"]}
 			}
@@ -764,7 +765,7 @@ func validateWorkspaceReferences(p corePackage) error {
 				}
 			}
 		case string:
-			if slices.Contains(referenceKeys, key) || key == "field_ids" || key == "terms" || key == "keywords" || key == "keyword" {
+			if slices.Contains(referenceKeys, key) || key == "field_ids" || key == "hidden_field_ids" || key == "terms" || key == "keywords" || key == "keyword" {
 				if _, err := uuid.Parse(v); err == nil && !known[v] {
 					return invalid("workspace package has an unresolved reference in " + key)
 				}

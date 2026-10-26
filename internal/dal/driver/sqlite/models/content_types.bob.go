@@ -27,15 +27,20 @@ import (
 
 // ContentType is an object representing the database table.
 type ContentType struct {
-	ID          string                      `db:"id,pk" `
-	CreatedAt   time.Time                   `db:"created_at" `
-	UpdatedAt   time.Time                   `db:"updated_at" `
-	Key         string                      `db:"key" `
-	Name        string                      `db:"name" `
-	TemplateKey null.Val[string]            `db:"template_key" `
-	FieldIds    types.JSON[[]string]        `db:"field_ids" `
-	Rules       types.JSON[json.RawMessage] `db:"rules" `
-	Version     int64                       `db:"version" `
+	ID             string                      `db:"id,pk" `
+	CreatedAt      time.Time                   `db:"created_at" `
+	UpdatedAt      time.Time                   `db:"updated_at" `
+	Key            string                      `db:"key" `
+	Name           string                      `db:"name" `
+	TemplateKey    null.Val[string]            `db:"template_key" `
+	ParentID       null.Val[string]            `db:"parent_id" `
+	CollectionID   null.Val[string]            `db:"collection_id" `
+	Attached       bool                        `db:"attached" `
+	IsDefault      bool                        `db:"is_default" `
+	FieldIds       types.JSON[[]string]        `db:"field_ids" `
+	HiddenFieldIds types.JSON[[]string]        `db:"hidden_field_ids" `
+	Rules          types.JSON[json.RawMessage] `db:"rules" `
+	Version        int64                       `db:"version" `
 
 	R contentTypeR `db:"-" `
 }
@@ -52,9 +57,12 @@ type ContentTypesQuery = *sqlite.ViewQuery[*ContentType, ContentTypeSlice]
 
 // contentTypeR is where relationships are stored.
 type contentTypeR struct {
-	CollectionTypes CollectionTypeSlice // fk_collection_types_0
-	ItemRevisions   ItemRevisionSlice   // fk_item_revisions_1
-	Resources       ResourceSlice       // fk_resources_0
+	AncestorContentTypeAncestors ContentTypeAncestorSlice // fk_content_type_ancestors_0
+	ContentTypeAncestors         ContentTypeAncestorSlice // fk_content_type_ancestors_1
+	Parent                       *ContentType             // fk_content_types_0
+	ReverseParents               ContentTypeSlice         // fk_content_types_0__self_join_reverse
+	ItemRevisions                ItemRevisionSlice        // fk_item_revisions_1
+	Resources                    ResourceSlice            // fk_resources_0
 	// Loaded reports whether each relationship has been loaded.
 	// A relationship's bool is set by Load*, Preload, ThenLoad, factory builds,
 	// and to-one Attach/Insert operations. To-many Attach/Insert operations leave it unchanged.
@@ -63,14 +71,17 @@ type contentTypeR struct {
 
 // contentTypeRLoaded tracks which relationships on ContentType have been loaded.
 type contentTypeRLoaded struct {
-	CollectionTypes bool // fk_collection_types_0
-	ItemRevisions   bool // fk_item_revisions_1
-	Resources       bool // fk_resources_0
+	AncestorContentTypeAncestors bool // fk_content_type_ancestors_0
+	ContentTypeAncestors         bool // fk_content_type_ancestors_1
+	Parent                       bool // fk_content_types_0
+	ReverseParents               bool // fk_content_types_0__self_join_reverse
+	ItemRevisions                bool // fk_item_revisions_1
+	Resources                    bool // fk_resources_0
 }
 
 func buildContentTypeColumns(tableName string) contentTypeColumns {
 	columnsExpr := expr.NewColumnsExpr(
-		"id", "created_at", "updated_at", "key", "name", "template_key", "field_ids", "rules", "version",
+		"id", "created_at", "updated_at", "key", "name", "template_key", "parent_id", "collection_id", "attached", "is_default", "field_ids", "hidden_field_ids", "rules", "version",
 	)
 
 	if tableName != "" {
@@ -78,32 +89,42 @@ func buildContentTypeColumns(tableName string) contentTypeColumns {
 	}
 
 	return contentTypeColumns{
-		ColumnsExpr: columnsExpr,
-		tableAlias:  tableName,
-		ID:          buildContentTypeColumn(tableName, "id"),
-		CreatedAt:   buildContentTypeColumn(tableName, "created_at"),
-		UpdatedAt:   buildContentTypeColumn(tableName, "updated_at"),
-		Key:         buildContentTypeColumn(tableName, "key"),
-		Name:        buildContentTypeColumn(tableName, "name"),
-		TemplateKey: buildContentTypeColumn(tableName, "template_key"),
-		FieldIds:    buildContentTypeColumn(tableName, "field_ids"),
-		Rules:       buildContentTypeColumn(tableName, "rules"),
-		Version:     buildContentTypeColumn(tableName, "version"),
+		ColumnsExpr:    columnsExpr,
+		tableAlias:     tableName,
+		ID:             buildContentTypeColumn(tableName, "id"),
+		CreatedAt:      buildContentTypeColumn(tableName, "created_at"),
+		UpdatedAt:      buildContentTypeColumn(tableName, "updated_at"),
+		Key:            buildContentTypeColumn(tableName, "key"),
+		Name:           buildContentTypeColumn(tableName, "name"),
+		TemplateKey:    buildContentTypeColumn(tableName, "template_key"),
+		ParentID:       buildContentTypeColumn(tableName, "parent_id"),
+		CollectionID:   buildContentTypeColumn(tableName, "collection_id"),
+		Attached:       buildContentTypeColumn(tableName, "attached"),
+		IsDefault:      buildContentTypeColumn(tableName, "is_default"),
+		FieldIds:       buildContentTypeColumn(tableName, "field_ids"),
+		HiddenFieldIds: buildContentTypeColumn(tableName, "hidden_field_ids"),
+		Rules:          buildContentTypeColumn(tableName, "rules"),
+		Version:        buildContentTypeColumn(tableName, "version"),
 	}
 }
 
 type contentTypeColumns struct {
 	expr.ColumnsExpr
-	tableAlias  string
-	ID          contentTypeColumn
-	CreatedAt   contentTypeColumn
-	UpdatedAt   contentTypeColumn
-	Key         contentTypeColumn
-	Name        contentTypeColumn
-	TemplateKey contentTypeColumn
-	FieldIds    contentTypeColumn
-	Rules       contentTypeColumn
-	Version     contentTypeColumn
+	tableAlias     string
+	ID             contentTypeColumn
+	CreatedAt      contentTypeColumn
+	UpdatedAt      contentTypeColumn
+	Key            contentTypeColumn
+	Name           contentTypeColumn
+	TemplateKey    contentTypeColumn
+	ParentID       contentTypeColumn
+	CollectionID   contentTypeColumn
+	Attached       contentTypeColumn
+	IsDefault      contentTypeColumn
+	FieldIds       contentTypeColumn
+	HiddenFieldIds contentTypeColumn
+	Rules          contentTypeColumn
+	Version        contentTypeColumn
 }
 
 // Alias returns the current table alias for the columns set.
@@ -149,19 +170,24 @@ func (c contentTypeColumn) ShouldOmitParens() bool {
 // All values are optional, and do not have to be set
 // Generated columns are not included
 type ContentTypeSetter struct {
-	ID          omit.Val[string]                      `db:"id,pk" `
-	CreatedAt   omit.Val[time.Time]                   `db:"created_at" `
-	UpdatedAt   omit.Val[time.Time]                   `db:"updated_at" `
-	Key         omit.Val[string]                      `db:"key" `
-	Name        omit.Val[string]                      `db:"name" `
-	TemplateKey omitnull.Val[string]                  `db:"template_key" `
-	FieldIds    omit.Val[types.JSON[[]string]]        `db:"field_ids" `
-	Rules       omit.Val[types.JSON[json.RawMessage]] `db:"rules" `
-	Version     omit.Val[int64]                       `db:"version" `
+	ID             omit.Val[string]                      `db:"id,pk" `
+	CreatedAt      omit.Val[time.Time]                   `db:"created_at" `
+	UpdatedAt      omit.Val[time.Time]                   `db:"updated_at" `
+	Key            omit.Val[string]                      `db:"key" `
+	Name           omit.Val[string]                      `db:"name" `
+	TemplateKey    omitnull.Val[string]                  `db:"template_key" `
+	ParentID       omitnull.Val[string]                  `db:"parent_id" `
+	CollectionID   omitnull.Val[string]                  `db:"collection_id" `
+	Attached       omit.Val[bool]                        `db:"attached" `
+	IsDefault      omit.Val[bool]                        `db:"is_default" `
+	FieldIds       omit.Val[types.JSON[[]string]]        `db:"field_ids" `
+	HiddenFieldIds omit.Val[types.JSON[[]string]]        `db:"hidden_field_ids" `
+	Rules          omit.Val[types.JSON[json.RawMessage]] `db:"rules" `
+	Version        omit.Val[int64]                       `db:"version" `
 }
 
 func (s ContentTypeSetter) SetColumns() []string {
-	vals := make([]string, 0, 9)
+	vals := make([]string, 0, 14)
 	if s.ID.IsValue() {
 		vals = append(vals, "id")
 	}
@@ -180,8 +206,23 @@ func (s ContentTypeSetter) SetColumns() []string {
 	if s.TemplateKey.IsValue() || s.TemplateKey.IsNull() {
 		vals = append(vals, "template_key")
 	}
+	if s.ParentID.IsValue() || s.ParentID.IsNull() {
+		vals = append(vals, "parent_id")
+	}
+	if s.CollectionID.IsValue() || s.CollectionID.IsNull() {
+		vals = append(vals, "collection_id")
+	}
+	if s.Attached.IsValue() {
+		vals = append(vals, "attached")
+	}
+	if s.IsDefault.IsValue() {
+		vals = append(vals, "is_default")
+	}
 	if s.FieldIds.IsValue() {
 		vals = append(vals, "field_ids")
+	}
+	if s.HiddenFieldIds.IsValue() {
+		vals = append(vals, "hidden_field_ids")
 	}
 	if s.Rules.IsValue() {
 		vals = append(vals, "rules")
@@ -211,8 +252,23 @@ func (s ContentTypeSetter) Overwrite(t *ContentType) {
 	if s.TemplateKey.IsValue() || s.TemplateKey.IsNull() {
 		t.TemplateKey = s.TemplateKey.MustGetNull()
 	}
+	if s.ParentID.IsValue() || s.ParentID.IsNull() {
+		t.ParentID = s.ParentID.MustGetNull()
+	}
+	if s.CollectionID.IsValue() || s.CollectionID.IsNull() {
+		t.CollectionID = s.CollectionID.MustGetNull()
+	}
+	if s.Attached.IsValue() {
+		t.Attached = s.Attached.MustGet()
+	}
+	if s.IsDefault.IsValue() {
+		t.IsDefault = s.IsDefault.MustGet()
+	}
 	if s.FieldIds.IsValue() {
 		t.FieldIds = s.FieldIds.MustGet()
+	}
+	if s.HiddenFieldIds.IsValue() {
+		t.HiddenFieldIds = s.HiddenFieldIds.MustGet()
 	}
 	if s.Rules.IsValue() {
 		t.Rules = s.Rules.MustGet()
@@ -280,12 +336,47 @@ func (s *ContentTypeSetter) Apply(q *dialect.InsertQuery) {
 				}
 				return sqlite.Arg(s.TemplateKey.MustGetNull()).WriteSQL(ctx, w, d, start)
 			}))
+		case "parent_id":
+			vals = append(vals, bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+				if s.ParentID.IsUnset() {
+					return sqlite.Arg(nil).WriteSQL(ctx, w, d, start)
+				}
+				return sqlite.Arg(s.ParentID.MustGetNull()).WriteSQL(ctx, w, d, start)
+			}))
+		case "collection_id":
+			vals = append(vals, bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+				if s.CollectionID.IsUnset() {
+					return sqlite.Arg(nil).WriteSQL(ctx, w, d, start)
+				}
+				return sqlite.Arg(s.CollectionID.MustGetNull()).WriteSQL(ctx, w, d, start)
+			}))
+		case "attached":
+			vals = append(vals, bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+				if s.Attached.IsUnset() {
+					return sqlite.Arg(nil).WriteSQL(ctx, w, d, start)
+				}
+				return sqlite.Arg(s.Attached.MustGet()).WriteSQL(ctx, w, d, start)
+			}))
+		case "is_default":
+			vals = append(vals, bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+				if s.IsDefault.IsUnset() {
+					return sqlite.Arg(nil).WriteSQL(ctx, w, d, start)
+				}
+				return sqlite.Arg(s.IsDefault.MustGet()).WriteSQL(ctx, w, d, start)
+			}))
 		case "field_ids":
 			vals = append(vals, bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
 				if s.FieldIds.IsUnset() {
 					return sqlite.Arg(nil).WriteSQL(ctx, w, d, start)
 				}
 				return sqlite.Arg(s.FieldIds.MustGet()).WriteSQL(ctx, w, d, start)
+			}))
+		case "hidden_field_ids":
+			vals = append(vals, bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+				if s.HiddenFieldIds.IsUnset() {
+					return sqlite.Arg(nil).WriteSQL(ctx, w, d, start)
+				}
+				return sqlite.Arg(s.HiddenFieldIds.MustGet()).WriteSQL(ctx, w, d, start)
 			}))
 		case "rules":
 			vals = append(vals, bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
@@ -312,7 +403,7 @@ func (s ContentTypeSetter) UpdateMod() bob.Mod[*dialect.UpdateQuery] {
 }
 
 func (s ContentTypeSetter) Expressions(prefix ...string) []bob.Expression {
-	exprs := make([]bob.Expression, 0, 9)
+	exprs := make([]bob.Expression, 0, 14)
 
 	if s.ID.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
@@ -356,10 +447,45 @@ func (s ContentTypeSetter) Expressions(prefix ...string) []bob.Expression {
 		}})
 	}
 
+	if s.ParentID.IsValue() || s.ParentID.IsNull() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			sqlite.Quote(append(prefix, "parent_id")...),
+			sqlite.Arg(s.ParentID),
+		}})
+	}
+
+	if s.CollectionID.IsValue() || s.CollectionID.IsNull() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			sqlite.Quote(append(prefix, "collection_id")...),
+			sqlite.Arg(s.CollectionID),
+		}})
+	}
+
+	if s.Attached.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			sqlite.Quote(append(prefix, "attached")...),
+			sqlite.Arg(s.Attached),
+		}})
+	}
+
+	if s.IsDefault.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			sqlite.Quote(append(prefix, "is_default")...),
+			sqlite.Arg(s.IsDefault),
+		}})
+	}
+
 	if s.FieldIds.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
 			sqlite.Quote(append(prefix, "field_ids")...),
 			sqlite.Arg(s.FieldIds),
+		}})
+	}
+
+	if s.HiddenFieldIds.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			sqlite.Quote(append(prefix, "hidden_field_ids")...),
+			sqlite.Arg(s.HiddenFieldIds),
 		}})
 	}
 
@@ -387,7 +513,7 @@ func contentTypeScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc,
 		idx int
 		dst func(o *ContentType) any
 	}
-	targets := make([]target, 0, 9)
+	targets := make([]target, 0, 14)
 	for i, col := range cols {
 		switch col {
 		case "id":
@@ -402,8 +528,18 @@ func contentTypeScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc,
 			targets = append(targets, target{i, func(o *ContentType) any { return &o.Name }})
 		case "template_key":
 			targets = append(targets, target{i, func(o *ContentType) any { return &o.TemplateKey }})
+		case "parent_id":
+			targets = append(targets, target{i, func(o *ContentType) any { return &o.ParentID }})
+		case "collection_id":
+			targets = append(targets, target{i, func(o *ContentType) any { return &o.CollectionID }})
+		case "attached":
+			targets = append(targets, target{i, func(o *ContentType) any { return &o.Attached }})
+		case "is_default":
+			targets = append(targets, target{i, func(o *ContentType) any { return &o.IsDefault }})
 		case "field_ids":
 			targets = append(targets, target{i, func(o *ContentType) any { return &o.FieldIds }})
+		case "hidden_field_ids":
+			targets = append(targets, target{i, func(o *ContentType) any { return &o.HiddenFieldIds }})
 		case "rules":
 			targets = append(targets, target{i, func(o *ContentType) any { return &o.Rules }})
 		case "version":
@@ -653,22 +789,79 @@ func (o ContentTypeSlice) ReloadAll(ctx context.Context, exec bob.Executor) erro
 	return nil
 }
 
-// CollectionTypes starts a query for related objects on collection_types
-func (o *ContentType) CollectionTypes(mods ...bob.Mod[*dialect.SelectQuery]) CollectionTypesQuery {
-	return CollectionTypes.Query(append(mods,
-		sm.Where(CollectionTypes.Columns.ContentTypeID.EQ(sqlite.Arg(o.ID))),
+// AncestorContentTypeAncestors starts a query for related objects on content_type_ancestors
+func (o *ContentType) AncestorContentTypeAncestors(mods ...bob.Mod[*dialect.SelectQuery]) ContentTypeAncestorsQuery {
+	return ContentTypeAncestors.Query(append(mods,
+		sm.Where(ContentTypeAncestors.Columns.AncestorID.EQ(sqlite.Arg(o.ID))),
 	)...)
 }
 
-func (os ContentTypeSlice) CollectionTypes(mods ...bob.Mod[*dialect.SelectQuery]) CollectionTypesQuery {
+func (os ContentTypeSlice) AncestorContentTypeAncestors(mods ...bob.Mod[*dialect.SelectQuery]) ContentTypeAncestorsQuery {
 	PKArgSlice := make([]bob.Expression, len(os))
 	for i, o := range os {
 		PKArgSlice[i] = sqlite.ArgGroup(o.ID)
 	}
 	PKArgExpr := sqlite.Group(PKArgSlice...)
 
-	return CollectionTypes.Query(append(mods,
-		sm.Where(sqlite.Group(CollectionTypes.Columns.ContentTypeID).OP("IN", PKArgExpr)),
+	return ContentTypeAncestors.Query(append(mods,
+		sm.Where(sqlite.Group(ContentTypeAncestors.Columns.AncestorID).OP("IN", PKArgExpr)),
+	)...)
+}
+
+// ContentTypeAncestors starts a query for related objects on content_type_ancestors
+func (o *ContentType) ContentTypeAncestors(mods ...bob.Mod[*dialect.SelectQuery]) ContentTypeAncestorsQuery {
+	return ContentTypeAncestors.Query(append(mods,
+		sm.Where(ContentTypeAncestors.Columns.ContentTypeID.EQ(sqlite.Arg(o.ID))),
+	)...)
+}
+
+func (os ContentTypeSlice) ContentTypeAncestors(mods ...bob.Mod[*dialect.SelectQuery]) ContentTypeAncestorsQuery {
+	PKArgSlice := make([]bob.Expression, len(os))
+	for i, o := range os {
+		PKArgSlice[i] = sqlite.ArgGroup(o.ID)
+	}
+	PKArgExpr := sqlite.Group(PKArgSlice...)
+
+	return ContentTypeAncestors.Query(append(mods,
+		sm.Where(sqlite.Group(ContentTypeAncestors.Columns.ContentTypeID).OP("IN", PKArgExpr)),
+	)...)
+}
+
+// Parent starts a query for related objects on content_types
+func (o *ContentType) Parent(mods ...bob.Mod[*dialect.SelectQuery]) ContentTypesQuery {
+	return ContentTypes.Query(append(mods,
+		sm.Where(ContentTypes.Columns.ID.EQ(sqlite.Arg(o.ParentID))),
+	)...)
+}
+
+func (os ContentTypeSlice) Parent(mods ...bob.Mod[*dialect.SelectQuery]) ContentTypesQuery {
+	PKArgSlice := make([]bob.Expression, len(os))
+	for i, o := range os {
+		PKArgSlice[i] = sqlite.ArgGroup(o.ParentID)
+	}
+	PKArgExpr := sqlite.Group(PKArgSlice...)
+
+	return ContentTypes.Query(append(mods,
+		sm.Where(sqlite.Group(ContentTypes.Columns.ID).OP("IN", PKArgExpr)),
+	)...)
+}
+
+// ReverseParents starts a query for related objects on content_types
+func (o *ContentType) ReverseParents(mods ...bob.Mod[*dialect.SelectQuery]) ContentTypesQuery {
+	return ContentTypes.Query(append(mods,
+		sm.Where(ContentTypes.Columns.ParentID.EQ(sqlite.Arg(o.ID))),
+	)...)
+}
+
+func (os ContentTypeSlice) ReverseParents(mods ...bob.Mod[*dialect.SelectQuery]) ContentTypesQuery {
+	PKArgSlice := make([]bob.Expression, len(os))
+	for i, o := range os {
+		PKArgSlice[i] = sqlite.ArgGroup(o.ID)
+	}
+	PKArgExpr := sqlite.Group(PKArgSlice...)
+
+	return ContentTypes.Query(append(mods,
+		sm.Where(sqlite.Group(ContentTypes.Columns.ParentID).OP("IN", PKArgExpr)),
 	)...)
 }
 
@@ -710,63 +903,231 @@ func (os ContentTypeSlice) Resources(mods ...bob.Mod[*dialect.SelectQuery]) Reso
 	)...)
 }
 
-func insertContentTypeCollectionTypes0(ctx context.Context, exec bob.Executor, collectionTypes1 []*CollectionTypeSetter, contentType0 *ContentType) (CollectionTypeSlice, error) {
-	for i := range collectionTypes1 {
-		collectionTypes1[i].ContentTypeID = omit.From(contentType0.ID)
+func insertContentTypeAncestorContentTypeAncestors0(ctx context.Context, exec bob.Executor, contentTypeAncestors1 []*ContentTypeAncestorSetter, contentType0 *ContentType) (ContentTypeAncestorSlice, error) {
+	for i := range contentTypeAncestors1 {
+		contentTypeAncestors1[i].AncestorID = omit.From(contentType0.ID)
 	}
 
-	ret, err := CollectionTypes.Insert(bob.ToMods(collectionTypes1...)).All(ctx, exec)
+	ret, err := ContentTypeAncestors.Insert(bob.ToMods(contentTypeAncestors1...)).All(ctx, exec)
 	if err != nil {
-		return ret, fmt.Errorf("insertContentTypeCollectionTypes0: %w", err)
+		return ret, fmt.Errorf("insertContentTypeAncestorContentTypeAncestors0: %w", err)
 	}
 
 	return ret, nil
 }
 
-func attachContentTypeCollectionTypes0(ctx context.Context, exec bob.Executor, count int, collectionTypes1 CollectionTypeSlice, contentType0 *ContentType) (CollectionTypeSlice, error) {
-	setter := &CollectionTypeSetter{
-		ContentTypeID: omit.From(contentType0.ID),
+func attachContentTypeAncestorContentTypeAncestors0(ctx context.Context, exec bob.Executor, count int, contentTypeAncestors1 ContentTypeAncestorSlice, contentType0 *ContentType) (ContentTypeAncestorSlice, error) {
+	setter := &ContentTypeAncestorSetter{
+		AncestorID: omit.From(contentType0.ID),
 	}
 
-	err := collectionTypes1.UpdateAll(ctx, exec, *setter)
+	err := contentTypeAncestors1.UpdateAll(ctx, exec, *setter)
 	if err != nil {
-		return nil, fmt.Errorf("attachContentTypeCollectionTypes0: %w", err)
+		return nil, fmt.Errorf("attachContentTypeAncestorContentTypeAncestors0: %w", err)
 	}
 
-	return collectionTypes1, nil
+	return contentTypeAncestors1, nil
 }
 
-func (contentType0 *ContentType) InsertCollectionTypes(ctx context.Context, exec bob.Executor, related ...*CollectionTypeSetter) error {
+func (contentType0 *ContentType) InsertAncestorContentTypeAncestors(ctx context.Context, exec bob.Executor, related ...*ContentTypeAncestorSetter) error {
 	if len(related) == 0 {
 		return nil
 	}
 
 	var err error
 
-	collectionTypes1, err := insertContentTypeCollectionTypes0(ctx, exec, related, contentType0)
+	contentTypeAncestors1, err := insertContentTypeAncestorContentTypeAncestors0(ctx, exec, related, contentType0)
 	if err != nil {
 		return err
 	}
 
-	contentType0.R.CollectionTypes = append(contentType0.R.CollectionTypes, collectionTypes1...)
+	contentType0.R.AncestorContentTypeAncestors = append(contentType0.R.AncestorContentTypeAncestors, contentTypeAncestors1...)
 
 	return nil
 }
 
-func (contentType0 *ContentType) AttachCollectionTypes(ctx context.Context, exec bob.Executor, related ...*CollectionType) error {
+func (contentType0 *ContentType) AttachAncestorContentTypeAncestors(ctx context.Context, exec bob.Executor, related ...*ContentTypeAncestor) error {
 	if len(related) == 0 {
 		return nil
 	}
 
 	var err error
-	collectionTypes1 := CollectionTypeSlice(related)
+	contentTypeAncestors1 := ContentTypeAncestorSlice(related)
 
-	_, err = attachContentTypeCollectionTypes0(ctx, exec, len(related), collectionTypes1, contentType0)
+	_, err = attachContentTypeAncestorContentTypeAncestors0(ctx, exec, len(related), contentTypeAncestors1, contentType0)
 	if err != nil {
 		return err
 	}
 
-	contentType0.R.CollectionTypes = append(contentType0.R.CollectionTypes, collectionTypes1...)
+	contentType0.R.AncestorContentTypeAncestors = append(contentType0.R.AncestorContentTypeAncestors, contentTypeAncestors1...)
+
+	return nil
+}
+
+func insertContentTypeContentTypeAncestors0(ctx context.Context, exec bob.Executor, contentTypeAncestors1 []*ContentTypeAncestorSetter, contentType0 *ContentType) (ContentTypeAncestorSlice, error) {
+	for i := range contentTypeAncestors1 {
+		contentTypeAncestors1[i].ContentTypeID = omit.From(contentType0.ID)
+	}
+
+	ret, err := ContentTypeAncestors.Insert(bob.ToMods(contentTypeAncestors1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertContentTypeContentTypeAncestors0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachContentTypeContentTypeAncestors0(ctx context.Context, exec bob.Executor, count int, contentTypeAncestors1 ContentTypeAncestorSlice, contentType0 *ContentType) (ContentTypeAncestorSlice, error) {
+	setter := &ContentTypeAncestorSetter{
+		ContentTypeID: omit.From(contentType0.ID),
+	}
+
+	err := contentTypeAncestors1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachContentTypeContentTypeAncestors0: %w", err)
+	}
+
+	return contentTypeAncestors1, nil
+}
+
+func (contentType0 *ContentType) InsertContentTypeAncestors(ctx context.Context, exec bob.Executor, related ...*ContentTypeAncestorSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	contentTypeAncestors1, err := insertContentTypeContentTypeAncestors0(ctx, exec, related, contentType0)
+	if err != nil {
+		return err
+	}
+
+	contentType0.R.ContentTypeAncestors = append(contentType0.R.ContentTypeAncestors, contentTypeAncestors1...)
+
+	return nil
+}
+
+func (contentType0 *ContentType) AttachContentTypeAncestors(ctx context.Context, exec bob.Executor, related ...*ContentTypeAncestor) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	contentTypeAncestors1 := ContentTypeAncestorSlice(related)
+
+	_, err = attachContentTypeContentTypeAncestors0(ctx, exec, len(related), contentTypeAncestors1, contentType0)
+	if err != nil {
+		return err
+	}
+
+	contentType0.R.ContentTypeAncestors = append(contentType0.R.ContentTypeAncestors, contentTypeAncestors1...)
+
+	return nil
+}
+
+func attachContentTypeParent0(ctx context.Context, exec bob.Executor, count int, contentType0 *ContentType, contentType1 *ContentType) (*ContentType, error) {
+	setter := &ContentTypeSetter{
+		ParentID: omitnull.From(contentType1.ID),
+	}
+
+	err := contentType0.Update(ctx, exec, setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachContentTypeParent0: %w", err)
+	}
+
+	return contentType0, nil
+}
+
+func (contentType0 *ContentType) InsertParent(ctx context.Context, exec bob.Executor, related *ContentTypeSetter) error {
+	var err error
+
+	contentType1, err := ContentTypes.Insert(related).One(ctx, exec)
+	if err != nil {
+		return fmt.Errorf("inserting related objects: %w", err)
+	}
+
+	_, err = attachContentTypeParent0(ctx, exec, 1, contentType0, contentType1)
+	if err != nil {
+		return err
+	}
+
+	contentType0.R.Parent = contentType1
+	contentType0.R.Loaded.Parent = true
+
+	return nil
+}
+
+func (contentType0 *ContentType) AttachParent(ctx context.Context, exec bob.Executor, contentType1 *ContentType) error {
+	var err error
+
+	_, err = attachContentTypeParent0(ctx, exec, 1, contentType0, contentType1)
+	if err != nil {
+		return err
+	}
+
+	contentType0.R.Parent = contentType1
+	contentType0.R.Loaded.Parent = true
+
+	return nil
+}
+
+func insertContentTypeReverseParents0(ctx context.Context, exec bob.Executor, contentTypes1 []*ContentTypeSetter, contentType0 *ContentType) (ContentTypeSlice, error) {
+	for i := range contentTypes1 {
+		contentTypes1[i].ParentID = omitnull.From(contentType0.ID)
+	}
+
+	ret, err := ContentTypes.Insert(bob.ToMods(contentTypes1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertContentTypeReverseParents0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachContentTypeReverseParents0(ctx context.Context, exec bob.Executor, count int, contentTypes1 ContentTypeSlice, contentType0 *ContentType) (ContentTypeSlice, error) {
+	setter := &ContentTypeSetter{
+		ParentID: omitnull.From(contentType0.ID),
+	}
+
+	err := contentTypes1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachContentTypeReverseParents0: %w", err)
+	}
+
+	return contentTypes1, nil
+}
+
+func (contentType0 *ContentType) InsertReverseParents(ctx context.Context, exec bob.Executor, related ...*ContentTypeSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	contentTypes1, err := insertContentTypeReverseParents0(ctx, exec, related, contentType0)
+	if err != nil {
+		return err
+	}
+
+	contentType0.R.ReverseParents = append(contentType0.R.ReverseParents, contentTypes1...)
+
+	return nil
+}
+
+func (contentType0 *ContentType) AttachReverseParents(ctx context.Context, exec bob.Executor, related ...*ContentType) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	contentTypes1 := ContentTypeSlice(related)
+
+	_, err = attachContentTypeReverseParents0(ctx, exec, len(related), contentTypes1, contentType0)
+	if err != nil {
+		return err
+	}
+
+	contentType0.R.ReverseParents = append(contentType0.R.ReverseParents, contentTypes1...)
 
 	return nil
 }
@@ -894,17 +1255,22 @@ func (contentType0 *ContentType) AttachResources(ctx context.Context, exec bob.E
 }
 
 type contentTypeWhere[Q sqlite.Filterable] struct {
-	cols        contentTypeColumns
-	ID          sqlite.WhereMod[Q, string]
-	CreatedAt   sqlite.WhereMod[Q, time.Time]
-	UpdatedAt   sqlite.WhereMod[Q, time.Time]
-	Key         sqlite.WhereMod[Q, string]
-	Name        sqlite.WhereMod[Q, string]
-	TemplateKey sqlite.WhereNullMod[Q, string]
-	FieldIds    sqlite.WhereMod[Q, types.JSON[[]string]]
-	Rules       sqlite.WhereMod[Q, types.JSON[json.RawMessage]]
-	Version     sqlite.WhereMod[Q, int64]
-	R           contentTypeWhereR[Q]
+	cols           contentTypeColumns
+	ID             sqlite.WhereMod[Q, string]
+	CreatedAt      sqlite.WhereMod[Q, time.Time]
+	UpdatedAt      sqlite.WhereMod[Q, time.Time]
+	Key            sqlite.WhereMod[Q, string]
+	Name           sqlite.WhereMod[Q, string]
+	TemplateKey    sqlite.WhereNullMod[Q, string]
+	ParentID       sqlite.WhereNullMod[Q, string]
+	CollectionID   sqlite.WhereNullMod[Q, string]
+	Attached       sqlite.WhereMod[Q, bool]
+	IsDefault      sqlite.WhereMod[Q, bool]
+	FieldIds       sqlite.WhereMod[Q, types.JSON[[]string]]
+	HiddenFieldIds sqlite.WhereMod[Q, types.JSON[[]string]]
+	Rules          sqlite.WhereMod[Q, types.JSON[json.RawMessage]]
+	Version        sqlite.WhereMod[Q, int64]
+	R              contentTypeWhereR[Q]
 }
 
 func (contentTypeWhere[Q]) AliasedAs(alias string) contentTypeWhere[Q] {
@@ -913,17 +1279,22 @@ func (contentTypeWhere[Q]) AliasedAs(alias string) contentTypeWhere[Q] {
 
 func buildContentTypeWhere[Q sqlite.Filterable](cols contentTypeColumns) contentTypeWhere[Q] {
 	return contentTypeWhere[Q]{
-		cols:        cols,
-		ID:          sqlite.Where[Q, string](cols.ID.Expression),
-		CreatedAt:   sqlite.Where[Q, time.Time](cols.CreatedAt.Expression),
-		UpdatedAt:   sqlite.Where[Q, time.Time](cols.UpdatedAt.Expression),
-		Key:         sqlite.Where[Q, string](cols.Key.Expression),
-		Name:        sqlite.Where[Q, string](cols.Name.Expression),
-		TemplateKey: sqlite.WhereNull[Q, string](cols.TemplateKey.Expression),
-		FieldIds:    sqlite.Where[Q, types.JSON[[]string]](cols.FieldIds.Expression),
-		Rules:       sqlite.Where[Q, types.JSON[json.RawMessage]](cols.Rules.Expression),
-		Version:     sqlite.Where[Q, int64](cols.Version.Expression),
-		R:           contentTypeWhereR[Q]{cols: cols},
+		cols:           cols,
+		ID:             sqlite.Where[Q, string](cols.ID.Expression),
+		CreatedAt:      sqlite.Where[Q, time.Time](cols.CreatedAt.Expression),
+		UpdatedAt:      sqlite.Where[Q, time.Time](cols.UpdatedAt.Expression),
+		Key:            sqlite.Where[Q, string](cols.Key.Expression),
+		Name:           sqlite.Where[Q, string](cols.Name.Expression),
+		TemplateKey:    sqlite.WhereNull[Q, string](cols.TemplateKey.Expression),
+		ParentID:       sqlite.WhereNull[Q, string](cols.ParentID.Expression),
+		CollectionID:   sqlite.WhereNull[Q, string](cols.CollectionID.Expression),
+		Attached:       sqlite.Where[Q, bool](cols.Attached.Expression),
+		IsDefault:      sqlite.Where[Q, bool](cols.IsDefault.Expression),
+		FieldIds:       sqlite.Where[Q, types.JSON[[]string]](cols.FieldIds.Expression),
+		HiddenFieldIds: sqlite.Where[Q, types.JSON[[]string]](cols.HiddenFieldIds.Expression),
+		Rules:          sqlite.Where[Q, types.JSON[json.RawMessage]](cols.Rules.Expression),
+		Version:        sqlite.Where[Q, int64](cols.Version.Expression),
+		R:              contentTypeWhereR[Q]{cols: cols},
 	}
 }
 
@@ -934,15 +1305,63 @@ type contentTypeWhereR[Q sqlite.Filterable] struct {
 	cols contentTypeColumns
 }
 
-// HasCollectionTypes filters parents that have a matching CollectionTypes using a
+// HasAncestorContentTypeAncestors filters parents that have a matching AncestorContentTypeAncestors using a
 // correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
 // multiply parent rows, so no DISTINCT is needed. The optional filters are
-// applied to the subquery (i.e. to CollectionTypes).
-func (w contentTypeWhereR[Q]) HasCollectionTypes(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+// applied to the subquery (i.e. to ContentTypeAncestors).
+func (w contentTypeWhereR[Q]) HasAncestorContentTypeAncestors(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
 	q := sqlite.Select(
 		sm.Columns(sqlite.Raw("1")),
-		sm.From(CollectionTypes.NameExpr()),
-		sm.Where(CollectionTypes.Columns.ContentTypeID.EQ(w.cols.ID)),
+		sm.From(ContentTypeAncestors.NameExpr()),
+		sm.Where(ContentTypeAncestors.Columns.AncestorID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: sqlite.Exists(q)}
+}
+
+// HasContentTypeAncestors filters parents that have a matching ContentTypeAncestors using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to ContentTypeAncestors).
+func (w contentTypeWhereR[Q]) HasContentTypeAncestors(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := sqlite.Select(
+		sm.Columns(sqlite.Raw("1")),
+		sm.From(ContentTypeAncestors.NameExpr()),
+		sm.Where(ContentTypeAncestors.Columns.ContentTypeID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: sqlite.Exists(q)}
+}
+
+// HasParent filters parents that have a matching Parent using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to ContentTypes).
+func (w contentTypeWhereR[Q]) HasParent(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	// self-referential relation: alias the subquery table so the correlation
+	// columns still reference the parent row rather than the subquery's own row.
+	relTbl := ContentTypes.Columns.AliasedAs("Parent")
+	q := sqlite.Select(
+		sm.Columns(sqlite.Raw("1")),
+		sm.From(ContentTypes.NameExpr().As("Parent")),
+		sm.Where(relTbl.ID.EQ(w.cols.ParentID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: sqlite.Exists(q)}
+}
+
+// HasReverseParents filters parents that have a matching ReverseParents using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to ContentTypes).
+func (w contentTypeWhereR[Q]) HasReverseParents(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	// self-referential relation: alias the subquery table so the correlation
+	// columns still reference the parent row rather than the subquery's own row.
+	relTbl := ContentTypes.Columns.AliasedAs("ReverseParents")
+	q := sqlite.Select(
+		sm.Columns(sqlite.Raw("1")),
+		sm.From(ContentTypes.NameExpr().As("ReverseParents")),
+		sm.Where(relTbl.ParentID.EQ(w.cols.ID)),
 	)
 	q.Apply(filters...)
 	return mods.Where[Q]{E: sqlite.Exists(q)}

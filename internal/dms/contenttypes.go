@@ -13,20 +13,35 @@ import (
 	"slices"
 )
 
-// Definitions and fields belong to the organization; defaults belong to attachments.
+// rootTypeKey is the key of the root catalog type, Item, that every other
+// type derives from.
+const rootTypeKey = "item"
+
+// ContentTypeInput defines a catalog type. A new type derives from ParentID,
+// or Item when it is empty, and the parent never changes. FieldIds,
+// HiddenFieldIds and Rules are the type's own; it also has everything its
+// ancestors define. Hidden fields are inherited fields forms leave out.
 type ContentTypeInput struct {
-	Key      string                 `json:"key"`
-	Name     string                 `json:"name"`
-	FieldIds []string               `json:"field_ids"`
-	Rules    []model.ValidationRule `json:"rules,omitempty"`
+	Key            string                 `json:"key"`
+	Name           string                 `json:"name"`
+	ParentID       string                 `json:"parent_id,omitempty"`
+	FieldIds       []string               `json:"field_ids"`
+	HiddenFieldIds []string               `json:"hidden_field_ids,omitempty"`
+	Rules          []model.ValidationRule `json:"rules,omitempty"`
 }
+
+// ListTypeInput customizes a collection's list type with fields, hidden
+// fields and rules of its own.
+type ListTypeInput struct {
+	FieldIds       []string               `json:"field_ids"`
+	HiddenFieldIds []string               `json:"hidden_field_ids,omitempty"`
+	Rules          []model.ValidationRule `json:"rules,omitempty"`
+}
+
+// AttachContentTypeInput names the catalog type a collection accepts.
 type AttachContentTypeInput struct {
 	ContentTypeID string `json:"content_type_id"`
 	IsDefault     bool   `json:"is_default"`
-}
-type CollectionContentType struct {
-	*catalog.ContentType
-	IsDefault bool `json:"is_default"`
 }
 
 func (s *Service) collectionFields(ctx context.Context, collection string) ([]*catalog.FieldDefinition, error) {
@@ -38,7 +53,7 @@ func (s *Service) collectionTypes(ctx context.Context, collection string) ([]*ca
 func selectTypeDefinitions(defs []*catalog.FieldDefinition, typ *catalog.ContentType) []*catalog.FieldDefinition {
 	out := []*catalog.FieldDefinition{}
 	for _, d := range defs {
-		if slices.Contains(typ.FieldIds, d.ID) {
+		if slices.Contains(typ.Effective.FieldIds, d.ID) {
 			out = append(out, d)
 		}
 	}
@@ -52,8 +67,11 @@ func fieldKeys(defs []*catalog.FieldDefinition) []string {
 	return out
 }
 func (s *Service) typeDefinitions(ctx context.Context, typ *catalog.ContentType) ([]*catalog.FieldDefinition, error) {
-	return s.DAL.Catalog().Fields(ctx, catalog.FieldFilter{IDs: append([]string{}, typ.FieldIds...)})
+	return s.DAL.Catalog().Fields(ctx, catalog.FieldFilter{IDs: append([]string{}, typ.Effective.FieldIds...)})
 }
+
+// contentType is a list type a collection accepts, or its default when id is
+// empty.
 func (s *Service) contentType(ctx context.Context, collection, id string) (*catalog.ContentType, error) {
 	out, err := s.DAL.Catalog().CollectionContentType(ctx, collection, id)
 	if dberr.IsNotFound(err) {
@@ -61,50 +79,195 @@ func (s *Service) contentType(ctx context.Context, collection, id string) (*cata
 	}
 	return out, err
 }
-func (s *Service) validateContentType(ctx context.Context, in *ContentTypeInput) error {
+
+// listType is the list type through which a collection accepts a catalog
+// type.
+func (s *Service) listType(ctx context.Context, collection, catalogID string) (*catalog.ContentType, error) {
+	typ, err := s.DAL.Catalog().OneContentType(ctx, catalog.ContentTypeFilter{CollectionID: collection, ParentID: catalogID})
+	if dberr.IsNotFound(err) {
+		return nil, ErrNotFound
+	}
+	return typ, err
+}
+
+// typeFamily resolves a list type of a collection, or a catalog type, to
+// itself and the collection's list types deriving from it.
+func (s *Service) typeFamily(ctx context.Context, collection, id string) (*catalog.ContentType, []string, error) {
+	typ, err := s.DAL.Catalog().ContentType(ctx, id)
+	if dberr.IsNotFound(err) {
+		return nil, nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	types, err := s.collectionTypes(ctx, collection)
+	if err != nil {
+		return nil, nil, err
+	}
+	family := []string{}
+	for _, t := range types {
+		if t.ID == id || slices.Contains(t.AncestorIDs, id) {
+			family = append(family, t.ID)
+		}
+	}
+	if len(family) == 0 {
+		return nil, nil, ErrNotFound
+	}
+	return typ, family, nil
+}
+
+// ancestorTypes loads the ancestors of types, nearest first, by type id.
+func (s *Service) ancestorTypes(ctx context.Context, types []*catalog.ContentType) (map[string][]*catalog.ContentType, error) {
+	ids := []string{}
+	for _, typ := range types {
+		ids = append(ids, typ.AncestorIDs...)
+	}
+	rows, err := s.DAL.Catalog().ContentTypes(ctx, catalog.ContentTypeFilter{IDs: ids})
+	if err != nil {
+		return nil, err
+	}
+	byID := map[string]*catalog.ContentType{}
+	for _, row := range rows {
+		byID[row.ID] = row
+	}
+	out := map[string][]*catalog.ContentType{}
+	for _, typ := range types {
+		for _, id := range typ.AncestorIDs {
+			if a := byID[id]; a != nil {
+				out[typ.ID] = append(out[typ.ID], a)
+			}
+		}
+	}
+	return out, nil
+}
+
+// catalogType is a catalog type; list types are not part of the catalog.
+func (s *Service) catalogType(ctx context.Context, id string) (*catalog.ContentType, error) {
+	typ, err := s.DAL.Catalog().ContentType(ctx, id)
+	if dberr.IsNotFound(err) || err == nil && !typ.Catalog() {
+		return nil, ErrNotFound
+	}
+	return typ, err
+}
+
+func (s *Service) validateTypeName(in ContentTypeInput) error {
 	if !fieldKey.MatchString(in.Key) {
 		return invalid("invalid content type key")
 	}
-	if err := validateName(in.Name); err != nil {
-		return err
+	return validateName(in.Name)
+}
+
+// validateTypeSchema checks what a type defines itself against what its
+// parent gives it. Own fields exist and are not inherited; hidden fields are
+// inherited and can be left out of forms; every field key is distinct and
+// the rules hold over all the fields.
+func (s *Service) validateTypeSchema(ctx context.Context, parent *catalog.ContentType, in *ListTypeInput) error {
+	in.FieldIds, in.HiddenFieldIds, in.Rules = nonNil(in.FieldIds), nonNil(in.HiddenFieldIds), nonNil(in.Rules)
+	inherited, inheritedRules := []string{}, []model.ValidationRule{}
+	if parent != nil {
+		inherited, inheritedRules = parent.Effective.FieldIds, parent.Effective.Rules
 	}
-	if len(in.FieldIds) > 200 {
+	if len(inherited)+len(in.FieldIds) > 200 {
 		return invalid("at most 200 fields per content type")
 	}
-	defs, err := s.DAL.Catalog().Fields(ctx, catalog.FieldFilter{IDs: append([]string{}, in.FieldIds...)})
+	own, err := s.DAL.Catalog().Fields(ctx, catalog.FieldFilter{IDs: append([]string{}, in.FieldIds...)})
 	if err != nil {
 		return err
 	}
-	if len(defs) != len(in.FieldIds) {
+	if len(own) != len(in.FieldIds) {
 		return invalid("content type field IDs must exist and be unique")
+	}
+	defs, err := s.DAL.Catalog().Fields(ctx, catalog.FieldFilter{IDs: append(slices.Clone(inherited), in.FieldIds...)})
+	if err != nil {
+		return err
 	}
 	seen := map[string]bool{}
 	for _, d := range defs {
 		if seen[d.Key] {
-			return invalid("content type field keys must be unique")
+			return invalid("content type field keys must be unique, including inherited fields: " + d.Key)
 		}
 		seen[d.Key] = true
+		if slices.Contains(in.FieldIds, d.ID) && slices.Contains(inherited, d.ID) {
+			return invalid("the content type inherits field " + d.Key)
+		}
 	}
-	if in.FieldIds == nil {
-		in.FieldIds = []string{}
+	for _, id := range in.HiddenFieldIds {
+		i := slices.IndexFunc(defs, func(d *catalog.FieldDefinition) bool { return d.ID == id })
+		if i < 0 || !slices.Contains(inherited, id) {
+			return invalid("hidden fields must be inherited fields")
+		}
+		if defs[i].Required && len(defs[i].Options.DefaultValue) == 0 {
+			return invalid("a required field without a default cannot be hidden: " + defs[i].Key)
+		}
 	}
-	if in.Rules == nil {
-		in.Rules = []model.ValidationRule{}
+	for _, rule := range in.Rules {
+		if slices.ContainsFunc(inheritedRules, func(r model.ValidationRule) bool { return r.Key == rule.Key }) {
+			return invalid("the content type inherits rule " + rule.Key)
+		}
 	}
-	return validateRules(defs, in.Rules)
+	return validateRules(defs, append(slices.Clone(inheritedRules), in.Rules...))
 }
+
+// reservedTypeKey reports whether a catalog key belongs to Item or to a
+// content type of a registered collection template.
+func (s *Service) reservedTypeKey(key string) bool {
+	if key == rootTypeKey {
+		return true
+	}
+	for _, template := range s.collectionTemplates {
+		for _, typ := range template.ContentTypes {
+			if typ.Key == key {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// rootType provisions the root catalog type, Item, on first use.
+func (s *Service) rootType(ctx context.Context, subject string) (*catalog.ContentType, error) {
+	typ, err := s.DAL.Catalog().OneContentType(ctx, catalog.ContentTypeFilter{TemplateKey: rootTypeKey})
+	if !dberr.IsNotFound(err) {
+		return typ, err
+	}
+	key := rootTypeKey
+	if typ, err = s.DAL.Catalog().CreateContentType(ctx, catalog.ContentType{Key: rootTypeKey, Name: "Item", TemplateKey: &key}); err != nil {
+		return nil, err
+	}
+	return typ, s.auditCatalog(ctx, subject, "content_type.create", map[string]any{"content_type_id": typ.ID, "template_key": rootTypeKey})
+}
+
 func (s *Service) CreateContentType(ctx context.Context, subject string, in ContentTypeInput) (out *catalog.ContentType, err error) {
 	err = s.write(ctx, func(t *Service) error {
 		if e := t.RequireScope(ctx, subject, "contentType.manage"); e != nil {
 			return e
 		}
-		if e := t.validateContentType(ctx, &in); e != nil {
+		if e := t.validateTypeName(in); e != nil {
 			return e
 		}
+		if t.reservedTypeKey(in.Key) {
+			return invalid("content type key is reserved by a template: " + in.Key)
+		}
+		var parent *catalog.ContentType
 		var e error
-		out, e = t.persistContentType(ctx, in, "")
+		if in.ParentID == "" {
+			parent, e = t.rootType(ctx, subject)
+		} else {
+			parent, e = t.catalogType(ctx, in.ParentID)
+		}
 		if e != nil {
 			return e
+		}
+		schema := ListTypeInput{FieldIds: in.FieldIds, HiddenFieldIds: in.HiddenFieldIds, Rules: in.Rules}
+		if e = t.validateTypeSchema(ctx, parent, &schema); e != nil {
+			return e
+		}
+		out, e = t.DAL.Catalog().CreateContentType(ctx, catalog.ContentType{Key: in.Key, Name: in.Name, ParentID: &parent.ID, FieldIds: schema.FieldIds, HiddenFieldIds: schema.HiddenFieldIds, Rules: schema.Rules})
+		if errors.Is(e, dberr.ErrUniqueViolation) {
+			return invalid("content type key is taken: " + in.Key)
+		}
+		if e != nil {
+			return catalogError(e)
 		}
 		return t.auditCatalog(ctx, subject, "content_type.create", map[string]any{"content_type_id": out.ID})
 	})
@@ -115,10 +278,12 @@ func (s *Service) CatalogContentTypes(ctx context.Context, subject string) ([]*c
 		if e := t.RequireScope(ctx, subject, "contentType.read"); e != nil {
 			return nil, e
 		}
-		return t.DAL.Catalog().ContentTypes(ctx, catalog.ContentTypeFilter{})
+		return t.DAL.Catalog().ContentTypes(ctx, catalog.ContentTypeFilter{Catalog: true})
 	})
 }
-func (s *Service) ContentTypes(ctx context.Context, subject, collection string) ([]*catalog.ContentType, error) {
+
+// CollectionContentTypes lists the list types a collection accepts.
+func (s *Service) CollectionContentTypes(ctx context.Context, subject, collection string) ([]*catalog.ContentType, error) {
 	return read(ctx, s, func(t *Service) ([]*catalog.ContentType, error) {
 		if _, e := t.contentTypeResource(ctx, subject, collection, "read"); e != nil {
 			return nil, e
@@ -126,55 +291,40 @@ func (s *Service) ContentTypes(ctx context.Context, subject, collection string) 
 		return t.collectionTypes(ctx, collection)
 	})
 }
-func (s *Service) CollectionContentTypes(ctx context.Context, subject, collection string) ([]CollectionContentType, error) {
-	return read(ctx, s, func(t *Service) ([]CollectionContentType, error) {
-		types, e := t.ContentTypes(ctx, subject, collection)
-		if e != nil {
+
+// CollectionContentType reads a list type of a collection, by its id or the
+// catalog type it copies.
+func (s *Service) CollectionContentType(ctx context.Context, subject, collection, id string) (*catalog.ContentType, error) {
+	return read(ctx, s, func(t *Service) (*catalog.ContentType, error) {
+		if _, e := t.authorize(ctx, subject, collection, "read"); e != nil {
 			return nil, e
 		}
-		defaultType, e := t.defaultContentType(ctx, collection)
-		if e != nil {
-			return nil, e
-		}
-		out := []CollectionContentType{}
-		for _, typ := range types {
-			out = append(out, CollectionContentType{typ, typ.ID == defaultType})
-		}
-		return out, nil
+		return t.contentType(ctx, collection, id)
 	})
 }
 
-// defaultContentType is the id of the content type a collection's new
-// items get.
+// defaultContentType is the id of the list type a collection's new items
+// get.
 func (s *Service) defaultContentType(ctx context.Context, collection string) (string, error) {
-	attachments, err := s.DAL.Catalog().Attachments(ctx, collection)
+	typ, err := s.contentType(ctx, collection, "")
 	if err != nil {
 		return "", err
 	}
-	for _, a := range attachments {
-		if a.IsDefault {
-			return a.ContentTypeID, nil
-		}
-	}
-	return "", ErrNotFound
+	return typ.ID, nil
 }
 func (s *Service) GetContentType(ctx context.Context, subject, id string) (*catalog.ContentType, error) {
 	return read(ctx, s, func(t *Service) (*catalog.ContentType, error) {
 		if e := t.RequireScope(ctx, subject, "contentType.read"); e != nil {
 			return nil, e
 		}
-		typ, e := t.DAL.Catalog().ContentType(ctx, id)
-		if dberr.IsNotFound(e) {
-			return nil, ErrNotFound
-		}
-		return typ, e
+		return t.catalogType(ctx, id)
 	})
 }
 
 // catalogError maps catalog rules to service errors.
 func catalogError(err error) error {
 	var v catalog.Violation
-	if errors.As(err, &v) {
+	if errors.As(err, &v) || errors.Is(err, dberr.ErrInvalidReference) {
 		return invalid(err.Error())
 	}
 	return err
@@ -231,7 +381,11 @@ func (s *Service) refreshCollections(ctx context.Context, subject string, collec
 			return e
 		}
 		for _, typ := range types {
-			if e = s.checkTypeHeads(ctx, subject, c, typ.ID, fieldKeys(selectTypeDefinitions(defs, typ)), typ.Rules); e != nil {
+			selected := selectTypeDefinitions(defs, typ)
+			if e = validateRules(selected, typ.Effective.Rules); e != nil {
+				return e
+			}
+			if e = s.checkTypeHeads(ctx, subject, c, typ.ID, fieldKeys(selected), typ.Effective.Rules); e != nil {
 				return e
 			}
 		}
@@ -247,15 +401,36 @@ func (s *Service) refreshCollections(ctx context.Context, subject string, collec
 	}
 	return nil
 }
+
+// checkSubtypes checks that the rules of a type's catalog subtypes still
+// hold over their fields; refreshCollections checks the list types.
+func (s *Service) checkSubtypes(ctx context.Context, id string) error {
+	ids, err := s.DAL.Catalog().Descendants(ctx, []string{id})
+	if err != nil {
+		return err
+	}
+	types, err := s.DAL.Catalog().ContentTypes(ctx, catalog.ContentTypeFilter{IDs: ids, Catalog: true})
+	if err != nil {
+		return err
+	}
+	for _, typ := range types {
+		defs, err := s.typeDefinitions(ctx, typ)
+		if err != nil {
+			return err
+		}
+		if err = validateRules(defs, typ.Effective.Rules); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *Service) UpdateContentType(ctx context.Context, subject, id string, version int, in ContentTypeInput) (out *catalog.ContentType, err error) {
 	err = s.write(ctx, func(t *Service) error {
 		if e := t.RequireScope(ctx, subject, "contentType.manage"); e != nil {
 			return e
 		}
-		old, e := t.DAL.Catalog().ContentType(ctx, id)
-		if dberr.IsNotFound(e) {
-			return ErrNotFound
-		}
+		old, e := t.catalogType(ctx, id)
 		if e != nil {
 			return e
 		}
@@ -268,15 +443,31 @@ func (s *Service) UpdateContentType(ctx context.Context, subject, id string, ver
 		if in.Key != old.Key {
 			return invalid("content type key is immutable")
 		}
-		if e = t.validateContentType(ctx, &in); e != nil {
+		if in.ParentID != "" && (old.ParentID == nil || in.ParentID != *old.ParentID) {
+			return invalid("content type parent is immutable")
+		}
+		if e = t.validateTypeName(in); e != nil {
+			return e
+		}
+		var parent *catalog.ContentType
+		if old.ParentID != nil {
+			if parent, e = t.DAL.Catalog().ContentType(ctx, *old.ParentID); e != nil {
+				return e
+			}
+		}
+		schema := ListTypeInput{FieldIds: in.FieldIds, HiddenFieldIds: in.HiddenFieldIds, Rules: in.Rules}
+		if e = t.validateTypeSchema(ctx, parent, &schema); e != nil {
 			return e
 		}
 		collections, e := t.attachedCollections(ctx, []string{id})
 		if e != nil {
 			return e
 		}
-		out, e = t.reviseContentType(ctx, old, in.Name, in.FieldIds, in.Rules)
+		out, e = t.reviseContentType(ctx, old, catalog.ContentType{Name: in.Name, FieldIds: schema.FieldIds, HiddenFieldIds: schema.HiddenFieldIds, Rules: schema.Rules})
 		if e != nil {
+			return e
+		}
+		if e = t.checkSubtypes(ctx, id); e != nil {
 			return e
 		}
 		if e = t.refreshCollections(ctx, subject, collections); e != nil {
@@ -286,6 +477,40 @@ func (s *Service) UpdateContentType(ctx context.Context, subject, id string, ver
 	})
 	return
 }
+
+// UpdateListType customizes a collection's list type at its version. The
+// type keeps every field and rule of its catalog type.
+func (s *Service) UpdateListType(ctx context.Context, subject, collection, id string, version int, in ListTypeInput) (out *catalog.ContentType, err error) {
+	err = s.write(ctx, func(t *Service) error {
+		c, e := t.contentTypeResource(ctx, subject, collection, "manage")
+		if e != nil {
+			return e
+		}
+		typ, e := t.contentType(ctx, c.ID, id)
+		if e != nil {
+			return e
+		}
+		if typ.Version != version {
+			return ErrPreconditionFailed
+		}
+		parent, e := t.DAL.Catalog().ContentType(ctx, *typ.ParentID)
+		if e != nil {
+			return e
+		}
+		if e = t.validateTypeSchema(ctx, parent, &in); e != nil {
+			return e
+		}
+		if out, e = t.reviseContentType(ctx, typ, catalog.ContentType{FieldIds: in.FieldIds, HiddenFieldIds: in.HiddenFieldIds, Rules: in.Rules}); e != nil {
+			return e
+		}
+		if e = t.refreshCollections(ctx, subject, []*resources.Resource{c}); e != nil {
+			return e
+		}
+		return t.audit(ctx, subject, "content_type.update", c, map[string]any{"content_type_id": id, "version": out.Version})
+	})
+	return
+}
+
 func (s *Service) AttachContentType(ctx context.Context, subject, collection string, version int, in AttachContentTypeInput) (out *resources.Resource, err error) {
 	err = s.write(ctx, func(t *Service) error {
 		if e := t.RequireScope(ctx, subject, "contentType.read"); e != nil {
@@ -300,7 +525,8 @@ func (s *Service) AttachContentType(ctx context.Context, subject, collection str
 
 // attachContentType also serves automatic provisioning of a fixed type. It
 // enforces list Manage; choosing a catalog type through the public API requires
-// contentType.read as well.
+// contentType.read as well. The collection accepts the catalog type through
+// its own list type.
 func (s *Service) attachContentType(ctx context.Context, subject, collection string, version int, in AttachContentTypeInput) (out *resources.Resource, err error) {
 	err = s.write(ctx, func(t *Service) error {
 		if e := t.RequireScope(ctx, subject, "item.read"); e != nil {
@@ -316,7 +542,7 @@ func (s *Service) attachContentType(ctx context.Context, subject, collection str
 		if c.Version != version {
 			return ErrPreconditionFailed
 		}
-		changed, e := t.DAL.Catalog().Attach(ctx, c.ID, in.ContentTypeID, in.IsDefault)
+		listType, changed, e := t.DAL.Catalog().Attach(ctx, c.ID, in.ContentTypeID, in.IsDefault)
 		if dberr.IsNotFound(e) {
 			return ErrNotFound
 		}
@@ -337,7 +563,7 @@ func (s *Service) attachContentType(ctx context.Context, subject, collection str
 		if e != nil {
 			return e
 		}
-		return t.audit(ctx, subject, "content_type.attach", c, map[string]any{"content_type_id": in.ContentTypeID, "is_default": in.IsDefault})
+		return t.audit(ctx, subject, "content_type.attach", c, map[string]any{"content_type_id": in.ContentTypeID, "list_type_id": listType.ID, "is_default": in.IsDefault})
 	})
 	return
 }
@@ -351,8 +577,9 @@ type SchemaContentType struct {
 	IsDefault bool                   `json:"is_default"`
 }
 
-// DetachContentType removes only this collection's attachment. Frozen revision
-// schemas and the shared organization catalog remain available.
+// DetachContentType makes a collection stop accepting a list type. The list
+// type stays for frozen revisions and returns when its catalog type is
+// attached again.
 func (s *Service) DetachContentType(ctx context.Context, subject, collection, typeID string, version int) (out *resources.Resource, err error) {
 	err = s.write(ctx, func(t *Service) error {
 		c, e := t.contentTypeResource(ctx, subject, collection, "manage")
@@ -473,28 +700,31 @@ func (s *Service) checkTypeHeads(ctx context.Context, subject string, c *resourc
 	}
 }
 
-func (s *Service) persistContentType(ctx context.Context, in ContentTypeInput, templateKey string) (*catalog.ContentType, error) {
-	t := catalog.ContentType{Key: in.Key, Name: in.Name, FieldIds: in.FieldIds, Rules: in.Rules}
-	if templateKey != "" {
-		t.TemplateKey = &templateKey
-	}
-	return s.DAL.Catalog().CreateContentType(ctx, t)
-}
-
-func (s *Service) reviseContentType(ctx context.Context, prior *catalog.ContentType, name string, fields []string, rules []model.ValidationRule) (*catalog.ContentType, error) {
+func (s *Service) reviseContentType(ctx context.Context, prior *catalog.ContentType, next catalog.ContentType) (*catalog.ContentType, error) {
 	before, err := json.Marshal(prior)
 	if err != nil {
 		return nil, err
 	}
-	updated, err := s.DAL.Catalog().SaveContentType(ctx, catalog.ContentType{ID: prior.ID, Name: name, FieldIds: fields, Rules: rules}, prior.Version)
+	next.ID = prior.ID
+	if next.Name == "" {
+		next.Name = prior.Name
+	}
+	updated, err := s.DAL.Catalog().SaveContentType(ctx, next, prior.Version)
 	if errors.Is(err, dberr.ErrConcurrentUpdate) {
 		return nil, ErrPreconditionFailed
 	}
 	if err != nil {
-		return nil, err
+		return nil, catalogError(err)
 	}
-	if err := s.trackAuditProperties(prior.ID, before, updated, "name", "field_ids", "rules"); err != nil {
+	if err := s.trackAuditProperties(prior.ID, before, updated, "name", "field_ids", "hidden_field_ids", "rules"); err != nil {
 		return nil, err
 	}
 	return updated, nil
+}
+
+func nonNil[T any](values []T) []T {
+	if values == nil {
+		return []T{}
+	}
+	return values
 }

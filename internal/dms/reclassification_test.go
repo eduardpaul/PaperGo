@@ -55,7 +55,7 @@ func TestReclassifyItemPrunesValuesAndRestoresTypeHistory(t *testing.T) {
 	if _, err = s.RestoreRevision(testContext, "alice", i.ID, 1, out.Version); !isValidation(err) {
 		t.Fatal("detached historical type restored", err)
 	}
-	if _, err = s.AttachContentType(testContext, "alice", c.ID, latest(t, s, c.ID).Version, AttachContentTypeInput{ContentTypeID: a.ID}); err != nil {
+	if _, err = s.AttachContentType(testContext, "alice", c.ID, latest(t, s, c.ID).Version, AttachContentTypeInput{ContentTypeID: *a.ParentID}); err != nil {
 		t.Fatal(err)
 	}
 	restored, err := s.RestoreRevision(testContext, "alice", i.ID, 1, out.Version)
@@ -69,7 +69,7 @@ func TestReclassifyItemPrunesValuesAndRestoresTypeHistory(t *testing.T) {
 
 func TestDetachContentTypeDefaultAndDeletedRecovery(t *testing.T) {
 	s, _, c := fixture(t)
-	types, err := s.ContentTypes(testContext, "alice", c.ID)
+	types, err := s.CollectionContentTypes(testContext, "alice", c.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,13 +92,13 @@ func TestDetachContentTypeDefaultAndDeletedRecovery(t *testing.T) {
 	if *newItem.ContentTypeID != b.ID {
 		t.Fatal("default not replaced", newItem)
 	}
-	if _, err = s.GetContentType(testContext, "alice", original.ID); err != nil {
+	if _, err = s.GetContentType(testContext, "alice", *original.ParentID); err != nil {
 		t.Fatal("catalog type deleted", err)
 	}
 	if _, err = s.RestoreDeleted(testContext, "alice", c.ID, i.ID, false); !isValidation(err) {
 		t.Fatal("unattached deleted type restored", err)
 	}
-	if _, err = s.AttachContentType(testContext, "alice", c.ID, latest(t, s, c.ID).Version, AttachContentTypeInput{ContentTypeID: original.ID}); err != nil {
+	if _, err = s.AttachContentType(testContext, "alice", c.ID, latest(t, s, c.ID).Version, AttachContentTypeInput{ContentTypeID: *original.ParentID}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = s.RestoreDeleted(testContext, "alice", c.ID, i.ID, false); err != nil {

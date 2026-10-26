@@ -583,6 +583,11 @@ func (r *Repo) Purge(ctx context.Context, id string) error {
 			if err := q.DeleteResource(ctx, row.ID); err != nil {
 				return err
 			}
+			if row.Kind == refs.KindList || row.Kind == refs.KindLibrary {
+				if err := q.DeleteUnusedListTypes(ctx, row.ID); err != nil {
+					return err
+				}
+			}
 			if row.Content() {
 				if err := live.Notify(ctx, q, live.KindItem, row.ID, live.ActionDeleted); err != nil {
 					return err
@@ -594,7 +599,8 @@ func (r *Repo) Purge(ctx context.Context, id string) error {
 }
 
 // Transfer moves a live item to a folder or collection of another
-// workspace. It leaves its grants, projections and business keys behind and
+// workspace, as the destination's list type of the item's catalog type. It
+// leaves its grants, projections and business keys behind and
 // inherits the destination's scope; its runs follow it. The caller
 // projects its surfaces again.
 func (r *Repo) Transfer(ctx context.Context, id, containerID, parentID, nameKey string, values json.RawMessage, actor string) (*Resource, error) {
@@ -626,12 +632,12 @@ func (r *Repo) Transfer(ctx context.Context, id, containerID, parentID, nameKey 
 		if err := contained(ctx, q, row.Kind, parent, containerID); err != nil {
 			return err
 		}
-		accepted, err := catalog.Accepts(ctx, q, containerID, *row.ContentTypeID)
+		typeID, err := catalog.Counterpart(ctx, q, containerID, *row.ContentTypeID)
+		if dberr.IsNotFound(err) {
+			return fmt.Errorf("%w: the destination does not accept the content type", dberr.ErrIncompatibleCollection)
+		}
 		if err != nil {
 			return err
-		}
-		if !accepted {
-			return fmt.Errorf("%w: the destination does not accept the content type", dberr.ErrIncompatibleCollection)
 		}
 		if err := dropProjections(ctx, q, id, true); err != nil {
 			return err
@@ -643,7 +649,7 @@ func (r *Repo) Transfer(ctx context.Context, id, containerID, parentID, nameKey 
 		if parent.ScopeID != nil {
 			scope = *parent.ScopeID
 		}
-		if err := update(ctx, q, id, row.Version, Set{WorkspaceID: &parent.WorkspaceID, ContainerID: &containerID, ParentID: &parentID, InheritPermissions: ptr(true),
+		if err := update(ctx, q, id, row.Version, Set{WorkspaceID: &parent.WorkspaceID, ContainerID: &containerID, ParentID: &parentID, ContentTypeID: &typeID, InheritPermissions: ptr(true),
 			ScopeID: &scope, NameKey: &nameKey, Values: values, Version: row.Version + 1, UpdatedBy: &actor}); err != nil {
 			return err
 		}

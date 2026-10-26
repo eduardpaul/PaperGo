@@ -77,12 +77,14 @@ permissions, schemas, lookups, taxonomy values, view filters, smart folders and
 workflow configuration, including UUID references embedded in expressions.
 Ordinary item text, person subjects and exact numeric values retain their values.
 
-Built-in template content types are matched by template key and their fields by
-field key. Taxonomy groups are matched by name, sets by key, terms by set and
+Catalog content types are matched by key, which is unique in a catalog, and
+their fields by field key; list types are copied with their collections and
+inherit from the matched catalog types. Packages carry each type's parent, and
+import rebuilds its lineage. Taxonomy groups are matched by name, sets by key, terms by set and
 parent path, and directory groups by name. Existing shared definitions and group
 memberships must agree; conflicts fail the entire import rather than changing
-configuration another workspace uses. Custom content types and their fields are
-copied independently. A group inbox already bound on the target conflicts.
+configuration another workspace uses. Content types and fields the target lacks are
+copied. A group inbox already bound on the target conflicts.
 
 User subjects are the portable directory identity. Existing target accounts keep
 their active status, profile and organization roles. Missing referenced users are

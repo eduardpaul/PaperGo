@@ -70,11 +70,12 @@ func TestRevisionsSurfacesDynamicQueryAndGroupCounts(t *testing.T) {
 			t.Fatalf("expected ErrForeignKeyViolation when deleting referenced field definition, got %v", err)
 		}
 
-		if _, err := s.Catalog().Attach(ctx, lib.ID, ct.ID, true); err != nil {
+		lt, _, err := s.Catalog().Attach(ctx, lib.ID, ct.ID, true)
+		if err != nil {
 			t.Fatalf("Attach: %v", err)
 		}
 
-		schemaDef := json.RawMessage(`{"content_types":[{"id":"ct-inv"}]}`)
+		schemaDef := json.RawMessage(`{"content_types":[{"id":"` + lt.ID + `"}]}`)
 		sr, err := s.Catalog().RecordSchema(ctx, lib.ID, "u1", schemaDef)
 		if err != nil {
 			t.Fatalf("RecordSchema: %v", err)
@@ -85,7 +86,7 @@ func TestRevisionsSurfacesDynamicQueryAndGroupCounts(t *testing.T) {
 			WorkspaceID:   ws.ID,
 			ParentID:      lib.ID,
 			ContainerID:   lib.ID,
-			ContentTypeID: ct.ID,
+			ContentTypeID: lt.ID,
 			Kind:          refs.KindItem,
 			Name:          "INV-001",
 			CreatedBy:     "u1",

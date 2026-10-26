@@ -16,16 +16,38 @@ func isValidation(err error) bool {
 	return errors.As(err, &v)
 }
 
+// typeOK creates a catalog type and attaches it to a collection, returning
+// the collection's list type.
 func typeOK(t *testing.T, s *Service, collection string, in ContentTypeInput, defaults ...bool) *catalog.ContentType {
 	t.Helper()
 	typ, err := s.CreateContentType(testContext, "alice", in)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.AttachContentType(testContext, "alice", collection, latest(t, s, collection).Version, AttachContentTypeInput{ContentTypeID: typ.ID, IsDefault: len(defaults) > 0 && defaults[0]}); err != nil {
+	return attachOK(t, s, collection, typ.ID, len(defaults) > 0 && defaults[0])
+}
+
+// attachOK attaches a catalog type to a collection, returning its list type.
+func attachOK(t *testing.T, s *Service, collection, catalogID string, isDefault bool) *catalog.ContentType {
+	t.Helper()
+	if _, err := s.AttachContentType(testContext, "alice", collection, latest(t, s, collection).Version, AttachContentTypeInput{ContentTypeID: catalogID, IsDefault: isDefault}); err != nil {
+		t.Fatal(err)
+	}
+	typ, err := s.listType(testContext, collection, catalogID)
+	if err != nil {
 		t.Fatal(err)
 	}
 	return typ
+}
+
+// catalogOf returns the catalog type a list type copies.
+func catalogOf(t *testing.T, s *Service, typ *catalog.ContentType) *catalog.ContentType {
+	t.Helper()
+	parent, err := s.GetContentType(testContext, "alice", *typ.ParentID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return parent
 }
 
 func fieldOK(t *testing.T, s *Service, collection string, in CreateField) *catalog.FieldDefinition {
@@ -44,12 +66,12 @@ func TestBulkContentTypesAndFrozenRules(t *testing.T) {
 	for _, key := range []string{"subtotal", "total"} {
 		fieldOK(t, s, l.ID, CreateField{ContentTypeID: typ.ID, Key: key, Label: key, Type: "decimal", Scale: 2, Indexed: true, Required: true})
 	}
-	typ, err := s.GetContentType(testContext, "alice", typ.ID)
+	typ, err := s.contentType(testContext, l.ID, typ.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	rules := []model.ValidationRule{{Key: "sum", Field: "total", Op: "gte", OtherField: "subtotal", Message: "Total must cover subtotal"}}
-	typ, err = s.UpdateContentType(testContext, "alice", typ.ID, typ.Version, ContentTypeInput{Name: typ.Name, FieldIds: typ.FieldIds, Rules: rules})
+	typ, err = s.UpdateListType(testContext, "alice", l.ID, typ.ID, typ.Version, ListTypeInput{FieldIds: typ.FieldIds, Rules: rules})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +99,7 @@ func TestBulkContentTypesAndFrozenRules(t *testing.T) {
 	if err != nil || len(frozen) != 1 {
 		t.Fatal(frozen, err)
 	}
-	oldTypes, err := s.ContentTypes(testContext, "alice", l.ID)
+	oldTypes, err := s.CollectionContentTypes(testContext, "alice", l.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +120,7 @@ func TestBulkContentTypesAndFrozenRules(t *testing.T) {
 	}
 	strict := []model.ValidationRule{{Key: "sum", Field: "total", Op: "lt", OtherField: "subtotal", Message: "Too high"}}
 	version := latest(t, s, l.ID).Version
-	if _, err = s.UpdateContentType(testContext, "alice", typ.ID, typ.Version, ContentTypeInput{Name: typ.Name, FieldIds: typ.FieldIds, Rules: strict}); !isValidation(err) {
+	if _, err = s.UpdateListType(testContext, "alice", l.ID, typ.ID, typ.Version, ListTypeInput{FieldIds: typ.FieldIds, Rules: strict}); !isValidation(err) {
 		t.Fatal(err)
 	}
 	if latest(t, s, l.ID).Version != version {
@@ -172,13 +194,13 @@ func TestRequiredIfAndRemovalKeepHistory(t *testing.T) {
 	s, _, l := fixture(t)
 	fieldOK(t, s, l.ID, CreateField{Key: "approved", Label: "Approved", Type: "boolean"})
 	d := fieldOK(t, s, l.ID, CreateField{Key: "code", Label: "Code", Type: "text", Indexed: true, Options: model.FieldOptions{Unique: true}})
-	types, err := s.ContentTypes(testContext, "alice", l.ID)
+	types, err := s.CollectionContentTypes(testContext, "alice", l.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	typ := types[0]
 	rules := []model.ValidationRule{{Key: "approval_code", Field: "code", Op: "required_if", WhenField: "approved", WhenValue: json.RawMessage("true"), Message: "Approved items need a code"}}
-	typ, err = s.UpdateContentType(testContext, "alice", typ.ID, typ.Version, ContentTypeInput{Name: typ.Name, FieldIds: typ.FieldIds, Rules: rules})
+	typ, err = s.UpdateListType(testContext, "alice", l.ID, typ.ID, typ.Version, ListTypeInput{FieldIds: typ.FieldIds, Rules: rules})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +210,7 @@ func TestRequiredIfAndRemovalKeepHistory(t *testing.T) {
 	if err = s.DeleteField(testContext, "alice", l.ID, d.ID, latest(t, s, l.ID).Version); !isValidation(err) {
 		t.Fatal("dependent rule", err)
 	}
-	typ, err = s.UpdateContentType(testContext, "alice", typ.ID, typ.Version, ContentTypeInput{Name: typ.Name, FieldIds: typ.FieldIds})
+	typ, err = s.UpdateListType(testContext, "alice", l.ID, typ.ID, typ.Version, ListTypeInput{FieldIds: typ.FieldIds})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -25,9 +25,9 @@ func Where[Q sqlite.Filterable]() struct {
 	BlobPreviews            blobPreviewWhere[Q]
 	Blobs                   blobWhere[Q]
 	BusinessKeys            businessKeyWhere[Q]
-	CollectionTypes         collectionTypeWhere[Q]
 	CommentMentions         commentMentionWhere[Q]
 	Comments                commentWhere[Q]
+	ContentTypeAncestors    contentTypeAncestorWhere[Q]
 	ContentTypes            contentTypeWhere[Q]
 	DomainEvents            domainEventWhere[Q]
 	FieldDefinitions        fieldDefinitionWhere[Q]
@@ -91,9 +91,9 @@ func Where[Q sqlite.Filterable]() struct {
 		BlobPreviews            blobPreviewWhere[Q]
 		Blobs                   blobWhere[Q]
 		BusinessKeys            businessKeyWhere[Q]
-		CollectionTypes         collectionTypeWhere[Q]
 		CommentMentions         commentMentionWhere[Q]
 		Comments                commentWhere[Q]
+		ContentTypeAncestors    contentTypeAncestorWhere[Q]
 		ContentTypes            contentTypeWhere[Q]
 		DomainEvents            domainEventWhere[Q]
 		FieldDefinitions        fieldDefinitionWhere[Q]
@@ -156,9 +156,9 @@ func Where[Q sqlite.Filterable]() struct {
 		BlobPreviews:            buildBlobPreviewWhere[Q](BlobPreviews.Columns),
 		Blobs:                   buildBlobWhere[Q](Blobs.Columns),
 		BusinessKeys:            buildBusinessKeyWhere[Q](BusinessKeys.Columns),
-		CollectionTypes:         buildCollectionTypeWhere[Q](CollectionTypes.Columns),
 		CommentMentions:         buildCommentMentionWhere[Q](CommentMentions.Columns),
 		Comments:                buildCommentWhere[Q](Comments.Columns),
+		ContentTypeAncestors:    buildContentTypeAncestorWhere[Q](ContentTypeAncestors.Columns),
 		ContentTypes:            buildContentTypeWhere[Q](ContentTypes.Columns),
 		DomainEvents:            buildDomainEventWhere[Q](DomainEvents.Columns),
 		FieldDefinitions:        buildFieldDefinitionWhere[Q](FieldDefinitions.Columns),

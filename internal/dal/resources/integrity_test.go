@@ -77,10 +77,11 @@ func TestResourcesHierarchyScopeCascadeAndPurge(t *testing.T) {
 		if err != nil {
 			t.Fatalf("CreateContentType: %v", err)
 		}
-		if _, err := s.Catalog().Attach(ctx, lib1.ID, ct.ID, true); err != nil {
+		lt, _, err := s.Catalog().Attach(ctx, lib1.ID, ct.ID, true)
+		if err != nil {
 			t.Fatalf("AttachCollectionContentType lib1: %v", err)
 		}
-		if _, err := s.Catalog().Attach(ctx, lib2.ID, ct.ID, true); err != nil {
+		if _, _, err := s.Catalog().Attach(ctx, lib2.ID, ct.ID, true); err != nil {
 			t.Fatalf("AttachCollectionContentType lib2: %v", err)
 		}
 
@@ -90,7 +91,7 @@ func TestResourcesHierarchyScopeCascadeAndPurge(t *testing.T) {
 			WorkspaceID:   ws.ID,
 			ParentID:      lib1.ID,
 			ContainerID:   lib1.ID,
-			ContentTypeID: ct.ID,
+			ContentTypeID: lt.ID,
 			Kind:          refs.KindFolder,
 			Name:          "2026",
 			NameKey:       "2026",
@@ -104,7 +105,7 @@ func TestResourcesHierarchyScopeCascadeAndPurge(t *testing.T) {
 			WorkspaceID:   ws.ID,
 			ParentID:      folderA.ID,
 			ContainerID:   lib1.ID,
-			ContentTypeID: ct.ID,
+			ContentTypeID: lt.ID,
 			Kind:          refs.KindFolder,
 			Name:          "Q4",
 			NameKey:       "q4",
@@ -118,7 +119,7 @@ func TestResourcesHierarchyScopeCascadeAndPurge(t *testing.T) {
 			WorkspaceID:   ws.ID,
 			ParentID:      folderB.ID,
 			ContainerID:   lib1.ID,
-			ContentTypeID: ct.ID,
+			ContentTypeID: lt.ID,
 			Kind:          refs.KindItem,
 			Name:          "MSA.pdf",
 			NameKey:       "msa.pdf",
@@ -224,7 +225,7 @@ func TestFailedTransferRollsBack(t *testing.T) {
 	daltest.Engines(t, func(t *testing.T, newStore func(testing.TB) *dal.Store) {
 		ctx := context.Background()
 		f := daltest.NewFixture(t, newStore(t))
-		if _, err := f.Store.Resources().Create(ctx, resources.New{ID: "other", WorkspaceID: f.Workspace, ParentID: f.Destination, ContainerID: f.Destination, ContentTypeID: "type", Kind: refs.KindItem, Name: "Item", NameKey: "item"}); err != nil {
+		if _, err := f.Store.Resources().Create(ctx, resources.New{ID: "other", WorkspaceID: f.Workspace, ParentID: f.Destination, ContainerID: f.Destination, ContentTypeID: f.DestinationType, Kind: refs.KindItem, Name: "Item", NameKey: "item"}); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := f.Store.Resources().Transfer(ctx, f.Item, f.Destination, f.Destination, "item", nil, "alice"); !errors.Is(err, dberr.ErrUniqueViolation) {

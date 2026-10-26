@@ -88,12 +88,14 @@ func Revise(ctx context.Context, s *dal.Store, rev revisions.Revision) (revision
 	return s.Resources().Revise(ctx, rev, values, rev.CreatedBy)
 }
 
-// Fixture is a workspace with two libraries of one content type, a folder in
-// the source library and an item in it with a revision shown on both
-// surfaces.
+// Fixture is a workspace with two libraries that accept the catalog type
+// "type" through their own list types, a folder in the source library and an
+// item in it with a revision shown on both surfaces.
 type Fixture struct {
 	Store                                                          *dal.Store
 	Workspace, Source, Destination, Folder, Item, Schema, Revision string
+	// SourceType and DestinationType are the libraries' list types.
+	SourceType, DestinationType string
 }
 
 func NewFixture(t testing.TB, store *dal.Store) Fixture {
@@ -116,22 +118,27 @@ func NewFixture(t testing.TB, store *dal.Store) Fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []string{f.Source, f.Destination} {
-		if _, err := store.Catalog().Attach(ctx, id, ct.ID, true); err != nil {
+	for _, at := range []struct {
+		collection string
+		listType   *string
+	}{{f.Source, &f.SourceType}, {f.Destination, &f.DestinationType}} {
+		listType, _, err := store.Catalog().Attach(ctx, at.collection, ct.ID, true)
+		if err != nil {
 			t.Fatal(err)
 		}
+		*at.listType = listType.ID
 	}
-	folder, err := store.Resources().Create(ctx, resources.New{ID: "folder", WorkspaceID: ws.ID, ParentID: f.Source, ContainerID: f.Source, ContentTypeID: ct.ID, Kind: refs.KindFolder, Name: "Folder"})
+	folder, err := store.Resources().Create(ctx, resources.New{ID: "folder", WorkspaceID: ws.ID, ParentID: f.Source, ContainerID: f.Source, ContentTypeID: f.SourceType, Kind: refs.KindFolder, Name: "Folder"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	f.Folder = folder.ID
-	item, err := store.Resources().Create(ctx, resources.New{ID: "item", WorkspaceID: ws.ID, ParentID: folder.ID, ContainerID: f.Source, ContentTypeID: ct.ID, Kind: refs.KindItem, Name: "Item", NameKey: "item"})
+	item, err := store.Resources().Create(ctx, resources.New{ID: "item", WorkspaceID: ws.ID, ParentID: folder.ID, ContainerID: f.Source, ContentTypeID: f.SourceType, Kind: refs.KindItem, Name: "Item", NameKey: "item"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	f.Item = item.ID
-	schema, err := store.Catalog().RecordSchema(ctx, f.Source, "alice", []byte(`{"content_types":[{"id":"type"}]}`))
+	schema, err := store.Catalog().RecordSchema(ctx, f.Source, "alice", []byte(`{"content_types":[{"id":"`+f.SourceType+`"}]}`))
 	if err != nil {
 		t.Fatal(err)
 	}
