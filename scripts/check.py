@@ -8,7 +8,8 @@ Stages:
            MCP server, frontend typecheck and lint, Python tests
   test     uncached Go suite on SQLite, database suites on PostgreSQL 17 and
            frontend tests
-  race     the Go suite with race detection
+  race     the Go suite with race detection, but for the packages the native
+           and zvec stages race-test with real models and stores
   web      frontend typecheck, lint and tests
   native   real decision, embedding and OCR models
   zvec     native search store conformance and parity
@@ -37,7 +38,10 @@ POSTGRES_PACKAGES = ['./internal/dms', './internal/httpapi', './internal/identit
                      './internal/webdav', './internal/workflow', './internal/aiops', './internal/worker', './internal/documenttext',
                      './internal/documentpreview', './internal/documentfiles', './internal/documentsearch',
                      './extensions/mcp/integration']
-NATIVE_PACKAGES = ['./internal/onnx', './internal/decision', './internal/embedding', './internal/ocr/paddle', './internal/scriptrun', './cmd/embed']
+NATIVE_PACKAGES = ['./internal/onnx', './internal/decision', './internal/embedding', './internal/ocr/paddle', './internal/scriptrun',
+                   './internal/compose', './internal/optimize', './cmd/embed']
+# Packages the zvec stage tests on the native search store.
+ZVEC_PACKAGES = ['./internal/dal/search/zvecstore', './internal/backup', './cmd/admin']
 # Native libraries the release executables load, exercised before packaging.
 NATIVE_ABI = (['./internal/onnx', './internal/ocr/paddle', './internal/imaging', './internal/doctext/pdfium', './internal/dal/search/zvecstore'],
               'TestNativeABI|TestReadAndRender|TestRecognize$|TestDecode|TestWebPRoundTripAndResize|TestIdle|TestConcurrentIdle')
@@ -156,6 +160,14 @@ def postgres_packages():
     stage, not rerun against PostgreSQL."""
     listed = subprocess.run(['go', 'list', './internal/dal/...'], cwd=ROOT, check=True, stdout=subprocess.PIPE, text=True).stdout.split()
     return [package for package in listed if not re.search(r'/internal/dal/search(/|$)', package)] + POSTGRES_PACKAGES
+
+
+def race_packages():
+    """The Go suite but for the packages the native and zvec stages already
+    run with race detection."""
+    listed = lambda *patterns: subprocess.run(['go', 'list', *patterns], cwd=ROOT, check=True, stdout=subprocess.PIPE, text=True).stdout.split()
+    covered = set(listed(*NATIVE_PACKAGES, *ZVEC_PACKAGES))
+    return [package for package in listed('./...') if package not in covered]
 
 
 def prepare_postgres():
@@ -318,7 +330,7 @@ def stage_race(args):
     prepare_go()
     prepare_frontend(args.setup)
     go_tests('race' + (f'-{args.shard[0]}' if args.shard else ''), ['-race', '-count=1', '-timeout=15m', *run_flags(args)],
-             args.packages or ['./...'], args.shard, sqlite_environment(PAPERGO_REQUIRE_OCR='1'))
+             args.packages or race_packages(), args.shard, sqlite_environment())
 
 
 def stage_native(args):
@@ -332,7 +344,7 @@ def stage_native(args):
 def stage_zvec(args):
     prepare_go()
     prepare_frontend(args.setup)
-    go_tests('zvec', ['-race', '-count=1'], ['./internal/dal/search/zvecstore', './internal/backup', './cmd/admin'], env=sqlite_environment())
+    go_tests('zvec', ['-race', '-count=1'], ZVEC_PACKAGES, env=sqlite_environment())
     go_tests('zvec-parity', ['-race', '-count=1', '-run', '(Search|Content|Receipt|Contract|AIComplete|Prefix|SmartFolder|View|Listing|Query)'],
              ['./internal/dms', './internal/httpapi', './internal/scriptrun'], env=sqlite_environment(PAPERGO_TEST_SEARCH_STORE='zvec'))
 

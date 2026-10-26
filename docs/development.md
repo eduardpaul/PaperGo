@@ -108,10 +108,10 @@ stage, so a failing job names the command that reproduces it.
 | `quick` (default) | Go formatting and the Go suite with Go's test-result cache: the edit/check loop |
 | `lint` | Formatting, module checksums, generated Bob models and workflow SDK, vet, Staticcheck, frontend typecheck and lint, Python tests |
 | `test` | Uncached Go suite on SQLite, the database suites on PostgreSQL 17, frontend tests |
-| `race` | The Go suite with race detection |
+| `race` | The Go suite with race detection, except the packages `native` and `zvec` run with race detection on real models and the native store |
 | `web` | Frontend typecheck, lint and tests |
-| `native` | Real decision, embedding and OCR models |
-| `zvec` | Native search store conformance and parity |
+| `native` | Real decision, embedding and OCR models, with race detection |
+| `zvec` | Native search store conformance, backup and parity, with race detection |
 | `soak` | Native search soak at real dimensions and timed fuzzing |
 | `release` | Builds, packages and runs the release executables with the shared assets |
 | `docker` | Builds the container image and runs its smoke test |
