@@ -11,6 +11,7 @@ import (
 	"papergo/internal/dal/dberr"
 	"papergo/internal/jsonutil"
 	"papergo/internal/model"
+	"slices"
 	"sync"
 	"testing"
 )
@@ -319,5 +320,41 @@ func testContentTypeInheritance(t *testing.T, s *dal.Store) {
 	}
 	if deep, _, err := r.Attach(ctx, f.Destination, deepest, false); err != nil || len(deep.AncestorIDs) != catalog.MaxDepth {
 		t.Fatalf("deepest catalog type attached: %+v %v", deep, err)
+	}
+}
+
+func TestContentTypeFieldLimit_SQLite(t *testing.T) {
+	testContentTypeFieldLimit(t, daltest.SQLiteStore(t))
+}
+func TestContentTypeFieldLimit_Postgres(t *testing.T) {
+	testContentTypeFieldLimit(t, daltest.PostgresStore(t))
+}
+
+// A parent cannot gain fields that would take a subtype, attached or not,
+// past MaxFields.
+func testContentTypeFieldLimit(t *testing.T, s *dal.Store) {
+	ctx := context.Background()
+	r := s.Catalog()
+	ids := make([]string, catalog.MaxFields+1)
+	for i := range ids {
+		ids[i] = fmt.Sprintf("field-%03d", i)
+		if _, err := r.CreateField(ctx, catalog.FieldDefinition{ID: ids[i], Key: ids[i], Label: ids[i], Type: catalog.FieldText}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	half := catalog.MaxFields / 2
+	parent, err := r.CreateContentType(ctx, catalog.ContentType{ID: "parent", Key: "parent", Name: "Parent", FieldIds: ids[:half]})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = r.CreateContentType(ctx, catalog.ContentType{ID: "child", Key: "child", Name: "Child", ParentID: &parent.ID, FieldIds: ids[half:catalog.MaxFields]}); err != nil {
+		t.Fatal(err)
+	}
+	var violation catalog.Violation
+	if _, err = r.SaveContentType(ctx, catalog.ContentType{ID: parent.ID, Name: parent.Name, FieldIds: append(slices.Clone(ids[:half]), ids[catalog.MaxFields])}, parent.Version); !errors.As(err, &violation) {
+		t.Fatalf("subtype pushed past the field limit: %v", err)
+	}
+	if _, err = r.CreateContentType(ctx, catalog.ContentType{ID: "too-wide", Key: "too-wide", Name: "Too wide", FieldIds: ids}); !errors.As(err, &violation) {
+		t.Fatalf("type past the field limit: %v", err)
 	}
 }

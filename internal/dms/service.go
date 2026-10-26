@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"papergo/internal/dal"
 	"papergo/internal/dal/access"
 	"papergo/internal/dal/blobs"
@@ -1017,8 +1018,8 @@ func (s *Service) createField(ctx context.Context, subject string, c *resources.
 	if e != nil {
 		return nil, e
 	}
-	if n >= 200 {
-		return nil, invalid("at most 200 fields per collection")
+	if n >= catalog.MaxFields {
+		return nil, invalid(fmt.Sprintf("at most %d fields per collection", catalog.MaxFields))
 	}
 	if d.Required && len(d.Options.DefaultValue) == 0 {
 		exists, e := s.DAL.Resources().Exists(ctx, resources.Filter{ContainerID: c.ID, ContentTypeID: typ.ID, Kinds: []refs.ResourceKind{refs.KindItem}, State: resources.Live})

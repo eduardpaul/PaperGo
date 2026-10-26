@@ -18,6 +18,10 @@ import (
 // MaxCollectionTypes bounds the content types a collection accepts.
 const MaxCollectionTypes = 32
 
+// MaxFields bounds the fields a content type has with its ancestors, and
+// those a collection resolves.
+const MaxFields = 200
+
 // MaxDepth bounds the ancestors of a content type. Catalog types have at
 // most MaxDepth-1, so that each has room for the list types deriving from it.
 const MaxDepth = 8
@@ -664,7 +668,7 @@ func (r *Repo) SaveContentType(ctx context.Context, in ContentType, version int)
 }
 
 // checkLineage checks that the types' own fields exist and are distinct, and
-// that each type's effective fields have distinct keys.
+// that each type's effective fields have distinct keys and fit MaxFields.
 func checkLineage(ctx context.Context, q Queries, types []*ContentType) error {
 	ids := []string{}
 	for _, t := range types {
@@ -682,6 +686,9 @@ func checkLineage(ctx context.Context, q Queries, types []*ContentType) error {
 	for _, t := range types {
 		if err := distinctFields(fields, t.FieldIds); err != nil {
 			return err
+		}
+		if len(t.Effective.FieldIds) > MaxFields {
+			return Violation(fmt.Sprintf("content type %q would have more than %d fields with its ancestors", t.Key, MaxFields))
 		}
 		keys := map[string]string{}
 		for _, id := range t.Effective.FieldIds {

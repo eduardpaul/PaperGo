@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"papergo/internal/dal/catalog"
 	"papergo/internal/dal/dberr"
 	"papergo/internal/dal/refs"
@@ -169,8 +170,8 @@ func (s *Service) validateTypeSchema(ctx context.Context, parent *catalog.Conten
 	if parent != nil {
 		inherited, inheritedRules = parent.Effective.FieldIds, parent.Effective.Rules
 	}
-	if len(inherited)+len(in.FieldIds) > 200 {
-		return invalid("at most 200 fields per content type")
+	if len(inherited)+len(in.FieldIds) > catalog.MaxFields {
+		return invalid(fmt.Sprintf("at most %d fields per content type", catalog.MaxFields))
 	}
 	own, err := s.DAL.Catalog().Fields(ctx, catalog.FieldFilter{IDs: append([]string{}, in.FieldIds...)})
 	if err != nil {
@@ -372,8 +373,8 @@ func (s *Service) refreshCollections(ctx context.Context, subject string, collec
 			}
 			seen[d.Key] = d.ID
 		}
-		if len(defs) > 200 {
-			return invalid("at most 200 fields per collection")
+		if len(defs) > catalog.MaxFields {
+			return invalid(fmt.Sprintf("at most %d fields per collection", catalog.MaxFields))
 		}
 		if e = s.validateFieldHistory(ctx, c.ID, defs); e != nil {
 			return e

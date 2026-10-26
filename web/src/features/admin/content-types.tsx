@@ -202,10 +202,18 @@ function TypeDialog({
   const [parentId, setParentId] = useState(type ? (type.parent_id ?? '') : (root?.id ?? ''));
   const [schema, setSchema] = useState<Schema>({ ids: type?.field_ids ?? [], hidden: type?.hidden_field_ids ?? [], rules: type?.rules ?? [] });
   const parent = types.find((entry) => entry.id === parentId);
-  // A type cannot derive from itself or its subtypes.
-  const parents = typeTree(types).filter(
-    ({ type: entry }) => (entry.ancestor_ids?.length ?? 0) < maxCatalogAncestors - 1 && (!type || (entry.id !== type.id && !entry.ancestor_ids?.includes(type.id))),
-  );
+  // An existing type keeps its parent, shown with its ancestry. A new type
+  // derives from a type that leaves it at most maxCatalogAncestors ancestors.
+  const parents = type
+    ? types
+        .filter((entry) => entry.id === type.parent_id)
+        .map((entry) => ({
+          id: entry.id,
+          label: [...(entry.ancestor_ids ?? [])].reverse().map((id) => types.find((other) => other.id === id)?.name ?? id).concat(entry.name).join(' › '),
+        }))
+    : typeTree(types)
+        .filter(({ type: entry }) => (entry.ancestor_ids?.length ?? 0) < maxCatalogAncestors)
+        .map(({ type: entry, depth }) => ({ id: entry.id, label: treeLabel(entry.name, depth) }));
   const save = useMutation({
     mutationFn: () =>
       api(type ? `/v1/content-types/${type.id}` : '/v1/content-types', {
@@ -268,9 +276,9 @@ function TypeDialog({
                 }));
               }}
             >
-              {parents.map(({ type: entry, depth }) => (
+              {parents.map((entry) => (
                 <option key={entry.id} value={entry.id}>
-                  {treeLabel(entry.name, depth)}
+                  {entry.label}
                 </option>
               ))}
             </Select>

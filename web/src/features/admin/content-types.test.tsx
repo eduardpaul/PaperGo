@@ -39,14 +39,14 @@ const item: ContentType = { id: 'item', key: 'item', name: 'Item', field_ids: []
 const record: ContentType = { id: 'record', key: 'record', name: 'Record', parent_id: 'item', ancestor_ids: ['item'], field_ids: ['code', 'note'], effective: effective(['code', 'note']), version: 1 };
 const collection: Resource = { id: 'collection', workspace_id: 'workspace', kind: 'list', name: 'Records', version: 1, max_versions: 50 };
 
-function catalogAPI(scopes: string[], listType: ContentType, onWrite?: (path: string, body: Record<string, unknown>) => void) {
+function catalogAPI(scopes: string[], listType: ContentType, onWrite?: (path: string, body: Record<string, unknown>) => void, catalog: ContentType[] = [item, record]) {
   mockAPI((url, init) => {
     if (init.method === 'PUT' || init.method === 'POST') {
       onWrite?.(url.pathname, parseJSON(String(init.body)) as Record<string, unknown>);
       return listType;
     }
     if (url.pathname === '/v1/identity/me') return { subject: 'alice', scopes };
-    if (url.pathname === '/v1/content-types') return [item, record];
+    if (url.pathname === '/v1/content-types') return catalog;
     if (url.pathname === '/v1/fields') return fields;
     if (url.pathname === '/v1/resources/collection/content-types') return [listType];
     return { value: [] };
@@ -96,5 +96,25 @@ describe('content type administration', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save content type' }));
     await waitFor(() => expect(created).toBeDefined());
     expect(created).toMatchObject({ parent_id: 'item', field_ids: [], hidden_field_ids: [] });
+  });
+
+  it('offers the deepest legal parent and shows an existing type\'s ancestry', async () => {
+    // Level n has n ancestors; catalog types have at most 7.
+    const levels: ContentType[] = [item];
+    for (let n = 1; n <= 7; n++) {
+      const parent = levels[n - 1];
+      levels.push({ id: `level-${n}`, key: `level-${n}`, name: `Level ${n}`, parent_id: parent.id, ancestor_ids: [parent.id, ...(parent.ancestor_ids ?? [])], field_ids: [], effective: effective([]), version: 1 });
+    }
+    catalogAPI(['contentType.read', 'contentType.manage'], record, undefined, levels);
+    renderPage(<ContentTypeCatalog />);
+    fireEvent.click(await screen.findByRole('button', { name: 'New content type' }));
+    const offered = [...(screen.getByLabelText('Derives from') as HTMLSelectElement).options].map((option) => option.value);
+    expect(offered).toContain('level-6');
+    expect(offered).not.toContain('level-7');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Edit' })[7]);
+    const parent = (await screen.findByLabelText('Derives from')) as HTMLSelectElement;
+    expect(parent.value).toBe('level-6');
+    expect(parent.selectedOptions[0].textContent).toBe('Item › Level 1 › Level 2 › Level 3 › Level 4 › Level 5 › Level 6');
   });
 });
