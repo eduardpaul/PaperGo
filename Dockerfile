@@ -57,10 +57,11 @@ RUN --mount=type=cache,target=/src/.tools/embedding/models \
     --mount=type=cache,target=/src/.tools/decision \
     python3 scripts/build-assets.py --output-dir /assets
 
-FROM golang:${GO_VERSION}-bookworm AS toolchain
+# Debian 13: zvec's Linux arm64 library needs glibc 2.38.
+FROM golang:${GO_VERSION}-trixie AS toolchain
 ARG CMAKE_VERSION
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl git libicu72 postgresql-client python3 python3-pip pkg-config sqlite3 sudo \
+    && apt-get install -y --no-install-recommends ca-certificates curl git libicu76 postgresql-client python3 python3-pip pkg-config sqlite3 sudo \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
@@ -126,7 +127,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     && rm /out/bin/papergo-mcp \
     && mkdir -p /state/blobs
 
-FROM gcr.io/distroless/cc-debian12:nonroot
+FROM gcr.io/distroless/cc-debian13:nonroot
 ARG VERSION=development
 ARG COMMIT=unknown
 ARG SOURCE_URL=https://github.com/eduardpaul/PaperGo
