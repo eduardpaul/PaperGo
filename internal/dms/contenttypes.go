@@ -635,7 +635,7 @@ func (s *Service) UpdateContentType(ctx context.Context, subject, id string, ver
 		if e != nil {
 			return e
 		}
-		reshaped, e := changedSchema(old, schema)
+		reshaped, reordered, e := changedSchema(old, schema)
 		if e != nil {
 			return e
 		}
@@ -649,8 +649,9 @@ func (s *Service) UpdateContentType(ctx context.Context, subject, id string, ver
 		if e = t.checkHiddenMandatory(ctx, []string{id}); e != nil {
 			return e
 		}
-		// Fields and rules reach the items of every type deriving from this
-		// one; a new name reaches only the collections' schema snapshots.
+		// Fields, rules and settings reach the items of every type deriving
+		// from this one; a new name or field order reaches only the
+		// collections' schema snapshots.
 		switch {
 		case reshaped:
 			if e = t.checkSubtypes(ctx, id); e != nil {
@@ -659,7 +660,7 @@ func (s *Service) UpdateContentType(ctx context.Context, subject, id string, ver
 			if e = t.refreshCollections(ctx, subject, collections); e != nil {
 				return e
 			}
-		case out.Name != old.Name:
+		case reordered || out.Name != old.Name:
 			for _, c := range collections {
 				if e = t.recordSchema(ctx, subject, c); e != nil {
 					return e
@@ -696,18 +697,20 @@ func (s *Service) DeleteContentType(ctx context.Context, subject, id string, ver
 	})
 }
 
-// changedSchema reports whether a write changes a type's own fields, rules,
-// field order or field settings.
-func changedSchema(old *catalog.ContentType, next ListTypeInput) (bool, error) {
-	if !slices.Equal(old.FieldIds, next.FieldIds) || !slices.Equal(old.FieldOrder, next.FieldOrder) {
-		return true, nil
-	}
-	before, err := json.Marshal([]any{nonNil(old.Rules), nonNil(old.FieldSettings)})
+// changedSchema reports whether a write changes what items of a type must
+// hold, its own fields, rules or field settings, and whether it changes only
+// the order of its fields.
+func changedSchema(old *catalog.ContentType, next ListTypeInput) (reshaped, reordered bool, err error) {
+	before, err := json.Marshal([]any{nonNil(old.FieldIds), nonNil(old.Rules), nonNil(old.FieldSettings)})
 	if err != nil {
-		return false, err
+		return false, false, err
 	}
-	after, err := json.Marshal([]any{nonNil(next.Rules), nonNil(next.FieldSettings)})
-	return string(before) != string(after), err
+	after, err := json.Marshal([]any{nonNil(next.FieldIds), nonNil(next.Rules), nonNil(next.FieldSettings)})
+	if err != nil {
+		return false, false, err
+	}
+	reshaped = string(before) != string(after)
+	return reshaped, !reshaped && !slices.Equal(old.FieldOrder, next.FieldOrder), nil
 }
 
 // UpdateListType customizes a collection's list type at its version. The
@@ -732,10 +735,20 @@ func (s *Service) UpdateListType(ctx context.Context, subject, collection, id st
 		if e = t.validateTypeSchema(ctx, subject, parent, &in); e != nil {
 			return e
 		}
+		reshaped, reordered, e := changedSchema(typ, in)
+		if e != nil {
+			return e
+		}
 		if out, e = t.reviseContentType(ctx, typ, catalog.ContentType{FieldIds: in.FieldIds, HiddenFieldIds: in.HiddenFieldIds, Rules: in.Rules, FieldOrder: in.FieldOrder, FieldSettings: in.FieldSettings}); e != nil {
 			return e
 		}
-		if e = t.refreshCollections(ctx, subject, []*resources.Resource{c}); e != nil {
+		switch {
+		case reshaped:
+			e = t.refreshCollections(ctx, subject, []*resources.Resource{c})
+		case reordered:
+			e = t.recordSchema(ctx, subject, c)
+		}
+		if e != nil {
 			return e
 		}
 		return t.audit(ctx, subject, "content_type.update", c, map[string]any{"content_type_id": id, "version": out.Version})

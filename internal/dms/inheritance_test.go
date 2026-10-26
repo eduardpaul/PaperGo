@@ -594,3 +594,56 @@ func TestFieldChangesKeepTypeDefaultsValid(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// Reordering a type's fields reaches the schema snapshots of the collections
+// that accept it.
+func TestFieldOrderReachesSchemaSnapshots(t *testing.T) {
+	s, _, l := fixture(t)
+	a, err := s.CreateCatalogField(testContext, "alice", CreateField{Key: "a", Label: "A", Type: "text"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := s.CreateCatalogField(testContext, "alice", CreateField{Key: "b", Label: "B", Type: "text"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err := s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "record", Name: "Record", FieldIds: []string{a.ID, b.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	listType := attachOK(t, s, l.ID, record.ID, true)
+	keys := func() []string {
+		t.Helper()
+		c := latest(t, s, l.ID)
+		schema, err := s.DAL.Catalog().Schema(testContext, *c.SchemaHeadID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var definition SchemaDefinition
+		if err = json.Unmarshal(schema.Definition, &definition); err != nil {
+			t.Fatal(err)
+		}
+		for _, typ := range definition.ContentTypes {
+			if typ.ID == listType.ID {
+				return typ.FieldKeys
+			}
+		}
+		t.Fatal("list type missing from the snapshot")
+		return nil
+	}
+	if _, err = s.UpdateContentType(testContext, "alice", record.ID, record.Version, ContentTypeInput{Name: record.Name, FieldIds: record.FieldIds, FieldOrder: []string{b.ID}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := keys(); !slices.Equal(got, []string{"b", "a"}) {
+		t.Fatal("catalog reorder", got)
+	}
+	if listType, err = s.contentType(testContext, l.ID, listType.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.UpdateListType(testContext, "alice", l.ID, listType.ID, listType.Version, ListTypeInput{FieldOrder: []string{a.ID}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := keys(); !slices.Equal(got, []string{"a", "b"}) {
+		t.Fatal("list reorder", got)
+	}
+}
