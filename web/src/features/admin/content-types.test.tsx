@@ -183,9 +183,23 @@ describe('content type administration', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(saved).toBeDefined());
     expect(saved).toMatchObject({
-      field_order: ['note', 'code'],
+      field_order: ['note'],
       field_settings: [{ field_id: 'code', required: false }, { field_id: 'note', required: true, default_value: 'n/a' }],
     });
+  });
+
+  it('orders only the fields out of inherited order, among those it shows', async () => {
+    let saved: Record<string, unknown> | undefined;
+    // "gone" has no definition the page loaded.
+    const listType: ContentType = { id: 'list-record', key: 'record', name: 'Record', parent_id: 'record', collection_id: 'collection', is_default: true, field_ids: [], effective: effective(['code', 'gone', 'note']), version: 2 };
+    catalogAPI(['contentType.read', 'contentType.manage'], listType, (_, body) => (saved = body), [item, { ...record, effective: effective(['code', 'gone', 'note']) }]);
+    renderPage(<CollectionContentTypes collection={collection} canManage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Customize' }));
+    expect(await screen.findByRole('button', { name: 'Move Note down' })).toHaveProperty('disabled', true);
+    fireEvent.click(screen.getByRole('button', { name: 'Move Code down' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(saved).toBeDefined());
+    expect(saved).toMatchObject({ field_order: ['note', 'gone'] });
   });
 
   it('starts an own default without one to inherit empty', async () => {

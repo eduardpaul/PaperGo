@@ -190,6 +190,7 @@ function SchemaFields({
     withSetting(field, parent?.effective?.field_settings?.find((setting) => setting.field_id === field.id));
   const ownSetting = (id: string) => schema.settings.find((setting) => setting.field_id === id);
   const all = schemaFieldIds(schema, parent);
+  const layout = all.flatMap((id) => byId.get(id) ?? []);
   // Fields given an own default that has no value yet.
   const [drafts, setDrafts] = useState<string[]>([]);
   const setSetting = (id: string, change: Partial<FieldSetting>) => {
@@ -199,11 +200,17 @@ function SchemaFields({
     const others = schema.settings.filter((setting) => setting.field_id !== id);
     onChange({ ...schema, settings: Object.keys(next).length > 1 ? [...others, next] : others });
   };
+  // Swaps a shown field with its neighbour. The type orders only the fields
+  // up to the last one out of inherited order, so the rest keep following
+  // what it inherits.
   const move = (index: number, by: number) => {
-    const order = [...all];
-    const [id] = order.splice(index, 1);
-    order.splice(index + by, 0, id);
-    onChange({ ...schema, order });
+    const next = [...all];
+    const [from, to] = [next.indexOf(layout[index].id), next.indexOf(layout[index + by].id)];
+    [next[from], next[to]] = [next[to], next[from]];
+    const inherited = schemaFieldIds({ ...schema, order: [] }, parent);
+    let length = 0;
+    while (reorder(inherited, next.slice(0, length)).some((id, i) => id !== next[i])) length++;
+    onChange({ ...schema, order: next.slice(0, length) });
   };
   const label = (field: FieldDefinition) => (
     <>
@@ -267,7 +274,7 @@ function SchemaFields({
             The order forms show the fields in, and whether this type requires each and its default. Fields themselves stay as
             they are for other types.
           </p>
-          {all.flatMap((id) => byId.get(id) ?? []).map((field, index) => {
+          {layout.map((field, index) => {
             const setting = ownSetting(field.id);
             const base = inheritedField(field);
             const ownDefault = drafts.includes(field.id) || (setting?.default_value !== undefined && setting.default_value !== null);
@@ -278,7 +285,7 @@ function SchemaFields({
                   <Button size="sm" variant="ghost" aria-label={`Move ${field.label} up`} disabled={index === 0} onClick={() => move(index, -1)}>
                     ↑
                   </Button>
-                  <Button size="sm" variant="ghost" aria-label={`Move ${field.label} down`} disabled={index === all.length - 1} onClick={() => move(index, 1)}>
+                  <Button size="sm" variant="ghost" aria-label={`Move ${field.label} down`} disabled={index === layout.length - 1} onClick={() => move(index, 1)}>
                     ↓
                   </Button>
                   <Select
