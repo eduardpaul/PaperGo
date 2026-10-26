@@ -30,6 +30,22 @@ class GoReportsTests(unittest.TestCase):
         self.assertEqual(len(result['packages']), 2)
         self.assertIn('cached', reports.markdown(result))
 
+    def test_long_failure_output_is_cut_and_kept_in_the_report(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / 'go.mod').write_text('module sample\n\ngo 1.26\n')
+            (root / 'sample_test.go').write_text('package sample\nimport (\n"strings"\n"testing"\n)\n'
+                                                 'func TestHuge(t *testing.T) { t.Fatal(strings.Repeat("x", 4<<20)) }\n')
+            stem = root / 'reports/tests'
+            env = {key: value for key, value in os.environ.items() if key != 'GITHUB_STEP_SUMMARY'}
+            result = subprocess.run([sys.executable, str(SCRIPT), '--output', str(stem), '--', './...'],
+                                    cwd=root, env=dict(env, GOTOOLCHAIN='local'), capture_output=True, text=True, timeout=120)
+            self.assertEqual(result.returncode, 1)
+            self.assertLess(max(map(len, (result.stdout + result.stderr).splitlines())), reports.MAX_LINE + 100)
+            self.assertIn('more characters in the .jsonl report', result.stderr)
+            events = map(json.loads, stem.with_suffix('.jsonl').read_text().splitlines())
+            self.assertIn('x' * (4 << 20), ''.join(event.get('Output', '') for event in events))
+
     def test_deadline_stops_a_hung_test_and_names_it(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

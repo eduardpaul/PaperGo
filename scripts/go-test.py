@@ -21,6 +21,16 @@ import time
 
 # Minutes without a finished package before the still-running tests are listed.
 QUIET_MINUTES = 5
+# GitHub's job log stops reading a step's output at lines of many megabytes,
+# which blocks the step; what is printed is cut, the .jsonl report keeps it.
+MAX_LINE = 64 << 10
+MAX_FAILURE_OUTPUT = 1 << 20
+
+
+def clip(text):
+    if len(text) <= MAX_LINE:
+        return text
+    return text[:MAX_LINE] + f' [{len(text) - MAX_LINE} more characters in the .jsonl report]\n'
 
 
 def summarize(events, wall_seconds, preparation_seconds, exit_code):
@@ -151,7 +161,7 @@ def main():
                 try:
                     event = json.loads(line)
                 except json.JSONDecodeError:
-                    print(line, end='', flush=True)
+                    print(clip(line), end='', flush=True)
                     continue
                 events.append(event)
                 package = event.get('Package', '')
@@ -163,13 +173,17 @@ def main():
                     if not test:
                         progressed = now
                 if event.get('Action') == 'build-output':
-                    print(event['Output'], end='', flush=True)
+                    print(clip(event['Output']), end='', flush=True)
                 elif event.get('Action') == 'output':
                     output[package].append(event['Output'])
                     if not event.get('Test'):
-                        print(event['Output'], end='', flush=True)
+                        print(clip(event['Output']), end='', flush=True)
                 if event.get('Action') == 'fail' and not event.get('Test'):
-                    print(''.join(output[package]), file=sys.stderr, end='', flush=True)
+                    # go test -json splits long lines into several events.
+                    failure = ''.join(map(clip, ''.join(output[package]).splitlines(keepends=True)))
+                    if len(failure) > MAX_FAILURE_OUTPUT:
+                        failure = f'[{len(failure) - MAX_FAILURE_OUTPUT} earlier characters in the .jsonl report]\n' + failure[-MAX_FAILURE_OUTPUT:]
+                    print(failure, file=sys.stderr, end='', flush=True)
                 if event.get('Action') in {'pass', 'fail', 'skip'} and not event.get('Test'):
                     output.pop(package, None)
         finally:
