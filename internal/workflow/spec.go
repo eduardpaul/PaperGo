@@ -78,6 +78,9 @@ const (
 // Trigger starts runs. CollectionID limits item and workflow-event triggers
 // to one list or library, and makes a schedule start one run per item of
 // that collection that meets the condition on Surface (head by default).
+// ContentTypeID limits them, in a collection or the whole workspace, to items
+// and folders of a content type or its subtypes; a list type stands for the
+// catalog type it copies.
 type Trigger struct {
 	Disabled      bool   `json:"disabled,omitempty"`
 	Type          string `json:"type"`
@@ -302,9 +305,6 @@ func (d Definition) validate() error {
 				return dms.Invalid(at + "a condition tests items; folder triggers take collection_id and content_type_id")
 			}
 		case t.Type == TriggerSchedule:
-			if t.ContentTypeID != "" {
-				return dms.Invalid(at + "content_type_id belongs to item triggers")
-			}
 			if _, err := t.schedule(); err != nil {
 				return dms.Invalid(at + err.Error())
 			}
@@ -347,8 +347,8 @@ func (d Definition) validate() error {
 		default:
 			return dms.Invalid(at + "unknown trigger type " + t.Type)
 		}
-		if t.ContentTypeID != "" && t.CollectionID == "" {
-			return dms.Invalid(at + "content_type_id needs collection_id")
+		if t.Type == TriggerSchedule && t.ContentTypeID != "" && t.CollectionID == "" {
+			return dms.Invalid(at + "a schedule takes content_type_id with collection_id")
 		}
 		if d.Condition != nil && t.CollectionID == "" {
 			return dms.Invalid(at + "a condition needs collection_id on every trigger")

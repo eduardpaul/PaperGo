@@ -13866,7 +13866,7 @@ export interface Task extends AdditionalDataHolder, Parsable {
      */
     input?: Task_input | null;
     /**
-     * A JSON Schema form (draft-07 subset; see docs/workflows.md#forms): type, title, description, default, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, uniqueItems, items, properties, required, additionalProperties (boolean or a schema; objects are closed by default). x-papergo on a property makes it a domain picker (item, collection, relationship, terms, keywords, people). The terms picker selects term IDs by default; select: sets selects term-set IDs, optionally narrowed by group_id.
+     * A JSON Schema form (draft-07 subset; see docs/workflows.md#forms): type, title, description, default, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, uniqueItems, items, properties, required, additionalProperties (boolean or a schema; objects are closed by default). x-papergo on a property makes it a domain picker (item, collection, relationship, terms, keywords, people, content_type). The content_type picker selects catalog content types a list or library of the workspace accepts, optionally narrowed by collection_id. The terms picker selects term IDs by default; select: sets selects term-set IDs, optionally narrowed by group_id.
      */
     inputSchema?: WorkflowForm | null;
     /**
@@ -14014,7 +14014,7 @@ export interface TaskCreate extends Parsable {
      */
     dueAt?: Date | null;
     /**
-     * A JSON Schema form (draft-07 subset; see docs/workflows.md#forms): type, title, description, default, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, uniqueItems, items, properties, required, additionalProperties (boolean or a schema; objects are closed by default). x-papergo on a property makes it a domain picker (item, collection, relationship, terms, keywords, people). The terms picker selects term IDs by default; select: sets selects term-set IDs, optionally narrowed by group_id.
+     * A JSON Schema form (draft-07 subset; see docs/workflows.md#forms): type, title, description, default, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, uniqueItems, items, properties, required, additionalProperties (boolean or a schema; objects are closed by default). x-papergo on a property makes it a domain picker (item, collection, relationship, terms, keywords, people, content_type). The content_type picker selects catalog content types a list or library of the workspace accepts, optionally narrowed by collection_id. The terms picker selects term IDs by default; select: sets selects term-set IDs, optionally narrowed by group_id.
      */
     inputSchema?: WorkflowForm | null;
     /**
@@ -14825,7 +14825,7 @@ export interface WorkflowCalls extends Parsable {
     workflow?: string | null;
 }
 /**
- * A JSON Schema form (draft-07 subset; see docs/workflows.md#forms): type, title, description, default, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, uniqueItems, items, properties, required, additionalProperties (boolean or a schema; objects are closed by default). x-papergo on a property makes it a domain picker (item, collection, relationship, terms, keywords, people). The terms picker selects term IDs by default; select: sets selects term-set IDs, optionally narrowed by group_id.
+ * A JSON Schema form (draft-07 subset; see docs/workflows.md#forms): type, title, description, default, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, uniqueItems, items, properties, required, additionalProperties (boolean or a schema; objects are closed by default). x-papergo on a property makes it a domain picker (item, collection, relationship, terms, keywords, people, content_type). The content_type picker selects catalog content types a list or library of the workspace accepts, optionally narrowed by collection_id. The terms picker selects term IDs by default; select: sets selects term-set IDs, optionally narrowed by group_id.
  */
 export interface WorkflowForm extends AdditionalDataHolder, Parsable {
 }

@@ -8,13 +8,15 @@ import (
 	"strings"
 )
 
+// automaticScope checks that every active content rule names a list or
+// library, or a content type, rather than all of a workspace's content.
 func automaticScope(def Definition) error {
 	for _, tr := range def.Triggers {
 		if tr.Disabled {
 			continue
 		}
-		if tr.CollectionID == "" && (strings.HasPrefix(tr.Type, "file.") || strings.HasPrefix(tr.Type, "item.") || strings.HasPrefix(tr.Type, "folder.") || tr.Type == dms.EventPermissionsChanged) {
-			return dms.Invalid("Automatic content processing requires a specific list or library for every active rule.")
+		if tr.CollectionID == "" && tr.ContentTypeID == "" && (strings.HasPrefix(tr.Type, "file.") || strings.HasPrefix(tr.Type, "item.") || strings.HasPrefix(tr.Type, "folder.") || tr.Type == dms.EventPermissionsChanged) {
+			return dms.Invalid("Automatic content processing requires a specific list or library, or a content type, for every active rule.")
 		}
 	}
 	return nil

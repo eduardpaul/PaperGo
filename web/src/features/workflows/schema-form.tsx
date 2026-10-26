@@ -3,12 +3,13 @@ import { useId, useState } from 'react';
 import { api } from '@/api/http';
 import { parseJSON, stringifyJSON } from '@/api/json';
 import { allPages } from '@/api/pages';
-import type { Page, Resource, Term } from '@/api/types';
+import type { Page, Resource, SearchContentType, Term } from '@/api/types';
 import { peopleQuery } from '@/api/queries';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
 import { Input, Label, Textarea } from '@/components/ui/input';
 import { Checkbox, Select } from '@/components/ui/select';
+import { typeTree } from '@/features/lists/schema';
 import { formDefaults } from './model';
 import type { FormSchema } from './model';
 
@@ -210,6 +211,22 @@ function DomainPicker({
         return (await api<{ value: Term[] }>('/v1/keywords', { query: { q: text, $top: 50 } })).data.value.map(
           (term) => ({ value: term.id, label: term.name }),
         );
+      if (domain.kind === 'content_type') {
+        // Catalog types the workspace (or the collection) uses, as a tree.
+        const types = (
+          await api<SearchContentType[]>('/v1/search/content-types', {
+            query: { workspace_id: workspaceId, collection_id: domain.collection_id },
+          })
+        ).data;
+        const byId = new Map(types.map((type) => [type.id, type]));
+        const path = (type: SearchContentType): string => {
+          const parent = type.parent_id ? byId.get(type.parent_id) : undefined;
+          return parent ? `${path(parent)} › ${type.name}` : type.name;
+        };
+        return typeTree(types)
+          .map(({ type }) => ({ value: type.id, label: path(type) }))
+          .filter((option) => option.label.toLowerCase().includes(text.toLowerCase()));
+      }
       if (domain.kind === 'terms') {
         if (domain.select === 'sets')
           return (await allPages<{ id: string; name: string }>('/v1/term-sets', { group_id: domain.group_id }))

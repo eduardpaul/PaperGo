@@ -17,7 +17,7 @@ import { useFormat } from '@/lib/preferences';
 import { formDefaults, manualItemMode, normalizeForm } from './model';
 import type { WorkflowDefinition } from './model';
 import { SchemaFields } from './schema-form';
-import { automaticSummary } from './presentation';
+import { automaticSummary, workspaceTypesQuery } from './presentation';
 
 export function LaunchWorkflow({
   workflow,
@@ -32,6 +32,7 @@ export function LaunchWorkflow({
 }) {
   const client = useQueryClient();
   const definition = workflow.definition as WorkflowDefinition;
+  const types = useQuery(workspaceTypesQuery(workflow.workspace_id, definition.triggers));
   const manual = definition.triggers.find((trigger) => trigger.type === 'manual');
   const itemMode = manualItemMode(manual);
   const schema = definition.input_schema ?? { type: 'object', properties: {} };
@@ -86,7 +87,7 @@ export function LaunchWorkflow({
       onClose={onClose}
       onSubmit={() => { if (check.data?.can_run) launch.mutate(); }}
     >
-      <p className="text-sm">Automatic runs: {automaticSummary(workflow)}. Running once keeps these settings unchanged.</p>
+      <p className="text-sm">Automatic runs: {automaticSummary(workflow, [], types.data)}. Running once keeps these settings unchanged.</p>
       <p className="text-xs text-muted">Execution author: {workflow.execution_author ?? 'Workflow author'}. The server rechecks permissions before execution.</p>
       <QueryFeedback query={check} />
       {check.data && <p role="status" className="text-sm">{check.data.reason}</p>}

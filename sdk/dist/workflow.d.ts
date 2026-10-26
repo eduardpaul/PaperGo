@@ -5974,7 +5974,7 @@ export interface Task extends AdditionalDataHolder, Parsable {
 	 */
 	input?: Task_input | null;
 	/**
-	 * A JSON Schema form (draft-07 subset; see docs/workflows.md#forms): type, title, description, default, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, uniqueItems, items, properties, required, additionalProperties (boolean or a schema; objects are closed by default). x-papergo on a property makes it a domain picker (item, collection, relationship, terms, keywords, people). The terms picker selects term IDs by default; select: sets selects term-set IDs, optionally narrowed by group_id.
+	 * A JSON Schema form (draft-07 subset; see docs/workflows.md#forms): type, title, description, default, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, uniqueItems, items, properties, required, additionalProperties (boolean or a schema; objects are closed by default). x-papergo on a property makes it a domain picker (item, collection, relationship, terms, keywords, people, content_type). The content_type picker selects catalog content types a list or library of the workspace accepts, optionally narrowed by collection_id. The terms picker selects term IDs by default; select: sets selects term-set IDs, optionally narrowed by group_id.
 	 */
 	inputSchema?: WorkflowForm | null;
 	/**
@@ -6122,7 +6122,7 @@ export interface TaskCreate extends Parsable {
 	 */
 	dueAt?: Date | null;
 	/**
-	 * A JSON Schema form (draft-07 subset; see docs/workflows.md#forms): type, title, description, default, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, uniqueItems, items, properties, required, additionalProperties (boolean or a schema; objects are closed by default). x-papergo on a property makes it a domain picker (item, collection, relationship, terms, keywords, people). The terms picker selects term IDs by default; select: sets selects term-set IDs, optionally narrowed by group_id.
+	 * A JSON Schema form (draft-07 subset; see docs/workflows.md#forms): type, title, description, default, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, uniqueItems, items, properties, required, additionalProperties (boolean or a schema; objects are closed by default). x-papergo on a property makes it a domain picker (item, collection, relationship, terms, keywords, people, content_type). The content_type picker selects catalog content types a list or library of the workspace accepts, optionally narrowed by collection_id. The terms picker selects term IDs by default; select: sets selects term-set IDs, optionally narrowed by group_id.
 	 */
 	inputSchema?: WorkflowForm | null;
 	/**
@@ -6933,7 +6933,7 @@ export interface WorkflowCalls extends Parsable {
 	workflow?: string | null;
 }
 /**
- * A JSON Schema form (draft-07 subset; see docs/workflows.md#forms): type, title, description, default, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, uniqueItems, items, properties, required, additionalProperties (boolean or a schema; objects are closed by default). x-papergo on a property makes it a domain picker (item, collection, relationship, terms, keywords, people). The terms picker selects term IDs by default; select: sets selects term-set IDs, optionally narrowed by group_id.
+ * A JSON Schema form (draft-07 subset; see docs/workflows.md#forms): type, title, description, default, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, uniqueItems, items, properties, required, additionalProperties (boolean or a schema; objects are closed by default). x-papergo on a property makes it a domain picker (item, collection, relationship, terms, keywords, people, content_type). The content_type picker selects catalog content types a list or library of the workspace accepts, optionally narrowed by collection_id. The terms picker selects term IDs by default; select: sets selects term-set IDs, optionally narrowed by group_id.
  */
 export interface WorkflowForm extends AdditionalDataHolder, Parsable {
 }
@@ -13718,6 +13718,7 @@ export interface Trigger {
 	type: string;
 	disabled?: boolean;
 	collection_id?: string;
+	/** A content type (a catalog type, or a list type standing for it); matches its subtypes too. */
 	content_type_id?: string;
 	cron?: string;
 	time_zone?: string;
@@ -13751,6 +13752,8 @@ export interface TriggerResource {
 	readonly revision_id: string;
 	readonly revision_number: number;
 	readonly content_type_id: string;
+	/** Key of the catalog type the item's type copies, such as `invoice`. */
+	readonly content_type_key: string;
 	readonly name: string;
 	readonly keywords: readonly string[];
 	/** Plain JSON field values. Absent when they would exceed the snapshot's 64 KiB budget. */

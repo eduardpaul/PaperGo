@@ -65,6 +65,7 @@ export interface Trigger {
   type: string;
   disabled?: boolean;
   collection_id?: string;
+  /** A content type (a catalog type, or a list type standing for it); matches its subtypes too. */
   content_type_id?: string;
   cron?: string;
   time_zone?: string;
@@ -101,6 +102,8 @@ export interface TriggerResource {
   readonly revision_id: string;
   readonly revision_number: number;
   readonly content_type_id: string;
+  /** Key of the catalog type the item's type copies, such as `invoice`. */
+  readonly content_type_key: string;
   readonly name: string;
   readonly keywords: readonly string[];
   /** Plain JSON field values. Absent when they would exceed the snapshot's 64 KiB budget. */

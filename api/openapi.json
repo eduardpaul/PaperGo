@@ -27222,7 +27222,8 @@
             "description": "Limits item, workflow-event, task and permission triggers to a collection; permission events include the collection itself and its folders/items. Not supported for term.changed, term.merged or term.moved."
           },
           "content_type_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Limits item, file, folder, permission and workflow-event triggers, and a collection's schedule, to items and folders of a content type or its subtypes. A catalog type, or a list type standing for the catalog type it copies. With collection_id the collection must accept the type or a subtype; without it the trigger covers the workspace, which also scopes automatic content rules. A schedule takes it only with collection_id."
           },
           "cron": {
             "type": "string",
@@ -28182,7 +28183,7 @@
       "WorkflowForm": {
         "type": "object",
         "additionalProperties": true,
-        "description": "A JSON Schema form (draft-07 subset; see docs/workflows.md#forms): type, title, description, default, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, uniqueItems, items, properties, required, additionalProperties (boolean or a schema; objects are closed by default). x-papergo on a property makes it a domain picker (item, collection, relationship, terms, keywords, people). The terms picker selects term IDs by default; select: sets selects term-set IDs, optionally narrowed by group_id."
+        "description": "A JSON Schema form (draft-07 subset; see docs/workflows.md#forms): type, title, description, default, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, uniqueItems, items, properties, required, additionalProperties (boolean or a schema; objects are closed by default). x-papergo on a property makes it a domain picker (item, collection, relationship, terms, keywords, people, content_type). The content_type picker selects catalog content types a list or library of the workspace accepts, optionally narrowed by collection_id. The terms picker selects term IDs by default; select: sets selects term-set IDs, optionally narrowed by group_id."
       },
       "TermGroupInput": {
         "type": "object",

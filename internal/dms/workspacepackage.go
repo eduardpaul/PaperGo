@@ -856,11 +856,12 @@ func rebuildWorkspaceTriggers(p *corePackage, now time.Time) error {
 		}
 		var definition struct {
 			Triggers []struct {
-				Disabled     bool   `json:"disabled"`
-				Type         string `json:"type"`
-				CollectionID string `json:"collection_id"`
-				Cron         string `json:"cron"`
-				TimeZone     string `json:"time_zone"`
+				Disabled      bool   `json:"disabled"`
+				Type          string `json:"type"`
+				CollectionID  string `json:"collection_id"`
+				ContentTypeID string `json:"content_type_id"`
+				Cron          string `json:"cron"`
+				TimeZone      string `json:"time_zone"`
 			} `json:"triggers"`
 		}
 		if err := json.Unmarshal([]byte(fmt.Sprint(version["definition"])), &definition); err != nil {
@@ -870,8 +871,8 @@ func rebuildWorkspaceTriggers(p *corePackage, now time.Time) error {
 			if trigger.Type == "manual" || trigger.Disabled {
 				continue
 			}
-			if trigger.CollectionID == "" && (strings.HasPrefix(trigger.Type, "file.") || strings.HasPrefix(trigger.Type, "item.") || strings.HasPrefix(trigger.Type, "folder.") || trigger.Type == EventPermissionsChanged) {
-				return invalid("automatic content processing requires a specific list or library")
+			if trigger.CollectionID == "" && trigger.ContentTypeID == "" && (strings.HasPrefix(trigger.Type, "file.") || strings.HasPrefix(trigger.Type, "item.") || strings.HasPrefix(trigger.Type, "folder.") || trigger.Type == EventPermissionsChanged) {
+				return invalid("automatic content processing requires a specific list or library, or a content type")
 			}
 			tr := map[string]any{"id": uuid.NewString(), "created_at": row["created_at"], "workflow_id": row["id"], "workspace_id": row["workspace_id"], "collection_id": nil, "type": trigger.Type, "position": int64(position), "next_at": nil}
 			if trigger.CollectionID != "" {

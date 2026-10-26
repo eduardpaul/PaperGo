@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/api/http";
@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/sheet";
 import { QueryFeedback } from "@/features/admin/common";
 import { formDefaults, normalizeForm, type FormSchema, type WorkflowDefinition } from "./model";
-import { triggerLabel } from "./presentation";
+import { triggerLabel, workspaceTypesQuery } from "./presentation";
 import { RunView } from "./run-details";
 import { JsonInput, SchemaFields } from "./schema-form";
 import { ScriptEditor } from "./script-editor";
@@ -82,6 +82,7 @@ export function WorkflowEditor({
     },
   });
   const definition = workflow?.definition as WorkflowDefinition | undefined;
+  const types = useQuery(workspaceTypesQuery(workspaceId, definition?.triggers));
   return (
     <Sheet open onOpenChange={(open) => !open && onClose()}>
       <SheetContent className="md:w-[min(1500px,96vw)]">
@@ -144,7 +145,7 @@ export function WorkflowEditor({
                   <ul className="list-disc pl-5">
                     {definition.triggers.map((trigger, index) => (
                       <li key={index}>
-                        {triggerLabel(trigger)}
+                        {triggerLabel(trigger, types.data)}
                         {trigger.disabled && " · paused"}
                       </li>
                     ))}

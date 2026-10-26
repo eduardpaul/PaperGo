@@ -336,6 +336,33 @@ func (r *Repo) CatalogTypeIDs(ctx context.Context, ids []string) (map[string]str
 	return out, nil
 }
 
+// Derives reports whether a type is another type or derives from it. A list
+// type named as the ancestor stands for the catalog type it copies.
+func (r *Repo) Derives(ctx context.Context, typeID, ancestorID string) (bool, error) {
+	catalogTypes, err := r.CatalogTypeIDs(ctx, []string{ancestorID})
+	if err != nil {
+		return false, err
+	}
+	want := catalogTypes[ancestorID]
+	if want == "" || typeID == "" {
+		return false, nil
+	}
+	if typeID == want {
+		return true, nil
+	}
+	lineages, err := r.read.Lineages(ctx, []string{typeID})
+	return slices.Contains(lineages[typeID], want), err
+}
+
+// ContentTypeKey returns the key of a stored type, or dberr.ErrNotFound.
+func (r *Repo) ContentTypeKey(ctx context.Context, id string) (string, error) {
+	t, err := r.read.ContentType(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	return t.Key, nil
+}
+
 // ContentType returns a content type, or dberr.ErrNotFound.
 func (r *Repo) ContentType(ctx context.Context, id string) (*ContentType, error) {
 	return contentType(ctx, r.read, id)

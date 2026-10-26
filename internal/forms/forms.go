@@ -12,6 +12,7 @@ import (
 	"papergo/internal/dms"
 	"reflect"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -62,6 +63,7 @@ var schemaKeywords = map[string]bool{
 //	terms         organization taxonomy terms, not deprecated; select: sets picks sets instead; group_id narrows either selection
 //	keywords      organization keywords: terms of its keywords set and terms available as keywords, not deprecated
 //	people        principal subjects with access (default read) to the workspace
+//	content_type  catalog content types a list or library of the workspace accepts, directly or through a subtype; collection_id narrows them to that collection's
 var domainKinds = map[string]map[string]bool{
 	"item":         {"collection_id": true},
 	"collection":   {},
@@ -69,6 +71,7 @@ var domainKinds = map[string]map[string]bool{
 	"terms":        {"select": true, "group_id": true, "term_set_id": true, "term_ids": true},
 	"keywords":     {},
 	"people":       {"access": true},
+	"content_type": {"collection_id": true},
 }
 
 var selectionHints = map[string]bool{"preview": true, "item_label": true, "order_label": true, "primary_description": true}
@@ -737,6 +740,31 @@ func checkPick(ctx context.Context, t *dms.Service, subject, workspaceID string,
 		r, err := t.Authorize(ctx, subject, id, "read")
 		if err != nil || r.WorkspaceID != workspaceID || string(r.Kind) != "list" && string(r.Kind) != "library" {
 			return fmt.Errorf("%s is not a readable list or library of the workspace", id)
+		}
+	case "content_type":
+		catalogTypes, err := t.DAL.Catalog().CatalogTypeIDs(ctx, []string{id})
+		if err != nil {
+			return err
+		}
+		if catalogTypes[id] != id {
+			return fmt.Errorf("%s is not a catalog content type", id)
+		}
+		collections, err := t.DAL.Catalog().AttachedCollections(ctx, []string{id})
+		if err != nil {
+			return err
+		}
+		if c, _ := f.opts["collection_id"].(string); c != "" {
+			collections = slices.DeleteFunc(collections, func(other string) bool { return other != c })
+		}
+		ok := len(collections) > 0
+		if ok {
+			ok, err = t.DAL.Resources().Exists(ctx, resources.Filter{IDs: collections, WorkspaceID: workspaceID, Kinds: []refs.ResourceKind{refs.KindList, refs.KindLibrary}, State: resources.Live})
+			if err != nil {
+				return err
+			}
+		}
+		if !ok {
+			return fmt.Errorf("content type %s is not used in the allowed collections", id)
 		}
 	case "terms":
 		group, _ := f.opts["group_id"].(string)
