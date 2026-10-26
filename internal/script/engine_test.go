@@ -556,7 +556,9 @@ export default workflow({
 func TestJournalsAreBounded(t *testing.T) {
 	page := jsonResponse(200, `{"value":[],"padding":"`+strings.Repeat("x", 1<<20)+`"}`)
 	m := newMemory(func(Request) Response { return page })
-	out := execute(t, New(m, 0), Run{ID: "run-journal", Artifact: bundle(t, `
+	// The script reads 32 MiB without waiting; its slice is long enough
+	// for that under the race detector, which TestSliceLimit covers.
+	out := execute(t, New(m, time.Minute), Run{ID: "run-journal", Artifact: bundle(t, `
 import { workflow } from "@papergo/workflow";
 export default workflow({
   async run(ctx) {
@@ -564,8 +566,9 @@ export default workflow({
   },
 });
 `)})
+	// The outcome holds the megabyte responses; the failure names only its status.
 	if out.Status != Failed || !strings.Contains(out.Error, "more than 32 MiB") || len(m.requests) != maxJournal/(1<<20) {
-		t.Fatalf("outcome: %+v after %d requests", out, len(m.requests))
+		t.Fatalf("outcome %s: %s, after %d requests", out.Status, out.Error, len(m.requests))
 	}
 }
 
