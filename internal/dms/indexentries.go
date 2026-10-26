@@ -9,7 +9,6 @@ import (
 
 	"papergo/internal/dal/catalog"
 	"papergo/internal/dal/content"
-	"papergo/internal/dal/dberr"
 	"papergo/internal/dal/refs"
 	"papergo/internal/dal/resources"
 	"papergo/internal/dal/surfaces"
@@ -110,16 +109,10 @@ func (s *Service) IndexEntries(ctx context.Context, ids []string) (entries []Ind
 	for _, rev := range byID {
 		typeIDs = append(typeIDs, rev.ContentTypeID)
 	}
-	types, err := s.DAL.Catalog().ContentTypes(ctx, catalog.ContentTypeFilter{IDs: typeIDs, Detached: true})
+	slices.Sort(typeIDs)
+	catalogTypes, err := s.DAL.Catalog().CatalogTypeIDs(ctx, slices.Compact(typeIDs))
 	if err != nil {
 		return nil, nil, err
-	}
-	catalogTypes := map[string]string{}
-	for _, typ := range types {
-		catalogTypes[typ.ID] = typ.ID
-		if !typ.Catalog() {
-			catalogTypes[typ.ID] = *typ.ParentID
-		}
 	}
 	defs := map[[2]string][]*catalog.FieldDefinition{}
 	weights := map[string]map[string]string{}
@@ -241,15 +234,12 @@ func (s *Service) TermFamily(ctx context.Context, id string) ([]string, error) {
 // type stands for the catalog type it copies.
 func (s *Service) ContentTypeFamily(ctx context.Context, id string) ([]string, error) {
 	return read(ctx, s, func(t *Service) ([]string, error) {
-		typ, err := t.DAL.Catalog().ContentType(ctx, id)
-		if dberr.IsNotFound(err) {
-			return []string{}, nil
-		}
+		catalogTypes, err := t.DAL.Catalog().CatalogTypeIDs(ctx, []string{id})
 		if err != nil {
 			return nil, err
 		}
-		if !typ.Catalog() {
-			id = *typ.ParentID
+		if id = catalogTypes[id]; id == "" {
+			return []string{}, nil
 		}
 		ids, err := t.DAL.Catalog().Descendants(ctx, []string{id})
 		if err != nil {

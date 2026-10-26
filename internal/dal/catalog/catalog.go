@@ -316,6 +316,26 @@ func (r *Repo) ContentTypes(ctx context.Context, f ContentTypeFilter) ([]*Conten
 	return contentTypes(ctx, r.read, f)
 }
 
+// CatalogTypeIDs maps each existing type to the catalog type it is or
+// copies. It reads the stored types only, without resolving their schemas.
+func (r *Repo) CatalogTypeIDs(ctx context.Context, ids []string) (map[string]string, error) {
+	out := map[string]string{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	rows, err := r.read.ContentTypes(ctx, ContentTypeFilter{IDs: ids, Detached: true})
+	if err != nil {
+		return nil, err
+	}
+	for _, t := range rows {
+		out[t.ID] = t.ID
+		if !t.Catalog() {
+			out[t.ID] = *t.ParentID
+		}
+	}
+	return out, nil
+}
+
 // ContentType returns a content type, or dberr.ErrNotFound.
 func (r *Repo) ContentType(ctx context.Context, id string) (*ContentType, error) {
 	return contentType(ctx, r.read, id)
