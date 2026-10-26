@@ -8,7 +8,8 @@ Stages:
            MCP server, frontend typecheck and lint, Python tests
   test     uncached Go suite on SQLite, database suites on PostgreSQL 17 and
            frontend tests
-  race     the Go suite with race detection
+  race     the Go suite with race detection, but for the packages the native
+           and zvec stages race-test with real models and stores
   web      frontend typecheck, lint and tests
   native   real decision, embedding and OCR models
   zvec     native search store conformance and parity
@@ -37,7 +38,10 @@ POSTGRES_PACKAGES = ['./internal/dms', './internal/httpapi', './internal/identit
                      './internal/webdav', './internal/workflow', './internal/aiops', './internal/worker', './internal/documenttext',
                      './internal/documentpreview', './internal/documentfiles', './internal/documentsearch',
                      './extensions/mcp/integration']
-NATIVE_PACKAGES = ['./internal/onnx', './internal/decision', './internal/embedding', './internal/ocr/paddle', './internal/scriptrun', './cmd/embed']
+NATIVE_PACKAGES = ['./internal/onnx', './internal/decision', './internal/embedding', './internal/ocr/paddle', './internal/scriptrun',
+                   './internal/compose', './internal/optimize', './cmd/embed']
+# Packages the zvec stage tests on the native search store.
+ZVEC_PACKAGES = ['./internal/dal/search/zvecstore', './internal/backup', './cmd/admin']
 # Native libraries the release executables load, exercised before packaging.
 NATIVE_ABI = (['./internal/onnx', './internal/ocr/paddle', './internal/imaging', './internal/doctext/pdfium', './internal/dal/search/zvecstore'],
               'TestNativeABI|TestReadAndRender|TestRecognize$|TestDecode|TestWebPRoundTripAndResize|TestIdle|TestConcurrentIdle')
@@ -158,6 +162,14 @@ def postgres_packages():
     return [package for package in listed if not re.search(r'/internal/dal/search(/|$)', package)] + POSTGRES_PACKAGES
 
 
+def race_packages():
+    """The Go suite but for the packages the native and zvec stages already
+    run with race detection."""
+    listed = lambda *patterns: subprocess.run(['go', 'list', *patterns], cwd=ROOT, check=True, stdout=subprocess.PIPE, text=True).stdout.split()
+    covered = set(listed(*NATIVE_PACKAGES, *ZVEC_PACKAGES))
+    return [package for package in listed('./...') if package not in covered]
+
+
 def prepare_postgres():
     """Point DAL and application tests at a PostgreSQL server: the one the
     environment names, or the disposable server of scripts/postgres.sh."""
@@ -227,41 +239,49 @@ def check_generated(install=False):
     unchanged('Workflow SDK', sdk, lambda: files('sdk/src/client', 'sdk/dist'))
 
 
-def shard_names(listing, shard, shards):
+# Top-level tests, fuzz targets and examples in a test file.
+TEST_DECLARATION = re.compile(r'^func (?:Test|Fuzz|Example)\w*\(', re.MULTILINE)
+
+
+def package_weights(packages):
+    """Each package's estimated test cost, read from its sources without
+    building it: its tests, fuzz seeds and examples, plus one for building
+    and starting its test binary."""
+    template = '{{.ImportPath}}|{{.Dir}}|{{join .TestGoFiles ","}},{{join .XTestGoFiles ","}}'
+    listing = subprocess.run(['go', 'list', '-f', template, *packages], cwd=ROOT, check=True, stdout=subprocess.PIPE, text=True).stdout
+    weights = {}
+    for line in listing.splitlines():
+        package, directory, files = line.split('|')
+        weights[package] = 1 + sum(len(TEST_DECLARATION.findall((Path(directory) / name).read_text(encoding='utf-8')))
+                                   for name in files.split(',') if name)
+    return weights
+
+
+def shard_packages(weights, shard, shards):
+    """One of shards parts of the packages, filled heaviest first into the
+    lightest part; every package belongs to exactly one."""
     if shards < 1 or not 1 <= shard <= shards:
         raise ValueError('shard must be between 1 and shards')
-    # A name shared by several packages must stay on the same shard because
-    # Go's -run expression applies to every package. Subtests run with the parent.
-    names = sorted(set(re.findall(r'^(?:Test|Fuzz|Example)\w*$', listing, re.MULTILINE)))
-    if not names:
-        raise ValueError('Go did not list any tests')
-    return names[shard - 1::shards]
-
-
-def run_pattern(names):
-    # An empty pattern would run every test, so empty shards must match nothing.
-    return '^(' + '|'.join(re.escape(name) for name in names) + ')$' if names else '^$'
+    loads, parts = [0] * shards, [[] for _ in range(shards)]
+    for package, weight in sorted(weights.items(), key=lambda item: (-item[1], item[0])):
+        lightest = loads.index(min(loads))
+        loads[lightest] += weight
+        parts[lightest].append(package)
+    return sorted(parts[shard - 1])
 
 
 def go_tests(name, flags, packages, shard=None, env=None):
-    """Run Go tests with reports in .cache/checks/<name>.*: all of them, or
-    one shard of the test, fuzz seed and example names."""
+    """Run Go tests with reports in .cache/checks/<name>.*: of all the
+    packages, or of one shard of them."""
     started = time.monotonic()
     report = ROOT / '.cache/checks' / name
     report.parent.mkdir(parents=True, exist_ok=True)
     if shard:
-        try:
-            listing = subprocess.run(['go', 'test', *flags, '-list', '^(Test|Fuzz|Example)', *packages], cwd=ROOT, check=True,
-                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env).stdout
-        except subprocess.CalledProcessError as error:
-            report.with_suffix('.discovery.log').write_text(error.stdout or '', encoding='utf-8')
-            print(error.stdout or '', file=sys.stderr)
-            raise
-        report.with_suffix('.discovery.log').write_text(listing, encoding='utf-8')
-        names = shard_names(listing, *shard)
-        # The shard's -run expression is long; the log names the shard instead.
-        print(f'+ go test {" ".join(flags)} {" ".join(packages)}: shard {shard[0]}/{shard[1]}, {len(names)} test names', flush=True)
-        flags = [*flags, '-run', run_pattern(names)]
+        weights = package_weights(packages)
+        packages = shard_packages(weights, *shard)
+        # The shard's package list is long; the log names the shard instead.
+        print(f'+ go test {" ".join(flags)}: shard {shard[0]}/{shard[1]}, {len(packages)} packages, '
+              f'{sum(weights[package] for package in packages)} of {sum(weights.values())} weight', flush=True)
     else:
         print(f'+ go test {" ".join(flags)} {" ".join(packages)}', flush=True)
     result = subprocess.run([sys.executable, str(ROOT / 'scripts/go-test.py'), '--output', str(report),
@@ -318,7 +338,7 @@ def stage_race(args):
     prepare_go()
     prepare_frontend(args.setup)
     go_tests('race' + (f'-{args.shard[0]}' if args.shard else ''), ['-race', '-count=1', '-timeout=15m', *run_flags(args)],
-             args.packages or ['./...'], args.shard, sqlite_environment(PAPERGO_REQUIRE_OCR='1'))
+             args.packages or race_packages(), args.shard, sqlite_environment())
 
 
 def stage_native(args):
@@ -332,7 +352,7 @@ def stage_native(args):
 def stage_zvec(args):
     prepare_go()
     prepare_frontend(args.setup)
-    go_tests('zvec', ['-race', '-count=1'], ['./internal/dal/search/zvecstore', './internal/backup', './cmd/admin'], env=sqlite_environment())
+    go_tests('zvec', ['-race', '-count=1'], ZVEC_PACKAGES, env=sqlite_environment())
     go_tests('zvec-parity', ['-race', '-count=1', '-run', '(Search|Content|Receipt|Contract|AIComplete|Prefix|SmartFolder|View|Listing|Query)'],
              ['./internal/dms', './internal/httpapi', './internal/scriptrun'], env=sqlite_environment(PAPERGO_TEST_SEARCH_STORE='zvec'))
 

@@ -140,6 +140,19 @@ class DevelopmentChecksTests(unittest.TestCase):
                                  environ={'PAPERGO_TEST_POSTGRES_DSN': 'postgres://localhost/papergo'})
         self.assertEqual(tests.call_args.args[2], ['./internal/dms'])
 
+    def test_race_leaves_native_and_zvec_packages_to_their_stages(self):
+        covered = ['papergo/internal/ocr/paddle', 'papergo/internal/dal/search/zvecstore']
+        rest = ['papergo/internal/dms', 'papergo/internal/ocr']
+        with patch.object(checks.subprocess, 'run') as run:
+            run.side_effect = lambda command, **_: subprocess.CompletedProcess(
+                command, 0, stdout='\n'.join(rest + covered if command[2:] == ['./...'] else covered))
+            self.assertEqual(checks.race_packages(), rest)
+        self.assertEqual(run.call_args_list[0].args[0][2:], [*checks.NATIVE_PACKAGES, *checks.ZVEC_PACKAGES])
+        with patch.object(checks, 'race_packages', return_value=rest):
+            _, tests, _ = self.stage('race')
+        self.assertEqual(tests.call_args.args[2], rest)
+        self.assertNotIn('PAPERGO_REQUIRE_OCR', tests.call_args.args[4])
+
     def test_postgres_packages_keep_portable_suites_without_native_search(self):
         portable = ['papergo/internal/dal', 'papergo/internal/dal/catalog', 'papergo/internal/dal/database', 'papergo/internal/dal/resources']
         native = ['papergo/internal/dal/search/sqlitestore', 'papergo/internal/dal/search/zvecstore']

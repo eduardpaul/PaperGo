@@ -108,10 +108,10 @@ stage, so a failing job names the command that reproduces it.
 | `quick` (default) | Go formatting and the Go suite with Go's test-result cache: the edit/check loop |
 | `lint` | Formatting, module checksums, generated Bob models and workflow SDK, vet, Staticcheck, frontend typecheck and lint, Python tests |
 | `test` | Uncached Go suite on SQLite, the database suites on PostgreSQL 17, frontend tests |
-| `race` | The Go suite with race detection |
+| `race` | The Go suite with race detection, except the packages `native` and `zvec` run with race detection on real models and the native store |
 | `web` | Frontend typecheck, lint and tests |
-| `native` | Real decision, embedding and OCR models |
-| `zvec` | Native search store conformance and parity |
+| `native` | Real decision, embedding and OCR models, with race detection |
+| `zvec` | Native search store conformance, backup and parity, with race detection |
 | `soak` | Native search soak at real dimensions and timed fuzzing |
 | `release` | Builds, packages and runs the release executables with the shared assets |
 | `docker` | Builds the container image and runs its smoke test |
@@ -131,7 +131,8 @@ bash scripts/check.sh test --only postgres --packages ./internal/dms
 
 Package selection is explicit: include affected callers when changing shared
 code. `test --only go|postgres|web` runs one part of the test stage;
-`--shard 1/2` runs half of the Go suite, as CI does. The database suites use the
+`--shard 1/2` runs half of the Go suite's packages, as CI does; shards are
+balanced by the tests, fuzz targets and examples each package declares. The database suites use the
 server `PAPERGO_TEST_POSTGRES_DSN` names, or start the one of `scripts/postgres.sh`;
 tests create and drop their own databases, and `bash scripts/postgres.sh clean`
 drops the ones an interrupted run left behind. For repeated frontend edits use
