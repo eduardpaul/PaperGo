@@ -2054,7 +2054,7 @@ export interface ContentTypeInput extends Parsable {
 	 */
 	name?: string | null;
 	/**
-	 * Creation: the catalog type to derive from; Item when omitted. Replacement may repeat it; it never changes.
+	 * Creation: the catalog type to derive from; Item when omitted. A catalog type has at most 7 ancestors. Replacement may repeat it; it never changes.
 	 */
 	parentId?: Guid | null;
 	/**
@@ -4357,7 +4357,7 @@ export interface QuerySpec extends Parsable {
 	 */
 	archive?: ArchiveSelection | null;
 	/**
-	 * Optional content type filter: a list type of the collection or a catalog type, matching every list type of the collection that derives from it. Field filters, sorting and grouping must use fields that type has.
+	 * Optional content type filter: a catalog type, or a list type of the collection standing for the catalog type it copies, matching every list type of the collection that derives from that catalog type. Field filters, sorting and grouping must use fields that the named type and every matching list type have.
 	 */
 	contentTypeId?: Guid | null;
 	/**
@@ -9914,14 +9914,14 @@ declare const GetSurfaceQueryParameterTypeObject$2: {
  */
 export interface WithTypeItemRequestBuilder extends BaseRequestBuilder<WithTypeItemRequestBuilder> {
 	/**
-	 * Requires list.manage, collection manage access and the current collection If-Match. typeID is a list type of the collection. Rejects the last attachment, a type used by live items, and dependent saved views. Chooses a remaining default when necessary. Updates the effective schema and business keys atomically; the list type stays for frozen revisions and returns with its customizations when its catalog type is attached again. Deleted items with a detached type require reattachment before restoration.
+	 * Requires list.manage, collection manage access and the current collection If-Match. typeID is a list type of the collection or the catalog type it copies. Rejects the last attachment, a type used by live items, and dependent saved views. Chooses a remaining default when necessary. Updates the effective schema and business keys atomically; the list type stays for frozen revisions and returns with its customizations when its catalog type is attached again. Deleted items with a detached type require reattachment before restoration.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @throws {Problem} error when the service returns a 412 status code
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	delete(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<void>;
 	/**
-	 *  Required module scopes: contentType.manage. Requires manage ACL on the collection. Replaces the list type's own fields, hidden fields and rules, validates every item against the effective schema and advances the collection's schema revision atomically.
+	 *  Required module scopes: contentType.manage. Requires manage ACL on the collection. typeID is a list type of the collection or the catalog type it copies. Replaces the list type's own fields, hidden fields and rules, validates every item against the effective schema and advances the collection's schema revision atomically.
 	 * @param body Customizes a collection's list type. Its catalog type's fields, hidden fields and rules stay; a list type adds its own and hides inherited ones.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<ContentType>}
@@ -9930,13 +9930,13 @@ export interface WithTypeItemRequestBuilder extends BaseRequestBuilder<WithTypeI
 	 */
 	put(body: ListTypeInput, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<ContentType | undefined>;
 	/**
-	 * Requires list.manage, collection manage access and the current collection If-Match. typeID is a list type of the collection. Rejects the last attachment, a type used by live items, and dependent saved views. Chooses a remaining default when necessary. Updates the effective schema and business keys atomically; the list type stays for frozen revisions and returns with its customizations when its catalog type is attached again. Deleted items with a detached type require reattachment before restoration.
+	 * Requires list.manage, collection manage access and the current collection If-Match. typeID is a list type of the collection or the catalog type it copies. Rejects the last attachment, a type used by live items, and dependent saved views. Chooses a remaining default when necessary. Updates the effective schema and business keys atomically; the list type stays for frozen revisions and returns with its customizations when its catalog type is attached again. Deleted items with a detached type require reattachment before restoration.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toDeleteRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 	/**
-	 *  Required module scopes: contentType.manage. Requires manage ACL on the collection. Replaces the list type's own fields, hidden fields and rules, validates every item against the effective schema and advances the collection's schema revision atomically.
+	 *  Required module scopes: contentType.manage. Requires manage ACL on the collection. typeID is a list type of the collection or the catalog type it copies. Replaces the list type's own fields, hidden fields and rules, validates every item against the effective schema and advances the collection's schema revision atomically.
 	 * @param body Customizes a collection's list type. Its catalog type's fields, hidden fields and rules stay; a list type adds its own and hides inherited ones.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
@@ -10047,7 +10047,7 @@ export interface DocumentsRequestBuilder extends BaseRequestBuilder<DocumentsReq
  */
 export interface WithFieldItemRequestBuilder extends BaseRequestBuilder<WithFieldItemRequestBuilder> {
 	/**
-	 * Uses the collection ETag. Rejects dependencies in rules and saved views. Removes memberships, query indexes and business key claims; immutable revisions retain their original fields and values. Removed keys cannot be reused. Later edits prune carried values, while explicitly supplied patch keys reject removed keys. Required module scopes: contentType.manage. Resource ACLs and any additional use-case checks also apply. Field definitions are organization-wide; editing through a collection applies to every collection using them.
+	 * Uses the collection ETag. Removes the field from the collection's list types that own it; catalog types and other collections keep it, and a field the collection inherits from a catalog type is rejected (hide it in the list type instead). The field definition is deleted once no content type has it. Rejects dependencies in rules and saved views. Removes memberships, query indexes and business key claims; immutable revisions retain their original fields and values. Removed keys cannot be reused. Later edits prune carried values, while explicitly supplied patch keys reject removed keys. Required module scopes: contentType.manage. Resource ACLs and any additional use-case checks also apply. Field definitions are organization-wide; removal through a collection applies to that collection only.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @throws {Problem} error when the service returns a 412 status code
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
@@ -10063,7 +10063,7 @@ export interface WithFieldItemRequestBuilder extends BaseRequestBuilder<WithFiel
 	 */
 	patch(body: UpdateField, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<FieldDefinition | undefined>;
 	/**
-	 * Uses the collection ETag. Rejects dependencies in rules and saved views. Removes memberships, query indexes and business key claims; immutable revisions retain their original fields and values. Removed keys cannot be reused. Later edits prune carried values, while explicitly supplied patch keys reject removed keys. Required module scopes: contentType.manage. Resource ACLs and any additional use-case checks also apply. Field definitions are organization-wide; editing through a collection applies to every collection using them.
+	 * Uses the collection ETag. Removes the field from the collection's list types that own it; catalog types and other collections keep it, and a field the collection inherits from a catalog type is rejected (hide it in the list type instead). The field definition is deleted once no content type has it. Rejects dependencies in rules and saved views. Removes memberships, query indexes and business key claims; immutable revisions retain their original fields and values. Removed keys cannot be reused. Later edits prune carried values, while explicitly supplied patch keys reject removed keys. Required module scopes: contentType.manage. Resource ACLs and any additional use-case checks also apply. Field definitions are organization-wide; removal through a collection applies to that collection only.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */

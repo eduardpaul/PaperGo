@@ -11,14 +11,14 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface WithTypeItemRequestBuilder extends BaseRequestBuilder<WithTypeItemRequestBuilder> {
     /**
-     * Requires list.manage, collection manage access and the current collection If-Match. typeID is a list type of the collection. Rejects the last attachment, a type used by live items, and dependent saved views. Chooses a remaining default when necessary. Updates the effective schema and business keys atomically; the list type stays for frozen revisions and returns with its customizations when its catalog type is attached again. Deleted items with a detached type require reattachment before restoration.
+     * Requires list.manage, collection manage access and the current collection If-Match. typeID is a list type of the collection or the catalog type it copies. Rejects the last attachment, a type used by live items, and dependent saved views. Chooses a remaining default when necessary. Updates the effective schema and business keys atomically; the list type stays for frozen revisions and returns with its customizations when its catalog type is attached again. Deleted items with a detached type require reattachment before restoration.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @throws {Problem} error when the service returns a 412 status code
      * @throws {Problem} error when the service returns a 4XX or 5XX status code
      */
      delete(requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<void>;
     /**
-     *  Required module scopes: contentType.manage. Requires manage ACL on the collection. Replaces the list type's own fields, hidden fields and rules, validates every item against the effective schema and advances the collection's schema revision atomically.
+     *  Required module scopes: contentType.manage. Requires manage ACL on the collection. typeID is a list type of the collection or the catalog type it copies. Replaces the list type's own fields, hidden fields and rules, validates every item against the effective schema and advances the collection's schema revision atomically.
      * @param body Customizes a collection's list type. Its catalog type's fields, hidden fields and rules stay; a list type adds its own and hides inherited ones.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<ContentType>}
@@ -27,13 +27,13 @@ export interface WithTypeItemRequestBuilder extends BaseRequestBuilder<WithTypeI
      */
      put(body: ListTypeInput, requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<ContentType | undefined>;
     /**
-     * Requires list.manage, collection manage access and the current collection If-Match. typeID is a list type of the collection. Rejects the last attachment, a type used by live items, and dependent saved views. Chooses a remaining default when necessary. Updates the effective schema and business keys atomically; the list type stays for frozen revisions and returns with its customizations when its catalog type is attached again. Deleted items with a detached type require reattachment before restoration.
+     * Requires list.manage, collection manage access and the current collection If-Match. typeID is a list type of the collection or the catalog type it copies. Rejects the last attachment, a type used by live items, and dependent saved views. Chooses a remaining default when necessary. Updates the effective schema and business keys atomically; the list type stays for frozen revisions and returns with its customizations when its catalog type is attached again. Deleted items with a detached type require reattachment before restoration.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */
      toDeleteRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined) : RequestInformation;
     /**
-     *  Required module scopes: contentType.manage. Requires manage ACL on the collection. Replaces the list type's own fields, hidden fields and rules, validates every item against the effective schema and advances the collection's schema revision atomically.
+     *  Required module scopes: contentType.manage. Requires manage ACL on the collection. typeID is a list type of the collection or the catalog type it copies. Replaces the list type's own fields, hidden fields and rules, validates every item against the effective schema and advances the collection's schema revision atomically.
      * @param body Customizes a collection's list type. Its catalog type's fields, hidden fields and rules stay; a list type adds its own and hides inherited ones.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}

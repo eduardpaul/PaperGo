@@ -1052,7 +1052,7 @@ export interface ContentTypeInput extends Parsable {
      */
     name?: string | null;
     /**
-     * Creation: the catalog type to derive from; Item when omitted. Replacement may repeat it; it never changes.
+     * Creation: the catalog type to derive from; Item when omitted. A catalog type has at most 7 ancestors. Replacement may repeat it; it never changes.
      */
     parentId?: Guid | null;
     /**
@@ -8779,7 +8779,7 @@ export interface QuerySpec extends Parsable {
      */
     archive?: ArchiveSelection | null;
     /**
-     * Optional content type filter: a list type of the collection or a catalog type, matching every list type of the collection that derives from it. Field filters, sorting and grouping must use fields that type has.
+     * Optional content type filter: a catalog type, or a list type of the collection standing for the catalog type it copies, matching every list type of the collection that derives from that catalog type. Field filters, sorting and grouping must use fields that the named type and every matching list type have.
      */
     contentTypeId?: Guid | null;
     /**
