@@ -222,6 +222,8 @@ CREATE TABLE content_types (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "key" TEXT NOT NULL,
     name TEXT NOT NULL,
+    -- group_name files a catalog type under a heading of the catalog.
+    group_name TEXT CHECK (collection_id IS NULL OR group_name IS NULL),
     template_key TEXT,
     parent_id TEXT REFERENCES content_types(id) ON DELETE RESTRICT,
     -- Item history can outlive a purged collection, so collection_id has no

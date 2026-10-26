@@ -160,6 +160,8 @@ export interface ContentType {
   id: string;
   key: string;
   name: string;
+  /** Catalog types: the heading the catalog files the type under. */
+  group?: string;
   parent_id?: string | null;
   collection_id?: string | null;
   ancestor_ids?: string[];

@@ -12,6 +12,8 @@ import (
 	"papergo/internal/dal/surfaces"
 	"papergo/internal/model"
 	"slices"
+	"strings"
+	"unicode/utf8"
 )
 
 // rootTypeKey is the key of the root catalog type, Item, that every other
@@ -25,6 +27,8 @@ const rootTypeKey = "item"
 type ContentTypeInput struct {
 	Key            string                 `json:"key"`
 	Name           string                 `json:"name"`
+	// Group files the type under a heading of the catalog; empty is none.
+	Group          string                 `json:"group,omitempty"`
 	ParentID       string                 `json:"parent_id,omitempty"`
 	FieldIds       []string               `json:"field_ids"`
 	HiddenFieldIds []string               `json:"hidden_field_ids,omitempty"`
@@ -153,9 +157,13 @@ func (s *Service) catalogType(ctx context.Context, id string) (*catalog.ContentT
 	return typ, err
 }
 
-func (s *Service) validateTypeName(in ContentTypeInput) error {
+// validateTypeName checks a type's key and name, and trims its group.
+func (s *Service) validateTypeName(in *ContentTypeInput) error {
 	if !fieldKey.MatchString(in.Key) {
 		return invalid("invalid content type key")
+	}
+	if in.Group = strings.TrimSpace(in.Group); utf8.RuneCountInString(in.Group) > 100 {
+		return invalid("a content type group has at most 100 characters")
 	}
 	return validateName(in.Name)
 }
@@ -245,7 +253,7 @@ func (s *Service) CreateContentType(ctx context.Context, subject string, in Cont
 		if e := t.RequireScope(ctx, subject, "contentType.manage"); e != nil {
 			return e
 		}
-		if e := t.validateTypeName(in); e != nil {
+		if e := t.validateTypeName(&in); e != nil {
 			return e
 		}
 		if t.reservedTypeKey(in.Key) {
@@ -265,7 +273,7 @@ func (s *Service) CreateContentType(ctx context.Context, subject string, in Cont
 		if e = t.validateTypeSchema(ctx, parent, &schema); e != nil {
 			return e
 		}
-		out, e = t.DAL.Catalog().CreateContentType(ctx, catalog.ContentType{Key: in.Key, Name: in.Name, ParentID: &parent.ID, FieldIds: schema.FieldIds, HiddenFieldIds: schema.HiddenFieldIds, Rules: schema.Rules})
+		out, e = t.DAL.Catalog().CreateContentType(ctx, catalog.ContentType{Key: in.Key, Name: in.Name, Group: in.Group, ParentID: &parent.ID, FieldIds: schema.FieldIds, HiddenFieldIds: schema.HiddenFieldIds, Rules: schema.Rules})
 		if errors.Is(e, dberr.ErrUniqueViolation) {
 			return invalid("content type key is taken: " + in.Key)
 		}
@@ -449,7 +457,7 @@ func (s *Service) UpdateContentType(ctx context.Context, subject, id string, ver
 		if in.ParentID != "" && (old.ParentID == nil || in.ParentID != *old.ParentID) {
 			return invalid("content type parent is immutable")
 		}
-		if e = t.validateTypeName(in); e != nil {
+		if e = t.validateTypeName(&in); e != nil {
 			return e
 		}
 		var parent *catalog.ContentType
@@ -470,7 +478,7 @@ func (s *Service) UpdateContentType(ctx context.Context, subject, id string, ver
 		if e != nil {
 			return e
 		}
-		out, e = t.reviseContentType(ctx, old, catalog.ContentType{Name: in.Name, FieldIds: schema.FieldIds, HiddenFieldIds: schema.HiddenFieldIds, Rules: schema.Rules})
+		out, e = t.reviseContentType(ctx, old, catalog.ContentType{Name: in.Name, Group: in.Group, FieldIds: schema.FieldIds, HiddenFieldIds: schema.HiddenFieldIds, Rules: schema.Rules})
 		if e != nil {
 			return e
 		}
@@ -768,8 +776,9 @@ func (s *Service) reviseContentType(ctx context.Context, prior *catalog.ContentT
 		return nil, err
 	}
 	next.ID = prior.ID
+	// Schema changes name no type; they keep its name and group.
 	if next.Name == "" {
-		next.Name = prior.Name
+		next.Name, next.Group = prior.Name, prior.Group
 	}
 	updated, err := s.DAL.Catalog().SaveContentType(ctx, next, prior.Version)
 	if errors.Is(err, dberr.ErrConcurrentUpdate) {
@@ -778,7 +787,7 @@ func (s *Service) reviseContentType(ctx context.Context, prior *catalog.ContentT
 	if err != nil {
 		return nil, catalogError(err)
 	}
-	if err := s.trackAuditProperties(prior.ID, before, updated, "name", "field_ids", "hidden_field_ids", "rules"); err != nil {
+	if err := s.trackAuditProperties(prior.ID, before, updated, "name", "group", "field_ids", "hidden_field_ids", "rules"); err != nil {
 		return nil, err
 	}
 	return updated, nil

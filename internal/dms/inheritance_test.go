@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 
 	"papergo/internal/dal/catalog"
@@ -338,5 +339,34 @@ func TestDeleteUnusedContentTypes(t *testing.T) {
 	// Its key is free again.
 	if _, err = s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "unused", Name: "Again"}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// A catalog type's group is set and cleared with its name, and kept by
+// schema changes.
+func TestContentTypeGroups(t *testing.T) {
+	s, _, _ := fixture(t)
+	code, err := s.CreateCatalogField(testContext, "alice", CreateField{Key: "code", Label: "Code", Type: "text"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	typ, err := s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "invoice", Name: "Invoice", Group: "  Finance "})
+	if err != nil || typ.Group != "Finance" {
+		t.Fatal("group on creation", typ, err)
+	}
+	if _, err = s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "long", Name: "Long", Group: strings.Repeat("g", 101)}); !isValidation(err) {
+		t.Fatal("long group", err)
+	}
+	if typ, err = s.UpdateContentType(testContext, "alice", typ.ID, typ.Version, ContentTypeInput{Name: typ.Name, Group: typ.Group, FieldIds: []string{code.ID}}); err != nil || typ.Group != "Finance" {
+		t.Fatal("group kept on a schema edit", typ, err)
+	}
+	if err = s.DeleteCatalogField(testContext, "alice", code.ID, code.Version); err != nil {
+		t.Fatal(err)
+	}
+	if typ, err = s.GetContentType(testContext, "alice", typ.ID); err != nil || typ.Group != "Finance" {
+		t.Fatal("group kept when a field goes", typ, err)
+	}
+	if typ, err = s.UpdateContentType(testContext, "alice", typ.ID, typ.Version, ContentTypeInput{Name: typ.Name}); err != nil || typ.Group != "" {
+		t.Fatal("group cleared", typ, err)
 	}
 }

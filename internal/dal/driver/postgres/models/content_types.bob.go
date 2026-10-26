@@ -33,6 +33,7 @@ type ContentType struct {
 	UpdatedAt      time.Time                   `db:"updated_at" `
 	Key            string                      `db:"key" `
 	Name           string                      `db:"name" `
+	GroupName      null.Val[string]            `db:"group_name" `
 	TemplateKey    null.Val[string]            `db:"template_key" `
 	ParentID       null.Val[string]            `db:"parent_id" `
 	CollectionID   null.Val[string]            `db:"collection_id" `
@@ -82,7 +83,7 @@ type contentTypeRLoaded struct {
 
 func buildContentTypeColumns(tableName string) contentTypeColumns {
 	columnsExpr := expr.NewColumnsExpr(
-		"id", "created_at", "updated_at", "key", "name", "template_key", "parent_id", "collection_id", "attached", "is_default", "field_ids", "hidden_field_ids", "rules", "version",
+		"id", "created_at", "updated_at", "key", "name", "group_name", "template_key", "parent_id", "collection_id", "attached", "is_default", "field_ids", "hidden_field_ids", "rules", "version",
 	)
 
 	if tableName != "" {
@@ -97,6 +98,7 @@ func buildContentTypeColumns(tableName string) contentTypeColumns {
 		UpdatedAt:      buildContentTypeColumn(tableName, "updated_at"),
 		Key:            buildContentTypeColumn(tableName, "key"),
 		Name:           buildContentTypeColumn(tableName, "name"),
+		GroupName:      buildContentTypeColumn(tableName, "group_name"),
 		TemplateKey:    buildContentTypeColumn(tableName, "template_key"),
 		ParentID:       buildContentTypeColumn(tableName, "parent_id"),
 		CollectionID:   buildContentTypeColumn(tableName, "collection_id"),
@@ -117,6 +119,7 @@ type contentTypeColumns struct {
 	UpdatedAt      contentTypeColumn
 	Key            contentTypeColumn
 	Name           contentTypeColumn
+	GroupName      contentTypeColumn
 	TemplateKey    contentTypeColumn
 	ParentID       contentTypeColumn
 	CollectionID   contentTypeColumn
@@ -176,6 +179,7 @@ type ContentTypeSetter struct {
 	UpdatedAt      omit.Val[time.Time]                   `db:"updated_at" `
 	Key            omit.Val[string]                      `db:"key" `
 	Name           omit.Val[string]                      `db:"name" `
+	GroupName      omitnull.Val[string]                  `db:"group_name" `
 	TemplateKey    omitnull.Val[string]                  `db:"template_key" `
 	ParentID       omitnull.Val[string]                  `db:"parent_id" `
 	CollectionID   omitnull.Val[string]                  `db:"collection_id" `
@@ -188,7 +192,7 @@ type ContentTypeSetter struct {
 }
 
 func (s ContentTypeSetter) SetColumns() []string {
-	vals := make([]string, 0, 14)
+	vals := make([]string, 0, 15)
 	if s.ID.IsValue() {
 		vals = append(vals, "id")
 	}
@@ -203,6 +207,9 @@ func (s ContentTypeSetter) SetColumns() []string {
 	}
 	if s.Name.IsValue() {
 		vals = append(vals, "name")
+	}
+	if s.GroupName.IsValue() || s.GroupName.IsNull() {
+		vals = append(vals, "group_name")
 	}
 	if s.TemplateKey.IsValue() || s.TemplateKey.IsNull() {
 		vals = append(vals, "template_key")
@@ -249,6 +256,9 @@ func (s ContentTypeSetter) Overwrite(t *ContentType) {
 	}
 	if s.Name.IsValue() {
 		t.Name = s.Name.MustGet()
+	}
+	if s.GroupName.IsValue() || s.GroupName.IsNull() {
+		t.GroupName = s.GroupName.MustGetNull()
 	}
 	if s.TemplateKey.IsValue() || s.TemplateKey.IsNull() {
 		t.TemplateKey = s.TemplateKey.MustGetNull()
@@ -311,6 +321,11 @@ func (s *ContentTypeSetter) Apply(q *dialect.InsertQuery) {
 			}
 			return psql.Arg(s.Name.MustGet()).WriteSQL(ctx, w, d, start)
 		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.GroupName.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.GroupName.MustGetNull()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
 			if s.TemplateKey.IsUnset() {
 				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
 			}
@@ -363,7 +378,7 @@ func (s ContentTypeSetter) UpdateMod() bob.Mod[*dialect.UpdateQuery] {
 }
 
 func (s ContentTypeSetter) Expressions(prefix ...string) []bob.Expression {
-	exprs := make([]bob.Expression, 0, 14)
+	exprs := make([]bob.Expression, 0, 15)
 
 	if s.ID.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
@@ -397,6 +412,13 @@ func (s ContentTypeSetter) Expressions(prefix ...string) []bob.Expression {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
 			psql.Quote(append(prefix, "name")...),
 			psql.Arg(s.Name),
+		}})
+	}
+
+	if s.GroupName.IsValue() || s.GroupName.IsNull() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "group_name")...),
+			psql.Arg(s.GroupName),
 		}})
 	}
 
@@ -473,7 +495,7 @@ func contentTypeScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc,
 		idx int
 		dst func(o *ContentType) any
 	}
-	targets := make([]target, 0, 14)
+	targets := make([]target, 0, 15)
 	for i, col := range cols {
 		switch col {
 		case "id":
@@ -486,6 +508,8 @@ func contentTypeScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc,
 			targets = append(targets, target{i, func(o *ContentType) any { return &o.Key }})
 		case "name":
 			targets = append(targets, target{i, func(o *ContentType) any { return &o.Name }})
+		case "group_name":
+			targets = append(targets, target{i, func(o *ContentType) any { return &o.GroupName }})
 		case "template_key":
 			targets = append(targets, target{i, func(o *ContentType) any { return &o.TemplateKey }})
 		case "parent_id":
@@ -1282,6 +1306,7 @@ type contentTypeWhere[Q psql.Filterable] struct {
 	UpdatedAt      psql.WhereMod[Q, time.Time]
 	Key            psql.WhereMod[Q, string]
 	Name           psql.WhereMod[Q, string]
+	GroupName      psql.WhereNullMod[Q, string]
 	TemplateKey    psql.WhereNullMod[Q, string]
 	ParentID       psql.WhereNullMod[Q, string]
 	CollectionID   psql.WhereNullMod[Q, string]
@@ -1306,6 +1331,7 @@ func buildContentTypeWhere[Q psql.Filterable](cols contentTypeColumns) contentTy
 		UpdatedAt:      psql.Where[Q, time.Time](cols.UpdatedAt.Expression),
 		Key:            psql.Where[Q, string](cols.Key.Expression),
 		Name:           psql.Where[Q, string](cols.Name.Expression),
+		GroupName:      psql.WhereNull[Q, string](cols.GroupName.Expression),
 		TemplateKey:    psql.WhereNull[Q, string](cols.TemplateKey.Expression),
 		ParentID:       psql.WhereNull[Q, string](cols.ParentID.Expression),
 		CollectionID:   psql.WhereNull[Q, string](cols.CollectionID.Expression),

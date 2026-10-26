@@ -26336,6 +26336,11 @@
             "maxLength": 255,
             "type": "string"
           },
+          "group": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "Heading the catalog files the type under; empty or omitted is none. Replacement sets it like the name."
+          },
           "rules": {
             "items": {
               "$ref": "#/components/schemas/ValidationRule"
@@ -26397,6 +26402,10 @@
           "name": {
             "type": "string",
             "description": "A list type shows the name of its catalog type."
+          },
+          "group": {
+            "type": "string",
+            "description": "Catalog types: the heading the catalog files the type under, such as Finance. List types have none."
           },
           "rules": {
             "type": "array",

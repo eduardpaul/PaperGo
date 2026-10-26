@@ -301,12 +301,16 @@ func contentTypeSetter(t *catalog.ContentType) (*models.ContentTypeSetter, error
 	if err != nil {
 		return nil, err
 	}
-	return &models.ContentTypeSetter{Name: omit.From(t.Name), FieldIds: omit.From(types.NewJSON(t.FieldIds)), HiddenFieldIds: omit.From(types.NewJSON(t.HiddenFieldIds)),
-		Rules: omit.From(types.NewJSON(json.RawMessage(rules))), UpdatedAt: omit.From(t.UpdatedAt), Version: omit.From(int64(t.Version))}, nil
+	set := &models.ContentTypeSetter{Name: omit.From(t.Name), FieldIds: omit.From(types.NewJSON(t.FieldIds)), HiddenFieldIds: omit.From(types.NewJSON(t.HiddenFieldIds)),
+		Rules: omit.From(types.NewJSON(json.RawMessage(rules))), UpdatedAt: omit.From(t.UpdatedAt), Version: omit.From(int64(t.Version))}
+	if t.Catalog() {
+		set.GroupName = nullable.String(t.Group)
+	}
+	return set, nil
 }
 
 func contentTypeRecord(row *models.ContentType) (*catalog.ContentType, error) {
-	out := &catalog.ContentType{ID: row.ID, CreatedAt: row.CreatedAt.UTC(), UpdatedAt: row.UpdatedAt.UTC(), Key: row.Key, Name: row.Name, TemplateKey: row.TemplateKey.Ptr(),
+	out := &catalog.ContentType{ID: row.ID, CreatedAt: row.CreatedAt.UTC(), UpdatedAt: row.UpdatedAt.UTC(), Key: row.Key, Name: row.Name, Group: row.GroupName.GetOr(""), TemplateKey: row.TemplateKey.Ptr(),
 		ParentID: row.ParentID.Ptr(), CollectionID: row.CollectionID.Ptr(), Attached: row.Attached, IsDefault: row.IsDefault,
 		FieldIds: row.FieldIds.Val, HiddenFieldIds: row.HiddenFieldIds.Val, Version: int(row.Version)}
 	if out.FieldIds == nil {

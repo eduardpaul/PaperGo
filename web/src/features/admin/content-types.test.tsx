@@ -130,4 +130,21 @@ describe('content type administration', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Delete content type' }));
     await waitFor(() => expect(deleted).toEqual({ method: 'DELETE', ifMatch: '"1"' }));
   });
+
+  it('files types under groups and filters the catalog by group', async () => {
+    let created: Record<string, unknown> | undefined;
+    const memo: ContentType = { ...record, id: 'memo', key: 'memo', name: 'Memo' };
+    catalogAPI(['contentType.read', 'contentType.manage'], record, (path, body) => path === '/v1/content-types' && (created = body), [item, { ...record, group: 'Finance' }, memo]);
+    renderPage(<ContentTypeCatalog />);
+    fireEvent.change(await screen.findByLabelText('Group'), { target: { value: 'Finance' } });
+    expect(screen.getByText('Record')).toBeTruthy();
+    expect(screen.queryByText('Memo')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'New content type' }));
+    const dialog = within(await screen.findByRole('dialog'));
+    fireEvent.change(dialog.getByLabelText('Key'), { target: { value: 'quote' } });
+    fireEvent.change(dialog.getByLabelText('Name'), { target: { value: 'Quote' } });
+    fireEvent.change(dialog.getByLabelText('Group'), { target: { value: ' Finance ' } });
+    fireEvent.click(dialog.getByRole('button', { name: 'Save content type' }));
+    await waitFor(() => expect(created).toMatchObject({ key: 'quote', group: 'Finance' }));
+  });
 });

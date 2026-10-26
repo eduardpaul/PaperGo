@@ -28,6 +28,8 @@ export const catalogFieldsQuery = {
   queryFn: async () => (await api<FieldDefinition[]>('/v1/fields')).data,
 };
 
+const NO_GROUP = '\u0000none';
+
 export function ContentTypeCatalog() {
   const canRead = useHasScope('contentType.read');
   const canManage = useHasScope('contentType.manage');
@@ -36,6 +38,10 @@ export function ContentTypeCatalog() {
   const [type, setType] = useState<ContentType | 'new'>();
   const [field, setField] = useState<FieldDefinition | 'new'>();
   const [deleting, setDeleting] = useState<ContentType>();
+  // '' shows every type, NO_GROUP those without a group.
+  const [shownGroup, setShownGroup] = useState('');
+  const groups = [...new Set((types.data ?? []).map((entry) => entry.group).filter((entry): entry is string => !!entry))].sort();
+  const shown = (types.data ?? []).filter((entry) => !shownGroup || (shownGroup === NO_GROUP ? !entry.group : entry.group === shownGroup));
   const client = useQueryClient();
   const remove = useMutation({
     mutationFn: (type: ContentType) => api(`/v1/content-types/${type.id}`, { method: 'DELETE', ifMatch: type.version }),
@@ -53,11 +59,25 @@ export function ContentTypeCatalog() {
         actions={canManage && <Button onClick={() => setType('new')}>New content type</Button>}
       >
         <QueryFeedback query={types} />
+        {groups.length > 0 && (
+          <Field id="content-type-group-filter" label="Group">
+            <Select id="content-type-group-filter" value={shownGroup} onChange={(event) => setShownGroup(event.target.value)}>
+              <option value="">All groups</option>
+              {groups.map((entry) => (
+                <option key={entry} value={entry}>
+                  {entry}
+                </option>
+              ))}
+              <option value={NO_GROUP}>No group</option>
+            </Select>
+          </Field>
+        )}
         <ul className="divide-y">
-          {typeTree(types.data ?? []).map(({ type, depth }) => (
+          {typeTree(shown).map(({ type, depth }) => (
             <li key={type.id} className="flex items-center gap-2 py-3" style={{ paddingLeft: `${depth * 1.25}rem` }}>
               <span className="flex-1 font-medium">
                 {type.name}{' '}
+                {type.group && <Badge>{type.group}</Badge>}{' '}
                 <span className="text-xs text-muted">
                   {type.key} · {type.effective?.field_ids.length ?? type.field_ids?.length ?? 0} fields
                   {(type.field_ids?.length ?? 0) !== (type.effective?.field_ids.length ?? 0) && ` (${type.field_ids?.length ?? 0} own)`}
@@ -223,6 +243,8 @@ function TypeDialog({
   const root = types.find((entry) => !entry.parent_id);
   const [key, setKey] = useState(type?.key ?? '');
   const [name, setName] = useState(type?.name ?? '');
+  const [group, setGroup] = useState(type?.group ?? '');
+  const groups = [...new Set(types.map((entry) => entry.group).filter((entry): entry is string => !!entry))].sort();
   const [parentId, setParentId] = useState(type ? (type.parent_id ?? '') : (root?.id ?? ''));
   const [schema, setSchema] = useState<Schema>({ ids: type?.field_ids ?? [], hidden: type?.hidden_field_ids ?? [], rules: type?.rules ?? [] });
   const parent = types.find((entry) => entry.id === parentId);
@@ -246,6 +268,7 @@ function TypeDialog({
         body: {
           key: key.trim(),
           name: name.trim(),
+          group: group.trim() || undefined,
           parent_id: type ? undefined : parentId || undefined,
           field_ids: schema.ids.filter((id) => !parent?.effective?.field_ids.includes(id)),
           hidden_field_ids: schema.hidden,
@@ -282,6 +305,14 @@ function TypeDialog({
         </Field>
         <Field id="content-type-name" label="Name">
           <Input id="content-type-name" required value={name} onChange={(event) => setName(event.target.value)} />
+        </Field>
+        <Field id="content-type-group" label="Group">
+          <Input id="content-type-group" list="content-type-groups" maxLength={100} value={group} onChange={(event) => setGroup(event.target.value)} />
+          <datalist id="content-type-groups">
+            {groups.map((entry) => (
+              <option key={entry} value={entry} />
+            ))}
+          </datalist>
         </Field>
         {(!type || type.parent_id) && (
           <Field id="content-type-parent" label="Derives from">
@@ -556,6 +587,7 @@ export function CollectionContentTypes({ collection, canManage }: { collection: 
             {available.map(({ type, depth }) => (
               <option key={type.id} value={type.id}>
                 {treeLabel(type.name, depth)}
+                {type.group ? ` · ${type.group}` : ''}
               </option>
             ))}
           </Select>

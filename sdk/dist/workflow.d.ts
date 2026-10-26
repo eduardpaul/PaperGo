@@ -1976,6 +1976,10 @@ export interface ContentType extends AdditionalDataHolder, Parsable {
 	 */
 	fieldIds?: Guid[] | null;
 	/**
+	 * Catalog types: the heading the catalog files the type under, such as Finance. List types have none.
+	 */
+	group?: string | null;
+	/**
 	 * Inherited fields that forms leave out. They stay part of the type.
 	 */
 	hiddenFieldIds?: Guid[] | null;
@@ -2041,6 +2045,10 @@ export interface ContentTypeInput extends Parsable {
 	 * The type's own field IDs, none of them inherited. Every key of the type and its ancestors is unique.
 	 */
 	fieldIds?: Guid[] | null;
+	/**
+	 * Heading the catalog files the type under; empty or omitted is none. Replacement sets it like the name.
+	 */
+	group?: string | null;
 	/**
 	 * Inherited fields that forms leave out. A required field without a default cannot be hidden.
 	 */

@@ -974,6 +974,10 @@ export interface ContentType extends AdditionalDataHolder, Parsable {
      */
     fieldIds?: Guid[] | null;
     /**
+     * Catalog types: the heading the catalog files the type under, such as Finance. List types have none.
+     */
+    group?: string | null;
+    /**
      * Inherited fields that forms leave out. They stay part of the type.
      */
     hiddenFieldIds?: Guid[] | null;
@@ -1039,6 +1043,10 @@ export interface ContentTypeInput extends Parsable {
      * The type's own field IDs, none of them inherited. Every key of the type and its ancestors is unique.
      */
     fieldIds?: Guid[] | null;
+    /**
+     * Heading the catalog files the type under; empty or omitted is none. Replacement sets it like the name.
+     */
+    group?: string | null;
     /**
      * Inherited fields that forms leave out. A required field without a default cannot be hidden.
      */
@@ -4325,6 +4333,7 @@ export function deserializeIntoContentType(contentType: Partial<ContentType> | u
         "created_at": n => { contentType.createdAt = n.getDateValue(); },
         "effective": n => { contentType.effective = n.getObjectValue<ContentType_effective>(createContentType_effectiveFromDiscriminatorValue); },
         "field_ids": n => { contentType.fieldIds = n.getCollectionOfPrimitiveValues<Guid>("string"); },
+        "group": n => { contentType.group = n.getStringValue(); },
         "hidden_field_ids": n => { contentType.hiddenFieldIds = n.getCollectionOfPrimitiveValues<Guid>("string"); },
         "id": n => { contentType.id = n.getGuidValue(); },
         "is_default": n => { contentType.isDefault = n.getBooleanValue(); },
@@ -4359,6 +4368,7 @@ export function deserializeIntoContentType_effective(contentType_effective: Part
 export function deserializeIntoContentTypeInput(contentTypeInput: Partial<ContentTypeInput> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
         "field_ids": n => { contentTypeInput.fieldIds = n.getCollectionOfPrimitiveValues<Guid>("string"); },
+        "group": n => { contentTypeInput.group = n.getStringValue(); },
         "hidden_field_ids": n => { contentTypeInput.hiddenFieldIds = n.getCollectionOfPrimitiveValues<Guid>("string"); },
         "key": n => { contentTypeInput.key = n.getStringValue(); },
         "name": n => { contentTypeInput.name = n.getStringValue(); },
@@ -10326,6 +10336,7 @@ export function serializeContentType(writer: SerializationWriter, contentType: P
     if (!contentType || isSerializingDerivedType) { return; }
     writer.writeDateValue("created_at", contentType.createdAt);
     writer.writeCollectionOfPrimitiveValues<Guid>("field_ids", contentType.fieldIds);
+    writer.writeStringValue("group", contentType.group);
     writer.writeCollectionOfPrimitiveValues<Guid>("hidden_field_ids", contentType.hiddenFieldIds);
     writer.writeGuidValue("id", contentType.id);
     writer.writeStringValue("key", contentType.key);
@@ -10359,6 +10370,7 @@ export function serializeContentType_effective(writer: SerializationWriter, cont
 export function serializeContentTypeInput(writer: SerializationWriter, contentTypeInput: Partial<ContentTypeInput> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!contentTypeInput || isSerializingDerivedType) { return; }
     writer.writeCollectionOfPrimitiveValues<Guid>("field_ids", contentTypeInput.fieldIds);
+    writer.writeStringValue("group", contentTypeInput.group);
     writer.writeCollectionOfPrimitiveValues<Guid>("hidden_field_ids", contentTypeInput.hiddenFieldIds);
     writer.writeStringValue("key", contentTypeInput.key);
     writer.writeStringValue("name", contentTypeInput.name);

@@ -60,12 +60,15 @@ type FieldDefinition struct {
 // that type's key and name. Every type but a root derives from a parent and
 // has every field and rule of its ancestors; Effective holds them all.
 type ContentType struct {
-	ID          string    `json:"id,omitempty"`
-	CreatedAt   time.Time `json:"created_at,omitempty"`
-	UpdatedAt   time.Time `json:"updated_at,omitempty"`
-	Key         string    `json:"key,omitempty"`
-	Name        string    `json:"name,omitempty"`
-	TemplateKey *string   `json:"template_key,omitempty"`
+	ID        string    `json:"id,omitempty"`
+	CreatedAt time.Time `json:"created_at,omitempty"`
+	UpdatedAt time.Time `json:"updated_at,omitempty"`
+	Key       string    `json:"key,omitempty"`
+	Name      string    `json:"name,omitempty"`
+	// Group files a catalog type under a heading of the catalog, such as
+	// Finance; list types have none.
+	Group       string  `json:"group,omitempty"`
+	TemplateKey *string `json:"template_key,omitempty"`
 	// ParentID is the type this one derives from; it never changes.
 	ParentID *string `json:"parent_id,omitempty"`
 	// CollectionID is the list or library of a list type.
@@ -598,7 +601,7 @@ func (r *Repo) RecordLineage(ctx context.Context, id string) error {
 }
 
 // SaveContentType changes a type's own fields, hidden fields and rules at
-// version, and a catalog type's name. Its key and parent never change. The
+// version, and a catalog type's name and group. Its key and parent never change. The
 // type and every type deriving from it keep distinct field keys. When its own
 // fields change, deriving types store theirs without the fields it now has
 // and their hidden fields without those it no longer has.
@@ -613,7 +616,7 @@ func (r *Repo) SaveContentType(ctx context.Context, in ContentType, version int)
 			return dberr.ErrConcurrentUpdate
 		}
 		if t.Catalog() {
-			t.Name = in.Name
+			t.Name, t.Group = in.Name, in.Group
 		}
 		reshaped := !slices.Equal(t.FieldIds, nonNil(in.FieldIds))
 		t.FieldIds, t.HiddenFieldIds, t.Rules = nonNil(in.FieldIds), nonNil(in.HiddenFieldIds), nonNil(in.Rules)
