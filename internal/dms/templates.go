@@ -211,7 +211,7 @@ func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templ
 			if newlyRequired(old, d) {
 				required = append(required, d.Key)
 			}
-			updated, e := t.reviseFieldDefinition(ctx, old, d)
+			updated, e := t.reviseFieldDefinition(ctx, subject, old, d)
 			if e != nil {
 				return e
 			}

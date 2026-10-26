@@ -125,7 +125,7 @@ func (s *Service) updateCatalogField(ctx context.Context, subject string, d *cat
 		}
 	}
 	reindex := in.Indexed != nil && *in.Indexed != d.Indexed
-	out, e = s.reviseFieldDefinition(ctx, d, &candidate)
+	out, e = s.reviseFieldDefinition(ctx, subject, d, &candidate)
 	if e != nil {
 		return nil, e
 	}

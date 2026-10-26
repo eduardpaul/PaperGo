@@ -571,3 +571,26 @@ func TestInheritedHiddenFieldsStayOptional(t *testing.T) {
 		t.Fatal("parent hides a field its subtype requires", err)
 	}
 }
+
+// A field keeps only choices the defaults content types give it allow.
+func TestFieldChangesKeepTypeDefaultsValid(t *testing.T) {
+	s, _, _ := fixture(t)
+	status, err := s.CreateCatalogField(testContext, "alice", CreateField{Key: "status", Label: "Status", Type: "choice", Choices: []string{"open", "closed"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err := s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "record", Name: "Record", FieldIds: []string{status.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "invoice", Name: "Invoice", ParentID: record.ID,
+		FieldSettings: []catalog.FieldSetting{{FieldID: status.ID, DefaultValue: []byte(`"closed"`)}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.UpdateCatalogField(testContext, "alice", status.ID, status.Version, UpdateField{Choices: &[]string{"open"}}); !isValidation(err) {
+		t.Fatal("choice a type defaults to removed", err)
+	}
+	if _, err = s.UpdateCatalogField(testContext, "alice", status.ID, status.Version, UpdateField{Choices: &[]string{"open", "closed", "void"}}); err != nil {
+		t.Fatal(err)
+	}
+}
