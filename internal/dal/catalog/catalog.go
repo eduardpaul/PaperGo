@@ -18,7 +18,8 @@ import (
 // MaxCollectionTypes bounds the content types a collection accepts.
 const MaxCollectionTypes = 32
 
-// MaxDepth bounds the ancestors of a content type.
+// MaxDepth bounds the ancestors of a content type. Catalog types have at
+// most MaxDepth-1, so that each has room for the list types deriving from it.
 const MaxDepth = 8
 
 // Violation is a catalog rule a change breaks; its text explains it.
@@ -473,8 +474,9 @@ func insertContentType(ctx context.Context, q Queries, t ContentType) (*ContentT
 		if !parent.Catalog() {
 			return nil, Violation("content types derive from catalog types")
 		}
-		if t.AncestorIDs = append([]string{parent.ID}, parent.AncestorIDs...); len(t.AncestorIDs) > MaxDepth {
-			return nil, Violation(fmt.Sprintf("content types have at most %d ancestors", MaxDepth))
+		t.AncestorIDs = append([]string{parent.ID}, parent.AncestorIDs...)
+		if err = depth(t, len(t.AncestorIDs)); err != nil {
+			return nil, err
 		}
 	}
 	t.Version, t.Attached, t.CreatedAt = 1, true, time.Now().UTC()
@@ -490,6 +492,17 @@ func insertContentType(ctx context.Context, q Queries, t ContentType) (*ContentT
 		return nil, err
 	}
 	return out, checkLineage(ctx, q, []*ContentType{out})
+}
+
+// depth checks that a type with that many ancestors fits within MaxDepth.
+func depth(t ContentType, ancestors int) error {
+	if t.Catalog() && ancestors > MaxDepth-1 {
+		return Violation(fmt.Sprintf("catalog types have at most %d ancestors", MaxDepth-1))
+	}
+	if ancestors > MaxDepth {
+		return Violation(fmt.Sprintf("content types have at most %d ancestors", MaxDepth))
+	}
+	return nil
 }
 
 // kept checks that resolving the written type kept the own and hidden fields
@@ -524,8 +537,8 @@ func (r *Repo) RecordLineage(ctx context.Context, id string) error {
 			}
 			ancestors = append([]string{*t.ParentID}, lineages[*t.ParentID]...)
 		}
-		if len(ancestors) > MaxDepth {
-			return Violation(fmt.Sprintf("content types have at most %d ancestors", MaxDepth))
+		if err = depth(*t, len(ancestors)); err != nil {
+			return err
 		}
 		return q.InsertLineage(ctx, id, ancestors)
 	})

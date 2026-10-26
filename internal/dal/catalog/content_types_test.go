@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"papergo/internal/dal"
 	"papergo/internal/dal/catalog"
 	"papergo/internal/dal/daltest"
@@ -303,5 +304,20 @@ func testContentTypeInheritance(t *testing.T, s *dal.Store) {
 	}
 	if collections, err := r.AttachedCollections(ctx, []string{"invoice"}); err != nil || len(collections) != 1 || collections[0] != f.Destination {
 		t.Fatalf("collections of a subtype: %v %v", collections, err)
+	}
+	// The deepest catalog type leaves room for its list types.
+	deepest := "invoice"
+	for i := 2; i < catalog.MaxDepth; i++ {
+		id := fmt.Sprintf("level-%d", i)
+		if _, err := r.CreateContentType(ctx, catalog.ContentType{ID: id, Key: id, Name: id, ParentID: &deepest}); err != nil {
+			t.Fatal(err)
+		}
+		deepest = id
+	}
+	if _, err := r.CreateContentType(ctx, catalog.ContentType{ID: "too-deep", Key: "too-deep", Name: "Too deep", ParentID: &deepest}); err == nil {
+		t.Fatal("catalog type below the deepest level")
+	}
+	if deep, _, err := r.Attach(ctx, f.Destination, deepest, false); err != nil || len(deep.AncestorIDs) != catalog.MaxDepth {
+		t.Fatalf("deepest catalog type attached: %+v %v", deep, err)
 	}
 }

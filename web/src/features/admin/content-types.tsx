@@ -16,6 +16,9 @@ import { SystemProperties } from '@/features/lists/system-properties';
 import { treeLabel, typeTree } from '@/features/lists/schema';
 import { FieldDialog, fieldTypeLabel } from './field-dialog';
 
+/** Catalog types have at most this many ancestors; list types take one more level. */
+const maxCatalogAncestors = 7;
+
 export const catalogTypesQuery = {
   queryKey: ['catalog', 'content-types'],
   queryFn: async () => (await api<ContentType[]>('/v1/content-types')).data,
@@ -200,7 +203,9 @@ function TypeDialog({
   const [schema, setSchema] = useState<Schema>({ ids: type?.field_ids ?? [], hidden: type?.hidden_field_ids ?? [], rules: type?.rules ?? [] });
   const parent = types.find((entry) => entry.id === parentId);
   // A type cannot derive from itself or its subtypes.
-  const parents = typeTree(types).filter(({ type: entry }) => !type || (entry.id !== type.id && !entry.ancestor_ids?.includes(type.id)));
+  const parents = typeTree(types).filter(
+    ({ type: entry }) => (entry.ancestor_ids?.length ?? 0) < maxCatalogAncestors - 1 && (!type || (entry.id !== type.id && !entry.ancestor_ids?.includes(type.id))),
+  );
   const save = useMutation({
     mutationFn: () =>
       api(type ? `/v1/content-types/${type.id}` : '/v1/content-types', {
