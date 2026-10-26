@@ -358,3 +358,56 @@ func testContentTypeFieldLimit(t *testing.T, s *dal.Store) {
 		t.Fatalf("type past the field limit: %v", err)
 	}
 }
+
+func TestContentTypeFieldOrderAndSettings_SQLite(t *testing.T) {
+	testContentTypeFieldOrderAndSettings(t, daltest.SQLiteStore(t))
+}
+func TestContentTypeFieldOrderAndSettings_Postgres(t *testing.T) {
+	testContentTypeFieldOrderAndSettings(t, daltest.PostgresStore(t))
+}
+
+// Subtypes reorder inherited fields and override their settings; the
+// nearest type wins, and settings of fields a type loses go with them.
+func testContentTypeFieldOrderAndSettings(t *testing.T, s *dal.Store) {
+	ctx := context.Background()
+	r := s.Catalog()
+	for _, key := range []string{"a", "b", "c"} {
+		if _, err := r.CreateField(ctx, catalog.FieldDefinition{ID: key, Key: key, Label: key, Type: catalog.FieldText}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	required, optional := true, false
+	parent, err := r.CreateContentType(ctx, catalog.ContentType{ID: "parent", Key: "parent", Name: "Parent", FieldIds: []string{"a", "b"}, FieldOrder: []string{"b", "a"},
+		FieldSettings: []catalog.FieldSetting{{FieldID: "a", Required: &required, DefaultValue: json.RawMessage(`"p"`)}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	child, err := r.CreateContentType(ctx, catalog.ContentType{ID: "child", Key: "child", Name: "Child", ParentID: &parent.ID, FieldIds: []string{"c"}, FieldOrder: []string{"c", "a"},
+		FieldSettings: []catalog.FieldSetting{{FieldID: "a", DefaultValue: json.RawMessage(`"c"`)}, {FieldID: "b", Required: &optional}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(parent.Effective.FieldIds, []string{"b", "a"}) || !slices.Equal(child.Effective.FieldIds, []string{"c", "a", "b"}) {
+		t.Fatalf("field order: %v %v", parent.Effective.FieldIds, child.Effective.FieldIds)
+	}
+	if a := child.Effective.Setting("a"); a.Required == nil || !*a.Required || string(a.DefaultValue) != `"c"` {
+		t.Fatalf("merged setting: %+v", a)
+	}
+	if b := child.Effective.Setting("b"); b.Required == nil || *b.Required {
+		t.Fatalf("own setting: %+v", b)
+	}
+	if _, err = r.CreateContentType(ctx, catalog.ContentType{ID: "stray", Key: "stray", Name: "Stray", ParentID: &parent.ID, FieldSettings: []catalog.FieldSetting{{FieldID: "c", Required: &required}}}); !errors.Is(err, dberr.ErrInvalidReference) {
+		t.Fatalf("setting of a field the type lacks: %v", err)
+	}
+	// The parent drops a: the child stores neither its order nor its setting.
+	if _, err = r.SaveContentType(ctx, catalog.ContentType{ID: parent.ID, Name: parent.Name, FieldIds: []string{"b"}}, parent.Version); err != nil {
+		t.Fatal(err)
+	}
+	var order, settings string
+	if err = s.SQLDB().QueryRowContext(ctx, `SELECT field_order, field_settings FROM content_types WHERE id = 'child'`).Scan(&order, &settings); err != nil {
+		t.Fatal(err)
+	}
+	if !jsonutil.Equal([]byte(order), []byte(`["c"]`)) || !jsonutil.Equal([]byte(settings), []byte(`[{"field_id":"b","required":false}]`)) {
+		t.Fatalf("stale order or settings stored: %s %s", order, settings)
+	}
+}

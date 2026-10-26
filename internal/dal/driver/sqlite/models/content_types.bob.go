@@ -43,6 +43,8 @@ type ContentType struct {
 	FieldIds       types.JSON[[]string]        `db:"field_ids" `
 	HiddenFieldIds types.JSON[[]string]        `db:"hidden_field_ids" `
 	Rules          types.JSON[json.RawMessage] `db:"rules" `
+	FieldOrder     types.JSON[[]string]        `db:"field_order" `
+	FieldSettings  types.JSON[json.RawMessage] `db:"field_settings" `
 	Version        int64                       `db:"version" `
 
 	R contentTypeR `db:"-" `
@@ -84,7 +86,7 @@ type contentTypeRLoaded struct {
 
 func buildContentTypeColumns(tableName string) contentTypeColumns {
 	columnsExpr := expr.NewColumnsExpr(
-		"id", "created_at", "updated_at", "key", "name", "group_name", "template_key", "parent_id", "collection_id", "attached", "is_default", "in_new_menu", "menu_position", "field_ids", "hidden_field_ids", "rules", "version",
+		"id", "created_at", "updated_at", "key", "name", "group_name", "template_key", "parent_id", "collection_id", "attached", "is_default", "in_new_menu", "menu_position", "field_ids", "hidden_field_ids", "rules", "field_order", "field_settings", "version",
 	)
 
 	if tableName != "" {
@@ -110,6 +112,8 @@ func buildContentTypeColumns(tableName string) contentTypeColumns {
 		FieldIds:       buildContentTypeColumn(tableName, "field_ids"),
 		HiddenFieldIds: buildContentTypeColumn(tableName, "hidden_field_ids"),
 		Rules:          buildContentTypeColumn(tableName, "rules"),
+		FieldOrder:     buildContentTypeColumn(tableName, "field_order"),
+		FieldSettings:  buildContentTypeColumn(tableName, "field_settings"),
 		Version:        buildContentTypeColumn(tableName, "version"),
 	}
 }
@@ -133,6 +137,8 @@ type contentTypeColumns struct {
 	FieldIds       contentTypeColumn
 	HiddenFieldIds contentTypeColumn
 	Rules          contentTypeColumn
+	FieldOrder     contentTypeColumn
+	FieldSettings  contentTypeColumn
 	Version        contentTypeColumn
 }
 
@@ -195,11 +201,13 @@ type ContentTypeSetter struct {
 	FieldIds       omit.Val[types.JSON[[]string]]        `db:"field_ids" `
 	HiddenFieldIds omit.Val[types.JSON[[]string]]        `db:"hidden_field_ids" `
 	Rules          omit.Val[types.JSON[json.RawMessage]] `db:"rules" `
+	FieldOrder     omit.Val[types.JSON[[]string]]        `db:"field_order" `
+	FieldSettings  omit.Val[types.JSON[json.RawMessage]] `db:"field_settings" `
 	Version        omit.Val[int64]                       `db:"version" `
 }
 
 func (s ContentTypeSetter) SetColumns() []string {
-	vals := make([]string, 0, 17)
+	vals := make([]string, 0, 19)
 	if s.ID.IsValue() {
 		vals = append(vals, "id")
 	}
@@ -247,6 +255,12 @@ func (s ContentTypeSetter) SetColumns() []string {
 	}
 	if s.Rules.IsValue() {
 		vals = append(vals, "rules")
+	}
+	if s.FieldOrder.IsValue() {
+		vals = append(vals, "field_order")
+	}
+	if s.FieldSettings.IsValue() {
+		vals = append(vals, "field_settings")
 	}
 	if s.Version.IsValue() {
 		vals = append(vals, "version")
@@ -302,6 +316,12 @@ func (s ContentTypeSetter) Overwrite(t *ContentType) {
 	}
 	if s.Rules.IsValue() {
 		t.Rules = s.Rules.MustGet()
+	}
+	if s.FieldOrder.IsValue() {
+		t.FieldOrder = s.FieldOrder.MustGet()
+	}
+	if s.FieldSettings.IsValue() {
+		t.FieldSettings = s.FieldSettings.MustGet()
 	}
 	if s.Version.IsValue() {
 		t.Version = s.Version.MustGet()
@@ -436,6 +456,20 @@ func (s *ContentTypeSetter) Apply(q *dialect.InsertQuery) {
 				}
 				return sqlite.Arg(s.Rules.MustGet()).WriteSQL(ctx, w, d, start)
 			}))
+		case "field_order":
+			vals = append(vals, bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+				if s.FieldOrder.IsUnset() {
+					return sqlite.Arg(nil).WriteSQL(ctx, w, d, start)
+				}
+				return sqlite.Arg(s.FieldOrder.MustGet()).WriteSQL(ctx, w, d, start)
+			}))
+		case "field_settings":
+			vals = append(vals, bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+				if s.FieldSettings.IsUnset() {
+					return sqlite.Arg(nil).WriteSQL(ctx, w, d, start)
+				}
+				return sqlite.Arg(s.FieldSettings.MustGet()).WriteSQL(ctx, w, d, start)
+			}))
 		case "version":
 			vals = append(vals, bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
 				if s.Version.IsUnset() {
@@ -454,7 +488,7 @@ func (s ContentTypeSetter) UpdateMod() bob.Mod[*dialect.UpdateQuery] {
 }
 
 func (s ContentTypeSetter) Expressions(prefix ...string) []bob.Expression {
-	exprs := make([]bob.Expression, 0, 17)
+	exprs := make([]bob.Expression, 0, 19)
 
 	if s.ID.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
@@ -568,6 +602,20 @@ func (s ContentTypeSetter) Expressions(prefix ...string) []bob.Expression {
 		}})
 	}
 
+	if s.FieldOrder.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			sqlite.Quote(append(prefix, "field_order")...),
+			sqlite.Arg(s.FieldOrder),
+		}})
+	}
+
+	if s.FieldSettings.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			sqlite.Quote(append(prefix, "field_settings")...),
+			sqlite.Arg(s.FieldSettings),
+		}})
+	}
+
 	if s.Version.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
 			sqlite.Quote(append(prefix, "version")...),
@@ -585,7 +633,7 @@ func contentTypeScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc,
 		idx int
 		dst func(o *ContentType) any
 	}
-	targets := make([]target, 0, 17)
+	targets := make([]target, 0, 19)
 	for i, col := range cols {
 		switch col {
 		case "id":
@@ -620,6 +668,10 @@ func contentTypeScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc,
 			targets = append(targets, target{i, func(o *ContentType) any { return &o.HiddenFieldIds }})
 		case "rules":
 			targets = append(targets, target{i, func(o *ContentType) any { return &o.Rules }})
+		case "field_order":
+			targets = append(targets, target{i, func(o *ContentType) any { return &o.FieldOrder }})
+		case "field_settings":
+			targets = append(targets, target{i, func(o *ContentType) any { return &o.FieldSettings }})
 		case "version":
 			targets = append(targets, target{i, func(o *ContentType) any { return &o.Version }})
 		}
@@ -1350,6 +1402,8 @@ type contentTypeWhere[Q sqlite.Filterable] struct {
 	FieldIds       sqlite.WhereMod[Q, types.JSON[[]string]]
 	HiddenFieldIds sqlite.WhereMod[Q, types.JSON[[]string]]
 	Rules          sqlite.WhereMod[Q, types.JSON[json.RawMessage]]
+	FieldOrder     sqlite.WhereMod[Q, types.JSON[[]string]]
+	FieldSettings  sqlite.WhereMod[Q, types.JSON[json.RawMessage]]
 	Version        sqlite.WhereMod[Q, int64]
 	R              contentTypeWhereR[Q]
 }
@@ -1377,6 +1431,8 @@ func buildContentTypeWhere[Q sqlite.Filterable](cols contentTypeColumns) content
 		FieldIds:       sqlite.Where[Q, types.JSON[[]string]](cols.FieldIds.Expression),
 		HiddenFieldIds: sqlite.Where[Q, types.JSON[[]string]](cols.HiddenFieldIds.Expression),
 		Rules:          sqlite.Where[Q, types.JSON[json.RawMessage]](cols.Rules.Expression),
+		FieldOrder:     sqlite.Where[Q, types.JSON[[]string]](cols.FieldOrder.Expression),
+		FieldSettings:  sqlite.Where[Q, types.JSON[json.RawMessage]](cols.FieldSettings.Expression),
 		Version:        sqlite.Where[Q, int64](cols.Version.Expression),
 		R:              contentTypeWhereR[Q]{cols: cols},
 	}

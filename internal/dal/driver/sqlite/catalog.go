@@ -308,8 +308,13 @@ func contentTypeSetter(t *catalog.ContentType) (*models.ContentTypeSetter, error
 	if err != nil {
 		return nil, err
 	}
+	settings, err := json.Marshal(t.FieldSettings)
+	if err != nil {
+		return nil, err
+	}
 	set := &models.ContentTypeSetter{Name: omit.From(t.Name), FieldIds: omit.From(types.NewJSON(t.FieldIds)), HiddenFieldIds: omit.From(types.NewJSON(t.HiddenFieldIds)),
 		Rules: omit.From(types.NewJSON(json.RawMessage(rules))), UpdatedAt: omit.From(t.UpdatedAt), Version: omit.From(int64(t.Version))}
+	set.FieldOrder, set.FieldSettings = omit.From(types.NewJSON(t.FieldOrder)), omit.From(types.NewJSON(json.RawMessage(settings)))
 	if t.Catalog() {
 		set.GroupName = nullable.String(t.Group)
 	}
@@ -327,6 +332,12 @@ func contentTypeRecord(row *models.ContentType) (*catalog.ContentType, error) {
 		out.HiddenFieldIds = []string{}
 	}
 	if err := json.Unmarshal(row.Rules.Val, &out.Rules); err != nil {
+		return nil, err
+	}
+	if out.FieldOrder = row.FieldOrder.Val; out.FieldOrder == nil {
+		out.FieldOrder = []string{}
+	}
+	if err := json.Unmarshal(row.FieldSettings.Val, &out.FieldSettings); err != nil {
 		return nil, err
 	}
 	return out, nil

@@ -241,6 +241,10 @@ CREATE TABLE content_types (
     -- hidden_field_ids are inherited fields forms leave out.
     hidden_field_ids JSONB NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(hidden_field_ids) = 'array'),
     rules JSONB NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(rules) = 'array'),
+    -- field_order orders the type's fields in forms; field_settings change,
+    -- per field, whether it is required and its default.
+    field_order JSONB NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(field_order) = 'array'),
+    field_settings JSONB NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(field_settings) = 'array'),
     version BIGINT NOT NULL DEFAULT 1 CHECK (version > 0),
     CHECK (collection_id IS NULL OR (parent_id IS NOT NULL AND template_key IS NULL))
 );

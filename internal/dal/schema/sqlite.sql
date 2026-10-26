@@ -241,6 +241,10 @@ CREATE TABLE content_types (
     -- hidden_field_ids are inherited fields forms leave out.
     hidden_field_ids TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(hidden_field_ids) AND json_type(hidden_field_ids) = 'array'),
     rules TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(rules) AND json_type(rules) = 'array'),
+    -- field_order orders the type's fields in forms; field_settings change,
+    -- per field, whether it is required and its default.
+    field_order TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(field_order) AND json_type(field_order) = 'array'),
+    field_settings TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(field_settings) AND json_type(field_settings) = 'array'),
     version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0),
     CHECK (collection_id IS NULL OR (parent_id IS NOT NULL AND template_key IS NULL))
 );

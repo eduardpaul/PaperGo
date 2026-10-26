@@ -5,6 +5,7 @@ package catalog
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -87,6 +88,12 @@ type ContentType struct {
 	FieldIds       []string               `json:"field_ids"`
 	HiddenFieldIds []string               `json:"hidden_field_ids"`
 	Rules          []model.ValidationRule `json:"rules"`
+	// FieldOrder orders fields of the type, own or inherited, in forms;
+	// fields it leaves out follow in the order the type inherits.
+	FieldOrder []string `json:"field_order"`
+	// FieldSettings change, for the type and its subtypes, whether a field
+	// is required and its default.
+	FieldSettings []FieldSetting `json:"field_settings"`
 	// AncestorIDs lists the ancestors, nearest first.
 	AncestorIDs []string  `json:"ancestor_ids"`
 	Effective   Effective `json:"effective"`
@@ -94,11 +101,32 @@ type ContentType struct {
 }
 
 // Effective is what a type and its ancestors define together, the root's
-// first.
+// first. FieldIds are in form order, and FieldSettings merge every setting of
+// the lineage, the nearest type's winning.
 type Effective struct {
 	FieldIds       []string               `json:"field_ids"`
 	HiddenFieldIds []string               `json:"hidden_field_ids"`
 	Rules          []model.ValidationRule `json:"rules"`
+	FieldSettings  []FieldSetting         `json:"field_settings"`
+}
+
+// FieldSetting changes, for a type and its subtypes, a field's Required flag
+// and its DefaultValue; nil keeps what the field or an ancestor says, and a
+// JSON null DefaultValue removes the default.
+type FieldSetting struct {
+	FieldID      string          `json:"field_id"`
+	Required     *bool           `json:"required,omitempty"`
+	DefaultValue json.RawMessage `json:"default_value,omitempty"`
+}
+
+// Setting returns the setting of a field, or a zero one.
+func (e Effective) Setting(fieldID string) FieldSetting {
+	for _, s := range e.FieldSettings {
+		if s.FieldID == fieldID {
+			return s
+		}
+	}
+	return FieldSetting{FieldID: fieldID}
 }
 
 // Catalog reports whether t is a catalog type rather than a list type.
@@ -418,8 +446,9 @@ func contentType(ctx context.Context, q Queries, id string) (*ContentType, error
 
 // resolve fills in the lineage and effective schema of stored types. A list
 // type shows the current name of its catalog type. Own fields an ancestor
-// has and hidden fields no ancestor has drop out, as SaveContentType stores
-// them once an ancestor changes.
+// has, hidden fields no ancestor has, and the order and settings of fields
+// the type no longer has drop out, as SaveContentType stores them once an
+// ancestor changes.
 func resolve(ctx context.Context, q Queries, types []*ContentType) error {
 	if len(types) == 0 {
 		return nil
@@ -461,6 +490,9 @@ func resolve(ctx context.Context, q Queries, types []*ContentType) error {
 		t.FieldIds = slices.DeleteFunc(slices.Clone(t.FieldIds), func(id string) bool { return slices.Contains(inherited, id) })
 		t.HiddenFieldIds = slices.DeleteFunc(slices.Clone(t.HiddenFieldIds), func(id string) bool { return !slices.Contains(inherited, id) })
 		t.Effective = effective(append(chain, t))
+		all := t.Effective.FieldIds
+		t.FieldOrder = slices.DeleteFunc(slices.Clone(t.FieldOrder), func(id string) bool { return !slices.Contains(all, id) })
+		t.FieldSettings = slices.DeleteFunc(slices.Clone(t.FieldSettings), func(s FieldSetting) bool { return !slices.Contains(all, s.FieldID) })
 		if !t.Catalog() && len(chain) > 0 {
 			t.Name = chain[len(chain)-1].Name
 		}
@@ -471,7 +503,8 @@ func resolve(ctx context.Context, q Queries, types []*ContentType) error {
 // effective combines a lineage, root first. A field appears once, where an
 // ancestor first has it; hidden fields are inherited fields.
 func effective(chain []*ContentType) Effective {
-	out := Effective{FieldIds: []string{}, HiddenFieldIds: []string{}, Rules: []model.ValidationRule{}}
+	out := Effective{FieldIds: []string{}, HiddenFieldIds: []string{}, Rules: []model.ValidationRule{}, FieldSettings: []FieldSetting{}}
+	settings := map[string]FieldSetting{}
 	for _, t := range chain {
 		inherited := slices.Clone(out.FieldIds)
 		for _, id := range t.HiddenFieldIds {
@@ -484,7 +517,41 @@ func effective(chain []*ContentType) Effective {
 				out.FieldIds = append(out.FieldIds, id)
 			}
 		}
+		out.FieldIds = reorder(out.FieldIds, t.FieldOrder)
 		out.Rules = append(out.Rules, t.Rules...)
+		for _, s := range t.FieldSettings {
+			merged := settings[s.FieldID]
+			merged.FieldID = s.FieldID
+			if s.Required != nil {
+				merged.Required = s.Required
+			}
+			if s.DefaultValue != nil {
+				merged.DefaultValue = s.DefaultValue
+			}
+			settings[s.FieldID] = merged
+		}
+	}
+	for _, id := range out.FieldIds {
+		if s, ok := settings[id]; ok {
+			out.FieldSettings = append(out.FieldSettings, s)
+		}
+	}
+	return out
+}
+
+// reorder puts the ids order names first, in that order, and the others
+// after them as they were.
+func reorder(ids, order []string) []string {
+	out := make([]string, 0, len(ids))
+	for _, id := range order {
+		if slices.Contains(ids, id) && !slices.Contains(out, id) {
+			out = append(out, id)
+		}
+	}
+	for _, id := range ids {
+		if !slices.Contains(out, id) {
+			out = append(out, id)
+		}
 	}
 	return out
 }
@@ -526,6 +593,7 @@ func insertContentType(ctx context.Context, q Queries, t ContentType) (*ContentT
 		t.ID = uuid.NewString()
 	}
 	t.FieldIds, t.HiddenFieldIds, t.Rules = nonNil(t.FieldIds), nonNil(t.HiddenFieldIds), nonNil(t.Rules)
+	t.FieldOrder, t.FieldSettings = nonNil(t.FieldOrder), nonNil(t.FieldSettings)
 	t.AncestorIDs = []string{}
 	if t.ParentID != nil {
 		parent, err := contentType(ctx, q, *t.ParentID)
@@ -569,8 +637,9 @@ func depth(t ContentType, ancestors int) error {
 	return nil
 }
 
-// kept checks that resolving the written type kept the own and hidden fields
-// the write asked for: own fields are not inherited, hidden fields are.
+// kept checks that resolving the written type kept the fields the write
+// asked for: own fields are not inherited, hidden fields are, and ordered and
+// set fields are the type's.
 func kept(asked ContentType, t *ContentType) error {
 	for _, id := range asked.FieldIds {
 		if !slices.Contains(t.FieldIds, id) {
@@ -580,6 +649,16 @@ func kept(asked ContentType, t *ContentType) error {
 	for _, id := range asked.HiddenFieldIds {
 		if !slices.Contains(t.HiddenFieldIds, id) {
 			return fmt.Errorf("%w: hidden field %s is not inherited by content type %s", dberr.ErrInvalidReference, id, t.Key)
+		}
+	}
+	for _, id := range asked.FieldOrder {
+		if !slices.Contains(t.FieldOrder, id) {
+			return fmt.Errorf("%w: content type %s orders field %s it does not have", dberr.ErrInvalidReference, t.Key, id)
+		}
+	}
+	for _, s := range asked.FieldSettings {
+		if !slices.ContainsFunc(t.FieldSettings, func(kept FieldSetting) bool { return kept.FieldID == s.FieldID }) {
+			return fmt.Errorf("%w: content type %s sets field %s it does not have", dberr.ErrInvalidReference, t.Key, s.FieldID)
 		}
 	}
 	return nil
@@ -608,8 +687,17 @@ func (r *Repo) RecordLineage(ctx context.Context, id string) error {
 	})
 }
 
-// SaveContentType changes a type's own fields, hidden fields and rules at
-// version, and a catalog type's name and group. Its key and parent never change. The
+// sameFields reports whether two versions of a type store the same fields,
+// hidden fields, field order and field settings.
+func sameFields(a, b *ContentType) bool {
+	return slices.Equal(a.FieldIds, b.FieldIds) && slices.Equal(a.HiddenFieldIds, b.HiddenFieldIds) && slices.Equal(a.FieldOrder, b.FieldOrder) &&
+		slices.EqualFunc(a.FieldSettings, b.FieldSettings, func(x, y FieldSetting) bool {
+			return x.FieldID == y.FieldID && (x.Required == nil) == (y.Required == nil) && (x.Required == nil || *x.Required == *y.Required) && string(x.DefaultValue) == string(y.DefaultValue)
+		})
+}
+
+// SaveContentType changes a type's own fields, hidden fields, rules, field
+// order and field settings at version, and a catalog type's name and group. Its key and parent never change. The
 // type and every type deriving from it keep distinct field keys. When its own
 // fields change, deriving types store theirs without the fields it now has
 // and their hidden fields without those it no longer has.
@@ -628,6 +716,7 @@ func (r *Repo) SaveContentType(ctx context.Context, in ContentType, version int)
 		}
 		reshaped := !slices.Equal(t.FieldIds, nonNil(in.FieldIds))
 		t.FieldIds, t.HiddenFieldIds, t.Rules = nonNil(in.FieldIds), nonNil(in.HiddenFieldIds), nonNil(in.Rules)
+		t.FieldOrder, t.FieldSettings = nonNil(in.FieldOrder), nonNil(in.FieldSettings)
 		t.Version, t.UpdatedAt = version+1, time.Now().UTC()
 		if err = saved(q.UpdateContentType(ctx, t)); err != nil {
 			return err
@@ -657,7 +746,7 @@ func (r *Repo) SaveContentType(ctx context.Context, in ContentType, version int)
 				return err
 			}
 			for i, row := range rows {
-				if slices.Equal(before[i].FieldIds, row.FieldIds) && slices.Equal(before[i].HiddenFieldIds, row.HiddenFieldIds) {
+				if sameFields(&before[i], row) {
 					continue
 				}
 				row.Version, row.UpdatedAt = row.Version+1, t.UpdatedAt
