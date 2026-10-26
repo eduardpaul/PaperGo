@@ -478,3 +478,57 @@ func TestPerTypeFieldSettingsAndOrder(t *testing.T) {
 		t.Fatal("records without amount made invalid", err)
 	}
 }
+
+// Removing a field drops it from the order and settings of the type that had
+// it.
+func TestRemovingFieldsDropsTheirOrderAndSettings(t *testing.T) {
+	s, _, l := fixture(t)
+	required := true
+	note, err := s.CreateField(testContext, "alice", l.ID, CreateField{Key: "note", Label: "Note", Type: "text"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	code, err := s.CreateField(testContext, "alice", l.ID, CreateField{Key: "code", Label: "Code", Type: "text"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	typ, err := s.contentType(testContext, l.ID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.UpdateListType(testContext, "alice", l.ID, typ.ID, typ.Version, ListTypeInput{FieldIds: typ.FieldIds, FieldOrder: []string{code.ID, note.ID},
+		FieldSettings: []catalog.FieldSetting{{FieldID: code.ID, DefaultValue: []byte(`"x"`)}, {FieldID: note.ID, Required: &required, DefaultValue: []byte(`"n"`)}}}); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.DeleteField(testContext, "alice", l.ID, code.ID, latest(t, s, l.ID).Version); err != nil {
+		t.Fatal(err)
+	}
+	if typ, err = s.contentType(testContext, l.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(typ.FieldOrder, []string{note.ID}) || len(typ.FieldSettings) != 1 || typ.FieldSettings[0].FieldID != note.ID {
+		t.Fatal("list type order and settings", typ.FieldOrder, typ.FieldSettings)
+	}
+	ref, err := s.CreateCatalogField(testContext, "alice", CreateField{Key: "ref", Label: "Ref", Type: "text"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	title, err := s.CreateCatalogField(testContext, "alice", CreateField{Key: "title2", Label: "Title", Type: "text"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err := s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "record", Name: "Record", FieldIds: []string{title.ID, ref.ID}, FieldOrder: []string{ref.ID},
+		FieldSettings: []catalog.FieldSetting{{FieldID: ref.ID, Required: &required, DefaultValue: []byte(`"r"`)}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.DeleteCatalogField(testContext, "alice", ref.ID, ref.Version); err != nil {
+		t.Fatal(err)
+	}
+	if record, err = s.GetContentType(testContext, "alice", record.ID); err != nil {
+		t.Fatal(err)
+	}
+	if len(record.FieldOrder) != 0 || len(record.FieldSettings) != 0 {
+		t.Fatal("catalog type order and settings", record.FieldOrder, record.FieldSettings)
+	}
+}

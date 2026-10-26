@@ -958,15 +958,17 @@ func (s *Service) reviseContentType(ctx context.Context, prior *catalog.ContentT
 	}
 	next.ID = prior.ID
 	// Schema changes name no type; they keep its name and group. Changes
-	// to its fields alone keep its field order and settings.
+	// to its fields alone keep its field order and settings, less the
+	// fields they remove.
 	if next.Name == "" {
 		next.Name, next.Group = prior.Name, prior.Group
 	}
+	removed := func(id string) bool { return slices.Contains(prior.FieldIds, id) && !slices.Contains(next.FieldIds, id) }
 	if next.FieldOrder == nil {
-		next.FieldOrder = prior.FieldOrder
+		next.FieldOrder = slices.DeleteFunc(slices.Clone(prior.FieldOrder), removed)
 	}
 	if next.FieldSettings == nil {
-		next.FieldSettings = prior.FieldSettings
+		next.FieldSettings = slices.DeleteFunc(slices.Clone(prior.FieldSettings), func(s catalog.FieldSetting) bool { return removed(s.FieldID) })
 	}
 	updated, err := s.DAL.Catalog().SaveContentType(ctx, next, prior.Version)
 	if errors.Is(err, dberr.ErrConcurrentUpdate) {
