@@ -963,7 +963,9 @@ func (s *Service) reviseContentType(ctx context.Context, prior *catalog.ContentT
 	if next.Name == "" {
 		next.Name, next.Group = prior.Name, prior.Group
 	}
-	removed := func(id string) bool { return slices.Contains(prior.FieldIds, id) && !slices.Contains(next.FieldIds, id) }
+	removed := func(id string) bool {
+		return slices.Contains(prior.FieldIds, id) && !slices.Contains(next.FieldIds, id)
+	}
 	if next.FieldOrder == nil {
 		next.FieldOrder = slices.DeleteFunc(slices.Clone(prior.FieldOrder), removed)
 	}
