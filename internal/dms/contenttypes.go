@@ -287,7 +287,13 @@ func (s *Service) validateTypeSchema(ctx context.Context, subject string, parent
 		if byID[id] == nil || !slices.Contains(inherited, id) {
 			return invalid("hidden fields must be inherited fields")
 		}
-		if mandatory(field(id)) {
+	}
+	hidden := slices.Clone(in.HiddenFieldIds)
+	if parent != nil {
+		hidden = append(hidden, parent.Effective.HiddenFieldIds...)
+	}
+	for _, id := range hidden {
+		if byID[id] != nil && mandatory(field(id)) {
 			return invalid("a required field without a default cannot be hidden: " + byID[id].Key)
 		}
 	}
@@ -555,10 +561,14 @@ func (s *Service) checkSubtypes(ctx context.Context, id string) error {
 	return nil
 }
 
-// checkHiddenMandatory checks that no type deriving from a type hides a
-// field its settings now make one forms must fill.
-func (s *Service) checkHiddenMandatory(ctx context.Context, id string) error {
-	ids, err := s.DAL.Catalog().Descendants(ctx, []string{id})
+// checkHiddenMandatory checks that none of the types, nor any type deriving
+// from them, hides a field forms must fill: one required without a default
+// as the type's settings change it.
+func (s *Service) checkHiddenMandatory(ctx context.Context, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	ids, err := s.DAL.Catalog().Descendants(ctx, ids)
 	if err != nil {
 		return err
 	}
@@ -634,14 +644,16 @@ func (s *Service) UpdateContentType(ctx context.Context, subject, id string, ver
 		if e != nil {
 			return e
 		}
+		// What the type hides and its settings reach every type deriving
+		// from it.
+		if e = t.checkHiddenMandatory(ctx, []string{id}); e != nil {
+			return e
+		}
 		// Fields and rules reach the items of every type deriving from this
 		// one; a new name reaches only the collections' schema snapshots.
 		switch {
 		case reshaped:
 			if e = t.checkSubtypes(ctx, id); e != nil {
-				return e
-			}
-			if e = t.checkHiddenMandatory(ctx, id); e != nil {
 				return e
 			}
 			if e = t.refreshCollections(ctx, subject, collections); e != nil {

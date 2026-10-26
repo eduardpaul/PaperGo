@@ -532,3 +532,42 @@ func TestRemovingFieldsDropsTheirOrderAndSettings(t *testing.T) {
 		t.Fatal("catalog type order and settings", record.FieldOrder, record.FieldSettings)
 	}
 }
+
+// No type hides a field its settings make one forms must fill, whichever
+// type hides it.
+func TestInheritedHiddenFieldsStayOptional(t *testing.T) {
+	s, _, l := fixture(t)
+	required := true
+	x, err := s.CreateCatalogField(testContext, "alice", CreateField{Key: "x", Label: "X", Type: "text"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err := s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "record", Name: "Record", FieldIds: []string{x.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	quiet, err := s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "quiet", Name: "Quiet", ParentID: record.ID, HiddenFieldIds: []string{x.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, setting := range []catalog.FieldSetting{{FieldID: x.ID, Required: &required}, {FieldID: x.ID, Required: &required, DefaultValue: []byte(`null`)}} {
+		if _, err = s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "loud", Name: "Loud", ParentID: quiet.ID, FieldSettings: []catalog.FieldSetting{setting}}); !isValidation(err) {
+			t.Fatal("subtype makes an inherited hidden field required", err)
+		}
+	}
+	listType := attachOK(t, s, l.ID, quiet.ID, false)
+	if _, err = s.UpdateListType(testContext, "alice", l.ID, listType.ID, listType.Version, ListTypeInput{FieldSettings: []catalog.FieldSetting{{FieldID: x.ID, Required: &required}}}); !isValidation(err) {
+		t.Fatal("list type makes an inherited hidden field required", err)
+	}
+	// Hiding a field a subtype requires is rejected too.
+	middle, err := s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "middle", Name: "Middle", ParentID: record.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "strict", Name: "Strict", ParentID: middle.ID, FieldSettings: []catalog.FieldSetting{{FieldID: x.ID, Required: &required}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.UpdateContentType(testContext, "alice", middle.ID, middle.Version, ContentTypeInput{Name: middle.Name, HiddenFieldIds: []string{x.ID}}); !isValidation(err) {
+		t.Fatal("parent hides a field its subtype requires", err)
+	}
+}
