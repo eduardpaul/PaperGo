@@ -17357,7 +17357,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "A content type; matches it and every type deriving from it."
+            "description": "A catalog type, or a list type standing for the catalog type it copies; matches it and every type deriving from it."
           },
           {
             "name": "term_id",
@@ -30983,7 +30983,7 @@
           },
           "content_type_id": {
             "type": "string",
-            "description": "The list type of the entry."
+            "description": "The catalog type the entry's list type copies."
           },
           "name": {
             "type": "string"
@@ -31412,7 +31412,7 @@
           },
           "content_type_id": {
             "type": "string",
-            "description": "A content type; matches it and every type deriving from it."
+            "description": "A catalog type, or a list type standing for the catalog type it copies; matches it and every type deriving from it."
           },
           "term_id": {
             "type": "string"

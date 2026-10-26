@@ -838,8 +838,6 @@ CREATE TABLE domain_events (
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     type TEXT NOT NULL,
     workspace_id TEXT NOT NULL,
-    -- Item history can outlive a purged collection, so collection_id has no
-    -- foreign key; purging a collection deletes the list types nothing uses.
     collection_id TEXT,
     resource_id TEXT,
     actor TEXT NOT NULL,

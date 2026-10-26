@@ -99,7 +99,7 @@ export interface SearchRequestBuilderGetQueryParameters {
      */
     collectionId?: string;
     /**
-     * A content type; matches it and every type deriving from it.
+     * A catalog type, or a list type standing for the catalog type it copies; matches it and every type deriving from it.
      */
     contentTypeId?: string;
     /**

@@ -7,6 +7,7 @@ import (
 	"papergo/internal/dal/catalog"
 	"papergo/internal/dal/dberr"
 	viewstore "papergo/internal/dal/views"
+	"slices"
 )
 
 func (s *Service) CatalogFields(ctx context.Context, subject string) ([]*catalog.FieldDefinition, error) {
@@ -120,6 +121,35 @@ func (s *Service) persistFieldDefinition(ctx context.Context, d *catalog.FieldDe
 	return s.DAL.Catalog().CreateField(ctx, *d)
 }
 
+// checkHiddenRequired rejects making a field one that forms must fill, required
+// without a default, while a content type hides it from forms.
+func (s *Service) checkHiddenRequired(ctx context.Context, d *catalog.FieldDefinition) error {
+	if !d.Required || len(d.Options.DefaultValue) > 0 {
+		return nil
+	}
+	owners, err := s.DAL.Catalog().ContentTypes(ctx, catalog.ContentTypeFilter{FieldID: d.ID, Detached: true})
+	if err != nil || len(owners) == 0 {
+		return err
+	}
+	ids := make([]string, len(owners))
+	for i, typ := range owners {
+		ids[i] = typ.ID
+	}
+	if ids, err = s.DAL.Catalog().Descendants(ctx, ids); err != nil {
+		return err
+	}
+	types, err := s.DAL.Catalog().ContentTypes(ctx, catalog.ContentTypeFilter{IDs: ids, Detached: true})
+	if err != nil {
+		return err
+	}
+	for _, typ := range types {
+		if slices.Contains(typ.Effective.HiddenFieldIds, d.ID) {
+			return invalid("content type " + typ.Name + " hides " + d.Key + "; show it in forms before making it required without a default")
+		}
+	}
+	return nil
+}
+
 func (s *Service) reviseFieldDefinition(ctx context.Context, prior, candidate *catalog.FieldDefinition) (*catalog.FieldDefinition, error) {
 	before, err := json.Marshal(prior)
 	if err != nil {
@@ -127,6 +157,9 @@ func (s *Service) reviseFieldDefinition(ctx context.Context, prior, candidate *c
 	}
 	change := *candidate
 	change.ID = prior.ID
+	if err := s.checkHiddenRequired(ctx, &change); err != nil {
+		return nil, err
+	}
 	updated, err := s.DAL.Catalog().SaveField(ctx, change, prior.Version)
 	if errors.Is(err, dberr.ErrConcurrentUpdate) {
 		return nil, ErrPreconditionFailed

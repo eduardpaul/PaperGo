@@ -9410,7 +9410,7 @@ export interface SearchHit extends Parsable {
      */
     collectionId?: Guid | null;
     /**
-     * The list type of the entry.
+     * The catalog type the entry's list type copies.
      */
     contentTypeId?: string | null;
     /**
@@ -9518,7 +9518,7 @@ export interface SearchRequest extends Parsable {
      */
     collectionId?: string | null;
     /**
-     * A content type; matches it and every type deriving from it.
+     * A catalog type, or a list type standing for the catalog type it copies; matches it and every type deriving from it.
      */
     contentTypeId?: string | null;
     /**

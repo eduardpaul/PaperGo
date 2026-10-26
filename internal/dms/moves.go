@@ -108,25 +108,10 @@ func (s *Service) MoveItem(ctx context.Context, subject, id string, version int,
 		if e != nil {
 			return e
 		}
-		if string(before) != string(after) {
-			if _, e = t.recordRevision(ctx, subject, out, nil, false); e != nil {
-				return e
-			}
-		} else {
-			rev, e := t.revision(ctx, *out.HeadRevisionID)
-			if e != nil {
-				return e
-			}
-			if dest.PublishingEnabled {
-				if e = t.replaceSurface(ctx, out, rev, refs.SurfaceHead, defs); e != nil {
-					return e
-				}
-			}
-			if !dest.PublishingEnabled {
-				if _, e = t.publishRevision(ctx, subject, out, rev, false, nil); e != nil {
-					return e
-				}
-			}
+		// The item takes the destination's list type, which a new head
+		// revision records with any normalized values.
+		if _, e = t.recordRevision(ctx, subject, out, nil, false); e != nil {
+			return e
 		}
 		// Explicit publications retain their frozen content and schema.
 		out, e = t.DAL.Resources().Resource(ctx, id)

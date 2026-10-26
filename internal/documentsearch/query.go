@@ -1,10 +1,8 @@
 package documentsearch
 
 import (
-	"cmp"
 	"context"
 	"log/slog"
-	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -234,9 +232,6 @@ func (x *Search) search(ctx context.Context, s *dms.Service, subject string, in 
 		if round == 0 {
 			out.Total, out.Facets = res.Total, res.Facets
 			out.TotalEstimated = res.Estimated || in.Facets && res.Facets == nil
-			if err = catalogFacets(ctx, s, out.Facets); err != nil {
-				return Result{}, err
-			}
 		}
 		keys := make([]search.Key, len(res.Hits))
 		for i, h := range res.Hits {
@@ -271,36 +266,6 @@ func (x *Search) search(ctx context.Context, s *dms.Service, subject string, in 
 }
 
 // files sets the file of each item hit.
-// catalogFacets counts content types by catalog type: the list types of
-// collections count toward the catalog type they copy.
-func catalogFacets(ctx context.Context, s *dms.Service, f *search.Facets) error {
-	if f == nil || len(f.ContentType) == 0 {
-		return nil
-	}
-	ids := make([]string, len(f.ContentType))
-	for i, v := range f.ContentType {
-		ids[i] = v.Value
-	}
-	catalogs, err := s.CatalogTypesOf(ctx, ids)
-	if err != nil {
-		return err
-	}
-	counts := map[string]int{}
-	for _, v := range f.ContentType {
-		id := v.Value
-		if c, ok := catalogs[id]; ok {
-			id = c
-		}
-		counts[id] += v.Count
-	}
-	f.ContentType = make([]search.FacetValue, 0, len(counts))
-	for id, n := range counts {
-		f.ContentType = append(f.ContentType, search.FacetValue{Value: id, Count: n})
-	}
-	slices.SortFunc(f.ContentType, func(a, b search.FacetValue) int { return cmp.Or(b.Count-a.Count, strings.Compare(a.Value, b.Value)) })
-	return nil
-}
-
 func files(ctx context.Context, s *dms.Service, hits []Hit) error {
 	items := map[string]refs.Surface{}
 	for _, h := range hits {

@@ -133,9 +133,13 @@ func TestContentTypeInheritanceAcrossLists(t *testing.T) {
 	if err != nil || !slices.Contains(ids, documents.ID) || !slices.Contains(ids, invoices.ID) {
 		t.Fatal("smart folder type selector", ids, err)
 	}
+	// The search index holds catalog types; a list type stands for its own.
 	family, err := s.ContentTypeFamily(testContext, document.ID)
-	if err != nil || !slices.Contains(family, invoiceType.ID) || !slices.Contains(family, documentType.ID) || !slices.Contains(family, invoice.ID) {
+	if err != nil || len(family) != 2 || !slices.Contains(family, document.ID) || !slices.Contains(family, invoice.ID) {
 		t.Fatal("search type family", family, err)
+	}
+	if family, err = s.ContentTypeFamily(testContext, invoiceType.ID); err != nil || !slices.Equal(family, []string{invoice.ID}) {
+		t.Fatal("list type family", family, err)
 	}
 }
 
@@ -158,5 +162,39 @@ func TestReattachRestoresListCustomizations(t *testing.T) {
 	again := attachOK(t, s, l.ID, *typ.ParentID, false)
 	if again.ID != typ.ID || !slices.Equal(again.FieldIds, []string{code.ID}) || len(again.Rules) != 1 {
 		t.Fatal("customizations lost", again)
+	}
+}
+
+// A field a type hides from forms cannot become one forms must fill.
+func TestHiddenFieldsStayOptional(t *testing.T) {
+	s, _, l := fixture(t)
+	note, err := s.CreateCatalogField(testContext, "alice", CreateField{Key: "note", Label: "Note", Type: "text"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	typ := typeOK(t, s, l.ID, ContentTypeInput{Key: "memo", Name: "Memo", FieldIds: []string{note.ID}})
+	if _, err = s.UpdateListType(testContext, "alice", l.ID, typ.ID, typ.Version, ListTypeInput{HiddenFieldIds: []string{note.ID}}); err != nil {
+		t.Fatal(err)
+	}
+	required := true
+	if _, err = s.UpdateCatalogField(testContext, "alice", note.ID, note.Version, UpdateField{Required: &required}); !isValidation(err) {
+		t.Fatal("hidden field made mandatory", err)
+	}
+	withDefault := model.FieldOptions{DefaultValue: []byte(`"none"`)}
+	if _, err = s.UpdateCatalogField(testContext, "alice", note.ID, note.Version, UpdateField{Required: &required, Options: &withDefault}); err != nil {
+		t.Fatal("a default keeps a hidden field fillable", err)
+	}
+	item, err := s.Create(testContext, "alice", l.ID, CreateResource{Kind: "item", Name: "Memo", ContentTypeID: typ.ID})
+	if err != nil || item.Values["note"] != "none" {
+		t.Fatal("item with a hidden required field", item, err)
+	}
+	current, err := s.CatalogFields(testContext, "alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	i := slices.IndexFunc(current, func(d *catalog.FieldDefinition) bool { return d.ID == note.ID })
+	noDefault := model.FieldOptions{}
+	if _, err = s.UpdateCatalogField(testContext, "alice", note.ID, current[i].Version, UpdateField{Options: &noDefault}); !isValidation(err) {
+		t.Fatal("default removed from a hidden required field", err)
 	}
 }

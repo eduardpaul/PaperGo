@@ -115,11 +115,16 @@ func TestMoveItemAcrossWorkspacesPreservesContentAndResetsACL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out.ID != item.ID || out.WorkspaceID != other.ID || *out.ContainerID != dest.ID || *out.ParentID != dest.ID || !out.InheritPermissions || *out.HeadRevisionID != head || *out.PublishedRevisionID != published {
+	if out.ID != item.ID || out.WorkspaceID != other.ID || *out.ContainerID != dest.ID || *out.ParentID != dest.ID || !out.InheritPermissions || *out.PublishedRevisionID != published {
 		t.Fatalf("move: %+v", out)
 	}
-	if revisionCount(t, s, item.ID) != versions {
-		t.Fatal("move-only revision added")
+	// The item takes the destination's list type, which a new head revision
+	// records; the explicit publication stays as it was.
+	if *out.ContentTypeID == *item.ContentTypeID || *out.HeadRevisionID == head || revisionCount(t, s, item.ID) != versions+1 {
+		t.Fatal("move revision", out)
+	}
+	if rev, err := s.revision(testContext, *out.HeadRevisionID); err != nil || rev.ContentTypeID != *out.ContentTypeID {
+		t.Fatal("head revision keeps the source type", rev, err)
 	}
 	if run, err := s.DAL.Runs().Find(testContext, "run"); err != nil || run.WorkspaceID != other.ID {
 		t.Fatal("run location not moved", run, err)

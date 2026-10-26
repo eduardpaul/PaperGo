@@ -781,9 +781,7 @@ CREATE TABLE workflow_triggers (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     workflow_id TEXT NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
     workspace_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
-    -- Item history can outlive a purged collection, so collection_id has no
-    -- foreign key; purging a collection deletes the list types nothing uses.
-    collection_id TEXT,
+    collection_id TEXT REFERENCES resources(id) ON DELETE CASCADE,
     type TEXT NOT NULL,
     position INTEGER NOT NULL CHECK (position >= 0),
     next_at DATETIME,

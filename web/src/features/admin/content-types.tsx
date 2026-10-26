@@ -120,23 +120,28 @@ function SchemaFields({
         <fieldset>
           <legend>Inherited from {parent.name}</legend>
           {inherited.length === 0 && <p className="text-sm text-muted">{parent.name} has no fields.</p>}
-          {inherited.flatMap((id) => byId.get(id) ?? []).map((field) => (
-            <label key={field.id} className="flex gap-2 py-1">
-              <Checkbox
-                aria-label={`Show ${field.label} in forms`}
-                disabled={inheritedHidden.has(field.id) || (field.required && field.options?.default_value === undefined)}
-                checked={!inheritedHidden.has(field.id) && !schema.hidden.includes(field.id)}
-                onChange={(event) =>
-                  onChange({
-                    ...schema,
-                    hidden: event.target.checked ? schema.hidden.filter((id) => id !== field.id) : [...schema.hidden, field.id],
-                  })
-                }
-              />
-              {label(field)}
-              <span className="text-xs text-muted">{inheritedHidden.has(field.id) || schema.hidden.includes(field.id) ? 'Hidden in forms' : 'Shown in forms'}</span>
-            </label>
-          ))}
+          {inherited.flatMap((id) => byId.get(id) ?? []).map((field) => {
+            const shown = !inheritedHidden.has(field.id) && !schema.hidden.includes(field.id);
+            // A field forms must fill cannot be hidden, but can always be shown again.
+            const mandatory = field.required && field.options?.default_value === undefined;
+            return (
+              <label key={field.id} className="flex gap-2 py-1">
+                <Checkbox
+                  aria-label={`Show ${field.label} in forms`}
+                  disabled={inheritedHidden.has(field.id) || (shown && mandatory)}
+                  checked={shown}
+                  onChange={(event) =>
+                    onChange({
+                      ...schema,
+                      hidden: event.target.checked ? schema.hidden.filter((id) => id !== field.id) : [...schema.hidden, field.id],
+                    })
+                  }
+                />
+                {label(field)}
+                <span className="text-xs text-muted">{shown ? 'Shown in forms' : 'Hidden in forms'}</span>
+              </label>
+            );
+          })}
         </fieldset>
       )}
       <fieldset>
@@ -247,7 +252,16 @@ function TypeDialog({
               id="content-type-parent"
               disabled={!!type}
               value={parentId}
-              onChange={(event) => setParentId(event.target.value)}
+              onChange={(event) => {
+                // Own fields and hidden fields are relative to the parent.
+                const next = types.find((entry) => entry.id === event.target.value)?.effective;
+                setParentId(event.target.value);
+                setSchema((current) => ({
+                  ...current,
+                  ids: current.ids.filter((id) => !next?.field_ids.includes(id)),
+                  hidden: current.hidden.filter((id) => next?.field_ids.includes(id) && !next.hidden_field_ids.includes(id)),
+                }));
+              }}
             >
               {parents.map(({ type: entry, depth }) => (
                 <option key={entry.id} value={entry.id}>
@@ -414,6 +428,7 @@ export function CollectionColumns({ collection, canManage }: { collection: Resou
 export function CollectionContentTypes({ collection, canManage }: { collection: Resource; canManage: boolean }) {
   const client = useQueryClient();
   const canReadCatalog = useHasScope('contentType.read');
+  const canManageTypes = useHasScope('contentType.manage');
   const catalog = useQuery({ ...catalogTypesQuery, enabled: canReadCatalog });
   const types = useQuery(contentTypesQuery(collection.id));
   const [attachId, setAttachId] = useState('');
@@ -464,7 +479,7 @@ export function CollectionContentTypes({ collection, canManage }: { collection: 
               <>
                 {canReadCatalog && (
                   <Button size="sm" variant="ghost" onClick={() => setCustomizing(type)}>
-                    Customize
+                    {canManageTypes ? 'Customize' : 'View type'}
                   </Button>
                 )}
                 <Button
@@ -526,7 +541,7 @@ export function CollectionContentTypes({ collection, canManage }: { collection: 
         onConfirm={() => detaching && detach.mutate(detaching)}
       />
       {customizing && (
-        <ListTypeDialog collection={collection} type={customizing} canManage={canManage} onClose={() => setCustomizing(undefined)} />
+        <ListTypeDialog collection={collection} type={customizing} canManage={canManage && canManageTypes} onClose={() => setCustomizing(undefined)} />
       )}
     </SettingsSection>
   );

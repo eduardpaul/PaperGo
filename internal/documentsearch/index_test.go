@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"testing"
 
 	"papergo/internal/dal/daltest"
@@ -297,5 +298,56 @@ func TestRebuild(t *testing.T) {
 	keys, err := x.Store.Keys(ctx, []string{gone.ID, kept.ID})
 	if err != nil || len(keys) != 1 || keys[0].ResourceID != kept.ID || x.rebuilding.Load() {
 		t.Fatal(keys, err, x.rebuilding.Load())
+	}
+}
+
+// Entries are indexed under the catalog type their list type copies: one
+// facet counts a type across lists, hits name it, and filtering by a parent
+// type finds its subtypes.
+func TestSearchCountsContentTypesAcrossLists(t *testing.T) {
+	ctx, s, x, list := fixture(t)
+	record, err := s.CreateContentType(ctx, "alice", dms.ContentTypeInput{Key: "record", Name: "Record"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	invoice, err := s.CreateContentType(ctx, "alice", dms.ContentTypeInput{Key: "invoice", Name: "Invoice", ParentID: record.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// More lists than a facet lists values, each with one record.
+	for i := range 25 {
+		c, err := s.Create(ctx, "alice", *list.ParentID, dms.CreateResource{Kind: "list", Name: "Records " + strconv.Itoa(i), ContentTypeIDs: []string{record.ID}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		item(t, s, c.ID, "Quarterly record", nil)
+	}
+	bills, err := s.Create(ctx, "alice", *list.ParentID, dms.CreateResource{Kind: "list", Name: "Bills", ContentTypeIDs: []string{invoice.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	item(t, s, bills.ID, "Quarterly bill", nil)
+	indexAll(t, s, x)
+	out, err := x.Search(ctx, s, "alice", Request{Q: "quarterly", Facets: true, Limit: 50})
+	if err != nil || out.Facets == nil {
+		t.Fatal(out, err)
+	}
+	counts := map[string]int{}
+	for _, v := range out.Facets.ContentType {
+		counts[v.Value] = v.Count
+	}
+	if counts[record.ID] != 25 || counts[invoice.ID] != 1 || len(counts) != 2 {
+		t.Fatal("content type facet", out.Facets.ContentType)
+	}
+	if !slices.ContainsFunc(out.Hits, func(h Hit) bool { return h.ContentTypeID == invoice.ID }) {
+		t.Fatal("hits name the catalog type", out.Hits)
+	}
+	out, err = x.Search(ctx, s, "alice", Request{Q: "quarterly", ContentTypeID: record.ID, Limit: 50})
+	if err != nil || len(out.Hits) != 26 {
+		t.Fatal("parent type filter", len(out.Hits), err)
+	}
+	out, err = x.Search(ctx, s, "alice", Request{Q: "quarterly", ContentTypeID: invoice.ID, Limit: 50})
+	if err != nil || len(out.Hits) != 1 {
+		t.Fatal("subtype filter", len(out.Hits), err)
 	}
 }

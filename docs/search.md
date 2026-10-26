@@ -179,7 +179,7 @@ For the other direction, use `--from zvec --to sqlite`. `--database`, `--sqlite`
 
 These routes, and the [content steps](#content-steps), are served when the deployment runs search. `GET /v1/search/fields` and `GET /v1/search/content-types` belong to the core, since smart folders filter on the same fields: they list the fields the caller can filter on, and the catalog types of readable collections.
 
-The search page offers a content-type selector, shown as the type tree, and matching type facets. `GET /v1/search/content-types` lists each catalog type that a readable collection accepts once, with its ancestors and `parent_id`, optionally narrowed by `workspace_id` and `collection_id`; pass `content_type_id` to `/v1/search` to filter by a type and its subtypes. The content type facet counts entries by the catalog type their list type copies. Expand Relationships on a result to load its authorized incoming/outgoing links and open a related item.
+The search page offers a content-type selector, shown as the type tree, and matching type facets. `GET /v1/search/content-types` lists each catalog type that a readable collection accepts once, with its ancestors and `parent_id`, optionally narrowed by `workspace_id` and `collection_id`; pass `content_type_id` to `/v1/search` to filter by a type and its subtypes. The index holds each entry under the catalog type its list type copies, so hits carry that type and the content type facet counts lists of one type together. Expand Relationships on a result to load its authorized incoming/outgoing links and open a related item.
 
 ## Archived items
 
