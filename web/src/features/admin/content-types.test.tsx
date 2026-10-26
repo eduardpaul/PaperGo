@@ -187,4 +187,18 @@ describe('content type administration', () => {
       field_settings: [{ field_id: 'code', required: false }, { field_id: 'note', required: true, default_value: 'n/a' }],
     });
   });
+
+  it('starts an own default without one to inherit empty', async () => {
+    let saved: Record<string, unknown> | undefined;
+    const listType: ContentType = { id: 'list-record', key: 'record', name: 'Record', parent_id: 'record', collection_id: 'collection', is_default: true, field_ids: [], effective: effective(['code', 'note']), version: 2 };
+    catalogAPI(['contentType.read', 'contentType.manage'], listType, (_, body) => (saved = body));
+    renderPage(<CollectionContentTypes collection={collection} canManage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Customize' }));
+    fireEvent.change(await screen.findByLabelText('Note default'), { target: { value: 'own' } });
+    expect((screen.getByLabelText('Note default') as HTMLSelectElement).value).toBe('own');
+    expect((screen.getByLabelText('Default Note') as HTMLInputElement).value).toBe('');
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(saved).toBeDefined());
+    expect(saved).toMatchObject({ field_settings: [] });
+  });
 });

@@ -190,6 +190,8 @@ function SchemaFields({
     withSetting(field, parent?.effective?.field_settings?.find((setting) => setting.field_id === field.id));
   const ownSetting = (id: string) => schema.settings.find((setting) => setting.field_id === id);
   const all = schemaFieldIds(schema, parent);
+  // Fields given an own default that has no value yet.
+  const [drafts, setDrafts] = useState<string[]>([]);
   const setSetting = (id: string, change: Partial<FieldSetting>) => {
     const next: FieldSetting = { ...ownSetting(id), ...change, field_id: id };
     if (next.required === undefined) delete next.required;
@@ -268,6 +270,7 @@ function SchemaFields({
           {all.flatMap((id) => byId.get(id) ?? []).map((field, index) => {
             const setting = ownSetting(field.id);
             const base = inheritedField(field);
+            const ownDefault = drafts.includes(field.id) || (setting?.default_value !== undefined && setting.default_value !== null);
             return (
               <div key={field.id} className="grid gap-1 border-b py-2 last:border-b-0">
                 <div className="flex flex-wrap items-center gap-2">
@@ -291,24 +294,26 @@ function SchemaFields({
                   <Select
                     aria-label={`${field.label} default`}
                     className="w-auto"
-                    value={setting?.default_value === undefined ? '' : setting.default_value === null ? 'none' : 'own'}
-                    onChange={(event) =>
-                      setSetting(field.id, {
-                        default_value: event.target.value === 'own' ? (base.options?.default_value ?? '') : event.target.value === 'none' ? null : undefined,
-                      })
-                    }
+                    value={setting?.default_value === null ? 'none' : ownDefault ? 'own' : ''}
+                    onChange={(event) => {
+                      // An own default starts from the inherited one, or empty
+                      // until a value is entered.
+                      const choice = event.target.value;
+                      setDrafts(choice === 'own' ? [...drafts, field.id] : drafts.filter((id) => id !== field.id));
+                      setSetting(field.id, { default_value: choice === 'own' ? base.options?.default_value : choice === 'none' ? null : undefined });
+                    }}
                   >
                     <option value="">{base.options?.default_value !== undefined ? 'Inherited default' : 'No default, as inherited'}</option>
                     <option value="own">Own default</option>
                     <option value="none">No default</option>
                   </Select>
                 </div>
-                {setting?.default_value !== undefined && setting.default_value !== null && (
+                {ownDefault && (
                   <FieldEditor
                     id={`default-${field.key}`}
                     field={{ ...field, label: `Default ${field.label}`, required: false }}
-                    value={setting.default_value}
-                    onChange={(value) => setSetting(field.id, { default_value: value ?? null })}
+                    value={setting?.default_value ?? undefined}
+                    onChange={(value) => setSetting(field.id, { default_value: value ?? undefined })}
                   />
                 )}
               </div>
