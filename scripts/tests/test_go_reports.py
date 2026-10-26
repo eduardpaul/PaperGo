@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 
@@ -28,6 +29,23 @@ class GoReportsTests(unittest.TestCase):
         self.assertTrue(result['packages'][0]['Cached'])
         self.assertEqual(len(result['packages']), 2)
         self.assertIn('cached', reports.markdown(result))
+
+    def test_deadline_stops_a_hung_test_and_names_it(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / 'go.mod').write_text('module sample\n\ngo 1.26\n')
+            (root / 'sample_test.go').write_text('package sample\nimport (\n"testing"\n"time"\n)\n'
+                                                 'func TestHangs(t *testing.T) { time.Sleep(time.Hour) }\n')
+            stem = root / 'reports/tests'
+            env = {key: value for key, value in os.environ.items() if key != 'GITHUB_STEP_SUMMARY'}
+            started = time.monotonic()
+            result = subprocess.run([sys.executable, str(SCRIPT), '--output', str(stem), '--deadline-minutes', '0.1', '--', './...'],
+                                    cwd=root, env=dict(env, GOTOOLCHAIN='local'), capture_output=True, text=True, timeout=120)
+            self.assertLess(time.monotonic() - started, 60)
+            self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn('0.1 minute deadline', result.stdout)
+            self.assertRegex(result.stdout, r'sample TestHangs: \d+\.\d min')
+            self.assertNotEqual(json.loads(stem.with_suffix('.json').read_text())['exit_code'], 0)
 
     def test_real_go_failure_and_compile_failure_preserve_exit_code_and_reports(self):
         sources = [

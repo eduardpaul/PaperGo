@@ -1,14 +1,26 @@
 #!/usr/bin/env python3
-"""Stream Go test results and save JSON events, timings and a Markdown summary."""
+"""Stream Go test results and save JSON events, timings and a Markdown summary.
+
+While packages run, it reports every few quiet minutes which tests are still
+running. With --deadline-minutes it stops go test and every process under it
+once that time has passed, reporting what was still running, so a hang fails
+the step with diagnostics instead of running into the job's time limit.
+"""
 
 import argparse
 from collections import defaultdict
 import json
 import os
 from pathlib import Path
+import queue
+import signal
 import subprocess
 import sys
+import threading
 import time
+
+# Minutes without a finished package before the still-running tests are listed.
+QUIET_MINUTES = 5
 
 
 def summarize(events, wall_seconds, preparation_seconds, exit_code):
@@ -47,10 +59,46 @@ def markdown(report):
     return '\n'.join(lines) + '\n'
 
 
+def forward(stream, lines):
+    for line in stream:
+        lines.put(line)
+    lines.put(None)
+
+
+def report_running(running, now, reason):
+    """Print the packages and top-level tests that have started and not
+    finished, longest first, and on POSIX the process tree."""
+    print(f'\n*** {reason}; still running:', flush=True)
+    for (package, test), since in sorted(running.items(), key=lambda item: item[1]):
+        print(f'***   {package} {test or "(package)"}: {(now - since) / 60:.1f} min', flush=True)
+
+
+def report_processes():
+    if os.name == 'nt':
+        return
+    try:
+        listing = subprocess.run(['ps', '-eo', 'pid,ppid,etimes,stat,args', '--forest'], capture_output=True, text=True, timeout=10).stdout
+    except (OSError, subprocess.SubprocessError):
+        return
+    print('*** processes:\n' + listing, flush=True)
+
+
+def stop(process):
+    """Stop go test and every process it started."""
+    try:
+        if os.name == 'nt':
+            subprocess.run(['taskkill', '/F', '/T', '/PID', str(process.pid)], capture_output=True)
+        else:
+            os.killpg(process.pid, signal.SIGKILL)
+    except (OSError, subprocess.SubprocessError):
+        process.kill()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True, help='path stem for .jsonl, .json and .md reports')
     parser.add_argument('--preparation-seconds', type=float, default=0)
+    parser.add_argument('--deadline-minutes', type=float, help='stop go test and fail once this time has passed')
     parser.add_argument('flags', nargs=argparse.REMAINDER, help='go test arguments after --')
     args = parser.parse_args()
     flags = args.flags[1:] if args.flags[:1] == ['--'] else args.flags
@@ -60,9 +108,39 @@ def main():
     events, output = [], defaultdict(list)
     started = time.monotonic()
     with args.output.with_suffix('.jsonl').open('w', encoding='utf-8') as raw:
-        process = subprocess.Popen(['go', 'test', '-json', *flags], stdout=subprocess.PIPE, text=True, encoding='utf-8', errors='replace')
+        # Its own process group lets a deadline stop the tests' processes too.
+        process = subprocess.Popen(['go', 'test', '-json', *flags], stdout=subprocess.PIPE, text=True, encoding='utf-8', errors='replace',
+                                   start_new_session=os.name != 'nt')
+        lines = queue.Queue()
+        threading.Thread(target=forward, args=(process.stdout, lines), daemon=True).start()
+        running, progressed, stopped = {}, started, False
         try:
-            for line in process.stdout:
+            while True:
+                try:
+                    line = lines.get(timeout=5)
+                except queue.Empty:
+                    line = ''
+                now = time.monotonic()
+                if line is None:
+                    break
+                if args.deadline_minutes and now - started > args.deadline_minutes * 60:
+                    report_running(running, now, f'go test passed its {args.deadline_minutes:g} minute deadline')
+                    report_processes()
+                    stop(process)
+                    stopped = True
+                    break
+                if not line:
+                    if process.poll() is not None and now - progressed > 60:
+                        # Its output stays open after it exited: a process it started holds it.
+                        report_running(running, now, 'go test exited, yet a process holds its output open')
+                        report_processes()
+                        stop(process)
+                        stopped = True
+                        break
+                    if now - progressed > QUIET_MINUTES * 60:
+                        report_running(running, now, f'no package finished for {QUIET_MINUTES} minutes')
+                        progressed = now
+                    continue
                 raw.write(line)
                 raw.flush()
                 try:
@@ -72,6 +150,13 @@ def main():
                     continue
                 events.append(event)
                 package = event.get('Package', '')
+                test = event.get('Test')
+                if event.get('Action') in {'start', 'run'} and (not test or '/' not in test):
+                    running[(package, test)] = now
+                elif event.get('Action') in {'pass', 'fail', 'skip'}:
+                    running.pop((package, test), None)
+                    if not test:
+                        progressed = now
                 if event.get('Action') == 'build-output':
                     print(event['Output'], end='', flush=True)
                 elif event.get('Action') == 'output':
@@ -83,8 +168,9 @@ def main():
                 if event.get('Action') in {'pass', 'fail', 'skip'} and not event.get('Test'):
                     output.pop(package, None)
         finally:
-            process.stdout.close()
             exit_code = process.wait()
+            if stopped:
+                exit_code = exit_code or 1
             report = summarize(events, time.monotonic() - started, args.preparation_seconds, exit_code)
             report['command'] = ['go', 'test', '-json', *flags]
             report['go_version'] = subprocess.check_output(['go', 'version'], text=True).strip()

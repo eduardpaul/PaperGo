@@ -284,8 +284,12 @@ def go_tests(name, flags, packages, shard=None, env=None):
               f'{sum(weights[package] for package in packages)} of {sum(weights.values())} weight', flush=True)
     else:
         print(f'+ go test {" ".join(flags)} {" ".join(packages)}', flush=True)
+    # Go stops a package's tests at its -timeout; a run still going five
+    # minutes later is stuck outside them, and stops with what still runs.
+    timeout = next((int(flag[len('-timeout='):-1]) for flag in flags if re.fullmatch(r'-timeout=\d+m', flag)), None)
+    deadline = ['--deadline-minutes', str(timeout + 5)] if timeout else []
     result = subprocess.run([sys.executable, str(ROOT / 'scripts/go-test.py'), '--output', str(report),
-                             '--preparation-seconds', str(time.monotonic() - started), '--', *flags, *packages],
+                             '--preparation-seconds', str(time.monotonic() - started), *deadline, '--', *flags, *packages],
                             cwd=ROOT, check=False, env=env)
     if result.returncode:
         raise subprocess.CalledProcessError(result.returncode, ['go', 'test', *packages])
