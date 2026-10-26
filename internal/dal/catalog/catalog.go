@@ -873,20 +873,6 @@ func (r *Repo) Detach(ctx context.Context, collectionID, contentTypeID string) e
 	})
 }
 
-// SetDefault makes a list type its collection's default.
-func (r *Repo) SetDefault(ctx context.Context, collectionID, contentTypeID string) error {
-	return r.write(ctx, func(q Queries) error {
-		ok, err := Accepts(ctx, q, collectionID, contentTypeID)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return dberr.ErrNotFound
-		}
-		return q.SetDefaultContentType(ctx, collectionID, contentTypeID)
-	})
-}
-
 func nonNil[T any](values []T) []T {
 	if values == nil {
 		return []T{}
