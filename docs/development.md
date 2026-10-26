@@ -131,7 +131,8 @@ bash scripts/check.sh test --only postgres --packages ./internal/dms
 
 Package selection is explicit: include affected callers when changing shared
 code. `test --only go|postgres|web` runs one part of the test stage;
-`--shard 1/2` runs half of the Go suite, as CI does. The database suites use the
+`--shard 1/2` runs half of the Go suite's packages, as CI does; shards are
+balanced by the tests, fuzz targets and examples each package declares. The database suites use the
 server `PAPERGO_TEST_POSTGRES_DSN` names, or start the one of `scripts/postgres.sh`;
 tests create and drop their own databases, and `bash scripts/postgres.sh clean`
 drops the ones an interrupted run left behind. For repeated frontend edits use
