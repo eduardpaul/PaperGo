@@ -619,7 +619,13 @@ func (s *Service) DetachContentType(ctx context.Context, subject, collection, ty
 		if c.Version != version {
 			return ErrPreconditionFailed
 		}
-		e = t.DAL.Catalog().Detach(ctx, collection, typeID)
+		// Like the other list type routes, the type may be named by the
+		// catalog type it copies.
+		typ, e := t.contentType(ctx, c.ID, typeID)
+		if e != nil {
+			return e
+		}
+		e = t.DAL.Catalog().Detach(ctx, collection, typ.ID)
 		switch {
 		case dberr.IsNotFound(e):
 			return ErrNotFound
@@ -635,7 +641,7 @@ func (s *Service) DetachContentType(ctx context.Context, subject, collection, ty
 		if e != nil {
 			return e
 		}
-		return t.audit(ctx, subject, "content_type.detach", c, map[string]any{"content_type_id": typeID})
+		return t.audit(ctx, subject, "content_type.detach", c, map[string]any{"content_type_id": typ.ID})
 	})
 	return
 }

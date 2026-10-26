@@ -13354,7 +13354,7 @@
       "delete": {
         "operationId": "detachContentType",
         "summary": "Detach an unused collection content type",
-        "description": "Requires list.manage, collection manage access and the current collection If-Match. typeID is a list type of the collection. Rejects the last attachment, a type used by live items, and dependent saved views. Chooses a remaining default when necessary. Updates the effective schema and business keys atomically; the list type stays for frozen revisions and returns with its customizations when its catalog type is attached again. Deleted items with a detached type require reattachment before restoration.",
+        "description": "Requires list.manage, collection manage access and the current collection If-Match. typeID is a list type of the collection or the catalog type it copies. Rejects the last attachment, a type used by live items, and dependent saved views. Chooses a remaining default when necessary. Updates the effective schema and business keys atomically; the list type stays for frozen revisions and returns with its customizations when its catalog type is attached again. Deleted items with a detached type require reattachment before restoration.",
         "x-module-scopes": [
           "list.manage"
         ],
@@ -13435,7 +13435,7 @@
         "x-module-scopes": [
           "contentType.manage"
         ],
-        "description": " Required module scopes: contentType.manage. Requires manage ACL on the collection. Replaces the list type's own fields, hidden fields and rules, validates every item against the effective schema and advances the collection's schema revision atomically."
+        "description": " Required module scopes: contentType.manage. Requires manage ACL on the collection. typeID is a list type of the collection or the catalog type it copies. Replaces the list type's own fields, hidden fields and rules, validates every item against the effective schema and advances the collection's schema revision atomically."
       }
     },
     "/v1/items/{id}/content/versions/{number}/restore": {

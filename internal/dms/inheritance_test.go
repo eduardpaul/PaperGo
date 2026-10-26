@@ -171,7 +171,8 @@ func TestReattachRestoresListCustomizations(t *testing.T) {
 	if _, err = s.UpdateListType(testContext, "alice", l.ID, typ.ID, typ.Version, ListTypeInput{FieldIds: []string{code.ID}, Rules: rules}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.DetachContentType(testContext, "alice", l.ID, typ.ID, latest(t, s, l.ID).Version); err != nil {
+	// Detaching may name the catalog type, as the other list type routes do.
+	if _, err = s.DetachContentType(testContext, "alice", l.ID, *typ.ParentID, latest(t, s, l.ID).Version); err != nil {
 		t.Fatal(err)
 	}
 	again := attachOK(t, s, l.ID, *typ.ParentID, false)
