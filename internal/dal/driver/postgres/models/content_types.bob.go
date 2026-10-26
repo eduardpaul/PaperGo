@@ -28,15 +28,25 @@ import (
 
 // ContentType is an object representing the database table.
 type ContentType struct {
-	ID          string                      `db:"id,pk" `
-	CreatedAt   time.Time                   `db:"created_at" `
-	UpdatedAt   time.Time                   `db:"updated_at" `
-	Key         string                      `db:"key" `
-	Name        string                      `db:"name" `
-	TemplateKey null.Val[string]            `db:"template_key" `
-	FieldIds    types.JSON[[]string]        `db:"field_ids" `
-	Rules       types.JSON[json.RawMessage] `db:"rules" `
-	Version     int64                       `db:"version" `
+	ID             string                      `db:"id,pk" `
+	CreatedAt      time.Time                   `db:"created_at" `
+	UpdatedAt      time.Time                   `db:"updated_at" `
+	Key            string                      `db:"key" `
+	Name           string                      `db:"name" `
+	GroupName      null.Val[string]            `db:"group_name" `
+	TemplateKey    null.Val[string]            `db:"template_key" `
+	ParentID       null.Val[string]            `db:"parent_id" `
+	CollectionID   null.Val[string]            `db:"collection_id" `
+	Attached       bool                        `db:"attached" `
+	IsDefault      bool                        `db:"is_default" `
+	InNewMenu      bool                        `db:"in_new_menu" `
+	MenuPosition   int32                       `db:"menu_position" `
+	FieldIds       types.JSON[[]string]        `db:"field_ids" `
+	HiddenFieldIds types.JSON[[]string]        `db:"hidden_field_ids" `
+	Rules          types.JSON[json.RawMessage] `db:"rules" `
+	FieldOrder     types.JSON[[]string]        `db:"field_order" `
+	FieldSettings  types.JSON[json.RawMessage] `db:"field_settings" `
+	Version        int64                       `db:"version" `
 
 	R contentTypeR `db:"-" `
 }
@@ -53,9 +63,12 @@ type ContentTypesQuery = *psql.ViewQuery[*ContentType, ContentTypeSlice]
 
 // contentTypeR is where relationships are stored.
 type contentTypeR struct {
-	CollectionTypes CollectionTypeSlice // collection_types.collection_types_content_type_id_fkey
-	ItemRevisions   ItemRevisionSlice   // item_revisions.item_revisions_content_type_id_fkey
-	Resources       ResourceSlice       // resources.resources_content_type_id_fkey
+	AncestorContentTypeAncestors ContentTypeAncestorSlice // content_type_ancestors.content_type_ancestors_ancestor_id_fkey
+	ContentTypeAncestors         ContentTypeAncestorSlice // content_type_ancestors.content_type_ancestors_content_type_id_fkey
+	Parent                       *ContentType             // content_types.content_types_parent_id_fkey
+	ReverseParents               ContentTypeSlice         // content_types.content_types_parent_id_fkey__self_join_reverse
+	ItemRevisions                ItemRevisionSlice        // item_revisions.item_revisions_content_type_id_fkey
+	Resources                    ResourceSlice            // resources.resources_content_type_id_fkey
 	// Loaded reports whether each relationship has been loaded.
 	// A relationship's bool is set by Load*, Preload, ThenLoad, factory builds,
 	// and to-one Attach/Insert operations. To-many Attach/Insert operations leave it unchanged.
@@ -64,14 +77,17 @@ type contentTypeR struct {
 
 // contentTypeRLoaded tracks which relationships on ContentType have been loaded.
 type contentTypeRLoaded struct {
-	CollectionTypes bool // collection_types.collection_types_content_type_id_fkey
-	ItemRevisions   bool // item_revisions.item_revisions_content_type_id_fkey
-	Resources       bool // resources.resources_content_type_id_fkey
+	AncestorContentTypeAncestors bool // content_type_ancestors.content_type_ancestors_ancestor_id_fkey
+	ContentTypeAncestors         bool // content_type_ancestors.content_type_ancestors_content_type_id_fkey
+	Parent                       bool // content_types.content_types_parent_id_fkey
+	ReverseParents               bool // content_types.content_types_parent_id_fkey__self_join_reverse
+	ItemRevisions                bool // item_revisions.item_revisions_content_type_id_fkey
+	Resources                    bool // resources.resources_content_type_id_fkey
 }
 
 func buildContentTypeColumns(tableName string) contentTypeColumns {
 	columnsExpr := expr.NewColumnsExpr(
-		"id", "created_at", "updated_at", "key", "name", "template_key", "field_ids", "rules", "version",
+		"id", "created_at", "updated_at", "key", "name", "group_name", "template_key", "parent_id", "collection_id", "attached", "is_default", "in_new_menu", "menu_position", "field_ids", "hidden_field_ids", "rules", "field_order", "field_settings", "version",
 	)
 
 	if tableName != "" {
@@ -79,32 +95,52 @@ func buildContentTypeColumns(tableName string) contentTypeColumns {
 	}
 
 	return contentTypeColumns{
-		ColumnsExpr: columnsExpr,
-		tableAlias:  tableName,
-		ID:          buildContentTypeColumn(tableName, "id"),
-		CreatedAt:   buildContentTypeColumn(tableName, "created_at"),
-		UpdatedAt:   buildContentTypeColumn(tableName, "updated_at"),
-		Key:         buildContentTypeColumn(tableName, "key"),
-		Name:        buildContentTypeColumn(tableName, "name"),
-		TemplateKey: buildContentTypeColumn(tableName, "template_key"),
-		FieldIds:    buildContentTypeColumn(tableName, "field_ids"),
-		Rules:       buildContentTypeColumn(tableName, "rules"),
-		Version:     buildContentTypeColumn(tableName, "version"),
+		ColumnsExpr:    columnsExpr,
+		tableAlias:     tableName,
+		ID:             buildContentTypeColumn(tableName, "id"),
+		CreatedAt:      buildContentTypeColumn(tableName, "created_at"),
+		UpdatedAt:      buildContentTypeColumn(tableName, "updated_at"),
+		Key:            buildContentTypeColumn(tableName, "key"),
+		Name:           buildContentTypeColumn(tableName, "name"),
+		GroupName:      buildContentTypeColumn(tableName, "group_name"),
+		TemplateKey:    buildContentTypeColumn(tableName, "template_key"),
+		ParentID:       buildContentTypeColumn(tableName, "parent_id"),
+		CollectionID:   buildContentTypeColumn(tableName, "collection_id"),
+		Attached:       buildContentTypeColumn(tableName, "attached"),
+		IsDefault:      buildContentTypeColumn(tableName, "is_default"),
+		InNewMenu:      buildContentTypeColumn(tableName, "in_new_menu"),
+		MenuPosition:   buildContentTypeColumn(tableName, "menu_position"),
+		FieldIds:       buildContentTypeColumn(tableName, "field_ids"),
+		HiddenFieldIds: buildContentTypeColumn(tableName, "hidden_field_ids"),
+		Rules:          buildContentTypeColumn(tableName, "rules"),
+		FieldOrder:     buildContentTypeColumn(tableName, "field_order"),
+		FieldSettings:  buildContentTypeColumn(tableName, "field_settings"),
+		Version:        buildContentTypeColumn(tableName, "version"),
 	}
 }
 
 type contentTypeColumns struct {
 	expr.ColumnsExpr
-	tableAlias  string
-	ID          contentTypeColumn
-	CreatedAt   contentTypeColumn
-	UpdatedAt   contentTypeColumn
-	Key         contentTypeColumn
-	Name        contentTypeColumn
-	TemplateKey contentTypeColumn
-	FieldIds    contentTypeColumn
-	Rules       contentTypeColumn
-	Version     contentTypeColumn
+	tableAlias     string
+	ID             contentTypeColumn
+	CreatedAt      contentTypeColumn
+	UpdatedAt      contentTypeColumn
+	Key            contentTypeColumn
+	Name           contentTypeColumn
+	GroupName      contentTypeColumn
+	TemplateKey    contentTypeColumn
+	ParentID       contentTypeColumn
+	CollectionID   contentTypeColumn
+	Attached       contentTypeColumn
+	IsDefault      contentTypeColumn
+	InNewMenu      contentTypeColumn
+	MenuPosition   contentTypeColumn
+	FieldIds       contentTypeColumn
+	HiddenFieldIds contentTypeColumn
+	Rules          contentTypeColumn
+	FieldOrder     contentTypeColumn
+	FieldSettings  contentTypeColumn
+	Version        contentTypeColumn
 }
 
 // Alias returns the current table alias for the columns set.
@@ -150,19 +186,29 @@ func (c contentTypeColumn) ShouldOmitParens() bool {
 // All values are optional, and do not have to be set
 // Generated columns are not included
 type ContentTypeSetter struct {
-	ID          omit.Val[string]                      `db:"id,pk" `
-	CreatedAt   omit.Val[time.Time]                   `db:"created_at" `
-	UpdatedAt   omit.Val[time.Time]                   `db:"updated_at" `
-	Key         omit.Val[string]                      `db:"key" `
-	Name        omit.Val[string]                      `db:"name" `
-	TemplateKey omitnull.Val[string]                  `db:"template_key" `
-	FieldIds    omit.Val[types.JSON[[]string]]        `db:"field_ids" `
-	Rules       omit.Val[types.JSON[json.RawMessage]] `db:"rules" `
-	Version     omit.Val[int64]                       `db:"version" `
+	ID             omit.Val[string]                      `db:"id,pk" `
+	CreatedAt      omit.Val[time.Time]                   `db:"created_at" `
+	UpdatedAt      omit.Val[time.Time]                   `db:"updated_at" `
+	Key            omit.Val[string]                      `db:"key" `
+	Name           omit.Val[string]                      `db:"name" `
+	GroupName      omitnull.Val[string]                  `db:"group_name" `
+	TemplateKey    omitnull.Val[string]                  `db:"template_key" `
+	ParentID       omitnull.Val[string]                  `db:"parent_id" `
+	CollectionID   omitnull.Val[string]                  `db:"collection_id" `
+	Attached       omit.Val[bool]                        `db:"attached" `
+	IsDefault      omit.Val[bool]                        `db:"is_default" `
+	InNewMenu      omit.Val[bool]                        `db:"in_new_menu" `
+	MenuPosition   omit.Val[int32]                       `db:"menu_position" `
+	FieldIds       omit.Val[types.JSON[[]string]]        `db:"field_ids" `
+	HiddenFieldIds omit.Val[types.JSON[[]string]]        `db:"hidden_field_ids" `
+	Rules          omit.Val[types.JSON[json.RawMessage]] `db:"rules" `
+	FieldOrder     omit.Val[types.JSON[[]string]]        `db:"field_order" `
+	FieldSettings  omit.Val[types.JSON[json.RawMessage]] `db:"field_settings" `
+	Version        omit.Val[int64]                       `db:"version" `
 }
 
 func (s ContentTypeSetter) SetColumns() []string {
-	vals := make([]string, 0, 9)
+	vals := make([]string, 0, 19)
 	if s.ID.IsValue() {
 		vals = append(vals, "id")
 	}
@@ -178,14 +224,44 @@ func (s ContentTypeSetter) SetColumns() []string {
 	if s.Name.IsValue() {
 		vals = append(vals, "name")
 	}
+	if s.GroupName.IsValue() || s.GroupName.IsNull() {
+		vals = append(vals, "group_name")
+	}
 	if s.TemplateKey.IsValue() || s.TemplateKey.IsNull() {
 		vals = append(vals, "template_key")
+	}
+	if s.ParentID.IsValue() || s.ParentID.IsNull() {
+		vals = append(vals, "parent_id")
+	}
+	if s.CollectionID.IsValue() || s.CollectionID.IsNull() {
+		vals = append(vals, "collection_id")
+	}
+	if s.Attached.IsValue() {
+		vals = append(vals, "attached")
+	}
+	if s.IsDefault.IsValue() {
+		vals = append(vals, "is_default")
+	}
+	if s.InNewMenu.IsValue() {
+		vals = append(vals, "in_new_menu")
+	}
+	if s.MenuPosition.IsValue() {
+		vals = append(vals, "menu_position")
 	}
 	if s.FieldIds.IsValue() {
 		vals = append(vals, "field_ids")
 	}
+	if s.HiddenFieldIds.IsValue() {
+		vals = append(vals, "hidden_field_ids")
+	}
 	if s.Rules.IsValue() {
 		vals = append(vals, "rules")
+	}
+	if s.FieldOrder.IsValue() {
+		vals = append(vals, "field_order")
+	}
+	if s.FieldSettings.IsValue() {
+		vals = append(vals, "field_settings")
 	}
 	if s.Version.IsValue() {
 		vals = append(vals, "version")
@@ -209,14 +285,44 @@ func (s ContentTypeSetter) Overwrite(t *ContentType) {
 	if s.Name.IsValue() {
 		t.Name = s.Name.MustGet()
 	}
+	if s.GroupName.IsValue() || s.GroupName.IsNull() {
+		t.GroupName = s.GroupName.MustGetNull()
+	}
 	if s.TemplateKey.IsValue() || s.TemplateKey.IsNull() {
 		t.TemplateKey = s.TemplateKey.MustGetNull()
+	}
+	if s.ParentID.IsValue() || s.ParentID.IsNull() {
+		t.ParentID = s.ParentID.MustGetNull()
+	}
+	if s.CollectionID.IsValue() || s.CollectionID.IsNull() {
+		t.CollectionID = s.CollectionID.MustGetNull()
+	}
+	if s.Attached.IsValue() {
+		t.Attached = s.Attached.MustGet()
+	}
+	if s.IsDefault.IsValue() {
+		t.IsDefault = s.IsDefault.MustGet()
+	}
+	if s.InNewMenu.IsValue() {
+		t.InNewMenu = s.InNewMenu.MustGet()
+	}
+	if s.MenuPosition.IsValue() {
+		t.MenuPosition = s.MenuPosition.MustGet()
 	}
 	if s.FieldIds.IsValue() {
 		t.FieldIds = s.FieldIds.MustGet()
 	}
+	if s.HiddenFieldIds.IsValue() {
+		t.HiddenFieldIds = s.HiddenFieldIds.MustGet()
+	}
 	if s.Rules.IsValue() {
 		t.Rules = s.Rules.MustGet()
+	}
+	if s.FieldOrder.IsValue() {
+		t.FieldOrder = s.FieldOrder.MustGet()
+	}
+	if s.FieldSettings.IsValue() {
+		t.FieldSettings = s.FieldSettings.MustGet()
 	}
 	if s.Version.IsValue() {
 		t.Version = s.Version.MustGet()
@@ -255,20 +361,70 @@ func (s *ContentTypeSetter) Apply(q *dialect.InsertQuery) {
 			}
 			return psql.Arg(s.Name.MustGet()).WriteSQL(ctx, w, d, start)
 		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.GroupName.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.GroupName.MustGetNull()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
 			if s.TemplateKey.IsUnset() {
 				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
 			}
 			return psql.Arg(s.TemplateKey.MustGetNull()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.ParentID.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.ParentID.MustGetNull()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.CollectionID.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.CollectionID.MustGetNull()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.Attached.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.Attached.MustGet()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.IsDefault.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.IsDefault.MustGet()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.InNewMenu.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.InNewMenu.MustGet()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.MenuPosition.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.MenuPosition.MustGet()).WriteSQL(ctx, w, d, start)
 		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
 			if s.FieldIds.IsUnset() {
 				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
 			}
 			return psql.Arg(s.FieldIds.MustGet()).WriteSQL(ctx, w, d, start)
 		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.HiddenFieldIds.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.HiddenFieldIds.MustGet()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
 			if s.Rules.IsUnset() {
 				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
 			}
 			return psql.Arg(s.Rules.MustGet()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.FieldOrder.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.FieldOrder.MustGet()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.FieldSettings.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.FieldSettings.MustGet()).WriteSQL(ctx, w, d, start)
 		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
 			if s.Version.IsUnset() {
 				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
@@ -282,7 +438,7 @@ func (s ContentTypeSetter) UpdateMod() bob.Mod[*dialect.UpdateQuery] {
 }
 
 func (s ContentTypeSetter) Expressions(prefix ...string) []bob.Expression {
-	exprs := make([]bob.Expression, 0, 9)
+	exprs := make([]bob.Expression, 0, 19)
 
 	if s.ID.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
@@ -319,10 +475,59 @@ func (s ContentTypeSetter) Expressions(prefix ...string) []bob.Expression {
 		}})
 	}
 
+	if s.GroupName.IsValue() || s.GroupName.IsNull() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "group_name")...),
+			psql.Arg(s.GroupName),
+		}})
+	}
+
 	if s.TemplateKey.IsValue() || s.TemplateKey.IsNull() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
 			psql.Quote(append(prefix, "template_key")...),
 			psql.Arg(s.TemplateKey),
+		}})
+	}
+
+	if s.ParentID.IsValue() || s.ParentID.IsNull() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "parent_id")...),
+			psql.Arg(s.ParentID),
+		}})
+	}
+
+	if s.CollectionID.IsValue() || s.CollectionID.IsNull() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "collection_id")...),
+			psql.Arg(s.CollectionID),
+		}})
+	}
+
+	if s.Attached.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "attached")...),
+			psql.Arg(s.Attached),
+		}})
+	}
+
+	if s.IsDefault.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "is_default")...),
+			psql.Arg(s.IsDefault),
+		}})
+	}
+
+	if s.InNewMenu.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "in_new_menu")...),
+			psql.Arg(s.InNewMenu),
+		}})
+	}
+
+	if s.MenuPosition.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "menu_position")...),
+			psql.Arg(s.MenuPosition),
 		}})
 	}
 
@@ -333,10 +538,31 @@ func (s ContentTypeSetter) Expressions(prefix ...string) []bob.Expression {
 		}})
 	}
 
+	if s.HiddenFieldIds.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "hidden_field_ids")...),
+			psql.Arg(s.HiddenFieldIds),
+		}})
+	}
+
 	if s.Rules.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
 			psql.Quote(append(prefix, "rules")...),
 			psql.Arg(s.Rules),
+		}})
+	}
+
+	if s.FieldOrder.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "field_order")...),
+			psql.Arg(s.FieldOrder),
+		}})
+	}
+
+	if s.FieldSettings.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "field_settings")...),
+			psql.Arg(s.FieldSettings),
 		}})
 	}
 
@@ -357,7 +583,7 @@ func contentTypeScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc,
 		idx int
 		dst func(o *ContentType) any
 	}
-	targets := make([]target, 0, 9)
+	targets := make([]target, 0, 19)
 	for i, col := range cols {
 		switch col {
 		case "id":
@@ -370,12 +596,32 @@ func contentTypeScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc,
 			targets = append(targets, target{i, func(o *ContentType) any { return &o.Key }})
 		case "name":
 			targets = append(targets, target{i, func(o *ContentType) any { return &o.Name }})
+		case "group_name":
+			targets = append(targets, target{i, func(o *ContentType) any { return &o.GroupName }})
 		case "template_key":
 			targets = append(targets, target{i, func(o *ContentType) any { return &o.TemplateKey }})
+		case "parent_id":
+			targets = append(targets, target{i, func(o *ContentType) any { return &o.ParentID }})
+		case "collection_id":
+			targets = append(targets, target{i, func(o *ContentType) any { return &o.CollectionID }})
+		case "attached":
+			targets = append(targets, target{i, func(o *ContentType) any { return &o.Attached }})
+		case "is_default":
+			targets = append(targets, target{i, func(o *ContentType) any { return &o.IsDefault }})
+		case "in_new_menu":
+			targets = append(targets, target{i, func(o *ContentType) any { return &o.InNewMenu }})
+		case "menu_position":
+			targets = append(targets, target{i, func(o *ContentType) any { return &o.MenuPosition }})
 		case "field_ids":
 			targets = append(targets, target{i, func(o *ContentType) any { return &o.FieldIds }})
+		case "hidden_field_ids":
+			targets = append(targets, target{i, func(o *ContentType) any { return &o.HiddenFieldIds }})
 		case "rules":
 			targets = append(targets, target{i, func(o *ContentType) any { return &o.Rules }})
+		case "field_order":
+			targets = append(targets, target{i, func(o *ContentType) any { return &o.FieldOrder }})
+		case "field_settings":
+			targets = append(targets, target{i, func(o *ContentType) any { return &o.FieldSettings }})
 		case "version":
 			targets = append(targets, target{i, func(o *ContentType) any { return &o.Version }})
 		}
@@ -653,14 +899,14 @@ func (o ContentTypeSlice) ReloadAll(ctx context.Context, exec bob.Executor) erro
 	return nil
 }
 
-// CollectionTypes starts a query for related objects on collection_types
-func (o *ContentType) CollectionTypes(mods ...bob.Mod[*dialect.SelectQuery]) CollectionTypesQuery {
-	return CollectionTypes.Query(append(mods,
-		sm.Where(CollectionTypes.Columns.ContentTypeID.EQ(psql.Arg(o.ID))),
+// AncestorContentTypeAncestors starts a query for related objects on content_type_ancestors
+func (o *ContentType) AncestorContentTypeAncestors(mods ...bob.Mod[*dialect.SelectQuery]) ContentTypeAncestorsQuery {
+	return ContentTypeAncestors.Query(append(mods,
+		sm.Where(ContentTypeAncestors.Columns.AncestorID.EQ(psql.Arg(o.ID))),
 	)...)
 }
 
-func (os ContentTypeSlice) CollectionTypes(mods ...bob.Mod[*dialect.SelectQuery]) CollectionTypesQuery {
+func (os ContentTypeSlice) AncestorContentTypeAncestors(mods ...bob.Mod[*dialect.SelectQuery]) ContentTypeAncestorsQuery {
 	pkID := make(pgtypes.Array[string], 0, len(os))
 
 	for _, o := range os {
@@ -671,8 +917,84 @@ func (os ContentTypeSlice) CollectionTypes(mods ...bob.Mod[*dialect.SelectQuery]
 	}
 	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkID), "text[]"))
 
-	return CollectionTypes.Query(append(mods,
-		sm.Where(CollectionTypes.Columns.ContentTypeID.EQ(PKArgExpr)),
+	return ContentTypeAncestors.Query(append(mods,
+		sm.Where(ContentTypeAncestors.Columns.AncestorID.EQ(PKArgExpr)),
+	)...)
+}
+
+// ContentTypeAncestors starts a query for related objects on content_type_ancestors
+func (o *ContentType) ContentTypeAncestors(mods ...bob.Mod[*dialect.SelectQuery]) ContentTypeAncestorsQuery {
+	return ContentTypeAncestors.Query(append(mods,
+		sm.Where(ContentTypeAncestors.Columns.ContentTypeID.EQ(psql.Arg(o.ID))),
+	)...)
+}
+
+func (os ContentTypeSlice) ContentTypeAncestors(mods ...bob.Mod[*dialect.SelectQuery]) ContentTypeAncestorsQuery {
+	pkID := make(pgtypes.Array[string], 0, len(os))
+
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		pkID = append(pkID, o.ID)
+	}
+	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkID), "text[]"))
+
+	return ContentTypeAncestors.Query(append(mods,
+		sm.Where(ContentTypeAncestors.Columns.ContentTypeID.EQ(PKArgExpr)),
+	)...)
+}
+
+// Parent starts a query for related objects on content_types
+func (o *ContentType) Parent(mods ...bob.Mod[*dialect.SelectQuery]) ContentTypesQuery {
+	return ContentTypes.Query(append(mods,
+		sm.Where(ContentTypes.Columns.ID.EQ(psql.Arg(o.ParentID))),
+	)...)
+}
+
+func (os ContentTypeSlice) Parent(mods ...bob.Mod[*dialect.SelectQuery]) ContentTypesQuery {
+	pkParentID := make(pgtypes.Array[null.Val[string]], 0, len(os))
+
+	// the array is only a filter (semi-join), so duplicate keys can be
+	// dropped before they are sent over the wire
+	seenParentID := make(map[null.Val[string]]struct{}, len(os))
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		if _, ok := seenParentID[o.ParentID]; ok {
+			continue
+		}
+		seenParentID[o.ParentID] = struct{}{}
+		pkParentID = append(pkParentID, o.ParentID)
+	}
+	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkParentID), "text[]"))
+
+	return ContentTypes.Query(append(mods,
+		sm.Where(ContentTypes.Columns.ID.EQ(PKArgExpr)),
+	)...)
+}
+
+// ReverseParents starts a query for related objects on content_types
+func (o *ContentType) ReverseParents(mods ...bob.Mod[*dialect.SelectQuery]) ContentTypesQuery {
+	return ContentTypes.Query(append(mods,
+		sm.Where(ContentTypes.Columns.ParentID.EQ(psql.Arg(o.ID))),
+	)...)
+}
+
+func (os ContentTypeSlice) ReverseParents(mods ...bob.Mod[*dialect.SelectQuery]) ContentTypesQuery {
+	pkID := make(pgtypes.Array[string], 0, len(os))
+
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		pkID = append(pkID, o.ID)
+	}
+	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkID), "text[]"))
+
+	return ContentTypes.Query(append(mods,
+		sm.Where(ContentTypes.Columns.ParentID.EQ(PKArgExpr)),
 	)...)
 }
 
@@ -722,63 +1044,231 @@ func (os ContentTypeSlice) Resources(mods ...bob.Mod[*dialect.SelectQuery]) Reso
 	)...)
 }
 
-func insertContentTypeCollectionTypes0(ctx context.Context, exec bob.Executor, collectionTypes1 []*CollectionTypeSetter, contentType0 *ContentType) (CollectionTypeSlice, error) {
-	for i := range collectionTypes1 {
-		collectionTypes1[i].ContentTypeID = omit.From(contentType0.ID)
+func insertContentTypeAncestorContentTypeAncestors0(ctx context.Context, exec bob.Executor, contentTypeAncestors1 []*ContentTypeAncestorSetter, contentType0 *ContentType) (ContentTypeAncestorSlice, error) {
+	for i := range contentTypeAncestors1 {
+		contentTypeAncestors1[i].AncestorID = omit.From(contentType0.ID)
 	}
 
-	ret, err := CollectionTypes.Insert(bob.ToMods(collectionTypes1...)).All(ctx, exec)
+	ret, err := ContentTypeAncestors.Insert(bob.ToMods(contentTypeAncestors1...)).All(ctx, exec)
 	if err != nil {
-		return ret, fmt.Errorf("insertContentTypeCollectionTypes0: %w", err)
+		return ret, fmt.Errorf("insertContentTypeAncestorContentTypeAncestors0: %w", err)
 	}
 
 	return ret, nil
 }
 
-func attachContentTypeCollectionTypes0(ctx context.Context, exec bob.Executor, count int, collectionTypes1 CollectionTypeSlice, contentType0 *ContentType) (CollectionTypeSlice, error) {
-	setter := &CollectionTypeSetter{
-		ContentTypeID: omit.From(contentType0.ID),
+func attachContentTypeAncestorContentTypeAncestors0(ctx context.Context, exec bob.Executor, count int, contentTypeAncestors1 ContentTypeAncestorSlice, contentType0 *ContentType) (ContentTypeAncestorSlice, error) {
+	setter := &ContentTypeAncestorSetter{
+		AncestorID: omit.From(contentType0.ID),
 	}
 
-	err := collectionTypes1.UpdateAll(ctx, exec, *setter)
+	err := contentTypeAncestors1.UpdateAll(ctx, exec, *setter)
 	if err != nil {
-		return nil, fmt.Errorf("attachContentTypeCollectionTypes0: %w", err)
+		return nil, fmt.Errorf("attachContentTypeAncestorContentTypeAncestors0: %w", err)
 	}
 
-	return collectionTypes1, nil
+	return contentTypeAncestors1, nil
 }
 
-func (contentType0 *ContentType) InsertCollectionTypes(ctx context.Context, exec bob.Executor, related ...*CollectionTypeSetter) error {
+func (contentType0 *ContentType) InsertAncestorContentTypeAncestors(ctx context.Context, exec bob.Executor, related ...*ContentTypeAncestorSetter) error {
 	if len(related) == 0 {
 		return nil
 	}
 
 	var err error
 
-	collectionTypes1, err := insertContentTypeCollectionTypes0(ctx, exec, related, contentType0)
+	contentTypeAncestors1, err := insertContentTypeAncestorContentTypeAncestors0(ctx, exec, related, contentType0)
 	if err != nil {
 		return err
 	}
 
-	contentType0.R.CollectionTypes = append(contentType0.R.CollectionTypes, collectionTypes1...)
+	contentType0.R.AncestorContentTypeAncestors = append(contentType0.R.AncestorContentTypeAncestors, contentTypeAncestors1...)
 
 	return nil
 }
 
-func (contentType0 *ContentType) AttachCollectionTypes(ctx context.Context, exec bob.Executor, related ...*CollectionType) error {
+func (contentType0 *ContentType) AttachAncestorContentTypeAncestors(ctx context.Context, exec bob.Executor, related ...*ContentTypeAncestor) error {
 	if len(related) == 0 {
 		return nil
 	}
 
 	var err error
-	collectionTypes1 := CollectionTypeSlice(related)
+	contentTypeAncestors1 := ContentTypeAncestorSlice(related)
 
-	_, err = attachContentTypeCollectionTypes0(ctx, exec, len(related), collectionTypes1, contentType0)
+	_, err = attachContentTypeAncestorContentTypeAncestors0(ctx, exec, len(related), contentTypeAncestors1, contentType0)
 	if err != nil {
 		return err
 	}
 
-	contentType0.R.CollectionTypes = append(contentType0.R.CollectionTypes, collectionTypes1...)
+	contentType0.R.AncestorContentTypeAncestors = append(contentType0.R.AncestorContentTypeAncestors, contentTypeAncestors1...)
+
+	return nil
+}
+
+func insertContentTypeContentTypeAncestors0(ctx context.Context, exec bob.Executor, contentTypeAncestors1 []*ContentTypeAncestorSetter, contentType0 *ContentType) (ContentTypeAncestorSlice, error) {
+	for i := range contentTypeAncestors1 {
+		contentTypeAncestors1[i].ContentTypeID = omit.From(contentType0.ID)
+	}
+
+	ret, err := ContentTypeAncestors.Insert(bob.ToMods(contentTypeAncestors1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertContentTypeContentTypeAncestors0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachContentTypeContentTypeAncestors0(ctx context.Context, exec bob.Executor, count int, contentTypeAncestors1 ContentTypeAncestorSlice, contentType0 *ContentType) (ContentTypeAncestorSlice, error) {
+	setter := &ContentTypeAncestorSetter{
+		ContentTypeID: omit.From(contentType0.ID),
+	}
+
+	err := contentTypeAncestors1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachContentTypeContentTypeAncestors0: %w", err)
+	}
+
+	return contentTypeAncestors1, nil
+}
+
+func (contentType0 *ContentType) InsertContentTypeAncestors(ctx context.Context, exec bob.Executor, related ...*ContentTypeAncestorSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	contentTypeAncestors1, err := insertContentTypeContentTypeAncestors0(ctx, exec, related, contentType0)
+	if err != nil {
+		return err
+	}
+
+	contentType0.R.ContentTypeAncestors = append(contentType0.R.ContentTypeAncestors, contentTypeAncestors1...)
+
+	return nil
+}
+
+func (contentType0 *ContentType) AttachContentTypeAncestors(ctx context.Context, exec bob.Executor, related ...*ContentTypeAncestor) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	contentTypeAncestors1 := ContentTypeAncestorSlice(related)
+
+	_, err = attachContentTypeContentTypeAncestors0(ctx, exec, len(related), contentTypeAncestors1, contentType0)
+	if err != nil {
+		return err
+	}
+
+	contentType0.R.ContentTypeAncestors = append(contentType0.R.ContentTypeAncestors, contentTypeAncestors1...)
+
+	return nil
+}
+
+func attachContentTypeParent0(ctx context.Context, exec bob.Executor, count int, contentType0 *ContentType, contentType1 *ContentType) (*ContentType, error) {
+	setter := &ContentTypeSetter{
+		ParentID: omitnull.From(contentType1.ID),
+	}
+
+	err := contentType0.Update(ctx, exec, setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachContentTypeParent0: %w", err)
+	}
+
+	return contentType0, nil
+}
+
+func (contentType0 *ContentType) InsertParent(ctx context.Context, exec bob.Executor, related *ContentTypeSetter) error {
+	var err error
+
+	contentType1, err := ContentTypes.Insert(related).One(ctx, exec)
+	if err != nil {
+		return fmt.Errorf("inserting related objects: %w", err)
+	}
+
+	_, err = attachContentTypeParent0(ctx, exec, 1, contentType0, contentType1)
+	if err != nil {
+		return err
+	}
+
+	contentType0.R.Parent = contentType1
+	contentType0.R.Loaded.Parent = true
+
+	return nil
+}
+
+func (contentType0 *ContentType) AttachParent(ctx context.Context, exec bob.Executor, contentType1 *ContentType) error {
+	var err error
+
+	_, err = attachContentTypeParent0(ctx, exec, 1, contentType0, contentType1)
+	if err != nil {
+		return err
+	}
+
+	contentType0.R.Parent = contentType1
+	contentType0.R.Loaded.Parent = true
+
+	return nil
+}
+
+func insertContentTypeReverseParents0(ctx context.Context, exec bob.Executor, contentTypes1 []*ContentTypeSetter, contentType0 *ContentType) (ContentTypeSlice, error) {
+	for i := range contentTypes1 {
+		contentTypes1[i].ParentID = omitnull.From(contentType0.ID)
+	}
+
+	ret, err := ContentTypes.Insert(bob.ToMods(contentTypes1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertContentTypeReverseParents0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachContentTypeReverseParents0(ctx context.Context, exec bob.Executor, count int, contentTypes1 ContentTypeSlice, contentType0 *ContentType) (ContentTypeSlice, error) {
+	setter := &ContentTypeSetter{
+		ParentID: omitnull.From(contentType0.ID),
+	}
+
+	err := contentTypes1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachContentTypeReverseParents0: %w", err)
+	}
+
+	return contentTypes1, nil
+}
+
+func (contentType0 *ContentType) InsertReverseParents(ctx context.Context, exec bob.Executor, related ...*ContentTypeSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	contentTypes1, err := insertContentTypeReverseParents0(ctx, exec, related, contentType0)
+	if err != nil {
+		return err
+	}
+
+	contentType0.R.ReverseParents = append(contentType0.R.ReverseParents, contentTypes1...)
+
+	return nil
+}
+
+func (contentType0 *ContentType) AttachReverseParents(ctx context.Context, exec bob.Executor, related ...*ContentType) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	contentTypes1 := ContentTypeSlice(related)
+
+	_, err = attachContentTypeReverseParents0(ctx, exec, len(related), contentTypes1, contentType0)
+	if err != nil {
+		return err
+	}
+
+	contentType0.R.ReverseParents = append(contentType0.R.ReverseParents, contentTypes1...)
 
 	return nil
 }
@@ -906,17 +1396,27 @@ func (contentType0 *ContentType) AttachResources(ctx context.Context, exec bob.E
 }
 
 type contentTypeWhere[Q psql.Filterable] struct {
-	cols        contentTypeColumns
-	ID          psql.WhereMod[Q, string]
-	CreatedAt   psql.WhereMod[Q, time.Time]
-	UpdatedAt   psql.WhereMod[Q, time.Time]
-	Key         psql.WhereMod[Q, string]
-	Name        psql.WhereMod[Q, string]
-	TemplateKey psql.WhereNullMod[Q, string]
-	FieldIds    psql.WhereMod[Q, types.JSON[[]string]]
-	Rules       psql.WhereMod[Q, types.JSON[json.RawMessage]]
-	Version     psql.WhereMod[Q, int64]
-	R           contentTypeWhereR[Q]
+	cols           contentTypeColumns
+	ID             psql.WhereMod[Q, string]
+	CreatedAt      psql.WhereMod[Q, time.Time]
+	UpdatedAt      psql.WhereMod[Q, time.Time]
+	Key            psql.WhereMod[Q, string]
+	Name           psql.WhereMod[Q, string]
+	GroupName      psql.WhereNullMod[Q, string]
+	TemplateKey    psql.WhereNullMod[Q, string]
+	ParentID       psql.WhereNullMod[Q, string]
+	CollectionID   psql.WhereNullMod[Q, string]
+	Attached       psql.WhereMod[Q, bool]
+	IsDefault      psql.WhereMod[Q, bool]
+	InNewMenu      psql.WhereMod[Q, bool]
+	MenuPosition   psql.WhereMod[Q, int32]
+	FieldIds       psql.WhereMod[Q, types.JSON[[]string]]
+	HiddenFieldIds psql.WhereMod[Q, types.JSON[[]string]]
+	Rules          psql.WhereMod[Q, types.JSON[json.RawMessage]]
+	FieldOrder     psql.WhereMod[Q, types.JSON[[]string]]
+	FieldSettings  psql.WhereMod[Q, types.JSON[json.RawMessage]]
+	Version        psql.WhereMod[Q, int64]
+	R              contentTypeWhereR[Q]
 }
 
 func (contentTypeWhere[Q]) AliasedAs(alias string) contentTypeWhere[Q] {
@@ -925,17 +1425,27 @@ func (contentTypeWhere[Q]) AliasedAs(alias string) contentTypeWhere[Q] {
 
 func buildContentTypeWhere[Q psql.Filterable](cols contentTypeColumns) contentTypeWhere[Q] {
 	return contentTypeWhere[Q]{
-		cols:        cols,
-		ID:          psql.Where[Q, string](cols.ID.Expression),
-		CreatedAt:   psql.Where[Q, time.Time](cols.CreatedAt.Expression),
-		UpdatedAt:   psql.Where[Q, time.Time](cols.UpdatedAt.Expression),
-		Key:         psql.Where[Q, string](cols.Key.Expression),
-		Name:        psql.Where[Q, string](cols.Name.Expression),
-		TemplateKey: psql.WhereNull[Q, string](cols.TemplateKey.Expression),
-		FieldIds:    psql.Where[Q, types.JSON[[]string]](cols.FieldIds.Expression),
-		Rules:       psql.Where[Q, types.JSON[json.RawMessage]](cols.Rules.Expression),
-		Version:     psql.Where[Q, int64](cols.Version.Expression),
-		R:           contentTypeWhereR[Q]{cols: cols},
+		cols:           cols,
+		ID:             psql.Where[Q, string](cols.ID.Expression),
+		CreatedAt:      psql.Where[Q, time.Time](cols.CreatedAt.Expression),
+		UpdatedAt:      psql.Where[Q, time.Time](cols.UpdatedAt.Expression),
+		Key:            psql.Where[Q, string](cols.Key.Expression),
+		Name:           psql.Where[Q, string](cols.Name.Expression),
+		GroupName:      psql.WhereNull[Q, string](cols.GroupName.Expression),
+		TemplateKey:    psql.WhereNull[Q, string](cols.TemplateKey.Expression),
+		ParentID:       psql.WhereNull[Q, string](cols.ParentID.Expression),
+		CollectionID:   psql.WhereNull[Q, string](cols.CollectionID.Expression),
+		Attached:       psql.Where[Q, bool](cols.Attached.Expression),
+		IsDefault:      psql.Where[Q, bool](cols.IsDefault.Expression),
+		InNewMenu:      psql.Where[Q, bool](cols.InNewMenu.Expression),
+		MenuPosition:   psql.Where[Q, int32](cols.MenuPosition.Expression),
+		FieldIds:       psql.Where[Q, types.JSON[[]string]](cols.FieldIds.Expression),
+		HiddenFieldIds: psql.Where[Q, types.JSON[[]string]](cols.HiddenFieldIds.Expression),
+		Rules:          psql.Where[Q, types.JSON[json.RawMessage]](cols.Rules.Expression),
+		FieldOrder:     psql.Where[Q, types.JSON[[]string]](cols.FieldOrder.Expression),
+		FieldSettings:  psql.Where[Q, types.JSON[json.RawMessage]](cols.FieldSettings.Expression),
+		Version:        psql.Where[Q, int64](cols.Version.Expression),
+		R:              contentTypeWhereR[Q]{cols: cols},
 	}
 }
 
@@ -946,15 +1456,63 @@ type contentTypeWhereR[Q psql.Filterable] struct {
 	cols contentTypeColumns
 }
 
-// HasCollectionTypes filters parents that have a matching CollectionTypes using a
+// HasAncestorContentTypeAncestors filters parents that have a matching AncestorContentTypeAncestors using a
 // correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
 // multiply parent rows, so no DISTINCT is needed. The optional filters are
-// applied to the subquery (i.e. to CollectionTypes).
-func (w contentTypeWhereR[Q]) HasCollectionTypes(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+// applied to the subquery (i.e. to ContentTypeAncestors).
+func (w contentTypeWhereR[Q]) HasAncestorContentTypeAncestors(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
 	q := psql.Select(
 		sm.Columns(psql.Raw("1")),
-		sm.From(CollectionTypes.NameExpr()),
-		sm.Where(CollectionTypes.Columns.ContentTypeID.EQ(w.cols.ID)),
+		sm.From(ContentTypeAncestors.NameExpr()),
+		sm.Where(ContentTypeAncestors.Columns.AncestorID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: psql.Exists(q)}
+}
+
+// HasContentTypeAncestors filters parents that have a matching ContentTypeAncestors using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to ContentTypeAncestors).
+func (w contentTypeWhereR[Q]) HasContentTypeAncestors(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := psql.Select(
+		sm.Columns(psql.Raw("1")),
+		sm.From(ContentTypeAncestors.NameExpr()),
+		sm.Where(ContentTypeAncestors.Columns.ContentTypeID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: psql.Exists(q)}
+}
+
+// HasParent filters parents that have a matching Parent using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to ContentTypes).
+func (w contentTypeWhereR[Q]) HasParent(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	// self-referential relation: alias the subquery table so the correlation
+	// columns still reference the parent row rather than the subquery's own row.
+	relTbl := ContentTypes.Columns.AliasedAs("Parent")
+	q := psql.Select(
+		sm.Columns(psql.Raw("1")),
+		sm.From(ContentTypes.NameExpr().As("Parent")),
+		sm.Where(relTbl.ID.EQ(w.cols.ParentID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: psql.Exists(q)}
+}
+
+// HasReverseParents filters parents that have a matching ReverseParents using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to ContentTypes).
+func (w contentTypeWhereR[Q]) HasReverseParents(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	// self-referential relation: alias the subquery table so the correlation
+	// columns still reference the parent row rather than the subquery's own row.
+	relTbl := ContentTypes.Columns.AliasedAs("ReverseParents")
+	q := psql.Select(
+		sm.Columns(psql.Raw("1")),
+		sm.From(ContentTypes.NameExpr().As("ReverseParents")),
+		sm.Where(relTbl.ParentID.EQ(w.cols.ID)),
 	)
 	q.Apply(filters...)
 	return mods.Where[Q]{E: psql.Exists(q)}

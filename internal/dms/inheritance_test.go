@@ -1,0 +1,649 @@
+package dms
+
+import (
+	"encoding/json"
+	"errors"
+	"slices"
+	"strings"
+	"testing"
+
+	"papergo/internal/dal/catalog"
+	"papergo/internal/dal/content"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/model"
+)
+
+// Blank lists accept the one Item catalog type, each through a list type of
+// its own.
+func TestBlankListsShareTheItemType(t *testing.T) {
+	s, w, l := fixture(t)
+	other := create(t, s, w.ID, "list", "Other", nil)
+	first, err := s.contentType(testContext, l.ID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := s.contentType(testContext, other.ID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.ID == second.ID || *first.ParentID != *second.ParentID || first.Key != rootTypeKey {
+		t.Fatal("blank lists", first, second)
+	}
+	items, err := s.DAL.Catalog().CountContentTypes(testContext, catalog.ContentTypeFilter{Catalog: true})
+	if err != nil || items != 1 {
+		t.Fatal("catalog holds one Item type", items, err)
+	}
+	if _, err = s.CreateContentType(testContext, "alice", ContentTypeInput{Key: rootTypeKey, Name: "Another item"}); !isValidation(err) {
+		t.Fatal("reserved key accepted", err)
+	}
+}
+
+// A subtype inherits its parent's fields; a list customizes its own list type
+// without touching the catalog or other lists, and catalog changes reach every
+// descendant.
+func TestContentTypeInheritanceAcrossLists(t *testing.T) {
+	s, w, documents := fixture(t)
+	title, err := s.CreateCatalogField(testContext, "alice", CreateField{Key: "title", Label: "Title", Type: "text", Indexed: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	amount, err := s.CreateCatalogField(testContext, "alice", CreateField{Key: "amount", Label: "Amount", Type: "integer", Indexed: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	document, err := s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "record", Name: "Record", FieldIds: []string{title.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	invoice, err := s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "invoice", Name: "Invoice", ParentID: document.ID, FieldIds: []string{amount.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(invoice.Effective.FieldIds) != 2 || invoice.Effective.FieldIds[0] != title.ID {
+		t.Fatal("subtype schema", invoice)
+	}
+	if _, err = s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "copy", Name: "Copy", ParentID: document.ID, FieldIds: []string{title.ID}}); !isValidation(err) {
+		t.Fatal("inherited field owned again", err)
+	}
+	invoices := create(t, s, w.ID, "list", "Bills", nil)
+	documentType := attachOK(t, s, documents.ID, document.ID, true)
+	invoiceType := attachOK(t, s, invoices.ID, invoice.ID, true)
+
+	// A column of one list stays in that list.
+	note := fieldOK(t, s, invoices.ID, CreateField{Key: "note", Label: "Note", Type: "text"})
+	if invoiceType, err = s.contentType(testContext, invoices.ID, invoiceType.ID); err != nil || !slices.Contains(invoiceType.FieldIds, note.ID) {
+		t.Fatal("list column", invoiceType, err)
+	}
+	if shared := catalogOf(t, s, invoiceType); slices.Contains(shared.Effective.FieldIds, note.ID) {
+		t.Fatal("list column reached the catalog", shared)
+	}
+	if fields, err := s.Fields(testContext, "alice", documents.ID); err != nil || slices.ContainsFunc(fields, func(d *catalog.FieldDefinition) bool { return d.ID == note.ID }) {
+		t.Fatal("list column reached another list", fields, err)
+	}
+
+	// A catalog change reaches every subtype and list type.
+	due, err := s.CreateCatalogField(testContext, "alice", CreateField{Key: "due", Label: "Due", Type: "date"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	document = catalogOf(t, s, documentType)
+	if _, err = s.UpdateContentType(testContext, "alice", document.ID, document.Version, ContentTypeInput{Name: document.Name, FieldIds: []string{title.ID, due.ID}}); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []string{documents.ID, invoices.ID} {
+		fields, err := s.Fields(testContext, "alice", c)
+		if err != nil || !slices.ContainsFunc(fields, func(d *catalog.FieldDefinition) bool { return d.ID == due.ID }) {
+			t.Fatal("catalog field did not reach the list", c, fields, err)
+		}
+	}
+
+	// A list hides inherited fields from forms but cannot hide its own or a
+	// required one without a default.
+	invoiceType, _ = s.contentType(testContext, invoices.ID, invoiceType.ID)
+	if _, err = s.UpdateListType(testContext, "alice", invoices.ID, invoiceType.ID, invoiceType.Version, ListTypeInput{FieldIds: invoiceType.FieldIds, HiddenFieldIds: []string{note.ID}}); !isValidation(err) {
+		t.Fatal("own field hidden", err)
+	}
+	hidden, err := s.UpdateListType(testContext, "alice", invoices.ID, invoiceType.ID, invoiceType.Version, ListTypeInput{FieldIds: invoiceType.FieldIds, HiddenFieldIds: []string{due.ID}})
+	if err != nil || !slices.Equal(hidden.Effective.HiddenFieldIds, []string{due.ID}) || !slices.Contains(hidden.Effective.FieldIds, due.ID) {
+		t.Fatal("hidden field", hidden, err)
+	}
+	required, err := s.CreateCatalogField(testContext, "alice", CreateField{Key: "code", Label: "Code", Type: "text", Required: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	invoice = catalogOf(t, s, invoiceType)
+	if _, err = s.UpdateContentType(testContext, "alice", invoice.ID, invoice.Version, ContentTypeInput{Name: invoice.Name, FieldIds: []string{amount.ID, required.ID}}); err != nil {
+		t.Fatal(err)
+	}
+	hidden, _ = s.contentType(testContext, invoices.ID, invoiceType.ID)
+	if _, err = s.UpdateListType(testContext, "alice", invoices.ID, hidden.ID, hidden.Version, ListTypeInput{FieldIds: hidden.FieldIds, HiddenFieldIds: []string{due.ID, required.ID}}); !isValidation(err) {
+		t.Fatal("required field hidden", err)
+	}
+
+	// Filtering by a parent type matches its subtypes.
+	item, err := s.Create(testContext, "alice", invoices.ID, CreateResource{Kind: "item", Name: "Bill", ContentTypeID: invoice.ID, Values: map[string]any{"title": "Power", "amount": json.Number("5"), "code": "A"}})
+	if err != nil || *item.ContentTypeID != invoiceType.ID {
+		t.Fatal("item named by its catalog type", item, err)
+	}
+	q, err := s.Query(testContext, "alice", invoices.ID, QueryRequest{Query: QuerySpec{ContentTypeID: document.ID, Filter: &FilterExpr{Field: "title", Value: []byte(`"Power"`)}}})
+	if err != nil || len(q.Data) != 1 || q.Data[0].ID != item.ID {
+		t.Fatal("parent type query", q, err)
+	}
+	if _, err = s.Query(testContext, "alice", invoices.ID, QueryRequest{Query: QuerySpec{ContentTypeID: document.ID, Filter: &FilterExpr{Field: "amount", Value: []byte(`5`)}}}); !isValidation(err) {
+		t.Fatal("parent type query used a subtype field", err)
+	}
+	ids, err := s.DAL.Content().CollectionIDs(testContext, content.Collections{Reader: principal(testContext, "alice"), WorkspaceID: w.ID, ContentTypes: []string{"record"}})
+	if err != nil || !slices.Contains(ids, documents.ID) || !slices.Contains(ids, invoices.ID) {
+		t.Fatal("smart folder type selector", ids, err)
+	}
+	// The search index holds catalog types; a list type stands for its own.
+	family, err := s.ContentTypeFamily(testContext, document.ID)
+	if err != nil || len(family) != 2 || !slices.Contains(family, document.ID) || !slices.Contains(family, invoice.ID) {
+		t.Fatal("search type family", family, err)
+	}
+	if family, err = s.ContentTypeFamily(testContext, invoiceType.ID); err != nil || !slices.Equal(family, []string{invoice.ID}) {
+		t.Fatal("list type family", family, err)
+	}
+
+	// A list's own field moves up when its catalog type gains it, and the
+	// list type saves as before.
+	invoice = catalogOf(t, s, invoiceType)
+	if _, err = s.UpdateContentType(testContext, "alice", invoice.ID, invoice.Version, ContentTypeInput{Name: invoice.Name, FieldIds: append(slices.Clone(invoice.FieldIds), note.ID)}); err != nil {
+		t.Fatal(err)
+	}
+	moved, err := s.contentType(testContext, invoices.ID, invoiceType.ID)
+	if err != nil || slices.Contains(moved.FieldIds, note.ID) || !slices.Contains(moved.Effective.FieldIds, note.ID) {
+		t.Fatal("field gained by the catalog type", moved, err)
+	}
+	if _, err = s.UpdateListType(testContext, "alice", invoices.ID, moved.ID, moved.Version, ListTypeInput{FieldIds: moved.FieldIds, HiddenFieldIds: moved.HiddenFieldIds}); err != nil {
+		t.Fatal("list type after its field moved up", err)
+	}
+}
+
+// A detached list type keeps its customizations for when its catalog type is
+// attached again.
+func TestReattachRestoresListCustomizations(t *testing.T) {
+	s, _, l := fixture(t)
+	code, err := s.CreateCatalogField(testContext, "alice", CreateField{Key: "code", Label: "Code", Type: "text"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	typ := typeOK(t, s, l.ID, ContentTypeInput{Key: "invoice", Name: "Invoice"})
+	rules := []model.ValidationRule{{Key: "coded", Field: "code", Op: "required_if", WhenField: "code", WhenValue: []byte(`"x"`), Message: "Code"}}
+	if _, err = s.UpdateListType(testContext, "alice", l.ID, typ.ID, typ.Version, ListTypeInput{FieldIds: []string{code.ID}, Rules: rules}); err != nil {
+		t.Fatal(err)
+	}
+	// Detaching may name the catalog type, as the other list type routes do.
+	if _, err = s.DetachContentType(testContext, "alice", l.ID, *typ.ParentID, latest(t, s, l.ID).Version); err != nil {
+		t.Fatal(err)
+	}
+	again := attachOK(t, s, l.ID, *typ.ParentID, false)
+	if again.ID != typ.ID || !slices.Equal(again.FieldIds, []string{code.ID}) || len(again.Rules) != 1 {
+		t.Fatal("customizations lost", again)
+	}
+}
+
+// A field a type hides from forms cannot become one forms must fill.
+func TestHiddenFieldsStayOptional(t *testing.T) {
+	s, _, l := fixture(t)
+	note, err := s.CreateCatalogField(testContext, "alice", CreateField{Key: "note", Label: "Note", Type: "text"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	typ := typeOK(t, s, l.ID, ContentTypeInput{Key: "memo", Name: "Memo", FieldIds: []string{note.ID}})
+	if _, err = s.UpdateListType(testContext, "alice", l.ID, typ.ID, typ.Version, ListTypeInput{HiddenFieldIds: []string{note.ID}}); err != nil {
+		t.Fatal(err)
+	}
+	required := true
+	if _, err = s.UpdateCatalogField(testContext, "alice", note.ID, note.Version, UpdateField{Required: &required}); !isValidation(err) {
+		t.Fatal("hidden field made mandatory", err)
+	}
+	withDefault := model.FieldOptions{DefaultValue: []byte(`"none"`)}
+	if _, err = s.UpdateCatalogField(testContext, "alice", note.ID, note.Version, UpdateField{Required: &required, Options: &withDefault}); err != nil {
+		t.Fatal("a default keeps a hidden field fillable", err)
+	}
+	item, err := s.Create(testContext, "alice", l.ID, CreateResource{Kind: "item", Name: "Memo", ContentTypeID: typ.ID})
+	if err != nil || item.Values["note"] != "none" {
+		t.Fatal("item with a hidden required field", item, err)
+	}
+	current, err := s.CatalogFields(testContext, "alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	i := slices.IndexFunc(current, func(d *catalog.FieldDefinition) bool { return d.ID == note.ID })
+	noDefault := model.FieldOptions{}
+	if _, err = s.UpdateCatalogField(testContext, "alice", note.ID, current[i].Version, UpdateField{Options: &noDefault}); !isValidation(err) {
+		t.Fatal("default removed from a hidden required field", err)
+	}
+}
+
+// Removing a column from a list leaves the catalog and other lists as they
+// are; the field goes once no type has it.
+func TestRemovingAColumnStaysInTheList(t *testing.T) {
+	s, w, l := fixture(t)
+	other := create(t, s, w.ID, "list", "Other", nil)
+	title, err := s.CreateCatalogField(testContext, "alice", CreateField{Key: "title", Label: "Title", Type: "text"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	code, err := s.CreateCatalogField(testContext, "alice", CreateField{Key: "code", Label: "Code", Type: "text"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err := s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "record", Name: "Record", FieldIds: []string{title.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []string{l.ID, other.ID} {
+		typ := attachOK(t, s, c, record.ID, true)
+		if _, err = s.UpdateListType(testContext, "alice", c, typ.ID, typ.Version, ListTypeInput{FieldIds: []string{code.ID}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err = s.DeleteField(testContext, "alice", l.ID, title.ID, latest(t, s, l.ID).Version); !isValidation(err) {
+		t.Fatal("inherited column removed", err)
+	}
+	if err = s.DeleteField(testContext, "alice", l.ID, code.ID, latest(t, s, l.ID).Version); err != nil {
+		t.Fatal(err)
+	}
+	has := func(c, id string) bool {
+		fields, err := s.Fields(testContext, "alice", c)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return slices.ContainsFunc(fields, func(d *catalog.FieldDefinition) bool { return d.ID == id })
+	}
+	if has(l.ID, code.ID) || !has(other.ID, code.ID) || !has(l.ID, title.ID) {
+		t.Fatal("column removal reached beyond the list")
+	}
+	if _, err = s.DAL.Catalog().Field(testContext, code.ID); err != nil {
+		t.Fatal("field another list has was deleted", err)
+	}
+	if err = s.DeleteField(testContext, "alice", other.ID, code.ID, latest(t, s, other.ID).Version); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.DAL.Catalog().Field(testContext, code.ID); !dberr.IsNotFound(err) {
+		t.Fatal("unused field kept", err)
+	}
+}
+
+// A list type stands for its catalog type in queries, so the list's items of
+// subtypes match it too.
+func TestListTypeQueriesIncludeSubtypes(t *testing.T) {
+	s, _, l := fixture(t)
+	title, err := s.CreateCatalogField(testContext, "alice", CreateField{Key: "title", Label: "Title", Type: "text", Indexed: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err := s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "record", Name: "Record", FieldIds: []string{title.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	invoice, err := s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "invoice", Name: "Invoice", ParentID: record.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	recordType := attachOK(t, s, l.ID, record.ID, true)
+	invoiceType := attachOK(t, s, l.ID, invoice.ID, false)
+	for _, typ := range []string{recordType.ID, invoiceType.ID} {
+		if _, err = s.Create(testContext, "alice", l.ID, CreateResource{Kind: "item", Name: typ, ContentTypeID: typ, Values: map[string]any{"title": "Power"}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for typ, want := range map[string]int{recordType.ID: 2, record.ID: 2, invoiceType.ID: 1} {
+		page, err := s.Query(testContext, "alice", l.ID, QueryRequest{Query: QuerySpec{ContentTypeID: typ, Filter: &FilterExpr{Field: "title", Value: []byte(`"Power"`)}}})
+		if err != nil || len(page.Data) != want {
+			t.Fatal("type query", typ, page, err)
+		}
+	}
+}
+
+// Only an unused catalog type can be deleted: no subtypes, no list types.
+func TestDeleteUnusedContentTypes(t *testing.T) {
+	s, _, l := fixture(t)
+	record, err := s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "record", Name: "Record"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	invoice, err := s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "invoice", Name: "Invoice", ParentID: record.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := s.GetContentType(testContext, "alice", *record.ParentID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.DeleteContentType(testContext, "alice", root.ID, root.Version); !isValidation(err) {
+		t.Fatal("root deleted", err)
+	}
+	if err = s.DeleteContentType(testContext, "alice", record.ID, record.Version); !isValidation(err) {
+		t.Fatal("type with a subtype deleted", err)
+	}
+	attachOK(t, s, l.ID, invoice.ID, false)
+	if err = s.DeleteContentType(testContext, "alice", invoice.ID, invoice.Version); !isValidation(err) {
+		t.Fatal("type a list uses deleted", err)
+	}
+	unused, err := s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "unused", Name: "Unused", ParentID: record.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.DeleteContentType(testContext, "alice", unused.ID, unused.Version+1); !errors.Is(err, ErrPreconditionFailed) {
+		t.Fatal("stale version", err)
+	}
+	if err = s.DeleteContentType(testContext, "alice", unused.ID, unused.Version); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.GetContentType(testContext, "alice", unused.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatal("deleted type still read", err)
+	}
+	// Its key is free again.
+	if _, err = s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "unused", Name: "Again"}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A catalog type's group is set and cleared with its name, and kept by
+// schema changes.
+func TestContentTypeGroups(t *testing.T) {
+	s, _, _ := fixture(t)
+	code, err := s.CreateCatalogField(testContext, "alice", CreateField{Key: "code", Label: "Code", Type: "text"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	typ, err := s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "invoice", Name: "Invoice", Group: "  Finance "})
+	if err != nil || typ.Group != "Finance" {
+		t.Fatal("group on creation", typ, err)
+	}
+	if _, err = s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "long", Name: "Long", Group: strings.Repeat("g", 101)}); !isValidation(err) {
+		t.Fatal("long group", err)
+	}
+	if typ, err = s.UpdateContentType(testContext, "alice", typ.ID, typ.Version, ContentTypeInput{Name: typ.Name, Group: typ.Group, FieldIds: []string{code.ID}}); err != nil || typ.Group != "Finance" {
+		t.Fatal("group kept on a schema edit", typ, err)
+	}
+	if err = s.DeleteCatalogField(testContext, "alice", code.ID, code.Version); err != nil {
+		t.Fatal(err)
+	}
+	if typ, err = s.GetContentType(testContext, "alice", typ.ID); err != nil || typ.Group != "Finance" {
+		t.Fatal("group kept when a field goes", typ, err)
+	}
+	if typ, err = s.UpdateContentType(testContext, "alice", typ.ID, typ.Version, ContentTypeInput{Name: typ.Name}); err != nil || typ.Group != "" {
+		t.Fatal("group cleared", typ, err)
+	}
+}
+
+// The New menu offers the chosen list types in order; the rest stay
+// accepted, and the default is always offered.
+func TestNewMenuOrderAndVisibility(t *testing.T) {
+	s, _, l := fixture(t)
+	invoice := typeOK(t, s, l.ID, ContentTypeInput{Key: "invoice", Name: "Invoice"})
+	memo := typeOK(t, s, l.ID, ContentTypeInput{Key: "memo", Name: "Memo"})
+	types, err := s.CollectionContentTypes(testContext, "alice", l.ID)
+	if err != nil || len(types) != 3 || types[1].ID != invoice.ID || types[2].ID != memo.ID {
+		t.Fatal("attached types come last", types, err)
+	}
+	item := types[0]
+	if _, err = s.SetNewMenu(testContext, "alice", l.ID, latest(t, s, l.ID).Version, NewMenuInput{ContentTypeIDs: []string{memo.ID}}); !isValidation(err) {
+		t.Fatal("default left out of the menu", err)
+	}
+	if _, err = s.SetNewMenu(testContext, "alice", l.ID, latest(t, s, l.ID).Version, NewMenuInput{ContentTypeIDs: []string{memo.ID, memo.ID, item.ID}}); !isValidation(err) {
+		t.Fatal("type listed twice", err)
+	}
+	// A catalog type id stands for the list type copying it.
+	version := latest(t, s, l.ID).Version
+	if types, err = s.SetNewMenu(testContext, "alice", l.ID, version, NewMenuInput{ContentTypeIDs: []string{*memo.ParentID, item.ID}}); err != nil {
+		t.Fatal(err)
+	}
+	if len(types) != 3 || types[0].ID != memo.ID || types[1].ID != item.ID || types[2].ID != invoice.ID || types[2].InNewMenu || !types[0].InNewMenu {
+		t.Fatal("menu order", types)
+	}
+	if latest(t, s, l.ID).Version != version+1 {
+		t.Fatal("collection version unchanged")
+	}
+	// A type left out of the menu is still accepted, and becomes offered as
+	// the default.
+	if _, err = s.Create(testContext, "alice", l.ID, CreateResource{Kind: "item", Name: "Bill", ContentTypeID: invoice.ID}); err != nil {
+		t.Fatal(err)
+	}
+	attachOK(t, s, l.ID, *invoice.ParentID, true)
+	if types, err = s.CollectionContentTypes(testContext, "alice", l.ID); err != nil || !slices.ContainsFunc(types, func(typ *catalog.ContentType) bool { return typ.ID == invoice.ID && typ.InNewMenu && typ.IsDefault }) {
+		t.Fatal("default offered", types, err)
+	}
+}
+
+// Types decide per field whether it is required and its default, and order
+// their fields, without changing the shared field or other types.
+func TestPerTypeFieldSettingsAndOrder(t *testing.T) {
+	s, w, l := fixture(t)
+	amount, err := s.CreateCatalogField(testContext, "alice", CreateField{Key: "amount", Label: "Amount", Type: "integer"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	note, err := s.CreateCatalogField(testContext, "alice", CreateField{Key: "note", Label: "Note", Type: "text"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	required := true
+	record, err := s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "record", Name: "Record", FieldIds: []string{amount.ID, note.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "bad", Name: "Bad", ParentID: record.ID, FieldSettings: []catalog.FieldSetting{{FieldID: amount.ID, DefaultValue: []byte(`"many"`)}}}); !isValidation(err) {
+		t.Fatal("default of the wrong type", err)
+	}
+	invoice, err := s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "invoice", Name: "Invoice", ParentID: record.ID, FieldSettings: []catalog.FieldSetting{{FieldID: amount.ID, Required: &required}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	quote, err := s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "quote", Name: "Quote", ParentID: record.ID, FieldOrder: []string{note.ID, amount.ID},
+		FieldSettings: []catalog.FieldSetting{{FieldID: amount.ID, Required: &required, DefaultValue: []byte(`7`)}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(quote.Effective.FieldIds, []string{note.ID, amount.ID}) || !slices.Equal(invoice.Effective.FieldIds, []string{amount.ID, note.ID}) {
+		t.Fatal("field order", quote.Effective.FieldIds, invoice.Effective.FieldIds)
+	}
+	invoiceType := attachOK(t, s, l.ID, invoice.ID, true)
+	attachOK(t, s, l.ID, quote.ID, false)
+	if _, err = s.Create(testContext, "alice", l.ID, CreateResource{Kind: "item", Name: "Bill", ContentTypeID: invoice.ID}); !isValidation(err) {
+		t.Fatal("invoice without its required amount", err)
+	}
+	if _, err = s.Create(testContext, "alice", l.ID, CreateResource{Kind: "item", Name: "Bill", ContentTypeID: invoice.ID, Values: map[string]any{"amount": json.Number("3")}}); err != nil {
+		t.Fatal(err)
+	}
+	offer, err := s.Create(testContext, "alice", l.ID, CreateResource{Kind: "item", Name: "Offer", ContentTypeID: quote.ID})
+	if err != nil || offer.Values["amount"] != json.Number("7") {
+		t.Fatal("quote default", offer, err)
+	}
+	// The field itself stays optional elsewhere.
+	other := create(t, s, w.ID, "list", "Records", nil)
+	attachOK(t, s, other.ID, record.ID, true)
+	if _, err = s.Create(testContext, "alice", other.ID, CreateResource{Kind: "item", Name: "Plain", ContentTypeID: record.ID}); err != nil {
+		t.Fatal("record without amount", err)
+	}
+	// An invoice list hides amount only with a default it fills it with.
+	if _, err = s.UpdateListType(testContext, "alice", l.ID, invoiceType.ID, invoiceType.Version, ListTypeInput{HiddenFieldIds: []string{amount.ID}}); !isValidation(err) {
+		t.Fatal("required field hidden", err)
+	}
+	if _, err = s.UpdateListType(testContext, "alice", l.ID, invoiceType.ID, invoiceType.Version, ListTypeInput{HiddenFieldIds: []string{amount.ID},
+		FieldSettings: []catalog.FieldSetting{{FieldID: amount.ID, DefaultValue: []byte(`1`)}}}); err != nil {
+		t.Fatal(err)
+	}
+	// Making amount required for every record checks the records that lack it.
+	record, err = s.GetContentType(testContext, "alice", record.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.UpdateContentType(testContext, "alice", record.ID, record.Version, ContentTypeInput{Name: record.Name, FieldIds: record.FieldIds,
+		FieldSettings: []catalog.FieldSetting{{FieldID: amount.ID, Required: &required}}}); !isValidation(err) {
+		t.Fatal("records without amount made invalid", err)
+	}
+}
+
+// Removing a field drops it from the order and settings of the type that had
+// it.
+func TestRemovingFieldsDropsTheirOrderAndSettings(t *testing.T) {
+	s, _, l := fixture(t)
+	required := true
+	note, err := s.CreateField(testContext, "alice", l.ID, CreateField{Key: "note", Label: "Note", Type: "text"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	code, err := s.CreateField(testContext, "alice", l.ID, CreateField{Key: "code", Label: "Code", Type: "text"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	typ, err := s.contentType(testContext, l.ID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.UpdateListType(testContext, "alice", l.ID, typ.ID, typ.Version, ListTypeInput{FieldIds: typ.FieldIds, FieldOrder: []string{code.ID, note.ID},
+		FieldSettings: []catalog.FieldSetting{{FieldID: code.ID, DefaultValue: []byte(`"x"`)}, {FieldID: note.ID, Required: &required, DefaultValue: []byte(`"n"`)}}}); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.DeleteField(testContext, "alice", l.ID, code.ID, latest(t, s, l.ID).Version); err != nil {
+		t.Fatal(err)
+	}
+	if typ, err = s.contentType(testContext, l.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(typ.FieldOrder, []string{note.ID}) || len(typ.FieldSettings) != 1 || typ.FieldSettings[0].FieldID != note.ID {
+		t.Fatal("list type order and settings", typ.FieldOrder, typ.FieldSettings)
+	}
+	ref, err := s.CreateCatalogField(testContext, "alice", CreateField{Key: "ref", Label: "Ref", Type: "text"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	title, err := s.CreateCatalogField(testContext, "alice", CreateField{Key: "title2", Label: "Title", Type: "text"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err := s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "record", Name: "Record", FieldIds: []string{title.ID, ref.ID}, FieldOrder: []string{ref.ID},
+		FieldSettings: []catalog.FieldSetting{{FieldID: ref.ID, Required: &required, DefaultValue: []byte(`"r"`)}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.DeleteCatalogField(testContext, "alice", ref.ID, ref.Version); err != nil {
+		t.Fatal(err)
+	}
+	if record, err = s.GetContentType(testContext, "alice", record.ID); err != nil {
+		t.Fatal(err)
+	}
+	if len(record.FieldOrder) != 0 || len(record.FieldSettings) != 0 {
+		t.Fatal("catalog type order and settings", record.FieldOrder, record.FieldSettings)
+	}
+}
+
+// No type hides a field its settings make one forms must fill, whichever
+// type hides it.
+func TestInheritedHiddenFieldsStayOptional(t *testing.T) {
+	s, _, l := fixture(t)
+	required := true
+	x, err := s.CreateCatalogField(testContext, "alice", CreateField{Key: "x", Label: "X", Type: "text"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err := s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "record", Name: "Record", FieldIds: []string{x.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	quiet, err := s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "quiet", Name: "Quiet", ParentID: record.ID, HiddenFieldIds: []string{x.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, setting := range []catalog.FieldSetting{{FieldID: x.ID, Required: &required}, {FieldID: x.ID, Required: &required, DefaultValue: []byte(`null`)}} {
+		if _, err = s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "loud", Name: "Loud", ParentID: quiet.ID, FieldSettings: []catalog.FieldSetting{setting}}); !isValidation(err) {
+			t.Fatal("subtype makes an inherited hidden field required", err)
+		}
+	}
+	listType := attachOK(t, s, l.ID, quiet.ID, false)
+	if _, err = s.UpdateListType(testContext, "alice", l.ID, listType.ID, listType.Version, ListTypeInput{FieldSettings: []catalog.FieldSetting{{FieldID: x.ID, Required: &required}}}); !isValidation(err) {
+		t.Fatal("list type makes an inherited hidden field required", err)
+	}
+	// Hiding a field a subtype requires is rejected too.
+	middle, err := s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "middle", Name: "Middle", ParentID: record.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "strict", Name: "Strict", ParentID: middle.ID, FieldSettings: []catalog.FieldSetting{{FieldID: x.ID, Required: &required}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.UpdateContentType(testContext, "alice", middle.ID, middle.Version, ContentTypeInput{Name: middle.Name, HiddenFieldIds: []string{x.ID}}); !isValidation(err) {
+		t.Fatal("parent hides a field its subtype requires", err)
+	}
+}
+
+// A field keeps only choices the defaults content types give it allow.
+func TestFieldChangesKeepTypeDefaultsValid(t *testing.T) {
+	s, _, _ := fixture(t)
+	status, err := s.CreateCatalogField(testContext, "alice", CreateField{Key: "status", Label: "Status", Type: "choice", Choices: []string{"open", "closed"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err := s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "record", Name: "Record", FieldIds: []string{status.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "invoice", Name: "Invoice", ParentID: record.ID,
+		FieldSettings: []catalog.FieldSetting{{FieldID: status.ID, DefaultValue: []byte(`"closed"`)}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.UpdateCatalogField(testContext, "alice", status.ID, status.Version, UpdateField{Choices: &[]string{"open"}}); !isValidation(err) {
+		t.Fatal("choice a type defaults to removed", err)
+	}
+	if _, err = s.UpdateCatalogField(testContext, "alice", status.ID, status.Version, UpdateField{Choices: &[]string{"open", "closed", "void"}}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Reordering a type's fields reaches the schema snapshots of the collections
+// that accept it.
+func TestFieldOrderReachesSchemaSnapshots(t *testing.T) {
+	s, _, l := fixture(t)
+	a, err := s.CreateCatalogField(testContext, "alice", CreateField{Key: "a", Label: "A", Type: "text"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := s.CreateCatalogField(testContext, "alice", CreateField{Key: "b", Label: "B", Type: "text"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err := s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "record", Name: "Record", FieldIds: []string{a.ID, b.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	listType := attachOK(t, s, l.ID, record.ID, true)
+	keys := func() []string {
+		t.Helper()
+		c := latest(t, s, l.ID)
+		schema, err := s.DAL.Catalog().Schema(testContext, *c.SchemaHeadID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var definition SchemaDefinition
+		if err = json.Unmarshal(schema.Definition, &definition); err != nil {
+			t.Fatal(err)
+		}
+		for _, typ := range definition.ContentTypes {
+			if typ.ID == listType.ID {
+				return typ.FieldKeys
+			}
+		}
+		t.Fatal("list type missing from the snapshot")
+		return nil
+	}
+	if _, err = s.UpdateContentType(testContext, "alice", record.ID, record.Version, ContentTypeInput{Name: record.Name, FieldIds: record.FieldIds, FieldOrder: []string{b.ID}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := keys(); !slices.Equal(got, []string{"b", "a"}) {
+		t.Fatal("catalog reorder", got)
+	}
+	if listType, err = s.contentType(testContext, l.ID, listType.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.UpdateListType(testContext, "alice", l.ID, listType.ID, listType.Version, ListTypeInput{FieldOrder: []string{a.ID}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := keys(); !slices.Equal(got, []string{"a", "b"}) {
+		t.Fatal("list reorder", got)
+	}
+}

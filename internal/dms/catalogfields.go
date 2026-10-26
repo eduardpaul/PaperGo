@@ -7,6 +7,7 @@ import (
 	"papergo/internal/dal/catalog"
 	"papergo/internal/dal/dberr"
 	viewstore "papergo/internal/dal/views"
+	"slices"
 )
 
 func (s *Service) CatalogFields(ctx context.Context, subject string) ([]*catalog.FieldDefinition, error) {
@@ -120,7 +121,43 @@ func (s *Service) persistFieldDefinition(ctx context.Context, d *catalog.FieldDe
 	return s.DAL.Catalog().CreateField(ctx, *d)
 }
 
-func (s *Service) reviseFieldDefinition(ctx context.Context, prior, candidate *catalog.FieldDefinition) (*catalog.FieldDefinition, error) {
+// fieldTypes returns the content types that have a field, as their own or
+// inherited, detached list types included.
+func (s *Service) fieldTypes(ctx context.Context, id string) ([]*catalog.ContentType, error) {
+	owners, err := s.DAL.Catalog().ContentTypes(ctx, catalog.ContentTypeFilter{FieldID: id, Detached: true})
+	if err != nil || len(owners) == 0 {
+		return nil, err
+	}
+	ids := make([]string, len(owners))
+	for i, typ := range owners {
+		ids[i] = typ.ID
+	}
+	if ids, err = s.DAL.Catalog().Descendants(ctx, ids); err != nil {
+		return nil, err
+	}
+	return s.DAL.Catalog().ContentTypes(ctx, catalog.ContentTypeFilter{IDs: ids, Detached: true})
+}
+
+// checkTypeDefaults checks that the defaults the types give a field hold for
+// its definition.
+func (s *Service) checkTypeDefaults(ctx context.Context, subject string, d *catalog.FieldDefinition, types []*catalog.ContentType) error {
+	for _, typ := range types {
+		i := slices.IndexFunc(typ.FieldSettings, func(setting catalog.FieldSetting) bool { return setting.FieldID == d.ID })
+		if i < 0 || typ.FieldSettings[i].DefaultValue == nil || string(typ.FieldSettings[i].DefaultValue) == "null" {
+			continue
+		}
+		candidate := *withSetting(d, typ.Effective.Setting(d.ID))
+		if e := validateFieldDefinition(&candidate); e != nil {
+			return invalid("content type " + typ.Name + " defaults " + d.Key + ": " + e.Error())
+		}
+		if e := s.normalizeKeywordDefault(ctx, subject, &candidate); e != nil {
+			return e
+		}
+	}
+	return nil
+}
+
+func (s *Service) reviseFieldDefinition(ctx context.Context, subject string, prior, candidate *catalog.FieldDefinition) (*catalog.FieldDefinition, error) {
 	before, err := json.Marshal(prior)
 	if err != nil {
 		return nil, err
@@ -132,6 +169,22 @@ func (s *Service) reviseFieldDefinition(ctx context.Context, prior, candidate *c
 		return nil, ErrPreconditionFailed
 	}
 	if err != nil {
+		return nil, err
+	}
+	// The defaults content types give the field still hold, and no type
+	// may hide it once forms must fill it.
+	types, err := s.fieldTypes(ctx, prior.ID)
+	if err != nil {
+		return nil, err
+	}
+	if err = s.checkTypeDefaults(ctx, subject, updated, types); err != nil {
+		return nil, err
+	}
+	ids := make([]string, len(types))
+	for i, typ := range types {
+		ids[i] = typ.ID
+	}
+	if err = s.checkHiddenMandatory(ctx, ids); err != nil {
 		return nil, err
 	}
 	if err := s.trackAuditProperties(prior.ID, before, updated, "label", "required", "choices", "indexed", "options"); err != nil {

@@ -2,12 +2,17 @@ package workflow
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"papergo/internal/dal/daltest"
 	eventstore "papergo/internal/dal/events"
+	"papergo/internal/dal/resources"
+	"papergo/internal/dal/workflows"
 	"papergo/internal/dms"
 )
 
@@ -290,4 +295,131 @@ func TestTriggerSnapshotOmitsLargeValues(t *testing.T) {
 	if err != nil || len(raw) > MaxTriggerBytes {
 		t.Fatal("snapshot exceeds budget", len(raw), err)
 	}
+}
+
+// A trigger's content type matches its subtypes, in a collection or the whole
+// workspace; a list type stands for its catalog type.
+func TestContentTypeTriggersMatchSubtypes(t *testing.T) {
+	s, ws, a, b, _ := policyFixture(t)
+	ctx := t.Context()
+	record, err := s.DMS.CreateContentType(ctx, "alice", dms.ContentTypeInput{Key: "record", Name: "Record"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	invoice, err := s.DMS.CreateContentType(ctx, "alice", dms.ContentTypeInput{Key: "invoice", Name: "Invoice", ParentID: record.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	attach := func(c *resources.Resource, typ string) string {
+		t.Helper()
+		live, err := s.DMS.Get(ctx, "alice", c.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = s.DMS.AttachContentType(ctx, "alice", c.ID, live.Version, dms.AttachContentTypeInput{ContentTypeID: typ}); err != nil {
+			t.Fatal(err)
+		}
+		listType, err := s.DMS.DAL.Catalog().CollectionContentType(ctx, c.ID, typ)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return listType.ID
+	}
+	attach(a, record.ID)
+	invoicesOfA := attach(a, invoice.ID)
+	attach(b, invoice.ID)
+	save := func(name, triggers string) (Workflow, error) {
+		return s.Create(ctx, "alice", ws.ID, Save{Name: name, AutomaticEnabled: new(true), Source: source(triggers, name)})
+	}
+	anywhere, err := save("Records", `[{type:"item.created",content_type_id:"`+record.ID+`"}]`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inA, err := save("Invoices of A", `[{type:"item.created",collection_id:"`+a.ID+`",content_type_id:"`+invoicesOfA+`"}]`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := s.DMS.Create(ctx, "alice", ws.ID, dms.CreateResource{Kind: "library", Name: "Plain"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = save("Plain records", `[{type:"item.created",collection_id:"`+other.ID+`",content_type_id:"`+record.ID+`"}]`); !invalid(err) {
+		t.Fatal("type the collection does not accept", err)
+	}
+	if _, err = save("Every record", `[{type:"schedule",cron:"0 1 * * *",content_type_id:"`+record.ID+`"}]`); !invalid(err) {
+		t.Fatal("typed schedule without a collection", err)
+	}
+
+	entries := 0
+	runs := func(collection *resources.Resource, typ string) map[string]bool {
+		t.Helper()
+		entries++
+		item, err := s.DMS.Create(ctx, "alice", collection.ID, dms.CreateResource{Kind: "item", Name: fmt.Sprint("Entry ", entries), ContentTypeID: typ})
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[string]bool{}
+		for _, run := range started(t, s, triggerEvents(t, s, item.ID, dms.EventItemCreated)) {
+			out[run.WorkflowID] = true
+		}
+		return out
+	}
+	if got := runs(a, record.ID); !got[anywhere.ID] || got[inA.ID] {
+		t.Fatal("record in A", got)
+	}
+	if got := runs(a, invoice.ID); !got[anywhere.ID] || !got[inA.ID] {
+		t.Fatal("invoice in A", got)
+	}
+	if got := runs(b, invoice.ID); !got[anywhere.ID] || got[inA.ID] {
+		t.Fatal("invoice in B", got)
+	}
+	if got := runs(other, ""); got[anywhere.ID] || got[inA.ID] {
+		t.Fatal("plain item", got)
+	}
+
+	// A typed schedule starts runs for the collection's items of the type.
+	scheduled, err := save("Daily invoices", `[{type:"schedule",cron:"0 1 * * *",collection_id:"`+a.ID+`",content_type_id:"`+invoice.ID+`"}]`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := s.DMS.DAL.Workflows().Triggers(ctx, workflows.TriggerFilter{WorkflowID: scheduled.ID})
+	if err != nil || len(rows) != 1 {
+		t.Fatal(rows, err)
+	}
+	events, _, err := occurrence(ctx, s.DMS, rows[0], time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range events {
+		r, err := s.DMS.DAL.Resources().Resource(ctx, e.ResourceID)
+		if err != nil || *r.ContentTypeID != invoicesOfA {
+			t.Fatal("scheduled item of another type", r, err)
+		}
+	}
+	if len(events) != 1 {
+		t.Fatal("scheduled invoices", events)
+	}
+
+	// Scripts read the catalog key of the item's type.
+	item, err := s.DMS.Create(ctx, "alice", b.ID, dms.CreateResource{Kind: "item", Name: "Bill", ContentTypeID: invoice.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ran := started(t, s, triggerEvents(t, s, item.ID, dms.EventItemCreated))
+	op, err := s.DMS.DAL.Operations().Find(ctx, ran[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var p RunPayload
+	if err = json.Unmarshal(op.Payload, &p); err != nil {
+		t.Fatal(err)
+	}
+	if p.Trigger == nil || p.Trigger.Item.ContentTypeKey != "invoice" {
+		t.Fatalf("trigger snapshot: %+v", p.Trigger)
+	}
+}
+
+func invalid(err error) bool {
+	var v *dms.ValidationError
+	return errors.As(err, &v)
 }

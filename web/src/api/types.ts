@@ -151,14 +151,48 @@ export interface FieldDefinition {
   version?: number;
 }
 
+/** Changes, for a type and its subtypes, whether a field is required and its default; null removes an inherited default. */
+export interface FieldSetting {
+  field_id: string;
+  required?: boolean;
+  default_value?: unknown;
+}
+
+/**
+ * A catalog type, or a list type: the copy of one catalog type (parent_id)
+ * that a list or library customizes. field_ids, hidden_field_ids and rules are
+ * the type's own; effective adds everything its ancestors define.
+ */
 export interface ContentType {
   id: string;
   key: string;
   name: string;
+  /** Catalog types: the heading the catalog files the type under. */
+  group?: string;
+  /** List types: whether the New menu offers the type; the default always is. */
+  in_new_menu?: boolean;
+  parent_id?: string | null;
+  collection_id?: string | null;
+  ancestor_ids?: string[];
   field_ids?: string[] | null;
+  hidden_field_ids?: string[] | null;
+  /** The type's own form order of its fields; others follow as inherited. */
+  field_order?: string[] | null;
+  /** The type's own per-field required flags and defaults. */
+  field_settings?: FieldSetting[] | null;
+  /** field_ids are in form order; field_settings merge the lineage's, the nearest type winning. */
+  effective?: { field_ids: string[]; hidden_field_ids: string[]; rules: ValidationRule[]; field_settings?: FieldSetting[] };
   is_default?: boolean;
   version?: number;
   rules?: ValidationRule[];
+}
+
+/** A catalog type listed for search pickers (GET /v1/search/content-types). */
+export interface SearchContentType {
+  id: string;
+  key: string;
+  name: string;
+  parent_id?: string;
 }
 
 export interface ValidationRule {

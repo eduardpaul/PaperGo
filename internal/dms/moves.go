@@ -3,6 +3,7 @@ package dms
 import (
 	"context"
 	"encoding/json"
+	"papergo/internal/dal/dberr"
 	"papergo/internal/dal/refs"
 	"papergo/internal/dal/resources"
 )
@@ -62,11 +63,15 @@ func (s *Service) MoveItem(ctx context.Context, subject, id string, version int,
 		if e != nil {
 			return e
 		}
-		defs, rules, e := typedDefinitions(schema.Definition, *r.ContentTypeID)
+		// The item becomes the destination's list type of its catalog type.
+		typeID, e := t.DAL.Catalog().Counterpart(ctx, dest.ID, *r.ContentTypeID)
+		if dberr.IsNotFound(e) {
+			return invalid("the destination does not accept the item's content type")
+		}
 		if e != nil {
 			return e
 		}
-		before, e := json.Marshal(r.Values)
+		defs, rules, e := typedDefinitions(schema.Definition, typeID)
 		if e != nil {
 			return e
 		}
@@ -99,25 +104,10 @@ func (s *Service) MoveItem(ctx context.Context, subject, id string, version int,
 		if e != nil {
 			return e
 		}
-		if string(before) != string(after) {
-			if _, e = t.recordRevision(ctx, subject, out, nil, false); e != nil {
-				return e
-			}
-		} else {
-			rev, e := t.revision(ctx, *out.HeadRevisionID)
-			if e != nil {
-				return e
-			}
-			if dest.PublishingEnabled {
-				if e = t.replaceSurface(ctx, out, rev, refs.SurfaceHead, defs); e != nil {
-					return e
-				}
-			}
-			if !dest.PublishingEnabled {
-				if _, e = t.publishRevision(ctx, subject, out, rev, false, nil); e != nil {
-					return e
-				}
-			}
+		// The item takes the destination's list type, which a new head
+		// revision records with any normalized values.
+		if _, e = t.recordRevision(ctx, subject, out, nil, false); e != nil {
+			return e
 		}
 		// Explicit publications retain their frozen content and schema.
 		out, e = t.DAL.Resources().Resource(ctx, id)
@@ -142,19 +132,7 @@ func (s *Service) MoveItem(ctx context.Context, subject, id string, version int,
 				return e
 			}
 		}
-		details := map[string]any{"from_workspace_id": oldWorkspace, "from_collection_id": oldContainer, "from_parent_id": oldParent, "collection_id": dest.ID, "parent_id": parent}
-		if string(before) == string(after) {
-			details["revision_id"] = *out.HeadRevisionID
-			rev, e := t.revision(ctx, *out.HeadRevisionID)
-			if e != nil {
-				return e
-			}
-			details["revision_number"], details["content_type_id"] = rev.RevisionNumber, rev.ContentTypeID
-			if rev.BlobID != nil {
-				details["blob_id"] = *rev.BlobID
-			}
-			t.emit(ctx, EventItemUpdated, subject, out.WorkspaceID, out.ContainerID, id, details)
-		}
+		details := map[string]any{"from_workspace_id": oldWorkspace, "from_collection_id": oldContainer, "from_parent_id": oldParent, "collection_id": dest.ID, "parent_id": parent, "revision_id": *out.HeadRevisionID}
 		if e = t.audit(ctx, subject, "resource.move", out, details); e != nil {
 			return e
 		}

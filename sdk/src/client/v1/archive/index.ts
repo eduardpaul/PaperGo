@@ -48,6 +48,9 @@ export interface ArchiveRequestBuilderGetQueryParameters {
     archivedFrom?: Date;
     archivedTo?: Date;
     collectionId?: string;
+    /**
+     * A content type; matches it and every type deriving from it.
+     */
     contentTypeId?: string;
     keyword?: string;
     q?: string;

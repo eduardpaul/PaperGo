@@ -47,14 +47,14 @@ func TestRelationshipCardinalityConcurrency(t *testing.T) {
 			Name:        "Rel Lib",
 		})
 		ct, _ := s.Catalog().CreateContentType(ctx, catalog.ContentType{ID: "ct-rel", Key: "doc", Name: "Doc"})
-		_, _ = s.Catalog().Attach(ctx, lib.ID, ct.ID, true)
+		lt, _, _ := s.Catalog().Attach(ctx, lib.ID, ct.ID, true)
 
 		srcItem, _ := s.Resources().Create(ctx, resources.New{
 			ID:            "item-src",
 			WorkspaceID:   ws.ID,
 			ParentID:      lib.ID,
 			ContainerID:   lib.ID,
-			ContentTypeID: ct.ID,
+			ContentTypeID: lt.ID,
 			Kind:          refs.KindItem,
 			Name:          "Source",
 		})
@@ -63,7 +63,7 @@ func TestRelationshipCardinalityConcurrency(t *testing.T) {
 			WorkspaceID:   ws.ID,
 			ParentID:      lib.ID,
 			ContainerID:   lib.ID,
-			ContentTypeID: ct.ID,
+			ContentTypeID: lt.ID,
 			Kind:          refs.KindItem,
 			Name:          "Target 1",
 		})
@@ -72,7 +72,7 @@ func TestRelationshipCardinalityConcurrency(t *testing.T) {
 			WorkspaceID:   ws.ID,
 			ParentID:      lib.ID,
 			ContainerID:   lib.ID,
-			ContentTypeID: ct.ID,
+			ContentTypeID: lt.ID,
 			Kind:          refs.KindItem,
 			Name:          "Target 2",
 		})

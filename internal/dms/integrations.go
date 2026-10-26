@@ -450,5 +450,5 @@ func (s *Service) eventType(ctx context.Context, list string) (*catalog.ContentT
 	if err != nil {
 		return nil, err
 	}
-	return s.contentType(ctx, list, typ.ID)
+	return s.listType(ctx, list, typ.ID)
 }

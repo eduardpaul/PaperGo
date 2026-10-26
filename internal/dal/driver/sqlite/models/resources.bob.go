@@ -84,7 +84,6 @@ type resourceR struct {
 	ItemBlobs                     BlobSlice            // fk_blobs_0
 	ItemBusinessKeys              BusinessKeySlice     // fk_business_keys_0
 	ContainerBusinessKeys         BusinessKeySlice     // fk_business_keys_1
-	ContainerCollectionTypes      CollectionTypeSlice  // fk_collection_types_1
 	ItemComments                  CommentSlice         // fk_comments_2
 	ItemFieldValues               FieldValueSlice      // fk_field_values_0
 	ContainerFieldValues          FieldValueSlice      // fk_field_values_1
@@ -150,7 +149,6 @@ type resourceRLoaded struct {
 	ItemBlobs                     bool // fk_blobs_0
 	ItemBusinessKeys              bool // fk_business_keys_0
 	ContainerBusinessKeys         bool // fk_business_keys_1
-	ContainerCollectionTypes      bool // fk_collection_types_1
 	ItemComments                  bool // fk_comments_2
 	ItemFieldValues               bool // fk_field_values_0
 	ContainerFieldValues          bool // fk_field_values_1
@@ -1560,25 +1558,6 @@ func (os ResourceSlice) ContainerBusinessKeys(mods ...bob.Mod[*dialect.SelectQue
 	)...)
 }
 
-// ContainerCollectionTypes starts a query for related objects on collection_types
-func (o *Resource) ContainerCollectionTypes(mods ...bob.Mod[*dialect.SelectQuery]) CollectionTypesQuery {
-	return CollectionTypes.Query(append(mods,
-		sm.Where(CollectionTypes.Columns.ContainerID.EQ(sqlite.Arg(o.ID))),
-	)...)
-}
-
-func (os ResourceSlice) ContainerCollectionTypes(mods ...bob.Mod[*dialect.SelectQuery]) CollectionTypesQuery {
-	PKArgSlice := make([]bob.Expression, len(os))
-	for i, o := range os {
-		PKArgSlice[i] = sqlite.ArgGroup(o.ID)
-	}
-	PKArgExpr := sqlite.Group(PKArgSlice...)
-
-	return CollectionTypes.Query(append(mods,
-		sm.Where(sqlite.Group(CollectionTypes.Columns.ContainerID).OP("IN", PKArgExpr)),
-	)...)
-}
-
 // ItemComments starts a query for related objects on comments
 func (o *Resource) ItemComments(mods ...bob.Mod[*dialect.SelectQuery]) CommentsQuery {
 	return Comments.Query(append(mods,
@@ -2873,67 +2852,6 @@ func (resource0 *Resource) AttachContainerBusinessKeys(ctx context.Context, exec
 	}
 
 	resource0.R.ContainerBusinessKeys = append(resource0.R.ContainerBusinessKeys, businessKeys1...)
-
-	return nil
-}
-
-func insertResourceContainerCollectionTypes0(ctx context.Context, exec bob.Executor, collectionTypes1 []*CollectionTypeSetter, resource0 *Resource) (CollectionTypeSlice, error) {
-	for i := range collectionTypes1 {
-		collectionTypes1[i].ContainerID = omit.From(resource0.ID)
-	}
-
-	ret, err := CollectionTypes.Insert(bob.ToMods(collectionTypes1...)).All(ctx, exec)
-	if err != nil {
-		return ret, fmt.Errorf("insertResourceContainerCollectionTypes0: %w", err)
-	}
-
-	return ret, nil
-}
-
-func attachResourceContainerCollectionTypes0(ctx context.Context, exec bob.Executor, count int, collectionTypes1 CollectionTypeSlice, resource0 *Resource) (CollectionTypeSlice, error) {
-	setter := &CollectionTypeSetter{
-		ContainerID: omit.From(resource0.ID),
-	}
-
-	err := collectionTypes1.UpdateAll(ctx, exec, *setter)
-	if err != nil {
-		return nil, fmt.Errorf("attachResourceContainerCollectionTypes0: %w", err)
-	}
-
-	return collectionTypes1, nil
-}
-
-func (resource0 *Resource) InsertContainerCollectionTypes(ctx context.Context, exec bob.Executor, related ...*CollectionTypeSetter) error {
-	if len(related) == 0 {
-		return nil
-	}
-
-	var err error
-
-	collectionTypes1, err := insertResourceContainerCollectionTypes0(ctx, exec, related, resource0)
-	if err != nil {
-		return err
-	}
-
-	resource0.R.ContainerCollectionTypes = append(resource0.R.ContainerCollectionTypes, collectionTypes1...)
-
-	return nil
-}
-
-func (resource0 *Resource) AttachContainerCollectionTypes(ctx context.Context, exec bob.Executor, related ...*CollectionType) error {
-	if len(related) == 0 {
-		return nil
-	}
-
-	var err error
-	collectionTypes1 := CollectionTypeSlice(related)
-
-	_, err = attachResourceContainerCollectionTypes0(ctx, exec, len(related), collectionTypes1, resource0)
-	if err != nil {
-		return err
-	}
-
-	resource0.R.ContainerCollectionTypes = append(resource0.R.ContainerCollectionTypes, collectionTypes1...)
 
 	return nil
 }
@@ -6123,20 +6041,6 @@ func (w resourceWhereR[Q]) HasContainerBusinessKeys(filters ...bob.Mod[*dialect.
 		sm.Columns(sqlite.Raw("1")),
 		sm.From(BusinessKeys.NameExpr()),
 		sm.Where(BusinessKeys.Columns.ContainerID.EQ(w.cols.ID)),
-	)
-	q.Apply(filters...)
-	return mods.Where[Q]{E: sqlite.Exists(q)}
-}
-
-// HasContainerCollectionTypes filters parents that have a matching ContainerCollectionTypes using a
-// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
-// multiply parent rows, so no DISTINCT is needed. The optional filters are
-// applied to the subquery (i.e. to CollectionTypes).
-func (w resourceWhereR[Q]) HasContainerCollectionTypes(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
-	q := sqlite.Select(
-		sm.Columns(sqlite.Raw("1")),
-		sm.From(CollectionTypes.NameExpr()),
-		sm.Where(CollectionTypes.Columns.ContainerID.EQ(w.cols.ID)),
 	)
 	q.Apply(filters...)
 	return mods.Where[Q]{E: sqlite.Exists(q)}

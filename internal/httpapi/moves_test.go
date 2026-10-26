@@ -23,7 +23,8 @@ func TestMoveItemHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, err := s.Create(ctx, "alice", w.ID, dms.CreateResource{Kind: "list", Name: "D", ContentTypeIDs: []string{*i.ContentTypeID}})
+	// Both lists accept Item, each through a list type of its own.
+	d, err := s.Create(ctx, "alice", w.ID, dms.CreateResource{Kind: "list", Name: "D"})
 	if err != nil {
 		t.Fatal(err)
 	}

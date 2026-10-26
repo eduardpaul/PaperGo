@@ -9,7 +9,7 @@ import { createUntypedNodeFromDiscriminatorValue, type AdditionalDataHolder, typ
  */
 export interface ApplyTemplateInput extends Parsable {
     /**
-     * Collection content type ID. Omission selects the collection default.
+     * A list type of the collection, or the catalog type it copies. Omission selects the collection default.
      */
     contentTypeId?: Guid | null;
     /**
@@ -43,7 +43,7 @@ export interface ArchiveEntry extends AdditionalDataHolder, Parsable {
      */
     containerId?: Guid | null;
     /**
-     * Items and folders: an attached collection content type. Creation selects the default when omitted. PATCH changes type, keeps shared fields and removes fields absent from the destination type. Folder required fields and creation defaults do not apply.
+     * Items and folders: a list type of the collection. Writes may name the catalog type it copies instead. Creation selects the default when omitted. PATCH changes type, keeps shared fields and removes fields absent from the destination type. Folder required fields and creation defaults do not apply.
      */
     contentTypeId?: Guid | null;
     /**
@@ -227,11 +227,11 @@ export interface Artifact_sources extends AdditionalDataHolder, Parsable {
     itemId?: string | null;
 }
 /**
- * Attach the organization definition by ID without copying. At most 32 types per collection. Selecting a default affects only this collection. Conflicting field keys are rejected; types that share a key must reference the same catalog field ID.
+ * Makes the collection accept a catalog type through a list type of its own, which inherits the type's fields and rules. Attaching a type the collection accepted before restores its list type and customizations. At most 32 types per collection. Selecting a default affects only this collection. Conflicting field keys are rejected; types that share a key must reference the same catalog field ID.
  */
 export interface AttachContentTypeInput extends Parsable {
     /**
-     * The content_type_id property
+     * A catalog type.
      */
     contentTypeId?: Guid | null;
     /**
@@ -359,7 +359,7 @@ export interface Blob extends AdditionalDataHolder, Parsable {
 export type Blob_content_type = (typeof Blob_content_typeObject)[keyof typeof Blob_content_typeObject];
 export interface BulkCreate extends Parsable {
     /**
-     * Collection content type ID. Omission selects the collection default.
+     * A list type of the collection, or the catalog type it copies. Omission selects the collection default.
      */
     contentTypeId?: Guid | null;
     /**
@@ -509,7 +509,7 @@ export interface BulkResult extends Parsable {
 export type BulkResult_action = (typeof BulkResult_actionObject)[keyof typeof BulkResult_actionObject];
 export interface BulkUpdate extends Parsable {
     /**
-     * Attached destination content type. Items only. Prunes unrelated fields, enforces required fields/rules, retains file content and creates a revision. Creation defaults are not applied.
+     * Destination list type of the collection, or the catalog type it copies. Items only. Prunes unrelated fields, enforces required fields/rules, retains file content and creates a revision. Creation defaults are not applied.
      */
     contentTypeId?: Guid | null;
     /**
@@ -627,12 +627,6 @@ export interface ChunkText extends Parsable {
 }
 export type ChunkText_chunker = (typeof ChunkText_chunkerObject)[keyof typeof ChunkText_chunkerObject];
 export type ChunkText_kind = (typeof ChunkText_kindObject)[keyof typeof ChunkText_kindObject];
-export interface CollectionContentType extends ContentType, Parsable {
-    /**
-     * Default only for this collection.
-     */
-    isDefault?: boolean | null;
-}
 export interface CollectionTemplate extends AdditionalDataHolder, Parsable {
     /**
      * The allow_folders property
@@ -955,29 +949,72 @@ export interface ComposePDF extends Parsable {
      */
     targetHeight?: number | null;
 }
+/**
+ * A catalog type belongs to the organization; a list type (collection_id set) is the copy of one catalog type that a list or library customizes and items use. Every type but the root Item derives from a parent and has every field, hidden field and rule of its ancestors.
+ */
 export interface ContentType extends AdditionalDataHolder, Parsable {
+    /**
+     * Ancestors, nearest first.
+     */
+    ancestorIds?: Guid[] | null;
+    /**
+     * The list or library of a list type; null for catalog types.
+     */
+    collectionId?: Guid | null;
     /**
      * The created_at property
      */
     createdAt?: Date | null;
     /**
-     * Organization field IDs. Each key must be unique within the content type. Definitions remain live in every attached collection.
+     * What the type and its ancestors define together: fields in form order, hidden fields, rules, and field settings merged with the nearest type winning.
+     */
+    effective?: ContentType_effective | null;
+    /**
+     * The type's own field IDs; ancestors' fields are in effective.
      */
     fieldIds?: Guid[] | null;
+    /**
+     * The type's fields, own or inherited, in the order forms show them; fields it leaves out follow in the order the type inherits. Applies after the ancestors' order.
+     */
+    fieldOrder?: Guid[] | null;
+    /**
+     * The type's own field settings, at most one per field of the type.
+     */
+    fieldSettings?: FieldSetting[] | null;
+    /**
+     * Catalog types: the heading the catalog files the type under, such as Finance. List types have none.
+     */
+    group?: string | null;
+    /**
+     * Inherited fields that forms leave out. They stay part of the type.
+     */
+    hiddenFieldIds?: Guid[] | null;
     /**
      * The id property
      */
     id?: Guid | null;
     /**
+     * List types: whether the New menu offers the type when people create items. The default always is; the others stay accepted for moves, API writes and type changes.
+     */
+    inNewMenu?: boolean | null;
+    /**
+     * List types: the type new items of the collection get.
+     */
+    isDefault?: boolean | null;
+    /**
      * The key property
      */
     key?: string | null;
     /**
-     * The name property
+     * A list type shows the name of its catalog type.
      */
     name?: string | null;
     /**
-     * The rules property
+     * The catalog type this one derives from; it never changes. Only the root Item type has none.
+     */
+    parentId?: Guid | null;
+    /**
+     * The type's own rules; ancestors' rules are in effective.
      */
     rules?: (ValidationRuleMember1 | ValidationRuleMember2)[] | null;
     /**
@@ -994,15 +1031,52 @@ export interface ContentType extends AdditionalDataHolder, Parsable {
     version?: number | null;
 }
 /**
- * Organization catalog definition. Replacement validates all attached collections and advances their schema revisions atomically. Requires contentType.manage, independently of workspace membership.
+ * What the type and its ancestors define together: fields in form order, hidden fields, rules, and field settings merged with the nearest type winning.
  */
-export interface ContentTypeInput extends Parsable {
+export interface ContentType_effective extends AdditionalDataHolder, Parsable {
     /**
-     * Organization field IDs. Each key must be unique within the content type. Definitions remain live in every attached collection.
+     * The field_ids property
      */
     fieldIds?: Guid[] | null;
     /**
-     * Required for creation, immutable. May be omitted for replacement.
+     * The field_settings property
+     */
+    fieldSettings?: FieldSetting[] | null;
+    /**
+     * The hidden_field_ids property
+     */
+    hiddenFieldIds?: Guid[] | null;
+    /**
+     * The rules property
+     */
+    rules?: (ValidationRuleMember1 | ValidationRuleMember2)[] | null;
+}
+/**
+ * Organization catalog type. A new type derives from parent_id, or Item when it is omitted. Replacement validates every subtype and attached collection and advances their schema revisions atomically. Requires contentType.manage, independently of workspace membership.
+ */
+export interface ContentTypeInput extends Parsable {
+    /**
+     * The type's own field IDs, none of them inherited. Every key of the type and its ancestors is unique.
+     */
+    fieldIds?: Guid[] | null;
+    /**
+     * The type's fields, own or inherited, in the order forms show them; fields it leaves out follow in the order the type inherits. Applies after the ancestors' order.
+     */
+    fieldOrder?: Guid[] | null;
+    /**
+     * The type's own field settings, at most one per field of the type.
+     */
+    fieldSettings?: FieldSetting[] | null;
+    /**
+     * Heading the catalog files the type under; empty or omitted is none. Replacement sets it like the name.
+     */
+    group?: string | null;
+    /**
+     * Inherited fields that forms leave out. A required field without a default cannot be hidden.
+     */
+    hiddenFieldIds?: Guid[] | null;
+    /**
+     * Required for creation, immutable. May be omitted for replacement. The key is unique in the catalog; item and the keys of registered template types are reserved.
      */
     key?: string | null;
     /**
@@ -1010,7 +1084,11 @@ export interface ContentTypeInput extends Parsable {
      */
     name?: string | null;
     /**
-     * The rules property
+     * Creation: the catalog type to derive from; Item when omitted. A catalog type has at most 7 ancestors. Replacement may repeat it; it never changes.
+     */
+    parentId?: Guid | null;
+    /**
+     * The type's own rules. Their keys differ from inherited rules; together at most 32.
      */
     rules?: (ValidationRuleMember1 | ValidationRuleMember2)[] | null;
 }
@@ -1322,15 +1400,6 @@ export function createChunkTextFromDiscriminatorValue(parseNode: ParseNode | und
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
- * @returns {CollectionContentType}
- */
-// @ts-ignore
-export function createCollectionContentTypeFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
-    return deserializeIntoCollectionContentType;
-}
-/**
- * Creates a new instance of the appropriate class based on discriminator value
- * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {CollectionTemplate}
  */
 // @ts-ignore
@@ -1480,6 +1549,15 @@ export function createCompletionRequestFromDiscriminatorValue(parseNode: ParseNo
 // @ts-ignore
 export function createComposePDFFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoComposePDF;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {ContentType_effective}
+ */
+// @ts-ignore
+export function createContentType_effectiveFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoContentType_effective;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -1703,7 +1781,7 @@ export interface CreateField extends Parsable {
      */
     choices?: string[] | null;
     /**
-     * Collection content type ID. Omission selects the collection default.
+     * A list type of the collection, or the catalog type it copies. Omission selects the collection default.
      */
     contentTypeId?: Guid | null;
     /**
@@ -1753,6 +1831,15 @@ export function createFieldDefinitionFromDiscriminatorValue(parseNode: ParseNode
 // @ts-ignore
 export function createFieldOptionsFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoFieldOptions;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {FieldSetting}
+ */
+// @ts-ignore
+export function createFieldSettingFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoFieldSetting;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -1951,6 +2038,15 @@ export function createListIntegrationFromDiscriminatorValue(parseNode: ParseNode
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {ListTypeInput}
+ */
+// @ts-ignore
+export function createListTypeInputFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoListTypeInput;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {ListView}
  */
 // @ts-ignore
@@ -2064,6 +2160,15 @@ export function createNavigationRequestFromDiscriminatorValue(parseNode: ParseNo
 // @ts-ignore
 export function createNavigationSelectionFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoNavigationSelection;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {NewMenuInput}
+ */
+// @ts-ignore
+export function createNewMenuInputFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoNewMenuInput;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -2478,7 +2583,7 @@ export interface CreateResource extends Parsable {
      */
     allowFolders?: boolean | null;
     /**
-     * Items and folders: an attached collection content type. Creation selects the default when omitted. PATCH changes type, keeps shared fields and removes fields absent from the destination type. Folder required fields and creation defaults do not apply.
+     * Items and folders: a list type of the collection. Writes may name the catalog type it copies instead. Creation selects the default when omitted. PATCH changes type, keeps shared fields and removes fields absent from the destination type. Folder required fields and creation defaults do not apply.
      */
     contentTypeId?: Guid | null;
     /**
@@ -4021,18 +4126,6 @@ export function deserializeIntoChunkText(chunkText: Partial<ChunkText> | undefin
 }
 /**
  * The deserialization information for the current model
- * @param CollectionContentType The instance to deserialize into.
- * @returns {Record<string, (node: ParseNode) => void>}
- */
-// @ts-ignore
-export function deserializeIntoCollectionContentType(collectionContentType: Partial<CollectionContentType> | undefined = {}) : Record<string, (node: ParseNode) => void> {
-    return {
-        ...deserializeIntoContentType(collectionContentType),
-        "is_default": n => { collectionContentType.isDefault = n.getBooleanValue(); },
-    }
-}
-/**
- * The deserialization information for the current model
  * @param CollectionTemplate The instance to deserialize into.
  * @returns {Record<string, (node: ParseNode) => void>}
  */
@@ -4277,15 +4370,39 @@ export function deserializeIntoComposePDF(composePDF: Partial<ComposePDF> | unde
 // @ts-ignore
 export function deserializeIntoContentType(contentType: Partial<ContentType> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
+        "ancestor_ids": n => { contentType.ancestorIds = n.getCollectionOfPrimitiveValues<Guid>("string"); },
+        "collection_id": n => { contentType.collectionId = n.getGuidValue(); },
         "created_at": n => { contentType.createdAt = n.getDateValue(); },
+        "effective": n => { contentType.effective = n.getObjectValue<ContentType_effective>(createContentType_effectiveFromDiscriminatorValue); },
         "field_ids": n => { contentType.fieldIds = n.getCollectionOfPrimitiveValues<Guid>("string"); },
+        "field_order": n => { contentType.fieldOrder = n.getCollectionOfPrimitiveValues<Guid>("string"); },
+        "field_settings": n => { contentType.fieldSettings = n.getCollectionOfObjectValues<FieldSetting>(createFieldSettingFromDiscriminatorValue); },
+        "group": n => { contentType.group = n.getStringValue(); },
+        "hidden_field_ids": n => { contentType.hiddenFieldIds = n.getCollectionOfPrimitiveValues<Guid>("string"); },
         "id": n => { contentType.id = n.getGuidValue(); },
+        "in_new_menu": n => { contentType.inNewMenu = n.getBooleanValue(); },
+        "is_default": n => { contentType.isDefault = n.getBooleanValue(); },
         "key": n => { contentType.key = n.getStringValue(); },
         "name": n => { contentType.name = n.getStringValue(); },
+        "parent_id": n => { contentType.parentId = n.getGuidValue(); },
         "rules": n => { contentType.rules = n.getCollectionOfObjectValues<ValidationRuleMember1>(createValidationRuleMember1FromDiscriminatorValue) ?? n.getCollectionOfObjectValues<ValidationRuleMember2>(createValidationRuleMember2FromDiscriminatorValue); },
         "template_key": n => { contentType.templateKey = n.getStringValue(); },
         "updated_at": n => { contentType.updatedAt = n.getDateValue(); },
         "version": n => { contentType.version = n.getNumberValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param ContentType_effective The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoContentType_effective(contentType_effective: Partial<ContentType_effective> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "field_ids": n => { contentType_effective.fieldIds = n.getCollectionOfPrimitiveValues<Guid>("string"); },
+        "field_settings": n => { contentType_effective.fieldSettings = n.getCollectionOfObjectValues<FieldSetting>(createFieldSettingFromDiscriminatorValue); },
+        "hidden_field_ids": n => { contentType_effective.hiddenFieldIds = n.getCollectionOfPrimitiveValues<Guid>("string"); },
+        "rules": n => { contentType_effective.rules = n.getCollectionOfObjectValues<ValidationRuleMember1>(createValidationRuleMember1FromDiscriminatorValue) ?? n.getCollectionOfObjectValues<ValidationRuleMember2>(createValidationRuleMember2FromDiscriminatorValue); },
     }
 }
 /**
@@ -4297,8 +4414,13 @@ export function deserializeIntoContentType(contentType: Partial<ContentType> | u
 export function deserializeIntoContentTypeInput(contentTypeInput: Partial<ContentTypeInput> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
         "field_ids": n => { contentTypeInput.fieldIds = n.getCollectionOfPrimitiveValues<Guid>("string"); },
+        "field_order": n => { contentTypeInput.fieldOrder = n.getCollectionOfPrimitiveValues<Guid>("string"); },
+        "field_settings": n => { contentTypeInput.fieldSettings = n.getCollectionOfObjectValues<FieldSetting>(createFieldSettingFromDiscriminatorValue); },
+        "group": n => { contentTypeInput.group = n.getStringValue(); },
+        "hidden_field_ids": n => { contentTypeInput.hiddenFieldIds = n.getCollectionOfPrimitiveValues<Guid>("string"); },
         "key": n => { contentTypeInput.key = n.getStringValue(); },
         "name": n => { contentTypeInput.name = n.getStringValue(); },
+        "parent_id": n => { contentTypeInput.parentId = n.getGuidValue(); },
         "rules": n => { contentTypeInput.rules = n.getCollectionOfObjectValues<ValidationRuleMember1>(createValidationRuleMember1FromDiscriminatorValue) ?? n.getCollectionOfObjectValues<ValidationRuleMember2>(createValidationRuleMember2FromDiscriminatorValue); },
     }
 }
@@ -4646,6 +4768,19 @@ export function deserializeIntoFieldOptions(fieldOptions: Partial<FieldOptions> 
 }
 /**
  * The deserialization information for the current model
+ * @param FieldSetting The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoFieldSetting(fieldSetting: Partial<FieldSetting> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "default_value": n => { fieldSetting.defaultValue = n.getObjectValue<UntypedNode>(createUntypedNodeFromDiscriminatorValue); },
+        "field_id": n => { fieldSetting.fieldId = n.getGuidValue(); },
+        "required": n => { fieldSetting.required = n.getBooleanValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
  * @param FileSummary The instance to deserialize into.
  * @returns {Record<string, (node: ParseNode) => void>}
  */
@@ -4931,6 +5066,21 @@ export function deserializeIntoListIntegration(listIntegration: Partial<ListInte
 }
 /**
  * The deserialization information for the current model
+ * @param ListTypeInput The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoListTypeInput(listTypeInput: Partial<ListTypeInput> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "field_ids": n => { listTypeInput.fieldIds = n.getCollectionOfPrimitiveValues<Guid>("string"); },
+        "field_order": n => { listTypeInput.fieldOrder = n.getCollectionOfPrimitiveValues<Guid>("string"); },
+        "field_settings": n => { listTypeInput.fieldSettings = n.getCollectionOfObjectValues<FieldSetting>(createFieldSettingFromDiscriminatorValue); },
+        "hidden_field_ids": n => { listTypeInput.hiddenFieldIds = n.getCollectionOfPrimitiveValues<Guid>("string"); },
+        "rules": n => { listTypeInput.rules = n.getCollectionOfObjectValues<ValidationRuleMember1>(createValidationRuleMember1FromDiscriminatorValue) ?? n.getCollectionOfObjectValues<ValidationRuleMember2>(createValidationRuleMember2FromDiscriminatorValue); },
+    }
+}
+/**
+ * The deserialization information for the current model
  * @param ListView The instance to deserialize into.
  * @returns {Record<string, (node: ParseNode) => void>}
  */
@@ -5105,6 +5255,17 @@ export function deserializeIntoNavigationSelection(navigationSelection: Partial<
         "field": n => { navigationSelection.field = n.getStringValue(); },
         "no_value": n => { navigationSelection.noValue = n.getBooleanValue(); },
         "term_id": n => { navigationSelection.termId = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param NewMenuInput The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoNewMenuInput(newMenuInput: Partial<NewMenuInput> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "content_type_ids": n => { newMenuInput.contentTypeIds = n.getCollectionOfPrimitiveValues<Guid>("string"); },
     }
 }
 /**
@@ -7218,7 +7379,7 @@ export function deserializeIntoWorkspaceRelationshipView(workspaceRelationshipVi
 }
 export interface DocumentMetadata extends Parsable {
     /**
-     * An attached library content type; defaults to the library default.
+     * A list type of the library, or the catalog type it copies; defaults to the library default.
      */
     contentTypeId?: Guid | null;
     /**
@@ -7386,6 +7547,23 @@ export interface FieldOptions extends Parsable {
 }
 export type FieldOptions_search_weight = (typeof FieldOptions_search_weightObject)[keyof typeof FieldOptions_search_weightObject];
 /**
+ * Changes, for a content type and its subtypes, whether one of its fields is required and its default. Omitted properties keep what the field or an ancestor says; the nearest type's setting wins.
+ */
+export interface FieldSetting extends Parsable {
+    /**
+     * Default for new items of the type, valid for the field like the field's own default; JSON null removes an inherited default.
+     */
+    defaultValue?: UntypedNode | null;
+    /**
+     * The field_id property
+     */
+    fieldId?: Guid | null;
+    /**
+     * Whether items of the type must hold a value (or get the default).
+     */
+    required?: boolean | null;
+}
+/**
  * The file of an item's selected revision: the one the caller reads (the draft for draft readers, otherwise the published file).
  */
 export interface FileSummary extends AdditionalDataHolder, Parsable {
@@ -7458,7 +7636,7 @@ export type FileVersion_availability = (typeof FileVersion_availabilityObject)[k
  */
 export interface FilteredBulkUpdate extends Parsable {
     /**
-     * Attached destination content type. Items only. Prunes unrelated fields, enforces required fields/rules, retains file content and creates a revision. Creation defaults are not applied.
+     * Destination list type of the collection, or the catalog type it copies. Items only. Prunes unrelated fields, enforces required fields/rules, retains file content and creates a revision. Creation defaults are not applied.
      */
     contentTypeId?: Guid | null;
     /**
@@ -7822,6 +8000,31 @@ export interface ListIntegration extends Parsable {
     version?: number | null;
 }
 export type ListIntegration_kind = (typeof ListIntegration_kindObject)[keyof typeof ListIntegration_kindObject];
+/**
+ * Customizes a collection's list type. Its catalog type's fields, hidden fields and rules stay; a list type adds its own and hides inherited ones.
+ */
+export interface ListTypeInput extends Parsable {
+    /**
+     * The list type's own field IDs, none of them inherited.
+     */
+    fieldIds?: Guid[] | null;
+    /**
+     * The type's fields, own or inherited, in the order forms show them; fields it leaves out follow in the order the type inherits. Applies after the ancestors' order.
+     */
+    fieldOrder?: Guid[] | null;
+    /**
+     * The type's own field settings, at most one per field of the type.
+     */
+    fieldSettings?: FieldSetting[] | null;
+    /**
+     * Inherited fields that forms leave out. A required field without a default cannot be hidden.
+     */
+    hiddenFieldIds?: Guid[] | null;
+    /**
+     * The list type's own rules; keys differ from inherited rules.
+     */
+    rules?: (ValidationRuleMember1 | ValidationRuleMember2)[] | null;
+}
 export interface ListView extends Parsable {
     /**
      * The columns property
@@ -8043,6 +8246,12 @@ export interface NavigationSelection extends Parsable {
      * A term of the field's term set: the items the view shows at it.
      */
     termId?: string | null;
+}
+export interface NewMenuInput extends Parsable {
+    /**
+     * The list types the New menu offers, in order, each by its own id or the catalog type it copies. It must include the default.
+     */
+    contentTypeIds?: Guid[] | null;
 }
 export interface NotificationSend extends Parsable {
     /**
@@ -8685,7 +8894,7 @@ export interface QuerySpec extends Parsable {
      */
     archive?: ArchiveSelection | null;
     /**
-     * Optional collection content type filter. Field filters, sorting and grouping must use fields assigned to that type.
+     * Optional content type filter: a catalog type, or a list type of the collection standing for the catalog type it copies, matching every list type of the collection that derives from that catalog type. Field filters, sorting and grouping must use fields that the named type and every matching list type have.
      */
     contentTypeId?: Guid | null;
     /**
@@ -8969,7 +9178,7 @@ export interface Resource extends AdditionalDataHolder, Parsable {
      */
     containerId?: Guid | null;
     /**
-     * Items and folders: an attached collection content type. Creation selects the default when omitted. PATCH changes type, keeps shared fields and removes fields absent from the destination type. Folder required fields and creation defaults do not apply.
+     * Items and folders: a list type of the collection. Writes may name the catalog type it copies instead. Creation selects the default when omitted. PATCH changes type, keeps shared fields and removes fields absent from the destination type. Folder required fields and creation defaults do not apply.
      */
     contentTypeId?: Guid | null;
     /**
@@ -9316,7 +9525,7 @@ export interface SearchHit extends Parsable {
      */
     collectionId?: Guid | null;
     /**
-     * The content_type_id property
+     * The catalog type the entry's list type copies.
      */
     contentTypeId?: string | null;
     /**
@@ -9424,7 +9633,7 @@ export interface SearchRequest extends Parsable {
      */
     collectionId?: string | null;
     /**
-     * The content_type_id property
+     * A catalog type, or a list type standing for the catalog type it copies; matches it and every type deriving from it.
      */
     contentTypeId?: string | null;
     /**
@@ -9975,18 +10184,6 @@ export function serializeChunkText(writer: SerializationWriter, chunkText: Parti
 }
 /**
  * Serializes information the current object
- * @param CollectionContentType The instance to serialize from.
- * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
- * @param writer Serialization writer to use to serialize this model
- */
-// @ts-ignore
-export function serializeCollectionContentType(writer: SerializationWriter, collectionContentType: Partial<CollectionContentType> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
-    if (!collectionContentType || isSerializingDerivedType) { return; }
-    serializeContentType(writer, collectionContentType, isSerializingDerivedType)
-    writer.writeBooleanValue("is_default", collectionContentType.isDefault);
-}
-/**
- * Serializes information the current object
  * @param CollectionTemplate The instance to serialize from.
  * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
  * @param writer Serialization writer to use to serialize this model
@@ -10244,6 +10441,10 @@ export function serializeContentType(writer: SerializationWriter, contentType: P
     if (!contentType || isSerializingDerivedType) { return; }
     writer.writeDateValue("created_at", contentType.createdAt);
     writer.writeCollectionOfPrimitiveValues<Guid>("field_ids", contentType.fieldIds);
+    writer.writeCollectionOfPrimitiveValues<Guid>("field_order", contentType.fieldOrder);
+    writer.writeCollectionOfObjectValues<FieldSetting>("field_settings", contentType.fieldSettings, serializeFieldSetting);
+    writer.writeStringValue("group", contentType.group);
+    writer.writeCollectionOfPrimitiveValues<Guid>("hidden_field_ids", contentType.hiddenFieldIds);
     writer.writeGuidValue("id", contentType.id);
     writer.writeStringValue("key", contentType.key);
     writer.writeStringValue("name", contentType.name);
@@ -10251,6 +10452,21 @@ export function serializeContentType(writer: SerializationWriter, contentType: P
     writer.writeDateValue("updated_at", contentType.updatedAt);
     writer.writeNumberValue("version", contentType.version);
     writer.writeAdditionalData(contentType.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param ContentType_effective The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeContentType_effective(writer: SerializationWriter, contentType_effective: Partial<ContentType_effective> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!contentType_effective || isSerializingDerivedType) { return; }
+    writer.writeCollectionOfPrimitiveValues<Guid>("field_ids", contentType_effective.fieldIds);
+    writer.writeCollectionOfObjectValues<FieldSetting>("field_settings", contentType_effective.fieldSettings, serializeFieldSetting);
+    writer.writeCollectionOfPrimitiveValues<Guid>("hidden_field_ids", contentType_effective.hiddenFieldIds);
+    writer.writeCollectionOfObjectValues<ValidationRuleMember1 | ValidationRuleMember2>("rules", contentType_effective.rules, serializeValidationRule);
+    writer.writeAdditionalData(contentType_effective.additionalData);
 }
 /**
  * Serializes information the current object
@@ -10262,8 +10478,13 @@ export function serializeContentType(writer: SerializationWriter, contentType: P
 export function serializeContentTypeInput(writer: SerializationWriter, contentTypeInput: Partial<ContentTypeInput> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!contentTypeInput || isSerializingDerivedType) { return; }
     writer.writeCollectionOfPrimitiveValues<Guid>("field_ids", contentTypeInput.fieldIds);
+    writer.writeCollectionOfPrimitiveValues<Guid>("field_order", contentTypeInput.fieldOrder);
+    writer.writeCollectionOfObjectValues<FieldSetting>("field_settings", contentTypeInput.fieldSettings, serializeFieldSetting);
+    writer.writeStringValue("group", contentTypeInput.group);
+    writer.writeCollectionOfPrimitiveValues<Guid>("hidden_field_ids", contentTypeInput.hiddenFieldIds);
     writer.writeStringValue("key", contentTypeInput.key);
     writer.writeStringValue("name", contentTypeInput.name);
+    writer.writeGuidValue("parent_id", contentTypeInput.parentId);
     writer.writeCollectionOfObjectValues<ValidationRuleMember1 | ValidationRuleMember2>("rules", contentTypeInput.rules, serializeValidationRule);
 }
 /**
@@ -10620,6 +10841,19 @@ export function serializeFieldOptions(writer: SerializationWriter, fieldOptions:
 }
 /**
  * Serializes information the current object
+ * @param FieldSetting The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeFieldSetting(writer: SerializationWriter, fieldSetting: Partial<FieldSetting> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!fieldSetting || isSerializingDerivedType) { return; }
+    writer.writeObjectValue("default_value", fieldSetting.defaultValue);
+    writer.writeGuidValue("field_id", fieldSetting.fieldId);
+    writer.writeBooleanValue("required", fieldSetting.required);
+}
+/**
+ * Serializes information the current object
  * @param FileSummary The instance to serialize from.
  * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
  * @param writer Serialization writer to use to serialize this model
@@ -10911,6 +11145,21 @@ export function serializeListIntegration(writer: SerializationWriter, listIntegr
 /**
  * Serializes information the current object
  * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param ListTypeInput The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeListTypeInput(writer: SerializationWriter, listTypeInput: Partial<ListTypeInput> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!listTypeInput || isSerializingDerivedType) { return; }
+    writer.writeCollectionOfPrimitiveValues<Guid>("field_ids", listTypeInput.fieldIds);
+    writer.writeCollectionOfPrimitiveValues<Guid>("field_order", listTypeInput.fieldOrder);
+    writer.writeCollectionOfObjectValues<FieldSetting>("field_settings", listTypeInput.fieldSettings, serializeFieldSetting);
+    writer.writeCollectionOfPrimitiveValues<Guid>("hidden_field_ids", listTypeInput.hiddenFieldIds);
+    writer.writeCollectionOfObjectValues<ValidationRuleMember1 | ValidationRuleMember2>("rules", listTypeInput.rules, serializeValidationRule);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
  * @param ListView The instance to serialize from.
  * @param writer Serialization writer to use to serialize this model
  */
@@ -11086,6 +11335,17 @@ export function serializeNavigationSelection(writer: SerializationWriter, naviga
     writer.writeStringValue("field", navigationSelection.field);
     writer.writeBooleanValue("no_value", navigationSelection.noValue);
     writer.writeStringValue("term_id", navigationSelection.termId);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param NewMenuInput The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeNewMenuInput(writer: SerializationWriter, newMenuInput: Partial<NewMenuInput> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!newMenuInput || isSerializingDerivedType) { return; }
+    writer.writeCollectionOfPrimitiveValues<Guid>("content_type_ids", newMenuInput.contentTypeIds);
 }
 /**
  * Serializes information the current object
@@ -13754,7 +14014,7 @@ export interface Task extends AdditionalDataHolder, Parsable {
      */
     input?: Task_input | null;
     /**
-     * A JSON Schema form (draft-07 subset; see docs/workflows.md#forms): type, title, description, default, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, uniqueItems, items, properties, required, additionalProperties (boolean or a schema; objects are closed by default). x-papergo on a property makes it a domain picker (item, collection, relationship, terms, keywords, people). The terms picker selects term IDs by default; select: sets selects term-set IDs, optionally narrowed by group_id.
+     * A JSON Schema form (draft-07 subset; see docs/workflows.md#forms): type, title, description, default, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, uniqueItems, items, properties, required, additionalProperties (boolean or a schema; objects are closed by default). x-papergo on a property makes it a domain picker (item, collection, relationship, terms, keywords, people, content_type). The content_type picker selects catalog content types a list or library of the workspace accepts, optionally narrowed by collection_id. The terms picker selects term IDs by default; select: sets selects term-set IDs, optionally narrowed by group_id.
      */
     inputSchema?: WorkflowForm | null;
     /**
@@ -13902,7 +14162,7 @@ export interface TaskCreate extends Parsable {
      */
     dueAt?: Date | null;
     /**
-     * A JSON Schema form (draft-07 subset; see docs/workflows.md#forms): type, title, description, default, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, uniqueItems, items, properties, required, additionalProperties (boolean or a schema; objects are closed by default). x-papergo on a property makes it a domain picker (item, collection, relationship, terms, keywords, people). The terms picker selects term IDs by default; select: sets selects term-set IDs, optionally narrowed by group_id.
+     * A JSON Schema form (draft-07 subset; see docs/workflows.md#forms): type, title, description, default, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, uniqueItems, items, properties, required, additionalProperties (boolean or a schema; objects are closed by default). x-papergo on a property makes it a domain picker (item, collection, relationship, terms, keywords, people, content_type). The content_type picker selects catalog content types a list or library of the workspace accepts, optionally narrowed by collection_id. The terms picker selects term IDs by default; select: sets selects term-set IDs, optionally narrowed by group_id.
      */
     inputSchema?: WorkflowForm | null;
     /**
@@ -14544,7 +14804,7 @@ export interface UpdateResource extends Parsable {
      */
     allowFolders?: boolean | null;
     /**
-     * Items and folders: an attached collection content type. Creation selects the default when omitted. PATCH changes type, keeps shared fields and removes fields absent from the destination type. Folder required fields and creation defaults do not apply.
+     * Items and folders: a list type of the collection. Writes may name the catalog type it copies instead. Creation selects the default when omitted. PATCH changes type, keeps shared fields and removes fields absent from the destination type. Folder required fields and creation defaults do not apply.
      */
     contentTypeId?: Guid | null;
     /**
@@ -14713,7 +14973,7 @@ export interface WorkflowCalls extends Parsable {
     workflow?: string | null;
 }
 /**
- * A JSON Schema form (draft-07 subset; see docs/workflows.md#forms): type, title, description, default, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, uniqueItems, items, properties, required, additionalProperties (boolean or a schema; objects are closed by default). x-papergo on a property makes it a domain picker (item, collection, relationship, terms, keywords, people). The terms picker selects term IDs by default; select: sets selects term-set IDs, optionally narrowed by group_id.
+ * A JSON Schema form (draft-07 subset; see docs/workflows.md#forms): type, title, description, default, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, uniqueItems, items, properties, required, additionalProperties (boolean or a schema; objects are closed by default). x-papergo on a property makes it a domain picker (item, collection, relationship, terms, keywords, people, content_type). The content_type picker selects catalog content types a list or library of the workspace accepts, optionally narrowed by collection_id. The terms picker selects term IDs by default; select: sets selects term-set IDs, optionally narrowed by group_id.
  */
 export interface WorkflowForm extends AdditionalDataHolder, Parsable {
 }

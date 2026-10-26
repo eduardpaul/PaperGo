@@ -27,7 +27,7 @@ export interface ContentTypesRequestBuilder extends BaseRequestBuilder<ContentTy
      get(requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<ContentType[] | undefined>;
     /**
      * Requires contentType.manage.
-     * @param body Organization catalog definition. Replacement validates all attached collections and advances their schema revisions atomically. Requires contentType.manage, independently of workspace membership.
+     * @param body Organization catalog type. A new type derives from parent_id, or Item when it is omitted. Replacement validates every subtype and attached collection and advances their schema revisions atomically. Requires contentType.manage, independently of workspace membership.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<ContentType>}
      * @throws {Problem} error when the service returns a 4XX or 5XX status code
@@ -41,7 +41,7 @@ export interface ContentTypesRequestBuilder extends BaseRequestBuilder<ContentTy
      toGetRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined) : RequestInformation;
     /**
      * Requires contentType.manage.
-     * @param body Organization catalog definition. Replacement validates all attached collections and advances their schema revisions atomically. Requires contentType.manage, independently of workspace membership.
+     * @param body Organization catalog type. A new type derives from parent_id, or Item when it is omitted. Replacement validates every subtype and attached collection and advances their schema revisions atomically. Requires contentType.manage, independently of workspace membership.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */

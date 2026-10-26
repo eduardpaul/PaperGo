@@ -2191,8 +2191,8 @@
       ],
       "delete": {
         "operationId": "deleteField",
-        "summary": "Remove field from the active schema (manage required)",
-        "description": "Uses the collection ETag. Rejects dependencies in rules and saved views. Removes memberships, query indexes and business key claims; immutable revisions retain their original fields and values. Removed keys cannot be reused. Later edits prune carried values, while explicitly supplied patch keys reject removed keys. Required module scopes: contentType.manage. Resource ACLs and any additional use-case checks also apply. Field definitions are organization-wide; editing through a collection applies to every collection using them.",
+        "summary": "Remove field from the collection's list types (manage required)",
+        "description": "Uses the collection ETag. Removes the field from the collection's list types that own it; catalog types and other collections keep it, and a field the collection inherits from a catalog type is rejected (hide it in the list type instead). The field definition is deleted once no content type has it. Rejects dependencies in rules and saved views. Removes memberships, query indexes and business key claims; immutable revisions retain their original fields and values. Removed keys cannot be reused. Later edits prune carried values, while explicitly supplied patch keys reject removed keys. Required module scopes: contentType.manage. Resource ACLs and any additional use-case checks also apply. Field definitions are organization-wide; removal through a collection applies to that collection only.",
         "parameters": [
           {
             "name": "If-Match",
@@ -5082,7 +5082,7 @@
       ],
       "get": {
         "operationId": "listContentTypes",
-        "summary": "List collection content types",
+        "summary": "List collection list types",
         "responses": {
           "200": {
             "description": "Success",
@@ -5090,7 +5090,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/CollectionContentType"
+                    "$ref": "#/components/schemas/ContentType"
                   },
                   "maxItems": 32,
                   "type": "array"
@@ -5105,11 +5105,11 @@
         "x-module-scopes": [
           "contentType.read"
         ],
-        "description": " Required module scopes: contentType.read. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: contentType.read. Resource ACLs and any additional use-case checks also apply. Each list type copies one catalog type (parent_id) and carries its effective schema. Listed in New menu order, followed by the types the menu leaves out, by key."
       },
       "post": {
         "operationId": "attachContentType",
-        "summary": "Attach a live organization content type to a collection",
+        "summary": "Attach a catalog content type to a collection",
         "parameters": [
           {
             "name": "If-Match",
@@ -5162,7 +5162,7 @@
           "list.manage",
           "contentType.read"
         ],
-        "description": "Requires list.manage, contentType.read and manage ACL on the collection. The shared definition is not copied. Returns the collection and its new ETag."
+        "description": "Requires list.manage, contentType.read and manage ACL on the collection. The collection accepts the catalog type through its own list type. Returns the collection and its new ETag."
       }
     },
     "/v1/content-types/{id}": {
@@ -5206,11 +5206,11 @@
         "x-module-scopes": [
           "contentType.read"
         ],
-        "description": "Organization catalog definition. Module scope applies independently of workspace ACLs. Updates advance every attached collection atomically."
+        "description": "Organization catalog type; list types are read through their collection. Module scope applies independently of workspace ACLs."
       },
       "put": {
         "operationId": "updateContentType",
-        "summary": "Replace content type fields and rules (manage required)",
+        "summary": "Replace a catalog type's own fields and rules (manage required)",
         "parameters": [
           {
             "name": "If-Match",
@@ -5262,7 +5262,38 @@
         "x-module-scopes": [
           "contentType.manage"
         ],
-        "description": "Organization catalog definition. Module scope applies independently of workspace ACLs. Updates advance every attached collection atomically."
+        "description": "Organization catalog type. Module scope applies independently of workspace ACLs. Updates reach every subtype and every list type deriving from it, and advance every affected collection atomically."
+      },
+      "delete": {
+        "operationId": "deleteContentType",
+        "summary": "Delete an unused catalog type (manage required)",
+        "description": "Requires the content type ETag. Only a catalog type with no subtypes and no list types, attached or kept for item history, can be deleted; the root Item type never can. Workflow triggers and smart folders that name it then match nothing.",
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412.",
+            "schema": {
+              "type": "string",
+              "pattern": "^\"[1-9][0-9]*\"$"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Content type deleted"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "contentType.manage"
+        ]
       }
     },
     "/v1/smart-folders": {
@@ -13354,7 +13385,7 @@
       "delete": {
         "operationId": "detachContentType",
         "summary": "Detach an unused collection content type",
-        "description": "Requires list.manage, collection manage access and the current collection If-Match. Rejects the last attachment, a type used by live items, and dependent saved views. Chooses a remaining default when necessary. Updates the effective schema and business keys atomically; organization catalog types and frozen revisions remain. Deleted items with a detached type require reattachment before restoration.",
+        "description": "Requires list.manage, collection manage access and the current collection If-Match. typeID is a list type of the collection or the catalog type it copies. Rejects the last attachment, a type used by live items, and dependent saved views. Chooses a remaining default when necessary. Updates the effective schema and business keys atomically; the list type stays for frozen revisions and returns with its customizations when its catalog type is attached again. Deleted items with a detached type require reattachment before restoration.",
         "x-module-scopes": [
           "list.manage"
         ],
@@ -13380,6 +13411,62 @@
             "$ref": "#/components/responses/Problem"
           }
         }
+      },
+      "put": {
+        "operationId": "updateListType",
+        "summary": "Customize a collection's list type",
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Required current quoted numeric ETag of the list type; weak W/\"n\" is accepted. Stale versions return 412.",
+            "schema": {
+              "type": "string",
+              "pattern": "^\"[1-9][0-9]*\"$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListTypeInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContentType"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "description": "Quoted numeric entity version",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "contentType.manage"
+        ],
+        "description": " Required module scopes: contentType.manage. Requires manage ACL on the collection. typeID is a list type of the collection or the catalog type it copies. Replaces the list type's own fields, hidden fields and rules, validates every item against the effective schema and advances the collection's schema revision atomically."
       }
     },
     "/v1/items/{id}/content/versions/{number}/restore": {
@@ -17301,7 +17388,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "Only this content type."
+            "description": "A catalog type, or a list type standing for the catalog type it copies; matches it and every type deriving from it."
           },
           {
             "name": "term_id",
@@ -17981,8 +18068,8 @@
     },
     "/v1/search/content-types": {
       "get": {
-        "summary": "List content types attached to readable collections",
-        "description": "Requires item.read. Optional workspace and collection scopes narrow the catalog; organization catalog permissions are not required.",
+        "summary": "List catalog types of readable collections",
+        "description": "Requires item.read. Lists each catalog type that a readable list or library accepts, directly or through a subtype, once, with its ancestors, so a picker can show the tree. Filtering search by a type also matches its subtypes. Optional workspace and collection scopes narrow the catalog; organization catalog permissions are not required.",
         "parameters": [
           {
             "name": "workspace_id",
@@ -18003,7 +18090,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Readable content type names",
+            "description": "Readable catalog types",
             "content": {
               "application/json": {
                 "schema": {
@@ -18025,6 +18112,11 @@
                       },
                       "key": {
                         "type": "string"
+                      },
+                      "parent_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "The catalog type it derives from; absent for Item."
                       }
                     }
                   }
@@ -21101,7 +21193,8 @@
             "in": "query",
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "A content type; matches it and every type deriving from it."
           },
           {
             "name": "keyword",
@@ -23414,6 +23507,71 @@
           }
         }
       }
+    },
+    "/v1/resources/{id}/content-type-menu": {
+      "parameters": [
+        {
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "in": "path",
+          "name": "id"
+        }
+      ],
+      "put": {
+        "operationId": "setContentTypeMenu",
+        "summary": "Choose and order the content types the New menu offers",
+        "description": "Requires list.manage and manage ACL on the collection, with the collection If-Match; advances the collection ETag. Types left out stay accepted for moves, API writes and type changes. The default must be offered; making a type the default offers it. Returns the list types in menu order.",
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412.",
+            "schema": {
+              "type": "string",
+              "pattern": "^\"[1-9][0-9]*\"$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewMenuInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "maxItems": 32,
+                  "items": {
+                    "$ref": "#/components/schemas/ContentType"
+                  }
+                }
+              }
+            }
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "list.manage"
+        ]
+      }
     }
   },
   "components": {
@@ -23934,7 +24092,7 @@
             "type": "string",
             "format": "uuid",
             "readOnly": true,
-            "description": "Items and folders: an attached collection content type. Creation selects the default when omitted. PATCH changes type, keeps shared fields and removes fields absent from the destination type. Folder required fields and creation defaults do not apply."
+            "description": "Items and folders: a list type of the collection. Writes may name the catalog type it copies instead. Creation selects the default when omitted. PATCH changes type, keeps shared fields and removes fields absent from the destination type. Folder required fields and creation defaults do not apply."
           },
           "template_keys": {
             "maxItems": 100,
@@ -24073,7 +24231,7 @@
           "content_type_id": {
             "type": "string",
             "format": "uuid",
-            "description": "Items and folders: an attached collection content type. Creation selects the default when omitted. PATCH changes type, keeps shared fields and removes fields absent from the destination type. Folder required fields and creation defaults do not apply."
+            "description": "Items and folders: a list type of the collection. Writes may name the catalog type it copies instead. Creation selects the default when omitted. PATCH changes type, keeps shared fields and removes fields absent from the destination type. Folder required fields and creation defaults do not apply."
           },
           "description": {
             "type": "string",
@@ -24200,7 +24358,7 @@
           "content_type_id": {
             "type": "string",
             "format": "uuid",
-            "description": "Items and folders: an attached collection content type. Creation selects the default when omitted. PATCH changes type, keeps shared fields and removes fields absent from the destination type. Folder required fields and creation defaults do not apply."
+            "description": "Items and folders: a list type of the collection. Writes may name the catalog type it copies instead. Creation selects the default when omitted. PATCH changes type, keeps shared fields and removes fields absent from the destination type. Folder required fields and creation defaults do not apply."
           },
           "duplicate_policy": {
             "type": "string",
@@ -24292,7 +24450,7 @@
           "content_type_id": {
             "type": "string",
             "format": "uuid",
-            "description": "Collection content type ID. Omission selects the collection default."
+            "description": "A list type of the collection, or the catalog type it copies. Omission selects the collection default."
           }
         },
         "required": [
@@ -25060,7 +25218,7 @@
           "content_type_id": {
             "type": "string",
             "format": "uuid",
-            "description": "Collection content type ID. Omission selects the collection default."
+            "description": "A list type of the collection, or the catalog type it copies. Omission selects the collection default."
           }
         },
         "required": [
@@ -25221,7 +25379,7 @@
           "content_type_id": {
             "type": "string",
             "format": "uuid",
-            "description": "Optional collection content type filter. Field filters, sorting and grouping must use fields assigned to that type."
+            "description": "Optional content type filter: a catalog type, or a list type of the collection standing for the catalog type it copies, matching every list type of the collection that derives from that catalog type. Field filters, sorting and grouping must use fields that the named type and every matching list type have."
           },
           "keyword": {
             "type": "string",
@@ -25833,7 +25991,7 @@
           "content_type_id": {
             "type": "string",
             "format": "uuid",
-            "description": "Collection content type ID. Omission selects the collection default."
+            "description": "A list type of the collection, or the catalog type it copies. Omission selects the collection default."
           },
           "keywords": {
             "type": "array",
@@ -25871,7 +26029,7 @@
           "content_type_id": {
             "type": "string",
             "format": "uuid",
-            "description": "Attached destination content type. Items only. Prunes unrelated fields, enforces required fields/rules, retains file content and creates a revision. Creation defaults are not applied."
+            "description": "Destination list type of the collection, or the catalog type it copies. Items only. Prunes unrelated fields, enforces required fields/rules, retains file content and creates a revision. Creation defaults are not applied."
           },
           "keywords": {
             "type": "array",
@@ -26234,7 +26392,7 @@
         ],
         "properties": {
           "key": {
-            "description": "Required for creation, immutable. May be omitted for replacement.",
+            "description": "Required for creation, immutable. May be omitted for replacement. The key is unique in the catalog; item and the keys of registered template types are reserved.",
             "pattern": "^[a-z][a-z0-9_]{0,63}$",
             "type": "string"
           },
@@ -26243,15 +26401,21 @@
             "maxLength": 255,
             "type": "string"
           },
+          "group": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "Heading the catalog files the type under; empty or omitted is none. Replacement sets it like the name."
+          },
           "rules": {
             "items": {
               "$ref": "#/components/schemas/ValidationRule"
             },
             "maxItems": 32,
-            "type": "array"
+            "type": "array",
+            "description": "The type's own rules. Their keys differ from inherited rules; together at most 32."
           },
           "field_ids": {
-            "description": "Organization field IDs. Each key must be unique within the content type. Definitions remain live in every attached collection.",
+            "description": "The type's own field IDs, none of them inherited. Every key of the type and its ancestors is unique.",
             "items": {
               "type": "string",
               "format": "uuid"
@@ -26259,9 +26423,38 @@
             "uniqueItems": true,
             "maxItems": 200,
             "type": "array"
+          },
+          "parent_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Creation: the catalog type to derive from; Item when omitted. A catalog type has at most 7 ancestors. Replacement may repeat it; it never changes."
+          },
+          "hidden_field_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "uniqueItems": true,
+            "description": "Inherited fields that forms leave out. A required field without a default cannot be hidden."
+          },
+          "field_order": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The type's fields, own or inherited, in the order forms show them; fields it leaves out follow in the order the type inherits. Applies after the ancestors' order."
+          },
+          "field_settings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldSetting"
+            },
+            "description": "The type's own field settings, at most one per field of the type."
           }
         },
-        "description": "Organization catalog definition. Replacement validates all attached collections and advances their schema revisions atomically. Requires contentType.manage, independently of workspace membership."
+        "description": "Organization catalog type. A new type derives from parent_id, or Item when it is omitted. Replacement validates every subtype and attached collection and advances their schema revisions atomically. Requires contentType.manage, independently of workspace membership."
       },
       "ContentType": {
         "type": "object",
@@ -26270,7 +26463,10 @@
           "key",
           "name",
           "field_ids",
+          "hidden_field_ids",
           "rules",
+          "ancestor_ids",
+          "effective",
           "version",
           "created_at",
           "updated_at"
@@ -26284,13 +26480,19 @@
             "type": "string"
           },
           "name": {
-            "type": "string"
+            "type": "string",
+            "description": "A list type shows the name of its catalog type."
+          },
+          "group": {
+            "type": "string",
+            "description": "Catalog types: the heading the catalog files the type under, such as Finance. List types have none."
           },
           "rules": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ValidationRule"
-            }
+            },
+            "description": "The type's own rules; ancestors' rules are in effective."
           },
           "version": {
             "type": "integer",
@@ -26310,7 +26512,7 @@
               "type": "string",
               "format": "uuid"
             },
-            "description": "Organization field IDs. Each key must be unique within the content type. Definitions remain live in every attached collection."
+            "description": "The type's own field IDs; ancestors' fields are in effective."
           },
           "template_key": {
             "type": [
@@ -26319,8 +26521,107 @@
             ],
             "readOnly": true,
             "description": "Stable provisioning identity of a registered template content type. Existing customized definitions are reused."
+          },
+          "hidden_field_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Inherited fields that forms leave out. They stay part of the type."
+          },
+          "field_order": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The type's fields, own or inherited, in the order forms show them; fields it leaves out follow in the order the type inherits. Applies after the ancestors' order."
+          },
+          "field_settings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldSetting"
+            },
+            "description": "The type's own field settings, at most one per field of the type."
+          },
+          "parent_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "readOnly": true,
+            "description": "The catalog type this one derives from; it never changes. Only the root Item type has none."
+          },
+          "collection_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "readOnly": true,
+            "description": "The list or library of a list type; null for catalog types."
+          },
+          "is_default": {
+            "type": "boolean",
+            "readOnly": true,
+            "description": "List types: the type new items of the collection get."
+          },
+          "in_new_menu": {
+            "type": "boolean",
+            "readOnly": true,
+            "description": "List types: whether the New menu offers the type when people create items. The default always is; the others stay accepted for moves, API writes and type changes."
+          },
+          "ancestor_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "readOnly": true,
+            "description": "Ancestors, nearest first."
+          },
+          "effective": {
+            "type": "object",
+            "readOnly": true,
+            "required": [
+              "field_ids",
+              "hidden_field_ids",
+              "rules"
+            ],
+            "description": "What the type and its ancestors define together: fields in form order, hidden fields, rules, and field settings merged with the nearest type winning.",
+            "properties": {
+              "field_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "hidden_field_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "rules": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ValidationRule"
+                }
+              },
+              "field_settings": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/FieldSetting"
+                }
+              }
+            }
           }
-        }
+        },
+        "description": "A catalog type belongs to the organization; a list type (collection_id set) is the copy of one catalog type that a list or library customizes and items use. Every type but the root Item derives from a parent and has every field, hidden field and rule of its ancestors."
       },
       "TemplateField": {
         "type": "object",
@@ -27067,7 +27368,8 @@
             "description": "Limits item, workflow-event, task and permission triggers to a collection; permission events include the collection itself and its folders/items. Not supported for term.changed, term.merged or term.moved."
           },
           "content_type_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Limits item, file, folder, permission and workflow-event triggers, and a collection's schedule, to items and folders of a content type or its subtypes. A catalog type, or a list type standing for the catalog type it copies. With collection_id the collection must accept the type or a subtype; without it the trigger covers the workspace, which also scopes automatic content rules. A schedule takes it only with collection_id."
           },
           "cron": {
             "type": "string",
@@ -28027,7 +28329,7 @@
       "WorkflowForm": {
         "type": "object",
         "additionalProperties": true,
-        "description": "A JSON Schema form (draft-07 subset; see docs/workflows.md#forms): type, title, description, default, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, uniqueItems, items, properties, required, additionalProperties (boolean or a schema; objects are closed by default). x-papergo on a property makes it a domain picker (item, collection, relationship, terms, keywords, people). The terms picker selects term IDs by default; select: sets selects term-set IDs, optionally narrowed by group_id."
+        "description": "A JSON Schema form (draft-07 subset; see docs/workflows.md#forms): type, title, description, default, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, uniqueItems, items, properties, required, additionalProperties (boolean or a schema; objects are closed by default). x-papergo on a property makes it a domain picker (item, collection, relationship, terms, keywords, people, content_type). The content_type picker selects catalog content types a list or library of the workspace accepts, optionally narrowed by collection_id. The terms picker selects term IDs by default; select: sets selects term-set IDs, optionally narrowed by group_id."
       },
       "TermGroupInput": {
         "type": "object",
@@ -28864,25 +29166,6 @@
         ],
         "additionalProperties": false
       },
-      "CollectionContentType": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/ContentType"
-          },
-          {
-            "type": "object",
-            "required": [
-              "is_default"
-            ],
-            "properties": {
-              "is_default": {
-                "type": "boolean",
-                "description": "Default only for this collection."
-              }
-            }
-          }
-        ]
-      },
       "AttachContentTypeInput": {
         "type": "object",
         "additionalProperties": false,
@@ -28892,14 +29175,15 @@
         "properties": {
           "content_type_id": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "A catalog type."
           },
           "is_default": {
             "type": "boolean",
             "default": false
           }
         },
-        "description": "Attach the organization definition by ID without copying. At most 32 types per collection. Selecting a default affects only this collection. Conflicting field keys are rejected; types that share a key must reference the same catalog field ID."
+        "description": "Makes the collection accept a catalog type through a list type of its own, which inherits the type's fields and rules. Attaching a type the collection accepted before restores its list type and customizations. At most 32 types per collection. Selecting a default affects only this collection. Conflicting field keys are rejected; types that share a key must reference the same catalog field ID."
       },
       "CreateCatalogField": {
         "type": "object",
@@ -28985,7 +29269,7 @@
           "content_type_id": {
             "type": "string",
             "format": "uuid",
-            "description": "Attached destination content type. Items only. Prunes unrelated fields, enforces required fields/rules, retains file content and creates a revision. Creation defaults are not applied."
+            "description": "Destination list type of the collection, or the catalog type it copies. Items only. Prunes unrelated fields, enforces required fields/rules, retains file content and creates a revision. Creation defaults are not applied."
           },
           "keywords": {
             "type": "array",
@@ -29204,7 +29488,7 @@
           "content_type_id": {
             "type": "string",
             "format": "uuid",
-            "description": "An attached library content type; defaults to the library default."
+            "description": "A list type of the library, or the catalog type it copies; defaults to the library default."
           },
           "folder_id": {
             "type": "string",
@@ -30845,7 +31129,8 @@
             "format": "uuid"
           },
           "content_type_id": {
-            "type": "string"
+            "type": "string",
+            "description": "The catalog type the entry's list type copies."
           },
           "name": {
             "type": "string"
@@ -31273,7 +31558,8 @@
             "type": "string"
           },
           "content_type_id": {
-            "type": "string"
+            "type": "string",
+            "description": "A catalog type, or a list type standing for the catalog type it copies; matches it and every type deriving from it."
           },
           "term_id": {
             "type": "string"
@@ -33029,7 +33315,7 @@
             "type": "string",
             "format": "uuid",
             "readOnly": true,
-            "description": "Items and folders: an attached collection content type. Creation selects the default when omitted. PATCH changes type, keeps shared fields and removes fields absent from the destination type. Folder required fields and creation defaults do not apply."
+            "description": "Items and folders: a list type of the collection. Writes may name the catalog type it copies instead. Creation selects the default when omitted. PATCH changes type, keeps shared fields and removes fields absent from the destination type. Folder required fields and creation defaults do not apply."
           },
           "template_keys": {
             "maxItems": 100,
@@ -33921,6 +34207,98 @@
           }
         },
         "additionalProperties": false
+      },
+      "ListTypeInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "field_ids"
+        ],
+        "description": "Customizes a collection's list type. Its catalog type's fields, hidden fields and rules stay; a list type adds its own and hides inherited ones.",
+        "properties": {
+          "field_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "uniqueItems": true,
+            "maxItems": 200,
+            "description": "The list type's own field IDs, none of them inherited."
+          },
+          "hidden_field_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "uniqueItems": true,
+            "description": "Inherited fields that forms leave out. A required field without a default cannot be hidden."
+          },
+          "field_order": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The type's fields, own or inherited, in the order forms show them; fields it leaves out follow in the order the type inherits. Applies after the ancestors' order."
+          },
+          "field_settings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldSetting"
+            },
+            "description": "The type's own field settings, at most one per field of the type."
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ValidationRule"
+            },
+            "maxItems": 32,
+            "description": "The list type's own rules; keys differ from inherited rules."
+          }
+        }
+      },
+      "NewMenuInput": {
+        "type": "object",
+        "required": [
+          "content_type_ids"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "content_type_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The list types the New menu offers, in order, each by its own id or the catalog type it copies. It must include the default."
+          }
+        }
+      },
+      "FieldSetting": {
+        "type": "object",
+        "required": [
+          "field_id"
+        ],
+        "additionalProperties": false,
+        "description": "Changes, for a content type and its subtypes, whether one of its fields is required and its default. Omitted properties keep what the field or an ancestor says; the nearest type's setting wins.",
+        "properties": {
+          "field_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "required": {
+            "type": "boolean",
+            "description": "Whether items of the type must hold a value (or get the default)."
+          },
+          "default_value": {
+            "description": "Default for new items of the type, valid for the field like the field's own default; JSON null removes an inherited default."
+          }
+        }
       }
     },
     "parameters": {

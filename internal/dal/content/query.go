@@ -150,15 +150,14 @@ type Plan struct {
 	CollectionID string
 	// Publishes is whether the collection keeps a head surface apart from
 	// the published one.
-	Publishes     bool
-	Surface       string
-	ContentTypeID string
-	ParentID      string
-	AncestorID    string
-	Filter        *Filter
-	Keyword       string
-	Search        *SearchMatch
-	Orders        []Order
+	Publishes  bool
+	Surface    string
+	ParentID   string
+	AncestorID string
+	Filter     *Filter
+	Keyword    string
+	Search     *SearchMatch
+	Orders     []Order
 	// Group sorts by a group column instead of Orders, for group counts.
 	Group *GroupBy
 	// RowACL checks permissions row by row, so queries over several
@@ -393,9 +392,6 @@ func (r *Repo) Compile(p Plan) *Query {
 		q.condArgs = append(q.condArgs, args...)
 	}
 	add(p.Archive.Predicate("r"))
-	if p.ContentTypeID != "" {
-		add("r.content_type_id=?", p.ContentTypeID)
-	}
 	if p.ParentID != "" {
 		add("r.parent_id=?", p.ParentID)
 	}
@@ -468,7 +464,7 @@ func (r *Repo) terms(m TermMatch) (string, []any) {
 		if root.Keyword {
 			fields = "(fd.type='keywords' OR " + fields + ")"
 		}
-		part := `EXISTS(SELECT 1 FROM field_values f JOIN field_definitions fd ON fd.key=f.field_key JOIN collection_types ca ON ca.container_id=f.container_id JOIN content_types ct ON ct.id=ca.content_type_id AND EXISTS(SELECT 1 FROM ` + r.d.Elements("ct.field_ids", "fid") + ` WHERE fid.value=fd.id) JOIN smart_terms st ON st.id=f.value_text WHERE f.surface_id=p.id AND fd.indexed AND ` + fields + ` AND st.root=?)`
+		part := `EXISTS(SELECT 1 FROM field_values f JOIN field_definitions fd ON fd.key=f.field_key JOIN content_types lt ON lt.collection_id=f.container_id AND lt.attached JOIN content_type_ancestors a ON a.content_type_id=lt.id JOIN content_types ct ON ct.id=a.ancestor_id AND EXISTS(SELECT 1 FROM ` + r.d.Elements("ct.field_ids", "fid") + ` WHERE fid.value=fd.id) JOIN smart_terms st ON st.id=f.value_text WHERE f.surface_id=p.id AND fd.indexed AND ` + fields + ` AND st.root=?)`
 		args = append(args, root.SetID, root.ID)
 		if root.Keyword {
 			part = "(" + part + " OR EXISTS(SELECT 1 FROM item_surface_keywords k JOIN smart_terms st ON st.id=k.keyword WHERE k.surface_id=p.id AND st.root=?))"

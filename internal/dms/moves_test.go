@@ -9,6 +9,7 @@ import (
 	"slices"
 	"testing"
 
+	eventstore "papergo/internal/dal/events"
 	"papergo/internal/dal/grants"
 )
 
@@ -67,9 +68,15 @@ func TestMoveInboxFileToWritableFolderInAnotherWorkspace(t *testing.T) {
 	}
 }
 
+// moveDestination is a collection that accepts the catalog type of a list
+// type.
 func moveDestination(t *testing.T, s *Service, workspace, kind, typeID string) *resources.Resource {
 	t.Helper()
-	c, err := s.Create(testContext, "alice", workspace, CreateResource{Kind: kind, Name: "Destination", ContentTypeIDs: []string{typeID}, PublishingEnabled: true})
+	typ, err := s.DAL.Catalog().ContentType(testContext, typeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := s.Create(testContext, "alice", workspace, CreateResource{Kind: kind, Name: "Destination", ContentTypeIDs: []string{*typ.ParentID}, PublishingEnabled: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,15 +112,28 @@ func TestMoveItemAcrossWorkspacesPreservesContentAndResetsACL(t *testing.T) {
 	}
 	dest := moveDestination(t, s, other.ID, "library", *item.ContentTypeID)
 	head, published, versions := *item.HeadRevisionID, *item.PublishedRevisionID, revisionCount(t, s, item.ID)
+	updates := eventstore.Filter{Types: []string{EventItemUpdated}, ResourceID: item.ID}
+	updated, err := s.DAL.Events().Count(testContext, updates)
+	if err != nil {
+		t.Fatal(err)
+	}
 	out, err := s.MoveItem(testContext, "alice", item.ID, item.Version, MoveItem{CollectionID: dest.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out.ID != item.ID || out.WorkspaceID != other.ID || *out.ContainerID != dest.ID || *out.ParentID != dest.ID || !out.InheritPermissions || *out.HeadRevisionID != head || *out.PublishedRevisionID != published {
+	if out.ID != item.ID || out.WorkspaceID != other.ID || *out.ContainerID != dest.ID || *out.ParentID != dest.ID || !out.InheritPermissions || *out.PublishedRevisionID != published {
 		t.Fatalf("move: %+v", out)
 	}
-	if revisionCount(t, s, item.ID) != versions {
-		t.Fatal("move-only revision added")
+	// The item takes the destination's list type, which a new head revision
+	// records; the explicit publication stays as it was.
+	if *out.ContentTypeID == *item.ContentTypeID || *out.HeadRevisionID == head || revisionCount(t, s, item.ID) != versions+1 {
+		t.Fatal("move revision", out)
+	}
+	if rev, err := s.revision(testContext, *out.HeadRevisionID); err != nil || rev.ContentTypeID != *out.ContentTypeID {
+		t.Fatal("head revision keeps the source type", rev, err)
+	}
+	if after, err := s.DAL.Events().Count(testContext, updates); err != nil || after != updated+1 {
+		t.Fatal("a move announces its revision once", updated, after, err)
 	}
 	if run, err := s.DAL.Runs().Find(testContext, "run"); err != nil || run.WorkspaceID != other.ID {
 		t.Fatal("run location not moved", run, err)
@@ -179,7 +199,14 @@ func TestMoveItemDestinationAccessAndNameConflicts(t *testing.T) {
 func TestMoveItemFailuresAreAtomic(t *testing.T) {
 	s, w, c := fixture(t)
 	item := create(t, s, c.ID, "item", "Item", nil)
-	unsupported := create(t, s, w.ID, "list", "Unsupported", nil)
+	other, err := s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "other", Name: "Other"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	unsupported, err := s.Create(testContext, "alice", w.ID, CreateResource{Kind: "list", Name: "Unsupported", ContentTypeIDs: []string{other.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err := s.MoveItem(testContext, "alice", item.ID, item.Version, MoveItem{CollectionID: unsupported.ID}); err == nil {
 		t.Fatal("unsupported type accepted")
 	}

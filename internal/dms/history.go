@@ -173,7 +173,16 @@ func (s *Service) RestoreRevision(ctx context.Context, subject, id string, numbe
 		if err != nil {
 			return err
 		}
-		defs, _, err := typedDefinitions(schema.Definition, old.ContentTypeID)
+		// A revision from before a move restores as this collection's list
+		// type of the same catalog type.
+		typeID, err := t.DAL.Catalog().Counterpart(ctx, collection.ID, old.ContentTypeID)
+		if dberr.IsNotFound(err) {
+			return invalid("attach the revision's content type to restore it")
+		}
+		if err != nil {
+			return err
+		}
+		defs, _, err := typedDefinitions(schema.Definition, typeID)
 		if err != nil {
 			return err
 		}
@@ -192,7 +201,7 @@ func (s *Service) RestoreRevision(ctx context.Context, subject, id string, numbe
 		if err = t.restoreIntegrationData(ctx, old.ID, id); err != nil {
 			return err
 		}
-		out, err = t.update(ctx, subject, id, version, UpdateResource{Name: &old.Name, Keywords: &old.Keywords, Values: &values, ContentTypeID: &old.ContentTypeID})
+		out, err = t.update(ctx, subject, id, version, UpdateResource{Name: &old.Name, Keywords: &old.Keywords, Values: &values, ContentTypeID: &typeID})
 		if err != nil {
 			return err
 		}

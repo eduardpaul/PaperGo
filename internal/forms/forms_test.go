@@ -196,3 +196,58 @@ func TestTermsPickerSelections(t *testing.T) {
 		t.Fatal("set outside selected group accepted")
 	}
 }
+
+func TestContentTypePickerSelections(t *testing.T) {
+	ctx := context.Background()
+	service := dms.NewService(daltest.Database(t).SQL)
+	ws, err := service.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Workspace"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	records, err := service.Create(ctx, "alice", ws.ID, dms.CreateResource{Kind: "list", Name: "Records"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain, err := service.Create(ctx, "alice", ws.ID, dms.CreateResource{Kind: "list", Name: "Plain"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err := service.CreateContentType(ctx, "alice", dms.ContentTypeInput{Key: "record", Name: "Record"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	unused, err := service.CreateContentType(ctx, "alice", dms.ContentTypeInput{Key: "unused", Name: "Unused"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.AttachContentType(ctx, "alice", records.ID, records.Version, dms.AttachContentTypeInput{ContentTypeID: record.ID}); err != nil {
+		t.Fatal(err)
+	}
+	listType, err := service.DAL.Catalog().CollectionContentType(ctx, records.ID, record.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	anywhere := MustParse(`{"type":"object","properties":{"pick":{"type":"string","x-papergo":{"kind":"content_type"}}}}`)
+	inPlain := MustParse(`{"type":"object","properties":{"pick":{"type":"string","x-papergo":{"kind":"content_type","collection_id":"` + plain.ID + `"}}}}`)
+	if err = CheckConfig(ctx, service, "alice", ws.ID, inPlain, "form"); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, id string
+		schema   map[string]any
+		valid    bool
+	}{
+		{"used catalog type", record.ID, anywhere, true},
+		{"unused catalog type", unused.ID, anywhere, false},
+		{"list type", listType.ID, anywhere, false},
+		{"type outside the collection", record.ID, inPlain, false},
+		{"missing", "missing", anywhere, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := CheckValues(ctx, service, "alice", ws.ID, tc.schema, map[string]any{"pick": tc.id}, "form")
+			if (err == nil) != tc.valid {
+				t.Fatalf("valid=%v, error=%v", tc.valid, err)
+			}
+		})
+	}
+}

@@ -19,27 +19,31 @@ export interface ContentTypes extends AdditionalDataHolder, Parsable {
      * The name property
      */
     name?: string | null;
+    /**
+     * The catalog type it derives from; absent for Item.
+     */
+    parentId?: Guid | null;
 }
 /**
  * Builds and executes requests for operations under /v1/search/content-types
  */
 export interface ContentTypesRequestBuilder extends BaseRequestBuilder<ContentTypesRequestBuilder> {
     /**
-     * Requires item.read. Optional workspace and collection scopes narrow the catalog; organization catalog permissions are not required.
+     * Requires item.read. Lists each catalog type that a readable list or library accepts, directly or through a subtype, once, with its ancestors, so a picker can show the tree. Filtering search by a type also matches its subtypes. Optional workspace and collection scopes narrow the catalog; organization catalog permissions are not required.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<ContentTypes[]>}
      * @throws {Problem} error when the service returns a 4XX or 5XX status code
      */
      get(requestConfiguration?: RequestConfiguration<ContentTypesRequestBuilderGetQueryParameters> | undefined) : Promise<ContentTypes[] | undefined>;
     /**
-     * Requires item.read. Optional workspace and collection scopes narrow the catalog; organization catalog permissions are not required.
+     * Requires item.read. Lists each catalog type that a readable list or library accepts, directly or through a subtype, once, with its ancestors, so a picker can show the tree. Filtering search by a type also matches its subtypes. Optional workspace and collection scopes narrow the catalog; organization catalog permissions are not required.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */
      toGetRequestInformation(requestConfiguration?: RequestConfiguration<ContentTypesRequestBuilderGetQueryParameters> | undefined) : RequestInformation;
 }
 /**
- * Requires item.read. Optional workspace and collection scopes narrow the catalog; organization catalog permissions are not required.
+ * Requires item.read. Lists each catalog type that a readable list or library accepts, directly or through a subtype, once, with its ancestors, so a picker can show the tree. Filtering search by a type also matches its subtypes. Optional workspace and collection scopes narrow the catalog; organization catalog permissions are not required.
  */
 export interface ContentTypesRequestBuilderGetQueryParameters {
     collectionId?: Guid;
@@ -65,6 +69,7 @@ export function deserializeIntoContentTypes(contentTypes: Partial<ContentTypes> 
         "id": n => { contentTypes.id = n.getGuidValue(); },
         "key": n => { contentTypes.key = n.getStringValue(); },
         "name": n => { contentTypes.name = n.getStringValue(); },
+        "parent_id": n => { contentTypes.parentId = n.getGuidValue(); },
     }
 }
 /**
@@ -79,6 +84,7 @@ export function serializeContentTypes(writer: SerializationWriter, contentTypes:
     writer.writeGuidValue("id", contentTypes.id);
     writer.writeStringValue("key", contentTypes.key);
     writer.writeStringValue("name", contentTypes.name);
+    writer.writeGuidValue("parent_id", contentTypes.parentId);
     writer.writeAdditionalData(contentTypes.additionalData);
 }
 /**

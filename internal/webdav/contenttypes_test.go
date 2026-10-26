@@ -11,7 +11,7 @@ func TestCopyPreservesContentTypeAndPrunesRemovedFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	typ, err := e.s.CreateContentType(ctx, "alice", dms.ContentTypeInput{Key: "document", Name: "Document"})
+	typ, err := e.s.CreateContentType(ctx, "alice", dms.ContentTypeInput{Key: "record", Name: "Record"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func TestCopyPreservesContentTypeAndPrunesRemovedFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if copy.Resource.ContentTypeID == nil || *copy.Resource.ContentTypeID != typ.ID || len(copy.Values) != 0 {
+	if copy.Resource.ContentTypeID == nil || *copy.Resource.ContentTypeID != *item.ContentTypeID || len(copy.Values) != 0 {
 		t.Fatal("copy type/schema", copy)
 	}
 	original, err := e.s.Get(ctx, "alice", item.ID)

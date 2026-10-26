@@ -211,7 +211,7 @@ func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templ
 			if newlyRequired(old, d) {
 				required = append(required, d.Key)
 			}
-			updated, e := t.reviseFieldDefinition(ctx, old, d)
+			updated, e := t.reviseFieldDefinition(ctx, subject, old, d)
 			if e != nil {
 				return e
 			}
@@ -226,13 +226,15 @@ func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templ
 		if e != nil {
 			return e
 		}
+		// The recipe adds to the list type's own fields and rules; fields its
+		// catalog type gives it stay inherited.
 		ids := slices.Clone(typ.FieldIds)
 		for _, d := range defs {
 			live, e := t.DAL.Catalog().OneField(ctx, catalog.FieldFilter{CollectionID: c.ID, Keys: []string{d.Key}})
 			if e != nil {
 				return e
 			}
-			if !slices.Contains(ids, live.ID) {
+			if !slices.Contains(typ.Effective.FieldIds, live.ID) && !slices.Contains(ids, live.ID) {
 				ids = append(ids, live.ID)
 			}
 		}
@@ -245,14 +247,26 @@ func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templ
 				rules[i] = rule
 			}
 		}
-		candidate := ContentTypeInput{Key: typ.Key, Name: typ.Name, FieldIds: ids, Rules: rules}
-		if e = t.validateContentType(ctx, &candidate); e != nil {
+		parent, e := t.DAL.Catalog().ContentType(ctx, *typ.ParentID)
+		if e != nil {
 			return e
 		}
-		if e = t.checkTypeHeads(ctx, subject, c, typ.ID, fieldKeys(defs), rules); e != nil {
+		schema := ListTypeInput{FieldIds: ids, HiddenFieldIds: typ.HiddenFieldIds, Rules: rules, FieldOrder: typ.FieldOrder, FieldSettings: typ.FieldSettings}
+		if e = t.validateTypeSchema(ctx, subject, parent, &schema); e != nil {
 			return e
 		}
-		if _, e = t.reviseContentType(ctx, typ, typ.Name, ids, candidate.Rules); e != nil {
+		fields, e := t.collectionFields(ctx, c.ID)
+		if e != nil {
+			return e
+		}
+		fields = selectDefinitions(fields, fieldKeys(defs))
+		for i, d := range fields {
+			fields[i] = withSetting(d, typ.Effective.Setting(d.ID))
+		}
+		if e = t.checkTypeHeads(ctx, subject, c, typ.ID, fields, append(slices.Clone(parent.Effective.Rules), rules...)); e != nil {
+			return e
+		}
+		if _, e = t.reviseContentType(ctx, typ, catalog.ContentType{FieldIds: ids, HiddenFieldIds: schema.HiddenFieldIds, Rules: schema.Rules, FieldOrder: schema.FieldOrder, FieldSettings: schema.FieldSettings}); e != nil {
 			return e
 		}
 		affected, e := t.attachedCollections(ctx, []string{typ.ID})

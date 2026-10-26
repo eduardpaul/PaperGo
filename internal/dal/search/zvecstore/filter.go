@@ -77,10 +77,13 @@ func nativeFilter(f search.Filter) (string, error) {
 	if len(f.Kinds) > 0 {
 		parts = append(parts, in("kind", encoded(f.Kinds)))
 	}
-	for column, value := range map[string]string{"workspace_id": f.WorkspaceID, "collection_id": f.CollectionID, "content_type_id": f.ContentTypeID, "created_by": f.CreatedBy, "modified_by": f.ModifiedBy} {
+	for column, value := range map[string]string{"workspace_id": f.WorkspaceID, "collection_id": f.CollectionID, "created_by": f.CreatedBy, "modified_by": f.ModifiedBy} {
 		if value != "" {
 			parts = append(parts, equal(column, encode(value)))
 		}
+	}
+	if len(f.ContentTypeIDs) > 0 {
+		parts = append(parts, in("content_type_id", encoded(f.ContentTypeIDs)))
 	}
 	if f.Within != nil {
 		parts = append(parts, in("workspace_id", encoded(f.Within.Workspaces))+" OR "+in("collection_id", encoded(f.Within.Collections)))

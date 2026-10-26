@@ -41,22 +41,46 @@ func TestRESTContentTypesBulkValidationAndRemoval(t *testing.T) {
 	if res.Code != 201 {
 		t.Fatal(res.Code, res.Body.String())
 	}
-	res = request(h, "GET", path, "", testToken, "", "")
-	if res.Code != 200 || !strings.Contains(res.Body.String(), typ.ID) || !strings.Contains(res.Body.String(), `"key":"item"`) {
-		t.Fatal(res.Code, res.Body.String())
+	// The list accepts the catalog type through a list type of its own.
+	listType := func() catalog.ContentType {
+		t.Helper()
+		res := request(h, "GET", path, "", testToken, "", "")
+		var types []catalog.ContentType
+		if res.Code != 200 || json.Unmarshal(res.Body.Bytes(), &types) != nil || !strings.Contains(res.Body.String(), `"key":"item"`) {
+			t.Fatal(res.Code, res.Body.String())
+		}
+		for _, entry := range types {
+			if entry.ParentID != nil && *entry.ParentID == typ.ID {
+				return entry
+			}
+		}
+		t.Fatal("no list type", res.Body.String())
+		return catalog.ContentType{}
 	}
+	lt := listType()
 	fieldBody := fmt.Sprintf(`{"content_type_id":%q,"key":"code","label":"Code","type":"text","indexed":true,"options":{"unique":true}}`, typ.ID)
 	res = request(h, "POST", "/v1/resources/"+l.ID+"/fields", fieldBody, testToken, "", "application/json")
 	var field catalog.FieldDefinition
 	if res.Code != 201 || json.Unmarshal(res.Body.Bytes(), &field) != nil {
 		t.Fatal(res.Code, res.Body.String())
 	}
+	// A column added to the list changes its list type, never the catalog.
 	res = request(h, "GET", "/v1/content-types/"+typ.ID, "", testToken, "", "")
-	if res.Code != 200 || json.Unmarshal(res.Body.Bytes(), &typ) != nil || res.Header().Get("ETag") != `"2"` {
+	if res.Code != 200 || json.Unmarshal(res.Body.Bytes(), &typ) != nil || res.Header().Get("ETag") != `"1"` || len(typ.FieldIds) != 0 {
 		t.Fatal(res.Code, res.Body.String())
 	}
-	update := fmt.Sprintf(`{"name":"Invoice","field_ids":[%q],"rules":[{"key":"code_required","field":"code","op":"required_if","when_field":"code","when_value":"A","message":"Code required"}]}`, field.ID)
-	res = request(h, "PUT", "/v1/content-types/"+typ.ID, update, testToken, `"2"`, "application/json")
+	if lt = listType(); len(lt.FieldIds) != 1 || lt.FieldIds[0] != field.ID || lt.Version != 2 {
+		t.Fatal("list column", lt)
+	}
+	if res = request(h, "GET", "/v1/content-types/"+lt.ID, "", testToken, "", ""); res.Code != 404 {
+		t.Fatal("list type in the catalog", res.Code, res.Body.String())
+	}
+	update := fmt.Sprintf(`{"field_ids":[%q],"rules":[{"key":"code_required","field":"code","op":"required_if","when_field":"code","when_value":"A","message":"Code required"}]}`, field.ID)
+	listPath := path + "/" + lt.ID
+	if res = request(h, "PUT", listPath, update, testToken, `"1"`, "application/json"); res.Code != 412 {
+		t.Fatal(res.Code, res.Body.String())
+	}
+	res = request(h, "PUT", listPath, update, testToken, `"2"`, "application/json")
 	if res.Code != 200 || res.Header().Get("ETag") != `"3"` {
 		t.Fatal(res.Code, res.Body.String())
 	}
@@ -80,7 +104,7 @@ func TestRESTContentTypesBulkValidationAndRemoval(t *testing.T) {
 	if res.Code != 422 {
 		t.Fatal(res.Code, res.Body.String())
 	}
-	res = request(h, "PUT", "/v1/content-types/"+typ.ID, fmt.Sprintf(`{"name":"Invoice","field_ids":[%q]}`, field.ID), testToken, `"3"`, "application/json")
+	res = request(h, "PUT", listPath, fmt.Sprintf(`{"field_ids":[%q]}`, field.ID), testToken, `"3"`, "application/json")
 	if res.Code != 200 {
 		t.Fatal(res.Code, res.Body.String())
 	}

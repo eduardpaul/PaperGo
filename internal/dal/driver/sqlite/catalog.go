@@ -21,13 +21,6 @@ import (
 func (q Queries) FieldDefinitions(ctx context.Context, f catalog.FieldFilter) ([]*catalog.FieldDefinition, error) {
 	c := models.FieldDefinitions.Columns
 	query := models.FieldDefinitions.Query(sm.OrderBy(c.Key), sm.OrderBy(c.ID))
-	if f.CollectionID != "" {
-		ids, err := q.collectionFieldIDs(ctx, f.CollectionID)
-		if err != nil || len(ids) == 0 {
-			return []*catalog.FieldDefinition{}, err
-		}
-		query.Apply(sm.Where(c.ID.In(sqlite.Arg(anys(ids)...))))
-	}
 	for _, in := range []struct {
 		values []string
 		col    string
@@ -54,19 +47,6 @@ func (q Queries) FieldDefinitions(ctx context.Context, f catalog.FieldFilter) ([
 		}
 	}
 	return out, nil
-}
-
-// collectionFieldIDs lists the fields of the content types a collection accepts.
-func (q Queries) collectionFieldIDs(ctx context.Context, collectionID string) ([]string, error) {
-	types, err := q.ContentTypes(ctx, catalog.ContentTypeFilter{CollectionID: collectionID})
-	if err != nil {
-		return nil, err
-	}
-	ids := []string{}
-	for _, t := range types {
-		ids = append(ids, t.FieldIds...)
-	}
-	return ids, nil
 }
 
 func fieldTypes(types []catalog.FieldType) []string {
@@ -132,14 +112,23 @@ func (q Queries) ContentTypes(ctx context.Context, f catalog.ContentTypeFilter) 
 	if f.TemplateKey != "" {
 		query.Apply(sm.Where(c.TemplateKey.EQ(sqlite.Arg(f.TemplateKey))))
 	}
+	if f.ParentID != "" {
+		query.Apply(sm.Where(c.ParentID.EQ(sqlite.Arg(f.ParentID))))
+	}
+	if f.Catalog {
+		query.Apply(sm.Where(c.CollectionID.IsNull()))
+	}
 	if f.CollectionIDs != nil {
 		if len(f.CollectionIDs) == 0 {
 			return []*catalog.ContentType{}, nil
 		}
-		query.Apply(sm.Where(sqlite.Raw(`"content_types"."id" IN (SELECT content_type_id FROM collection_types WHERE container_id IN ?)`, sqlite.ArgGroup(anys(f.CollectionIDs)...))))
+		query.Apply(sm.Where(c.CollectionID.In(sqlite.Arg(anys(f.CollectionIDs)...))))
 	}
 	if f.CollectionID != "" {
-		query.Apply(sm.Where(sqlite.Raw(`"content_types"."id" IN (SELECT content_type_id FROM collection_types WHERE container_id = ?)`, f.CollectionID)))
+		query.Apply(sm.Where(c.CollectionID.EQ(sqlite.Arg(f.CollectionID))))
+	}
+	if (f.CollectionID != "" || f.CollectionIDs != nil) && !f.Detached {
+		query.Apply(sm.Where(c.Attached.EQ(sqlite.Arg(true))))
 	}
 	if f.FieldID != "" {
 		query.Apply(sm.Where(sqlite.Raw(`EXISTS(SELECT 1 FROM json_each("content_types"."field_ids") f WHERE f.value = ?)`, f.FieldID)))
@@ -170,11 +159,29 @@ func (q Queries) InsertContentType(ctx context.Context, t *catalog.ContentType) 
 	if err != nil {
 		return err
 	}
-	set.ID, set.CreatedAt, set.Key = omit.From(t.ID), omit.From(t.CreatedAt), omit.From(t.Key)
+	set.ID, set.CreatedAt, set.Key, set.Attached, set.IsDefault = omit.From(t.ID), omit.From(t.CreatedAt), omit.From(t.Key), omit.From(t.Attached), omit.From(t.IsDefault)
+	set.InNewMenu, set.MenuPosition = omit.From(t.InNewMenu), omit.From(int64(t.MenuPosition))
 	if t.TemplateKey != nil {
 		set.TemplateKey = nullable.String(*t.TemplateKey)
 	}
-	_, err = models.ContentTypes.Insert(set).Exec(ctx, q.exec)
+	if t.ParentID != nil {
+		set.ParentID = nullable.String(*t.ParentID)
+	}
+	if t.CollectionID != nil {
+		set.CollectionID = nullable.String(*t.CollectionID)
+	}
+	if _, err = models.ContentTypes.Insert(set).Exec(ctx, q.exec); err != nil {
+		return dberr.Translate(err)
+	}
+	return q.InsertLineage(ctx, t.ID, t.AncestorIDs)
+}
+
+func (q Queries) InsertLineage(ctx context.Context, id string, ancestorIDs []string) error {
+	lineage := make([]*models.ContentTypeAncestorSetter, 0, len(ancestorIDs)+1)
+	for depth, ancestor := range append([]string{id}, ancestorIDs...) {
+		lineage = append(lineage, &models.ContentTypeAncestorSetter{ContentTypeID: omit.From(id), AncestorID: omit.From(ancestor), Depth: omit.From(int64(depth))})
+	}
+	_, err := models.ContentTypeAncestors.Insert(bob.ToMods(lineage...)).Exec(ctx, q.exec)
 	return dberr.Translate(err)
 }
 
@@ -195,47 +202,60 @@ func (q Queries) BumpContentTypes(ctx context.Context, ids []string, at time.Tim
 	return dberr.Translate(err)
 }
 
-func (q Queries) Attachments(ctx context.Context, collectionID string) ([]catalog.Attachment, error) {
-	c := models.CollectionTypes.Columns
-	rows, err := models.CollectionTypes.Query(models.SelectWhere.CollectionTypes.ContainerID.EQ(collectionID), sm.OrderBy(c.ContentTypeID)).All(ctx, q.exec)
+func (q Queries) Lineages(ctx context.Context, ids []string) (map[string][]string, error) {
+	c := models.ContentTypeAncestors.Columns
+	rows, err := models.ContentTypeAncestors.Query(sm.Where(c.ContentTypeID.In(sqlite.Arg(anys(ids)...))), sm.Where(c.Depth.GT(sqlite.Arg(0))),
+		sm.OrderBy(c.ContentTypeID), sm.OrderBy(c.Depth)).All(ctx, q.exec)
 	if err != nil {
 		return nil, dberr.Translate(err)
 	}
-	out := make([]catalog.Attachment, len(rows))
-	for i, row := range rows {
-		out[i] = catalog.Attachment{ID: row.ID, CollectionID: row.ContainerID, ContentTypeID: row.ContentTypeID, IsDefault: row.IsDefault, CreatedAt: row.CreatedAt.UTC()}
+	out := map[string][]string{}
+	for _, row := range rows {
+		out[row.ContentTypeID] = append(out[row.ContentTypeID], row.AncestorID)
 	}
 	return out, nil
 }
 
-func (q Queries) InsertAttachment(ctx context.Context, a catalog.Attachment) error {
-	_, err := models.CollectionTypes.Insert(&models.CollectionTypeSetter{
-		ID: omit.From(a.ID), CreatedAt: omit.From(a.CreatedAt), ContainerID: omit.From(a.CollectionID), ContentTypeID: omit.From(a.ContentTypeID), IsDefault: omit.From(a.IsDefault),
-	}).Exec(ctx, q.exec)
+func (q Queries) Descendants(ctx context.Context, ids []string) ([]string, error) {
+	c := models.ContentTypeAncestors.Columns
+	query := models.ContentTypeAncestors.Query(sm.Columns(c.ContentTypeID), sm.Distinct(), sm.Where(c.AncestorID.In(sqlite.Arg(anys(ids)...))), sm.OrderBy(c.ContentTypeID))
+	out, err := bob.All(ctx, q.exec, query, scan.SingleColumnMapper[string])
+	return out, dberr.Translate(err)
+}
+
+func (q Queries) SetAttached(ctx context.Context, id string, attached bool) error {
+	set := &models.ContentTypeSetter{Attached: omit.From(attached)}
+	if !attached {
+		set.IsDefault = omit.From(false)
+	}
+	_, err := models.ContentTypes.Update(set.UpdateMod(), models.UpdateWhere.ContentTypes.ID.EQ(id)).Exec(ctx, q.exec)
 	return dberr.Translate(err)
 }
 
-// SetDefaultAttachment clears the old default first: a collection has at
+func (q Queries) SetNewMenu(ctx context.Context, id string, offered bool, position int) error {
+	set := &models.ContentTypeSetter{InNewMenu: omit.From(offered), MenuPosition: omit.From(int64(position))}
+	_, err := models.ContentTypes.Update(set.UpdateMod(), models.UpdateWhere.ContentTypes.ID.EQ(id)).Exec(ctx, q.exec)
+	return dberr.Translate(err)
+}
+
+// SetDefaultContentType clears the old default first: a collection has at
 // most one default at any time.
-func (q Queries) SetDefaultAttachment(ctx context.Context, collectionID, contentTypeID string) error {
-	w := models.UpdateWhere.CollectionTypes
-	off := &models.CollectionTypeSetter{IsDefault: omit.From(false)}
-	if _, err := models.CollectionTypes.Update(off.UpdateMod(), w.ContainerID.EQ(collectionID), w.IsDefault.EQ(true)).Exec(ctx, q.exec); err != nil {
+func (q Queries) SetDefaultContentType(ctx context.Context, collectionID, id string) error {
+	w := models.UpdateWhere.ContentTypes
+	off := &models.ContentTypeSetter{IsDefault: omit.From(false)}
+	if _, err := models.ContentTypes.Update(off.UpdateMod(), w.CollectionID.EQ(collectionID), w.IsDefault.EQ(true)).Exec(ctx, q.exec); err != nil {
 		return dberr.Translate(err)
 	}
-	on := &models.CollectionTypeSetter{IsDefault: omit.From(true)}
-	_, err := models.CollectionTypes.Update(on.UpdateMod(), w.ContainerID.EQ(collectionID), w.ContentTypeID.EQ(contentTypeID)).Exec(ctx, q.exec)
-	return dberr.Translate(err)
-}
-
-func (q Queries) DeleteAttachment(ctx context.Context, id string) error {
-	_, err := models.CollectionTypes.Delete(models.DeleteWhere.CollectionTypes.ID.EQ(id)).Exec(ctx, q.exec)
+	on := &models.ContentTypeSetter{IsDefault: omit.From(true), InNewMenu: omit.From(true)}
+	_, err := models.ContentTypes.Update(on.UpdateMod(), w.CollectionID.EQ(collectionID), w.ID.EQ(id)).Exec(ctx, q.exec)
 	return dberr.Translate(err)
 }
 
 func (q Queries) AttachedCollections(ctx context.Context, contentTypeIDs []string) ([]string, error) {
-	c := models.CollectionTypes.Columns
-	query := models.CollectionTypes.Query(sm.Columns(c.ContainerID), sm.Distinct(), sm.Where(c.ContentTypeID.In(sqlite.Arg(anys(contentTypeIDs)...))), sm.OrderBy(c.ContainerID))
+	c := models.ContentTypes.Columns
+	query := models.ContentTypes.Query(sm.Columns(c.CollectionID), sm.Distinct(), sm.Where(c.CollectionID.IsNotNull()), sm.Where(c.Attached.EQ(sqlite.Arg(true))),
+		sm.Where(sqlite.Raw(`"content_types"."id" IN (SELECT content_type_id FROM content_type_ancestors WHERE ancestor_id IN ?)`, sqlite.ArgGroup(anys(contentTypeIDs)...))),
+		sm.OrderBy(c.CollectionID))
 	out, err := bob.All(ctx, q.exec, query, scan.SingleColumnMapper[string])
 	return out, dberr.Translate(err)
 }
@@ -244,6 +264,18 @@ func (q Queries) ContentTypeInUse(ctx context.Context, collectionID, contentType
 	w := models.SelectWhere.Resources
 	ok, err := models.Resources.Query(w.ContainerID.EQ(collectionID), w.ContentTypeID.EQ(contentTypeID), w.DeletedAt.IsNull()).Exists(ctx, q.exec)
 	return ok, dberr.Translate(err)
+}
+
+func (q Queries) DeleteUnusedListTypes(ctx context.Context, collectionID string) error {
+	_, err := q.exec.ExecContext(ctx, `DELETE FROM content_types WHERE collection_id = ?
+ AND NOT EXISTS (SELECT 1 FROM resources r WHERE r.content_type_id = content_types.id)
+ AND NOT EXISTS (SELECT 1 FROM item_revisions v WHERE v.content_type_id = content_types.id)`, collectionID)
+	return dberr.Translate(err)
+}
+
+func (q Queries) DeleteContentType(ctx context.Context, id string) error {
+	_, err := models.ContentTypes.Delete(models.DeleteWhere.ContentTypes.ID.EQ(id)).Exec(ctx, q.exec)
+	return dberr.Translate(err)
 }
 
 func fieldSetter(d *catalog.FieldDefinition) (*models.FieldDefinitionSetter, error) {
@@ -276,17 +308,36 @@ func contentTypeSetter(t *catalog.ContentType) (*models.ContentTypeSetter, error
 	if err != nil {
 		return nil, err
 	}
-	return &models.ContentTypeSetter{Name: omit.From(t.Name), FieldIds: omit.From(types.NewJSON(t.FieldIds)), Rules: omit.From(types.NewJSON(json.RawMessage(rules))),
-		UpdatedAt: omit.From(t.UpdatedAt), Version: omit.From(int64(t.Version))}, nil
+	settings, err := json.Marshal(t.FieldSettings)
+	if err != nil {
+		return nil, err
+	}
+	set := &models.ContentTypeSetter{Name: omit.From(t.Name), FieldIds: omit.From(types.NewJSON(t.FieldIds)), HiddenFieldIds: omit.From(types.NewJSON(t.HiddenFieldIds)),
+		Rules: omit.From(types.NewJSON(json.RawMessage(rules))), UpdatedAt: omit.From(t.UpdatedAt), Version: omit.From(int64(t.Version))}
+	set.FieldOrder, set.FieldSettings = omit.From(types.NewJSON(t.FieldOrder)), omit.From(types.NewJSON(json.RawMessage(settings)))
+	if t.Catalog() {
+		set.GroupName = nullable.String(t.Group)
+	}
+	return set, nil
 }
 
 func contentTypeRecord(row *models.ContentType) (*catalog.ContentType, error) {
-	out := &catalog.ContentType{ID: row.ID, CreatedAt: row.CreatedAt.UTC(), UpdatedAt: row.UpdatedAt.UTC(), Key: row.Key, Name: row.Name, TemplateKey: row.TemplateKey.Ptr(),
-		FieldIds: row.FieldIds.Val, Version: int(row.Version)}
+	out := &catalog.ContentType{ID: row.ID, CreatedAt: row.CreatedAt.UTC(), UpdatedAt: row.UpdatedAt.UTC(), Key: row.Key, Name: row.Name, Group: row.GroupName.GetOr(""), TemplateKey: row.TemplateKey.Ptr(),
+		ParentID: row.ParentID.Ptr(), CollectionID: row.CollectionID.Ptr(), Attached: row.Attached, IsDefault: row.IsDefault, InNewMenu: row.InNewMenu, MenuPosition: int(row.MenuPosition),
+		FieldIds: row.FieldIds.Val, HiddenFieldIds: row.HiddenFieldIds.Val, Version: int(row.Version)}
 	if out.FieldIds == nil {
 		out.FieldIds = []string{}
 	}
+	if out.HiddenFieldIds == nil {
+		out.HiddenFieldIds = []string{}
+	}
 	if err := json.Unmarshal(row.Rules.Val, &out.Rules); err != nil {
+		return nil, err
+	}
+	if out.FieldOrder = row.FieldOrder.Val; out.FieldOrder == nil {
+		out.FieldOrder = []string{}
+	}
+	if err := json.Unmarshal(row.FieldSettings.Val, &out.FieldSettings); err != nil {
 		return nil, err
 	}
 	return out, nil

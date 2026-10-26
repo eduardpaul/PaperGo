@@ -6,12 +6,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"maps"
 	"papergo/internal/dal/catalog"
 	"papergo/internal/dal/content"
 	"papergo/internal/dal/refs"
 	"papergo/internal/dal/resources"
 	"papergo/internal/dal/taxonomy"
 	viewstore "papergo/internal/dal/views"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -69,22 +71,31 @@ func (s *Service) smartCandidates(ctx context.Context, subject string, f *viewst
 		return []smartCandidate{}, nil
 	}
 	fields := map[string][]*catalog.FieldDefinition{}
-	byCollection := map[string][]*catalog.ContentType{}
+	accepted := map[string][]*catalog.ContentType{}
 	for _, c := range collections {
 		defs, e := s.collectionFields(ctx, c.ID)
 		if e != nil {
 			return nil, e
 		}
 		fields[c.ID] = defs
-		types, e := s.collectionTypes(ctx, c.ID)
-		if e != nil {
+		if accepted[c.ID], e = s.collectionTypes(ctx, c.ID); e != nil {
 			return nil, e
 		}
-		for _, typ := range types {
+	}
+	// A selector names a type or any type it derives from.
+	ancestors, err := s.ancestorTypes(ctx, slices.Concat(slices.Collect(maps.Values(accepted))...))
+	if err != nil {
+		return nil, err
+	}
+	byCollection := map[string][]*catalog.ContentType{}
+	for _, c := range collections {
+		for _, typ := range accepted[c.ID] {
 			if len(d.ContentTypes) > 0 {
 				match := false
-				for _, key := range d.ContentTypes {
-					match = match || strings.EqualFold(key, typ.Key) || strings.EqualFold(key, typ.Name)
+				for _, lineage := range append([]*catalog.ContentType{typ}, ancestors[typ.ID]...) {
+					for _, key := range d.ContentTypes {
+						match = match || strings.EqualFold(key, lineage.Key) || strings.EqualFold(key, lineage.Name)
+					}
 				}
 				if !match {
 					continue

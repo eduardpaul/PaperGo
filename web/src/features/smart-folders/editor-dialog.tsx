@@ -3,7 +3,8 @@ import { useMemo, useState } from 'react';
 import { api } from '@/api/http';
 import { parseJSON, stringifyJSON } from '@/api/json';
 import { collectionChildren, keys, resourceQuery, templatesQuery, termsById, workspacesQuery } from '@/api/queries';
-import type { FieldDefinition, FilterExpr, Page, SmartFolder, SmartFolderDefinition, SmartFolderEntry } from '@/api/types';
+import type { FieldDefinition, FilterExpr, Page, SearchContentType, SmartFolder, SmartFolderDefinition, SmartFolderEntry } from '@/api/types';
+import { treeLabel, typeTree } from '@/features/lists/schema';
 import { FormDialog } from '@/components/form-dialog';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
@@ -59,9 +60,10 @@ function Editor({ folder, onClose, onSaved }: { folder?: SmartFolder; onClose: (
   const selectedPlace = collections.length === 1 ? places.data?.find(place => place.name === collections[0])?.id : undefined;
   const metadata = useQuery({ queryKey: ['resources', 'smart-folder-fields', workspaceId || undefined, selectedPlace], queryFn: async () => (await api<Page<SmartQueryField>>('/v1/search/fields', { query: { workspace_id: workspaceId, collection_id: selectedPlace } })).data.value });
   const fields = useMemo(() => smartQueryFields(metadata.data ?? []), [metadata.data]);
-  const types = useQuery({ queryKey: ['search', 'content-types', workspaceId || undefined, selectedPlace], queryFn: async () => (await api<{ id: string; key: string; name: string }[]>('/v1/search/content-types', { query: { workspace_id: workspaceId, collection_id: selectedPlace } })).data });
+  const types = useQuery({ queryKey: ['search', 'content-types', workspaceId || undefined, selectedPlace], queryFn: async () => (await api<SearchContentType[]>('/v1/search/content-types', { query: { workspace_id: workspaceId, collection_id: selectedPlace } })).data });
   const templateList = useQuery(templatesQuery);
-  const typeOptions = (types.data ?? []).map(type => ({ value: type.key, label: type.name }));
+  // A selected type also matches the types deriving from it.
+  const typeOptions = typeTree(types.data ?? []).map(({ type, depth }) => ({ value: type.key, label: treeLabel(type.name, depth) }));
   let definition: SmartFolderDefinition;
   let invalid: string | undefined;
   try {

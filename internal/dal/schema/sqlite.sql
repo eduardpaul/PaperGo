@@ -211,19 +211,57 @@ CREATE TABLE field_definitions (
 );
 CREATE INDEX fielddefinition_key ON field_definitions("key");
 
+-- A catalog type (no collection_id) is shared by the organization. A list
+-- type (collection_id) is the copy of one catalog type that a list or library
+-- customizes; it derives from that type and keeps its key and name. Every type
+-- but a root derives from a parent, which never changes. field_ids and rules
+-- are the type's own; a type also has every field and rule of its ancestors.
 CREATE TABLE content_types (
     id TEXT PRIMARY KEY NOT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "key" TEXT NOT NULL,
     name TEXT NOT NULL,
+    -- group_name files a catalog type under a heading of the catalog.
+    group_name TEXT CHECK (collection_id IS NULL OR group_name IS NULL),
     template_key TEXT,
+    parent_id TEXT REFERENCES content_types(id) ON DELETE RESTRICT,
+    -- Item history can outlive a purged collection, so collection_id has no
+    -- foreign key; purging a collection deletes the list types nothing uses.
+    collection_id TEXT,
+    -- attached is false once the collection stops accepting the type; its
+    -- items' history keeps it, and attaching the catalog type again restores it.
+    attached BOOLEAN NOT NULL DEFAULT TRUE CHECK (attached IN (0, 1) AND (collection_id IS NOT NULL OR attached = 1)),
+    is_default BOOLEAN NOT NULL DEFAULT FALSE CHECK (is_default IN (0, 1) AND (is_default = 0 OR (collection_id IS NOT NULL AND attached = 1))),
+    -- in_new_menu offers a list type when people create items, in menu_position
+    -- order; the default always is.
+    in_new_menu BOOLEAN NOT NULL DEFAULT TRUE CHECK (in_new_menu IN (0, 1) AND (in_new_menu = 1 OR is_default = 0)),
+    menu_position INTEGER NOT NULL DEFAULT 0 CHECK (menu_position >= 0),
     field_ids TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(field_ids) AND json_type(field_ids) = 'array'),
+    -- hidden_field_ids are inherited fields forms leave out.
+    hidden_field_ids TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(hidden_field_ids) AND json_type(hidden_field_ids) = 'array'),
     rules TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(rules) AND json_type(rules) = 'array'),
-    version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0)
+    -- field_order orders the type's fields in forms; field_settings change,
+    -- per field, whether it is required and its default.
+    field_order TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(field_order) AND json_type(field_order) = 'array'),
+    field_settings TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(field_settings) AND json_type(field_settings) = 'array'),
+    version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0),
+    CHECK (collection_id IS NULL OR (parent_id IS NOT NULL AND template_key IS NULL))
 );
-CREATE INDEX contenttype_key ON content_types("key");
+CREATE UNIQUE INDEX contenttype_key ON content_types("key") WHERE collection_id IS NULL;
 CREATE UNIQUE INDEX contenttype_template_key ON content_types(template_key);
+CREATE INDEX contenttype_parent_id ON content_types(parent_id);
+CREATE UNIQUE INDEX contenttype_collection_id_parent_id ON content_types(collection_id, parent_id) WHERE collection_id IS NOT NULL;
+CREATE UNIQUE INDEX contenttype_collection_id ON content_types(collection_id) WHERE is_default = 1;
+
+-- content_type_ancestors holds each type's lineage, itself at depth 0.
+CREATE TABLE content_type_ancestors (
+    content_type_id TEXT NOT NULL REFERENCES content_types(id) ON DELETE CASCADE,
+    ancestor_id TEXT NOT NULL REFERENCES content_types(id) ON DELETE CASCADE,
+    depth INTEGER NOT NULL CHECK (depth BETWEEN 0 AND 8),
+    PRIMARY KEY (ancestor_id, content_type_id)
+) WITHOUT ROWID;
+CREATE UNIQUE INDEX contenttypeancestor_content_type_id_depth ON content_type_ancestors(content_type_id, depth);
 
 -- =============================================================================
 -- 4. Resources, Blobs, Revisions & Surfaces
@@ -298,17 +336,6 @@ CREATE TABLE resource_keywords (
     PRIMARY KEY (keyword, resource_id)
 ) WITHOUT ROWID;
 CREATE INDEX resource_keywords_by_resource ON resource_keywords(resource_id, keyword);
-
-CREATE TABLE collection_types (
-    id TEXT PRIMARY KEY NOT NULL,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    container_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
-    content_type_id TEXT NOT NULL REFERENCES content_types(id) ON DELETE RESTRICT,
-    is_default BOOLEAN NOT NULL DEFAULT FALSE CHECK (is_default IN (0, 1))
-);
-CREATE UNIQUE INDEX collectiontype_container_id_content_type_id ON collection_types(container_id, content_type_id);
-CREATE INDEX collectiontype_content_type_id_container_id ON collection_types(content_type_id, container_id);
-CREATE UNIQUE INDEX collectiontype_container_id ON collection_types(container_id) WHERE is_default = 1;
 
 CREATE TABLE schema_revisions (
     id TEXT PRIMARY KEY NOT NULL,

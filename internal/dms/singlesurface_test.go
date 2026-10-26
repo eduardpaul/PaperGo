@@ -138,7 +138,7 @@ func TestCollectionsWithoutPublishingKeepOneSurface(t *testing.T) {
 func TestMovesFollowTheDestinationSurfaces(t *testing.T) {
 	s, w, publishing := fixture(t)
 	item := create(t, s, publishing.ID, "item", "Traveller", nil)
-	plain, err := s.Create(testContext, "alice", w.ID, CreateResource{Kind: "list", Name: "Plain", ContentTypeIDs: []string{*item.ContentTypeID}})
+	plain, err := s.Create(testContext, "alice", w.ID, CreateResource{Kind: "list", Name: "Plain"})
 	if err != nil {
 		t.Fatal(err)
 	}

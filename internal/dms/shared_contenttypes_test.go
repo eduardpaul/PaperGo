@@ -90,7 +90,7 @@ func TestSharedContentTypeAttachmentConflictsAndDefaultIsolation(t *testing.T) {
 	if after, e := s.Get(ctx, "bob", b.ID); e != nil || after.Version != changed.Version || *after.SchemaHeadID != *changed.SchemaHeadID {
 		t.Fatal("failed attachment changed schema", after, e)
 	}
-	if defaultType, e := s.contentType(ctx, b.ID, ""); e != nil || defaultType.ID != typ.ID {
+	if defaultType, e := s.contentType(ctx, b.ID, ""); e != nil || *defaultType.ParentID != typ.ID {
 		t.Fatal("failed attachment changed default", defaultType, e)
 	}
 	if _, e = s.contentType(ctx, b.ID, conflict.ID); !errors.Is(e, ErrNotFound) {
@@ -146,7 +146,7 @@ func TestSharedFieldRemovalChecksRemoteViewsAndRetainsHistory(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	defs, _, e := typedDefinitions(history.Definition, typ.ID)
+	defs, _, e := typedDefinitions(history.Definition, *r.ContentTypeID)
 	if e != nil || len(defs) != 1 || defs[0].Key != d.Key {
 		t.Fatal("history lost removed definition", defs, e)
 	}

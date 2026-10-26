@@ -661,14 +661,30 @@ func (s *Service) importCorePackage(ctx context.Context, store storage.Store, su
 	return result, s.auditCatalog(ctx, subject, "portability.import", map[string]any{"rows": result.Rows, "objects": result.Objects})
 }
 
+// orderPackageTypes puts content types after their parents; a parent the
+// package does not carry already exists.
+func orderPackageTypes(rows []map[string]any) ([]map[string]any, error) {
+	carried := map[any]bool{}
+	for _, row := range rows {
+		carried[row["id"]] = true
+	}
+	return orderByParent(rows, func(parent any) bool { return !carried[parent] })
+}
+
 func orderPackageParents(rows []map[string]any) ([]map[string]any, error) {
+	return orderByParent(rows, func(any) bool { return false })
+}
+
+// orderByParent puts rows after their parents; a row whose parent is nil or
+// existing needs none.
+func orderByParent(rows []map[string]any, existing func(parent any) bool) ([]map[string]any, error) {
 	var ordered []map[string]any
 	done := map[any]bool{}
 	for len(rows) > 0 {
 		next := []map[string]any{}
 		for _, row := range rows {
 			parent := row["parent_id"]
-			if parent == nil || done[parent] {
+			if parent == nil || done[parent] || existing(parent) {
 				ordered = append(ordered, row)
 				done[row["id"]] = true
 			} else {
@@ -747,9 +763,15 @@ func (s *Service) applyCorePackage(ctx context.Context, subject string, p corePa
 				return err
 			}
 		}
-		// Collections must exist before their schema and attachments; item
-		// initial state deliberately has no revision pointers or tombstone.
-		if table == "collection_types" {
+		if table == "content_types" {
+			rows, err = orderPackageTypes(rows)
+			if err != nil {
+				return err
+			}
+		}
+		// Collections must exist before their schema; item initial state
+		// deliberately has no revision pointers or tombstone.
+		if table == "schema_revisions" {
 			for _, row := range packageResources {
 				if row["kind"] == "workspace" || row["kind"] == "list" || row["kind"] == "library" {
 					if err = s.insertPackageResource(ctx, row); err != nil {
@@ -804,6 +826,12 @@ func (s *Service) applyCorePackage(ctx context.Context, subject string, p corePa
 			}
 			if err = s.DAL.Portable().Insert(ctx, table, row); err != nil {
 				return fmt.Errorf("package %s: %w", table, err)
+			}
+			// Lineage derives from parents, so packages do not carry it.
+			if table == "content_types" {
+				if err = s.DAL.Catalog().RecordLineage(ctx, fmt.Sprint(row["id"])); err != nil {
+					return fmt.Errorf("package %s: %w", table, catalogError(err))
+				}
 			}
 		}
 	}

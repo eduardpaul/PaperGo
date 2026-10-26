@@ -11,6 +11,7 @@ import (
 
 // CollectionTemplate provisions a complete collection. Modules register templates
 // before serving requests; the first content type is the collection default.
+// Template content types are catalog types deriving from Item.
 type CollectionTemplate struct {
 	Key               string          `json:"key"`
 	Name              string          `json:"name"`
@@ -79,7 +80,7 @@ func (s *Service) RegisterCollectionTemplate(in CollectionTemplate) error {
 	}
 	seen := map[string]bool{}
 	for _, typ := range in.ContentTypes {
-		if !fieldKey.MatchString(typ.Key) || len(typ.Fields) > 200 {
+		if !fieldKey.MatchString(typ.Key) || typ.Key == rootTypeKey || len(typ.Fields) > 200 {
 			return invalid("invalid template content type")
 		}
 		if err := validateName(typ.Name); err != nil {
@@ -202,13 +203,18 @@ func (s *Service) provisionCollectionTypes(ctx context.Context, subject string, 
 			}
 			fieldIDs = append(fieldIDs, live.ID)
 		}
-		candidate := ContentTypeInput{Key: recipe.Key, Name: recipe.Name, FieldIds: fieldIDs, Rules: recipe.Rules}
-		if err = s.validateContentType(ctx, &candidate); err != nil {
-			return nil, err
-		}
-		typ, err = s.persistContentType(ctx, candidate, recipe.Key)
+		root, err := s.rootType(ctx, subject)
 		if err != nil {
 			return nil, err
+		}
+		schema := ListTypeInput{FieldIds: fieldIDs, Rules: recipe.Rules}
+		if err = s.validateTypeSchema(ctx, subject, root, &schema); err != nil {
+			return nil, err
+		}
+		key := recipe.Key
+		typ, err = s.DAL.Catalog().CreateContentType(ctx, catalog.ContentType{Key: recipe.Key, Name: recipe.Name, TemplateKey: &key, ParentID: &root.ID, FieldIds: schema.FieldIds, Rules: schema.Rules})
+		if err != nil {
+			return nil, catalogError(err)
 		}
 		if err = s.auditCatalog(ctx, subject, "content_type.create", map[string]any{"content_type_id": typ.ID, "template_key": recipe.Key}); err != nil {
 			return nil, err

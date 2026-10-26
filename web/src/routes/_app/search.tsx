@@ -8,7 +8,8 @@ import { useApiPages } from '@/api/pages';
 import { workflowCatalogQuery, workspacesQuery } from '@/api/queries';
 import { searchRequest } from '@/api/requests';
 import { cn } from '@/lib/utils';
-import type { SearchFacetValue, SearchHit, SearchPage } from '@/api/types';
+import type { SearchContentType, SearchFacetValue, SearchHit, SearchPage } from '@/api/types';
+import { treeLabel, typeTree } from '@/features/lists/schema';
 import { FileAction } from '@/features/files/file-action';
 import { FileTypeIcon } from '@/features/files/file-types';
 import { Page, PageHeader } from '@/components/page';
@@ -59,7 +60,7 @@ function SearchPage() {
   const params = Route.useSearch();
   const { q, workspace, collection, keyword, content_type } = params;
   const archive = params.archive ?? 'active';
-  const types = useQuery({ queryKey: ['search', 'content-types', workspace, collection], queryFn: async () => (await api<{ id: string; name: string }[]>('/v1/search/content-types', { query: { workspace_id: workspace, collection_id: collection } })).data });
+  const types = useQuery({ queryKey: ['search', 'content-types', workspace, collection], queryFn: async () => (await api<SearchContentType[]>('/v1/search/content-types', { query: { workspace_id: workspace, collection_id: collection } })).data });
   const kind: Kind = params.kind ?? 'item';
   const navigate = useNavigate({ from: Route.fullPath });
   const workspaces = useQuery(workspacesQuery);
@@ -130,7 +131,7 @@ function SearchPage() {
         <div className="w-52"><Label htmlFor="search-type">Content type</Label>
           <Select id="search-type" className="mt-1" value={content_type ?? ''} onChange={event => void navigate({ search: current => ({ ...current, content_type: event.target.value || undefined }) })}>
             <option value="">All content types</option>
-            {types.data?.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}
+            {typeTree(types.data ?? []).map(({ type, depth }) => <option key={type.id} value={type.id}>{treeLabel(type.name, depth)}</option>)}
             {content_type && !types.data?.some(type => type.id === content_type) && <option value={content_type}>Selected content type</option>}
           </Select>
         </div>

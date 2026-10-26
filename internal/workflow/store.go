@@ -359,12 +359,30 @@ func checkDefinition(ctx context.Context, t *dms.Service, subject, workspaceID s
 			checked[tr.CollectionID] = true
 		}
 		if tr.ContentTypeID != "" {
-			ok, err := t.DAL.Catalog().Accepts(ctx, tr.CollectionID, tr.ContentTypeID)
+			// A list type stands for its catalog type. The collection
+			// accepts the type or a subtype.
+			catalogTypes, err := t.DAL.Catalog().CatalogTypeIDs(ctx, []string{tr.ContentTypeID})
 			if err != nil {
 				return err
 			}
-			if !ok {
-				return dms.Invalid(at + "content_type_id must belong to collection_id")
+			typ := catalogTypes[tr.ContentTypeID]
+			if typ == "" {
+				return dms.Invalid(at + "content_type_id must be a content type")
+			}
+			if tr.CollectionID != "" {
+				collections, err := t.DAL.Catalog().AttachedCollections(ctx, []string{typ})
+				if err != nil {
+					return err
+				}
+				if !slices.Contains(collections, tr.CollectionID) {
+					return dms.Invalid(at + "collection_id must accept content_type_id or a subtype")
+				}
+			}
+			if tr.Type == TriggerSchedule && def.Condition != nil {
+				// A typed schedule queries the type's fields.
+				if _, err = t.Query(ctx, subject, tr.CollectionID, dms.QueryRequest{Query: dms.QuerySpec{Filter: def.Condition, ContentTypeID: typ}, Surface: "head", Limit: 1}); err != nil {
+					return dms.Invalid(at + "condition: " + err.Error())
+				}
 			}
 		}
 		for _, id := range tr.Terms {
@@ -1217,7 +1235,12 @@ func (m *matchable) accepts(ctx context.Context, t *dms.Service, e dms.Event) (b
 					typ = *r.ContentTypeID
 				}
 			}
-			if typ != tr.ContentTypeID {
+			// The trigger's type matches its subtypes too.
+			derives, err := t.DAL.Catalog().Derives(ctx, typ, tr.ContentTypeID)
+			if err != nil {
+				return false, err
+			}
+			if !derives {
 				continue
 			}
 		}
@@ -1338,7 +1361,7 @@ func occurrence(ctx context.Context, t *dms.Service, row workflows.Trigger, now 
 	}
 	data["surface"] = surface
 	var events []dms.Event
-	q := dms.QueryRequest{Query: dms.QuerySpec{Filter: def.Condition}, Surface: surface, Limit: 100}
+	q := dms.QueryRequest{Query: dms.QuerySpec{Filter: def.Condition, ContentTypeID: tr.ContentTypeID}, Surface: surface, Limit: 100}
 	for len(events) < MaxScheduled {
 		res, err := t.Query(ctx, v.CreatedBy, tr.CollectionID, q)
 		if err != nil {

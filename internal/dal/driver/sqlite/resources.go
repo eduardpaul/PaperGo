@@ -377,7 +377,7 @@ func (q Queries) ClearWorkspace(ctx context.Context, workspaceID, actor string, 
 		"DELETE FROM item_revisions WHERE item_id IN (" + sub + ")",
 		"DELETE FROM blobs WHERE item_id IN (" + sub + ")",
 		"DELETE FROM grants WHERE resource_id IN (" + sub + ")",
-		"DELETE FROM collection_types WHERE container_id IN (" + sub + ")",
+		"UPDATE content_types SET attached = FALSE, is_default = FALSE WHERE collection_id IN (" + sub + ")",
 		"DELETE FROM schema_revisions WHERE container_id IN (" + sub + ")",
 	}
 	// Tombstones release retention and last-owner guards during the purge.

@@ -177,7 +177,7 @@ func filters(t *testing.T, s search.Store) {
 	}{
 		"workspace":     {search.Filter{WorkspaceID: "w2"}, []string{"b"}},
 		"collection":    {search.Filter{CollectionID: "c"}, []string{"a", "f"}},
-		"content type":  {search.Filter{ContentTypeID: "ct2"}, []string{"b"}},
+		"content type":  {search.Filter{ContentTypeIDs: []string{"ct2", "other"}}, []string{"b"}},
 		"kind":          {search.Filter{Kinds: []string{"folder"}}, []string{"f"}},
 		"terms":         {search.Filter{TermIDs: []string{"t2", "t9"}}, []string{"a"}},
 		"keyword":       {search.Filter{Keyword: "red"}, []string{"a"}},

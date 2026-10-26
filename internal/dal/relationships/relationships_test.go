@@ -23,7 +23,7 @@ func testRelationships(t *testing.T, s *dal.Store) {
 	ctx := context.Background()
 	f := daltest.NewFixture(t, s)
 	for _, id := range []string{"b", "c"} {
-		if _, err := s.Resources().Create(ctx, resources.New{ID: id, WorkspaceID: f.Workspace, ParentID: f.Source, ContainerID: f.Source, ContentTypeID: "type", Kind: refs.KindItem, Name: id}); err != nil {
+		if _, err := s.Resources().Create(ctx, resources.New{ID: id, WorkspaceID: f.Workspace, ParentID: f.Source, ContainerID: f.Source, ContentTypeID: f.SourceType, Kind: refs.KindItem, Name: id}); err != nil {
 			t.Fatal(err)
 		}
 	}

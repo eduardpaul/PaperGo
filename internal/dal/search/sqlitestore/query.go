@@ -124,11 +124,15 @@ func where(f search.Filter) (string, []any, error) {
 		conds = append(conds, "d.kind IN (SELECT value FROM json_each(?))")
 		args = append(args, jsonList(f.Kinds))
 	}
-	for column, value := range map[string]string{"workspace_id": f.WorkspaceID, "collection_id": f.CollectionID, "content_type_id": f.ContentTypeID, "created_by": f.CreatedBy, "modified_by": f.ModifiedBy} {
+	for column, value := range map[string]string{"workspace_id": f.WorkspaceID, "collection_id": f.CollectionID, "created_by": f.CreatedBy, "modified_by": f.ModifiedBy} {
 		if value != "" {
 			conds = append(conds, "d."+column+"=?")
 			args = append(args, value)
 		}
+	}
+	if len(f.ContentTypeIDs) > 0 {
+		conds = append(conds, "d.content_type_id IN (SELECT value FROM json_each(?))")
+		args = append(args, jsonList(f.ContentTypeIDs))
 	}
 	if f.Within != nil {
 		conds = append(conds, "(d.workspace_id IN (SELECT value FROM json_each(?)) OR d.collection_id IN (SELECT value FROM json_each(?)))")

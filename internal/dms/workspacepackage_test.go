@@ -515,7 +515,7 @@ func TestWorkspacePackageTemplateTypesAndLiteralDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sourceType := types[0].ContentType
+	sourceType := types[0]
 	store, err := storage.NewLocal(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -533,12 +533,13 @@ func TestWorkspacePackageTemplateTypesAndLiteralDefaults(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			typ := targetTypes[0].ContentType
-			if typ.ID == sourceType.ID {
+			typ := targetTypes[0]
+			if *typ.ParentID == *sourceType.ParentID {
 				t.Fatal("fixture must use independent catalog identities")
 			}
 			if conflict {
-				if _, err = target.UpdateContentType(ctx, "alice", typ.ID, typ.Version, ContentTypeInput{Name: "Customized contact", FieldIds: typ.FieldIds}); err != nil {
+				shared := catalogOf(t, target, typ)
+				if _, err = target.UpdateContentType(ctx, "alice", shared.ID, shared.Version, ContentTypeInput{Name: "Customized contact", FieldIds: shared.FieldIds}); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -562,7 +563,7 @@ func TestWorkspacePackageTemplateTypesAndLiteralDefaults(t *testing.T) {
 				t.Fatal(err)
 			}
 			copiedTypes, err := target.CollectionContentTypes(ctx, "alice", copied.ID)
-			if err != nil || copiedTypes[0].ID != typ.ID {
+			if err != nil || copiedTypes[0].ID == typ.ID || *copiedTypes[0].ParentID != *typ.ParentID {
 				t.Fatal("template type not reused", copiedTypes, err)
 			}
 			views, err := target.Views(ctx, "alice", copied.ID, "", 50)

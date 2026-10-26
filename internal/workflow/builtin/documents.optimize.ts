@@ -13,6 +13,7 @@ interface Params {
   minimum_scale: number;
   quality: number;
   approvers?: string[];
+  content_type?: string;
 }
 
 // The images optimization reads; other files start no run.
@@ -20,8 +21,8 @@ const images = ["image/jpeg", "image/png", "image/webp"];
 
 export default workflow<unknown, unknown, Params>({
   triggers: (p) => [
-    { type: "file.added", collection_id: p.collection, media_types: images },
-    { type: "file.updated", collection_id: p.collection, media_types: images },
+    { type: "file.added", collection_id: p.collection, content_type_id: p.content_type, media_types: images },
+    { type: "file.updated", collection_id: p.collection, content_type_id: p.content_type, media_types: images },
     { type: "manual", collection_id: p.collection, selection: "per_item" },
   ],
   concurrency: "replace",

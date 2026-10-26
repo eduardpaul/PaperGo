@@ -5,7 +5,8 @@ import { useState } from 'react';
 import { api } from '@/api/http';
 import { allPages, useApiPages } from '@/api/pages';
 import { resourceQuery, workspacesQuery } from '@/api/queries';
-import type { Resource, SearchHit } from '@/api/types';
+import type { Resource, SearchContentType, SearchHit } from '@/api/types';
+import { treeLabel, typeTree } from '@/features/lists/schema';
 import { KeywordInput } from '@/components/keyword-input';
 import { Page, PageHeader } from '@/components/page';
 import { Button } from '@/components/ui/button';
@@ -34,7 +35,7 @@ function ArchivePage() {
   const people = usePeopleNames();
   const workspaces = useQuery(workspacesQuery);
   const collections = useQuery({ queryKey: ['archive-collections', filters.workspace], enabled: !!filters.workspace, queryFn: async () => (await allPages<Resource>(`/v1/resources/${filters.workspace}/children`)).filter(resource => resource.kind === 'list' || resource.kind === 'library') });
-  const types = useQuery({ queryKey: ['archive-content-types', filters.workspace, filters.collection], queryFn: async () => (await api<{ id: string; name: string }[]>('/v1/search/content-types', { query: { workspace_id: filters.workspace || undefined, collection_id: filters.collection || undefined } })).data });
+  const types = useQuery({ queryKey: ['archive-content-types', filters.workspace, filters.collection], queryFn: async () => (await api<SearchContentType[]>('/v1/search/content-types', { query: { workspace_id: filters.workspace || undefined, collection_id: filters.collection || undefined } })).data });
   const fullText = filters.mode === 'fulltext' && searchAvailable;
   const text = useDebounced(filters.q.trim(), 300);
   const query = {
@@ -74,7 +75,7 @@ function ArchivePage() {
       <div><Label htmlFor="archive-mode">Search in</Label><Select id="archive-mode" value={fullText ? 'fulltext' : 'name'} onChange={event => setFilter('mode', event.target.value)}><option value="name">Names</option>{searchAvailable && <option value="fulltext">Full text</option>}</Select></div>
       <div><Label htmlFor="archive-workspace">Workspace</Label><Select id="archive-workspace" value={filters.workspace} onChange={event => setFilter('workspace', event.target.value)}><option value="">All workspaces</option>{workspaces.data?.map(workspace => <option key={workspace.id} value={workspace.id}>{workspaceName(workspace.id)}</option>)}</Select></div>
       <div><Label htmlFor="archive-collection">List or library</Label><Select id="archive-collection" value={filters.collection} disabled={!filters.workspace} onChange={event => setFilter('collection', event.target.value)}><option value="">{filters.workspace ? 'All lists and libraries' : 'Choose a workspace first'}</option>{collections.data?.map(collection => <option key={collection.id} value={collection.id}>{collection.name}</option>)}</Select></div>
-      <div><Label htmlFor="archive-type">Content type</Label><Select id="archive-type" value={filters.type} onChange={event => setFilter('type', event.target.value)}><option value="">All content types</option>{types.data?.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}</Select></div>
+      <div><Label htmlFor="archive-type">Content type</Label><Select id="archive-type" value={filters.type} onChange={event => setFilter('type', event.target.value)}><option value="">All content types</option>{typeTree(types.data ?? []).map(({ type, depth }) => <option key={type.id} value={type.id}>{treeLabel(type.name, depth)}</option>)}</Select></div>
       <div><Label htmlFor="archive-keyword">Keyword</Label><KeywordInput limit={1} id="archive-keyword" value={filters.keyword ? [filters.keyword] : []} onChange={values => setFilter('keyword', values.at(-1) ?? '')} /></div>
       <div><FieldEditor id="archive-by" field={{ id: '$archived_by', key: '$archived_by', label: 'Archived by', type: 'person' }} value={filters.by || null} onChange={value => setFilter('by', typeof value === 'string' ? value : '')} /></div>
       <div className="flex gap-2"><div className="min-w-0 flex-1"><Label htmlFor="archive-from">Archived from (UTC)</Label><Input type="date" id="archive-from" value={filters.from} onChange={event => setFilter('from', event.target.value)} /></div><div className="min-w-0 flex-1"><Label htmlFor="archive-to">Through (UTC)</Label><Input type="date" id="archive-to" value={filters.to} onChange={event => setFilter('to', event.target.value)} /></div></div>

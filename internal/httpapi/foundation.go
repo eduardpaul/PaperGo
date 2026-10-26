@@ -128,6 +128,12 @@ func (a *API) registerFoundation(m *router) {
 	m.HandleFunc("POST /v1/resources/{id}/content-types", foundationMutation(a, 201, true, func(r *http.Request, in dms.AttachContentTypeInput, v int) (any, error) {
 		return a.dms(r).AttachContentType(r.Context(), subject(r), r.PathValue("id"), v, in)
 	}))
+	m.HandleFunc("PUT /v1/resources/{id}/content-type-menu", foundationMutation(a, 200, true, func(r *http.Request, in dms.NewMenuInput, v int) (any, error) {
+		return a.dms(r).SetNewMenu(r.Context(), subject(r), r.PathValue("id"), v, in)
+	}))
+	m.HandleFunc("PUT /v1/resources/{id}/content-types/{typeID}", foundationMutation(a, 200, true, func(r *http.Request, in dms.ListTypeInput, v int) (any, error) {
+		return a.dms(r).UpdateListType(r.Context(), subject(r), r.PathValue("id"), r.PathValue("typeID"), v, in)
+	}))
 	m.HandleFunc("DELETE /v1/resources/{id}/content-types/{typeID}", func(w http.ResponseWriter, r *http.Request) {
 		v, ok := a.version(w, r)
 		if !ok {
@@ -147,6 +153,17 @@ func (a *API) registerFoundation(m *router) {
 	m.HandleFunc("PUT /v1/content-types/{id}", foundationMutation(a, 200, true, func(r *http.Request, in dms.ContentTypeInput, v int) (any, error) {
 		return a.dms(r).UpdateContentType(r.Context(), subject(r), r.PathValue("id"), v, in)
 	}))
+	m.HandleFunc("DELETE /v1/content-types/{id}", func(w http.ResponseWriter, r *http.Request) {
+		v, ok := a.version(w, r)
+		if !ok {
+			return
+		}
+		if err := a.dms(r).DeleteContentType(r.Context(), subject(r), r.PathValue("id"), v); err != nil {
+			a.failure(w, r, err)
+			return
+		}
+		w.WriteHeader(204)
+	})
 	m.HandleFunc("DELETE /v1/resources/{id}/fields/{fieldID}", func(w http.ResponseWriter, r *http.Request) {
 		v, ok := a.version(w, r)
 		if !ok {

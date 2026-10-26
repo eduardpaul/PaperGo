@@ -41,12 +41,14 @@ type TriggerSelection struct {
 // TriggerResource contains revision content, without mutable resource state
 // such as an ETag or parent. Writes must obtain a current ETag through the API.
 type TriggerResource struct {
-	ID             string          `json:"id"`
-	WorkspaceID    string          `json:"workspace_id"`
-	CollectionID   string          `json:"collection_id"`
-	RevisionID     string          `json:"revision_id"`
-	RevisionNumber int             `json:"revision_number"`
-	ContentTypeID  string          `json:"content_type_id"`
+	ID             string `json:"id"`
+	WorkspaceID    string `json:"workspace_id"`
+	CollectionID   string `json:"collection_id"`
+	RevisionID     string `json:"revision_id"`
+	RevisionNumber int    `json:"revision_number"`
+	ContentTypeID  string `json:"content_type_id"`
+	// ContentTypeKey is the key of the type's catalog type, such as invoice.
+	ContentTypeKey string          `json:"content_type_key"`
 	Name           string          `json:"name"`
 	Keywords       []string        `json:"keywords"`
 	Values         json.RawMessage `json:"values,omitempty"`
@@ -142,8 +144,12 @@ func contentTriggerObject(ctx context.Context, t *dms.Service, author string, e 
 	if rev.ItemID != r.ID {
 		return nil, fmt.Errorf("trigger revision does not belong to resource %s", r.ID)
 	}
+	typeKey, err := t.DAL.Catalog().ContentTypeKey(ctx, rev.ContentTypeID)
+	if err != nil {
+		return nil, err
+	}
 	resource := &TriggerResource{
-		ID: r.ID, WorkspaceID: r.WorkspaceID, CollectionID: rev.ContainerID,
+		ID: r.ID, WorkspaceID: r.WorkspaceID, CollectionID: rev.ContainerID, ContentTypeKey: typeKey,
 		RevisionID: rev.ID, RevisionNumber: rev.RevisionNumber, ContentTypeID: rev.ContentTypeID,
 		Name: rev.Name, Keywords: append([]string{}, rev.Keywords...), Values: rev.Payload,
 	}

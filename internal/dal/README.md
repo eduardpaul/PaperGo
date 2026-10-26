@@ -16,7 +16,8 @@ Each domain lives in its own package and is split in two:
   `Queries` interface. It contains no SQL. The domains are `audit/`,
   `blobs/` (file versions and their availability, staged files, previews,
   deletion queue, leases), `catalog/` (field
-  definitions, content types, the types collections accept, business
+  definitions, content types with their lineage, the list types through
+  which collections accept them, business
   keys, schema revisions and templates), `delta/` (collection
   synchronization), `directory/` (users, groups, memberships, roles,
   assignments, access tokens, organization settings, preferences, audit snapshots

@@ -1,7 +1,22 @@
-import type { Resource, Workflow } from '@/api/types';
+import { api } from '@/api/http';
+import type { Resource, SearchContentType, Workflow } from '@/api/types';
 import type { Trigger, WorkflowDefinition } from './model';
 
-export function triggerLabel(trigger: Trigger): string {
+/** The catalog types a workspace's lists and libraries use, which name the content types of triggers; fetched only when a trigger has one. */
+export const workspaceTypesQuery = (workspaceId: string, triggers: Trigger[] = []) => ({
+  queryKey: ['search', 'content-types', workspaceId, undefined],
+  enabled: triggers.some(trigger => trigger.content_type_id),
+  queryFn: async () => (await api<SearchContentType[]>('/v1/search/content-types', { query: { workspace_id: workspaceId } })).data,
+});
+
+/** A trigger's event, narrowed to its content type when it has one. */
+export function triggerLabel(trigger: Trigger, types: SearchContentType[] = []): string {
+  if (!trigger.content_type_id) return eventLabel(trigger);
+  const type = types.find(entry => entry.id === trigger.content_type_id);
+  return `${eventLabel(trigger)} (${type ? `${type.name} or a subtype` : 'selected content type'})`;
+}
+
+function eventLabel(trigger: Trigger): string {
   const labels: Record<string, string> = { manual: 'Run on demand', call: 'When another workflow calls it', 'file.added': 'When a file is added', 'file.updated': 'When a file is replaced', 'item.created': 'When an item is created', 'item.updated': 'When metadata changes', 'item.published': 'When an item is published', 'permissions.changed': 'When permissions change', 'term.changed': 'When a term changes', 'term.merged': 'When terms merge', 'term.moved': 'When a term moves', 'task.completed': 'When a task is completed' };
   if (trigger.type === 'schedule') {
     if (trigger.cron === '* * * * *') return 'Every minute';
@@ -11,7 +26,7 @@ export function triggerLabel(trigger: Trigger): string {
   return labels[trigger.type] ?? trigger.type.replaceAll('.', ' · ').replaceAll('_', ' ');
 }
 
-export function automaticSummary(workflow: Workflow, collections: Resource[] = []) {
+export function automaticSummary(workflow: Workflow, collections: Resource[] = [], types: SearchContentType[] = []) {
   if (workflow.state !== 'published') return `Off · ${workflow.state === 'draft' ? 'Draft' : 'Archived'}`;
   // Manual starts and calls do not depend on automatic processing.
   const triggers = (workflow.definition as WorkflowDefinition).triggers.filter(trigger => trigger.type !== 'manual' && trigger.type !== 'call');
@@ -21,7 +36,7 @@ export function automaticSummary(workflow: Workflow, collections: Resource[] = [
   if (!active.length) return 'Off · All rules paused';
   return `On · ${active.map(trigger => {
     const collection = collections.find(entry => entry.id === trigger.collection_id);
-    return `${triggerLabel(trigger)}${collection ? ` in ${collection.name}` : trigger.collection_id ? ' in the selected collection' : ''}`;
+    return `${triggerLabel(trigger, types)}${collection ? ` in ${collection.name}` : trigger.collection_id ? ' in the selected collection' : ''}`;
   }).join('; ')}`;
 }
 

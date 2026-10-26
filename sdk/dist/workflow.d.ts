@@ -1011,7 +1011,7 @@ export interface MultipartEntry {
  */
 export interface ApplyTemplateInput extends Parsable {
 	/**
-	 * Collection content type ID. Omission selects the collection default.
+	 * A list type of the collection, or the catalog type it copies. Omission selects the collection default.
 	 */
 	contentTypeId?: Guid | null;
 	/**
@@ -1045,7 +1045,7 @@ export interface ArchiveEntry extends AdditionalDataHolder, Parsable {
 	 */
 	containerId?: Guid | null;
 	/**
-	 * Items and folders: an attached collection content type. Creation selects the default when omitted. PATCH changes type, keeps shared fields and removes fields absent from the destination type. Folder required fields and creation defaults do not apply.
+	 * Items and folders: a list type of the collection. Writes may name the catalog type it copies instead. Creation selects the default when omitted. PATCH changes type, keeps shared fields and removes fields absent from the destination type. Folder required fields and creation defaults do not apply.
 	 */
 	contentTypeId?: Guid | null;
 	/**
@@ -1229,11 +1229,11 @@ export interface Artifact_sources extends AdditionalDataHolder, Parsable {
 	itemId?: string | null;
 }
 /**
- * Attach the organization definition by ID without copying. At most 32 types per collection. Selecting a default affects only this collection. Conflicting field keys are rejected; types that share a key must reference the same catalog field ID.
+ * Makes the collection accept a catalog type through a list type of its own, which inherits the type's fields and rules. Attaching a type the collection accepted before restores its list type and customizations. At most 32 types per collection. Selecting a default affects only this collection. Conflicting field keys are rejected; types that share a key must reference the same catalog field ID.
  */
 export interface AttachContentTypeInput extends Parsable {
 	/**
-	 * The content_type_id property
+	 * A catalog type.
 	 */
 	contentTypeId?: Guid | null;
 	/**
@@ -1361,7 +1361,7 @@ export interface Blob extends AdditionalDataHolder, Parsable {
 export type Blob_content_type = (typeof Blob_content_typeObject)[keyof typeof Blob_content_typeObject];
 export interface BulkCreate extends Parsable {
 	/**
-	 * Collection content type ID. Omission selects the collection default.
+	 * A list type of the collection, or the catalog type it copies. Omission selects the collection default.
 	 */
 	contentTypeId?: Guid | null;
 	/**
@@ -1511,7 +1511,7 @@ export interface BulkResult extends Parsable {
 export type BulkResult_action = (typeof BulkResult_actionObject)[keyof typeof BulkResult_actionObject];
 export interface BulkUpdate extends Parsable {
 	/**
-	 * Attached destination content type. Items only. Prunes unrelated fields, enforces required fields/rules, retains file content and creates a revision. Creation defaults are not applied.
+	 * Destination list type of the collection, or the catalog type it copies. Items only. Prunes unrelated fields, enforces required fields/rules, retains file content and creates a revision. Creation defaults are not applied.
 	 */
 	contentTypeId?: Guid | null;
 	/**
@@ -1629,12 +1629,6 @@ export interface ChunkText extends Parsable {
 }
 export type ChunkText_chunker = (typeof ChunkText_chunkerObject)[keyof typeof ChunkText_chunkerObject];
 export type ChunkText_kind = (typeof ChunkText_kindObject)[keyof typeof ChunkText_kindObject];
-export interface CollectionContentType extends ContentType, Parsable {
-	/**
-	 * Default only for this collection.
-	 */
-	isDefault?: boolean | null;
-}
 export interface CollectionTemplate extends AdditionalDataHolder, Parsable {
 	/**
 	 * The allow_folders property
@@ -1957,29 +1951,72 @@ export interface ComposePDF extends Parsable {
 	 */
 	targetHeight?: number | null;
 }
+/**
+ * A catalog type belongs to the organization; a list type (collection_id set) is the copy of one catalog type that a list or library customizes and items use. Every type but the root Item derives from a parent and has every field, hidden field and rule of its ancestors.
+ */
 export interface ContentType extends AdditionalDataHolder, Parsable {
+	/**
+	 * Ancestors, nearest first.
+	 */
+	ancestorIds?: Guid[] | null;
+	/**
+	 * The list or library of a list type; null for catalog types.
+	 */
+	collectionId?: Guid | null;
 	/**
 	 * The created_at property
 	 */
 	createdAt?: Date | null;
 	/**
-	 * Organization field IDs. Each key must be unique within the content type. Definitions remain live in every attached collection.
+	 * What the type and its ancestors define together: fields in form order, hidden fields, rules, and field settings merged with the nearest type winning.
+	 */
+	effective?: ContentType_effective | null;
+	/**
+	 * The type's own field IDs; ancestors' fields are in effective.
 	 */
 	fieldIds?: Guid[] | null;
+	/**
+	 * The type's fields, own or inherited, in the order forms show them; fields it leaves out follow in the order the type inherits. Applies after the ancestors' order.
+	 */
+	fieldOrder?: Guid[] | null;
+	/**
+	 * The type's own field settings, at most one per field of the type.
+	 */
+	fieldSettings?: FieldSetting[] | null;
+	/**
+	 * Catalog types: the heading the catalog files the type under, such as Finance. List types have none.
+	 */
+	group?: string | null;
+	/**
+	 * Inherited fields that forms leave out. They stay part of the type.
+	 */
+	hiddenFieldIds?: Guid[] | null;
 	/**
 	 * The id property
 	 */
 	id?: Guid | null;
 	/**
+	 * List types: whether the New menu offers the type when people create items. The default always is; the others stay accepted for moves, API writes and type changes.
+	 */
+	inNewMenu?: boolean | null;
+	/**
+	 * List types: the type new items of the collection get.
+	 */
+	isDefault?: boolean | null;
+	/**
 	 * The key property
 	 */
 	key?: string | null;
 	/**
-	 * The name property
+	 * A list type shows the name of its catalog type.
 	 */
 	name?: string | null;
 	/**
-	 * The rules property
+	 * The catalog type this one derives from; it never changes. Only the root Item type has none.
+	 */
+	parentId?: Guid | null;
+	/**
+	 * The type's own rules; ancestors' rules are in effective.
 	 */
 	rules?: (ValidationRuleMember1 | ValidationRuleMember2)[] | null;
 	/**
@@ -1996,15 +2033,52 @@ export interface ContentType extends AdditionalDataHolder, Parsable {
 	version?: number | null;
 }
 /**
- * Organization catalog definition. Replacement validates all attached collections and advances their schema revisions atomically. Requires contentType.manage, independently of workspace membership.
+ * What the type and its ancestors define together: fields in form order, hidden fields, rules, and field settings merged with the nearest type winning.
  */
-export interface ContentTypeInput extends Parsable {
+export interface ContentType_effective extends AdditionalDataHolder, Parsable {
 	/**
-	 * Organization field IDs. Each key must be unique within the content type. Definitions remain live in every attached collection.
+	 * The field_ids property
 	 */
 	fieldIds?: Guid[] | null;
 	/**
-	 * Required for creation, immutable. May be omitted for replacement.
+	 * The field_settings property
+	 */
+	fieldSettings?: FieldSetting[] | null;
+	/**
+	 * The hidden_field_ids property
+	 */
+	hiddenFieldIds?: Guid[] | null;
+	/**
+	 * The rules property
+	 */
+	rules?: (ValidationRuleMember1 | ValidationRuleMember2)[] | null;
+}
+/**
+ * Organization catalog type. A new type derives from parent_id, or Item when it is omitted. Replacement validates every subtype and attached collection and advances their schema revisions atomically. Requires contentType.manage, independently of workspace membership.
+ */
+export interface ContentTypeInput extends Parsable {
+	/**
+	 * The type's own field IDs, none of them inherited. Every key of the type and its ancestors is unique.
+	 */
+	fieldIds?: Guid[] | null;
+	/**
+	 * The type's fields, own or inherited, in the order forms show them; fields it leaves out follow in the order the type inherits. Applies after the ancestors' order.
+	 */
+	fieldOrder?: Guid[] | null;
+	/**
+	 * The type's own field settings, at most one per field of the type.
+	 */
+	fieldSettings?: FieldSetting[] | null;
+	/**
+	 * Heading the catalog files the type under; empty or omitted is none. Replacement sets it like the name.
+	 */
+	group?: string | null;
+	/**
+	 * Inherited fields that forms leave out. A required field without a default cannot be hidden.
+	 */
+	hiddenFieldIds?: Guid[] | null;
+	/**
+	 * Required for creation, immutable. May be omitted for replacement. The key is unique in the catalog; item and the keys of registered template types are reserved.
 	 */
 	key?: string | null;
 	/**
@@ -2012,7 +2086,11 @@ export interface ContentTypeInput extends Parsable {
 	 */
 	name?: string | null;
 	/**
-	 * The rules property
+	 * Creation: the catalog type to derive from; Item when omitted. A catalog type has at most 7 ancestors. Replacement may repeat it; it never changes.
+	 */
+	parentId?: Guid | null;
+	/**
+	 * The type's own rules. Their keys differ from inherited rules; together at most 32.
 	 */
 	rules?: (ValidationRuleMember1 | ValidationRuleMember2)[] | null;
 }
@@ -2081,7 +2159,6 @@ export interface CreateCatalogField extends Parsable {
 }
 export type CreateCatalogField_type = (typeof CreateCatalogField_typeObject)[keyof typeof CreateCatalogField_typeObject];
 declare function createChunkTextFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
-declare function createCollectionContentTypeFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createCollectionTemplateFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createCommentAnchorFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createCommentCounts_countsFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
@@ -2099,6 +2176,7 @@ declare function createCommentThreadListFromDiscriminatorValue(parseNode: ParseN
 declare function createCompletionRequest_output_schemaFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createCompletionRequestFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createComposePDFFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
+declare function createContentType_effectiveFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createContentTypeFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createContentTypeInputFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createCreateCatalogFieldFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
@@ -2129,7 +2207,7 @@ export interface CreateField extends Parsable {
 	 */
 	choices?: string[] | null;
 	/**
-	 * Collection content type ID. Omission selects the collection default.
+	 * A list type of the collection, or the catalog type it copies. Omission selects the collection default.
 	 */
 	contentTypeId?: Guid | null;
 	/**
@@ -2164,6 +2242,7 @@ export interface CreateField extends Parsable {
 export type CreateField_type = (typeof CreateField_typeObject)[keyof typeof CreateField_typeObject];
 declare function createFieldDefinitionFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createFieldOptionsFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
+declare function createFieldSettingFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createFileSummaryFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createFileVersionFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createFilteredBulkUpdate_valuesFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
@@ -2206,6 +2285,7 @@ export interface CreateListIntegration_configuration extends Parsable {
 	url?: string | null;
 }
 declare function createListIntegrationFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
+declare function createListTypeInputFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createListViewFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createListViewPageFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createLocatedItemFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
@@ -2219,6 +2299,7 @@ declare function createNavigationNodeFromDiscriminatorValue(parseNode: ParseNode
 declare function createNavigationPageFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createNavigationRequestFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createNavigationSelectionFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
+declare function createNewMenuInputFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createNotificationSendFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createNotificationSendResultFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createOperationFailureFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
@@ -2288,7 +2369,7 @@ export interface CreateResource extends Parsable {
 	 */
 	allowFolders?: boolean | null;
 	/**
-	 * Items and folders: an attached collection content type. Creation selects the default when omitted. PATCH changes type, keeps shared fields and removes fields absent from the destination type. Folder required fields and creation defaults do not apply.
+	 * Items and folders: a list type of the collection. Writes may name the catalog type it copies instead. Creation selects the default when omitted. PATCH changes type, keeps shared fields and removes fields absent from the destination type. Folder required fields and creation defaults do not apply.
 	 */
 	contentTypeId?: Guid | null;
 	/**
@@ -2602,7 +2683,6 @@ declare function deserializeIntoBulkUpdate_values(bulkUpdate_values?: Partial<Bu
 declare function deserializeIntoCalendarOccurrence(calendarOccurrence?: Partial<CalendarOccurrence> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoCalendarQuery(calendarQuery?: Partial<CalendarQuery> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoChunkText(chunkText?: Partial<ChunkText> | undefined): Record<string, (node: ParseNode) => void>;
-declare function deserializeIntoCollectionContentType(collectionContentType?: Partial<CollectionContentType> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoCollectionTemplate(collectionTemplate?: Partial<CollectionTemplate> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoComment(comment?: Partial<Comment> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoCommentAnchor(commentAnchor?: Partial<CommentAnchor> | undefined): Record<string, (node: ParseNode) => void>;
@@ -2621,6 +2701,7 @@ declare function deserializeIntoCompletionRequest(completionRequest?: Partial<Co
 declare function deserializeIntoCompletionRequest_output_schema(completionRequest_output_schema?: Partial<CompletionRequest_output_schema> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoComposePDF(composePDF?: Partial<ComposePDF> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoContentType(contentType?: Partial<ContentType> | undefined): Record<string, (node: ParseNode) => void>;
+declare function deserializeIntoContentType_effective(contentType_effective?: Partial<ContentType_effective> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoContentTypeInput(contentTypeInput?: Partial<ContentTypeInput> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoCreateCatalogField(createCatalogField?: Partial<CreateCatalogField> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoCreateField(createField?: Partial<CreateField> | undefined): Record<string, (node: ParseNode) => void>;
@@ -2646,6 +2727,7 @@ declare function deserializeIntoDocumentUpload(documentUpload?: Partial<Document
 declare function deserializeIntoDuplicateDocument(duplicateDocument?: Partial<DuplicateDocument> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoFieldDefinition(fieldDefinition?: Partial<FieldDefinition> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoFieldOptions(fieldOptions?: Partial<FieldOptions> | undefined): Record<string, (node: ParseNode) => void>;
+declare function deserializeIntoFieldSetting(fieldSetting?: Partial<FieldSetting> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoFileSummary(fileSummary?: Partial<FileSummary> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoFileVersion(fileVersion?: Partial<FileVersion> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoFilteredBulkUpdate(filteredBulkUpdate?: Partial<FilteredBulkUpdate> | undefined): Record<string, (node: ParseNode) => void>;
@@ -2665,6 +2747,7 @@ declare function deserializeIntoKeywordCount(keywordCount?: Partial<KeywordCount
 declare function deserializeIntoKeywordCountList(keywordCountList?: Partial<KeywordCountList> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoKeywordInput(keywordInput?: Partial<KeywordInput> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoListIntegration(listIntegration?: Partial<ListIntegration> | undefined): Record<string, (node: ParseNode) => void>;
+declare function deserializeIntoListTypeInput(listTypeInput?: Partial<ListTypeInput> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoListView(listView?: Partial<ListView> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoListViewPage(listViewPage?: Partial<ListViewPage> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoLocatedItem(locatedItem?: Partial<LocatedItem> | undefined): Record<string, (node: ParseNode) => void>;
@@ -2678,6 +2761,7 @@ declare function deserializeIntoNavigationNode(navigationNode?: Partial<Navigati
 declare function deserializeIntoNavigationPage(navigationPage?: Partial<NavigationPage> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoNavigationRequest(navigationRequest?: Partial<NavigationRequest> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoNavigationSelection(navigationSelection?: Partial<NavigationSelection> | undefined): Record<string, (node: ParseNode) => void>;
+declare function deserializeIntoNewMenuInput(newMenuInput?: Partial<NewMenuInput> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoNotificationSend(notificationSend?: Partial<NotificationSend> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoNotificationSendResult(notificationSendResult?: Partial<NotificationSendResult> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoOperation(operation?: Partial<Operation> | undefined): Record<string, (node: ParseNode) => void>;
@@ -2825,7 +2909,7 @@ declare function deserializeIntoWorkspaceRelationshipTypePage(workspaceRelations
 declare function deserializeIntoWorkspaceRelationshipView(workspaceRelationshipView?: Partial<WorkspaceRelationshipView> | undefined): Record<string, (node: ParseNode) => void>;
 export interface DocumentMetadata extends Parsable {
 	/**
-	 * An attached library content type; defaults to the library default.
+	 * A list type of the library, or the catalog type it copies; defaults to the library default.
 	 */
 	contentTypeId?: Guid | null;
 	/**
@@ -2993,6 +3077,23 @@ export interface FieldOptions extends Parsable {
 }
 export type FieldOptions_search_weight = (typeof FieldOptions_search_weightObject)[keyof typeof FieldOptions_search_weightObject];
 /**
+ * Changes, for a content type and its subtypes, whether one of its fields is required and its default. Omitted properties keep what the field or an ancestor says; the nearest type's setting wins.
+ */
+export interface FieldSetting extends Parsable {
+	/**
+	 * Default for new items of the type, valid for the field like the field's own default; JSON null removes an inherited default.
+	 */
+	defaultValue?: UntypedNode | null;
+	/**
+	 * The field_id property
+	 */
+	fieldId?: Guid | null;
+	/**
+	 * Whether items of the type must hold a value (or get the default).
+	 */
+	required?: boolean | null;
+}
+/**
  * The file of an item's selected revision: the one the caller reads (the draft for draft readers, otherwise the published file).
  */
 export interface FileSummary extends AdditionalDataHolder, Parsable {
@@ -3065,7 +3166,7 @@ export type FileVersion_availability = (typeof FileVersion_availabilityObject)[k
  */
 export interface FilteredBulkUpdate extends Parsable {
 	/**
-	 * Attached destination content type. Items only. Prunes unrelated fields, enforces required fields/rules, retains file content and creates a revision. Creation defaults are not applied.
+	 * Destination list type of the collection, or the catalog type it copies. Items only. Prunes unrelated fields, enforces required fields/rules, retains file content and creates a revision. Creation defaults are not applied.
 	 */
 	contentTypeId?: Guid | null;
 	/**
@@ -3429,6 +3530,31 @@ export interface ListIntegration extends Parsable {
 	version?: number | null;
 }
 export type ListIntegration_kind = (typeof ListIntegration_kindObject)[keyof typeof ListIntegration_kindObject];
+/**
+ * Customizes a collection's list type. Its catalog type's fields, hidden fields and rules stay; a list type adds its own and hides inherited ones.
+ */
+export interface ListTypeInput extends Parsable {
+	/**
+	 * The list type's own field IDs, none of them inherited.
+	 */
+	fieldIds?: Guid[] | null;
+	/**
+	 * The type's fields, own or inherited, in the order forms show them; fields it leaves out follow in the order the type inherits. Applies after the ancestors' order.
+	 */
+	fieldOrder?: Guid[] | null;
+	/**
+	 * The type's own field settings, at most one per field of the type.
+	 */
+	fieldSettings?: FieldSetting[] | null;
+	/**
+	 * Inherited fields that forms leave out. A required field without a default cannot be hidden.
+	 */
+	hiddenFieldIds?: Guid[] | null;
+	/**
+	 * The list type's own rules; keys differ from inherited rules.
+	 */
+	rules?: (ValidationRuleMember1 | ValidationRuleMember2)[] | null;
+}
 export interface ListView extends Parsable {
 	/**
 	 * The columns property
@@ -3650,6 +3776,12 @@ export interface NavigationSelection extends Parsable {
 	 * A term of the field's term set: the items the view shows at it.
 	 */
 	termId?: string | null;
+}
+export interface NewMenuInput extends Parsable {
+	/**
+	 * The list types the New menu offers, in order, each by its own id or the catalog type it copies. It must include the default.
+	 */
+	contentTypeIds?: Guid[] | null;
 }
 export interface NotificationSend extends Parsable {
 	/**
@@ -4292,7 +4424,7 @@ export interface QuerySpec extends Parsable {
 	 */
 	archive?: ArchiveSelection | null;
 	/**
-	 * Optional collection content type filter. Field filters, sorting and grouping must use fields assigned to that type.
+	 * Optional content type filter: a catalog type, or a list type of the collection standing for the catalog type it copies, matching every list type of the collection that derives from that catalog type. Field filters, sorting and grouping must use fields that the named type and every matching list type have.
 	 */
 	contentTypeId?: Guid | null;
 	/**
@@ -4576,7 +4708,7 @@ export interface Resource extends AdditionalDataHolder, Parsable {
 	 */
 	containerId?: Guid | null;
 	/**
-	 * Items and folders: an attached collection content type. Creation selects the default when omitted. PATCH changes type, keeps shared fields and removes fields absent from the destination type. Folder required fields and creation defaults do not apply.
+	 * Items and folders: a list type of the collection. Writes may name the catalog type it copies instead. Creation selects the default when omitted. PATCH changes type, keeps shared fields and removes fields absent from the destination type. Folder required fields and creation defaults do not apply.
 	 */
 	contentTypeId?: Guid | null;
 	/**
@@ -4923,7 +5055,7 @@ export interface SearchHit extends Parsable {
 	 */
 	collectionId?: Guid | null;
 	/**
-	 * The content_type_id property
+	 * The catalog type the entry's list type copies.
 	 */
 	contentTypeId?: string | null;
 	/**
@@ -5031,7 +5163,7 @@ export interface SearchRequest extends Parsable {
 	 */
 	collectionId?: string | null;
 	/**
-	 * The content_type_id property
+	 * A catalog type, or a list type standing for the catalog type it copies; matches it and every type deriving from it.
 	 */
 	contentTypeId?: string | null;
 	/**
@@ -5170,7 +5302,6 @@ declare function serializeBulkUpdate_values(writer: SerializationWriter, bulkUpd
 declare function serializeCalendarOccurrence(writer: SerializationWriter, calendarOccurrence?: Partial<CalendarOccurrence> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeCalendarQuery(writer: SerializationWriter, calendarQuery?: Partial<CalendarQuery> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeChunkText(writer: SerializationWriter, chunkText?: Partial<ChunkText> | undefined | null, isSerializingDerivedType?: boolean): void;
-declare function serializeCollectionContentType(writer: SerializationWriter, collectionContentType?: Partial<CollectionContentType> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeCollectionTemplate(writer: SerializationWriter, collectionTemplate?: Partial<CollectionTemplate> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeComment(writer: SerializationWriter, comment?: Partial<Comment> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeCommentAnchor(writer: SerializationWriter, commentAnchor?: Partial<CommentAnchor> | undefined | null, isSerializingDerivedType?: boolean): void;
@@ -5189,6 +5320,7 @@ declare function serializeCompletionRequest(writer: SerializationWriter, complet
 declare function serializeCompletionRequest_output_schema(writer: SerializationWriter, completionRequest_output_schema?: Partial<CompletionRequest_output_schema> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeComposePDF(writer: SerializationWriter, composePDF?: Partial<ComposePDF> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeContentType(writer: SerializationWriter, contentType?: Partial<ContentType> | undefined | null, isSerializingDerivedType?: boolean): void;
+declare function serializeContentType_effective(writer: SerializationWriter, contentType_effective?: Partial<ContentType_effective> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeContentTypeInput(writer: SerializationWriter, contentTypeInput?: Partial<ContentTypeInput> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeCreateCatalogField(writer: SerializationWriter, createCatalogField?: Partial<CreateCatalogField> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeCreateField(writer: SerializationWriter, createField?: Partial<CreateField> | undefined | null, isSerializingDerivedType?: boolean): void;
@@ -5214,6 +5346,7 @@ declare function serializeDocumentUpload(writer: SerializationWriter, documentUp
 declare function serializeDuplicateDocument(writer: SerializationWriter, duplicateDocument?: Partial<DuplicateDocument> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeFieldDefinition(writer: SerializationWriter, fieldDefinition?: Partial<FieldDefinition> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeFieldOptions(writer: SerializationWriter, fieldOptions?: Partial<FieldOptions> | undefined | null, isSerializingDerivedType?: boolean): void;
+declare function serializeFieldSetting(writer: SerializationWriter, fieldSetting?: Partial<FieldSetting> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeFileSummary(writer: SerializationWriter, fileSummary?: Partial<FileSummary> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeFileVersion(writer: SerializationWriter, fileVersion?: Partial<FileVersion> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeFilteredBulkUpdate(writer: SerializationWriter, filteredBulkUpdate?: Partial<FilteredBulkUpdate> | undefined | null, isSerializingDerivedType?: boolean): void;
@@ -5233,6 +5366,7 @@ declare function serializeKeywordCount(writer: SerializationWriter, keywordCount
 declare function serializeKeywordCountList(writer: SerializationWriter, keywordCountList?: Partial<KeywordCountList> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeKeywordInput(writer: SerializationWriter, keywordInput?: Partial<KeywordInput> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeListIntegration(writer: SerializationWriter, listIntegration?: Partial<ListIntegration> | undefined | null, isSerializingDerivedType?: boolean): void;
+declare function serializeListTypeInput(writer: SerializationWriter, listTypeInput?: Partial<ListTypeInput> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeListView(writer: SerializationWriter, listView?: Partial<ListView> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeListViewPage(writer: SerializationWriter, listViewPage?: Partial<ListViewPage> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeLocatedItem(writer: SerializationWriter, locatedItem?: Partial<LocatedItem> | undefined | null, isSerializingDerivedType?: boolean): void;
@@ -5246,6 +5380,7 @@ declare function serializeNavigationNode(writer: SerializationWriter, navigation
 declare function serializeNavigationPage(writer: SerializationWriter, navigationPage?: Partial<NavigationPage> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeNavigationRequest(writer: SerializationWriter, navigationRequest?: Partial<NavigationRequest> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeNavigationSelection(writer: SerializationWriter, navigationSelection?: Partial<NavigationSelection> | undefined | null, isSerializingDerivedType?: boolean): void;
+declare function serializeNewMenuInput(writer: SerializationWriter, newMenuInput?: Partial<NewMenuInput> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeNotificationSend(writer: SerializationWriter, notificationSend?: Partial<NotificationSend> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeNotificationSendResult(writer: SerializationWriter, notificationSendResult?: Partial<NotificationSendResult> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeOperation(writer: SerializationWriter, operation?: Partial<Operation> | undefined | null, isSerializingDerivedType?: boolean): void;
@@ -5908,7 +6043,7 @@ export interface Task extends AdditionalDataHolder, Parsable {
 	 */
 	input?: Task_input | null;
 	/**
-	 * A JSON Schema form (draft-07 subset; see docs/workflows.md#forms): type, title, description, default, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, uniqueItems, items, properties, required, additionalProperties (boolean or a schema; objects are closed by default). x-papergo on a property makes it a domain picker (item, collection, relationship, terms, keywords, people). The terms picker selects term IDs by default; select: sets selects term-set IDs, optionally narrowed by group_id.
+	 * A JSON Schema form (draft-07 subset; see docs/workflows.md#forms): type, title, description, default, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, uniqueItems, items, properties, required, additionalProperties (boolean or a schema; objects are closed by default). x-papergo on a property makes it a domain picker (item, collection, relationship, terms, keywords, people, content_type). The content_type picker selects catalog content types a list or library of the workspace accepts, optionally narrowed by collection_id. The terms picker selects term IDs by default; select: sets selects term-set IDs, optionally narrowed by group_id.
 	 */
 	inputSchema?: WorkflowForm | null;
 	/**
@@ -6056,7 +6191,7 @@ export interface TaskCreate extends Parsable {
 	 */
 	dueAt?: Date | null;
 	/**
-	 * A JSON Schema form (draft-07 subset; see docs/workflows.md#forms): type, title, description, default, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, uniqueItems, items, properties, required, additionalProperties (boolean or a schema; objects are closed by default). x-papergo on a property makes it a domain picker (item, collection, relationship, terms, keywords, people). The terms picker selects term IDs by default; select: sets selects term-set IDs, optionally narrowed by group_id.
+	 * A JSON Schema form (draft-07 subset; see docs/workflows.md#forms): type, title, description, default, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, uniqueItems, items, properties, required, additionalProperties (boolean or a schema; objects are closed by default). x-papergo on a property makes it a domain picker (item, collection, relationship, terms, keywords, people, content_type). The content_type picker selects catalog content types a list or library of the workspace accepts, optionally narrowed by collection_id. The terms picker selects term IDs by default; select: sets selects term-set IDs, optionally narrowed by group_id.
 	 */
 	inputSchema?: WorkflowForm | null;
 	/**
@@ -6698,7 +6833,7 @@ export interface UpdateResource extends Parsable {
 	 */
 	allowFolders?: boolean | null;
 	/**
-	 * Items and folders: an attached collection content type. Creation selects the default when omitted. PATCH changes type, keeps shared fields and removes fields absent from the destination type. Folder required fields and creation defaults do not apply.
+	 * Items and folders: a list type of the collection. Writes may name the catalog type it copies instead. Creation selects the default when omitted. PATCH changes type, keeps shared fields and removes fields absent from the destination type. Folder required fields and creation defaults do not apply.
 	 */
 	contentTypeId?: Guid | null;
 	/**
@@ -6867,7 +7002,7 @@ export interface WorkflowCalls extends Parsable {
 	workflow?: string | null;
 }
 /**
- * A JSON Schema form (draft-07 subset; see docs/workflows.md#forms): type, title, description, default, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, uniqueItems, items, properties, required, additionalProperties (boolean or a schema; objects are closed by default). x-papergo on a property makes it a domain picker (item, collection, relationship, terms, keywords, people). The terms picker selects term IDs by default; select: sets selects term-set IDs, optionally narrowed by group_id.
+ * A JSON Schema form (draft-07 subset; see docs/workflows.md#forms): type, title, description, default, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, uniqueItems, items, properties, required, additionalProperties (boolean or a schema; objects are closed by default). x-papergo on a property makes it a domain picker (item, collection, relationship, terms, keywords, people, content_type). The content_type picker selects catalog content types a list or library of the workspace accepts, optionally narrowed by collection_id. The terms picker selects term IDs by default; select: sets selects term-set IDs, optionally narrowed by group_id.
  */
 export interface WorkflowForm extends AdditionalDataHolder, Parsable {
 }
@@ -7700,6 +7835,9 @@ export interface ArchiveRequestBuilderGetQueryParameters {
 	archivedFrom?: Date;
 	archivedTo?: Date;
 	collectionId?: string;
+	/**
+	 * A content type; matches it and every type deriving from it.
+	 */
 	contentTypeId?: string;
 	keyword?: string;
 	q?: string;
@@ -8034,15 +8172,22 @@ export interface CommentsRequestBuilder extends BaseRequestBuilder<CommentsReque
  */
 export interface ContentTypesItemRequestBuilder extends BaseRequestBuilder<ContentTypesItemRequestBuilder> {
 	/**
-	 * Organization catalog definition. Module scope applies independently of workspace ACLs. Updates advance every attached collection atomically.
+	 * Requires the content type ETag. Only a catalog type with no subtypes and no list types, attached or kept for item history, can be deleted; the root Item type never can. Workflow triggers and smart folders that name it then match nothing.
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @throws {Problem} error when the service returns a 412 status code
+	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
+	 */
+	delete(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<void>;
+	/**
+	 * Organization catalog type; list types are read through their collection. Module scope applies independently of workspace ACLs.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<ContentType>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	get(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<ContentType | undefined>;
 	/**
-	 * Organization catalog definition. Module scope applies independently of workspace ACLs. Updates advance every attached collection atomically.
-	 * @param body Organization catalog definition. Replacement validates all attached collections and advances their schema revisions atomically. Requires contentType.manage, independently of workspace membership.
+	 * Organization catalog type. Module scope applies independently of workspace ACLs. Updates reach every subtype and every list type deriving from it, and advance every affected collection atomically.
+	 * @param body Organization catalog type. A new type derives from parent_id, or Item when it is omitted. Replacement validates every subtype and attached collection and advances their schema revisions atomically. Requires contentType.manage, independently of workspace membership.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<ContentType>}
 	 * @throws {Problem} error when the service returns a 412 status code
@@ -8050,14 +8195,20 @@ export interface ContentTypesItemRequestBuilder extends BaseRequestBuilder<Conte
 	 */
 	put(body: ContentTypeInput, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<ContentType | undefined>;
 	/**
-	 * Organization catalog definition. Module scope applies independently of workspace ACLs. Updates advance every attached collection atomically.
+	 * Requires the content type ETag. Only a catalog type with no subtypes and no list types, attached or kept for item history, can be deleted; the root Item type never can. Workflow triggers and smart folders that name it then match nothing.
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {RequestInformation}
+	 */
+	toDeleteRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
+	/**
+	 * Organization catalog type; list types are read through their collection. Module scope applies independently of workspace ACLs.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 	/**
-	 * Organization catalog definition. Module scope applies independently of workspace ACLs. Updates advance every attached collection atomically.
-	 * @param body Organization catalog definition. Replacement validates all attached collections and advances their schema revisions atomically. Requires contentType.manage, independently of workspace membership.
+	 * Organization catalog type. Module scope applies independently of workspace ACLs. Updates reach every subtype and every list type deriving from it, and advance every affected collection atomically.
+	 * @param body Organization catalog type. A new type derives from parent_id, or Item when it is omitted. Replacement validates every subtype and attached collection and advances their schema revisions atomically. Requires contentType.manage, independently of workspace membership.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -8082,7 +8233,7 @@ export interface ContentTypesRequestBuilder extends BaseRequestBuilder<ContentTy
 	get(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<ContentType[] | undefined>;
 	/**
 	 * Requires contentType.manage.
-	 * @param body Organization catalog definition. Replacement validates all attached collections and advances their schema revisions atomically. Requires contentType.manage, independently of workspace membership.
+	 * @param body Organization catalog type. A new type derives from parent_id, or Item when it is omitted. Replacement validates every subtype and attached collection and advances their schema revisions atomically. Requires contentType.manage, independently of workspace membership.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<ContentType>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
@@ -8096,7 +8247,7 @@ export interface ContentTypesRequestBuilder extends BaseRequestBuilder<ContentTy
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 	/**
 	 * Requires contentType.manage.
-	 * @param body Organization catalog definition. Replacement validates all attached collections and advances their schema revisions atomically. Requires contentType.manage, independently of workspace membership.
+	 * @param body Organization catalog type. A new type derives from parent_id, or Item when it is omitted. Replacement validates every subtype and attached collection and advances their schema revisions atomically. Requires contentType.manage, independently of workspace membership.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -9841,22 +9992,59 @@ declare const GetSurfaceQueryParameterTypeObject$2: {
 	readonly Published: "published";
 };
 /**
+ * Builds and executes requests for operations under /v1/resources/{id}/content-type-menu
+ */
+export interface ContentTypeMenuRequestBuilder extends BaseRequestBuilder<ContentTypeMenuRequestBuilder> {
+	/**
+	 * Requires list.manage and manage ACL on the collection, with the collection If-Match; advances the collection ETag. Types left out stay accepted for moves, API writes and type changes. The default must be offered; making a type the default offers it. Returns the list types in menu order.
+	 * @param body The request body
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {Promise<ContentType[]>}
+	 * @throws {Problem} error when the service returns a 412 status code
+	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
+	 */
+	put(body: NewMenuInput, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<ContentType[] | undefined>;
+	/**
+	 * Requires list.manage and manage ACL on the collection, with the collection If-Match; advances the collection ETag. Types left out stay accepted for moves, API writes and type changes. The default must be offered; making a type the default offers it. Returns the list types in menu order.
+	 * @param body The request body
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {RequestInformation}
+	 */
+	toPutRequestInformation(body: NewMenuInput, requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
+}
+/**
  * Builds and executes requests for operations under /v1/resources/{id}/content-types/{typeID}
  */
 export interface WithTypeItemRequestBuilder extends BaseRequestBuilder<WithTypeItemRequestBuilder> {
 	/**
-	 * Requires list.manage, collection manage access and the current collection If-Match. Rejects the last attachment, a type used by live items, and dependent saved views. Chooses a remaining default when necessary. Updates the effective schema and business keys atomically; organization catalog types and frozen revisions remain. Deleted items with a detached type require reattachment before restoration.
+	 * Requires list.manage, collection manage access and the current collection If-Match. typeID is a list type of the collection or the catalog type it copies. Rejects the last attachment, a type used by live items, and dependent saved views. Chooses a remaining default when necessary. Updates the effective schema and business keys atomically; the list type stays for frozen revisions and returns with its customizations when its catalog type is attached again. Deleted items with a detached type require reattachment before restoration.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @throws {Problem} error when the service returns a 412 status code
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	delete(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<void>;
 	/**
-	 * Requires list.manage, collection manage access and the current collection If-Match. Rejects the last attachment, a type used by live items, and dependent saved views. Chooses a remaining default when necessary. Updates the effective schema and business keys atomically; organization catalog types and frozen revisions remain. Deleted items with a detached type require reattachment before restoration.
+	 *  Required module scopes: contentType.manage. Requires manage ACL on the collection. typeID is a list type of the collection or the catalog type it copies. Replaces the list type's own fields, hidden fields and rules, validates every item against the effective schema and advances the collection's schema revision atomically.
+	 * @param body Customizes a collection's list type. Its catalog type's fields, hidden fields and rules stay; a list type adds its own and hides inherited ones.
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {Promise<ContentType>}
+	 * @throws {Problem} error when the service returns a 412 status code
+	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
+	 */
+	put(body: ListTypeInput, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<ContentType | undefined>;
+	/**
+	 * Requires list.manage, collection manage access and the current collection If-Match. typeID is a list type of the collection or the catalog type it copies. Rejects the last attachment, a type used by live items, and dependent saved views. Chooses a remaining default when necessary. Updates the effective schema and business keys atomically; the list type stays for frozen revisions and returns with its customizations when its catalog type is attached again. Deleted items with a detached type require reattachment before restoration.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toDeleteRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
+	/**
+	 *  Required module scopes: contentType.manage. Requires manage ACL on the collection. typeID is a list type of the collection or the catalog type it copies. Replaces the list type's own fields, hidden fields and rules, validates every item against the effective schema and advances the collection's schema revision atomically.
+	 * @param body Customizes a collection's list type. Its catalog type's fields, hidden fields and rules stay; a list type adds its own and hides inherited ones.
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {RequestInformation}
+	 */
+	toPutRequestInformation(body: ListTypeInput, requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 }
 interface ContentTypesRequestBuilder$1 extends BaseRequestBuilder<ContentTypesRequestBuilder$1> {
 	/**
@@ -9866,15 +10054,15 @@ interface ContentTypesRequestBuilder$1 extends BaseRequestBuilder<ContentTypesRe
 	 */
 	byTypeID(typeID: Guid): WithTypeItemRequestBuilder;
 	/**
-	 *  Required module scopes: contentType.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: contentType.read. Resource ACLs and any additional use-case checks also apply. Each list type copies one catalog type (parent_id) and carries its effective schema. Listed in New menu order, followed by the types the menu leaves out, by key.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
-	 * @returns {Promise<CollectionContentType[]>}
+	 * @returns {Promise<ContentType[]>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
-	get(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<CollectionContentType[] | undefined>;
+	get(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<ContentType[] | undefined>;
 	/**
-	 * Requires list.manage, contentType.read and manage ACL on the collection. The shared definition is not copied. Returns the collection and its new ETag.
-	 * @param body Attach the organization definition by ID without copying. At most 32 types per collection. Selecting a default affects only this collection. Conflicting field keys are rejected; types that share a key must reference the same catalog field ID.
+	 * Requires list.manage, contentType.read and manage ACL on the collection. The collection accepts the catalog type through its own list type. Returns the collection and its new ETag.
+	 * @param body Makes the collection accept a catalog type through a list type of its own, which inherits the type's fields and rules. Attaching a type the collection accepted before restores its list type and customizations. At most 32 types per collection. Selecting a default affects only this collection. Conflicting field keys are rejected; types that share a key must reference the same catalog field ID.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Resource>}
 	 * @throws {Problem} error when the service returns a 412 status code
@@ -9882,14 +10070,14 @@ interface ContentTypesRequestBuilder$1 extends BaseRequestBuilder<ContentTypesRe
 	 */
 	post(body: AttachContentTypeInput, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Resource | undefined>;
 	/**
-	 *  Required module scopes: contentType.read. Resource ACLs and any additional use-case checks also apply.
+	 *  Required module scopes: contentType.read. Resource ACLs and any additional use-case checks also apply. Each list type copies one catalog type (parent_id) and carries its effective schema. Listed in New menu order, followed by the types the menu leaves out, by key.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 	/**
-	 * Requires list.manage, contentType.read and manage ACL on the collection. The shared definition is not copied. Returns the collection and its new ETag.
-	 * @param body Attach the organization definition by ID without copying. At most 32 types per collection. Selecting a default affects only this collection. Conflicting field keys are rejected; types that share a key must reference the same catalog field ID.
+	 * Requires list.manage, contentType.read and manage ACL on the collection. The collection accepts the catalog type through its own list type. Returns the collection and its new ETag.
+	 * @param body Makes the collection accept a catalog type through a list type of its own, which inherits the type's fields and rules. Attaching a type the collection accepted before restores its list type and customizations. At most 32 types per collection. Selecting a default affects only this collection. Conflicting field keys are rejected; types that share a key must reference the same catalog field ID.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -9962,7 +10150,7 @@ export interface DocumentsRequestBuilder extends BaseRequestBuilder<DocumentsReq
  */
 export interface WithFieldItemRequestBuilder extends BaseRequestBuilder<WithFieldItemRequestBuilder> {
 	/**
-	 * Uses the collection ETag. Rejects dependencies in rules and saved views. Removes memberships, query indexes and business key claims; immutable revisions retain their original fields and values. Removed keys cannot be reused. Later edits prune carried values, while explicitly supplied patch keys reject removed keys. Required module scopes: contentType.manage. Resource ACLs and any additional use-case checks also apply. Field definitions are organization-wide; editing through a collection applies to every collection using them.
+	 * Uses the collection ETag. Removes the field from the collection's list types that own it; catalog types and other collections keep it, and a field the collection inherits from a catalog type is rejected (hide it in the list type instead). The field definition is deleted once no content type has it. Rejects dependencies in rules and saved views. Removes memberships, query indexes and business key claims; immutable revisions retain their original fields and values. Removed keys cannot be reused. Later edits prune carried values, while explicitly supplied patch keys reject removed keys. Required module scopes: contentType.manage. Resource ACLs and any additional use-case checks also apply. Field definitions are organization-wide; removal through a collection applies to that collection only.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @throws {Problem} error when the service returns a 412 status code
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
@@ -9978,7 +10166,7 @@ export interface WithFieldItemRequestBuilder extends BaseRequestBuilder<WithFiel
 	 */
 	patch(body: UpdateField, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<FieldDefinition | undefined>;
 	/**
-	 * Uses the collection ETag. Rejects dependencies in rules and saved views. Removes memberships, query indexes and business key claims; immutable revisions retain their original fields and values. Removed keys cannot be reused. Later edits prune carried values, while explicitly supplied patch keys reject removed keys. Required module scopes: contentType.manage. Resource ACLs and any additional use-case checks also apply. Field definitions are organization-wide; editing through a collection applies to every collection using them.
+	 * Uses the collection ETag. Removes the field from the collection's list types that own it; catalog types and other collections keep it, and a field the collection inherits from a catalog type is rejected (hide it in the list type instead). The field definition is deleted once no content type has it. Rejects dependencies in rules and saved views. Removes memberships, query indexes and business key claims; immutable revisions retain their original fields and values. Removed keys cannot be reused. Later edits prune carried values, while explicitly supplied patch keys reject removed keys. Required module scopes: contentType.manage. Resource ACLs and any additional use-case checks also apply. Field definitions are organization-wide; removal through a collection applies to that collection only.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -10686,6 +10874,10 @@ export interface ResourcesItemRequestBuilder extends BaseRequestBuilder<Resource
 	 */
 	get children(): ChildrenRequestBuilder;
 	/**
+	 * The contentTypeMenu property
+	 */
+	get contentTypeMenu(): ContentTypeMenuRequestBuilder;
+	/**
 	 * The contentTypes property
 	 */
 	get contentTypes(): ContentTypesRequestBuilder$1;
@@ -10927,24 +11119,28 @@ export interface ContentTypes extends AdditionalDataHolder, Parsable {
 	 * The name property
 	 */
 	name?: string | null;
+	/**
+	 * The catalog type it derives from; absent for Item.
+	 */
+	parentId?: Guid | null;
 }
 interface ContentTypesRequestBuilder$2 extends BaseRequestBuilder<ContentTypesRequestBuilder$2> {
 	/**
-	 * Requires item.read. Optional workspace and collection scopes narrow the catalog; organization catalog permissions are not required.
+	 * Requires item.read. Lists each catalog type that a readable list or library accepts, directly or through a subtype, once, with its ancestors, so a picker can show the tree. Filtering search by a type also matches its subtypes. Optional workspace and collection scopes narrow the catalog; organization catalog permissions are not required.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<ContentTypes[]>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	get(requestConfiguration?: RequestConfiguration<ContentTypesRequestBuilderGetQueryParameters> | undefined): Promise<ContentTypes[] | undefined>;
 	/**
-	 * Requires item.read. Optional workspace and collection scopes narrow the catalog; organization catalog permissions are not required.
+	 * Requires item.read. Lists each catalog type that a readable list or library accepts, directly or through a subtype, once, with its ancestors, so a picker can show the tree. Filtering search by a type also matches its subtypes. Optional workspace and collection scopes narrow the catalog; organization catalog permissions are not required.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<ContentTypesRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 }
 /**
- * Requires item.read. Optional workspace and collection scopes narrow the catalog; organization catalog permissions are not required.
+ * Requires item.read. Lists each catalog type that a readable list or library accepts, directly or through a subtype, once, with its ancestors, so a picker can show the tree. Filtering search by a type also matches its subtypes. Optional workspace and collection scopes narrow the catalog; organization catalog permissions are not required.
  */
 export interface ContentTypesRequestBuilderGetQueryParameters {
 	collectionId?: Guid;
@@ -11247,7 +11443,7 @@ export interface SearchRequestBuilderGetQueryParameters {
 	 */
 	collectionId?: string;
 	/**
-	 * Only this content type.
+	 * A catalog type, or a list type standing for the catalog type it copies; matches it and every type deriving from it.
 	 */
 	contentTypeId?: string;
 	/**
@@ -13629,6 +13825,7 @@ export interface Trigger {
 	type: string;
 	disabled?: boolean;
 	collection_id?: string;
+	/** A content type (a catalog type, or a list type standing for it); matches its subtypes too. */
 	content_type_id?: string;
 	cron?: string;
 	time_zone?: string;
@@ -13662,6 +13859,8 @@ export interface TriggerResource {
 	readonly revision_id: string;
 	readonly revision_number: number;
 	readonly content_type_id: string;
+	/** Key of the catalog type the item's type copies, such as `invoice`. */
+	readonly content_type_key: string;
 	readonly name: string;
 	readonly keywords: readonly string[];
 	/** Plain JSON field values. Absent when they would exceed the snapshot's 64 KiB budget. */
@@ -13900,7 +14099,7 @@ export declare function __start(definition: unknown, run: string): Promise<strin
 export declare function __manifest(definition: unknown, params: string): string;
 
 declare namespace models {
-	export { ApplyTemplateInput, ArchiveEntry, ArchiveEntry_duplicate_policy, ArchiveEntry_duplicate_policyObject, ArchiveEntry_kind, ArchiveEntry_kindObject, ArchiveEntry_system_key, ArchiveEntry_system_keyObject, ArchiveEntry_values, ArchiveEntry_versioning, ArchiveEntry_versioningObject, ArchiveSelection, ArchiveSelectionObject, Artifact, Artifact_metrics, Artifact_sources, AttachContentTypeInput, AuditEvent, AuditEvent_credential, AuditEvent_details, AuditPage, Blob, Blob_content_type, Blob_content_typeObject, BulkCreate, BulkCreate_values, BulkOperation, BulkOperationMember1, BulkOperationMember2, BulkOperationMember3, BulkOperationMember4, BulkOperationMember5, BulkOperationMember6, BulkOperationMember7, BulkRequest, BulkResponse, BulkResult, BulkResult_action, BulkResult_actionObject, BulkUpdate, BulkUpdate_values, CalendarOccurrence, CalendarQuery, CalendarQuery_surface, CalendarQuery_surfaceObject, ChunkText, ChunkText_chunker, ChunkText_chunkerObject, ChunkText_kind, ChunkText_kindObject, CollectionContentType, CollectionTemplate, CollectionTemplate_duplicate_policy, CollectionTemplate_duplicate_policyObject, CollectionTemplate_kind, CollectionTemplate_kindObject, CollectionTemplate_versioning, CollectionTemplate_versioningObject, Comment, CommentAnchor, CommentCounts, CommentCountsRequest, CommentCounts_counts, CommentCreate, CommentEdit, CommentPerson, CommentSettings, CommentSettingsInput, CommentSettingsInput_mode, CommentSettingsInput_modeObject, CommentSettings_effective, CommentSettings_effective_from, CommentSettings_effective_fromObject, CommentSettings_effective_mode, CommentSettings_effective_modeObject, CommentSettings_mode, CommentSettings_modeObject, CommentThread, CommentThreadList, CommentThreadList_mode, CommentThreadList_modeObject, CommentThreadList_mode_from, CommentThreadList_mode_fromObject, Comment_source, Comment_sourceObject, CompletionRequest, CompletionRequest_execution, CompletionRequest_executionObject, CompletionRequest_output_schema, ComposePDF, ContentType, ContentTypeInput, CreateCatalogField, CreateCatalogField_type, CreateCatalogField_typeObject, CreateField, CreateField_type, CreateField_typeObject, CreateListIntegration, CreateListIntegration_configuration, CreateRelationship, CreateRelationship_metadata, CreateResource, CreateResource_duplicate_policy, CreateResource_duplicate_policyObject, CreateResource_kind, CreateResource_kindObject, CreateResource_values, CreateResource_versioning, CreateResource_versioningObject, DecisionRequest, DecisionRequest_context, DecisionRequest_data, DecisionRequest_questions, DecisionRequest_questions_options, DecisionRequest_questions_type, DecisionRequest_questions_typeObject, DeletedResource, DeltaPage, DeltaPage_value, DeltaPage_valueMember1, DeltaPage_valueMember1_Removed, DeltaPage_valueMember1_Removed_reason, DeltaPage_valueMember1_Removed_reasonObject, DocumentMetadata, DocumentMetadata_values, DocumentUpload, DuplicateDocument, FieldDefinition, FieldDefinition_index_status, FieldDefinition_index_statusObject, FieldDefinition_type, FieldDefinition_typeObject, FieldOptions, FieldOptions_search_weight, FieldOptions_search_weightObject, FileSummary, FileVersion, FileVersion_availability, FileVersion_availabilityObject, FilterExpr, FilterExpr_op, FilterExpr_opObject, FilterExpr_value_ref, FilterExpr_value_refObject, FilteredBulkUpdate, FilteredBulkUpdate_values, GenerationChunk, GenerationChunkPage, GenerationEnrichments, GenerationEnrichments_enrichments, ItemIntegration, ItemRevision, ItemRevision_payload, ItemText, ItemText_next, ItemText_pages, KeywordCount, KeywordCountList, KeywordInput, ListIntegration, ListIntegration_kind, ListIntegration_kindObject, ListView, ListViewPage, ListView_system_key, ListView_system_keyObject, LocatedItem, MentionCandidateList, MentionCandidateList_value, MergeTerm, MoveItem, MoveTerm, NavigationFieldSetting, NavigationNode, NavigationPage, NavigationRequest, NavigationRequest_surface, NavigationRequest_surfaceObject, NavigationSelection, NotificationSend, NotificationSendResult, Operation, OperationFailure, OperationPage, Operation_error_code, Operation_error_codeObject, Operation_status, Operation_statusObject, Operation_waiting, Operation_waitingObject, OptimizeImage, PageList, PageSize, Permissions, Permissions_effective_grants, Permissions_effective_grants_action, Permissions_effective_grants_actionObject, Permissions_effective_grants_effect, Permissions_effective_grants_effectObject, Permissions_effective_grants_principal_type, Permissions_effective_grants_principal_typeObject, Permissions_grants, Permissions_grants_action, Permissions_grants_actionObject, Permissions_grants_effect, Permissions_grants_effectObject, Permissions_grants_principal_type, Permissions_grants_principal_typeObject, PortableSmartFolder, PortableSmartFolderDefinition, PortableSmartFolderDefinition_collection_kind, PortableSmartFolderDefinition_collection_kindObject, PortableSmartFolderDefinition_mode, PortableSmartFolderDefinition_modeObject, PortableSmartFolderDefinition_term_match, PortableSmartFolderDefinition_term_matchObject, PortableTerm, PortableTermGroup, PortableTermSet, PortableTerm_labels, Problem, Problem_existing_item, PromoteKeyword, PromoteStagedFile, PromotedFile, Publication, Publication_action, Publication_actionObject, Publication_snapshot, QueryGroup, QueryGroupPage, QueryRequest, QueryRequest_surface, QueryRequest_surfaceObject, QueryResult, QuerySpec, ReadText, ReadText_ocr, ReadText_ocrObject, ReclaimFileVersion, ReclaimedFileVersion, RecycleBinPage, Relationship, RelationshipEndpoint, RelationshipEndpointPage, RelationshipNeighborhood, RelationshipType, RelationshipTypeInput, RelationshipTypePage, RelationshipType_attributes, RelationshipView, Relationship_metadata, Resource, ResourceAccess, ResourceAccess_access, ResourceAccess_accessObject, Resource_duplicate_policy, Resource_duplicate_policyObject, Resource_kind, Resource_kindObject, Resource_system_key, Resource_system_keyObject, Resource_values, Resource_versioning, Resource_versioningObject, SchemaRevision, SchemaRevision_definition, SchemaRevision_definition_fields, SchemaRevision_definition_fields_type, SchemaRevision_definition_fields_typeObject, SchemaTemplate, SchemaTemplatePage, SchemaTemplate_definition, SearchFacetValue, SearchFacets, SearchField, SearchField_operators, SearchField_operatorsObject, SearchHit, SearchHit_kind, SearchHit_kindObject, SearchHit_matched_by, SearchHit_matched_byObject, SearchHit_surface, SearchHit_surfaceObject, SearchPage, SearchPage_mode, SearchPage_modeObject, SearchRequest, SearchRequest_kind, SearchRequest_kindObject, SearchRequest_mode, SearchRequest_modeObject, SearchRequest_surface, SearchRequest_surfaceObject, SearchStatus, SearchStatus_embeddings, SearchSync, SetWorkspaceMember, SetWorkspaceMember_role, SetWorkspaceMember_roleObject, SmartFolder, SmartFolderDefinition, SmartFolderDefinition_collection_kind, SmartFolderDefinition_collection_kindObject, SmartFolderDefinition_mode, SmartFolderDefinition_modeObject, SmartFolderDefinition_term_match, SmartFolderDefinition_term_matchObject, SmartFolderDrop, SmartFolderEntry, SmartFolderEntry_collection_kind, SmartFolderEntry_collection_kindObject, SmartFolderGroup, SmartFolderGroupBy, SmartFolderGroupBy_by, SmartFolderGroupBy_byObject, SmartFolderGroupsResult, SmartFolderImportResult, SmartFolderInput, SmartFolderPackage, SmartFolderPage, SmartFolderPreview, SmartFolderQueryRequest, SmartFolderQueryRequest_sort, SmartFolderQueryRequest_sort_direction, SmartFolderQueryRequest_sort_directionObject, SmartFolderQueryRequest_sort_field, SmartFolderQueryRequest_sort_fieldObject, SmartFolderQueryRequest_surface, SmartFolderQueryRequest_surfaceObject, SmartFolderResult, SmartFolderTermRef, SmartFolderUnclassify, SortSpec, SortSpec_direction, SortSpec_directionObject, StagedArtifact, StagedFile, StagedFile_metrics, StagedFile_sources, StagedFile_state, StagedFile_stateObject, Task, TaskAnswer, TaskAnswer_input, TaskCreate, TaskCreate_completion, TaskCreate_completionObject, TaskCreate_kind, TaskCreate_kindObject, TaskCreate_priority, TaskCreate_priorityObject, TaskCreate_review, TaskCreate_review_type, TaskCreate_review_typeObject, TaskCreate_values, TaskList, TaskOutcome, TaskOutcome_comment, TaskOutcome_commentObject, TaskOutcome_style, TaskOutcome_styleObject, TaskReassign, TaskResponseInput, TaskResponseInput_input, Task_completion, Task_completionObject, Task_input, Task_kind, Task_kindObject, Task_priority, Task_priorityObject, Task_review, Task_review_type, Task_review_typeObject, Task_source, Task_sourceObject, Task_status, Task_statusObject, Task_values, TaxonomyDecisionRequest, TaxonomyDecisionRequest_context, TaxonomyDecisionRequest_data, TaxonomyDecisionRequest_description_overrides, TaxonomyDecisionRequest_selection, TaxonomyDecisionRequest_selectionObject, TaxonomyImportResult, TaxonomyPackage, TemplateField, TemplateField_type, TemplateField_typeObject, TemplateInput, Term, TermEntries, TermGroup, TermGroupInput, TermGroupPage, TermImportResult, TermInput, TermInput_labels, TermList, TermPage, TermSet, TermSetInput, TermSetPage, Term_labels, UpdateField, UpdateListIntegration, UpdateListIntegration_configuration, UpdateRelationship, UpdateRelationship_metadata, UpdateResource, UpdateResource_duplicate_policy, UpdateResource_duplicate_policyObject, UpdateResource_values, UpdateResource_versioning, UpdateResource_versioningObject, ValidationRule, ValidationRuleMember1, ValidationRuleMember2, ValidationRuleMember2_op, ValidationRuleMember2_opObject, ViewInput, ViewInput_layout, ViewInput_layoutObject, ViewQueryRequest, ViewQueryRequest_surface, ViewQueryRequest_surfaceObject, ViewSettings, ViewSettings_match, ViewSettings_matchObject, WorkflowCall, WorkflowCall_input, WorkflowCalls, WorkflowForm, WorkflowStarted, WorkspaceKeywordCount, WorkspaceKeywordCountPage, WorkspaceMember, WorkspaceMember_role, WorkspaceMember_roleObject, WorkspaceRelationshipPage, WorkspaceRelationshipType, WorkspaceRelationshipTypePage, WorkspaceRelationshipView, createApplyTemplateInputFromDiscriminatorValue, createArchiveEntryFromDiscriminatorValue, createArchiveEntry_valuesFromDiscriminatorValue, createArtifactFromDiscriminatorValue, createArtifact_metricsFromDiscriminatorValue, createArtifact_sourcesFromDiscriminatorValue, createAttachContentTypeInputFromDiscriminatorValue, createAuditEventFromDiscriminatorValue, createAuditEvent_credentialFromDiscriminatorValue, createAuditEvent_detailsFromDiscriminatorValue, createAuditPageFromDiscriminatorValue, createBlobFromDiscriminatorValue, createBulkCreateFromDiscriminatorValue, createBulkCreate_valuesFromDiscriminatorValue, createBulkOperationFromDiscriminatorValue, createBulkOperationMember1FromDiscriminatorValue, createBulkOperationMember2FromDiscriminatorValue, createBulkOperationMember3FromDiscriminatorValue, createBulkOperationMember4FromDiscriminatorValue, createBulkOperationMember5FromDiscriminatorValue, createBulkOperationMember6FromDiscriminatorValue, createBulkOperationMember7FromDiscriminatorValue, createBulkRequestFromDiscriminatorValue, createBulkResponseFromDiscriminatorValue, createBulkResultFromDiscriminatorValue, createBulkUpdateFromDiscriminatorValue, createBulkUpdate_valuesFromDiscriminatorValue, createCalendarOccurrenceFromDiscriminatorValue, createCalendarQueryFromDiscriminatorValue, createChunkTextFromDiscriminatorValue, createCollectionContentTypeFromDiscriminatorValue, createCollectionTemplateFromDiscriminatorValue, createCommentAnchorFromDiscriminatorValue, createCommentCountsFromDiscriminatorValue, createCommentCountsRequestFromDiscriminatorValue, createCommentCounts_countsFromDiscriminatorValue, createCommentCreateFromDiscriminatorValue, createCommentEditFromDiscriminatorValue, createCommentFromDiscriminatorValue, createCommentPersonFromDiscriminatorValue, createCommentSettingsFromDiscriminatorValue, createCommentSettingsInputFromDiscriminatorValue, createCommentSettings_effectiveFromDiscriminatorValue, createCommentThreadFromDiscriminatorValue, createCommentThreadListFromDiscriminatorValue, createCompletionRequestFromDiscriminatorValue, createCompletionRequest_output_schemaFromDiscriminatorValue, createComposePDFFromDiscriminatorValue, createContentTypeFromDiscriminatorValue, createContentTypeInputFromDiscriminatorValue, createCreateCatalogFieldFromDiscriminatorValue, createCreateFieldFromDiscriminatorValue, createCreateListIntegrationFromDiscriminatorValue, createCreateListIntegration_configurationFromDiscriminatorValue, createCreateRelationshipFromDiscriminatorValue, createCreateRelationship_metadataFromDiscriminatorValue, createCreateResourceFromDiscriminatorValue, createCreateResource_valuesFromDiscriminatorValue, createDecisionRequestFromDiscriminatorValue, createDecisionRequest_contextFromDiscriminatorValue, createDecisionRequest_dataFromDiscriminatorValue, createDecisionRequest_questionsFromDiscriminatorValue, createDecisionRequest_questions_optionsFromDiscriminatorValue, createDeletedResourceFromDiscriminatorValue, createDeltaPageFromDiscriminatorValue, createDeltaPage_valueFromDiscriminatorValue, createDeltaPage_valueMember1FromDiscriminatorValue, createDeltaPage_valueMember1_RemovedFromDiscriminatorValue, createDocumentMetadataFromDiscriminatorValue, createDocumentMetadata_valuesFromDiscriminatorValue, createDocumentUploadFromDiscriminatorValue, createDuplicateDocumentFromDiscriminatorValue, createFieldDefinitionFromDiscriminatorValue, createFieldOptionsFromDiscriminatorValue, createFileSummaryFromDiscriminatorValue, createFileVersionFromDiscriminatorValue, createFilterExprFromDiscriminatorValue, createFilteredBulkUpdateFromDiscriminatorValue, createFilteredBulkUpdate_valuesFromDiscriminatorValue, createGenerationChunkFromDiscriminatorValue, createGenerationChunkPageFromDiscriminatorValue, createGenerationEnrichmentsFromDiscriminatorValue, createGenerationEnrichments_enrichmentsFromDiscriminatorValue, createItemIntegrationFromDiscriminatorValue, createItemRevisionFromDiscriminatorValue, createItemRevision_payloadFromDiscriminatorValue, createItemTextFromDiscriminatorValue, createItemText_nextFromDiscriminatorValue, createItemText_pagesFromDiscriminatorValue, createKeywordCountFromDiscriminatorValue, createKeywordCountListFromDiscriminatorValue, createKeywordInputFromDiscriminatorValue, createListIntegrationFromDiscriminatorValue, createListViewFromDiscriminatorValue, createListViewPageFromDiscriminatorValue, createLocatedItemFromDiscriminatorValue, createMentionCandidateListFromDiscriminatorValue, createMentionCandidateList_valueFromDiscriminatorValue, createMergeTermFromDiscriminatorValue, createMoveItemFromDiscriminatorValue, createMoveTermFromDiscriminatorValue, createNavigationFieldSettingFromDiscriminatorValue, createNavigationNodeFromDiscriminatorValue, createNavigationPageFromDiscriminatorValue, createNavigationRequestFromDiscriminatorValue, createNavigationSelectionFromDiscriminatorValue, createNotificationSendFromDiscriminatorValue, createNotificationSendResultFromDiscriminatorValue, createOperationFailureFromDiscriminatorValue, createOperationFromDiscriminatorValue, createOperationPageFromDiscriminatorValue, createOptimizeImageFromDiscriminatorValue, createPageListFromDiscriminatorValue, createPageSizeFromDiscriminatorValue, createPermissionsFromDiscriminatorValue, createPermissions_effective_grantsFromDiscriminatorValue, createPermissions_grantsFromDiscriminatorValue, createPortableSmartFolderDefinitionFromDiscriminatorValue, createPortableSmartFolderFromDiscriminatorValue, createPortableTermFromDiscriminatorValue, createPortableTermGroupFromDiscriminatorValue, createPortableTermSetFromDiscriminatorValue, createPortableTerm_labelsFromDiscriminatorValue, createProblemFromDiscriminatorValue, createProblem_existing_itemFromDiscriminatorValue, createPromoteKeywordFromDiscriminatorValue, createPromoteStagedFileFromDiscriminatorValue, createPromotedFileFromDiscriminatorValue, createPublicationFromDiscriminatorValue, createPublication_snapshotFromDiscriminatorValue, createQueryGroupFromDiscriminatorValue, createQueryGroupPageFromDiscriminatorValue, createQueryRequestFromDiscriminatorValue, createQueryResultFromDiscriminatorValue, createQuerySpecFromDiscriminatorValue, createReadTextFromDiscriminatorValue, createReclaimFileVersionFromDiscriminatorValue, createReclaimedFileVersionFromDiscriminatorValue, createRecycleBinPageFromDiscriminatorValue, createRelationshipEndpointFromDiscriminatorValue, createRelationshipEndpointPageFromDiscriminatorValue, createRelationshipFromDiscriminatorValue, createRelationshipNeighborhoodFromDiscriminatorValue, createRelationshipTypeFromDiscriminatorValue, createRelationshipTypeInputFromDiscriminatorValue, createRelationshipTypePageFromDiscriminatorValue, createRelationshipType_attributesFromDiscriminatorValue, createRelationshipViewFromDiscriminatorValue, createRelationship_metadataFromDiscriminatorValue, createResourceAccessFromDiscriminatorValue, createResourceFromDiscriminatorValue, createResource_valuesFromDiscriminatorValue, createSchemaRevisionFromDiscriminatorValue, createSchemaRevision_definitionFromDiscriminatorValue, createSchemaRevision_definition_fieldsFromDiscriminatorValue, createSchemaTemplateFromDiscriminatorValue, createSchemaTemplatePageFromDiscriminatorValue, createSchemaTemplate_definitionFromDiscriminatorValue, createSearchFacetValueFromDiscriminatorValue, createSearchFacetsFromDiscriminatorValue, createSearchFieldFromDiscriminatorValue, createSearchHitFromDiscriminatorValue, createSearchPageFromDiscriminatorValue, createSearchRequestFromDiscriminatorValue, createSearchStatusFromDiscriminatorValue, createSearchStatus_embeddingsFromDiscriminatorValue, createSearchSyncFromDiscriminatorValue, createSetWorkspaceMemberFromDiscriminatorValue, createSmartFolderDefinitionFromDiscriminatorValue, createSmartFolderDropFromDiscriminatorValue, createSmartFolderEntryFromDiscriminatorValue, createSmartFolderFromDiscriminatorValue, createSmartFolderGroupByFromDiscriminatorValue, createSmartFolderGroupFromDiscriminatorValue, createSmartFolderGroupsResultFromDiscriminatorValue, createSmartFolderImportResultFromDiscriminatorValue, createSmartFolderInputFromDiscriminatorValue, createSmartFolderPackageFromDiscriminatorValue, createSmartFolderPageFromDiscriminatorValue, createSmartFolderPreviewFromDiscriminatorValue, createSmartFolderQueryRequestFromDiscriminatorValue, createSmartFolderQueryRequest_sortFromDiscriminatorValue, createSmartFolderResultFromDiscriminatorValue, createSmartFolderTermRefFromDiscriminatorValue, createSmartFolderUnclassifyFromDiscriminatorValue, createSortSpecFromDiscriminatorValue, createStagedArtifactFromDiscriminatorValue, createStagedFileFromDiscriminatorValue, createStagedFile_metricsFromDiscriminatorValue, createStagedFile_sourcesFromDiscriminatorValue, createTaskAnswerFromDiscriminatorValue, createTaskAnswer_inputFromDiscriminatorValue, createTaskCreateFromDiscriminatorValue, createTaskCreate_reviewFromDiscriminatorValue, createTaskCreate_valuesFromDiscriminatorValue, createTaskFromDiscriminatorValue, createTaskListFromDiscriminatorValue, createTaskOutcomeFromDiscriminatorValue, createTaskReassignFromDiscriminatorValue, createTaskResponseInputFromDiscriminatorValue, createTaskResponseInput_inputFromDiscriminatorValue, createTask_inputFromDiscriminatorValue, createTask_reviewFromDiscriminatorValue, createTask_valuesFromDiscriminatorValue, createTaxonomyDecisionRequestFromDiscriminatorValue, createTaxonomyDecisionRequest_contextFromDiscriminatorValue, createTaxonomyDecisionRequest_dataFromDiscriminatorValue, createTaxonomyDecisionRequest_description_overridesFromDiscriminatorValue, createTaxonomyImportResultFromDiscriminatorValue, createTaxonomyPackageFromDiscriminatorValue, createTemplateFieldFromDiscriminatorValue, createTemplateInputFromDiscriminatorValue, createTermEntriesFromDiscriminatorValue, createTermFromDiscriminatorValue, createTermGroupFromDiscriminatorValue, createTermGroupInputFromDiscriminatorValue, createTermGroupPageFromDiscriminatorValue, createTermImportResultFromDiscriminatorValue, createTermInputFromDiscriminatorValue, createTermInput_labelsFromDiscriminatorValue, createTermListFromDiscriminatorValue, createTermPageFromDiscriminatorValue, createTermSetFromDiscriminatorValue, createTermSetInputFromDiscriminatorValue, createTermSetPageFromDiscriminatorValue, createTerm_labelsFromDiscriminatorValue, createUpdateFieldFromDiscriminatorValue, createUpdateListIntegrationFromDiscriminatorValue, createUpdateListIntegration_configurationFromDiscriminatorValue, createUpdateRelationshipFromDiscriminatorValue, createUpdateRelationship_metadataFromDiscriminatorValue, createUpdateResourceFromDiscriminatorValue, createUpdateResource_valuesFromDiscriminatorValue, createValidationRuleFromDiscriminatorValue, createValidationRuleMember1FromDiscriminatorValue, createValidationRuleMember2FromDiscriminatorValue, createViewInputFromDiscriminatorValue, createViewQueryRequestFromDiscriminatorValue, createViewSettingsFromDiscriminatorValue, createWorkflowCallFromDiscriminatorValue, createWorkflowCall_inputFromDiscriminatorValue, createWorkflowCallsFromDiscriminatorValue, createWorkflowFormFromDiscriminatorValue, createWorkflowStartedFromDiscriminatorValue, createWorkspaceKeywordCountFromDiscriminatorValue, createWorkspaceKeywordCountPageFromDiscriminatorValue, createWorkspaceMemberFromDiscriminatorValue, createWorkspaceRelationshipPageFromDiscriminatorValue, createWorkspaceRelationshipTypeFromDiscriminatorValue, createWorkspaceRelationshipTypePageFromDiscriminatorValue, createWorkspaceRelationshipViewFromDiscriminatorValue, deserializeIntoApplyTemplateInput, deserializeIntoArchiveEntry, deserializeIntoArchiveEntry_values, deserializeIntoArtifact, deserializeIntoArtifact_metrics, deserializeIntoArtifact_sources, deserializeIntoAttachContentTypeInput, deserializeIntoAuditEvent, deserializeIntoAuditEvent_credential, deserializeIntoAuditEvent_details, deserializeIntoAuditPage, deserializeIntoBlob, deserializeIntoBulkCreate, deserializeIntoBulkCreate_values, deserializeIntoBulkOperation, deserializeIntoBulkOperationMember1, deserializeIntoBulkOperationMember2, deserializeIntoBulkOperationMember3, deserializeIntoBulkOperationMember4, deserializeIntoBulkOperationMember5, deserializeIntoBulkOperationMember6, deserializeIntoBulkOperationMember7, deserializeIntoBulkRequest, deserializeIntoBulkResponse, deserializeIntoBulkResult, deserializeIntoBulkUpdate, deserializeIntoBulkUpdate_values, deserializeIntoCalendarOccurrence, deserializeIntoCalendarQuery, deserializeIntoChunkText, deserializeIntoCollectionContentType, deserializeIntoCollectionTemplate, deserializeIntoComment, deserializeIntoCommentAnchor, deserializeIntoCommentCounts, deserializeIntoCommentCountsRequest, deserializeIntoCommentCounts_counts, deserializeIntoCommentCreate, deserializeIntoCommentEdit, deserializeIntoCommentPerson, deserializeIntoCommentSettings, deserializeIntoCommentSettingsInput, deserializeIntoCommentSettings_effective, deserializeIntoCommentThread, deserializeIntoCommentThreadList, deserializeIntoCompletionRequest, deserializeIntoCompletionRequest_output_schema, deserializeIntoComposePDF, deserializeIntoContentType, deserializeIntoContentTypeInput, deserializeIntoCreateCatalogField, deserializeIntoCreateField, deserializeIntoCreateListIntegration, deserializeIntoCreateListIntegration_configuration, deserializeIntoCreateRelationship, deserializeIntoCreateRelationship_metadata, deserializeIntoCreateResource, deserializeIntoCreateResource_values, deserializeIntoDecisionRequest, deserializeIntoDecisionRequest_context, deserializeIntoDecisionRequest_data, deserializeIntoDecisionRequest_questions, deserializeIntoDecisionRequest_questions_options, deserializeIntoDeletedResource, deserializeIntoDeltaPage, deserializeIntoDeltaPage_value, deserializeIntoDeltaPage_valueMember1, deserializeIntoDeltaPage_valueMember1_Removed, deserializeIntoDocumentMetadata, deserializeIntoDocumentMetadata_values, deserializeIntoDocumentUpload, deserializeIntoDuplicateDocument, deserializeIntoFieldDefinition, deserializeIntoFieldOptions, deserializeIntoFileSummary, deserializeIntoFileVersion, deserializeIntoFilterExpr, deserializeIntoFilteredBulkUpdate, deserializeIntoFilteredBulkUpdate_values, deserializeIntoGenerationChunk, deserializeIntoGenerationChunkPage, deserializeIntoGenerationEnrichments, deserializeIntoGenerationEnrichments_enrichments, deserializeIntoItemIntegration, deserializeIntoItemRevision, deserializeIntoItemRevision_payload, deserializeIntoItemText, deserializeIntoItemText_next, deserializeIntoItemText_pages, deserializeIntoKeywordCount, deserializeIntoKeywordCountList, deserializeIntoKeywordInput, deserializeIntoListIntegration, deserializeIntoListView, deserializeIntoListViewPage, deserializeIntoLocatedItem, deserializeIntoMentionCandidateList, deserializeIntoMentionCandidateList_value, deserializeIntoMergeTerm, deserializeIntoMoveItem, deserializeIntoMoveTerm, deserializeIntoNavigationFieldSetting, deserializeIntoNavigationNode, deserializeIntoNavigationPage, deserializeIntoNavigationRequest, deserializeIntoNavigationSelection, deserializeIntoNotificationSend, deserializeIntoNotificationSendResult, deserializeIntoOperation, deserializeIntoOperationFailure, deserializeIntoOperationPage, deserializeIntoOptimizeImage, deserializeIntoPageList, deserializeIntoPageSize, deserializeIntoPermissions, deserializeIntoPermissions_effective_grants, deserializeIntoPermissions_grants, deserializeIntoPortableSmartFolder, deserializeIntoPortableSmartFolderDefinition, deserializeIntoPortableTerm, deserializeIntoPortableTermGroup, deserializeIntoPortableTermSet, deserializeIntoPortableTerm_labels, deserializeIntoProblem, deserializeIntoProblem_existing_item, deserializeIntoPromoteKeyword, deserializeIntoPromoteStagedFile, deserializeIntoPromotedFile, deserializeIntoPublication, deserializeIntoPublication_snapshot, deserializeIntoQueryGroup, deserializeIntoQueryGroupPage, deserializeIntoQueryRequest, deserializeIntoQueryResult, deserializeIntoQuerySpec, deserializeIntoReadText, deserializeIntoReclaimFileVersion, deserializeIntoReclaimedFileVersion, deserializeIntoRecycleBinPage, deserializeIntoRelationship, deserializeIntoRelationshipEndpoint, deserializeIntoRelationshipEndpointPage, deserializeIntoRelationshipNeighborhood, deserializeIntoRelationshipType, deserializeIntoRelationshipTypeInput, deserializeIntoRelationshipTypePage, deserializeIntoRelationshipType_attributes, deserializeIntoRelationshipView, deserializeIntoRelationship_metadata, deserializeIntoResource, deserializeIntoResourceAccess, deserializeIntoResource_values, deserializeIntoSchemaRevision, deserializeIntoSchemaRevision_definition, deserializeIntoSchemaRevision_definition_fields, deserializeIntoSchemaTemplate, deserializeIntoSchemaTemplatePage, deserializeIntoSchemaTemplate_definition, deserializeIntoSearchFacetValue, deserializeIntoSearchFacets, deserializeIntoSearchField, deserializeIntoSearchHit, deserializeIntoSearchPage, deserializeIntoSearchRequest, deserializeIntoSearchStatus, deserializeIntoSearchStatus_embeddings, deserializeIntoSearchSync, deserializeIntoSetWorkspaceMember, deserializeIntoSmartFolder, deserializeIntoSmartFolderDefinition, deserializeIntoSmartFolderDrop, deserializeIntoSmartFolderEntry, deserializeIntoSmartFolderGroup, deserializeIntoSmartFolderGroupBy, deserializeIntoSmartFolderGroupsResult, deserializeIntoSmartFolderImportResult, deserializeIntoSmartFolderInput, deserializeIntoSmartFolderPackage, deserializeIntoSmartFolderPage, deserializeIntoSmartFolderPreview, deserializeIntoSmartFolderQueryRequest, deserializeIntoSmartFolderQueryRequest_sort, deserializeIntoSmartFolderResult, deserializeIntoSmartFolderTermRef, deserializeIntoSmartFolderUnclassify, deserializeIntoSortSpec, deserializeIntoStagedArtifact, deserializeIntoStagedFile, deserializeIntoStagedFile_metrics, deserializeIntoStagedFile_sources, deserializeIntoTask, deserializeIntoTaskAnswer, deserializeIntoTaskAnswer_input, deserializeIntoTaskCreate, deserializeIntoTaskCreate_review, deserializeIntoTaskCreate_values, deserializeIntoTaskList, deserializeIntoTaskOutcome, deserializeIntoTaskReassign, deserializeIntoTaskResponseInput, deserializeIntoTaskResponseInput_input, deserializeIntoTask_input, deserializeIntoTask_review, deserializeIntoTask_values, deserializeIntoTaxonomyDecisionRequest, deserializeIntoTaxonomyDecisionRequest_context, deserializeIntoTaxonomyDecisionRequest_data, deserializeIntoTaxonomyDecisionRequest_description_overrides, deserializeIntoTaxonomyImportResult, deserializeIntoTaxonomyPackage, deserializeIntoTemplateField, deserializeIntoTemplateInput, deserializeIntoTerm, deserializeIntoTermEntries, deserializeIntoTermGroup, deserializeIntoTermGroupInput, deserializeIntoTermGroupPage, deserializeIntoTermImportResult, deserializeIntoTermInput, deserializeIntoTermInput_labels, deserializeIntoTermList, deserializeIntoTermPage, deserializeIntoTermSet, deserializeIntoTermSetInput, deserializeIntoTermSetPage, deserializeIntoTerm_labels, deserializeIntoUpdateField, deserializeIntoUpdateListIntegration, deserializeIntoUpdateListIntegration_configuration, deserializeIntoUpdateRelationship, deserializeIntoUpdateRelationship_metadata, deserializeIntoUpdateResource, deserializeIntoUpdateResource_values, deserializeIntoValidationRule, deserializeIntoValidationRuleMember1, deserializeIntoValidationRuleMember2, deserializeIntoViewInput, deserializeIntoViewQueryRequest, deserializeIntoViewSettings, deserializeIntoWorkflowCall, deserializeIntoWorkflowCall_input, deserializeIntoWorkflowCalls, deserializeIntoWorkflowForm, deserializeIntoWorkflowStarted, deserializeIntoWorkspaceKeywordCount, deserializeIntoWorkspaceKeywordCountPage, deserializeIntoWorkspaceMember, deserializeIntoWorkspaceRelationshipPage, deserializeIntoWorkspaceRelationshipType, deserializeIntoWorkspaceRelationshipTypePage, deserializeIntoWorkspaceRelationshipView, serializeApplyTemplateInput, serializeArchiveEntry, serializeArchiveEntry_values, serializeArtifact, serializeArtifact_metrics, serializeArtifact_sources, serializeAttachContentTypeInput, serializeAuditEvent, serializeAuditEvent_credential, serializeAuditEvent_details, serializeAuditPage, serializeBlob, serializeBulkCreate, serializeBulkCreate_values, serializeBulkOperation, serializeBulkOperationMember1, serializeBulkOperationMember2, serializeBulkOperationMember3, serializeBulkOperationMember4, serializeBulkOperationMember5, serializeBulkOperationMember6, serializeBulkOperationMember7, serializeBulkRequest, serializeBulkResponse, serializeBulkResult, serializeBulkUpdate, serializeBulkUpdate_values, serializeCalendarOccurrence, serializeCalendarQuery, serializeChunkText, serializeCollectionContentType, serializeCollectionTemplate, serializeComment, serializeCommentAnchor, serializeCommentCounts, serializeCommentCountsRequest, serializeCommentCounts_counts, serializeCommentCreate, serializeCommentEdit, serializeCommentPerson, serializeCommentSettings, serializeCommentSettingsInput, serializeCommentSettings_effective, serializeCommentThread, serializeCommentThreadList, serializeCompletionRequest, serializeCompletionRequest_output_schema, serializeComposePDF, serializeContentType, serializeContentTypeInput, serializeCreateCatalogField, serializeCreateField, serializeCreateListIntegration, serializeCreateListIntegration_configuration, serializeCreateRelationship, serializeCreateRelationship_metadata, serializeCreateResource, serializeCreateResource_values, serializeDecisionRequest, serializeDecisionRequest_context, serializeDecisionRequest_data, serializeDecisionRequest_questions, serializeDecisionRequest_questions_options, serializeDeletedResource, serializeDeltaPage, serializeDeltaPage_value, serializeDeltaPage_valueMember1, serializeDeltaPage_valueMember1_Removed, serializeDocumentMetadata, serializeDocumentMetadata_values, serializeDocumentUpload, serializeDuplicateDocument, serializeFieldDefinition, serializeFieldOptions, serializeFileSummary, serializeFileVersion, serializeFilterExpr, serializeFilteredBulkUpdate, serializeFilteredBulkUpdate_values, serializeGenerationChunk, serializeGenerationChunkPage, serializeGenerationEnrichments, serializeGenerationEnrichments_enrichments, serializeItemIntegration, serializeItemRevision, serializeItemRevision_payload, serializeItemText, serializeItemText_next, serializeItemText_pages, serializeKeywordCount, serializeKeywordCountList, serializeKeywordInput, serializeListIntegration, serializeListView, serializeListViewPage, serializeLocatedItem, serializeMentionCandidateList, serializeMentionCandidateList_value, serializeMergeTerm, serializeMoveItem, serializeMoveTerm, serializeNavigationFieldSetting, serializeNavigationNode, serializeNavigationPage, serializeNavigationRequest, serializeNavigationSelection, serializeNotificationSend, serializeNotificationSendResult, serializeOperation, serializeOperationFailure, serializeOperationPage, serializeOptimizeImage, serializePageList, serializePageSize, serializePermissions, serializePermissions_effective_grants, serializePermissions_grants, serializePortableSmartFolder, serializePortableSmartFolderDefinition, serializePortableTerm, serializePortableTermGroup, serializePortableTermSet, serializePortableTerm_labels, serializeProblem, serializeProblem_existing_item, serializePromoteKeyword, serializePromoteStagedFile, serializePromotedFile, serializePublication, serializePublication_snapshot, serializeQueryGroup, serializeQueryGroupPage, serializeQueryRequest, serializeQueryResult, serializeQuerySpec, serializeReadText, serializeReclaimFileVersion, serializeReclaimedFileVersion, serializeRecycleBinPage, serializeRelationship, serializeRelationshipEndpoint, serializeRelationshipEndpointPage, serializeRelationshipNeighborhood, serializeRelationshipType, serializeRelationshipTypeInput, serializeRelationshipTypePage, serializeRelationshipType_attributes, serializeRelationshipView, serializeRelationship_metadata, serializeResource, serializeResourceAccess, serializeResource_values, serializeSchemaRevision, serializeSchemaRevision_definition, serializeSchemaRevision_definition_fields, serializeSchemaTemplate, serializeSchemaTemplatePage, serializeSchemaTemplate_definition, serializeSearchFacetValue, serializeSearchFacets, serializeSearchField, serializeSearchHit, serializeSearchPage, serializeSearchRequest, serializeSearchStatus, serializeSearchStatus_embeddings, serializeSearchSync, serializeSetWorkspaceMember, serializeSmartFolder, serializeSmartFolderDefinition, serializeSmartFolderDrop, serializeSmartFolderEntry, serializeSmartFolderGroup, serializeSmartFolderGroupBy, serializeSmartFolderGroupsResult, serializeSmartFolderImportResult, serializeSmartFolderInput, serializeSmartFolderPackage, serializeSmartFolderPage, serializeSmartFolderPreview, serializeSmartFolderQueryRequest, serializeSmartFolderQueryRequest_sort, serializeSmartFolderResult, serializeSmartFolderTermRef, serializeSmartFolderUnclassify, serializeSortSpec, serializeStagedArtifact, serializeStagedFile, serializeStagedFile_metrics, serializeStagedFile_sources, serializeTask, serializeTaskAnswer, serializeTaskAnswer_input, serializeTaskCreate, serializeTaskCreate_review, serializeTaskCreate_values, serializeTaskList, serializeTaskOutcome, serializeTaskReassign, serializeTaskResponseInput, serializeTaskResponseInput_input, serializeTask_input, serializeTask_review, serializeTask_values, serializeTaxonomyDecisionRequest, serializeTaxonomyDecisionRequest_context, serializeTaxonomyDecisionRequest_data, serializeTaxonomyDecisionRequest_description_overrides, serializeTaxonomyImportResult, serializeTaxonomyPackage, serializeTemplateField, serializeTemplateInput, serializeTerm, serializeTermEntries, serializeTermGroup, serializeTermGroupInput, serializeTermGroupPage, serializeTermImportResult, serializeTermInput, serializeTermInput_labels, serializeTermList, serializeTermPage, serializeTermSet, serializeTermSetInput, serializeTermSetPage, serializeTerm_labels, serializeUpdateField, serializeUpdateListIntegration, serializeUpdateListIntegration_configuration, serializeUpdateRelationship, serializeUpdateRelationship_metadata, serializeUpdateResource, serializeUpdateResource_values, serializeValidationRule, serializeValidationRuleMember1, serializeValidationRuleMember2, serializeViewInput, serializeViewQueryRequest, serializeViewSettings, serializeWorkflowCall, serializeWorkflowCall_input, serializeWorkflowCalls, serializeWorkflowForm, serializeWorkflowStarted, serializeWorkspaceKeywordCount, serializeWorkspaceKeywordCountPage, serializeWorkspaceMember, serializeWorkspaceRelationshipPage, serializeWorkspaceRelationshipType, serializeWorkspaceRelationshipTypePage, serializeWorkspaceRelationshipView };
+	export { ApplyTemplateInput, ArchiveEntry, ArchiveEntry_duplicate_policy, ArchiveEntry_duplicate_policyObject, ArchiveEntry_kind, ArchiveEntry_kindObject, ArchiveEntry_system_key, ArchiveEntry_system_keyObject, ArchiveEntry_values, ArchiveEntry_versioning, ArchiveEntry_versioningObject, ArchiveSelection, ArchiveSelectionObject, Artifact, Artifact_metrics, Artifact_sources, AttachContentTypeInput, AuditEvent, AuditEvent_credential, AuditEvent_details, AuditPage, Blob, Blob_content_type, Blob_content_typeObject, BulkCreate, BulkCreate_values, BulkOperation, BulkOperationMember1, BulkOperationMember2, BulkOperationMember3, BulkOperationMember4, BulkOperationMember5, BulkOperationMember6, BulkOperationMember7, BulkRequest, BulkResponse, BulkResult, BulkResult_action, BulkResult_actionObject, BulkUpdate, BulkUpdate_values, CalendarOccurrence, CalendarQuery, CalendarQuery_surface, CalendarQuery_surfaceObject, ChunkText, ChunkText_chunker, ChunkText_chunkerObject, ChunkText_kind, ChunkText_kindObject, CollectionTemplate, CollectionTemplate_duplicate_policy, CollectionTemplate_duplicate_policyObject, CollectionTemplate_kind, CollectionTemplate_kindObject, CollectionTemplate_versioning, CollectionTemplate_versioningObject, Comment, CommentAnchor, CommentCounts, CommentCountsRequest, CommentCounts_counts, CommentCreate, CommentEdit, CommentPerson, CommentSettings, CommentSettingsInput, CommentSettingsInput_mode, CommentSettingsInput_modeObject, CommentSettings_effective, CommentSettings_effective_from, CommentSettings_effective_fromObject, CommentSettings_effective_mode, CommentSettings_effective_modeObject, CommentSettings_mode, CommentSettings_modeObject, CommentThread, CommentThreadList, CommentThreadList_mode, CommentThreadList_modeObject, CommentThreadList_mode_from, CommentThreadList_mode_fromObject, Comment_source, Comment_sourceObject, CompletionRequest, CompletionRequest_execution, CompletionRequest_executionObject, CompletionRequest_output_schema, ComposePDF, ContentType, ContentTypeInput, ContentType_effective, CreateCatalogField, CreateCatalogField_type, CreateCatalogField_typeObject, CreateField, CreateField_type, CreateField_typeObject, CreateListIntegration, CreateListIntegration_configuration, CreateRelationship, CreateRelationship_metadata, CreateResource, CreateResource_duplicate_policy, CreateResource_duplicate_policyObject, CreateResource_kind, CreateResource_kindObject, CreateResource_values, CreateResource_versioning, CreateResource_versioningObject, DecisionRequest, DecisionRequest_context, DecisionRequest_data, DecisionRequest_questions, DecisionRequest_questions_options, DecisionRequest_questions_type, DecisionRequest_questions_typeObject, DeletedResource, DeltaPage, DeltaPage_value, DeltaPage_valueMember1, DeltaPage_valueMember1_Removed, DeltaPage_valueMember1_Removed_reason, DeltaPage_valueMember1_Removed_reasonObject, DocumentMetadata, DocumentMetadata_values, DocumentUpload, DuplicateDocument, FieldDefinition, FieldDefinition_index_status, FieldDefinition_index_statusObject, FieldDefinition_type, FieldDefinition_typeObject, FieldOptions, FieldOptions_search_weight, FieldOptions_search_weightObject, FieldSetting, FileSummary, FileVersion, FileVersion_availability, FileVersion_availabilityObject, FilterExpr, FilterExpr_op, FilterExpr_opObject, FilterExpr_value_ref, FilterExpr_value_refObject, FilteredBulkUpdate, FilteredBulkUpdate_values, GenerationChunk, GenerationChunkPage, GenerationEnrichments, GenerationEnrichments_enrichments, ItemIntegration, ItemRevision, ItemRevision_payload, ItemText, ItemText_next, ItemText_pages, KeywordCount, KeywordCountList, KeywordInput, ListIntegration, ListIntegration_kind, ListIntegration_kindObject, ListTypeInput, ListView, ListViewPage, ListView_system_key, ListView_system_keyObject, LocatedItem, MentionCandidateList, MentionCandidateList_value, MergeTerm, MoveItem, MoveTerm, NavigationFieldSetting, NavigationNode, NavigationPage, NavigationRequest, NavigationRequest_surface, NavigationRequest_surfaceObject, NavigationSelection, NewMenuInput, NotificationSend, NotificationSendResult, Operation, OperationFailure, OperationPage, Operation_error_code, Operation_error_codeObject, Operation_status, Operation_statusObject, Operation_waiting, Operation_waitingObject, OptimizeImage, PageList, PageSize, Permissions, Permissions_effective_grants, Permissions_effective_grants_action, Permissions_effective_grants_actionObject, Permissions_effective_grants_effect, Permissions_effective_grants_effectObject, Permissions_effective_grants_principal_type, Permissions_effective_grants_principal_typeObject, Permissions_grants, Permissions_grants_action, Permissions_grants_actionObject, Permissions_grants_effect, Permissions_grants_effectObject, Permissions_grants_principal_type, Permissions_grants_principal_typeObject, PortableSmartFolder, PortableSmartFolderDefinition, PortableSmartFolderDefinition_collection_kind, PortableSmartFolderDefinition_collection_kindObject, PortableSmartFolderDefinition_mode, PortableSmartFolderDefinition_modeObject, PortableSmartFolderDefinition_term_match, PortableSmartFolderDefinition_term_matchObject, PortableTerm, PortableTermGroup, PortableTermSet, PortableTerm_labels, Problem, Problem_existing_item, PromoteKeyword, PromoteStagedFile, PromotedFile, Publication, Publication_action, Publication_actionObject, Publication_snapshot, QueryGroup, QueryGroupPage, QueryRequest, QueryRequest_surface, QueryRequest_surfaceObject, QueryResult, QuerySpec, ReadText, ReadText_ocr, ReadText_ocrObject, ReclaimFileVersion, ReclaimedFileVersion, RecycleBinPage, Relationship, RelationshipEndpoint, RelationshipEndpointPage, RelationshipNeighborhood, RelationshipType, RelationshipTypeInput, RelationshipTypePage, RelationshipType_attributes, RelationshipView, Relationship_metadata, Resource, ResourceAccess, ResourceAccess_access, ResourceAccess_accessObject, Resource_duplicate_policy, Resource_duplicate_policyObject, Resource_kind, Resource_kindObject, Resource_system_key, Resource_system_keyObject, Resource_values, Resource_versioning, Resource_versioningObject, SchemaRevision, SchemaRevision_definition, SchemaRevision_definition_fields, SchemaRevision_definition_fields_type, SchemaRevision_definition_fields_typeObject, SchemaTemplate, SchemaTemplatePage, SchemaTemplate_definition, SearchFacetValue, SearchFacets, SearchField, SearchField_operators, SearchField_operatorsObject, SearchHit, SearchHit_kind, SearchHit_kindObject, SearchHit_matched_by, SearchHit_matched_byObject, SearchHit_surface, SearchHit_surfaceObject, SearchPage, SearchPage_mode, SearchPage_modeObject, SearchRequest, SearchRequest_kind, SearchRequest_kindObject, SearchRequest_mode, SearchRequest_modeObject, SearchRequest_surface, SearchRequest_surfaceObject, SearchStatus, SearchStatus_embeddings, SearchSync, SetWorkspaceMember, SetWorkspaceMember_role, SetWorkspaceMember_roleObject, SmartFolder, SmartFolderDefinition, SmartFolderDefinition_collection_kind, SmartFolderDefinition_collection_kindObject, SmartFolderDefinition_mode, SmartFolderDefinition_modeObject, SmartFolderDefinition_term_match, SmartFolderDefinition_term_matchObject, SmartFolderDrop, SmartFolderEntry, SmartFolderEntry_collection_kind, SmartFolderEntry_collection_kindObject, SmartFolderGroup, SmartFolderGroupBy, SmartFolderGroupBy_by, SmartFolderGroupBy_byObject, SmartFolderGroupsResult, SmartFolderImportResult, SmartFolderInput, SmartFolderPackage, SmartFolderPage, SmartFolderPreview, SmartFolderQueryRequest, SmartFolderQueryRequest_sort, SmartFolderQueryRequest_sort_direction, SmartFolderQueryRequest_sort_directionObject, SmartFolderQueryRequest_sort_field, SmartFolderQueryRequest_sort_fieldObject, SmartFolderQueryRequest_surface, SmartFolderQueryRequest_surfaceObject, SmartFolderResult, SmartFolderTermRef, SmartFolderUnclassify, SortSpec, SortSpec_direction, SortSpec_directionObject, StagedArtifact, StagedFile, StagedFile_metrics, StagedFile_sources, StagedFile_state, StagedFile_stateObject, Task, TaskAnswer, TaskAnswer_input, TaskCreate, TaskCreate_completion, TaskCreate_completionObject, TaskCreate_kind, TaskCreate_kindObject, TaskCreate_priority, TaskCreate_priorityObject, TaskCreate_review, TaskCreate_review_type, TaskCreate_review_typeObject, TaskCreate_values, TaskList, TaskOutcome, TaskOutcome_comment, TaskOutcome_commentObject, TaskOutcome_style, TaskOutcome_styleObject, TaskReassign, TaskResponseInput, TaskResponseInput_input, Task_completion, Task_completionObject, Task_input, Task_kind, Task_kindObject, Task_priority, Task_priorityObject, Task_review, Task_review_type, Task_review_typeObject, Task_source, Task_sourceObject, Task_status, Task_statusObject, Task_values, TaxonomyDecisionRequest, TaxonomyDecisionRequest_context, TaxonomyDecisionRequest_data, TaxonomyDecisionRequest_description_overrides, TaxonomyDecisionRequest_selection, TaxonomyDecisionRequest_selectionObject, TaxonomyImportResult, TaxonomyPackage, TemplateField, TemplateField_type, TemplateField_typeObject, TemplateInput, Term, TermEntries, TermGroup, TermGroupInput, TermGroupPage, TermImportResult, TermInput, TermInput_labels, TermList, TermPage, TermSet, TermSetInput, TermSetPage, Term_labels, UpdateField, UpdateListIntegration, UpdateListIntegration_configuration, UpdateRelationship, UpdateRelationship_metadata, UpdateResource, UpdateResource_duplicate_policy, UpdateResource_duplicate_policyObject, UpdateResource_values, UpdateResource_versioning, UpdateResource_versioningObject, ValidationRule, ValidationRuleMember1, ValidationRuleMember2, ValidationRuleMember2_op, ValidationRuleMember2_opObject, ViewInput, ViewInput_layout, ViewInput_layoutObject, ViewQueryRequest, ViewQueryRequest_surface, ViewQueryRequest_surfaceObject, ViewSettings, ViewSettings_match, ViewSettings_matchObject, WorkflowCall, WorkflowCall_input, WorkflowCalls, WorkflowForm, WorkflowStarted, WorkspaceKeywordCount, WorkspaceKeywordCountPage, WorkspaceMember, WorkspaceMember_role, WorkspaceMember_roleObject, WorkspaceRelationshipPage, WorkspaceRelationshipType, WorkspaceRelationshipTypePage, WorkspaceRelationshipView, createApplyTemplateInputFromDiscriminatorValue, createArchiveEntryFromDiscriminatorValue, createArchiveEntry_valuesFromDiscriminatorValue, createArtifactFromDiscriminatorValue, createArtifact_metricsFromDiscriminatorValue, createArtifact_sourcesFromDiscriminatorValue, createAttachContentTypeInputFromDiscriminatorValue, createAuditEventFromDiscriminatorValue, createAuditEvent_credentialFromDiscriminatorValue, createAuditEvent_detailsFromDiscriminatorValue, createAuditPageFromDiscriminatorValue, createBlobFromDiscriminatorValue, createBulkCreateFromDiscriminatorValue, createBulkCreate_valuesFromDiscriminatorValue, createBulkOperationFromDiscriminatorValue, createBulkOperationMember1FromDiscriminatorValue, createBulkOperationMember2FromDiscriminatorValue, createBulkOperationMember3FromDiscriminatorValue, createBulkOperationMember4FromDiscriminatorValue, createBulkOperationMember5FromDiscriminatorValue, createBulkOperationMember6FromDiscriminatorValue, createBulkOperationMember7FromDiscriminatorValue, createBulkRequestFromDiscriminatorValue, createBulkResponseFromDiscriminatorValue, createBulkResultFromDiscriminatorValue, createBulkUpdateFromDiscriminatorValue, createBulkUpdate_valuesFromDiscriminatorValue, createCalendarOccurrenceFromDiscriminatorValue, createCalendarQueryFromDiscriminatorValue, createChunkTextFromDiscriminatorValue, createCollectionTemplateFromDiscriminatorValue, createCommentAnchorFromDiscriminatorValue, createCommentCountsFromDiscriminatorValue, createCommentCountsRequestFromDiscriminatorValue, createCommentCounts_countsFromDiscriminatorValue, createCommentCreateFromDiscriminatorValue, createCommentEditFromDiscriminatorValue, createCommentFromDiscriminatorValue, createCommentPersonFromDiscriminatorValue, createCommentSettingsFromDiscriminatorValue, createCommentSettingsInputFromDiscriminatorValue, createCommentSettings_effectiveFromDiscriminatorValue, createCommentThreadFromDiscriminatorValue, createCommentThreadListFromDiscriminatorValue, createCompletionRequestFromDiscriminatorValue, createCompletionRequest_output_schemaFromDiscriminatorValue, createComposePDFFromDiscriminatorValue, createContentTypeFromDiscriminatorValue, createContentTypeInputFromDiscriminatorValue, createContentType_effectiveFromDiscriminatorValue, createCreateCatalogFieldFromDiscriminatorValue, createCreateFieldFromDiscriminatorValue, createCreateListIntegrationFromDiscriminatorValue, createCreateListIntegration_configurationFromDiscriminatorValue, createCreateRelationshipFromDiscriminatorValue, createCreateRelationship_metadataFromDiscriminatorValue, createCreateResourceFromDiscriminatorValue, createCreateResource_valuesFromDiscriminatorValue, createDecisionRequestFromDiscriminatorValue, createDecisionRequest_contextFromDiscriminatorValue, createDecisionRequest_dataFromDiscriminatorValue, createDecisionRequest_questionsFromDiscriminatorValue, createDecisionRequest_questions_optionsFromDiscriminatorValue, createDeletedResourceFromDiscriminatorValue, createDeltaPageFromDiscriminatorValue, createDeltaPage_valueFromDiscriminatorValue, createDeltaPage_valueMember1FromDiscriminatorValue, createDeltaPage_valueMember1_RemovedFromDiscriminatorValue, createDocumentMetadataFromDiscriminatorValue, createDocumentMetadata_valuesFromDiscriminatorValue, createDocumentUploadFromDiscriminatorValue, createDuplicateDocumentFromDiscriminatorValue, createFieldDefinitionFromDiscriminatorValue, createFieldOptionsFromDiscriminatorValue, createFieldSettingFromDiscriminatorValue, createFileSummaryFromDiscriminatorValue, createFileVersionFromDiscriminatorValue, createFilterExprFromDiscriminatorValue, createFilteredBulkUpdateFromDiscriminatorValue, createFilteredBulkUpdate_valuesFromDiscriminatorValue, createGenerationChunkFromDiscriminatorValue, createGenerationChunkPageFromDiscriminatorValue, createGenerationEnrichmentsFromDiscriminatorValue, createGenerationEnrichments_enrichmentsFromDiscriminatorValue, createItemIntegrationFromDiscriminatorValue, createItemRevisionFromDiscriminatorValue, createItemRevision_payloadFromDiscriminatorValue, createItemTextFromDiscriminatorValue, createItemText_nextFromDiscriminatorValue, createItemText_pagesFromDiscriminatorValue, createKeywordCountFromDiscriminatorValue, createKeywordCountListFromDiscriminatorValue, createKeywordInputFromDiscriminatorValue, createListIntegrationFromDiscriminatorValue, createListTypeInputFromDiscriminatorValue, createListViewFromDiscriminatorValue, createListViewPageFromDiscriminatorValue, createLocatedItemFromDiscriminatorValue, createMentionCandidateListFromDiscriminatorValue, createMentionCandidateList_valueFromDiscriminatorValue, createMergeTermFromDiscriminatorValue, createMoveItemFromDiscriminatorValue, createMoveTermFromDiscriminatorValue, createNavigationFieldSettingFromDiscriminatorValue, createNavigationNodeFromDiscriminatorValue, createNavigationPageFromDiscriminatorValue, createNavigationRequestFromDiscriminatorValue, createNavigationSelectionFromDiscriminatorValue, createNewMenuInputFromDiscriminatorValue, createNotificationSendFromDiscriminatorValue, createNotificationSendResultFromDiscriminatorValue, createOperationFailureFromDiscriminatorValue, createOperationFromDiscriminatorValue, createOperationPageFromDiscriminatorValue, createOptimizeImageFromDiscriminatorValue, createPageListFromDiscriminatorValue, createPageSizeFromDiscriminatorValue, createPermissionsFromDiscriminatorValue, createPermissions_effective_grantsFromDiscriminatorValue, createPermissions_grantsFromDiscriminatorValue, createPortableSmartFolderDefinitionFromDiscriminatorValue, createPortableSmartFolderFromDiscriminatorValue, createPortableTermFromDiscriminatorValue, createPortableTermGroupFromDiscriminatorValue, createPortableTermSetFromDiscriminatorValue, createPortableTerm_labelsFromDiscriminatorValue, createProblemFromDiscriminatorValue, createProblem_existing_itemFromDiscriminatorValue, createPromoteKeywordFromDiscriminatorValue, createPromoteStagedFileFromDiscriminatorValue, createPromotedFileFromDiscriminatorValue, createPublicationFromDiscriminatorValue, createPublication_snapshotFromDiscriminatorValue, createQueryGroupFromDiscriminatorValue, createQueryGroupPageFromDiscriminatorValue, createQueryRequestFromDiscriminatorValue, createQueryResultFromDiscriminatorValue, createQuerySpecFromDiscriminatorValue, createReadTextFromDiscriminatorValue, createReclaimFileVersionFromDiscriminatorValue, createReclaimedFileVersionFromDiscriminatorValue, createRecycleBinPageFromDiscriminatorValue, createRelationshipEndpointFromDiscriminatorValue, createRelationshipEndpointPageFromDiscriminatorValue, createRelationshipFromDiscriminatorValue, createRelationshipNeighborhoodFromDiscriminatorValue, createRelationshipTypeFromDiscriminatorValue, createRelationshipTypeInputFromDiscriminatorValue, createRelationshipTypePageFromDiscriminatorValue, createRelationshipType_attributesFromDiscriminatorValue, createRelationshipViewFromDiscriminatorValue, createRelationship_metadataFromDiscriminatorValue, createResourceAccessFromDiscriminatorValue, createResourceFromDiscriminatorValue, createResource_valuesFromDiscriminatorValue, createSchemaRevisionFromDiscriminatorValue, createSchemaRevision_definitionFromDiscriminatorValue, createSchemaRevision_definition_fieldsFromDiscriminatorValue, createSchemaTemplateFromDiscriminatorValue, createSchemaTemplatePageFromDiscriminatorValue, createSchemaTemplate_definitionFromDiscriminatorValue, createSearchFacetValueFromDiscriminatorValue, createSearchFacetsFromDiscriminatorValue, createSearchFieldFromDiscriminatorValue, createSearchHitFromDiscriminatorValue, createSearchPageFromDiscriminatorValue, createSearchRequestFromDiscriminatorValue, createSearchStatusFromDiscriminatorValue, createSearchStatus_embeddingsFromDiscriminatorValue, createSearchSyncFromDiscriminatorValue, createSetWorkspaceMemberFromDiscriminatorValue, createSmartFolderDefinitionFromDiscriminatorValue, createSmartFolderDropFromDiscriminatorValue, createSmartFolderEntryFromDiscriminatorValue, createSmartFolderFromDiscriminatorValue, createSmartFolderGroupByFromDiscriminatorValue, createSmartFolderGroupFromDiscriminatorValue, createSmartFolderGroupsResultFromDiscriminatorValue, createSmartFolderImportResultFromDiscriminatorValue, createSmartFolderInputFromDiscriminatorValue, createSmartFolderPackageFromDiscriminatorValue, createSmartFolderPageFromDiscriminatorValue, createSmartFolderPreviewFromDiscriminatorValue, createSmartFolderQueryRequestFromDiscriminatorValue, createSmartFolderQueryRequest_sortFromDiscriminatorValue, createSmartFolderResultFromDiscriminatorValue, createSmartFolderTermRefFromDiscriminatorValue, createSmartFolderUnclassifyFromDiscriminatorValue, createSortSpecFromDiscriminatorValue, createStagedArtifactFromDiscriminatorValue, createStagedFileFromDiscriminatorValue, createStagedFile_metricsFromDiscriminatorValue, createStagedFile_sourcesFromDiscriminatorValue, createTaskAnswerFromDiscriminatorValue, createTaskAnswer_inputFromDiscriminatorValue, createTaskCreateFromDiscriminatorValue, createTaskCreate_reviewFromDiscriminatorValue, createTaskCreate_valuesFromDiscriminatorValue, createTaskFromDiscriminatorValue, createTaskListFromDiscriminatorValue, createTaskOutcomeFromDiscriminatorValue, createTaskReassignFromDiscriminatorValue, createTaskResponseInputFromDiscriminatorValue, createTaskResponseInput_inputFromDiscriminatorValue, createTask_inputFromDiscriminatorValue, createTask_reviewFromDiscriminatorValue, createTask_valuesFromDiscriminatorValue, createTaxonomyDecisionRequestFromDiscriminatorValue, createTaxonomyDecisionRequest_contextFromDiscriminatorValue, createTaxonomyDecisionRequest_dataFromDiscriminatorValue, createTaxonomyDecisionRequest_description_overridesFromDiscriminatorValue, createTaxonomyImportResultFromDiscriminatorValue, createTaxonomyPackageFromDiscriminatorValue, createTemplateFieldFromDiscriminatorValue, createTemplateInputFromDiscriminatorValue, createTermEntriesFromDiscriminatorValue, createTermFromDiscriminatorValue, createTermGroupFromDiscriminatorValue, createTermGroupInputFromDiscriminatorValue, createTermGroupPageFromDiscriminatorValue, createTermImportResultFromDiscriminatorValue, createTermInputFromDiscriminatorValue, createTermInput_labelsFromDiscriminatorValue, createTermListFromDiscriminatorValue, createTermPageFromDiscriminatorValue, createTermSetFromDiscriminatorValue, createTermSetInputFromDiscriminatorValue, createTermSetPageFromDiscriminatorValue, createTerm_labelsFromDiscriminatorValue, createUpdateFieldFromDiscriminatorValue, createUpdateListIntegrationFromDiscriminatorValue, createUpdateListIntegration_configurationFromDiscriminatorValue, createUpdateRelationshipFromDiscriminatorValue, createUpdateRelationship_metadataFromDiscriminatorValue, createUpdateResourceFromDiscriminatorValue, createUpdateResource_valuesFromDiscriminatorValue, createValidationRuleFromDiscriminatorValue, createValidationRuleMember1FromDiscriminatorValue, createValidationRuleMember2FromDiscriminatorValue, createViewInputFromDiscriminatorValue, createViewQueryRequestFromDiscriminatorValue, createViewSettingsFromDiscriminatorValue, createWorkflowCallFromDiscriminatorValue, createWorkflowCall_inputFromDiscriminatorValue, createWorkflowCallsFromDiscriminatorValue, createWorkflowFormFromDiscriminatorValue, createWorkflowStartedFromDiscriminatorValue, createWorkspaceKeywordCountFromDiscriminatorValue, createWorkspaceKeywordCountPageFromDiscriminatorValue, createWorkspaceMemberFromDiscriminatorValue, createWorkspaceRelationshipPageFromDiscriminatorValue, createWorkspaceRelationshipTypeFromDiscriminatorValue, createWorkspaceRelationshipTypePageFromDiscriminatorValue, createWorkspaceRelationshipViewFromDiscriminatorValue, deserializeIntoApplyTemplateInput, deserializeIntoArchiveEntry, deserializeIntoArchiveEntry_values, deserializeIntoArtifact, deserializeIntoArtifact_metrics, deserializeIntoArtifact_sources, deserializeIntoAttachContentTypeInput, deserializeIntoAuditEvent, deserializeIntoAuditEvent_credential, deserializeIntoAuditEvent_details, deserializeIntoAuditPage, deserializeIntoBlob, deserializeIntoBulkCreate, deserializeIntoBulkCreate_values, deserializeIntoBulkOperation, deserializeIntoBulkOperationMember1, deserializeIntoBulkOperationMember2, deserializeIntoBulkOperationMember3, deserializeIntoBulkOperationMember4, deserializeIntoBulkOperationMember5, deserializeIntoBulkOperationMember6, deserializeIntoBulkOperationMember7, deserializeIntoBulkRequest, deserializeIntoBulkResponse, deserializeIntoBulkResult, deserializeIntoBulkUpdate, deserializeIntoBulkUpdate_values, deserializeIntoCalendarOccurrence, deserializeIntoCalendarQuery, deserializeIntoChunkText, deserializeIntoCollectionTemplate, deserializeIntoComment, deserializeIntoCommentAnchor, deserializeIntoCommentCounts, deserializeIntoCommentCountsRequest, deserializeIntoCommentCounts_counts, deserializeIntoCommentCreate, deserializeIntoCommentEdit, deserializeIntoCommentPerson, deserializeIntoCommentSettings, deserializeIntoCommentSettingsInput, deserializeIntoCommentSettings_effective, deserializeIntoCommentThread, deserializeIntoCommentThreadList, deserializeIntoCompletionRequest, deserializeIntoCompletionRequest_output_schema, deserializeIntoComposePDF, deserializeIntoContentType, deserializeIntoContentTypeInput, deserializeIntoContentType_effective, deserializeIntoCreateCatalogField, deserializeIntoCreateField, deserializeIntoCreateListIntegration, deserializeIntoCreateListIntegration_configuration, deserializeIntoCreateRelationship, deserializeIntoCreateRelationship_metadata, deserializeIntoCreateResource, deserializeIntoCreateResource_values, deserializeIntoDecisionRequest, deserializeIntoDecisionRequest_context, deserializeIntoDecisionRequest_data, deserializeIntoDecisionRequest_questions, deserializeIntoDecisionRequest_questions_options, deserializeIntoDeletedResource, deserializeIntoDeltaPage, deserializeIntoDeltaPage_value, deserializeIntoDeltaPage_valueMember1, deserializeIntoDeltaPage_valueMember1_Removed, deserializeIntoDocumentMetadata, deserializeIntoDocumentMetadata_values, deserializeIntoDocumentUpload, deserializeIntoDuplicateDocument, deserializeIntoFieldDefinition, deserializeIntoFieldOptions, deserializeIntoFieldSetting, deserializeIntoFileSummary, deserializeIntoFileVersion, deserializeIntoFilterExpr, deserializeIntoFilteredBulkUpdate, deserializeIntoFilteredBulkUpdate_values, deserializeIntoGenerationChunk, deserializeIntoGenerationChunkPage, deserializeIntoGenerationEnrichments, deserializeIntoGenerationEnrichments_enrichments, deserializeIntoItemIntegration, deserializeIntoItemRevision, deserializeIntoItemRevision_payload, deserializeIntoItemText, deserializeIntoItemText_next, deserializeIntoItemText_pages, deserializeIntoKeywordCount, deserializeIntoKeywordCountList, deserializeIntoKeywordInput, deserializeIntoListIntegration, deserializeIntoListTypeInput, deserializeIntoListView, deserializeIntoListViewPage, deserializeIntoLocatedItem, deserializeIntoMentionCandidateList, deserializeIntoMentionCandidateList_value, deserializeIntoMergeTerm, deserializeIntoMoveItem, deserializeIntoMoveTerm, deserializeIntoNavigationFieldSetting, deserializeIntoNavigationNode, deserializeIntoNavigationPage, deserializeIntoNavigationRequest, deserializeIntoNavigationSelection, deserializeIntoNewMenuInput, deserializeIntoNotificationSend, deserializeIntoNotificationSendResult, deserializeIntoOperation, deserializeIntoOperationFailure, deserializeIntoOperationPage, deserializeIntoOptimizeImage, deserializeIntoPageList, deserializeIntoPageSize, deserializeIntoPermissions, deserializeIntoPermissions_effective_grants, deserializeIntoPermissions_grants, deserializeIntoPortableSmartFolder, deserializeIntoPortableSmartFolderDefinition, deserializeIntoPortableTerm, deserializeIntoPortableTermGroup, deserializeIntoPortableTermSet, deserializeIntoPortableTerm_labels, deserializeIntoProblem, deserializeIntoProblem_existing_item, deserializeIntoPromoteKeyword, deserializeIntoPromoteStagedFile, deserializeIntoPromotedFile, deserializeIntoPublication, deserializeIntoPublication_snapshot, deserializeIntoQueryGroup, deserializeIntoQueryGroupPage, deserializeIntoQueryRequest, deserializeIntoQueryResult, deserializeIntoQuerySpec, deserializeIntoReadText, deserializeIntoReclaimFileVersion, deserializeIntoReclaimedFileVersion, deserializeIntoRecycleBinPage, deserializeIntoRelationship, deserializeIntoRelationshipEndpoint, deserializeIntoRelationshipEndpointPage, deserializeIntoRelationshipNeighborhood, deserializeIntoRelationshipType, deserializeIntoRelationshipTypeInput, deserializeIntoRelationshipTypePage, deserializeIntoRelationshipType_attributes, deserializeIntoRelationshipView, deserializeIntoRelationship_metadata, deserializeIntoResource, deserializeIntoResourceAccess, deserializeIntoResource_values, deserializeIntoSchemaRevision, deserializeIntoSchemaRevision_definition, deserializeIntoSchemaRevision_definition_fields, deserializeIntoSchemaTemplate, deserializeIntoSchemaTemplatePage, deserializeIntoSchemaTemplate_definition, deserializeIntoSearchFacetValue, deserializeIntoSearchFacets, deserializeIntoSearchField, deserializeIntoSearchHit, deserializeIntoSearchPage, deserializeIntoSearchRequest, deserializeIntoSearchStatus, deserializeIntoSearchStatus_embeddings, deserializeIntoSearchSync, deserializeIntoSetWorkspaceMember, deserializeIntoSmartFolder, deserializeIntoSmartFolderDefinition, deserializeIntoSmartFolderDrop, deserializeIntoSmartFolderEntry, deserializeIntoSmartFolderGroup, deserializeIntoSmartFolderGroupBy, deserializeIntoSmartFolderGroupsResult, deserializeIntoSmartFolderImportResult, deserializeIntoSmartFolderInput, deserializeIntoSmartFolderPackage, deserializeIntoSmartFolderPage, deserializeIntoSmartFolderPreview, deserializeIntoSmartFolderQueryRequest, deserializeIntoSmartFolderQueryRequest_sort, deserializeIntoSmartFolderResult, deserializeIntoSmartFolderTermRef, deserializeIntoSmartFolderUnclassify, deserializeIntoSortSpec, deserializeIntoStagedArtifact, deserializeIntoStagedFile, deserializeIntoStagedFile_metrics, deserializeIntoStagedFile_sources, deserializeIntoTask, deserializeIntoTaskAnswer, deserializeIntoTaskAnswer_input, deserializeIntoTaskCreate, deserializeIntoTaskCreate_review, deserializeIntoTaskCreate_values, deserializeIntoTaskList, deserializeIntoTaskOutcome, deserializeIntoTaskReassign, deserializeIntoTaskResponseInput, deserializeIntoTaskResponseInput_input, deserializeIntoTask_input, deserializeIntoTask_review, deserializeIntoTask_values, deserializeIntoTaxonomyDecisionRequest, deserializeIntoTaxonomyDecisionRequest_context, deserializeIntoTaxonomyDecisionRequest_data, deserializeIntoTaxonomyDecisionRequest_description_overrides, deserializeIntoTaxonomyImportResult, deserializeIntoTaxonomyPackage, deserializeIntoTemplateField, deserializeIntoTemplateInput, deserializeIntoTerm, deserializeIntoTermEntries, deserializeIntoTermGroup, deserializeIntoTermGroupInput, deserializeIntoTermGroupPage, deserializeIntoTermImportResult, deserializeIntoTermInput, deserializeIntoTermInput_labels, deserializeIntoTermList, deserializeIntoTermPage, deserializeIntoTermSet, deserializeIntoTermSetInput, deserializeIntoTermSetPage, deserializeIntoTerm_labels, deserializeIntoUpdateField, deserializeIntoUpdateListIntegration, deserializeIntoUpdateListIntegration_configuration, deserializeIntoUpdateRelationship, deserializeIntoUpdateRelationship_metadata, deserializeIntoUpdateResource, deserializeIntoUpdateResource_values, deserializeIntoValidationRule, deserializeIntoValidationRuleMember1, deserializeIntoValidationRuleMember2, deserializeIntoViewInput, deserializeIntoViewQueryRequest, deserializeIntoViewSettings, deserializeIntoWorkflowCall, deserializeIntoWorkflowCall_input, deserializeIntoWorkflowCalls, deserializeIntoWorkflowForm, deserializeIntoWorkflowStarted, deserializeIntoWorkspaceKeywordCount, deserializeIntoWorkspaceKeywordCountPage, deserializeIntoWorkspaceMember, deserializeIntoWorkspaceRelationshipPage, deserializeIntoWorkspaceRelationshipType, deserializeIntoWorkspaceRelationshipTypePage, deserializeIntoWorkspaceRelationshipView, serializeApplyTemplateInput, serializeArchiveEntry, serializeArchiveEntry_values, serializeArtifact, serializeArtifact_metrics, serializeArtifact_sources, serializeAttachContentTypeInput, serializeAuditEvent, serializeAuditEvent_credential, serializeAuditEvent_details, serializeAuditPage, serializeBlob, serializeBulkCreate, serializeBulkCreate_values, serializeBulkOperation, serializeBulkOperationMember1, serializeBulkOperationMember2, serializeBulkOperationMember3, serializeBulkOperationMember4, serializeBulkOperationMember5, serializeBulkOperationMember6, serializeBulkOperationMember7, serializeBulkRequest, serializeBulkResponse, serializeBulkResult, serializeBulkUpdate, serializeBulkUpdate_values, serializeCalendarOccurrence, serializeCalendarQuery, serializeChunkText, serializeCollectionTemplate, serializeComment, serializeCommentAnchor, serializeCommentCounts, serializeCommentCountsRequest, serializeCommentCounts_counts, serializeCommentCreate, serializeCommentEdit, serializeCommentPerson, serializeCommentSettings, serializeCommentSettingsInput, serializeCommentSettings_effective, serializeCommentThread, serializeCommentThreadList, serializeCompletionRequest, serializeCompletionRequest_output_schema, serializeComposePDF, serializeContentType, serializeContentTypeInput, serializeContentType_effective, serializeCreateCatalogField, serializeCreateField, serializeCreateListIntegration, serializeCreateListIntegration_configuration, serializeCreateRelationship, serializeCreateRelationship_metadata, serializeCreateResource, serializeCreateResource_values, serializeDecisionRequest, serializeDecisionRequest_context, serializeDecisionRequest_data, serializeDecisionRequest_questions, serializeDecisionRequest_questions_options, serializeDeletedResource, serializeDeltaPage, serializeDeltaPage_value, serializeDeltaPage_valueMember1, serializeDeltaPage_valueMember1_Removed, serializeDocumentMetadata, serializeDocumentMetadata_values, serializeDocumentUpload, serializeDuplicateDocument, serializeFieldDefinition, serializeFieldOptions, serializeFieldSetting, serializeFileSummary, serializeFileVersion, serializeFilterExpr, serializeFilteredBulkUpdate, serializeFilteredBulkUpdate_values, serializeGenerationChunk, serializeGenerationChunkPage, serializeGenerationEnrichments, serializeGenerationEnrichments_enrichments, serializeItemIntegration, serializeItemRevision, serializeItemRevision_payload, serializeItemText, serializeItemText_next, serializeItemText_pages, serializeKeywordCount, serializeKeywordCountList, serializeKeywordInput, serializeListIntegration, serializeListTypeInput, serializeListView, serializeListViewPage, serializeLocatedItem, serializeMentionCandidateList, serializeMentionCandidateList_value, serializeMergeTerm, serializeMoveItem, serializeMoveTerm, serializeNavigationFieldSetting, serializeNavigationNode, serializeNavigationPage, serializeNavigationRequest, serializeNavigationSelection, serializeNewMenuInput, serializeNotificationSend, serializeNotificationSendResult, serializeOperation, serializeOperationFailure, serializeOperationPage, serializeOptimizeImage, serializePageList, serializePageSize, serializePermissions, serializePermissions_effective_grants, serializePermissions_grants, serializePortableSmartFolder, serializePortableSmartFolderDefinition, serializePortableTerm, serializePortableTermGroup, serializePortableTermSet, serializePortableTerm_labels, serializeProblem, serializeProblem_existing_item, serializePromoteKeyword, serializePromoteStagedFile, serializePromotedFile, serializePublication, serializePublication_snapshot, serializeQueryGroup, serializeQueryGroupPage, serializeQueryRequest, serializeQueryResult, serializeQuerySpec, serializeReadText, serializeReclaimFileVersion, serializeReclaimedFileVersion, serializeRecycleBinPage, serializeRelationship, serializeRelationshipEndpoint, serializeRelationshipEndpointPage, serializeRelationshipNeighborhood, serializeRelationshipType, serializeRelationshipTypeInput, serializeRelationshipTypePage, serializeRelationshipType_attributes, serializeRelationshipView, serializeRelationship_metadata, serializeResource, serializeResourceAccess, serializeResource_values, serializeSchemaRevision, serializeSchemaRevision_definition, serializeSchemaRevision_definition_fields, serializeSchemaTemplate, serializeSchemaTemplatePage, serializeSchemaTemplate_definition, serializeSearchFacetValue, serializeSearchFacets, serializeSearchField, serializeSearchHit, serializeSearchPage, serializeSearchRequest, serializeSearchStatus, serializeSearchStatus_embeddings, serializeSearchSync, serializeSetWorkspaceMember, serializeSmartFolder, serializeSmartFolderDefinition, serializeSmartFolderDrop, serializeSmartFolderEntry, serializeSmartFolderGroup, serializeSmartFolderGroupBy, serializeSmartFolderGroupsResult, serializeSmartFolderImportResult, serializeSmartFolderInput, serializeSmartFolderPackage, serializeSmartFolderPage, serializeSmartFolderPreview, serializeSmartFolderQueryRequest, serializeSmartFolderQueryRequest_sort, serializeSmartFolderResult, serializeSmartFolderTermRef, serializeSmartFolderUnclassify, serializeSortSpec, serializeStagedArtifact, serializeStagedFile, serializeStagedFile_metrics, serializeStagedFile_sources, serializeTask, serializeTaskAnswer, serializeTaskAnswer_input, serializeTaskCreate, serializeTaskCreate_review, serializeTaskCreate_values, serializeTaskList, serializeTaskOutcome, serializeTaskReassign, serializeTaskResponseInput, serializeTaskResponseInput_input, serializeTask_input, serializeTask_review, serializeTask_values, serializeTaxonomyDecisionRequest, serializeTaxonomyDecisionRequest_context, serializeTaxonomyDecisionRequest_data, serializeTaxonomyDecisionRequest_description_overrides, serializeTaxonomyImportResult, serializeTaxonomyPackage, serializeTemplateField, serializeTemplateInput, serializeTerm, serializeTermEntries, serializeTermGroup, serializeTermGroupInput, serializeTermGroupPage, serializeTermImportResult, serializeTermInput, serializeTermInput_labels, serializeTermList, serializeTermPage, serializeTermSet, serializeTermSetInput, serializeTermSetPage, serializeTerm_labels, serializeUpdateField, serializeUpdateListIntegration, serializeUpdateListIntegration_configuration, serializeUpdateRelationship, serializeUpdateRelationship_metadata, serializeUpdateResource, serializeUpdateResource_values, serializeValidationRule, serializeValidationRuleMember1, serializeValidationRuleMember2, serializeViewInput, serializeViewQueryRequest, serializeViewSettings, serializeWorkflowCall, serializeWorkflowCall_input, serializeWorkflowCalls, serializeWorkflowForm, serializeWorkflowStarted, serializeWorkspaceKeywordCount, serializeWorkspaceKeywordCountPage, serializeWorkspaceMember, serializeWorkspaceRelationshipPage, serializeWorkspaceRelationshipType, serializeWorkspaceRelationshipTypePage, serializeWorkspaceRelationshipView };
 }
 
 export {

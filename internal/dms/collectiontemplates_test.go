@@ -21,11 +21,13 @@ func TestCollectionTemplatesProvisionShareAndPreserveTypes(t *testing.T) {
 	if err != nil || len(types) != 1 || !types[0].IsDefault {
 		t.Fatal(types, err)
 	}
-	typ := types[0].ContentType
-	if typ.TemplateKey == nil || *typ.TemplateKey != "contact" || len(typ.FieldIds) != 5 {
-		t.Fatal(typ)
+	// The collection customizes its own list type of the shared catalog type.
+	typ := types[0]
+	shared, err := s.GetContentType(ctx, "alice", *typ.ParentID)
+	if err != nil || shared.TemplateKey == nil || *shared.TemplateKey != "contact" || len(shared.FieldIds) != 5 || len(typ.FieldIds) != 0 || len(typ.Effective.FieldIds) != 5 {
+		t.Fatal(typ, shared, err)
 	}
-	_, err = s.UpdateContentType(ctx, "alice", typ.ID, typ.Version, ContentTypeInput{Key: typ.Key, Name: "People", FieldIds: typ.FieldIds})
+	_, err = s.UpdateContentType(ctx, "alice", shared.ID, shared.Version, ContentTypeInput{Key: shared.Key, Name: "People", FieldIds: shared.FieldIds})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +40,7 @@ func TestCollectionTemplatesProvisionShareAndPreserveTypes(t *testing.T) {
 		t.Fatal(err)
 	}
 	bt, err := s.CollectionContentTypes(ctx, "bob", b.ID)
-	if err != nil || bt[0].ID != typ.ID || bt[0].Name != "People" {
+	if err != nil || bt[0].ID == typ.ID || *bt[0].ParentID != shared.ID || bt[0].Name != "People" {
 		t.Fatal(bt, err)
 	}
 	views, err := s.Views(ctx, "bob", b.ID, "", 50)
@@ -46,7 +48,7 @@ func TestCollectionTemplatesProvisionShareAndPreserveTypes(t *testing.T) {
 		t.Fatal(views, err)
 	}
 	item, err := s.Create(ctx, "bob", b.ID, CreateResource{Kind: "item", Name: "Ada", Values: map[string]any{"email": "ada@example.com"}})
-	if err != nil || item.ContentTypeID == nil || *item.ContentTypeID != typ.ID {
+	if err != nil || item.ContentTypeID == nil || *item.ContentTypeID != bt[0].ID {
 		t.Fatal(item, err)
 	}
 	docs, err := s.Create(ctx, "alice", w.ID, CreateResource{Kind: "list", Name: "Files", TemplateKey: "documents", AllowFolders: ptr(false)})
@@ -117,7 +119,7 @@ func TestModuleCollectionTemplateSharesFieldsAcrossTypes(t *testing.T) {
 	if e != nil || len(types) != 2 {
 		t.Fatal(types, e)
 	}
-	if types[0].FieldIds[0] != types[1].FieldIds[0] {
+	if types[0].Effective.FieldIds[0] != types[1].Effective.FieldIds[0] {
 		t.Fatal("shared key copied", types)
 	}
 	defs, e := s.Fields(testContext, "alice", c.ID)

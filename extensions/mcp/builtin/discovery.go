@@ -130,7 +130,7 @@ func getCollectionSchema(l links) mcp.Tool {
 		OutputSchema: json.RawMessage(`{"type": "object", "required": ["collection", "fields", "content_types", "views"], "properties": {
 			"collection": ` + collectionSchema + `,
 			"fields": {"type": "array", "items": {"type": "object"}, "description": "Field definitions, as PaperGo's FieldDefinition."},
-			"content_types": {"type": "array", "items": {"type": "object"}, "description": "Attached content types, as PaperGo's CollectionContentType, with is_default."},
+			"content_types": {"type": "array", "items": {"type": "object"}, "description": "The collection's list types, as PaperGo's ContentType: each copies the catalog type in parent_id, with its effective schema and is_default."},
 			"views": {"type": "array", "items": {"type": "object"}, "description": "Saved views, as PaperGo's ListView: id, name, layout, columns, query, is_default."}}}`),
 		Scopes:      []string{scopeItemRead, scopeContentTypeRead},
 		Annotations: mcp.Annotations{ReadOnly: true, Idempotent: true},

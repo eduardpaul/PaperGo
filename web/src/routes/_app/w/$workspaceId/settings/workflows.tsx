@@ -17,7 +17,7 @@ import { WorkflowEditor } from '@/features/workflows/workflow-editor';
 import { CopyBuiltIn, LaunchWorkflow, WorkflowVersions } from '@/features/workflows/workflow-tools';
 import { formDefaults, type FormSchema, type WorkflowDefinition } from '@/features/workflows/model';
 import { SchemaFields } from '@/features/workflows/schema-form';
-import { automaticSummary, manualSummary, triggerLabel } from '@/features/workflows/presentation';
+import { automaticSummary, manualSummary, triggerLabel, workspaceTypesQuery } from '@/features/workflows/presentation';
 
 export const Route = createFileRoute('/_app/w/$workspaceId/settings/workflows')({ validateSearch: (search: Record<string, unknown>): { collection?: string } => ({ collection: typeof search.collection === 'string' ? search.collection : undefined }), component: WorkflowsPage });
 
@@ -59,8 +59,15 @@ function WorkflowsPage() {
   </SettingsSection>;
 }
 
+/** Narrows a built-in's content type pickers to the types of the collection it is set up for. */
+function withCollection(schema: FormSchema, collectionId: string): FormSchema {
+  if (!collectionId || !schema.properties) return schema;
+  return { ...schema, properties: Object.fromEntries(Object.entries(schema.properties).map(([name, property]) => [name, property['x-papergo']?.kind === 'content_type' ? { ...property, 'x-papergo': { collection_id: collectionId, ...property['x-papergo'] } } : property])) };
+}
+
 function UseSummary({ workflow, collections }: { workflow: Workflow; collections: Resource[] }) {
-  return <dl className="grid gap-2 text-sm sm:grid-cols-2"><div><dt className="text-xs text-muted">Manual use</dt><dd>{manualSummary(workflow)}</dd></div><div><dt className="text-xs text-muted">Automatic runs</dt><dd>{automaticSummary(workflow, collections)}</dd></div></dl>;
+  const types = useQuery(workspaceTypesQuery(workflow.workspace_id, (workflow.definition as WorkflowDefinition).triggers));
+  return <dl className="grid gap-2 text-sm sm:grid-cols-2"><div><dt className="text-xs text-muted">Manual use</dt><dd>{manualSummary(workflow)}</dd></div><div><dt className="text-xs text-muted">Automatic runs</dt><dd>{automaticSummary(workflow, collections, types.data)}</dd></div></dl>;
 }
 
 function BuiltInFeature({ workspaceId, builtin, collectionId, collections, canManage, onChanged, onLaunch }: { workspaceId: string; builtin: BuiltInState; collectionId: string; collections: Resource[]; canManage: boolean; onChanged: () => Promise<void>; onLaunch: (workflow: Workflow) => void }) {
@@ -84,19 +91,20 @@ function BuiltInFeature({ workspaceId, builtin, collectionId, collections, canMa
 }
 
 function BuiltInSettings({ workspaceId, builtin, existing, collectionId, canManage, onChanged }: { workspaceId: string; builtin: BuiltInState; existing?: Workflow; collectionId: string; canManage: boolean; onChanged: () => Promise<void> }) {
-  const schema = (builtin.parameters_schema ?? { type: 'object', properties: {} }) as FormSchema;
+  const schema = withCollection((builtin.parameters_schema ?? { type: 'object', properties: {} }) as FormSchema, collectionId);
   const [parameters, setParameters] = useState<Record<string, unknown>>({ ...formDefaults(schema), ...(existing?.parameters ?? {}) });
   const [manual, setManual] = useState(existing?.manual_enabled ?? builtin.manual_mode !== 'none');
   const [automatic, setAutomatic] = useState(existing?.automatic_enabled ?? false);
   const triggers = ((existing?.definition as WorkflowDefinition | undefined)?.triggers ?? builtin.automatic_triggers ?? []).filter(trigger => trigger.type !== 'manual');
   const [disabled, setDisabled] = useState(triggers.filter(trigger => trigger.disabled).map(trigger => trigger.type));
+  const types = useQuery(workspaceTypesQuery(workspaceId, triggers));
   const automaticScopeReady = !(builtin.per_collection || builtin.role) || !!collectionId;
   const save = useMutation({ mutationFn: () => api(`/v1/workspaces/${workspaceId}/workflow-builtins/${builtin.key}`, { method: 'PUT', ifMatch: existing?.version, body: { collection_id: collectionId || undefined, automatic_enabled: automatic && automaticScopeReady, manual_enabled: manual, state: 'published', disabled_triggers: disabled, parameters } }), onSuccess: async () => { await onChanged(); toast.success('Settings saved.'); } });
   return <details><summary className="cursor-pointer text-sm font-medium">Configure use and parameters</summary><fieldset disabled={!canManage || save.isPending || !!builtin.per_collection && !collectionId} className="mt-3 grid gap-3">
     <label className="flex items-center gap-2 text-sm"><Checkbox checked={manual} disabled={builtin.manual_mode === 'none'} onChange={event => setManual(event.target.checked)} />Allow manual runs</label>
     <label className="flex items-center gap-2 text-sm"><Checkbox checked={automatic} disabled={!automaticScopeReady || !triggers.length} onChange={event => setAutomatic(event.target.checked)} />Run automatically in this {collectionId ? 'collection' : 'workspace service'}</label>
     {!automaticScopeReady && <p className="text-xs text-muted">Choose a library or list to configure automatic processing.</p>}
-    {triggers.length > 0 && <fieldset disabled={!automatic || !automaticScopeReady} className="grid gap-2 border-l pl-3"><legend className="text-xs text-muted">Automatic rules</legend>{[...new Map(triggers.map(trigger => [trigger.type, trigger])).values()].map(trigger => <label key={trigger.type} className="flex items-center gap-2 text-sm"><Checkbox checked={!disabled.includes(trigger.type)} onChange={event => setDisabled(current => event.target.checked ? current.filter(type => type !== trigger.type) : [...current, trigger.type])} />{triggerLabel(trigger)}</label>)}</fieldset>}
+    {triggers.length > 0 && <fieldset disabled={!automatic || !automaticScopeReady} className="grid gap-2 border-l pl-3"><legend className="text-xs text-muted">Automatic rules</legend>{[...new Map(triggers.map(trigger => [trigger.type, trigger])).values()].map(trigger => <label key={trigger.type} className="flex items-center gap-2 text-sm"><Checkbox checked={!disabled.includes(trigger.type)} onChange={event => setDisabled(current => event.target.checked ? current.filter(type => type !== trigger.type) : [...current, trigger.type])} />{triggerLabel(trigger, types.data)}</label>)}</fieldset>}
     <SchemaFields schema={schema} data={parameters} onChange={setParameters} workspaceId={workspaceId} />
     {builtin.role && automatic && <Alert>This selects the automatic provider for this collection. Any other automatic provider for this feature here will be paused; manual use stays independent.</Alert>}
     <QueryFeedback query={save} /><div><Button size="sm" onClick={() => save.mutate()}>Save settings</Button></div>

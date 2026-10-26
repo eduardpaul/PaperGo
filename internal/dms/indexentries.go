@@ -24,8 +24,10 @@ type IndexEntry struct {
 	Surface  refs.Surface
 	// Publishes reports that the collection publishes; without publishing,
 	// its published surface is also the head.
-	Publishes     bool
-	RevisionID    string
+	Publishes  bool
+	RevisionID string
+	// ContentTypeID is the catalog type the surface's list type copies, so
+	// filters and facets count lists of one type together.
 	ContentTypeID string
 	BlobID        string
 	Name          string
@@ -103,6 +105,15 @@ func (s *Service) IndexEntries(ctx context.Context, ids []string) (entries []Ind
 	if err != nil {
 		return nil, nil, err
 	}
+	typeIDs := []string{}
+	for _, rev := range byID {
+		typeIDs = append(typeIDs, rev.ContentTypeID)
+	}
+	slices.Sort(typeIDs)
+	catalogTypes, err := s.DAL.Catalog().CatalogTypeIDs(ctx, slices.Compact(typeIDs))
+	if err != nil {
+		return nil, nil, err
+	}
 	defs := map[[2]string][]*catalog.FieldDefinition{}
 	weights := map[string]map[string]string{}
 	for _, p := range projections {
@@ -129,7 +140,7 @@ func (s *Service) IndexEntries(ctx context.Context, ids []string) (entries []Ind
 		if err != nil {
 			return nil, nil, err
 		}
-		e := IndexEntry{Resource: r, Surface: p.Surface, Publishes: publishes[*r.ContainerID], RevisionID: rev.ID, ContentTypeID: rev.ContentTypeID,
+		e := IndexEntry{Resource: r, Surface: p.Surface, Publishes: publishes[*r.ContainerID], RevisionID: rev.ID, ContentTypeID: catalogTypes[rev.ContentTypeID],
 			Name: p.Name, Keywords: p.Keywords, Fields: fields, CreatedAt: p.ItemCreatedAt, CreatedBy: p.ItemCreatedBy, ModifiedAt: p.ModifiedAt, ModifiedBy: p.ModifiedBy}
 		if rev.BlobID != nil {
 			e.BlobID = *rev.BlobID
@@ -215,6 +226,34 @@ func (s *Service) fieldWeights(ctx context.Context, collectionID string) (map[st
 func (s *Service) TermFamily(ctx context.Context, id string) ([]string, error) {
 	return read(ctx, s, func(t *Service) ([]string, error) {
 		return t.DAL.Taxonomy().Family(ctx, id)
+	})
+}
+
+// ContentTypeFamily expands a catalog type to itself and every catalog type
+// deriving from it, as content type filters on indexed entries match; a list
+// type stands for the catalog type it copies.
+func (s *Service) ContentTypeFamily(ctx context.Context, id string) ([]string, error) {
+	return read(ctx, s, func(t *Service) ([]string, error) {
+		catalogTypes, err := t.DAL.Catalog().CatalogTypeIDs(ctx, []string{id})
+		if err != nil {
+			return nil, err
+		}
+		if id = catalogTypes[id]; id == "" {
+			return []string{}, nil
+		}
+		ids, err := t.DAL.Catalog().Descendants(ctx, []string{id})
+		if err != nil {
+			return nil, err
+		}
+		family, err := t.DAL.Catalog().ContentTypes(ctx, catalog.ContentTypeFilter{IDs: ids, Catalog: true})
+		if err != nil {
+			return nil, err
+		}
+		out := make([]string, len(family))
+		for i, f := range family {
+			out[i] = f.ID
+		}
+		return out, nil
 	})
 }
 

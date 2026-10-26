@@ -99,8 +99,8 @@ func TestFolderReclassificationSchemaChangesAndRecycle(t *testing.T) {
 	f := create(t, s, c.ID, "folder", "Typed folder", map[string]any{"old": "archive"})
 	b := typeOK(t, s, c.ID, ContentTypeInput{Key: "b", Name: "B", FieldIds: []string{required.ID}})
 	// Tightening the shared type must not force required values onto folders.
-	a, err = s.UpdateContentType(testContext, "alice", a.ID, a.Version, ContentTypeInput{Name: a.Name, FieldIds: []string{old.ID, required.ID}})
-	if err != nil {
+	shared := catalogOf(t, s, a)
+	if _, err = s.UpdateContentType(testContext, "alice", shared.ID, shared.Version, ContentTypeInput{Name: shared.Name, FieldIds: []string{old.ID, required.ID}}); err != nil {
 		t.Fatal("folder blocked schema adoption", err)
 	}
 	if _, err = s.DetachContentType(testContext, "alice", c.ID, a.ID, latest(t, s, c.ID).Version); !errors.Is(err, ErrConflict) {
@@ -128,7 +128,7 @@ func TestFolderReclassificationSchemaChangesAndRecycle(t *testing.T) {
 	if _, err = s.RestoreDeleted(testContext, "alice", c.ID, f.ID, false); !isValidation(err) {
 		t.Fatal("restored detached folder type", err)
 	}
-	if _, err = s.AttachContentType(testContext, "alice", c.ID, latest(t, s, c.ID).Version, AttachContentTypeInput{ContentTypeID: b.ID}); err != nil {
+	if _, err = s.AttachContentType(testContext, "alice", c.ID, latest(t, s, c.ID).Version, AttachContentTypeInput{ContentTypeID: *b.ParentID}); err != nil {
 		t.Fatal(err)
 	}
 	f, err = s.RestoreDeleted(testContext, "alice", c.ID, f.ID, false)

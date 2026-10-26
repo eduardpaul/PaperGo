@@ -30,7 +30,7 @@ import (
 var Tables = []string{
 	"identity_users", "identity_groups", "identity_roles", "identity_memberships", "identity_assignments", "identity_preferences",
 	"term_groups", "term_sets", "terms", "relationship_types", "field_definitions", "content_types",
-	"resources", "collection_types", "schema_revisions", "schema_templates", "list_views", "smart_folders",
+	"resources", "schema_revisions", "schema_templates", "list_views", "smart_folders",
 	"blobs", "blob_previews", "item_revisions", "integration_revision_data", "integration_items", "item_histories", "publications", "item_surfaces", "business_keys", "grants", "relationships",
 	"workflows", "workflow_versions", "workflow_triggers", "group_inboxes",
 }
@@ -447,7 +447,7 @@ func exportScope(table string, scope Scope) (string, []any) {
 	switch table {
 	case "resources":
 		return "id IN (" + resourcesIn + ")", resourceArgs
-	case "collection_types", "list_views":
+	case "list_views":
 		return "container_id IN (" + resourcesIn + ")", resourceArgs
 	case "schema_revisions":
 		if !scope.Data {

@@ -48,7 +48,7 @@ func (s *Service) searchFieldDefinitions(ctx context.Context, subject, workspace
 	}
 	ids := []string{}
 	for _, typ := range types {
-		for _, id := range typ.FieldIds {
+		for _, id := range typ.Effective.FieldIds {
 			if !slices.Contains(ids, id) {
 				ids = append(ids, id)
 			}
@@ -102,13 +102,19 @@ func (s *Service) SearchFields(ctx context.Context, subject, workspaceID, collec
 	})
 }
 
-// SearchContentType is a named type attached to a collection the caller can read.
+// SearchContentType is a catalog type that a collection the caller can
+// read accepts, directly or through a subtype. Filtering by it also matches
+// its subtypes.
 type SearchContentType struct {
-	Key  string `json:"key"`
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	Key      string `json:"key"`
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	ParentID string `json:"parent_id,omitempty"`
 }
 
+// SearchContentTypes lists the catalog types of the readable lists and
+// libraries, optionally of one workspace or collection, with their
+// ancestors, so a picker can show them as a tree.
 func (s *Service) SearchContentTypes(ctx context.Context, subject, workspaceID, collectionID string) ([]SearchContentType, error) {
 	if err := s.RequireScope(ctx, subject, "item.read"); err != nil {
 		return nil, err
@@ -118,9 +124,24 @@ func (s *Service) SearchContentTypes(ctx context.Context, subject, workspaceID, 
 		if err != nil {
 			return nil, err
 		}
-		out := make([]SearchContentType, len(types))
-		for i, typ := range types {
-			out[i] = SearchContentType{ID: typ.ID, Name: typ.Name, Key: typ.Key}
+		ancestors, err := t.ancestorTypes(ctx, types)
+		if err != nil {
+			return nil, err
+		}
+		seen := map[string]bool{}
+		out := []SearchContentType{}
+		for _, typ := range types {
+			for _, a := range ancestors[typ.ID] {
+				if seen[a.ID] {
+					continue
+				}
+				seen[a.ID] = true
+				entry := SearchContentType{ID: a.ID, Name: a.Name, Key: a.Key}
+				if a.ParentID != nil {
+					entry.ParentID = *a.ParentID
+				}
+				out = append(out, entry)
+			}
 		}
 		slices.SortFunc(out, func(a, b SearchContentType) int {
 			return cmp.Or(strings.Compare(a.Name, b.Name), strings.Compare(a.ID, b.ID))

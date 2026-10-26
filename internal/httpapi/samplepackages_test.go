@@ -146,11 +146,12 @@ func checkImportedSampleSource(t *testing.T, s *dms.Service, w workflow.Workflow
 	var source workflow.Save
 	switch w.Name {
 	case "Read receipts":
-		types, err := s.ContentTypes(t.Context(), "organization-admin", ids["Receipt lines"])
+		types, err := s.CollectionContentTypes(t.Context(), "organization-admin", ids["Receipt lines"])
 		if err != nil || len(types) != 1 {
 			t.Fatal(types, err)
 		}
-		source = sampleWorkflowSource(t, "receipts-package/read-receipts.json", "$LIBRARY", ids["Receipts"], "$LINES", ids["Receipt lines"], "$LINE_TYPE", types[0].ID)
+		// The workflow names the catalog type; the list accepts it.
+		source = sampleWorkflowSource(t, "receipts-package/read-receipts.json", "$LIBRARY", ids["Receipts"], "$LINES", ids["Receipt lines"], "$LINE_TYPE", *types[0].ParentID)
 		for _, name := range []string{"Receipts", "Receipt lines"} {
 			views, err := s.Views(t.Context(), "organization-admin", ids[name], "", 100)
 			if err != nil {

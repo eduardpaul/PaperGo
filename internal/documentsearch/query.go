@@ -153,7 +153,7 @@ func (x *Search) search(ctx context.Context, s *dms.Service, subject string, in 
 	if keywordErr != nil {
 		return Result{}, keywordErr
 	}
-	q := search.Query{Mode: in.Mode, Vector: in.vector, Model: in.model, Filter: search.Filter{Archive: in.Archive, ArchivedBy: in.ArchivedBy, ArchivedFrom: in.ArchivedFrom, ArchivedTo: in.ArchivedTo, Surface: in.Surface, Kinds: in.Kinds, WorkspaceID: in.WorkspaceID, CollectionID: in.CollectionID, ContentTypeID: in.ContentTypeID,
+	q := search.Query{Mode: in.Mode, Vector: in.vector, Model: in.model, Filter: search.Filter{Archive: in.Archive, ArchivedBy: in.ArchivedBy, ArchivedFrom: in.ArchivedFrom, ArchivedTo: in.ArchivedTo, Surface: in.Surface, Kinds: in.Kinds, WorkspaceID: in.WorkspaceID, CollectionID: in.CollectionID,
 		Keyword: in.Keyword, CreatedBy: in.CreatedBy, ModifiedBy: in.ModifiedBy, ModifiedFrom: in.ModifiedFrom, ModifiedTo: in.ModifiedTo}, Facets: in.Facets}
 	if strings.TrimSpace(in.Q) != "" {
 		var err error
@@ -164,6 +164,17 @@ func (x *Search) search(ctx context.Context, s *dms.Service, subject string, in 
 		}
 	} else if in.Archive != refs.ArchiveArchived && in.WorkspaceID == "" && in.CollectionID == "" && in.ContentTypeID == "" && in.TermID == "" && in.Keyword == "" && in.CreatedBy == "" && in.ModifiedBy == "" && in.Filter == nil {
 		return Result{}, dms.Invalid("enter words to search for, or at least one filter")
+	}
+	// A content type matches with every type deriving from it.
+	if in.ContentTypeID != "" {
+		types, err := s.ContentTypeFamily(ctx, in.ContentTypeID)
+		if err != nil {
+			return Result{}, err
+		}
+		if len(types) == 0 {
+			types = []string{in.ContentTypeID}
+		}
+		q.Filter.ContentTypeIDs = types
 	}
 	if in.TermID != "" {
 		terms, err := s.TermFamily(ctx, in.TermID)
