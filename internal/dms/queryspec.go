@@ -10,6 +10,7 @@ import (
 	"papergo/internal/dal/content"
 	"papergo/internal/dal/refs"
 	"papergo/internal/dal/resources"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -380,14 +381,22 @@ func (s *Service) collectionPlan(ctx context.Context, subject string, c *resourc
 	}
 	plan := content.Plan{Archive: in.Query.Archive.Default(), Reader: principal(ctx, subject), CollectionID: c.ID, Publishes: c.PublishingEnabled, Surface: in.Surface, RowACL: in.rowACL}
 	if in.Query.ContentTypeID != "" {
-		// A type matches the collection's types deriving from it, on the
-		// fields they all share.
+		// A type matches the collection's types deriving from it, on its
+		// fields that they all share.
 		typ, family, e := s.typeFamily(ctx, c.ID, in.Query.ContentTypeID)
 		if e != nil {
 			return content.Plan{}, compiledQuery{}, e
 		}
-		compiler.defs = definitionMap(selectTypeDefinitions(defs, typ))
-		plan.ContentTypes = family
+		shared := []*catalog.FieldDefinition{}
+		for _, d := range selectTypeDefinitions(defs, typ) {
+			if !slices.ContainsFunc(family, func(t *catalog.ContentType) bool { return !slices.Contains(t.Effective.FieldIds, d.ID) }) {
+				shared = append(shared, d)
+			}
+		}
+		compiler.defs = definitionMap(shared)
+		for _, t := range family {
+			plan.ContentTypes = append(plan.ContentTypes, t.ID)
+		}
 	}
 	if len(in.Query.Sort) > 8 {
 		return content.Plan{}, compiledQuery{}, invalid("at most 8 sort keys")

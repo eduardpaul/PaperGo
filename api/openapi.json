@@ -25283,7 +25283,7 @@
           "content_type_id": {
             "type": "string",
             "format": "uuid",
-            "description": "Optional content type filter: a list type of the collection or a catalog type, matching every list type of the collection that derives from it. Field filters, sorting and grouping must use fields that type has."
+            "description": "Optional content type filter: a catalog type, or a list type of the collection standing for the catalog type it copies, matching every list type of the collection that derives from that catalog type. Field filters, sorting and grouping must use fields that the named type and every matching list type have."
           },
           "keyword": {
             "type": "string",

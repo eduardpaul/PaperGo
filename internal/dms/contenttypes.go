@@ -90,9 +90,10 @@ func (s *Service) listType(ctx context.Context, collection, catalogID string) (*
 	return typ, err
 }
 
-// typeFamily resolves a list type of a collection, or a catalog type, to
-// itself and the collection's list types deriving from it.
-func (s *Service) typeFamily(ctx context.Context, collection, id string) (*catalog.ContentType, []string, error) {
+// typeFamily resolves a catalog type, or a list type of a collection, to
+// itself and the collection's list types deriving from the catalog type: a
+// list type stands for its catalog type, so its subtypes match too.
+func (s *Service) typeFamily(ctx context.Context, collection, id string) (*catalog.ContentType, []*catalog.ContentType, error) {
 	typ, err := s.DAL.Catalog().ContentType(ctx, id)
 	if dberr.IsNotFound(err) {
 		return nil, nil, ErrNotFound
@@ -100,16 +101,17 @@ func (s *Service) typeFamily(ctx context.Context, collection, id string) (*catal
 	if err != nil {
 		return nil, nil, err
 	}
+	if !typ.Catalog() {
+		if *typ.CollectionID != collection {
+			return nil, nil, ErrNotFound
+		}
+		id = *typ.ParentID
+	}
 	types, err := s.collectionTypes(ctx, collection)
 	if err != nil {
 		return nil, nil, err
 	}
-	family := []string{}
-	for _, t := range types {
-		if t.ID == id || slices.Contains(t.AncestorIDs, id) {
-			family = append(family, t.ID)
-		}
-	}
+	family := slices.DeleteFunc(types, func(t *catalog.ContentType) bool { return !slices.Contains(t.AncestorIDs, id) })
 	if len(family) == 0 {
 		return nil, nil, ErrNotFound
 	}

@@ -263,3 +263,34 @@ func TestRemovingAColumnStaysInTheList(t *testing.T) {
 		t.Fatal("unused field kept", err)
 	}
 }
+
+// A list type stands for its catalog type in queries, so the list's items of
+// subtypes match it too.
+func TestListTypeQueriesIncludeSubtypes(t *testing.T) {
+	s, _, l := fixture(t)
+	title, err := s.CreateCatalogField(testContext, "alice", CreateField{Key: "title", Label: "Title", Type: "text", Indexed: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err := s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "record", Name: "Record", FieldIds: []string{title.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	invoice, err := s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "invoice", Name: "Invoice", ParentID: record.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	recordType := attachOK(t, s, l.ID, record.ID, true)
+	invoiceType := attachOK(t, s, l.ID, invoice.ID, false)
+	for _, typ := range []string{recordType.ID, invoiceType.ID} {
+		if _, err = s.Create(testContext, "alice", l.ID, CreateResource{Kind: "item", Name: typ, ContentTypeID: typ, Values: map[string]any{"title": "Power"}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for typ, want := range map[string]int{recordType.ID: 2, record.ID: 2, invoiceType.ID: 1} {
+		page, err := s.Query(testContext, "alice", l.ID, QueryRequest{Query: QuerySpec{ContentTypeID: typ, Filter: &FilterExpr{Field: "title", Value: []byte(`"Power"`)}}})
+		if err != nil || len(page.Data) != want {
+			t.Fatal("type query", typ, page, err)
+		}
+	}
+}
