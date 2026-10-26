@@ -141,6 +141,20 @@ func TestContentTypeInheritanceAcrossLists(t *testing.T) {
 	if family, err = s.ContentTypeFamily(testContext, invoiceType.ID); err != nil || !slices.Equal(family, []string{invoice.ID}) {
 		t.Fatal("list type family", family, err)
 	}
+
+	// A list's own field moves up when its catalog type gains it, and the
+	// list type saves as before.
+	invoice = catalogOf(t, s, invoiceType)
+	if _, err = s.UpdateContentType(testContext, "alice", invoice.ID, invoice.Version, ContentTypeInput{Name: invoice.Name, FieldIds: append(slices.Clone(invoice.FieldIds), note.ID)}); err != nil {
+		t.Fatal(err)
+	}
+	moved, err := s.contentType(testContext, invoices.ID, invoiceType.ID)
+	if err != nil || slices.Contains(moved.FieldIds, note.ID) || !slices.Contains(moved.Effective.FieldIds, note.ID) {
+		t.Fatal("field gained by the catalog type", moved, err)
+	}
+	if _, err = s.UpdateListType(testContext, "alice", invoices.ID, moved.ID, moved.Version, ListTypeInput{FieldIds: moved.FieldIds, HiddenFieldIds: moved.HiddenFieldIds}); err != nil {
+		t.Fatal("list type after its field moved up", err)
+	}
 }
 
 // A detached list type keeps its customizations for when its catalog type is

@@ -463,19 +463,47 @@ func (s *Service) UpdateContentType(ctx context.Context, subject, id string, ver
 		if e != nil {
 			return e
 		}
+		reshaped, e := changedSchema(old, schema)
+		if e != nil {
+			return e
+		}
 		out, e = t.reviseContentType(ctx, old, catalog.ContentType{Name: in.Name, FieldIds: schema.FieldIds, HiddenFieldIds: schema.HiddenFieldIds, Rules: schema.Rules})
 		if e != nil {
 			return e
 		}
-		if e = t.checkSubtypes(ctx, id); e != nil {
-			return e
-		}
-		if e = t.refreshCollections(ctx, subject, collections); e != nil {
-			return e
+		// Fields and rules reach the items of every type deriving from this
+		// one; a new name reaches only the collections' schema snapshots.
+		switch {
+		case reshaped:
+			if e = t.checkSubtypes(ctx, id); e != nil {
+				return e
+			}
+			if e = t.refreshCollections(ctx, subject, collections); e != nil {
+				return e
+			}
+		case out.Name != old.Name:
+			for _, c := range collections {
+				if e = t.recordSchema(ctx, subject, c); e != nil {
+					return e
+				}
+			}
 		}
 		return t.auditCatalog(ctx, subject, "content_type.update", map[string]any{"content_type_id": id, "version": out.Version})
 	})
 	return
+}
+
+// changedSchema reports whether a write changes a type's own fields or rules.
+func changedSchema(old *catalog.ContentType, next ListTypeInput) (bool, error) {
+	if !slices.Equal(old.FieldIds, next.FieldIds) {
+		return true, nil
+	}
+	before, err := json.Marshal(nonNil(old.Rules))
+	if err != nil {
+		return false, err
+	}
+	after, err := json.Marshal(nonNil(next.Rules))
+	return string(before) != string(after), err
 }
 
 // UpdateListType customizes a collection's list type at its version. The

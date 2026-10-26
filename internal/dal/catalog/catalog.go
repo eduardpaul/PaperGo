@@ -352,8 +352,9 @@ func contentType(ctx context.Context, q Queries, id string) (*ContentType, error
 }
 
 // resolve fills in the lineage and effective schema of stored types. A list
-// type shows the current name of its catalog type. Hidden fields an ancestor
-// no longer has drop out.
+// type shows the current name of its catalog type. Own fields an ancestor
+// has and hidden fields no ancestor has drop out, as SaveContentType stores
+// them once an ancestor changes.
 func resolve(ctx context.Context, q Queries, types []*ContentType) error {
 	if len(types) == 0 {
 		return nil
@@ -392,7 +393,8 @@ func resolve(ctx context.Context, q Queries, types []*ContentType) error {
 			chain = append(chain, a)
 		}
 		inherited := effective(chain).FieldIds
-		t.HiddenFieldIds = slices.DeleteFunc(t.HiddenFieldIds, func(id string) bool { return !slices.Contains(inherited, id) })
+		t.FieldIds = slices.DeleteFunc(slices.Clone(t.FieldIds), func(id string) bool { return slices.Contains(inherited, id) })
+		t.HiddenFieldIds = slices.DeleteFunc(slices.Clone(t.HiddenFieldIds), func(id string) bool { return !slices.Contains(inherited, id) })
 		t.Effective = effective(append(chain, t))
 		if !t.Catalog() && len(chain) > 0 {
 			t.Name = chain[len(chain)-1].Name
@@ -484,16 +486,21 @@ func insertContentType(ctx context.Context, q Queries, t ContentType) (*ContentT
 	if err != nil {
 		return nil, err
 	}
-	if err = inheritedHidden(t.HiddenFieldIds, out); err != nil {
+	if err = kept(t, out); err != nil {
 		return nil, err
 	}
-	return out, checkLineage(ctx, q, out)
+	return out, checkLineage(ctx, q, []*ContentType{out})
 }
 
-// inheritedHidden checks that the hidden fields a write asked for are all
-// inherited: resolving a type keeps only those.
-func inheritedHidden(asked []string, t *ContentType) error {
-	for _, id := range asked {
+// kept checks that resolving the written type kept the own and hidden fields
+// the write asked for: own fields are not inherited, hidden fields are.
+func kept(asked ContentType, t *ContentType) error {
+	for _, id := range asked.FieldIds {
+		if !slices.Contains(t.FieldIds, id) {
+			return fmt.Errorf("%w: content type %s inherits field %s", dberr.ErrInvalidReference, t.Key, id)
+		}
+	}
+	for _, id := range asked.HiddenFieldIds {
 		if !slices.Contains(t.HiddenFieldIds, id) {
 			return fmt.Errorf("%w: hidden field %s is not inherited by content type %s", dberr.ErrInvalidReference, id, t.Key)
 		}
@@ -526,7 +533,9 @@ func (r *Repo) RecordLineage(ctx context.Context, id string) error {
 
 // SaveContentType changes a type's own fields, hidden fields and rules at
 // version, and a catalog type's name. Its key and parent never change. The
-// type and every type deriving from it keep distinct field keys.
+// type and every type deriving from it keep distinct field keys. When its own
+// fields change, deriving types store theirs without the fields it now has
+// and their hidden fields without those it no longer has.
 func (r *Repo) SaveContentType(ctx context.Context, in ContentType, version int) (*ContentType, error) {
 	var out *ContentType
 	err := r.write(ctx, func(q Queries) error {
@@ -540,33 +549,52 @@ func (r *Repo) SaveContentType(ctx context.Context, in ContentType, version int)
 		if t.Catalog() {
 			t.Name = in.Name
 		}
+		reshaped := !slices.Equal(t.FieldIds, nonNil(in.FieldIds))
 		t.FieldIds, t.HiddenFieldIds, t.Rules = nonNil(in.FieldIds), nonNil(in.HiddenFieldIds), nonNil(in.Rules)
 		t.Version, t.UpdatedAt = version+1, time.Now().UTC()
 		if err = saved(q.UpdateContentType(ctx, t)); err != nil {
+			return err
+		}
+		if out, err = contentType(ctx, q, t.ID); err != nil {
+			return err
+		}
+		if err = kept(*t, out); err != nil {
 			return err
 		}
 		ids, err := q.Descendants(ctx, []string{t.ID})
 		if err != nil {
 			return err
 		}
-		types, err := contentTypes(ctx, q, ContentTypeFilter{IDs: ids, Detached: true})
-		if err != nil {
-			return err
-		}
-		others := []string{}
-		for _, typ := range types {
-			if err := checkLineage(ctx, q, typ); err != nil {
+		others := slices.DeleteFunc(ids, func(id string) bool { return id == t.ID })
+		checked, stored := []*ContentType{out}, []string{}
+		if reshaped && len(others) > 0 {
+			rows, err := q.ContentTypes(ctx, ContentTypeFilter{IDs: others, Detached: true})
+			if err != nil {
 				return err
 			}
-			if typ.ID == t.ID {
-				if err := inheritedHidden(t.HiddenFieldIds, typ); err != nil {
+			before := make([]ContentType, len(rows))
+			for i, row := range rows {
+				before[i] = *row
+			}
+			if err = resolve(ctx, q, rows); err != nil {
+				return err
+			}
+			for i, row := range rows {
+				if slices.Equal(before[i].FieldIds, row.FieldIds) && slices.Equal(before[i].HiddenFieldIds, row.HiddenFieldIds) {
+					continue
+				}
+				row.Version, row.UpdatedAt = row.Version+1, t.UpdatedAt
+				if err = saved(q.UpdateContentType(ctx, row)); err != nil {
 					return err
 				}
-				out = typ
-			} else {
-				others = append(others, typ.ID)
+				stored = append(stored, row.ID)
 			}
+			checked = append(checked, rows...)
 		}
+		if err = checkLineage(ctx, q, checked); err != nil {
+			return err
+		}
+		others = slices.DeleteFunc(others, func(id string) bool { return slices.Contains(stored, id) })
 		if len(others) == 0 {
 			return nil
 		}
@@ -575,38 +603,47 @@ func (r *Repo) SaveContentType(ctx context.Context, in ContentType, version int)
 	return out, err
 }
 
-// checkLineage checks that a type's own fields exist and that its effective
-// fields have distinct keys.
-func checkLineage(ctx context.Context, q Queries, t *ContentType) error {
-	if err := distinctFields(ctx, q, t.FieldIds); err != nil {
+// checkLineage checks that the types' own fields exist and are distinct, and
+// that each type's effective fields have distinct keys.
+func checkLineage(ctx context.Context, q Queries, types []*ContentType) error {
+	ids := []string{}
+	for _, t := range types {
+		ids = append(append(ids, t.FieldIds...), t.Effective.FieldIds...)
+	}
+	slices.Sort(ids)
+	rows, err := q.FieldDefinitions(ctx, FieldFilter{IDs: slices.Compact(ids)})
+	if err != nil {
 		return err
 	}
-	keys := map[string]string{}
-	for _, id := range t.Effective.FieldIds {
-		field, err := q.FieldDefinition(ctx, id)
-		if dberr.IsNotFound(err) {
-			return fmt.Errorf("%w: field %s does not exist", dberr.ErrInvalidReference, id)
-		}
-		if err != nil {
+	fields := make(map[string]*FieldDefinition, len(rows))
+	for _, row := range rows {
+		fields[row.ID] = row
+	}
+	for _, t := range types {
+		if err := distinctFields(fields, t.FieldIds); err != nil {
 			return err
 		}
-		if other, taken := keys[field.Key]; taken && other != id {
-			return Violation(fmt.Sprintf("field key %q appears twice in content type %q and its ancestors", field.Key, t.Key))
+		keys := map[string]string{}
+		for _, id := range t.Effective.FieldIds {
+			field := fields[id]
+			if field == nil {
+				return fmt.Errorf("%w: field %s does not exist", dberr.ErrInvalidReference, id)
+			}
+			if other, taken := keys[field.Key]; taken && other != id {
+				return Violation(fmt.Sprintf("field key %q appears twice in content type %q and its ancestors", field.Key, t.Key))
+			}
+			keys[field.Key] = id
 		}
-		keys[field.Key] = id
 	}
 	return nil
 }
 
-func distinctFields(ctx context.Context, q Queries, ids []string) error {
+func distinctFields(fields map[string]*FieldDefinition, ids []string) error {
 	seenIDs, seenKeys := map[string]bool{}, map[string]bool{}
 	for _, id := range ids {
-		field, err := q.FieldDefinition(ctx, id)
-		if dberr.IsNotFound(err) {
+		field := fields[id]
+		if field == nil {
 			return fmt.Errorf("%w: field %s does not exist", dberr.ErrInvalidReference, id)
-		}
-		if err != nil {
-			return err
 		}
 		if seenIDs[id] || seenKeys[field.Key] {
 			return fmt.Errorf("%w: content type fields require distinct identities and keys", dberr.ErrInvalidReference)

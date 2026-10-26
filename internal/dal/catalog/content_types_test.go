@@ -282,6 +282,21 @@ func testContentTypeInheritance(t *testing.T, s *dal.Store) {
 	if err != nil || len(fieldsOf) != 4 {
 		t.Fatalf("collection fields include inherited ones: %+v %v", fieldsOf, err)
 	}
+	// A descendant stores neither own fields its parent gains nor hidden
+	// fields its parent loses.
+	if _, err = r.SaveContentType(ctx, catalog.ContentType{ID: "invoice", Name: "Bill", FieldIds: []string{"note", "due"}}, invoice.Version); err != nil {
+		t.Fatal(err)
+	}
+	var own, hidden string
+	if err = s.SQLDB().QueryRowContext(ctx, `SELECT field_ids, hidden_field_ids FROM content_types WHERE id = '`+listType.ID+`'`).Scan(&own, &hidden); err != nil {
+		t.Fatal(err)
+	}
+	if !jsonutil.Equal([]byte(own), []byte(`[]`)) || !jsonutil.Equal([]byte(hidden), []byte(`[]`)) {
+		t.Fatalf("descendant keeps stale fields: %s %s", own, hidden)
+	}
+	if updated, err = r.ContentType(ctx, listType.ID); err != nil || len(updated.Effective.FieldIds) != 3 || updated.Version != listType.Version+2 {
+		t.Fatalf("descendant after its fields moved up: %+v %v", updated, err)
+	}
 	descendants, err := r.Descendants(ctx, []string{"type"})
 	if err != nil || len(descendants) != 6 {
 		t.Fatalf("descendants: %v %v", descendants, err)
