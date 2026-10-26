@@ -7,6 +7,7 @@ import (
 
 	"papergo/internal/dal/catalog"
 	"papergo/internal/dal/content"
+	"papergo/internal/dal/dberr"
 	"papergo/internal/model"
 )
 
@@ -210,5 +211,55 @@ func TestHiddenFieldsStayOptional(t *testing.T) {
 	noDefault := model.FieldOptions{}
 	if _, err = s.UpdateCatalogField(testContext, "alice", note.ID, current[i].Version, UpdateField{Options: &noDefault}); !isValidation(err) {
 		t.Fatal("default removed from a hidden required field", err)
+	}
+}
+
+// Removing a column from a list leaves the catalog and other lists as they
+// are; the field goes once no type has it.
+func TestRemovingAColumnStaysInTheList(t *testing.T) {
+	s, w, l := fixture(t)
+	other := create(t, s, w.ID, "list", "Other", nil)
+	title, err := s.CreateCatalogField(testContext, "alice", CreateField{Key: "title", Label: "Title", Type: "text"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	code, err := s.CreateCatalogField(testContext, "alice", CreateField{Key: "code", Label: "Code", Type: "text"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err := s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "record", Name: "Record", FieldIds: []string{title.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []string{l.ID, other.ID} {
+		typ := attachOK(t, s, c, record.ID, true)
+		if _, err = s.UpdateListType(testContext, "alice", c, typ.ID, typ.Version, ListTypeInput{FieldIds: []string{code.ID}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err = s.DeleteField(testContext, "alice", l.ID, title.ID, latest(t, s, l.ID).Version); !isValidation(err) {
+		t.Fatal("inherited column removed", err)
+	}
+	if err = s.DeleteField(testContext, "alice", l.ID, code.ID, latest(t, s, l.ID).Version); err != nil {
+		t.Fatal(err)
+	}
+	has := func(c, id string) bool {
+		fields, err := s.Fields(testContext, "alice", c)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return slices.ContainsFunc(fields, func(d *catalog.FieldDefinition) bool { return d.ID == id })
+	}
+	if has(l.ID, code.ID) || !has(other.ID, code.ID) || !has(l.ID, title.ID) {
+		t.Fatal("column removal reached beyond the list")
+	}
+	if _, err = s.DAL.Catalog().Field(testContext, code.ID); err != nil {
+		t.Fatal("field another list has was deleted", err)
+	}
+	if err = s.DeleteField(testContext, "alice", other.ID, code.ID, latest(t, s, other.ID).Version); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.DAL.Catalog().Field(testContext, code.ID); !dberr.IsNotFound(err) {
+		t.Fatal("unused field kept", err)
 	}
 }

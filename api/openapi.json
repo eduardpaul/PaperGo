@@ -2191,8 +2191,8 @@
       ],
       "delete": {
         "operationId": "deleteField",
-        "summary": "Remove field from the active schema (manage required)",
-        "description": "Uses the collection ETag. Rejects dependencies in rules and saved views. Removes memberships, query indexes and business key claims; immutable revisions retain their original fields and values. Removed keys cannot be reused. Later edits prune carried values, while explicitly supplied patch keys reject removed keys. Required module scopes: contentType.manage. Resource ACLs and any additional use-case checks also apply. Field definitions are organization-wide; editing through a collection applies to every collection using them.",
+        "summary": "Remove field from the collection's list types (manage required)",
+        "description": "Uses the collection ETag. Removes the field from the collection's list types that own it; catalog types and other collections keep it, and a field the collection inherits from a catalog type is rejected (hide it in the list type instead). The field definition is deleted once no content type has it. Rejects dependencies in rules and saved views. Removes memberships, query indexes and business key claims; immutable revisions retain their original fields and values. Removed keys cannot be reused. Later edits prune carried values, while explicitly supplied patch keys reject removed keys. Required module scopes: contentType.manage. Resource ACLs and any additional use-case checks also apply. Field definitions are organization-wide; removal through a collection applies to that collection only.",
         "parameters": [
           {
             "name": "If-Match",

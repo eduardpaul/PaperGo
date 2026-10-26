@@ -374,7 +374,7 @@ function FieldList({
             </Button>
             {canManage && (
               <Button size="sm" variant="ghost" onClick={() => setDeleting(field)}>
-                Delete
+                {collection ? 'Remove' : 'Delete'}
               </Button>
             )}
           </li>
@@ -383,9 +383,13 @@ function FieldList({
       <ConfirmDialog
         open={!!deleting}
         onOpenChange={(open) => !open && setDeleting(undefined)}
-        title={`Delete ${collection ? 'column' : 'field'} ${deleting?.label ?? ''}?`}
-        description="This removes the shared field from every content type, list and library that uses it, with its current values. Earlier versions keep theirs."
-        confirm={collection ? 'Delete column' : 'Delete shared field'}
+        title={collection ? `Remove column ${deleting?.label ?? ''}?` : `Delete field ${deleting?.label ?? ''}?`}
+        description={
+          collection
+            ? 'This removes the column from this collection, with its current values; other lists keep it. Earlier versions keep theirs. A column a catalog content type provides stays: hide it in the content type instead.'
+            : 'This removes the shared field from every content type, list and library that uses it, with its current values. Earlier versions keep theirs.'
+        }
+        confirm={collection ? 'Remove column' : 'Delete shared field'}
         busy={remove.isPending}
         error={remove.error}
         onConfirm={() => deleting && remove.mutate(deleting)}
@@ -401,7 +405,7 @@ export function CollectionColumns({ collection, canManage }: { collection: Resou
   return (
     <SettingsSection
       title="Columns"
-      description="The information kept for each item. Columns are shared fields: changing one changes it everywhere it is used."
+      description="The information kept for each item. Columns are shared fields: editing one changes it everywhere it is used, removing one removes it from this collection only."
       actions={
         canManage && (
           <Button variant="primary" onClick={() => setEditing('new')}>
