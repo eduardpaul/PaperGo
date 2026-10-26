@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { api } from '@/api/http';
 import { Plus } from 'lucide-react';
 import { contentTypesQuery, fieldsQuery, keys } from '@/api/queries';
-import type { ContentType, FieldDefinition, Resource, ValidationRule } from '@/api/types';
+import type { ContentType, FieldDefinition, FieldSetting, Resource, ValidationRule } from '@/api/types';
 import { FormDialog } from '@/components/form-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,7 +13,8 @@ import { ConfirmDialog, SettingsSection } from '@/features/settings/section';
 import { JsonInput } from '@/features/workflows/schema-form';
 import { Field, QueryFeedback, useHasScope } from './common';
 import { SystemProperties } from '@/features/lists/system-properties';
-import { treeLabel, typeTree } from '@/features/lists/schema';
+import { reorder, treeLabel, typeTree, withSetting } from '@/features/lists/schema';
+import { FieldEditor } from '@/features/fields/editor';
 import { FieldDialog, fieldTypeLabel } from './field-dialog';
 
 /** Catalog types have at most this many ancestors; list types take one more level. */
@@ -136,7 +137,35 @@ interface Schema {
   ids: string[];
   hidden: string[];
   rules: ValidationRule[];
+  order: string[];
+  settings: FieldSetting[];
 }
+
+const schemaOf = (type?: ContentType): Schema => ({
+  ids: type?.field_ids ?? [],
+  hidden: type?.hidden_field_ids ?? [],
+  rules: type?.rules ?? [],
+  order: type?.field_order ?? [],
+  settings: type?.field_settings ?? [],
+});
+
+/** The type's fields in its form order: inherited ones, then its own. */
+const schemaFieldIds = (schema: Schema, parent?: ContentType) => {
+  const inherited = parent?.effective?.field_ids ?? [];
+  return reorder([...inherited, ...schema.ids.filter((id) => !inherited.includes(id))], schema.order);
+};
+
+/** A type's write body: what it defines itself, for the fields it has. */
+const schemaBody = (schema: Schema, parent?: ContentType) => {
+  const all = schemaFieldIds(schema, parent);
+  return {
+    field_ids: schema.ids.filter((id) => !parent?.effective?.field_ids.includes(id)),
+    hidden_field_ids: schema.hidden,
+    rules: schema.rules,
+    field_order: schema.order.filter((id) => all.includes(id)),
+    field_settings: schema.settings.filter((setting) => all.includes(setting.field_id)),
+  };
+};
 
 /**
  * Edits a type's own fields, hidden inherited fields and own rules. Inherited
@@ -156,6 +185,24 @@ function SchemaFields({
   const inherited = parent?.effective?.field_ids ?? [];
   const inheritedHidden = new Set(parent?.effective?.hidden_field_ids ?? []);
   const byId = new Map(fields.map((field) => [field.id, field]));
+  // A field as the type inherits it, and as its own setting changes it.
+  const inheritedField = (field: FieldDefinition) =>
+    withSetting(field, parent?.effective?.field_settings?.find((setting) => setting.field_id === field.id));
+  const ownSetting = (id: string) => schema.settings.find((setting) => setting.field_id === id);
+  const all = schemaFieldIds(schema, parent);
+  const setSetting = (id: string, change: Partial<FieldSetting>) => {
+    const next: FieldSetting = { ...ownSetting(id), ...change, field_id: id };
+    if (next.required === undefined) delete next.required;
+    if (next.default_value === undefined) delete next.default_value;
+    const others = schema.settings.filter((setting) => setting.field_id !== id);
+    onChange({ ...schema, settings: Object.keys(next).length > 1 ? [...others, next] : others });
+  };
+  const move = (index: number, by: number) => {
+    const order = [...all];
+    const [id] = order.splice(index, 1);
+    order.splice(index + by, 0, id);
+    onChange({ ...schema, order });
+  };
   const label = (field: FieldDefinition) => (
     <>
       {field.label} <span className="text-xs text-muted">{fieldTypeLabel(field.type)}</span>
@@ -170,7 +217,8 @@ function SchemaFields({
           {inherited.flatMap((id) => byId.get(id) ?? []).map((field) => {
             const shown = !inheritedHidden.has(field.id) && !schema.hidden.includes(field.id);
             // A field forms must fill cannot be hidden, but can always be shown again.
-            const mandatory = field.required && field.options?.default_value === undefined;
+            const effective = withSetting(inheritedField(field), ownSetting(field.id));
+            const mandatory = effective.required && effective.options?.default_value === undefined;
             return (
               <label key={field.id} className="flex gap-2 py-1">
                 <Checkbox
@@ -210,6 +258,64 @@ function SchemaFields({
             </label>
           ))}
       </fieldset>
+      {all.length > 0 && (
+        <fieldset>
+          <legend>Form layout</legend>
+          <p className="text-xs text-muted">
+            The order forms show the fields in, and whether this type requires each and its default. Fields themselves stay as
+            they are for other types.
+          </p>
+          {all.flatMap((id) => byId.get(id) ?? []).map((field, index) => {
+            const setting = ownSetting(field.id);
+            const base = inheritedField(field);
+            return (
+              <div key={field.id} className="grid gap-1 border-b py-2 last:border-b-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="flex-1 text-sm">{label(field)}</span>
+                  <Button size="sm" variant="ghost" aria-label={`Move ${field.label} up`} disabled={index === 0} onClick={() => move(index, -1)}>
+                    ↑
+                  </Button>
+                  <Button size="sm" variant="ghost" aria-label={`Move ${field.label} down`} disabled={index === all.length - 1} onClick={() => move(index, 1)}>
+                    ↓
+                  </Button>
+                  <Select
+                    aria-label={`${field.label} required`}
+                    className="w-auto"
+                    value={setting?.required === undefined ? '' : setting.required ? 'required' : 'optional'}
+                    onChange={(event) => setSetting(field.id, { required: event.target.value ? event.target.value === 'required' : undefined })}
+                  >
+                    <option value="">{base.required ? 'Required, as inherited' : 'Optional, as inherited'}</option>
+                    <option value="required">Required</option>
+                    <option value="optional">Optional</option>
+                  </Select>
+                  <Select
+                    aria-label={`${field.label} default`}
+                    className="w-auto"
+                    value={setting?.default_value === undefined ? '' : setting.default_value === null ? 'none' : 'own'}
+                    onChange={(event) =>
+                      setSetting(field.id, {
+                        default_value: event.target.value === 'own' ? (base.options?.default_value ?? '') : event.target.value === 'none' ? null : undefined,
+                      })
+                    }
+                  >
+                    <option value="">{base.options?.default_value !== undefined ? 'Inherited default' : 'No default, as inherited'}</option>
+                    <option value="own">Own default</option>
+                    <option value="none">No default</option>
+                  </Select>
+                </div>
+                {setting?.default_value !== undefined && setting.default_value !== null && (
+                  <FieldEditor
+                    id={`default-${field.key}`}
+                    field={{ ...field, label: `Default ${field.label}`, required: false }}
+                    value={setting.default_value}
+                    onChange={(value) => setSetting(field.id, { default_value: value ?? null })}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </fieldset>
+      )}
       <p className="text-sm font-medium">Validation rules</p>
       {!!parent?.effective?.rules.length && (
         <p className="text-sm text-muted">{parent.effective.rules.length} inherited rules also apply.</p>
@@ -246,7 +352,7 @@ function TypeDialog({
   const [group, setGroup] = useState(type?.group ?? '');
   const groups = [...new Set(types.map((entry) => entry.group).filter((entry): entry is string => !!entry))].sort();
   const [parentId, setParentId] = useState(type ? (type.parent_id ?? '') : (root?.id ?? ''));
-  const [schema, setSchema] = useState<Schema>({ ids: type?.field_ids ?? [], hidden: type?.hidden_field_ids ?? [], rules: type?.rules ?? [] });
+  const [schema, setSchema] = useState<Schema>(schemaOf(type));
   const parent = types.find((entry) => entry.id === parentId);
   // An existing type keeps its parent, shown with its ancestry. A new type
   // derives from a type that leaves it at most maxCatalogAncestors ancestors.
@@ -270,9 +376,7 @@ function TypeDialog({
           name: name.trim(),
           group: group.trim() || undefined,
           parent_id: type ? undefined : parentId || undefined,
-          field_ids: schema.ids.filter((id) => !parent?.effective?.field_ids.includes(id)),
-          hidden_field_ids: schema.hidden,
-          rules: schema.rules,
+          ...schemaBody(schema, parent),
         },
       }),
     onSuccess: async () => {
@@ -361,13 +465,13 @@ function ListTypeDialog({
   const catalog = useQuery(catalogTypesQuery);
   const fields = useQuery(catalogFieldsQuery);
   const parent = catalog.data?.find((entry) => entry.id === type.parent_id);
-  const [schema, setSchema] = useState<Schema>({ ids: type.field_ids ?? [], hidden: type.hidden_field_ids ?? [], rules: type.rules ?? [] });
+  const [schema, setSchema] = useState<Schema>(schemaOf(type));
   const save = useMutation({
     mutationFn: () =>
       api(`/v1/resources/${collection.id}/content-types/${type.id}`, {
         method: 'PUT',
         ifMatch: type.version,
-        body: { field_ids: schema.ids, hidden_field_ids: schema.hidden, rules: schema.rules },
+        body: schemaBody(schema, parent),
       }),
     onSuccess: async () => {
       await client.invalidateQueries({ queryKey: keys.resources });

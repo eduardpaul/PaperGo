@@ -1,4 +1,4 @@
-import type { ContentType, FieldDefinition, Resource } from '@/api/types';
+import type { ContentType, FieldDefinition, FieldSetting, Resource } from '@/api/types';
 
 const labels: Record<string, string> = {
   $name: 'Name',
@@ -17,8 +17,9 @@ export function columnLabel(key: string, fields: FieldDefinition[]): string {
 }
 
 /**
- * The fields forms show for a content type: inherited fields first, then the
- * type's own, without the hidden ones. Without a type, all fields.
+ * The fields forms show for a content type, in its form order, without the
+ * hidden ones and as its settings make them required or give them defaults.
+ * Without a type, all fields.
  */
 export function fieldsForType(fields: FieldDefinition[], types: ContentType[], contentTypeId?: string): FieldDefinition[] {
   const selected = types.find((type) => type.id === contentTypeId) ?? types.find((type) => type.is_default);
@@ -26,7 +27,26 @@ export function fieldsForType(fields: FieldDefinition[], types: ContentType[], c
   const hidden = new Set(selected.effective?.hidden_field_ids ?? []);
   const ids = (selected.effective?.field_ids ?? selected.field_ids ?? []).filter((id) => id && !hidden.has(id));
   const byId = new Map(fields.map((field) => [field.id, field]));
-  return ids.flatMap((id) => byId.get(id) ?? []);
+  const settings = selected.effective?.field_settings ?? [];
+  return ids.flatMap((id) => {
+    const field = byId.get(id);
+    return field ? [withSetting(field, settings.find((setting) => setting.field_id === id))] : [];
+  });
+}
+
+/** A field as a type's setting changes whether it is required and its default. */
+export function withSetting(field: FieldDefinition, setting?: FieldSetting): FieldDefinition {
+  if (!setting || (setting.required === undefined && setting.default_value === undefined)) return field;
+  const options = { ...field.options };
+  if (setting.default_value === null) delete options.default_value;
+  else if (setting.default_value !== undefined) options.default_value = setting.default_value;
+  return { ...field, required: setting.required ?? field.required, options };
+}
+
+/** Puts the ids order names first, in that order, and the rest after them as they were. */
+export function reorder(ids: string[], order: string[]): string[] {
+  const first = order.filter((id, i) => ids.includes(id) && order.indexOf(id) === i);
+  return [...first, ...ids.filter((id) => !first.includes(id))];
 }
 
 /** Types in tree order, each after its parent, with its depth below the listed roots. */

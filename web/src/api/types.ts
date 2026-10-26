@@ -151,6 +151,13 @@ export interface FieldDefinition {
   version?: number;
 }
 
+/** Changes, for a type and its subtypes, whether a field is required and its default; null removes an inherited default. */
+export interface FieldSetting {
+  field_id: string;
+  required?: boolean;
+  default_value?: unknown;
+}
+
 /**
  * A catalog type, or a list type: the copy of one catalog type (parent_id)
  * that a list or library customizes. field_ids, hidden_field_ids and rules are
@@ -169,7 +176,12 @@ export interface ContentType {
   ancestor_ids?: string[];
   field_ids?: string[] | null;
   hidden_field_ids?: string[] | null;
-  effective?: { field_ids: string[]; hidden_field_ids: string[]; rules: ValidationRule[] };
+  /** The type's own form order of its fields; others follow as inherited. */
+  field_order?: string[] | null;
+  /** The type's own per-field required flags and defaults. */
+  field_settings?: FieldSetting[] | null;
+  /** field_ids are in form order; field_settings merge the lineage's, the nearest type winning. */
+  effective?: { field_ids: string[]; hidden_field_ids: string[]; rules: ValidationRule[]; field_settings?: FieldSetting[] };
   is_default?: boolean;
   version?: number;
   rules?: ValidationRule[];
