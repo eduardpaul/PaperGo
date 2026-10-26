@@ -65,12 +65,17 @@ def forward(stream, lines):
     lines.put(None)
 
 
-def report_running(running, now, reason):
+def report_running(running, now, reason, annotate=False):
     """Print the packages and top-level tests that have started and not
-    finished, longest first, and on POSIX the process tree."""
+    finished, longest first. With annotate, GitHub Actions also shows them
+    as an error annotation of the job."""
+    rows = [f'{package} {test or "(package)"}: {(now - since) / 60:.1f} min'
+            for (package, test), since in sorted(running.items(), key=lambda item: item[1])]
     print(f'\n*** {reason}; still running:', flush=True)
-    for (package, test), since in sorted(running.items(), key=lambda item: item[1]):
-        print(f'***   {package} {test or "(package)"}: {(now - since) / 60:.1f} min', flush=True)
+    for row in rows:
+        print('***   ' + row, flush=True)
+    if annotate and os.environ.get('GITHUB_ACTIONS') == 'true':
+        print(f'::error title=Go tests stuck::{reason}; still running:%0A' + '%0A'.join(rows), flush=True)
 
 
 def report_processes():
@@ -124,7 +129,7 @@ def main():
                 if line is None:
                     break
                 if args.deadline_minutes and now - started > args.deadline_minutes * 60:
-                    report_running(running, now, f'go test passed its {args.deadline_minutes:g} minute deadline')
+                    report_running(running, now, f'go test passed its {args.deadline_minutes:g} minute deadline', annotate=True)
                     report_processes()
                     stop(process)
                     stopped = True
@@ -132,7 +137,7 @@ def main():
                 if not line:
                     if process.poll() is not None and now - progressed > 60:
                         # Its output stays open after it exited: a process it started holds it.
-                        report_running(running, now, 'go test exited, yet a process holds its output open')
+                        report_running(running, now, 'go test exited, yet a process holds its output open', annotate=True)
                         report_processes()
                         stop(process)
                         stopped = True
