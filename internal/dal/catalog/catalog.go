@@ -168,6 +168,8 @@ type Queries interface {
 	// DeleteUnusedListTypes deletes the list types of a collection that no
 	// resource or revision has.
 	DeleteUnusedListTypes(ctx context.Context, collectionID string) error
+	// DeleteContentType deletes a type and its lineage.
+	DeleteContentType(ctx context.Context, id string) error
 }
 
 // Repo applies the catalog's rules for every engine. read runs single
@@ -904,6 +906,44 @@ func (r *Repo) Detach(ctx context.Context, collectionID, contentTypeID string) e
 			return err
 		}
 		return q.SetDefaultContentType(ctx, collectionID, remaining[0].ID)
+	})
+}
+
+// DeleteContentType deletes a catalog type at version that no type derives
+// from: it has no subtypes and no list type, attached or kept for history.
+// The root never goes.
+func (r *Repo) DeleteContentType(ctx context.Context, id string, version int) error {
+	return r.write(ctx, func(q Queries) error {
+		t, err := q.ContentType(ctx, id)
+		if err != nil {
+			return err
+		}
+		if t.Version != version {
+			return dberr.ErrConcurrentUpdate
+		}
+		if !t.Catalog() {
+			return Violation("list types go when their collection detaches the catalog type")
+		}
+		if t.ParentID == nil {
+			return Violation("the root content type cannot be deleted")
+		}
+		ids, err := q.Descendants(ctx, []string{id})
+		if err != nil {
+			return err
+		}
+		derived, err := q.ContentTypes(ctx, ContentTypeFilter{IDs: slices.DeleteFunc(ids, func(other string) bool { return other == id }), Detached: true})
+		if err != nil {
+			return err
+		}
+		for _, d := range derived {
+			if d.Catalog() {
+				return Violation(fmt.Sprintf("delete the subtypes of content type %q first", t.Key))
+			}
+		}
+		if len(derived) > 0 {
+			return Violation(fmt.Sprintf("lists use content type %q or keep it for their items' history", t.Key))
+		}
+		return q.DeleteContentType(ctx, id)
 	})
 }
 

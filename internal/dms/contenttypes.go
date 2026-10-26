@@ -496,6 +496,31 @@ func (s *Service) UpdateContentType(ctx context.Context, subject, id string, ver
 	return
 }
 
+// DeleteContentType deletes an unused catalog type at version: one with no
+// subtypes and no list types. Triggers and smart folders naming it then
+// match nothing.
+func (s *Service) DeleteContentType(ctx context.Context, subject, id string, version int) error {
+	return s.write(ctx, func(t *Service) error {
+		if e := t.RequireScope(ctx, subject, "contentType.manage"); e != nil {
+			return e
+		}
+		typ, e := t.catalogType(ctx, id)
+		if e != nil {
+			return e
+		}
+		if typ.Version != version {
+			return ErrPreconditionFailed
+		}
+		if e = t.DAL.Catalog().DeleteContentType(ctx, id, version); e != nil {
+			if errors.Is(e, dberr.ErrConcurrentUpdate) {
+				return ErrPreconditionFailed
+			}
+			return catalogError(e)
+		}
+		return t.auditCatalog(ctx, subject, "content_type.delete", map[string]any{"content_type_id": id, "key": typ.Key})
+	})
+}
+
 // changedSchema reports whether a write changes a type's own fields or rules.
 func changedSchema(old *catalog.ContentType, next ListTypeInput) (bool, error) {
 	if !slices.Equal(old.FieldIds, next.FieldIds) {

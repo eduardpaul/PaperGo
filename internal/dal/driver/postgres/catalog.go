@@ -266,6 +266,11 @@ func (q Queries) DeleteUnusedListTypes(ctx context.Context, collectionID string)
 	return dberr.Translate(err)
 }
 
+func (q Queries) DeleteContentType(ctx context.Context, id string) error {
+	_, err := models.ContentTypes.Delete(models.DeleteWhere.ContentTypes.ID.EQ(id)).Exec(ctx, q.exec)
+	return dberr.Translate(err)
+}
+
 func fieldSetter(d *catalog.FieldDefinition) (*models.FieldDefinitionSetter, error) {
 	choices, err := json.Marshal(d.Choices)
 	if err != nil {

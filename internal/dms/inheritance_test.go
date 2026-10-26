@@ -2,6 +2,7 @@ package dms
 
 import (
 	"encoding/json"
+	"errors"
 	"slices"
 	"testing"
 
@@ -293,5 +294,49 @@ func TestListTypeQueriesIncludeSubtypes(t *testing.T) {
 		if err != nil || len(page.Data) != want {
 			t.Fatal("type query", typ, page, err)
 		}
+	}
+}
+
+// Only an unused catalog type can be deleted: no subtypes, no list types.
+func TestDeleteUnusedContentTypes(t *testing.T) {
+	s, _, l := fixture(t)
+	record, err := s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "record", Name: "Record"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	invoice, err := s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "invoice", Name: "Invoice", ParentID: record.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := s.GetContentType(testContext, "alice", *record.ParentID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.DeleteContentType(testContext, "alice", root.ID, root.Version); !isValidation(err) {
+		t.Fatal("root deleted", err)
+	}
+	if err = s.DeleteContentType(testContext, "alice", record.ID, record.Version); !isValidation(err) {
+		t.Fatal("type with a subtype deleted", err)
+	}
+	attachOK(t, s, l.ID, invoice.ID, false)
+	if err = s.DeleteContentType(testContext, "alice", invoice.ID, invoice.Version); !isValidation(err) {
+		t.Fatal("type a list uses deleted", err)
+	}
+	unused, err := s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "unused", Name: "Unused", ParentID: record.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.DeleteContentType(testContext, "alice", unused.ID, unused.Version+1); !errors.Is(err, ErrPreconditionFailed) {
+		t.Fatal("stale version", err)
+	}
+	if err = s.DeleteContentType(testContext, "alice", unused.ID, unused.Version); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.GetContentType(testContext, "alice", unused.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatal("deleted type still read", err)
+	}
+	// Its key is free again.
+	if _, err = s.CreateContentType(testContext, "alice", ContentTypeInput{Key: "unused", Name: "Again"}); err != nil {
+		t.Fatal(err)
 	}
 }

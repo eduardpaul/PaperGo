@@ -11,6 +11,13 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface ContentTypesItemRequestBuilder extends BaseRequestBuilder<ContentTypesItemRequestBuilder> {
     /**
+     * Requires the content type ETag. Only a catalog type with no subtypes and no list types, attached or kept for item history, can be deleted; the root Item type never can. Workflow triggers and smart folders that name it then match nothing.
+     * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+     * @throws {Problem} error when the service returns a 412 status code
+     * @throws {Problem} error when the service returns a 4XX or 5XX status code
+     */
+     delete(requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<void>;
+    /**
      * Organization catalog type; list types are read through their collection. Module scope applies independently of workspace ACLs.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<ContentType>}
@@ -26,6 +33,12 @@ export interface ContentTypesItemRequestBuilder extends BaseRequestBuilder<Conte
      * @throws {Problem} error when the service returns a 4XX or 5XX status code
      */
      put(body: ContentTypeInput, requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<ContentType | undefined>;
+    /**
+     * Requires the content type ETag. Only a catalog type with no subtypes and no list types, attached or kept for item history, can be deleted; the root Item type never can. Workflow triggers and smart folders that name it then match nothing.
+     * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+     * @returns {RequestInformation}
+     */
+     toDeleteRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined) : RequestInformation;
     /**
      * Organization catalog type; list types are read through their collection. Module scope applies independently of workspace ACLs.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
@@ -48,6 +61,15 @@ export const ContentTypesItemRequestBuilderUriTemplate = "{+baseurl}/v1/content-
  * Metadata for all the requests in the request builder.
  */
 export const ContentTypesItemRequestBuilderRequestsMetadata: RequestsMetadata = {
+    delete: {
+        uriTemplate: ContentTypesItemRequestBuilderUriTemplate,
+        responseBodyContentType: "application/problem+json",
+        errorMappings: {
+            412: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+            XXX: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+        },
+        adapterMethodName: "sendNoResponseContent",
+    },
     get: {
         uriTemplate: ContentTypesItemRequestBuilderUriTemplate,
         responseBodyContentType: "application/json",

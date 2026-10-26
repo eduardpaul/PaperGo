@@ -5263,6 +5263,37 @@
           "contentType.manage"
         ],
         "description": "Organization catalog type. Module scope applies independently of workspace ACLs. Updates reach every subtype and every list type deriving from it, and advance every affected collection atomically."
+      },
+      "delete": {
+        "operationId": "deleteContentType",
+        "summary": "Delete an unused catalog type (manage required)",
+        "description": "Requires the content type ETag. Only a catalog type with no subtypes and no list types, attached or kept for item history, can be deleted; the root Item type never can. Workflow triggers and smart folders that name it then match nothing.",
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412.",
+            "schema": {
+              "type": "string",
+              "pattern": "^\"[1-9][0-9]*\"$"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Content type deleted"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "contentType.manage"
+        ]
       }
     },
     "/v1/smart-folders": {

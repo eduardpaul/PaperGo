@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseJSON, stringifyJSON } from '@/api/json';
@@ -41,8 +41,8 @@ const collection: Resource = { id: 'collection', workspace_id: 'workspace', kind
 
 function catalogAPI(scopes: string[], listType: ContentType, onWrite?: (path: string, body: Record<string, unknown>) => void, catalog: ContentType[] = [item, record]) {
   mockAPI((url, init) => {
-    if (init.method === 'PUT' || init.method === 'POST') {
-      onWrite?.(url.pathname, parseJSON(String(init.body)) as Record<string, unknown>);
+    if (init.method === 'PUT' || init.method === 'POST' || init.method === 'DELETE') {
+      onWrite?.(url.pathname, init.body ? (parseJSON(String(init.body)) as Record<string, unknown>) : { method: init.method, ifMatch: new Headers(init.headers).get('If-Match') });
       return listType;
     }
     if (url.pathname === '/v1/identity/me') return { subject: 'alice', scopes };
@@ -116,5 +116,18 @@ describe('content type administration', () => {
     const parent = (await screen.findByLabelText('Derives from')) as HTMLSelectElement;
     expect(parent.value).toBe('level-6');
     expect(parent.selectedOptions[0].textContent).toBe('Item › Level 1 › Level 2 › Level 3 › Level 4 › Level 5 › Level 6');
+  });
+
+  it('deletes a catalog type at its version', async () => {
+    let deleted: Record<string, unknown> | undefined;
+    catalogAPI(['contentType.read', 'contentType.manage'], record, (path, body) => path === '/v1/content-types/record' && (deleted = body));
+    renderPage(<ContentTypeCatalog />);
+    const rows = within((await screen.findByRole('heading', { name: 'Content types' })).closest('[aria-labelledby]') as HTMLElement);
+    await rows.findByText('Record');
+    // The root Item type offers no delete.
+    expect(rows.getAllByRole('button', { name: 'Delete' })).toHaveLength(1);
+    fireEvent.click(rows.getByRole('button', { name: 'Delete' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete content type' }));
+    await waitFor(() => expect(deleted).toEqual({ method: 'DELETE', ifMatch: '"1"' }));
   });
 });

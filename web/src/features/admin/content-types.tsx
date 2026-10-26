@@ -35,6 +35,15 @@ export function ContentTypeCatalog() {
   const fields = useQuery({ ...catalogFieldsQuery, enabled: canRead });
   const [type, setType] = useState<ContentType | 'new'>();
   const [field, setField] = useState<FieldDefinition | 'new'>();
+  const [deleting, setDeleting] = useState<ContentType>();
+  const client = useQueryClient();
+  const remove = useMutation({
+    mutationFn: (type: ContentType) => api(`/v1/content-types/${type.id}`, { method: 'DELETE', ifMatch: type.version }),
+    onSuccess: async () => {
+      setDeleting(undefined);
+      await client.invalidateQueries({ queryKey: ['catalog'] });
+    },
+  });
   if (!canRead) return <p>You need contentType.read to view this catalog.</p>;
   return (
     <div className="grid gap-5">
@@ -55,6 +64,11 @@ export function ContentTypeCatalog() {
                 </span>
               </span>
               <Button onClick={() => setType(type)}>{canManage ? 'Edit' : 'View'}</Button>
+              {canManage && type.parent_id && (
+                <Button variant="ghost" onClick={() => setDeleting(type)}>
+                  Delete
+                </Button>
+              )}
             </li>
           ))}
         </ul>
@@ -83,6 +97,16 @@ export function ContentTypeCatalog() {
           onClose={() => setField(undefined)}
         />
       )}
+      <ConfirmDialog
+        open={!!deleting}
+        onOpenChange={(open) => !open && setDeleting(undefined)}
+        title={`Delete content type ${deleting?.name ?? ''}?`}
+        description="Only a type without subtypes that no list or library uses, now or in its items' history, can be deleted. Workflow rules and smart folders that name it stop matching."
+        confirm="Delete content type"
+        busy={remove.isPending}
+        error={remove.error}
+        onConfirm={() => deleting && remove.mutate(deleting)}
+      />
     </div>
   );
 }

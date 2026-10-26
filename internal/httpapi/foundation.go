@@ -150,6 +150,17 @@ func (a *API) registerFoundation(m *router) {
 	m.HandleFunc("PUT /v1/content-types/{id}", foundationMutation(a, 200, true, func(r *http.Request, in dms.ContentTypeInput, v int) (any, error) {
 		return a.dms(r).UpdateContentType(r.Context(), subject(r), r.PathValue("id"), v, in)
 	}))
+	m.HandleFunc("DELETE /v1/content-types/{id}", func(w http.ResponseWriter, r *http.Request) {
+		v, ok := a.version(w, r)
+		if !ok {
+			return
+		}
+		if err := a.dms(r).DeleteContentType(r.Context(), subject(r), r.PathValue("id"), v); err != nil {
+			a.failure(w, r, err)
+			return
+		}
+		w.WriteHeader(204)
+	})
 	m.HandleFunc("DELETE /v1/resources/{id}/fields/{fieldID}", func(w http.ResponseWriter, r *http.Request) {
 		v, ok := a.version(w, r)
 		if !ok {
