@@ -75,10 +75,6 @@ func (s *Service) MoveItem(ctx context.Context, subject, id string, version int,
 		if e != nil {
 			return e
 		}
-		before, e := json.Marshal(r.Values)
-		if e != nil {
-			return e
-		}
 		// Revalidate every value and reference against the destination schema;
 		// stale references cannot use the ordinary unchanged-value exception.
 		if e = t.normalizeItemValues(ctx, subject, defs, r.Values, nil, true); e != nil {
@@ -136,19 +132,7 @@ func (s *Service) MoveItem(ctx context.Context, subject, id string, version int,
 				return e
 			}
 		}
-		details := map[string]any{"from_workspace_id": oldWorkspace, "from_collection_id": oldContainer, "from_parent_id": oldParent, "collection_id": dest.ID, "parent_id": parent}
-		if string(before) == string(after) {
-			details["revision_id"] = *out.HeadRevisionID
-			rev, e := t.revision(ctx, *out.HeadRevisionID)
-			if e != nil {
-				return e
-			}
-			details["revision_number"], details["content_type_id"] = rev.RevisionNumber, rev.ContentTypeID
-			if rev.BlobID != nil {
-				details["blob_id"] = *rev.BlobID
-			}
-			t.emit(ctx, EventItemUpdated, subject, out.WorkspaceID, out.ContainerID, id, details)
-		}
+		details := map[string]any{"from_workspace_id": oldWorkspace, "from_collection_id": oldContainer, "from_parent_id": oldParent, "collection_id": dest.ID, "parent_id": parent, "revision_id": *out.HeadRevisionID}
 		if e = t.audit(ctx, subject, "resource.move", out, details); e != nil {
 			return e
 		}

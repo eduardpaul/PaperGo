@@ -9,6 +9,7 @@ import (
 	"slices"
 	"testing"
 
+	eventstore "papergo/internal/dal/events"
 	"papergo/internal/dal/grants"
 )
 
@@ -111,6 +112,11 @@ func TestMoveItemAcrossWorkspacesPreservesContentAndResetsACL(t *testing.T) {
 	}
 	dest := moveDestination(t, s, other.ID, "library", *item.ContentTypeID)
 	head, published, versions := *item.HeadRevisionID, *item.PublishedRevisionID, revisionCount(t, s, item.ID)
+	updates := eventstore.Filter{Types: []string{EventItemUpdated}, ResourceID: item.ID}
+	updated, err := s.DAL.Events().Count(testContext, updates)
+	if err != nil {
+		t.Fatal(err)
+	}
 	out, err := s.MoveItem(testContext, "alice", item.ID, item.Version, MoveItem{CollectionID: dest.ID})
 	if err != nil {
 		t.Fatal(err)
@@ -125,6 +131,9 @@ func TestMoveItemAcrossWorkspacesPreservesContentAndResetsACL(t *testing.T) {
 	}
 	if rev, err := s.revision(testContext, *out.HeadRevisionID); err != nil || rev.ContentTypeID != *out.ContentTypeID {
 		t.Fatal("head revision keeps the source type", rev, err)
+	}
+	if after, err := s.DAL.Events().Count(testContext, updates); err != nil || after != updated+1 {
+		t.Fatal("a move announces its revision once", updated, after, err)
 	}
 	if run, err := s.DAL.Runs().Find(testContext, "run"); err != nil || run.WorkspaceID != other.ID {
 		t.Fatal("run location not moved", run, err)
