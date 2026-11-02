@@ -162,6 +162,9 @@ single-choice facets consistent with resource mutations:
 - Purge deletes descendants before ancestors, updates counts and emits item
   deletion notifications in the same transaction.
 - Revision allocation advances the resource head, values and history atomically.
+  An item's or folder's name, keywords, content type and values are its
+  content: `Change` refuses them, and `ChangeRevised` writes them with the
+  revision that records them in one update of the resource.
   New revisions, publications and surface projections reject tombstones.
 
 Keyword resolution follows merged IDs to an active, eligible canonical term,
@@ -268,3 +271,24 @@ runs them as CI does.
 Tests seed and inspect rows through `daltest` (`Insert`, `Count`, `Values`,
 `Update`, `Delete`, `Reject`), which run on either engine; tests outside DAL
 issue no SQL of their own.
+
+### Write cost
+
+`daltest.NewWriteMeter` opens a handle on a test database that counts every
+statement and the rows each write changed, by table. Between `Start` and
+`Stop` it also reads the engine's own account: on PostgreSQL the WAL bytes
+the cluster wrote and each table's tuple counters, including how many
+updates were HOT; on SQLite the pages its WAL received. `dms.TestWriteCost`
+measures creating document library items, editing one field and editing
+behind a backlog of queued events with it. It runs only when
+`PAPERGO_WRITE_COST` names a file to append its report to:
+
+```sh
+PAPERGO_WRITE_COST=cost.md go test ./internal/dms -run '^TestWriteCost$' -count=1
+PAPERGO_WRITE_COST=cost.md PAPERGO_TEST_POSTGRES_DSN=$(bash scripts/postgres.sh dsn) \
+  go test ./internal/dms -run '^TestWriteCost$' -count=1
+```
+
+PostgreSQL's WAL is the cluster's, so measure on a server no other suite
+uses, with `full_page_writes` and `autovacuum` off: full-page images after a
+checkpoint and background vacuums would otherwise vary between runs.

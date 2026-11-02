@@ -192,9 +192,8 @@ WHERE `+scope+`
 AND NOT EXISTS (SELECT 1 FROM resources r WHERE r.head_revision_id = v.id OR r.published_revision_id = v.id)
 AND NOT EXISTS (SELECT 1 FROM item_surfaces p WHERE p.revision_id = v.id)
 AND NOT EXISTS (SELECT 1 FROM item_histories h WHERE h.revision_id = v.id)
-AND NOT EXISTS (SELECT 1 FROM domain_events e JOIN item_revisions event_revision
- ON event_revision.id = e.data->>'revision_id'
- WHERE e.dispatched_at IS NULL AND event_revision.item_id = v.item_id
- AND (event_revision.id = v.id OR event_revision.revision_number = v.revision_number + 1))`, args...)
+AND NOT EXISTS (SELECT 1 FROM domain_events e WHERE e.data->>'revision_id' = v.id AND e.dispatched_at IS NULL)
+AND NOT EXISTS (SELECT 1 FROM item_revisions n JOIN domain_events e ON e.data->>'revision_id' = n.id AND e.dispatched_at IS NULL
+ WHERE n.item_id = v.item_id AND n.revision_number = v.revision_number + 1)`, args...)
 	return dberr.Translate(err)
 }

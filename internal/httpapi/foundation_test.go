@@ -17,7 +17,7 @@ func TestRESTExactValuesAndSchemaRoutes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	l, err := s.Create(ctx, "alice", w.ID, dms.CreateResource{Versioning: historyMode("major"), Kind: "list", Name: "Records"})
+	l, err := s.Create(ctx, "alice", w.ID, dms.CreateResource{Versioning: historyMode("major"), Kind: "list", Name: "Records", PublishingEnabled: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,6 +32,10 @@ func TestRESTExactValuesAndSchemaRoutes(t *testing.T) {
 	}
 	var item resources.Resource
 	if err = json.Unmarshal(response.Body.Bytes(), &item); err != nil {
+		t.Fatal(err)
+	}
+	// The publication records its snapshot with the exact values.
+	if _, err = s.Publish(ctx, "alice", item.ID, item.Version); err != nil {
 		t.Fatal(err)
 	}
 	for _, tc := range []struct {

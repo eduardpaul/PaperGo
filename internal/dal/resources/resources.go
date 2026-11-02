@@ -117,6 +117,15 @@ func (r Resource) Collection() bool { return r.Kind == refs.KindList || r.Kind =
 // Content reports whether r is a folder or item.
 func (r Resource) Content() bool { return r.Kind == refs.KindFolder || r.Kind == refs.KindItem }
 
+// ref is the reference state of the resource that other domains check.
+func (r Resource) ref() refs.Resource {
+	container := ""
+	if r.ContainerID != nil {
+		container = *r.ContainerID
+	}
+	return refs.Resource{Kind: r.Kind, WorkspaceID: r.WorkspaceID, ContainerID: container, Deleted: r.DeletedAt != nil, CreatedAt: r.CreatedAt, CreatedBy: r.CreatedBy}
+}
+
 // State selects resources by deletion.
 type State uint8
 

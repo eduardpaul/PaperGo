@@ -19,7 +19,6 @@ require (
 	github.com/kolesa-team/go-webp v1.0.5
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/robfig/cron/v3 v3.0.1
-	github.com/shopspring/decimal v1.5.0
 	github.com/stephenafamo/bob v0.50.0
 	github.com/stephenafamo/scan v0.9.0
 	github.com/teambition/rrule-go v1.8.2
@@ -116,6 +115,7 @@ require (
 	github.com/segmentio/asm v1.1.3 // indirect
 	github.com/segmentio/encoding v0.5.4 // indirect
 	github.com/shirou/gopsutil/v4 v4.25.5 // indirect
+	github.com/shopspring/decimal v1.5.0 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/spf13/cast v1.10.0 // indirect
 	github.com/stephenafamo/sqlparser v0.0.0-20260122161205-e324475bd1fc // indirect

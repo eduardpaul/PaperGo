@@ -285,7 +285,7 @@ The `data` for each event type:
 - `file.added` and `file.updated`: `filename`, `source`, `file_version`, `blob_id`, `content_type` (the file's media type), `size`, `revision_id`, `content_type_id`. `file.updated` also includes `previous_blob_id`. Metadata edits emit `item.updated` without a file event; content processors subscribe to the two file events.
 - `permissions.changed`: `resource_kind` (`item` or `folder`), `action`, `root_id` and `root_kind` (the resource whose ACL changed, that moved, or the workspace), `root_event_id`, and `previous_scope_id` / `current_scope_id` for `replace` and `move` (the permission scope the entry read through before and after). Membership actions add `member_subject`, `previous_role` and `role`; an empty role means no membership.
 - `folder.created` / `folder.updated`: `revision_id`, `revision_number`, `content_type_id` for a new name or keywords; `from_parent_id` and `parent_id` for a move
-- `item.published`: `revision_id`, `revision_number`, `publication_id`
+- `item.published`: `revision_id`, `revision_number`, and `publication_id` for an explicit publication
 - `item.unpublished`: `revision_id`
 - `schedule`: `workflow_id`, `occurrence`; item-associated schedules also include `surface` (`head` or `published`)
 - `manual`: `workflow_id`; form results are available as `ctx.trigger.input` and `run(ctx, input)`'s second argument

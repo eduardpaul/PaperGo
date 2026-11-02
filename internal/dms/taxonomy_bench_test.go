@@ -33,7 +33,8 @@ func newTaxonomyBench(b *testing.B) *taxonomyBench {
 		n = v
 	}
 	ctx := context.Background()
-	s := NewService(daltest.Database(b).SQL)
+	db := daltest.Database(b)
+	s := NewService(db.SQL)
 	w, err := s.Create(ctx, "alice", "", CreateResource{Kind: "workspace", Name: "Benchmark"})
 	if err != nil {
 		b.Fatal(err)
@@ -105,6 +106,7 @@ func newTaxonomyBench(b *testing.B) *taxonomyBench {
 			b.Fatal(err)
 		}
 	}
+	daltest.Analyze(b, db)
 	return &taxonomyBench{s: s, workspace: w.ID, list: l.ID, keywordRoot: keywordRoots[0], keywordLeaf: keywordLeaves[0],
 		placeRoot: placeRoots[0], placeLeaf: placeLeaves[0], keywordLeaves: keywordLeaves, placeLeaves: placeLeaves, placeRoots: placeRoots, placeMids: placeMids}
 }

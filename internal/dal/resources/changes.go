@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -189,8 +190,11 @@ func create(ctx context.Context, q Queries, n New) (*Resource, error) {
 	if err := q.InsertResource(ctx, row, n.Values); err != nil {
 		return nil, err
 	}
-	if err := q.TagResource(ctx, row.ID, keywords); err != nil {
-		return nil, err
+	// Items and folders keep their keywords on their surfaces.
+	if !row.Content() {
+		if err := q.TagResource(ctx, row.ID, keywords); err != nil {
+			return nil, err
+		}
 	}
 	if row.Content() {
 		if err := live.Notify(ctx, q, live.KindItem, row.ID, live.ActionCreated); err != nil {
@@ -246,7 +250,6 @@ type Changes struct {
 	AllowFolders, PublishingEnabled, WebdavEnabled      *bool
 	MaxVersions                                         *int
 	Keywords                                            *[]string
-	Values                                              json.RawMessage
 }
 
 // Change writes a new version of a live resource with its keyword
@@ -257,88 +260,154 @@ func (r *Repo) Change(ctx context.Context, id string, version int, actor string,
 		if err := q.LockWorkspace(ctx, id); err != nil {
 			return err
 		}
-		row, err := q.FindResource(ctx, id)
+		row, set, err := changeSet(ctx, q, id, version, actor, c, false)
 		if err != nil {
 			return err
-		}
-		if row.Version != version {
-			return dberr.ErrConcurrentUpdate
-		}
-		if row.DeletedAt != nil {
-			return fmt.Errorf("%w: deleted resources are retained", dberr.ErrImmutable)
-		}
-		content := row.Content()
-		if c.Description != nil && *c.Description != "" && content {
-			return fmt.Errorf("%w: descriptions belong to workspaces and collections", dberr.ErrCheckViolation)
-		}
-		if !row.Collection() && (c.AllowFolders != nil || c.Versioning != nil || c.MaxVersions != nil || c.PublishingEnabled != nil || c.DuplicatePolicy != nil) {
-			return fmt.Errorf("%w: collection settings require a collection", dberr.ErrCheckViolation)
-		}
-		if c.DefaultCurrency != nil && row.Kind != refs.KindWorkspace {
-			return fmt.Errorf("%w: default currency requires a workspace", dberr.ErrCheckViolation)
-		}
-		if c.WebdavEnabled != nil && row.Kind != refs.KindLibrary {
-			return fmt.Errorf("%w: WebDAV requires a library", dberr.ErrCheckViolation)
-		}
-		if c.Values != nil && !content {
-			return fmt.Errorf("%w: values require an item or folder", dberr.ErrCheckViolation)
-		}
-		if c.Versioning != nil && !c.Versioning.Valid() || c.DuplicatePolicy != nil && !c.DuplicatePolicy.Valid() {
-			return fmt.Errorf("%w: invalid collection setting", dberr.ErrCheckViolation)
-		}
-		moved := c.ParentID != nil && (row.ParentID == nil || *c.ParentID != *row.ParentID)
-		if moved {
-			container := ""
-			if row.ContainerID != nil {
-				container = *row.ContainerID
-			}
-			if err := move(ctx, q, row, *c.ParentID, container); err != nil {
-				return err
-			}
-		}
-		set := Set{Version: version + 1, UpdatedBy: &actor, Description: c.Description, AllowFolders: c.AllowFolders, Versioning: c.Versioning,
-			MaxVersions: c.MaxVersions, PublishingEnabled: c.PublishingEnabled, WebdavEnabled: c.WebdavEnabled, DefaultCurrency: c.DefaultCurrency,
-			DuplicatePolicy: c.DuplicatePolicy, Values: c.Values}
-		if c.Name != nil {
-			set.Name, set.NameKey = c.Name, ptr("")
-			if c.NameKey != nil {
-				set.NameKey = c.NameKey
-			}
-		}
-		if c.ContentTypeID != nil {
-			if !content || row.ContainerID == nil {
-				return fmt.Errorf("%w: content types belong to items and folders", dberr.ErrInvalidContainment)
-			}
-			accepted, err := catalog.Accepts(ctx, q, *row.ContainerID, *c.ContentTypeID)
-			if err != nil {
-				return err
-			}
-			if !accepted {
-				return fmt.Errorf("%w: the collection does not accept the content type", dberr.ErrInvalidReference)
-			}
-			set.ContentTypeID = c.ContentTypeID
-		}
-		if c.Keywords != nil {
-			ids, err := taxonomy.ResolveKeywords(ctx, q, *c.Keywords)
-			if err != nil {
-				return err
-			}
-			set.Keywords = &ids
-			if err := q.TagResource(ctx, id, ids); err != nil {
-				return err
-			}
 		}
 		if err := update(ctx, q, id, version, set); err != nil {
 			return err
 		}
-		if content {
+		if row.Content() {
 			return live.Notify(ctx, q, live.KindItem, id, live.ActionUpdated)
 		}
 		return nil
 	})
 }
 
-// update writes s to a resource at version, stamping it now.
+// ChangeRevised is Change of a live item or folder that also records rev as
+// its next revision and makes it the head, with the values it holds, in the
+// same write: the one way to change an item's or folder's content. publish
+// also makes it the published revision. The revision keeps the keywords the
+// change leaves the resource.
+func (r *Repo) ChangeRevised(ctx context.Context, id string, version int, actor string, c Changes, rev revisions.Revision, publish bool) (revisions.Revision, error) {
+	var out revisions.Revision
+	err := r.write(ctx, func(q Queries) error {
+		if err := q.LockWorkspace(ctx, id); err != nil {
+			return err
+		}
+		row, set, err := changeSet(ctx, q, id, version, actor, c, true)
+		if err != nil {
+			return err
+		}
+		if !row.Content() || rev.ItemID != id {
+			return fmt.Errorf("%w: a revision belongs to the item it changes", dberr.ErrInvalidReference)
+		}
+		rev.Keywords = row.Keywords
+		if set.Keywords != nil {
+			rev.Keywords = *set.Keywords
+		}
+		if out, err = recordHead(ctx, q, row, rev, publish, &set); err != nil {
+			return err
+		}
+		if err := update(ctx, q, id, version, set); err != nil {
+			return err
+		}
+		return live.Notify(ctx, q, live.KindItem, id, live.ActionUpdated)
+	})
+	return out, err
+}
+
+// recordHead records rev as row's next revision and adds to set what makes
+// it the head with the values it holds; publish also makes it the published
+// revision.
+func recordHead(ctx context.Context, q Queries, row Resource, rev revisions.Revision, publish bool, set *Set) (revisions.Revision, error) {
+	rev.RevisionNumber = row.NextRevisionNumber
+	out, err := revisions.RecordOf(ctx, q, row.ref(), rev)
+	if err != nil {
+		return revisions.Revision{}, err
+	}
+	set.HeadRevisionID, set.Values, set.NextRevisionNumber = &out.ID, out.Payload, ptr(row.NextRevisionNumber+1)
+	if publish {
+		set.PublishedRevisionID = &out.ID
+	}
+	return out, nil
+}
+
+// changeSet validates a change of the resource at version and returns it
+// with the settings to write, re-tagging a workspace's or collection's
+// keywords when they change. An item's or folder's name, keywords and
+// content type are its content, which only a change that records a revision
+// writes.
+func changeSet(ctx context.Context, q Queries, id string, version int, actor string, c Changes, revised bool) (Resource, Set, error) {
+	row, err := q.FindResource(ctx, id)
+	if err != nil {
+		return Resource{}, Set{}, err
+	}
+	if row.Version != version {
+		return Resource{}, Set{}, dberr.ErrConcurrentUpdate
+	}
+	if row.DeletedAt != nil {
+		return Resource{}, Set{}, fmt.Errorf("%w: deleted resources are retained", dberr.ErrImmutable)
+	}
+	content := row.Content()
+	if c.Description != nil && *c.Description != "" && content {
+		return Resource{}, Set{}, fmt.Errorf("%w: descriptions belong to workspaces and collections", dberr.ErrCheckViolation)
+	}
+	if !row.Collection() && (c.AllowFolders != nil || c.Versioning != nil || c.MaxVersions != nil || c.PublishingEnabled != nil || c.DuplicatePolicy != nil) {
+		return Resource{}, Set{}, fmt.Errorf("%w: collection settings require a collection", dberr.ErrCheckViolation)
+	}
+	if c.DefaultCurrency != nil && row.Kind != refs.KindWorkspace {
+		return Resource{}, Set{}, fmt.Errorf("%w: default currency requires a workspace", dberr.ErrCheckViolation)
+	}
+	if c.WebdavEnabled != nil && row.Kind != refs.KindLibrary {
+		return Resource{}, Set{}, fmt.Errorf("%w: WebDAV requires a library", dberr.ErrCheckViolation)
+	}
+	if content && !revised && (c.Name != nil || c.Keywords != nil || c.ContentTypeID != nil) {
+		return Resource{}, Set{}, fmt.Errorf("%w: an item's or folder's content changes with a revision", dberr.ErrCheckViolation)
+	}
+	if c.Versioning != nil && !c.Versioning.Valid() || c.DuplicatePolicy != nil && !c.DuplicatePolicy.Valid() {
+		return Resource{}, Set{}, fmt.Errorf("%w: invalid collection setting", dberr.ErrCheckViolation)
+	}
+	moved := c.ParentID != nil && (row.ParentID == nil || *c.ParentID != *row.ParentID)
+	if moved {
+		container := ""
+		if row.ContainerID != nil {
+			container = *row.ContainerID
+		}
+		if err := move(ctx, q, row, *c.ParentID, container); err != nil {
+			return Resource{}, Set{}, err
+		}
+	}
+	set := Set{Version: version + 1, UpdatedBy: &actor, Description: c.Description, AllowFolders: c.AllowFolders, Versioning: c.Versioning,
+		MaxVersions: c.MaxVersions, PublishingEnabled: c.PublishingEnabled, WebdavEnabled: c.WebdavEnabled, DefaultCurrency: c.DefaultCurrency,
+		DuplicatePolicy: c.DuplicatePolicy}
+	if c.Name != nil {
+		set.Name, set.NameKey = c.Name, ptr("")
+		if c.NameKey != nil {
+			set.NameKey = c.NameKey
+		}
+	}
+	if c.ContentTypeID != nil {
+		if !content || row.ContainerID == nil {
+			return Resource{}, Set{}, fmt.Errorf("%w: content types belong to items and folders", dberr.ErrInvalidContainment)
+		}
+		accepted, err := catalog.Accepts(ctx, q, *row.ContainerID, *c.ContentTypeID)
+		if err != nil {
+			return Resource{}, Set{}, err
+		}
+		if !accepted {
+			return Resource{}, Set{}, fmt.Errorf("%w: the collection does not accept the content type", dberr.ErrInvalidReference)
+		}
+		set.ContentTypeID = c.ContentTypeID
+	}
+	if c.Keywords != nil {
+		ids, err := taxonomy.ResolveKeywords(ctx, q, *c.Keywords)
+		if err != nil {
+			return Resource{}, Set{}, err
+		}
+		// An edit restates the keywords it keeps; only a change re-tags.
+		if !slices.Equal(ids, row.Keywords) {
+			set.Keywords = &ids
+			if !content {
+				if err := q.TagResource(ctx, id, ids); err != nil {
+					return Resource{}, Set{}, err
+				}
+			}
+		}
+	}
+	return row, set, nil
+}
+
 func update(ctx context.Context, q Queries, id string, version int, s Set) error {
 	s.UpdatedAt = now()
 	ok, err := q.UpdateResource(ctx, id, version, s)
@@ -668,7 +737,18 @@ func (r *Repo) Transfer(ctx context.Context, id, containerID, parentID, nameKey 
 
 // Revise records the next revision of a live item or folder, numbered
 // after its last one, and makes it the head with the values it holds.
-func (r *Repo) Revise(ctx context.Context, rev revisions.Revision, values json.RawMessage, actor string) (revisions.Revision, error) {
+func (r *Repo) Revise(ctx context.Context, rev revisions.Revision, actor string) (revisions.Revision, error) {
+	return r.revise(ctx, rev, actor, false)
+}
+
+// RevisePublished is Revise that also makes the revision the published one
+// in the same write, as an item of a collection without publishing and a
+// folder show their head at once.
+func (r *Repo) RevisePublished(ctx context.Context, rev revisions.Revision, actor string) (revisions.Revision, error) {
+	return r.revise(ctx, rev, actor, true)
+}
+
+func (r *Repo) revise(ctx context.Context, rev revisions.Revision, actor string, publish bool) (revisions.Revision, error) {
 	var out revisions.Revision
 	err := r.write(ctx, func(q Queries) error {
 		if err := q.LockWorkspace(ctx, rev.ItemID); err != nil {
@@ -678,11 +758,11 @@ func (r *Repo) Revise(ctx context.Context, rev revisions.Revision, values json.R
 		if err != nil {
 			return err
 		}
-		rev.RevisionNumber = row.NextRevisionNumber
-		if out, err = revisions.Record(ctx, q, rev); err != nil {
+		set := Set{UpdatedBy: &actor}
+		if out, err = recordHead(ctx, q, row, rev, publish, &set); err != nil {
 			return err
 		}
-		return update(ctx, q, rev.ItemID, 0, Set{HeadRevisionID: &out.ID, Values: values, UpdatedBy: &actor, NextRevisionNumber: ptr(row.NextRevisionNumber + 1)})
+		return update(ctx, q, rev.ItemID, 0, set)
 	})
 	return out, err
 }

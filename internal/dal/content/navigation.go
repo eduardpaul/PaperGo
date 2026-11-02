@@ -54,7 +54,7 @@ func (r *Repo) held(src TermSource) (string, []any) {
 		lineage = "TRUE"
 	}
 	if src.Field != nil {
-		return "SELECT e.id AS item,f.value_text AS term," + lineage + " AS lineage FROM eligible e JOIN field_values f ON f.surface_id=e.surface_id AND f.field_key=? AND f.field_type=?",
+		return "SELECT e.id AS item,f.value_text AS term," + lineage + " AS lineage FROM eligible e JOIN field_values f ON f.surface_id=e.surface_id AND f.field_key=? AND f.field_type=? AND " + termValues,
 			[]any{src.Field.Key, string(src.Field.Type)}
 	}
 	// Keyword field values count above as their field says, as keyword

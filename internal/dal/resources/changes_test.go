@@ -10,6 +10,7 @@ import (
 	"papergo/internal/dal/live"
 	"papergo/internal/dal/refs"
 	"papergo/internal/dal/resources"
+	"papergo/internal/dal/revisions"
 	"papergo/internal/dal/surfaces"
 	"testing"
 	"time"
@@ -85,25 +86,36 @@ func testResourceChanges(t *testing.T, s *dal.Store) {
 	}
 	name := "Changed"
 	words := []string{"finance"}
-	if err := s.Resources().Change(ctx, f.Item, original.Version, "alice", resources.Changes{Name: &name, Keywords: &words}); err != nil {
+	// An item's content changes only with the revision that records it.
+	if err := s.Resources().Change(ctx, f.Item, original.Version, "alice", resources.Changes{Name: &name, Keywords: &words}); !errors.Is(err, dberr.ErrCheckViolation) {
+		t.Fatalf("content change without a revision: %v", err)
+	}
+	rev := revisions.Revision{ItemID: f.Item, ContainerID: f.Source, ContentTypeID: f.SourceType, SchemaRevisionID: f.Schema, Name: name, CreatedBy: "alice"}
+	recorded, err := s.Resources().ChangeRevised(ctx, f.Item, original.Version, "alice", resources.Changes{Name: &name, Keywords: &words}, rev, false)
+	if err != nil {
 		t.Fatal(err)
 	}
 	changed, err := s.Resources().Resource(ctx, f.Item)
-	if err != nil || changed.Name != name || changed.Version != original.Version+1 {
-		t.Fatalf("resource change: %+v %v", changed, err)
+	if err != nil || changed.Name != name || changed.Version != original.Version+1 || daltest.Val(changed.HeadRevisionID) != recorded.ID ||
+		changed.NextRevisionNumber != original.NextRevisionNumber+1 || recorded.RevisionNumber != original.NextRevisionNumber {
+		t.Fatalf("resource change: %+v %+v %v", changed, recorded, err)
+	}
+	if len(recorded.Keywords) != 1 || len(changed.Keywords) != 1 || recorded.Keywords[0] != changed.Keywords[0] {
+		t.Fatalf("revision keywords %v, resource keywords %v", recorded.Keywords, changed.Keywords)
 	}
 	if len(changed.Keywords) != 1 {
 		t.Fatalf("keywords not resolved: %+v", changed.Keywords)
 	}
-	if indexed := daltest.Count(t, s, "resource_keywords", daltest.Row{"resource_id": f.Item, "keyword": changed.Keywords[0]}); indexed != 1 {
-		t.Fatalf("keyword projection: %d", indexed)
+	// An item's keywords are projected on its surfaces, not on the resource.
+	if indexed := daltest.Count(t, s, "resource_keywords", daltest.Row{"resource_id": f.Item}); indexed != 0 {
+		t.Fatalf("item keyword projection: %d", indexed)
 	}
 	stale := "stale"
 	if err := s.Resources().Change(ctx, f.Item, original.Version, "alice", resources.Changes{Name: &stale}); !errors.Is(err, dberr.ErrConcurrentUpdate) {
 		t.Fatalf("stale writer: %v", err)
 	}
 	invalidParent := f.Workspace
-	if err := s.Resources().Change(ctx, f.Item, changed.Version, "alice", resources.Changes{Name: &stale, ParentID: &invalidParent}); !errors.Is(err, dberr.ErrInvalidContainment) {
+	if err := s.Resources().Change(ctx, f.Item, changed.Version, "alice", resources.Changes{ParentID: &invalidParent}); !errors.Is(err, dberr.ErrInvalidContainment) {
 		t.Fatalf("invalid move: %v", err)
 	}
 	retained, err := s.Resources().Resource(ctx, f.Item)

@@ -25,12 +25,12 @@ func testRevisions(t *testing.T, s *dal.Store) {
 	base := revisions.Revision{ItemID: f.Item, ContainerID: f.Source, ContentTypeID: f.SourceType, SchemaRevisionID: f.Schema, Name: "Item", CreatedBy: "alice"}
 	other := base
 	other.ContentTypeID = "missing"
-	if _, err := s.Resources().Revise(ctx, other, nil, "alice"); !errors.Is(err, dberr.ErrInvalidReference) {
+	if _, err := s.Resources().Revise(ctx, other, "alice"); !errors.Is(err, dberr.ErrInvalidReference) {
 		t.Fatalf("revision outside its schema: %v", err)
 	}
 	other = base
 	other.ContainerID = f.Destination
-	if _, err := s.Resources().Revise(ctx, other, nil, "alice"); !errors.Is(err, dberr.ErrInvalidReference) {
+	if _, err := s.Resources().Revise(ctx, other, "alice"); !errors.Is(err, dberr.ErrInvalidReference) {
 		t.Fatalf("revision in another collection: %v", err)
 	}
 	file, err := s.Blobs().AddBlob(ctx, blobs.Blob{ItemID: f.Item, ObjectKey: "object", Filename: "a.pdf", ContentType: blobs.MediaPDF, Sha256: strings.Repeat("e", 64), Size: 3})
@@ -39,7 +39,7 @@ func testRevisions(t *testing.T, s *dal.Store) {
 	}
 	second := base
 	second.RevisionNumber, second.BlobID, second.Filename, second.Payload = 2, &file.ID, "a.pdf", json.RawMessage(`{"amount": 3}`)
-	recorded, err := s.Resources().Revise(ctx, second, nil, "alice")
+	recorded, err := s.Resources().Revise(ctx, second, "alice")
 	if err != nil || recorded.Keywords == nil || recorded.ID == "" {
 		t.Fatalf("record: %+v %v", recorded, err)
 	}
@@ -55,7 +55,7 @@ func testRevisions(t *testing.T, s *dal.Store) {
 	for number := 3; number <= 5; number++ {
 		next := base
 		next.RevisionNumber = number
-		rev, err := s.Resources().Revise(ctx, next, nil, "alice")
+		rev, err := s.Resources().Revise(ctx, next, "alice")
 		if err != nil {
 			t.Fatal(err)
 		}

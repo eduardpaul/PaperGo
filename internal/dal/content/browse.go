@@ -240,7 +240,7 @@ func (r *Repo) BrowseIDs(ctx context.Context, b Browse) ([]string, error) {
 		// Holders of a descendant apply the keyword when they apply parents.
 		family := r.family()
 		candidates = append(candidates, candidate{
-			"SELECT resource_id AS id FROM resource_keywords WHERE keyword IN (" + family + ") UNION ALL SELECT p.item_id FROM item_surface_keywords k JOIN item_surfaces p ON p.id=k.surface_id WHERE k.keyword IN (" + family + ") UNION ALL SELECT item_id FROM field_values WHERE field_type IN ('keywords','term') AND value_text IN (" + family + ")",
+			"SELECT resource_id AS id FROM resource_keywords WHERE keyword IN (" + family + ") UNION ALL SELECT p.item_id FROM item_surface_keywords k JOIN item_surfaces p ON p.id=k.surface_id WHERE k.keyword IN (" + family + ") UNION ALL SELECT item_id FROM field_values WHERE field_type IN ('term','keywords') AND value_text IN (" + family + ")",
 			[]any{b.Keyword, b.Keyword, b.Keyword, b.Keyword, b.Keyword, b.Keyword},
 		})
 	}

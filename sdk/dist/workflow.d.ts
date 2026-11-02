@@ -8824,7 +8824,7 @@ export interface PublicationsRequestBuilder extends BaseRequestBuilder<Publicati
 	 */
 	all(requestConfiguration?: RequestConfiguration<PublicationsRequestBuilderGetQueryParameters> | undefined): Promise<NonNullable<PublicationsGetResponse["value"]>>;
 	/**
-	 * Draft readers see lifecycle history. Ordinary readers see publish events for the current published revision only. Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
+	 * Explicit publish and unpublish events of a collection with publishing; a collection without publishing shows each save at once and records none. Draft readers see lifecycle history. Ordinary readers see publish events for the current published revision only. Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<PublicationsGetResponse>}
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
@@ -8839,7 +8839,7 @@ export interface PublicationsRequestBuilder extends BaseRequestBuilder<Publicati
 	 */
 	post(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Publication | undefined>;
 	/**
-	 * Draft readers see lifecycle history. Ordinary readers see publish events for the current published revision only. Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
+	 * Explicit publish and unpublish events of a collection with publishing; a collection without publishing shows each save at once and records none. Draft readers see lifecycle history. Ordinary readers see publish events for the current published revision only. Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -8852,7 +8852,7 @@ export interface PublicationsRequestBuilder extends BaseRequestBuilder<Publicati
 	toPostRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 }
 /**
- * Draft readers see lifecycle history. Ordinary readers see publish events for the current published revision only. Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
+ * Explicit publish and unpublish events of a collection with publishing; a collection without publishing shows each save at once and records none. Draft readers see lifecycle history. Ordinary readers see publish events for the current published revision only. Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
  */
 export interface PublicationsRequestBuilderGetQueryParameters {
 	/**

@@ -85,6 +85,7 @@ func benchCollection(b *testing.B) (*Service, string, string, string) {
 			}
 		}
 	}
+	daltest.Analyze(b, db)
 	return s, path, l.ID, field
 }
 

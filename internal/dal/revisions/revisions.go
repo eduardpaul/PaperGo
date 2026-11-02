@@ -169,6 +169,11 @@ func Record(ctx context.Context, q Queries, rev Revision) (Revision, error) {
 	if err != nil {
 		return Revision{}, err
 	}
+	return RecordOf(ctx, q, item, rev)
+}
+
+// RecordOf is Record for a caller that has read the item.
+func RecordOf(ctx context.Context, q Queries, item refs.Resource, rev Revision) (Revision, error) {
 	if item.Kind != refs.KindItem && item.Kind != refs.KindFolder {
 		return Revision{}, fmt.Errorf("%w: revisions belong to items and folders", dberr.ErrInvalidContainment)
 	}

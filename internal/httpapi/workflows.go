@@ -41,7 +41,7 @@ func (a *API) registerWorkflows(api *router) {
 var triggerTypes = []map[string]string{
 	{"type": dms.EventItemCreated, "description": "An item was created; data has revision_id, revision_number, content_type_id and blob_id. terms and term_change limit it to revisions that hold, gain or lose terms."},
 	{"type": dms.EventItemUpdated, "description": "An item's content changed (a new head revision); data as for item.created. terms and term_change as for item.created."},
-	{"type": dms.EventItemPublished, "description": "An item revision was published; data has revision_id, revision_number and publication_id. terms and term_change as for item.created."},
+	{"type": dms.EventItemPublished, "description": "An item revision was published; data has revision_id and revision_number, and publication_id when the publication was explicit. terms and term_change as for item.created."},
 	{"type": dms.EventItemUnpublished, "description": "An item was unpublished; data has revision_id."},
 	{"type": dms.EventItemDeleted, "description": "An item was deleted, alone or with its folder; the run has no item."},
 	{"type": dms.EventFolderCreated, "description": "A folder was created; data has revision_id, revision_number and content_type_id, and the run has the folder as its item."},

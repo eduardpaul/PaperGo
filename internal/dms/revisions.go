@@ -135,7 +135,38 @@ func (s *Service) revision(ctx context.Context, id string) (*revisions.Revision,
 	return &rev, nil
 }
 
+// revisionDraft is a validated revision of an item or folder, ready to store.
+type revisionDraft struct {
+	collection *resources.Resource
+	rev        revisions.Revision
+	defs       []*catalog.FieldDefinition
+	previous   *revisions.Revision
+	newBlobID  *string
+	// publish stores the revision as the published one as well: a folder's
+	// always is, and so is an item's in a collection without publishing.
+	publish bool
+}
+
+// recordRevision stores r's next revision from its current content and
+// projects it.
 func (s *Service) recordRevision(ctx context.Context, actor string, r *resources.Resource, newBlobID *string, carry bool) (*revisions.Revision, error) {
+	d, err := s.draftRevision(ctx, actor, r, newBlobID, carry)
+	if err != nil {
+		return nil, err
+	}
+	store := s.DAL.Resources().Revise
+	if d.publish {
+		store = s.DAL.Resources().RevisePublished
+	}
+	recorded, err := store(ctx, d.rev, actor)
+	if err != nil {
+		return nil, err
+	}
+	return s.projectRevision(ctx, actor, r, d, recorded)
+}
+
+// draftRevision validates and normalizes r's content as its next revision.
+func (s *Service) draftRevision(ctx context.Context, actor string, r *resources.Resource, newBlobID *string, carry bool) (*revisionDraft, error) {
 	if r.ContainerID == nil {
 		return nil, invalid("item has no container")
 	}
@@ -226,21 +257,26 @@ func (s *Service) recordRevision(ctx context.Context, actor string, r *resources
 			return nil, invalid("invalid attachment filename")
 		}
 	}
-	values, err := json.Marshal(r.Values)
-	if err != nil {
-		return nil, err
-	}
-	recorded, err := s.DAL.Resources().Revise(ctx, revisions.Revision{Filename: filename, ItemID: r.ID, ContainerID: c.ID, ContentTypeID: *r.ContentTypeID,
-		SchemaRevisionID: schema.ID, Name: r.Name, Keywords: r.Keywords, Payload: raw, CreatedBy: actor, BlobID: blobID}, values, actor)
-	if err != nil {
-		return nil, err
-	}
+	rev := revisions.Revision{Filename: filename, ItemID: r.ID, ContainerID: c.ID, ContentTypeID: *r.ContentTypeID,
+		SchemaRevisionID: schema.ID, Name: r.Name, Keywords: r.Keywords, Payload: raw, CreatedBy: actor, BlobID: blobID}
+	return &revisionDraft{collection: c, rev: rev, defs: defs, previous: previousRevision, newBlobID: newBlobID,
+		publish: r.Kind == refs.KindFolder || !c.PublishingEnabled}, nil
+}
+
+// projectRevision projects a stored revision, publishes it where the
+// collection publishes on save, and keeps its history.
+func (s *Service) projectRevision(ctx context.Context, actor string, r *resources.Resource, d *revisionDraft, recorded revisions.Revision) (*revisions.Revision, error) {
+	c, defs, previousRevision, newBlobID := d.collection, d.defs, d.previous, d.newBlobID
+	var err error
 	rev := &recorded
 	if err = s.recordIntegrationData(ctx, rev, previousRevision); err != nil {
 		return nil, err
 	}
 	r.HeadRevisionID = &rev.ID
 	r.NextRevisionNumber = rev.RevisionNumber + 1
+	if d.publish {
+		r.PublishedRevisionID = &rev.ID
+	}
 	// Without publishing, head and published content are one, kept only as the
 	// published surface: written once below, indexed once.
 	if c.PublishingEnabled {
@@ -254,10 +290,7 @@ func (s *Service) recordRevision(ctx context.Context, actor string, r *resources
 		if err = s.replaceSurface(ctx, r, rev, refs.SurfacePublished, defs); err != nil {
 			return nil, err
 		}
-		err = s.DAL.Resources().SetPublished(ctx, r.ID, rev.ID, false)
-		if err == nil {
-			err = s.collectRevisions(ctx, r.ID)
-		}
+		err = s.collectRevisions(ctx, r.ID)
 		typ := EventFolderUpdated
 		if rev.RevisionNumber == 1 {
 			typ = EventFolderCreated
@@ -391,8 +424,10 @@ func fieldValueRows(payload json.RawMessage, defs []*catalog.FieldDefinition) ([
 	return rows, nil
 }
 
-// publishRevision reuses schema revisions from schemas, which may be nil, and
-// adds the ones it loads.
+// publishRevision shows rev on the published surface. An explicit
+// publication is recorded and returned; publishing on save returns nil. It
+// reuses schema revisions from schemas, which may be nil, and adds the ones
+// it loads.
 func (s *Service) publishRevision(ctx context.Context, actor string, r *resources.Resource, rev *revisions.Revision, explicit bool, schemas map[string]*catalog.SchemaRevision) (*revisions.Publication, error) {
 	if explicit && r.PublishedRevisionID != nil && *r.PublishedRevisionID == rev.ID {
 		return nil, ErrConflict
@@ -414,24 +449,35 @@ func (s *Service) publishRevision(ctx context.Context, actor string, r *resource
 	if err = s.replaceSurface(ctx, r, rev, refs.SurfacePublished, defs); err != nil {
 		return nil, err
 	}
-	snapshot := map[string]any{"id": r.ID, "name": rev.Name, "keywords": rev.Keywords, "values": rev.Payload, "revision_id": rev.ID, "revision_number": rev.RevisionNumber, "schema_revision_id": rev.SchemaRevisionID, "filename": rev.Filename}
-	if rev.BlobID != nil {
-		snapshot["blob_id"] = *rev.BlobID
+	// Only an explicit publication is recorded with its snapshot. Without
+	// publishing every save shows the head at once, and its history is the
+	// item's own.
+	var event *revisions.Publication
+	data := map[string]any{"revision_id": rev.ID, "revision_number": rev.RevisionNumber}
+	if explicit {
+		snapshot := map[string]any{"id": r.ID, "name": rev.Name, "keywords": rev.Keywords, "values": rev.Payload, "revision_id": rev.ID, "revision_number": rev.RevisionNumber, "schema_revision_id": rev.SchemaRevisionID, "filename": rev.Filename}
+		if rev.BlobID != nil {
+			snapshot["blob_id"] = *rev.BlobID
+		}
+		raw, err := json.Marshal(snapshot)
+		if err != nil {
+			return nil, err
+		}
+		published, err := s.DAL.Revisions().Publish(ctx, revisions.Publication{ItemID: r.ID, RevisionID: &rev.ID, Version: r.Version, Action: revisions.ActionPublish, PublishedBy: actor, Snapshot: raw})
+		if err != nil {
+			return nil, err
+		}
+		event = &published
+		data["publication_id"] = event.ID
 	}
-	raw, err := json.Marshal(snapshot)
-	if err != nil {
-		return nil, err
-	}
-	published, err := s.DAL.Revisions().Publish(ctx, revisions.Publication{ItemID: r.ID, RevisionID: &rev.ID, Version: r.Version, Action: revisions.ActionPublish, PublishedBy: actor, Snapshot: raw})
-	if err != nil {
-		return nil, err
-	}
-	event := &published
-	if err = s.DAL.Resources().SetPublished(ctx, r.ID, rev.ID, explicit); err != nil {
-		return nil, err
+	// A revision stored as published already points the item at itself.
+	if explicit || r.PublishedRevisionID == nil || *r.PublishedRevisionID != rev.ID {
+		if err = s.DAL.Resources().SetPublished(ctx, r.ID, rev.ID, explicit); err != nil {
+			return nil, err
+		}
 	}
 	r.PublishedRevisionID = &rev.ID
-	s.emit(ctx, EventItemPublished, actor, r.WorkspaceID, r.ContainerID, r.ID, map[string]any{"revision_id": rev.ID, "revision_number": rev.RevisionNumber, "publication_id": event.ID})
+	s.emit(ctx, EventItemPublished, actor, r.WorkspaceID, r.ContainerID, r.ID, data)
 	return event, nil
 }
 

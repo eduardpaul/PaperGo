@@ -109,6 +109,11 @@ func (r *Repo) seekPage(ctx context.Context, q *Query, after *Position, n int) (
 			// Ties use sk.item_id: the planner cannot use the index for p.item_id.
 			key, id = "sk."+string(col), "sk.item_id"
 			driver = "field_values sk " + r.d.OrderedJoin() + " item_surfaces p ON p.id=sk.surface_id " + r.d.OrderedJoin() + " resources r ON r.id=sk.item_id WHERE sk.container_id=? AND sk.surface=? AND sk.field_key=? AND sk.field_type=? AND sk.scale=? AND sk.ordinal=0"
+			// The integer and boolean value indexes are partial: naming the
+			// column's NOT NULL lets the planner scan the one that holds them.
+			if col != ValueText {
+				driver += " AND " + key + " IS NOT NULL"
+			}
 			driverArgs = []any{q.RankDef.Key, string(q.RankDef.Type), q.RankDef.Scale}
 		}
 		var seek string

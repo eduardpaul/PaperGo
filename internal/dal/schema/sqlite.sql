@@ -330,6 +330,8 @@ CREATE INDEX resource_container_id_deleted_at_id ON resources(container_id, dele
 CREATE UNIQUE INDEX resource_personal_owner_id ON resources(personal_owner_id) WHERE personal_owner_id IS NOT NULL;
 CREATE UNIQUE INDEX resource_workspace_id_system_key ON resources(workspace_id, system_key) WHERE system_key IS NOT NULL;
 
+-- The keywords of workspaces, lists and libraries. Items and folders keep
+-- theirs on their surfaces, in item_surface_keywords.
 CREATE TABLE resource_keywords (
     resource_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
     keyword TEXT NOT NULL REFERENCES terms(id) ON DELETE CASCADE,
@@ -485,7 +487,6 @@ CREATE TABLE field_values (
     ordinal INTEGER NOT NULL DEFAULT 0 CHECK (ordinal >= 0),
     value_text TEXT,
     value_integer INTEGER,
-    value_numeric NUMERIC,
     value_boolean BOOLEAN,
     -- applies_parents copies the immutable apply_parents option of a term
     -- or keywords field: its value also applies the term's ancestors.
@@ -494,25 +495,25 @@ CREATE TABLE field_values (
     CHECK (
         (CASE WHEN value_text IS NOT NULL THEN 1 ELSE 0 END) +
         (CASE WHEN value_integer IS NOT NULL THEN 1 ELSE 0 END) +
-        (CASE WHEN value_numeric IS NOT NULL THEN 1 ELSE 0 END) +
         (CASE WHEN value_boolean IS NOT NULL THEN 1 ELSE 0 END) = 1
     ),
     CHECK (
         (field_type IN ('text','note','email','url','date','lookup','person','term','keywords','choice','datetime') AND value_text IS NOT NULL)
         OR (field_type IN ('integer','decimal') AND value_integer IS NOT NULL AND typeof(value_integer) = 'integer')
-        OR (field_type IN ('number','currency') AND (
-            value_numeric IS NOT NULL
-            OR (value_text IS NOT NULL AND length(value_text) = 58 AND substr(value_text, 1, 1) IN ('0', '1') AND glob('*[^0-9]*', value_text) = 0)
-        ))
+        OR (field_type IN ('number','currency') AND value_text IS NOT NULL AND length(value_text) = 58 AND substr(value_text, 1, 1) IN ('0', '1') AND glob('*[^0-9]*', value_text) = 0)
         OR (field_type = 'boolean' AND value_boolean IS NOT NULL AND value_boolean IN (0, 1))
     )
 );
-CREATE INDEX fieldvalue_field_type_value_text_item_id ON field_values(field_type, value_text, item_id);
+-- The integer and boolean value indexes hold only the rows whose column
+-- they order. The text index, which most values enter, holds every row: a
+-- text sort then needs no NULL test, which PostgreSQL would estimate as if
+-- the field's values could be missing. Term values are also found by value
+-- alone.
+CREATE INDEX fieldvalue_field_type_value_text_item_id ON field_values(field_type, value_text, item_id) WHERE field_type IN ('term', 'keywords');
 CREATE UNIQUE INDEX fieldvalue_surface_id_field_key_ordinal ON field_values(surface_id, field_key, ordinal);
-CREATE INDEX fieldvalue_container_id_surface_field_key_value_integer_item_id ON field_values(container_id, surface, field_key, value_integer, item_id);
-CREATE INDEX fieldvalue_container_id_surface_field_key_value_numeric_item_id ON field_values(container_id, surface, field_key, value_numeric, item_id);
+CREATE INDEX fieldvalue_container_id_surface_field_key_value_integer_item_id ON field_values(container_id, surface, field_key, value_integer, item_id) WHERE value_integer IS NOT NULL;
 CREATE INDEX fieldvalue_container_id_surface_field_key_value_text_item_id ON field_values(container_id, surface, field_key, value_text, item_id);
-CREATE INDEX fieldvalue_container_id_surface_field_key_value_boolean_item_id ON field_values(container_id, surface, field_key, value_boolean, item_id);
+CREATE INDEX fieldvalue_container_id_surface_field_key_value_boolean_item_id ON field_values(container_id, surface, field_key, value_boolean, item_id) WHERE value_boolean IS NOT NULL;
 
 CREATE TABLE group_counts (
     container_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
@@ -855,6 +856,8 @@ CREATE TABLE domain_events (
 );
 CREATE INDEX domainevent_created_at_id ON domain_events(created_at, id) WHERE dispatched_at IS NULL;
 CREATE INDEX domainevent_dispatched_at ON domain_events(dispatched_at) WHERE dispatched_at IS NOT NULL;
+-- Revision collection keeps the revisions undispatched item events name.
+CREATE INDEX domainevent_revision_id ON domain_events(json_extract(data, '$.revision_id')) WHERE dispatched_at IS NULL;
 
 CREATE TABLE artifacts (
     id TEXT PRIMARY KEY NOT NULL,

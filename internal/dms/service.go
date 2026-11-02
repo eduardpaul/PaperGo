@@ -738,13 +738,22 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 			}
 			r.Values = patchValues(current, *in.Values)
 		}
-		raw, err := json.Marshal(r.Values)
-		if err != nil {
-			return nil, err
-		}
-		changes.Values = raw
 	}
-	if e = s.DAL.Resources().Change(ctx, id, version, subject, changes); e != nil {
+	// A content change of an item or folder is written with its next
+	// revision in one update; a move alone changes location, not content,
+	// so it records no revision.
+	var draft *revisionDraft
+	var recorded revisions.Revision
+	if contentKind(r.Kind) && content {
+		next := *r
+		if draft, e = s.draftRevision(ctx, subject, &next, nil, in.Values == nil); e != nil {
+			return nil, e
+		}
+		recorded, e = s.DAL.Resources().ChangeRevised(ctx, id, version, subject, changes, draft.rev, draft.publish)
+	} else {
+		e = s.DAL.Resources().Change(ctx, id, version, subject, changes)
+	}
+	if e != nil {
 		if errors.Is(e, dberr.ErrConcurrentUpdate) {
 			return nil, ErrPreconditionFailed
 		}
@@ -755,13 +764,10 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 		return nil, e
 	}
 	if contentKind(out.Kind) {
-		// A move alone changes location, not content, so it records no revision.
-		if content {
-			out.Values = r.Values
-			if _, e = s.recordRevision(ctx, subject, out, nil, in.Values == nil); e != nil {
-				return nil, e
-			}
-			if out, e = s.DAL.Resources().Resource(ctx, id); e != nil {
+		// The resource read above already holds the revision's pointers;
+		// projecting it writes no resource row.
+		if draft != nil {
+			if _, e = s.projectRevision(ctx, subject, out, draft, recorded); e != nil {
 				return nil, e
 			}
 		}

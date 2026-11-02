@@ -181,7 +181,9 @@ func deref(p *string) string {
 }
 
 // CollectRevisions filters by item in its own statement, so the engine seeks
-// the item's revisions instead of scanning them all on every write.
+// the item's revisions instead of scanning them all on every write. The
+// unary + drops the id column's TEXT affinity, which the expression index
+// on an event's revision_id lacks; with it SQLite would scan that index.
 func (q Queries) CollectRevisions(ctx context.Context, itemID string) error {
 	scope, args := "TRUE", []any{}
 	if itemID != "" {
@@ -192,9 +194,8 @@ WHERE `+scope+`
 AND NOT EXISTS (SELECT 1 FROM resources r WHERE r.head_revision_id = v.id OR r.published_revision_id = v.id)
 AND NOT EXISTS (SELECT 1 FROM item_surfaces p WHERE p.revision_id = v.id)
 AND NOT EXISTS (SELECT 1 FROM item_histories h WHERE h.revision_id = v.id)
-AND NOT EXISTS (SELECT 1 FROM domain_events e JOIN item_revisions event_revision
- ON event_revision.id = json_extract(e.data, '$.revision_id')
- WHERE e.dispatched_at IS NULL AND event_revision.item_id = v.item_id
- AND (event_revision.id = v.id OR event_revision.revision_number = v.revision_number + 1))`, args...)
+AND NOT EXISTS (SELECT 1 FROM domain_events e WHERE json_extract(e.data, '$.revision_id') = +v.id AND e.dispatched_at IS NULL)
+AND NOT EXISTS (SELECT 1 FROM item_revisions n JOIN domain_events e ON json_extract(e.data, '$.revision_id') = +n.id AND e.dispatched_at IS NULL
+ WHERE n.item_id = v.item_id AND n.revision_number = v.revision_number + 1)`, args...)
 	return dberr.Translate(err)
 }

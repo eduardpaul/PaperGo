@@ -338,10 +338,17 @@ func (r *Repo) condition(c *Condition) (string, []any) {
 	return "EXISTS (SELECT 1 FROM field_values f WHERE " + prefix + " AND " + compare + ")", append(args, c.Values...)
 }
 
+// termValues names the field types whose values the partial term value
+// index holds, in its own words, which both engines match.
+const termValues = "f.field_type IN ('term','keywords')"
+
 // termCondition matches term values. A value holding a merged term counts as
 // the term it was merged into; under also matches the descendants of a term,
 // and so does every comparison on a field whose values apply their parents.
 func (r *Repo) termCondition(c *Condition, prefix string, args []any) (string, []any) {
+	// The field's type is a parameter; naming the term types lets a generic
+	// plan use the partial index of term values, as a custom plan would.
+	prefix += " AND " + termValues
 	var set string
 	var bind []any
 	if c.Op == FilterUnder || c.Field.Def.Options.ApplyParents {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/shopspring/decimal"
 	_ "modernc.org/sqlite"
 	"papergo/internal/dal"
 	"papergo/internal/dal/blobs"
@@ -15,6 +14,7 @@ import (
 	"papergo/internal/dal/resources"
 	"papergo/internal/dal/revisions"
 	"papergo/internal/dal/surfaces"
+	"strings"
 	"testing"
 )
 
@@ -118,7 +118,8 @@ func TestRevisionsSurfacesDynamicQueryAndGroupCounts(t *testing.T) {
 
 		// Project onto head surface with choice and numeric field values
 		openVal := "open"
-		amtVal := decimal.NewFromFloat(1250.50)
+		// An exact number's index key: the sign digit, then 57 digits.
+		amtVal := "1" + strings.Repeat("0", 44) + "1250500000000"
 		if _, err := s.Surfaces().Project(ctx, surfaces.Projection{
 			ItemID:     item.ID,
 			Surface:    refs.SurfaceHead,
@@ -126,7 +127,7 @@ func TestRevisionsSurfacesDynamicQueryAndGroupCounts(t *testing.T) {
 			ModifiedBy: "u1",
 			Fields: []surfaces.FieldValue{
 				{FieldKey: "stage", FieldType: catalog.FieldChoice, ValueText: &openVal},
-				{FieldKey: "amount", FieldType: catalog.FieldCurrency, ValueNumeric: &amtVal},
+				{FieldKey: "amount", FieldType: catalog.FieldCurrency, ValueText: &amtVal},
 			},
 		}); err != nil {
 			t.Fatalf("Project: %v", err)

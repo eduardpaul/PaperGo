@@ -6,13 +6,15 @@
 package surfaces
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/shopspring/decimal"
 	"papergo/internal/dal/catalog"
 	"papergo/internal/dal/dberr"
 	"papergo/internal/dal/refs"
@@ -40,7 +42,7 @@ type Surface struct {
 }
 
 // FieldValue is one indexed value of a surface's field. Exactly one value
-// column is set; multi-valued fields number their values with Ordinal.
+// column is set: exact numbers are ordered text keys in ValueText; multi-valued fields number their values with Ordinal.
 type FieldValue struct {
 	ID           string
 	SurfaceID    string
@@ -53,7 +55,6 @@ type FieldValue struct {
 	Ordinal      int64
 	ValueText    *string
 	ValueInteger *int64
-	ValueNumeric *decimal.Decimal
 	ValueBoolean *bool
 	// AppliesParents makes a term value also apply the term's ancestors.
 	AppliesParents bool
@@ -89,6 +90,7 @@ func (f Filter) empty() bool {
 
 // ValueFilter selects field values. Zero fields do not filter.
 type ValueFilter struct {
+	IDs                                      []string
 	SurfaceID, ItemID, ContainerID, FieldKey string
 	Surface                                  refs.Surface
 	// ChoiceHeads selects the first value of choice fields, the one group
@@ -245,9 +247,11 @@ func (r *Repo) Project(ctx context.Context, p Projection) (Surface, error) {
 		if err != nil {
 			return err
 		}
+		var held []FieldValue
+		tagged := false
 		if len(existing) > 0 {
 			out = existing[0]
-			if err := choiceCounts(ctx, q, out, -1); err != nil {
+			if held, err = q.FieldValues(ctx, ValueFilter{SurfaceID: out.ID}); err != nil {
 				return err
 			}
 			if out.ContainerID != item.ContainerID {
@@ -258,6 +262,7 @@ func (r *Repo) Project(ctx context.Context, p Projection) (Surface, error) {
 					return err
 				}
 			}
+			tagged = slices.Equal(out.Keywords, keywords)
 			out.ContainerID, out.WorkspaceID, out.RevisionID, out.Name = item.ContainerID, item.WorkspaceID, rev.ID, rev.Name
 			out.Keywords, out.Payload, out.ModifiedAt, out.ModifiedBy = keywords, payload, modifiedAt, modifiedBy
 			if err := q.UpdateSurface(ctx, out); err != nil {
@@ -276,10 +281,12 @@ func (r *Repo) Project(ctx context.Context, p Projection) (Surface, error) {
 				return err
 			}
 		}
-		if err := q.TagSurface(ctx, out.ID, keywords); err != nil {
-			return err
+		if !tagged {
+			if err := q.TagSurface(ctx, out.ID, keywords); err != nil {
+				return err
+			}
 		}
-		return replaceValues(ctx, q, out, p.Fields)
+		return syncValues(ctx, q, out, held, p.Fields)
 	})
 	return out, err
 }
@@ -306,6 +313,10 @@ func (r *Repo) Reindex(ctx context.Context, surfaceID string, keys []string, val
 		if item.Deleted {
 			return fmt.Errorf("%w: deleted resources cannot be reindexed", dberr.ErrImmutable)
 		}
+		held, err := q.FieldValues(ctx, ValueFilter{SurfaceID: surfaceID})
+		if err != nil {
+			return err
+		}
 		if keys != nil {
 			replace := make(map[string]bool, len(keys))
 			for _, key := range keys {
@@ -316,20 +327,13 @@ func (r *Repo) Reindex(ctx context.Context, surfaceID string, keys []string, val
 					return fmt.Errorf("%w: field is outside the reindex selection", dberr.ErrInvalidReference)
 				}
 			}
-			kept, err := q.FieldValues(ctx, ValueFilter{SurfaceID: surfaceID})
-			if err != nil {
-				return err
-			}
-			for _, v := range kept {
+			for _, v := range held {
 				if !replace[v.FieldKey] {
 					values = append(values, v)
 				}
 			}
 		}
-		if err := choiceCounts(ctx, q, s, -1); err != nil {
-			return err
-		}
-		return replaceValues(ctx, q, s, values)
+		return syncValues(ctx, q, s, held, values)
 	})
 }
 
@@ -404,29 +408,85 @@ func (r *Repo) Counts(ctx context.Context, containerID string, surface refs.Surf
 	return out, nil
 }
 
-func replaceValues(ctx context.Context, q Queries, s Surface, values []FieldValue) error {
-	if err := q.DeleteFieldValues(ctx, ValueFilter{SurfaceID: s.ID}); err != nil {
-		return err
+// syncValues makes a surface's values the given ones. held are the values
+// it has: a value equal to the one held in its field and position stays,
+// so an edit writes only the rows of the fields it changes, and the group
+// counts move only by the choice values that change.
+func syncValues(ctx context.Context, q Queries, s Surface, held, values []FieldValue) error {
+	type slot struct {
+		key     string
+		ordinal int64
 	}
-	rows := make([]FieldValue, len(values))
-	for i, v := range values {
-		if v.ID == "" {
-			v.ID = uuid.NewString()
-		}
-		v.SurfaceID, v.ContainerID, v.ItemID, v.Surface = s.ID, s.ContainerID, s.ItemID, s.Surface
-		rows[i] = v
+	type counter struct{ container, key, value string }
+	byslot := make(map[slot]FieldValue, len(held))
+	for _, v := range held {
+		byslot[slot{v.FieldKey, v.Ordinal}] = v
 	}
-	if err := q.InsertFieldValues(ctx, rows); err != nil {
-		return err
-	}
-	for _, v := range rows {
+	deltas := map[counter]int{}
+	stale := []string{}
+	unheld := func(v FieldValue) {
+		stale = append(stale, v.ID)
 		if counted(v) {
-			if err := q.AddGroupCount(ctx, GroupCount{ContainerID: s.ContainerID, Surface: s.Surface, FieldKey: v.FieldKey, Value: *v.ValueText}, 1); err != nil {
-				return err
+			deltas[counter{v.ContainerID, v.FieldKey, *v.ValueText}]--
+		}
+	}
+	fresh := make([]FieldValue, 0, len(values))
+	for _, v := range values {
+		v.SurfaceID, v.ContainerID, v.ItemID, v.Surface = s.ID, s.ContainerID, s.ItemID, s.Surface
+		k := slot{v.FieldKey, v.Ordinal}
+		if h, ok := byslot[k]; ok {
+			delete(byslot, k)
+			if sameValue(h, v) {
+				continue
 			}
+			unheld(h)
+		}
+		v.ID = uuid.NewString()
+		fresh = append(fresh, v)
+		if counted(v) {
+			deltas[counter{v.ContainerID, v.FieldKey, *v.ValueText}]++
+		}
+	}
+	for _, h := range byslot {
+		unheld(h)
+	}
+	if len(stale) > 0 {
+		if err := q.DeleteFieldValues(ctx, ValueFilter{IDs: stale}); err != nil {
+			return err
+		}
+	}
+	if len(fresh) > 0 {
+		if err := q.InsertFieldValues(ctx, fresh); err != nil {
+			return err
+		}
+	}
+	changed := make([]counter, 0, len(deltas))
+	for c, d := range deltas {
+		if d != 0 {
+			changed = append(changed, c)
+		}
+	}
+	// Decrements first, then increments, in a fixed order.
+	slices.SortFunc(changed, func(a, b counter) int {
+		return cmp.Or(cmp.Compare(deltas[a], deltas[b]), strings.Compare(a.container, b.container), strings.Compare(a.key, b.key), strings.Compare(a.value, b.value))
+	})
+	for _, c := range changed {
+		if err := q.AddGroupCount(ctx, GroupCount{ContainerID: c.container, Surface: s.Surface, FieldKey: c.key, Value: c.value}, deltas[c]); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+// sameValue reports whether a held value row already stores v.
+func sameValue(held, v FieldValue) bool {
+	return held.ContainerID == v.ContainerID && held.ItemID == v.ItemID && held.Surface == v.Surface &&
+		held.FieldType == v.FieldType && held.Scale == v.Scale && held.AppliesParents == v.AppliesParents &&
+		equalPtr(held.ValueText, v.ValueText) && equalPtr(held.ValueInteger, v.ValueInteger) && equalPtr(held.ValueBoolean, v.ValueBoolean)
+}
+
+func equalPtr[T comparable](a, b *T) bool {
+	return a == nil && b == nil || a != nil && b != nil && *a == *b
 }
 
 // counted reports whether a value is one group counts count: the first value

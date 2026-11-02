@@ -116,10 +116,10 @@ func TestOperationUnknownHandlerAndRevokedCredential(t *testing.T) {
 
 func TestOperationPanicRollsBackBatch(t *testing.T) {
 	s, _, list := fixture(t)
-	item := create(t, s, list.ID, "item", "Original", nil)
+	before := current(t, s, list.ID)
 	handler := checkpointHandler()
 	handler.Step = func(ctx context.Context, t *Service, op *operations.Operation) error {
-		if err := t.DAL.Resources().Change(ctx, item.ID, item.Version, "alice", resources.Changes{Name: ptr("Partial")}); err != nil {
+		if err := t.DAL.Resources().Change(ctx, list.ID, before.Version, "alice", resources.Changes{Description: ptr("Partial")}); err != nil {
 			return err
 		}
 		panic("failed handler")
@@ -138,8 +138,8 @@ func TestOperationPanicRollsBackBatch(t *testing.T) {
 	if err != nil || op.Status != operations.StatusFailed || op.StartedAt == nil {
 		t.Fatal(op, err)
 	}
-	row, err := s.DAL.Resources().Resource(testContext, item.ID)
-	if err != nil || row.Name != "Original" || row.Version != item.Version {
+	row, err := s.DAL.Resources().Resource(testContext, list.ID)
+	if err != nil || row.Description != before.Description || row.Version != before.Version {
 		t.Fatal(row, err)
 	}
 }

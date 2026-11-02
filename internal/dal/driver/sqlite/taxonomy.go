@@ -9,6 +9,7 @@ import (
 	"github.com/stephenafamo/bob"
 	"github.com/stephenafamo/bob/dialect/sqlite"
 	"github.com/stephenafamo/bob/dialect/sqlite/dialect"
+	"github.com/stephenafamo/bob/dialect/sqlite/im"
 	"github.com/stephenafamo/bob/dialect/sqlite/sm"
 	"github.com/stephenafamo/bob/types"
 	"github.com/stephenafamo/scan"
@@ -232,33 +233,45 @@ func (q Queries) TermFamily(ctx context.Context, id string) ([]string, error) {
 		func(r scan.Rows) (string, error) { var v string; err := r.Scan(&v); return v, err }, id, id)
 }
 
+// TagResource and TagSurface change only the keyword rows that differ:
+// they delete the keywords no longer held and add the new ones.
 func (q Queries) TagResource(ctx context.Context, resourceID string, termIDs []string) error {
-	if _, err := models.ResourceKeywords.Delete(models.DeleteWhere.ResourceKeywords.ResourceID.EQ(resourceID)).Exec(ctx, q.exec); err != nil {
+	d := models.DeleteWhere.ResourceKeywords
+	where := []bob.Mod[*dialect.DeleteQuery]{d.ResourceID.EQ(resourceID)}
+	if len(termIDs) > 0 {
+		where = append(where, d.Keyword.NotIn(termIDs...))
+	}
+	if _, err := models.ResourceKeywords.Delete(where...).Exec(ctx, q.exec); err != nil {
 		return dberr.Translate(err)
 	}
 	if len(termIDs) == 0 {
 		return nil
 	}
-	rows := make([]bob.Mod[*dialect.InsertQuery], len(termIDs))
+	rows := make([]bob.Mod[*dialect.InsertQuery], len(termIDs), len(termIDs)+1)
 	for i, id := range termIDs {
 		rows[i] = &models.ResourceKeywordSetter{ResourceID: omit.From(resourceID), Keyword: omit.From(id)}
 	}
-	_, err := models.ResourceKeywords.Insert(rows...).Exec(ctx, q.exec)
+	_, err := models.ResourceKeywords.Insert(append(rows, im.OnConflict("keyword", "resource_id").DoNothing())...).Exec(ctx, q.exec)
 	return dberr.Translate(err)
 }
 
 func (q Queries) TagSurface(ctx context.Context, surfaceID string, termIDs []string) error {
-	if _, err := models.ItemSurfaceKeywords.Delete(models.DeleteWhere.ItemSurfaceKeywords.SurfaceID.EQ(surfaceID)).Exec(ctx, q.exec); err != nil {
+	d := models.DeleteWhere.ItemSurfaceKeywords
+	where := []bob.Mod[*dialect.DeleteQuery]{d.SurfaceID.EQ(surfaceID)}
+	if len(termIDs) > 0 {
+		where = append(where, d.Keyword.NotIn(termIDs...))
+	}
+	if _, err := models.ItemSurfaceKeywords.Delete(where...).Exec(ctx, q.exec); err != nil {
 		return dberr.Translate(err)
 	}
 	if len(termIDs) == 0 {
 		return nil
 	}
-	rows := make([]bob.Mod[*dialect.InsertQuery], len(termIDs))
+	rows := make([]bob.Mod[*dialect.InsertQuery], len(termIDs), len(termIDs)+1)
 	for i, id := range termIDs {
 		rows[i] = &models.ItemSurfaceKeywordSetter{SurfaceID: omit.From(surfaceID), Keyword: omit.From(id)}
 	}
-	_, err := models.ItemSurfaceKeywords.Insert(rows...).Exec(ctx, q.exec)
+	_, err := models.ItemSurfaceKeywords.Insert(append(rows, im.OnConflict("keyword", "surface_id").DoNothing())...).Exec(ctx, q.exec)
 	return dberr.Translate(err)
 }
 

@@ -138,7 +138,7 @@ func (q Queries) FieldValues(ctx context.Context, f surfaces.ValueFilter) ([]sur
 		out[i] = surfaces.FieldValue{
 			ID: row.ID, SurfaceID: row.SurfaceID, ContainerID: row.ContainerID, ItemID: row.ItemID, Surface: refs.Surface(row.Surface),
 			FieldKey: row.FieldKey, FieldType: catalog.FieldType(row.FieldType), Scale: row.Scale, Ordinal: row.Ordinal,
-			ValueText: row.ValueText.Ptr(), ValueInteger: row.ValueInteger.Ptr(), ValueNumeric: row.ValueNumeric.Ptr(), ValueBoolean: row.ValueBoolean.Ptr(),
+			ValueText: row.ValueText.Ptr(), ValueInteger: row.ValueInteger.Ptr(), ValueBoolean: row.ValueBoolean.Ptr(),
 			AppliesParents: row.AppliesParents,
 		}
 	}
@@ -148,6 +148,9 @@ func (q Queries) FieldValues(ctx context.Context, f surfaces.ValueFilter) ([]sur
 func valueFilter(f surfaces.ValueFilter) []bob.Expression {
 	c := models.FieldValues.Columns
 	var out []bob.Expression
+	if len(f.IDs) > 0 {
+		out = append(out, c.ID.In(sqlite.Arg(anys(f.IDs)...)))
+	}
 	if f.SurfaceID != "" {
 		out = append(out, c.SurfaceID.EQ(sqlite.Arg(f.SurfaceID)))
 	}
@@ -183,7 +186,7 @@ func (q Queries) InsertFieldValues(ctx context.Context, values []surfaces.FieldV
 				ID: omit.From(v.ID), CreatedAt: omit.From(at), SurfaceID: omit.From(v.SurfaceID), ContainerID: omit.From(v.ContainerID),
 				ItemID: omit.From(v.ItemID), Surface: omit.From(string(v.Surface)), FieldKey: omit.From(v.FieldKey), FieldType: omit.From(string(v.FieldType)),
 				Scale: omit.From(v.Scale), Ordinal: omit.From(v.Ordinal), ValueText: omitnull.FromPtr(v.ValueText), ValueInteger: omitnull.FromPtr(v.ValueInteger),
-				ValueNumeric: omitnull.FromPtr(v.ValueNumeric), ValueBoolean: omitnull.FromPtr(v.ValueBoolean), AppliesParents: omit.From(v.AppliesParents),
+				ValueBoolean: omitnull.FromPtr(v.ValueBoolean), AppliesParents: omit.From(v.AppliesParents),
 			}
 		}
 		if _, err := models.FieldValues.Insert(rows...).Exec(ctx, q.exec); err != nil {

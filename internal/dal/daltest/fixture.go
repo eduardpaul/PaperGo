@@ -2,7 +2,6 @@ package daltest
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"papergo/internal/dal"
 	"papergo/internal/dal/catalog"
@@ -57,20 +56,37 @@ func Restore(ctx context.Context, s *dal.Store, id, nameKey, actor string) error
 
 // Rename changes a resource's name.
 func Rename(ctx context.Context, s *dal.Store, id, name, actor string) error {
-	r, err := s.Resources().Resource(ctx, id)
-	if err != nil {
-		return err
-	}
-	return s.Resources().Change(ctx, id, r.Version, actor, resources.Changes{Name: &name})
+	return change(ctx, s, id, actor, resources.Changes{Name: &name})
 }
 
-// Tag replaces a resource's keywords.
+// Tag changes a resource's keywords.
 func Tag(ctx context.Context, s *dal.Store, id string, keywords []string) error {
+	return change(ctx, s, id, "test", resources.Changes{Keywords: &keywords})
+}
+
+// change writes a change of a resource. An item or folder records it as its
+// next revision, carrying its head revision's content forward.
+func change(ctx context.Context, s *dal.Store, id, actor string, c resources.Changes) error {
 	r, err := s.Resources().Resource(ctx, id)
 	if err != nil {
 		return err
 	}
-	return s.Resources().Change(ctx, id, r.Version, "test", resources.Changes{Keywords: &keywords})
+	if r.Kind != refs.KindItem && r.Kind != refs.KindFolder {
+		return s.Resources().Change(ctx, id, r.Version, actor, c)
+	}
+	rev := revisions.Revision{ItemID: id, ContainerID: Val(r.ContainerID), ContentTypeID: Val(r.ContentTypeID), Name: r.Name, CreatedBy: actor}
+	if r.HeadRevisionID != nil {
+		head, err := s.Revisions().Revision(ctx, *r.HeadRevisionID)
+		if err != nil {
+			return err
+		}
+		rev.SchemaRevisionID, rev.Payload, rev.BlobID, rev.Filename = head.SchemaRevisionID, head.Payload, head.BlobID, head.Filename
+	}
+	if c.Name != nil {
+		rev.Name = *c.Name
+	}
+	_, err = s.Resources().ChangeRevised(ctx, id, r.Version, actor, c, rev, false)
+	return err
 }
 
 // Revise records an item's next revision in its collection with its
@@ -81,11 +97,7 @@ func Revise(ctx context.Context, s *dal.Store, rev revisions.Revision) (revision
 		return revisions.Revision{}, err
 	}
 	rev.ContainerID, rev.ContentTypeID = Val(r.ContainerID), Val(r.ContentTypeID)
-	values := rev.Payload
-	if len(values) == 0 {
-		values = json.RawMessage(`{}`)
-	}
-	return s.Resources().Revise(ctx, rev, values, rev.CreatedBy)
+	return s.Resources().Revise(ctx, rev, rev.CreatedBy)
 }
 
 // Fixture is a workspace with two libraries that accept the catalog type

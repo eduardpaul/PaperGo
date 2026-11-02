@@ -12,7 +12,6 @@ import (
 	"github.com/aarondl/opt/null"
 	"github.com/aarondl/opt/omit"
 	"github.com/aarondl/opt/omitnull"
-	"github.com/shopspring/decimal"
 	"github.com/stephenafamo/bob"
 	"github.com/stephenafamo/bob/dialect/sqlite"
 	"github.com/stephenafamo/bob/dialect/sqlite/dialect"
@@ -26,21 +25,20 @@ import (
 
 // FieldValue is an object representing the database table.
 type FieldValue struct {
-	ID             string                    `db:"id,pk" `
-	CreatedAt      time.Time                 `db:"created_at" `
-	SurfaceID      string                    `db:"surface_id" `
-	ContainerID    string                    `db:"container_id" `
-	ItemID         string                    `db:"item_id" `
-	Surface        string                    `db:"surface" `
-	FieldKey       string                    `db:"field_key" `
-	FieldType      string                    `db:"field_type" `
-	Scale          int64                     `db:"scale" `
-	Ordinal        int64                     `db:"ordinal" `
-	ValueText      null.Val[string]          `db:"value_text" `
-	ValueInteger   null.Val[int64]           `db:"value_integer" `
-	ValueNumeric   null.Val[decimal.Decimal] `db:"value_numeric" `
-	ValueBoolean   null.Val[bool]            `db:"value_boolean" `
-	AppliesParents bool                      `db:"applies_parents" `
+	ID             string           `db:"id,pk" `
+	CreatedAt      time.Time        `db:"created_at" `
+	SurfaceID      string           `db:"surface_id" `
+	ContainerID    string           `db:"container_id" `
+	ItemID         string           `db:"item_id" `
+	Surface        string           `db:"surface" `
+	FieldKey       string           `db:"field_key" `
+	FieldType      string           `db:"field_type" `
+	Scale          int64            `db:"scale" `
+	Ordinal        int64            `db:"ordinal" `
+	ValueText      null.Val[string] `db:"value_text" `
+	ValueInteger   null.Val[int64]  `db:"value_integer" `
+	ValueBoolean   null.Val[bool]   `db:"value_boolean" `
+	AppliesParents bool             `db:"applies_parents" `
 
 	R fieldValueR `db:"-" `
 }
@@ -75,7 +73,7 @@ type fieldValueRLoaded struct {
 
 func buildFieldValueColumns(tableName string) fieldValueColumns {
 	columnsExpr := expr.NewColumnsExpr(
-		"id", "created_at", "surface_id", "container_id", "item_id", "surface", "field_key", "field_type", "scale", "ordinal", "value_text", "value_integer", "value_numeric", "value_boolean", "applies_parents",
+		"id", "created_at", "surface_id", "container_id", "item_id", "surface", "field_key", "field_type", "scale", "ordinal", "value_text", "value_integer", "value_boolean", "applies_parents",
 	)
 
 	if tableName != "" {
@@ -97,7 +95,6 @@ func buildFieldValueColumns(tableName string) fieldValueColumns {
 		Ordinal:        buildFieldValueColumn(tableName, "ordinal"),
 		ValueText:      buildFieldValueColumn(tableName, "value_text"),
 		ValueInteger:   buildFieldValueColumn(tableName, "value_integer"),
-		ValueNumeric:   buildFieldValueColumn(tableName, "value_numeric"),
 		ValueBoolean:   buildFieldValueColumn(tableName, "value_boolean"),
 		AppliesParents: buildFieldValueColumn(tableName, "applies_parents"),
 	}
@@ -118,7 +115,6 @@ type fieldValueColumns struct {
 	Ordinal        fieldValueColumn
 	ValueText      fieldValueColumn
 	ValueInteger   fieldValueColumn
-	ValueNumeric   fieldValueColumn
 	ValueBoolean   fieldValueColumn
 	AppliesParents fieldValueColumn
 }
@@ -166,25 +162,24 @@ func (c fieldValueColumn) ShouldOmitParens() bool {
 // All values are optional, and do not have to be set
 // Generated columns are not included
 type FieldValueSetter struct {
-	ID             omit.Val[string]              `db:"id,pk" `
-	CreatedAt      omit.Val[time.Time]           `db:"created_at" `
-	SurfaceID      omit.Val[string]              `db:"surface_id" `
-	ContainerID    omit.Val[string]              `db:"container_id" `
-	ItemID         omit.Val[string]              `db:"item_id" `
-	Surface        omit.Val[string]              `db:"surface" `
-	FieldKey       omit.Val[string]              `db:"field_key" `
-	FieldType      omit.Val[string]              `db:"field_type" `
-	Scale          omit.Val[int64]               `db:"scale" `
-	Ordinal        omit.Val[int64]               `db:"ordinal" `
-	ValueText      omitnull.Val[string]          `db:"value_text" `
-	ValueInteger   omitnull.Val[int64]           `db:"value_integer" `
-	ValueNumeric   omitnull.Val[decimal.Decimal] `db:"value_numeric" `
-	ValueBoolean   omitnull.Val[bool]            `db:"value_boolean" `
-	AppliesParents omit.Val[bool]                `db:"applies_parents" `
+	ID             omit.Val[string]     `db:"id,pk" `
+	CreatedAt      omit.Val[time.Time]  `db:"created_at" `
+	SurfaceID      omit.Val[string]     `db:"surface_id" `
+	ContainerID    omit.Val[string]     `db:"container_id" `
+	ItemID         omit.Val[string]     `db:"item_id" `
+	Surface        omit.Val[string]     `db:"surface" `
+	FieldKey       omit.Val[string]     `db:"field_key" `
+	FieldType      omit.Val[string]     `db:"field_type" `
+	Scale          omit.Val[int64]      `db:"scale" `
+	Ordinal        omit.Val[int64]      `db:"ordinal" `
+	ValueText      omitnull.Val[string] `db:"value_text" `
+	ValueInteger   omitnull.Val[int64]  `db:"value_integer" `
+	ValueBoolean   omitnull.Val[bool]   `db:"value_boolean" `
+	AppliesParents omit.Val[bool]       `db:"applies_parents" `
 }
 
 func (s FieldValueSetter) SetColumns() []string {
-	vals := make([]string, 0, 15)
+	vals := make([]string, 0, 14)
 	if s.ID.IsValue() {
 		vals = append(vals, "id")
 	}
@@ -220,9 +215,6 @@ func (s FieldValueSetter) SetColumns() []string {
 	}
 	if s.ValueInteger.IsValue() || s.ValueInteger.IsNull() {
 		vals = append(vals, "value_integer")
-	}
-	if s.ValueNumeric.IsValue() || s.ValueNumeric.IsNull() {
-		vals = append(vals, "value_numeric")
 	}
 	if s.ValueBoolean.IsValue() || s.ValueBoolean.IsNull() {
 		vals = append(vals, "value_boolean")
@@ -269,9 +261,6 @@ func (s FieldValueSetter) Overwrite(t *FieldValue) {
 	}
 	if s.ValueInteger.IsValue() || s.ValueInteger.IsNull() {
 		t.ValueInteger = s.ValueInteger.MustGetNull()
-	}
-	if s.ValueNumeric.IsValue() || s.ValueNumeric.IsNull() {
-		t.ValueNumeric = s.ValueNumeric.MustGetNull()
 	}
 	if s.ValueBoolean.IsValue() || s.ValueBoolean.IsNull() {
 		t.ValueBoolean = s.ValueBoolean.MustGetNull()
@@ -381,13 +370,6 @@ func (s *FieldValueSetter) Apply(q *dialect.InsertQuery) {
 				}
 				return sqlite.Arg(s.ValueInteger.MustGetNull()).WriteSQL(ctx, w, d, start)
 			}))
-		case "value_numeric":
-			vals = append(vals, bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
-				if s.ValueNumeric.IsUnset() {
-					return sqlite.Arg(nil).WriteSQL(ctx, w, d, start)
-				}
-				return sqlite.Arg(s.ValueNumeric.MustGetNull()).WriteSQL(ctx, w, d, start)
-			}))
 		case "value_boolean":
 			vals = append(vals, bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
 				if s.ValueBoolean.IsUnset() {
@@ -413,7 +395,7 @@ func (s FieldValueSetter) UpdateMod() bob.Mod[*dialect.UpdateQuery] {
 }
 
 func (s FieldValueSetter) Expressions(prefix ...string) []bob.Expression {
-	exprs := make([]bob.Expression, 0, 15)
+	exprs := make([]bob.Expression, 0, 14)
 
 	if s.ID.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
@@ -499,13 +481,6 @@ func (s FieldValueSetter) Expressions(prefix ...string) []bob.Expression {
 		}})
 	}
 
-	if s.ValueNumeric.IsValue() || s.ValueNumeric.IsNull() {
-		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
-			sqlite.Quote(append(prefix, "value_numeric")...),
-			sqlite.Arg(s.ValueNumeric),
-		}})
-	}
-
 	if s.ValueBoolean.IsValue() || s.ValueBoolean.IsNull() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
 			sqlite.Quote(append(prefix, "value_boolean")...),
@@ -530,7 +505,7 @@ func fieldValueScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc, 
 		idx int
 		dst func(o *FieldValue) any
 	}
-	targets := make([]target, 0, 15)
+	targets := make([]target, 0, 14)
 	for i, col := range cols {
 		switch col {
 		case "id":
@@ -557,8 +532,6 @@ func fieldValueScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc, 
 			targets = append(targets, target{i, func(o *FieldValue) any { return &o.ValueText }})
 		case "value_integer":
 			targets = append(targets, target{i, func(o *FieldValue) any { return &o.ValueInteger }})
-		case "value_numeric":
-			targets = append(targets, target{i, func(o *FieldValue) any { return &o.ValueNumeric }})
 		case "value_boolean":
 			targets = append(targets, target{i, func(o *FieldValue) any { return &o.ValueBoolean }})
 		case "applies_parents":
@@ -1017,7 +990,6 @@ type fieldValueWhere[Q sqlite.Filterable] struct {
 	Ordinal        sqlite.WhereMod[Q, int64]
 	ValueText      sqlite.WhereNullMod[Q, string]
 	ValueInteger   sqlite.WhereNullMod[Q, int64]
-	ValueNumeric   sqlite.WhereNullMod[Q, decimal.Decimal]
 	ValueBoolean   sqlite.WhereNullMod[Q, bool]
 	AppliesParents sqlite.WhereMod[Q, bool]
 	R              fieldValueWhereR[Q]
@@ -1042,7 +1014,6 @@ func buildFieldValueWhere[Q sqlite.Filterable](cols fieldValueColumns) fieldValu
 		Ordinal:        sqlite.Where[Q, int64](cols.Ordinal.Expression),
 		ValueText:      sqlite.WhereNull[Q, string](cols.ValueText.Expression),
 		ValueInteger:   sqlite.WhereNull[Q, int64](cols.ValueInteger.Expression),
-		ValueNumeric:   sqlite.WhereNull[Q, decimal.Decimal](cols.ValueNumeric.Expression),
 		ValueBoolean:   sqlite.WhereNull[Q, bool](cols.ValueBoolean.Expression),
 		AppliesParents: sqlite.Where[Q, bool](cols.AppliesParents.Expression),
 		R:              fieldValueWhereR[Q]{cols: cols},

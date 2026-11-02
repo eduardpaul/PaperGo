@@ -329,8 +329,9 @@ CREATE INDEX resource_content_type_id ON resources(content_type_id) WHERE conten
 CREATE INDEX resource_container_id_deleted_at_id ON resources(container_id, deleted_at, id) WHERE deleted_at IS NOT NULL;
 CREATE UNIQUE INDEX resource_personal_owner_id ON resources(personal_owner_id) WHERE personal_owner_id IS NOT NULL;
 CREATE UNIQUE INDEX resource_workspace_id_system_key ON resources(workspace_id, system_key) WHERE system_key IS NOT NULL;
-CREATE INDEX resource_keywords_gin ON resources USING GIN (keywords);
 
+-- The keywords of workspaces, lists and libraries. Items and folders keep
+-- theirs on their surfaces, in item_surface_keywords.
 CREATE TABLE resource_keywords (
     resource_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE DEFERRABLE,
     keyword TEXT NOT NULL REFERENCES terms(id) ON DELETE CASCADE DEFERRABLE,
@@ -471,8 +472,6 @@ CREATE INDEX itemsurface_container_id_surface_modified_by_item_id ON item_surfac
 CREATE INDEX itemsurface_container_id_surface_item_created_at_item_id ON item_surfaces(container_id, surface, item_created_at, item_id);
 CREATE INDEX itemsurface_container_id_surface_item_created_by_item_id ON item_surfaces(container_id, surface, item_created_by, item_id);
 CREATE INDEX itemsurface_container_id_surface_name_item_id ON item_surfaces(container_id, surface, name, item_id);
-CREATE INDEX itemsurface_keywords_gin ON item_surfaces USING GIN (keywords);
-CREATE INDEX itemsurface_payload_gin ON item_surfaces USING GIN (payload);
 
 CREATE TABLE item_surface_keywords (
     surface_id TEXT NOT NULL REFERENCES item_surfaces(id) ON DELETE CASCADE DEFERRABLE,
@@ -494,29 +493,29 @@ CREATE TABLE field_values (
     ordinal BIGINT NOT NULL DEFAULT 0 CHECK (ordinal >= 0),
     value_text TEXT COLLATE "C",
     value_integer BIGINT,
-    value_numeric NUMERIC(38, 9),
     value_boolean BOOLEAN,
     -- applies_parents copies the immutable apply_parents option of a term
     -- or keywords field: its value also applies the term's ancestors.
     applies_parents BOOLEAN NOT NULL DEFAULT FALSE,
     CHECK (field_type IN ('term', 'keywords') OR NOT applies_parents),
-    CHECK (num_nonnulls(value_text, value_integer, value_numeric, value_boolean) = 1),
+    CHECK (num_nonnulls(value_text, value_integer, value_boolean) = 1),
     CHECK (
         (field_type IN ('text','note','email','url','date','lookup','person','term','keywords','choice','datetime') AND value_text IS NOT NULL)
         OR (field_type IN ('integer','decimal') AND value_integer IS NOT NULL)
-        OR (field_type IN ('number','currency') AND (
-            value_numeric IS NOT NULL
-            OR (value_text IS NOT NULL AND value_text ~ '^[01][0-9]{57}$')
-        ))
+        OR (field_type IN ('number','currency') AND value_text IS NOT NULL AND value_text ~ '^[01][0-9]{57}$')
         OR (field_type = 'boolean' AND value_boolean IS NOT NULL)
     )
 );
-CREATE INDEX fieldvalue_field_type_value_text_item_id ON field_values(field_type, value_text, item_id);
+-- The integer and boolean value indexes hold only the rows whose column
+-- they order. The text index, which most values enter, holds every row: a
+-- text sort then needs no NULL test, which PostgreSQL would estimate as if
+-- the field's values could be missing. Term values are also found by value
+-- alone.
+CREATE INDEX fieldvalue_field_type_value_text_item_id ON field_values(field_type, value_text, item_id) WHERE field_type IN ('term', 'keywords');
 CREATE UNIQUE INDEX fieldvalue_surface_id_field_key_ordinal ON field_values(surface_id, field_key, ordinal);
-CREATE INDEX fieldvalue_container_id_surface_field_key_value_integer_item_id ON field_values(container_id, surface, field_key, value_integer, item_id);
-CREATE INDEX fieldvalue_container_id_surface_field_key_value_numeric_item_id ON field_values(container_id, surface, field_key, value_numeric, item_id);
+CREATE INDEX fieldvalue_container_id_surface_field_key_value_integer_item_id ON field_values(container_id, surface, field_key, value_integer, item_id) WHERE value_integer IS NOT NULL;
 CREATE INDEX fieldvalue_container_id_surface_field_key_value_text_item_id ON field_values(container_id, surface, field_key, value_text, item_id);
-CREATE INDEX fieldvalue_container_id_surface_field_key_value_boolean_item_id ON field_values(container_id, surface, field_key, value_boolean, item_id);
+CREATE INDEX fieldvalue_container_id_surface_field_key_value_boolean_item_id ON field_values(container_id, surface, field_key, value_boolean, item_id) WHERE value_boolean IS NOT NULL;
 
 CREATE TABLE group_counts (
     container_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE DEFERRABLE,
@@ -859,6 +858,8 @@ CREATE TABLE domain_events (
 );
 CREATE INDEX domainevent_created_at_id ON domain_events(created_at, id) WHERE dispatched_at IS NULL;
 CREATE INDEX domainevent_dispatched_at ON domain_events(dispatched_at) WHERE dispatched_at IS NOT NULL;
+-- Revision collection keeps the revisions undispatched item events name.
+CREATE INDEX domainevent_revision_id ON domain_events((data->>'revision_id')) WHERE dispatched_at IS NULL;
 
 CREATE TABLE artifacts (
     id TEXT PRIMARY KEY NOT NULL,
