@@ -90,6 +90,8 @@ such as calendar or import/export, can use too:
   without authenticating or admitting them again.
 - `Request.Bearer()` reports whether the caller sent a bearer credential of
   its own, rather than a browser session or a proxy's assertion.
+- `Request.Scopes(ctx)` is the caller's effective scopes, its roles' grants
+  narrowed to its credential's.
 
 An extensible scope catalog is not needed: existing domain scopes govern every
 tool.
@@ -177,9 +179,10 @@ Important source details that must not become porting mistakes:
    PaperGo personal/integration tokens in every mode and provider/development
    bearer tokens in bearer mode. Recommend personal tokens for a user
    assistant and dedicated integration identities for automation.
-2. Resolve the caller through `GET /v1/identity/me`, in-process. Its `scopes`
-   already intersect credential restrictions and current role grants. An
-   identity failure stops the request before MCP dispatch.
+2. Resolve the caller's effective scopes with the module socket's
+   `Request.Scopes`, which intersects credential restrictions and current
+   role grants as `GET /v1/identity/me` does. A failure stops the request
+   before MCP dispatch with a retryable 503.
 3. Serve the tools' API requests through the module request's `Loopback`, as
    that caller. Do not use an administrator credential, token fallback,
    asserted subject, browser session, proxy identity or client-chosen URL.

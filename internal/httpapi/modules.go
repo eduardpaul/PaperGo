@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"papergo/internal/auth"
+	"papergo/internal/dal"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
 	"slices"
@@ -50,6 +51,12 @@ type Request struct {
 // A browser session or a proxy's assertion is not one. Modules that serve
 // clients other than the web app, such as protocol endpoints, require it.
 func (in Request) Bearer() bool { return in.bearer }
+
+// Scopes are the caller's effective scopes: its roles' grants narrowed to
+// its credential's, as GET /v1/identity/me reports them.
+func (in Request) Scopes(ctx context.Context) ([]string, error) {
+	return identity.EffectiveScopes(callerContext{ctx, in.caller}, dal.NewStore(in.DMS.Directory().DB), in.Subject)
+}
 
 // Loopback serves requests to the /v1 API in-process as the module
 // request's caller: the same subject, credential, scopes and resource

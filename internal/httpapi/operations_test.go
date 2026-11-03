@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"slices"
 	"strings"
 	"testing"
 
@@ -88,6 +89,10 @@ func TestModuleLoopbackActsAsTheCaller(t *testing.T) {
 		}
 		if got.Code != 200 || json.Unmarshal(got.Body.Bytes(), &caller) != nil {
 			return fmt.Errorf("identity: %d %s", got.Code, got.Body.String())
+		}
+		scopes, err := in.Scopes(context.Background())
+		if err != nil || !slices.Equal(scopes, caller.Scopes) {
+			return fmt.Errorf("scopes %v, identity reports %v: %v", scopes, caller.Scopes, err)
 		}
 		respond(w, r, 200, map[string]any{"bearer": in.Bearer(), "subject": caller.Subject, "scopes": caller.Scopes})
 		return nil

@@ -96,10 +96,16 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request, in httpapi.Reques
 		api = s.cfg.WrapAPI(api)
 	}
 	rec := &record{id: requestmeta.Trace(r.Context())}
-	caller, err := resolve(ctx, backend{api: api, host: r.Host, requestID: rec.id, maxBody: s.cfg.MaxResultBytes})
+	// The scopes decide which tools the caller sees. Nothing is cached:
+	// every request asks again, and the API authorizes every request the
+	// tools make.
+	scopes, err := in.Scopes(ctx)
 	if err != nil {
-		return err
+		s.cfg.Logger.Warn("mcp_caller_unresolved", "request_id", rec.id, "error", err)
+		w.Header().Set("Retry-After", "5")
+		return &httpapi.Problem{Status: http.StatusServiceUnavailable, Code: "unavailable", Detail: "PaperGo could not tell what the caller may do; try again shortly"}
 	}
+	caller := &Caller{subject: in.Subject, scopes: scopes, backend: backend{api: api, host: r.Host, requestID: rec.id, maxBody: s.cfg.MaxResultBytes}}
 	s.mcp.ServeHTTP(private{w}, r.WithContext(context.WithValue(context.WithValue(ctx, callerKey, caller), recordKey, rec)))
 	if rec.tool != "" {
 		attrs := []any{"request_id", rec.id, "tool", rec.tool}
