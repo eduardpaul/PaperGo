@@ -13,7 +13,8 @@ import { useTranslation } from '@/i18n';
 import type { FileRef, ViewerProps } from '../handlers';
 import { PageRegions, threadsOn, useRegionThreads } from '../regions';
 import { PageMatches, pagesMatching, useReadText } from '../text-find';
-import { typing, useViewerKeys, ViewerBar, ViewerMessage } from '../viewer-kit';
+import { useFormat } from '@/lib/preferences';
+import { typing, useViewerKeys, ViewerBar, ViewerMessage, ZoomOptions, type ZoomChoice } from '../viewer-kit';
 import { useFollowLink, useTrust } from '../trust';
 import { PageImages } from './pages';
 
@@ -37,20 +38,11 @@ function load() {
   return loading;
 }
 
-const scales = [
-  ['page-width', 'viewer.fitWidth'],
-  ['page-fit', 'viewer.fitPage'],
-  ['0.5', '50%'],
-  ['0.75', '75%'],
-  ['1', '100%'],
-  ['1.5', '150%'],
-  ['2', '200%'],
-  ['3', '300%'],
-  ['4', '400%'],
-] as const;
-
-/** The scales named in words; the rest are percentages. */
-const named = (label: string): label is 'viewer.fitWidth' | 'viewer.fitPage' => label.startsWith('viewer.');
+const scales: readonly ZoomChoice[] = [
+  { value: 'page-width', fit: 'viewer.fitWidth' },
+  { value: 'page-fit', fit: 'viewer.fitPage' },
+  ...[0.5, 0.75, 1, 1.5, 2, 3, 4].map((scale) => ({ value: String(scale), scale })),
+];
 
 type State = { status: 'loading' } | { status: 'password'; retry: (password: string) => void; wrong: boolean } | { status: 'failed'; message: 'pdf.damaged' | 'viewer.notLoaded' | 'pdf.failed' } | { status: 'ready'; pages: number };
 
@@ -105,6 +97,7 @@ function PdfDocument({ file, source, page, onPage, find: initialFind, comment, o
   const [state, setState] = useState<State>({ status: 'loading' });
   const [current, setCurrent] = useState(page ?? 1);
   const [scale, setScale] = useState<string>('page-width');
+  const format = useFormat();
   const [percent, setPercent] = useState(100);
   const [finding, setFinding] = useState(!!initialFind);
   const [query, setQuery] = useState(initialFind ?? '');
@@ -401,13 +394,9 @@ function PdfDocument({ file, source, page, onPage, find: initialFind, comment, o
           <Button size="icon" variant="ghost" aria-label={t('viewer.zoomOut')} onClick={() => zoom(-1)}>
             <ZoomOut />
           </Button>
-          <Select aria-label={t('viewer.zoom')} className="h-8 w-28" value={scales.some(([value]) => value === scale) ? scale : 'custom'} onChange={(event) => choose(event.target.value)}>
-            {!scales.some(([value]) => value === scale) && <option value="custom">{percent}%</option>}
-            {scales.map(([value, label]) => (
-              <option key={value} value={value}>
-                {named(label) ? t(label) : label}
-              </option>
-            ))}
+          <Select aria-label={t('viewer.zoom')} className="h-8 w-28" value={scales.some((choice) => choice.value === scale) ? scale : 'custom'} onChange={(event) => choose(event.target.value)}>
+            {!scales.some((choice) => choice.value === scale) && <option value="custom">{format.percent(percent / 100)}</option>}
+            <ZoomOptions choices={scales} />
           </Select>
           <Button size="icon" variant="ghost" aria-label={t('viewer.zoomIn')} onClick={() => zoom(1)}>
             <ZoomIn />

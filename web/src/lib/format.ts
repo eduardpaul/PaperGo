@@ -27,6 +27,8 @@ export interface Formatter {
   relative(value: Date | string | null | undefined, now?: Date): string;
   number(value: number | string | null | undefined, options?: Intl.NumberFormatOptions): string;
   currency(value: number | string | null | undefined, currencyCode: string): string;
+  /** A ratio as a percentage: 0.5 is "50%" ("50 %" in some languages). */
+  percent(ratio: number): string;
   fileSize(bytes: number | null | undefined): string;
   /** The calendar day (yyyy-MM-dd) of a moment in the user's time zone. */
   dayKey(value: Date | string): string;
@@ -139,6 +141,7 @@ export function createFormatter(preferences: Partial<FormatPreferences> = {}): F
     number: (value, options) => (value == null ? '' : number(value, options)),
     currency: (value, currencyCode) =>
       value == null ? '' : number(value, { style: 'currency', currency: currencyCode || 'EUR' }),
+    percent: (ratio) => number(ratio, { style: 'percent' }),
     fileSize: (bytes) => {
       if (bytes == null) return '';
       const units = ['B', 'KB', 'MB', 'GB', 'TB'];

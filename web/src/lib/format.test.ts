@@ -21,6 +21,11 @@ describe('createFormatter', () => {
     expect(format.time('2026-10-01')).toBe('');
   });
 
+  it('formats ratios as percentages in the number culture', () => {
+    expect(createFormatter({ numberFormat: 'en' }).percent(0.75)).toBe('75%');
+    expect(createFormatter({ numberFormat: 'es' }).percent(1.5)).toBe('150\u00a0%');
+  });
+
   it('formats numbers and currencies in the number culture', () => {
     const format = createFormatter({ numberFormat: 'de-DE' });
     expect(format.number(1234.5)).toBe('1.234,5');

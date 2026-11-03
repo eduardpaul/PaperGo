@@ -3,6 +3,7 @@ import { Component, createContext, useContext, useEffect, useRef, type ReactNode
 import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/i18n';
 import { typingIn } from '@/lib/keys';
+import { useFormat } from '@/lib/preferences';
 import { cn } from '@/lib/utils';
 
 /** Keys typed into a field, or pressed with a modifier the viewer does not use, are not viewer shortcuts. */
@@ -81,6 +82,20 @@ export function ViewerBar({ children, className }: { children: ReactNode; classN
       {children}
     </div>
   );
+}
+
+/** A zoom choice: fitting the page, named in words, or a scale (1 is 100%). */
+export type ZoomChoice = { value: string; fit: 'viewer.fitWidth' | 'viewer.fitPage' } | { value: string; scale: number };
+
+/** The options of a zoom select, with scales as percentages in the user's number format. */
+export function ZoomOptions({ choices }: { choices: readonly ZoomChoice[] }) {
+  const { t } = useTranslation('files');
+  const format = useFormat();
+  return choices.map((choice) => (
+    <option key={choice.value} value={choice.value}>
+      {'fit' in choice ? t(choice.fit) : format.percent(choice.scale)}
+    </option>
+  ));
 }
 
 /** A state that fills the canvas: loading, a failure, or a question such as a password. */

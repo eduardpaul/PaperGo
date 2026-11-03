@@ -11,7 +11,7 @@ import { problemMessage } from '@/lib/errors';
 import { useBlobUrl } from '@/lib/use-blob-url';
 import type { FileRef, ViewerProps } from '../handlers';
 import { PageMatches, pagesMatching, useReadText } from '../text-find';
-import { typing, useViewerKeys, ViewerBar, ViewerMessage } from '../viewer-kit';
+import { typing, useViewerKeys, ViewerBar, ViewerMessage, ZoomOptions, type ZoomChoice } from '../viewer-kit';
 
 interface PageList {
   blob_id: string;
@@ -23,14 +23,10 @@ interface PageList {
 const widths = [320, 480, 640, 960, 1280, 1600, 2048];
 const renditionWidth = (pixels: number) => widths.find((width) => width >= pixels) ?? widths[widths.length - 1];
 
-const zooms = [
-  ['fit', undefined],
-  ['0.5', '50%'],
-  ['0.75', '75%'],
-  ['1', '100%'],
-  ['1.5', '150%'],
-  ['2', '200%'],
-] as const;
+const zooms: readonly ZoomChoice[] = [
+  { value: 'fit', fit: 'viewer.fitWidth' },
+  ...[0.5, 0.75, 1, 1.5, 2].map((scale) => ({ value: String(scale), scale })),
+];
 
 /** The pages of a TIFF scan, rendered by the server one by one. */
 export default function PagesView(props: ViewerProps) {
@@ -122,9 +118,9 @@ export function PageImages({ file, page, onPage, find: initialFind, notice }: Vi
   });
 
   const step = (delta: number) => {
-    const index = zooms.findIndex(([value]) => value === zoom);
+    const index = zooms.findIndex((choice) => choice.value === zoom);
     const next = zooms[Math.min(zooms.length - 1, Math.max(1, (index < 1 ? 3 : index) + delta))];
-    setZoom(next[0]);
+    setZoom(next.value);
   };
   const openFind = () => {
     setFinding(true);
@@ -181,11 +177,7 @@ export function PageImages({ file, page, onPage, find: initialFind, notice }: Vi
           <ZoomOut />
         </Button>
         <Select aria-label={t('viewer.zoom')} className="h-8 w-28" value={zoom} onChange={(event) => setZoom(event.target.value)}>
-          {zooms.map(([value, label]) => (
-            <option key={value} value={value}>
-              {label ?? t('viewer.fitWidth')}
-            </option>
-          ))}
+          <ZoomOptions choices={zooms} />
         </Select>
         <Button size="icon" variant="ghost" aria-label={t('viewer.zoomIn')} onClick={() => step(1)}>
           <ZoomIn />
