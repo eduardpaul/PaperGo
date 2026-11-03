@@ -25,72 +25,88 @@ const usage = "usage: papergo admin initialize|health|backup|restore|search|work
 // Run runs an administrative command: papergo admin <command>. A command
 // asked for --help prints it and returns flag.ErrHelp.
 func Run(ctx context.Context, args []string, out io.Writer) error {
-	if len(args) == 1 && (args[0] == "-h" || args[0] == "--help") {
-		fmt.Fprintln(out, usage)
-		return flag.ErrHelp
-	}
-	if len(args) > 0 && args[0] == "search" {
-		return searchCommand(ctx, args[1:], out)
-	}
-	if len(args) > 0 && args[0] == "workers" {
-		return workersCommand(ctx, args[1:], out)
-	}
-	if len(args) > 0 && args[0] == "health" {
-		flags := flag.NewFlagSet("health", flag.ContinueOnError)
-		flags.SetOutput(out)
-		address := flags.String("url", "", "Readiness URL; by default the configured listen address's /health/ready")
-		timeout := flags.Duration("timeout", 3*time.Second, "Request timeout")
-		if err := flags.Parse(args[1:]); err != nil {
-			return err
-		}
-		if flags.NArg() != 0 || *timeout <= 0 || *timeout > time.Minute {
-			return errors.New("health requires a timeout greater than zero and at most one minute, and no positional arguments")
-		}
-		if *address == "" {
-			listen, err := config.ListenAddress()
-			if err != nil {
-				return err
-			}
-			if *address, err = readinessURL(listen); err != nil {
-				return err
-			}
-		}
-		req, err := http.NewRequestWithContext(ctx, "GET", *address, nil)
-		if err != nil {
-			return err
-		}
-		response, err := (&http.Client{Timeout: *timeout}).Do(req)
-		if err != nil {
-			return err
-		}
-		defer response.Body.Close()
-		if response.StatusCode != 200 {
-			return fmt.Errorf("readiness status %d", response.StatusCode)
-		}
-		return nil
-	}
-	if len(args) > 0 && args[0] == "initialize" {
-		flags := flag.NewFlagSet("initialize", flag.ContinueOnError)
-		flags.SetOutput(out)
-		path := os.Getenv("DATABASE_PATH")
-		if path == "" {
-			path = "data/papergo.db"
-		}
-		flags.StringVar(&path, "database", path, "SQLite database path; DATABASE_URL selects PostgreSQL")
-		if err := flags.Parse(args[1:]); err != nil {
-			return err
-		}
-		if flags.NArg() != 0 {
-			return errors.New("initialize accepts no positional arguments")
-		}
-		if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
-			return database.InitializePostgres(ctx, dsn)
-		}
-		return database.Initialize(ctx, path)
-	}
-	if len(args) == 0 || args[0] != "backup" && args[0] != "restore" {
+	if len(args) == 0 {
 		return errors.New(usage)
 	}
+	switch args[0] {
+	case "-h", "--help":
+		fmt.Fprintln(out, usage)
+		return flag.ErrHelp
+	case "health":
+		return healthCommand(ctx, args[1:], out)
+	case "initialize":
+		return initializeCommand(ctx, args[1:], out)
+	case "backup", "restore":
+		return archiveCommand(ctx, args, out)
+	case "search":
+		return searchCommand(ctx, args[1:], out)
+	case "workers":
+		return workersCommand(ctx, args[1:], out)
+	}
+	return errors.New(usage)
+}
+
+// healthCommand probes a running server's readiness check.
+func healthCommand(ctx context.Context, args []string, out io.Writer) error {
+	flags := flag.NewFlagSet("health", flag.ContinueOnError)
+	flags.SetOutput(out)
+	address := flags.String("url", "", "Readiness URL; by default the configured listen address's /health/ready")
+	timeout := flags.Duration("timeout", 3*time.Second, "Request timeout")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() != 0 || *timeout <= 0 || *timeout > time.Minute {
+		return errors.New("health requires a timeout greater than zero and at most one minute, and no positional arguments")
+	}
+	if *address == "" {
+		listen, err := config.ListenAddress()
+		if err != nil {
+			return err
+		}
+		if *address, err = readinessURL(listen); err != nil {
+			return err
+		}
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, *address, nil)
+	if err != nil {
+		return err
+	}
+	response, err := (&http.Client{Timeout: *timeout}).Do(req)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("readiness status %d", response.StatusCode)
+	}
+	return nil
+}
+
+// initializeCommand creates or upgrades a database without starting the
+// server.
+func initializeCommand(ctx context.Context, args []string, out io.Writer) error {
+	flags := flag.NewFlagSet("initialize", flag.ContinueOnError)
+	flags.SetOutput(out)
+	path := os.Getenv("DATABASE_PATH")
+	if path == "" {
+		path = "data/papergo.db"
+	}
+	flags.StringVar(&path, "database", path, "SQLite database path; DATABASE_URL selects PostgreSQL")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() != 0 {
+		return errors.New("initialize accepts no positional arguments")
+	}
+	if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
+		return database.InitializePostgres(ctx, dsn)
+	}
+	return database.Initialize(ctx, path)
+}
+
+// archiveCommand backs up or restores the SQLite database, its files and
+// search store: args[0] is backup or restore.
+func archiveCommand(ctx context.Context, args []string, out io.Writer) error {
 	if os.Getenv("DATABASE_URL") != "" {
 		return errors.New(args[0] + " archives the SQLite database; DATABASE_URL selects PostgreSQL, which its own tools back up")
 	}
