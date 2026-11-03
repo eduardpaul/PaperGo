@@ -7,7 +7,6 @@ Direct Go modules and the licences they ship under. Add a row when a change adds
 | `github.com/stephenafamo/bob` | DAL query building and generated models (`internal/dal` only) | MIT |
 | `github.com/stephenafamo/scan` | scanning DAL query rows (`internal/dal` only) | MIT |
 | `github.com/aarondl/opt` | optional and nullable columns of generated models | MIT |
-| `github.com/shopspring/decimal` | exact numeric field values | MIT |
 | `github.com/jackc/pgx/v5` | PostgreSQL driver | MIT |
 | `github.com/blevesearch/snowballstem` | word stems for search in the `SEARCH_LANGUAGES` (`internal/search` only): the Snowball project's generated stemmers | BSD-3-Clause |
 | `github.com/coreos/go-oidc/v3` | OIDC bearer token verification | Apache-2.0 |
@@ -17,9 +16,17 @@ Direct Go modules and the licences they ship under. Add a row when a change adds
 | `github.com/daulet/tokenizers` | statically linked Hugging Face Rust tokenizer | MIT |
 | `github.com/go-jose/go-jose/v4` | JWT handling | Apache-2.0 |
 | `github.com/google/uuid` | identifiers | BSD-3-Clause |
-| `golang.org/x/image` | WebP decoding of uploaded images, image resampling for OCR, fonts in OCR tests | BSD-3-Clause |
+| `golang.org/x/crypto` | password hashing (`bcrypt`) | BSD-3-Clause |
+| `golang.org/x/image` | WebP and TIFF decoding of uploaded images, image resampling for OCR, fonts in OCR tests | BSD-3-Clause |
 | `golang.org/x/net` | international host names in their ASCII form for [trusted hosts](trusted-hosts.md) (`internal/hosts`, `idna`) | BSD-3-Clause |
 | `golang.org/x/oauth2` | bearer-token transport for OIDC UserInfo | BSD-3-Clause |
+| `golang.org/x/sys` | database file leases and atomic backup publishing (`unix`, `windows`) | BSD-3-Clause |
+| `golang.org/x/term` | the interactive first-start password prompt | BSD-3-Clause |
+| `golang.org/x/text` | diacritic folding in the PostgreSQL search store and language preferences | BSD-3-Clause |
+| `github.com/klauspost/compress` | zstd compression of stored run output (`internal/dal/runs`) | BSD-3-Clause; zstd's bundled xxhash is MIT |
+| `gopkg.in/yaml.v3` | reading `config.yaml` | MIT and Apache-2.0 |
+| `github.com/emersion/go-ical` | RFC 5545 decoding and encoding for HTTPS iCalendar integrations | MIT |
+| `github.com/teambition/rrule-go` | bounded recurrence expansion for HTTPS iCalendar integrations | MIT |
 | `github.com/robfig/cron/v3` | parsing workflow schedule triggers | MIT |
 | `modernc.org/sqlite` | SQLite driver | BSD-3-Clause |
 | `github.com/dop251/goja` | JavaScript runtime for workflow scripts (`internal/script` only) | MIT |
@@ -42,7 +49,7 @@ The native SDK installer (`scripts/native.py`, checksums in `scripts/native.json
 
 - **ONNX Runtime** 1.23.2 (MIT). Its release binaries include third-party code listed in their `ThirdPartyNotices.txt`, among it Eigen, partly under MPL-2.0. Deployments that ship the library ship that file with it.
 - **The PaddleOCR models** in `models/paddleocr` (Apache-2.0, PaddlePaddle / PaddleOCR contributors).
-- **Hugging Face Tokenizers** through the pinned `daulet/tokenizers` Rust static library (MIT/Apache-2.0).
+- **Hugging Face Tokenizers** through the pinned `daulet/tokenizers` v1.27.0 Rust static library, linked into the executable. The library is daulet's FFI crate (MIT) around Hugging Face `tokenizers` 0.22.0 (Apache-2.0), with 66 further Rust crates under MIT, Apache-2.0, Unlicense, Zlib, BSL-1.0 or BSD-2-Clause terms (most dual-licensed MIT OR Apache-2.0), the Oniguruma C library (BSD-2-Clause) that `onig_sys` compiles, the esaxx and sais C++ code (MIT) that `esaxx-rs` compiles, OpenAI's tiktoken vocabularies (MIT) embedded by `tiktoken-rs`, and the Rust standard library (MIT OR Apache-2.0). `scripts/generate-tokenizers-notices.py` lists the crates linked into the release library from the pinned source's `Cargo.lock` and writes their licence texts to `scripts/native-notices/tokenizers/`; `scripts/native.py` ships that directory as `notices/tokenizers/` in release archives and the Docker image. Regenerate it whenever `tokenizers_source` changes.
 
 Platform release ZIPs carry native libraries and notices beside the executable (`lib/` on Linux, DLLs beside the EXE on Windows). The Docker image uses the same layout under `/opt/papergo`. Models and their notices ship in the platform-independent assets ZIP.
 
@@ -61,8 +68,6 @@ Web numeric transport, long tables and component tests use these direct packages
 | `react-markdown`, `remark-gfm` | the Markdown file handler: rendering GitHub-flavoured Markdown (tables, task lists, strikethrough) to React elements without raw HTML, loaded only when a Markdown file opens | MIT |
 | `@testing-library/react` | tests of rendered forms and user interactions | MIT |
 | `jsdom` | DOM environment for component tests | MIT |
-
-HTTPS iCalendar integrations use `github.com/emersion/go-ical` for RFC 5545 decoding/encoding and `github.com/teambition/rrule-go` for bounded recurrence expansion.
 
 MIT, Apache-2.0, BSD, ISC, zlib, BSL-1.0 and PostgreSQL licenses are allowed. The GCC Runtime Library Exception permits distributing the compiler runtimes shipped beside the executables without applying GPL terms to PaperGo. ONNX Runtime's Eigen dependency includes MPL-2.0 files; its upstream notices and source reference ship with the library.
 

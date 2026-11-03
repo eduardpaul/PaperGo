@@ -77,6 +77,7 @@ RUN git config --system --add safe.directory '*'
 # tokenizers use pinned binaries.
 # Setup in a checkout rewrites their environment files for that checkout.
 COPY scripts/native.py scripts/native.json /opt/papergo/native-src/scripts/
+COPY scripts/native-notices /opt/papergo/native-src/scripts/native-notices
 RUN python3 /opt/papergo/native-src/scripts/native.py --directory /opt/papergo/native \
     && rm -rf /opt/papergo/native/sdk /opt/papergo/native-src/.tools
 ENV PAPERGO_NATIVE_DIR=/opt/papergo/native
