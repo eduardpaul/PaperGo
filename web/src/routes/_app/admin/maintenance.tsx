@@ -11,6 +11,7 @@ import { useHasScope } from '@/features/admin/common';
 import { OperationProgress } from '@/features/admin/operation-progress';
 import type { Operation } from '@/features/admin/operation-progress';
 import { SettingRow, SettingsSection } from '@/features/settings/section';
+import { useTranslation } from '@/i18n';
 
 interface PortabilitySearch {
   workspace?: string;
@@ -26,6 +27,7 @@ export const Route = createFileRoute('/_app/admin/maintenance')({
   component: PortabilityPage,
 });
 export function PortabilityPage() {
+  const { t } = useTranslation('admin');
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const canManage = useHasScope('organization.manage');
@@ -55,38 +57,38 @@ export function PortabilityPage() {
       void navigate({ search: (current) => ({ ...current, import: operation.id }) });
     },
   });
-  if (!canManage) return <Alert>You need organization.manage to export or import the organization.</Alert>;
+  if (!canManage) return <Alert>{t('maintenance.needManage')}</Alert>;
   return (
     <SettingsSection
-      title="Export and import"
-      description="Copy a workspace to another PaperGo instance, with its configuration and optional content. Organization packages transfer the whole instance."
+      title={t('maintenance.title')}
+      description={t('maintenance.description')}
     >
-      <SettingRow id="export-scope" label="Export scope">
+      <SettingRow id="export-scope" label={t('maintenance.scope')}>
         <Select id="export-scope" value={search.workspace ?? ''} disabled={create.isPending} onChange={(event) => {
           void navigate({ search: (current) => ({ ...current, workspace: event.target.value || undefined }) });
         }}>
-          <option value="">Whole organization</option>
+          <option value="">{t('maintenance.wholeOrganization')}</option>
           {workspaces.data?.filter((workspace) => !workspace.personal_owner_id).map((workspace) => (
             <option key={workspace.id} value={workspace.id}>{workspace.name}</option>
           ))}
         </Select>
       </SettingRow>
-      <SettingRow id="include-data" label="Include content" hint="Include items, folders, history and all file versions. Clear this to copy configuration only.">
+      <SettingRow id="include-data" label={t('maintenance.includeContent')} hint={t('maintenance.includeContentHint')}>
         <label htmlFor="include-data" className="flex items-center gap-2">
           <Checkbox id="include-data" checked={includeData} onChange={(event) => setIncludeData(event.target.checked)} />
-          Include workspace data and files
+          {t('maintenance.includeData')}
         </label>
       </SettingRow>
-      <SettingRow id="new-export" label={search.workspace ? 'Export workspace' : 'Export organization'}>
+      <SettingRow id="new-export" label={search.workspace ? t('maintenance.exportWorkspace') : t('maintenance.exportOrganization')}>
         <Button id="new-export" disabled={create.isPending} onClick={() => create.mutate()}>
-          {search.workspace ? 'Export workspace' : 'Export organization'}
+          {search.workspace ? t('maintenance.exportWorkspace') : t('maintenance.exportOrganization')}
         </Button>
       </SettingRow>
-      {search.export && <OperationProgress key={search.export} id={search.export} label="Export" />}
+      {search.export && <OperationProgress key={search.export} id={search.export} label={t('maintenance.export')} />}
       <SettingRow
         id="package-file"
-        label="Import a package"
-        hint="Workspace packages create a new workspace alongside existing ones. Organization packages require an instance without resources. Try it first to validate without making changes."
+        label={t('maintenance.importPackage')}
+        hint={t('maintenance.importHint')}
       >
         <Input
           id="package-file"
@@ -94,18 +96,18 @@ export function PortabilityPage() {
           accept=".zip,application/zip"
           onChange={(event) => setFile(event.target.files?.[0])}
         />
-        <label htmlFor="import-workspace-name" className="mt-3 block text-sm">New workspace name (optional, workspace packages only)</label>
-        <Input id="import-workspace-name" value={workspaceName} onChange={(event) => setWorkspaceName(event.target.value)} placeholder="Use the name from the package" />
+        <label htmlFor="import-workspace-name" className="mt-3 block text-sm">{t('maintenance.workspaceName')}</label>
+        <Input id="import-workspace-name" value={workspaceName} onChange={(event) => setWorkspaceName(event.target.value)} placeholder={t('maintenance.workspaceNamePlaceholder')} />
         <div className="mt-2 flex gap-2">
           <Button disabled={!file || upload.isPending} onClick={() => upload.mutate(true)}>
-            Try it
+            {t('maintenance.tryIt')}
           </Button>
           <Button variant="primary" disabled={!file || upload.isPending} onClick={() => upload.mutate(false)}>
-            Import
+            {t('maintenance.importButton')}
           </Button>
         </div>
       </SettingRow>
-      {search.import && <OperationProgress key={search.import} id={search.import} label="Import" />}
+      {search.import && <OperationProgress key={search.import} id={search.import} label={t('maintenance.import')} />}
     </SettingsSection>
   );
 }

@@ -7,29 +7,34 @@ import { parseJSON, stringifyJSON } from '@/api/json';
 import { Button } from '@/components/ui/button';
 import { Alert } from '@/components/ui/feedback';
 import { Input } from '@/components/ui/input';
+import { useTranslation } from '@/i18n';
 import { problemMessage } from '@/lib/errors';
 import { SettingsSection } from '@/features/settings/section';
 
+// The packages, with the name their export is saved under in every language.
+const packages = { taxonomy: 'taxonomy', smartFolders: 'smart-folders' } as const;
+
 export function PackageTransfer({
-  title,
+  kind,
   path,
   canImport,
   version,
   onImported,
 }: {
-  title: string;
+  kind: keyof typeof packages;
   path: string;
   canImport: boolean;
   version?: number;
   onImported: () => Promise<void>;
 }) {
+  const { t } = useTranslation('admin');
   const [file, setFile] = useState<File>();
   const download = useMutation({
     mutationFn: async () => {
       const data = (await api<unknown>(`${path}/export`)).data;
       saveFile(
         new Blob([stringifyJSON(data)!], { type: 'application/json' }),
-        `${title.toLowerCase().replaceAll(' ', '-')}.json`,
+        `${packages[kind]}.json`,
       );
     },
   });
@@ -38,15 +43,15 @@ export function PackageTransfer({
       api(`${path}/import`, { method: 'POST', ifMatch: version, body: parseJSON(await file!.text()) }),
     onSuccess: async () => {
       await onImported();
-      toast.success(`${title} imported`);
+      toast.success(t(`package.${kind}.imported`));
       setFile(undefined);
     },
   });
   return (
-    <SettingsSection title={`${title} package`} description="Export a package or import one to add its definitions.">
+    <SettingsSection title={t(`package.${kind}.title`)} description={t('package.description')}>
       <div className="flex flex-wrap items-center gap-2">
         <Button disabled={download.isPending} onClick={() => download.mutate()}>
-          Export {title.toLowerCase()}
+          {t(`package.${kind}.export`)}
         </Button>
         {canImport && (
           <>
@@ -54,12 +59,12 @@ export function PackageTransfer({
               key={file?.name ?? 'empty'}
               type="file"
               accept=".json,application/json"
-              aria-label={`${title} package file`}
+              aria-label={t(`package.${kind}.file`)}
               onChange={(event) => setFile(event.target.files?.[0])}
               className="max-w-xs"
             />
             <Button disabled={!file || upload.isPending} onClick={() => upload.mutate()}>
-              Import {title.toLowerCase()}
+              {t(`package.${kind}.import`)}
             </Button>
           </>
         )}

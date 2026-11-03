@@ -3,10 +3,12 @@ import { Building2, Download, Globe, KeyRound, FolderTree, ScrollText, ShieldChe
 import { Page, PageHeader } from '@/components/page';
 import { SubNav, SubNavLayout, SubNavLink } from '@/components/sub-nav';
 import { useHasScope } from '@/features/admin/common';
+import { useTranslation } from '@/i18n';
 
 export const Route = createFileRoute('/_app/admin')({ component: Administration });
 
 function Administration() {
+  const { t } = useTranslation('admin');
   const users = useHasScope('user.read');
   const groups = useHasScope('group.read');
   const roles = useHasScope('role.read');
@@ -16,57 +18,57 @@ function Administration() {
   const maintenance = useHasScope('organization.manage');
   return (
     <Page className="max-w-6xl">
-      <PageHeader icon={ShieldCheck} title="Administration" description="Settings of the whole organization." />
+      <PageHeader icon={ShieldCheck} title={t('title')} description={t('description')} />
       <SubNavLayout
         nav={
-          <SubNav label="Administration">
+          <SubNav label={t('title')}>
             <SubNavLink to="/admin" activeOptions={{ exact: true }}>
-              <Building2 /> Organization
+              <Building2 /> {t('nav.organization')}
             </SubNavLink>
             {users && (
               <SubNavLink to="/admin/users">
-                <UserRound /> Users
+                <UserRound /> {t('nav.users')}
               </SubNavLink>
             )}
             {groups && (
               <SubNavLink to="/admin/groups">
-                <Users /> Groups
+                <Users /> {t('nav.groups')}
               </SubNavLink>
             )}
             {roles && (
               <SubNavLink to="/admin/roles">
-                <ShieldHalf /> Roles
+                <ShieldHalf /> {t('nav.roles')}
               </SubNavLink>
             )}
             {taxonomy && (
               <SubNavLink to="/admin/relationship-types">
-                <FolderTree /> Relationship types
+                <FolderTree /> {t('nav.relationshipTypes')}
               </SubNavLink>
             )}
             {taxonomy && (
               <SubNavLink to="/admin/terms">
-                <FolderTree /> Term store
+                <FolderTree /> {t('nav.terms')}
               </SubNavLink>
             )}
             {contentTypes && (
               <SubNavLink to="/admin/content-types">
-                <FolderTree /> Content types
+                <FolderTree /> {t('nav.contentTypes')}
               </SubNavLink>
             )}
             {audit && (
               <SubNavLink to="/admin/audit">
-                <ScrollText /> Audit log
+                <ScrollText /> {t('nav.audit')}
               </SubNavLink>
             )}
-            {maintenance && <SubNavLink to="/admin/tokens"><KeyRound /> Access tokens</SubNavLink>}
+            {maintenance && <SubNavLink to="/admin/tokens"><KeyRound /> {t('nav.tokens')}</SubNavLink>}
             {maintenance && (
               <SubNavLink to="/admin/trusted-hosts">
-                <Globe /> Trusted hosts
+                <Globe /> {t('nav.trustedHosts')}
               </SubNavLink>
             )}
             {maintenance && (
               <SubNavLink to="/admin/maintenance">
-                <Download /> Export and import
+                <Download /> {t('nav.maintenance')}
               </SubNavLink>
             )}
           </SubNav>

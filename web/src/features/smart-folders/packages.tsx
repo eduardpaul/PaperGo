@@ -11,7 +11,7 @@ export function SmartFolderPackages({ workspaceId }: { workspaceId: string }) {
   if (!can(workspace.data, 'manage')) return null;
   return (
     <PackageTransfer
-      title="Smart folders"
+      kind="smartFolders"
       path={`/v1/workspaces/${workspaceId}/smart-folders`}
       version={workspace.data?.version}
       canImport={canWrite}

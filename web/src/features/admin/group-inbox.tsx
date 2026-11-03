@@ -7,10 +7,12 @@ import type { Inbox, Resource } from '@/api/types';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
+import { useTranslation } from '@/i18n';
 import { QueryFeedback, useHasScope } from './common';
 
 /** Shared inbox selector ported from PaperDotNet group details. */
 export function GroupInbox({ groupId }: { groupId: string }) {
+  const { t } = useTranslation('admin');
   const canRead = useHasScope('document.read');
   const canEdit = useHasScope('document.write');
   const client = useQueryClient();
@@ -45,9 +47,9 @@ export function GroupInbox({ groupId }: { groupId: string }) {
   if (!canRead) return null;
   return (
     <div className="my-4 grid gap-2 border-t pt-3">
-      <Label htmlFor={`group-inbox-${groupId}`}>Shared inbox</Label>
+      <Label htmlFor={`group-inbox-${groupId}`}>{t('groups.inbox.label')}</Label>
       <p className="text-xs text-muted">
-        Changing the inbox requires manage access to both the current and destination libraries.
+        {t('groups.inbox.hint')}
       </p>
       <QueryFeedback query={inbox} />
       <QueryFeedback query={libraries} />
@@ -81,6 +83,7 @@ function InboxSelector({
   canEdit: boolean;
   onSaved: () => Promise<void>;
 }) {
+  const { t } = useTranslation('admin');
   const [id, setId] = useState(current?.library_id ?? '');
   const save = useMutation({
     mutationFn: () =>
@@ -98,13 +101,13 @@ function InboxSelector({
         disabled={!canEdit || save.isPending}
         onChange={(event) => setId(event.target.value)}
       >
-        <option value="">No readable inbox</option>
+        <option value="">{t('groups.inbox.none')}</option>
         {current && !libraries.some((library) => library.id === current.library_id) && (
           <option value={current.library_id}>{current.library_name}</option>
         )}
         {libraries.map((library) => (
           <option key={library.id} value={library.id}>
-            {library.workspaceName} / {library.name}
+            {t('groups.inbox.library', { workspace: library.workspaceName, library: library.name })}
           </option>
         ))}
       </Select>
@@ -113,7 +116,7 @@ function InboxSelector({
         disabled={!canEdit || save.isPending || id === (current?.library_id ?? '')}
         onClick={() => save.mutate()}
       >
-        Save inbox
+        {t('groups.inbox.save')}
       </Button>
     </>
   );

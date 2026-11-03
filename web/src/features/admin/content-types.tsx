@@ -16,6 +16,7 @@ import { SystemProperties } from '@/features/lists/system-properties';
 import { reorder, treeLabel, typeTree, withSetting } from '@/features/lists/schema';
 import { FieldEditor } from '@/features/fields/editor';
 import { FieldDialog, fieldTypeLabel } from './field-dialog';
+import { useTranslation } from '@/i18n';
 
 /** Catalog types have at most this many ancestors; list types take one more level. */
 const maxCatalogAncestors = 7;
@@ -32,6 +33,7 @@ export const catalogFieldsQuery = {
 const NO_GROUP = '\u0000none';
 
 export function ContentTypeCatalog() {
+  const { t } = useTranslation(['admin', 'common']);
   const canRead = useHasScope('contentType.read');
   const canManage = useHasScope('contentType.manage');
   const types = useQuery({ ...catalogTypesQuery, enabled: canRead });
@@ -51,43 +53,43 @@ export function ContentTypeCatalog() {
       await client.invalidateQueries({ queryKey: ['catalog'] });
     },
   });
-  if (!canRead) return <p>You need contentType.read to view this catalog.</p>;
+  if (!canRead) return <p>{t('contentTypes.needRead')}</p>;
   return (
     <div className="grid gap-5">
       <SettingsSection
-        title="Content types"
-        description="Reusable schemas shared by collections. A type inherits every field and rule of the type it derives from; lists customize their own copy."
-        actions={canManage && <Button onClick={() => setType('new')}>New content type</Button>}
+        title={t('contentTypes.title')}
+        description={t('contentTypes.description')}
+        actions={canManage && <Button onClick={() => setType('new')}>{t('contentTypes.new')}</Button>}
       >
         <QueryFeedback query={types} />
         {groups.length > 0 && (
-          <Field id="content-type-group-filter" label="Group">
+          <Field id="content-type-group-filter" label={t('contentTypes.group')}>
             <Select id="content-type-group-filter" value={shownGroup} onChange={(event) => setShownGroup(event.target.value)}>
-              <option value="">All groups</option>
+              <option value="">{t('contentTypes.allGroups')}</option>
               {groups.map((entry) => (
                 <option key={entry} value={entry}>
                   {entry}
                 </option>
               ))}
-              <option value={NO_GROUP}>No group</option>
+              <option value={NO_GROUP}>{t('contentTypes.noGroup')}</option>
             </Select>
           </Field>
         )}
         <ul className="divide-y">
           {typeTree(shown).map(({ type, depth }) => (
-            <li key={type.id} className="flex items-center gap-2 py-3" style={{ paddingLeft: `${depth * 1.25}rem` }}>
+            <li key={type.id} className="flex items-center gap-2 py-3" style={{ paddingInlineStart: `${depth * 1.25}rem` }}>
               <span className="flex-1 font-medium">
                 {type.name}{' '}
                 {type.group && <Badge>{type.group}</Badge>}{' '}
                 <span className="text-xs text-muted">
-                  {type.key} · {type.effective?.field_ids.length ?? type.field_ids?.length ?? 0} fields
-                  {(type.field_ids?.length ?? 0) !== (type.effective?.field_ids.length ?? 0) && ` (${type.field_ids?.length ?? 0} own)`}
+                  {type.key} · {t('contentTypes.fieldCount', { count: type.effective?.field_ids.length ?? type.field_ids?.length ?? 0 })}
+                  {(type.field_ids?.length ?? 0) !== (type.effective?.field_ids.length ?? 0) && ` ${t('contentTypes.ownCount', { count: type.field_ids?.length ?? 0 })}`}
                 </span>
               </span>
-              <Button onClick={() => setType(type)}>{canManage ? 'Edit' : 'View'}</Button>
+              <Button onClick={() => setType(type)}>{canManage ? t('common:actions.edit') : t('contentTypes.view')}</Button>
               {canManage && type.parent_id && (
                 <Button variant="ghost" onClick={() => setDeleting(type)}>
-                  Delete
+                  {t('common:actions.delete')}
                 </Button>
               )}
             </li>
@@ -95,9 +97,9 @@ export function ContentTypeCatalog() {
         </ul>
       </SettingsSection>
       <SettingsSection
-        title="Field catalog"
-        description="Editing or deleting a field changes every content type and collection that uses it."
-        actions={canManage && <Button onClick={() => setField('new')}>New field</Button>}
+        title={t('contentTypes.fieldCatalog')}
+        description={t('contentTypes.fieldCatalogDescription')}
+        actions={canManage && <Button onClick={() => setField('new')}>{t('contentTypes.newField')}</Button>}
       >
         <QueryFeedback query={fields} />
         <FieldList fields={fields.data ?? []} canManage={canManage} onEdit={setField} />
@@ -121,9 +123,9 @@ export function ContentTypeCatalog() {
       <ConfirmDialog
         open={!!deleting}
         onOpenChange={(open) => !open && setDeleting(undefined)}
-        title={`Delete content type ${deleting?.name ?? ''}?`}
-        description="Only a type without subtypes that no list or library uses, now or in its items' history, can be deleted. Workflow rules and smart folders that name it stop matching."
-        confirm="Delete content type"
+        title={t('contentTypes.deleteTitle', { name: deleting?.name ?? '' })}
+        description={t('contentTypes.deleteDescription')}
+        confirm={t('contentTypes.deleteConfirm')}
         busy={remove.isPending}
         error={remove.error}
         onConfirm={() => deleting && remove.mutate(deleting)}
@@ -182,6 +184,7 @@ function SchemaFields({
   schema: Schema;
   onChange: (schema: Schema) => void;
 }) {
+  const { t } = useTranslation('admin');
   const inherited = parent?.effective?.field_ids ?? [];
   const inheritedHidden = new Set(parent?.effective?.hidden_field_ids ?? []);
   const byId = new Map(fields.map((field) => [field.id, field]));
@@ -221,8 +224,8 @@ function SchemaFields({
     <>
       {parent && (
         <fieldset>
-          <legend>Inherited from {parent.name}</legend>
-          {inherited.length === 0 && <p className="text-sm text-muted">{parent.name} has no fields.</p>}
+          <legend>{t('contentTypes.inheritedFrom', { name: parent.name })}</legend>
+          {inherited.length === 0 && <p className="text-sm text-muted">{t('contentTypes.noFields', { name: parent.name })}</p>}
           {inherited.flatMap((id) => byId.get(id) ?? []).map((field) => {
             const shown = !inheritedHidden.has(field.id) && !schema.hidden.includes(field.id);
             // A field forms must fill cannot be hidden, but can always be shown again.
@@ -231,7 +234,7 @@ function SchemaFields({
             return (
               <label key={field.id} className="flex gap-2 py-1">
                 <Checkbox
-                  aria-label={`Show ${field.label} in forms`}
+                  aria-label={t('contentTypes.showInForms', { label: field.label })}
                   disabled={inheritedHidden.has(field.id) || (shown && mandatory)}
                   checked={shown}
                   onChange={(event) =>
@@ -242,14 +245,14 @@ function SchemaFields({
                   }
                 />
                 {label(field)}
-                <span className="text-xs text-muted">{shown ? 'Shown in forms' : 'Hidden in forms'}</span>
+                <span className="text-xs text-muted">{shown ? t('contentTypes.shownInForms') : t('contentTypes.hiddenInForms')}</span>
               </label>
             );
           })}
         </fieldset>
       )}
       <fieldset>
-        <legend>{parent ? 'Own fields' : 'Fields'}</legend>
+        <legend>{parent ? t('contentTypes.ownFields') : t('contentTypes.fields')}</legend>
         {fields
           .filter((field) => !inherited.includes(field.id))
           .map((field) => (
@@ -269,11 +272,8 @@ function SchemaFields({
       </fieldset>
       {all.length > 0 && (
         <fieldset>
-          <legend>Form layout</legend>
-          <p className="text-xs text-muted">
-            The order forms show the fields in, and whether this type requires each and its default. Fields themselves stay as
-            they are for other types.
-          </p>
+          <legend>{t('contentTypes.formLayout')}</legend>
+          <p className="text-xs text-muted">{t('contentTypes.formLayoutHint')}</p>
           {layout.map((field, index) => {
             const setting = ownSetting(field.id);
             const base = inheritedField(field);
@@ -282,24 +282,24 @@ function SchemaFields({
               <div key={field.id} className="grid gap-1 border-b py-2 last:border-b-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="flex-1 text-sm">{label(field)}</span>
-                  <Button size="sm" variant="ghost" aria-label={`Move ${field.label} up`} disabled={index === 0} onClick={() => move(index, -1)}>
+                  <Button size="sm" variant="ghost" aria-label={t('contentTypes.moveUp', { label: field.label })} disabled={index === 0} onClick={() => move(index, -1)}>
                     ↑
                   </Button>
-                  <Button size="sm" variant="ghost" aria-label={`Move ${field.label} down`} disabled={index === layout.length - 1} onClick={() => move(index, 1)}>
+                  <Button size="sm" variant="ghost" aria-label={t('contentTypes.moveDown', { label: field.label })} disabled={index === layout.length - 1} onClick={() => move(index, 1)}>
                     ↓
                   </Button>
                   <Select
-                    aria-label={`${field.label} required`}
+                    aria-label={t('contentTypes.requiredLabel', { label: field.label })}
                     className="w-auto"
                     value={setting?.required === undefined ? '' : setting.required ? 'required' : 'optional'}
                     onChange={(event) => setSetting(field.id, { required: event.target.value ? event.target.value === 'required' : undefined })}
                   >
-                    <option value="">{base.required ? 'Required, as inherited' : 'Optional, as inherited'}</option>
-                    <option value="required">Required</option>
-                    <option value="optional">Optional</option>
+                    <option value="">{base.required ? t('contentTypes.requiredInherited') : t('contentTypes.optionalInherited')}</option>
+                    <option value="required">{t('contentTypes.required')}</option>
+                    <option value="optional">{t('contentTypes.optional')}</option>
                   </Select>
                   <Select
-                    aria-label={`${field.label} default`}
+                    aria-label={t('contentTypes.defaultLabel', { label: field.label })}
                     className="w-auto"
                     value={setting?.default_value === null ? 'none' : ownDefault ? 'own' : ''}
                     onChange={(event) => {
@@ -310,15 +310,15 @@ function SchemaFields({
                       setSetting(field.id, { default_value: choice === 'own' ? base.options?.default_value : choice === 'none' ? null : undefined });
                     }}
                   >
-                    <option value="">{base.options?.default_value !== undefined ? 'Inherited default' : 'No default, as inherited'}</option>
-                    <option value="own">Own default</option>
-                    <option value="none">No default</option>
+                    <option value="">{base.options?.default_value !== undefined ? t('contentTypes.inheritedDefault') : t('contentTypes.noDefaultInherited')}</option>
+                    <option value="own">{t('contentTypes.ownDefault')}</option>
+                    <option value="none">{t('contentTypes.noDefault')}</option>
                   </Select>
                 </div>
                 {ownDefault && (
                   <FieldEditor
                     id={`default-${field.key}`}
-                    field={{ ...field, label: `Default ${field.label}`, required: false }}
+                    field={{ ...field, label: t('contentTypes.defaultField', { label: field.label }), required: false }}
                     value={setting?.default_value ?? undefined}
                     onChange={(value) => setSetting(field.id, { default_value: value ?? undefined })}
                   />
@@ -328,15 +328,15 @@ function SchemaFields({
           })}
         </fieldset>
       )}
-      <p className="text-sm font-medium">Validation rules</p>
+      <p className="text-sm font-medium">{t('contentTypes.rules')}</p>
       {!!parent?.effective?.rules.length && (
-        <p className="text-sm text-muted">{parent.effective.rules.length} inherited rules also apply.</p>
+        <p className="text-sm text-muted">{t('contentTypes.inheritedRules', { count: parent.effective.rules.length })}</p>
       )}
       <JsonInput
-        label="Content type validation rules"
+        label={t('contentTypes.rulesLabel')}
         value={schema.rules}
         onChange={(value) => {
-          if (!Array.isArray(value)) throw new Error('Rules must be an array.');
+          if (!Array.isArray(value)) throw new Error(t('contentTypes.rulesNotArray'));
           onChange({ ...schema, rules: value as ValidationRule[] });
         }}
       />
@@ -357,6 +357,7 @@ function TypeDialog({
   canManage: boolean;
   onClose: () => void;
 }) {
+  const { t } = useTranslation(['admin', 'common']);
   const client = useQueryClient();
   const root = types.find((entry) => !entry.parent_id);
   const [key, setKey] = useState(type?.key ?? '');
@@ -400,16 +401,16 @@ function TypeDialog({
   return (
     <FormDialog
       open
-      title={type ? `Content type ${type.name}` : 'New content type'}
-      description="Changes apply to every type deriving from this one and to every list using them."
-      submitLabel="Save content type"
+      title={type ? t('contentTypes.typeTitle', { name: type.name }) : t('contentTypes.new')}
+      description={t('contentTypes.typeDescription')}
+      submitLabel={t('contentTypes.save')}
       submitDisabled={!canManage}
       pending={save.isPending}
       onClose={onClose}
       onSubmit={() => canManage && save.mutate()}
     >
       <fieldset className="grid gap-3" disabled={!canManage}>
-        <Field id="content-type-key" label="Key">
+        <Field id="content-type-key" label={t('contentTypes.key')}>
           <Input
             id="content-type-key"
             disabled={!!type}
@@ -419,10 +420,10 @@ function TypeDialog({
             onChange={(event) => setKey(event.target.value)}
           />
         </Field>
-        <Field id="content-type-name" label="Name">
+        <Field id="content-type-name" label={t('common:fields.name')}>
           <Input id="content-type-name" required value={name} onChange={(event) => setName(event.target.value)} />
         </Field>
-        <Field id="content-type-group" label="Group">
+        <Field id="content-type-group" label={t('contentTypes.group')}>
           <Input id="content-type-group" list="content-type-groups" maxLength={100} value={group} onChange={(event) => setGroup(event.target.value)} />
           <datalist id="content-type-groups">
             {groups.map((entry) => (
@@ -431,7 +432,7 @@ function TypeDialog({
           </datalist>
         </Field>
         {(!type || type.parent_id) && (
-          <Field id="content-type-parent" label="Derives from">
+          <Field id="content-type-parent" label={t('contentTypes.derivesFrom')}>
             <Select
               id="content-type-parent"
               disabled={!!type}
@@ -473,6 +474,7 @@ function ListTypeDialog({
   canManage: boolean;
   onClose: () => void;
 }) {
+  const { t } = useTranslation(['admin', 'common']);
   const client = useQueryClient();
   const catalog = useQuery(catalogTypesQuery);
   const fields = useQuery(catalogFieldsQuery);
@@ -493,9 +495,9 @@ function ListTypeDialog({
   return (
     <FormDialog
       open
-      title={`Customize ${type.name} in ${collection.name}`}
-      description={`Only this list changes. Everything ${type.name} defines stays, and stays in step with the catalog.`}
-      submitLabel="Save"
+      title={t('contentTypes.customizeTitle', { type: type.name, collection: collection.name })}
+      description={t('contentTypes.customizeDescription', { type: type.name })}
+      submitLabel={t('common:actions.save')}
       submitDisabled={!canManage}
       pending={save.isPending}
       onClose={onClose}
@@ -520,6 +522,7 @@ function FieldList({
   onEdit: (field: FieldDefinition) => void;
   collection?: Resource;
 }) {
+  const { t } = useTranslation(['admin', 'common']);
   const client = useQueryClient();
   const [deleting, setDeleting] = useState<FieldDefinition>();
   const remove = useMutation({
@@ -542,18 +545,26 @@ function FieldList({
             <span className="flex-1">
               <span className="font-medium">{field.label}</span>
               <span className="block text-xs text-muted">
-                {collection ? '' : `${field.key} · `}
-                {fieldTypeLabel(field.type)}
-                {field.required ? ' · Required' : ''}
-                {field.indexed ? (field.index_status && field.index_status !== 'ready' ? ' · Preparing filters…' : ' · Filterable') : ''}
+                {[
+                  collection ? '' : field.key,
+                  fieldTypeLabel(field.type),
+                  field.required ? t('contentTypes.required') : '',
+                  field.indexed
+                    ? field.index_status && field.index_status !== 'ready'
+                      ? t('contentTypes.preparingFilters')
+                      : t('contentTypes.filterable')
+                    : '',
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
               </span>
             </span>
             <Button size="sm" variant="ghost" onClick={() => onEdit(field)}>
-              {canManage ? 'Edit' : 'View'}
+              {canManage ? t('common:actions.edit') : t('contentTypes.view')}
             </Button>
             {canManage && (
               <Button size="sm" variant="ghost" onClick={() => setDeleting(field)}>
-                {collection ? 'Remove' : 'Delete'}
+                {collection ? t('common:actions.removeItem') : t('common:actions.delete')}
               </Button>
             )}
           </li>
@@ -562,13 +573,17 @@ function FieldList({
       <ConfirmDialog
         open={!!deleting}
         onOpenChange={(open) => !open && setDeleting(undefined)}
-        title={collection ? `Remove column ${deleting?.label ?? ''}?` : `Delete field ${deleting?.label ?? ''}?`}
+        title={
+          collection
+            ? t('contentTypes.removeColumnTitle', { label: deleting?.label ?? '' })
+            : t('contentTypes.deleteFieldTitle', { label: deleting?.label ?? '' })
+        }
         description={
           collection
-            ? 'This removes the column from this collection, with its current values; other lists keep it. Earlier versions keep theirs. A column a catalog content type provides stays: hide it in the content type instead.'
-            : 'This removes the shared field from every content type, list and library that uses it, with its current values. Earlier versions keep theirs.'
+            ? t('contentTypes.removeColumnDescription')
+            : t('contentTypes.deleteFieldDescription')
         }
-        confirm={collection ? 'Remove column' : 'Delete shared field'}
+        confirm={collection ? t('contentTypes.removeColumn') : t('contentTypes.deleteSharedField')}
         busy={remove.isPending}
         error={remove.error}
         onConfirm={() => deleting && remove.mutate(deleting)}
@@ -579,26 +594,27 @@ function FieldList({
 
 /** The columns of a list or library: shared organization fields attached through its content types. */
 export function CollectionColumns({ collection, canManage }: { collection: Resource; canManage: boolean }) {
+  const { t } = useTranslation('admin');
   const fields = useQuery(fieldsQuery(collection.id));
   const [editing, setEditing] = useState<FieldDefinition | 'new'>();
   return (
     <SettingsSection
-      title="Columns"
-      description="The information kept for each item. Columns are shared fields: editing one changes it everywhere it is used, removing one removes it from this collection only."
+      title={t('contentTypes.columns')}
+      description={t('contentTypes.columnsDescription')}
       actions={
         canManage && (
           <Button variant="primary" onClick={() => setEditing('new')}>
-            <Plus /> Add column
+            <Plus /> {t('contentTypes.addColumn')}
           </Button>
         )
       }
     >
       <QueryFeedback query={fields} />
       <SystemProperties />
-      <h3 className="mt-3 font-medium">Custom fields</h3>
+      <h3 className="mt-3 font-medium">{t('contentTypes.customFields')}</h3>
       <FieldList collection={collection} fields={fields.data ?? []} canManage={canManage} onEdit={setEditing} />
       {fields.isSuccess && fields.data.length === 0 && (
-        <p className="text-sm text-muted">No custom fields defined. System properties are available on every item.</p>
+        <p className="text-sm text-muted">{t('contentTypes.noCustomFields')}</p>
       )}
       {editing && (
         <FieldDialog
@@ -614,6 +630,7 @@ export function CollectionColumns({ collection, canManage }: { collection: Resou
 
 /** Content types attached to a list or library; each item uses one and gets its columns. */
 export function CollectionContentTypes({ collection, canManage }: { collection: Resource; canManage: boolean }) {
+  const { t } = useTranslation(['admin', 'common']);
   const client = useQueryClient();
   const canReadCatalog = useHasScope('contentType.read');
   const canManageTypes = useHasScope('contentType.manage');
@@ -664,8 +681,8 @@ export function CollectionContentTypes({ collection, canManage }: { collection: 
   const available = typeTree(catalog.data?.filter((type) => !types.data?.some((attached) => attached.parent_id === type.id)) ?? []);
   return (
     <SettingsSection
-      title="Content types"
-      description="Kinds of items this list holds. Each comes from the catalog with its columns; customizing one changes it for this list only. New items use the default type; the New menu offers the checked types in this order."
+      title={t('contentTypes.title')}
+      description={t('contentTypes.listDescription')}
     >
       <QueryFeedback query={types} />
       <QueryFeedback query={setMenu} />
@@ -673,10 +690,10 @@ export function CollectionContentTypes({ collection, canManage }: { collection: 
         {types.data?.map((type) => (
           <li key={type.id} className="flex items-center gap-2 py-2">
             <span className="flex-1 text-[13px] font-medium">
-              {type.name} {type.is_default && <Badge>Default</Badge>}
-              {type.in_new_menu === false && <span className="ml-2 text-xs text-muted">Not in New menu</span>}
+              {type.name} {type.is_default && <Badge>{t('contentTypes.default')}</Badge>}
+              {type.in_new_menu === false && <span className="ms-2 text-xs text-muted">{t('contentTypes.notInNewMenu')}</span>}
               {(!!type.field_ids?.length || !!type.hidden_field_ids?.length || !!type.rules?.length) && (
-                <span className="ml-2 text-xs text-muted">Customized</span>
+                <span className="ms-2 text-xs text-muted">{t('contentTypes.customized')}</span>
               )}
             </span>
             {canManage && (
@@ -685,17 +702,17 @@ export function CollectionContentTypes({ collection, canManage }: { collection: 
                   <>
                     <label className="flex items-center gap-1 text-xs">
                       <Checkbox
-                        aria-label={`Offer ${type.name} in the New menu`}
+                        aria-label={t('contentTypes.offerInNewMenu', { name: type.name })}
                         checked={type.in_new_menu !== false}
                         disabled={type.is_default || setMenu.isPending}
                         onChange={(event) => setMenu.mutate(event.target.checked ? [...menu, type.id] : menu.filter((id) => id !== type.id))}
                       />
-                      New menu
+                      {t('contentTypes.newMenu')}
                     </label>
                     <Button
                       size="sm"
                       variant="ghost"
-                      aria-label={`Move ${type.name} up`}
+                      aria-label={t('contentTypes.moveUp', { label: type.name })}
                       disabled={menu.indexOf(type.id) <= 0 || setMenu.isPending}
                       onClick={() => move(type.id, -1)}
                     >
@@ -704,7 +721,7 @@ export function CollectionContentTypes({ collection, canManage }: { collection: 
                     <Button
                       size="sm"
                       variant="ghost"
-                      aria-label={`Move ${type.name} down`}
+                      aria-label={t('contentTypes.moveDown', { label: type.name })}
                       disabled={!menu.includes(type.id) || menu.indexOf(type.id) === menu.length - 1 || setMenu.isPending}
                       onClick={() => move(type.id, 1)}
                     >
@@ -714,7 +731,7 @@ export function CollectionContentTypes({ collection, canManage }: { collection: 
                 )}
                 {canReadCatalog && (
                   <Button size="sm" variant="ghost" onClick={() => setCustomizing(type)}>
-                    {canManageTypes ? 'Customize' : 'View type'}
+                    {canManageTypes ? t('contentTypes.customize') : t('contentTypes.viewType')}
                   </Button>
                 )}
                 <Button
@@ -723,7 +740,7 @@ export function CollectionContentTypes({ collection, canManage }: { collection: 
                   disabled={type.is_default || attach.isPending || !type.parent_id}
                   onClick={() => type.parent_id && attach.mutate({ id: type.parent_id, isDefault: true })}
                 >
-                  Make default
+                  {t('contentTypes.makeDefault')}
                 </Button>
                 <Button
                   size="sm"
@@ -731,7 +748,7 @@ export function CollectionContentTypes({ collection, canManage }: { collection: 
                   disabled={(types.data?.length ?? 0) <= 1}
                   onClick={() => setDetaching(type)}
                 >
-                  Remove
+                  {t('common:actions.removeItem')}
                 </Button>
               </>
             )}
@@ -741,37 +758,38 @@ export function CollectionContentTypes({ collection, canManage }: { collection: 
       {canManage && canReadCatalog && available.length > 0 && (
         <div className="mt-3 flex flex-col gap-2 border-t pt-3 sm:flex-row sm:items-center">
           <Select
-            aria-label="Add content type"
+            aria-label={t('contentTypes.addContentType')}
             className="sm:max-w-xs"
             value={attachId}
             onChange={(event) => setAttachId(event.target.value)}
           >
-            <option value="">Add a content type…</option>
+            <option value="">{t('contentTypes.addContentTypePlaceholder')}</option>
             {available.map(({ type, depth }) => (
               <option key={type.id} value={type.id}>
-                {treeLabel(type.name, depth)}
-                {type.group ? ` · ${type.group}` : ''}
+                {type.group
+                  ? t('contentTypes.typeInGroup', { type: treeLabel(type.name, depth), group: type.group })
+                  : treeLabel(type.name, depth)}
               </option>
             ))}
           </Select>
           <label className="flex items-center gap-2 text-[13px]">
             <Checkbox checked={makeDefault} onChange={(event) => setMakeDefault(event.target.checked)} />
-            Make default
+            {t('contentTypes.makeDefault')}
           </label>
           <Button
             disabled={!attachId || attach.isPending}
             onClick={() => attach.mutate({ id: attachId, isDefault: makeDefault })}
           >
-            Add
+            {t('contentTypes.add')}
           </Button>
         </div>
       )}
       <ConfirmDialog
         open={!!detaching}
         onOpenChange={(open) => !open && setDetaching(undefined)}
-        title={`Remove ${detaching?.name ?? ''} from this list?`}
-        description="The content type stays available to other lists, and this list keeps its customizations if you add it again. A type still used by items cannot be removed."
-        confirm="Remove content type"
+        title={t('contentTypes.detachTitle', { name: detaching?.name ?? '' })}
+        description={t('contentTypes.detachDescription')}
+        confirm={t('contentTypes.detachConfirm')}
         busy={detach.isPending}
         error={detach.error}
         onConfirm={() => detaching && detach.mutate(detaching)}

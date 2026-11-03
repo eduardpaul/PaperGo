@@ -10,6 +10,7 @@ import { Input, Label, Textarea } from '@/components/ui/input';
 import { Checkbox, Select } from '@/components/ui/select';
 import { FieldEditor } from '@/features/fields/editor';
 import { valuesPatch } from '@/features/fields/values';
+import { i18n, useTranslation } from '@/i18n';
 import { termSetsQuery } from './taxonomy';
 import { Field } from './common';
 
@@ -31,27 +32,11 @@ export const fieldTypes = [
   'term',
   'keywords',
 ];
-const typeLabels: Record<string, string> = {
-  text: 'Single line of text',
-  note: 'Multiple lines of text',
-  email: 'Email address',
-  url: 'Link',
-  date: 'Date',
-  datetime: 'Date and time',
-  choice: 'Choice',
-  number: 'Number',
-  integer: 'Whole number',
-  decimal: 'Decimal number',
-  currency: 'Currency',
-  boolean: 'Yes/No',
-  lookup: 'Lookup (item in another list)',
-  person: 'Person',
-  term: 'Taxonomy (term set)',
-  keywords: 'Keywords',
-};
+const typeLabels = new Set(fieldTypes);
 
+/** The type's name in the user's language; an unknown type shows as it is. */
 export function fieldTypeLabel(type: string) {
-  return typeLabels[type] ?? type;
+  return typeLabels.has(type) ? i18n.t(`admin:fieldTypes.${type as 'text'}`) : type;
 }
 
 /** A field key from its label: lowercase letters, digits and underscores, starting with a letter. */
@@ -81,6 +66,7 @@ export function FieldDialog({
   onClose: () => void;
   canManage?: boolean;
 }) {
+  const { t } = useTranslation(['admin', 'common']);
   const client = useQueryClient();
   const [key, setKey] = useState(field?.key ?? '');
   const [keyEdited, setKeyEdited] = useState(!!field);
@@ -110,7 +96,7 @@ export function FieldDialog({
   const draft: FieldDefinition = {
     id: field?.id ?? 'new',
     key,
-    label: 'Default value',
+    label: t('field.defaultValue'),
     type,
     scale,
     choices: choices
@@ -152,20 +138,26 @@ export function FieldDialog({
   return (
     <FormDialog
       open
-      title={field ? `${collection ? 'Column' : 'Field'} ${field.label}` : collection ? 'Add a column' : 'New field'}
+      title={
+        field
+          ? t(collection ? 'field.columnTitle' : 'field.fieldTitle', { label: field.label })
+          : collection
+            ? t('field.addColumn')
+            : t('field.new')
+      }
       description={
         collection
-          ? 'Columns are shared organization fields. Editing one updates every list and library that uses it.'
-          : 'Organization fields are shared. Editing a field updates every collection using it.'
+          ? t('field.columnDescription')
+          : t('field.fieldDescription')
       }
-      submitLabel="Save field"
+      submitLabel={t('field.save')}
       submitDisabled={!canManage || (type === 'term' && !options.term_set_id)}
       pending={save.isPending}
       onClose={onClose}
       onSubmit={() => canManage && save.mutate()}
     >
       <fieldset className="grid gap-3" disabled={!canManage}>
-        <Field id="catalog-field-label" label="Name">
+        <Field id="catalog-field-label" label={t('common:fields.name')}>
           <Input
             id="catalog-field-label"
             required
@@ -179,8 +171,8 @@ export function FieldDialog({
         </Field>
         <Field
           id="catalog-field-key"
-          label="Key"
-          hint={field ? 'The key cannot be changed.' : 'Used by the API, filters and workflows. Lowercase letters, digits and underscores.'}
+          label={t('field.key')}
+          hint={field ? t('field.keyFixed') : t('field.keyHint')}
         >
           <Input
             id="catalog-field-key"
@@ -194,7 +186,7 @@ export function FieldDialog({
             }}
           />
         </Field>
-        <Field id="catalog-field-type" label="Type">
+        <Field id="catalog-field-type" label={t('common:fields.type')}>
           <Select
             id="catalog-field-type"
             disabled={!!field}
@@ -214,7 +206,7 @@ export function FieldDialog({
           </Select>
         </Field>
         {type === 'decimal' && (
-          <Field id="field-scale" label="Decimal scale">
+          <Field id="field-scale" label={t('field.scale')}>
             <Input
               id="field-scale"
               type="number"
@@ -227,7 +219,7 @@ export function FieldDialog({
           </Field>
         )}
         {type === 'choice' && (
-          <Field id="field-choices" label="Choices, one per line">
+          <Field id="field-choices" label={t('field.choices')}>
             <Textarea
               id="field-choices"
               required
@@ -236,14 +228,14 @@ export function FieldDialog({
             />
           </Field>
         )}
-        <Field id="field-description" label="Description">
+        <Field id="field-description" label={t('common:fields.description')}>
           <Textarea
             id="field-description"
             value={options.description ?? ''}
             onChange={(event) => patchOptions({ description: event.target.value || undefined })}
           />
         </Field>
-        <Field id="field-search-weight" label="In search">
+        <Field id="field-search-weight" label={t('field.inSearch')}>
           <Select
             id="field-search-weight"
             value={options.search_weight ?? 'normal'}
@@ -253,13 +245,13 @@ export function FieldDialog({
               })
             }
           >
-            <option value="normal">Searchable</option>
-            <option value="high">Searchable, ranked with names</option>
-            <option value="none">Not searchable (filters only)</option>
+            <option value="normal">{t('field.searchNormal')}</option>
+            <option value="high">{t('field.searchHigh')}</option>
+            <option value="none">{t('field.searchNone')}</option>
           </Select>
         </Field>
         {['text', 'note', 'email', 'url'].includes(type) && (
-          <Field id="field-length" label="Maximum length">
+          <Field id="field-length" label={t('field.maxLength')}>
             <Input
               id="field-length"
               type="number"
@@ -273,7 +265,7 @@ export function FieldDialog({
         )}
         {['number', 'integer', 'decimal', 'currency'].includes(type) && (
           <>
-            <Field id="field-min" label="Minimum">
+            <Field id="field-min" label={t('field.minimum')}>
               <Input
                 id="field-min"
                 inputMode="decimal"
@@ -281,7 +273,7 @@ export function FieldDialog({
                 onChange={(event) => patchOptions({ minimum: event.target.value || undefined })}
               />
             </Field>
-            <Field id="field-max" label="Maximum">
+            <Field id="field-max" label={t('field.maximum')}>
               <Input
                 id="field-max"
                 inputMode="decimal"
@@ -292,13 +284,13 @@ export function FieldDialog({
           </>
         )}
         {type === 'currency' && (
-          <div className="grid gap-1.5"><Label id="field-currency-label">Currency</Label>
+          <div className="grid gap-1.5"><Label id="field-currency-label">{t('field.currency')}</Label>
             <CurrencyPicker id="field-currency" labelledBy="field-currency-label" value={currencyCode} onChange={code => patchOptions({ currency_code: code || undefined })} />
-            {!field && <p className="text-xs text-muted">Starts with the workspace default, or the organization default when no override is set.</p>}
+            {!field && <p className="text-xs text-muted">{t('field.currencyHint')}</p>}
           </div>
         )}
         {type === 'lookup' && (
-          <Field id="field-lookup" label="Look up items in">
+          <Field id="field-lookup" label={t('field.lookupIn')}>
             {collection ? (
               <Select
                 id="field-lookup"
@@ -306,7 +298,7 @@ export function FieldDialog({
                 value={options.lookup_container_id ?? ''}
                 onChange={(event) => patchOptions({ lookup_container_id: event.target.value })}
               >
-                <option value="">Choose a list…</option>
+                <option value="">{t('field.chooseList')}</option>
                 {lookupTargets.data?.map((target) => (
                   <option key={target.id} value={target.id}>
                     {target.name}
@@ -317,7 +309,7 @@ export function FieldDialog({
               <Input
                 id="field-lookup"
                 required
-                placeholder="List or library id"
+                placeholder={t('field.lookupPlaceholder')}
                 value={options.lookup_container_id ?? ''}
                 onChange={(event) => patchOptions({ lookup_container_id: event.target.value })}
               />
@@ -325,14 +317,14 @@ export function FieldDialog({
           </Field>
         )}
         {type === 'term' && (
-          <Field id="field-term-set" label="Term set" hint="Choose the term set that defines this taxonomy field.">
+          <Field id="field-term-set" label={t('field.termSet')} hint={t('field.termSetHint')}>
             <Select
               id="field-term-set"
               required
               value={options.term_set_id ?? ''}
               onChange={(event) => patchOptions({ term_set_id: event.target.value })}
             >
-              <option value="">Choose…</option>
+              <option value="">{t('field.choose')}</option>
               {termSets.data?.map((set) => (
                 <option key={set.id} value={set.id}>
                   {set.name}
@@ -343,7 +335,7 @@ export function FieldDialog({
         )}
         <label className="flex gap-2">
           <Checkbox checked={required} onChange={(event) => setRequired(event.target.checked)} />
-          Required
+          {t('field.required')}
         </label>
         <label className="flex gap-2">
           <Checkbox
@@ -351,11 +343,11 @@ export function FieldDialog({
             disabled={alwaysIndexed}
             onChange={(event) => setIndexed(event.target.checked)}
           />
-          Use for filtering, sorting and grouping in views{alwaysIndexed ? ' (always on for keywords and parent terms)' : ''}
+          {alwaysIndexed ? t('field.indexedAlways') : t('field.indexed')}
         </label>
         <label className="flex gap-2">
           <Checkbox checked={!!options.unique} onChange={(event) => patchOptions({ unique: event.target.checked })} />
-          Unique within each collection
+          {t('field.unique')}
         </label>
         {multipleTypes.has(type) && (
           <label className="flex gap-2">
@@ -367,7 +359,7 @@ export function FieldDialog({
                 setDefaultValue(undefined);
               }}
             />
-            Allow multiple values
+            {t('field.multiple')}
           </label>
         )}
         {termTypes.has(type) && (
@@ -377,15 +369,15 @@ export function FieldDialog({
               disabled={!!field}
               onChange={(event) => patchOptions({ apply_parents: event.target.checked })}
             />
-            Apply parent terms (picking a term also tags its parents)
+            {t('field.applyParents')}
           </label>
         )}
         <label className="flex gap-2">
           <Checkbox checked={hasDefault} onChange={(event) => setHasDefault(event.target.checked)} />
-          Set a default value
+          {t('field.setDefault')}
         </label>
         {hasDefault && <FieldEditor key={type} field={draft} value={defaultValue} onChange={setDefaultValue} />}
-        <Label className="text-xs text-muted">Saved keys, types and decimal scales cannot be changed.</Label>
+        <Label className="text-xs text-muted">{t('field.fixed')}</Label>
       </fieldset>
     </FormDialog>
   );
