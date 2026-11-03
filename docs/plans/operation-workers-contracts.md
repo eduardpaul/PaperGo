@@ -481,7 +481,7 @@ Startup validation rejects:
 
 ### Controls
 
-The admin command, `cmd/admin workers {status|pause|resume|drain|unload|disable|enable|flush} <worker>`, writes a `worker.control` record (desired state, plus a flush request id). The runtime polls it every 15 s and on wake.
+The admin command, `papergo admin workers {status|pause|resume|drain|unload|disable|enable|flush} <worker>`, writes a `worker.control` record (desired state, plus a flush request id). The runtime polls it every 15 s and on wake.
 
 | Control | Effect |
 | --- | --- |
@@ -497,7 +497,7 @@ The runtime writes a `worker.status` record when the status changes, at most eve
 - active claims, retries and drain progress;
 - residency.
 
-`cmd/admin workers status` prints it, and the same fields are logged. There is no new public API.
+`papergo admin workers status` prints it, and the same fields are logged. There is no new public API.
 
 ### Resources
 
@@ -613,7 +613,7 @@ The runtime lives in `internal/worker`; `cmd/api/workers.go` composes it. The co
 - **Workers in code.** The executable defines its workers and their kinds: `maintenance`, `integrations` and `documents`. `config.yaml` only adjusts them by name, through `concurrency`, `window` and `admission`. There is no `operation_kinds` key, because a kind moving between workers is a code change validated at startup.
 - **Retries.** They stay with each handler's `MaxAttempts` and `Retry(err, after)`; there is no per-worker retry key.
 - **Fairness.** Ready order (`attempt_at`, then age) is the fairness rule. There are no priorities or starvation clock yet.
-- **Controls.** Controls (`running`, `paused`, `draining`) and flushes are activity records, which `papergo-admin workers` writes. Each process polls them every 15 seconds and reports its status there. `unload` and `disable` follow with the resource registry.
+- **Controls.** Controls (`running`, `paused`, `draining`) and flushes are activity records, which `papergo admin workers` writes. Each process polls them every 15 seconds and reports its status there. `unload` and `disable` follow with the resource registry.
 - **Group admission.**
   - Handlers that declare `Admission` and `ExecuteGroup` run in groups.
   - A group released by `max_wait` or a flush records a drain marker with its cutoff, so a restart continues that backlog.

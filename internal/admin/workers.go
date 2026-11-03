@@ -1,4 +1,4 @@
-package main
+package admin
 
 import (
 	"context"
@@ -18,7 +18,7 @@ import (
 // workersCommand reads and controls the operation workers of running API
 // processes, which apply a control within their control poll.
 func workersCommand(ctx context.Context, args []string, out io.Writer) error {
-	usage := errors.New("usage: papergo-admin workers status | pause|resume|drain|flush <worker>")
+	usage := errors.New("usage: papergo admin workers status | pause|resume|drain|flush <worker>")
 	if len(args) == 0 {
 		return usage
 	}
@@ -58,7 +58,7 @@ func workersCommand(ctx context.Context, args []string, out io.Writer) error {
 	}
 	name := names[0]
 	if !slices.ContainsFunc(statuses, func(s worker.Status) bool { return s.Worker == name }) {
-		return fmt.Errorf("no worker named %s has reported; papergo-admin workers status lists them", name)
+		return fmt.Errorf("no worker named %s has reported; papergo admin workers status lists them", name)
 	}
 	switch command {
 	case "pause":

@@ -140,6 +140,9 @@ const (
 	SearchNone = "none"
 )
 
+// defaultAddress is where the server listens unless configured otherwise.
+const defaultAddress = "127.0.0.1:8080"
+
 // Load reads config.yaml from PAPERGO_CONFIG or ./config.yaml, then applies
 // environment variables. Environment variables win when they are non-empty.
 func Load() (Config, error) {
@@ -148,6 +151,27 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	return LoadFrom(os.Getenv, text)
+}
+
+// ListenAddress is the address the server listens on (HTTP_ADDR, or
+// server.bind and server.port in config.yaml), read as Load reads it but
+// without the rest of the configuration, for probes of a running server.
+func ListenAddress() (string, error) {
+	text, err := readWorkingYAML(os.Getenv)
+	if err != nil {
+		return "", err
+	}
+	file, err := parseYAML(text)
+	if err != nil {
+		return "", err
+	}
+	if v := os.Getenv("HTTP_ADDR"); v != "" {
+		return v, nil
+	}
+	if v := file.values["HTTP_ADDR"]; v != "" {
+		return v, nil
+	}
+	return defaultAddress, nil
 }
 
 // LoadFrom builds configuration from YAML text and getenv. Tests pass the
@@ -180,7 +204,7 @@ func loadFrom(getenv func(string) string, yamlText, directory string) (Config, e
 		}
 		return fallback
 	}
-	c := Config{Env: value("APP_ENV", "development"), Address: value("HTTP_ADDR", "127.0.0.1:8080"), DatabasePath: value("DATABASE_PATH", "data/papergo.db"), BlobPath: value("BLOB_PATH", "data/blobs"), AuthMode: value("AUTH_MODE", "local"), DevToken: lookup("DEV_TOKEN"), DevSubject: value("DEV_SUBJECT", "local-admin"), Issuer: lookup("OIDC_ISSUER"), Audience: lookup("OIDC_AUDIENCE"), MaxUpload: 64 * 1024 * 1024, FileEditMax: 2 * 1024 * 1024, MaxInFlight: 32, RequestTimeout: 30 * time.Second, RunRetention: 30 * 24 * time.Hour, SystemRunRetention: 24 * time.Hour, ResultCacheTTL: 30 * 24 * time.Hour}
+	c := Config{Env: value("APP_ENV", "development"), Address: value("HTTP_ADDR", defaultAddress), DatabasePath: value("DATABASE_PATH", "data/papergo.db"), BlobPath: value("BLOB_PATH", "data/blobs"), AuthMode: value("AUTH_MODE", "local"), DevToken: lookup("DEV_TOKEN"), DevSubject: value("DEV_SUBJECT", "local-admin"), Issuer: lookup("OIDC_ISSUER"), Audience: lookup("OIDC_AUDIENCE"), MaxUpload: 64 * 1024 * 1024, FileEditMax: 2 * 1024 * 1024, MaxInFlight: 32, RequestTimeout: 30 * time.Second, RunRetention: 30 * 24 * time.Hour, SystemRunRetention: 24 * time.Hour, ResultCacheTTL: 30 * 24 * time.Hour}
 	c.DatabaseURL = lookup("DATABASE_URL")
 	if c.DatabaseURL != "" {
 		if u, err := url.Parse(c.DatabaseURL); err != nil || u.Scheme != "postgres" && u.Scheme != "postgresql" {

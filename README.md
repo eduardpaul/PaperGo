@@ -9,9 +9,8 @@ Download the ZIP for your platform and `papergo_vX.Y.Z_assets.zip` from the same
 ```text
 papergo/                 # your installation directory
   papergo[.exe]
-  papergo-admin[.exe]
   config.yaml
-  lib/                   # Linux native libraries; Windows DLLs sit beside the EXEs
+  lib/                   # Linux native libraries; Windows DLLs sit beside the EXE
   notices/
   assets/
     models/
@@ -27,7 +26,7 @@ Run the executable from that directory and open http://localhost:8080. The first
 
 The binary ZIP includes the web UI, database schema, native libraries, compiler runtimes and their license notices. The shared ZIP contains PaddleOCR, Laya FP32, EmbeddingGemma 2 and Harrier Q4 models, tokenizers and model notices, and works with every platform. Native libraries and models are read directly from the installation; model paths are resolved beside the executable even when started from another working directory. The web UI stays embedded in the executable. OCR and local workflow decisions use the shared models automatically. Set `AI_EMBEDDINGS_PROVIDER=local` and select `AI_EMBEDDINGS_MODEL=embeddinggemma-2` (default) or `harrier-oss-v1-0.6b` for local semantic search. Inference never downloads models. `ONNXRUNTIME_LIB`, `OCR_MODELS`, `AI_DECISION_MODELS_PATH` and `AI_EMBEDDINGS_MODELS_PATH` select explicit alternatives. Linux builds require the target system's glibc.
 
-Configuration is optional. The sample `config.yaml` listens on port 8080, signs in a local administrator (`admin` / `admin`), and stores the database, files and zvec index under `./data`. Set the initial password before the first start. Set `auth.mode` to `oidc` or `proxy` when an identity provider or trusted proxy should sign people in. Non-empty environment variables override matching settings in `config.yaml`. Release archives include the optional configuration, operator documentation and the `papergo-admin` maintenance tool, which shares the native libraries.
+Configuration is optional. The sample `config.yaml` listens on port 8080, signs in a local administrator (`admin` / `admin`), and stores the database, files and zvec index under `./data`. Set the initial password before the first start. Set `auth.mode` to `oidc` or `proxy` when an identity provider or trusted proxy should sign people in. Non-empty environment variables override matching settings in `config.yaml`. Release archives include the optional configuration and operator documentation; `papergo admin` runs the maintenance commands.
 
 See the [sample YAML configuration](deploy/config.yaml) for the supported sections. Unknown fields, duplicate keys and multiple YAML documents are rejected. Quote password values; `auth.admin_password: ""` or `null` prompts securely on an interactive first start and fails on a non-interactive one. Proxy configuration uses a YAML list for `auth.proxy_trusted_cidrs`.
 
@@ -76,7 +75,7 @@ To build the deployable executable from the repository root:
 bash scripts/build.sh
 ```
 
-On Windows, run `./scripts/build.ps1`. These scripts install the locked frontend dependencies, build the UI, then run `scripts/build-binaries.py` and `scripts/build-assets.py`. The `bin/` directory contains both executables, their native libraries and `assets/`; copy the whole directory to deploy it. Laya is downloaded from its published, checksum-pinned bundle into `.tools/decision/model`. To use an existing verified Laya directory/archive or HTTPS artifact, run `python3 scripts/prepare-preset-models.py --laya-bundle PATH_OR_URL` before building. Asset preparation also downloads and verifies both embedding presets and their model cards. Binary compilation alone needs no model downloads: `python3 scripts/build-binaries.py`. For local Go commands, first run `python3 scripts/native.py` and source `.tools/native/env.sh` (PowerShell: `. .tools/native/env.ps1`). The Docker image uses the same executable, native-library and shared-assets layout under `/opt/papergo`.
+On Windows, run `./scripts/build.ps1`. These scripts install the locked frontend dependencies, build the UI, then run `scripts/build-binaries.py` and `scripts/build-assets.py`. The `bin/` directory contains the executable, its native libraries and `assets/`; copy the whole directory to deploy it. Laya is downloaded from its published, checksum-pinned bundle into `.tools/decision/model`. To use an existing verified Laya directory/archive or HTTPS artifact, run `python3 scripts/prepare-preset-models.py --laya-bundle PATH_OR_URL` before building. Asset preparation also downloads and verifies both embedding presets and their model cards. Binary compilation alone needs no model downloads: `python3 scripts/build-binaries.py`. For local Go commands, first run `python3 scripts/native.py` and source `.tools/native/env.sh` (PowerShell: `. .tools/native/env.ps1`). The Docker image uses the same executable, native-library and shared-assets layout under `/opt/papergo`.
 
 For frontend development with hot reload, run this from `web/` alongside PaperGo:
 
@@ -281,7 +280,7 @@ which PaperGo applies at startup. See [database upgrades](docs/releases.md#datab
 
 ## Tagged binary releases
 
-Push a version tag such as `v0.1.0` on a commit that passed CI on main to build and smoke-test Windows and Linux executables, publish archives with checksums to GitHub Releases, and publish Linux amd64/arm64 images to `ghcr.io/eduardpaul/papergo`. Stable releases update the `latest` image tag; release candidates use only their version tag. Database migrations are embedded in the executables; stop the service, replace the binaries and restart to apply them automatically. See [release management](docs/releases.md) for platform support, release candidates, blocked changes, backups and recovery.
+Push a version tag such as `v0.1.0` on a commit that passed CI on main to build and smoke-test Windows and Linux executables, publish archives with checksums to GitHub Releases, and publish Linux amd64/arm64 images to `ghcr.io/eduardpaul/papergo`. Stable releases update the `latest` image tag; release candidates use only their version tag. Database migrations are embedded in the executable; stop the service, replace it and restart to apply them automatically. See [release management](docs/releases.md) for platform support, release candidates, blocked changes, backups and recovery.
 
 ## Deployment and scaling
 
@@ -334,11 +333,11 @@ that can be installed directly from **Export and import**.
 
 ## Administrative backup and restore
 
-Build the administrative CLI with `go build -o papergo-admin ./cmd/admin`:
+The `papergo` executable runs administrative commands as `papergo admin <command>`: `initialize`, `health`, `backup`, `restore`, `search copy` and `workers`, each with `--help`.
 
 ```sh
-papergo-admin backup --file backup.tar.gz
-papergo-admin restore --file backup.tar.gz
+papergo admin backup --file backup.tar.gz
+papergo admin restore --file backup.tar.gz
 ```
 
 `--database`, `--blobs`, `--search` and `--search-store` select paths and the backend; defaults use `DATABASE_PATH`, `BLOB_PATH`, `SEARCH_STORE` and `SEARCH_DATABASE_PATH` or `SEARCH_ZVEC_PATH`. These commands need filesystem access and do not initialize HTTP authentication. With SQLite search, backup can run while the API is serving: it pauses database writes while snapshotting and copying referenced immutable files; reads continue. The gzip tar archive includes the complete SQLite database (including workflow runs), referenced file bytes and a checksum manifest; it leaves out the SQLite search index. With zvec, stop the API first: backup requires exclusive leases and includes the flushed, closed native directory and its checksums. Existing backup archives are never overwritten. The manifest is limited to 16 MiB.

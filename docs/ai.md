@@ -24,7 +24,7 @@ Batch completions need their own provider and never fall back to the chat provid
 
 ## Batches
 
-Batch completions are `ai.batch` operations, which the `ai-batch` [worker](application-foundation.md#background-operations) admits in groups, one group per queue: by default a full group of 20 distinct requests goes at once, and whatever waits goes at 01:00 UTC. The `workers.ai-batch.admission` section of `config.yaml` changes the threshold, the group size, a maximum wait and the flush schedule; `papergo-admin workers flush ai-batch` sends what waits now.
+Batch completions are `ai.batch` operations, which the `ai-batch` [worker](application-foundation.md#background-operations) admits in groups, one group per queue: by default a full group of 20 distinct requests goes at once, and whatever waits goes at 01:00 UTC. The `workers.ai-batch.admission` section of `config.yaml` changes the threshold, the group size, a maximum wait and the flush schedule; `papergo admin workers flush ai-batch` sends what waits now.
 
 - **Membership.** A group goes to the provider as one batch; identical requests share one line and keep separate authorization. A request whose answer is already cached completes its `ai.batch` operation at acceptance, without waiting for a batch. Repeating its `Idempotency-Key` returns the same operation whether the answer cache is warm or expired.
 - **Waiting.** The members of a submitted batch wait without holding a worker (`waiting: remote`). A maintenance task polls each batch every five minutes and ends its members as their answers arrive.

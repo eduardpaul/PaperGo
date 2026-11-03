@@ -1,4 +1,4 @@
-package main
+package admin
 
 import (
 	"context"
@@ -19,7 +19,7 @@ import (
 
 func searchCommand(ctx context.Context, args []string, out io.Writer) error {
 	if len(args) == 0 || args[0] != "copy" {
-		return errors.New("usage: papergo-admin search copy --to sqlite|zvec (stop the API first)")
+		return errors.New("usage: papergo admin search copy --to sqlite|zvec (stop the API first)")
 	}
 	flags := flag.NewFlagSet("search copy", flag.ContinueOnError)
 	flags.SetOutput(out)

@@ -21,8 +21,8 @@ newer than the latest published release, has no release yet, and names a
 commit whose `verify` run on `main` succeeded. A commit that a newer push to
 `main` superseded before its run finished has no such run; tag the newer one.
 It then builds and runs native smoke tests for Linux amd64/arm64 and Windows amd64, using [GitHub hosted runners](https://docs.github.com/en/actions/reference/runners/github-hosted-runners). Each archive includes `papergo`,
-`papergo-admin` and this guide. Both executables support `--version`; version, commit and commit date are injected into the build. The smoke test also lists the [MCP endpoint](mcp.md)'s tools.
-Each platform ZIP includes the executables, native libraries, compiler runtimes, license notices, sample `config.yaml` and operator documentation. Linux libraries live in `lib/`; Windows DLLs sit beside the executables. macOS release and native CI builds are temporarily commented out.
+whose `admin` commands back up, restore and initialize databases, and this guide. `papergo --version` reports the version, commit and commit date injected into the build. The smoke test also lists the [MCP endpoint](mcp.md)'s tools.
+Each platform ZIP includes the executable, native libraries, compiler runtimes, license notices, sample `config.yaml` and operator documentation. Linux libraries live in `lib/`; Windows DLLs sit beside the executable. macOS release and native CI builds are temporarily commented out.
 
 One platform-independent `papergo_vX.Y.Z_assets.zip` contains PaddleOCR, Laya multilingual FP32, EmbeddingGemma 2 Q4 and Harrier Q4 models, tokenizers and model notices. Extract it into the platform installation directory: `assets/` must sit beside the main executable and `config.yaml`. The application finds native libraries and models relative to its executable and loads them directly from disk. The web UI, database schema and migrations remain embedded. Linux requires the target system's glibc, 2.27 or newer on amd64 and 2.38 or newer on arm64 (Debian 13, Ubuntu 24.04); WebP and tokenizers are statically linked. OCR and local decisions use the shared assets automatically. For local embeddings set `AI_EMBEDDINGS_PROVIDER=local` and choose `AI_EMBEDDINGS_MODEL=embeddinggemma-2` or `harrier-oss-v1-0.6b`. Explicit `ONNXRUNTIME_LIB`, `OCR_MODELS`, `AI_DECISION_MODELS_PATH` and `AI_EMBEDDINGS_MODELS_PATH` settings select alternative inference assets. The release downloads and checksum-verifies the models once on Linux, packages one shared ZIP, and tests each platform ZIP with those same assets. The Docker image uses the same directory layout under `/opt/papergo`.
 
@@ -92,8 +92,8 @@ unmatched file fails every test.
    ```sh
    git show v0.1.0:internal/dal/schema/sqlite.sql | sqlite3 old.db
    sqlite3 old.db "INSERT INTO schema_metadata VALUES (1, 0)"  # v0.1.0's version
-   go run ./cmd/admin initialize --database old.db             # applies the migrations
-   go run ./cmd/admin initialize --database new.db
+   go run ./cmd/api admin initialize --database old.db         # applies the migrations
+   go run ./cmd/api admin initialize --database new.db
    diff <(sqlite3 old.db .schema) <(sqlite3 new.db .schema)
    ```
 
@@ -124,7 +124,7 @@ saves a copy beside the database, `papergo-pre-upgrade-*/database.sqlite`,
 with `VACUUM INTO`, which includes the WAL. Migrations run with foreign keys
 off, so tables can be rebuilt, and PaperGo checks every reference and the
 file's integrity after each one before it commits.
-`papergo-admin initialize --database <file>` does the same without starting
+`papergo admin initialize --database <file>` does the same without starting
 the server.
 
 On PostgreSQL, the transaction holds an advisory lock: when several instances
@@ -141,16 +141,16 @@ WAL they write.
 Download the ZIP for your OS/CPU and the shared assets ZIP from the same release,
 and verify both against `SHA256SUMS`. Extract both into the same application
 directory, separate from data. Keep the resulting `assets/` beside `config.yaml`
-and the executables.
+and the executable.
 Set the normal production authentication and storage configuration from the
 README. The first start creates the database.
 
 For an upgrade:
 
-1. Take a full backup with the currently installed `papergo-admin backup`,
+1. Take a full backup with the currently installed `papergo admin backup`,
    including the referenced blob files, and keep that binary for recovery.
 2. Stop the PaperGo service and wait for its process to exit.
-3. Install the executables, native libraries and matching `assets/` from the new
+3. Install the executable, native libraries and matching `assets/` from the new
    platform and shared assets ZIPs. Retain your `config.yaml`, `DATABASE_PATH`,
    `BLOB_PATH` and authentication configuration.
 4. Restart the service. It upgrades the database as
@@ -170,6 +170,6 @@ The automatic copy contains only SQLite, including workflow runs and other
 operations. It does not replace the full database-plus-blobs backup. A later
 startup failure may happen after the migrations have committed. Rolling back
 an installed application requires stopping it and restoring the full backup
-with the matching old `papergo-admin` before starting the old binary: an old
+with the matching old `papergo admin restore` before starting the old binary: an old
 binary refuses a database that a newer one upgraded. Backup archives record
 their schema version, and only an admin tool at that version restores them.

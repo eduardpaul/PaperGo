@@ -147,21 +147,21 @@ On Linux/glibc, PaperGo limits native allocator arenas and trims unused allocato
 
 After five minutes without a native search or write, maintenance flushes and closes both native collections. The idle deadline is checked every 30 seconds, after active readers and writers finish. The next full-text/vector search or write reopens the persisted indexes without rebuilding or embedding again. The source catalog and cached vectors stay in Go memory, so status checks, exports, embedding work lists and filter-only queries remain available without waking the native indexes. The store keeps its exclusive ownership lease until shutdown.
 
-`python3 scripts/native.py` installs the pinned zvec v0.7.0 SDK for Linux amd64/arm64, macOS ARM64 and Windows amd64, along with the other native dependencies. Source `.tools/native/env.sh` or `.tools/native/env.ps1` before invoking Go directly. The Go SDK owns native calls, resource handles and thread-local errors; PaperGo uses its copied string-array setter for keyword/term filters. CI tests real native stores. Platform ZIPs contain the native libraries and notices alongside the executables. Extract the shared assets ZIP into the same directory to supply models. The Docker image includes that directory layout under `/opt/papergo`.
+`python3 scripts/native.py` installs the pinned zvec v0.7.0 SDK for Linux amd64/arm64, macOS ARM64 and Windows amd64, along with the other native dependencies. Source `.tools/native/env.sh` or `.tools/native/env.ps1` before invoking Go directly. The Go SDK owns native calls, resource handles and thread-local errors; PaperGo uses its copied string-array setter for keyword/term filters. CI tests real native stores. Platform ZIPs contain the native libraries and notices alongside the executable. Extract the shared assets ZIP into the same directory to supply models. The Docker image includes that directory layout under `/opt/papergo`.
 
 Search paths must differ from the application database and its sidecar files, including through symbolic or hard links. The zvec directory must not overlap the database, blob directory or SQLite search file. Startup rejects unrelated databases at the search path.
 
 - **Rebuild.** A new store, or one whose layout changed in a new release, is rebuilt from the database at startup. Until the rebuild completes, global search answers `503 search_unavailable`, and collection queries and listings match `q` by name.
 - **Reindex.** `POST /v1/search/reindex` (`organization.manage`) rewrites every document as an [operation](application-foundation.md) (202 with `Location: /v1/operations/{id}`), in batches of 200, and removes documents of entries that no longer exist. Search keeps answering meanwhile. With `{"content": true}` it also raises `file.updated` with the `reindex` source for the current file of every item without content (`"force": true`: every item), so the workflow filling `search.content` for its collection indexes it again; text read before is reused. A rebuild and an import do this too.
 - **Status.** `GET /v1/search/status` (`organization.manage`) gives the store's name, whether it is rebuilding, its document and chunk counts and its size; with an embedding model, its `model` and `embeddings`: stored `vectors`, chunk inputs `pending` a vector, and the `memory_bytes` semantic search holds. `GET /v1/storage/status` lists the store under `extensions`.
-- **Backups.** SQLite search is excluded and removed on restore, then rebuilt. With `SEARCH_STORE=zvec`, stop the API first so the collection flushes and closes; `papergo-admin backup --file backup.tar.gz` includes the complete native directory with checksums. Restore it with the same backend and search path configuration. Active API/native leases reject offline snapshots.
+- **Backups.** SQLite search is excluded and removed on restore, then rebuilt. With `SEARCH_STORE=zvec`, stop the API first so the collection flushes and closes; `papergo admin backup --file backup.tar.gz` includes the complete native directory with checksums. Restore it with the same backend and search path configuration. Active API/native leases reject offline snapshots.
 
 ### Copying between stores
 
 Stop the API, leave the source index in place and choose an absent destination:
 
 ```sh
-papergo-admin search copy --from sqlite --to zvec
+papergo admin search copy --from sqlite --to zvec
 # Set SEARCH_STORE=zvec, then start the API.
 ```
 

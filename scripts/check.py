@@ -41,7 +41,7 @@ POSTGRES_PACKAGES = ['./internal/dms', './internal/httpapi', './internal/identit
 NATIVE_PACKAGES = ['./internal/onnx', './internal/decision', './internal/embedding', './internal/ocr/paddle', './internal/scriptrun',
                    './internal/compose', './internal/optimize', './cmd/embed']
 # Packages the zvec stage tests on the native search store.
-ZVEC_PACKAGES = ['./internal/dal/search/zvecstore', './internal/backup', './cmd/admin']
+ZVEC_PACKAGES = ['./internal/dal/search/zvecstore', './internal/backup', './internal/admin']
 # Native libraries the release executables load, exercised before packaging.
 NATIVE_ABI = (['./internal/onnx', './internal/ocr/paddle', './internal/imaging', './internal/doctext/pdfium', './internal/dal/search/zvecstore'],
               'TestNativeABI|TestReadAndRender|TestRecognize$|TestDecode|TestWebPRoundTripAndResize|TestIdle|TestConcurrentIdle')

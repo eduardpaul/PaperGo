@@ -159,7 +159,7 @@ def exercise_native(base, workspace):
         raise RuntimeError('shared OCR workflow did not complete')
 
 
-def exercise(binary, admin, directory, model='embeddinggemma-2'):
+def exercise(binary, directory, model='embeddinggemma-2'):
     directory.mkdir(parents=True, exist_ok=True)
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
@@ -216,7 +216,7 @@ def exercise(binary, admin, directory, model='embeddinggemma-2'):
                 process.wait(timeout=10)
     # A backup checks the schema, integrity and foreign keys with the
     # release's own SQLite; the schema uses functions older ones lack.
-    subprocess.run([str(admin), "backup", "--search-store", "zvec", "--file", str(directory / "backup.tar.gz")],
+    subprocess.run([str(binary), "admin", "backup", "--search-store", "zvec", "--file", str(directory / "backup.tar.gz")],
                    cwd=directory, env=env, check=True)
     # A new database is at the schema version of the last migration.
     migrations = len(list((ROOT / "internal/dal/migrations/sqlite").glob("*.sql")))
@@ -265,14 +265,13 @@ def main():
         assert (package / 'assets/models/laya').is_dir()
         for preset in ('embeddinggemma-2', 'harrier-oss-v1-0.6b'):
             assert (package / 'assets/models/embedding' / preset).is_dir()
-        binary, admin = package / f'papergo{suffix}', package / f'papergo-admin{suffix}'
-        for executable in (binary, admin):
-            version = subprocess.check_output([str(executable), '--version'], cwd=directory, text=True)
-            assert (current or 'PaperGo') in version
+        binary = package / f'papergo{suffix}'
+        version = subprocess.check_output([str(binary), '--version'], cwd=directory, text=True)
+        assert (current or 'PaperGo') in version
         # Use an unrelated working directory: native libraries and shared models
         # must be found beside the executable without development loader paths.
-        exercise(binary, admin, directory / 'fresh')
-        exercise(binary, admin, directory / 'harrier', model='harrier-oss-v1-0.6b')
+        exercise(binary, directory / 'fresh')
+        exercise(binary, directory / 'harrier', model='harrier-oss-v1-0.6b')
     print('Platform binaries plus shared assets: versions, UI, zvec, PDF previews, PaddleOCR, Laya, both embedding presets and backup passed.')
 
 

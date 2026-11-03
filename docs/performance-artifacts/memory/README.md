@@ -42,7 +42,6 @@ source .tools/native/env.sh
 npm ci --prefix web
 npm --prefix web run build
 go build -trimpath -ldflags='-s -w' -o bin/papergo ./cmd/api
-go build -trimpath -ldflags='-s -w' -o bin/papergo-admin ./cmd/admin
 python3 scripts/memory.py --search-store sqlite --idle-seconds 35 --output .cache/memory-sqlite.json
 python3 scripts/memory.py --search-store zvec --idle-seconds 35 --output .cache/memory-zvec.json
 python3 scripts/memory.py --search-store zvec --idle-seconds 1 --unload-seconds 335 --output .cache/memory-zvec-unload.json

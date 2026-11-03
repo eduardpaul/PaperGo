@@ -57,7 +57,7 @@ class SingleBinaryTests(unittest.TestCase):
         root = Path(__file__).parent
         for name in ('compose.yaml', 'setup.py', 'verify.py'):
             text = (root / name).read_text()
-            self.assertNotIn('papergo-admin initialize', text)
+            self.assertNotIn('admin initialize', text)
             self.assertNotRegex(text, r'(?m)^  initialize:')
         compose = (root / 'compose.yaml').read_text()
         self.assertIn('./generated/config.yaml:/config/config.yaml:ro', compose)
@@ -85,7 +85,7 @@ class EgressTests(unittest.TestCase):
     def test_checks_dns_and_verified_https_inside_papergo(self):
         with patch.object(setup, 'compose') as compose:
             setup.verify_egress()
-        compose.assert_called_once_with('exec', '-T', 'papergo', '/opt/papergo/papergo-admin', 'health',
+        compose.assert_called_once_with('exec', '-T', 'papergo', '/opt/papergo/papergo', 'admin', 'health',
                                         '--url', 'https://calendar.google.com/', '--timeout', '15s')
 
     def test_failed_egress_has_actionable_network_error(self):

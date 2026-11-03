@@ -38,7 +38,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-go run ./cmd/admin initialize --database "$smoke_dir/papergo.db"
+go run ./cmd/api admin initialize --database "$smoke_dir/papergo.db"
 go build -o "$smoke_dir/papergo" ./cmd/api
 smoke_token=$(python3 -c 'import secrets; print(secrets.token_hex(32))')
 

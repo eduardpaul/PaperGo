@@ -80,7 +80,7 @@ python3 verify.py
 
 This deletes all PaperGo records and blobs. NPM configuration, certificates and the private files in `generated/` remain available. Setup recreates the data volume and the application creates the current schema on startup. Use `python3 setup.py --no-build` when the current application image is already built.
 
-The PaperGo container runs as UID 65532, with a read-only root filesystem, dropped capabilities, an internal network, bounded resources and rotated container logs. Readiness checks use `papergo --health`. NPM uses its supported image layout and persistent directories.
+The PaperGo container runs as UID 65532, with a read-only root filesystem, dropped capabilities, an internal network, bounded resources and rotated container logs. Readiness checks use `papergo admin health`. NPM uses its supported image layout and persistent directories.
 
 ```sh
 docker compose --env-file .env logs --tail 100 papergo npm
@@ -88,11 +88,11 @@ docker compose --env-file .env restart papergo
 docker compose --env-file .env down
 ```
 
-`down` preserves named volumes. `down --volumes` permanently deletes them and is only appropriate when intentionally discarding a deployment. Keep `generated/` private and back it up securely together with the NPM volumes. Use the image's `papergo-admin backup` for a consistent PaperGo database and blob archive while the API serves reads:
+`down` preserves named volumes. `down --volumes` permanently deletes them and is only appropriate when intentionally discarding a deployment. Keep `generated/` private and back it up securely together with the NPM volumes. Use the image's `papergo admin backup` for a consistent PaperGo database and blob archive while the API serves reads:
 
 ```sh
 backup_name="papergo-$(date -u +%Y%m%dT%H%M%SZ).tar.gz"
-docker compose --env-file .env exec -T papergo /opt/papergo/papergo-admin backup --file "/data/$backup_name"
+docker compose --env-file .env exec -T papergo /opt/papergo/papergo admin backup --file "/data/$backup_name"
 docker compose --env-file .env cp "papergo:/data/$backup_name" "generated/$backup_name"
 ```
 

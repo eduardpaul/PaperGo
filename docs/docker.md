@@ -32,14 +32,14 @@ To supply YAML, mount a readable configuration file at `/config/config.yaml` and
 
 Models load from `/opt/papergo/assets/models`; native libraries live in `/opt/papergo/lib`. Model assets are in a separate cached image layer. They are read directly, so runtime model extraction and a writable code directory are unnecessary. Local decisions and OCR are enabled; semantic search requires `AI_EMBEDDINGS_PROVIDER=local`, with `AI_EMBEDDINGS_MODEL=embeddinggemma-2` or `harrier-oss-v1-0.6b`. The image includes roughly 2 GiB of application/model files. Model inference needs additional RAM; allow at least 4 GiB when using Laya and embeddings together, and size for your workload.
 
-The image includes a readiness health check using `/opt/papergo/papergo --health`. It needs no shell or curl. Logs go to standard output; SIGTERM shuts down the HTTP server and workflow runner. Compose allows 45 seconds for that shutdown.
+The image includes a readiness health check using `/opt/papergo/papergo admin health`, which probes `/health/ready` at the listen address the server is configured with (`HTTP_ADDR`, or `server.bind` and `server.port`), or at `--url`. It needs no shell or curl. Logs go to standard output; SIGTERM shuts down the HTTP server and workflow runner. Compose allows 45 seconds for that shutdown.
 
 For maintenance, stop the API before a zvec backup and use the same image and data volume:
 
 ```sh
 docker compose -f deploy/compose.yaml stop papergo
 docker compose -f deploy/compose.yaml run --rm --no-deps \
-  --entrypoint /opt/papergo/papergo-admin papergo backup --file /data/backup.tar.gz
+  papergo admin backup --file /data/backup.tar.gz
 docker compose -f deploy/compose.yaml up -d
 ```
 
@@ -51,7 +51,7 @@ docker tag papergo:local ghcr.io/eduardpaul/papergo:local
 PAPERGO_VERSION=local docker compose -f deploy/compose.yaml up -d
 ```
 
-BuildKit builds the frontend, native SDKs, models and Go executables. The model stage downloads the published Laya bundle and the embedding presets and verifies their checksums. Release CI supplies the already verified shared model assets as the `model-assets` named build context, so each platform builds natively without re-exporting weights. A source build also accepts this context when assets have been prepared:
+BuildKit builds the frontend, native SDKs, models and the Go executable. The model stage downloads the published Laya bundle and the embedding presets and verifies their checksums. Release CI supplies the already verified shared model assets as the `model-assets` named build context, so each platform builds natively without re-exporting weights. A source build also accepts this context when assets have been prepared:
 
 ```sh
 python3 scripts/build-assets.py --output-dir .cache/container-assets/assets
