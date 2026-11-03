@@ -38,6 +38,16 @@ runs the PostgreSQL server and model generation.
 configuration; it is distinct from the optional `.env.example` file, which the
 application does not load.
 
+Native Windows development uses Go, MSYS2 UCRT64's GCC and the Rust GNU
+toolchain. `python scripts/native.py` installs the pinned SDKs, among them
+ONNX Runtime and the Visual C++ runtime it imports, which `native.json` pins
+as Microsoft's Visual Studio package and copies into `.tools/native/lib`
+(on `PATH` in `env.ps1`, for tests that load `ONNXRUNTIME_LIB`). It also
+stages both, compressed, in `internal/onnx/windows-runtime`, which every
+Windows build embeds: a Windows build reports that pattern missing until
+`native.py` has run. Its `CGO_LDFLAGS` link MinGW's C++, GCC and thread
+runtimes statically.
+
 Tools and application processes run as `vscode`, with the Dev Containers default
 UID/GID adjustment on Linux. Setup uses sudo only to repair ownership of the
 three dependency/cache volumes. The container has an init process to reap
@@ -185,7 +195,10 @@ frontend, about ten minutes on warm caches. Pushes to `main` and a weekly
 schedule run the Go suite as `race` in two shards instead, with PostgreSQL
 and the frontend, and add `native`, `release` and `vuln` in the
 toolchain image, `release` on Windows with natively installed SDKs, and
-`docker`. The weekly schedule and manual runs also build the devcontainer and
+`docker`. On Windows, `release` is followed by
+`scripts/windows-clean-smoke.py`, which runs the packaged `papergo.exe`
+with OCR in a Windows Server Core container: unlike the runner, it has no
+Visual C++ runtime. The weekly schedule and manual runs also build the devcontainer and
 run its smoke test. The first job of
 each run publishes the toolchain image when its inputs changed. Each kind of
 job restores its Go, npm and Staticcheck cache; runs on `main` save a new one

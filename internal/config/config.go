@@ -9,6 +9,7 @@ import (
 	"papergo/internal/ai"
 	"papergo/internal/decision"
 	"papergo/internal/identity"
+	"papergo/internal/onnx"
 	"papergo/internal/search"
 	"path/filepath"
 	"runtime"
@@ -337,11 +338,14 @@ func loadFrom(getenv func(string) string, yamlText, directory string) (Config, e
 	}
 	c.OCRLibrary, c.OCRThreads = lookup("ONNXRUNTIME_LIB"), 1
 	if c.OCRLibrary == "" {
+		// The Windows executable embeds ONNX Runtime and installs it in the
+		// data folder's cache, as derived data.
+		c.OCRLibrary = onnx.EmbeddedLibrary(filepath.Join(filepath.Dir(c.DatabasePath), "cache", "onnxruntime"))
+	}
+	if c.OCRLibrary == "" {
+		// Linux and macOS packages ship it in lib beside the executable.
 		library := filepath.Join(directory, "lib", "libonnxruntime.so")
-		switch runtime.GOOS {
-		case "windows":
-			library = filepath.Join(directory, "onnxruntime.dll")
-		case "darwin":
+		if runtime.GOOS == "darwin" {
 			library = filepath.Join(directory, "lib", "libonnxruntime.dylib")
 		}
 		if info, err := os.Stat(library); err == nil && info.Mode().IsRegular() {

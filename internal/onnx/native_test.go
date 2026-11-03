@@ -23,6 +23,12 @@ func TestNativeABI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	probe(t, r)
+}
+
+// probe runs the probe model on r and checks its metadata and outputs.
+func probe(t *testing.T, r *Runtime) {
+	t.Helper()
 	s, err := r.NewSession(probeModel(), 1)
 	if err != nil {
 		t.Fatal(err)

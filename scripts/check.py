@@ -38,8 +38,9 @@ POSTGRES_PACKAGES = ['./internal/dms', './internal/httpapi', './internal/identit
                      './extensions/mcp/server']
 NATIVE_PACKAGES = ['./internal/onnx', './internal/decision', './internal/embedding', './internal/ocr/paddle', './internal/scriptrun',
                    './internal/compose', './cmd/embed']
-# Native libraries the release executables load, exercised before packaging.
-NATIVE_ABI = (['./internal/onnx', './internal/ocr/paddle'], 'TestNativeABI|TestRecognize$')
+# Native libraries the release executables load, exercised before packaging,
+# with the runtime the Windows executable embeds.
+NATIVE_ABI = (['./internal/onnx', './internal/ocr/paddle'], 'TestNativeABI|TestRecognize$|TestEmbeddedRuntime')
 RELEASE_VERSION = 'v0.0.0-rc.1'
 
 

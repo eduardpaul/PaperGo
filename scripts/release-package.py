@@ -42,6 +42,13 @@ def check_linux(inputs):
                              f'newer than the documented glibc {".".join(map(str, GLIBC_MAXIMUM))}')
 
 
+# Notices of what papergo.exe embeds or links statically: ONNX Runtime, the
+# Visual C++ runtime and MinGW's GCC and thread runtimes.
+WINDOWS_NOTICES = ['notices/onnxruntime-LICENSE', 'notices/onnxruntime-ThirdPartyNotices.txt',
+                   'notices/microsoft-visual-cpp-runtime.txt', 'notices/compiler/libstdc++/COPYING.RUNTIME',
+                   'notices/compiler/libgcc/COPYING.RUNTIME', 'notices/compiler/winpthreads/COPYING']
+
+
 def package(version, system, arch, bin_dir, dist):
     suffix = '.exe' if system == 'windows' else ''
     inputs = {
@@ -50,21 +57,24 @@ def package(version, system, arch, bin_dir, dist):
         'config.yaml': ROOT / 'deploy/config.yaml',
         'README.md': ROOT / 'deploy/README.md',
     }
-    for directory in ('lib', 'notices'):
+    for directory in ('notices',) if system == 'windows' else ('lib', 'notices'):
         for path in sorted((bin_dir / directory).rglob('*')):
             if path.is_file():
                 inputs[path.relative_to(bin_dir).as_posix()] = path
-    if system == 'windows':
-        inputs.update((path.name, path) for path in sorted(bin_dir.glob('*.dll')))
-    required = ['onnxruntime.dll'] if system == 'windows' else [
-        'lib/libonnxruntime.so',
-    ] if system == 'linux' else [
-        'lib/libonnxruntime.dylib',
-    ]
     # The executable embeds PDFium, whose notices ship beside it.
-    required.append('notices/pdfium/pdfium.txt')
+    required = ['notices/pdfium/pdfium.txt']
+    if system == 'windows':
+        # papergo.exe embeds ONNX Runtime with the Visual C++ runtime and links
+        # its compiler runtimes statically: no DLL ships beside it.
+        required += WINDOWS_NOTICES
+        unexpected = [name for name in inputs if name.lower().endswith('.dll') or not (
+            name in ('papergo.exe', 'RELEASES.md', 'config.yaml', 'README.md') or name.startswith('notices/'))]
+        if unexpected:
+            raise ValueError(f'The Windows package holds only papergo.exe, its documents, config.yaml and notices, not {unexpected}')
+    else:
+        required.append('lib/libonnxruntime.' + ('so' if system == 'linux' else 'dylib'))
     if any(name not in inputs for name in required):
-        raise ValueError('Build the native libraries alongside the executable before packaging')
+        raise ValueError('Build the native libraries and notices alongside the executable before packaging')
     if system == 'linux':
         check_linux(inputs)
     dist.mkdir(parents=True, exist_ok=True)

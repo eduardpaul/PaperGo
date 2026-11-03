@@ -21,7 +21,8 @@ var (
 	sharedRuntime *Runtime
 )
 
-// Load initializes the environment once. All engines must use the same library.
+// Load initializes the environment once. All engines must use the same
+// library. A path from EmbeddedLibrary installs the embedded runtime first.
 func Load(path string) (*Runtime, error) {
 	runtimeMu.Lock()
 	defer runtimeMu.Unlock()
@@ -34,7 +35,11 @@ func Load(path string) (*Runtime, error) {
 	if path == "" || strings.ContainsRune(path, 0) {
 		return nil, errors.New("invalid ONNX Runtime library path")
 	}
-	ort.SetSharedLibraryPath(path)
+	library, err := prepareLibrary(path)
+	if err != nil {
+		return nil, fmt.Errorf("install the embedded ONNX Runtime: %w", err)
+	}
+	ort.SetSharedLibraryPath(library)
 	if err := ort.InitializeEnvironment(ort.WithLogLevelError()); err != nil {
 		return nil, fmt.Errorf("load ONNX Runtime from %s: %w", path, err)
 	}

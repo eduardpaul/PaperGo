@@ -262,7 +262,7 @@ jobs:
     if: github.event_name != 'pull_request'
     needs: models
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 50
+    timeout-minutes: 80
     strategy:
       fail-fast: false
       matrix:
@@ -278,6 +278,15 @@ jobs:
           path: .tools
       - shell: bash
         run: python scripts/check.py ${{ matrix.stage }} --setup
+      # The runner has the Visual C++ runtime installed, which a clean
+      # Windows lacks; Windows Server Core containers do not. The packaged
+      # executable must run there with OCR, from its embedded runtime.
+      - name: Run the Windows package without the Visual C++ runtime
+        if: runner.os == 'Windows' && matrix.stage == 'release'
+        shell: bash
+        run: |
+          docker pull mcr.microsoft.com/windows/servercore:ltsc2025
+          python scripts/windows-clean-smoke.py
 
   docker:
     name: Container image
