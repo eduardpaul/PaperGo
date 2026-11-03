@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -102,7 +101,7 @@ func setup(t *testing.T, o options) *env {
 		Ready: db.SQL.PingContext, MaxUpload: 1 << 20, MaxInFlight: o.maxInFlight, MCP: true,
 		Modules: []httpapi.Module{New(cfg, registry).Module()}}
 	if o.search {
-		e.search = &documentsearch.Search{Storage: files, Store: searchstore.Open(t, filepath.Join(t.TempDir(), "search.db"), []string{"english"})}
+		e.search = &documentsearch.Search{Storage: files, Store: searchstore.Open(t, db, []string{"english"})}
 		if err := e.search.Register(e.svc); err != nil {
 			t.Fatal(err)
 		}

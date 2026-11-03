@@ -22,6 +22,7 @@ import (
 	"papergo/internal/dal/database"
 	"papergo/internal/dal/integrations"
 	"papergo/internal/dal/resultcache"
+	"papergo/internal/dal/search/pgstore"
 	"papergo/internal/dal/search/sqlitestore"
 	"papergo/internal/decision"
 	"papergo/internal/dms"
@@ -156,6 +157,8 @@ func run(log *slog.Logger) error {
 	switch c.SearchStore {
 	case config.SearchSQLite:
 		index, err = sqlitestore.Open(startup, c.SearchPath, sqlitestore.Options{Languages: c.SearchLanguages})
+	case config.SearchPostgres:
+		index, err = pgstore.Open(startup, db.SQL, pgstore.Options{Languages: c.SearchLanguages})
 	}
 	if err != nil {
 		return fmt.Errorf("open the search store: %w", err)

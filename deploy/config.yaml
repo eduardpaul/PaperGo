@@ -21,8 +21,11 @@ auth:
   admin_user: admin
   admin_password: admin
 
-search:
-  store: sqlite
+# Search keeps its index beside the database: a SQLite file next to the
+# SQLite database, or a schema of the PostgreSQL database. To choose
+# (sqlite, postgres or none, which runs without search):
+# search:
+#   store: none
 
 # Discussions on items: "on" (the default) or "off". Off keeps existing
 # comments but serves none of them; organizations, workspaces and

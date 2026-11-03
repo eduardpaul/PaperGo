@@ -149,10 +149,10 @@ def prepare_go():
 
 
 def postgres_packages():
-    """The portable database suites. The search store keeps its own SQLite
-    file, so it is not rerun against PostgreSQL."""
+    """The portable database suites, with the PostgreSQL search store. The
+    SQLite search store keeps its own file, so it is not rerun there."""
     listed = subprocess.run(['go', 'list', './internal/dal/...'], cwd=ROOT, check=True, stdout=subprocess.PIPE, text=True).stdout.split()
-    return [package for package in listed if not re.search(r'/internal/dal/search(/|$)', package)] + POSTGRES_PACKAGES
+    return [package for package in listed if not package.endswith('/internal/dal/search/sqlitestore')] + POSTGRES_PACKAGES
 
 
 def race_packages():

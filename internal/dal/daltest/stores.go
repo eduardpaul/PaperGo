@@ -153,6 +153,13 @@ func storeName() string {
 // dropped after the test. Without either test DSN the test skips.
 func PostgresStore(t testing.TB) *dal.Store {
 	t.Helper()
+	return dal.NewStoreWithDialect(PostgresDB(t), dal.DialectPostgres)
+}
+
+// PostgresDB opens a new PostgreSQL database with the schema, dropped after
+// the test. Without either test DSN the test skips.
+func PostgresDB(t testing.TB) *sql.DB {
+	t.Helper()
 	if postgresStoreDSN() == "" {
 		t.Skip("no PostgreSQL test DSN; skipping PostgreSQL integration test")
 	}
@@ -177,5 +184,5 @@ func PostgresStore(t testing.TB) *dal.Store {
 	db := stdlib.OpenDB(*server.connConfig(name))
 	db.SetMaxOpenConns(8)
 	t.Cleanup(func() { _ = db.Close() })
-	return dal.NewStoreWithDialect(db, dal.DialectPostgres)
+	return db
 }

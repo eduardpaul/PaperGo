@@ -168,10 +168,9 @@ def exercise(binary, directory, model='embeddinggemma-2'):
     env = dict(os.environ, APP_ENV="test", AUTH_MODE="development", DEV_TOKEN=TOKEN,
                ADMIN_SUBJECT="smoke-admin", DEV_SUBJECT="smoke-admin", HTTP_ADDR=f"127.0.0.1:{port}",
                DATABASE_PATH=str(directory / "papergo.db"), BLOB_PATH=str(directory / "blobs"),
-               SEARCH_STORE='sqlite',
                AI_EMBEDDINGS_PROVIDER='local', AI_EMBEDDINGS_MODEL=model)
     for name in ('ONNXRUNTIME_LIB', 'OCR_MODELS', 'AI_DECISION_MODELS_PATH', 'AI_EMBEDDINGS_MODELS_PATH',
-                 'PAPERGO_CONFIG', 'LD_LIBRARY_PATH', 'DYLD_LIBRARY_PATH'):
+                 'PAPERGO_CONFIG', 'SEARCH_STORE', 'DATABASE_URL', 'LD_LIBRARY_PATH', 'DYLD_LIBRARY_PATH'):
         env.pop(name, None)
     excluded = {os.path.normcase(str(Path(os.environ.get('PAPERGO_NATIVE_DIR') or ROOT / '.tools/native') / 'lib'))}
     compiler = Path(os.environ.get('CC', ''))

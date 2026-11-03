@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
-	"os"
 	directorydomain "papergo/internal/dal/directory"
 	"slices"
 	"strings"
@@ -213,10 +212,7 @@ func TestSearchReindexAndRebuild(t *testing.T) {
 	}
 	res = request(h, "GET", "/v1/search/status", "", testToken, "", "")
 	var status Status
-	expectedStore := os.Getenv("PAPERGO_TEST_SEARCH_STORE")
-	if expectedStore == "" {
-		expectedStore = "sqlite"
-	}
+	expectedStore := extension(t, s).Store.Name()
 	if res.Code != 200 || json.Unmarshal(res.Body.Bytes(), &status) != nil || status.Store != expectedStore || status.Documents != 1 || status.Rebuilding {
 		t.Fatal(res.Code, res.Body.String())
 	}

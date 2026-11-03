@@ -153,8 +153,9 @@ class DevelopmentChecksTests(unittest.TestCase):
         self.assertEqual(tests.call_args.args[2], rest)
         self.assertNotIn('PAPERGO_REQUIRE_OCR', tests.call_args.args[4])
 
-    def test_postgres_packages_keep_portable_suites_without_search(self):
-        portable = ['papergo/internal/dal', 'papergo/internal/dal/catalog', 'papergo/internal/dal/database', 'papergo/internal/dal/resources']
+    def test_postgres_packages_keep_portable_suites_and_the_postgres_search_store(self):
+        portable = ['papergo/internal/dal', 'papergo/internal/dal/catalog', 'papergo/internal/dal/database', 'papergo/internal/dal/resources',
+                    'papergo/internal/dal/search/pgstore']
         native = ['papergo/internal/dal/search/sqlitestore']
         with patch.object(checks.subprocess, 'run') as run:
             run.return_value.stdout = '\n'.join([*portable, *native])

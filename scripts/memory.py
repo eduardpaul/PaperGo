@@ -71,7 +71,8 @@ def snapshot(server, name, seconds):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--binary', type=Path, default=ROOT / 'bin/papergo')
-    parser.add_argument('--search-store', choices=['sqlite', 'none'], default='sqlite')
+    # The server runs on a SQLite database: unset, search follows it.
+    parser.add_argument('--search-store', choices=['sqlite', 'none'], help='search store; by default the one of the database, sqlite')
     parser.add_argument('--items', type=int, default=200)
     parser.add_argument('--idle-seconds', type=float, default=65)
     parser.add_argument('--output', type=Path, required=True)
@@ -82,8 +83,9 @@ def main():
     # Deployment auth, paths, model settings and allocator overrides stay out.
     env = {k: v for k, v in os.environ.items() if k in ('PATH', 'HOME', 'LANG', 'TMPDIR', 'LD_LIBRARY_PATH')}
     env.update(APP_ENV='test', AUTH_MODE='development', DEV_TOKEN=TOKEN,
-               DEV_SUBJECT='memory-admin', ADMIN_SUBJECT='memory-admin',
-               SEARCH_STORE=args.search_store)
+               DEV_SUBJECT='memory-admin', ADMIN_SUBJECT='memory-admin')
+    if args.search_store:
+        env['SEARCH_STORE'] = args.search_store
     with tempfile.TemporaryDirectory(prefix='papergo-memory-') as temp:
         directory = Path(temp)
         dbpath = directory / 'papergo.db'
@@ -116,7 +118,7 @@ def main():
             stages.append(snapshot(server, 'idle-after-search', args.idle_seconds))
         with running(binary, env, directory) as server:
             stages.append(snapshot(server, 'idle-restarted', args.idle_seconds))
-        result = dict(platform=platform.platform(), search_store=args.search_store, items=args.items,
+        result = dict(platform=platform.platform(), search_store=args.search_store or 'sqlite', items=args.items,
                       idle_seconds=args.idle_seconds,
                       binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),
                       local_models='disabled', stages=stages)

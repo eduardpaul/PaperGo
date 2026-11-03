@@ -30,8 +30,9 @@ type Config struct {
 	// SearchPath is the search store's SQLite file (SEARCH_DATABASE_PATH),
 	// by default search.db next to the database.
 	SearchPath string
-	// SearchStore is the search extension's store (SEARCH_STORE): sqlite
-	// (default), or none to run without search.
+	// SearchStore is the search extension's store (SEARCH_STORE): sqlite,
+	// postgres, or none to run without search. Unset, it follows the
+	// database: postgres with DATABASE_URL, else sqlite.
 	SearchStore string
 	// SearchLanguages are the languages whose word stems search indexes
 	// (SEARCH_LANGUAGES, comma-separated Snowball names; default english,
@@ -132,6 +133,9 @@ type Config struct {
 // Search stores (SEARCH_STORE).
 const (
 	SearchSQLite = "sqlite"
+	// SearchPostgres keeps the index in the PostgreSQL database of
+	// DATABASE_URL, in a schema of its own.
+	SearchPostgres = "postgres"
 	// SearchNone runs PaperGo without its search extension: listings match
 	// search text by name.
 	SearchNone = "none"
@@ -209,9 +213,20 @@ func loadFrom(getenv func(string) string, yamlText, directory string) (Config, e
 		}
 	}
 	c.SearchPath = value("SEARCH_DATABASE_PATH", filepath.Join(filepath.Dir(c.DatabasePath), "search.db"))
-	c.SearchStore = value("SEARCH_STORE", SearchSQLite)
-	if c.SearchStore != SearchSQLite && c.SearchStore != SearchNone {
-		return c, fmt.Errorf("SEARCH_STORE must be sqlite or none")
+	// The search store follows the database unless chosen.
+	c.SearchStore = SearchSQLite
+	if c.DatabaseURL != "" {
+		c.SearchStore = SearchPostgres
+	}
+	c.SearchStore = value("SEARCH_STORE", c.SearchStore)
+	switch c.SearchStore {
+	case SearchSQLite, SearchNone:
+	case SearchPostgres:
+		if c.DatabaseURL == "" {
+			return c, fmt.Errorf("SEARCH_STORE=postgres keeps the index in the PostgreSQL database; set DATABASE_URL")
+		}
+	default:
+		return c, fmt.Errorf("SEARCH_STORE must be sqlite, postgres or none")
 	}
 	switch value("COMMENTS", "on") {
 	case "on":

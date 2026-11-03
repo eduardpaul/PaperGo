@@ -66,7 +66,8 @@ class SingleBinaryTests(unittest.TestCase):
         config = setup.papergo_config('https://docs.example.com', 'papergo-admin', '10.90.0.2/32')
         self.assertIn('  mode: proxy', config)
         self.assertIn('  proxy_trusted_cidrs:\n    - "10.90.0.2/32"', config)
-        self.assertIn('  store: sqlite', config)
+        # Search follows the SQLite database.
+        self.assertNotIn('search:', config)
         self.assertIn('  admin_user: "papergo-admin"', config)
 
     def test_assistants_reach_the_mcp_endpoint_past_the_access_list(self):

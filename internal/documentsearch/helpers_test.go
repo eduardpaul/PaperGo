@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -34,7 +33,7 @@ func setup(t *testing.T) (http.Handler, *dms.Service, string) {
 		t.Fatal(err)
 	}
 	s := dms.NewService(db.SQL)
-	x := &Search{Storage: files, Store: searchstore.Open(t, filepath.Join(t.TempDir(), "search.db"), []string{"english"})}
+	x := &Search{Storage: files, Store: searchstore.Open(t, db, []string{"english"})}
 	if err = x.Register(s); err != nil {
 		t.Fatal(err)
 	}

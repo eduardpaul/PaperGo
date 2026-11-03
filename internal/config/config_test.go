@@ -55,6 +55,37 @@ func TestBatchExecutionConfig(t *testing.T) {
 	}
 }
 
+func TestSearchStoreFollowsTheDatabase(t *testing.T) {
+	dir := t.TempDir()
+	const url = "postgres://papergo@localhost/papergo"
+	for _, tc := range []struct {
+		name, database, store, want string
+	}{
+		{"sqlite database", "", "", SearchSQLite},
+		{"postgres database", url, "", SearchPostgres},
+		{"sqlite chosen", "", SearchSQLite, SearchSQLite},
+		{"sqlite search with postgres", url, SearchSQLite, SearchSQLite},
+		{"postgres chosen", url, SearchPostgres, SearchPostgres},
+		{"none", url, SearchNone, SearchNone},
+		{"postgres without a postgres database", "", SearchPostgres, ""},
+		{"unknown", "", "elastic", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			env := map[string]string{"DATABASE_PATH": filepath.Join(dir, "papergo.db"), "DATABASE_URL": tc.database, "SEARCH_STORE": tc.store}
+			c, err := LoadFrom(func(key string) string { return env[key] }, "")
+			if tc.want == "" {
+				if err == nil {
+					t.Fatalf("accepted store %q, resolved %q", tc.store, c.SearchStore)
+				}
+				return
+			}
+			if err != nil || c.SearchStore != tc.want {
+				t.Fatalf("store %q, want %q: %v", c.SearchStore, tc.want, err)
+			}
+		})
+	}
+}
+
 func TestSearchDatabasePathRejectsApplicationDatabase(t *testing.T) {
 	t.Setenv("APP_ENV", "test")
 	t.Setenv("AUTH_MODE", "development")

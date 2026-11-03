@@ -4,7 +4,7 @@ This stack uses **NPM Access List usernames and passwords** to authenticate both
 
 Requirements: Docker with Compose v2, Python 3, and OpenSSL for the local certificate option. PaperGo needs outbound DNS and HTTPS (TCP 443) for public iCalendar subscriptions and configured AI providers. The backend bridge permits egress; PaperGo publishes no host ports and trusts only NPM’s fixed address for proxy authentication. Setup and verification check verified HTTPS connectivity to `calendar.google.com` from the PaperGo container. Run each deployment from its own repository checkout. The setup script stores deployment-specific state under `generated/` and refuses conflicting settings for an existing stack.
 
-Search uses the SQLite store, `search.db` beside the database on the persistent data volume. Setup requires `/v1/search/status` to report `sqlite`; verification also creates an item and waits for a successful indexed keyword search. Semantic and hybrid queries require a configured embedding provider and its model, as described in [search configuration](../../docs/search.md#semantic-and-hybrid-search).
+Search follows the SQLite database: its store is `search.db` beside the database on the persistent data volume. Setup requires `/v1/search/status` to report `sqlite`; verification also creates an item and waits for a successful indexed keyword search. Semantic and hybrid queries require a configured embedding provider and its model, as described in [search configuration](../../docs/search.md#semantic-and-hybrid-search).
 
 ## Run locally
 
@@ -67,7 +67,7 @@ PaperGo validates the actual forwarding peer, secret and username. It rejects du
 
 ## Storage and operations
 
-Named volumes preserve PaperGo data, NPM configuration and certificates. A network-isolated permissions job installs the private bridge secret and prepares the data directory. Setup writes `generated/config.yaml` and Compose mounts it into the PaperGo container. That file sets `auth.mode` to `proxy`, trusts the NPM address in `auth.proxy_trusted_cidrs`, and sets `search.store` to `sqlite`. PaperGo creates or upgrades the database when the application starts.
+Named volumes preserve PaperGo data, NPM configuration and certificates. A network-isolated permissions job installs the private bridge secret and prepares the data directory. Setup writes `generated/config.yaml` and Compose mounts it into the PaperGo container. That file sets `auth.mode` to `proxy`, trusts the NPM address in `auth.proxy_trusted_cidrs`, and leaves the search store to follow the database. PaperGo creates or upgrades the database when the application starts.
 
 If setup fails, it prints recent service logs. A PaperGo error saying `database has no initialized DAL schema` or `database schema version … is newer than this PaperGo` requires discarding the PaperGo data volume or running a matching release. From this directory, run:
 
