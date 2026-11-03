@@ -38,8 +38,8 @@ const (
 // MaxPages bounds a composition.
 const MaxPages = 100
 
-// ErrAnimated rejects animated photos, which have no single page.
-var ErrAnimated = errors.New("animated images cannot be combined into a PDF")
+// errAnimated rejects animated photos, which have no single page.
+var errAnimated = errors.New("animated images cannot be combined into a PDF")
 
 // Validate checks the options' ranges.
 func (o Options) Validate() error {
@@ -100,7 +100,7 @@ func PDF(ctx context.Context, engine ocr.Engine, w io.Writer, pages int, photo f
 			return Metrics{}, err
 		}
 		m.SourceBytes += int64(len(data))
-		page, details, err := Prepare(ctx, engine, data, maxPixels, o.TargetHeight)
+		page, details, err := prepare(ctx, engine, data, maxPixels, o.TargetHeight)
 		if err != nil {
 			return Metrics{}, fmt.Errorf("page %d: %w", i+1, err)
 		}
@@ -117,14 +117,14 @@ func PDF(ctx context.Context, engine ocr.Engine, w io.Writer, pages int, photo f
 	return m, nil
 }
 
-// Prepare turns a photo into a PDF page: upright, flattened onto white,
+// prepare turns a photo into a PDF page: upright, flattened onto white,
 // scaled so that its smallest reliable text line is targetHeight pixels
 // high (never enlarged), with the text OCR read on the full-resolution photo
 // placed at the scaled positions.
-func Prepare(ctx context.Context, engine ocr.Engine, data []byte, maxPixels int64, targetHeight float64) (pdf.Page, Page, error) {
+func prepare(ctx context.Context, engine ocr.Engine, data []byte, maxPixels int64, targetHeight float64) (pdf.Page, Page, error) {
 	img, err := imaging.Decode(data, maxPixels)
 	if errors.Is(err, imaging.ErrAnimated) {
-		return pdf.Page{}, Page{}, ErrAnimated
+		return pdf.Page{}, Page{}, errAnimated
 	}
 	if err != nil {
 		return pdf.Page{}, Page{}, err
@@ -141,7 +141,7 @@ func Prepare(ctx context.Context, engine ocr.Engine, data []byte, maxPixels int6
 	}
 	if len(heights) > 0 {
 		p.SmallestTextHeight = slices.Min(heights)
-		p.Scale = SizeForText(p.SmallestTextHeight, targetHeight)
+		p.Scale = sizeForText(p.SmallestTextHeight, targetHeight)
 		p.Width, p.Height = max(1, round(float64(w)*p.Scale)), max(1, round(float64(h)*p.Scale))
 	}
 	text, err := engine.Recognize(ctx, upright)
@@ -164,9 +164,9 @@ func Prepare(ctx context.Context, engine ocr.Engine, data []byte, maxPixels int6
 	return page, p, nil
 }
 
-// SizeForText is the scale that brings the smallest text to the target
+// sizeForText is the scale that brings the smallest text to the target
 // height, at most 1.
-func SizeForText(smallest, target float64) float64 {
+func sizeForText(smallest, target float64) float64 {
 	return math.Min(1, target/smallest)
 }
 

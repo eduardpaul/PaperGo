@@ -1,14 +1,14 @@
 # Idle native memory
 
-Measured on 15 October 2026 on Linux amd64/WSL2, an Intel Core i7-10870H with four logical CPUs, Go 1.26.0 and the pinned native SDKs. RSS includes resident Go/native allocations and mapped code/data. These are disposable local processes, with no container memory limit; other host activity was not controlled. The figures are memory observations, not throughput comparisons or deployment limits.
+The server figures were measured on 3 November 2026, the model probe on 15 October 2026, on Linux amd64/WSL2, an Intel Core i7-10870H with four logical CPUs, Go 1.27.0 (the model probe: Go 1.26.0) and the pinned native SDKs. RSS includes resident Go/native allocations and mapped code/data. These are disposable local processes, with no container memory limit; other host activity was not controlled. The figures are memory observations, not throughput comparisons or deployment limits.
 
-The server fixture creates 200 invoice-like items through the HTTP API, waits for both domain events and indexing workflows to finish, then waits 35 seconds at each idle stage. Local AI is disabled in these server measurements. The empty server still includes the administrator directory, embedded UI, workflow runner and SQLite search store.
+The server fixture creates 200 invoice-like items through the HTTP API, waits for domain events and pending operations to finish, then waits 35 seconds at each idle stage. Local AI is disabled in these server measurements. The empty server still includes the administrator directory, embedded UI, workflow runner, SQLite search store and PDFium, which runs as WebAssembly and is warmed at start. A first start compiles PDFium into an empty compilation cache, which still costs memory and CPU (9% of a core) at the empty stage; a restart loads the compiled code from the cache.
 
 | Workload | RSS |
 | --- | ---: |
-| Empty API | 75 MiB |
-| API with 200 items, idle after searches | 86 MiB |
-| API with 200 items, idle after restart | 79 MiB |
+| Empty API, first start (PDFium compiled into an empty cache) | 408 MiB |
+| API with 200 items, idle after searches | 185 MiB |
+| API with 200 items, idle after restart (PDFium from the cache) | 128 MiB |
 
 ## Native allocation policy
 

@@ -40,9 +40,19 @@ storage:
   edit_max_mb: 2
 
 # Operation workers. Each named worker runs its own kinds of background
-# work; settings left out keep the defaults. Workers: maintenance (index
-# builds, bulk edits, search reindex, package export and import),
-# integrations (list integration refreshes) and documents (text reads).
+# work; settings left out keep the defaults. Workers:
+#   maintenance   index builds, bulk edits, package export and import
+#   integrations  list integration refreshes, two at a time
+#   documents     text reads and OCR, Photos to PDF
+#   previews      file previews
+#   ai            AI completions, two at a time
+#   ai-batch      batch AI completions, in groups of 20 or at 01:00 UTC
+#   decisions     local workflow and taxonomy decisions
+#   workflows     workflow runs, four slices at a time
+#   search        file content chunking, embedding and publishing, embedding
+#                 sweeps and search reindex (only with search)
+#   search-sync   writing changed entries to the index, up to 200 at a time
+#                 (only with search)
 # workers:
 #   documents:
 #     concurrency: 2

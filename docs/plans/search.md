@@ -2,9 +2,10 @@
 
 This plan ports PaperDotNet's search layer to PaperGo. That layer is one search across everything a person may read: keyword, semantic and hybrid search, page hits, typed field filters and facets. It sits behind a replaceable **search store**.
 
-PaperGo's store is built as a separate package, and other stores can follow behind the same contract:
+Each of PaperGo's stores is a separate package behind the same contract:
 
-- **`sqlite`**, the default: a separate `search.db`.
+- **`sqlite`**, for SQLite deployments: a separate `search.db`;
+- **`postgres`**, for PostgreSQL deployments: the schema `papergo_search` of the application's database.
 
 All indexing runs **asynchronously in workflows** that people can turn off and change per workspace or collection:
 
@@ -126,7 +127,7 @@ What arrived:
 **Layering: it fits.**
 
 - **Port and adapter.** `internal/workflow` imports only `internal/ocr`. The engine is constructed in `cmd/api` (and `cmd/ocr`) and handed over in `workflow.Tools`. Engines never read storage or the database, so a second engine (Tesseract, a GLM-OCR endpoint) needs no change in callers. This is the pattern the search stores follow: `internal/workflow` sees `search.Store`, and `cmd/api` picks the implementation.
-- **Native SDKs.** PaperGo uses cgo with the maintained ONNX Go SDK; PDFium runs as WebAssembly inside the executable. `scripts/native.py` installs pinned native libraries and headers. The Docker runtime uses `distroless/cc` with glibc and libstdc++.
+- **Native SDKs.** PaperGo uses cgo with the maintained ONNX Go SDK; PDFium runs as WebAssembly inside the executable. `scripts/native.py` installs pinned native libraries. The Docker runtime uses `distroless/cc` with glibc and libstdc++.
 - **Heavy work outside the writer.** The three-step activity shape (`run` → `Exec.Work` → `commit`) is what search activities need. Search writes go to another database, so `search.*` activities do their store writes in `Work` and keep their main-database steps short.
 - **One wrinkle.** `internal/imaging` imports `internal/storage` only for the `storage.DocumentType` signature sniffer. It is harmless, but the sniffer belongs in a small leaf package (for example `internal/mediatype`), so imaging and later `internal/doctext` depend on no storage code. A cleanup, not a blocker.
 
@@ -190,14 +191,15 @@ These differences shape the Go design. Each changes something in the port.
 | Package | Contents | Imports |
 | --- | --- | --- |
 | `internal/search` | Store interface and types, the `FullTextQuery` parser, `Filter` tree, `Service`, RRF, snippets, chunkers, the document builder (from a read snapshot to `Document`) | `dms` read API; standard library otherwise |
-| `internal/dal/search/sqlitestore` | The default store in `search.db`, with its in-memory vector index | `modernc.org/sqlite` |
+| `internal/dal/search/sqlitestore` | The SQLite store in `search.db`, with its in-memory vector index | `modernc.org/sqlite` |
+| `internal/dal/search/pgstore` | The PostgreSQL store in the schema `papergo_search`, with its in-memory vector index | `github.com/jackc/pgx/v5` |
 | `internal/search/storetest` | Conformance suite that each store's tests call | `search` |
 | `internal/doctext` | Page text of a file: PDF text layer, rendering and OCR through the port, the text cache | `ocr`, `imaging`, a PDF reader (section 7.3) |
 | `internal/ai` | Embeddings client (OpenAI-compatible `/v1/embeddings`), retries, query cache | standard library |
 | `internal/workflow` (existing) | `search.*` and `document.read_text` activities and the built-ins | `search`, `doctext` through `Tools` |
 | `internal/httpapi` (existing) | `/v1/search` routes | `search` |
 
-Only `cmd/api` chooses the store (`SEARCH_STORE`) and passes it in `workflow.Tools` and to `dms`. Only `sqlitestore` opens `search.db`.
+Only `cmd/api` chooses the store (`SEARCH_STORE`) and passes it in `workflow.Tools` and to `dms`. Only `sqlitestore` opens `search.db`, and only `pgstore` owns `papergo_search`.
 
 ## 5. Contracts (`internal/search`)
 
@@ -266,7 +268,6 @@ type Store interface {
 
     Fields(ctx context.Context) ([]FieldInfo, error)
     CountTerms(ctx context.Context, termIDs []string) (map[string]int, error)
-    Export(ctx context.Context, emit func(Record) error) error // copying between stores
     Stats(ctx context.Context) (Stats, error)
     Close() error
 }
@@ -348,7 +349,7 @@ Each store is a separate package with nothing in common with another but the `se
 - **Facets:** exact `GROUP BY` over the keyword match set, or over the fused candidates. Workspace, collection, content type, terms and keywords, top 20 each.
 - **Scope lists:** passed as one JSON parameter (`scope_id IN (SELECT value FROM json_each(?))`), so 20,000 scopes are not 20,000 placeholders.
 
-**PostgreSQL** is out of scope. A PostgreSQL store (tsvector with languages, pgvector) can follow when PaperGo's main database supports PostgreSQL, as another package behind the same contract and suite.
+**PostgreSQL** deployments use the `postgres` store, behind the same contract and suite; see [the store](../search.md#the-store).
 
 ## 7. Indexing pipeline: workflows people can change
 
@@ -555,7 +556,7 @@ Personalization changes quality and cost, never permissions or inclusion.
 - **Scope and surface come from `search.sync` alone.** Content activities never write them: chunks inherit visibility from the documents that reference their blob.
 - **Exactly once:** `generation` is derived from the run ID and the step ID that started it, so a replayed step stages the same generation again.
 
-### 7.5 Reindex, sweep and copying
+### 7.5 Reindex and sweep
 
 - **Reindex:** `POST /v1/search/reindex` (`organization.manage`) is the operation `search.reindex`.
   - **Metadata:** it starts the active `search.index` filler's manual trigger for every live resource, in bounded batches (E5 decides which workflow that is per collection). Then it deletes documents not touched since the operation started, by stamp. Because it goes through the active workflow, customizations such as `extra_keywords` apply.
@@ -659,8 +660,7 @@ Personalization changes quality and cost, never permissions or inclusion.
     - vector reuse by `input_hash`;
     - reindex by stamp without a gap;
     - 20,000 readable scopes;
-    - `Match` with `parent_id`, `ancestor_id`, the literal-prefix rule and the cap;
-    - an `Export` round trip into another store.
+    - `Match` with `parent_id`, `ancestor_id`, the literal-prefix rule and the cap.
 - **Collection query parity:** the existing `search` tests of collection queries, views, smart folders, listings and WebDAV-adjacent listings run against the store, with a helper that waits for `search.index` to finish. Results, ordering and totals must equal what the FTS5 tables gave, except that file text now also matches.
 - **Unit tests and fuzzing:**
   - parser, `SemanticText`, snippets, RRF;

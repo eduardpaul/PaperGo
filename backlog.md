@@ -86,7 +86,7 @@ Scope: ISSUE-21, ISSUE-20 and ISSUE-19. ISSUE-23 and FEAT-01 are deferred and ex
 
 - [x] **ISSUE-21** — Backend Docker bridge allows outbound DNS/HTTPS while PaperGo ports remain unpublished. Setup and verification check calendar.google.com from the actual container with TLS verification and actionable errors. Validation: 20 NPM Python tests, admin CLI tests, Compose configuration checks and live distroless-container DNS/HTTPS smoke test.
 - [x] **ISSUE-20** — Organization managers list/revoke organization credentials and issue scoped `pgo_` integration tokens with separate non-interactive service identities, 30/90/365-day or no expiration, one-time secrets and last-use metadata. Token scopes and resource ACLs apply in bearer/proxy modes and queued operations revalidate the credential. Validation: issuance/ACL/scope/expiry/disabled-identity/revocation and proxy API tests, personal-token/operation regressions, two admin UI tests, typecheck/lint, production frontend build, Ent/Atlas checks and sample-package regeneration.
-- [x] **ISSUE-19** — Default file-preview system workflow renders first-page PDF/TIFF and static-image WebP renditions under 100,000 bytes and 800 pixels asynchronously, with separate bounded preview work. Authorized viewing follows the caller’s visible revision, preserves originals, shares identical bytes and supports pending/unavailable placeholders. Gallery/board/content/selection views use previews. Packages, backup and cleanup preserve their lifecycle. Validation: 21.9 MB source → 77 KB in about 0.6 s, PDF/TIFF bounds, ACL/publication tests, asynchronous reuse/replacement and worker starvation tests, package/backup/cleanup regressions and preview UI tests.
+- [x] **ISSUE-19** — Default file-preview system workflow renders first-page PDF/TIFF and JPEG renditions under 100,000 bytes and 800 pixels asynchronously, with separate bounded preview work. Authorized viewing follows the caller’s visible revision, preserves originals, shares identical bytes and supports pending/unavailable placeholders. Gallery/board/content/selection views use previews. Packages, backup and cleanup preserve their lifecycle. Validation: 21.9 MB source → 77 KB in about 0.6 s, PDF/TIFF bounds, ACL/publication tests, asynchronous reuse/replacement and worker starvation tests, package/backup/cleanup regressions and preview UI tests.
 
 
 **Completed the three selected Phase 4 issues on 2026-10-17.** Final validation: all 1,000 Go test cases passed (15 optional integration cases skipped), all 171 frontend tests and all 56 Python tests passed, with frontend typecheck/lint, production API/admin/frontend builds, full Go vet/staticcheck, module checksum verification, reproducible Ent generation, Atlas validation and regenerated sample packages. The built Docker image passed fresh-volume startup, search indexing, outbound calendar DNS/HTTPS, scoped service-token authentication/revocation and asynchronous preview/original-preservation checks. FEAT-01 remains deferred; ISSUE-23 is tracked below.
@@ -813,13 +813,13 @@ Currently, document viewing and thumbnail displays either download full-resoluti
 
 #### Technical Analysis
 - Large PDF/TIFF/JPEG files consume extensive client bandwidth and memory.
-- PaperGo has imaging tools (`internal/imaging`, `internal/pdf`, PDFium as WebAssembly, native WebP).
-- Built-in workflow mechanism can process uploaded blobs in a background task and store low-res previews in a dedicated cache directory (`data/previews/{hash}.webp`).
+- PaperGo has imaging tools (`internal/imaging`, `internal/pdf`, PDFium as WebAssembly).
+- Built-in workflow mechanism can process uploaded blobs in a background task and store low-res previews in a dedicated cache directory (`data/previews/{hash}.jpg`).
 
 #### Proposed Specification
 1. **Built-in Preview Generator Workflow**:
    - Triggers on `file.added` and `file.updated`.
-   - Uses PDFium / imaging to render page 1 (or images) into a bounded WebP (e.g. max dimension 800px, quality 75).
+   - Uses PDFium / imaging to render page 1 (or images) into a bounded JPEG (e.g. max dimension 800px, quality 75).
    - Saves output to preview storage and attaches preview metadata to the item.
 2. **UI Integration**:
    - Before preview generation completes, the UI shows a clean skeleton/placeholder ("Generating preview...").
@@ -827,7 +827,7 @@ Currently, document viewing and thumbnail displays either download full-resoluti
    - Full-resolution bytes are only downloaded when the user explicitly clicks "Download Original".
 
 #### Acceptance Criteria
-- Uploading a 20MB image or multi-page PDF generates a low-res WebP preview under 100KB within seconds.
+- Uploading a 20MB image or multi-page PDF generates a low-res JPEG preview under 100KB within seconds.
 - The UI displays the lightweight preview instantly without loading the full blob.
 - While processing, a clear non-blocking placeholder is shown.
 

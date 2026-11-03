@@ -75,9 +75,10 @@ type Hit struct {
 	ModifiedBy string    `json:"modified_by"`
 }
 
-// Result is a page of hits. Total counts the store's matches;
-// TotalEstimated reports a bounded candidate set or entries left out because
-// the caller may no longer read them as indexed. NextOffset continues, or is -1.
+// Result is a page of hits. Total counts the store's matches as indexed;
+// TotalEstimated reports that it may count entries the caller can no longer
+// read: such hits were left out, or the facets were withheld because one of
+// their sources is no longer visible. NextOffset continues, or is -1.
 type Result struct {
 	Hits           []Hit          `json:"value"`
 	Total          int            `json:"total"`
@@ -231,7 +232,7 @@ func (x *Search) search(ctx context.Context, s *dms.Service, subject string, in 
 		}
 		if round == 0 {
 			out.Total, out.Facets = res.Total, res.Facets
-			out.TotalEstimated = res.Estimated || in.Facets && res.Facets == nil
+			out.TotalEstimated = in.Facets && res.Facets == nil
 		}
 		keys := make([]search.Key, len(res.Hits))
 		for i, h := range res.Hits {

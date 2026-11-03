@@ -177,7 +177,7 @@ func FuzzRenderedQueriesAreValid(f *testing.F) {
 			return
 		}
 		if _, err = s.Search(context.Background(), search.Query{Text: q, Filter: search.Filter{Access: search.Access{Read: []string{"s"}}}}); err != nil {
-			t.Fatalf("%q rendered as %q: %v", text, render(q, s.stem), err)
+			t.Fatalf("%q rendered as %q: %v", text, renderOn(q, s.stem, docColumns), err)
 		}
 		if _, err = s.Match(context.Background(), search.MatchQuery{CollectionID: "c", Text: search.Literal(text)}); err != nil {
 			t.Fatalf("literal %q: %v", text, err)

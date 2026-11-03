@@ -21,14 +21,10 @@ var (
 	chunkColumns    = columns{"{text}", "{text_stem}"}
 )
 
-// render writes a parsed query in FTS5 syntax over the document columns.
+// renderOn writes a parsed query in FTS5 syntax over the columns cols.
 // Tokens are letters and digits only, so quoting them needs no escaping.
 // With a stemmer, a whole word or phrase also matches its stems in any of
 // the stemmer's languages; prefixes match words only.
-func render(q *search.FullTextQuery, stem *search.Stemmer) string {
-	return renderOn(q, stem, docColumns)
-}
-
 func renderOn(q *search.FullTextQuery, stem *search.Stemmer, cols columns) string {
 	groups := make([]string, len(q.Groups))
 	for i, group := range q.Groups {

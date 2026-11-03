@@ -4,11 +4,11 @@ PaperGo's [devcontainer](../.devcontainer/devcontainer.json) is the `development
 stage of the repository's one [Dockerfile](../Dockerfile), which is also CI's
 toolchain image and the base of the application build. It provides Go, Node.js
 with npm, Python 3, SQLite's CLI, the PostgreSQL client, the native
-SDKs and a C compiler, plus gopls, Delve, Staticcheck and
+SDKs and GCC with g++, plus gopls, Delve, Staticcheck and
 govulncheck. The Dockerfile is the only place their versions are pinned: Go
 and Node as `ARG`s at its top and the native SDKs in
-`scripts/native.json`. CI jobs that cannot use
-the image, on Windows and Linux arm64, install the same versions with
+`scripts/native.json`. Jobs that cannot use the image, CI's Windows release
+rehearsal and the release workflow's platform builds, install the same versions with
 `.github/actions/toolchain`, which reads them through
 `scripts/toolchain-versions.py`. To change a version, edit the Dockerfile. It
 supports Linux amd64 and arm64 through the upstream multi-platform images. The source checkout stays on the host; dependencies and
@@ -32,7 +32,7 @@ creates a random development token in `.cache/development.env` with mode 0600.
 The editor waits for setup because Go packages link the native SDK libraries and embed `web/dist` at compile time. The Go extension and debugger use `.tools/native/native.env`; direct shell commands require `source .tools/native/env.sh` (PowerShell: `. .tools/native/env.ps1`).
 Setup can be rerun with **PaperGo: setup** or `bash scripts/setup-dev.sh`, including
 after dependency changes. The shell scripts also work with native Go, Node/npm,
-Python 3.11+ and a C compiler. Docker
+Python 3.11+ and GCC with g++ (cgo links the C++ runtime). Docker
 runs the PostgreSQL server and model generation.
 `.cache/development.env` is generated development
 configuration; it is distinct from the optional `.env.example` file, which the
@@ -182,7 +182,7 @@ volumes.
 
 Pull requests run `lint` and `test`: Go in two shards, PostgreSQL and the
 frontend, about ten minutes on warm caches. Pushes to `main` and a weekly
-schedule run the Go suite as `race` in three shards instead, with PostgreSQL
+schedule run the Go suite as `race` in two shards instead, with PostgreSQL
 and the frontend, and add `native`, `release` and `vuln` in the
 toolchain image, `release` on Windows with natively installed SDKs, and
 `docker`. The weekly schedule and manual runs also build the devcontainer and

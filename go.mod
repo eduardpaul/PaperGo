@@ -2,6 +2,12 @@ module papergo
 
 go 1.27.0
 
+// npm dependencies can ship Go files; they are not part of the module.
+ignore (
+	./sdk/node_modules
+	./web/node_modules
+)
+
 require (
 	github.com/aarondl/opt v0.0.0-20250607033636-982744e1bd65
 	github.com/blevesearch/snowballstem v0.9.0

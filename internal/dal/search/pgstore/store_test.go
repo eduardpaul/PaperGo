@@ -3,19 +3,13 @@ package pgstore
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"path/filepath"
-	"reflect"
-	"sort"
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"papergo/internal/dal/daltest"
-	"papergo/internal/dal/search/sqlitestore"
 	"papergo/internal/search"
 	"papergo/internal/search/storetest"
 )
@@ -243,87 +237,4 @@ func TestLongTextStaysWithinTsvectorBounds(t *testing.T) {
 	if res, err := s.Search(ctx, search.Query{Text: q, Filter: search.Filter{Access: search.Access{Read: []string{"s"}}}}); err != nil || res.Total != 1 {
 		t.Fatalf("%+v %v", res, err)
 	}
-}
-
-// Records copy between the stores, both ways, without any change.
-func TestCopyBetweenStores(t *testing.T) {
-	ctx := context.Background()
-	source, err := sqlitestore.Open(ctx, filepath.Join(t.TempDir(), "search.db"), sqlitestore.Options{Languages: []string{"english"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer source.Close()
-	d := search.Document{ResourceID: "copy", Kind: "item", Surface: search.SurfacePublished, Views: search.ViewHead | search.ViewPublished, ScopeID: "s", WorkspaceID: "w", CollectionID: "c",
-		Name: "invoice copy", BlobID: "blob", TermIDs: []string{"t1", "t2"}, KeywordIDs: []string{"k"}, CreatedAt: time.Unix(0, 1).UTC(), ModifiedAt: time.Unix(0, 2).UTC()}
-	d.Fields = []search.Field{{Key: "large", Type: "integer", Values: []search.FieldValue{{Int: 9007199254740993}}}, {Key: "precise", Type: "number", Values: []search.FieldValue{{Text: "exact-96-bit-ordering-key"}}}}
-	if err = source.UpsertDocuments(ctx, []search.Document{d}, 42); err != nil {
-		t.Fatal(err)
-	}
-	chunks := make([]search.Chunk, 205)
-	for i := range chunks {
-		chunks[i] = search.Chunk{Part: "read", Ordinal: i, Kind: "content", Page: i + 1, Text: "invoice payment " + strings.Repeat("a", i%7+1)}
-	}
-	if err = source.StageContent(ctx, d.ResourceID, d.BlobID, "published", chunks); err != nil {
-		t.Fatal(err)
-	}
-	if err = source.PublishContent(ctx, d.ResourceID, d.BlobID, "published"); err != nil {
-		t.Fatal(err)
-	}
-	todo, _, err := source.GenerationToEmbed(ctx, "model", "published")
-	if err != nil {
-		t.Fatal(err)
-	}
-	vs := []search.HashVector{}
-	for _, c := range todo {
-		vs = append(vs, search.HashVector{InputHash: c.InputHash, Vector: []float32{1, 0, 0, 0}})
-	}
-	if err = source.SetVectors(ctx, "model", vs); err != nil {
-		t.Fatal(err)
-	}
-	pg := open(t, daltest.PostgresDB(t), "english")
-	if err = search.Copy(ctx, source, pg); err != nil {
-		t.Fatal(err)
-	}
-	if err = search.Copy(ctx, source, pg); err != nil {
-		t.Fatal("idempotent import", err)
-	}
-	back, err := sqlitestore.Open(ctx, filepath.Join(t.TempDir(), "copy.db"), sqlitestore.Options{Languages: []string{"english"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer back.Close()
-	if err = search.Copy(ctx, pg, back); err != nil {
-		t.Fatal(err)
-	}
-	records := func(s search.Store) []string {
-		t.Helper()
-		out := []string{}
-		if err := s.Export(ctx, func(r search.Record) error { raw, err := json.Marshal(r); out = append(out, string(raw)); return err }); err != nil {
-			t.Fatal(err)
-		}
-		sort.Strings(out)
-		return out
-	}
-	if a, b := records(source), records(pg); !reflect.DeepEqual(a, b) {
-		t.Fatalf("postgres records differ: %d -> %d", len(a), len(b))
-	}
-	if a, b := records(source), records(back); !reflect.DeepEqual(a, b) {
-		t.Fatalf("records copied back differ: %d -> %d", len(a), len(b))
-	}
-	if hit := find(t, pg, "payment"); hit != "copy" {
-		t.Fatalf("copied content: %q", hit)
-	}
-}
-
-func find(t *testing.T, s search.Store, text string) string {
-	t.Helper()
-	q, err := search.Parse(text)
-	if err != nil {
-		t.Fatal(err)
-	}
-	res, err := s.Search(context.Background(), search.Query{Text: q, Content: true, Limit: 1, Filter: search.Filter{Access: search.Access{Read: []string{"s"}}}})
-	if err != nil || len(res.Hits) != 1 {
-		t.Fatalf("%q: %+v %v", text, res, err)
-	}
-	return res.Hits[0].ResourceID
 }

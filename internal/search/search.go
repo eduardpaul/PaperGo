@@ -10,7 +10,6 @@ import (
 	"context"
 	"errors"
 	"papergo/internal/dal/refs"
-	"slices"
 	"time"
 )
 
@@ -162,12 +161,6 @@ type Within struct {
 	Workspaces, Collections []string
 }
 
-// Holds reports whether a document of a workspace and collection is
-// inside w; a nil w holds everything.
-func (w *Within) Holds(workspaceID, collectionID string) bool {
-	return w == nil || slices.Contains(w.Workspaces, workspaceID) || slices.Contains(w.Collections, collectionID)
-}
-
 // Search modes: keyword matches words; semantic finds file content close
 // in meaning to the query, by embedding vectors; hybrid fuses both lists by
 // reciprocal rank.
@@ -199,12 +192,11 @@ const (
 // Semantic and hybrid searches need Vector, the normalized embedding of the
 // query by Model; there, Text gives the keyword side and the excluded words.
 type Query struct {
-	Mode          string
-	Text          *FullTextQuery
-	Vector        []float32
-	Model         string
-	MinSimilarity float32
-	Filter        Filter
+	Mode   string
+	Text   *FullTextQuery
+	Vector []float32
+	Model  string
+	Filter Filter
 	// Content includes file text in matching and snippets; otherwise only
 	// metadata is searched. Callers must authorize document.read first.
 	Content bool
@@ -263,11 +255,9 @@ const FacetSize = 20
 
 // Result is a page of hits. Total counts every match.
 type Result struct {
-	Hits  []Hit
-	Total int
-	// Estimated reports a bounded candidate set, rather than an exact count.
-	Estimated bool
-	Facets    *Facets
+	Hits   []Hit
+	Total  int
+	Facets *Facets
 }
 
 // MatchQuery finds the entries of one collection, or of one workspace,
@@ -420,11 +410,6 @@ type Store interface {
 	// Keys lists the documents of the entries that exist in the store.
 	Keys(ctx context.Context, resourceIDs []string) ([]Key, error)
 	Stats(ctx context.Context) (Stats, error)
-	// Export streams the source records, including staged chunks and cached
-	// vectors, for an offline copy without OCR or model calls.
-	Export(ctx context.Context, yield func(Record) error) error
-	// Import applies exported records idempotently, in their export order.
-	Import(ctx context.Context, records []Record) error
 	Close() error
 }
 

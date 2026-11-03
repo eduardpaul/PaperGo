@@ -94,7 +94,7 @@ Each file type that PaperGo can show is served by a **file handler**: a plug-in 
 | Building block | State | Consequence |
 | --- | --- | --- |
 | Accepted file types | Hard-coded to PDF, TIFF, JPEG, PNG and WebP, detected from the first 12 bytes (`internal/storage/documents.go`). The same set is a `CHECK` on `blobs.content_type`, the `blobs.MediaType` constants, the web upload `accept` list and the file-type filter labels. | Every other file returns 415, including WebDAV saves from Explorer, Finder and Office, and package imports. |
-| Processing | Preview (`internal/preview`), text reading (`internal/doctext`), OCR, image optimisation and Photos to PDF each assume one of those five types. | Once anything can be stored, each processor must say which types it handles and skip the rest. Otherwise workflows fail. |
+| Processing | Preview (`internal/preview`), text reading (`internal/doctext`), OCR and Photos to PDF each assume one of those five types. | Once anything can be stored, each processor must say which types it handles and skip the rest. Otherwise workflows fail. |
 | Preview | `GET /v1/items/{id}/preview`: a JPEG of page 1, longest side at most 800 px. It shows in gallery and board cards and in the item sheet's **File** tab. | You can never see page 2. There is no zoom, and clicking the preview does nothing. |
 | Original file | `GET /v1/items/{id}/content`: always `attachment` and `nosniff`, with Range support. The web app only ever saves it to disk. | Opening a file means downloading it. |
 | Editing a file | `PUT /v1/items/{id}/content` with `If-Match` makes a new file version. The **Replace file** button uploads one. | The concurrency model an editor needs already exists. |
@@ -481,7 +481,7 @@ as `?item=<id>&open=file`, with optional `&page=<n>` (PDF),
 | Piece | Where it lives | Why |
 | --- | --- | --- |
 | Accepting any file and identifying its type | **Core:** S1 file type identification. | Decided in D1. Storage, DMS, WebDAV, import and the schema all gate on type today. |
-| Processors (preview, text, OCR, optimise, compose) saying which types they take | **Core:** S1 processor capabilities. | Otherwise every new type makes workflows fail. |
+| Processors (preview, text, OCR, compose) saying which types they take | **Core:** S1 processor capabilities. | Otherwise every new type makes workflows fail. |
 | Text reading for `.md` and `.txt` | **Extension:** `internal/textfiles` registers a `doctext` reader. | It plugs into S1. |
 | File summary on rows | **Core:** S2. | Decided in D2. |
 | Trusted hosts | **Core:** S4, an organization setting with one Go check. | Decided in D6: integrations and every handler must share it. |
@@ -547,7 +547,7 @@ The last header is new; it makes a file opened directly in a browser inert. The 
 - Each processor declares the types it handles:
   - preview: PDF, TIFF, JPEG, PNG and WebP;
   - text reading: those, plus whatever `doctext` readers are registered;
-  - OCR and image optimisation: images;
+  - OCR: images;
   - Photos to PDF: images.
 - A request for another type is refused up front with `415 unsupported_file_type`, before any operation is queued.
 - The built-in workflows check the file's type first and end as **skipped**, not failed, so no failed-run notifications follow.

@@ -19,21 +19,22 @@ export interface PagesRequestBuilder extends BaseRequestBuilder<PagesRequestBuil
      */
      byPage(page: number) : WithPageItemRequestBuilder;
     /**
-     * The pages of the caller's file (or an earlier version), with each page's size in CSS pixels at 100 %: points at 96 DPI for PDF pages, pixels for images. Every page of PDFs and multi-page TIFFs is listed, up to 2,000, and a JPEG, PNG or WebP image has one. Requires document.read and read access to the item. Other kinds of file answer 415 unsupported_file_type; a file whose pages cannot be read answers 422 unreadable_file.
+     * The pages of the caller's file (or an earlier version), with each page's size in CSS pixels at 100 %: points at 96 DPI for PDF pages, pixels for images. Every page of PDFs and multi-page TIFFs is listed, up to 2,000, and a JPEG, PNG or WebP image has one. Requires document.read and read access to the item. Other kinds of file answer 415 unsupported_file_type; a file whose pages cannot be read answers 422 unreadable_file. If PDFium could not start, PDFs answer 503 pdf_unavailable; retry later.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<PageList>}
+     * @throws {Problem} error when the service returns a 503 status code
      * @throws {Problem} error when the service returns a 4XX or 5XX status code
      */
      get(requestConfiguration?: RequestConfiguration<PagesRequestBuilderGetQueryParameters> | undefined) : Promise<PageList | undefined>;
     /**
-     * The pages of the caller's file (or an earlier version), with each page's size in CSS pixels at 100 %: points at 96 DPI for PDF pages, pixels for images. Every page of PDFs and multi-page TIFFs is listed, up to 2,000, and a JPEG, PNG or WebP image has one. Requires document.read and read access to the item. Other kinds of file answer 415 unsupported_file_type; a file whose pages cannot be read answers 422 unreadable_file.
+     * The pages of the caller's file (or an earlier version), with each page's size in CSS pixels at 100 %: points at 96 DPI for PDF pages, pixels for images. Every page of PDFs and multi-page TIFFs is listed, up to 2,000, and a JPEG, PNG or WebP image has one. Requires document.read and read access to the item. Other kinds of file answer 415 unsupported_file_type; a file whose pages cannot be read answers 422 unreadable_file. If PDFium could not start, PDFs answer 503 pdf_unavailable; retry later.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */
      toGetRequestInformation(requestConfiguration?: RequestConfiguration<PagesRequestBuilderGetQueryParameters> | undefined) : RequestInformation;
 }
 /**
- * The pages of the caller's file (or an earlier version), with each page's size in CSS pixels at 100 %: points at 96 DPI for PDF pages, pixels for images. Every page of PDFs and multi-page TIFFs is listed, up to 2,000, and a JPEG, PNG or WebP image has one. Requires document.read and read access to the item. Other kinds of file answer 415 unsupported_file_type; a file whose pages cannot be read answers 422 unreadable_file.
+ * The pages of the caller's file (or an earlier version), with each page's size in CSS pixels at 100 %: points at 96 DPI for PDF pages, pixels for images. Every page of PDFs and multi-page TIFFs is listed, up to 2,000, and a JPEG, PNG or WebP image has one. Requires document.read and read access to the item. Other kinds of file answer 415 unsupported_file_type; a file whose pages cannot be read answers 422 unreadable_file. If PDFium could not start, PDFs answer 503 pdf_unavailable; retry later.
  */
 export interface PagesRequestBuilderGetQueryParameters {
     /**
@@ -68,6 +69,7 @@ export const PagesRequestBuilderRequestsMetadata: RequestsMetadata = {
         uriTemplate: PagesRequestBuilderUriTemplate,
         responseBodyContentType: "application/json",
         errorMappings: {
+            503: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             XXX: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
         },
         adapterMethodName: "send",

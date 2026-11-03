@@ -164,15 +164,11 @@ func (s *Store) semantic(ctx context.Context, tx tx, q search.Query, filter clau
 	if err != nil {
 		return nil, err
 	}
-	minSimilarity := q.MinSimilarity
-	if minSimilarity == 0 {
-		minSimilarity = search.MinSimilarity
-	}
 	if q.Text != nil && len(q.Text.Excluded) > 0 {
 		excluded := matching(&search.FullTextQuery{Groups: [][]search.Term{q.Text.Excluded}}, s.stem, true)
 		filter = clause{filter.sql + " AND NOT (" + excluded.sql + ")", append(append([]any{}, filter.args...), excluded.args...)}
 	}
-	candidates := snapshot.Nearest(q.Vector, search.PassageCandidates, minSimilarity, nil)
+	candidates := snapshot.Nearest(q.Vector, search.PassageCandidates, search.MinSimilarity, nil)
 	matches, err := documentsOf(ctx, tx, candidates, filter, limit)
 	if err != nil || len(matches) >= limit || len(candidates) < search.PassageCandidates {
 		return matches, err
@@ -183,7 +179,7 @@ func (s *Store) semantic(ctx context.Context, tx tx, q search.Query, filter clau
 	if err != nil {
 		return nil, err
 	}
-	return documentsOf(ctx, tx, snapshot.Nearest(q.Vector, search.PassageCandidates, minSimilarity, allowed), filter, limit)
+	return documentsOf(ctx, tx, snapshot.Nearest(q.Vector, search.PassageCandidates, search.MinSimilarity, allowed), filter, limit)
 }
 
 // documentsOf maps similar inputs to the documents whose published content
