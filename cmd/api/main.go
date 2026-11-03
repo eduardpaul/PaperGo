@@ -248,7 +248,7 @@ func run(log *slog.Logger) error {
 		if err != nil {
 			return fmt.Errorf("MCP_EXTENSIONS: %w", err)
 		}
-		feats.mcp = mcpserver.New(mcpserver.Config{Version: buildinfo.Version, Logger: log, AppURL: c.PublicURL}, registry)
+		feats.mcp = mcpserver.New(mcpserver.Config{Version: buildinfo.Version, Logger: log, AppURL: c.PublicURL, RequestTimeout: c.RequestTimeout}, registry)
 	}
 	if err = feats.register(service); err != nil {
 		return err

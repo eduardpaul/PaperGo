@@ -335,8 +335,8 @@ app learns from `/auth/config` whether MCP is on and the public origin, and
 offers connections there, or at its own origin without `PUBLIC_URL`.
 
 MCP requests share the API's admission limit; the API requests a tool makes are
-part of its MCP request and take no turn of their own. Each MCP request has a
-30-second deadline, 1 MiB request bodies and an 8 MiB answer/result cap. Cancel
+part of its MCP request and take no turn of their own. Each MCP request has the
+API's read deadline (`REQUEST_TIMEOUT`, 30 seconds by default), 1 MiB request bodies and an 8 MiB answer/result cap. Cancel
 work on disconnect where the SDK permits. Return explicit size-limit errors
 rather than truncating JSON. The module performs no file transfers requiring
 longer deadlines.

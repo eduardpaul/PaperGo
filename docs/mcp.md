@@ -180,7 +180,7 @@ A tool that cannot do what was asked returns an error result whose text is JSON:
 
 ## Limits
 
-MCP requests share the API's admission limit (`MAX_IN_FLIGHT`): past it, a request that waits more than one second for a turn is answered `503` with `Retry-After`. The API requests a tool makes are part of its MCP request and take no turn of their own. Each MCP request may take 30 seconds. Request bodies are limited to 1 MiB and each API answer and tool result to 8 MiB. Every response is `Cache-Control: private, no-store`, and tool listings are marked private with no cache lifetime, since they depend on the caller.
+MCP requests share the API's admission limit (`MAX_IN_FLIGHT`): past it, a request that waits more than one second for a turn is answered `503` with `Retry-After`. The API requests a tool makes are part of its MCP request and take no turn of their own. Each MCP request, writes included, may take `REQUEST_TIMEOUT` (default 30 seconds). Request bodies are limited to 1 MiB and each API answer and tool result to 8 MiB. Every response is `Cache-Control: private, no-store`, and tool listings are marked private with no cache lifetime, since they depend on the caller.
 
 ## Terms
 
