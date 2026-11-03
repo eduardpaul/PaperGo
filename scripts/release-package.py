@@ -21,10 +21,10 @@ def package(version, system, arch, bin_dir, dist):
                 inputs[path.relative_to(bin_dir).as_posix()] = path
     if system == 'windows':
         inputs.update((path.name, path) for path in sorted(bin_dir.glob('*.dll')))
-    required = ['onnxruntime.dll', 'pdfium.dll', 'zvec_c_api.dll'] if system == 'windows' else [
-        'lib/libonnxruntime.so', 'lib/libpdfium.so', 'lib/libzvec_c_api.so',
+    required = ['onnxruntime.dll', 'pdfium.dll'] if system == 'windows' else [
+        'lib/libonnxruntime.so', 'lib/libpdfium.so',
     ] if system == 'linux' else [
-        'lib/libonnxruntime.dylib', 'lib/libpdfium.dylib', 'lib/libzvec_c_api.dylib',
+        'lib/libonnxruntime.dylib', 'lib/libpdfium.dylib',
     ]
     if any(name not in inputs for name in required):
         raise ValueError('Build the native libraries alongside the executable before packaging')

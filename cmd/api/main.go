@@ -22,8 +22,8 @@ import (
 	"papergo/internal/dal/database"
 	"papergo/internal/dal/integrations"
 	"papergo/internal/dal/resultcache"
+	"papergo/internal/dal/search/pgstore"
 	"papergo/internal/dal/search/sqlitestore"
-	"papergo/internal/dal/search/zvecstore"
 	"papergo/internal/decision"
 	"papergo/internal/dms"
 	"papergo/internal/doctext/pdfium"
@@ -155,10 +155,10 @@ func run(log *slog.Logger) error {
 	// listings match search text by name.
 	var index search.Store
 	switch c.SearchStore {
-	case config.SearchZvec:
-		index, err = zvecstore.Open(startup, c.ZvecPath, zvecstore.Options{Languages: c.SearchLanguages, KeywordCandidates: c.ZvecKeywordCandidates})
 	case config.SearchSQLite:
 		index, err = sqlitestore.Open(startup, c.SearchPath, sqlitestore.Options{Languages: c.SearchLanguages})
+	case config.SearchPostgres:
+		index, err = pgstore.Open(startup, db.SQL, pgstore.Options{Languages: c.SearchLanguages})
 	}
 	if err != nil {
 		return fmt.Errorf("open the search store: %w", err)

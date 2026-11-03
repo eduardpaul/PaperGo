@@ -108,11 +108,9 @@ stage, so a failing job names the command that reproduces it.
 | `quick` (default) | Go formatting and the Go suite with Go's test-result cache: the edit/check loop |
 | `lint` | Formatting, module checksums, generated Bob models and workflow SDK, vet, Staticcheck, frontend typecheck and lint, Python tests |
 | `test` | Uncached Go suite on SQLite, the database suites on PostgreSQL 17, frontend tests |
-| `race` | The Go suite with race detection, except the packages `native` and `zvec` run with race detection on real models and the native store |
+| `race` | The Go suite with race detection, except the packages that `native` runs with race detection on real models |
 | `web` | Frontend typecheck, lint and tests |
 | `native` | Real decision, embedding and OCR models, with race detection |
-| `zvec` | Native search store conformance, backup and parity, with race detection |
-| `soak` | Native search soak at real dimensions and timed fuzzing |
 | `release` | Builds, packages and runs the release executable with the shared assets |
 | `docker` | Builds the container image and runs its smoke test |
 | `vuln` | Reachable Go dependency vulnerabilities |
@@ -142,6 +140,10 @@ arguments: `./scripts/check.ps1 --packages ./internal/dms`.
 The Go stage covers SQLite. The PostgreSQL stage selects PostgreSQL for the
 shared fixtures and skips explicit SQLite contracts, schema-file tests and
 SQLite backups, so they run once per test stage.
+Search tests open the store of their fixture database, as `SEARCH_STORE`
+does: the PostgreSQL stage runs them, and the PostgreSQL store's own suite,
+on PostgreSQL. `PAPERGO_TEST_SEARCH_STORE=sqlite` or `postgres` chooses the
+store instead.
 
 Checks use the installed dependencies and never download them; `--setup` first
 runs `npm ci` where the installed packages do not match the lockfile, as CI does.
@@ -160,7 +162,7 @@ and the PostgreSQL client. It needs only Docker, Python 3 and Git:
 scripts/ci.sh                         # the pull request gate: lint, then test
 scripts/ci.sh test --only go --shard 1/2
 scripts/ci.sh race
-scripts/ci.sh release                 # also: native, zvec, docker, vuln
+scripts/ci.sh release                 # also: native, docker, vuln
 ```
 
 It copies a clean snapshot of the checkout into the container: tracked and new
@@ -181,10 +183,10 @@ volumes.
 Pull requests run `lint` and `test`: Go in two shards, PostgreSQL and the
 frontend, about ten minutes on warm caches. Pushes to `main` and a weekly
 schedule run the Go suite as `race` in three shards instead, with PostgreSQL
-and the frontend, and add `native`, `zvec`, `release` and `vuln` in the
-toolchain image, `release` on Windows and `zvec` on Linux arm64 with natively
-installed SDKs, and `docker`. The weekly schedule and manual runs also run
-`soak` and build the devcontainer and run its smoke test. The first job of
+and the frontend, and add `native`, `release` and `vuln` in the
+toolchain image, `release` on Windows with natively installed SDKs, and
+`docker`. The weekly schedule and manual runs also build the devcontainer and
+run its smoke test. The first job of
 each run publishes the toolchain image when its inputs changed. Each kind of
 job restores its Go, npm and Staticcheck cache; runs on `main` save a new one
 once a week or when a lockfile changes, and pull requests only read them. Go

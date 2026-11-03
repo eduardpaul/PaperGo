@@ -34,7 +34,7 @@ Models load from `/opt/papergo/assets/models`; native libraries live in `/opt/pa
 
 The image includes a readiness health check using `/opt/papergo/papergo admin health`, which probes `/health/ready` at the listen address the server is configured with (`HTTP_ADDR`, or `server.bind` and `server.port`), or at `--url`. It needs no shell or curl. Logs go to standard output; SIGTERM shuts down the HTTP server and workflow runner. Compose allows 45 seconds for that shutdown.
 
-For maintenance, stop the API before a zvec backup and use the same image and data volume:
+For maintenance, stop the API and use the same image and data volume:
 
 ```sh
 docker compose -f deploy/compose.yaml stop papergo
@@ -58,4 +58,4 @@ python3 scripts/build-assets.py --output-dir .cache/container-assets/assets
 docker build --build-context model-assets=.cache/container-assets -t papergo:local .
 ```
 
-Check an image directly with `python3 scripts/docker-smoke.py --image papergo:local`. The test requires only Docker and Python on the test host. It checks production password setup, automatic schema creation, persistent data across replacement, health, graceful shutdown, the UI, zvec, PDF rendering, OCR, Laya and both embedding presets under the image's nonroot user and a read-only root filesystem.
+Check an image directly with `python3 scripts/docker-smoke.py --image papergo:local`. The test requires only Docker and Python on the test host. It checks production password setup, automatic schema creation, persistent data across replacement, health, graceful shutdown, the UI, semantic search, PDF rendering, OCR, Laya and both embedding presets under the image's nonroot user and a read-only root filesystem.

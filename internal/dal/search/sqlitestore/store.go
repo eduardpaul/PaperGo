@@ -43,7 +43,7 @@ type Store struct {
 	fresh bool
 	stem  *search.Stemmer
 	// vectors is the in-memory index of semantic search.
-	vectors vectorIndex
+	vectors search.VectorIndex
 }
 
 // Options configure the store.
@@ -51,8 +51,6 @@ type Options struct {
 	// Languages are the Snowball languages whose stems are indexed
 	// (SEARCH_LANGUAGES); none indexes words only.
 	Languages []string
-	// NoRebuild refuses missing or incompatible stores (offline copy sources).
-	NoRebuild bool
 }
 
 // Open opens the store at path, creating it, or recreating it when its
@@ -66,11 +64,6 @@ func Open(ctx context.Context, path string, opts Options) (*Store, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		return nil, err
-	}
-	if opts.NoRebuild {
-		if info, err := os.Stat(abs); err != nil || !info.Mode().IsRegular() {
-			return nil, errors.New("source search store is missing")
-		}
 	}
 	if err = os.MkdirAll(filepath.Dir(abs), 0700); err != nil {
 		return nil, err
@@ -96,10 +89,6 @@ func Open(ctx context.Context, path string, opts Options) (*Store, error) {
 	case err == nil && version == schemaVersion && built == languages:
 		return s, nil
 	case err == nil || strings.Contains(err.Error(), "no such table"):
-		if opts.NoRebuild {
-			s.db.Close()
-			return nil, errors.New("source search schema or languages require a reindex")
-		}
 		// Another schema: the store is derived data, so start over.
 		s.db.Close()
 		for _, suffix := range []string{"", "-wal", "-shm"} {
@@ -212,12 +201,12 @@ func (s *Store) upsertDocuments(ctx context.Context, tx *sql.Tx, docs []search.D
 				ordinal++
 			}
 		}
-		for _, id := range unique(d.TermIDs) {
+		for _, id := range search.Unique(d.TermIDs) {
 			if _, err = tx.ExecContext(ctx, `INSERT INTO document_terms(term_id,doc) VALUES (?,?)`, id, rowid); err != nil {
 				return err
 			}
 		}
-		for _, keyword := range unique(d.KeywordIDs) {
+		for _, keyword := range search.Unique(d.KeywordIDs) {
 			if _, err = tx.ExecContext(ctx, `INSERT INTO document_keywords(keyword,doc) VALUES (?,?)`, keyword, rowid); err != nil {
 				return err
 			}
@@ -248,18 +237,6 @@ func publishedText(ctx context.Context, tx *sql.Tx, itemID, blobID string) (stri
 	err := tx.QueryRowContext(ctx, `SELECT group_concat(text || CASE WHEN enrichment<>'' THEN char(10) || enrichment ELSE '' END, char(10))
  FROM (SELECT text, enrichment FROM chunks WHERE item_id=? AND blob_id=? AND published=1 ORDER BY part, ordinal)`, itemID, blobID).Scan(&text)
 	return text.String, err
-}
-
-func unique(values []string) []string {
-	seen := map[string]bool{}
-	out := values[:0:0]
-	for _, v := range values {
-		if v != "" && !seen[v] {
-			seen[v] = true
-			out = append(out, v)
-		}
-	}
-	return out
 }
 
 // deleteRows removes the documents selected by where, with their index rows.

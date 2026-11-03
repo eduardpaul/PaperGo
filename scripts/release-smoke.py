@@ -168,10 +168,9 @@ def exercise(binary, directory, model='embeddinggemma-2'):
     env = dict(os.environ, APP_ENV="test", AUTH_MODE="development", DEV_TOKEN=TOKEN,
                ADMIN_SUBJECT="smoke-admin", DEV_SUBJECT="smoke-admin", HTTP_ADDR=f"127.0.0.1:{port}",
                DATABASE_PATH=str(directory / "papergo.db"), BLOB_PATH=str(directory / "blobs"),
-               SEARCH_STORE='zvec', SEARCH_ZVEC_PATH=str(directory / 'zvec'),
                AI_EMBEDDINGS_PROVIDER='local', AI_EMBEDDINGS_MODEL=model)
     for name in ('ONNXRUNTIME_LIB', 'OCR_MODELS', 'AI_DECISION_MODELS_PATH', 'AI_EMBEDDINGS_MODELS_PATH',
-                 'PAPERGO_CONFIG', 'LD_LIBRARY_PATH', 'DYLD_LIBRARY_PATH'):
+                 'PAPERGO_CONFIG', 'SEARCH_STORE', 'DATABASE_URL', 'LD_LIBRARY_PATH', 'DYLD_LIBRARY_PATH'):
         env.pop(name, None)
     excluded = {os.path.normcase(str(Path(os.environ.get('PAPERGO_NATIVE_DIR') or ROOT / '.tools/native') / 'lib'))}
     compiler = Path(os.environ.get('CC', ''))
@@ -216,7 +215,7 @@ def exercise(binary, directory, model='embeddinggemma-2'):
                 process.wait(timeout=10)
     # A backup checks the schema, integrity and foreign keys with the
     # release's own SQLite; the schema uses functions older ones lack.
-    subprocess.run([str(binary), "admin", "backup", "--search-store", "zvec", "--file", str(directory / "backup.tar.gz")],
+    subprocess.run([str(binary), "admin", "backup", "--file", str(directory / "backup.tar.gz")],
                    cwd=directory, env=env, check=True)
     # A new database is at the schema version of the last migration.
     migrations = len(list((ROOT / "internal/dal/migrations/sqlite").glob("*.sql")))
@@ -272,7 +271,7 @@ def main():
         # must be found beside the executable without development loader paths.
         exercise(binary, directory / 'fresh')
         exercise(binary, directory / 'harrier', model='harrier-oss-v1-0.6b')
-    print('Platform binaries plus shared assets: versions, UI, zvec, PDF previews, PaddleOCR, Laya, both embedding presets and backup passed.')
+    print('Platform binaries plus shared assets: versions, UI, semantic search, PDF previews, PaddleOCR, Laya, both embedding presets and backup passed.')
 
 
 if __name__ == '__main__':

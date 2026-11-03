@@ -31463,7 +31463,7 @@
         "properties": {
           "store": {
             "type": "string",
-            "description": "The configured search store: sqlite or zvec."
+            "description": "The configured search store: sqlite or postgres."
           },
           "rebuilding": {
             "type": "boolean",
@@ -31496,7 +31496,7 @@
               },
               "memory_bytes": {
                 "type": "integer",
-                "description": "Cached normalized vector bytes for the model; native index and source-catalog overhead are additional."
+                "description": "Cached normalized vector bytes for the model."
               }
             },
             "required": [
@@ -33185,7 +33185,7 @@
           },
           "store": {
             "type": "string",
-            "description": "Its store, such as zvec or sqlite."
+            "description": "Its store, such as sqlite or postgres."
           },
           "bytes": {
             "type": "integer",

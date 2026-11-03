@@ -3,9 +3,7 @@ package sqlitestore
 import (
 	"context"
 	"database/sql"
-	"encoding/binary"
 	"errors"
-	"math"
 
 	"papergo/internal/search"
 )
@@ -67,13 +65,8 @@ func (s *Store) Export(ctx context.Context, yield func(search.Record) error) err
 		if err = rows.Scan(&v.Model, &v.InputHash, &raw, &unused); err != nil {
 			break
 		}
-		if len(raw)%4 != 0 {
-			err = errors.New("invalid vector bytes in search store")
+		if v.Vector, err = search.DecodeVector(raw); err != nil {
 			break
-		}
-		v.Vector = make([]float32, len(raw)/4)
-		for i := range v.Vector {
-			v.Vector[i] = math.Float32frombits(binary.LittleEndian.Uint32(raw[i*4:]))
 		}
 		if unused.Valid {
 			t := fromNanos(unused.Int64)
@@ -161,7 +154,7 @@ func (s *Store) Import(ctx context.Context, records []search.Record) error {
 				if v.UnusedSince != nil {
 					unused = v.UnusedSince.UnixNano()
 				}
-				if _, err := tx.ExecContext(ctx, `INSERT INTO vectors(model,input_hash,dims,vector,stamp,unused_since) VALUES(?,?,?,?,?,?) ON CONFLICT(model,input_hash) DO NOTHING`, v.Model, v.InputHash, len(v.Vector), vectorBytes(v.Vector), stamp, unused); err != nil {
+				if _, err := tx.ExecContext(ctx, `INSERT INTO vectors(model,input_hash,dims,vector,stamp,unused_since) VALUES(?,?,?,?,?,?) ON CONFLICT(model,input_hash) DO NOTHING`, v.Model, v.InputHash, len(v.Vector), search.VectorBytes(v.Vector), stamp, unused); err != nil {
 					return err
 				}
 			default:

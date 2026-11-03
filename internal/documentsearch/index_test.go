@@ -3,7 +3,6 @@ package documentsearch
 import (
 	"context"
 	"encoding/json"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"testing"
@@ -22,8 +21,9 @@ import (
 func fixture(t *testing.T) (context.Context, *dms.Service, *Search, *resources.Resource) {
 	t.Helper()
 	ctx := context.Background()
-	s := dms.NewService(daltest.Database(t).SQL)
-	x := &Search{Store: searchstore.Open(t, filepath.Join(t.TempDir(), "search.db"), []string{"english"})}
+	db := daltest.Database(t)
+	s := dms.NewService(db.SQL)
+	x := &Search{Store: searchstore.Open(t, db, []string{"english"})}
 	if err := x.Register(s); err != nil {
 		t.Fatal(err)
 	}

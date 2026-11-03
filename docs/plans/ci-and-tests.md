@@ -28,7 +28,7 @@ change.
 Implemented on `claude/ci-simplify`:
 
 - `scripts/check.py` has named stages (`quick`, `lint`, `test`, `race`, `web`,
-  `native`, `zvec`, `release`, `docker`, `vuln`); every CI job runs exactly one,
+  `native`, `release`, `docker`, `vuln`); every CI job runs exactly one,
   with package lists and flags defined only there. The race-shard script and
   release rehearsal script became the `race --shard` and `release`/`docker`
   stages.
@@ -37,7 +37,7 @@ Implemented on `claude/ci-simplify`:
   its inputs and runs the Linux jobs in it; `scripts/ci.sh` runs the same stages
   locally in the same image on a clean snapshot, with PostgreSQL beside it.
 - Pull requests run `lint` and `test` (ordinary Go suite in two shards,
-  PostgreSQL, frontend). The race suite, real models, zvec, packaging,
+  PostgreSQL, frontend). The race suite, real models, packaging,
   container image, devcontainer and dependency scan run on `main`, nightly and
   releases, as recommended below.
 - Bob's PostgreSQL models are generated from a database on the test server
@@ -48,9 +48,8 @@ Implemented on `claude/ci-simplify`:
 - The seek pagination test pages each query, sort and direction once, with
   the reader and surface rotating: 70 combinations instead of 420, 26s instead
   of 133s under race detection locally.
-- The race stage leaves the packages the native and zvec stages race-test to
-  those stages; the native stage also runs the OCR tests of compose and
-  optimize.
+- The race stage leaves the packages the native stage race-tests to that
+  stage; the native stage also runs the OCR tests of compose and optimize.
 - Shards take whole packages, balanced by the tests each declares, so no shard
   lists or builds the whole suite first. DMS alone takes 279s under race
   detection and bounds the shard time, so the race job runs in two shards:
@@ -103,14 +102,12 @@ The largest individual tests in those logs are:
 | `TestSeekPagesMatchSortedEligibleRows` | 229.24s | 2 actors × 3 surfaces × 4 queries × 7 sorts × 2 directions = 672 combinations, each comparing pagination with a reference query |
 | `TestTaxonomyReviewSampleGuards` | 77.86s | Six scenarios each launch a complete runner fixture |
 | `TestDecisionDurableCrashRecovery` | 42.61s | Three genuine subprocess crash/recovery scenarios |
-| Native `TestConformance` | 33.97s | Shared search contract with fresh stores per scenario |
 | `TestBrowseCandidateAndScanPathsAgree` | 27.25s | Another query-path comparison matrix |
 
 A bounded local measurement used the existing SDKs and built frontend, Go
-1.26.8, Linux with four logical CPUs, and uncached ordinary tests for four
-packages. All four passed: DMS **47.90s**, HTTP API **15.48s**, runner **57.20s**,
-zvec **88.03s**; combined wall time **106.37s**, including compilation and package
-scheduling. The pagination matrix alone took **12.52s**. These are a local
+1.26.8, Linux with four logical CPUs, and uncached ordinary tests. They passed:
+DMS **47.90s**, HTTP API **15.48s**, runner **57.20s**, including compilation.
+The pagination matrix alone took **12.52s**. These are a local
 baseline, not a prediction for GitHub's Go 1.27.2 runners.
 
 Frontend: **33 files / 123 tests passed**, 33.40s Vitest time, 36.50s command wall
@@ -122,7 +119,7 @@ Source inventory: 202 Go test files, 568 top-level Test/Fuzz/Example declaration
 **zero `testing.Short()` checks and zero `t.Parallel()` calls**. Packages already
 run concurrently through Go; tests within each package run serially.
 
-The latest run failed on missing embedded frontend assets in the zvec job,
+The latest run failed on missing embedded frontend assets in a native job,
 Windows compiler setup, and packaged macOS backup. It did **not** time out.
 The current native CI fixes address those areas and must be verified separately;
 they do not establish that suite runtime has improved. The
@@ -138,9 +135,8 @@ consumed 64.6 job minutes and took about 12 minutes, including a failed race sha
 | Full frontend build on backend-only edits | Avoid when inputs are unchanged | Reuse a verified current `web/dist`; still build real assets after frontend/build input changes and for integration/packaging checks. |
 | Independent frontend builds in nine current verification jobs, plus vulnerability scanning | Consolidate | Build and typecheck once per workflow revision, upload `web/dist`, download only in consumers that embed it. Keep Docker's own build as a packaging check. Measure artifact dependency overhead. |
 | Entire Go suite under race detection on every PR | Remove from the ordinary PR lane | Ordinary correctness suite plus explicit concurrency tests; complete race execution on main and nightly, and on relevant PRs. |
-| Duplicated amd64 native/backup/admin race execution | Remove duplicate ownership | Dedicated native lane owns zvec tests; common suite owns ordinary backup/admin coverage. Keep native-backend backup/copy coverage where it differs. |
+| Duplicated amd64 native/backup/admin race execution | Remove duplicate ownership | Dedicated native lane owns native-model tests; common suite owns ordinary backup/admin coverage. |
 | Full service/API/runner parity matrix on both Linux architectures | Reduce | Full backend contract on amd64; arm64 native conformance and one indexing/query/backup smoke. Broader arm64 coverage nightly and before release. |
-| 2,000 × 768 zvec soak and timed fuzz campaigns on every PR | Move | Nightly/manual and relevant native changes; retain deterministic fuzz seeds on every PR. |
 | Devcontainer rebuild on every app change | Make conditional | Trigger on devcontainer/setup/toolchain/native inputs and scheduled runs. Retain its non-root, permissions, debugger and proxy assertions. |
 | Docker rebuild on unrelated edits | Make conditional | Trigger on application, frontend, native, schema and packaging inputs; skip prose-only and unrelated sample changes. Add persistent BuildKit cache. |
 | Previous-release schema upgrade planning and preservation tests | Delete with their feature code | Follow `AGENTS.md`: one current schema, fresh initialization, no upgrade paths. Remove `internal/dal/releaseplan`, upgrade-specific portions of `internal/database/release*`, their callers and bundle-history machinery/docs in one coherent change. Retain fresh startup, schema validation, version/checksum and package tests. This is a policy correction, not the largest speed saving. |

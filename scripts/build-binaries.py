@@ -10,9 +10,9 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parent.parent
 LIBRARIES = {
-    'linux': ['libonnxruntime.so', 'libpdfium.so', 'libzvec_c_api.so'],
-    'darwin': ['libonnxruntime.dylib', 'libpdfium.dylib', 'libzvec_c_api.dylib'],
-    'windows': ['onnxruntime.dll', 'pdfium.dll', 'zvec_c_api.dll'],
+    'linux': ['libonnxruntime.so', 'libpdfium.so'],
+    'darwin': ['libonnxruntime.dylib', 'libpdfium.dylib'],
+    'windows': ['onnxruntime.dll', 'pdfium.dll'],
 }
 
 

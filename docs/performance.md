@@ -4,7 +4,7 @@ Measured on 13 October 2026 against application commit `5947e87`. PaperGo's
 small process footprint suits self-hosting; CPU and query shape are the main
 constraints under sustained load. The measurements and sizing estimates below
 include its embedded workflow runner. Updated cgo idle-memory measurements,
-including zvec and five-minute model unloading, are in the
+including five-minute model unloading, are in the
 [native memory report](performance-artifacts/memory/README.md); the request-load
 measurements below have not been rerun with that allocator policy.
 

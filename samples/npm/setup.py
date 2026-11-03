@@ -51,10 +51,6 @@ def papergo_config(public_url, admin_user, trusted_cidr):
         "  proxy_trusted_cidrs:",
         f"    - {json.dumps(trusted_cidr)}",
         "",
-        "search:",
-        "  store: zvec",
-        "  zvec_path: /data/search/zvec",
-        "",
         "storage:",
         "  blob_path: /data/blobs",
         "  max_upload_mb: 64",
@@ -307,8 +303,8 @@ def verify_search_store(settings, credentials):
         connection.request("GET", "/v1/search/status", headers={"Authorization": "Basic " + base64.b64encode(login.encode()).decode()})
         response = connection.getresponse()
         status = json.loads(response.read()) if response.status == 200 else {}
-        if status.get("store") != "zvec":
-            raise RuntimeError("PaperGo must report the zvec search store. Check SEARCH_STORE and /data/search/zvec permissions, then rerun setup.")
+        if status.get("store") != "sqlite":
+            raise RuntimeError("PaperGo must report the sqlite search store of its SQLite database. Check SEARCH_STORE, then rerun setup.")
     finally:
         connection.close()
 

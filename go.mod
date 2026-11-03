@@ -23,7 +23,6 @@ require (
 	github.com/stephenafamo/scan v0.9.0
 	github.com/teambition/rrule-go v1.8.2
 	github.com/yalue/onnxruntime_go v1.25.0
-	github.com/zvec-ai/zvec-go v0.7.0
 	golang.org/x/crypto v0.57.0
 	golang.org/x/image v0.47.0
 	golang.org/x/net v0.60.0
@@ -153,8 +152,6 @@ require (
 	modernc.org/memory v1.12.1 // indirect
 	mvdan.cc/gofumpt v0.7.0 // indirect
 )
-
-replace github.com/zvec-ai/zvec-go => github.com/eduardpaul/zvec-go v0.0.0-20261015090631-dbf998ca01f1
 
 tool (
 	github.com/stephenafamo/bob/gen/bobgen-psql

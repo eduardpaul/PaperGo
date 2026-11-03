@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	archivepath "path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -32,13 +31,10 @@ type Options struct {
 	DatabasePath string
 	BlobPath     string
 	ArchivePath  string
-	// SearchPath is the SQLite search file (excluded and removed on restore)
-	// or the native zvec directory (included in offline snapshots).
+	// SearchPath is the SQLite search file: excluded from backups and
+	// removed on restore, since a reindex rebuilds it.
 	SearchPath string
-	// SearchStore is sqlite (default) or zvec. zvec snapshots are offline:
-	// the API and its native collection must be closed before backup.
-	SearchStore string
-	Force       bool
+	Force      bool
 }
 
 type fileEntry struct {
@@ -47,21 +43,14 @@ type fileEntry struct {
 	SHA256 string `json:"sha256"`
 }
 type manifest struct {
-	Format      string      `json:"format"`
-	CreatedAt   time.Time   `json:"created_at"`
-	Schema      int         `json:"schema_version"`
-	SearchStore string      `json:"search_store,omitempty"`
-	Files       []fileEntry `json:"files"`
+	Format    string      `json:"format"`
+	CreatedAt time.Time   `json:"created_at"`
+	Schema    int         `json:"schema_version"`
+	Files     []fileEntry `json:"files"`
 }
 
 func paths(in Options) (Options, error) {
 	var err error
-	if in.SearchStore == "" {
-		in.SearchStore = "sqlite"
-	}
-	if in.SearchStore != "sqlite" && in.SearchStore != "zvec" {
-		return in, errors.New("search store must be sqlite or zvec")
-	}
 	checked := []*string{&in.DatabasePath, &in.BlobPath, &in.ArchivePath}
 	if in.SearchPath != "" {
 		checked = append(checked, &in.SearchPath)
@@ -125,26 +114,14 @@ func leases(in Options, exclusive bool) (func(), error) {
 		data.Close()
 		return nil, err
 	}
-	var index *os.File
-	if in.SearchStore == "zvec" && in.SearchPath != "" {
-		index, err = database.AcquireLease(in.SearchPath, true)
-		if err != nil {
-			blobs.Close()
-			data.Close()
-			return nil, err
-		}
-	}
 	return func() {
-		if index != nil {
-			index.Close()
-		}
 		blobs.Close()
 		data.Close()
 	}, nil
 }
 
 // Create uses the SQLite online backup API and freezes reference changes
-// while copying files. Native zvec snapshots additionally require a stopped API.
+// while copying files.
 func Create(ctx context.Context, in Options) (err error) {
 	in, err = paths(in)
 	if err != nil {
@@ -159,7 +136,7 @@ func Create(ctx context.Context, in Options) (err error) {
 	if err = os.MkdirAll(filepath.Dir(in.ArchivePath), 0700); err != nil {
 		return err
 	}
-	release, err := leases(in, in.SearchStore == "zvec")
+	release, err := leases(in, false)
 	if err != nil {
 		return err
 	}
@@ -214,16 +191,6 @@ func Create(ctx context.Context, in Options) (err error) {
 			return errors.New("integration encryption key is missing")
 		}
 	}
-	if in.SearchStore == "zvec" && in.SearchPath != "" {
-		files, e := searchFiles(ctx, in.SearchPath)
-		if e != nil {
-			return e
-		}
-		if len(files) > 0 {
-			m.SearchStore = "zvec"
-			m.Files = append(m.Files, files...)
-		}
-	}
 	meta, err := json.Marshal(m)
 	if err != nil {
 		return err
@@ -250,11 +217,7 @@ func Create(ctx context.Context, in Options) (err error) {
 		if entry.Path == "integrations.key" {
 			source = keyPath
 		} else if entry.Path != "database.sqlite" {
-			if strings.HasPrefix(entry.Path, "search/") {
-				source = filepath.Join(in.SearchPath, strings.TrimPrefix(entry.Path, "search/"))
-			} else {
-				source = filepath.Join(in.BlobPath, strings.TrimPrefix(entry.Path, "blobs/"))
-			}
+			source = filepath.Join(in.BlobPath, strings.TrimPrefix(entry.Path, "blobs/"))
 		}
 		if err = archiveFile(ctx, tw, source, entry); err != nil {
 			return err
@@ -385,9 +348,6 @@ func Restore(ctx context.Context, in Options) (err error) {
 	}
 	defer release()
 	targets := []string{in.DatabasePath, in.BlobPath, in.DatabasePath + "-wal", in.DatabasePath + "-shm", in.DatabasePath + "-journal", in.DatabasePath + ".integrations.key"}
-	if in.SearchStore == "zvec" && in.SearchPath != "" {
-		targets = append(targets, in.SearchPath)
-	}
 	for _, target := range targets {
 		info, e := os.Lstat(target)
 		if e != nil && !errors.Is(e, os.ErrNotExist) {
@@ -397,7 +357,7 @@ func Restore(ctx context.Context, in Options) (err error) {
 			if info.Mode()&os.ModeSymlink != 0 {
 				return errors.New("restore target cannot be a symlink")
 			}
-			directory := target == in.BlobPath || target == in.SearchPath
+			directory := target == in.BlobPath
 			if directory && !info.IsDir() || !directory && !info.Mode().IsRegular() {
 				return errors.New("invalid restore target type")
 			}
@@ -416,34 +376,16 @@ func Restore(ctx context.Context, in Options) (err error) {
 		return err
 	}
 	defer os.RemoveAll(blobs)
-	searchStage := ""
-	if in.SearchStore == "zvec" && in.SearchPath != "" {
-		if err = os.MkdirAll(filepath.Dir(in.SearchPath), 0700); err != nil {
-			return err
-		}
-		searchStage, err = os.MkdirTemp(filepath.Dir(in.SearchPath), ".papergo-search-")
-		if err != nil {
-			return err
-		}
-		defer os.RemoveAll(searchStage)
-	}
-	if err = extract(ctx, in.ArchivePath, work, blobs, searchStage); err != nil {
+	if err = extract(ctx, in.ArchivePath, work, blobs); err != nil {
 		return err
 	}
 	if err = ctx.Err(); err != nil {
 		return err
 	}
-	if searchStage != "" {
-		if _, e := os.Stat(filepath.Join(searchStage, "catalog.json")); errors.Is(e, os.ErrNotExist) {
-			searchStage = ""
-		} else if e != nil {
-			return e
-		}
-	}
-	return install(in, filepath.Join(work, "database.sqlite"), blobs, searchStage)
+	return install(in, filepath.Join(work, "database.sqlite"), blobs)
 }
 
-func extract(ctx context.Context, archive, work, blobs, searchStage string) error {
+func extract(ctx context.Context, archive, work, blobs string) error {
 	f, err := os.Open(archive)
 	if err != nil {
 		return err
@@ -473,9 +415,6 @@ func extract(ctx context.Context, archive, work, blobs, searchStage string) erro
 	if m.Format != format || m.Schema != dal.SchemaVersion() || m.CreatedAt.IsZero() || len(m.Files) < 1 {
 		return errors.New("archive format or schema does not match this build")
 	}
-	if m.SearchStore != "" && (m.SearchStore != "zvec" || searchStage == "") {
-		return errors.New("zvec backup requires a zvec search destination")
-	}
 	expected := map[string]fileEntry{}
 	for _, entry := range m.Files {
 		if _, duplicate := expected[entry.Path]; duplicate || entry.Size < 0 || !validDigest(entry.SHA256) {
@@ -484,10 +423,6 @@ func extract(ctx context.Context, archive, work, blobs, searchStage string) erro
 		if entry.Path == "integrations.key" {
 			if entry.Size != 32 {
 				return errors.New("invalid integration encryption key")
-			}
-		} else if strings.HasPrefix(entry.Path, "search/") {
-			if m.SearchStore != "zvec" || !validSearchEntry(entry.Path) {
-				return errors.New("invalid search snapshot path")
 			}
 		} else if entry.Path != "database.sqlite" {
 			key := strings.TrimPrefix(entry.Path, "blobs/")
@@ -519,14 +454,7 @@ func extract(ctx context.Context, archive, work, blobs, searchStage string) erro
 		if header.Name == "integrations.key" {
 			target = filepath.Join(work, "integrations.key")
 		} else if header.Name != "database.sqlite" {
-			if strings.HasPrefix(header.Name, "search/") {
-				target = filepath.Join(searchStage, strings.TrimPrefix(header.Name, "search/"))
-				if e := os.MkdirAll(filepath.Dir(target), 0700); e != nil {
-					return e
-				}
-			} else {
-				target = filepath.Join(blobs, strings.TrimPrefix(header.Name, "blobs/"))
-			}
+			target = filepath.Join(blobs, strings.TrimPrefix(header.Name, "blobs/"))
 		}
 		out, e := os.OpenFile(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 		if e != nil {
@@ -578,13 +506,10 @@ func extract(ctx context.Context, archive, work, blobs, searchStage string) erro
 			return errors.New("archive file metadata does not match database")
 		}
 	}
-	if m.SearchStore == "zvec" {
-		return validateSearchSnapshot(searchStage)
-	}
 	return nil
 }
 
-func install(in Options, snapshot, blobs, searchStage string) (err error) {
+func install(in Options, snapshot, blobs string) (err error) {
 	type moved struct{ from, to string }
 	old := []moved{}
 	installed := []string{}
@@ -651,80 +576,6 @@ func install(in Options, snapshot, blobs, searchStage string) (err error) {
 			}
 			old = append(old, moved{target, saved})
 		}
-		if searchStage != "" {
-			if err = os.Rename(searchStage, in.SearchPath); err != nil {
-				return err
-			}
-			installed = append(installed, in.SearchPath)
-		}
 	}
 	return nil
-}
-
-func validSearchEntry(name string) bool {
-	return strings.HasPrefix(name, "search/") && name != "search/" && archivepath.Clean(name) == name && !strings.ContainsAny(name, "\\:")
-}
-
-func validateSearchSnapshot(root string) error {
-	if _, err := os.Stat(filepath.Join(root, "dirty")); !errors.Is(err, os.ErrNotExist) {
-		return errors.New("zvec store needs a rebuild before backup")
-	}
-	raw, err := os.ReadFile(filepath.Join(root, "catalog.json"))
-	if err != nil {
-		return err
-	}
-	var meta struct{ Format, Collection, VectorCollection string }
-	if json.Unmarshal(raw, &meta) != nil || meta.Format != "papergo-zvec/1" || meta.Collection == "" || meta.Collection == "." || filepath.Base(meta.Collection) != meta.Collection {
-		return errors.New("invalid zvec catalog")
-	}
-	for _, name := range []string{meta.Collection, meta.VectorCollection} {
-		if name == "" {
-			continue
-		}
-		if name == "." || filepath.Base(name) != name {
-			return errors.New("invalid zvec collection path")
-		}
-		if info, err := os.Stat(filepath.Join(root, name)); err != nil || !info.IsDir() {
-			return errors.New("zvec collection is missing")
-		}
-	}
-	return nil
-}
-
-func searchFiles(ctx context.Context, root string) (out []fileEntry, err error) {
-	if _, err = os.Stat(root); errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	}
-	if err = validateSearchSnapshot(root); err != nil {
-		return nil, err
-	}
-	err = filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if err = ctx.Err(); err != nil {
-			return err
-		}
-		if entry.IsDir() {
-			return nil
-		}
-		if !entry.Type().IsRegular() {
-			return errors.New("zvec snapshot contains a non-regular file")
-		}
-		rel, err := filepath.Rel(root, path)
-		if err != nil {
-			return err
-		}
-		name := "search/" + filepath.ToSlash(rel)
-		if !validSearchEntry(name) {
-			return errors.New("invalid zvec file path")
-		}
-		size, hash, err := digest(ctx, path)
-		if err != nil {
-			return err
-		}
-		out = append(out, fileEntry{Path: name, Size: size, SHA256: hash})
-		return nil
-	})
-	return
 }

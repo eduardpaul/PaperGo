@@ -61,7 +61,8 @@ RUN --mount=type=cache,target=/src/.tools/embedding/models \
     --mount=type=cache,target=/src/.tools/decision \
     python3 scripts/build-assets.py --output-dir /assets
 
-# Debian 13: zvec's Linux arm64 library needs glibc 2.38.
+# Debian 13 matches the runtime image (distroless cc-debian13), so the
+# executables built here run on the glibc they were linked against.
 FROM golang:${GO_VERSION}-trixie AS toolchain
 ARG CMAKE_VERSION
 RUN apt-get update \
@@ -76,10 +77,9 @@ RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
 # stamping of go list and go build, would otherwise refuse the repository.
 RUN git config --system --add safe.directory '*'
 # The pinned cgo SDKs: headers, libraries and license notices. Only WebP is
-# compiled; zvec, PDFium, ONNX Runtime and tokenizers use pinned binaries.
+# compiled; PDFium, ONNX Runtime and tokenizers use pinned binaries.
 # Setup in a checkout rewrites their environment files for that checkout.
 COPY scripts/native.py scripts/native.json /opt/papergo/native-src/scripts/
-COPY scripts/native-notices /opt/papergo/native-src/scripts/native-notices
 RUN python3 /opt/papergo/native-src/scripts/native.py --directory /opt/papergo/native \
     && rm -rf /opt/papergo/native/sdk /opt/papergo/native-src/.tools
 ENV PAPERGO_NATIVE_DIR=/opt/papergo/native

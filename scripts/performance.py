@@ -259,7 +259,8 @@ def main():
     parser.add_argument("--idle-seconds", type=float, default=30)
     parser.add_argument("--concurrency", type=int, nargs="+", default=[1, 8, 32])
     parser.add_argument("--extended", action="store_true", help="also measure 500-row pages and repeated edits")
-    parser.add_argument("--search-store", choices=["sqlite", "zvec"], default="sqlite")
+    # The server runs on a SQLite database: unset, search follows it.
+    parser.add_argument("--search-store", choices=["sqlite", "none"], help="search store; by default the one of the database, sqlite")
     parser.add_argument("--collaboration", action="store_true",
                         help="also measure tasks, comments, notifications and live streams under comment load")
     parser.add_argument("--output", type=Path, required=True)
@@ -272,8 +273,9 @@ def main():
     # Explicitly clear deployment configuration; the benchmark must be isolated.
     env = {k: v for k, v in os.environ.items() if k in ("PATH", "HOME", "TMPDIR", "LANG", "TZ", "SYSTEMROOT", "LD_LIBRARY_PATH")}
     env.update(APP_ENV="test", AUTH_MODE="development", DEV_TOKEN=TOKEN,
-               DEV_SUBJECT="performance-admin", ADMIN_SUBJECT="performance-admin",
-               SEARCH_STORE=args.search_store)
+               DEV_SUBJECT="performance-admin", ADMIN_SUBJECT="performance-admin")
+    if args.search_store:
+        env["SEARCH_STORE"] = args.search_store
     with tempfile.TemporaryDirectory(prefix="papergo-performance-") as temp:
         directory = Path(temp)
         dbpath = directory / "papergo.db"
@@ -415,7 +417,7 @@ def main():
                     "configuration": {"auth_mode": "development", "max_in_flight": 32, "request_timeout": "30s",
                                       "max_upload_mib": 64, "extended": args.extended,
                                       "collaboration": args.collaboration,
-                                      "search_store": args.search_store},
+                                      "search_store": args.search_store or "sqlite"},
                     "fixture_storage": fixture,
                     "startup_ready_s": ready_s, "stages": server.results, "final_table_rows": counts,
                     "database_mib": dbpath.stat().st_size / 2**20,

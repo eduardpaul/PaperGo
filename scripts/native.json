@@ -1,10 +1,6 @@
 {
   "platforms": {
     "linux-amd64": {
-      "zvec": {
-        "url": "https://github.com/zvec-ai/zvec-go/releases/download/v0.7.0/zvec-libs-linux-x64.tar.gz",
-        "sha256": "7a466f501050b7debe04fd64da52b98634910bb8a8d22083412fe511134cd088"
-      },
       "pdfium": {
         "url": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/8076/pdfium-linux-x64.tgz",
         "sha256": "d9d67bc40af03aef4fe28a60b19b1086f28ace019c8c9caf19cb7fe3d14ceca3"
@@ -19,10 +15,6 @@
       }
     },
     "linux-arm64": {
-      "zvec": {
-        "url": "https://github.com/zvec-ai/zvec-go/releases/download/v0.7.0/zvec-libs-linux-arm64.tar.gz",
-        "sha256": "6dfa9e02be9a69309b20eb5660658c0b3cb3f41b3197ba2391fb43e804122971"
-      },
       "pdfium": {
         "url": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/8076/pdfium-linux-arm64.tgz",
         "sha256": "d7247b33ae5545615a5e877235dd97afc879e3a8805689684f528cae3339d352"
@@ -37,10 +29,6 @@
       }
     },
     "darwin-arm64": {
-      "zvec": {
-        "url": "https://github.com/zvec-ai/zvec-go/releases/download/v0.7.0/zvec-libs-darwin-arm64.tar.gz",
-        "sha256": "c4ed1cc5b795c4538618e0e3b80953c8683e7a011265eaacc2af8192a67eb762"
-      },
       "pdfium": {
         "url": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/8076/pdfium-mac-arm64.tgz",
         "sha256": "0d6781fe08906baff3d82c90953e519fbc4eb253fe76431e5ed53b157763b97c"
@@ -55,10 +43,6 @@
       }
     },
     "windows-amd64": {
-      "zvec": {
-        "url": "https://github.com/zvec-ai/zvec-go/releases/download/v0.7.0/zvec-libs-windows-x64.zip",
-        "sha256": "d24ab3e360e3ca3cf65bf42ae347ddce1e953b3f8ea58d34b8d4e6cf0dc0f2b3"
-      },
       "pdfium": {
         "url": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/8076/pdfium-win-x64.tgz",
         "sha256": "808d36da9bc5a3104315fb307c80998121f565ee53953633bf33e80d7429e5ac"
