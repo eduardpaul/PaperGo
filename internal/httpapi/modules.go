@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"papergo/internal/auth"
 	"papergo/internal/dal"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
@@ -132,10 +131,8 @@ func (a *API) registerModules(m *router) error {
 
 func (a *API) moduleHandler(route Route) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, token := identity.AccessTokenContext(r.Context())
-		scheme, _, _ := strings.Cut(r.Header.Get("Authorization"), " ")
-		in := Request{Subject: subject(r), Run: runOf(r), DMS: a.dms(r), api: a, caller: r.Context(),
-			bearer: token || a.Auth != nil && a.Auth.Kind() == auth.Bearer && strings.EqualFold(scheme, "Bearer")}
+		bearer, _ := r.Context().Value(bearerKey{}).(bool)
+		in := Request{Subject: subject(r), Run: runOf(r), DMS: a.dms(r), api: a, caller: r.Context(), bearer: bearer}
 		a.idempotent(func(w http.ResponseWriter, r *http.Request) {
 			if err := route.Handle(w, r, in); err != nil {
 				a.failure(w, r, err)

@@ -75,6 +75,9 @@ type BrowserSignIn struct {
 }
 
 type subjectKey struct{}
+
+// bearerKey marks a request authenticated with a bearer credential.
+type bearerKey struct{}
 type requestKey struct{}
 type publicURLKey struct{}
 
@@ -881,6 +884,11 @@ func (a *API) authenticate(next http.Handler) http.Handler {
 			return
 		}
 		ctx := context.WithValue(r.Context(), subjectKey{}, ident.Subject)
+		// An access token, or any credential in bearer mode, which reads
+		// only the Authorization header, is one the client sent itself.
+		if _, token := identity.AccessTokenContext(ctx); token || a.Auth.Kind() == auth.Bearer {
+			ctx = context.WithValue(ctx, bearerKey{}, true)
+		}
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

@@ -108,6 +108,15 @@ func TestModuleLoopbackActsAsTheCaller(t *testing.T) {
 	if res := request(h, "POST", "/v1/test-module/me", "", token.Secret, "", ""); res.Code != 200 || !strings.Contains(res.Body.String(), `"bearer":true,"scopes":["item.read"],"subject":"bob"`) {
 		t.Fatal("access token's scopes", res.Code, res.Body.String())
 	}
+	// Bearer follows what authentication accepted, however the header is
+	// spaced.
+	tabbed := httptest.NewRequest("POST", "/v1/test-module/me", nil)
+	tabbed.Header.Set("Authorization", "Bearer\t"+testToken)
+	res := httptest.NewRecorder()
+	h.ServeHTTP(res, tabbed)
+	if res.Code != 200 || !strings.Contains(res.Body.String(), `"bearer":true`) {
+		t.Fatal("tab-separated bearer credential", res.Code, res.Body.String())
+	}
 	secret := strings.Repeat("s", 64)
 	proxy, err := auth.NewProxy(secret, []netip.Prefix{netip.MustParsePrefix("172.29.242.2/32")}, "https://docs.example.com")
 	if err != nil {
@@ -118,7 +127,7 @@ func TestModuleLoopbackActsAsTheCaller(t *testing.T) {
 	asserted.RemoteAddr = "172.29.242.2:1234"
 	asserted.Header.Set(auth.ProxySubjectHeader, "bob")
 	asserted.Header.Set(auth.ProxySecretHeader, secret)
-	res := httptest.NewRecorder()
+	res = httptest.NewRecorder()
 	h.ServeHTTP(res, asserted)
 	if res.Code != 200 || !strings.Contains(res.Body.String(), `"bearer":false`) {
 		t.Fatal("proxy assertion is not a bearer credential", res.Code, res.Body.String())
