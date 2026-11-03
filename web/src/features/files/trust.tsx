@@ -8,6 +8,7 @@ import type { TrustedHosts } from '@/api/types';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useHasScope } from '@/features/admin/common';
+import { i18n, Trans, useTranslation } from '@/i18n';
 import { useBlobUrl } from '@/lib/use-blob-url';
 
 /** Whether hosts trust url: this app's own origin, or a web URL on a listed host. */
@@ -72,7 +73,7 @@ export function useTrustHost() {
     },
     onSuccess: (hosts, host) => {
       client.setQueryData(trustedHostsQuery.queryKey, hosts);
-      toast.success(`${host} is trusted now`);
+      toast.success(i18n.t('files:trust.trustedNow', { host }));
     },
   });
   return { allowed, trust };
@@ -139,25 +140,26 @@ export function useFollowLink() {
 }
 
 function LeavingDialog({ href, host, onClose }: { href: string; host: string; onClose: () => void }) {
+  const { t } = useTranslation(['files', 'common']);
   const { allowed, trust } = useTrustHost();
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>You're leaving PaperGo for {host}</DialogTitle>
-          <DialogDescription>This link goes to a site your organization has not marked as trusted. Check the address before you open it.</DialogDescription>
+          <DialogTitle>{t('trust.leavingTitle', { host })}</DialogTitle>
+          <DialogDescription>{t('trust.leavingDescription')}</DialogDescription>
         </DialogHeader>
         <p className="mx-5 rounded-md bg-surface-muted px-3 py-2 font-mono text-xs break-all">{href}</p>
         <DialogFooter>
           {allowed && !isAddress(host) && (
             <Button className="mr-auto" variant="ghost" disabled={trust.isPending} onClick={() => trust.mutate(host)}>
-              Trust {host}
+              {t('trust.trust', { host })}
             </Button>
           )}
-          <Button onClick={onClose}>Cancel</Button>
+          <Button onClick={onClose}>{t('common:actions.cancel')}</Button>
           <Button asChild variant="primary">
             <a href={href} target="_blank" rel="noopener noreferrer nofollow" onClick={onClose}>
-              <ExternalLink /> Open link
+              <ExternalLink /> {t('trust.openLink')}
             </a>
           </Button>
         </DialogFooter>
@@ -185,6 +187,7 @@ function ownPath(src: string | undefined) {
  * browser would not send them by itself.
  */
 export function RemoteImage({ src, alt, shown, onShow }: { src?: string; alt?: string; shown: boolean; onShow: (all: boolean) => void }) {
+  const { t } = useTranslation('files');
   const { trusted } = useTrust();
   const { allowed, trust } = useTrustHost();
   const [once, setOnce] = useState(false);
@@ -193,25 +196,25 @@ export function RemoteImage({ src, alt, shown, onShow }: { src?: string; alt?: s
   const host = src ? hostOf(src) : '';
   if (own) {
     if (stored.url) return <img src={stored.url} alt={alt ?? ''} loading="lazy" className="max-w-full rounded" />;
-    return <span className="text-muted">[{stored.error ? `${alt || 'image'} could not be loaded` : alt || 'image'}]</span>;
+    return <span className="text-muted">[{stored.error ? t('trust.couldNotLoad', { name: alt || t('trust.image') }) : alt || t('trust.image')}]</span>;
   }
-  if (!src || !host) return <span className="text-muted">[{alt || 'image'}]</span>;
+  if (!src || !host) return <span className="text-muted">[{alt || t('trust.image')}]</span>;
   if (once || shown || trusted(src)) return <img src={src} alt={alt ?? ''} referrerPolicy="no-referrer" loading="lazy" className="max-w-full rounded" />;
   return (
     <span role="note" className="my-2 flex flex-wrap items-center gap-2 rounded-md border border-dashed px-3 py-2 text-xs text-muted">
       <ImageOff className="size-4" />
       <span>
-        Image from <strong>{host}</strong> not shown{alt ? `: ${alt}` : ''}.
+        <Trans t={t} i18nKey={alt ? 'trust.notShownAlt' : 'trust.notShown'} values={{ host, alt }} components={{ host: <strong /> }} />
       </span>
       <Button size="sm" variant="ghost" onClick={() => setOnce(true)}>
-        Show once
+        {t('trust.showOnce')}
       </Button>
       <Button size="sm" variant="ghost" onClick={() => onShow(true)}>
-        Show all images in this file
+        {t('trust.showAll')}
       </Button>
       {allowed && !isAddress(host) && (
         <Button size="sm" variant="ghost" disabled={trust.isPending} onClick={() => trust.mutate(host)}>
-          Trust {host}
+          {t('trust.trust', { host })}
         </Button>
       )}
     </span>

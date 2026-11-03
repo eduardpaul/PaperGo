@@ -1,5 +1,6 @@
 import { Suspense, useRef } from 'react';
 import { Spinner } from '@/components/ui/feedback';
+import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { handlerFor, type FileRef, type FileSource } from './handlers';
 import { HandlerBoundary, KeyScope, ViewerMessage } from './viewer-kit';
@@ -9,6 +10,7 @@ import { HandlerBoundary, KeyScope, ViewerMessage } from './viewer-kit';
  * views as the viewer, read-only, taking keys only while focus is inside.
  */
 export function FileView({ file, source, onDownload, className }: { file: FileRef; source: FileSource; onDownload: () => void; className?: string }) {
+  const { t } = useTranslation('files');
   const box = useRef<HTMLDivElement>(null);
   const handler = handlerFor(file);
   return (
@@ -18,7 +20,7 @@ export function FileView({ file, source, onDownload, className }: { file: FileRe
           <HandlerBoundary onDownload={onDownload}>
             <Suspense
               fallback={
-                <ViewerMessage title="Opening…">
+                <ViewerMessage title={t('viewer.opening')}>
                   <Spinner />
                 </ViewerMessage>
               }
@@ -28,7 +30,7 @@ export function FileView({ file, source, onDownload, className }: { file: FileRe
           </HandlerBoundary>
         </KeyScope.Provider>
       ) : (
-        <ViewerMessage title={`${file.filename} can't be shown here.`}>Download it to open it in another application.</ViewerMessage>
+        <ViewerMessage title={t('viewer.cannotShowHere', { name: file.filename })}>{t('viewer.downloadToOpen')}</ViewerMessage>
       )}
     </div>
   );

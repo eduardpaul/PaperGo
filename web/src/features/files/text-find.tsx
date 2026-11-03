@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { api, isApiError } from '@/api/http';
 import { Button } from '@/components/ui/button';
+import { useTranslation } from '@/i18n';
 import type { FileRef } from './handlers';
 
 interface ReadText {
@@ -41,17 +42,18 @@ function fold(value: string) {
  * highlight, so find names them and goes to them instead.
  */
 export function PageMatches({ label, pages, current, onGo }: { label: string; pages: number[]; current?: number; onGo: (page: number) => void }) {
+  const { t } = useTranslation('files');
   if (pages.length === 0) return null;
   const shown = pages.slice(0, 12);
   return (
     <span className="flex flex-wrap items-center gap-1 text-xs text-muted" aria-live="polite">
       {label}
       {shown.map((page) => (
-        <Button key={page} size="sm" variant={page === current ? 'secondary' : 'ghost'} className="h-6 px-1.5" aria-label={`Go to page ${page}`} onClick={() => onGo(page)}>
+        <Button key={page} size="sm" variant={page === current ? 'secondary' : 'ghost'} className="h-6 px-1.5" aria-label={t('viewer.goToPage', { page })} onClick={() => onGo(page)}>
           {page}
         </Button>
       ))}
-      {pages.length > shown.length && <span>and {pages.length - shown.length} more</span>}
+      {pages.length > shown.length && <span>{t('viewer.andMore', { more: pages.length - shown.length })}</span>}
     </span>
   );
 }

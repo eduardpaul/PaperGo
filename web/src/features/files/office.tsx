@@ -3,6 +3,7 @@ import { ExternalLink } from 'lucide-react';
 import { api } from '@/api/http';
 import type { Resource } from '@/api/types';
 import { buttonVariants } from '@/components/ui/button';
+import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/utils';
 import type { FileItem } from './file-action';
 
@@ -76,16 +77,17 @@ export function useOfficeLink(item: FileItem & { parent_id?: string }, collectio
  * save there is a new file version. Nothing shows for other files.
  */
 export function OpenInOffice({ item, collection, className, size = 'md' }: { item: FileItem & { parent_id?: string }; collection: Pick<Resource, 'id' | 'webdav_enabled'> | undefined; className?: string; size?: 'sm' | 'md' }) {
+  const { t } = useTranslation('files');
   const link = useOfficeLink(item, collection);
   if (!link) return null;
   return (
     <a
       href={link.href}
-      title={`Opens in the ${link.app.name} app on this computer; saving there adds a file version here`}
+      title={t('office.title', { app: link.app.name })}
       className={cn(buttonVariants({ size }), className)}
       onClick={(event) => event.stopPropagation()}
     >
-      <ExternalLink /> Open in {link.app.name}
+      <ExternalLink /> {t('office.open', { app: link.app.name })}
     </a>
   );
 }

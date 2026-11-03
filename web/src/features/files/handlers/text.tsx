@@ -1,6 +1,7 @@
 import { WrapText } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { useTranslation } from '@/i18n';
 import type { ViewerProps } from '../handlers';
 import { TextDocument } from '../text-document';
 
@@ -8,6 +9,7 @@ const wrapKey = 'papergo.viewer.wrap';
 
 /** Plain text with line numbers, or wrapped to the window without them. */
 function Lines({ text }: { text: string }) {
+  const { t } = useTranslation('files');
   const [wrap, setWrap] = useState(() => {
     try {
       return localStorage.getItem(wrapKey) === 'on';
@@ -33,7 +35,7 @@ function Lines({ text }: { text: string }) {
             }
           }}
         >
-          <WrapText /> Wrap lines
+          <WrapText /> {t('text.wrapLines')}
         </Button>
       </div>
       <div className="flex min-h-0 flex-1 overflow-auto font-mono text-[13px] leading-6">

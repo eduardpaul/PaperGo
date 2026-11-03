@@ -1,5 +1,6 @@
 import { File, FileArchive, FileAudio, FileCode, FileImage, FileSpreadsheet, FileText, FileVideo, Mail, Presentation, type LucideIcon } from 'lucide-react';
 import { fileTypes } from '@/api/auth';
+import { i18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 
 export type FileFamily = 'pdf' | 'image' | 'text' | 'document' | 'spreadsheet' | 'presentation' | 'archive' | 'audio' | 'video' | 'email' | 'code' | 'file';
@@ -31,8 +32,8 @@ export function fileFamily(media: string | undefined): FileFamily {
 
 /** A person's name for a media type: the server's, such as "PDF document", else one made from the type. */
 export function fileTypeLabel(media: string | undefined): string {
-  if (!media || media === 'application/octet-stream') return 'File';
-  return known(media)?.label ?? `${media.split('/')[1]?.replace(/^(x-|vnd\.)/, '').toUpperCase() || 'Unknown'} file`;
+  if (!media || media === 'application/octet-stream') return i18n.t('files:type.file');
+  return known(media)?.label ?? i18n.t('files:type.named', { kind: media.split('/')[1]?.replace(/^(x-|vnd\.)/, '').toUpperCase() || i18n.t('files:type.unknown') });
 }
 
 /** The icon of a file's family, coloured so kinds are told apart at a glance. */

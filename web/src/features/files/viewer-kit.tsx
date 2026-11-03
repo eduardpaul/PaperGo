@@ -1,6 +1,7 @@
 import { Download } from 'lucide-react';
 import { Component, createContext, useContext, useEffect, useRef, type ReactNode, type RefObject } from 'react';
 import { Button } from '@/components/ui/button';
+import { useTranslation } from '@/i18n';
 import { typingIn } from '@/lib/keys';
 import { cn } from '@/lib/utils';
 
@@ -56,21 +57,27 @@ export class HandlerBoundary extends Component<{ children: ReactNode; onDownload
   }
   render() {
     if (!this.state.failed) return this.props.children;
-    return (
-      <ViewerMessage title="This file could not be shown.">
-        <span>Reload the page to try again, or download the file.</span>
-        <Button variant="primary" onClick={this.props.onDownload}>
-          <Download /> Download
-        </Button>
-      </ViewerMessage>
-    );
+    return <HandlerFailure onDownload={this.props.onDownload} />;
   }
+}
+
+function HandlerFailure({ onDownload }: { onDownload: () => void }) {
+  const { t } = useTranslation(['files', 'common']);
+  return (
+    <ViewerMessage title={t('viewer.failed')}>
+      <span>{t('viewer.reloadOrDownload')}</span>
+      <Button variant="primary" onClick={onDownload}>
+        <Download /> {t('common:actions.download')}
+      </Button>
+    </ViewerMessage>
+  );
 }
 
 /** The bar of page, zoom and find controls under a handler's canvas. */
 export function ViewerBar({ children, className }: { children: ReactNode; className?: string }) {
+  const { t } = useTranslation('files');
   return (
-    <div role="toolbar" aria-label="File controls" className={cn('flex shrink-0 flex-wrap items-center justify-center gap-1 border-t bg-surface px-2 py-1.5 text-[13px]', className)}>
+    <div role="toolbar" aria-label={t('viewer.controls')} className={cn('flex shrink-0 flex-wrap items-center justify-center gap-1 border-t bg-surface px-2 py-1.5 text-[13px]', className)}>
       {children}
     </div>
   );

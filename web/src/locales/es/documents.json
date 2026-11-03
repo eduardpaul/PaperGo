@@ -1,1 +1,38 @@
-{}
+{
+  "preview": {
+    "generating": "Generando la vista previa…",
+    "unavailable": "Vista previa no disponible"
+  },
+  "transfer": {
+    "interrupted": "Se interrumpió la subida. Comprueba la conexión e inténtalo de nuevo.",
+    "nameConflict": "Ya hay un archivo con este nombre aquí."
+  },
+  "uploads": {
+    "alreadyStored": "Ya guardado como {{names}}",
+    "cancelled": "Cancelada",
+    "close": "Cerrar las subidas",
+    "complete_one": "{{count}} subida completada",
+    "complete_many": "{{count}} subidas completadas",
+    "complete_other": "{{count}} subidas completadas",
+    "failed_one": "Falló {{count}} subida",
+    "failed_many": "Fallaron {{count}} subidas",
+    "failed_other": "Fallaron {{count}} subidas",
+    "hide": "Ocultar las subidas",
+    "label": "Subidas",
+    "nameTaken": "Ya hay un archivo con este nombre aquí. Elige Cambiar el nombre o, si está disponible, Reemplazar el existente.",
+    "progress": "{{percent}} % de {{size}} a {{target}}",
+    "progressLabel": "Subida de {{name}}",
+    "rename": {
+      "fileName": "Nombre del archivo",
+      "submit": "Cambiar el nombre y subir",
+      "title": "Cambiar el nombre de la subida"
+    },
+    "replaceExisting": "Reemplazar el existente",
+    "show": "Mostrar las subidas",
+    "uploaded": "Subido a {{target}}",
+    "uploading_one": "Subiendo {{count}} archivo",
+    "uploading_many": "Subiendo {{count}} archivos",
+    "uploading_other": "Subiendo {{count}} archivos",
+    "waiting": "En espera · {{size}}"
+  }
+}

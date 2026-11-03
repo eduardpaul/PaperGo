@@ -4,6 +4,7 @@ import { parseJSON } from '@/api/json';
 import { downloadFile } from '@/api/files';
 import { documentUploadRequest, downloadContentPath, replaceContentRequest } from '@/api/requests';
 import type { DocumentUpload } from '@/api/types';
+import { i18n } from '@/i18n';
 
 export interface DocumentMetadata {
   name?: string;
@@ -22,7 +23,7 @@ export interface UploadOptions {
 
 export class UploadNameConflict extends ApiError {
   constructor(readonly existingItem?: { id: string; version: number }) {
-    super(409, 'name_conflict', 'A file with this name is already here.');
+    super(409, 'name_conflict', i18n.t('documents:transfer.nameConflict'));
   }
 }
 
@@ -80,7 +81,7 @@ export function uploadDocument(
       }
       reject(new ApiError(xhr.status, problem?.code ?? 'error', problem?.detail ?? problem?.title ?? xhr.statusText));
     };
-    xhr.onerror = () => reject(new ApiError(0, 'network', 'The upload was interrupted. Check the connection and try again.'));
+    xhr.onerror = () => reject(new ApiError(0, 'network', i18n.t('documents:transfer.interrupted')));
     xhr.onabort = () => reject(new UploadCancelled());
     options.signal?.addEventListener('abort', () => xhr.abort(), { once: true });
     xhr.send(body);

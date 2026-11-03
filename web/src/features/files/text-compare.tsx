@@ -7,6 +7,7 @@ import { downloadContentPath } from '@/api/requests';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Spinner } from '@/components/ui/feedback';
+import { useTranslation } from '@/i18n';
 import { problemMessage } from '@/lib/errors';
 
 /** A file version a comparison reads: the item's current file has no blob ID. */
@@ -26,12 +27,13 @@ export function comparable(contentType: string) {
  * side on wide screens, inline on narrow ones, read-only.
  */
 export function TextCompareDialog({ itemId, filename, from, to, onClose }: { itemId: string; filename: string; from: ComparedVersion; to: ComparedVersion; onClose: () => void }) {
+  const { t } = useTranslation('files');
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="flex h-[85vh] w-[min(1200px,calc(100vw-2rem))] max-w-none flex-col">
         <DialogHeader>
           <DialogTitle>
-            Changes from version {from.version} to version {to.version}
+            {t('compare.title', { from: from.version, to: to.version })}
           </DialogTitle>
           <DialogDescription>{filename}</DialogDescription>
         </DialogHeader>
@@ -50,6 +52,7 @@ function useText(itemId: string, version: ComparedVersion) {
 }
 
 function Comparison({ itemId, from, to, language }: { itemId: string; from: ComparedVersion; to: ComparedVersion; language: 'markdown' | 'plaintext' }) {
+  const { t } = useTranslation('files');
   const before = useText(itemId, from);
   const after = useText(itemId, to);
   const host = useRef<HTMLDivElement>(null);
@@ -97,19 +100,19 @@ function Comparison({ itemId, from, to, language }: { itemId: string; from: Comp
 
   const error = before.error ?? after.error;
   if (error) return <p className="px-5 text-[13px] text-danger">{problemMessage(error)}</p>;
-  if (failed) return <p className="px-5 text-[13px] text-danger">The comparison could not be shown.</p>;
+  if (failed) return <p className="px-5 text-[13px] text-danger">{t('compare.failed')}</p>;
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2 px-5 pb-5">
       <div className="flex items-center gap-2 text-[13px]">
         <span aria-live="polite" className="text-muted">
-          {changes === undefined ? 'Comparing…' : changes === 0 ? 'The texts are the same.' : `${changes} change${changes === 1 ? '' : 's'}`}
+          {changes === undefined ? t('compare.comparing') : changes === 0 ? t('compare.same') : t('compare.changes', { count: changes })}
         </span>
         {!!changes && (
           <>
-            <Button size="icon" variant="ghost" aria-label="Previous change" onClick={() => editor.current?.goToDiff('previous')}>
+            <Button size="icon" variant="ghost" aria-label={t('compare.previousChange')} onClick={() => editor.current?.goToDiff('previous')}>
               <ArrowUp />
             </Button>
-            <Button size="icon" variant="ghost" aria-label="Next change" onClick={() => editor.current?.goToDiff('next')}>
+            <Button size="icon" variant="ghost" aria-label={t('compare.nextChange')} onClick={() => editor.current?.goToDiff('next')}>
               <ArrowDown />
             </Button>
           </>

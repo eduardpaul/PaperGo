@@ -5,6 +5,7 @@ import { keys } from '@/api/queries';
 import type { Comment, CommentPage, CommentThread } from '@/api/types';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/input';
+import { useTranslation } from '@/i18n';
 import { problemMessage } from '@/lib/errors';
 import { cn } from '@/lib/utils';
 import type { FileRef } from './handlers';
@@ -128,6 +129,7 @@ export function PageRegions({
   onOpen: (threadId: string) => void;
   onDone: (threadId?: string) => void;
 }) {
+  const { t } = useTranslation('files');
   const layer = useRef<HTMLDivElement>(null);
   const [start, setStart] = useState<{ x: number; y: number }>();
   const [rect, setRect] = useState<Rect>();
@@ -156,7 +158,7 @@ export function PageRegions({
                 focused ? 'bg-accent' : thread.resolved_at ? 'bg-zinc-400' : 'bg-amber-500',
               )}
               style={{ left: `${(shown.x + shown.w) * 100}%`, top: `${shown.y * 100}%` }}
-              aria-label={`Comment ${number} by ${thread.author.name}${thread.resolved_at ? ', resolved' : ''}`}
+              aria-label={t(thread.resolved_at ? 'regions.pinResolved' : 'regions.pin', { number, author: thread.author.name })}
               title={thread.body.slice(0, 120)}
               onClick={() => onOpen(thread.id)}
             >
@@ -210,6 +212,7 @@ export function PageRegions({
 
 /** The box to write a comment about a region just drawn, beside it on the page. */
 function RegionComposer({ file, region, shown, onDone }: { file: FileRef; region: FileRegion; shown: Rect; onDone: (threadId?: string) => void }) {
+  const { t } = useTranslation(['files', 'common']);
   const client = useQueryClient();
   const [text, setText] = useState('');
   const post = useMutation({
@@ -244,14 +247,14 @@ function RegionComposer({ file, region, shown, onDone }: { file: FileRef; region
           }
         }}
       >
-        <Textarea aria-label="Comment on this area" placeholder="Comment on this area" rows={3} autoFocus value={text} onChange={(event) => setText(event.target.value)} />
+        <Textarea aria-label={t('regions.commentOnArea')} placeholder={t('regions.commentOnArea')} rows={3} autoFocus value={text} onChange={(event) => setText(event.target.value)} />
         {post.error && <p className="text-xs text-danger">{problemMessage(post.error)}</p>}
         <div className="flex justify-end gap-2">
           <Button type="button" size="sm" onClick={() => onDone()}>
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
           <Button type="submit" size="sm" variant="primary" disabled={!text.trim() || post.isPending}>
-            Comment
+            {t('regions.comment')}
           </Button>
         </div>
       </form>

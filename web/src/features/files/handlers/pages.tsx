@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/feedback';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
+import { useTranslation } from '@/i18n';
 import { problemMessage } from '@/lib/errors';
 import { useBlobUrl } from '@/lib/use-blob-url';
 import type { FileRef, ViewerProps } from '../handlers';
@@ -23,7 +24,7 @@ const widths = [320, 480, 640, 960, 1280, 1600, 2048];
 const renditionWidth = (pixels: number) => widths.find((width) => width >= pixels) ?? widths[widths.length - 1];
 
 const zooms = [
-  ['fit', 'Fit width'],
+  ['fit', undefined],
   ['0.5', '50%'],
   ['0.75', '75%'],
   ['1', '100%'],
@@ -43,6 +44,7 @@ export default function PagesView(props: ViewerProps) {
  * through the text PaperGo read from the file, page by page.
  */
 export function PageImages({ file, page, onPage, find: initialFind, notice }: ViewerProps & { notice?: ReactNode }) {
+  const { t } = useTranslation(['files', 'common']);
   const list = useQuery({
     queryKey: ['file-pages', file.itemId, file.blobId],
     queryFn: async () => (await api<PageList>(`/v1/items/${file.itemId}/pages`, { query: { blob_id: file.blobId } })).data,
@@ -148,65 +150,65 @@ export function PageImages({ file, page, onPage, find: initialFind, notice }: Vi
 
   if (list.isPending)
     return (
-      <ViewerMessage title="Opening…">
+      <ViewerMessage title={t('viewer.opening')}>
         <Spinner />
       </ViewerMessage>
     );
-  if (list.isError) return <ViewerMessage title="The pages of this file could not be shown.">{problemMessage(list.error)} Download it to open it in another application.</ViewerMessage>;
+  if (list.isError) return <ViewerMessage title={t('pages.failed')}>{problemMessage(list.error)} {t('viewer.downloadToOpen')}</ViewerMessage>;
 
   const total = pages.length;
   return (
     <div className="flex h-full flex-col">
       {notice && <div className="shrink-0 border-b bg-surface px-4 py-2 text-[13px]">{notice}</div>}
-      <div ref={frame} onScroll={onScroll} tabIndex={0} aria-label={`Pages of ${file.filename}`} className="relative min-h-0 flex-1 overflow-auto bg-surface-muted px-4 py-4 outline-none">
+      <div ref={frame} onScroll={onScroll} tabIndex={0} aria-label={t('viewer.pagesOf', { name: file.filename })} className="relative min-h-0 flex-1 overflow-auto bg-surface-muted px-4 py-4 outline-none">
         <div className="mx-auto flex w-max min-w-full flex-col items-center gap-4">
           {pages.map((size, index) => (
             <PageImage key={index} scroller={frame} file={file} number={index + 1} size={size} width={displayWidth(size)} rotation={rotation} highlighted={finding && matches.includes(index + 1)} />
           ))}
-          {list.data.truncated && <p className="text-[13px] text-muted">Only the first {total} pages are shown. Download the file for the rest.</p>}
+          {list.data.truncated && <p className="text-[13px] text-muted">{t('pages.truncated', { total })}</p>}
         </div>
       </div>
       <ViewerBar>
-        <Button size="icon" variant="ghost" aria-label="Previous page" disabled={current <= 1} onClick={() => go(current - 1)}>
+        <Button size="icon" variant="ghost" aria-label={t('viewer.previousPage')} disabled={current <= 1} onClick={() => go(current - 1)}>
           <ChevronUp />
         </Button>
         <PageBox current={current} total={total} onGo={go} />
-        <Button size="icon" variant="ghost" aria-label="Next page" disabled={current >= total} onClick={() => go(current + 1)}>
+        <Button size="icon" variant="ghost" aria-label={t('viewer.nextPage')} disabled={current >= total} onClick={() => go(current + 1)}>
           <ChevronDown />
         </Button>
         <span className="mx-1 h-5 w-px bg-border" aria-hidden />
-        <Button size="icon" variant="ghost" aria-label="Zoom out (−)" onClick={() => step(-1)}>
+        <Button size="icon" variant="ghost" aria-label={t('viewer.zoomOut')} onClick={() => step(-1)}>
           <ZoomOut />
         </Button>
-        <Select aria-label="Zoom" className="h-8 w-28" value={zoom} onChange={(event) => setZoom(event.target.value)}>
+        <Select aria-label={t('viewer.zoom')} className="h-8 w-28" value={zoom} onChange={(event) => setZoom(event.target.value)}>
           {zooms.map(([value, label]) => (
             <option key={value} value={value}>
-              {label}
+              {label ?? t('viewer.fitWidth')}
             </option>
           ))}
         </Select>
-        <Button size="icon" variant="ghost" aria-label="Zoom in (+)" onClick={() => step(1)}>
+        <Button size="icon" variant="ghost" aria-label={t('viewer.zoomIn')} onClick={() => step(1)}>
           <ZoomIn />
         </Button>
-        <Button size="icon" variant="ghost" aria-label="Rotate the view (R)" onClick={() => setRotation((rotation + 90) % 360)}>
+        <Button size="icon" variant="ghost" aria-label={t('viewer.rotate')} onClick={() => setRotation((rotation + 90) % 360)}>
           <RotateCw />
         </Button>
         {!file.detached && <span className="mx-1 h-5 w-px bg-border" aria-hidden />}
         {!file.detached &&
           (finding ? (
             <form role="search" className="flex flex-wrap items-center gap-1" onSubmit={(event) => event.preventDefault()}>
-              <Input ref={findInput} aria-label="Find in the file" placeholder="Find" className="h-8 w-40" value={query} onChange={(event) => setQuery(event.target.value)} />
+              <Input ref={findInput} aria-label={t('viewer.findInFile')} placeholder={t('viewer.find')} className="h-8 w-40" value={query} onChange={(event) => setQuery(event.target.value)} />
               <span aria-live="polite" className="text-xs text-muted">
-                {!query.trim() ? '' : text.isPending ? 'Searching…' : !text.data ? 'No text was read from this file yet' : matches.length === 0 ? 'No matches' : ''}
+                {!query.trim() ? '' : text.isPending ? t('common:status.searching') : !text.data ? t('viewer.noTextRead') : matches.length === 0 ? t('viewer.noMatches') : ''}
               </span>
-              <PageMatches label="On pages" pages={matches} current={current} onGo={go} />
-              <Button size="icon" variant="ghost" aria-label="Close find" onClick={() => setFinding(false)}>
+              <PageMatches label={t('pages.onPages')} pages={matches} current={current} onGo={go} />
+              <Button size="icon" variant="ghost" aria-label={t('viewer.closeFind')} onClick={() => setFinding(false)}>
                 <X />
               </Button>
             </form>
           ) : (
             <Button size="sm" variant="ghost" onClick={openFind}>
-              <Search /> Find
+              <Search /> {t('viewer.find')}
             </Button>
           ))}
       </ViewerBar>
@@ -242,6 +244,7 @@ function PageImage({
   rotation: number;
   highlighted: boolean;
 }) {
+  const { t } = useTranslation('files');
   const box = useRef<HTMLDivElement>(null);
   const [near, setNear] = useState(false);
   useEffect(() => {
@@ -271,20 +274,20 @@ function PageImage({
     <div
       ref={box}
       data-page={number}
-      aria-label={`Page ${number}`}
+      aria-label={t('viewer.pageNumber', { number })}
       className={`relative shrink-0 overflow-hidden bg-white shadow-sm ${highlighted ? 'ring-2 ring-accent' : ''}`}
       style={{ width, height }}
     >
       {image.url ? (
         <img
           src={image.url}
-          alt={`Page ${number} of ${file.filename}`}
+          alt={t('pages.imageAlt', { number, name: file.filename })}
           draggable={false}
           className="absolute top-1/2 left-1/2 max-w-none select-none"
           style={{ width: drawnWidth, height: drawnHeight, transform: `translate(-50%, -50%) rotate(${rotation}deg)` }}
         />
       ) : image.error ? (
-        <p className="grid h-full place-items-center p-4 text-center text-xs text-muted">Page {number} could not be shown.</p>
+        <p className="grid h-full place-items-center p-4 text-center text-xs text-muted">{t('pages.pageFailed', { number })}</p>
       ) : (
         <span className="absolute inset-0 grid place-items-center text-xs text-muted">{near ? <Spinner /> : number}</span>
       )}
@@ -293,6 +296,7 @@ function PageImage({
 }
 
 function PageBox({ current, total, onGo }: { current: number; total: number; onGo: (page: number) => void }) {
+  const { t } = useTranslation('files');
   const [value, setValue] = useState(String(current));
   const [shown, setShown] = useState(current);
   if (shown !== current) {
@@ -309,9 +313,9 @@ function PageBox({ current, total, onGo }: { current: number; total: number; onG
         else setValue(String(current));
       }}
     >
-      <Input aria-label="Page" inputMode="numeric" className="h-8 w-14 text-center" value={value} onChange={(event) => setValue(event.target.value)} onBlur={() => setValue(String(current))} />
+      <Input aria-label={t('viewer.page')} inputMode="numeric" className="h-8 w-14 text-center" value={value} onChange={(event) => setValue(event.target.value)} onBlur={() => setValue(String(current))} />
       <span className="text-muted" aria-live="polite">
-        of {total}
+        {t('viewer.ofTotal', { total })}
       </span>
     </form>
   );
