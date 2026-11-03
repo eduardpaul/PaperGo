@@ -122,8 +122,7 @@ def main():
     cache.mkdir(parents=True, exist_ok=True)
     stamp = output / 'installed.json'
     fingerprint = {'platform': key, 'lock': hashlib.sha256((ROOT / 'scripts/native.json').read_bytes()).hexdigest(),
-                   'installer': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-                   'notices': hashlib.sha256(b''.join(path.read_bytes() for path in sorted((ROOT / 'scripts/native-notices').rglob('*')) if path.is_file())).hexdigest()}
+                   'installer': hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
     if not stamp.exists() or json.loads(stamp.read_text()) != fingerprint:
         if args.check:
             parser.error('native SDKs are missing or stale; run python scripts/native.py')
@@ -135,11 +134,6 @@ def main():
         (output / 'lib').mkdir(parents=True)
         for name, archive in archives.items():
             extract(archive, output / 'sdk' / name)
-        zvec = output / 'sdk/zvec'
-        shutil.copytree(zvec / 'include', output / 'include')
-        for native in (zvec / key.replace('-', '_')).iterdir():
-            if native.is_file():
-                shutil.copy2(native, output / 'lib' / native.name)
         pdfium = output / 'sdk/pdfium'
         shutil.copytree(pdfium / 'include', output / 'include', dirs_exist_ok=True)
         for native in list((pdfium / 'lib').glob('*')) + list((pdfium / 'bin').glob('*')):
@@ -171,7 +165,6 @@ def main():
         for name in ['LICENSE', 'ThirdPartyNotices.txt']:
             shutil.copy2(ort / name, notices / ('onnxruntime-' + name))
         shutil.copy2(next((output / 'sdk/webp').iterdir()) / 'COPYING', notices / 'webp-COPYING')
-        shutil.copytree(ROOT / 'scripts/native-notices/zvec', notices / 'zvec')
         pkg = output / 'lib/pkgconfig'
         pkg.mkdir()
         (pkg / 'pdfium.pc').write_text(f'Name: PDFium\nDescription: PDFium\nVersion: 8076\nLibs: -L{(output / "lib").as_posix()} -lpdfium\nCflags: -I{(output / "include").as_posix()}\n')

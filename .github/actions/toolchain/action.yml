@@ -50,7 +50,7 @@ runs:
         path: |
           .tools/native
           .tools/native-downloads
-        key: native-${{ runner.os }}-${{ runner.arch }}-${{ env.ImageOS }}-${{ hashFiles('.github/actions/toolchain/action.yml', 'Dockerfile', 'scripts/native.py', 'scripts/native.json', 'scripts/native-notices/**') }}
+        key: native-${{ runner.os }}-${{ runner.arch }}-${{ env.ImageOS }}-${{ hashFiles('.github/actions/toolchain/action.yml', 'Dockerfile', 'scripts/native.py', 'scripts/native.json') }}
     - name: Install native SDKs
       shell: bash
       env:

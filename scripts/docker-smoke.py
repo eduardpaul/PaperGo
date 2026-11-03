@@ -76,7 +76,7 @@ def exercise(image, version):
             assert docker('inspect', '--format={{.State.ExitCode}}', container) == '0'
             docker('rm', container)
             container = None
-        print('Image version, production authentication, persistence, graceful stop, UI, zvec, PDF, OCR, Laya and both embedding presets passed.')
+        print('Image version, production authentication, persistence, graceful stop, UI, semantic search, PDF, OCR, Laya and both embedding presets passed.')
     finally:
         if container:
             subprocess.run(['docker', 'logs', '--tail=100', container])

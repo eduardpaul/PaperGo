@@ -2,11 +2,10 @@ name: verify
 # Every job runs one stage of scripts/check.py; scripts/ci.sh runs the same
 # stages locally in the same toolchain image. Pull requests run the lint and
 # test stages. Pushes to main and the weekly schedule run the Go suite with
-# the race detector instead of without it, and add real models, native
-# search, packaging, the container image and the dependency scan. The weekly
-# schedule and manual runs also run the native search soak and fuzzing and
-# exercise the devcontainer. A release tag must name a commit this workflow
-# passed on main.
+# the race detector instead of without it, and add real models, packaging,
+# the container image and the dependency scan. The weekly schedule and
+# manual runs also exercise the devcontainer. A release tag must name a
+# commit this workflow passed on main.
 on:
   push:
     branches: [main]
@@ -241,7 +240,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        stage: [native, zvec, release, vuln]
+        stage: [native, release, vuln]
     steps:
       - uses: actions/checkout@v7.0.1
       - id: week
@@ -270,7 +269,6 @@ jobs:
         include:
           # macOS release builds are temporarily disabled.
           - { runner: windows-2025, stage: release }
-          - { runner: ubuntu-24.04-arm, stage: zvec }
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: ./.github/actions/toolchain
@@ -294,18 +292,6 @@ jobs:
           name: model-presets
           path: .tools
       - run: python3 scripts/check.py docker
-
-  # Long native search runs: the real-dimension soak and timed fuzzing.
-  soak:
-    name: Native search soak
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    needs: toolchain
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    container: *toolchain
-    steps:
-      - uses: actions/checkout@v7.0.1
-      - run: python3 scripts/check.py soak --setup
 
   # It builds the development image afresh, which the toolchain job already
   # builds and every container job uses, so it only runs weekly and on demand.

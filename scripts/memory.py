@@ -54,15 +54,9 @@ def running(binary, env, directory):
                 process.wait()
 
 
-def snapshot(server, name, seconds, poll_status=False):
+def snapshot(server, name, seconds):
     start = process_stats(server.pid)
-    if poll_status:
-        deadline = time.monotonic() + seconds
-        while time.monotonic() < deadline:
-            server.json('GET', '/v1/search/status')
-            time.sleep(min(5, max(0, deadline - time.monotonic())))
-    else:
-        time.sleep(seconds)
+    time.sleep(seconds)
     end = process_stats(server.pid)
     smaps = {}
     for line in Path(f'/proc/{server.pid}/smaps_rollup').read_text().splitlines()[1:]:
@@ -77,19 +71,13 @@ def snapshot(server, name, seconds, poll_status=False):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--binary', type=Path, default=ROOT / 'bin/papergo')
-    parser.add_argument('--search-store', choices=['sqlite', 'zvec'], default='sqlite')
+    parser.add_argument('--search-store', choices=['sqlite', 'none'], default='sqlite')
     parser.add_argument('--items', type=int, default=200)
     parser.add_argument('--idle-seconds', type=float, default=65)
-    parser.add_argument('--unload-seconds', type=float, default=0,
-                        help='also measure automatic native unloading, polling status, then a wake-up search (use 335+)')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
-    if platform.system() != 'Linux' or args.items < 1 or args.idle_seconds <= 0 or args.unload_seconds < 0:
+    if platform.system() != 'Linux' or args.items < 1 or args.idle_seconds <= 0:
         parser.error('requires Linux, positive item count and positive idle duration')
-    if args.unload_seconds and args.search_store != 'zvec':
-        parser.error('--unload-seconds requires --search-store zvec')
-    if 0 < args.unload_seconds < 335:
-        parser.error('--unload-seconds must be at least 335 to cover five minutes plus the maintenance interval')
     binary = args.binary.resolve()
     # Deployment auth, paths, model settings and allocator overrides stay out.
     env = {k: v for k, v in os.environ.items() if k in ('PATH', 'HOME', 'LANG', 'TMPDIR', 'LD_LIBRARY_PATH')}
@@ -126,20 +114,10 @@ def main():
                 if len(result.get('value', [])) != min(50, args.items):
                     raise RuntimeError('seeded full-text query returned the wrong number of items')
             stages.append(snapshot(server, 'idle-after-search', args.idle_seconds))
-            if args.unload_seconds:
-                stages.append(snapshot(server, 'idle-native-unloaded', args.unload_seconds, poll_status=True))
-                started = time.monotonic()
-                result = server.json('POST', f'/v1/resources/{collection}/query?$top=50', {'query': {'search': 'Invoice'}})
-                wake_ms = (time.monotonic() - started) * 1000
-                if len(result.get('value', [])) != min(50, args.items):
-                    raise RuntimeError('native wake-up search lost indexed items')
-                wake = snapshot(server, 'native-search-reopened', args.idle_seconds)
-                wake['first_query_ms'] = wake_ms
-                stages.append(wake)
         with running(binary, env, directory) as server:
             stages.append(snapshot(server, 'idle-restarted', args.idle_seconds))
         result = dict(platform=platform.platform(), search_store=args.search_store, items=args.items,
-                      idle_seconds=args.idle_seconds, unload_seconds=args.unload_seconds,
+                      idle_seconds=args.idle_seconds,
                       binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),
                       local_models='disabled', stages=stages)
         args.output.parent.mkdir(parents=True, exist_ok=True)

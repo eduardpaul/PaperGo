@@ -259,7 +259,7 @@ def main():
     parser.add_argument("--idle-seconds", type=float, default=30)
     parser.add_argument("--concurrency", type=int, nargs="+", default=[1, 8, 32])
     parser.add_argument("--extended", action="store_true", help="also measure 500-row pages and repeated edits")
-    parser.add_argument("--search-store", choices=["sqlite", "zvec"], default="sqlite")
+    parser.add_argument("--search-store", choices=["sqlite", "none"], default="sqlite")
     parser.add_argument("--collaboration", action="store_true",
                         help="also measure tasks, comments, notifications and live streams under comment load")
     parser.add_argument("--output", type=Path, required=True)
