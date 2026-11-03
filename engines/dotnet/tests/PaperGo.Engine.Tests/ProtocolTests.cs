@@ -152,6 +152,29 @@ public sealed class ProtocolTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ClientDisconnectTerminatesInference()
+    {
+        Assert.SkipWhen(!Directory.Exists(Models.Ocr), "PaddleOCR models not installed");
+        await Start("--ocr-models", Models.Ocr);
+        var ct = TestContext.Current.CancellationToken;
+        var white = Enumerable.Repeat((byte)255, 64 * 48).ToArray();
+        await client.SendAsync(Pixels("/v1/ocr/detect", 64, 48, "gray8", white), ct);
+        // Noise at the largest preview keeps the detector busy for seconds.
+        var noise = new byte[2560 * 2560];
+        new Random(1).NextBytes(noise);
+        var full = System.Diagnostics.Stopwatch.StartNew();
+        await client.SendAsync(Pixels("/v1/ocr/detect?max_dimension=2560", 2560, 2560, "gray8", noise), ct);
+        full.Stop();
+        using var abort = new CancellationTokenSource(TimeSpan.FromMilliseconds(400));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => client.SendAsync(Pixels("/v1/ocr/detect?max_dimension=2560", 2560, 2560, "gray8", noise), abort.Token));
+        // The next request waits only for the terminated run, not a full one.
+        var next = System.Diagnostics.Stopwatch.StartNew();
+        var (status, _) = await Json(await client.SendAsync(Pixels("/v1/ocr/detect", 64, 48, "gray8", white), ct));
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.True(next.Elapsed < full.Elapsed * 0.7, $"next request took {next.Elapsed}, a full detection {full.Elapsed}");
+    }
+
+    [Fact]
     public async Task TcpRequiresTheBearerToken()
     {
         var tokenFile = Path.Combine(dir, "token");

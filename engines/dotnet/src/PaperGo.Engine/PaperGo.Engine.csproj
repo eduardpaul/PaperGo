@@ -31,6 +31,17 @@
     <NativeLibrary Include="$(TokenizersArchive)" />
   </ItemGroup>
 
+  <!-- Optional: -p:OnnxRuntimeStatic=/path/libonnxruntime.a links a static
+       ONNX Runtime 1.23.2 into the executable instead of loading
+       libonnxruntime.so (see RESULTS.md). -->
+  <ItemGroup Condition="'$(OnnxRuntimeStatic)' != ''">
+    <DirectPInvoke Include="onnxruntime" />
+    <NativeLibrary Include="$(OnnxRuntimeStatic)" />
+  </ItemGroup>
+  <Target Name="DropSharedOnnxRuntime" AfterTargets="Publish" Condition="'$(OnnxRuntimeStatic)' != ''">
+    <Delete Files="$(PublishDir)libonnxruntime.so" />
+  </Target>
+
   <!-- JIT runs (dotnet run, dotnet test) load the same archive as a shared library. -->
   <Target Name="BuildTokenizersShared" BeforeTargets="BeforeBuild" Inputs="$(TokenizersArchive)" Outputs="$(TokenizersShared)">
     <Error Condition="!Exists('$(TokenizersArchive)')" Text="$(TokenizersArchive) not found: set PAPERGO_NATIVE_DIR to the directory scripts/native.py installs (.tools/native)." />

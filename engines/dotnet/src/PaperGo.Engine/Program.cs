@@ -10,7 +10,12 @@ public static class Program
         if (args is ["-h" or "--help"])
         {
             Console.WriteLine(EngineOptions.Usage);
+            Console.WriteLine(Diagnostics.Usage);
             return 0;
+        }
+        if (args is ["tokenize" or "laya-encode", _, ..])
+        {
+            return await Diagnostics.Run(args);
         }
         EngineOptions options;
         Engines engines;

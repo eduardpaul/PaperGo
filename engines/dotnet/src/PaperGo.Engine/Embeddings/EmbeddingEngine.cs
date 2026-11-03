@@ -79,7 +79,9 @@ public sealed class EmbeddingEngine : IDisposable
     }
 
     /// <summary>The prompt EmbedQuery or an untitled EmbedDocuments passage gives the model.</summary>
-    public string Prompt(string text, bool query) => (Model, query) switch
+    public string Prompt(string text, bool query) => PromptFor(Model, text, query);
+
+    public static string PromptFor(string model, string text, bool query) => (model, query) switch
     {
         (Harrier, true) => "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery: " + text,
         (Harrier, false) => text,

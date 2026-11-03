@@ -15,7 +15,6 @@ public sealed class ModelGate : IDisposable
     readonly Action unload;
     readonly Timer timer;
     int pending;
-    long generation;
     bool loaded;
 
     public ModelGate(int queue, TimeSpan idle, Action unload)
@@ -45,7 +44,6 @@ public sealed class ModelGate : IDisposable
             Interlocked.Decrement(ref pending);
             throw;
         }
-        generation++;
         timer.Change(Timeout.Infinite, Timeout.Infinite);
         return new Lease(this);
     }
