@@ -302,3 +302,26 @@ func TestMCPYAML(t *testing.T) {
 		t.Fatalf("environment over YAML %v %v", c.MCP, err)
 	}
 }
+
+// Probes find the server where Load would make it listen.
+func TestListenAddress(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	t.Setenv("PAPERGO_CONFIG", "")
+	t.Setenv("HTTP_ADDR", "")
+	if got, err := ListenAddress(); err != nil || got != "127.0.0.1:8080" {
+		t.Fatalf("default %q %v", got, err)
+	}
+	path := filepath.Join(dir, "papergo.yaml")
+	if err := os.WriteFile(path, []byte("server:\n  bind: 0.0.0.0\n  port: 9090\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PAPERGO_CONFIG", path)
+	if got, err := ListenAddress(); err != nil || got != "0.0.0.0:9090" {
+		t.Fatalf("config.yaml %q %v", got, err)
+	}
+	t.Setenv("HTTP_ADDR", "127.0.0.1:7070")
+	if got, err := ListenAddress(); err != nil || got != "127.0.0.1:7070" {
+		t.Fatalf("environment %q %v", got, err)
+	}
+}

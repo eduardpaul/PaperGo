@@ -6,12 +6,15 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"time"
 
 	"papergo/internal/backup"
+	"papergo/internal/config"
 	"papergo/internal/dal/database"
 )
 
@@ -26,13 +29,22 @@ func admin(ctx context.Context, args []string, out io.Writer) error {
 	if len(args) > 0 && args[0] == "health" {
 		flags := flag.NewFlagSet("health", flag.ContinueOnError)
 		flags.SetOutput(out)
-		address := flags.String("url", "http://127.0.0.1:8080/health/ready", "Readiness URL")
+		address := flags.String("url", "", "Readiness URL; by default the configured listen address's /health/ready")
 		timeout := flags.Duration("timeout", 3*time.Second, "Request timeout")
 		if err := flags.Parse(args[1:]); err != nil {
 			return err
 		}
 		if flags.NArg() != 0 || *timeout <= 0 || *timeout > time.Minute {
 			return errors.New("health requires a timeout greater than zero and at most one minute, and no positional arguments")
+		}
+		if *address == "" {
+			listen, err := config.ListenAddress()
+			if err != nil {
+				return err
+			}
+			if *address, err = readinessURL(listen); err != nil {
+				return err
+			}
 		}
 		req, err := http.NewRequestWithContext(ctx, "GET", *address, nil)
 		if err != nil {
@@ -120,4 +132,20 @@ func admin(ctx context.Context, args []string, out io.Writer) error {
 	}
 	fmt.Fprintf(out, "%s completed: %s\n", args[0], in.ArchivePath)
 	return nil
+}
+
+// readinessURL is the readiness check of a server listening on listen. A
+// server listening on every address answers on loopback.
+func readinessURL(listen string) (string, error) {
+	host, port, err := net.SplitHostPort(listen)
+	if err != nil {
+		return "", fmt.Errorf("listen address %q: %w", listen, err)
+	}
+	switch host {
+	case "", "0.0.0.0":
+		host = "127.0.0.1"
+	case "::":
+		host = "::1"
+	}
+	return (&url.URL{Scheme: "http", Host: net.JoinHostPort(host, port), Path: "/health/ready"}).String(), nil
 }

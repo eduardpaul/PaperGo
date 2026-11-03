@@ -32,6 +32,29 @@ func TestAdminHealth(t *testing.T) {
 	if err := admin(context.Background(), []string{"health", "extra"}, new(bytes.Buffer)); err == nil {
 		t.Fatal("positional argument accepted")
 	}
+	// Without --url it probes the configured listen address.
+	ready.Store(true)
+	t.Setenv("PAPERGO_CONFIG", "")
+	t.Setenv("HTTP_ADDR", strings.TrimPrefix(server.URL, "http://"))
+	if err := admin(context.Background(), []string{"health"}, new(bytes.Buffer)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestReadinessURL(t *testing.T) {
+	for listen, want := range map[string]string{
+		"127.0.0.1:8080": "http://127.0.0.1:8080/health/ready",
+		"0.0.0.0:9090":   "http://127.0.0.1:9090/health/ready",
+		":9090":          "http://127.0.0.1:9090/health/ready",
+		"[::]:9090":      "http://[::1]:9090/health/ready",
+	} {
+		if got, err := readinessURL(listen); err != nil || got != want {
+			t.Errorf("%s: %s %v", listen, got, err)
+		}
+	}
+	if _, err := readinessURL("no-port"); err == nil {
+		t.Error("address without a port accepted")
+	}
 }
 
 func TestAdminUsage(t *testing.T) {
