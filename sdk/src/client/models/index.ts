@@ -9421,7 +9421,7 @@ export interface SearchPage extends Parsable {
      */
     total?: number | null;
     /**
-     * The native candidate limit was reached or entries failed the current permission recheck; total and facets may be estimates.
+     * Some matches failed the current permission recheck: hits were left out or facets withheld, so total may count entries the caller can no longer read.
      */
     totalEstimated?: boolean | null;
     /**
