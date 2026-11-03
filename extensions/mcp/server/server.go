@@ -239,8 +239,10 @@ func definition(t *mcp.Registered) *sdk.Tool {
 	return out
 }
 
-// private keeps every response private and uncacheable, whatever the MCP
-// handler set: what a caller sees depends on who they are.
+// private keeps every response private and uncacheable: what a caller
+// sees depends on who they are. The SDK sets Cache-Control: no-cache,
+// no-transform on its answers, replacing the API's private, no-store, so
+// the header is set again as the answer is written.
 type private struct{ http.ResponseWriter }
 
 func (w private) WriteHeader(code int) {
