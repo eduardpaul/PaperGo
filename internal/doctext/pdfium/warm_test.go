@@ -15,9 +15,16 @@ import (
 )
 
 // Opens while PDFium warms up wait for that start instead of starting
-// their own, and later warm-ups reuse it.
+// their own, and a warm-up while it is loaded reuses it.
 func TestWarmSharesTheStart(t *testing.T) {
 	reader := pdfium.New(pdfium.Options{CacheDir: doctexttest.CacheDir(t)})
+	// The start ends once the warm-up and the three opens wait for it.
+	pdfium.ReplaceStarts(t, time.Hour, func(dir string, real func(string) (sdk.Pool, error)) (sdk.Pool, error) {
+		for pdfium.Users(reader) < 4 {
+			time.Sleep(time.Millisecond)
+		}
+		return real(dir)
+	})
 	warmed := make(chan error, 1)
 	go func() { _, err := reader.Warm(); warmed <- err }()
 	var wg sync.WaitGroup

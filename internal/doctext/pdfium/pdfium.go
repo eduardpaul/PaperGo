@@ -61,12 +61,21 @@ const (
 // Reader opens PDFs with PDFium 8111 as WebAssembly, the module go-pdfium
 // v1.21.4 embeds. Name keys stored text, and notices/ holds the licences
 // the module ships under: update both with go-pdfium.
+//
+// PDFium's compiled code takes about 20 MB while it is loaded, so a reader
+// whose start came from its cache unloads it once no PDF has been open for
+// idleUnload; the next open loads it again from the cache in a fraction of
+// a second. Compiling without a cache takes seconds, so such a start stays.
 type Reader struct {
 	o Options
-	// mu guards the current or last start and the count of starts.
+	// mu guards the current or last start, the count of starts, the users
+	// of the current start (opens and warm-ups under way, and open PDFs)
+	// and the timer that unloads it once they are gone.
 	mu     sync.Mutex
 	run    *start
 	starts int
+	users  int
+	idle   *time.Timer
 	// slots holds one entry per open PDF, up to maxOpen; waiting counts
 	// the opens waiting for one.
 	slots   chan struct{}
@@ -86,9 +95,23 @@ type start struct {
 	ended time.Time
 }
 
+// unloads reports whether s loaded PDFium from its cache, so unloading it
+// costs the next open little.
+func (s *start) unloads() bool {
+	select {
+	case <-s.done:
+		return s.err == nil && s.cache != CacheOff
+	default:
+		return false
+	}
+}
+
 // retryAfter is how long a failed start answers callers before the next
 // one tries again, so a lasting failure does not compile on every request.
 var retryAfter = time.Minute
+
+// idleUnload is how long PDFium stays loaded after its last PDF closes.
+var idleUnload = time.Minute
 
 // newPool starts PDFium's pool; tests replace it.
 var newPool = startPool
@@ -97,21 +120,24 @@ func New(o Options) *Reader { return &Reader{o: o, slots: make(chan struct{}, ma
 
 func (*Reader) Name() string { return "pdfium-8111-wasm" }
 
-// Warm starts PDFium as the first Open would: it compiles the module, or
-// loads it from the cache, and starts one instance. Opens meanwhile wait
-// for the same start. It returns CacheHit, CacheMiss or CacheOff.
+// Warm prepares PDFium as the first Open would: it compiles the module into
+// the cache, or loads it from there, and starts one instance. Opens
+// meanwhile wait for the same start. A start from the cache is unloaded
+// again at once unless PDFs are open, so a server that reads no PDFs does
+// not keep PDFium loaded. It returns CacheHit, CacheMiss or CacheOff.
 func (r *Reader) Warm() (string, error) {
-	s, err := r.started(context.Background())
+	s, err := r.enter(context.Background())
 	if err != nil {
 		return "", err
 	}
+	r.leave(s, true)
 	return s.cache, nil
 }
 
-// started waits, as long as ctx allows, for the one start of PDFium that
+// enter waits, as long as ctx allows, for the one start of PDFium that
 // runs at a time, beginning it unless it runs, succeeded, or failed less
-// than retryAfter ago.
-func (r *Reader) started(ctx context.Context) (*start, error) {
+// than retryAfter ago. The caller uses the start until it calls leave.
+func (r *Reader) enter(ctx context.Context) (*start, error) {
 	r.mu.Lock()
 	s := r.run
 	if s != nil {
@@ -125,24 +151,86 @@ func (r *Reader) started(ctx context.Context) (*start, error) {
 	}
 	if s == nil {
 		s = &start{done: make(chan struct{})}
-		r.run = s
+		r.run, r.users = s, 0
 		r.starts++
+		if r.idle != nil {
+			r.idle.Stop()
+			r.idle = nil
+		}
 		go func() {
 			s.pool, s.cache, s.err = r.init()
 			s.ended = time.Now()
 			close(s.done)
+			// Compiling leaves a few hundred megabytes of garbage, and an
+			// idle server collects none: return it to the system now.
+			debug.FreeOSMemory()
+			// Every caller may have given up waiting for this start.
+			r.mu.Lock()
+			if r.run == s && r.users == 0 && s.unloads() {
+				r.unloadLater(s)
+			}
+			r.mu.Unlock()
 		}()
+	}
+	r.users++
+	if r.idle != nil {
+		r.idle.Stop()
+		r.idle = nil
 	}
 	r.mu.Unlock()
 	select {
 	case <-s.done:
 	case <-ctx.Done():
+		r.leave(s, false)
 		return nil, ctx.Err()
 	}
 	if s.err != nil {
+		r.leave(s, false)
 		return nil, fmt.Errorf("%w: PDFium cannot start: %w", doctext.ErrUnavailable, s.err)
 	}
 	return s, nil
+}
+
+// leave ends a use of s. When it was the last one, a start from the cache
+// is unloaded, at once or after idleUnload.
+func (r *Reader) leave(s *start, now bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.run != s {
+		return
+	}
+	r.users--
+	if r.users > 0 || !s.unloads() {
+		return
+	}
+	if now {
+		r.unload(s)
+		return
+	}
+	r.unloadLater(s)
+}
+
+// unloadLater unloads s after idleUnload unless it is used again. r.mu is
+// held.
+func (r *Reader) unloadLater(s *start) {
+	if r.idle != nil {
+		r.idle.Stop()
+	}
+	r.idle = time.AfterFunc(idleUnload, func() {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		if r.run == s && r.users == 0 {
+			r.unload(s)
+		}
+	})
+}
+
+// unload closes s's pool, which frees its compiled code, and returns the
+// memory; the next open starts PDFium again. r.mu is held and s unused.
+func (r *Reader) unload(s *start) {
+	r.run, r.idle = nil, nil
+	_ = s.pool.Close()
+	debug.FreeOSMemory()
 }
 
 func (r *Reader) init() (sdk.Pool, string, error) {
@@ -217,7 +305,23 @@ func startPool(dir string) (sdk.Pool, error) {
 		}
 		return nil, err
 	}
+	if cache != nil {
+		return cachedPool{p, cache}, nil
+	}
 	return p, nil
+}
+
+// cachedPool closes its compilation cache with it, which holds the engine
+// that compiled the module.
+type cachedPool struct {
+	sdk.Pool
+	cache wazero.CompilationCache
+}
+
+func (p cachedPool) Close() error {
+	err := p.Pool.Close()
+	_ = p.cache.Close(context.Background())
+	return err
 }
 
 // A cache directory holds one wazero-<version>-<arch>-<os> directory per
@@ -310,11 +414,10 @@ func (r *Reader) Open(ctx context.Context, data []byte) (doctext.Document, error
 	if len(data) == 0 || len(data) > math.MaxInt32 {
 		return nil, errors.New("the PDF is empty or too large")
 	}
-	s, err := r.started(ctx)
+	s, err := r.enter(ctx)
 	if err != nil {
 		return nil, err
 	}
-	p := s.pool
 	// The pool is never asked for more instances than it may hold, so its
 	// borrowers never wait inside it: go-commons-pool can miss the wakeup
 	// of a borrower that found it full just before an instance closed.
@@ -324,10 +427,14 @@ func (r *Reader) Open(ctx context.Context, data []byte) (doctext.Document, error
 		r.waiting.Add(-1)
 	case <-ctx.Done():
 		r.waiting.Add(-1)
+		r.leave(s, false)
 		return nil, ctx.Err()
 	}
-	release := sync.OnceFunc(func() { <-r.slots })
-	instance, err := p.GetInstanceWithContext(ctx)
+	release := sync.OnceFunc(func() {
+		<-r.slots
+		r.leave(s, false)
+	})
+	instance, err := s.pool.GetInstanceWithContext(ctx)
 	if err != nil {
 		release()
 		// The pool reports a cancelled wait as its own timeout.
@@ -361,7 +468,8 @@ func (r *Reader) Open(ctx context.Context, data []byte) (doctext.Document, error
 type document struct {
 	mu       sync.Mutex
 	instance sdk.Pdfium
-	// release frees the reader's slot once the instance is closed.
+	// release frees the reader's slot and its use of PDFium once the
+	// instance is closed.
 	release func()
 	doc     references.FPDF_DOCUMENT
 	pages   int

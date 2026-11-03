@@ -17,6 +17,36 @@ func Starts(r *Reader) int {
 	return r.starts
 }
 
+// Users counts the opens and warm-ups under way and the open PDFs of a
+// reader's current start.
+func Users(r *Reader) int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.users
+}
+
+// Loaded reports whether a reader has PDFium loaded.
+func Loaded(r *Reader) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.run == nil {
+		return false
+	}
+	select {
+	case <-r.run.done:
+		return r.run.err == nil
+	default:
+		return false
+	}
+}
+
+// UnloadAfter makes readers unload PDFium after d idle, until the test ends.
+func UnloadAfter(t testing.TB, d time.Duration) {
+	before := idleUnload
+	idleUnload = d
+	t.Cleanup(func() { idleUnload = before })
+}
+
 // Held counts a reader's open PDFs, and Waiting the opens waiting for one
 // to close.
 func Held(r *Reader) int    { return len(r.slots) }

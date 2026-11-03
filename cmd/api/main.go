@@ -330,9 +330,10 @@ func run(log *slog.Logger) error {
 	return nil
 }
 
-// warmPDF starts PDFium in the background, so the first PDF does not wait
-// for it; PDFs read meanwhile wait for the same start. Nothing waits for
-// it at shutdown.
+// warmPDF prepares PDFium in the background: the first start compiles it
+// into the cache, so later PDFs load it from there in a fraction of a
+// second, and nothing stays loaded until a PDF is read. PDFs read
+// meanwhile wait for the same start. Nothing waits for it at shutdown.
 func warmPDF(log *slog.Logger, pdf *pdfium.Reader) {
 	go func() {
 		start := time.Now()
