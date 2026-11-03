@@ -12,7 +12,6 @@ def package(version, system, arch, bin_dir, dist):
     inputs = {
         f'papergo{suffix}': bin_dir / f'papergo{suffix}',
         f'papergo-admin{suffix}': bin_dir / f'papergo-admin{suffix}',
-        f'papergo-mcp{suffix}': bin_dir / f'papergo-mcp{suffix}',
         'RELEASES.md': ROOT / 'docs/releases.md',
         'config.yaml': ROOT / 'deploy/config.yaml',
         'README.md': ROOT / 'deploy/README.md',
@@ -29,7 +28,7 @@ def package(version, system, arch, bin_dir, dist):
         'lib/libonnxruntime.dylib', 'lib/libpdfium.dylib', 'lib/libzvec_c_api.dylib',
     ]
     if any(name not in inputs for name in required):
-        raise ValueError('Build the native libraries alongside the executables before packaging')
+        raise ValueError('Build the native libraries alongside both executables before packaging')
     dist.mkdir(parents=True, exist_ok=True)
     target = dist / f'papergo_{version}_{system}_{arch}.zip'
     with zipfile.ZipFile(target, 'w', zipfile.ZIP_DEFLATED) as archive:

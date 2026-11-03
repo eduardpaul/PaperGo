@@ -49,7 +49,7 @@ function serve(granted: string[], { existing = [] as unknown[], mcpStatus = 200 
       if (String(input) === auth.endpoint) {
         served.checks.push({ authorization: new Headers(init.headers).get('Authorization') });
         return new Response(
-          JSON.stringify({ jsonrpc: '2.0', id: 1, result: { serverInfo: { name: 'papergo-mcp' } } }),
+          JSON.stringify({ jsonrpc: '2.0', id: 1, result: { serverInfo: { name: 'papergo' } } }),
           {
             status: mcpStatus,
           },
@@ -172,11 +172,11 @@ it('offers read and write only to people who can write', async () => {
   client.clear();
 });
 
-it('explains that connections need an MCP server when the deployment runs none', async () => {
+it('explains that connections need MCP when the deployment turns it off', async () => {
   auth.endpoint = null;
   serve(reading);
   const client = show();
-  expect(screen.getByText(/does not run an MCP server yet/)).toBeTruthy();
+  expect(screen.getByText(/has turned MCP off/)).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Create connection' })).toBeNull();
   client.clear();
 });

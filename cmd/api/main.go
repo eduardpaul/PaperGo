@@ -8,6 +8,9 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"papergo/extensions/mcp"
+	"papergo/extensions/mcp/builtin"
+	mcpserver "papergo/extensions/mcp/server"
 	"papergo/internal/ai"
 	"papergo/internal/aiops"
 	"papergo/internal/auth"
@@ -240,6 +243,13 @@ func run(log *slog.Logger) error {
 	if index != nil {
 		feats.search = &documentsearch.Search{Storage: store, Store: index, Embeddings: embeddings}
 	}
+	if c.MCP {
+		registry, err := mcp.NewRegistry(builtin.Tools(builtin.Options{AppURL: c.PublicURL}), mcpContributions, c.MCPExtensions)
+		if err != nil {
+			return fmt.Errorf("MCP_EXTENSIONS: %w", err)
+		}
+		feats.mcp = mcpserver.New(mcpserver.Config{Version: buildinfo.Version, Logger: log}, registry)
+	}
 	if err = feats.register(service); err != nil {
 		return err
 	}
@@ -256,7 +266,7 @@ func run(log *slog.Logger) error {
 			return err
 		}
 		return db.CheckSchema(ctx)
-	}, WebDAV: webdav.New(service, verifier, store, log, c.MaxUpload), PublicURL: c.PublicURL, MCPURL: c.MCPPublicURL, CommentsOff: !c.Comments, FileEditMax: c.FileEditMax}
+	}, WebDAV: webdav.New(service, verifier, store, log, c.MaxUpload), PublicURL: c.PublicURL, MCP: feats.mcp != nil, CommentsOff: !c.Comments, FileEditMax: c.FileEditMax}
 	if c.ClientID != "" {
 		a.BrowserSignIn = &httpapi.BrowserSignIn{Issuer: c.Issuer, ClientID: c.ClientID, Scope: c.ClientScopes}
 	}

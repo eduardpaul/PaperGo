@@ -42,9 +42,9 @@ type API struct {
 	RequestTimeout time.Duration
 	// WebDAV serves WebDAV-enabled libraries under webdav.Prefix with its own authentication.
 	WebDAV *webdav.Handler
-	// MCPURL, when set, is where AI assistants reach papergo-mcp; the web
-	// app learns it from /auth/config.
-	MCPURL *url.URL
+	// MCP says the deployment serves AI assistants at /v1/mcp; the web app
+	// learns it from /auth/config.
+	MCP bool
 	// FileEditMax is the largest file the web app edits (FILE_EDIT_MAX_BYTES).
 	FileEditMax int64
 	// CommentsOff runs the deployment without discussions (COMMENTS=off):
@@ -158,16 +158,23 @@ func (a *API) dms(r *http.Request) *dms.Service {
 // with the step that records it. It neither authenticates nor rate-limits.
 // The routes are built once and shared by every in-process request.
 func (a *API) Loopback(t *dms.Service, subject, run string) http.Handler {
+	routes := a.inProcess()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.WithValue(context.WithValue(context.WithValue(r.Context(), subjectKey{}, subject), runKey{}, run), serviceKey{}, t)
+		// What the run's requests start belongs to the run.
+		routes.ServeHTTP(w, r.WithContext(dms.WithParentOperation(ctx, run)))
+	})
+}
+
+// inProcess is the /v1 routes in-process requests are served by, built
+// once and shared.
+func (a *API) inProcess() *router {
 	a.loopback.once.Do(func() { a.loopback.routes, a.loopback.err = a.routes() })
 	if a.loopback.err != nil {
 		// Validate reports this before the API serves.
 		panic(a.loopback.err)
 	}
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := context.WithValue(context.WithValue(context.WithValue(r.Context(), subjectKey{}, subject), runKey{}, run), serviceKey{}, t)
-		// What the run's requests start belongs to the run.
-		a.loopback.routes.ServeHTTP(w, r.WithContext(dms.WithParentOperation(ctx, run)))
-	})
+	return a.loopback.routes
 }
 
 func (a *API) Handler() http.Handler {
@@ -198,22 +205,16 @@ func (a *API) root() (*router, error) {
 		}
 		// Features tells the web app which optional parts the deployment
 		// runs.
-		type mcp struct {
-			URL string `json:"url"`
-		}
 		type features struct {
 			Comments bool `json:"comments"`
-			MCP      *mcp `json:"mcp,omitempty"`
+			MCP      bool `json:"mcp"`
 			// FileTypes are the kinds of file PaperGo names, and which
 			// of them get previews and text reading.
 			FileTypes []fileType `json:"file_types"`
 			// FileEditMax is the largest file the web app edits.
 			FileEditMax int64 `json:"file_edit_max_bytes"`
 		}
-		f := features{Comments: !a.CommentsOff, FileTypes: fileTypes(), FileEditMax: a.FileEditMax}
-		if a.MCPURL != nil {
-			f.MCP = &mcp{URL: a.MCPURL.String()}
-		}
+		f := features{Comments: !a.CommentsOff, MCP: a.MCP, FileTypes: fileTypes(), FileEditMax: a.FileEditMax}
 		respond(w, r, 200, struct {
 			Mode     auth.Kind      `json:"mode"`
 			OIDC     *BrowserSignIn `json:"oidc,omitempty"`

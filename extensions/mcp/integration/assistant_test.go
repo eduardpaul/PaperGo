@@ -273,7 +273,7 @@ func upload(t *testing.T, e *env, item, body, version string) string {
 // travels. Parts never mix two files: once the file is replaced, the read
 // must start again.
 func TestLargeTextIsReadInParts(t *testing.T) {
-	e := setup(t, options{configure: func(c *server.Config) { c.MaxBackendBytes = 64 << 10 }})
+	e := setup(t, options{configure: func(c *server.Config) { c.MaxResultBytes = 64 << 10 }})
 	f := seed(t, e)
 	s := e.connect(t, aliceToken)
 	doc := create(t, e.svc, "alice", f.library, dms.CreateResource{Kind: "item", Name: "Archive scan"})

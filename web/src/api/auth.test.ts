@@ -6,6 +6,7 @@ import {
   authorizationHeaders,
   clearToken,
   loadAuthentication,
+  mcpEndpoint,
   oidcSignIn,
   setToken,
   signInLocal,
@@ -143,4 +144,13 @@ it('only continues at same-origin application paths after sign-in', () => {
   for (const value of ['https://attacker.example', '//attacker.example', '/\\attacker.example', undefined, 7]) {
     expect(safeReturnPath(value)).toBe('/');
   }
+});
+
+it('offers assistants the MCP endpoint on its own origin while the deployment serves it', async () => {
+  vi.stubGlobal('fetch', async () => new Response('{"mode":"bearer","features":{"mcp":true}}'));
+  await loadAuthentication();
+  expect(mcpEndpoint()).toBe(`${window.location.origin}/v1/mcp`);
+  vi.stubGlobal('fetch', async () => new Response('{"mode":"bearer","features":{"mcp":false}}'));
+  await loadAuthentication();
+  expect(mcpEndpoint()).toBeNull();
 });

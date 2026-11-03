@@ -21,17 +21,16 @@ Decisions:
 - **Places are workspaces, lists and libraries.** A workspace includes the
   lists and libraries created in it later. Folders are not a unit.
 - **One access level per connection:** read only, or read and write.
-- **PaperGo knows the endpoint:** its `MCP_PUBLIC_URL` setting names where
-  assistants connect, and the web app offers connections only when it is
-  set. Creating a connection and checking it are separate steps: the
-  browser asks the endpoint to start a session with the new token, and
-  papergo-mcp accepts that from the web app's origin.
+- **PaperGo serves the endpoint:** `/v1/mcp` on its own origin, while `MCP`
+  is on, the default; the web app offers connections only then. Creating a
+  connection and checking it are separate steps: the browser asks the
+  endpoint to start a session with the new token.
 - **Proxy deployments work too.** People signed in through the proxy create
   personal tokens, which the API now accepts in every mode; the proxy routes
-  exactly `/v1/mcp` past its Basic sign-in to papergo-mcp, as the NPM
+  exactly `/v1/mcp` past its Basic sign-in to PaperGo, as the NPM
   sample does. Tokens do not pass through the proxy, so a departing person
   is also deactivated in PaperGo.
-- **The API enforces the limit, not papergo-mcp.** A limited token is
+- **The API enforces the limit, not the MCP module.** A limited token is
   limited everywhere: REST, WebDAV, queued work and MCP alike.
 
 ## Core change: resource limits on access tokens
@@ -66,7 +65,7 @@ serves MCP connections, single-list integration tokens and WebDAV tokens.
 
 ## MCP
 
-papergo-mcp needs no new rules: every API call it makes is limited. Tools
+The MCP module needs no new rules: every API call it makes is limited. Tools
 already list only what the API returns, labels leave out names the caller
 cannot read, and write tools are hidden without `item.write`. The docs
 explain connections and limits.

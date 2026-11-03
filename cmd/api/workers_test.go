@@ -3,6 +3,8 @@ package main
 import (
 	"log/slog"
 
+	"papergo/extensions/mcp"
+	mcpserver "papergo/extensions/mcp/server"
 	"papergo/internal/aiops"
 	"papergo/internal/documentfiles"
 	"papergo/internal/documentpreview"
@@ -74,7 +76,8 @@ func testRuntime(t *testing.T, f features) *worker.Runtime {
 // testFeatures are the feature modules without engines or models, with
 // search or without.
 func testFeatures(search bool) features {
-	f := features{text: &documenttext.Reader{}, preview: &documentpreview.Renderer{}, ai: &aiops.Assistant{}, files: &documentfiles.Maker{}}
+	registry, _ := mcp.NewRegistry(nil, nil, nil)
+	f := features{text: &documenttext.Reader{}, preview: &documentpreview.Renderer{}, ai: &aiops.Assistant{}, files: &documentfiles.Maker{}, mcp: mcpserver.New(mcpserver.Config{}, registry)}
 	if search {
 		f.search = &documentsearch.Search{}
 	}

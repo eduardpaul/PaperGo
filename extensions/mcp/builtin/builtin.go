@@ -1,4 +1,4 @@
-// Package builtin holds the MCP tools papergo-mcp always serves: discovery
+// Package builtin holds the MCP tools PaperGo always serves: discovery
 // of workspaces and collections, collection schemas and views, structured
 // queries, item reads, file text, terms, creates and updates, and search.
 // Each acts through the PaperGo API as its caller, so the API decides what

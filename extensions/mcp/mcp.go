@@ -1,9 +1,9 @@
-// Package mcp is the contract of PaperGo's MCP server, papergo-mcp: the
-// tools it serves, the caller they act for and the PaperGo API they act
-// through. The server's built-in tools use the same contract as compiled
-// contributions, so neither parses credentials, opens connections or sees
-// the protocol: a tool receives its validated arguments and a caller whose
-// backend reaches only the configured PaperGo API, as that caller.
+// Package mcp is the contract of PaperGo's MCP endpoint: the tools it
+// serves, the caller they act for and the PaperGo API they act through.
+// The endpoint's built-in tools use the same contract as compiled
+// contributions, so neither parses credentials, touches the database or
+// sees the protocol: a tool receives its validated arguments and a caller
+// whose backend reaches only the PaperGo API, as that caller.
 package mcp
 
 import (
@@ -60,9 +60,8 @@ type Caller interface {
 	Backend() Backend
 }
 
-// Backend sends requests to the configured PaperGo API with the caller's
-// credential. It reaches only that API's /v1 paths and never follows
-// redirects.
+// Backend sends requests to the PaperGo API as the caller, with the
+// caller's credential. It reaches only the API's /v1 paths.
 type Backend interface {
 	Do(ctx context.Context, r Request) (*Response, error)
 }
@@ -98,8 +97,7 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("PaperGo answered %d %s: %s", e.Status, e.Code, e.Detail)
 }
 
-// ErrUnavailable means the API could not be reached or did not answer as
-// it should.
+// ErrUnavailable means the API did not answer as it should.
 var ErrUnavailable = errors.New("PaperGo is unavailable")
 
 // Failure codes.

@@ -37,6 +37,17 @@ def request(base, path, data=None, method=None):
         raise
 
 
+def exercise_mcp(base):
+    """The executable serves AI assistants at /v1/mcp by default."""
+    message = json.dumps({'jsonrpc': '2.0', 'id': 1, 'method': 'tools/list'}).encode()
+    req = urllib.request.Request(base + '/v1/mcp', data=message, headers={
+        'Authorization': AUTHORIZATION, 'Content-Type': 'application/json',
+        'Accept': 'application/json, text/event-stream', 'MCP-Protocol-Version': '2025-06-18'})
+    with urllib.request.urlopen(req, timeout=10) as response:
+        tools = [tool['name'] for tool in json.load(response)['result']['tools']]
+    assert 'list_workspaces' in tools, tools
+
+
 def upload(base, library, name, data):
     boundary = 'papergo-release-smoke'
     body = (f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="{name}"\r\n'
@@ -189,6 +200,7 @@ def exercise(binary, admin, directory, model='embeddinggemma-2'):
             # foreign-key enforcement must work in the released executable.
             workspace = json.loads(request(base, "/v1/workspaces", {"name": "Release smoke"}))
             assert workspace.get("id"), workspace
+            exercise_mcp(base)
             exercise_native(base, workspace['id'])
         except Exception:
             log.flush()
@@ -254,7 +266,7 @@ def main():
         for preset in ('embeddinggemma-2', 'harrier-oss-v1-0.6b'):
             assert (package / 'assets/models/embedding' / preset).is_dir()
         binary, admin = package / f'papergo{suffix}', package / f'papergo-admin{suffix}'
-        for executable in (binary, admin, package / f'papergo-mcp{suffix}'):
+        for executable in (binary, admin):
             version = subprocess.check_output([str(executable), '--version'], cwd=directory, text=True)
             assert (current or 'PaperGo') in version
         # Use an unrelated working directory: native libraries and shared models

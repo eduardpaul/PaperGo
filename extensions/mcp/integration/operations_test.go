@@ -12,7 +12,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -59,65 +58,41 @@ func TestContributions(t *testing.T) {
 	unknown(t, ds, "acme_crm_whoami")
 }
 
-func TestOrigins(t *testing.T) {
-	e := setup(t, options{configure: func(c *server.Config) { c.AllowedOrigins = []string{"https://app.example"} }})
+// Assistants connect with a bearer credential. A proxy on loopback that
+// forwards its public host reaches the endpoint like any other client.
+func TestBearerAndHost(t *testing.T) {
+	e := setup(t, options{})
 	list := `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`
-	auth := "Bearer " + aliceToken
-	for origin, want := range map[string]int{"https://app.example": 200, "https://evil.example": 403, "null": 403} {
-		r := post(t, e, list, map[string]string{"Authorization": auth, "Origin": origin, "MCP-Protocol-Version": "2025-06-18"})
-		if r.StatusCode != want {
-			t.Errorf("%s: %d, want %d", origin, r.StatusCode, want)
-		}
+	if r := post(t, e, list, map[string]string{"MCP-Protocol-Version": "2025-06-18"}); r.StatusCode != http.StatusUnauthorized || !strings.HasPrefix(r.Header.Get("WWW-Authenticate"), "Bearer") {
+		t.Fatalf("no credential: %d %v", r.StatusCode, r.Header)
 	}
-	// An allowed page, such as PaperGo's web app checking a new connection,
-	// may call from the browser: preflights are answered and responses name
-	// its origin. Other origins get neither.
-	for origin, want := range map[string]int{"https://app.example": 204, "https://evil.example": 403} {
-		req, _ := http.NewRequestWithContext(t.Context(), http.MethodOptions, e.endpoint(), nil)
-		req.Header.Set("Origin", origin)
-		req.Header.Set("Access-Control-Request-Method", "POST")
-		req.Header.Set("Access-Control-Request-Headers", "authorization, content-type, mcp-protocol-version")
-		res, err := http.DefaultClient.Do(req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		res.Body.Close()
-		allowed := res.Header.Get("Access-Control-Allow-Origin")
-		if res.StatusCode != want || (want == 204) != (allowed == origin) || want == 204 && !strings.Contains(res.Header.Get("Access-Control-Allow-Headers"), "Authorization") {
-			t.Errorf("preflight from %s: %d %v", origin, res.StatusCode, res.Header)
-		}
+	if r := post(t, e, list, map[string]string{"Authorization": "Bearer pgo_revoked", "MCP-Protocol-Version": "2025-06-18"}); r.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("unknown token: %d", r.StatusCode)
 	}
-	if r := post(t, e, list, map[string]string{"Authorization": auth, "Origin": "https://app.example", "MCP-Protocol-Version": "2025-06-18"}); r.Header.Get("Access-Control-Allow-Origin") != "https://app.example" {
-		t.Errorf("response to an allowed page: %v", r.Header)
-	}
-	// A browser's cross-site request without an Origin is refused too.
-	if r := post(t, e, list, map[string]string{"Authorization": auth, "Sec-Fetch-Site": "cross-site"}); r.StatusCode != 403 {
-		t.Errorf("cross-site: %d", r.StatusCode)
-	}
-	// The SDK's DNS-rebinding protection refuses a foreign Host on loopback.
 	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, e.endpoint(), strings.NewReader(list))
-	req.Host = "attacker.example"
-	req.Header.Set("Authorization", auth)
+	req.Host = "papergo.example"
+	req.Header.Set("Authorization", "Bearer "+aliceToken)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
+	req.Header.Set("MCP-Protocol-Version", "2025-06-18")
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
 	res.Body.Close()
-	if res.StatusCode != 403 {
-		t.Errorf("foreign Host: %d", res.StatusCode)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("public Host on loopback: %d", res.StatusCode)
 	}
 }
 
 func TestOverloadAndLimits(t *testing.T) {
-	e := setup(t, options{configure: func(c *server.Config) {
-		c.MaxInFlight, c.AdmissionWait, c.MaxRequestBytes, c.MaxBackendBytes = 1, 50*time.Millisecond, 4096, 2048
+	e := setup(t, options{maxInFlight: 1, configure: func(c *server.Config) {
+		c.MaxRequestBytes, c.MaxResultBytes = 4096, 2048
 	}})
 	f := seed(t, e)
 	s := e.connect(t, aliceToken)
 
-	// One call holds the only slot at the API; the next request is refused.
+	// One call holds the API's only slot; the next request is refused.
 	gate, arrived := make(chan struct{}), make(chan struct{})
 	var once sync.Once
 	e.mu.Lock()
@@ -157,40 +132,25 @@ func TestOverloadAndLimits(t *testing.T) {
 	fails(t, s, "query_items", `{"collection_id": "`+f.list+`"}`, "too_large")
 }
 
-func TestUnavailableBackend(t *testing.T) {
+// An answer that is not JSON is the API being unavailable, not data.
+func TestInvalidAnswer(t *testing.T) {
 	e := setup(t, options{})
 	f := seed(t, e)
 	s := e.connect(t, aliceToken)
-	// An answer that is not JSON is the API being unavailable, not data.
-	e.serve(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/v1/identity/me" {
+	e.intercept(func(api http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/v1/identity/me" {
+				api.ServeHTTP(w, r)
+				return
+			}
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = io.WriteString(w, `{"subject":"alice","active":true,"scopes":["item.read"]}`)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, `<html>`)
-	}))
-	f2 := fails(t, s, "get_item", `{"item_id": "`+f.items[0]+`"}`, "unavailable")
-	if !f2.Retryable {
-		t.Fatalf("%+v", f2)
+			_, _ = io.WriteString(w, `<html>`)
+		})
+	})
+	failure := fails(t, s, "get_item", `{"item_id": "`+f.items[0]+`"}`, "unavailable")
+	if !failure.Retryable {
+		t.Fatalf("%+v", failure)
 	}
-	e.api.Close()
-	if r := post(t, e, `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, map[string]string{"Authorization": "Bearer " + aliceToken}); r.StatusCode != http.StatusServiceUnavailable || r.Header.Get("Retry-After") == "" {
-		t.Fatalf("down: %d", r.StatusCode)
-	}
-	res, err := http.Get(e.mcp.URL + "/health/ready")
-	if err != nil {
-		t.Fatal(err)
-	}
-	res.Body.Close()
-	if res.StatusCode != http.StatusServiceUnavailable {
-		t.Fatalf("ready while the API is down: %d", res.StatusCode)
-	}
-	if res, err = http.Get(e.mcp.URL + "/health/live"); err != nil || res.StatusCode/100 != 2 {
-		t.Fatalf("live: %v", err)
-	}
-	res.Body.Close()
 }
 
 func TestSchemaChangeDuringRead(t *testing.T) {
@@ -265,33 +225,31 @@ func TestSearch(t *testing.T) {
 	fails(t, s, "search", `{"query": "x", "mode": "fuzzy"}`, "invalid_arguments")
 }
 
-// A write whose answer is lost is not sent again: the caller decides, with
+// A write whose answer fails is not sent again: the caller decides, with
 // its own id, whether to repeat it.
 func TestWritesAreNotRetried(t *testing.T) {
 	e := setup(t, options{})
 	f := seed(t, e)
 	s := e.connect(t, aliceToken)
-	api := e.backend
 	var posts atomic.Int32
-	e.serve(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			api.ServeHTTP(w, r)
-			return
-		}
-		posts.Add(1)
-		api.ServeHTTP(httptest.NewRecorder(), r)
-		// The item exists, but its answer never arrives.
-		conn, _, err := http.NewResponseController(w).Hijack()
-		if err == nil {
-			conn.Close()
-		}
-	}))
+	e.intercept(func(api http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				api.ServeHTTP(w, r)
+				return
+			}
+			posts.Add(1)
+			api.ServeHTTP(httptest.NewRecorder(), r)
+			// The item exists, but its answer is a failure.
+			w.WriteHeader(http.StatusServiceUnavailable)
+		})
+	})
 	const id = "2f1e7c55-3b0e-4d8f-9b3e-5d7c1a2b3c4d"
 	fails(t, s, "create_item", `{"parent_id": "`+f.list+`", "id": "`+id+`", "name": "Lost answer"}`, "unavailable")
 	if n := posts.Load(); n != 1 {
 		t.Fatalf("%d writes sent", n)
 	}
-	e.serve(api)
+	e.intercept(nil)
 	if again := ok(t, s, "create_item", `{"parent_id": "`+f.list+`", "id": "`+id+`", "name": "Lost answer"}`); again["created"] != false {
 		t.Fatalf("repeat %v", again)
 	}
@@ -303,18 +261,17 @@ func TestWriteSurvivesLabelFailure(t *testing.T) {
 	e := setup(t, options{})
 	f := seed(t, e)
 	s := e.connect(t, aliceToken)
-	api := e.backend
 	var dropped atomic.Int32
-	e.serve(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/fields") {
-			dropped.Add(1)
-			if conn, _, err := http.NewResponseController(w).Hijack(); err == nil {
-				conn.Close()
+	e.intercept(func(api http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/fields") {
+				dropped.Add(1)
+				_, _ = io.WriteString(w, `<html>`)
+				return
 			}
-			return
-		}
-		api.ServeHTTP(w, r)
-	}))
+			api.ServeHTTP(w, r)
+		})
+	})
 	created := ok(t, s, "create_item", `{"parent_id": "`+f.list+`", "name": "Written", "values": {"status": "Open"}}`)
 	if dropped.Load() == 0 || created["created"] != true || str(created["id"]) == "" || created["labels_missing"] != true {
 		t.Fatalf("create %v", created)
@@ -323,7 +280,7 @@ func TestWriteSurvivesLabelFailure(t *testing.T) {
 	if updated["name"] != "Rewritten" || updated["labels_missing"] != true {
 		t.Fatalf("update %v", updated)
 	}
-	e.serve(api)
+	e.intercept(nil)
 	if again := ok(t, s, "get_item", `{"item_id": "`+str(created["id"])+`"}`); again["labels_missing"] != nil {
 		t.Fatalf("read %v", again)
 	}

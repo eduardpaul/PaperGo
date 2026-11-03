@@ -11,8 +11,8 @@ import (
 )
 
 // A connection limited to one list sees that list alone, through every tool:
-// discovery, reads, labels and search. Its token, not papergo-mcp, carries
-// the limit, so the API enforces it for every request.
+// discovery, reads, labels and search. Its token, not the MCP endpoint,
+// carries the limit, so the API enforces it for every request.
 func TestLimitedConnection(t *testing.T) {
 	e := setup(t, options{search: true})
 	k := seedTasks(t, e)

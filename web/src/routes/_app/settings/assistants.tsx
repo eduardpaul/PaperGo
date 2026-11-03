@@ -130,11 +130,10 @@ function AssistantsPage() {
       ) : (
         <SettingsSection
           title="Connect an assistant"
-          description="AI assistants, such as Claude, can work with PaperGo through its MCP server."
+          description="AI assistants, such as Claude, can work with PaperGo through its MCP endpoint."
         >
           <p className="text-sm">
-            This PaperGo does not run an MCP server yet. An administrator runs <code>papergo-mcp</code> and sets{' '}
-            <code>MCP_PUBLIC_URL</code> to its address; then you can connect assistants here.
+            This PaperGo does not serve AI assistants: an administrator has turned MCP off (<code>MCP=off</code>).
           </p>
         </SettingsSection>
       )}

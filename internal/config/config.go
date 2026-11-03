@@ -73,10 +73,12 @@ type Config struct {
 	// PublicURL is the scheme and host clients use, for example behind a
 	// TLS-terminating reverse proxy. Nil uses each request's own.
 	PublicURL *url.URL
-	// MCPPublicURL is where AI assistants reach the optional MCP server,
-	// papergo-mcp, ending in /v1/mcp; the web app offers assistant
-	// connections only when it is set.
-	MCPPublicURL *url.URL
+	// MCP serves AI assistants at /v1/mcp (MCP=on, the default, or off);
+	// the web app offers assistant connections only when it is on.
+	MCP bool
+	// MCPExtensions are the compiled MCP tool contributions served, by ID
+	// (MCP_EXTENSIONS, comma-separated).
+	MCPExtensions []string
 	// GroupsClaim is the claim holding group names (e.g. "groups" or "realm_access.roles").
 	GroupsClaim string
 	// GroupsPrefix filters group names to those with this prefix, stripped before syncing.
@@ -197,6 +199,14 @@ func loadFrom(getenv func(string) string, yamlText, directory string) (Config, e
 	default:
 		return c, fmt.Errorf("COMMENTS must be on or off")
 	}
+	switch value("MCP", "on") {
+	case "on":
+		c.MCP = true
+	case "off":
+	default:
+		return c, fmt.Errorf("MCP must be on or off")
+	}
+	c.MCPExtensions = strings.FieldsFunc(value("MCP_EXTENSIONS", ""), func(r rune) bool { return r == ',' || r == ' ' })
 	c.ZvecPath = value("SEARCH_ZVEC_PATH", filepath.Join(filepath.Dir(c.DatabasePath), "search", "zvec"))
 	c.ZvecKeywordCandidates = 10000
 	if raw := lookup("SEARCH_ZVEC_KEYWORD_CANDIDATES"); raw != "" {
@@ -347,13 +357,6 @@ func loadFrom(getenv func(string) string, yamlText, directory string) (Config, e
 			return c, fmt.Errorf("PUBLIC_URL must be an http or https origin without a path, such as https://docs.example.com")
 		}
 		c.PublicURL = &url.URL{Scheme: u.Scheme, Host: u.Host}
-	}
-	if v := lookup("MCP_PUBLIC_URL"); v != "" {
-		u, err := url.Parse(v)
-		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil || u.Opaque != "" || u.Path != "/v1/mcp" || u.RawQuery != "" || u.Fragment != "" {
-			return c, fmt.Errorf("MCP_PUBLIC_URL must be the MCP server's absolute http or https URL ending in /v1/mcp, such as https://docs.example.com/v1/mcp")
-		}
-		c.MCPPublicURL = u
 	}
 	if c.Env != "development" && c.Env != "test" && c.Env != "production" {
 		return c, fmt.Errorf("invalid APP_ENV")

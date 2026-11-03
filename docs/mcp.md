@@ -1,81 +1,33 @@
-# MCP server
+# MCP
 
-`papergo-mcp` is PaperGo's optional [Model Context Protocol](https://modelcontextprotocol.io) server. It lets an MCP client, such as an AI assistant, find workspaces, lists and libraries, run their saved views, query, search, read items and the text of documents, and create and update items, with the access of the person or integration whose credential the client sends.
+PaperGo serves the [Model Context Protocol](https://modelcontextprotocol.io) at `/v1/mcp`. An MCP client, such as an AI assistant, can find workspaces, lists and libraries, run their saved views, query, search, read items and the text of documents, and create and update items, with the access of the person or integration whose credential it sends.
 
-It is a separate process in front of the PaperGo API. It holds no data, no database connection and no credentials of its own: every tool call becomes requests to the API carrying the client's bearer credential, and the API authorizes each of them exactly as it would a direct REST call. Deployments that do not run it are unaffected. It is pure Go, needs no native libraries or models, and builds with `CGO_ENABLED=0`.
+The endpoint is part of the PaperGo executable and its API, and is on by default. It holds no data of its own: every tool call becomes requests to the API, made in-process as the caller, with the caller's credential, scopes and place limits, and the API authorizes each of them exactly as it would the same REST request.
 
 ## Who can connect
 
-- **Clients:** any MCP client that can send an `Authorization` header with a remote (Streamable HTTP) server, such as Claude Code, Cursor or VS Code. Clients that connect to remote servers only through OAuth sign-in cannot connect: the server offers no OAuth.
+- **Clients:** any MCP client that can send an `Authorization` header with a remote (Streamable HTTP) server, such as Claude Code, Cursor or VS Code. Clients that connect to remote servers only through OAuth sign-in cannot connect: the endpoint offers no OAuth.
 - **People:** in every authentication mode, proxy included, each person creates a connection under Settings → AI assistants and connects as themselves, to everything they can access or to chosen places. Administrators can also create integration tokens, limited in the same way, for a service identity with its own access.
-- **Hosts:** with proxy authentication the proxy's Basic sign-in would take the `Authorization` header the assistant sends. Exempt the exact `/v1/mcp` route from it, forwarding `Authorization` unchanged to `papergo-mcp` and asserting no proxy identity there; PaperGo checks the token on every request. The [NPM sample](../samples/npm/README.md) does this, so the endpoint stays on the app's own host.
+- **Hosts:** with proxy authentication the proxy's Basic sign-in would take the `Authorization` header the assistant sends. Exempt the exact `/v1/mcp` route from it, forwarding `Authorization` unchanged to PaperGo and asserting no proxy identity there; PaperGo checks the token on every request. The [NPM sample](../samples/npm/README.md) does this.
 
 ## Endpoint
 
-The server serves the MCP [Streamable HTTP transport](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports#streamable-http) at `/v1/mcp`, statelessly: each POST is complete in itself, answers are JSON, and there are no sessions. GET and DELETE answer `405`. Protocol revisions `2026-07-28`, `2025-11-25`, `2025-06-18`, `2025-03-26` and `2024-11-05` are negotiated.
+The endpoint serves the MCP [Streamable HTTP transport](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports#streamable-http) at `/v1/mcp`, statelessly: each POST is complete in itself, answers are JSON, and there are no sessions. GET and DELETE answer `405`. Protocol revisions `2026-07-28`, `2025-11-25`, `2025-06-18`, `2025-03-26` and `2024-11-05` are negotiated.
 
-`GET /health/live` answers `204` while the process runs. `GET /health/ready` answers `204` when the PaperGo API reports ready and `503` otherwise; it uses no credential.
+## Settings
 
-## Running it
+| Setting | `config.yaml` | Meaning |
+| --- | --- | --- |
+| `MCP` | `mcp.enabled` | `on` (the default) serves `/v1/mcp` and lets the web app offer connections; `off` serves neither. |
+| `MCP_EXTENSIONS` | `mcp.extensions` | Compiled tool [contributions](#contributions) to serve, by ID, comma-separated. None ship today. |
 
-Every release archive contains `papergo-mcp` beside `papergo`. Point it at the API's origin:
+Results link to the web app at [`PUBLIC_URL`](reverse-proxies.md); without it they carry no links. Behind a reverse proxy, `/v1/mcp` is served with the rest of the API: the proxy forwards `Authorization` unchanged and does not cache responses, as for any API request.
 
-```sh
-PAPERGO_MCP_BACKEND_URL=http://127.0.0.1:8080 ./papergo-mcp
-```
-
-Then tell PaperGo where people's assistants reach it, so its web app offers connections: set `MCP_PUBLIC_URL` to the endpoint's public URL, such as `https://papergo.example.com/v1/mcp`, or `mcp.public_url` in `config.yaml`. It is an absolute `http` or `https` URL ending in `/v1/mcp`.
-
-| Setting | Meaning |
-| --- | --- |
-| `PAPERGO_MCP_BACKEND_URL` | Required. The PaperGo API's origin, without path, query or credentials. `https`, or `http` only to a loopback or private address or a single-label host such as a Compose service name. |
-| `PAPERGO_MCP_LISTEN` | Address to listen on. Default `127.0.0.1:8081`; the container image sets `0.0.0.0:8081`. |
-| `PAPERGO_MCP_PUBLIC_URL` | The endpoint's public URL, ending in `/v1/mcp`, when clients reach it through a reverse proxy. `https` unless on loopback. Browser requests from its origin are accepted, and results link to the web app at its origin unless `PAPERGO_MCP_APP_URL` says otherwise. |
-| `PAPERGO_MCP_APP_URL` | The web app's origin, such as `https://papergo.example.com`, that results link to. Defaults to `PAPERGO_MCP_PUBLIC_URL`'s origin; without either, results carry no links. `https`, or `http` only to a loopback, private or single-label host. |
-| `PAPERGO_MCP_ALLOWED_ORIGINS` | Further browser origins allowed to call the endpoint, comma-separated, such as `https://app.example`. The web app's origin, from `PAPERGO_MCP_APP_URL` or `PAPERGO_MCP_PUBLIC_URL`, is always allowed. Clients outside a browser send no origin and need none. |
-| `PAPERGO_MCP_ENABLED_EXTENSIONS` | Compiled tool contributions to serve, by ID, comma-separated. None ship today. |
-
-There is no setting for a backend token: the server only relays its callers' credentials. Logs are JSON lines on standard output, one per request, with its request ID, status, duration, tool, failure code and the API request IDs it caused. They never contain credentials, arguments or results.
-
-`papergo-mcp --version` prints its version. On `SIGINT` or `SIGTERM` it stops accepting connections and lets requests in flight finish, for at most 30 seconds.
-
-### Docker and Compose
-
-Every release publishes the server's own image for Linux amd64 and arm64, `ghcr.io/eduardpaul/papergo-mcp:vX.Y.Z` and `:latest`. It contains only the static executable; build it from the repository root with `docker build -f extensions/mcp/Dockerfile -t papergo-mcp .`.
-
-The [Compose file](../deploy/compose.yaml) has a `papergo-mcp` service and PaperGo's `MCP_PUBLIC_URL`, both commented out. Uncommented, the server answers at `http://localhost:8090/v1/mcp`, links results to the web app at `http://localhost:8080`, and the web app offers connections to it. Behind a reverse proxy, run it on the private network without a published port and set its public URL, and PaperGo's `MCP_PUBLIC_URL`, to the proxied address:
-
-```yaml
-  papergo-mcp:
-    image: ghcr.io/eduardpaul/papergo-mcp:${PAPERGO_VERSION:-latest}
-    restart: unless-stopped
-    environment:
-      PAPERGO_MCP_BACKEND_URL: http://papergo:8080
-      PAPERGO_MCP_PUBLIC_URL: https://papergo.example.com/v1/mcp
-    depends_on:
-      - papergo
-```
-
-### Behind a reverse proxy
-
-Route `/v1/mcp` to `papergo-mcp` and everything else to PaperGo, on the same public host. The proxy must forward the `Authorization` header unchanged and must not cache responses. With Caddy:
-
-```caddyfile
-papergo.example.com {
-	handle /v1/mcp {
-		reverse_proxy papergo-mcp:8081
-	}
-	handle {
-		reverse_proxy papergo:8080
-	}
-}
-```
-
-The server refuses a request that arrives over a loopback connection with a Host header that is not a loopback name, which protects a local server from DNS rebinding. A proxy that reaches it over loopback, such as one on the same machine with `PAPERGO_MCP_LISTEN=127.0.0.1:8081`, must send the upstream's own address as Host: `header_up Host {upstream_hostport}` in Caddy, `proxy_set_header Host 127.0.0.1:8081;` in nginx. Set `PAPERGO_MCP_PUBLIC_URL` so browser requests from the public origin stay accepted. Over a private container network no Host rewrite is needed.
+Each tool call logs an `mcp_tool` line with its request ID, the tool and its failure code, beside the API's `http_request` line for the same request ID. Logs never contain credentials, arguments or results.
 
 ## Authentication and scopes
 
-Clients send `Authorization: Bearer <credential>` with every request. The server asks the API who the credential belongs to (`GET /v1/identity/me`) on every request and keeps nothing between requests. Any bearer credential the API accepts works: a [personal access token](identity.md) in a bearer-authenticated deployment, an integration token in any mode, or an OIDC access token for the API's audience. A missing or malformed credential is answered `401` with `WWW-Authenticate: Bearer realm="PaperGo"`, a refused one, such as an expired or revoked token, `401` with `error="invalid_token"` and a message to create a new token, and an inactive user `403`.
+Clients send `Authorization: Bearer <credential>` with every request, and PaperGo authenticates it as it does any API request, keeping nothing between requests. Any bearer credential the API accepts works: a [personal access token](identity.md) or integration token in any mode, or an OIDC access token for the API's audience in a bearer-authenticated deployment. A missing or refused credential, such as an expired or revoked token, is answered `401` with `WWW-Authenticate: Bearer`. The web app's own sign-in, a session or a proxy's assertion, is not a credential the assistant sent, and is answered `401` too.
 
 A credential's scopes decide which tools its holder sees and may call; the API's resource permissions then decide what each call may read and change, as for any REST client.
 
@@ -98,15 +50,13 @@ Members hold all of these by default. A tool the caller lacks the scopes for is 
 
 Revoking or expiring a token, deactivating its user or removing a role takes effect on the next request, since nothing is cached.
 
-OAuth sign-in is not offered: the server publishes no OAuth metadata, so clients must be configured with a token. Clients that only support OAuth cannot connect.
+OAuth sign-in is not offered: PaperGo publishes no OAuth metadata, so clients must be configured with a token. Clients that only support OAuth cannot connect.
 
 ## Connecting a client
 
-The simplest way is **Settings → AI assistants** in the web app. It offers connections when PaperGo's `MCP_PUBLIC_URL` setting (`mcp.public_url` in `config.yaml`) names this server's public endpoint; otherwise it says that an administrator has to set one up. **Connect an assistant** asks for a name, **Read only** or **Read and write**, and whether it reaches **everything you can access** or **only selected workspaces, lists and libraries**, picked by name; **Advanced options** set when it expires. A summary shows the access, places and expiry before anything is created.
+The simplest way is **Settings → AI assistants** in the web app. It offers connections while `MCP` is on, at the web app's own address followed by `/v1/mcp`; otherwise it says that an administrator turned MCP off. **Connect an assistant** asks for a name, **Read only** or **Read and write**, and whether it reaches **everything you can access** or **only selected workspaces, lists and libraries**, picked by name; **Advanced options** set when it expires. A summary shows the access, places and expiry before anything is created.
 
 Creating the connection creates its token, shown once, and then checks the connection: the browser asks the endpoint to start a session with the new token, as an assistant would, and says whether it answered. A token that cannot reach the endpoint still exists and still works once the address is right; **Check again** repeats the check. Setup is ready to copy for Claude Code, Cursor, VS Code and other clients that send a header. **Your connections** lists the tokens that can connect an assistant with their access (read only, or read and write, naming any other scope a token holds, such as `list.manage`), the places they reach by name, whether they have been used, when they expire or expired, and revokes them after asking.
-
-The browser's check comes from the web app's origin. papergo-mcp accepts it from the origin of `PAPERGO_MCP_APP_URL` (or `PAPERGO_MCP_PUBLIC_URL`) and from `PAPERGO_MCP_ALLOWED_ORIGINS`, answering the browser's preflight; other origins are refused.
 
 A connection is a personal access token, so you can also create one under Settings → Access tokens or with `POST /v1/identity/me/tokens`, with the scopes above and, to limit it, [`resources`](identity.md). The token carries the limit, so PaperGo enforces it for every request, whichever client sends it: a limited connection lists only the workspaces and collections it reaches, finds and reads nothing elsewhere, and `labels` leave out the names of linked items outside it. `GET /v1/identity/me` with the token reports its limit.
 
@@ -156,7 +106,7 @@ Items are returned with `id`, `kind`, `workspace_id`, `collection_id`, `parent_i
 
 Term, keywords, person and lookup fields hold IDs, and so do `keywords`, `created_by` and `updated_by`. `labels` names them by ID, so an assistant can say "Acme" rather than an ID: term and keyword names with `taxonomy.read`, people's display names with `user.read`, and the names of linked items the caller can read. Names the caller may not read are left out; they never fail the call. A page resolves them in a few batched API requests.
 
-`draft` is true while an item has changes that are not published: people who read only published content do not see them. `archived` is true for archived entries. Workspaces, collections, items and search hits carry a `url` that opens them in the web app, when the server knows its address (`PAPERGO_MCP_APP_URL`).
+`draft` is true while an item has changes that are not published: people who read only published content do not see them. `archived` is true for archived entries. Workspaces, collections, items and search hits carry a `url` that opens them in the web app when `PUBLIC_URL` is set.
 
 ### Querying
 
@@ -199,7 +149,7 @@ Term and keywords values, and `keywords`, take a term's ID or label. A keyword l
 
 `create_item` creates in the collection's default content type unless `content_type_id` names another attached type. Give it an `id` of your own (a UUID) to make it safe to repeat: when an item with that ID already exists there, it is returned unchanged with `created: false` and the new arguments are ignored. Without an `id`, repeating a create makes a second item.
 
-The server never repeats a write. When the API's answer is lost, the call fails as `unavailable` and the write may or may not have happened: repeat a create with the same `id`, and re-read before repeating an update.
+PaperGo never repeats a write. When a write runs out of time, the call fails as `unavailable` and the write may or may not have happened: repeat a create with the same `id`, and re-read before repeating an update.
 
 Writes are the caller's, with the same audit actor, revisions, publishing policy, workflows and search updates as the equivalent REST request. In a collection with publishing, creates and updates are drafts until someone publishes them in the web app: their results have `draft: true`, and the tool descriptions ask assistants to say so.
 
@@ -223,14 +173,14 @@ A tool that cannot do what was asked returns an error result whose text is JSON:
 | `conflict` | The write conflicts with existing content, such as a create `id` used for another item. |
 | `schema_changed` | The collection's schema changed while `get_collection_schema` read it; call again. |
 | `too_large` | The answer is larger than 8 MiB; ask for fewer entries or values. |
-| `unavailable` | PaperGo did not answer in time or at all; `retryable` is set. |
+| `unavailable` | PaperGo did not answer in time or as it should; `retryable` is set. |
 | `unauthorized`, `internal_error` | The credential stopped working mid-request, or an unexpected failure. |
 
-`request_id` names the PaperGo API request that failed, or the MCP request when no API request did, for matching with logs.
+`request_id` is the MCP request's ID, its `X-Request-ID`, which the API requests it made share, for matching with logs.
 
 ## Limits
 
-The server handles 32 requests at a time; a request that waits more than one second for a turn is answered `503` with `Retry-After`. Each request may take 30 seconds. Request bodies are limited to 1 MiB and each API answer and tool result to 8 MiB. It keeps at most 64 connections to the API. Every response is `Cache-Control: private, no-store`, and tool listings are marked private with no cache lifetime, since they depend on the caller.
+MCP requests share the API's admission limit (`MAX_IN_FLIGHT`): past it, a request that waits more than one second for a turn is answered `503` with `Retry-After`. The API requests a tool makes are part of its MCP request and take no turn of their own. Each MCP request may take 30 seconds. Request bodies are limited to 1 MiB and each API answer and tool result to 8 MiB. Every response is `Cache-Control: private, no-store`, and tool listings are marked private with no cache lifetime, since they depend on the caller.
 
 ## Terms
 
@@ -245,4 +195,4 @@ The tools use PaperGo's API names, which differ from some web app labels:
 
 ## Contributions
 
-Further tools are compiled into `papergo-mcp` as contributions of the `extensions/mcp` package, each under an ID whose tools are named with that ID, dots and hyphens replaced with `_`, followed by `_` (contribution `acme.crm` names tools `acme_crm_…`). A deployment serves a contribution only when `PAPERGO_MCP_ENABLED_EXTENSIONS` names it. Contributions use the same contract as the built-in tools: they declare their schemas and scopes, may report themselves unavailable to a caller, and reach PaperGo only through the API as that caller. The server refuses to start with an invalid or colliding name, a tool without scopes or schemas, or an enabled ID that is not compiled in.
+Further tools are compiled into PaperGo as contributions of the `extensions/mcp` package, each under an ID whose tools are named with that ID, dots and hyphens replaced with `_`, followed by `_` (contribution `acme.crm` names tools `acme_crm_…`). A deployment serves a contribution only when `MCP_EXTENSIONS` names it. Contributions use the same contract as the built-in tools: they declare their schemas and scopes, may report themselves unavailable to a caller, and reach PaperGo only through the API as that caller. PaperGo refuses to start with an invalid or colliding name, a tool without scopes or schemas, or an enabled ID that is not compiled in.

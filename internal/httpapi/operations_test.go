@@ -1,10 +1,13 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"strings"
 	"testing"
 
@@ -67,6 +70,56 @@ func TestModuleRoutes(t *testing.T) {
 		if err := a.Validate(); err == nil {
 			t.Fatalf("%s: conflicting module route accepted", name)
 		}
+	}
+}
+
+// A module's in-process requests act as its caller, with the credential's
+// scopes, whatever context the module makes them with; Bearer tells a
+// credential the client sent from a proxy's assertion.
+func TestModuleLoopbackActsAsTheCaller(t *testing.T) {
+	_, s, _ := setup(t)
+	me := Route{Method: "POST", Pattern: "/v1/test-module/me", OperationID: "testModuleMe", Handle: func(w http.ResponseWriter, r *http.Request, in Request) error {
+		sub := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/identity/me", nil)
+		got := httptest.NewRecorder()
+		in.Loopback().ServeHTTP(got, sub)
+		var caller struct {
+			Subject string   `json:"subject"`
+			Scopes  []string `json:"scopes"`
+		}
+		if got.Code != 200 || json.Unmarshal(got.Body.Bytes(), &caller) != nil {
+			return fmt.Errorf("identity: %d %s", got.Code, got.Body.String())
+		}
+		respond(w, r, 200, map[string]any{"bearer": in.Bearer(), "subject": caller.Subject, "scopes": caller.Scopes})
+		return nil
+	}}
+	token, err := s.Directory().CreateAccessToken(t.Context(), "bob", identity.AccessTokenInput{Name: "Assistant", Scopes: []string{"item.read"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := (&API{DMS: s, Auth: auth.Development{Token: testToken, Subject: "alice"}, Logger: slog.Default(), Modules: []Module{testModule{[]Route{me}}}}).Handler()
+	if res := request(h, "POST", "/v1/test-module/me", "", testToken, "", ""); res.Code != 200 || !strings.Contains(res.Body.String(), `"bearer":true`) || !strings.Contains(res.Body.String(), `"subject":"alice"`) {
+		t.Fatal("bearer-mode caller", res.Code, res.Body.String())
+	}
+	if res := request(h, "POST", "/v1/test-module/me", "", token.Secret, "", ""); res.Code != 200 || !strings.Contains(res.Body.String(), `"bearer":true,"scopes":["item.read"],"subject":"bob"`) {
+		t.Fatal("access token's scopes", res.Code, res.Body.String())
+	}
+	secret := strings.Repeat("s", 64)
+	proxy, err := auth.NewProxy(secret, []netip.Prefix{netip.MustParsePrefix("172.29.242.2/32")}, "https://docs.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h = (&API{DMS: s, Auth: proxy, Logger: slog.Default(), Modules: []Module{testModule{[]Route{me}}}}).Handler()
+	asserted := httptest.NewRequest("POST", "/v1/test-module/me", nil)
+	asserted.RemoteAddr = "172.29.242.2:1234"
+	asserted.Header.Set(auth.ProxySubjectHeader, "bob")
+	asserted.Header.Set(auth.ProxySecretHeader, secret)
+	res := httptest.NewRecorder()
+	h.ServeHTTP(res, asserted)
+	if res.Code != 200 || !strings.Contains(res.Body.String(), `"bearer":false`) {
+		t.Fatal("proxy assertion is not a bearer credential", res.Code, res.Body.String())
+	}
+	if res = request(h, "POST", "/v1/test-module/me", "", token.Secret, "", ""); res.Code != 200 || !strings.Contains(res.Body.String(), `"bearer":true`) {
+		t.Fatal("access token in a proxy deployment", res.Code, res.Body.String())
 	}
 }
 
