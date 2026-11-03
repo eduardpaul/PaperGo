@@ -845,9 +845,15 @@ func (a *API) authenticate(next http.Handler) http.Handler {
 			ident, err = a.Auth.Authenticate(r)
 		}
 		if err != nil {
-			w.Header().Set("WWW-Authenticate", "Bearer")
-			if a.Auth.Kind() == auth.TrustedProxy || a.Auth.Kind() == auth.LocalMode {
+			// A client that sent a bearer credential learns that it was
+			// refused, whatever the mode signs browsers in with.
+			switch bearer := len(parts) == 2 && strings.EqualFold(parts[0], "Bearer"); {
+			case bearer:
+				w.Header().Set("WWW-Authenticate", `Bearer realm="PaperGo", error="invalid_token"`)
+			case a.Auth.Kind() == auth.TrustedProxy || a.Auth.Kind() == auth.LocalMode:
 				w.Header().Set("WWW-Authenticate", `Basic realm="PaperGo", charset="UTF-8"`)
+			default:
+				w.Header().Set("WWW-Authenticate", "Bearer")
 			}
 			a.problem(w, r, 401, "unauthorized", "valid authentication is required")
 			return

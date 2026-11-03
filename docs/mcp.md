@@ -27,7 +27,7 @@ Each tool call logs an `mcp_tool` line with its request ID, the tool and its fai
 
 ## Authentication and scopes
 
-Clients send `Authorization: Bearer <credential>` with every request, and PaperGo authenticates it as it does any API request, keeping nothing between requests. Any bearer credential the API accepts works: a [personal access token](identity.md) or integration token in any mode, or an OIDC access token for the API's audience in a bearer-authenticated deployment. A missing or refused credential, such as an expired or revoked token, is answered `401` with `WWW-Authenticate: Bearer`. The web app's own sign-in, a session or a proxy's assertion, is not a credential the assistant sent, and is answered `401` too.
+Clients send `Authorization: Bearer <credential>` with every request, and PaperGo authenticates it as it does any API request, keeping nothing between requests. Any bearer credential the API accepts works: a [personal access token](identity.md) or integration token in any mode, or an OIDC access token for the API's audience in a bearer-authenticated deployment. A missing credential is answered `401`, and a refused one, such as an expired or revoked token, `401` with `WWW-Authenticate: Bearer realm="PaperGo", error="invalid_token"` in every authentication mode. The web app's own sign-in, a session or a proxy's assertion, is not a credential the assistant sent, and is answered `401` too.
 
 A credential's scopes decide which tools its holder sees and may call; the API's resource permissions then decide what each call may read and change, as for any REST client.
 

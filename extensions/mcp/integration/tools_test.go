@@ -375,7 +375,7 @@ func TestIdentitiesStayApart(t *testing.T) {
 		t.Fatal("revoked token still served")
 	}
 	r := post(t, e, `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, map[string]string{"Authorization": "Bearer " + reader.Secret})
-	if r.StatusCode != 401 || !strings.HasPrefix(r.Header.Get("WWW-Authenticate"), "Bearer") {
+	if r.StatusCode != 401 || !strings.Contains(r.Header.Get("WWW-Authenticate"), `error="invalid_token"`) {
 		t.Fatalf("revoked: %d %v", r.StatusCode, r.Header)
 	}
 	for _, h := range []map[string]string{{}, {"Authorization": "Basic YTpi"}, {"Authorization": "Bearer "}, {"Authorization": "Bearer a b"}} {

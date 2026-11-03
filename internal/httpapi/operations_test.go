@@ -121,6 +121,11 @@ func TestModuleLoopbackActsAsTheCaller(t *testing.T) {
 	if res = request(h, "POST", "/v1/test-module/me", "", token.Secret, "", ""); res.Code != 200 || !strings.Contains(res.Body.String(), `"bearer":true`) {
 		t.Fatal("access token in a proxy deployment", res.Code, res.Body.String())
 	}
+	// A refused bearer credential is challenged as one, not with the
+	// proxy's Basic sign-in.
+	if res = request(h, "POST", "/v1/test-module/me", "", "pgo_revoked", "", ""); res.Code != 401 || res.Header().Get("WWW-Authenticate") != `Bearer realm="PaperGo", error="invalid_token"` {
+		t.Fatal("refused bearer challenge", res.Code, res.Header())
+	}
 }
 
 func TestOperationRequestsAreIdempotentCancellableAndBounded(t *testing.T) {
