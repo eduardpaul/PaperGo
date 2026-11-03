@@ -6,22 +6,22 @@ runs:
   using: composite
   steps:
     # Python only runs the repository's scripts; any current 3.x does.
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v7.1.0
       with:
         python-version: '3.x'
     - id: versions
       shell: bash
       run: python scripts/toolchain-versions.py >> "$GITHUB_OUTPUT"
-    - uses: actions/setup-go@v5
+    - uses: actions/setup-go@v7.0.0
       with:
         go-version: ${{ steps.versions.outputs.go }}
         cache: true
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@v7.1.0
       with:
         node-version: ${{ steps.versions.outputs.node }}
         cache: npm
         cache-dependency-path: web/package-lock.json
-    - uses: msys2/setup-msys2@v2
+    - uses: msys2/setup-msys2@v2.33.0
       id: msys2
       if: runner.os == 'Windows'
       with:
@@ -45,7 +45,7 @@ runs:
       if: runner.os == 'Windows'
       with:
         targets: x86_64-pc-windows-gnu
-    - uses: actions/cache@v4
+    - uses: actions/cache@v6.1.0
       with:
         path: |
           .tools/native

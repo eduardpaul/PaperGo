@@ -29,7 +29,7 @@ jobs:
       commit: ${{ steps.metadata.outputs.commit }}
       date: ${{ steps.metadata.outputs.date }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
         with:
           ref: ${{ inputs.tag || github.ref_name }}
           fetch-depth: 0
@@ -44,13 +44,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
         with:
           ref: ${{ needs.prepare.outputs.commit }}
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7.1.0
         with:
           python-version: '3.x'
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6.1.0
         with:
           path: |
             .tools/decision/model
@@ -60,13 +60,13 @@ jobs:
         env:
           RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
         run: python3 scripts/build-assets.py --output-dir shared/assets --archive "dist/papergo_${RELEASE_TAG}_assets.zip"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: container-assets
           path: shared
           if-no-files-found: error
           retention-days: 14
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: shared-assets
           path: dist/*_assets.zip
@@ -85,7 +85,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 50
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
         with:
           ref: ${{ needs.prepare.outputs.commit }}
       - uses: ./.github/actions/toolchain
@@ -110,14 +110,14 @@ jobs:
           RELEASE_OS: ${{ matrix.os }}
           RELEASE_ARCH: ${{ matrix.arch }}
         run: python scripts/release-package.py --version "$RELEASE_TAG" --os "$RELEASE_OS" --arch "$RELEASE_ARCH"
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8.0.2
         with:
           name: shared-assets
           path: shared-assets
       - name: Native binary startup and database smoke test
         shell: bash
         run: python scripts/release-smoke.py --assets shared-assets/papergo_${{ needs.prepare.outputs.tag }}_assets.zip
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: binary-${{ matrix.os }}-${{ matrix.arch }}
           path: dist/*
@@ -139,13 +139,13 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
         with:
           ref: ${{ needs.prepare.outputs.commit }}
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7.1.0
         with:
           python-version: '3.x'
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8.0.2
         with:
           name: container-assets
           path: container-assets
@@ -154,7 +154,7 @@ jobs:
       - uses: docker/setup-buildx-action@v4.4.1
         with:
           driver: docker-container
-      - uses: docker/login-action@v4.6.0
+      - uses: docker/login-action@v4.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -188,7 +188,7 @@ jobs:
         env:
           DIGEST: ${{ steps.image.outputs.digest }}
         run: mkdir -p digests && echo "$DIGEST" > "digests/${{ matrix.arch }}"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: image-digest-${{ matrix.arch }}
           path: digests/*
@@ -201,15 +201,15 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
         with:
           ref: ${{ needs.prepare.outputs.commit }}
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8.0.2
         with:
           pattern: binary-*
           path: dist
           merge-multiple: true
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8.0.2
         with:
           name: shared-assets
           path: dist
@@ -231,13 +231,13 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8.0.2
         with:
           pattern: image-digest-*
           merge-multiple: true
           path: digests
       - uses: docker/setup-buildx-action@v4.4.1
-      - uses: docker/login-action@v4.6.0
+      - uses: docker/login-action@v4.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -266,13 +266,13 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
         with:
           ref: ${{ needs.prepare.outputs.commit }}
       - uses: docker/setup-buildx-action@v4.4.1
         with:
           driver: docker-container
-      - uses: docker/login-action@v4.6.0
+      - uses: docker/login-action@v4.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}

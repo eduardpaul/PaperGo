@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
       - uses: docker/setup-buildx-action@v4.4.1
       - name: Export the pinned graph
         run: docker buildx build --target laya-model --output type=local,dest=.tools/decision-build/onnx .
