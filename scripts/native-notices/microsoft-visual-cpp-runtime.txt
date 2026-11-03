@@ -15,16 +15,29 @@ They are Distributable Code under the Microsoft Visual Studio license terms
 Visual Studio 2022 distributable code files
 (https://learn.microsoft.com/visualstudio/releases/2022/redistribution).
 
-These terms apply to the Microsoft files, in addition to PaperGo's licence:
+These Microsoft files are not licensed under PaperGo's Apache License 2.0.
+They are licensed only under the following terms.
 
-- Microsoft and its suppliers own the files. They are licensed, not sold,
-  and you may use them only as part of PaperGo.
+By installing, copying or using PaperGo's Windows build, you agree to these
+terms for the Microsoft files. Anyone who redistributes PaperGo's Windows
+build, including through a package manager, must require their recipients
+to agree to these terms.
+
+- Microsoft and its suppliers own the files. They are licensed, not sold.
+  Microsoft reserves all rights not expressly granted here.
+- You may use the files only as part of PaperGo. You may not distribute
+  them separately from PaperGo or as a stand-alone offering.
 - You may not work around technical limitations in the files, or reverse
   engineer, decompile or disassemble them, except where applicable law
   permits it despite this limitation.
-- You may not distribute the files separately from PaperGo, or use
-  Microsoft's trademarks in a way that suggests PaperGo comes from or is
-  endorsed by Microsoft.
+- You may not remove, alter or obscure Microsoft's copyright, trademark or
+  other notices in the files.
+- You may not rent, lease or lend the files, or host them as a stand-alone
+  service.
+- You must comply with all export laws and regulations that apply to the
+  files.
+- You may not use Microsoft's trademarks in a way that suggests PaperGo
+  comes from or is endorsed by Microsoft.
 - The files are provided "as is". Microsoft gives no express warranties,
   guarantees or conditions, and to the extent permitted by local law
   excludes the implied warranties of merchantability, fitness for a

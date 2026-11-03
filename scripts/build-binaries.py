@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
-"""Build the executables and collect their platform-specific runtime files.
-The Windows executable embeds ONNX Runtime and links its compiler runtimes
-statically, so only notices ship beside it."""
+"""Build the executables and collect their platform-specific runtime files:
+PaperGo's LICENSE and NOTICE, native libraries and the notices of everything
+compiled into or shipped beside the executable. The Linux executable uses
+the distribution's libstdc++ and libgcc_s. The Windows executable embeds
+ONNX Runtime and links its compiler runtimes statically, so only notices
+ship beside it."""
 import argparse
 import os
 from pathlib import Path
@@ -18,8 +21,19 @@ LIBRARIES = {
     # The Windows executable embeds ONNX Runtime with the Visual C++ runtime.
     'windows': [],
 }
+# PaperGo's own licence and notice, at the top of the installation.
+PROJECT_FILES = ['LICENSE', 'NOTICE']
 # The executable embeds PDFium as WebAssembly; these notices ship with it.
 PDFIUM_NOTICES = ROOT / 'internal/doctext/pdfium/notices'
+# The npm packages bundled into the embedded web app and workflow SDK, whose
+# builds write these notices (scripts/npm-notices.mjs).
+NPM_NOTICES = {
+    'notices/web/THIRD-PARTY-NOTICES': ROOT / 'web/dist/THIRD-PARTY-NOTICES',
+    'notices/sdk/THIRD-PARTY-NOTICES': ROOT / 'sdk/dist/THIRD-PARTY-NOTICES',
+}
+# The Go modules and standard library linked into the executable, generated
+# for the platform being built (scripts/generate-go-notices.py).
+GO_NOTICES = 'notices/go/THIRD-PARTY-NOTICES'
 # MSYS2's licences of the MinGW runtimes the Windows executable links
 # statically: libstdc++ and libgcc (GPL-3.0 with the GCC Runtime Library
 # Exception) and winpthreads.
@@ -34,50 +48,37 @@ def compiler(env, system):
     return command
 
 
-def compiler_runtime(system, env):
-    """Include the compiler runtimes that are not supplied by the target OS,
-    and the licences of those linked into the executable."""
-    if system == 'darwin':
-        return {}
-    command = compiler(env, system)
+def windows_compiler_notices(env):
+    """The licences of the MinGW runtimes linked into the Windows executable."""
+    command = compiler(env, 'windows')
     files = {}
-    if system == 'windows':
-        executable = shutil.which(command[0], path=env.get('PATH'))
-        licenses = Path(executable).parent.parent / 'share/licenses' if executable else None
-        for package in WINDOWS_RUNTIME_LICENSES:
-            directory = licenses / package if licenses else None
-            if not directory or not directory.is_dir():
-                raise ValueError(f'Missing the MinGW {package} licence: install MSYS2 UCRT64 GCC, whose share/licenses/{package} holds it')
-            for path in sorted(directory.rglob('*')):
-                if path.is_file():
-                    files[f'notices/compiler/{package}/' + path.relative_to(directory).as_posix()] = path
-        return files
-    for name in ['libstdc++.so.6', 'libgcc_s.so.1']:
-        located = subprocess.check_output([*command, '-print-file-name=' + name], env=env, text=True).strip()
-        path = Path(located)
-        if not path.is_file():
-            executable = shutil.which(command[0], path=env.get('PATH'))
-            path = Path(executable).parent / name if executable else path
-        if not path.is_file():
-            raise ValueError(f'Missing compiler runtime {name}')
-        files['lib/' + name] = path
-    # Debian/Ubuntu's compiler copyright files include the runtime exception
-    # and redistribution notices.
-    for package in ('libstdc++6', 'libgcc-s1'):
-        notice = Path('/usr/share/doc') / package / 'copyright'
-        if notice.is_file():
-            files[f'notices/compiler/{package}-copyright'] = notice
+    executable = shutil.which(command[0], path=env.get('PATH'))
+    licenses = Path(executable).parent.parent / 'share/licenses' if executable else None
+    for package in WINDOWS_RUNTIME_LICENSES:
+        directory = licenses / package if licenses else None
+        if not directory or not directory.is_dir():
+            raise ValueError(f'Missing the MinGW {package} licence: install MSYS2 UCRT64 GCC, whose share/licenses/{package} holds it')
+        for path in sorted(directory.rglob('*')):
+            if path.is_file():
+                files[f'notices/compiler/{package}/' + path.relative_to(directory).as_posix()] = path
     return files
 
 
 def runtime_files(native, system, env):
-    files = {'lib/' + name: native / 'lib' / name for name in LIBRARIES[system]}
-    files.update(compiler_runtime(system, env))
+    files = {name: ROOT / name for name in PROJECT_FILES}
+    files.update({'lib/' + name: native / 'lib' / name for name in LIBRARIES[system]})
+    if system == 'windows':
+        files.update(windows_compiler_notices(env))
     for path in sorted((native / 'notices').rglob('*')):
         if path.is_file():
             files['notices/' + path.relative_to(native / 'notices').as_posix()] = path
     for path in sorted(PDFIUM_NOTICES.iterdir()):
         files['notices/pdfium/' + path.name] = path
+    for name, path in NPM_NOTICES.items():
+        if not path.is_file():
+            project = path.parent.parent.name
+            raise ValueError(f'Missing {path.relative_to(ROOT).as_posix()}: build it with npm --prefix {project} run build')
+        files[name] = path
     return files
 
 
@@ -100,14 +101,21 @@ def main():
         subprocess.run([sys.executable, str(ROOT / 'scripts/native.py'), '--check', '--directory', str(native)],
                        cwd=ROOT, env=env, check=True)
     output.mkdir(parents=True, exist_ok=True)
+    # Libraries and notices of an earlier build must not ship with this one.
+    for directory in ('lib', 'notices'):
+        shutil.rmtree(output / directory, ignore_errors=True)
     for name, source in runtime_files(native, system, env).items():
         target = output / name
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, target)
+    # The same environment as the build, so the notices list exactly the
+    # modules linked for this GOOS, GOARCH and cgo setting.
+    subprocess.run([sys.executable, str(ROOT / 'scripts/generate-go-notices.py'), '--output', str(output / GO_NOTICES)],
+                   cwd=ROOT, env=env, check=True)
     subprocess.run(['go', 'build', '-trimpath', '-ldflags=' + args.ldflags,
                     '-o', str(output / ('papergo' + suffix)), './cmd/api'],
                    cwd=ROOT, env=env, check=True)
-    print(f'Executables and native libraries: {output}')
+    print(f'Executables, native libraries and notices: {output}')
 
 
 if __name__ == '__main__':

@@ -2,12 +2,14 @@
 // workflow. It defines the global __papergoSdk; workflows reach it through
 // require("@papergo/workflow"). It also writes dist/workflow.d.ts, the
 // SDK's declarations with Kiota's in one file, which the web app's script
-// editor checks scripts against.
+// editor checks scripts against, and dist/THIRD-PARTY-NOTICES, the notices
+// of the npm packages the bundle embeds, which release archives ship.
 import { readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { generateDtsBundle } from "dts-bundle-generator";
 import { build } from "esbuild";
+import { notices } from "../../scripts/npm-notices.mjs";
 
 const sdk = join(dirname(fileURLToPath(import.meta.url)), "..");
 await build({
@@ -37,3 +39,4 @@ const [declarations] = generateDtsBundle(
 // The runtime's globals follow the module's declarations.
 const globals = (await readFile(join(sdk, "src", "globals.d.ts"), "utf8")).replace(/^declare /gm, "").replace(/^(?=.)/gm, "  ");
 await writeFile(join(sdk, "dist", "workflow.d.ts"), `${declarations}\ndeclare global {\n${globals}}\n`);
+await writeFile(join(sdk, "dist", "THIRD-PARTY-NOTICES"), notices(sdk).text);
