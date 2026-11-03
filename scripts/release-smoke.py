@@ -83,7 +83,7 @@ export default workflow<Record<string, never>, { kind: string }>({
 
 def exercise_native(base, workspace):
     library = json.loads(request(base, f'/v1/resources/{workspace}/children', {'kind': 'library', 'name': 'Scans'}))['id']
-    # PDFium and statically linked WebP must render a PDF preview.
+    # PDFium must render a PDF preview.
     pdf, offsets = bytearray(b'%PDF-1.4\n'), []
     stream = 'BT /F1 14 Tf 40 700 Td (Standalone PDF) Tj ET'
     for body in ['<</Type/Catalog/Pages 2 0 R>>', '<</Type/Pages/Kids[4 0 R]/Count 1>>',
@@ -100,7 +100,7 @@ def exercise_native(base, workspace):
     item = upload(base, library, 'page.pdf', pdf)
     for _ in range(120):
         preview = request(base, f'/v1/items/{item}/preview')
-        if preview[:4] == b'RIFF' and preview[8:12] == b'WEBP':
+        if preview[:3] == b'\xff\xd8\xff':
             break
         if b'unavailable' in preview:
             raise RuntimeError('packaged PDF renderer could not generate a preview')

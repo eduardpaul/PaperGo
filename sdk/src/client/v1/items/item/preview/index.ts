@@ -49,7 +49,7 @@ export interface PreviewRequestBuilder extends BaseRequestBuilder<PreviewRequest
      */
      get(requestConfiguration?: RequestConfiguration<PreviewRequestBuilderGetQueryParameters> | undefined) : Promise<PreviewGetResponse | undefined>;
     /**
-     * Starts rendering a first-page WebP preview, under 100 KiB and 800 pixels, of the item's current file as a background operation; GET /v1/items/{id}/preview serves it. Previews are kept once per file bytes, so bytes rendered before finish at once. Requires document.write and write access to the item. Kinds of file previews are not rendered for (GET /auth/config marks the ones they are with preview) are refused with 415 unsupported_file_type.
+     * Starts rendering a first-page JPEG preview, under 100 KiB and 800 pixels, of the item's current file as a background operation; GET /v1/items/{id}/preview serves it. Previews are kept once per file bytes, so bytes rendered before finish at once. Requires document.write and write access to the item. Kinds of file previews are not rendered for (GET /auth/config marks the ones they are with preview) are refused with 415 unsupported_file_type.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<Operation>}
      * @throws {Problem} error when the service returns a 400 status code
@@ -69,7 +69,7 @@ export interface PreviewRequestBuilder extends BaseRequestBuilder<PreviewRequest
      */
      toGetRequestInformation(requestConfiguration?: RequestConfiguration<PreviewRequestBuilderGetQueryParameters> | undefined) : RequestInformation;
     /**
-     * Starts rendering a first-page WebP preview, under 100 KiB and 800 pixels, of the item's current file as a background operation; GET /v1/items/{id}/preview serves it. Previews are kept once per file bytes, so bytes rendered before finish at once. Requires document.write and write access to the item. Kinds of file previews are not rendered for (GET /auth/config marks the ones they are with preview) are refused with 415 unsupported_file_type.
+     * Starts rendering a first-page JPEG preview, under 100 KiB and 800 pixels, of the item's current file as a background operation; GET /v1/items/{id}/preview serves it. Previews are kept once per file bytes, so bytes rendered before finish at once. Requires document.write and write access to the item. Kinds of file previews are not rendered for (GET /auth/config marks the ones they are with preview) are refused with 415 unsupported_file_type.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */

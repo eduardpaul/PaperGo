@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"papergo/internal/dal/blobs"
 	"papergo/internal/dal/catalog"
 	"papergo/internal/dal/dberr"
 	"papergo/internal/dal/directory"
@@ -577,8 +578,8 @@ func (s *Service) importCorePackage(ctx context.Context, store storage.Store, su
 		}
 		key, _ := preview["object_key"].(string)
 		obj, ok := objects[key]
-		if !ok || preview["object_size"] != obj.Size || preview["object_sha256"] != obj.SHA256 || storage.Signature(objectHeads[key]) != "image/webp" {
-			return result, invalid("preview does not match its packaged WebP object")
+		if !ok || preview["object_size"] != obj.Size || preview["object_sha256"] != obj.SHA256 || storage.Signature(objectHeads[key]) != string(blobs.MediaJPEG) {
+			return result, invalid("preview does not match its packaged JPEG object")
 		}
 	}
 	if err = validatePackageGroups(p); err != nil {

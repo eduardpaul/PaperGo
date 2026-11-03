@@ -8631,20 +8631,20 @@ export interface OptimizeImageRequestBuilder extends BaseRequestBuilder<Optimize
  */
 export interface WithPageItemRequestBuilder extends BaseRequestBuilder<WithPageItemRequestBuilder> {
 	/**
-	 * One page, from 1, of the caller's file (or an earlier version) as WebP, for viewers that cannot draw the file themselves, such as multi-page TIFFs. Pages render on request at the smallest of 320, 480, 640, 960, 1280, 1600 and 2048 pixels wide that is at least `width` (default 960); tall pages render narrower to stay within about 8 megapixels, and images are never enlarged. Renders are shared by everyone reading the same bytes. With blob_id the response is cacheable for a year; without it, it revalidates with its ETag. Requires document.read and read access to the item.
+	 * One page, from 1, of the caller's file (or an earlier version) as JPEG, for viewers that cannot draw the file themselves, such as multi-page TIFFs. Pages render on request at the smallest of 320, 480, 640, 960, 1280, 1600 and 2048 pixels wide that is at least `width` (default 960); tall pages render narrower to stay within about 8 megapixels, and images are never enlarged. Renders are shared by everyone reading the same bytes. With blob_id the response is cacheable for a year; without it, it revalidates with its ETag. Requires document.read and read access to the item.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
 	 */
 	get(requestConfiguration?: RequestConfiguration<WithPageItemRequestBuilderGetQueryParameters> | undefined): Promise<void>;
 	/**
-	 * One page, from 1, of the caller's file (or an earlier version) as WebP, for viewers that cannot draw the file themselves, such as multi-page TIFFs. Pages render on request at the smallest of 320, 480, 640, 960, 1280, 1600 and 2048 pixels wide that is at least `width` (default 960); tall pages render narrower to stay within about 8 megapixels, and images are never enlarged. Renders are shared by everyone reading the same bytes. With blob_id the response is cacheable for a year; without it, it revalidates with its ETag. Requires document.read and read access to the item.
+	 * One page, from 1, of the caller's file (or an earlier version) as JPEG, for viewers that cannot draw the file themselves, such as multi-page TIFFs. Pages render on request at the smallest of 320, 480, 640, 960, 1280, 1600 and 2048 pixels wide that is at least `width` (default 960); tall pages render narrower to stay within about 8 megapixels, and images are never enlarged. Renders are shared by everyone reading the same bytes. With blob_id the response is cacheable for a year; without it, it revalidates with its ETag. Requires document.read and read access to the item.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<WithPageItemRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 }
 /**
- * One page, from 1, of the caller's file (or an earlier version) as WebP, for viewers that cannot draw the file themselves, such as multi-page TIFFs. Pages render on request at the smallest of 320, 480, 640, 960, 1280, 1600 and 2048 pixels wide that is at least `width` (default 960); tall pages render narrower to stay within about 8 megapixels, and images are never enlarged. Renders are shared by everyone reading the same bytes. With blob_id the response is cacheable for a year; without it, it revalidates with its ETag. Requires document.read and read access to the item.
+ * One page, from 1, of the caller's file (or an earlier version) as JPEG, for viewers that cannot draw the file themselves, such as multi-page TIFFs. Pages render on request at the smallest of 320, 480, 640, 960, 1280, 1600 and 2048 pixels wide that is at least `width` (default 960); tall pages render narrower to stay within about 8 megapixels, and images are never enlarged. Renders are shared by everyone reading the same bytes. With blob_id the response is cacheable for a year; without it, it revalidates with its ETag. Requires document.read and read access to the item.
  */
 export interface WithPageItemRequestBuilderGetQueryParameters {
 	/**
@@ -8708,7 +8708,7 @@ export interface PreviewRequestBuilder extends BaseRequestBuilder<PreviewRequest
 	 */
 	get(requestConfiguration?: RequestConfiguration<PreviewRequestBuilderGetQueryParameters> | undefined): Promise<PreviewGetResponse | undefined>;
 	/**
-	 * Starts rendering a first-page WebP preview, under 100 KiB and 800 pixels, of the item's current file as a background operation; GET /v1/items/{id}/preview serves it. Previews are kept once per file bytes, so bytes rendered before finish at once. Requires document.write and write access to the item. Kinds of file previews are not rendered for (GET /auth/config marks the ones they are with preview) are refused with 415 unsupported_file_type.
+	 * Starts rendering a first-page JPEG preview, under 100 KiB and 800 pixels, of the item's current file as a background operation; GET /v1/items/{id}/preview serves it. Previews are kept once per file bytes, so bytes rendered before finish at once. Requires document.write and write access to the item. Kinds of file previews are not rendered for (GET /auth/config marks the ones they are with preview) are refused with 415 unsupported_file_type.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Operation>}
 	 * @throws {Problem} error when the service returns a 400 status code
@@ -8728,7 +8728,7 @@ export interface PreviewRequestBuilder extends BaseRequestBuilder<PreviewRequest
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<PreviewRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 	/**
-	 * Starts rendering a first-page WebP preview, under 100 KiB and 800 pixels, of the item's current file as a background operation; GET /v1/items/{id}/preview serves it. Previews are kept once per file bytes, so bytes rendered before finish at once. Requires document.write and write access to the item. Kinds of file previews are not rendered for (GET /auth/config marks the ones they are with preview) are refused with 415 unsupported_file_type.
+	 * Starts rendering a first-page JPEG preview, under 100 KiB and 800 pixels, of the item's current file as a background operation; GET /v1/items/{id}/preview serves it. Previews are kept once per file bytes, so bytes rendered before finish at once. Requires document.write and write access to the item. Kinds of file previews are not rendered for (GET /auth/config marks the ones they are with preview) are refused with 415 unsupported_file_type.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"image"
+	"image/jpeg"
 	"io"
 	"log/slog"
 	"net/http/httptest"
@@ -13,7 +14,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/kolesa-team/go-webp/webp"
 	"papergo/internal/auth"
 	"papergo/internal/dal/daltest"
 	"papergo/internal/dal/resources"
@@ -84,8 +84,8 @@ func TestPageRenditions(t *testing.T) {
 		if want != 200 {
 			return 0, res
 		}
-		cfg, err := webp.DecodeConfig(bytes.NewReader(res.Body.Bytes()), nil)
-		if err != nil || res.Header().Get("Content-Type") != "image/webp" || res.Header().Get("Content-Security-Policy") == "" {
+		cfg, err := jpeg.DecodeConfig(bytes.NewReader(res.Body.Bytes()))
+		if err != nil || res.Header().Get("Content-Type") != "image/jpeg" || res.Header().Get("Content-Security-Policy") == "" {
 			t.Fatal(path, err, res.Header())
 		}
 		return cfg.Width, res

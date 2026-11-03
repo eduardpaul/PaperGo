@@ -35,10 +35,10 @@ func (a *API) preview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer data.Close()
-	w.Header().Set("Content-Type", "image/webp")
-	w.Header().Set("Content-Disposition", `inline; filename="preview.webp"`)
+	w.Header().Set("Content-Type", previewer.MediaType)
+	w.Header().Set("Content-Disposition", `inline; filename="preview.jpg"`)
 	transfer.StoredFile(w)
 	w.Header().Set("ETag", strconv.Quote(preview.ObjectSHA256))
 	w.Header().Set("X-Preview-Blob-ID", file.ID)
-	http.ServeContent(transfer.Writer(w), r, "preview.webp", preview.CreatedAt, data)
+	http.ServeContent(transfer.Writer(w), r, "preview.jpg", preview.CreatedAt, data)
 }

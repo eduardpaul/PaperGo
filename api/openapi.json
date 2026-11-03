@@ -18447,7 +18447,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Bounded WebP (longest side at most 800px, fewer than 100000 bytes), or unavailable state.",
+            "description": "Bounded JPEG (longest side at most 800px, fewer than 100000 bytes), or unavailable state.",
             "headers": {
               "X-Preview-Blob-ID": {
                 "schema": {
@@ -18462,7 +18462,7 @@
               }
             },
             "content": {
-              "image/webp": {
+              "image/jpeg": {
                 "schema": {
                   "type": "string",
                   "format": "binary"
@@ -18530,7 +18530,7 @@
         ],
         "operationId": "renderItemPreview",
         "summary": "Render a preview of the item's current file",
-        "description": "Starts rendering a first-page WebP preview, under 100 KiB and 800 pixels, of the item's current file as a background operation; GET /v1/items/{id}/preview serves it. Previews are kept once per file bytes, so bytes rendered before finish at once. Requires document.write and write access to the item. Kinds of file previews are not rendered for (GET /auth/config marks the ones they are with preview) are refused with 415 unsupported_file_type.",
+        "description": "Starts rendering a first-page JPEG preview, under 100 KiB and 800 pixels, of the item's current file as a background operation; GET /v1/items/{id}/preview serves it. Previews are kept once per file bytes, so bytes rendered before finish at once. Requires document.write and write access to the item. Kinds of file previews are not rendered for (GET /auth/config marks the ones they are with preview) are refused with 415 unsupported_file_type.",
         "x-required-scopes": [
           "document.write"
         ],
@@ -18686,7 +18686,7 @@
         ],
         "operationId": "getItemPage",
         "summary": "Render one page of the item's file",
-        "description": "One page, from 1, of the caller's file (or an earlier version) as WebP, for viewers that cannot draw the file themselves, such as multi-page TIFFs. Pages render on request at the smallest of 320, 480, 640, 960, 1280, 1600 and 2048 pixels wide that is at least `width` (default 960); tall pages render narrower to stay within about 8 megapixels, and images are never enlarged. Renders are shared by everyone reading the same bytes. With blob_id the response is cacheable for a year; without it, it revalidates with its ETag. Requires document.read and read access to the item.",
+        "description": "One page, from 1, of the caller's file (or an earlier version) as JPEG, for viewers that cannot draw the file themselves, such as multi-page TIFFs. Pages render on request at the smallest of 320, 480, 640, 960, 1280, 1600 and 2048 pixels wide that is at least `width` (default 960); tall pages render narrower to stay within about 8 megapixels, and images are never enlarged. Renders are shared by everyone reading the same bytes. With blob_id the response is cacheable for a year; without it, it revalidates with its ETag. Requires document.read and read access to the item.",
         "x-required-scopes": [
           "document.read"
         ],
@@ -18729,7 +18729,7 @@
         ],
         "responses": {
           "200": {
-            "description": "The page as WebP.",
+            "description": "The page as JPEG.",
             "headers": {
               "ETag": {
                 "schema": {
@@ -18745,7 +18745,7 @@
               }
             },
             "content": {
-              "image/webp": {
+              "image/jpeg": {
                 "schema": {
                   "type": "string",
                   "format": "binary"

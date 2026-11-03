@@ -124,19 +124,19 @@ func (p *pages) page(w http.ResponseWriter, r *http.Request, in httpapi.Request)
 	if err != nil {
 		return err
 	}
-	key := fmt.Sprintf("%s/%d/%d", file.Sha256, number, width)
-	webp := p.cache.get(key)
-	if webp == nil {
+	key := fmt.Sprintf("%s/%d/%d.jpg", file.Sha256, number, width)
+	rendered := p.cache.get(key)
+	if rendered == nil {
 		if err = p.read(r.Context(), file, func(data []byte) (err error) {
-			webp, err = p.render(r.Context(), data, string(file.ContentType), number-1, width)
+			rendered, err = p.render(r.Context(), data, string(file.ContentType), number-1, width)
 			return err
 		}); err != nil {
 			return err
 		}
-		p.cache.put(key, webp)
+		p.cache.put(key, rendered)
 	}
-	w.Header().Set("Content-Type", "image/webp")
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="page-%d.webp"`, number))
+	w.Header().Set("Content-Type", preview.MediaType)
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="page-%d.jpg"`, number))
 	transfer.StoredFile(w)
 	w.Header().Set("ETag", strconv.Quote(key))
 	// A named file version never changes; the item's current file can.
@@ -146,7 +146,7 @@ func (p *pages) page(w http.ResponseWriter, r *http.Request, in httpapi.Request)
 		w.Header().Set("Cache-Control", "private, no-cache")
 	}
 	w.Header().Set("X-Page-Blob-ID", file.ID)
-	http.ServeContent(transfer.Writer(w), r, "", file.CreatedAt, bytes.NewReader(webp))
+	http.ServeContent(transfer.Writer(w), r, "", file.CreatedAt, bytes.NewReader(rendered))
 	return nil
 }
 
@@ -256,8 +256,13 @@ func (p *pages) sizes(ctx context.Context, data []byte, media string) ([]PageSiz
 	}
 }
 
+// pageQuality is the JPEG quality of rendered pages: text keeps clean
+// edges, without visible ringing, at the widths pages are read at. Quality
+// 90 costs a fifth more bytes for a difference that is hard to see.
+const pageQuality = 85
+
 // render draws page i at width pixels, or narrower for a tall page or a
-// smaller image, as WebP. Callers hold a slot.
+// smaller image, as a JPEG flattened onto white. Callers hold a slot.
 func (p *pages) render(ctx context.Context, data []byte, media string, i, width int) ([]byte, error) {
 	var img image.Image
 	switch media {
@@ -314,7 +319,7 @@ func (p *pages) render(ctx context.Context, data []byte, media string, i, width 
 	} else {
 		img = imaging.Flatten(img)
 	}
-	return imaging.EncodeWebP(img, 82)
+	return imaging.EncodeJPEG(img, pageQuality)
 }
 
 // renditions keeps recently rendered pages, least recently used first out,

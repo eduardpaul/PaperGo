@@ -1,4 +1,4 @@
-// Renders a bounded WebP preview of a file when it is added or replaced. The
+// Renders a bounded JPEG preview of a file when it is added or replaced. The
 // preview is of the item's current file, so a run a newer file overtook
 // renders that file, which its own run then finds rendered.
 import { plain, workflow } from "@papergo/workflow";

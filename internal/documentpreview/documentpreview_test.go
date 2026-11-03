@@ -90,7 +90,7 @@ func TestRenderPreview(t *testing.T) {
 			t.Fatalf("%+v %v", done, err)
 		}
 		if result.Ready {
-			if got := call("GET", "/v1/items/"+item.ID+"/preview", ""); got.Code != 200 || got.Header().Get("Content-Type") != "image/webp" {
+			if got := call("GET", "/v1/items/"+item.ID+"/preview", ""); got.Code != 200 || got.Header().Get("Content-Type") != "image/jpeg" {
 				t.Fatal(got.Code, got.Header())
 			}
 		}
