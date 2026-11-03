@@ -15,10 +15,9 @@ Direct Go modules and the licences they ship under. Add a row when a change adds
 | `github.com/klippa-app/go-pdfium` | PDF text reading and rendering with its embedded PDFium WebAssembly module (`internal/doctext/pdfium` only) | MIT |
 | `github.com/tetratelabs/wazero` | pure-Go WebAssembly runtime that runs PDFium in-process (`internal/doctext/pdfium` only) | Apache-2.0 |
 | `github.com/daulet/tokenizers` | statically linked Hugging Face Rust tokenizer | MIT |
-| `github.com/kolesa-team/go-webp` | cgo WebP decoding and encoding | MIT |
 | `github.com/go-jose/go-jose/v4` | JWT handling | Apache-2.0 |
 | `github.com/google/uuid` | identifiers | BSD-3-Clause |
-| `golang.org/x/image` | image resampling for OCR, WebP decoding in `cmd/ocr`, fonts in OCR tests | BSD-3-Clause |
+| `golang.org/x/image` | WebP decoding of uploaded images, image resampling for OCR, fonts in OCR tests | BSD-3-Clause |
 | `golang.org/x/net` | international host names in their ASCII form for [trusted hosts](trusted-hosts.md) (`internal/hosts`, `idna`) | BSD-3-Clause |
 | `golang.org/x/oauth2` | bearer-token transport for OIDC UserInfo | BSD-3-Clause |
 | `github.com/robfig/cron/v3` | parsing workflow schedule triggers | MIT |
@@ -43,7 +42,6 @@ The native SDK installer (`scripts/native.py`, checksums in `scripts/native.json
 
 - **ONNX Runtime** 1.23.2 (MIT). Its release binaries include third-party code listed in their `ThirdPartyNotices.txt`, among it Eigen, partly under MPL-2.0. Deployments that ship the library ship that file with it.
 - **The PaddleOCR models** in `models/paddleocr` (Apache-2.0, PaddlePaddle / PaddleOCR contributors).
-- **libwebp** 1.6.0 (BSD-3-Clause), compiled without source patches and statically linked, including its SharpYUV component.
 - **Hugging Face Tokenizers** through the pinned `daulet/tokenizers` Rust static library (MIT/Apache-2.0).
 
 Platform release ZIPs carry native libraries and notices beside the executable (`lib/` on Linux, DLLs beside the EXE on Windows). The Docker image uses the same layout under `/opt/papergo`. Models and their notices ship in the platform-independent assets ZIP.

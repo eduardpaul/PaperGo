@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Install pinned native SDKs and write build/runtime environment files.
 
-Requires Python 3.11+, a C compiler, CMake 3.26+ and pkg-config. Windows also
-requires the Rust GNU toolchain to build Hugging Face's tokenizer static library.
-No upstream source files are patched. Downloads are checked against native.json.
+Requires Python 3.11+ and a C compiler. Windows also requires the Rust GNU
+toolchain to build Hugging Face's tokenizer static library. No upstream source
+files are patched. Downloads are checked against native.json.
 """
 import argparse
 import concurrent.futures
@@ -67,23 +67,9 @@ def extract(archive, directory):
                     target.chmod(info.mode & 0o777)
 
 
-def build_webp(source, output, cmake):
-    build = source / 'build'
-    generator = ['-G', 'Ninja'] if os.name == 'nt' else []
-    subprocess.run([cmake, *generator, '-S', str(source), '-B', str(build), '-DCMAKE_BUILD_TYPE=Release',
-                    '-DBUILD_SHARED_LIBS=OFF', '-DCMAKE_POSITION_INDEPENDENT_CODE=ON',
-                    '-DWEBP_BUILD_ANIM_UTILS=OFF', '-DWEBP_BUILD_CWEBP=OFF', '-DWEBP_BUILD_DWEBP=OFF',
-                    '-DWEBP_BUILD_VWEBP=OFF', '-DWEBP_BUILD_WEBPINFO=OFF', '-DWEBP_BUILD_WEBPMUX=OFF',
-                    '-DWEBP_BUILD_EXTRAS=OFF', '-DWEBP_BUILD_GIF2WEBP=OFF'], check=True)
-    subprocess.run([cmake, '--build', str(build), '--target', 'webp', 'sharpyuv', '--parallel', '2'], check=True)
-    shutil.copytree(source / 'src/webp', output / 'include/webp', dirs_exist_ok=True)
-    for name in ['libwebp.a', 'libsharpyuv.a']:
-        shutil.copy2(next(build.rglob(name)), output / 'lib' / name)
-
-
 def environment(output, system):
     lib = (output / 'lib').as_posix()
-    flags = [f'-L{lib}', '-lwebp', '-lsharpyuv', '-lm']
+    flags = [f'-L{lib}', '-lm']
     if system == 'linux':
         # RPATH also resolves dependencies of the shipped shared libraries.
         flags += ['-Wl,--disable-new-dtags', '-Wl,-rpath,$ORIGIN/lib']
@@ -92,8 +78,7 @@ def environment(output, system):
     elif system == 'windows':
         # The tokenizer's Rust standard library calls the Windows NT API.
         flags += ['-lntdll']
-    env = {'CGO_ENABLED': '1', 'CGO_CFLAGS': shlex.join([f'-I{(output / "include").as_posix()}']),
-           'CGO_LDFLAGS': shlex.join(flags), 'PKG_CONFIG_PATH': str(output / 'lib/pkgconfig'),
+    env = {'CGO_ENABLED': '1', 'CGO_LDFLAGS': shlex.join(flags),
            'ONNXRUNTIME_LIB': str(output / 'lib' / {'linux': 'libonnxruntime.so', 'darwin': 'libonnxruntime.dylib', 'windows': 'onnxruntime.dll'}[system]),
            'OCR_MODELS': str(ROOT / 'models/paddleocr')}
     # The native loader uses this for local Go tests and development executables.
@@ -107,7 +92,6 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     # The toolchain image installs the SDKs once, outside the checkout.
     parser.add_argument('--directory', default=os.environ.get('PAPERGO_NATIVE_DIR') or str(ROOT / '.tools/native'))
-    parser.add_argument('--cmake', default='cmake')
     parser.add_argument('--github-env', action='store_true')
     parser.add_argument('--check', action='store_true', help='require current installed SDKs without downloading or building')
     args = parser.parse_args()
@@ -126,7 +110,7 @@ def main():
     if not stamp.exists() or json.loads(stamp.read_text()) != fingerprint:
         if args.check:
             parser.error('native SDKs are missing or stale; run python scripts/native.py')
-        entries = dict(lock['platforms'][key], webp=lock['webp'], tokenizers_source=lock['tokenizers_source'])
+        entries = dict(lock['platforms'][key], tokenizers_source=lock['tokenizers_source'])
         with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
             archives = dict(zip(entries, pool.map(lambda item: download(item, cache), entries.values())))
         if output.exists():
@@ -146,16 +130,11 @@ def main():
         else:
             tokenizer = next((output / 'sdk/tokenizers').rglob('libtokenizers.a'))
         shutil.copy2(tokenizer, output / 'lib/libtokenizers.a')
-        build_webp(next((output / 'sdk/webp').iterdir()), output, args.cmake)
         notices = output / 'notices'
         notices.mkdir()
         shutil.copy2(tokenizer_source / 'LICENSE', notices / 'tokenizers-LICENSE')
         for name in ['LICENSE', 'ThirdPartyNotices.txt']:
             shutil.copy2(ort / name, notices / ('onnxruntime-' + name))
-        shutil.copy2(next((output / 'sdk/webp').iterdir()) / 'COPYING', notices / 'webp-COPYING')
-        pkg = output / 'lib/pkgconfig'
-        pkg.mkdir()
-        (pkg / 'libwebp.pc').write_text(f'Name: libwebp\nDescription: libwebp\nVersion: 1.6.0\nLibs: -L{(output / "lib").as_posix()} -lwebp -lsharpyuv -lm\nCflags: -I{(output / "include").as_posix()}\n')
         stamp.write_text(json.dumps(fingerprint))
     if args.check:
         print(f'Native SDKs are current: {output}')

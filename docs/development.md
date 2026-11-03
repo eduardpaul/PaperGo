@@ -4,9 +4,9 @@ PaperGo's [devcontainer](../.devcontainer/devcontainer.json) is the `development
 stage of the repository's one [Dockerfile](../Dockerfile), which is also CI's
 toolchain image and the base of the application build. It provides Go, Node.js
 with npm, Python 3, SQLite's CLI, the PostgreSQL client, the native
-SDKs, a C compiler, pkg-config and CMake, plus gopls, Delve, Staticcheck and
-govulncheck. The Dockerfile is the only place their versions are pinned: Go,
-Node and CMake as `ARG`s at its top and the native SDKs in
+SDKs and a C compiler, plus gopls, Delve, Staticcheck and
+govulncheck. The Dockerfile is the only place their versions are pinned: Go
+and Node as `ARG`s at its top and the native SDKs in
 `scripts/native.json`. CI jobs that cannot use
 the image, on Windows and Linux arm64, install the same versions with
 `.github/actions/toolchain`, which reads them through
@@ -29,10 +29,10 @@ The first build installs development tools. After the checkout is mounted, setup
 repairs volume permissions, installs the pinned native SDKs, downloads Go modules, installs the npm lockfile,
 builds `web/dist`, validates and applies the schema to `data/papergo.db`, and
 creates a random development token in `.cache/development.env` with mode 0600.
-The editor waits for setup because Go packages need the native SDK headers and embed `web/dist` at compile time. The Go extension and debugger use `.tools/native/native.env`; direct shell commands require `source .tools/native/env.sh` (PowerShell: `. .tools/native/env.ps1`).
+The editor waits for setup because Go packages link the native SDK libraries and embed `web/dist` at compile time. The Go extension and debugger use `.tools/native/native.env`; direct shell commands require `source .tools/native/env.sh` (PowerShell: `. .tools/native/env.ps1`).
 Setup can be rerun with **PaperGo: setup** or `bash scripts/setup-dev.sh`, including
 after dependency changes. The shell scripts also work with native Go, Node/npm,
-Python 3.11+, a C compiler, CMake 3.26+ and pkg-config installations. Docker
+Python 3.11+ and a C compiler. Docker
 runs the PostgreSQL server and model generation.
 `.cache/development.env` is generated development
 configuration; it is distinct from the optional `.env.example` file, which the

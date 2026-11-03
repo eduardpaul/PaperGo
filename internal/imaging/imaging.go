@@ -1,7 +1,8 @@
 // Package imaging decodes, orients, resizes and encodes the page images that
-// document workflows process: static JPEG, PNG and WebP. It bounds decoded
-// pixels before allocating them and applies EXIF orientation, so callers
-// always work on upright images.
+// document workflows process. It decodes static JPEG, PNG and WebP (lossy,
+// lossless and with alpha) in pure Go, bounds decoded pixels before
+// allocating them and applies EXIF orientation, so callers always work on
+// upright images. It encodes JPEG.
 package imaging
 
 import (
@@ -16,9 +17,8 @@ import (
 	"image/png"
 	"math"
 
-	"github.com/kolesa-team/go-webp/encoder"
-	"github.com/kolesa-team/go-webp/webp"
 	xdraw "golang.org/x/image/draw"
+	"golang.org/x/image/webp"
 
 	"papergo/internal/storage"
 )
@@ -67,7 +67,7 @@ func Decode(data []byte, maxPixels int64) (Image, error) {
 	var err error
 	switch media {
 	case "image/webp":
-		cfg, err = webp.DecodeConfig(bytes.NewReader(data), nil)
+		cfg, err = webp.DecodeConfig(bytes.NewReader(data))
 	case "image/png":
 		cfg, err = png.DecodeConfig(bytes.NewReader(data))
 	default:
@@ -82,7 +82,7 @@ func Decode(data []byte, maxPixels int64) (Image, error) {
 	var img image.Image
 	switch media {
 	case "image/webp":
-		img, err = webp.Decode(bytes.NewReader(data), nil)
+		img, err = webp.Decode(bytes.NewReader(data))
 	case "image/png":
 		img, err = png.Decode(bytes.NewReader(data))
 	default:
@@ -207,20 +207,6 @@ func Resize(img image.Image, w, h int) *image.RGBA {
 	draw.Draw(out, out.Bounds(), image.NewUniform(color.White), image.Point{}, draw.Src)
 	Mitchell.Scale(out, out.Bounds(), img, img.Bounds(), xdraw.Over, nil)
 	return out
-}
-
-// EncodeWebP encodes img as lossy WebP at quality 1 to 100.
-func EncodeWebP(img image.Image, quality int) ([]byte, error) {
-	var buf bytes.Buffer
-	options, err := encoder.NewLossyEncoderOptions(encoder.PresetDefault, float32(quality))
-	if err != nil {
-		return nil, err
-	}
-	options.Method = 4
-	if err := webp.Encode(&buf, img, options); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
 }
 
 // EncodeJPEG encodes img as JPEG at quality 1 to 100.

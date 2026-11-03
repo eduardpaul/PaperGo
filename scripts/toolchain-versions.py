@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Print the toolchain versions the Dockerfile pins, as name=value lines for
 $GITHUB_OUTPUT, so CI jobs that cannot run in the toolchain image install
-the same Go, Node and CMake."""
+the same Go and Node."""
 from pathlib import Path
 import re
 
 ROOT = Path(__file__).resolve().parent.parent
-NAMES = {'GO_VERSION': 'go', 'NODE_VERSION': 'node', 'CMAKE_VERSION': 'cmake'}
+NAMES = {'GO_VERSION': 'go', 'NODE_VERSION': 'node'}
 
 
 def versions(dockerfile=ROOT / 'Dockerfile'):
