@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
+	"flag"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -61,6 +63,14 @@ func TestAdminUsage(t *testing.T) {
 	for _, args := range [][]string{nil, {"unknown"}} {
 		if err := admin(context.Background(), args, new(bytes.Buffer)); err == nil || !strings.Contains(err.Error(), "usage: papergo admin") {
 			t.Fatalf("%v: %v", args, err)
+		}
+	}
+	// Help is printed and reported as flag.ErrHelp, which main treats as
+	// success.
+	for _, args := range [][]string{{"--help"}, {"health", "--help"}, {"backup", "--help"}, {"workers", "status", "--help"}} {
+		out := new(bytes.Buffer)
+		if err := admin(context.Background(), args, out); !errors.Is(err, flag.ErrHelp) || out.Len() == 0 {
+			t.Fatalf("%v: %v %q", args, err, out)
 		}
 	}
 }

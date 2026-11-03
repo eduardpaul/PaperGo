@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -54,7 +55,8 @@ func main() {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		err := admin(ctx, os.Args[2:], os.Stdout)
 		stop()
-		if err != nil {
+		// A command asked for --help has printed it.
+		if err != nil && !errors.Is(err, flag.ErrHelp) {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}

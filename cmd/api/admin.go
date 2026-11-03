@@ -18,8 +18,15 @@ import (
 	"papergo/internal/dal/database"
 )
 
-// admin runs an administrative command: papergo admin <command>.
+const adminUsage = "usage: papergo admin initialize|health|backup|restore|search|workers; each command accepts --help"
+
+// admin runs an administrative command: papergo admin <command>. A command
+// asked for --help prints it and returns flag.ErrHelp.
 func admin(ctx context.Context, args []string, out io.Writer) error {
+	if len(args) == 1 && (args[0] == "-h" || args[0] == "--help") {
+		fmt.Fprintln(out, adminUsage)
+		return flag.ErrHelp
+	}
 	if len(args) > 0 && args[0] == "search" {
 		return searchCommand(ctx, args[1:], out)
 	}
@@ -80,7 +87,7 @@ func admin(ctx context.Context, args []string, out io.Writer) error {
 		return database.Initialize(ctx, path)
 	}
 	if len(args) == 0 || args[0] != "backup" && args[0] != "restore" {
-		return errors.New("usage: papergo admin initialize|health|backup|restore|search|workers; each command accepts --help")
+		return errors.New(adminUsage)
 	}
 	if os.Getenv("DATABASE_URL") != "" {
 		return errors.New(args[0] + " archives the SQLite database; DATABASE_URL selects PostgreSQL, which its own tools back up")
