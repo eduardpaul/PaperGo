@@ -5,24 +5,33 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"papergo/internal/onnx"
 )
 
 func TestAssetsBesideExecutable(t *testing.T) {
 	directory := filepath.Join(t.TempDir(), "application with spaces")
 	t.Chdir(t.TempDir())
-	library := filepath.Join(directory, "lib", "libonnxruntime.so")
-	switch runtime.GOOS {
-	case "windows":
-		library = filepath.Join(directory, "onnxruntime.dll")
-	case "darwin":
-		library = filepath.Join(directory, "lib", "libonnxruntime.dylib")
-	}
-	for _, path := range []string{filepath.Dir(library), filepath.Join(directory, "assets", "models", "laya")} {
-		if err := os.MkdirAll(path, 0755); err != nil {
+	// Windows installs its embedded runtime in the data folder's cache;
+	// Linux and macOS load the library shipped in lib.
+	library := onnx.EmbeddedLibrary(filepath.Join("data", "cache", "onnxruntime"))
+	if runtime.GOOS == "windows" {
+		if library == "" {
+			t.Fatal("the Windows executable embeds no ONNX Runtime")
+		}
+	} else {
+		library = filepath.Join(directory, "lib", "libonnxruntime.so")
+		if runtime.GOOS == "darwin" {
+			library = filepath.Join(directory, "lib", "libonnxruntime.dylib")
+		}
+		if err := os.MkdirAll(filepath.Dir(library), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(library, []byte("test library"), 0644); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := os.WriteFile(library, []byte("test library"), 0644); err != nil {
+	if err := os.MkdirAll(filepath.Join(directory, "assets", "models", "laya"), 0755); err != nil {
 		t.Fatal(err)
 	}
 	for _, key := range []string{"ONNXRUNTIME_LIB", "OCR_MODELS", "AI_DECISION_MODELS_PATH", "AI_EMBEDDINGS_MODELS_PATH"} {

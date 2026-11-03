@@ -4,7 +4,8 @@
 Requires Python 3.11+. Linux and macOS only download pinned binaries. Windows
 builds the tokenizers static library from its pinned source, which needs the
 Rust GNU toolchain (target x86_64-pc-windows-gnu) and MinGW-w64 GCC with g++
-for the C and C++ code its crates compile. No upstream source files are
+for the C and C++ code its crates compile, and Go to stage the runtime the
+Windows executable embeds (internal/onnx). No upstream source files are
 patched. Downloads are checked against native.json.
 """
 import argparse
@@ -22,6 +23,11 @@ import urllib.request
 import zipfile
 
 ROOT = Path(__file__).resolve().parent.parent
+# The Visual C++ runtime ONNX Runtime imports, in load order; the Windows
+# executable embeds it with ONNX Runtime (internal/onnx).
+VC_RUNTIME = ['vcruntime140.dll', 'vcruntime140_1.dll', 'msvcp140.dll', 'msvcp140_1.dll']
+VC_RUNTIME_NOTICE = ROOT / 'scripts/native-notices/microsoft-visual-cpp-runtime.txt'
+WINDOWS_RUNTIME = ROOT / 'internal/onnx/windows-runtime'
 
 
 def download(entry, cache):
@@ -90,6 +96,20 @@ def environment(output, system):
     return env
 
 
+def stage_windows_runtime(native):
+    """Stage ONNX Runtime and the Visual C++ runtime in internal/onnx, which
+    the Windows executable embeds, unless they are staged already."""
+    files = [native / 'lib' / name for name in [*VC_RUNTIME, 'onnxruntime.dll']]
+    manifest = WINDOWS_RUNTIME / 'manifest.json'
+    if manifest.is_file():
+        staged = [(entry['name'], entry['sha256']) for entry in json.loads(manifest.read_text())]
+        if staged == [(path.name, hashlib.sha256(path.read_bytes()).hexdigest()) for path in files] and \
+                all((WINDOWS_RUNTIME / (path.name + '.zst')).is_file() for path in files):
+            return
+    subprocess.run(['go', 'run', './internal/onnx/stage', str(WINDOWS_RUNTIME), *map(str, files)], cwd=ROOT, check=True)
+    print(f'Staged the embedded Windows runtime: {WINDOWS_RUNTIME}')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     # The toolchain image installs the SDKs once, outside the checkout.
@@ -125,6 +145,12 @@ def main():
         ort_name = {'linux': 'libonnxruntime.so', 'darwin': 'libonnxruntime.dylib', 'windows': 'onnxruntime.dll'}[system]
         ort_library = next(item for item in (ort / 'lib').iterdir() if item.name.startswith(ort_name) or (system == 'darwin' and item.name.startswith('libonnxruntime.') and item.suffix == '.dylib'))
         shutil.copy2(ort_library, output / 'lib' / ort_name)
+        if system == 'windows':
+            # Beside onnxruntime.dll, and on PATH for development, as Windows
+            # lacks them until the Visual C++ Redistributable is installed.
+            redist = output / 'sdk/vcruntime' / lock['platforms'][key]['vcruntime']['directory']
+            for name in VC_RUNTIME:
+                shutil.copy2(redist / name, output / 'lib' / name)
         tokenizer_source = next((output / 'sdk/tokenizers_source').iterdir())
         if system == 'windows':
             subprocess.run(['cargo', 'build', '--locked', '--release', '-p', 'tokenizers-ffi',
@@ -139,7 +165,14 @@ def main():
         shutil.copytree(ROOT / 'scripts/native-notices/tokenizers', notices / 'tokenizers')
         for name in ['LICENSE', 'ThirdPartyNotices.txt']:
             shutil.copy2(ort / name, notices / ('onnxruntime-' + name))
+        if system == 'windows':
+            version = lock['platforms'][key]['vcruntime']['version']
+            if f'Visual C++ Runtime {version} ' not in VC_RUNTIME_NOTICE.read_text():
+                raise ValueError(f'{VC_RUNTIME_NOTICE.relative_to(ROOT)} must name the pinned runtime version {version}')
+            shutil.copy2(VC_RUNTIME_NOTICE, notices / VC_RUNTIME_NOTICE.name)
         stamp.write_text(json.dumps(fingerprint))
+    if system == 'windows':
+        stage_windows_runtime(output)
     if args.check:
         print(f'Native SDKs are current: {output}')
         return
