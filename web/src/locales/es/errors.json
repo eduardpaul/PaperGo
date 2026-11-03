@@ -1,7 +1,7 @@
 {
   "generic": "Algo salió mal.",
   "code": {
-    "conflict": "Entra en conflicto con un cambio de otra persona. Vuelve a cargar e inténtalo de nuevo.",
+    "conflict": "Entra en conflicto con el estado actual de lo que estás cambiando.",
     "content_unavailable": "El contenido del archivo ya no está disponible.",
     "duplicate_file": "Este archivo ya está guardado.",
     "folder_not_empty": "La carpeta no está vacía.",
@@ -18,7 +18,7 @@
     "storage_unavailable": "El almacenamiento de archivos no está disponible. Inténtalo de nuevo en breve.",
     "text_not_read": "Todavía no se ha leído el texto del archivo. Lo lee un flujo de trabajo con document.read_text.",
     "timeout": "El servidor tardó demasiado. Inténtalo de nuevo.",
-    "unauthorized": "Tu sesión ha caducado. Vuelve a iniciar sesión.",
+    "unauthorized": "Tienes que iniciar sesión.",
     "unavailable": "El servidor no está disponible. Inténtalo de nuevo en breve."
   }
 }

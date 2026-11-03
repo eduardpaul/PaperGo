@@ -1,7 +1,7 @@
 {
   "generic": "Something went wrong.",
   "code": {
-    "conflict": "That conflicts with a change someone else made. Reload and try again.",
+    "conflict": "This conflicts with the current state of what you are changing.",
     "content_unavailable": "The file content is no longer available.",
     "duplicate_file": "This file is already stored.",
     "folder_not_empty": "The folder is not empty.",
@@ -18,7 +18,7 @@
     "storage_unavailable": "File storage is unavailable. Try again shortly.",
     "text_not_read": "The file's text has not been read yet. A workflow with document.read_text reads it.",
     "timeout": "The server took too long. Try again.",
-    "unauthorized": "Your sign-in has expired. Sign in again.",
+    "unauthorized": "You need to sign in.",
     "unavailable": "The server is unavailable. Try again shortly."
   }
 }

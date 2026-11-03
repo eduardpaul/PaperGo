@@ -44,7 +44,7 @@ function LocalLogin() {
       queryClient.clear();
       void navigate({ href: returnTo });
     } catch (cause) {
-      setError(isApiError(cause) ? problemMessage(cause) : t('signIn.rejectedCredentials'));
+      setError(isApiError(cause) && cause.status !== 401 ? problemMessage(cause) : t('signIn.rejectedCredentials'));
     } finally {
       setPending(false);
     }
@@ -165,7 +165,7 @@ function BearerLogin() {
       void navigate({ href: returnTo });
     } catch (cause) {
       setToken('');
-      setError(isApiError(cause) ? problemMessage(cause) : t('signIn.rejectedToken'));
+      setError(isApiError(cause) && cause.status !== 401 ? problemMessage(cause) : t('signIn.rejectedToken'));
     } finally {
       setPending(false);
     }
