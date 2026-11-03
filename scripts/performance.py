@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Measure a disposable PaperGo server on Linux; never opens the deployment DB.
 
-Requires built current-source API/admin binaries and the embedded frontend.
+Requires a current-source papergo binary with the embedded frontend.
 CPU percentages use one logical core = 100%; RSS includes resident mappings
 but excludes unmapped kernel file cache.
 The stdlib HTTP client runs on the same host, so throughput is a lower bound
@@ -254,7 +254,6 @@ def collaboration(server, workspace, collection, seconds):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", type=Path, default=ROOT / "bin/papergo")
-    parser.add_argument("--admin", type=Path, default=ROOT / "bin/papergo-admin")
     parser.add_argument("--items", type=int, default=2000)
     parser.add_argument("--seconds", type=float, default=10)
     parser.add_argument("--idle-seconds", type=float, default=30)
@@ -269,7 +268,7 @@ def main():
         parser.error("Linux /proc is required for process resource measurements")
     if min(args.items, args.seconds, args.idle_seconds, *args.concurrency) <= 0:
         parser.error("items, durations and concurrency must be positive")
-    args.binary, args.admin = args.binary.resolve(), args.admin.resolve()
+    args.binary = args.binary.resolve()
     # Explicitly clear deployment configuration; the benchmark must be isolated.
     env = {k: v for k, v in os.environ.items() if k in ("PATH", "HOME", "TMPDIR", "LANG", "TZ", "SYSTEMROOT", "LD_LIBRARY_PATH")}
     env.update(APP_ENV="test", AUTH_MODE="development", DEV_TOKEN=TOKEN,
@@ -278,7 +277,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="papergo-performance-") as temp:
         directory = Path(temp)
         dbpath = directory / "papergo.db"
-        subprocess.run([str(args.admin), "initialize", "--database", str(dbpath)],
+        subprocess.run([str(args.binary), "admin", "initialize", "--database", str(dbpath)],
                        cwd=ROOT, env=env, check=True, stdout=subprocess.DEVNULL)
         with socket.socket() as listener:
             listener.bind(("127.0.0.1", 0))

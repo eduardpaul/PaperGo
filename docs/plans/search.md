@@ -613,13 +613,13 @@ Personalization changes quality and cost, never permissions or inclusion.
 
 ### 7.5 Reindex, sweep and copying
 
-- **Reindex:** `POST /v1/search/reindex` (`organization.manage`) is the operation `search.reindex`, also available as `papergo-admin search reindex`.
+- **Reindex:** `POST /v1/search/reindex` (`organization.manage`) is the operation `search.reindex`, also available as `papergo admin search reindex`.
   - **Metadata:** it starts the active `search.index` filler's manual trigger for every live resource, in bounded batches (E5 decides which workflow that is per collection). Then it deletes documents not touched since the operation started, by stamp. Because it goes through the active workflow, customizations such as `extra_keywords` apply.
   - **Content, with `content: true`:** it raises `file.added` with the source `reindex` for the current file of items whose file version has no published content, or of all items with `force: true` after a process change. Dispatch then starts whichever workflow fills `search.content` for each collection (built in P4; only triggers that list the `reindex` source react).
   - Search stays complete during a reindex, and vectors are found again by hash.
 - **Embedding sweep:** a DBOS-scheduled system function, `papergo.search_embed`, every 15 minutes. It embeds published chunks without a vector of the current model, 64 per call and at most 2,000 per run. It covers `deferred`, `later` and model changes.
 - **First start or lost store:** a missing or outdated `search.db` starts the reindex on start-up. Search, global and in collections, returns `503 search_unavailable` until metadata is complete.
-- **Copying:** `papergo-admin search copy --to zvec`, offline, through `Export`. Nothing is computed again.
+- **Copying:** `papergo admin search copy --to zvec`, offline, through `Export`. Nothing is computed again.
 - **Imports:** a content-package import restores `blob_texts` and starts a reindex with `content: true`, so OCR does not run again; only chunking and embedding do.
 
 ## 8. Collection queries and listings on the store

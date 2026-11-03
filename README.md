@@ -9,9 +9,8 @@ Download the ZIP for your platform and `papergo_vX.Y.Z_assets.zip` from the same
 ```text
 papergo/                 # your installation directory
   papergo[.exe]
-  papergo-admin[.exe]
   config.yaml
-  lib/                   # Linux native libraries; Windows DLLs sit beside the EXEs
+  lib/                   # Linux native libraries; Windows DLLs sit beside the EXE
   notices/
   assets/
     models/
@@ -334,11 +333,11 @@ that can be installed directly from **Export and import**.
 
 ## Administrative backup and restore
 
-Build the administrative CLI with `go build -o papergo-admin ./cmd/admin`:
+The `papergo` executable runs administrative commands as `papergo admin <command>`: `initialize`, `health`, `backup`, `restore`, `search copy` and `workers`, each with `--help`.
 
 ```sh
-papergo-admin backup --file backup.tar.gz
-papergo-admin restore --file backup.tar.gz
+papergo admin backup --file backup.tar.gz
+papergo admin restore --file backup.tar.gz
 ```
 
 `--database`, `--blobs`, `--search` and `--search-store` select paths and the backend; defaults use `DATABASE_PATH`, `BLOB_PATH`, `SEARCH_STORE` and `SEARCH_DATABASE_PATH` or `SEARCH_ZVEC_PATH`. These commands need filesystem access and do not initialize HTTP authentication. With SQLite search, backup can run while the API is serving: it pauses database writes while snapshotting and copying referenced immutable files; reads continue. The gzip tar archive includes the complete SQLite database (including workflow runs), referenced file bytes and a checksum manifest; it leaves out the SQLite search index. With zvec, stop the API first: backup requires exclusive leases and includes the flushed, closed native directory and its checksums. Existing backup archives are never overwritten. The manifest is limited to 16 MiB.

@@ -145,5 +145,5 @@ USER 65532:65532
 ENV HTTP_ADDR=0.0.0.0:8080 DATABASE_PATH=/data/papergo.db BLOB_PATH=/data/blobs APP_ENV=production
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-    CMD ["/opt/papergo/papergo", "--health"]
+    CMD ["/opt/papergo/papergo", "admin", "health"]
 ENTRYPOINT ["/opt/papergo/papergo"]

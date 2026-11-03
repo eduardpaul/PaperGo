@@ -8,30 +8,15 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/signal"
 	"path/filepath"
-	"syscall"
 	"time"
 
 	"papergo/internal/backup"
-	"papergo/internal/buildinfo"
 	"papergo/internal/dal/database"
 )
 
-func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	if err := run(ctx, os.Args[1:], os.Stdout); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-}
-
-func run(ctx context.Context, args []string, out io.Writer) error {
-	if len(args) == 1 && args[0] == "--version" {
-		fmt.Fprintln(out, buildinfo.String())
-		return nil
-	}
+// admin runs an administrative command: papergo admin <command>.
+func admin(ctx context.Context, args []string, out io.Writer) error {
 	if len(args) > 0 && args[0] == "search" {
 		return searchCommand(ctx, args[1:], out)
 	}
@@ -83,7 +68,7 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		return database.Initialize(ctx, path)
 	}
 	if len(args) == 0 || args[0] != "backup" && args[0] != "restore" {
-		return errors.New("usage: papergo-admin initialize|health|backup|restore|search|workers; each command accepts --help")
+		return errors.New("usage: papergo admin initialize|health|backup|restore|search|workers; each command accepts --help")
 	}
 	if os.Getenv("DATABASE_URL") != "" {
 		return errors.New(args[0] + " archives the SQLite database; DATABASE_URL selects PostgreSQL, which its own tools back up")

@@ -222,7 +222,7 @@ migration for each engine to `internal/dal/migrations/`; see
 
 Stop the API or debugger before resetting local data. Local databases and blobs
 are disposable: delete `data/`, recreate the directory with `mkdir -p data/blobs`,
-then run `go run ./cmd/admin initialize --database data/papergo.db`. Do not add backfills.
+then run `go run ./cmd/api admin initialize --database data/papergo.db`. Do not add backfills.
 
 Go/npm caches and `web/node_modules` survive container rebuilds. `npm ci` replaces
 the installed dependency tree with the lockfile contents. To clear a stale build

@@ -40,10 +40,9 @@ def exercise(image, version):
     try:
         config = json.loads(docker('image', 'inspect', image))[0]['Config']
         assert config['User'] == '65532:65532', config['User']
-        assert config['Healthcheck']['Test'] == ['CMD', '/opt/papergo/papergo', '--health']
-        for program in ('/opt/papergo/papergo', '/opt/papergo/papergo-admin'):
-            output = docker('run', '--rm', '--network=none', '--entrypoint', program, image, '--version')
-            assert 'PaperGo' in output and (not version or version in output), output
+        assert config['Healthcheck']['Test'] == ['CMD', '/opt/papergo/papergo', 'admin', 'health']
+        output = docker('run', '--rm', '--network=none', image, '--version')
+        assert 'PaperGo' in output and (not version or version in output), output
         # A fresh production instance must not expose a default admin password.
         container = docker('create', '--network=none', '--volume', volume + ':/data', image)
         docker('start', container)
@@ -72,7 +71,7 @@ def exercise(image, version):
             workspace = json.loads(smoke.request(base, '/v1/workspaces', {'name': model}))
             previous_workspace = workspace['id']
             smoke.exercise_native(base, workspace['id'])
-            docker('exec', container, '/opt/papergo/papergo', '--health')
+            docker('exec', container, '/opt/papergo/papergo', 'admin', 'health')
             docker('stop', '--time=45', container)
             assert docker('inspect', '--format={{.State.ExitCode}}', container) == '0'
             docker('rm', container)

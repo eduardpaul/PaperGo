@@ -39,11 +39,10 @@ class PackagingTests(unittest.TestCase):
                 with patch.object(build, 'compiler_runtime', return_value={}):
                     files = build.runtime_files(native, system, {})
                 suffix = '.exe' if system == 'windows' else ''
-                for name in ('papergo', 'papergo-admin'):
-                    path = binaries / (name + suffix)
-                    path.parent.mkdir(parents=True, exist_ok=True)
-                    path.write_bytes(b'application')
-                    path.chmod(0o755)
+                path = binaries / ('papergo' + suffix)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b'application')
+                path.chmod(0o755)
                 assets.collect(binaries, files)
                 model = root / 'model.onnx'
                 data = bytes(range(256)) * 8193

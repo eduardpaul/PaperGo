@@ -34,7 +34,6 @@ import (
 	"papergo/internal/integration"
 	"papergo/internal/ocr"
 	"papergo/internal/officefiles"
-	"papergo/internal/readiness"
 	"papergo/internal/scriptrun"
 	"papergo/internal/search"
 	"papergo/internal/storage"
@@ -51,15 +50,18 @@ func main() {
 		fmt.Println(buildinfo.String())
 		return
 	}
-	if len(os.Args) >= 2 && os.Args[1] == "--health" {
-		if err := readiness.Check(os.Args[2:]); err != nil {
+	if len(os.Args) >= 2 && os.Args[1] == "admin" {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		err := admin(ctx, os.Args[2:], os.Stdout)
+		stop()
+		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
 		return
 	}
 	if len(os.Args) > 1 {
-		fmt.Fprintln(os.Stderr, "usage: papergo [--version|--health [url]]; configuration is read from config.yaml and environment variables")
+		fmt.Fprintln(os.Stderr, "usage: papergo [--version | admin <command>]; the server reads its configuration from config.yaml and environment variables")
 		os.Exit(1)
 	}
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))

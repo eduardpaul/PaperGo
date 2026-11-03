@@ -9,7 +9,7 @@ go mod download
 npm ci --prefix web
 npm --prefix web run build
 mkdir -p data/blobs .cache
-go run ./cmd/admin initialize --database data/papergo.db
+go run ./cmd/api admin initialize --database data/papergo.db
 
 # Keep the same private, random token across container rebuilds and API restarts.
 if [[ ! -e .cache/development.env ]]; then

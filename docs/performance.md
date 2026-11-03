@@ -315,8 +315,8 @@ configuration, and writes raw process/resource measurements to JSON. Run these
 commands **one at a time**:
 
 ```sh
-python3 scripts/performance.py --binary .cache/performance/papergo --admin .cache/performance/papergo-admin --items 2000 --seconds 10 --idle-seconds 30 --concurrency 1 8 32 64 --output .cache/performance/http-2000.json
-python3 scripts/performance.py --binary .cache/performance/papergo --admin .cache/performance/papergo-admin --items 20000 --seconds 5 --idle-seconds 10 --concurrency 1 8 32 --extended --output .cache/performance/http-20000.json
+python3 scripts/performance.py --binary .cache/performance/papergo --items 2000 --seconds 10 --idle-seconds 30 --concurrency 1 8 32 64 --output .cache/performance/http-2000.json
+python3 scripts/performance.py --binary .cache/performance/papergo --items 20000 --seconds 5 --idle-seconds 10 --concurrency 1 8 32 --extended --output .cache/performance/http-20000.json
 PAPERGO_BENCH_ITEMS=2000 .cache/performance/dms.test -test.run='^$' -test.bench='BenchmarkCollectionQuery|BenchmarkWriteDuringIndexBuild|BenchmarkItemUpdates|BenchmarkBulkCreate|BenchmarkSmartFolderQuery100Collections' -test.benchtime=20x -test.benchmem
 PAPERGO_BENCH_ITEMS=20000 .cache/performance/dms.test -test.run='^$' -test.bench='^BenchmarkCollectionQuery$' -test.benchtime=20x -test.benchmem
 ```

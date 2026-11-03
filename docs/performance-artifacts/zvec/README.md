@@ -20,7 +20,7 @@ Reproduce using the pinned SDK:
 ```sh
 python3 scripts/native.py
 source .tools/native/env.sh
-go test -race ./internal/dal/search/zvecstore ./internal/backup ./cmd/admin
+go test -race ./internal/dal/search/zvecstore ./internal/backup ./cmd/api
 PAPERGO_ZVEC_SOAK=1 go test ./internal/dal/search/zvecstore -run '^TestRealDimensionsSoak$' -count=1 -v
 PAPERGO_TEST_SEARCH_STORE=zvec go test -race ./internal/dms ./internal/httpapi ./internal/scriptrun \
   -run '(Search|Content|Receipt|Contract|AIComplete|Prefix|SmartFolder|View|Listing|Query)'

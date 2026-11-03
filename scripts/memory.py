@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Measure Linux idle RSS on a disposable server, including a seeded restart.
 
-Build the API/admin binaries and source .tools/native/env.sh before running.
+Build the papergo binary and source .tools/native/env.sh before running.
 Local AI models are disabled so this measures the server and search store.
 """
 import argparse
@@ -77,7 +77,6 @@ def snapshot(server, name, seconds, poll_status=False):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--binary', type=Path, default=ROOT / 'bin/papergo')
-    parser.add_argument('--admin', type=Path, default=ROOT / 'bin/papergo-admin')
     parser.add_argument('--search-store', choices=['sqlite', 'zvec'], default='sqlite')
     parser.add_argument('--items', type=int, default=200)
     parser.add_argument('--idle-seconds', type=float, default=65)
@@ -91,7 +90,7 @@ def main():
         parser.error('--unload-seconds requires --search-store zvec')
     if 0 < args.unload_seconds < 335:
         parser.error('--unload-seconds must be at least 335 to cover five minutes plus the maintenance interval')
-    binary, admin = args.binary.resolve(), args.admin.resolve()
+    binary = args.binary.resolve()
     # Deployment auth, paths, model settings and allocator overrides stay out.
     env = {k: v for k, v in os.environ.items() if k in ('PATH', 'HOME', 'LANG', 'TMPDIR', 'LD_LIBRARY_PATH')}
     env.update(APP_ENV='test', AUTH_MODE='development', DEV_TOKEN=TOKEN,
@@ -101,7 +100,7 @@ def main():
         directory = Path(temp)
         dbpath = directory / 'papergo.db'
         env.update(DATABASE_PATH=str(dbpath), BLOB_PATH=str(directory / 'blobs'))
-        subprocess.run([str(admin), 'initialize', '--database', str(dbpath)],
+        subprocess.run([str(binary), 'admin', 'initialize', '--database', str(dbpath)],
                        cwd=ROOT, env=env, check=True, stdout=subprocess.DEVNULL)
         with running(binary, env, directory) as server:
             stages = [snapshot(server, 'idle-empty', args.idle_seconds)]

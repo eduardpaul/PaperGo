@@ -83,10 +83,9 @@ def main():
         target = output / name
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, target)
-    for command, name in [('api', 'papergo'), ('admin', 'papergo-admin')]:
-        subprocess.run(['go', 'build', '-trimpath', '-ldflags=' + args.ldflags,
-                        '-o', str(output / (name + suffix)), './cmd/' + command],
-                       cwd=ROOT, env=env, check=True)
+    subprocess.run(['go', 'build', '-trimpath', '-ldflags=' + args.ldflags,
+                    '-o', str(output / ('papergo' + suffix)), './cmd/api'],
+                   cwd=ROOT, env=env, check=True)
     print(f'Executables and native libraries: {output}')
 
 
