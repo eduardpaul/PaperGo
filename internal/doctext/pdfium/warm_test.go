@@ -80,9 +80,10 @@ func TestFailedStartIsRetried(t *testing.T) {
 		if failing.Load() {
 			return nil, errors.New("no PDFium")
 		}
-		return real(dir)
+		return real(doctexttest.CacheDir(t))
 	})
-	// Without a cache: a failed start with one clears it.
+	// Without a cache of its own: a failed start with one clears it. Once
+	// starts work, they load the shared one.
 	reader := pdfium.New(pdfium.Options{})
 	for range 2 {
 		if _, err := reader.Open(context.Background(), doctexttest.TextPDF("Retry")); !errors.Is(err, doctext.ErrUnavailable) {
