@@ -1,1 +1,38 @@
-{}
+{
+  "greeting": {
+    "afternoon": "Buenas tardes",
+    "afternoonName": "Buenas tardes, {{name}}",
+    "evening": "Buenas noches",
+    "eveningName": "Buenas noches, {{name}}",
+    "morning": "Buenos días",
+    "morningName": "Buenos días, {{name}}"
+  },
+  "today": "{{weekday}}, {{date}}",
+  "inbox": "Bandeja de entrada",
+  "toFile_one": "{{count}} por archivar",
+  "toFile_many": "{{count}} por archivar",
+  "toFile_other": "{{count}} por archivar",
+  "nothingToFile": "Nada por archivar",
+  "myDocuments": "Mis documentos",
+  "workspaces": "Espacios de trabajo",
+  "all": "Todos",
+  "noWorkspaces": "Todavía no hay espacios de trabajo",
+  "createWorkspace": "<link>Crea un espacio de trabajo</link> para un equipo o un proyecto.",
+  "askAdministrator": "Pide a un administrador que te añada a un espacio de trabajo.",
+  "inboxPage": {
+    "description": "Archivos pendientes de clasificar.",
+    "none": "Todavía no hay bandeja de entrada",
+    "group": "Grupo",
+    "personal": "Personal",
+    "open": "Abrir {{name}}",
+    "loadMore": "Cargar más",
+    "groupInbox": "la bandeja de entrada de {{group}}",
+    "yourInbox": "tu bandeja de entrada"
+  },
+  "values": {
+    "invalidInteger": "Escribe un número entero válido.",
+    "invalidNumber": "Escribe un número válido.",
+    "unavailableItem": "Elemento no disponible",
+    "unknownTerm": "Término desconocido"
+  }
+}

@@ -1,4 +1,5 @@
 import { api, isApiError } from './http';
+import { i18n } from '@/i18n';
 import { termsById } from './queries';
 
 /** Labels of term and keyword ids. Ids the store does not return read "Unknown term"; without taxonomy access, none. */
@@ -9,7 +10,7 @@ export async function termNames(ids: string[]): Promise<Map<string, string>> {
       const chunk = ids.slice(index, index + 200);
       const found = await termsById(chunk);
       for (const term of found) names.set(term.id, term.name);
-      for (const id of chunk) if (!names.has(id)) names.set(id, 'Unknown term');
+      for (const id of chunk) if (!names.has(id)) names.set(id, i18n.t('home:values.unknownTerm'));
     }
   } catch (error) {
     if (!isApiError(error, 403)) throw error;
@@ -38,7 +39,7 @@ export async function resourceNames(ids: string[]): Promise<Map<string, string>>
       ).data;
       for (const id of chunk) {
         const response = result.responses.find((entry) => entry.id === id);
-        names.set(id, response?.status === 200 && response.body?.name ? response.body.name : 'Unavailable item');
+        names.set(id, response?.status === 200 && response.body?.name ? response.body.name : i18n.t('home:values.unavailableItem'));
       }
     }),
   );

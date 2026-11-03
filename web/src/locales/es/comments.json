@@ -1,1 +1,72 @@
-{}
+{
+  "deleted": "Este comentario se eliminó.",
+  "peopleToMention": "Personas a las que mencionar",
+  "cannotSee": "no puede ver este elemento",
+  "unseen": "{{names}} no puede ver este elemento y no recibirá aviso. Una mención no lo comparte.",
+  "onPage": "En la página {{page}}",
+  "onEarlierPage": "En la página {{page}} de una versión anterior",
+  "commentBy": "Comentario de {{name}}",
+  "workflow": "flujo de trabajo",
+  "edited": "(editado)",
+  "actionsFor": "Acciones del comentario de {{name}}",
+  "editPlaceholder": "Edita el comentario",
+  "reply": "Responder",
+  "reopen": "Reabrir",
+  "resolve": "Resolver",
+  "resolvedBy": "Resuelto por {{name}}",
+  "status": {
+    "all": "Todos",
+    "open": "Abiertos",
+    "resolved": "Resueltos"
+  },
+  "turnedOffBy": {
+    "collection": "esta lista o biblioteca",
+    "default": "el valor predeterminado",
+    "deployment": "esta instalación",
+    "organization": "la organización",
+    "workspace": "este espacio de trabajo"
+  },
+  "offTitle": "Los comentarios están desactivados aquí",
+  "offBody": "Los ha desactivado {{origin}}.",
+  "collaboratorsTitle": "La conversación es para colaboradores",
+  "collaboratorsBody": "Las personas que pueden leer los borradores de este elemento lo comentan aquí.",
+  "discussion": "Conversación",
+  "threadViews": "Vistas de hilos",
+  "followedMissing": "El comentario que seguiste se eliminó o ya no está en esta conversación.",
+  "noResolved": "No hay hilos resueltos.",
+  "noDiscussion": "Todavía no hay conversación.",
+  "threads": "Hilos",
+  "loadMore": "Cargar más hilos",
+  "startPlaceholder": "Empieza un hilo; escribe @ para mencionar a alguien",
+  "comment": "Comentar",
+  "readOnly": "Puedes leer esta conversación, pero no participar en ella.",
+  "settings": {
+    "title": "Comentarios",
+    "saved": "Configuración de comentarios guardada",
+    "workspaceDescription": "Quién comenta los elementos de este espacio de trabajo. Las listas y bibliotecas pueden elegir su propia opción.",
+    "collectionDescription": "Quién comenta los elementos de esta lista o biblioteca.",
+    "discussion": "Conversación",
+    "now": "Ahora: {{mode}}, definido por {{origin}}.",
+    "inherit": "Heredar",
+    "organizationDescription": "Conversaciones sobre elementos en toda la organización. Desactivarlas aquí prevalece sobre cualquier espacio de trabajo y colección.",
+    "enabled": "Comentarios",
+    "enabledHint": "Desactivados, se ocultan todas las conversaciones y se conservan sus comentarios.",
+    "on": "Activados",
+    "off": "Desactivados",
+    "defaultMode": "Conversación predeterminada",
+    "defaultModeHint": "La usan los espacios de trabajo, listas y bibliotecas que no eligen nada.",
+    "defaultOption": "{{mode}} (predeterminado)",
+    "modes": {
+      "collaborators": "Colaboradores: personas que pueden leer borradores",
+      "off": "Desactivados",
+      "readers": "Lectores: todos los que pueden leer el elemento"
+    },
+    "setBy": {
+      "collection": "esta lista o biblioteca",
+      "default": "el valor predeterminado",
+      "deployment": "la instalación",
+      "organization": "la organización",
+      "workspace": "el espacio de trabajo"
+    }
+  }
+}

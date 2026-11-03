@@ -8,6 +8,7 @@ import type { CreatedAccessToken } from '@/api/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { CopyField, SettingRow, SettingsSection } from '@/features/settings/section';
+import { Trans, useTranslation } from '@/i18n';
 import { useFormat } from '@/lib/preferences';
 
 export const Route = createFileRoute('/_app/settings/webdav')({ component: WebDAVPage });
@@ -17,22 +18,24 @@ function WebDAVPage() {
 }
 
 function ProxyWebDAV() {
+  const { t } = useTranslation('settings');
   const me = useQuery(meQuery);
   return (
     <SettingsSection
-      title="WebDAV through your proxy"
-      description="Use your reverse-proxy username and password over HTTPS to open a WebDAV-enabled library in Explorer or Finder."
+      title={t('webdav.proxyTitle')}
+      description={t('webdav.proxyDescription')}
     >
       <p className="text-sm">
-        Username: <strong>{me.data?.subject}</strong>
+        <Trans t={t} i18nKey="webdav.username" values={{ subject: me.data?.subject ?? '' }} components={{ strong: <strong /> }} />
       </p>
-      <p className="mt-2 break-all text-sm">Library address: {window.location.origin}/webdav/&#123;library-id&#125;/</p>
-      <p className="mt-2 text-xs text-muted">Your proxy manages credentials for both the browser and WebDAV.</p>
+      <p className="mt-2 break-all text-sm">{t('webdav.libraryAddress', { address: `${window.location.origin}/webdav/{${t('webdav.libraryId')}}/` })}</p>
+      <p className="mt-2 text-xs text-muted">{t('webdav.proxyHint')}</p>
     </SettingsSection>
   );
 }
 
 function BearerWebDAV() {
+  const { t } = useTranslation('settings');
   const format = useFormat();
   const queryClient = useQueryClient();
   const list = useQuery({ queryKey: ['tokens'], queryFn: tokens });
@@ -68,18 +71,18 @@ function BearerWebDAV() {
   return (
     <div className="flex flex-col gap-5">
       <SettingsSection
-        title="New WebDAV access token"
-        description="Use this token as the password with your account subject to open a library in Explorer or Finder. It is shown once."
+        title={t('webdav.newTitle')}
+        description={t('webdav.newDescription')}
         actions={
           <Button variant="primary" disabled={issue.isPending || !label.trim() || !canRead || !validExpiry} onClick={() => issue.mutate()}>
-            Create token
+            {t('tokens.create')}
           </Button>
         }
       >
-        <SettingRow id="dav-label" label="Label">
+        <SettingRow id="dav-label" label={t('webdav.label')}>
           <Input id="dav-label" value={label} onChange={(event) => setLabel(event.target.value)} />
         </SettingRow>
-        <SettingRow id="dav-expires" label="Expires in days" hint="1–3650 days.">
+        <SettingRow id="dav-expires" label={t('tokens.expiresInDays')} hint={t('webdav.expiresHint')}>
           <Input
             id="dav-expires"
             type="number"
@@ -89,18 +92,19 @@ function BearerWebDAV() {
             onChange={(event) => setDays(event.target.value)}
           />
         </SettingRow>
-        {mine.isSuccess && !canRead && <p className="text-sm text-muted">Library and document read access is required to create a WebDAV token.</p>}
-        {created?.secret && <CopyField label="Password" value={created.secret} />}
+        {mine.isSuccess && !canRead && <p className="text-sm text-muted">{t('webdav.readRequired')}</p>}
+        {created?.secret && <CopyField label={t('webdav.password')} value={created.secret} />}
       </SettingsSection>
-      <SettingsSection title="Access tokens">
+      <SettingsSection title={t('webdav.listTitle')}>
         <ul className="flex flex-col gap-2">
           {(list.data ?? []).map((credential) => (
             <li key={credential.id} className="flex items-center gap-3 rounded-md border px-3 py-2">
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[13px] font-medium">{credential.name}</p>
                 <p className="text-xs text-muted">
-                  Created {format.date(credential.created_at)}
-                  {credential.expires_at ? ` · expires ${format.date(credential.expires_at)}` : ''}
+                  {credential.expires_at
+                    ? t('webdav.createdExpires', { date: format.date(credential.created_at), expires: format.date(credential.expires_at) })
+                    : t('webdav.created', { date: format.date(credential.created_at) })}
                 </p>
               </div>
               <Button
@@ -109,12 +113,12 @@ function BearerWebDAV() {
                 disabled={revoke.isPending}
                 onClick={() => revoke.mutate(credential.id)}
               >
-                Revoke
+                {t('tokens.revoke')}
               </Button>
             </li>
           ))}
           {list.isFetched && (list.data?.length ?? 0) === 0 && (
-            <li className="text-sm text-muted">No access tokens.</li>
+            <li className="text-sm text-muted">{t('webdav.none')}</li>
           )}
         </ul>
       </SettingsSection>

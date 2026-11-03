@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ConfirmDialog, CopyField, SettingRow, SettingsSection } from '@/features/settings/section';
+import { i18n, Trans, useTranslation } from '@/i18n';
 import { problemMessage } from '@/lib/errors';
 import { useFormat } from '@/lib/preferences';
 
@@ -75,18 +76,18 @@ export async function checkConnection(endpoint: string, secret: string): Promise
       }),
     });
   } catch {
-    return { ok: false, reason: `Nothing answered at ${endpoint}.` };
+    return { ok: false, reason: i18n.t('settings:assistants.check.nothingAnswered', { endpoint }) };
   }
-  if (response.status === 404) return { ok: false, reason: `${endpoint} is not an MCP server: it answered 404.` };
-  if (response.status === 401) return { ok: false, reason: 'The assistant endpoint refused the token.' };
-  if (!response.ok) return { ok: false, reason: `The assistant endpoint answered ${response.status}.` };
+  if (response.status === 404) return { ok: false, reason: i18n.t('settings:assistants.check.notFound', { endpoint }) };
+  if (response.status === 401) return { ok: false, reason: i18n.t('settings:assistants.check.refused') };
+  if (!response.ok) return { ok: false, reason: i18n.t('settings:assistants.check.status', { status: response.status }) };
   try {
     const body = (await response.json()) as { result?: { serverInfo?: unknown } };
     if (body.result?.serverInfo) return { ok: true };
   } catch {
     // Reported below.
   }
-  return { ok: false, reason: `${endpoint} did not answer as an MCP server.` };
+  return { ok: false, reason: i18n.t('settings:assistants.check.notMcp', { endpoint }) };
 }
 
 /** The scopes a connection gets: reading, and item.write for read and write. */
@@ -102,13 +103,15 @@ export function connectionScopes(write: boolean, held: string[]) {
 export function accessLabel(scopes: string[]) {
   const write = scopes.includes('item.write');
   const more = scopes.filter((scope) => scope !== 'item.write' && !ReadScopes.includes(scope));
-  if (more.length === 0) return write ? 'Read and write' : 'Read only';
-  return `${write ? 'Read and write' : 'Read'}, plus ${more.join(', ')}`;
+  if (more.length === 0) return i18n.t(write ? 'settings:assistants.accessReadWrite' : 'settings:assistants.accessReadOnly');
+  return i18n.t(write ? 'settings:assistants.accessReadWritePlus' : 'settings:assistants.accessReadPlus', { scopes: more.join(', ') });
 }
 
 export function placesLabel(places: Place[] | null) {
-  if (places === null) return 'Everything you can access';
-  return places.map((place) => (place.workspace ? `${place.name} (${place.workspace})` : place.name)).join(', ');
+  if (places === null) return i18n.t('settings:assistants.everything');
+  return places
+    .map((place) => (place.workspace ? i18n.t('settings:assistants.placeIn', { name: place.name, workspace: place.workspace }) : place.name))
+    .join(', ');
 }
 
 function expiryDate(days: number) {
@@ -122,6 +125,7 @@ export function expired(token: AccessToken, now = Date.now()) {
 }
 
 function AssistantsPage() {
+  const { t } = useTranslation('settings');
   const endpoint = mcpEndpoint();
   return (
     <div className="flex flex-col gap-5">
@@ -129,12 +133,11 @@ function AssistantsPage() {
         <Connect endpoint={endpoint} />
       ) : (
         <SettingsSection
-          title="Connect an assistant"
-          description="AI assistants, such as Claude, can work with PaperGo through its MCP server."
+          title={t('assistants.connectTitle')}
+          description={t('assistants.unavailableDescription')}
         >
           <p className="text-sm">
-            This PaperGo does not run an MCP server yet. An administrator runs <code>papergo-mcp</code> and sets{' '}
-            <code>MCP_PUBLIC_URL</code> to its address; then you can connect assistants here.
+            <Trans t={t} i18nKey="assistants.unavailable" components={{ code: <code /> }} />
           </p>
         </SettingsSection>
       )}
@@ -144,10 +147,11 @@ function AssistantsPage() {
 }
 
 function Connect({ endpoint }: { endpoint: string }) {
+  const { t } = useTranslation(['settings', 'common']);
   const format = useFormat();
   const queryClient = useQueryClient();
   const mine = useQuery({ queryKey: ['my-scopes'], queryFn: scopes });
-  const [name, setName] = useState('AI assistant');
+  const [name, setName] = useState(() => t('assistants.defaultName'));
   const [write, setWrite] = useState(false);
   const [limited, setLimited] = useState(false);
   const [places, setPlaces] = useState<Place[]>([]);
@@ -198,30 +202,30 @@ function Connect({ endpoint }: { endpoint: string }) {
   return (
     <>
       <SettingsSection
-        title="Connect an assistant"
-        description="Let an AI assistant, such as Claude, find and read your work in PaperGo, and change it if you allow. It never gets more access than you have."
+        title={t('assistants.connectTitle')}
+        description={t('assistants.connectDescription')}
         actions={
           <Button
             variant="primary"
             disabled={issue.isPending || !canRead || !name.trim() || !validExpiry || !validPlaces}
             onClick={() => issue.mutate()}
           >
-            Create connection
+            {t('assistants.create')}
           </Button>
         }
       >
-        <SettingRow id="assistant-name" label="Name" hint="So you recognise it later, such as the assistant it is for.">
+        <SettingRow id="assistant-name" label={t('common:fields.name')} hint={t('assistants.nameHint')}>
           <Input id="assistant-name" value={name} onChange={(event) => setName(event.target.value)} />
         </SettingRow>
         <SettingRow
           id="assistant-access"
-          label="Access"
-          hint="Neither creates, configures, shares or deletes workspaces, lists or libraries."
+          label={t('assistants.access')}
+          hint={t('assistants.accessHint')}
         >
           <div role="radiogroup" aria-labelledby="assistant-access-label" className="flex flex-col gap-1.5">
             <label className="flex items-center gap-2 text-[13px]">
               <input type="radio" name="assistant-access" checked={!write} onChange={() => setWrite(false)} />
-              Read only: find and read, never change
+              {t('assistants.readOnlyOption')}
             </label>
             <label className="flex items-center gap-2 text-[13px]">
               <input
@@ -231,32 +235,32 @@ function Connect({ endpoint }: { endpoint: string }) {
                 disabled={!canWrite}
                 onChange={() => setWrite(true)}
               />
-              Read and write: also add, edit and delete items
+              {t('assistants.readWriteOption')}
             </label>
           </div>
         </SettingRow>
-        <SettingRow id="assistant-reach" label="Reach">
+        <SettingRow id="assistant-reach" label={t('assistants.reach')}>
           <div role="radiogroup" aria-labelledby="assistant-reach-label" className="flex flex-col gap-1.5">
             <label className="flex items-center gap-2 text-[13px]">
               <input type="radio" name="assistant-reach" checked={!limited} onChange={() => setLimited(false)} />
-              Everything I can access
+              {t('assistants.everythingOption')}
             </label>
             <label className="flex items-center gap-2 text-[13px]">
               <input type="radio" name="assistant-reach" checked={limited} onChange={() => setLimited(true)} />
-              Only selected workspaces, lists and libraries
+              {t('assistants.selectedOption')}
             </label>
           </div>
         </SettingRow>
         {limited && (
           <SettingRow
             id="assistant-places"
-            label="Places"
+            label={t('assistants.places')}
             hint={
               places.length > MaxPlaces
-                ? `Choose at most ${MaxPlaces}.`
+                ? t('assistants.placesMax', { max: MaxPlaces })
                 : places.length === 0
-                  ? 'Choose at least one. A workspace includes the lists and libraries added to it later.'
-                  : 'A workspace includes the lists and libraries added to it later.'
+                  ? t('assistants.placesNone')
+                  : t('assistants.placesHint')
             }
           >
             <PlacePicker selected={places} onChange={setPlaces} />
@@ -268,10 +272,10 @@ function Connect({ endpoint }: { endpoint: string }) {
           aria-expanded={advanced}
           onClick={() => setAdvanced((open) => !open)}
         >
-          {advanced ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />} Advanced options
+          {advanced ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />} {t('assistants.advanced')}
         </button>
         {advanced && (
-          <SettingRow id="assistant-days" label="Expires in days">
+          <SettingRow id="assistant-days" label={t('tokens.expiresInDays')}>
             <Input
               id="assistant-days"
               inputMode="numeric"
@@ -281,49 +285,46 @@ function Connect({ endpoint }: { endpoint: string }) {
           </SettingRow>
         )}
         <dl
-          aria-label="This connection"
+          aria-label={t('assistants.summary')}
           className="mt-2 grid gap-1 rounded-md bg-surface-muted/60 px-3 py-2.5 text-[13px] sm:grid-cols-[6rem_1fr]"
         >
-          <dt className="text-muted">Access</dt>
+          <dt className="text-muted">{t('assistants.access')}</dt>
           <dd>{accessLabel(connectionScopes(write, held))}</dd>
-          <dt className="text-muted">Reach</dt>
-          <dd>{limited ? (places.length ? placesLabel(places) : 'No places chosen yet') : placesLabel(null)}</dd>
-          <dt className="text-muted">Expires</dt>
-          <dd>{validExpiry ? format.date(expiryDate(expires)) : 'Choose 1 to 3650 days'}</dd>
+          <dt className="text-muted">{t('assistants.reach')}</dt>
+          <dd>{limited ? (places.length ? placesLabel(places) : t('assistants.noPlaces')) : placesLabel(null)}</dd>
+          <dt className="text-muted">{t('assistants.expires')}</dt>
+          <dd>{validExpiry ? format.date(expiryDate(expires)) : t('assistants.chooseDays')}</dd>
         </dl>
         {mine.isSuccess && !canRead && (
-          <p className="mt-2 text-sm text-muted">Reading lists is required to connect an assistant.</p>
+          <p className="mt-2 text-sm text-muted">{t('assistants.readRequired')}</p>
         )}
         {issue.isError && <p className="mt-2 text-sm text-danger">{problemMessage(issue.error)}</p>}
       </SettingsSection>
       {created && (
         <div ref={result}>
           <SettingsSection
-            title={`Set up ${created.token.name}`}
-            description="Add the connection to your assistant now: the token is shown only once, and anyone holding it acts as you within this connection."
+            title={t('assistants.setUp', { name: created.token.name })}
+            description={t('assistants.setUpDescription')}
           >
             <ol className="mb-4 flex flex-col gap-1.5 text-[13px]">
               <li className="flex items-center gap-2">
-                <Check className="size-4 text-success" /> Token created
+                <Check className="size-4 text-success" /> {t('assistants.tokenCreated')}
               </li>
               <li className="flex items-center gap-2" aria-live="polite">
                 {check === 'checking' || check === null ? (
                   <>
-                    <LoaderCircle className="size-4 animate-spin text-muted" /> Checking the assistant endpoint…
+                    <LoaderCircle className="size-4 animate-spin text-muted" /> {t('assistants.checking')}
                   </>
                 ) : check.ok ? (
                   <>
-                    <Check className="size-4 text-success" /> The assistant endpoint answered with this token
+                    <Check className="size-4 text-success" /> {t('assistants.answered')}
                   </>
                 ) : (
                   <>
                     <CircleAlert className="size-4 text-danger" />
-                    <span>
-                      Not reachable yet. {check.reason} The token works and is listed below; check the address with your
-                      administrator.
-                    </span>
+                    <span>{t('assistants.notReachable', { reason: check.reason })}</span>
                     <Button size="sm" onClick={() => void verify(created.secret)}>
-                      Check again
+                      {t('assistants.checkAgain')}
                     </Button>
                   </>
                 )}
@@ -337,56 +338,63 @@ function Connect({ endpoint }: { endpoint: string }) {
   );
 }
 
+// Product names, the same in every language.
+const clients = [
+  { value: 'claude-code', name: 'Claude Code' },
+  { value: 'cursor', name: 'Cursor' },
+  { value: 'vscode', name: 'VS Code' },
+];
+
 function ClientSetup({ endpoint, secret }: { endpoint: string; secret: string }) {
+  const { t } = useTranslation('settings');
   const setup = clientSetup(endpoint, secret);
   return (
     <div className="flex flex-col gap-3">
-      <SettingRow id="assistant-endpoint" label="Address">
-        <CopyField label="Address" value={endpoint} />
+      <SettingRow id="assistant-endpoint" label={t('assistants.address')}>
+        <CopyField label={t('assistants.address')} value={endpoint} />
       </SettingRow>
-      <SettingRow id="assistant-token" label="Token">
-        <CopyField label="Token" value={secret} />
+      <SettingRow id="assistant-token" label={t('assistants.token')}>
+        <CopyField label={t('assistants.token')} value={secret} />
       </SettingRow>
       <Tabs defaultValue="claude-code" className="rounded-md border">
-        <TabsList aria-label="Assistant">
-          <TabsTrigger value="claude-code">Claude Code</TabsTrigger>
-          <TabsTrigger value="cursor">Cursor</TabsTrigger>
-          <TabsTrigger value="vscode">VS Code</TabsTrigger>
-          <TabsTrigger value="other">Other</TabsTrigger>
+        <TabsList aria-label={t('assistants.client')}>
+          {clients.map((client) => (
+            <TabsTrigger key={client.value} value={client.value}>
+              {client.name}
+            </TabsTrigger>
+          ))}
+          <TabsTrigger value="other">{t('assistants.other')}</TabsTrigger>
         </TabsList>
         <TabsContent value="claude-code" className="flex flex-col gap-2 p-4 text-[13px]">
-          <p>Run this in a terminal:</p>
-          <CopyField label="Claude Code command" value={setup.claudeCode} />
+          <p>{t('assistants.claudeCodeHint')}</p>
+          <CopyField label={t('assistants.claudeCodeLabel')} value={setup.claudeCode} />
         </TabsContent>
         <TabsContent value="cursor" className="flex flex-col gap-2 p-4 text-[13px]">
           <p>
-            Add this to <code>~/.cursor/mcp.json</code>, or to <code>.cursor/mcp.json</code> in a project:
+            <Trans t={t} i18nKey="assistants.cursorHint" components={{ code: <code /> }} />
           </p>
-          <CopyField label="Cursor configuration" value={setup.cursor} />
+          <CopyField label={t('assistants.cursorLabel')} value={setup.cursor} />
         </TabsContent>
         <TabsContent value="vscode" className="flex flex-col gap-2 p-4 text-[13px]">
           <p>
-            Add this to <code>.vscode/mcp.json</code> in a workspace, or with MCP: Open User Configuration:
+            <Trans t={t} i18nKey="assistants.vscodeHint" components={{ code: <code /> }} />
           </p>
-          <CopyField label="VS Code configuration" value={setup.vscode} />
+          <CopyField label={t('assistants.vscodeLabel')} value={setup.vscode} />
         </TabsContent>
         <TabsContent value="other" className="flex flex-col gap-2 p-4 text-[13px]">
           <p>
-            Clients that connect to a remote MCP server over HTTP with a header take the address and an{' '}
-            <code>Authorization: Bearer</code> header with the token, often in this form:
+            <Trans t={t} i18nKey="assistants.otherHint" components={{ code: <code /> }} />
           </p>
-          <CopyField label="JSON configuration" value={setup.json} />
+          <CopyField label={t('assistants.jsonLabel')} value={setup.json} />
         </TabsContent>
       </Tabs>
-      <p className="text-xs text-muted">
-        Assistants that connect to remote servers only through an OAuth sign-in, such as custom connectors in Claude.ai
-        or ChatGPT, cannot use a token and cannot connect yet.
-      </p>
+      <p className="text-xs text-muted">{t('assistants.oauthNote')}</p>
     </div>
   );
 }
 
 function Connections() {
+  const { t } = useTranslation('settings');
   const format = useFormat();
   const queryClient = useQueryClient();
   const list = useQuery({ queryKey: ['tokens'], queryFn: tokens });
@@ -402,8 +410,8 @@ function Connections() {
   const connections = (list.data ?? []).filter((token) => token.scopes?.includes('item.read'));
   return (
     <SettingsSection
-      title="Your connections"
-      description="Every access token that can read lists can connect an assistant."
+      title={t('assistants.connectionsTitle')}
+      description={t('assistants.connectionsDescription')}
     >
       <ul className="flex flex-col gap-2">
         {connections.map((token) => {
@@ -413,34 +421,34 @@ function Connections() {
               <div className="min-w-0 flex-1">
                 <p className="flex items-center gap-2 truncate text-[13px] font-medium">
                   {token.name}
-                  {over ? <Badge tone="danger">Expired</Badge> : !token.last_used_at && <Badge>Not used yet</Badge>}
+                  {over ? <Badge tone="danger">{t('assistants.expired')}</Badge> : !token.last_used_at && <Badge>{t('assistants.notUsed')}</Badge>}
                 </p>
                 <p className="text-xs text-muted">
                   {accessLabel(token.scopes ?? [])} · <TokenPlaces ids={token.resources ?? []} />
                 </p>
                 <p className="text-xs text-muted">
-                  {token.last_used_at ? `Last used ${format.date(token.last_used_at)}` : 'Never used'} ·{' '}
+                  {token.last_used_at ? t('assistants.lastUsed', { date: format.date(token.last_used_at) }) : t('assistants.neverUsed')} ·{' '}
                   {token.expires_at
-                    ? `${over ? 'expired' : 'expires'} ${format.date(token.expires_at)}`
-                    : 'never expires'}
+                    ? t(over ? 'assistants.expiredOn' : 'assistants.expiresOn', { date: format.date(token.expires_at) })
+                    : t('assistants.neverExpires')}
                 </p>
               </div>
               <Button size="sm" variant="danger" onClick={() => setRevoking(token)}>
-                Revoke
+                {t('assistants.revoke')}
               </Button>
             </li>
           );
         })}
-        {list.isFetched && connections.length === 0 && <li className="text-sm text-muted">No connections yet.</li>}
+        {list.isFetched && connections.length === 0 && <li className="text-sm text-muted">{t('assistants.noConnections')}</li>}
       </ul>
       <ConfirmDialog
         open={revoking !== null}
         onOpenChange={(open) => {
           if (!open) setRevoking(null);
         }}
-        title={`Revoke ${revoking?.name ?? 'this connection'}?`}
-        description="Assistants using it stop working at once. This cannot be undone; create a new connection to reconnect."
-        confirm="Revoke"
+        title={t('assistants.revokeTitle', { name: revoking?.name ?? t('assistants.thisConnection') })}
+        description={t('assistants.revokeDescription')}
+        confirm={t('assistants.revoke')}
         busy={revoke.isPending}
         error={revoke.error}
         onConfirm={() => revoking && revoke.mutate(revoking.id)}
@@ -451,19 +459,21 @@ function Connections() {
 
 /** The names of the places a token reaches; places since removed or out of reach are counted. */
 function TokenPlaces({ ids }: { ids: string[] }) {
+  const { t } = useTranslation('settings');
   const resources = useQueries({ queries: ids.map((id) => ({ ...resourceQuery(id), retry: false })) });
-  if (ids.length === 0) return <>Everything you can access</>;
+  if (ids.length === 0) return <>{t('assistants.everything')}</>;
   const names = resources.flatMap((r) => (r.data ? [r.data.name] : []));
   const missing = resources.filter((r) => r.isError).length;
   const pending = resources.some((r) => r.isPending);
   const parts = [...names];
-  if (missing) parts.push(missing === 1 ? '1 place no longer available' : `${missing} places no longer available`);
-  if (pending && parts.length === 0) return <>{ids.length === 1 ? '1 place' : `${ids.length} places`}</>;
+  if (missing) parts.push(t('assistants.unavailablePlaces', { count: missing }));
+  if (pending && parts.length === 0) return <>{t('assistants.placeCount', { count: ids.length })}</>;
   return <>{parts.join(', ')}</>;
 }
 
 /** Workspaces with their lists and libraries; ticking a workspace takes all of it. */
 function PlacePicker({ selected, onChange }: { selected: Place[]; onChange: (places: Place[]) => void }) {
+  const { t } = useTranslation('settings');
   const workspaces = useQuery(workspacesQuery);
   const [filter, setFilter] = useState('');
   // Taking a whole workspace drops its lists and libraries ticked one by one.
@@ -477,8 +487,8 @@ function PlacePicker({ selected, onChange }: { selected: Place[]; onChange: (pla
   return (
     <div className="flex flex-col gap-2">
       <Input
-        aria-label="Filter places"
-        placeholder="Filter by name"
+        aria-label={t('assistants.filterPlaces')}
+        placeholder={t('assistants.filterPlaceholder')}
         value={filter}
         onChange={(event) => setFilter(event.target.value)}
       />
@@ -492,10 +502,10 @@ function PlacePicker({ selected, onChange }: { selected: Place[]; onChange: (pla
             onToggle={toggle}
           />
         ))}
-        {workspaces.isFetched && shown.length === 0 && <p className="text-sm text-muted">No workspaces.</p>}
+        {workspaces.isFetched && shown.length === 0 && <p className="text-sm text-muted">{t('assistants.noWorkspaces')}</p>}
       </div>
       <p className="text-xs text-muted">
-        {selected.length === 1 ? '1 place selected' : `${selected.length} places selected`}
+        {t('assistants.selected', { count: selected.length })}
       </p>
     </div>
   );
@@ -512,6 +522,7 @@ function WorkspacePlaces({
   selected: string[];
   onToggle: (place: Place, on: boolean, drop?: string[]) => void;
 }) {
+  const { t } = useTranslation('settings');
   const [open, setOpen] = useState(false);
   const collections = useQuery({
     queryKey: ['resources', workspace.id, 'collections'],
@@ -530,7 +541,7 @@ function WorkspacePlaces({
       <div className="flex items-center gap-1">
         <button
           type="button"
-          aria-label={`${open ? 'Hide' : 'Show'} ${workspace.name}'s lists and libraries`}
+          aria-label={t(open ? 'assistants.hideLists' : 'assistants.showLists', { workspace: workspace.name })}
           aria-expanded={open}
           className="text-muted"
           onClick={() => setOpen((value) => !value)}
@@ -568,11 +579,11 @@ function WorkspacePlaces({
                 }
               />
               {collection.name}
-              <span className="text-xs text-muted">{collection.kind === 'library' ? 'Library' : 'List'}</span>
+              <span className="text-xs text-muted">{collection.kind === 'library' ? t('assistants.library') : t('assistants.list')}</span>
             </label>
           ))}
           {collections.isFetched && matching.length === 0 && (
-            <p className="text-xs text-muted">No lists or libraries.</p>
+            <p className="text-xs text-muted">{t('assistants.noLists')}</p>
           )}
         </div>
       )}

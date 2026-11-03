@@ -1,1 +1,74 @@
-{}
+{
+  "page": {
+    "title": "Tareas",
+    "description": "Aprobaciones y otras solicitudes que esperan tu respuesta.",
+    "new": "Nueva tarea",
+    "views": "Vistas de tareas",
+    "list": "Tareas",
+    "loadMore": "Cargar más",
+    "nothingWaiting": "No tienes nada pendiente",
+    "none": "Todavía no hay tareas"
+  },
+  "views": {
+    "all": "Todas",
+    "approvals": "Aprobaciones",
+    "completed": "Completadas",
+    "waiting": "Pendientes de mí"
+  },
+  "status": {
+    "cancelled": "cancelada",
+    "completed": "completada",
+    "expired": "caducada",
+    "open": "abierta"
+  },
+  "approval": "aprobación",
+  "highPriority": "prioridad alta",
+  "due": "vence el {{date}}",
+  "requestedByWorkflow": "Solicitada el {{date}} por un flujo de trabajo",
+  "requestedBy": "Solicitada el {{date}} por {{person}}",
+  "everyAssignee": "responden todas las personas asignadas",
+  "waitingForOthers": "Ya respondiste; la tarea espera al resto de personas asignadas.",
+  "openItem": "Abrir {{name}}",
+  "answer": "Respuesta",
+  "comment": "Comentario",
+  "needsComment": "{{outcome}} necesita un comentario.",
+  "addPeople": "Añadir personas",
+  "reassign": "Reasignar",
+  "assignees": "Personas asignadas",
+  "reassignHint": "Cuentan las respuestas de las personas asignadas que mantengas; si deben responder todas, la tarea se completa cuando hayan respondido todas las que queden. Sin personas asignadas, la tarea es para los propietarios del espacio de trabajo.",
+  "saveAssignees": "Guardar personas asignadas",
+  "answers": "Respuestas",
+  "forAssignee": "en nombre de {{assignee}}",
+  "quoted": "«{{comment}}»",
+  "create": {
+    "title": "Nueva tarea",
+    "submit": "Crear tarea",
+    "workspace": "Espacio de trabajo",
+    "taskTitle": "Título",
+    "assigneesHint": "Si no hay ninguna, la tarea es para los propietarios del espacio de trabajo.",
+    "priority": "Prioridad",
+    "due": "Fecha de vencimiento"
+  },
+  "review": {
+    "label": "Revisión",
+    "promoted": "Este archivo se aceptó.",
+    "discarded": "Este archivo se descartó.",
+    "stale": "Un archivo a partir del que se creó este cambió después de solicitar la revisión. Ya no se puede aceptar; solo se puede rechazar.",
+    "currentFile": "Archivo actual",
+    "proposed": "Propuesto: {{filename}}",
+    "proposedFile": "Archivo propuesto",
+    "metrics": {
+      "bytes": "Tamaño",
+      "height": "Alto",
+      "pages": "Páginas",
+      "savings_percent": "Ahorro",
+      "scale": "Escala",
+      "smallest_text_height": "Altura del texto más pequeño",
+      "source_bytes": "Tamaño original",
+      "source_height": "Alto original",
+      "source_width": "Ancho original",
+      "text_regions": "Regiones de texto",
+      "width": "Ancho"
+    }
+  }
+}

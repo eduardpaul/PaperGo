@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { EmptyState, Skeleton } from '@/components/ui/feedback';
 import { useUploads } from '@/features/documents/uploads';
 import { ItemSheet } from '@/features/lists/item-sheet';
+import { useTranslation } from '@/i18n';
 import { useFormat } from '@/lib/preferences';
 import { textParam } from '@/lib/search';
 import { cn } from '@/lib/utils';
@@ -30,6 +31,7 @@ export const Route = createFileRoute('/_app/inbox')({
 });
 
 function InboxPage() {
+  const { t } = useTranslation(['home', 'common']);
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const inboxes = useQuery(inboxesQuery);
@@ -60,7 +62,7 @@ function InboxPage() {
     const inbox = selected;
     void upload(list, {
       url: inbox.group_id ? `/v1/identity/groups/${inbox.group_id}/inbox/documents` : '/v1/identity/me/inbox/documents',
-      label: inbox.group_name ? `${inbox.group_name} inbox` : 'your inbox',
+      label: inbox.group_name ? t('inboxPage.groupInbox', { group: inbox.group_name }) : t('inboxPage.yourInbox'),
       metadata: (file) => ({ name: file.name }),
       open: (itemId) => ({ to: '/inbox', search: { inbox: inbox.library_id, item: itemId } }),
     }).then((results) => {
@@ -75,13 +77,13 @@ function InboxPage() {
     <Page>
       <PageHeader
         icon={InboxIcon}
-        title="Inbox"
-        description="Files waiting to be sorted."
+        title={t('inbox')}
+        description={t('inboxPage.description')}
         actions={
           selected && (
             <Button asChild variant="primary">
               <label className="cursor-pointer">
-                <Upload /> Upload
+                <Upload /> {t('common:actions.upload')}
                 <input
                   type="file"
                   multiple
@@ -99,7 +101,7 @@ function InboxPage() {
       {inboxes.isPending ? (
         <Skeleton className="h-16" />
       ) : !inboxes.data?.length ? (
-        <EmptyState icon={InboxIcon} title="No inbox yet" />
+        <EmptyState icon={InboxIcon} title={t('inboxPage.none')} />
       ) : (
         <div className="grid gap-4 lg:grid-cols-[16rem_1fr]">
           <ul className="flex gap-2 overflow-auto lg:flex-col">
@@ -114,7 +116,7 @@ function InboxPage() {
                   onClick={() => void navigate({ search: { inbox: inbox.library_id } })}
                 >
                   <span className="block truncate">{inbox.group_name || inbox.library_name}</span>
-                  <span className="text-xs text-muted">{inbox.kind === 'group' ? 'Group' : 'Personal'}</span>
+                  <span className="text-xs text-muted">{inbox.kind === 'group' ? t('inboxPage.group') : t('inboxPage.personal')}</span>
                 </button>
               </li>
             ))}
@@ -122,7 +124,7 @@ function InboxPage() {
           <div>
             {selected && (
               <Link to="/w/$workspaceId/l/$listId" params={{ workspaceId: selected.workspace_id, listId: selected.library_id }} className="mb-3 inline-block text-xs font-medium text-accent hover:underline">
-                Open {selected.library_name}
+                {t('inboxPage.open', { name: selected.library_name })}
               </Link>
             )}
             <ul className="overflow-hidden rounded-lg border bg-surface">
@@ -139,7 +141,7 @@ function InboxPage() {
                   </button>
                 </li>
               ))}
-              {!children.isPending && rows.length === 0 && <EmptyState title="Nothing to file" />}
+              {!children.isPending && rows.length === 0 && <EmptyState title={t('nothingToFile')} />}
             </ul>
             {next && (
               <Button
@@ -156,7 +158,7 @@ function InboxPage() {
                     .finally(() => setLoadingMore(false));
                 }}
               >
-                {loadingMore ? 'Loading…' : 'Load more'}
+                {loadingMore ? t('common:status.loading') : t('inboxPage.loadMore')}
               </Button>
             )}
           </div>

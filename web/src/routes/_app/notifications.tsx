@@ -6,6 +6,7 @@ import { Page, PageHeader } from '@/components/page';
 import { Button } from '@/components/ui/button';
 import { Alert, EmptyState, Skeleton } from '@/components/ui/feedback';
 import { NotificationRow, useNotificationActions, useOpenNotification } from '@/features/notifications/notifications';
+import { useTranslation } from '@/i18n';
 import { problemMessage } from '@/lib/errors';
 import { textParam } from '@/lib/search';
 
@@ -18,7 +19,10 @@ export const Route = createFileRoute('/_app/notifications')({
   component: NotificationsPage,
 });
 
+const views = ['all', 'unread', 'mentions'] as const;
+
 function NotificationsPage() {
+  const { t } = useTranslation(['notifications', 'common']);
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const view = search.view === 'unread' || search.view === 'mentions' ? search.view : 'all';
@@ -31,21 +35,25 @@ function NotificationsPage() {
   return (
     <Page>
       <PageHeader
-        title="Notifications"
-        description="What happened that concerns you: tasks, mentions, replies, messages and failed workflows."
+        title={t('title')}
+        description={t('page.description')}
         icon={Bell}
         actions={
           <Button size="sm" disabled={!unread.data || markRead.isPending} onClick={() => markRead.mutate(undefined)}>
-            Mark all read
+            {t('markAllRead')}
           </Button>
         }
       />
-      <div className="mb-4 flex flex-wrap gap-2" role="tablist" aria-label="Notification views">
-        {[
-          { value: 'all', label: 'All' },
-          { value: 'unread', label: unread.data ? `Unread (${unread.data})` : 'Unread' },
-          { value: 'mentions', label: 'Mentions' },
-        ].map((v) => {
+      <div className="mb-4 flex flex-wrap gap-2" role="tablist" aria-label={t('page.views')}>
+        {views.map((value) => ({
+          value,
+          label:
+            value === 'unread'
+              ? unread.data
+                ? t('page.unreadCount', { unread: unread.data })
+                : t('unread')
+              : t(value === 'all' ? 'page.all' : 'page.mentions'),
+        })).map((v) => {
           const selected = v.value === view;
           return (
             <Button
@@ -68,14 +76,14 @@ function NotificationsPage() {
           icon={Bell}
           title={
             unreadOnly
-              ? 'You have read everything'
+              ? t('page.allRead')
               : view === 'mentions'
-                ? 'Nobody mentioned you yet'
-                : 'No notifications yet'
+                ? t('page.noMentions')
+                : t('page.none')
           }
         />
       )}
-      <ul className="flex flex-col divide-y rounded-lg border bg-surface empty:hidden" aria-label="Notifications">
+      <ul className="flex flex-col divide-y rounded-lg border bg-surface empty:hidden" aria-label={t('title')}>
         {rows.map((notification) => (
           <li key={notification.id} className="flex items-center gap-1 pr-2">
             <div className="min-w-0 flex-1">
@@ -90,7 +98,7 @@ function NotificationsPage() {
             <Button
               variant="ghost"
               size="icon"
-              aria-label={`Delete ${notification.title}`}
+              aria-label={t('page.delete', { title: notification.title })}
               disabled={remove.isPending}
               onClick={() => remove.mutate(notification.id)}
             >
@@ -101,7 +109,7 @@ function NotificationsPage() {
       </ul>
       {list.hasNextPage && (
         <Button className="mt-3" disabled={list.isFetching} onClick={() => void list.fetchNextPage()}>
-          {list.isFetchingNextPage ? 'Loading…' : 'Load more'}
+          {list.isFetchingNextPage ? t('common:status.loading') : t('page.loadMore')}
         </Button>
       )}
     </Page>

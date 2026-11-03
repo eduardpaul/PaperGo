@@ -1,1 +1,37 @@
-{}
+{
+  "greeting": {
+    "afternoon": "Good afternoon",
+    "afternoonName": "Good afternoon, {{name}}",
+    "evening": "Good evening",
+    "eveningName": "Good evening, {{name}}",
+    "morning": "Good morning",
+    "morningName": "Good morning, {{name}}"
+  },
+  "today": "{{weekday}}, {{date}}",
+  "inbox": "Inbox",
+  "toFile_one": "{{count}} to file",
+  "toFile_other": "{{count}} to file",
+  "nothingToFile": "Nothing to file",
+  "myDocuments": "My documents",
+  "workspaces": "Workspaces",
+  "all": "All",
+  "noWorkspaces": "No workspaces yet",
+  "createWorkspace": "<link>Create a workspace</link> for a team or project.",
+  "askAdministrator": "Ask an administrator to add you to a workspace.",
+  "inboxPage": {
+    "description": "Files waiting to be sorted.",
+    "none": "No inbox yet",
+    "group": "Group",
+    "personal": "Personal",
+    "open": "Open {{name}}",
+    "loadMore": "Load more",
+    "groupInbox": "{{group}} inbox",
+    "yourInbox": "your inbox"
+  },
+  "values": {
+    "invalidInteger": "Enter a valid integer.",
+    "invalidNumber": "Enter a valid number.",
+    "unavailableItem": "Unavailable item",
+    "unknownTerm": "Unknown term"
+  }
+}

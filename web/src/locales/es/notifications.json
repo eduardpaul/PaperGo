@@ -1,1 +1,29 @@
-{}
+{
+  "kinds": {
+    "commentMentioned": "Mención",
+    "commentReplied": "Respuesta",
+    "message": "Mensaje",
+    "taskAssigned": "Tarea para ti",
+    "taskCompleted": "Tarea respondida",
+    "workflowFailed": "Error en un flujo de trabajo"
+  },
+  "unread": "Sin leer",
+  "title": "Notificaciones",
+  "bellUnread": "Notificaciones, {{unread}} sin leer",
+  "markAllRead": "Marcar todo como leído",
+  "nothingNew": "Nada nuevo",
+  "latest": "Últimas notificaciones",
+  "viewAll": "Ver todas las notificaciones",
+  "page": {
+    "description": "Lo que ha pasado y te afecta: tareas, menciones, respuestas, mensajes y flujos de trabajo con errores.",
+    "views": "Vistas de notificaciones",
+    "all": "Todas",
+    "unreadCount": "Sin leer ({{unread}})",
+    "mentions": "Menciones",
+    "allRead": "Lo has leído todo",
+    "noMentions": "Todavía no te ha mencionado nadie",
+    "none": "Todavía no hay notificaciones",
+    "delete": "Eliminar {{title}}",
+    "loadMore": "Cargar más"
+  }
+}

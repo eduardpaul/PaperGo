@@ -1,1 +1,60 @@
-{}
+{
+  "title": "Buscar",
+  "notSetUp": "La búsqueda no está configurada",
+  "notSetUpBody": "Este PaperGo funciona sin búsqueda. Las listas y bibliotecas siguen encontrando elementos por nombre.",
+  "description": "Encuentra elementos y carpetas en tus espacios de trabajo por nombre, campos y palabras clave.",
+  "searchFor": "Buscar",
+  "placeholder": "Palabras, \"una frase\", palabra*, -excluir",
+  "items": "Elementos",
+  "archive": {
+    "active": "Activos",
+    "all": "Todos",
+    "archived": "Archivados"
+  },
+  "find": "Encontrar",
+  "kind": {
+    "all": "Elementos y carpetas",
+    "folder": "Carpetas",
+    "item": "Elementos"
+  },
+  "contentType": "Tipo de contenido",
+  "allContentTypes": "Todos los tipos de contenido",
+  "selectedContentType": "Tipo de contenido seleccionado",
+  "submit": "Buscar",
+  "workspaces": "Espacios de trabajo",
+  "typeToSearch": "Escribe para buscar",
+  "typeToSearchBody": "Deben coincidir todas las palabras, en nombres, campos o palabras clave; también coinciden otras formas de cada palabra. Usa comillas para una frase, * para el principio de una palabra y - para excluir una palabra.",
+  "home": "Inicio",
+  "workspace": "Espacio de trabajo",
+  "list": "Lista",
+  "keyword": "Palabra clave",
+  "results": "Resultados",
+  "resultCount_one": "{{count}} resultado",
+  "resultCount_many": "{{count}} resultados",
+  "resultCount_other": "{{count}} resultados",
+  "aboutResults_one": "Unos {{count}} resultado",
+  "aboutResults_many": "Unos {{count}} resultados",
+  "aboutResults_other": "Unos {{count}} resultados",
+  "removeFilter": "Quitar el filtro {{label}}",
+  "nothingMatches": "Nada coincide con «{{q}}»",
+  "nothingMatchesFilters": "Nada coincide con estos filtros",
+  "moreResults": "Más resultados",
+  "refine": "Refinar",
+  "listsAndLibraries": "Listas y bibliotecas",
+  "contentTypes": "Tipos de contenido",
+  "keywords": "Palabras clave",
+  "hit": {
+    "archived": "Archivado",
+    "draft": "Borrador",
+    "folderIn": "Carpeta en {{where}}",
+    "itemIn": "Elemento en {{where}}",
+    "page": "página {{page}}",
+    "similar": "significado parecido"
+  },
+  "relationships": {
+    "title": "Relaciones",
+    "related": "Relacionado",
+    "none": "No hay elementos relacionados.",
+    "more": "Más elementos relacionados"
+  }
+}

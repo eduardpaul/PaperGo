@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { api } from '@/api/http';
 import { resourceQuery } from '@/api/queries';
 import type { Task, TaskOutcome } from '@/api/types';
@@ -11,6 +11,7 @@ import { Label, Textarea } from '@/components/ui/input';
 import type { FormSchema } from '@/features/workflows/model';
 import { normalizeForm } from '@/features/workflows/model';
 import { SchemaFields } from '@/features/workflows/schema-form';
+import { useTranslation } from '@/i18n';
 import { problemMessage } from '@/lib/errors';
 import { useFormat } from '@/lib/preferences';
 import { Review } from './review';
@@ -32,24 +33,27 @@ export function outcomeLabel(task: Task, key?: string) {
  * outcome while the reader may answer, and the answers given so far.
  */
 export function TaskDetail({ task }: { task: Task }) {
+  const { t } = useTranslation('tasks');
   const format = useFormat();
+  const requested = [
+    task.source === 'workflow'
+      ? t('requestedByWorkflow', { date: format.dateTime(task.created_at) })
+      : t('requestedBy', { date: format.dateTime(task.created_at), person: task.created_by }),
+    task.due_at && t('due', { date: format.dateTime(task.due_at) }),
+    task.completion === 'all' && t('everyAssignee'),
+  ];
   return (
     <article className="grid min-w-0 gap-4 rounded-lg border p-4" aria-label={task.title}>
       <header className="grid gap-1">
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-lg font-semibold">{task.title}</h2>
           <Badge tone={statusTone[task.status]}>
-            {task.status === 'completed' ? outcomeLabel(task, task.outcome) : task.status}
+            {task.status === 'completed' ? outcomeLabel(task, task.outcome) : t(`status.${task.status}`)}
           </Badge>
-          {task.kind === 'approval' && <Badge>approval</Badge>}
-          {task.priority === 'high' && <Badge tone="danger">high priority</Badge>}
+          {task.kind === 'approval' && <Badge>{t('approval')}</Badge>}
+          {task.priority === 'high' && <Badge tone="danger">{t('highPriority')}</Badge>}
         </div>
-        <p className="text-xs text-muted">
-          Requested {format.dateTime(task.created_at)}
-          {task.source === 'workflow' ? ' by a workflow' : ` by ${task.created_by}`}
-          {task.due_at && ` · due ${format.dateTime(task.due_at)}`}
-          {task.completion === 'all' && ' · every assignee answers'}
-        </p>
+        <p className="text-xs text-muted">{requested.filter(Boolean).join(' · ')}</p>
         {task.description && <p className="text-[13px] whitespace-pre-line">{task.description}</p>}
         {task.item_id && <ItemLink workspaceId={task.workspace_id} itemId={task.item_id} />}
       </header>
@@ -57,7 +61,7 @@ export function TaskDetail({ task }: { task: Task }) {
       {task.can_respond && <ResponseForm task={task} />}
       {task.can_reassign && <Reassign task={task} />}
       {task.answered && !task.can_respond && task.status === 'open' && (
-        <p className="text-[13px] text-muted">You answered; the task waits for the other assignees.</p>
+        <p className="text-[13px] text-muted">{t('waitingForOthers')}</p>
       )}
       <Answers task={task} />
     </article>
@@ -66,6 +70,7 @@ export function TaskDetail({ task }: { task: Task }) {
 
 /** Items open in their list or library. */
 function ItemLink({ workspaceId, itemId }: { workspaceId: string; itemId: string }) {
+  const { t } = useTranslation('tasks');
   const item = useQuery(resourceQuery(itemId));
   if (!item.data?.container_id) return null;
   return (
@@ -75,12 +80,13 @@ function ItemLink({ workspaceId, itemId }: { workspaceId: string; itemId: string
       search={{ item: itemId }}
       className="text-[13px] text-accent hover:underline"
     >
-      Open {item.data.name}
+      {t('openItem', { name: item.data.name })}
     </Link>
   );
 }
 
 function ResponseForm({ task }: { task: Task }) {
+  const { t } = useTranslation('tasks');
   const queryClient = useQueryClient();
   const [input, setInput] = useState<Record<string, unknown>>(() => ({ ...task.values }));
   const [comment, setComment] = useState('');
@@ -101,20 +107,20 @@ function ResponseForm({ task }: { task: Task }) {
   const commentable = task.outcomes.some((o) => o.comment !== 'none');
   const answer = (outcome: TaskOutcome) => {
     if (outcome.comment === 'required' && !comment.trim()) {
-      setMissing(`${outcome.label} needs a comment.`);
+      setMissing(t('needsComment', { outcome: outcome.label }));
       return;
     }
     setMissing(undefined);
     respond.mutate(outcome);
   };
   return (
-    <form className="grid gap-3" onSubmit={(event) => event.preventDefault()} aria-label="Answer">
+    <form className="grid gap-3" onSubmit={(event) => event.preventDefault()} aria-label={t('answer')}>
       {task.input_schema && (
         <SchemaFields schema={task.input_schema} data={input} onChange={setInput} workspaceId={task.workspace_id} />
       )}
       {commentable && (
         <div className="grid gap-1">
-          <Label htmlFor="task-comment">Comment</Label>
+          <Label htmlFor="task-comment">{t('comment')}</Label>
           <Textarea
             id="task-comment"
             value={comment}
@@ -141,24 +147,28 @@ function ResponseForm({ task }: { task: Task }) {
   );
 }
 
-const addPeopleSchema: FormSchema = {
-  type: 'object',
-  properties: {
-    people: {
-      type: 'array',
-      title: 'Add people',
-      items: { type: 'string' },
-      maxItems: 50,
-      'x-papergo': { kind: 'people', access: 'read' },
+function addPeopleSchema(title: string): FormSchema {
+  return {
+    type: 'object',
+    properties: {
+      people: {
+        type: 'array',
+        title,
+        items: { type: 'string' },
+        maxItems: 50,
+        'x-papergo': { kind: 'people', access: 'read' },
+      },
     },
-  },
-};
+  };
+}
 
 /**
  * Owners change who a task waits for, such as when an assignee left: they
  * keep or drop each assignee and add people.
  */
 function Reassign({ task }: { task: Task }) {
+  const { t } = useTranslation(['tasks', 'common']);
+  const schema = useMemo(() => addPeopleSchema(t('addPeople')), [t]);
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [kept, setKept] = useState<string[]>(task.assignees);
@@ -180,7 +190,7 @@ function Reassign({ task }: { task: Task }) {
     return (
       <div>
         <Button variant="secondary" onClick={() => setOpen(true)}>
-          Reassign
+          {t('reassign')}
         </Button>
       </div>
     );
@@ -188,14 +198,14 @@ function Reassign({ task }: { task: Task }) {
   return (
     <form
       className="grid gap-3 rounded-md border p-3"
-      aria-label="Reassign"
+      aria-label={t('reassign')}
       onSubmit={(event) => {
         event.preventDefault();
         reassign.mutate();
       }}
     >
       <fieldset className="grid gap-1">
-        <legend className="text-[13px] font-medium">Assignees</legend>
+        <legend className="text-[13px] font-medium">{t('assignees')}</legend>
         {task.assignees.map((a) => (
           <label key={a} className="flex items-center gap-2 text-[13px]">
             <input
@@ -207,18 +217,15 @@ function Reassign({ task }: { task: Task }) {
           </label>
         ))}
       </fieldset>
-      <SchemaFields schema={addPeopleSchema} data={added} onChange={setAdded} workspaceId={task.workspace_id} />
-      <p className="text-xs text-muted">
-        Answers of assignees you keep count; with every assignee answering, the task completes once everyone left has
-        answered. No assignees means the workspace owners.
-      </p>
+      <SchemaFields schema={schema} data={added} onChange={setAdded} workspaceId={task.workspace_id} />
+      <p className="text-xs text-muted">{t('reassignHint')}</p>
       {reassign.error && <Alert>{problemMessage(reassign.error)}</Alert>}
       <div className="flex gap-2">
         <Button type="submit" disabled={reassign.isPending}>
-          Save assignees
+          {t('saveAssignees')}
         </Button>
         <Button variant="secondary" onClick={() => setOpen(false)}>
-          Cancel
+          {t('common:actions.cancel')}
         </Button>
       </div>
     </form>
@@ -227,22 +234,23 @@ function Reassign({ task }: { task: Task }) {
 
 /** The answers given, each with its form values, read only. */
 function Answers({ task }: { task: Task }) {
+  const { t } = useTranslation('tasks');
   const format = useFormat();
   if (!task.responses?.length) return null;
   return (
-    <section className="grid gap-2" aria-label="Answers">
-      <h3 className="text-[13px] font-semibold">Answers</h3>
+    <section className="grid gap-2" aria-label={t('answers')}>
+      <h3 className="text-[13px] font-semibold">{t('answers')}</h3>
       <ul className="grid gap-2">
         {task.responses.map((r) => (
           <li key={r.assignee} className="rounded-md border p-3 text-[13px]">
             <p>
               <span className="font-medium">{r.subject}</span>
-              {r.assignee !== r.subject && <span className="text-muted"> for {r.assignee}</span>}
+              {r.assignee !== r.subject && <span className="text-muted"> {t('forAssignee', { assignee: r.assignee })}</span>}
               {': '}
               {outcomeLabel(task, r.outcome)}
               <span className="text-xs text-muted"> · {format.dateTime(r.created_at)}</span>
             </p>
-            {r.comment && <p className="whitespace-pre-line">“{r.comment}”</p>}
+            {r.comment && <p className="whitespace-pre-line">{t('quoted', { comment: r.comment })}</p>}
             {r.input && task.input_schema && <FormValues schema={task.input_schema} values={r.input} />}
           </li>
         ))}
