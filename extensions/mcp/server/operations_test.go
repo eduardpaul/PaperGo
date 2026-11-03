@@ -1,4 +1,4 @@
-package integration
+package server
 
 import (
 	"context"
@@ -16,7 +16,6 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"papergo/extensions/mcp"
-	"papergo/extensions/mcp/server"
 	"papergo/internal/dms"
 	"papergo/internal/worker"
 )
@@ -86,7 +85,7 @@ func TestBearerAndHost(t *testing.T) {
 }
 
 func TestOverloadAndLimits(t *testing.T) {
-	e := setup(t, options{maxInFlight: 1, configure: func(c *server.Config) {
+	e := setup(t, options{maxInFlight: 1, configure: func(c *Config) {
 		c.MaxRequestBytes, c.MaxResultBytes = 4096, 2048
 	}})
 	f := seed(t, e)

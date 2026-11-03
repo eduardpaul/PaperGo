@@ -1,4 +1,4 @@
-package integration
+package server
 
 import (
 	"bytes"
@@ -18,7 +18,6 @@ import (
 
 	"papergo/extensions/mcp"
 	"papergo/extensions/mcp/builtin"
-	"papergo/extensions/mcp/server"
 	"papergo/internal/auth"
 	"papergo/internal/dal/daltest"
 	"papergo/internal/dms"
@@ -56,7 +55,7 @@ type env struct {
 
 type options struct {
 	search        bool
-	configure     func(*server.Config)
+	configure     func(*Config)
 	contributions []mcp.Contribution
 	enabled       []string
 	// app is the web app's origin results link to.
@@ -74,7 +73,7 @@ func setup(t *testing.T, o options) *env {
 	}
 	e := &env{svc: dms.NewService(db.SQL), files: files, logs: &bytes.Buffer{}, logsMu: &sync.Mutex{}}
 	log := slog.New(slog.NewJSONHandler(lockedWriter{e.logs, e.logsMu}, nil))
-	cfg := server.Config{Version: "test", Logger: log, AppURL: o.app, WrapAPI: func(api http.Handler) http.Handler {
+	cfg := Config{Version: "test", Logger: log, AppURL: o.app, wrapAPI: func(api http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			e.mu.Lock()
 			gate, before, wrap := e.gate, e.before, e.wrap
@@ -101,7 +100,7 @@ func setup(t *testing.T, o options) *env {
 	}
 	a := &httpapi.API{DMS: e.svc, Auth: auth.Development{Token: aliceToken, Subject: "alice"}, Storage: files, Logger: log,
 		Ready: db.SQL.PingContext, MaxUpload: 1 << 20, MaxInFlight: o.maxInFlight, MCP: true,
-		Modules: []httpapi.Module{server.New(cfg, registry).Module()}}
+		Modules: []httpapi.Module{New(cfg, registry).Module()}}
 	if o.search {
 		e.search = &documentsearch.Search{Storage: files, Store: searchstore.Open(t, filepath.Join(t.TempDir(), "search.db"), []string{"english"})}
 		if err := e.search.Register(e.svc); err != nil {
@@ -142,7 +141,7 @@ func (e *env) intercept(wrap func(api http.Handler) http.Handler) {
 	e.wrap = wrap
 }
 
-func (e *env) endpoint() string { return e.api.URL + server.Path }
+func (e *env) endpoint() string { return e.api.URL + Path }
 
 // token is a personal access token of subject with scopes.
 func (e *env) token(t *testing.T, subject string, scopes ...string) identity.CreatedAccessToken {

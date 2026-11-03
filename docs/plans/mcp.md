@@ -28,7 +28,7 @@ Reviewed against PaperGo `main` at
 ## Acceptance record
 
 Automated, with the official go-sdk client against the real API handlers, on
-SQLite and on PostgreSQL 17 (`extensions/mcp/integration`, also run with
+SQLite and on PostgreSQL 17 (`extensions/mcp/server`, also run with
 `-race`), plus unit tests of the registry, path safety and cursors, and the
 module socket's tests in `internal/httpapi`:
 
@@ -404,8 +404,8 @@ Required automated scenarios:
   bearer-only admission and a loopback proxy's public Host. Ensure logs and
   user errors contain no secrets or content payloads.
 
-Run focused module unit/race tests. Put real-API contract tests in an explicit
-integration test package. Run those with PaperGo's normal test environment on SQLite and
+Run focused module unit/race tests, and real-API contract tests beside the
+transport in `extensions/mcp/server`. Run those with PaperGo's normal test environment on SQLite and
 `PAPERGO_TEST_POSTGRES_DSN` for PostgreSQL; preserve current DAL tests' separate
 `TEST_POSTGRES_DSN` convention. Use existing fixture/schema installation helpers.
 Run formatting, vet, Staticcheck and the applicable repository CI checks; no

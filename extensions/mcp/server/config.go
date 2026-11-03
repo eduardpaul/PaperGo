@@ -23,10 +23,10 @@ type Config struct {
 	// AppURL is the web app's public origin (PUBLIC_URL) results link to;
 	// nil links to the origin each client reached.
 	AppURL *url.URL
-	Logger  *slog.Logger
-	// WrapAPI, when set, wraps the API handler tools act through, such as
-	// for tests that watch or fail its answers.
-	WrapAPI func(http.Handler) http.Handler
+	Logger *slog.Logger
+	// wrapAPI, when set, wraps the API handler tools act through, so this
+	// package's tests can watch or fail its answers.
+	wrapAPI func(http.Handler) http.Handler
 
 	// Operating limits; zero values take the defaults.
 	RequestTimeout  time.Duration

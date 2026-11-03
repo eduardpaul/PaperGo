@@ -92,8 +92,8 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request, in httpapi.Reques
 	ctx, cancel := context.WithTimeout(r.Context(), s.cfg.RequestTimeout)
 	defer cancel()
 	api := in.Loopback()
-	if s.cfg.WrapAPI != nil {
-		api = s.cfg.WrapAPI(api)
+	if s.cfg.wrapAPI != nil {
+		api = s.cfg.wrapAPI(api)
 	}
 	rec := &record{id: requestmeta.Trace(r.Context())}
 	// The scopes decide which tools the caller sees. Nothing is cached:

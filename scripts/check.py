@@ -37,7 +37,7 @@ STAGES = ['quick', 'lint', 'test', 'race', 'web', 'native', 'zvec', 'soak', 'rel
 POSTGRES_PACKAGES = ['./internal/dms', './internal/httpapi', './internal/identity', './internal/scriptrun',
                      './internal/webdav', './internal/workflow', './internal/aiops', './internal/worker', './internal/documenttext',
                      './internal/documentpreview', './internal/documentfiles', './internal/documentsearch',
-                     './extensions/mcp/integration']
+                     './extensions/mcp/server']
 NATIVE_PACKAGES = ['./internal/onnx', './internal/decision', './internal/embedding', './internal/ocr/paddle', './internal/scriptrun',
                    './internal/compose', './internal/optimize', './cmd/embed']
 # Packages the zvec stage tests on the native search store.
