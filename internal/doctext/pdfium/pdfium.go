@@ -38,13 +38,13 @@ var pool = sync.OnceValues(func() (sdk.Pool, error) {
 	return webassembly.Init(webassembly.Config{MaxTotal: maxOpen, FSConfig: wazero.NewFSConfig(), Stdout: os.Stderr})
 })
 
-// Reader opens PDFs with PDFium 8057 as WebAssembly, the module go-pdfium
-// v1.21.3 embeds. Name keys stored text, and notices/ holds the licences
+// Reader opens PDFs with PDFium 8111 as WebAssembly, the module go-pdfium
+// v1.21.4 embeds. Name keys stored text, and notices/ holds the licences
 // the module ships under: update both with go-pdfium.
 type Reader struct{}
 
 func New() *Reader           { return &Reader{} }
-func (*Reader) Name() string { return "pdfium-8057-wasm" }
+func (*Reader) Name() string { return "pdfium-8111-wasm" }
 
 func (*Reader) Open(ctx context.Context, data []byte) (doctext.Document, error) {
 	if err := ctx.Err(); err != nil {

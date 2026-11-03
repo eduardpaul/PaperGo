@@ -15,12 +15,12 @@ func TestReadAndRender(t *testing.T) {
 	reader := doctexttest.PDF(t)
 	// The name keys stored text: it names the PDFium build go-pdfium embeds,
 	// so it changes with go-pdfium.
-	if reader.Name() != "pdfium-8057-wasm" {
+	if reader.Name() != "pdfium-8111-wasm" {
 		t.Fatal(reader.Name())
 	}
 	if info, ok := debug.ReadBuildInfo(); ok {
 		for _, m := range info.Deps {
-			if m.Path == "github.com/klippa-app/go-pdfium" && m.Version != "v1.21.3" {
+			if m.Path == "github.com/klippa-app/go-pdfium" && m.Version != "v1.21.4" {
 				t.Fatalf("go-pdfium is %s: update Name to the PDFium build its module embeds", m.Version)
 			}
 		}
