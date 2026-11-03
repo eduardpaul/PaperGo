@@ -124,7 +124,7 @@ func TestPDFRejects(t *testing.T) {
 	apng, _ := base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACGFjVEwAAAACAAAAAPONk3AAAAAaZmNUTAAAAAAAAAABAAAAAQAAAAAAAAAAAAEACgAAWn8w0AAAAA1JREFUeJxj+M/A8B8ABQAB/4mZPR0AAAAaZmNUTAAAAAEAAAABAAAAAQAAAAAAAAAAAAEACgAAwQzaBAAAABFmZEFUAAAAAnicY2Bg+P8fAAMCAf/1e6XXAAAAAElFTkSuQmCC")
 	read := func(data []byte) func(int) ([]byte, error) { return func(int) ([]byte, error) { return data, nil } }
 	var buf bytes.Buffer
-	if _, err := PDF(context.Background(), fake{}, &buf, 1, read(apng), 64e6, Defaults); !errors.Is(err, ErrAnimated) {
+	if _, err := PDF(context.Background(), fake{}, &buf, 1, read(apng), 64e6, Defaults); !errors.Is(err, errAnimated) {
 		t.Errorf("animated: %v", err)
 	}
 	if _, err := PDF(context.Background(), fake{}, &buf, 1, read([]byte("%PDF-1.7")), 64e6, Defaults); err == nil {

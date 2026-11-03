@@ -188,11 +188,11 @@ func (m *Maker) StartCompose(ctx context.Context, s *dms.Service, subject, itemI
 	if !seen[itemID] {
 		return nil, dms.Invalid("item_ids must include the item")
 	}
-	return start(ctx, s, subject, KindCompose, j)
+	return start(ctx, s, subject, j)
 }
 
-func start(ctx context.Context, s *dms.Service, subject, kind string, j job) (*dms.OperationView, error) {
-	j.InputKey = inputKey(kind, j)
+func start(ctx context.Context, s *dms.Service, subject string, j job) (*dms.OperationView, error) {
+	j.InputKey = inputKey(j)
 	payload, err := json.Marshal(j)
 	if err != nil {
 		return nil, err
@@ -204,7 +204,7 @@ func start(ctx context.Context, s *dms.Service, subject, kind string, j job) (*d
 	var out *dms.OperationView
 	err = s.Write(ctx, func(t *dms.Service) error {
 		var err error
-		if out, err = t.EnqueueOperation(ctx, subject, j.ItemID, kind, payload); err != nil || out.Replayed {
+		if out, err = t.EnqueueOperation(ctx, subject, j.ItemID, KindCompose, payload); err != nil || out.Replayed {
 			return err
 		}
 		return t.LeaseOperationBlobs(ctx, out.ID, blobs)
@@ -212,12 +212,12 @@ func start(ctx context.Context, s *dms.Service, subject, kind string, j job) (*d
 	return out, err
 }
 
-// inputKey identifies what a file is made from and how: the kind, the item,
-// the source file versions in order and the options.
-func inputKey(kind string, j job) string {
+// inputKey identifies what a PDF is made from and how: the operation kind,
+// the item, the source file versions in order and the options.
+func inputKey(j job) string {
 	h := sha256.New()
 	enc := json.NewEncoder(h)
-	_ = enc.Encode([]any{kind, j.ItemID, j.Compose})
+	_ = enc.Encode([]any{KindCompose, j.ItemID, j.Compose})
 	for _, f := range j.Files {
 		_ = enc.Encode([]string{f.ItemID, f.BlobID})
 	}
