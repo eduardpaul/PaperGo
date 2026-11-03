@@ -12,9 +12,13 @@ import { Button } from '@/components/ui/button';
 import { Input, Label } from '@/components/ui/input';
 import { Checkbox, Select } from '@/components/ui/select';
 import { QueryFeedback } from '@/features/admin/common';
+import { useTranslation } from '@/i18n';
 import { ConfirmDialog, SettingsSection } from '@/features/settings/section';
 import { columnLabel } from './schema';
 import { FilterEditor, normalizeFilter, systemFields } from './filter-editor';
+
+const layouts = ['table', 'board', 'calendar', 'gallery', 'navigation'] as const;
+const isLayout = (value: string): value is (typeof layouts)[number] => layouts.some((layout) => layout === value);
 
 /** The most fields a navigation view browses. */
 const maxBrowsed = 5;
@@ -36,6 +40,7 @@ export function ViewsEditor({
   fields: FieldDefinition[];
   contentTypes: ContentType[];
 }) {
+  const { t } = useTranslation(['lists', 'common']);
   const client = useQueryClient();
   const { canManage } = useAccess(collectionId);
   const views = useQuery({
@@ -54,12 +59,12 @@ export function ViewsEditor({
   return (
     <>
       <SettingsSection
-        title="Saved views"
-        description="Columns, filtering, sorting, grouping and layout for everyone using this collection."
+        title={t('views.title')}
+        description={t('views.description')}
         actions={
           canManage && (
             <Button variant="primary" onClick={() => setEditing('new')}>
-              <Plus /> New view
+              <Plus /> {t('views.new')}
             </Button>
           )
         }
@@ -67,23 +72,22 @@ export function ViewsEditor({
         <QueryFeedback query={views} />
         {views.isSuccess && views.data.length === 0 && (
           <p className="text-sm text-muted">
-            No saved views yet. Everyone sees all items with the first columns. Add a view to choose columns, filters,
-            sorting, or a board, calendar or gallery layout.
+            {t('views.none')}
           </p>
         )}
         <ul className="divide-y">
           {views.data?.map((view) => (
             <li key={view.id} className="flex items-center gap-3 py-3">
               <span className="flex-1 font-medium">
-                {view.name} <Badge>{view.layout}</Badge>
-                {view.is_default && <Badge className="ml-2">Default</Badge>}
+                {view.name} <Badge>{view.layout && isLayout(view.layout) ? t(`views.layoutNames.${view.layout}`) : view.layout}</Badge>
+                {view.is_default && <Badge className="ml-2">{t('views.default')}</Badge>}
               </span>
               <Button size="sm" variant="ghost" onClick={() => setEditing(view)}>
-                <Pencil /> {canManage && !view.system_key ? 'Edit' : 'View'}
+                <Pencil /> {canManage && !view.system_key ? t('common:actions.edit') : t('views.view')}
               </Button>
               {canManage && !view.system_key && (
                 <Button size="sm" variant="ghost" onClick={() => setDeleting(view)}>
-                  Delete
+                  {t('common:actions.delete')}
                 </Button>
               )}
             </li>
@@ -103,9 +107,9 @@ export function ViewsEditor({
       <ConfirmDialog
         open={!!deleting}
         onOpenChange={(open) => !open && setDeleting(undefined)}
-        title={`Delete ${deleting?.name ?? ''}?`}
-        description="Items remain; this saved view is removed."
-        confirm="Delete view"
+        title={t('general.deleteTitle', { name: deleting?.name ?? '' })}
+        description={t('views.deleteDescription')}
+        confirm={t('views.delete')}
         busy={remove.isPending}
         error={remove.error}
         onConfirm={() => deleting && remove.mutate(deleting)}
@@ -129,6 +133,7 @@ function ViewDialog({
   canManage: boolean;
   onClose: () => void;
 }) {
+  const { t } = useTranslation(['lists', 'common']);
   const client = useQueryClient();
   const [name, setName] = useState(view?.name ?? '');
   const [columns, setColumns] = useState(view?.columns ?? ['$name']);
@@ -149,7 +154,7 @@ function ViewDialog({
         : sortable;
   // A navigation view browses item keywords or a taxonomy or keywords column as folders.
   const navigable = [
-    { key: '$keywords', label: 'Keywords', type: 'keywords', options: { apply_parents: true } } as FieldDefinition,
+    { key: '$keywords', label: t('columns.keywords'), type: 'keywords', options: { apply_parents: true } } as FieldDefinition,
     ...queryable.filter((field) => field.key !== '$keywords' && (field.type === 'term' || field.type === 'keywords')),
   ];
   const browsed = settings.fields ?? [];
@@ -183,17 +188,17 @@ function ViewDialog({
   return (
     <FormDialog
       open
-      title={view ? `View ${view.name}` : 'New view'}
-      submitLabel="Save view"
+      title={view ? t('views.viewTitle', { name: view.name }) : t('views.new')}
+      submitLabel={t('views.save')}
       submitDisabled={!canManage || columns.length === 0 || !validLayout}
       pending={save.isPending}
       onClose={onClose}
       onSubmit={() => canManage && save.mutate()}
     >
       <fieldset disabled={!canManage} className="grid gap-3">
-        <Label htmlFor="view-name">Name</Label>
+        <Label htmlFor="view-name">{t('common:fields.name')}</Label>
         <Input id="view-name" required value={name} onChange={(event) => setName(event.target.value)} />
-        <Label htmlFor="view-layout">Layout</Label>
+        <Label htmlFor="view-layout">{t('views.layout')}</Label>
         <Select
           id="view-layout"
           value={layout}
@@ -202,23 +207,17 @@ function ViewDialog({
             patchQuery({ group_by: undefined });
           }}
         >
-          {[
-            ['table', 'Table'],
-            ['board', 'Board (cards grouped by a choice column)'],
-            ['calendar', 'Calendar (by a date column)'],
-            ['gallery', 'Gallery (cards)'],
-            ['navigation', 'Navigation (browse a taxonomy as folders)'],
-          ].map(([value, label]) => (
+          {layouts.map((value) => (
             <option key={value} value={value}>
-              {label}
+              {t(`views.layouts.${value}`)}
             </option>
           ))}
         </Select>
         {layout === 'navigation' && (
           <fieldset className="grid gap-2 rounded-lg border p-3">
-            <legend className="px-1 font-medium">Navigation</legend>
-            <p className="text-xs text-muted">Each column becomes a tree of folders; a term lists the items tagged with it.</p>
-            <ul aria-label="Browsed columns" className="grid gap-2">
+            <legend className="px-1 font-medium">{t('views.navigation')}</legend>
+            <p className="text-xs text-muted">{t('views.navigationHint')}</p>
+            <ul aria-label={t('views.browsed')} className="grid gap-2">
               {browsed.map((entry, index) => {
                 const field = navigable.find((candidate) => candidate.key === entry.field);
                 const label = field?.label ?? entry.field;
@@ -230,18 +229,18 @@ function ViewDialog({
                   <li key={entry.field} aria-label={label} className="grid gap-1 rounded border p-2">
                     <div className="flex items-center gap-2">
                       <span className="flex-1 font-medium">{label}</span>
-                      <Button size="icon" aria-label={`Move ${label} up`} disabled={index === 0} onClick={() => setBrowsed(moved(browsed, index, -1))}>
+                      <Button size="icon" aria-label={t('views.up', { name: label })} disabled={index === 0} onClick={() => setBrowsed(moved(browsed, index, -1))}>
                         <ArrowUp />
                       </Button>
                       <Button
                         size="icon"
-                        aria-label={`Move ${label} down`}
+                        aria-label={t('views.down', { name: label })}
                         disabled={index === browsed.length - 1}
                         onClick={() => setBrowsed(moved(browsed, index, 1))}
                       >
                         <ArrowDown />
                       </Button>
-                      <Button size="icon" aria-label={`Remove ${label}`} onClick={() => setBrowsed(browsed.filter((_, i) => i !== index))}>
+                      <Button size="icon" aria-label={t('common:actions.remove', { name: label })} onClick={() => setBrowsed(browsed.filter((_, i) => i !== index))}>
                         <X />
                       </Button>
                     </div>
@@ -251,14 +250,14 @@ function ViewDialog({
                         disabled={parentsApply}
                         onChange={(event) => patch({ include_subterms: event.target.checked || undefined })}
                       />
-                      Show items of subterms at each term
+                      {t('views.subterms')}
                     </label>
                     <p className="text-xs text-muted">
                       {parentsApply
-                        ? `${label} applies parent terms, so a term always shows the items tagged with it or any term below it.`
+                        ? t('views.parentsApply', { name: label })
                         : entry.include_subterms
-                          ? 'A term shows the items tagged with it or any term below it.'
-                          : 'A term shows only the items tagged with it; items tagged with a subterm appear when you open that subterm.'}
+                          ? t('views.withSubterms')
+                          : t('views.withoutSubterms')}
                     </p>
                   </li>
                 );
@@ -266,11 +265,11 @@ function ViewDialog({
             </ul>
             {browsed.length < maxBrowsed && (
               <Select
-                aria-label="Add a column to browse"
+                aria-label={t('views.addBrowsed')}
                 value=""
                 onChange={(event) => event.target.value && setBrowsed([...browsed, { field: event.target.value }])}
               >
-                <option value="">{browsed.length ? 'Add another taxonomy or keywords column…' : 'Choose a taxonomy or keywords column…'}</option>
+                <option value="">{browsed.length ? t('views.addAnother') : t('views.chooseBrowsed')}</option>
                 {navigable
                   .filter((field) => !browsed.some((entry) => entry.field === field.key))
                   .map((field) => (
@@ -282,19 +281,17 @@ function ViewDialog({
             )}
             {browsed.length > 1 && (
               <>
-                <Label htmlFor="view-match">Show items that match</Label>
+                <Label htmlFor="view-match">{t('views.match')}</Label>
                 <Select
                   id="view-match"
                   value={settings.match ?? 'all'}
                   onChange={(event) => setSettings((current) => ({ ...current, match: event.target.value as NavigationMatch }))}
                 >
-                  <option value="all">All opened terms</option>
-                  <option value="any">Any opened term</option>
+                  <option value="all">{t('views.matchAll')}</option>
+                  <option value="any">{t('views.matchAny')}</option>
                 </Select>
                 <p className="text-xs text-muted">
-                  {settings.match === 'any'
-                    ? 'Opening Q1 and Finance shows the items tagged with either; each tree counts all items of the view.'
-                    : "Opening Q1 and Finance shows the items tagged with both; each tree counts within the other trees' terms."}
+                  {settings.match === 'any' ? t('views.matchAnyHint') : t('views.matchAllHint')}
                 </p>
               </>
             )}
@@ -303,20 +300,20 @@ function ViewDialog({
                 checked={!!settings.hide_empty}
                 onChange={(event) => setSettings((current) => ({ ...current, hide_empty: event.target.checked || undefined }))}
               />
-              Hide terms without items
+              {t('views.hideEmpty')}
             </label>
           </fieldset>
         )}
-        <Label htmlFor="view-archive">Items</Label>
+        <Label htmlFor="view-archive">{t('views.items')}</Label>
         <Select id="view-archive" value={query.archive ?? 'active'} onChange={event => patchQuery({ archive: event.target.value as QuerySpec['archive'] })}>
-          <option value="active">Active</option><option value="archived">Archived</option><option value="all">All</option>
+          <option value="active">{t('views.archive.active')}</option><option value="archived">{t('views.archive.archived')}</option><option value="all">{t('views.archive.all')}</option>
         </Select>
         <label className="flex gap-2">
           <Checkbox checked={isDefault} onChange={(event) => setIsDefault(event.target.checked)} />
-          Default view
+          {t('views.defaultView')}
         </label>
         <fieldset>
-          <legend className="font-medium">Columns</legend>
+          <legend className="font-medium">{t('columnPicker.columns')}</legend>
           <ul>
             {[
               ...columns,
@@ -340,7 +337,7 @@ function ViewDialog({
                     <>
                       <Button
                         size="icon"
-                        aria-label={`Move ${key} up`}
+                        aria-label={t('views.up', { name: key })}
                         disabled={index === 0}
                         onClick={() => move(index, -1)}
                       >
@@ -348,7 +345,7 @@ function ViewDialog({
                       </Button>
                       <Button
                         size="icon"
-                        aria-label={`Move ${key} down`}
+                        aria-label={t('views.down', { name: key })}
                         disabled={index === columns.length - 1}
                         onClick={() => move(index, 1)}
                       >
@@ -361,13 +358,13 @@ function ViewDialog({
             })}
           </ul>
         </fieldset>
-        <Label htmlFor="view-type">Content type</Label>
+        <Label htmlFor="view-type">{t('system.contentType')}</Label>
         <Select
           id="view-type"
           value={query.content_type_id ?? ''}
           onChange={(event) => patchQuery({ content_type_id: event.target.value || undefined })}
         >
-          <option value="">All types</option>
+          <option value="">{t('related.allTypes')}</option>
           {contentTypes.map((type) => (
             <option key={type.id} value={type.id}>
               {type.name}
@@ -376,13 +373,13 @@ function ViewDialog({
         </Select>
         {layout !== 'navigation' && (
           <>
-            <Label htmlFor="view-group">Group or calendar field</Label>
+            <Label htmlFor="view-group">{t('views.group')}</Label>
             <Select
               id="view-group"
               value={query.group_by ?? ''}
               onChange={(event) => patchQuery({ group_by: event.target.value || undefined })}
             >
-              <option value="">None</option>
+              <option value="">{t('common:select.none')}</option>
               {grouping.map((field) => (
                 <option key={field.key} value={field.key}>
                   {field.label}
@@ -392,11 +389,11 @@ function ViewDialog({
           </>
         )}
         <fieldset>
-          <legend className="mb-2 font-medium">Sort</legend>
+          <legend className="mb-2 font-medium">{t('views.sort')}</legend>
           {(query.sort ?? []).map((sort, index) => (
             <div key={index} className="mb-2 flex gap-2">
               <Select
-                aria-label={`Sort field ${index + 1}`}
+                aria-label={t('views.sortField', { number: index + 1 })}
                 value={sort.field}
                 onChange={(event) =>
                   patchQuery({
@@ -413,7 +410,7 @@ function ViewDialog({
                 ))}
               </Select>
               <Select
-                aria-label={`Sort direction ${index + 1}`}
+                aria-label={t('views.sortDirection', { number: index + 1 })}
                 value={sort.direction}
                 onChange={(event) =>
                   patchQuery({
@@ -423,38 +420,38 @@ function ViewDialog({
                   })
                 }
               >
-                <option value="asc">Ascending</option>
-                <option value="desc">Descending</option>
+                <option value="asc">{t('views.ascending')}</option>
+                <option value="desc">{t('views.descending')}</option>
               </Select>
               <Button onClick={() => patchQuery({ sort: query.sort!.filter((_, i) => i !== index) })}>
-                Remove sort
+                {t('views.removeSort')}
               </Button>
             </div>
           ))}
           <Button
             onClick={() => patchQuery({ sort: [...(query.sort ?? []), { field: '$modified_at', direction: 'desc' }] })}
           >
-            Add sort
+            {t('views.addSort')}
           </Button>
         </fieldset>
         <FilterEditor filter={query.filter} fields={queryable} onChange={(filter) => patchQuery({ filter })} />
-        <Label htmlFor="view-search">Search text</Label>
+        <Label htmlFor="view-search">{t('views.search')}</Label>
         <Input
           id="view-search"
           value={query.search ?? ''}
           onChange={(event) => patchQuery({ search: event.target.value || undefined })}
         />
-        <Label htmlFor="view-keyword">Keyword</Label>
+        <Label htmlFor="view-keyword">{t('views.keyword')}</Label>
         <Input
           id="view-keyword"
           value={query.keyword ?? ''}
           onChange={(event) => patchQuery({ keyword: event.target.value || undefined })}
         />
-        <Label htmlFor="view-parent">Folder</Label>
+        <Label htmlFor="view-parent">{t('moveDialog.folder')}</Label>
         <Input
           id="view-parent"
           value={query.parent_id ?? ''}
-          placeholder="Folder id, or empty for all items"
+          placeholder={t('views.folderPlaceholder')}
           onChange={(event) => patchQuery({ parent_id: event.target.value || undefined })}
         />
       </fieldset>

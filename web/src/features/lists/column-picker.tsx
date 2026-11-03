@@ -11,6 +11,7 @@ import { Alert } from '@/components/ui/feedback';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/select';
+import { useTranslation } from '@/i18n';
 import { problemMessage } from '@/lib/errors';
 
 /**
@@ -39,6 +40,7 @@ export function ColumnPicker({
   onChange: (columns: string[] | undefined) => void;
   onSaved: (viewId: string) => void;
 }) {
+  const { t } = useTranslation(['lists', 'common']);
   const client = useQueryClient();
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState('');
@@ -70,7 +72,7 @@ export function ColumnPicker({
     },
     onSuccess: async (id, target) => {
       await client.invalidateQueries({ queryKey: keys.views(collectionId) });
-      toast.success(target === 'view' ? 'View saved' : `View “${name.trim()}” created`);
+      toast.success(target === 'view' ? t('columnPicker.saved') : t('columnPicker.created', { name: name.trim() }));
       setNaming(false);
       setName('');
       onSaved(id);
@@ -79,13 +81,13 @@ export function ColumnPicker({
   return (
     <Popover onOpenChange={(open) => !open && setNaming(false)}>
       <PopoverTrigger asChild>
-        <Button size="sm" variant="ghost" aria-label={changed ? 'Columns (changed)' : 'Columns'}>
-          <Columns3 /> Columns
+        <Button size="sm" variant="ghost" aria-label={changed ? t('columnPicker.changed') : t('columnPicker.columns')}>
+          <Columns3 /> {t('columnPicker.columns')}
           {changed && <span aria-hidden className="size-1.5 rounded-full bg-accent" />}
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-72 p-0">
-        <p className="border-b px-3 py-2 text-xs font-medium text-muted">Show columns</p>
+        <p className="border-b px-3 py-2 text-xs font-medium text-muted">{t('columnPicker.show')}</p>
         <ul className="max-h-72 overflow-y-auto p-1">
           {ordered.map((key) => {
             const index = columns.indexOf(key);
@@ -108,7 +110,7 @@ export function ColumnPicker({
                       size="icon"
                       variant="ghost"
                       className="size-6"
-                      aria-label={`Move ${label(key)} left`}
+                      aria-label={t('columnPicker.left', { column: label(key) })}
                       disabled={index === 0}
                       onClick={() => move(index, -1)}
                     >
@@ -118,7 +120,7 @@ export function ColumnPicker({
                       size="icon"
                       variant="ghost"
                       className="size-6"
-                      aria-label={`Move ${label(key)} right`}
+                      aria-label={t('columnPicker.right', { column: label(key) })}
                       disabled={index === columns.length - 1}
                       onClick={() => move(index, 1)}
                     >
@@ -143,31 +145,31 @@ export function ColumnPicker({
               >
                 <Input
                   autoFocus
-                  aria-label="Name of the new view"
-                  placeholder="View name"
+                  aria-label={t('columnPicker.newName')}
+                  placeholder={t('columnPicker.namePlaceholder')}
                   value={name}
                   maxLength={200}
                   onChange={(event) => setName(event.target.value)}
                 />
                 <Button type="submit" variant="primary" disabled={!name.trim() || save.isPending}>
-                  Save
+                  {t('common:actions.save')}
                 </Button>
               </form>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {changed && (
                   <Button size="sm" variant="ghost" onClick={() => onChange(undefined)}>
-                    Reset
+                    {t('columnPicker.reset')}
                   </Button>
                 )}
                 {canManage && (changed || !!sort) && view && !view.system_key && (view.layout ?? 'table') === 'table' && (
                   <Button size="sm" disabled={save.isPending} onClick={() => save.mutate('view')}>
-                    Save to “{view.name}”
+                    {t('columnPicker.saveTo', { name: view.name })}
                   </Button>
                 )}
                 {canManage && (
                   <Button size="sm" onClick={() => setNaming(true)}>
-                    Save as new view…
+                    {t('columnPicker.saveNew')}
                   </Button>
                 )}
               </div>

@@ -11,8 +11,10 @@ import { CreateRelationshipType, relationshipTypesQuery } from '@/features/admin
 import { QueryFeedback, useHasScope } from '@/features/admin/common';
 import { FieldEditor } from '@/features/fields/editor';
 import { valuesPatch } from '@/features/fields/values';
+import { useTranslation } from '@/i18n';
 
 export function RelatedItems({ item, canWrite }: { item: Resource; canWrite: boolean }) {
+  const { t } = useTranslation(['lists', 'common']);
   const client = useQueryClient();
   const types = useQuery(relationshipTypesQuery);
   const canCreate = useHasScope('item.write');
@@ -61,11 +63,11 @@ export function RelatedItems({ item, canWrite }: { item: Resource; canWrite: boo
   return (
     <div className="grid gap-3">
       <Select
-        aria-label="Filter relationship type"
+        aria-label={t('related.filterType')}
         value={filterType}
         onChange={(event) => setFilterType(event.target.value)}
       >
-        <option value="">All types</option>
+        <option value="">{t('related.allTypes')}</option>
         {types.data?.map((type) => (
           <option key={type.id} value={type.id}>
             {type.term.name}
@@ -73,13 +75,13 @@ export function RelatedItems({ item, canWrite }: { item: Resource; canWrite: boo
         ))}
       </Select>
       <Select
-        aria-label="Filter relationship direction"
+        aria-label={t('related.filterDirection')}
         value={direction}
         onChange={(event) => setDirection(event.target.value)}
       >
-        <option value="both">Both directions</option>
-        <option value="outgoing">Outgoing</option>
-        <option value="incoming">Incoming</option>
+        <option value="both">{t('related.both')}</option>
+        <option value="outgoing">{t('related.outgoing')}</option>
+        <option value="incoming">{t('related.incoming')}</option>
       </Select>
       <QueryFeedback query={links} />
       <ul className="divide-y">
@@ -88,22 +90,22 @@ export function RelatedItems({ item, canWrite }: { item: Resource; canWrite: boo
             <div className="flex-1">
               <p className="font-medium">{link.related_item?.name ?? link.target_id}</p>
               <p className="text-xs text-muted">
-                {types.data?.find((type) => type.id === link.type_id)?.term.name ?? 'Related'} ·{' '}
-                {link.directed ? 'Directed' : 'Symmetric'}
+                {types.data?.find((type) => type.id === link.type_id)?.term.name ?? t('related.related')} ·{' '}
+                {link.directed ? t('related.directed') : t('related.symmetric')}
               </p>
             </div>
             {canWrite && (
               <Button size="sm" variant="ghost" disabled={remove.isPending} onClick={() => remove.mutate(link)}>
-                Remove
+                {t('common:actions.removeItem')}
               </Button>
             )}
           </li>
         ))}
       </ul>
-      {!links.isPending && links.items.length === 0 && <p className="text-sm text-muted">No links yet.</p>}
+      {!links.isPending && links.items.length === 0 && <p className="text-sm text-muted">{t('related.none')}</p>}
       {links.hasNextPage && (
         <Button onClick={() => void links.fetchNextPage()} disabled={links.isFetchingNextPage}>
-          More links
+          {t('related.more')}
         </Button>
       )}
       {canWrite && (
@@ -114,7 +116,7 @@ export function RelatedItems({ item, canWrite }: { item: Resource; canWrite: boo
           create.mutate();
         }}
       >
-        <Label htmlFor="link-type">Relationship type</Label>
+        <Label htmlFor="link-type">{t('related.type')}</Label>
         <Select
           id="link-type"
           value={typeId}
@@ -123,21 +125,21 @@ export function RelatedItems({ item, canWrite }: { item: Resource; canWrite: boo
             setMetadata({});
           }}
         >
-          <option value="">Related (untyped)</option>
+          <option value="">{t('related.untyped')}</option>
           {types.data?.map((type) => (
             <option key={type.id} value={type.id}>
               {type.term.name}
             </option>
           ))}
         </Select>
-        {canCreate && <Button onClick={() => setCreating(true)}>New relationship type</Button>}
+        {canCreate && <Button onClick={() => setCreating(true)}>{t('related.newType')}</Button>}
         {!typeId && (
           <label className="flex gap-2">
             <input type="checkbox" checked={directed} onChange={(event) => setDirected(event.target.checked)} />
-            Directed link
+            {t('related.directedLink')}
           </label>
         )}
-        <Label id="link-target-label">Item to link</Label>
+        <Label id="link-target-label">{t('related.target')}</Label>
         <Combobox
           aria-labelledby="link-target-label"
           selected={
@@ -148,7 +150,7 @@ export function RelatedItems({ item, canWrite }: { item: Resource; canWrite: boo
           onChange={(options) => setTarget(options[0]?.value ?? '')}
         />
         {q && <QueryFeedback query={matches} />}
-        {matches.hasNextPage && <Button onClick={() => void matches.fetchNextPage()}>More target items</Button>}
+        {matches.hasNextPage && <Button onClick={() => void matches.fetchNextPage()}>{t('related.moreTargets')}</Button>}
         {fields.map((field) => (
           <FieldEditor
             key={field.key}
@@ -158,7 +160,7 @@ export function RelatedItems({ item, canWrite }: { item: Resource; canWrite: boo
           />
         ))}
         <Button type="submit" disabled={!target.trim() || create.isPending}>
-          Add link
+          {t('related.add')}
         </Button>
       </form>
       )}

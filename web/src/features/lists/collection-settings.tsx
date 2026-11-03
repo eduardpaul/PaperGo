@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input, Textarea } from '@/components/ui/input';
 import { Checkbox, Select } from '@/components/ui/select';
 import { ConfirmDialog, SettingRow, SettingsSection } from '@/features/settings/section';
+import { useTranslation } from '@/i18n';
 
 /** Name, folders, history, publishing and file settings of a list or library, and deleting it. */
 export function CollectionGeneral({
@@ -19,9 +20,9 @@ export function CollectionGeneral({
   canManage: boolean;
   onDeleted: () => void;
 }) {
+  const { t } = useTranslation(['lists', 'common']);
   const queryClient = useQueryClient();
   const library = collection.kind === 'library';
-  const noun = library ? 'library' : 'list';
   const initial = {
     name: collection.name,
     description: collection.description ?? '',
@@ -60,7 +61,7 @@ export function CollectionGeneral({
     onSuccess: async (updated) => {
       queryClient.setQueryData(keys.resource(collection.id), updated);
       await queryClient.invalidateQueries({ queryKey: keys.resources });
-      toast.success('Settings saved');
+      toast.success(t('general.saved'));
     },
   });
   const remove = useMutation({
@@ -73,7 +74,7 @@ export function CollectionGeneral({
       }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: keys.resources });
-      toast.success(`${collection.name} deleted`);
+      toast.success(t('general.deleted', { name: collection.name }));
       onDeleted();
     },
   });
@@ -81,65 +82,61 @@ export function CollectionGeneral({
   return (
     <>
       <SettingsSection
-        title="General"
+        title={t('general.title')}
         actions={
           canManage && (
             <>
               <Button disabled={!dirty || save.isPending} onClick={() => setDraft(initial)}>
-                Discard changes
+                {t('general.discard')}
               </Button>
               <Button
                 variant="primary"
                 disabled={!dirty || save.isPending || !draft.name.trim() || (draft.versioning !== 'off' && !validMax)}
                 onClick={() => save.mutate()}
               >
-                Save
+                {t('common:actions.save')}
               </Button>
             </>
           )
         }
       >
         <fieldset disabled={!canManage} className="contents">
-          <SettingRow id="collection-name" label="Name">
+          <SettingRow id="collection-name" label={t('common:fields.name')}>
             <Input id="collection-name" required value={draft.name} onChange={(event) => patch({ name: event.target.value })} />
           </SettingRow>
-          <SettingRow id="collection-description" label="Description">
+          <SettingRow id="collection-description" label={t('common:fields.description')}>
             <Textarea
               id="collection-description"
               value={draft.description}
               onChange={(event) => patch({ description: event.target.value })}
             />
           </SettingRow>
-          <SettingRow id="allow-folders" label="Folders" hint="People can organize content in folders.">
+          <SettingRow id="allow-folders" label={t('general.folders')} hint={t('general.foldersHint')}>
             <label className="flex items-center gap-2 pt-2 text-[13px]">
               <Checkbox
                 id="allow-folders"
                 checked={draft.allowFolders}
                 onChange={(event) => patch({ allowFolders: event.target.checked })}
               />
-              Allow folders
+              {t('general.allowFolders')}
             </label>
           </SettingRow>
           <SettingRow
             id="versioning"
-            label="Version history"
-            hint={
-              library
-                ? 'Keep earlier files and their details for restoration. When off, replaced files are reclaimed after a one-hour grace period, once no longer in use.'
-                : 'Keep earlier versions of each item so they can be restored.'
-            }
+            label={t('general.versioning')}
+            hint={library ? t('general.versioningHintLibrary') : t('general.versioningHintList')}
           >
             <Select
               id="versioning"
               value={draft.versioning}
               onChange={(event) => patch({ versioning: event.target.value === 'major' ? 'major' : 'off' })}
             >
-              <option value="off">Off</option>
-              <option value="major">Keep versions</option>
+              <option value="off">{t('general.versioningOff')}</option>
+              <option value="major">{t('general.versioningOn')}</option>
             </Select>
           </SettingRow>
           {draft.versioning !== 'off' && (
-            <SettingRow id="max-versions" label="Versions to keep" hint="Between 1 and 500; older versions are removed.">
+            <SettingRow id="max-versions" label={t('general.maxVersions')} hint={t('general.maxVersionsHint')}>
               <Input
                 id="max-versions"
                 type="number"
@@ -153,17 +150,17 @@ export function CollectionGeneral({
           )}
           <SettingRow
             id="publishing"
-            label="Publishing"
-            hint="Changes stay drafts, visible to editors only, until someone publishes them."
+            label={t('general.publishing')}
+            hint={t('general.publishingHint')}
           >
             <label className="flex items-center gap-2 pt-2 text-[13px]">
               <Checkbox id="publishing" checked={draft.publishing} onChange={(event) => patch({ publishing: event.target.checked })} />
-              Require publishing before readers see changes
+              {t('general.requirePublishing')}
             </label>
           </SettingRow>
           {library && (
             <>
-              <SettingRow id="duplicate-policy" label="Duplicate files" hint="What happens when someone uploads a file that is already stored.">
+              <SettingRow id="duplicate-policy" label={t('general.duplicates')} hint={t('general.duplicatesHint')}>
                 <Select
                   id="duplicate-policy"
                   value={draft.duplicate}
@@ -174,15 +171,15 @@ export function CollectionGeneral({
                     })
                   }
                 >
-                  <option value="allow">Allow them</option>
-                  <option value="warn">Allow them with a warning</option>
-                  <option value="block">Refuse them</option>
+                  <option value="allow">{t('general.duplicateAllow')}</option>
+                  <option value="warn">{t('general.duplicateWarn')}</option>
+                  <option value="block">{t('general.duplicateBlock')}</option>
                 </Select>
               </SettingRow>
-              <SettingRow id="webdav" label="Network drive" hint="Open this library in Windows Explorer, macOS Finder or Office over WebDAV.">
+              <SettingRow id="webdav" label={t('general.webdav')} hint={t('general.webdavHint')}>
                 <label className="flex items-center gap-2 pt-2 text-[13px]">
                   <Checkbox id="webdav" checked={draft.webdav} onChange={(event) => patch({ webdav: event.target.checked })} />
-                  Available as a network drive
+                  {t('general.webdavEnabled')}
                 </label>
               </SettingRow>
             </>
@@ -191,11 +188,11 @@ export function CollectionGeneral({
       </SettingsSection>
       {canManage && !collection.system_key && (
         <SettingsSection
-          title={`Delete ${noun}`}
-          description={`Deletes the ${noun} with all its folders and items for everyone.`}
+          title={library ? t('general.deleteLibrary') : t('general.deleteList')}
+          description={library ? t('general.deleteLibraryDescription') : t('general.deleteListDescription')}
           actions={
             <Button variant="danger" onClick={() => setDeleting(true)}>
-              Delete {noun}
+              {library ? t('general.deleteLibrary') : t('general.deleteList')}
             </Button>
           }
         />
@@ -203,9 +200,9 @@ export function CollectionGeneral({
       <ConfirmDialog
         open={deleting}
         onOpenChange={setDeleting}
-        title={`Delete ${collection.name}?`}
-        description={`All folders and items in this ${noun} become unavailable to everyone.`}
-        confirm={`Delete ${noun}`}
+        title={t('general.deleteTitle', { name: collection.name })}
+        description={library ? t('general.deleteLibraryConfirm') : t('general.deleteListConfirm')}
+        confirm={library ? t('general.deleteLibrary') : t('general.deleteList')}
         busy={remove.isPending}
         error={remove.error}
         onConfirm={() => remove.mutate()}

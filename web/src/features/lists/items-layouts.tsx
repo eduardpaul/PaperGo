@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/menu';
 import { FieldDisplay } from '@/features/fields/display';
 import { useValueNames } from '@/features/fields/names';
+import { useTranslation } from '@/i18n';
 import { problemMessage } from '@/lib/errors';
 import { useFormat } from '@/lib/preferences';
 import { cn } from '@/lib/utils';
@@ -71,6 +72,7 @@ function CardFields({ item, fields, names }: { item: Resource; fields: FieldDefi
 }
 
 export function ItemsGallery({ items, fields, names, onOpen, renderItem, provenance, previewItems }: LayoutProps) {
+  const { t } = useTranslation('lists');
   const clicks = useClickOrOpenFile(onOpen);
   return (
     <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -86,7 +88,7 @@ export function ItemsGallery({ items, fields, names, onOpen, renderItem, provena
             <span className="flex items-center gap-2 pr-8 font-medium">
               {item.kind === 'folder' ? <Folder className="size-4" /> : item.file ? <FileTypeIcon media={item.file.content_type} /> : <File className="size-4" />}
               {item.name}
-              {item.archived && <Badge>Archived</Badge>}
+              {item.archived && <Badge>{t('system.archived')}</Badge>}
               {provenance?.get(item.id) && <Badge>{provenance.get(item.id)}</Badge>}
             </span>
             {previewItems?.has(item.id) && item.kind === 'item' && <FileThumb item={item} className="h-36" iconClassName="size-10" />}
@@ -131,6 +133,7 @@ export function ItemsBoard({
   renderItem?: LayoutProps['renderItem'];
   onOpen: (item: Resource) => void;
 }) {
+  const { t } = useTranslation('lists');
   const client = useQueryClient();
   const format = useFormat();
   const [over, setOver] = useState<string>();
@@ -154,7 +157,7 @@ export function ItemsBoard({
     onError: (error) => toast.error(problemMessage(error)),
     onSettled: () => client.invalidateQueries({ queryKey: keys.resources }),
   });
-  if (!valid) return <Alert>This board needs a single-choice grouping field. Choose one in Manage views.</Alert>;
+  if (!valid) return <Alert>{t('board.invalid')}</Alert>;
   const counts = new Map((groups.data ?? []).map((group) => [group.value == null ? '' : String(group.value), group.count]));
   const columns = [
     ...new Set([
@@ -174,7 +177,7 @@ export function ItemsBoard({
       {columns.map((column) => (
         <section
           key={column}
-          aria-label={column || 'No value'}
+          aria-label={column || t('board.noValue')}
           className={`flex max-h-[75vh] w-72 shrink-0 flex-col rounded-lg border bg-surface-muted ${over === column ? 'border-accent' : ''}`}
           onDragOver={(event) => {
             if (readOnly || !event.dataTransfer.types.includes(dragType)) return;
@@ -194,7 +197,7 @@ export function ItemsBoard({
           }}
         >
           <h3 className="p-3 text-sm font-semibold">
-            {column || 'No value'}{' '}
+            {column || t('board.noValue')}{' '}
             <span className="text-muted">{groups.isSuccess ? format.number(counts.get(column) ?? 0) : ''}</span>
           </h3>
           <BoardColumn
@@ -241,6 +244,7 @@ function BoardColumn({
   onMove: (item: Resource, value: string) => void;
   onOpen: (item: Resource) => void;
 }) {
+  const { t } = useTranslation(['lists', 'common']);
   const call = viewRowsRequest(collectionId, view, filter, boardPageSize);
   const cards = useApiPages<Resource>(['resources', collectionId, 'board'], call.path, { query: call.query, body: call.body });
   const names = useValueNames(fields, cards.items);
@@ -264,14 +268,14 @@ function BoardColumn({
               </button>
               {!readOnly && item.kind === 'item' && (
                 <DropdownMenu>
-                  <DropdownMenuTrigger aria-label={`Move ${item.name} to`}>
+                  <DropdownMenuTrigger aria-label={t('board.moveItem', { name: item.name })}>
                     <MoreHorizontal className="size-4" />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent>
-                    <DropdownMenuLabel>Move to</DropdownMenuLabel>
+                    <DropdownMenuLabel>{t('board.moveTo')}</DropdownMenuLabel>
                     {targets.map((value) => (
                       <DropdownMenuItem key={value} onSelect={() => onMove(item, value)}>
-                        {value || 'No value'}
+                        {value || t('board.noValue')}
                       </DropdownMenuItem>
                     ))}
                   </DropdownMenuContent>
@@ -289,7 +293,7 @@ function BoardColumn({
           return renderItem ? renderItem(item, card) : card;
         })}
       </ul>
-      {cards.items.length === 0 && <p className="px-3 pb-3 text-xs text-muted">Nothing here</p>}
+      {cards.items.length === 0 && <p className="px-3 pb-3 text-xs text-muted">{t('board.empty')}</p>}
       {cards.hasNextPage && (
         <Button
           size="sm"
@@ -298,7 +302,7 @@ function BoardColumn({
           disabled={cards.isFetchingNextPage}
           onClick={() => void cards.fetchNextPage()}
         >
-          {cards.isFetchingNextPage ? 'Loading…' : 'Load more'}
+          {cards.isFetchingNextPage ? t('common:status.loading') : t('loadMore')}
         </Button>
       )}
     </div>
@@ -349,6 +353,7 @@ export function ItemsCalendar({
   dateField?: FieldDefinition;
   onOpen: (item: Resource) => void;
 }) {
+  const { t } = useTranslation(['lists', 'common']);
   const format = useFormat();
   const today = format.dayKey(new Date());
   const [cursor, setCursor] = useState(today.slice(0, 7));
@@ -395,7 +400,7 @@ export function ItemsCalendar({
   useEffect(() => {
     if (hasNextPage && !isFetchingNextPage && loaded < calendarLimit) void fetchNextPage();
   }, [hasNextPage, isFetchingNextPage, loaded, fetchNextPage]);
-  if (!valid) return <Alert>This calendar needs a date grouping field. Choose one in Manage views.</Alert>;
+  if (!valid) return <Alert>{t('calendar.invalid')}</Alert>;
   const byDay = new Map<string, (Resource & { occurrence_key?: string })[]>();
   const visibleItems = eventCalendar ? (occurrences.data ?? []).map((o) => ({
     ...o.item,
@@ -415,6 +420,11 @@ export function ItemsCalendar({
     if (day) byDay.set(day, [...(byDay.get(day) ?? []), item]);
   }
   const inMonth = [...byDay.entries()].filter(([day]) => day.startsWith(cursor)).reduce((sum, [, list]) => sum + list.length, 0);
+  // The month's name in the user's language, as "October 2026" or "octubre de 2026".
+  const monthName = new Intl.DateTimeFormat(format.preferences.language, { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(
+    Date.UTC(Number(cursor.slice(0, 4)), Number(cursor.slice(5, 7)) - 1, 1),
+  );
+  const weekdays = new Map(days.slice(0, 7).map((day) => [day, format.weekday(day, 'short')]));
   const show = (month: Date) => {
     setCursor(dateKey(month, 'yyyy-MM'));
     setExpanded(new Set());
@@ -422,20 +432,20 @@ export function ItemsCalendar({
   return (
     <div className="grid gap-3">
       <div className="flex flex-wrap items-center gap-3">
-        <Button aria-label="Previous month" onClick={() => show(addMonths(anchor, -1))}>
+        <Button aria-label={t('calendar.previous')} onClick={() => show(addMonths(anchor, -1))}>
           ‹
         </Button>
-        <span className="font-semibold">{cursor}</span>
-        <Button aria-label="Next month" onClick={() => show(addMonths(anchor, 1))}>
+        <span className="font-semibold">{monthName}</span>
+        <Button aria-label={t('calendar.next')} onClick={() => show(addMonths(anchor, 1))}>
           ›
         </Button>
-        <Button onClick={() => show(parseISO(`${today.slice(0, 7)}-01`))}>Today</Button>
+        <Button onClick={() => show(parseISO(`${today.slice(0, 7)}-01`))}>{t('calendar.today')}</Button>
         <span role="status" className="text-xs text-muted">
           {(eventCalendar ? occurrences.isPending : items.isPending || (hasNextPage && loaded < calendarLimit))
-            ? 'Loading…'
+            ? t('common:status.loading')
             : hasNextPage
-              ? `Showing the first ${format.number(loaded)} items of these weeks. Filter the view to see the rest.`
-              : `${format.number(inMonth)} ${inMonth === 1 ? 'item' : 'items'} this month`}
+              ? t('calendar.capped', { count: loaded, number: format.number(loaded) })
+              : t('calendar.count', { count: inMonth, number: format.number(inMonth) })}
         </span>
       </div>
       {items.isError && <QueryFeedback query={items} />}
@@ -444,7 +454,7 @@ export function ItemsCalendar({
         <div className="grid min-w-[600px] grid-cols-7">
           {days.slice(0, 7).map((day) => (
             <div key={day} className="border-b p-2 text-xs text-muted">
-              {format.weekday(day, 'short')}
+              {weekdays.get(day)}
             </div>
           ))}
           {days.map((day) => {
@@ -484,7 +494,7 @@ export function ItemsCalendar({
                       })
                     }
                   >
-                    {open ? 'Show less' : `${entries.length - calendarDayLimit} more`}
+                    {open ? t('calendar.less') : t('calendar.more', { count: entries.length - calendarDayLimit })}
                   </button>
                 )}
               </div>
@@ -494,7 +504,7 @@ export function ItemsCalendar({
       </div>
       {undated.items.length > 0 && (
         <div>
-          <h3 className="text-sm font-medium">No {dateField.label}</h3>
+          <h3 className="text-sm font-medium">{t('calendar.undated', { field: dateField.label })}</h3>
           <ul>
             {undated.items.map((item) => (
               <li key={item.id}>
@@ -506,7 +516,7 @@ export function ItemsCalendar({
           </ul>
           {undated.hasNextPage && (
             <Button size="sm" variant="ghost" disabled={undated.isFetchingNextPage} onClick={() => void undated.fetchNextPage()}>
-              Load more
+              {t('loadMore')}
             </Button>
           )}
         </div>

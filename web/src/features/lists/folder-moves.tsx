@@ -7,6 +7,7 @@ import type { Resource } from '@/api/types';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/features/settings/section';
+import { i18n, useTranslation } from '@/i18n';
 import { problemMessage } from '@/lib/errors';
 import { can } from './access';
 import { MoveDialog } from './move-dialog';
@@ -18,19 +19,20 @@ type Conflict = Move & { source: Resource; existing?: { id: string; version: num
 
 /** Drag payloads are untrusted; permissions and all versions are checked again by the server. */
 export function readMoveDrag(value: string, collection: Resource): Resource[] {
-  if (value.length > 128_000) throw new Error('The dragged selection is too large.');
+  if (value.length > 128_000) throw new Error(i18n.t('lists:moves.tooLarge'));
   const payload = JSON.parse(value) as { collection_id?: unknown; items?: Resource[] };
-  if (payload.collection_id !== collection.id || !Array.isArray(payload.items) || !payload.items.length || payload.items.length > 100) throw new Error('Select up to 100 entries from this collection. Use Move for another collection.');
+  if (payload.collection_id !== collection.id || !Array.isArray(payload.items) || !payload.items.length || payload.items.length > 100) throw new Error(i18n.t('lists:moves.otherCollection'));
   const seen = new Set<string>();
   return payload.items.map(item => {
-    if (!item || typeof item.id !== 'string' || !item.id || seen.has(item.id) || !Number.isSafeInteger(item.version) || item.version < 1 || !['item', 'folder'].includes(item.kind)) throw new Error('The dragged selection is invalid. Select the entries again.');
+    if (!item || typeof item.id !== 'string' || !item.id || seen.has(item.id) || !Number.isSafeInteger(item.version) || item.version < 1 || !['item', 'folder'].includes(item.kind)) throw new Error(i18n.t('lists:moves.invalid'));
     seen.add(item.id);
-    return { id: item.id, version: item.version, kind: item.kind, name: typeof item.name === 'string' ? item.name : 'Item', parent_id: typeof item.parent_id === 'string' ? item.parent_id : undefined, container_id: collection.id, workspace_id: collection.workspace_id };
+    return { id: item.id, version: item.version, kind: item.kind, name: typeof item.name === 'string' ? item.name : i18n.t('lists:moves.unnamed'), parent_id: typeof item.parent_id === 'string' ? item.parent_id : undefined, container_id: collection.id, workspace_id: collection.workspace_id };
   });
 }
 
 /** Folder rows and breadcrumbs share one move operation and one conflict-resolution flow. */
 export function useFolderMoves(collection: Resource | undefined, selected: Map<string, Resource>, onSelection: (items: Resource[]) => void) {
+  const { t } = useTranslation(['lists', 'common']);
   const client = useQueryClient();
   const [over, setOver] = useState<string>();
   const [conflict, setConflict] = useState<Conflict>();
@@ -45,7 +47,7 @@ export function useFolderMoves(collection: Resource | undefined, selected: Map<s
   const move = useMutation({
     meta: { silent: true },
     mutationFn: ({ items, target }: Move) => api<{ id: string; version: number }[]>(`/v1/resources/${collection!.id}/move-selection`, { method: 'POST', body: { parent_id: target.id, items: items.map(item => ({ id: item.id, version: item.version })) } }),
-    onSuccess: (_result, input) => { onSelection([]); toast.success(`Moved ${input.items.length === 1 ? 'entry' : `${input.items.length} entries`} to ${input.target.name}`); },
+    onSuccess: (_result, input) => { onSelection([]); toast.success(t('moves.moved', { count: input.items.length, target: input.target.name })); },
     onError: async (error, input) => {
       const sourceId = isApiError(error) && error.code === 'name_conflict' ? error.problem?.source_item_id : undefined;
       if (sourceId && input.items.some(item => item.id === sourceId)) {
@@ -56,7 +58,7 @@ export function useFolderMoves(collection: Resource | undefined, selected: Map<s
           return;
         } catch { /* Access may have changed after the failed move. */ }
       }
-      toast.error(`Nothing moved. ${problemMessage(error)}`, { action: { label: 'Choose destination…', onClick: () => setReviewing(input.items) } });
+      toast.error(t('moves.failed', { problem: problemMessage(error) }), { action: { label: t('moves.chooseDestination'), onClick: () => setReviewing(input.items) } });
     },
     onSettled: refresh,
   });
@@ -66,7 +68,7 @@ export function useFolderMoves(collection: Resource | undefined, selected: Map<s
       { action: 'delete', id: conflict!.existing!.id, version: conflict!.existing!.version },
       { action: 'update', id: conflict!.source.id, version: conflict!.source.version, update: { parent_id: conflict!.target.id } },
     ] } }),
-    onSuccess: () => { setConfirmingReplace(false); setConflict(undefined); onSelection([]); toast.success('Moved entry; the replaced file is in the recycle bin.'); },
+    onSuccess: () => { setConfirmingReplace(false); setConflict(undefined); onSelection([]); toast.success(t('moves.replaced')); },
     onSettled: refresh,
   });
   const accepts = (event: DragEvent, target: Resource) => enabled && !move.isPending && (target.access ? can(target, 'write') : true) && Array.from(event.dataTransfer.types).includes(resourceDragType);
@@ -75,7 +77,7 @@ export function useFolderMoves(collection: Resource | undefined, selected: Map<s
     onDragStart: event => {
       if (!enabled) { event.preventDefault(); return; }
       const items = selected.has(item.id) ? [...selected.values()] : [item];
-      if (items.length > 100) { event.preventDefault(); toast.error('Select up to 100 entries to move at once.'); return; }
+      if (items.length > 100) { event.preventDefault(); toast.error(t('moves.limit')); return; }
       onSelection(items);
       event.dataTransfer.setData(resourceDragType, JSON.stringify({ collection_id: collection!.id, items: items.map(({ id, version, kind, name, parent_id }) => ({ id, version, kind, name, parent_id })) }));
       event.dataTransfer.effectAllowed = 'move';
@@ -93,20 +95,20 @@ export function useFolderMoves(collection: Resource | undefined, selected: Map<s
       event.preventDefault(); event.stopPropagation(); setOver(undefined);
       try {
         const items = readMoveDrag(event.dataTransfer.getData(resourceDragType), collection!);
-        if (items.some(item => item.id === target.id)) throw new Error('An entry cannot be moved into itself.');
-        if (items.every(item => item.parent_id === target.id)) { toast.info('The selection is already here.'); return; }
+        if (items.some(item => item.id === target.id)) throw new Error(t('moves.intoItself'));
+        if (items.every(item => item.parent_id === target.id)) { toast.info(t('moves.alreadyHere')); return; }
         replace.reset(); move.mutate({ items, target });
       } catch (error) { toast.error(problemMessage(error)); }
     },
   });
   const dialogs = <>
     <Dialog open={!!conflict && !renaming && !confirmingReplace} onOpenChange={open => !open && setConflict(undefined)}>
-      <DialogContent><DialogHeader><DialogTitle>Name already in use</DialogTitle><DialogDescription>“{conflict?.source.name}” conflicts with an entry in {conflict?.target.name}. Nothing moved. Rename it and drag again, or replace the writable file when available.</DialogDescription></DialogHeader>
-        <DialogFooter><Button onClick={() => setConflict(undefined)}>Cancel</Button><Button disabled={!can(conflict?.source, 'write')} onClick={() => setRenaming(conflict?.source)}>Rename…</Button>{conflict?.existing && <Button variant="danger" onClick={() => setConfirmingReplace(true)}>Replace…</Button>}</DialogFooter>
+      <DialogContent><DialogHeader><DialogTitle>{t('moves.conflictTitle')}</DialogTitle><DialogDescription>{t('moves.conflictDescription', { name: conflict?.source.name, target: conflict?.target.name })}</DialogDescription></DialogHeader>
+        <DialogFooter><Button onClick={() => setConflict(undefined)}>{t('common:actions.cancel')}</Button><Button disabled={!can(conflict?.source, 'write')} onClick={() => setRenaming(conflict?.source)}>{t('menu.rename')}</Button>{conflict?.existing && <Button variant="danger" onClick={() => setConfirmingReplace(true)}>{t('moves.replace')}</Button>}</DialogFooter>
       </DialogContent>
     </Dialog>
     {renaming && <RenameDialog item={renaming} onClose={() => { setRenaming(undefined); setConflict(undefined); }} />}
-    <ConfirmDialog open={confirmingReplace} onOpenChange={setConfirmingReplace} title={`Replace the file named “${conflict?.source.name ?? ''}”?`} description="The destination file moves to the recycle bin and the dragged entry moves into its folder. Both changes happen together; a changed version or permission cancels the whole operation." confirm="Replace and move" busy={replace.isPending} error={replace.error} onConfirm={() => replace.mutate()} />
+    <ConfirmDialog open={confirmingReplace} onOpenChange={setConfirmingReplace} title={t('moves.replaceTitle', { name: conflict?.source.name ?? '' })} description={t('moves.replaceDescription')} confirm={t('moves.replaceConfirm')} busy={replace.isPending} error={replace.error} onConfirm={() => replace.mutate()} />
     {reviewing && collection && <MoveDialog item={reviewing[0]} items={reviewing} collection={collection} onClose={() => setReviewing(undefined)} onMoved={() => setReviewing(undefined)} />}
   </>;
   return { over, sourceProps, targetProps, dialogs };

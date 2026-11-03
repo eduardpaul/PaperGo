@@ -7,24 +7,37 @@ import { FieldEditor } from '@/features/fields/editor';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
+import { i18n, useTranslation } from '@/i18n';
 
-export const systemFields: FieldDefinition[] = [
-  ['$name', 'Name', 'text'],
-  ['$id', 'ID', 'text'],
-  ['$keywords', 'Keywords', 'keywords'],
-  ['$created_at', 'Created', 'datetime'],
-  ['$modified_at', 'Modified', 'datetime'],
-  ['$created_by', 'Created by', 'person'],
-  ['$modified_by', 'Modified by', 'person'],
-  ['$archived_at', 'Archived', 'datetime'],
-  ['$archived_by', 'Archived by', 'person'],
-].map(([key, label, type]) => ({ id: key, key, label, type, indexed: true, options: key === '$keywords' ? { multiple: true } : undefined }));
+/** The built-in columns as fields. Each label is read in the user's language when it is used. */
+export const systemFields: FieldDefinition[] = (
+  [
+    ['name', 'text'],
+    ['id', 'text'],
+    ['keywords', 'keywords'],
+    ['created_at', 'datetime'],
+    ['modified_at', 'datetime'],
+    ['created_by', 'person'],
+    ['modified_by', 'person'],
+    ['archived_at', 'datetime'],
+    ['archived_by', 'person'],
+  ] as const
+).map(([column, type]) => ({
+  id: `$${column}`,
+  key: `$${column}`,
+  get label() {
+    return i18n.t(`lists:columns.${column}`);
+  },
+  type,
+  indexed: true,
+  options: column === 'keywords' ? { multiple: true } : undefined,
+}));
 
-export const comparisonLabels: Record<string, string> = { eq: 'is', ne: 'is not', in: 'is one of', missing: 'is empty', present: 'has a value', gt: 'is after / greater than', gte: 'is on or after / at least', lt: 'is before / less than', lte: 'is on or before / at most', contains: 'contains', under: 'is in this topic' };
-export const relativeLabels: Record<string, string> = { today: 'Today', yesterday: 'Yesterday', tomorrow: 'Tomorrow', last7Days: 'Past week', next7Days: 'Next week', last30Days: 'Past month', next30Days: 'Next month', weekStart: 'Start of week', weekEnd: 'End of week', monthStart: 'Start of month', monthEnd: 'End of month', me: 'Current user' };
+const comparisons = ['eq', 'ne', 'in', 'missing', 'present', 'gt', 'gte', 'lt', 'lte', 'contains', 'under'] as const;
+const relativeDates = ['today', 'yesterday', 'tomorrow', 'last7Days', 'next7Days', 'last30Days', 'next30Days', 'weekStart', 'weekEnd', 'monthStart', 'monthEnd'] as const;
 /** The file type filter: the kinds of file the server names, and files it does not recognize. */
 export function fileTypeField(): FieldDefinition {
-  return { id: '$file_type', key: '$file_type', label: 'File type', type: 'choice', indexed: true, choices: [...fileTypes().map((type) => type.media_type), 'application/octet-stream'] };
+  return { id: '$file_type', key: '$file_type', label: i18n.t('lists:system.fileType'), type: 'choice', indexed: true, choices: [...fileTypes().map((type) => type.media_type), 'application/octet-stream'] };
 }
 
 export function normalizeFilter(filter: FilterExpr | undefined, fields: FieldDefinition[]): FilterExpr | undefined {
@@ -46,6 +59,9 @@ export function normalizeFilter(filter: FilterExpr | undefined, fields: FieldDef
   };
 }
 
+/** A moment as the API reads it; the same in every language. */
+const datetimeExample = '2026-10-12T00:00:00Z';
+
 const newCondition = (): FilterExpr => ({ field: '$name', op: 'eq', value: '' });
 export function FilterEditor({
   filter,
@@ -58,8 +74,9 @@ export function FilterEditor({
   onChange: (filter?: FilterExpr) => void;
   depth?: number;
 }) {
+  const { t } = useTranslation(['lists', 'common']);
   const id = useId();
-  if (!filter) return <Button onClick={() => onChange(newCondition())}>Add filter</Button>;
+  if (!filter) return <Button onClick={() => onChange(newCondition())}>{t('filter.add')}</Button>;
   const children = filter.and ?? filter.or;
   if (children) {
     const operator = filter.and ? 'and' : 'or';
@@ -67,14 +84,14 @@ export function FilterEditor({
       <div className="grid gap-2 rounded border p-3">
         <div className="flex gap-2">
           <Select
-            aria-label="Match conditions"
+            aria-label={t('filter.match')}
             value={operator}
             onChange={(event) => onChange({ [event.target.value]: children })}
           >
-            <option value="and">All conditions</option>
-            <option value="or">Any condition</option>
+            <option value="and">{t('filter.all')}</option>
+            <option value="or">{t('filter.any')}</option>
           </Select>
-          <Button onClick={() => onChange(undefined)}>Remove group</Button>
+          <Button onClick={() => onChange(undefined)}>{t('filter.removeGroup')}</Button>
         </div>
         {children.map((child, index) => (
           <FilterEditor
@@ -89,7 +106,7 @@ export function FilterEditor({
           />
         ))}
         {depth < 5 && (
-          <Button onClick={() => onChange({ [operator]: [...children, newCondition()] })}>Add condition</Button>
+          <Button onClick={() => onChange({ [operator]: [...children, newCondition()] })}>{t('filter.addCondition')}</Button>
         )}
       </div>
     );
@@ -98,8 +115,8 @@ export function FilterEditor({
     return (
       <div className="grid gap-2 rounded border p-3">
         <div className="flex gap-2">
-          <span className="flex-1">Not</span>
-          <Button onClick={() => onChange(filter.not)}>Remove negation</Button>
+          <span className="flex-1">{t('filter.not')}</span>
+          <Button onClick={() => onChange(filter.not)}>{t('filter.removeNegation')}</Button>
         </div>
         <FilterEditor
           filter={filter.not}
@@ -145,12 +162,12 @@ export function FilterEditor({
         value={String(v ?? false)}
         onChange={(event) => onValue(event.target.value === 'true')}
       >
-        <option value="true">Yes</option>
-        <option value="false">No</option>
+        <option value="true">{t('common:answer.yes')}</option>
+        <option value="false">{t('common:answer.no')}</option>
       </Select>
     ) : field?.type === 'choice' ? (
       <Select aria-label={label} value={String(v ?? '')} onChange={(event) => onValue(event.target.value)}>
-        <option value="">Choose…</option>
+        <option value="">{t('filter.choose')}</option>
         {field.choices?.map((choice) => (
           <option key={choice} value={choice}>
             {field.key === '$file_type' ? fileTypeLabel(choice) : choice}
@@ -163,7 +180,7 @@ export function FilterEditor({
         value={String(v ?? '')}
         type={field?.type === 'date' ? 'date' : 'text'}
         inputMode={['integer', 'number', 'currency', 'decimal'].includes(field?.type ?? '') ? 'decimal' : undefined}
-        placeholder={field?.type === 'datetime' ? '2026-10-12T00:00:00Z' : 'Value'}
+        placeholder={field?.type === 'datetime' ? datetimeExample : t('filter.value')}
         onChange={(event) => onValue(event.target.value)}
       />
     );
@@ -171,7 +188,7 @@ export function FilterEditor({
     <div className="grid gap-2 rounded border p-3">
       <div className="flex flex-wrap gap-2">
         <Select
-          aria-label="Filter field"
+          aria-label={t('filter.field')}
           value={filter.field ?? ''}
           onChange={(event) =>
             onChange({
@@ -181,7 +198,7 @@ export function FilterEditor({
             })
           }
         >
-          {filter.field && !field && <option value={filter.field}>Field unavailable in this scope</option>}
+          {filter.field && !field && <option value={filter.field}>{t('filter.unavailable')}</option>}
           {fields.map((field) => (
             <option key={field.key} value={field.key}>
               {field.label}
@@ -189,7 +206,7 @@ export function FilterEditor({
           ))}
         </Select>
         <Select
-          aria-label="Comparison"
+          aria-label={t('filter.comparison')}
           value={op}
           onChange={(event) =>
             onChange({
@@ -206,17 +223,17 @@ export function FilterEditor({
         >
           {operators.map((operator) => (
             <option key={operator} value={operator}>
-              {comparisonLabels[operator] ?? operator}
+              {comparisons.find((known) => known === operator) ? t(`filter.ops.${operator as (typeof comparisons)[number]}`) : operator}
             </option>
           ))}
         </Select>
-        <Button onClick={() => onChange(undefined)}>Remove condition</Button>
+        <Button onClick={() => onChange(undefined)}>{t('filter.removeCondition')}</Button>
       </div>
       {!['missing', 'present'].includes(op) && (
         <>
           {op !== 'in' && (
             <Select
-              aria-label="Compare with"
+              aria-label={t('filter.compareWith')}
               value={filter.value_ref ?? ''}
               onChange={(event) =>
                 onChange({
@@ -227,24 +244,12 @@ export function FilterEditor({
                 })
               }
             >
-              <option value="">A value</option>
-              {field?.type === 'person' && <option value="me">Current user</option>}
+              <option value="">{t('filter.aValue')}</option>
+              {field?.type === 'person' && <option value="me">{t('filter.relative.me')}</option>}
               {['date', 'datetime'].includes(field?.type ?? '') &&
-                [
-                  'today',
-                  'yesterday',
-                  'tomorrow',
-                  'last7Days',
-                  'next7Days',
-                  'last30Days',
-                  'next30Days',
-                  'weekStart',
-                  'weekEnd',
-                  'monthStart',
-                  'monthEnd',
-                ].map((ref) => (
+                relativeDates.map((ref) => (
                   <option key={ref} value={ref}>
-                    {relativeLabels[ref]} (UTC)
+                    {t('filter.utc', { date: t(`filter.relative.${ref}`) })}
                   </option>
                 ))}
             </Select>
@@ -258,10 +263,10 @@ export function FilterEditor({
                       entry,
                       (next) =>
                         onChange({ ...filter, value: values.map((current, i) => (i === index ? next : current)) }),
-                      `Filter value ${index + 1}`,
+                      t('filter.valueNumber', { number: index + 1 }),
                     )}
                     <Button onClick={() => onChange({ ...filter, value: values.filter((_, i) => i !== index) })}>
-                      Remove value
+                      {t('filter.removeValue')}
                     </Button>
                   </div>
                 ))}
@@ -270,18 +275,18 @@ export function FilterEditor({
                     onChange({ ...filter, value: [...(Array.isArray(filter.value) ? filter.value : []), ''] })
                   }
                 >
-                  Add value
+                  {t('filter.addValue')}
                 </Button>
               </>
             ) : (
-              value(filter.value, (next) => onChange({ ...filter, value: next }), `Filter value ${id}`)
+              value(filter.value, (next) => onChange({ ...filter, value: next }), t('filter.valueNumber', { number: id }))
             ))}
         </>
       )}
       {depth < 5 && (
         <div className="flex gap-2">
-          <Button onClick={() => onChange({ and: [filter, newCondition()] })}>Add condition group</Button>
-          <Button onClick={() => onChange({ not: filter })}>Negate</Button>
+          <Button onClick={() => onChange({ and: [filter, newCondition()] })}>{t('filter.addGroup')}</Button>
+          <Button onClick={() => onChange({ not: filter })}>{t('filter.negate')}</Button>
         </div>
       )}
     </div>
