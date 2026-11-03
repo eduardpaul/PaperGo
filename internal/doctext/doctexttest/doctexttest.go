@@ -72,5 +72,13 @@ func cacheDir() string {
 // use their own.
 func CacheDir(t testing.TB) string { t.Helper(); return cacheDir() }
 
-// PDF returns the PDF reader.
-func PDF(t testing.TB) doctext.PDF { t.Helper(); return reader() }
+// PDF returns the PDF reader, started: a cold compile takes tens of seconds
+// under the race detector and would otherwise count against the deadlines
+// of the test that first opens a PDF.
+func PDF(t testing.TB) doctext.PDF {
+	t.Helper()
+	if _, err := reader().Warm(); err != nil {
+		t.Fatalf("start PDFium: %v", err)
+	}
+	return reader()
+}
