@@ -126,7 +126,7 @@ What arrived:
 **Layering: it fits.**
 
 - **Port and adapter.** `internal/workflow` imports only `internal/ocr`. The engine is constructed in `cmd/api` (and `cmd/ocr`) and handed over in `workflow.Tools`. Engines never read storage or the database, so a second engine (Tesseract, a GLM-OCR endpoint) needs no change in callers. This is the pattern the search stores follow: `internal/workflow` sees `search.Store`, and `cmd/api` picks the implementation.
-- **Native SDKs.** PaperGo uses cgo with maintained ONNX and PDFium Go SDKs. `scripts/native.py` installs pinned native libraries and headers. The Docker runtime uses `distroless/cc` with glibc and libstdc++.
+- **Native SDKs.** PaperGo uses cgo with the maintained ONNX Go SDK; PDFium runs as WebAssembly inside the executable. `scripts/native.py` installs pinned native libraries and headers. The Docker runtime uses `distroless/cc` with glibc and libstdc++.
 - **Heavy work outside the writer.** The three-step activity shape (`run` → `Exec.Work` → `commit`) is what search activities need. Search writes go to another database, so `search.*` activities do their store writes in `Work` and keep their main-database steps short.
 - **One wrinkle.** `internal/imaging` imports `internal/storage` only for the `storage.DocumentType` signature sniffer. It is harmless, but the sniffer belongs in a small leaf package (for example `internal/mediatype`), so imaging and later `internal/doctext` depend on no storage code. A cleanup, not a blocker.
 
@@ -496,8 +496,8 @@ Chunkers are a Go interface, `Chunker{ Key() string; Split(text Text, o Options)
 
 #### Reading text and where it is kept
 
-- **PDF reading.** PDFium chromium/8076 through `klippa-app/go-pdfium`'s cgo backend, behind `doctext.PDF`. The linked SDK provides text extraction and page rendering for OCR. The native installer, Docker image and release archives include its library and notices.
-  - **Not chosen:** PDFium as WebAssembly in wazero (no native library, but a few seconds to compile per process and about 2× slower; tried first and replaced), pdfcpu (processes PDFs but neither extracts text nor renders pages), and a pure-Go text reader (no rendering, so scanned PDFs would stay without text).
+- **PDF reading.** PDFium 8057 as WebAssembly, embedded by `klippa-app/go-pdfium` and run in-process by wazero, behind `doctext.PDF`. It provides text extraction and page rendering for OCR with no native library. The module compiles in a few seconds on the first PDF after a start, and reads and renders about 2–4× slower than native PDFium. The Docker image and release archives ship its notices.
+  - **Not chosen:** PDFium through go-pdfium's cgo backend (faster, but a native library that every build, package and start depends on), pdfcpu (processes PDFs but neither extracts text nor renders pages), and a pure-Go text reader (no rendering, so scanned PDFs would stay without text).
   - **Alternative:** a pure-Go text-layer reader, with no rendering. Scanned PDFs would then stay without text until a renderer exists.
 - **No OCR configured.** When `ONNXRUNTIME_LIB` is empty, `ocr: auto` reads text layers only and reports the pages it skipped. It does not fail.
 - **Storage.** One row per physical file, `blob_texts(sha256, pages, chars, language, extractor, models, object_key)`, in `papergo.db`. The page texts are one JSON object in the blob store, written in the work step and pinned by the row, so large text stays out of the database.
@@ -634,7 +634,7 @@ Personalization changes quality and cost, never permissions or inclusion.
 - SQLite uses `modernc.org/sqlite`, including DBOS's SQLite driver; native bindings use maintained cgo SDKs;
 - the Snowball stemmers are `github.com/blevesearch/snowballstem` (BSD-3-Clause, recorded in `docs/dependencies.md`); the language-detection library is checked when P3 needs it.
 
-**PDFium** (chosen in P3, through cgo SDKs) is BSD-3-Clause and Apache-2.0, plus the notices of its bundled libraries (FreeType FTL, libjpeg-turbo, OpenJPEG, lcms2, zlib), all permissive. It ships with its own notices file.
+**PDFium** (chosen in P3, as go-pdfium's embedded WebAssembly module) is BSD-3-Clause and Apache-2.0, plus the notices of its bundled libraries (FreeType FTL, libjpeg-turbo, OpenJPEG, lcms2, zlib, ICU, Emscripten's runtime), all permissive. wazero, which runs it, is Apache-2.0. Their notices ship as `notices/pdfium`.
 
 **A written allow list.** `docs/dependencies.md` gets one: MIT, Apache-2.0, BSD, ISC, zlib, BSL-1.0 and PostgreSQL allowed; GPL, LGPL, AGPL and SSPL not linked. Its one exception is MPL-2.0 inside the ONNX Runtime binary (Eigen, header-only), which is file-level copyleft and satisfied by shipping the notices and pointing to the unmodified source.
 
@@ -736,7 +736,7 @@ P1 and P2 give global search over all items and folders, and move collection sea
 - **Rebuild window.** After a lost `search.db`, collection `search` returns 503 until metadata is rebuilt (minutes at 200k items). Backups leave the store out, so a restore pays this window once; including it is a later option.
 - **`doc_fts` rewrite cost.** A metadata change on an item with a large file re-tokenizes its published chunk text. If that hurts, split it into a metadata-only table and a per-blob content table that changes only on publish.
 - **Readable scopes at scale.** Long scope lists are passed as JSON parameters on SQLite, and measured in P0 and P1.
-- **Native code in the process.** ONNX Runtime and PDFium run in-process: a crash in one stops PaperGo. Each stays behind a port and is pinned; PDFium reads untrusted PDFs, so its build is updated with PaperGo's releases. Each stays behind a port, pinned and fuzzed at its builders.
+- **Native code in the process.** ONNX Runtime runs in-process: a crash in it stops PaperGo. PDFium reads untrusted PDFs inside wazero's sandbox, without file system access, and its build is updated with PaperGo's releases. Each stays behind a port, pinned and fuzzed at its builders.
 - **Open questions:**
   - ~~Should `search.enrich` text appear in snippets, or only be used for ranking?~~ Decided in P7: it is matched and embedded, and snippets show only the file's text.
   - Should `max_chunks` and `max_pages` stay parameters of the built-ins, or become library settings?

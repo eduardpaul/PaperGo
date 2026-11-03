@@ -64,7 +64,7 @@ Limits:
 
 `internal/onnx` uses [`yalue/onnxruntime_go` v1.25.0](https://github.com/yalue/onnxruntime_go/tree/v1.25.0), a cgo binding for ONNX Runtime 1.23.2. OCR and local embeddings share one environment. Models load from memory or a path, tensors use the SDK, and context cancellation terminates only the active run. CPU arenas and memory patterns are disabled to bound retained memory for varying image shapes.
 
-PaperGo builds with cgo. `python3 scripts/native.py` installs the pinned SDKs and writes `.tools/native/env.sh` and `env.ps1`. The Docker image and release archives include ONNX Runtime and PDFium. PDF reading is always available; ONNX Runtime inference is enabled with `ONNXRUNTIME_LIB` and the model paths. The Docker image enables OCR and includes its models. Native license notices are under `/opt/papergo/notices` in Docker and `notices/` in platform ZIPs. Shared models and their notices are in `assets/` beside the executable.
+PaperGo builds with cgo. `python3 scripts/native.py` installs the pinned SDKs and writes `.tools/native/env.sh` and `env.ps1`. The Docker image and release archives include ONNX Runtime. PDF reading is always available: PDFium is embedded in the executable as WebAssembly; ONNX Runtime inference is enabled with `ONNXRUNTIME_LIB` and the model paths. The Docker image enables OCR and includes its models. Native license notices are under `/opt/papergo/notices` in Docker and `notices/` in platform ZIPs. Shared models and their notices are in `assets/` beside the executable.
 
 Configuration (`paddle.Config`):
 

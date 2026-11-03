@@ -12,7 +12,8 @@ Direct Go modules and the licences they ship under. Add a row when a change adds
 | `github.com/blevesearch/snowballstem` | word stems for search in the `SEARCH_LANGUAGES` (`internal/search` only): the Snowball project's generated stemmers | BSD-3-Clause |
 | `github.com/coreos/go-oidc/v3` | OIDC bearer token verification | Apache-2.0 |
 | `github.com/yalue/onnxruntime_go` | cgo ONNX Runtime binding shared by OCR, embeddings and decisions | MIT |
-| `github.com/klippa-app/go-pdfium` | cgo PDF text reading and rendering | MIT |
+| `github.com/klippa-app/go-pdfium` | PDF text reading and rendering with its embedded PDFium WebAssembly module (`internal/doctext/pdfium` only) | MIT |
+| `github.com/tetratelabs/wazero` | pure-Go WebAssembly runtime that runs PDFium in-process (`internal/doctext/pdfium` only) | Apache-2.0 |
 | `github.com/daulet/tokenizers` | statically linked Hugging Face Rust tokenizer | MIT |
 | `github.com/kolesa-team/go-webp` | cgo WebP decoding and encoding | MIT |
 | `github.com/go-jose/go-jose/v4` | JWT handling | Apache-2.0 |
@@ -29,6 +30,10 @@ Direct Go modules and the licences they ship under. Add a row when a change adds
 
 goja also links `github.com/dlclark/regexp2` (MIT), `github.com/go-sourcemap/sourcemap` (BSD-2-Clause) and `github.com/google/pprof` (Apache-2.0).
 
+go-pdfium's WebAssembly backend also links `github.com/jolestar/go-commons-pool/v2` (Apache-2.0).
+
+**PDFium** 8057, as the WebAssembly module go-pdfium v1.21.3 embeds, is compiled into the executable and runs in wazero with no file system access; no native PDFium library is loaded. The module is built with Emscripten from the `wasm-standalone` branch of `jerbob92/pdfium-binaries`, without V8 or XFA. PDFium is Apache-2.0 and BSD-3-Clause. The module also contains FreeType (FreeType License), libjpeg-turbo (IJG, BSD-3-Clause and zlib), OpenJPEG (BSD-2-Clause), Little CMS (MIT), zlib, ICU (Unicode License), Abseil (Apache-2.0), AGG and Emscripten's runtime libraries (MIT and NCSA, musl MIT). `internal/doctext/pdfium/notices` holds these notices, those of the other libraries PDFium's build may include, and wazero's licence and NOTICE. `scripts/build-binaries.py` ships them as `notices/pdfium/` in release archives and the Docker image. Update the notices and `Name()` in `internal/doctext/pdfium` when go-pdfium changes.
+
 The MCP SDK also links `github.com/segmentio/encoding` and `github.com/segmentio/asm` (MIT), `github.com/yosida95/uritemplate/v3` (BSD-3-Clause) and `golang.org/x/time` (BSD-3-Clause).
 
 The embedded workflow SDK (`sdk/dist/sdk.js`) bundles the npm packages `@microsoft/kiota-abstractions` and the Kiota JSON, text, form and multipart serializers (MIT), `@opentelemetry/api` and `@std-uritemplate/std-uritemplate` (Apache-2.0), and `tinyduration` (MIT). The client is generated with Kiota 1.35.0 (MIT), a development tool.
@@ -38,7 +43,6 @@ The native SDK installer (`scripts/native.py`, checksums in `scripts/native.json
 
 - **ONNX Runtime** 1.23.2 (MIT). Its release binaries include third-party code listed in their `ThirdPartyNotices.txt`, among it Eigen, partly under MPL-2.0. Deployments that ship the library ship that file with it.
 - **The PaddleOCR models** in `models/paddleocr` (Apache-2.0, PaddlePaddle / PaddleOCR contributors).
-- **PDFium** chromium/8076 from `bblanchon/pdfium-binaries`, linked by `internal/doctext/pdfium`. PDFium is Apache-2.0 and BSD-3-Clause. Its bundled dependency notices ship in the SDK's `licenses/` directory and are included in Docker and release archives.
 - **libwebp** 1.6.0 (BSD-3-Clause), compiled without source patches and statically linked, including its SharpYUV component.
 - **Hugging Face Tokenizers** through the pinned `daulet/tokenizers` Rust static library (MIT/Apache-2.0).
 

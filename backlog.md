@@ -813,13 +813,13 @@ Currently, document viewing and thumbnail displays either download full-resoluti
 
 #### Technical Analysis
 - Large PDF/TIFF/JPEG files consume extensive client bandwidth and memory.
-- PaperGo has high-performance native imaging tools (`internal/imaging`, `internal/pdf`, PDFium, WebP).
+- PaperGo has imaging tools (`internal/imaging`, `internal/pdf`, PDFium as WebAssembly, native WebP).
 - Built-in workflow mechanism can process uploaded blobs in a background task and store low-res previews in a dedicated cache directory (`data/previews/{hash}.webp`).
 
 #### Proposed Specification
 1. **Built-in Preview Generator Workflow**:
    - Triggers on `file.added` and `file.updated`.
-   - Uses native PDFium / imaging to render page 1 (or images) into a bounded WebP (e.g. max dimension 800px, quality 75).
+   - Uses PDFium / imaging to render page 1 (or images) into a bounded WebP (e.g. max dimension 800px, quality 75).
    - Saves output to preview storage and attaches preview metadata to the item.
 2. **UI Integration**:
    - Before preview generation completes, the UI shows a clean skeleton/placeholder ("Generating preview...").

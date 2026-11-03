@@ -54,7 +54,7 @@ Start routes answer `202` with `Location: /v1/operations/{id}`. Results are read
 | PaddleOCR | **Package-global** (`internal/ocr/paddle/paddle.go:83`) | Hard-coded 5 min | Unloads; reloads on next use |
 | Local embeddings | Per instance | Hard-coded 5 min | Permanent |
 | Laya | Per instance | Hard-coded 5 min | Permanent |
-| PDFium | Process-wide single-threaded pool | None | None |
+| PDFium | Process-wide pool of WebAssembly instances, one per open PDF, bounded to the readers that run at once by default | Instance freed on close | None |
 
 `cmd/api` builds one instance of each engine and shares it. `workGate` (`internal/workflow/tools.go:83`) adds a second process-wide gate around OCR, optimization, composition and decisions, but not embeddings.
 
