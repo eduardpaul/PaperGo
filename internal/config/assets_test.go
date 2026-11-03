@@ -13,7 +13,7 @@ func TestAssetsBesideExecutable(t *testing.T) {
 	library := filepath.Join(directory, "lib", "libonnxruntime.so")
 	switch runtime.GOOS {
 	case "windows":
-		library = filepath.Join(directory, "onnxruntime.dll")
+		library = filepath.Join(directory, "lib", "onnxruntime.dll")
 	case "darwin":
 		library = filepath.Join(directory, "lib", "libonnxruntime.dylib")
 	}

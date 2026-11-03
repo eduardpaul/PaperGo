@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- The private assembly in lib\ that papergo.manifest depends on. -->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <assemblyIdentity type="win32" name="lib" version="1.0.0.0" processorArchitecture="amd64"/>
+  <file name="pdfium.dll"/>
+  <file name="zvec_c_api.dll"/>
+</assembly>

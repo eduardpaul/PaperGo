@@ -62,6 +62,9 @@ class PackagingTests(unittest.TestCase):
                     self.assertFalse(any(name.startswith('assets/') for name in names))
                     self.assertTrue(set(files) <= names)
                     self.assertIn('config.yaml', names)
+                    self.assertFalse(any('/' not in name and name.endswith(('.dll', '.so')) for name in names))
+                    if system == 'windows':
+                        self.assertIn('lib/lib.manifest', names)
                     self.assertEqual((binary_zip.getinfo('papergo' + suffix).external_attr >> 16) & 0o777, 0o755)
                     binary_zip.extractall(installation)
                 with zipfile.ZipFile(shared) as shared_zip:

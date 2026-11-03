@@ -21,9 +21,7 @@ def package(version, system, arch, bin_dir, dist):
         for path in sorted((bin_dir / directory).rglob('*')):
             if path.is_file():
                 inputs[path.relative_to(bin_dir).as_posix()] = path
-    if system == 'windows':
-        inputs.update((path.name, path) for path in sorted(bin_dir.glob('*.dll')))
-    required = ['onnxruntime.dll', 'pdfium.dll', 'zvec_c_api.dll'] if system == 'windows' else [
+    required = ['lib/onnxruntime.dll', 'lib/pdfium.dll', 'lib/zvec_c_api.dll', 'lib/lib.manifest'] if system == 'windows' else [
         'lib/libonnxruntime.so', 'lib/libpdfium.so', 'lib/libzvec_c_api.so',
     ] if system == 'linux' else [
         'lib/libonnxruntime.dylib', 'lib/libpdfium.dylib', 'lib/libzvec_c_api.dylib',

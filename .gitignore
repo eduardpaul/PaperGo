@@ -8,6 +8,7 @@ bin/
 coverage.out
 *.test
 *.exe
+*.syso
 dist/
 # The workflow SDK bundle is generated and committed; Go embeds it.
 !/sdk/dist/

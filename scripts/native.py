@@ -144,7 +144,9 @@ def main():
         shutil.copytree(pdfium / 'include', output / 'include', dirs_exist_ok=True)
         for native in list((pdfium / 'lib').glob('*')) + list((pdfium / 'bin').glob('*')):
             if native.is_file():
-                shutil.copy2(native, output / 'lib' / native.name)
+                # Static MinGW links resolve -lpdfium to the import library only as pdfium.lib.
+                name = 'pdfium.lib' if native.name == 'pdfium.dll.lib' else native.name
+                shutil.copy2(native, output / 'lib' / name)
         ort = next((output / 'sdk/onnxruntime').iterdir())
         ort_name = {'linux': 'libonnxruntime.so', 'darwin': 'libonnxruntime.dylib', 'windows': 'onnxruntime.dll'}[system]
         ort_library = next(item for item in (ort / 'lib').iterdir() if item.name.startswith(ort_name) or (system == 'darwin' and item.name.startswith('libonnxruntime.') and item.suffix == '.dylib'))

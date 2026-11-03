@@ -11,7 +11,7 @@ papergo/                 # your installation directory
   papergo[.exe]
   papergo-admin[.exe]
   config.yaml
-  lib/                   # Linux native libraries; Windows DLLs sit beside the EXEs
+  lib/                   # native libraries
   notices/
   assets/
     models/
@@ -25,7 +25,7 @@ papergo/                 # your installation directory
 
 Run the executable from that directory and open http://localhost:8080. The first start creates the database automatically. Node.js and Python are not needed at runtime. Linux amd64/arm64 and Windows amd64 release builds are enabled; macOS builds are temporarily disabled.
 
-The binary ZIP includes the web UI, database schema, native libraries, compiler runtimes and their license notices. The shared ZIP contains PaddleOCR, Laya FP32, EmbeddingGemma 2 and Harrier Q4 models, tokenizers and model notices, and works with every platform. Native libraries and models are read directly from the installation; model paths are resolved beside the executable even when started from another working directory. The web UI stays embedded in the executable. OCR and local workflow decisions use the shared models automatically. Set `AI_EMBEDDINGS_PROVIDER=local` and select `AI_EMBEDDINGS_MODEL=embeddinggemma-2` (default) or `harrier-oss-v1-0.6b` for local semantic search. Inference never downloads models. `ONNXRUNTIME_LIB`, `OCR_MODELS`, `AI_DECISION_MODELS_PATH` and `AI_EMBEDDINGS_MODELS_PATH` select explicit alternatives. Linux builds require the target system's glibc.
+The binary ZIP includes the web UI, database schema, native libraries and their license notices. The shared ZIP contains PaddleOCR, Laya FP32, EmbeddingGemma 2 and Harrier Q4 models, tokenizers and model notices, and works with every platform. Native libraries and models are read directly from the installation; model paths are resolved beside the executable even when started from another working directory. The web UI stays embedded in the executable. OCR and local workflow decisions use the shared models automatically. Set `AI_EMBEDDINGS_PROVIDER=local` and select `AI_EMBEDDINGS_MODEL=embeddinggemma-2` (default) or `harrier-oss-v1-0.6b` for local semantic search. Inference never downloads models. `ONNXRUNTIME_LIB`, `OCR_MODELS`, `AI_DECISION_MODELS_PATH` and `AI_EMBEDDINGS_MODELS_PATH` select explicit alternatives. Linux builds require the target system's glibc.
 
 Configuration is optional. The sample `config.yaml` listens on port 8080, signs in a local administrator (`admin` / `admin`), and stores the database, files and zvec index under `./data`. Set the initial password before the first start. Set `auth.mode` to `oidc` or `proxy` when an identity provider or trusted proxy should sign people in. Non-empty environment variables override matching settings in `config.yaml`. Release archives include the optional configuration, operator documentation and the `papergo-admin` maintenance tool, which shares the native libraries.
 

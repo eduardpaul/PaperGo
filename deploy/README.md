@@ -11,7 +11,7 @@ Change `admin_password` before you expose the process beyond this computer. Set 
 
 Set `PAPERGO_CONFIG` to read a different YAML file. Non-empty environment variables take precedence over matching YAML settings. Unknown fields, duplicate keys and multiple documents are rejected. Quote passwords; an explicitly empty or null `auth.admin_password` prompts on an interactive first start and fails without a terminal. Existing passwords are unchanged on later starts. In proxy mode, `auth.proxy_trusted_cidrs` is a YAML list of CIDR strings.
 
-Keep the native libraries and `notices/` from the platform ZIP beside the executables. Linux libraries live in `lib/`; Windows DLLs sit beside `papergo.exe`. Linux builds require the target system's glibc. Keep `assets/models/` and `assets/notices/` from the shared ZIP in the same installation. Models are identical across platforms and load directly from disk. macOS release builds are temporarily disabled.
+Keep the native libraries and `notices/` from the platform ZIP beside the executables. Native libraries live in `lib/`, together with `lib.manifest` on Windows. Linux builds require the target system's glibc. Keep `assets/models/` and `assets/notices/` from the shared ZIP in the same installation. Models are identical across platforms and load directly from disk. macOS release builds are temporarily disabled.
 
 OCR and local decisions use the shared assets automatically. Enable local semantic search with `AI_EMBEDDINGS_PROVIDER=local` and choose `AI_EMBEDDINGS_MODEL=embeddinggemma-2` (default) or `harrier-oss-v1-0.6b`. Models never download at runtime. `ONNXRUNTIME_LIB`, `OCR_MODELS`, `AI_DECISION_MODELS_PATH` and `AI_EMBEDDINGS_MODELS_PATH` select explicit alternatives.
 

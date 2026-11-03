@@ -63,7 +63,7 @@ HTTPS iCalendar integrations use `github.com/emersion/go-ical` for RFC 5545 deco
 
 ## Native search
 
-The optional [zvec store](search.md#the-store) uses the official v0.7.0 C API SDK and the Go binding's string-array fix from `eduardpaul/zvec-go`. `scripts/native.json` pins the prebuilt SDK archives for Linux amd64/arm64, macOS ARM64 and Windows amd64. PaperGo does not patch or compile zvec sources. Platform release ZIPs carry native libraries and notices beside the executables (`lib/` on Linux, DLLs beside the EXEs on Windows). The Docker image uses the same layout under `/opt/papergo`. Models and their notices ship in the platform-independent assets ZIP. The SDK includes compiler runtime libraries under the GCC Runtime Library Exception; their license texts ship alongside the dependency notices.
+The optional [zvec store](search.md#the-store) uses the official v0.7.0 C API SDK and the Go binding's string-array fix from `eduardpaul/zvec-go`. `scripts/native.json` pins the prebuilt SDK archives for Linux amd64/arm64, macOS ARM64 and Windows amd64. PaperGo does not patch or compile zvec sources. Platform release ZIPs carry native libraries in `lib/` and notices in `notices/` beside the executables. The Docker image uses the same layout under `/opt/papergo`. Models and their notices ship in the platform-independent assets ZIP. The SDK includes compiler runtime libraries, Linux ZIPs ship the GCC runtimes in `lib/` and Windows executables link the MinGW-w64 runtimes statically, all under the GCC Runtime Library Exception; their license texts ship alongside the dependency notices.
 
 | Bundled component | License |
 | --- | --- |
@@ -75,7 +75,7 @@ The optional [zvec store](search.md#the-store) uses the official v0.7.0 C API SD
 | zlib | zlib |
 | Boost | BSL-1.0 |
 
-MIT, Apache-2.0, BSD, ISC, zlib, BSL-1.0 and PostgreSQL licenses are allowed. The GCC Runtime Library Exception permits distributing the SDK's compiler runtimes without applying GPL terms to PaperGo. ONNX Runtime's Eigen dependency includes MPL-2.0 files; its upstream notices and source reference ship with the library.
+MIT, Apache-2.0, BSD, ISC, zlib, BSL-1.0 and PostgreSQL licenses are allowed. The GCC Runtime Library Exception permits distributing these compiler runtimes, shipped or statically linked, without applying GPL terms to PaperGo. ONNX Runtime's Eigen dependency includes MPL-2.0 files; its upstream notices and source reference ship with the library.
 
 The bundled local decision engine uses Laya multilingual FP32, checkpoint
 `1720e3e3357cfe1e281542e223f8273b0890ca34` (Apache-2.0). Its verified bundle includes
