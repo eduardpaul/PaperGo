@@ -9,7 +9,7 @@ it('shows a non-blocking pending state, renders a lightweight preview and never 
   const create = vi.fn(() => 'blob:preview'), revoke = vi.fn();
   vi.stubGlobal('URL', class extends URL { static createObjectURL = create; static revokeObjectURL = revoke; });
   let ready = false;
-  const fetch = vi.fn(async (_input: string) => ready ? new Response('webp', { headers: { 'Content-Type': 'image/webp' } }) : new Response(JSON.stringify({ status: 'pending' }), { status: 202, headers: { 'Content-Type': 'application/json' } }));
+  const fetch = vi.fn(async (_input: string) => ready ? new Response('jpeg', { headers: { 'Content-Type': 'image/jpeg' } }) : new Response(JSON.stringify({ status: 'pending' }), { status: 202, headers: { 'Content-Type': 'application/json' } }));
   vi.stubGlobal('fetch', fetch);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const view = render(<QueryClientProvider client={client}><FilePreview itemId="item" version={1} alt="Document preview" /></QueryClientProvider>);

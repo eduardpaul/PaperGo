@@ -18447,7 +18447,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Bounded WebP (longest side at most 800px, fewer than 100000 bytes), or unavailable state.",
+            "description": "Bounded JPEG (longest side at most 800px, fewer than 100000 bytes), or unavailable state.",
             "headers": {
               "X-Preview-Blob-ID": {
                 "schema": {
@@ -18462,7 +18462,7 @@
               }
             },
             "content": {
-              "image/webp": {
+              "image/jpeg": {
                 "schema": {
                   "type": "string",
                   "format": "binary"
@@ -18530,7 +18530,7 @@
         ],
         "operationId": "renderItemPreview",
         "summary": "Render a preview of the item's current file",
-        "description": "Starts rendering a first-page WebP preview, under 100 KiB and 800 pixels, of the item's current file as a background operation; GET /v1/items/{id}/preview serves it. Previews are kept once per file bytes, so bytes rendered before finish at once. Requires document.write and write access to the item. Kinds of file previews are not rendered for (GET /auth/config marks the ones they are with preview) are refused with 415 unsupported_file_type.",
+        "description": "Starts rendering a first-page JPEG preview, under 100 KiB and 800 pixels, of the item's current file as a background operation; GET /v1/items/{id}/preview serves it. Previews are kept once per file bytes, so bytes rendered before finish at once. Requires document.write and write access to the item. Kinds of file previews are not rendered for (GET /auth/config marks the ones they are with preview) are refused with 415 unsupported_file_type.",
         "x-required-scopes": [
           "document.write"
         ],
@@ -18686,7 +18686,7 @@
         ],
         "operationId": "getItemPage",
         "summary": "Render one page of the item's file",
-        "description": "One page, from 1, of the caller's file (or an earlier version) as WebP, for viewers that cannot draw the file themselves, such as multi-page TIFFs. Pages render on request at the smallest of 320, 480, 640, 960, 1280, 1600 and 2048 pixels wide that is at least `width` (default 960); tall pages render narrower to stay within about 8 megapixels, and images are never enlarged. Renders are shared by everyone reading the same bytes. With blob_id the response is cacheable for a year; without it, it revalidates with its ETag. Requires document.read and read access to the item.",
+        "description": "One page, from 1, of the caller's file (or an earlier version) as JPEG, for viewers that cannot draw the file themselves, such as multi-page TIFFs. Pages render on request at the smallest of 320, 480, 640, 960, 1280, 1600 and 2048 pixels wide that is at least `width` (default 960); tall pages render narrower to stay within about 8 megapixels, and images are never enlarged. Renders are shared by everyone reading the same bytes. With blob_id the response is cacheable for a year; without it, it revalidates with its ETag. Requires document.read and read access to the item.",
         "x-required-scopes": [
           "document.read"
         ],
@@ -18729,7 +18729,7 @@
         ],
         "responses": {
           "200": {
-            "description": "The page as WebP.",
+            "description": "The page as JPEG.",
             "headers": {
               "ETag": {
                 "schema": {
@@ -18745,7 +18745,7 @@
               }
             },
             "content": {
-              "image/webp": {
+              "image/jpeg": {
                 "schema": {
                   "type": "string",
                   "format": "binary"
@@ -20680,122 +20680,6 @@
         }
       }
     },
-    "/v1/items/{id}/optimize-image": {
-      "post": {
-        "tags": [
-          "Documents"
-        ],
-        "operationId": "optimizeItemImage",
-        "summary": "Propose a smaller copy of an image",
-        "description": "Analyzes the text of the item's current JPEG, PNG or WebP image with OCR and makes a smaller WebP copy, as an artifact, whose smallest text keeps the target height. An identical request for the same file version reuses an unexpired artifact (reused). The result gives the reason when the original is kept: the format is not supported, the image is animated, has no reliable text or would not get smaller, or a newer file replaced file_version.",
-        "x-required-scopes": [
-          "document.write"
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "$ref": "#/components/parameters/IdempotencyKey"
-          }
-        ],
-        "requestBody": {
-          "required": false,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/OptimizeImage"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "An Idempotency-Key returned the operation this request accepted earlier.",
-            "headers": {
-              "Location": {
-                "schema": {
-                  "type": "string"
-                },
-                "description": "The operation, at /v1/operations/{id}."
-              },
-              "Idempotent-Replayed": {
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "true"
-                  ]
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Operation"
-                }
-              }
-            }
-          },
-          "202": {
-            "description": "Queued operation. Follow Location; its result is a OptimizeImageResult.",
-            "headers": {
-              "Location": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Operation"
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/Problem"
-          },
-          "401": {
-            "$ref": "#/components/responses/Problem"
-          },
-          "403": {
-            "$ref": "#/components/responses/Problem"
-          },
-          "404": {
-            "$ref": "#/components/responses/Problem"
-          },
-          "409": {
-            "$ref": "#/components/responses/Problem"
-          },
-          "422": {
-            "$ref": "#/components/responses/Problem"
-          },
-          "429": {
-            "description": "Too many pending operations for the caller, the workspace or the installation (code operation_quota). Nothing was accepted; retry after Retry-After seconds.",
-            "headers": {
-              "Retry-After": {
-                "schema": {
-                  "type": "integer"
-                }
-              }
-            },
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/v1/items/{id}/compose-pdf": {
       "post": {
         "tags": [
@@ -21176,7 +21060,7 @@
         ],
         "operationId": "reclaimFileVersion",
         "summary": "Free a file version's bytes",
-        "description": "Asks to free the bytes of a file version of the item after the grace period, such as an original a smaller copy replaced. The version keeps its number, filename, media type, size and checksum. Current, published and staged files defer it, with the reason. Asking again does not move the deadline. Requires write access to the item.",
+        "description": "Asks to free the bytes of a file version of the item after the grace period, such as the photo a searchable PDF replaced. The version keeps its number, filename, media type, size and checksum. Current, published and staged files defer it, with the reason. Asking again does not move the deadline. Requires write access to the item.",
         "x-required-scopes": [
           "document.write"
         ],
@@ -30123,7 +30007,6 @@
               "type": {
                 "type": "string",
                 "enum": [
-                  "file.compare",
                   "file.preview"
                 ]
               },
@@ -30406,7 +30289,6 @@
               "type": {
                 "type": "string",
                 "enum": [
-                  "file.compare",
                   "file.preview"
                 ]
               },
@@ -30418,7 +30300,7 @@
               "type",
               "staged_file_id"
             ],
-            "description": "A staged file of the calling workflow run for the assignees to review: beside the item's current file (file.compare) or alone (file.preview).",
+            "description": "A staged file of the calling workflow run for the assignees to review (file.preview).",
             "additionalProperties": false
           }
         },
@@ -32860,89 +32742,6 @@
             "type": "boolean"
           }
         }
-      },
-      "OptimizeImage": {
-        "type": "object",
-        "properties": {
-          "target_height": {
-            "type": "number",
-            "minimum": 4,
-            "maximum": 200,
-            "description": "Height in pixels the smallest text keeps, 12 when omitted."
-          },
-          "min_confidence": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 100,
-            "description": "Detector score a text line needs, 50 when omitted."
-          },
-          "percentile": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 100,
-            "description": "Percentile of the text heights taken as the smallest text, 5 when omitted."
-          },
-          "max_analysis_dimension": {
-            "type": "integer",
-            "minimum": 256,
-            "maximum": 2600,
-            "description": "Longest side of the copy analyzed, 2600 when omitted."
-          },
-          "minimum_scale": {
-            "type": "number",
-            "minimum": 0.01,
-            "maximum": 1,
-            "description": "How far the image may shrink, 0.05 when omitted."
-          },
-          "quality": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 100,
-            "description": "WebP quality, 80 when omitted."
-          },
-          "file_version": {
-            "type": "integer",
-            "description": "The file version the workflow was started for: a newer one is kept as it is."
-          }
-        },
-        "additionalProperties": false
-      },
-      "OptimizeImageResult": {
-        "type": "object",
-        "properties": {
-          "artifact_id": {
-            "type": "string",
-            "description": "The smaller WebP copy, as an artifact to stage."
-          },
-          "reused": {
-            "type": "boolean",
-            "description": "An identical request made the artifact."
-          },
-          "reason": {
-            "type": "string",
-            "description": "Why the original is kept."
-          },
-          "item_id": {
-            "type": "string"
-          },
-          "blob_id": {
-            "type": "string"
-          },
-          "file_version": {
-            "type": "integer"
-          },
-          "metrics": {
-            "type": "object",
-            "additionalProperties": true
-          }
-        },
-        "required": [
-          "item_id",
-          "blob_id",
-          "file_version"
-        ],
-        "description": "A smaller copy as an artifact, or the reason the original is kept.",
-        "additionalProperties": false
       },
       "ComposePDF": {
         "type": "object",

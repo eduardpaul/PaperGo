@@ -1,4 +1,4 @@
-// Package preview renders the first page of a document into a bounded WebP.
+// Package preview renders the first page of a document into a bounded JPEG.
 package preview
 
 import (
@@ -15,8 +15,15 @@ import (
 const MaxDimension = 800
 const MaxBytes = 100_000
 
+// MediaType is the type of the images Generate renders.
+const MediaType = "image/jpeg"
+
+// qualities are the JPEG qualities Generate tries, best first, before it
+// shrinks an image that does not fit MaxBytes.
+var qualities = []int{75, 60, 45, 30}
+
 type Result struct {
-	WebP          []byte
+	JPEG          []byte
 	Width, Height int
 }
 
@@ -26,6 +33,10 @@ var Media = []string{"application/pdf", "image/tiff", "image/jpeg", "image/png",
 // Supported reports whether Generate renders files of media.
 func Supported(media string) bool { return slices.Contains(Media, media) }
 
+// Generate renders the first page of a file of media as a JPEG of at most
+// MaxDimension pixels on its longest side and fewer than MaxBytes, never
+// enlarged. Transparency is flattened onto white. It lowers the quality,
+// then the size, until the JPEG fits.
 func Generate(ctx context.Context, data []byte, media string, pdf doctext.PDF, maxPixels int64) (Result, error) {
 	if err := ctx.Err(); err != nil {
 		return Result{}, err
@@ -62,13 +73,14 @@ func Generate(ctx context.Context, data []byte, media string, pdf doctext.PDF, m
 	width, height := img.Bounds().Dx(), img.Bounds().Dy()
 	scale := math.Min(1, float64(MaxDimension)/float64(max(width, height)))
 	width, height = max(1, int(float64(width)*scale)), max(1, int(float64(height)*scale))
+	// Resize also flattens transparency onto white, as JPEG has no alpha.
 	img = imaging.Resize(img, width, height)
 	for {
-		for _, quality := range []int{75, 60, 45, 30} {
+		for _, quality := range qualities {
 			if err = ctx.Err(); err != nil {
 				return Result{}, err
 			}
-			encoded, e := imaging.EncodeWebP(img, quality)
+			encoded, e := imaging.EncodeJPEG(img, quality)
 			if e != nil {
 				return Result{}, e
 			}

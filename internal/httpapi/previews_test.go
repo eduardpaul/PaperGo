@@ -44,7 +44,7 @@ func TestPreviewEndpointUsesAuthorizedVisibleBlobAndNeverReturnsOriginal(t *test
 	if pending.Code != 202 || strings.Contains(pending.Body.String(), "%PDF") {
 		t.Fatal(pending.Code, pending.Body.String())
 	}
-	rendition, err := store.Put(ctx, strings.NewReader("tiny-webp-preview"), 1000)
+	rendition, err := store.Put(ctx, strings.NewReader("tiny-jpeg-preview"), 1000)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestPreviewEndpointUsesAuthorizedVisibleBlobAndNeverReturnsOriginal(t *test
 		t.Fatal(err)
 	}
 	visible := request(reader, "GET", endpoint, "", testToken, "", "")
-	if visible.Code != 200 || visible.Body.String() != "tiny-webp-preview" || visible.Header().Get("X-Preview-Blob-ID") != old.ID || visible.Header().Get("Content-Type") != "image/webp" {
+	if visible.Code != 200 || visible.Body.String() != "tiny-jpeg-preview" || visible.Header().Get("X-Preview-Blob-ID") != old.ID || visible.Header().Get("Content-Type") != "image/jpeg" {
 		t.Fatal(visible.Code, visible.Body.String(), visible.Header())
 	}
 	if got := request(reader, "GET", endpoint+"?blob_id="+head.ID, "", testToken, "", ""); got.Code != 404 {

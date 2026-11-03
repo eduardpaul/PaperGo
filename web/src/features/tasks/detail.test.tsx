@@ -74,21 +74,22 @@ it('shows a stale review of an approval and the answers given, read only', async
   const task: Task = {
     ...base,
     kind: 'approval',
-    title: 'Review smaller file for Receipt',
+    title: 'Review PDF for Receipt',
     completion: 'all',
     outcomes: [
       { key: 'approved', label: 'Approve', style: 'primary' },
       { key: 'rejected', label: 'Reject', style: 'danger', comment: 'required', allow_stale: true, decisive: true },
     ],
     input_schema: { type: 'object', properties: { note: { type: 'string', title: 'Note' } } },
-    review: { type: 'file.compare', staged_file_id: 'staged' },
+    review: { type: 'file.preview', staged_file_id: 'staged' },
     can_respond: false,
     answered: true,
     responses: [{ subject: 'carol', assignee: 'group:legal', outcome: 'approved', comment: 'fine', input: { note: 'readable' }, created_at: '2026-10-13T11:00:00Z' }],
   };
   vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: () => 'blob:preview', revokeObjectURL: () => {} }));
-  const fetch = stub((path) => {
-    if (path.includes('/content')) return new Response('image', { headers: { 'Content-Type': 'image/webp' } });
+  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} });
+  stub((path) => {
+    if (path.includes('/content')) return new Response('image', { headers: { 'Content-Type': 'image/png' } });
     if (path.endsWith('/v1/staged-files/staged'))
       return new Response(
         stringifyJSON({
@@ -96,11 +97,11 @@ it('shows a stale review of an approval and the answers given, read only', async
           item_id: 'item',
           artifact_id: 'artifact',
           run_id: 'run',
-          filename: 'receipt.webp',
-          content_type: 'image/webp',
+          filename: 'receipt.png',
+          content_type: 'image/png',
           size: 1000,
           sha256: 'x',
-          metrics: { source_bytes: 4000, bytes: 1000, savings_percent: 75 },
+          metrics: { source_bytes: 4000, bytes: 1000, pages: 3 },
           sources: [{ item_id: 'item', blob_id: 'blob' }],
           state: 'pending',
           fresh: false,
@@ -111,10 +112,9 @@ it('shows a stale review of an approval and the answers given, read only', async
   });
   show(task);
   expect(await screen.findByText(/can no longer be accepted/)).toBeTruthy();
-  expect(await screen.findByText('75 %')).toBeTruthy();
-  await waitFor(() => expect(screen.getAllByRole('img')).toHaveLength(2));
-  // The original is requested at the file version the candidate was made from.
-  expect(fetch.mock.calls.some(([url]) => String(url).endsWith('/v1/items/item/content?blob_id=blob'))).toBe(true);
+  expect(await screen.findByText('Pages')).toBeTruthy();
+  expect(screen.getByText('3')).toBeTruthy();
+  await screen.findByLabelText('Image receipt.png');
   // Answered: no buttons, the answers with their form values.
   expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
   expect(screen.getByText(/waits for the other assignees/)).toBeTruthy();

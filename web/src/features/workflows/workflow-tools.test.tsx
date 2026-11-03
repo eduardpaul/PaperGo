@@ -74,7 +74,7 @@ it('preserves an ordered selection, explicit primary item and exact typed launch
 it('shows selection hints and image previews of the ordered items', async () => {
   const fetch = vi.fn(async (url: URL | string) =>
     String(url).includes('/preview')
-      ? new Response('image bytes', { headers: { 'Content-Type': 'image/webp' } })
+      ? new Response('image bytes', { headers: { 'Content-Type': 'image/jpeg' } })
       : new Response(stringifyJSON({ value: [{ id: 'first', name: 'First', kind: 'item' }, { id: 'second', name: 'Second', kind: 'item' }] })),
   );
   vi.stubGlobal('fetch', fetch);
@@ -123,7 +123,7 @@ it('explains server readiness failures and prevents an unavailable run', async (
   )));
   vi.stubGlobal('fetch', fetch);
   const workflow: Workflow = {
-    id: 'optimizer', key: 'optimizer', workspace_id: 'workspace', name: 'Optimize', description: '',
+    id: 'compose', key: 'compose', workspace_id: 'workspace', name: 'Photos to PDF', description: '',
     automatic_enabled: false, manual_enabled: true, automatic_provider: false, state: 'published',
     version: 1, current_version: 1,
         source: '',

@@ -46,9 +46,7 @@ const (
 	Approved = "approved"
 	Rejected = "rejected"
 
-	// ReviewCompare shows the item's current file beside a staged image;
 	// ReviewPreview shows a staged document, such as a composed PDF.
-	ReviewCompare = "file.compare"
 	ReviewPreview = "file.preview"
 )
 
@@ -342,8 +340,8 @@ func checkPrefill(schema, values map[string]any) error {
 // CheckReviewShape checks a review's settings.
 func CheckReviewShape(r map[string]any) error {
 	typ, _ := r["type"].(string)
-	if typ != ReviewCompare && typ != ReviewPreview {
-		return dms.Invalid("review type is file.compare or file.preview")
+	if typ != ReviewPreview {
+		return dms.Invalid("review type is file.preview")
 	}
 	if r["staged_file_id"] == nil {
 		return dms.Invalid("review needs staged_file_id")

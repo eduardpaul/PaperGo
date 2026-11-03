@@ -14,7 +14,6 @@ import (
 
 	"papergo/internal/imaging"
 	"papergo/internal/ocr"
-	"papergo/internal/optimize"
 	"papergo/internal/pdf"
 )
 
@@ -30,7 +29,7 @@ type Options struct {
 // Defaults are PaperDotNet's defaults.
 var Defaults = Options{TargetHeight: 32, Quality: 80}
 
-// Text analysis settings, as in PaperDotNet: the optimization defaults.
+// Text analysis settings, as in PaperDotNet.
 const (
 	minConfidence     = 50
 	analysisDimension = 2600
@@ -136,7 +135,7 @@ func Prepare(ctx context.Context, engine ocr.Engine, data []byte, maxPixels int6
 	if img.Orientation > 1 {
 		p.Orientation = img.Orientation
 	}
-	heights, _, err := optimize.Analyze(ctx, engine, upright, minConfidence, analysisDimension)
+	heights, err := analyze(ctx, engine, upright, minConfidence, analysisDimension)
 	if err != nil {
 		return pdf.Page{}, Page{}, err
 	}

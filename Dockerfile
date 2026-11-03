@@ -10,7 +10,6 @@
 # scripts/toolchain-versions.py.
 ARG GO_VERSION=1.27.3
 ARG NODE_VERSION=24.15.0
-ARG CMAKE_VERSION=3.31.10
 
 FROM node:${NODE_VERSION}-bookworm-slim AS node
 
@@ -64,20 +63,18 @@ RUN --mount=type=cache,target=/src/.tools/embedding/models \
 # Debian 13 matches the runtime image (distroless cc-debian13), so the
 # executables built here run on the glibc they were linked against.
 FROM golang:${GO_VERSION}-trixie AS toolchain
-ARG CMAKE_VERSION
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl git libicu76 postgresql-client python3 python3-pip pkg-config sqlite3 sudo \
+    && apt-get install -y --no-install-recommends ca-certificates curl git libicu76 postgresql-client python3 sqlite3 sudo \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
-    && ln -s /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
-    && pip3 install --break-system-packages --root-user-action=ignore --no-cache-dir cmake==${CMAKE_VERSION}
+    && ln -s /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 # CI jobs run as root on a checkout another user owns; Git, and the VCS
 # stamping of go list and go build, would otherwise refuse the repository.
 RUN git config --system --add safe.directory '*'
-# The pinned cgo SDKs: headers, libraries and license notices. Only WebP is
-# compiled; ONNX Runtime and tokenizers use pinned binaries.
+# The pinned cgo SDKs: libraries and license notices. ONNX Runtime and
+# tokenizers use pinned binaries.
 # Setup in a checkout rewrites their environment files for that checkout.
 COPY scripts/native.py scripts/native.json /opt/papergo/native-src/scripts/
 RUN python3 /opt/papergo/native-src/scripts/native.py --directory /opt/papergo/native \

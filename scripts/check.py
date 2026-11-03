@@ -37,10 +37,9 @@ POSTGRES_PACKAGES = ['./internal/dms', './internal/httpapi', './internal/identit
                      './internal/documentpreview', './internal/documentfiles', './internal/documentsearch',
                      './extensions/mcp/server']
 NATIVE_PACKAGES = ['./internal/onnx', './internal/decision', './internal/embedding', './internal/ocr/paddle', './internal/scriptrun',
-                   './internal/compose', './internal/optimize', './cmd/embed']
+                   './internal/compose', './cmd/embed']
 # Native libraries the release executables load, exercised before packaging.
-NATIVE_ABI = (['./internal/onnx', './internal/ocr/paddle', './internal/imaging'],
-              'TestNativeABI|TestRecognize$|TestDecode|TestWebPRoundTripAndResize')
+NATIVE_ABI = (['./internal/onnx', './internal/ocr/paddle'], 'TestNativeABI|TestRecognize$')
 RELEASE_VERSION = 'v0.0.0-rc.1'
 
 

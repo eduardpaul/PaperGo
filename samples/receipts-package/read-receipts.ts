@@ -1,6 +1,5 @@
-// Reads a receipt photo: keeps a smaller copy when one is suitable, asks a
-// model in batch mode for the store, date, currency, total and product
-// lines, and files the lines in the lines list, each linked to the receipt.
+// Reads a receipt photo: asks a model in batch mode for the store, date,
+// currency, total and product lines, and files the lines in the lines list, each linked to the receipt.
 // It marks the receipt Read once the lines are stored, and Needs review
 // when the extraction or the filing fails.
 import { json, OperationError, plain, workflow } from "@papergo/workflow";
@@ -49,8 +48,8 @@ const contains = "contains receipt line";
 const photos = ["image/*"];
 const sources = ["upload", "restore", "webdav"];
 
-// update sets values of the item at version, the receipt as it was when its
-// image was chosen, and returns its new version. A newer file or edit
+// update sets values of the item at version, the receipt as it was before
+// its image was chosen, and returns its new version. A newer file or edit
 // fails it.
 async function update(api: PaperGoClient, id: string, version: number, values: Record<string, unknown>): Promise<number> {
   const item = await api.v1.resources.byId(id).patch({ values: json(values) }, { headers: { "If-Match": `"${version}"` } });
@@ -70,13 +69,10 @@ export default workflow<unknown, unknown, Params>({
     const api = ctx.api;
     let version: number;
     try {
-      const optimized = plain((await ctx.wait((await api.v1.items.byId(id).optimizeImage.post({}))!)).result) as { artifact_id?: string; blob_id: string };
-      let image = optimized.blob_id;
-      if (optimized.artifact_id) {
-        const staged = (await api.v1.artifacts.byId(optimized.artifact_id).stage.post())!;
-        image = (await api.v1.stagedFiles.byId(staged.id!).promote.post({}))!.blobId!;
-      }
       version = (await api.v1.resources.byId(id).get())!.version!;
+      // The model reads the receipt's current photo.
+      const files = (await api.v1.items.byId(id).content.versions.get())!.value!;
+      const image = files.find((f) => f.isCurrent)!.id!;
       const answer = await ctx.wait((await api.v1.ai.completions.post({
         prompt, itemId: id, imageBlobId: image, execution: "batch", queue: "shared", outputSchema: json(schema),
       }))!);
@@ -99,10 +95,6 @@ export default workflow<unknown, unknown, Params>({
           kind: "item", name: line.description, contentTypeId: ctx.params.line_type, values: json({ ...line }),
         });
         await api.v1.items.byId(id).relationships.post({ type: contains, directed: true, targetId: created!.id });
-      }
-      if (optimized.artifact_id) {
-        // The replaced photo goes once the grace period ends.
-        await api.v1.items.byId(id).content.reclaim.post({ blobId: optimized.blob_id });
       }
       version = (await api.v1.resources.byId(id).get())!.version!;
       await update(api, id, version, { status: "Read" });

@@ -11,7 +11,7 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface ReclaimRequestBuilder extends BaseRequestBuilder<ReclaimRequestBuilder> {
     /**
-     * Asks to free the bytes of a file version of the item after the grace period, such as an original a smaller copy replaced. The version keeps its number, filename, media type, size and checksum. Current, published and staged files defer it, with the reason. Asking again does not move the deadline. Requires write access to the item.
+     * Asks to free the bytes of a file version of the item after the grace period, such as the photo a searchable PDF replaced. The version keeps its number, filename, media type, size and checksum. Current, published and staged files defer it, with the reason. Asking again does not move the deadline. Requires write access to the item.
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<ReclaimedFileVersion>}
@@ -23,7 +23,7 @@ export interface ReclaimRequestBuilder extends BaseRequestBuilder<ReclaimRequest
      */
      post(body: ReclaimFileVersion, requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<ReclaimedFileVersion | undefined>;
     /**
-     * Asks to free the bytes of a file version of the item after the grace period, such as an original a smaller copy replaced. The version keeps its number, filename, media type, size and checksum. Current, published and staged files defer it, with the reason. Asking again does not move the deadline. Requires write access to the item.
+     * Asks to free the bytes of a file version of the item after the grace period, such as the photo a searchable PDF replaced. The version keeps its number, filename, media type, size and checksum. Current, published and staged files defer it, with the reason. Asking again does not move the deadline. Requires write access to the item.
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}

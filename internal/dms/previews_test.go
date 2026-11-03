@@ -28,7 +28,7 @@ func TestPreviewsTravelWithPackagesAndAreCollectedOnlyAfterSourcesDisappear(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	encoded, err := imaging.EncodeWebP(image.NewRGBA(image.Rect(0, 0, 20, 10)), 75)
+	encoded, err := imaging.EncodeJPEG(image.NewRGBA(image.Rect(0, 0, 20, 10)), 75)
 	if err != nil {
 		t.Fatal(err)
 	}

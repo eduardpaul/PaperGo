@@ -83,7 +83,7 @@ export default workflow<Record<string, never>, { kind: string }>({
 
 def exercise_native(base, workspace):
     library = json.loads(request(base, f'/v1/resources/{workspace}/children', {'kind': 'library', 'name': 'Scans'}))['id']
-    # PDFium and statically linked WebP must render a PDF preview.
+    # PDFium must render a PDF preview.
     pdf, offsets = bytearray(b'%PDF-1.4\n'), []
     stream = 'BT /F1 14 Tf 40 700 Td (Standalone PDF) Tj ET'
     for body in ['<</Type/Catalog/Pages 2 0 R>>', '<</Type/Pages/Kids[4 0 R]/Count 1>>',
@@ -100,7 +100,7 @@ def exercise_native(base, workspace):
     item = upload(base, library, 'page.pdf', pdf)
     for _ in range(120):
         preview = request(base, f'/v1/items/{item}/preview')
-        if preview[:4] == b'RIFF' and preview[8:12] == b'WEBP':
+        if preview[:3] == b'\xff\xd8\xff':
             break
         if b'unavailable' in preview:
             raise RuntimeError('packaged PDF renderer could not generate a preview')
@@ -140,23 +140,22 @@ def exercise_native(base, workspace):
         time.sleep(.25)
     else:
         raise RuntimeError(f'shared Laya workflow did not complete: {run}')
-    # A blank PNG exercises ONNX Runtime and the shared PaddleOCR models.
-    flow = json.loads(request(base, f'/v1/workspaces/{workspace}/workflow-builtins/documents.optimize',
-                              {'collection_id': library, 'automatic_enabled': True}, method='PUT'))
+    # Reading a blank PNG exercises ONNX Runtime and the shared PaddleOCR models.
     def chunk(kind, data):
         return struct.pack('>I', len(data)) + kind + data + struct.pack('>I', zlib.crc32(kind + data))
     png = (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', 800, 600, 8, 0, 0, 0, 0)) +
            chunk(b'IDAT', zlib.compress((b'\x00' + b'\xff' * 800) * 600)) + chunk(b'IEND', b''))
     item = upload(base, library, 'blank.png', png)
+    operation = json.loads(request(base, f'/v1/items/{item}/text', {'ocr': 'always'}))
     for _ in range(180):
-        runs = json.loads(request(base, f'/v1/workspaces/{workspace}/workflow-runs?item_id={item}&workflow_id={flow["id"]}')).get('value') or []
-        if runs and runs[0]['status'] == 'completed':
+        operation = json.loads(request(base, f'/v1/operations/{operation["id"]}'))
+        if operation['status'] == 'succeeded':
             break
-        if runs and runs[0]['status'] == 'failed':
-            raise RuntimeError(f'shared OCR failed: {runs[0]}')
+        if operation['status'] != 'pending':
+            raise RuntimeError(f'shared OCR failed: {operation}')
         time.sleep(.25)
     else:
-        raise RuntimeError('shared OCR workflow did not complete')
+        raise RuntimeError('shared OCR read did not complete')
 
 
 def exercise(binary, directory, model='embeddinggemma-2'):

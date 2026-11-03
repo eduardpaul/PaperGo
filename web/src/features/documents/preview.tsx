@@ -9,7 +9,7 @@ type Rendition = { status: 'ready'; blob: Blob } | { status: 'pending' | 'unavai
 export async function fetchPreview(path: string, signal?: AbortSignal): Promise<Rendition> {
   const response = await fetch(path, { headers: authorizationHeaders(), credentials: 'same-origin', signal });
   if (!response.ok) return { status: 'unavailable' };
-  if (response.headers.get('Content-Type')?.split(';')[0] === 'image/webp') return { status: 'ready', blob: await response.blob() };
+  if (response.headers.get('Content-Type')?.startsWith('image/')) return { status: 'ready', blob: await response.blob() };
   const state = await response.json() as { status?: string };
   return { status: state.status === 'pending' ? 'pending' : 'unavailable' };
 }

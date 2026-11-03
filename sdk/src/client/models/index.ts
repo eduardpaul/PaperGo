@@ -2149,15 +2149,6 @@ export function createOperationPageFromDiscriminatorValue(parseNode: ParseNode |
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
- * @returns {OptimizeImage}
- */
-// @ts-ignore
-export function createOptimizeImageFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
-    return deserializeIntoOptimizeImage;
-}
-/**
- * Creates a new instance of the appropriate class based on discriminator value
- * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {PageList}
  */
 // @ts-ignore
@@ -5233,23 +5224,6 @@ export function deserializeIntoOperationPage(operationPage: Partial<OperationPag
 }
 /**
  * The deserialization information for the current model
- * @param OptimizeImage The instance to deserialize into.
- * @returns {Record<string, (node: ParseNode) => void>}
- */
-// @ts-ignore
-export function deserializeIntoOptimizeImage(optimizeImage: Partial<OptimizeImage> | undefined = {}) : Record<string, (node: ParseNode) => void> {
-    return {
-        "file_version": n => { optimizeImage.fileVersion = n.getNumberValue(); },
-        "max_analysis_dimension": n => { optimizeImage.maxAnalysisDimension = n.getNumberValue(); },
-        "min_confidence": n => { optimizeImage.minConfidence = n.getNumberValue(); },
-        "minimum_scale": n => { optimizeImage.minimumScale = n.getNumberValue(); },
-        "percentile": n => { optimizeImage.percentile = n.getNumberValue(); },
-        "quality": n => { optimizeImage.quality = n.getNumberValue(); },
-        "target_height": n => { optimizeImage.targetHeight = n.getNumberValue(); },
-    }
-}
-/**
- * The deserialization information for the current model
  * @param PageList The instance to deserialize into.
  * @returns {Record<string, (node: ParseNode) => void>}
  */
@@ -8296,36 +8270,6 @@ export interface OperationPage extends Parsable {
      */
     value?: Operation[] | null;
 }
-export interface OptimizeImage extends Parsable {
-    /**
-     * The file version the workflow was started for: a newer one is kept as it is.
-     */
-    fileVersion?: number | null;
-    /**
-     * Longest side of the copy analyzed, 2600 when omitted.
-     */
-    maxAnalysisDimension?: number | null;
-    /**
-     * Detector score a text line needs, 50 when omitted.
-     */
-    minConfidence?: number | null;
-    /**
-     * How far the image may shrink, 0.05 when omitted.
-     */
-    minimumScale?: number | null;
-    /**
-     * Percentile of the text heights taken as the smallest text, 5 when omitted.
-     */
-    percentile?: number | null;
-    /**
-     * WebP quality, 80 when omitted.
-     */
-    quality?: number | null;
-    /**
-     * Height in pixels the smallest text keeps, 12 when omitted.
-     */
-    targetHeight?: number | null;
-}
 export interface PageList extends AdditionalDataHolder, Parsable {
     /**
      * The file version listed.
@@ -11281,23 +11225,6 @@ export function serializeOperationPage(writer: SerializationWriter, operationPag
 /**
  * Serializes information the current object
  * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
- * @param OptimizeImage The instance to serialize from.
- * @param writer Serialization writer to use to serialize this model
- */
-// @ts-ignore
-export function serializeOptimizeImage(writer: SerializationWriter, optimizeImage: Partial<OptimizeImage> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
-    if (!optimizeImage || isSerializingDerivedType) { return; }
-    writer.writeNumberValue("file_version", optimizeImage.fileVersion);
-    writer.writeNumberValue("max_analysis_dimension", optimizeImage.maxAnalysisDimension);
-    writer.writeNumberValue("min_confidence", optimizeImage.minConfidence);
-    writer.writeNumberValue("minimum_scale", optimizeImage.minimumScale);
-    writer.writeNumberValue("percentile", optimizeImage.percentile);
-    writer.writeNumberValue("quality", optimizeImage.quality);
-    writer.writeNumberValue("target_height", optimizeImage.targetHeight);
-}
-/**
- * Serializes information the current object
- * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
  * @param PageList The instance to serialize from.
  * @param writer Serialization writer to use to serialize this model
  */
@@ -14026,7 +13953,7 @@ export interface TaskCreate extends Parsable {
      */
     priority?: TaskCreate_priority | null;
     /**
-     * A staged file of the calling workflow run for the assignees to review: beside the item's current file (file.compare) or alone (file.preview).
+     * A staged file of the calling workflow run for the assignees to review (file.preview).
      */
     review?: TaskCreate_review | null;
     /**
@@ -14042,7 +13969,7 @@ export type TaskCreate_completion = (typeof TaskCreate_completionObject)[keyof t
 export type TaskCreate_kind = (typeof TaskCreate_kindObject)[keyof typeof TaskCreate_kindObject];
 export type TaskCreate_priority = (typeof TaskCreate_priorityObject)[keyof typeof TaskCreate_priorityObject];
 /**
- * A staged file of the calling workflow run for the assignees to review: beside the item's current file (file.compare) or alone (file.preview).
+ * A staged file of the calling workflow run for the assignees to review (file.preview).
  */
 export interface TaskCreate_review extends Parsable {
     /**
@@ -15511,7 +15438,6 @@ export const Task_priorityObject = {
     High: "high",
 } as const;
 export const Task_review_typeObject = {
-    FileCompare: "file.compare",
     FilePreview: "file.preview",
 } as const;
 export const Task_sourceObject = {
@@ -15539,7 +15465,6 @@ export const TaskCreate_priorityObject = {
     High: "high",
 } as const;
 export const TaskCreate_review_typeObject = {
-    FileCompare: "file.compare",
     FilePreview: "file.preview",
 } as const;
 export const TaskOutcome_commentObject = {

@@ -30,8 +30,7 @@ its author; runs use that author's permissions. The package contains
 configuration only and makes no model calls during import.
 
 For photo extraction into a list of purchased products, import the separate
-[receipts package](../receipts-package/README.md), which uses batch execution
-and image optimization.
+[receipts package](../receipts-package/README.md), which uses batch execution.
 
 The adjacent `.ts` scripts and `.json` settings are the editable sources used by
 the regression suite; the scripts typecheck against the SDK with

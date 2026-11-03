@@ -35,7 +35,7 @@ See the [sample YAML configuration](deploy/config.yaml) for the supported sectio
 [Self-hosting performance](docs/performance.md) records measured CPU, memory,
 query latency and storage costs, sizing estimates, and a reproducible load test.
 
-Building requires Go 1.27+ (the [Dockerfile](Dockerfile) pins the exact toolchain CI and the Docker build use), Node.js 24 with npm, Python 3.11+, a C compiler, CMake 3.26+, pkg-config. Windows also needs the Rust GNU toolchain for its static tokenizer library. Optional local tools live under `.tools/`, which is ignored by Git. No Docker or database service is required for native development.
+Building requires Go 1.27+ (the [Dockerfile](Dockerfile) pins the exact toolchain CI and the Docker build use), Node.js 24 with npm, Python 3.11+ and a C compiler. Windows also needs the Rust GNU toolchain for its static tokenizer library. Optional local tools live under `.tools/`, which is ignored by Git. No Docker or database service is required for native development.
 
 For a ready-to-use Linux development environment, open the repository in VS Code
 and run **Dev Containers: Reopen in Container**. The [development guide](docs/development.md)
@@ -110,7 +110,7 @@ Vite listens on `http://127.0.0.1:5173` and proxies `/v1`, `/auth` and `/health`
 | Reusable application schemas | Organization content-type and field catalogs with type inheritance, per-list types that customize a shared type, independent defaults, filters that match subtypes, cross-field rules and templates; shared updates advance immutable effective schemas atomically. |
 | Business keys | Indexed scalar uniqueness across head and published values, enforced transactionally for single and bulk writes. |
 | Saved views and controlled taxonomy | Bounded typed queries, sorting, pagination, opt-in authorized totals, grouping; an organization-wide governed taxonomy of term groups, sets and hierarchical terms (labels, synonyms, colors, order, deprecation, move, merge, SharePoint CSV import, portable packages) and keywords people add, which managers promote into managed sets. Workflows can react to terms gained or lost. |
-| File previews | Asynchronous first-page WebP renditions under 100 KB, with authorized viewing and original downloads. See [previews](docs/previews.md). |
+| File previews | Asynchronous first-page JPEG renditions under 100 KB, with authorized viewing and original downloads. See [previews](docs/previews.md). |
 | Smart folders | Personal or shared saved searches and classification folders, visual typed rules with live previews, direct table/grid results with collection badges, and optional metadata groups. See [smart folders](docs/smart-folders.md). |
 | Comments and mentions | Threads of comments on items with @-mentions, replies, edits and resolving, notified to the people mentioned and the thread's participants. Each list or library opens its discussions to collaborators or readers, or turns them off, inherited from the workspace and the organization. See [comments](docs/comments.md). |
 | Notifications | An inbox per person, a bell with the unread count and live updates. Tasks tell their assignees and creators, failed runs tell their workflow's author, and people and workflows send messages, reaching only people who can read what they concern. See [notifications](docs/notifications.md). |
@@ -159,7 +159,7 @@ Every `/v1` request requires authentication: HTTP Basic or a session cookie in l
 | GET | `/v1/items/{id}/schema?surface=auto` | Immutable schema of the caller's visible content revision |
 | PUT / GET | `/v1/items/{id}/content` | Upload a blob / download the selected revision's blob; draft readers may request historical `blob_id` |
 | POST | `/v1/resources/{id}/documents` | Create a library document using multipart `file` and optional `metadata` JSON; see [documents](docs/documents.md) |
-| GET | `/v1/items/{id}/pages`, `/v1/items/{id}/pages/{page}` | The pages of the item's file, and one page rendered as WebP at a requested width, for PDFs, TIFF scans and images; see [previews](docs/previews.md#page-renditions) |
+| GET | `/v1/items/{id}/pages`, `/v1/items/{id}/pages/{page}` | The pages of the item's file, and one page rendered as JPEG at a requested width, for PDFs, TIFF scans and images; see [previews](docs/previews.md#page-renditions) |
 | GET | `/v1/items/{id}/content/versions` | Retained file versions, newest first: number, file name, type, size, SHA-256, who added it, and the current one. Ordinary readers see only the published file |
 | POST | `/v1/items/{id}/content/versions/{number}/restore` | Restore an earlier file as a new version; requires current numeric `If-Match` |
 | GET | `/v1/audit` | Organization-wide feed requiring `audit.read`; actor/entity/workspace/date filters, changed properties, trace IDs and newest-first paging |
@@ -296,7 +296,7 @@ Back up SQLite with its online backup API or `VACUUM INTO` and back up the refer
 
 This is an initial backend foundation, not a completed enterprise certification or deployment. S3 storage, antivirus scanning, quotas, notifications, document text extraction and tracing/metrics export remain future extensions. Benchmarks cover query latency and allocations, writer wait during index builds and WAL growth on configurable collection sizes; concurrent upload throughput, multi-client load and SLOs still need a target workload.
 
-[OCR](docs/ocr.md) reads text in page images with PaddleOCR in ONNX Runtime, for reading text, image optimization and photos to PDF ([documents](docs/documents.md#reading-text)). [AI completions](docs/ai.md) call a chat model immediately or in provider batches.
+[OCR](docs/ocr.md) reads text in page images with PaddleOCR in ONNX Runtime, for reading text and photos to PDF ([documents](docs/documents.md#reading-text)). [AI completions](docs/ai.md) call a chat model immediately or in provider batches.
 
 [Local embeddings](docs/embeddings.md) provides a lazy EmbeddingGemma 2 engine using the shared ONNX Runtime, plus a reproducible Harrier-OSS-v1-0.6B comparison. It can be exercised with `cmd/embed`; application search uses keywords.
 

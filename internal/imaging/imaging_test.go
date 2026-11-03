@@ -9,6 +9,7 @@ import (
 	"image/color"
 	"image/jpeg"
 	"image/png"
+	"os"
 	"testing"
 )
 
@@ -134,25 +135,59 @@ func TestDecodeRejectsMalformedAndPixelBombs(t *testing.T) {
 	}
 }
 
-func TestWebPRoundTripAndResize(t *testing.T) {
+func TestResize(t *testing.T) {
 	src := image.NewRGBA(image.Rect(0, 0, 64, 32))
 	for i := range src.Pix {
 		src.Pix[i] = uint8(i)
 	}
-	small := Resize(src, 32, 16)
-	if small.Rect.Dx() != 32 || small.Rect.Dy() != 16 {
+	if small := Resize(src, 32, 16); small.Rect.Dx() != 32 || small.Rect.Dy() != 16 {
 		t.Fatalf("resized %v", small.Rect)
 	}
-	data, err := EncodeWebP(small, 80)
+}
+
+// The WebP fixtures are 32×24, red on the left half and blue on the right;
+// in alpha.webp the bottom third is transparent. libwebp encoded them.
+func TestDecodeWebP(t *testing.T) {
+	near := func(c color.Color, want color.NRGBA) bool {
+		got := color.NRGBAModel.Convert(c).(color.NRGBA)
+		d := func(a, b uint8) int { return max(int(a)-int(b), int(b)-int(a)) }
+		return d(got.R, want.R) <= 24 && d(got.G, want.G) <= 24 && d(got.B, want.B) <= 24 && d(got.A, want.A) <= 8
+	}
+	red, blue := color.NRGBA{R: 220, G: 30, B: 30, A: 255}, color.NRGBA{R: 30, G: 30, B: 220, A: 255}
+	for _, name := range []string{"lossy", "lossless", "alpha"} {
+		data, err := os.ReadFile("testdata/" + name + ".webp")
+		if err != nil {
+			t.Fatal(err)
+		}
+		img, err := Decode(data, 1<<20)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if img.MediaType != "image/webp" || img.Bounds() != image.Rect(0, 0, 32, 24) || img.Orientation != 1 {
+			t.Fatalf("%s: %s %v orientation %d", name, img.MediaType, img.Bounds(), img.Orientation)
+		}
+		if !near(img.At(4, 4), red) || !near(img.At(28, 4), blue) {
+			t.Errorf("%s: colors %v and %v", name, img.At(4, 4), img.At(28, 4))
+		}
+		bottom := red
+		if name == "alpha" {
+			bottom = color.NRGBA{}
+		}
+		if got := color.NRGBAModel.Convert(img.At(4, 21)).(color.NRGBA); (bottom.A == 0 && got.A != 0) || (bottom.A != 0 && !near(got, bottom)) {
+			t.Errorf("%s: bottom pixel %v", name, got)
+		}
+		if _, err = Decode(data, 32*24-1); !errors.Is(err, ErrTooLarge) {
+			t.Errorf("%s: pixel limit: %v", name, err)
+		}
+	}
+	// The same extended file with its animation flag set is kept as animated.
+	data, err := os.ReadFile("testdata/alpha.webp")
 	if err != nil {
 		t.Fatal(err)
 	}
-	img, err := Decode(data, 1<<20)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if img.MediaType != "image/webp" || img.Bounds().Dx() != 32 {
-		t.Fatalf("decoded %+v", img)
+	data[20] |= 0x02
+	if _, err = Decode(data, 1<<20); !errors.Is(err, ErrAnimated) {
+		t.Fatalf("animated WebP: %v", err)
 	}
 }
 

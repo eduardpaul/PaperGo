@@ -1,13 +1,13 @@
 // Package documentfiles makes new files from items' files:
-// POST /v1/items/{id}/optimize-image proposes a smaller copy of an image,
-// and POST /v1/items/{id}/compose-pdf combines photos into one searchable
-// PDF. Each is an operation whose result is an artifact, kept for reuse by
+// POST /v1/items/{id}/compose-pdf combines photos into one searchable PDF.
+// It is an operation whose result is an artifact, kept for reuse by
 // identical requests whoever asks. A consumer stages an artifact with
 // POST /v1/artifacts/{id}/stage to review it; POST
 // /v1/staged-files/{id}/promote makes it the item's file and POST
 // /v1/staged-files/{id}/discard drops the claim. A file staged by a
 // workflow run answers only that run. POST /v1/items/{id}/content/reclaim
-// frees the bytes of a file version a smaller copy replaced.
+// frees the bytes of a file version a new file replaced, such as the photo
+// a searchable PDF replaced.
 package documentfiles
 
 import (
@@ -32,27 +32,16 @@ import (
 	"papergo/internal/httpapi"
 	"papergo/internal/model"
 	"papergo/internal/ocr"
-	"papergo/internal/optimize"
 	"papergo/internal/storage"
 	"papergo/internal/transfer"
 )
 
-// Operation kinds.
-const (
-	KindOptimize = "document.optimize_image"
-	KindCompose  = "document.compose_pdf"
-)
-
-// Reasons an optimization keeps the original without analyzing it.
-const (
-	ReasonSuperseded  = "A newer file replaced the one the workflow was started for."
-	ReasonUnsupported = "Only JPEG, PNG and WebP images are optimized."
-	ReasonChanged     = "The file changed while it was analyzed."
-)
+// KindCompose is the operation kind.
+const KindCompose = "document.compose_pdf"
 
 var (
-	// ErrNoOCR refuses analysis in a deployment without an OCR engine.
-	ErrNoOCR = errors.New("image analysis needs OCR; configure ONNXRUNTIME_LIB and OCR_MODELS")
+	// ErrNoOCR refuses composition in a deployment without an OCR engine.
+	ErrNoOCR = errors.New("photos to PDF needs OCR; configure ONNXRUNTIME_LIB and OCR_MODELS")
 	// errPhotoChanged fails a composition whose photos changed: the
 	// reviewed PDF must show the photos as they are.
 	errPhotoChanged = errors.New("a photo changed after the composition started; start a new one")
@@ -68,11 +57,8 @@ type Maker struct {
 	MaxFileBytes int64
 }
 
-// Register makes s run the operations.
+// Register makes s run the operation.
 func (m *Maker) Register(s *dms.Service) error {
-	if err := s.RegisterOperationHandler(KindOptimize, dms.OperationHandler{Scope: "document.write", Validate: validate, Execute: m.optimize}); err != nil {
-		return err
-	}
 	return s.RegisterOperationHandler(KindCompose, dms.OperationHandler{Scope: "document.write", Validate: validate, Execute: m.compose})
 }
 
@@ -85,7 +71,6 @@ func (module) Name() string { return "documentfiles" }
 
 func (h module) Routes() []httpapi.Route {
 	return []httpapi.Route{
-		{Method: http.MethodPost, Pattern: "/v1/items/{id}/optimize-image", OperationID: "optimizeItemImage", Handle: h.optimize},
 		{Method: http.MethodPost, Pattern: "/v1/items/{id}/compose-pdf", OperationID: "composeItemPDF", Handle: h.compose},
 		{Method: http.MethodGet, Pattern: "/v1/artifacts/{id}", OperationID: "getArtifact", Handle: h.getArtifact},
 		{Method: http.MethodGet, Pattern: "/v1/artifacts/{id}/content", OperationID: "getArtifactContent", Handle: h.artifactContent},
@@ -96,37 +81,13 @@ func (h module) Routes() []httpapi.Route {
 	}
 }
 
-// OptimizeRequest tunes an image optimization; zero values take the
-// defaults. FileVersion, when set, is the file version the workflow was
-// started for: a newer one is not optimized.
-type OptimizeRequest struct {
-	optimize.Options
-	FileVersion int `json:"file_version,omitempty"`
-}
-
-// OptimizeResult is a finished optimization's result: the WebP artifact,
-// or the reason the original is kept. Reused says an identical request
-// made the artifact.
-type OptimizeResult struct {
-	ArtifactID  string           `json:"artifact_id,omitempty"`
-	Reused      bool             `json:"reused,omitempty"`
-	Reason      string           `json:"reason,omitempty"`
-	ItemID      string           `json:"item_id"`
-	BlobID      string           `json:"blob_id"`
-	FileVersion int              `json:"file_version"`
-	Metrics     optimize.Metrics `json:"metrics"`
-}
-
 // job is an operation's payload: the item, the file versions its file is
 // made from, the item's first, and the key identical requests share.
 type job struct {
-	ItemID   string           `json:"item_id"`
-	InputKey string           `json:"input_key"`
-	Files    []file           `json:"files"`
-	Optimize optimize.Options `json:"optimize,omitempty"`
-	Compose  compose.Options  `json:"compose,omitempty"`
-	// Reason keeps the original without analyzing it.
-	Reason string `json:"reason,omitempty"`
+	ItemID   string          `json:"item_id"`
+	InputKey string          `json:"input_key"`
+	Files    []file          `json:"files"`
+	Compose  compose.Options `json:"compose"`
 }
 
 type file struct {
@@ -135,60 +96,6 @@ type file struct {
 	Version   int    `json:"version"`
 	ObjectKey string `json:"object_key"`
 	Filename  string `json:"filename"`
-}
-
-func (h module) optimize(w http.ResponseWriter, r *http.Request, in httpapi.Request) error {
-	var request OptimizeRequest
-	if r.ContentLength != 0 && !in.Decode(w, r, &request) {
-		return nil
-	}
-	op, err := h.m.StartOptimize(r.Context(), in.DMS, in.Subject, r.PathValue("id"), request)
-	if err != nil {
-		return err
-	}
-	httpapi.Accepted(w, r, op)
-	return nil
-}
-
-// StartOptimize proposes a smaller WebP copy of the item's current image,
-// as subject.
-func (m *Maker) StartOptimize(ctx context.Context, s *dms.Service, subject, itemID string, in OptimizeRequest) (*dms.OperationView, error) {
-	o := optimize.Defaults
-	if in.TargetHeight != 0 {
-		o.TargetHeight = in.TargetHeight
-	}
-	if in.MinConfidence != 0 {
-		o.MinConfidence = in.MinConfidence
-	}
-	if in.Percentile != 0 {
-		o.Percentile = in.Percentile
-	}
-	if in.MaxAnalysisDimension != 0 {
-		o.MaxAnalysisDimension = in.MaxAnalysisDimension
-	}
-	if in.MinimumScale != 0 {
-		o.MinimumScale = in.MinimumScale
-	}
-	if in.Quality != 0 {
-		o.Quality = in.Quality
-	}
-	if err := o.Validate(); err != nil {
-		return nil, dms.Invalid(err.Error())
-	}
-	b, err := s.CurrentFile(ctx, subject, itemID)
-	if err != nil {
-		return nil, err
-	}
-	j := job{ItemID: itemID, Optimize: o, Files: []file{{ItemID: itemID, BlobID: b.ID, Version: b.Version, ObjectKey: b.ObjectKey, Filename: b.Filename}}}
-	switch {
-	case in.FileVersion != 0 && in.FileVersion != b.Version:
-		j.Reason = ReasonSuperseded
-	case b.ContentType != "image/jpeg" && b.ContentType != "image/png" && b.ContentType != "image/webp":
-		j.Reason = ReasonUnsupported
-	case m.OCR == nil:
-		return nil, dms.Invalid(ErrNoOCR.Error())
-	}
-	return start(ctx, s, subject, KindOptimize, j)
 }
 
 func (h module) compose(w http.ResponseWriter, r *http.Request, in httpapi.Request) error {
@@ -310,7 +217,7 @@ func start(ctx context.Context, s *dms.Service, subject, kind string, j job) (*d
 func inputKey(kind string, j job) string {
 	h := sha256.New()
 	enc := json.NewEncoder(h)
-	_ = enc.Encode([]any{kind, j.ItemID, j.Optimize, j.Compose})
+	_ = enc.Encode([]any{kind, j.ItemID, j.Compose})
 	for _, f := range j.Files {
 		_ = enc.Encode([]string{f.ItemID, f.BlobID})
 	}
@@ -348,68 +255,6 @@ func (m *Maker) maxPixels() int64 {
 		return m.MaxPixels
 	}
 	return ocr.MaxPixels
-}
-
-// optimize analyzes the image outside the writer and stages the smaller
-// copy, unless the original is kept.
-func (m *Maker) optimize(ctx context.Context, s *dms.Service, op *operations.Operation) error {
-	var j job
-	if err := json.Unmarshal(op.Payload, &j); err != nil {
-		return err
-	}
-	f := j.Files[0]
-	res := OptimizeResult{ItemID: j.ItemID, BlobID: f.BlobID, FileVersion: f.Version, Reason: j.Reason}
-	if res.Reason != "" {
-		return finish(ctx, s, op, res)
-	}
-	if a, err := s.ReusableArtifact(ctx, j.ItemID, j.InputKey); err != nil || a != nil {
-		if err != nil {
-			return err
-		}
-		res.ArtifactID, res.Reused = a.ID, true
-		if err = json.Unmarshal(a.Metrics, &res.Metrics); err != nil {
-			return err
-		}
-		return finish(ctx, s, op, res)
-	}
-	if m.OCR == nil {
-		return ErrNoOCR
-	}
-	data, err := m.read(ctx, f.ObjectKey)
-	if err != nil {
-		return err
-	}
-	r, err := optimize.Image(ctx, m.OCR, data, m.maxPixels(), j.Optimize)
-	if err != nil {
-		return fmt.Errorf("optimize %s: %w", f.Filename, err)
-	}
-	res.Reason, res.Metrics = r.Reason, r.Metrics
-	if r.WebP == nil {
-		return finish(ctx, s, op, res)
-	}
-	obj, err := m.store(ctx, r.WebP)
-	if err != nil {
-		return err
-	}
-	metrics, err := json.Marshal(r.Metrics)
-	if err != nil {
-		return err
-	}
-	name := strings.TrimSuffix(f.Filename, path.Ext(f.Filename)) + ".webp"
-	return s.Write(ctx, func(t *dms.Service) error {
-		a, err := t.AddArtifact(ctx, op.CreatedBy, dms.ArtifactInput{ItemID: j.ItemID, OperationID: op.ID, InputKey: j.InputKey, Sources: []model.ArtifactSource{{ItemID: j.ItemID, BlobID: f.BlobID}},
-			ObjectKey: obj.Key, Filename: name, ContentType: "image/webp", Size: obj.Size, SHA256: obj.SHA256, Metrics: metrics})
-		switch {
-		case errors.Is(err, dms.ErrConflict):
-			// The stored copy is freed by the storage collector.
-			res.Reason = ReasonChanged
-		case err != nil:
-			return err
-		default:
-			res.ArtifactID = a.ID
-		}
-		return save(ctx, t, op, res)
-	})
 }
 
 // compose combines the photos outside the writer and stages the PDF.

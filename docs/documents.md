@@ -17,7 +17,7 @@ A library stores any file. PaperGo names each file's media type from its bytes a
 
 `/auth/config` lists the known types in `features.file_types`, each with its `media_type`, `label` (such as "Word document"), icon `family`, `extensions`, and whether PaperGo can `preview` it or read its `text`. Every route that returns stored bytes sends them as attachments with `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox; default-src 'none'`, so a stored file never runs in the browser.
 
-Processing follows each type's capabilities. Previews, reading text, OCR and image optimization answer `415 unsupported_file_type` up front for files they cannot read, and built-in workflows skip those files. Markdown and plain text are read as text without OCR, in pages of 20,000 characters.
+Processing follows each type's capabilities. Previews, reading text, OCR and photos to PDF answer `415 unsupported_file_type` up front for files they cannot read, and built-in workflows skip those files. Markdown and plain text are read as text without OCR, in pages of 20,000 characters.
 
 A library item holds metadata and immutable file versions. Item resources, listings, queries, smart folders and search hits carry a `file` summary of the file the caller reads (the draft for draft readers, otherwise the published file): `blob_id`, `content_type`, `filename`, `size` and `version`. It is absent before the first upload. `PUT /v1/items/{id}/content` streams a new file using `X-Filename`, `Content-Type` and the current numeric `If-Match`. The response includes the file version number and the new resource ETag. File version numbers, metadata revision numbers and resource lock versions are independent.
 
@@ -87,7 +87,7 @@ Markdown and text files compare any earlier version with the current file, line 
 
 ### Reviews
 
-When a workflow asks someone to review a file it made, such as a PDF composed from photos, the task shows the file with the viewer's handler for its type, in the task itself: PDFs with their pages, find and zoom, images with zoom and rotation. Keys reach that view only while focus is inside it. Reviews that compare a smaller image with the original show both at their own pixels, side by side.
+When a workflow asks someone to review a file it made, such as a PDF composed from photos, the task shows the file with the viewer's handler for its type, in the task itself: PDFs with their pages, find and zoom, images with zoom and rotation. Keys reach that view only while focus is inside it.
 
 ## Reading text
 
@@ -104,7 +104,7 @@ The text is kept once per file bytes and reading settings (reader, OCR engine an
 
 ## Artifacts and staged files
 
-Requests that produce files, such as a smaller image or a PDF composed from photos, replace nothing themselves. Their operation's result is an **artifact**: a file made for an item from file versions, with the metrics reviewers need. It belongs to no workflow:
+Requests that produce files, such as a PDF composed from photos, replace nothing themselves. Their operation's result is an **artifact**: a file made for an item from file versions, with the metrics reviewers need. It belongs to no workflow:
 
 - Anyone who may write the item can ask, from a workflow script or not. An identical request (same item, file versions and options) reuses an unexpired artifact instead of computing it again; its result says `reused: true`.
 - An artifact is kept for 7 days, and longer while a staged file holds it. `GET /v1/artifacts/{id}` and `/content` show it to readers of its item. Expired artifacts nothing holds are deleted hourly, and the storage collector frees their bytes after its grace period.
@@ -123,24 +123,12 @@ A completed or cancelled run discards its pending staged files. A failed run kee
 
 `POST /v1/items/{id}/content/reclaim` with a `blob_id` asks for one file version's bytes back. The version keeps its id, number, filename, content type, size and checksum. The request marks it `pending`. A current file, a published file, a pending staged file's artifact (or a file it was made from), or a byte lease held by an operation defers the grace period (`deferred`, with `reason` `current`, `published`, `staged` or `in use`). Asking again for a version that is already pending does not move `reclaim_after`. After the one-hour object grace period, the collector marks an unprotected version `reclaimed` and deletes bytes that no other file still needs.
 
-## Image optimization
-
-`POST /v1/items/{id}/optimize-image` shrinks a page image without making its text unreadable. It is a background operation (`202 Accepted`) whose result is an [artifact](#artifacts-and-staged-files); it needs `document.write` and write access to the item, with the options below in its body and an optional `file_version` the request was made for. It is PaperDotNet's storage optimization, with the same parameters and results:
-
-1. It keeps files that are not JPEG, PNG or WebP, and a `file_version` a newer file already replaced.
-2. It decodes the image (at most 64 megapixels), applies its EXIF orientation, and keeps animated images unchanged.
-3. A copy at most `max_analysis_dimension` pixels long (default 2600) goes to the OCR detector. Text lines that score at least `min_confidence` (default 50), are at least 6 analysis pixels high and at least 1.5 times as long as high count. Each line's height is its shortest side, projected back to the image's pixels.
-4. The `percentile` (default 5) of those heights, interpolated and rounded, at least 4, is the smallest text. The scale is `target_height` (default 12) divided by it, between `minimum_scale` (default 0.05) and 1: images never grow.
-5. The image is resized with the Mitchell filter (transparency flattened onto white) and encoded as WebP at `quality` (default 80).
-
-Its result keeps the original, with a `reason`, when the image has no reliable text, is already WebP with its smallest text at the target, or the WebP file would not be smaller. Otherwise it makes the WebP file an [artifact](#artifacts-and-staged-files), named after the original, and its result has the `artifact_id` and `metrics` for reviewers: text regions, smallest text height, scale, sizes before and after, and the settings, detector and model hashes. Without an OCR engine (see [OCR configuration](ocr.md#configuration)) the request is refused. The [Optimize image storage](workflows.md#built-in-workflows) built-in stages the copy and asks for a review before it promotes it.
-
 ## Photos to PDF
 
 `POST /v1/items/{id}/compose-pdf` ports PaperDotNet's photo to document conversion. It is a background operation on the primary item whose result is an [artifact](#artifacts-and-staged-files), with `item_ids` (the photos in page order, the item among them), `target_height` and `quality`:
 
 1. **Snapshot.** Every item must be an item of the primary item's library that the caller may write, with a JPEG, PNG or WebP file. The request records each file version; at most 100 photos.
-2. **Pages.** Each photo, in order, is decoded (at most 64 megapixels, not animated), turned upright and flattened onto white. Its text lines are measured as in [image optimization](#image-optimization), and the page is scaled so that its smallest line is `target_height` pixels high (default 32). Unlike PaperDotNet, pages never grow; a page without text keeps its size.
+2. **Pages.** Each photo, in order, is decoded (at most 64 megapixels, not animated), turned upright and flattened onto white. A copy at most 2600 pixels long goes to the OCR detector. Text lines that score at least 50, are at least 6 analysis pixels high and at least 1.5 times as long as high count; each line's height is its shortest side, projected back to the photo's pixels. The page is scaled so that its smallest line is `target_height` pixels high (default 32). Unlike PaperDotNet, pages never grow; a page without text keeps its size.
 3. **Text.** OCR reads the full-resolution photo. Each line is placed, invisible, at its position on the scaled page, so the PDF can be searched and its text selected and copied. The text layer embeds a placeholder font and maps characters to Unicode, so it needs no system fonts and keeps every script.
 4. **PDF.** Each page image is embedded at 150 pixels per inch, as JPEG at `quality` (default 80), or losslessly when that is smaller. The PDF is an artifact for the primary item, named after its file, with the other items as `others`.
 

@@ -9,7 +9,7 @@ Engines never read storage or the database. Callers decode the file, apply EXIF 
 
 `POST /v1/items/{id}/text` reads the text of an item's current file as a background operation, for API clients and workflow scripts alike. It answers `202 Accepted` with the pending operation and its `Location`. The operation reads text layers and OCRs pages and images without one (`ocr`: `auto`, `always` or `never`; `max_pages`; `languages`), reuses text already read from the same bytes with the same settings, and keeps the pages where `GET /v1/items/{id}/text` returns them. Its result counts the pages, characters and OCRed pages; a file whose text cannot be read fails it. Starting it requires `document.write` and write access to the item. The `documents` worker runs these operations one at a time, so a long document delays the reads queued after it, not other work. See [reading text](documents.md#reading-text).
 
-[Image optimization](documents.md#image-optimization) detects text to shrink images, and [photos to PDF](documents.md#photos-to-pdf) also recognizes it for the text layer of searchable PDFs (`internal/pdf`).
+[Photos to PDF](documents.md#photos-to-pdf) detects text to scale each page, and recognizes it for the text layer of searchable PDFs (`internal/pdf`).
 
 ## Configuration
 
@@ -25,7 +25,7 @@ Release builds and the Docker image include ONNX Runtime and PaddleOCR models an
 
 | Call | Returns |
 | --- | --- |
-| `Detect(ctx, img, DetectOptions{MinScore, MaxDimension})` | `Detection`: the regions in reading order, each a `Quad` with the detector's `Score` (0 to 1). Also the size of the preview the detector analyzed, because regions only a few preview pixels high are unreliable. `MaxDimension` (256 to 2600) bounds only the preview's longest side instead of the engine's default, so a caller can analyze a larger preview, as image optimization does. |
+| `Detect(ctx, img, DetectOptions{MinScore, MaxDimension})` | `Detection`: the regions in reading order, each a `Quad` with the detector's `Score` (0 to 1). Also the size of the preview the detector analyzed, because regions only a few preview pixels high are unreliable. `MaxDimension` (256 to 2600) bounds only the preview's longest side instead of the engine's default, so a caller can analyze a larger preview, as photos to PDF does. |
 | `Recognize(ctx, img)` | `Page`: its `Lines` in reading order, each with `Text`, `Confidence` (the mean of its characters), `Quad` and `Words`, each word with its own `Quad`. `Page.Text()` joins the lines. An image without text gives a page without lines. |
 | `Info()` | the engine's name and its model files with their SHA-256, for run metrics |
 

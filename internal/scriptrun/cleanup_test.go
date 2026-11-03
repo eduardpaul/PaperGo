@@ -2,8 +2,10 @@ package scriptrun
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"image"
 	"testing"
 	"time"
 
@@ -15,31 +17,49 @@ import (
 	"papergo/internal/dms"
 	"papergo/internal/documentfiles"
 	"papergo/internal/httpapi"
+	"papergo/internal/ocr"
 	"papergo/internal/storage"
 )
 
+// pageText finds and reads one line of text in a photo.
+type pageText struct{}
+
+func (pageText) Detect(_ context.Context, img image.Image, _ ocr.DetectOptions) (ocr.Detection, error) {
+	b := img.Bounds()
+	x, y := b.Dx()/4, b.Dy()/2
+	q := ocr.Quad{{x, y}, {3 * x, y}, {3 * x, y + 24}, {x, y + 24}}
+	return ocr.Detection{Regions: []ocr.Region{{Quad: q, Score: 0.9}}, Width: b.Dx(), Height: b.Dy()}, nil
+}
+
+func (pageText) Recognize(_ context.Context, img image.Image) (ocr.Page, error) {
+	b := img.Bounds()
+	return ocr.Page{Width: b.Dx(), Height: b.Dy(), Lines: []ocr.Line{{Text: "Total 12.50", Confidence: 0.9, Quad: ocr.Quad{{10, 10}, {200, 10}, {200, 40}, {10, 40}}}}}, nil
+}
+
+func (pageText) Info() ocr.Info { return ocr.Info{Engine: "test"} }
+func (pageText) Close() error   { return nil }
+
 // files mounts the document files module with an OCR engine.
 func files(s *dms.Service, store storage.Store) httpapi.Module {
-	m := &documentfiles.Maker{Storage: store, OCR: receiptText{}, MaxFileBytes: 32 << 20}
+	m := &documentfiles.Maker{Storage: store, OCR: pageText{}, MaxFileBytes: 32 << 20}
 	if err := m.Register(s); err != nil {
 		panic(err)
 	}
 	return m.Module()
 }
 
-// reviewSource optimizes the run's photo, stages the copy and waits for a
+// reviewSource makes a PDF of the run's photo, stages it and waits for a
 // review of it, after leaving a follow-up task it does not wait for.
 const reviewSource = `import { plain, workflow } from "@papergo/workflow";
 export default workflow({
   triggers: [{ type: "manual", collection_id: "%s" }],
   async run(ctx) {
-    const optimized = plain((await ctx.wait((await ctx.api.v1.items.byId(ctx.itemId!).optimizeImage.post({}))!)).result) as { artifact_id?: string };
-    if (!optimized.artifact_id) throw new Error("nothing made");
-    const staged = (await ctx.api.v1.artifacts.byId(optimized.artifact_id).stage.post())!;
+    const composed = plain((await ctx.wait((await ctx.api.v1.items.byId(ctx.itemId!).composePdf.post({}))!)).result) as { artifact_id: string };
+    const staged = (await ctx.api.v1.artifacts.byId(composed.artifact_id).stage.post())!;
     const tasks = ctx.api.v1.workspaces.byId(ctx.run.workspace_id).tasks;
     await tasks.post({ itemId: ctx.itemId, title: "Follow up" });
     const review = await tasks.post({ kind: "approval", itemId: ctx.itemId, title: "Review",
-      review: { type: "file.compare", stagedFileId: staged.id } });
+      review: { type: "file.preview", stagedFileId: staged.id } });
     await ctx.wait(review!.operationId!);
   },
 });
@@ -219,7 +239,7 @@ func TestCancellingARunCancelsWhatItOwns(t *testing.T) {
 	}
 }
 
-// An optimization belongs to no workflow: a client without a run gets an
+// A composition belongs to no workflow: a client without a run gets an
 // artifact, an identical request reuses it, and the client stages and
 // promotes it itself. A workflow run cannot promote the client's file.
 func TestArtifactsWithoutRuns(t *testing.T) {
@@ -229,30 +249,30 @@ func TestArtifactsWithoutRuns(t *testing.T) {
 		t.Fatal(err)
 	}
 	item := r.photo(t, library.ID, "photo.png")
-	optimize := func() documentfiles.OptimizeResult {
+	compose := func() documentfiles.ComposeResult {
 		t.Helper()
 		var op dms.OperationView
-		r.call(t, "POST", "/v1/items/"+item+"/optimize-image", "", 202, &op)
+		r.call(t, "POST", "/v1/items/"+item+"/compose-pdf", "", 202, &op)
 		for deadline := time.Now().Add(20 * time.Second); op.Status == operations.StatusPending; time.Sleep(20 * time.Millisecond) {
 			if time.Now().After(deadline) {
-				t.Fatal("the optimization did not finish")
+				t.Fatal("the composition did not finish")
 			}
 			r.call(t, "GET", "/v1/operations/"+op.ID, "", 200, &op)
 		}
-		var res documentfiles.OptimizeResult
+		var res documentfiles.ComposeResult
 		if op.Status != operations.StatusSucceeded || json.Unmarshal(op.Result, &res) != nil || res.ArtifactID == "" {
 			t.Fatalf("%+v", op)
 		}
 		return res
 	}
-	first := optimize()
-	again := optimize()
-	if first.Reused || !again.Reused || again.ArtifactID != first.ArtifactID || again.Metrics.Bytes != first.Metrics.Bytes {
+	first := compose()
+	again := compose()
+	if first.Reused || !again.Reused || again.ArtifactID != first.ArtifactID || again.Bytes != first.Bytes {
 		t.Fatalf("not reused: %+v %+v", first, again)
 	}
 	var artifact documentfiles.ArtifactView
 	r.call(t, "GET", "/v1/artifacts/"+first.ArtifactID, "", 200, &artifact)
-	if artifact.ItemID != item || artifact.ContentType != "image/webp" || len(artifact.Sources) != 1 || !artifact.ExpiresAt.After(time.Now()) {
+	if artifact.ItemID != item || artifact.ContentType != "application/pdf" || len(artifact.Sources) != 1 || !artifact.ExpiresAt.After(time.Now()) {
 		t.Fatalf("%+v", artifact)
 	}
 	var staged documentfiles.StagedResult

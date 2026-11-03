@@ -1,4 +1,4 @@
-// Package documentpreview renders a first-page WebP preview of an item's
+// Package documentpreview renders a first-page JPEG preview of an item's
 // file as a background operation. Its module route, POST
 // /v1/items/{id}/preview, starts it for the item's current file and
 // answers with the pending operation; GET /v1/items/{id}/preview serves the
@@ -70,7 +70,7 @@ var builtinSource string
 func (r *Renderer) Register(s *dms.Service) error {
 	workflow.RegisterRole(&workflow.Role{Key: Role, Name: "File previews", Description: "Generates lightweight first-page previews asynchronously."})
 	workflow.RegisterBuiltIn(&workflow.BuiltIn{Key: "documents.preview", Name: "Generate file previews", Role: Role, Default: true, System: true,
-		Description:      "Generates bounded WebP previews when files are added or replaced. Also runs on demand.",
+		Description:      "Generates bounded JPEG previews when files are added or replaced. Also runs on demand.",
 		ParametersSchema: forms.MustParse(`{"type": "object", "properties": {}}`), Source: builtinSource})
 	return s.RegisterOperationHandler(Kind, dms.OperationHandler{Scope: "document.write", Validate: validate, Execute: r.execute})
 }
@@ -213,7 +213,7 @@ func (r *Renderer) render(ctx context.Context, j job) (storage.Object, int, int,
 		}
 		return storage.Object{}, 0, 0, false, nil
 	}
-	object, err := r.Storage.Put(ctx, bytes.NewReader(image.WebP), int64(len(image.WebP))+1)
+	object, err := r.Storage.Put(ctx, bytes.NewReader(image.JPEG), int64(len(image.JPEG))+1)
 	if err != nil {
 		return storage.Object{}, 0, 0, false, errors.Join(errors.New("store the preview"), err)
 	}
