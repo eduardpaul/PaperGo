@@ -85,7 +85,9 @@ def environment(output, system):
         flags += ['-Wl,-rpath,@loader_path/lib']
     elif system == 'windows':
         # The tokenizer's Rust standard library calls the Windows NT API.
-        flags += ['-lntdll']
+        # MinGW's C++, GCC and thread runtimes link statically, so the
+        # executable imports only Windows system DLLs and the Universal CRT.
+        flags += ['-lntdll', '-static']
     env = {'CGO_ENABLED': '1', 'CGO_LDFLAGS': shlex.join(flags),
            'ONNXRUNTIME_LIB': str(output / 'lib' / {'linux': 'libonnxruntime.so', 'darwin': 'libonnxruntime.dylib', 'windows': 'onnxruntime.dll'}[system]),
            'OCR_MODELS': str(ROOT / 'models/paddleocr')}

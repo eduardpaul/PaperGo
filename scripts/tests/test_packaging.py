@@ -36,7 +36,16 @@ class PackagingTests(unittest.TestCase):
                 notice = native / 'notices/dependency/LICENSE'
                 notice.parent.mkdir(parents=True)
                 notice.write_text('native license')
-                with patch.object(build, 'compiler_runtime', return_value={}):
+                compiler = {}
+                if system == 'windows':
+                    # native.py installs the ONNX Runtime and Visual C++ notices;
+                    # MSYS2 supplies the statically linked compiler runtimes' licences.
+                    for name in package.WINDOWS_NOTICES:
+                        if name.startswith('notices/compiler/'):
+                            compiler[name] = notice
+                        else:
+                            (native / name).write_text('notice')
+                with patch.object(build, 'compiler_runtime', return_value=compiler):
                     files = build.runtime_files(native, system, {})
                 suffix = '.exe' if system == 'windows' else ''
                 path = binaries / ('papergo' + suffix)
@@ -66,6 +75,9 @@ class PackagingTests(unittest.TestCase):
                     self.assertIn('notices/pdfium/pdfium.txt', names)
                     self.assertFalse(any('pdfium' in name for name in names if not name.startswith('notices/')))
                     self.assertIn('config.yaml', names)
+                    if system == 'windows':
+                        self.assertEqual({name for name in names if not name.startswith('notices/')},
+                                         {'papergo.exe', 'RELEASES.md', 'config.yaml', 'README.md'})
                     self.assertEqual((binary_zip.getinfo('papergo' + suffix).external_attr >> 16) & 0o777, 0o755)
                     binary_zip.extractall(installation)
                 with zipfile.ZipFile(shared) as shared_zip:
@@ -108,6 +120,26 @@ class PackagingTests(unittest.TestCase):
         with patch.object(package.shutil, 'which', return_value=None):
             with self.assertRaisesRegex(ValueError, 'objdump or readelf'):
                 package.dynamic_symbols(Path('papergo'))
+
+    def test_windows_package_refuses_dlls_and_missing_notices(self):
+        with tempfile.TemporaryDirectory() as temp:
+            binaries = Path(temp) / 'bin'
+            for name in ['papergo.exe', 'notices/pdfium/pdfium.txt', *package.WINDOWS_NOTICES]:
+                (binaries / name).parent.mkdir(parents=True, exist_ok=True)
+                (binaries / name).write_text(name)
+            package.package('v0.2.0', 'windows', 'amd64', binaries, Path(temp) / 'dist')
+            for stray in ['notices/onnxruntime.dll', 'lib/onnxruntime.dll']:
+                (binaries / stray).parent.mkdir(parents=True, exist_ok=True)
+                (binaries / stray).write_text('library')
+                if stray.startswith('notices/'):
+                    with self.assertRaisesRegex(ValueError, 'only papergo.exe'):
+                        package.package('v0.2.0', 'windows', 'amd64', binaries, Path(temp) / 'dist')
+                (binaries / stray).unlink()
+            # Directories other than notices/ are not packaged at all on Windows.
+            package.package('v0.2.0', 'windows', 'amd64', binaries, Path(temp) / 'dist')
+            (binaries / 'notices/microsoft-visual-cpp-runtime.txt').unlink()
+            with self.assertRaisesRegex(ValueError, 'notices'):
+                package.package('v0.2.0', 'windows', 'amd64', binaries, Path(temp) / 'dist')
 
     def test_laya_cache_requires_pinned_manifest_and_every_file_hash(self):
         with tempfile.TemporaryDirectory() as temp:
