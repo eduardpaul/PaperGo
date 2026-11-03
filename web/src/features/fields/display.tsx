@@ -1,13 +1,15 @@
 import { isLosslessNumber } from 'lossless-json';
 import type { FieldDefinition } from '@/api/types';
 import { TrustedLink } from '@/features/files/trust';
+import { useTranslation } from '@/i18n';
 import { useFormat } from '@/lib/preferences';
 import { asList, fieldText } from './values';
 
 export function FieldDisplay({ field, value, names }: { field: FieldDefinition; value: unknown; names?: Map<string, string> }) {
+  const { t } = useTranslation();
   const format = useFormat();
   if (value === undefined || value === null || value === '') return <span className="text-muted">—</span>;
-  if (field.type === 'boolean') return <>{value ? 'Yes' : 'No'}</>;
+  if (field.type === 'boolean') return <>{value ? t('answer.yes') : t('answer.no')}</>;
   if (field.type === 'date') return <>{format.date(fieldText(value))}</>;
   if (field.type === 'datetime') return <>{format.dateTime(fieldText(value))}</>;
   if (field.type === 'number' && (typeof value === 'number' || isLosslessNumber(value))) {

@@ -10,6 +10,7 @@ import { QueryFeedback, useHasScope } from '@/features/admin/common';
 import { PreferencesForm } from '@/features/settings/preferences-form';
 import { SettingRow, SettingsSection } from '@/features/settings/section';
 import { OrganizationCommentSettingsForm } from '@/features/comments/settings';
+import { useTranslation } from '@/i18n';
 
 interface Organization {
   id: string;
@@ -39,6 +40,7 @@ function OrganizationPage() {
 }
 
 function OrganizationForm({ organization, canEdit }: { organization: Organization; canEdit: boolean }) {
+  const { t } = useTranslation(['admin', 'common']);
   const client = useQueryClient();
   const [identifier, setIdentifier] = useState(organization.identifier);
   const [name, setName] = useState(organization.display_name);
@@ -55,12 +57,12 @@ function OrganizationForm({ organization, canEdit }: { organization: Organizatio
         client.invalidateQueries({ queryKey: ['organization', 'profile'] }),
         client.invalidateQueries({ queryKey: keys.me }),
       ]);
-      toast.success('Organization saved');
+      toast.success(t('organization.saved'));
     },
   });
   return (
     <SettingsSection
-      title="Organization"
+      title={t('organization.title')}
       actions={
         canEdit && (
           <Button
@@ -68,19 +70,19 @@ function OrganizationForm({ organization, canEdit }: { organization: Organizatio
             disabled={save.isPending || !name.trim() || !identifier.trim()}
             onClick={() => save.mutate()}
           >
-            Save organization
+            {t('organization.save')}
           </Button>
         )
       }
     >
       <fieldset disabled={!canEdit}>
-        <SettingRow id="org-identifier" label="Identifier">
+        <SettingRow id="org-identifier" label={t('organization.identifier')}>
           <Input id="org-identifier" value={identifier} onChange={(event) => setIdentifier(event.target.value)} />
         </SettingRow>
-        <SettingRow id="org-name" label="Display name">
+        <SettingRow id="org-name" label={t('organization.displayName')}>
           <Input id="org-name" value={name} onChange={(event) => setName(event.target.value)} />
         </SettingRow>
-        <SettingRow id="org-description" label="Description">
+        <SettingRow id="org-description" label={t('common:fields.description')}>
           <Textarea id="org-description" value={description} onChange={(event) => setDescription(event.target.value)} />
         </SettingRow>
       </fieldset>

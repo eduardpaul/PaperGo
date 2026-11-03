@@ -48,13 +48,13 @@ import { FieldEditor } from '@/features/fields/editor';
 import { useResourceNames, useValueNames } from '@/features/fields/names';
 import { valuesPatch } from '@/features/fields/values';
 import { ConfirmDialog } from '@/features/settings/section';
+import { useTranslation } from '@/i18n';
 import { typingIn } from '@/lib/keys';
 import { useFormat } from '@/lib/preferences';
 import { RunWorkflowAction } from '@/features/workflows/item-workflows';
 import { cn } from '@/lib/utils';
 import { can } from './access';
 import { CollectionIcon } from './collection-icon';
-import { systemFields } from './filter-editor';
 import { useFolderMoves } from './folder-moves';
 import { ItemContextMenu } from './item-context-menu';
 import { MoveDialog } from './move-dialog';
@@ -64,7 +64,7 @@ import { ItemsTable } from './items-table';
 import { BulkEditDialog } from './operations';
 import { ColumnPicker } from './column-picker';
 import { ItemsNavigation } from './navigation-layout';
-import { columnLabel, fieldsForType, parseSort, sortableColumns, sortParam } from './schema';
+import { columnLabel, fieldsForType, parseSort, sortableColumns, sortParam, systemFields } from './schema';
 
 export interface CollectionSearch {
   create?: 'folder' | 'upload';
@@ -100,6 +100,9 @@ interface Listing {
   body?: unknown;
 }
 
+// Key names, as printed on keyboards.
+const keyNames = { enter: 'Enter', open: 'o', select: 'x' };
+
 /** Columns shown when no saved view picks them: the name, the first few columns of the default type, the last change. */
 const defaultColumnCount = 4;
 
@@ -117,6 +120,7 @@ export function CollectionPage({
   onSearch: (patch: Partial<CollectionSearch>, replace?: boolean, keepScroll?: boolean) => void;
   onMoved: (resource: Resource) => void;
 }) {
+  const { t } = useTranslation(['lists', 'common']);
   const queryClient = useQueryClient();
   const format = useFormat();
   const collection = useQuery(resourceQuery(listId));
@@ -182,9 +186,9 @@ export function CollectionPage({
     const location = search.folder ? crumbs.data?.at(-1) : collection.data;
     if (can(location, 'write')) {
       if (search.create === 'upload' && collection.data.kind === 'library') fileInput.current?.click();
-    } else toast.error('You do not have permission to add content here.');
+    } else toast.error(t('page.noPermission'));
     onSearch({ create: undefined }, true);
-  }, [search.create, search.folder, collection.data, crumbs.data, onSearch]);
+  }, [search.create, search.folder, collection.data, crumbs.data, onSearch, t]);
 
 
   const rows = [...(listing.data?.items ?? []), ...more];
@@ -258,7 +262,7 @@ export function CollectionPage({
     onSuccess: async () => {
       setConfirmingDelete(false);
       await refresh();
-      toast.success('Moved to the recycle bin');
+      toast.success(t('menu.deleted'));
     },
     onError: refresh,
   });
@@ -297,13 +301,12 @@ export function CollectionPage({
   if (!collection.data) {
     return (
       <Screen>
-        <EmptyState title="This list is not available">It was deleted, or you do not have access to it.</EmptyState>
+        <EmptyState title={t('page.unavailable')}>{t('page.unavailableHint')}</EmptyState>
       </Screen>
     );
   }
   const current = collection.data;
   const library = current.kind === 'library';
-  const noun = library ? 'library' : 'list';
   const folders = current.allow_folders !== false;
   // Adding goes into the open folder, which can have its own permissions.
   const location = search.folder ? crumbs.data?.at(-1) : current;
@@ -328,7 +331,7 @@ export function CollectionPage({
     const folder = search.folder;
     void upload(list, {
       url: `/v1/resources/${listId}/documents`,
-      label: folder ? (crumbs.data?.at(-1)?.name ?? 'the folder') : current.name,
+      label: folder ? (crumbs.data?.at(-1)?.name ?? t('page.theFolder')) : current.name,
       metadata: () => ({ folder_id: folder }),
       open: (itemId) => ({
         to: '/w/$workspaceId/l/$listId',
@@ -362,23 +365,23 @@ export function CollectionPage({
           <>
             {folders && canAdd && (
               <Button onClick={() => setCreating('folder')}>
-                <FolderPlus /> New folder
+                <FolderPlus /> {t('page.newFolder')}
               </Button>
             )}
             {canAdd &&
               (library ? (
                 <Button variant="primary" onClick={startUpload}>
-                  <Upload /> Upload
+                  <Upload /> {t('common:actions.upload')}
                 </Button>
               ) : (
                 <Button variant="primary" onClick={() => setCreating('item')}>
-                  <Plus /> New item
+                  <Plus /> {t('page.newItem')}
                 </Button>
               ))}
             {(canEdit || canManage) && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" aria-label={`More actions for this ${noun}`}>
+                <Button variant="ghost" size="icon" aria-label={library ? t('page.moreLibrary') : t('page.moreList')}>
                   <MoreHorizontal />
                 </Button>
               </DropdownMenuTrigger>
@@ -386,17 +389,17 @@ export function CollectionPage({
                 {library && canAdd && (
                   <>
                     <DropdownMenuItem onSelect={() => setCreating('markdown')}>
-                      <FilePen /> New Markdown document
+                      <FilePen /> {t('page.newMarkdown')}
                     </DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => setCreating('item')}>
-                      <FilePlus /> New item without a file
+                      <FilePlus /> {t('page.newItemWithoutFile')}
                     </DropdownMenuItem>
                   </>
                 )}
                 {canEdit && (
                   <DropdownMenuItem asChild>
                     <Link to="/w/$workspaceId/l/$listId/recycle-bin" params={{ workspaceId, listId }}>
-                      <Trash2 /> Recycle bin
+                      <Trash2 /> {t('page.recycleBin')}
                     </Link>
                   </DropdownMenuItem>
                 )}
@@ -405,12 +408,12 @@ export function CollectionPage({
                     {canEdit && <DropdownMenuSeparator />}
                     <DropdownMenuItem asChild>
                       <Link to="/w/$workspaceId/l/$listId/settings/views" params={{ workspaceId, listId }}>
-                        <Pencil /> Edit views
+                        <Pencil /> {t('page.editViews')}
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>
                       <Link to="/w/$workspaceId/l/$listId/settings" params={{ workspaceId, listId }}>
-                        <Settings /> {library ? 'Library settings' : 'List settings'}
+                        <Settings /> {library ? t('page.librarySettings') : t('page.listSettings')}
                       </Link>
                     </DropdownMenuItem>
                   </>
@@ -436,14 +439,14 @@ export function CollectionPage({
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
         {(views.data?.length ?? 0) > 0 && (
-          <div role="tablist" aria-label="Views" className="flex max-w-full overflow-x-auto rounded-md bg-surface-muted p-0.5">
+          <div role="tablist" aria-label={t('page.views')} className="flex max-w-full overflow-x-auto rounded-md bg-surface-muted p-0.5">
             {views.data?.map((entry) => (
               <ViewTab key={entry.id} active={entry.id === viewId} onClick={() => onSearch({ view: entry.id, folder: undefined, q: undefined, sort: undefined, cols: undefined, nav: undefined })}>
                 {entry.name}
               </ViewTab>
             ))}
             <ViewTab active={!viewId} onClick={() => onSearch({ view: 'none', q: undefined, sort: undefined, cols: undefined, nav: undefined })}>
-              Active items
+              {t('page.activeItems')}
             </ViewTab>
           </div>
         )}
@@ -460,11 +463,11 @@ export function CollectionPage({
             onSaved={(id) => onSearch({ view: id, cols: undefined, sort: undefined })}
           />
         )}
-        <SearchBox initial={search.q ?? ''} noun={noun} onSearch={(q) => onSearch({ q }, true)} />
+        <SearchBox initial={search.q ?? ''} library={library} onSearch={(q) => onSearch({ q }, true)} />
       </div>
 
       {search.folder && (
-        <nav aria-label="Folders" className="mb-3 flex flex-wrap items-center gap-1 text-[13px]">
+        <nav aria-label={t('page.folders')} className="mb-3 flex flex-wrap items-center gap-1 text-[13px]">
           <Link
             to="/w/$workspaceId/l/$listId"
             params={{ workspaceId, listId }}
@@ -498,14 +501,14 @@ export function CollectionPage({
 
       {search.q && (
         <p className="mb-3 flex items-center gap-2 text-[13px] text-muted">
-          Results for “{search.q}” in {search.folder ? 'this folder and its subfolders' : `the whole ${noun}`}
+          {search.folder ? t('page.resultsFolder', { q: search.q }) : library ? t('page.resultsLibrary', { q: search.q }) : t('page.resultsList', { q: search.q })}
           {search.folder && (
             <Button size="sm" variant="ghost" onClick={() => onSearch({ folder: undefined, item: undefined }, true)}>
-              <Search /> Search the whole {noun}
+              <Search /> {library ? t('page.searchWholeLibrary') : t('page.searchWholeList')}
             </Button>
           )}
           <Button size="sm" variant="ghost" onClick={() => onSearch({ q: undefined }, true)}>
-            <X /> Clear search
+            <X /> {t('page.clearSearch')}
           </Button>
         </p>
       )}
@@ -513,27 +516,27 @@ export function CollectionPage({
       {selected.size > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-accent-soft px-3 py-2 text-[13px]">
           <span className="font-medium">
-            {allMatching ? <MatchingCount collectionId={listId} query={matching} /> : `${selected.size} selected`}
+            {allMatching ? <MatchingCount collectionId={listId} query={matching} phrase="selected" /> : t('page.selected', { count: selected.size })}
           </span>
           {!allMatching && allLoadedSelected && next && canEdit && (
             <Button size="sm" variant="ghost" className="text-accent" onClick={() => setAllMatching(true)}>
-              Select all <MatchingCount collectionId={listId} query={matching} bare />
+              <MatchingCount collectionId={listId} query={matching} phrase="selectAll" />
             </Button>
           )}
           <Button size="sm" disabled={!allMatching && items.length === 0} onClick={() => setBulkEditing(true)}>
-            <Pencil /> Edit a field
+            <Pencil /> {t('page.editField')}
           </Button>
           {!allMatching && canEdit && items.length === selected.size && (
             <RunWorkflowAction workspaceId={workspaceId} collectionId={listId} items={items} />
           )}
           {!allMatching && canEdit && items.length === selected.size && <>
-            {items.some(item => !item.archived) && <Button size="sm" disabled={archive.isPending || items.length > 100} onClick={() => archive.mutate({ items, archived: true })}>Archive selected</Button>}
-            {items.some(item => item.archived) && <Button size="sm" disabled={archive.isPending || items.length > 100} onClick={() => archive.mutate({ items, archived: false })}>Unarchive selected</Button>}
+            {items.some(item => !item.archived) && <Button size="sm" disabled={archive.isPending || items.length > 100} onClick={() => archive.mutate({ items, archived: true })}>{t('menu.archiveSelected')}</Button>}
+            {items.some(item => item.archived) && <Button size="sm" disabled={archive.isPending || items.length > 100} onClick={() => archive.mutate({ items, archived: false })}>{t('menu.unarchiveSelected')}</Button>}
           </>}
-          {!allMatching && <Button size="sm" disabled={selected.size > 100} onClick={() => setMoving(true)}>Move selected…</Button>}
+          {!allMatching && <Button size="sm" disabled={selected.size > 100} onClick={() => setMoving(true)}>{t('menu.moveSelected')}</Button>}
           {!allMatching && (
             <Button size="sm" disabled={remove.isPending} onClick={() => setConfirmingDelete(true)}>
-              <Trash2 /> Delete
+              <Trash2 /> {t('common:actions.delete')}
             </Button>
           )}
           <Button
@@ -545,7 +548,7 @@ export function CollectionPage({
               setAllMatching(false);
             }}
           >
-            <X /> Clear selection
+            <X /> {t('page.clearSelection')}
           </Button>
         </div>
       )}
@@ -553,7 +556,7 @@ export function CollectionPage({
       <QueryFeedback query={views} />
       <div
         role="region"
-        aria-label={library ? 'Library contents' : 'List contents'}
+        aria-label={library ? t('page.libraryContents') : t('page.listContents')}
         className={cn('relative rounded-lg', dragging && 'ring-2 ring-accent ring-offset-2')}
         onDragOver={(event) => {
           if (!hasFiles(event)) return;
@@ -573,7 +576,7 @@ export function CollectionPage({
       >
         {dragging && (
           <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-accent-soft/80 text-sm font-medium text-accent">
-            Drop to upload to {search.folder ? (crumbs.data?.at(-1)?.name ?? 'this folder') : current.name}
+            {t('page.drop', { target: search.folder ? (crumbs.data?.at(-1)?.name ?? t('page.thisFolder')) : current.name })}
           </div>
         )}
         {ownRows && layout === 'navigation' ? (
@@ -618,22 +621,22 @@ export function CollectionPage({
           <Card>
             <EmptyState
               icon={search.q ? Search : search.folder ? FolderOpen : undefined}
-              title={search.q ? 'Nothing matches your search' : search.folder ? 'This folder is empty' : `This ${noun} is empty`}
+              title={search.q ? t('page.noMatches') : search.folder ? t('page.emptyFolder') : library ? t('page.emptyLibrary') : t('page.emptyList')}
             >
               {search.q ? (
                 <Button className="mt-2" onClick={() => onSearch({ q: undefined }, true)}>
-                  Clear search
+                  {t('page.clearSearch')}
                 </Button>
               ) : !canAdd ? null : library ? (
                 <>
-                  <p className="mb-3">Drag files here, or upload them.</p>
+                  <p className="mb-3">{t('page.dragHint')}</p>
                   <Button variant="primary" onClick={startUpload}>
-                    <Upload /> Upload files
+                    <Upload /> {t('page.uploadFiles')}
                   </Button>
                 </>
               ) : (
                 <Button variant="primary" className="mt-2" onClick={() => setCreating('item')}>
-                  <Plus /> Add the first item
+                  <Plus /> {t('page.addFirst')}
                 </Button>
               )}
             </EmptyState>
@@ -675,20 +678,22 @@ export function CollectionPage({
         <div className="mt-3 flex items-center gap-3 text-xs text-muted">
           <span>
             {!next
-              ? `${format.number(rows.length)} ${rows.length === 1 ? 'entry' : 'entries'}`
+              ? t('page.entries', { count: rows.length, number: format.number(rows.length) })
               : counted
-                ? `${format.number(rows.length)} of ${format.number(counted.total)}${counted.capped ? '+' : ''} entries`
-                : `${format.number(rows.length)}+ entries`}
+                ? counted.capped
+                  ? t('page.entriesOfCapped', { number: format.number(rows.length), total: format.number(counted.total) })
+                  : t('page.entriesOf', { number: format.number(rows.length), total: format.number(counted.total) })
+                : t('page.entriesMore', { number: format.number(rows.length) })}
           </span>
           {next && (
             <Button size="sm" disabled={loadingMore} onClick={() => void loadMore()}>
-              {loadingMore && <Spinner />} Load more
+              {loadingMore && <Spinner />} {t('loadMore')}
             </Button>
           )}
           {layout === 'table' && (
             <span className="ml-auto hidden md:inline">
-              <Kbd>↑</Kbd> <Kbd>↓</Kbd> move · <Kbd>Enter</Kbd> details{library && <> · <Kbd>o</Kbd> open file</>}{canEdit && <> · <Kbd>x</Kbd> select</>} · <Kbd>/</Kbd>{' '}
-              search
+              <Kbd>↑</Kbd> <Kbd>↓</Kbd> {t('page.keys.move')} · <Kbd>{keyNames.enter}</Kbd> {t('page.keys.details')}{library && <> · <Kbd>{keyNames.open}</Kbd> {t('page.keys.open')}</>}{canEdit && <> · <Kbd>{keyNames.select}</Kbd> {t('page.keys.select')}</>} · <Kbd>/</Kbd>{' '}
+              {t('page.keys.search')}
             </span>
           )}
         </div>
@@ -697,7 +702,7 @@ export function CollectionPage({
         <OperationProgress
           key={id}
           id={id}
-          label={`Field update${operations.length > 1 ? ` (part ${index + 1} of ${operations.length})` : ''}`}
+          label={operations.length > 1 ? t('page.fieldUpdatePart', { part: index + 1, parts: operations.length }) : t('page.fieldUpdate')}
         />
       ))}
       {folderMoves.dialogs}
@@ -706,11 +711,11 @@ export function CollectionPage({
         <BulkEditDialog
           collectionId={listId}
           target={allMatching ? { query: matching } : { ids: items.map((item) => item.id) }}
-          count={allMatching ? <MatchingCount collectionId={listId} query={matching} bare /> : undefined}
+          title={allMatching ? <MatchingCount collectionId={listId} query={matching} phrase="edit" /> : undefined}
           fields={fieldList}
           onClose={() => setBulkEditing(false)}
           onStarted={(ids) => {
-            toast.success('The field update runs in the background. Its progress shows below the list.');
+            toast.success(t('page.fieldUpdateStarted'));
             setOperations(ids);
             setSelected(new Map());
             setAllMatching(false);
@@ -720,13 +725,13 @@ export function CollectionPage({
       <ConfirmDialog
         open={confirmingDelete}
         onOpenChange={setConfirmingDelete}
-        title={`Delete ${selected.size === 1 ? `“${[...selected.values()][0]?.name}”` : `${selected.size} entries`}?`}
+        title={selected.size === 1 ? t('menu.deleteTitle', { name: [...selected.values()][0]?.name }) : t('page.deleteEntries', { count: selected.size })}
         description={
           [...selected.values()].some((resource) => resource.kind === 'folder')
-            ? 'Folders are deleted with everything in them. You can restore them from the recycle bin.'
-            : 'You can restore them from the recycle bin.'
+            ? t('page.deleteFolders')
+            : t('page.deleteItems')
         }
-        confirm="Delete"
+        confirm={t('common:actions.delete')}
         busy={remove.isPending}
         error={remove.error}
         onConfirm={() => remove.mutate()}
@@ -811,7 +816,8 @@ function ViewTab({ active, onClick, children }: { active: boolean; onClick: () =
 }
 
 /** Searches as the person types (after a short pause); Escape or the clear button empties it. */
-function SearchBox({ initial, noun, onSearch }: { initial: string; noun: string; onSearch: (q: string | undefined) => void }) {
+function SearchBox({ initial, library, onSearch }: { initial: string; library: boolean; onSearch: (q: string | undefined) => void }) {
+  const { t } = useTranslation('lists');
   const [value, setValue] = useState(initial);
   const [previousInitial, setPreviousInitial] = useState(initial);
   // URL navigation updates the value without replacing the focused input.
@@ -866,15 +872,15 @@ function SearchBox({ initial, noun, onSearch }: { initial: string; noun: string;
             clear();
           }
         }}
-        placeholder={`Search this ${noun}…`}
+        placeholder={library ? t('page.searchLibraryPlaceholder') : t('page.searchListPlaceholder')}
         aria-keyshortcuts="/"
-        aria-label={`Search this ${noun}`}
+        aria-label={library ? t('page.searchLibrary') : t('page.searchList')}
         className="px-8"
       />
       {value && (
         <button
           type="button"
-          aria-label="Clear search"
+          aria-label={t('page.clearSearch')}
           className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-0.5 text-muted hover:bg-surface-muted hover:text-foreground"
           onClick={clear}
         >
@@ -899,6 +905,7 @@ function CreateDialog({
   onClose: () => void;
   onCreated: (resource: Resource) => void;
 }) {
+  const { t } = useTranslation(['lists', 'common']);
   const fields = useQuery(fieldsQuery(collection.id));
   const types = useQuery(contentTypesQuery(collection.id));
   const [name, setName] = useState('');
@@ -944,18 +951,18 @@ function CreateDialog({
   return (
     <FormDialog
       open
-      title={kind === 'folder' ? 'New folder' : kind === 'markdown' ? 'New Markdown document' : 'New item'}
-      submitLabel={kind === 'folder' ? 'Create folder' : kind === 'markdown' ? 'Create and edit' : 'Create item'}
+      title={kind === 'folder' ? t('page.newFolder') : kind === 'markdown' ? t('page.newMarkdown') : t('page.newItem')}
+      submitLabel={kind === 'folder' ? t('page.createFolder') : kind === 'markdown' ? t('page.createAndEdit') : t('page.createItem')}
       pending={create.isPending}
       submitDisabled={!name.trim()}
       onClose={onClose}
       onSubmit={() => name.trim() && create.mutate()}
     >
-      <Label htmlFor="draft-name">Name</Label>
+      <Label htmlFor="draft-name">{t('common:fields.name')}</Label>
       <Input id="draft-name" value={name} onChange={(event) => setName(event.target.value)} required autoFocus />
       {kind !== 'folder' && menu.length > 1 && (
         <>
-          <Label htmlFor="draft-type">Content type</Label>
+          <Label htmlFor="draft-type">{t('system.contentType')}</Label>
           <Select id="draft-type" value={chosenType} onChange={(event) => setType(event.target.value)}>
             {menu.map((entry) => (
               <option key={entry.id} value={entry.id}>
@@ -973,7 +980,7 @@ function CreateDialog({
           onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))}
         />
       ))}
-      <Label htmlFor="draft-keywords">Keywords</Label>
+      <Label htmlFor="draft-keywords">{t('columns.keywords')}</Label>
       <KeywordInput id="draft-keywords" value={keywords} onChange={setKeywords} />
     </FormDialog>
   );
@@ -1015,11 +1022,17 @@ function useMatchingTotal(collectionId: string, query: QuerySpec, enabled = true
   }).data;
 }
 
-/** "2,490 items" or "100,000+ items" matching a query. */
-function MatchingCount({ collectionId, query, bare }: { collectionId: string; query: QuerySpec; bare?: boolean }) {
+/**
+ * A sentence about the items a query matches, counted ("2,490 items", "100,000+ items") once the count is known:
+ * "All 2,490 items selected", the "Select all 2,490 items" action or the "Edit 2,490 items" title.
+ */
+function MatchingCount({ collectionId, query, phrase }: { collectionId: string; query: QuerySpec; phrase: 'selected' | 'selectAll' | 'edit' }) {
+  const { t } = useTranslation('lists');
   const format = useFormat();
   const counted = useMatchingTotal(collectionId, query);
-  if (!counted) return <>{bare ? 'all matching items' : 'All matching items selected'}</>;
-  const count = `${format.number(counted.total)}${counted.capped ? '+' : ''} ${counted.total === 1 && !counted.capped ? 'item' : 'items'}`;
-  return <>{bare ? count : `All ${count} selected`}</>;
+  if (!counted) return <>{t(({ selected: 'matching.allSelected', selectAll: 'matching.selectAllUncounted', edit: 'bulkEdit.editAll' } as const)[phrase])}</>;
+  const items = counted.capped
+    ? t('matching.countCapped', { number: format.number(counted.total) })
+    : t('matching.count', { count: counted.total, number: format.number(counted.total) });
+  return <>{t(({ selected: 'matching.selected', selectAll: 'matching.selectAll', edit: 'bulkEdit.editMatching' } as const)[phrase], { items })}</>;
 }

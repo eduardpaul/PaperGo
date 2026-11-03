@@ -1,17 +1,19 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { api } from '@/api/http';
+import { useTranslation } from '@/i18n';
 import { problemMessage } from '@/lib/errors';
 import type { Resource } from '@/api/types';
 
 export function useArchiveActions(onDone?: (completed: string[]) => void) {
+  const { t } = useTranslation('lists');
   const client = useQueryClient();
   return useMutation({
     meta: { silent: true },
     mutationFn: async ({ items, archived }: { items: Resource[]; archived: boolean }) => {
       const groups = new Map<string, Resource[]>();
       for (const item of items) {
-        if (item.kind !== 'item' || !item.container_id) throw new Error('Only documents and list items can be archived.');
+        if (item.kind !== 'item' || !item.container_id) throw new Error(t('archive.onlyItems'));
         const group = groups.get(item.container_id) ?? [];
         group.push(item); groups.set(item.container_id, group);
       }
@@ -26,10 +28,10 @@ export function useArchiveActions(onDone?: (completed: string[]) => void) {
         }
       }
       onDone?.(completed);
-      if (failures.length) throw new Error(`${completed.length ? `${completed.length} updated. ` : ''}${failures.join(' ')}`);
+      if (failures.length) throw new Error([...(completed.length ? [t('archive.updated', { count: completed.length })] : []), ...failures].join(' '));
       return completed;
     },
-    onSuccess: (completed, { archived }) => { toast.success(`${completed.length} ${completed.length === 1 ? 'item' : 'items'} ${archived ? 'archived' : 'unarchived'}`); },
+    onSuccess: (completed, { archived }) => { toast.success(archived ? t('archive.archived', { count: completed.length }) : t('archive.unarchived', { count: completed.length })); },
     onError: error => toast.error(problemMessage(error)),
     onSettled: () => client.invalidateQueries(),
   });

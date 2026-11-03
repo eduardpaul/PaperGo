@@ -94,7 +94,7 @@ it('runs two uploads at a time with progress, failures, retry and an Open link',
   act(() => FakeRequest.sent[2].respond(201, { item: { id: 'item-c', name: 'c.pdf' } }));
   await waitFor(() => expect(onDone).toHaveBeenCalledWith(2));
   expect(screen.getByText('1 upload failed')).toBeTruthy();
-  expect(screen.getByText('Server is busy')).toBeTruthy();
+  expect(screen.getByText('The server is unavailable. Try again shortly.')).toBeTruthy();
   expect(screen.getByText(/Already stored as old.pdf/)).toBeTruthy();
   fireEvent.click(screen.getAllByRole('button', { name: 'Open' })[0]);
   expect(navigate).toHaveBeenCalledWith({ to: '/w/$workspaceId/l/$listId', params: { workspaceId: 'w', listId: 'lib' }, search: { item: 'item-a' } });

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
+import { setLanguage } from '@/i18n';
 import { CurrencyPicker } from './currency-picker';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -24,4 +25,16 @@ it('accepts a custom uppercase three-letter code', async () => {
   fireEvent.click(await screen.findByRole('option', { name: /Add “tzs”/ }));
   expect(change).toHaveBeenCalledWith('TZS');
   expect(screen.getByRole('combobox').getAttribute('aria-expanded')).toBe('false');
+});
+it('names currencies in the UI language', async () => {
+  await act(() => setLanguage('es'));
+  try {
+    render(<CurrencyPicker value="" onChange={vi.fn()} />);
+    expect(screen.getByText('Elige una moneda…')).toBeTruthy();
+    cleanup();
+    render(<CurrencyPicker value="EUR" onChange={vi.fn()} />);
+    expect(screen.getByText(/EUR · € · euro/)).toBeTruthy();
+  } finally {
+    await act(() => setLanguage('en'));
+  }
 });

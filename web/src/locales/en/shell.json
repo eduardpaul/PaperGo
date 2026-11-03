@@ -1,0 +1,34 @@
+{
+  "nav": {
+    "archive": "Archive",
+    "home": "Home",
+    "inbox": "Inbox",
+    "label": "Main",
+    "navigation": "Navigation",
+    "newSmartFolder": "New smart folder",
+    "newWorkspace": "New workspace",
+    "open": "Open navigation",
+    "search": "Search",
+    "settings": "Settings",
+    "smartFolders": "Smart folders",
+    "tasks": "Tasks",
+    "workspaces": "Workspaces"
+  },
+  "palette": {
+    "downloadFile": "Download file",
+    "goTo": "Go to",
+    "lists": "Lists and libraries",
+    "noMatchesSearch": "No matches. Press enter on Search to look through items.",
+    "openFile": "Open file",
+    "placeholder": "Search or jump to…",
+    "title": "Search or jump to"
+  },
+  "account": {
+    "administration": "Administration",
+    "label": "Account",
+    "proxy": "Sign-in is managed by your reverse proxy.",
+    "settings": "Settings",
+    "signOut": "Sign out",
+    "theme": "Theme"
+  }
+}

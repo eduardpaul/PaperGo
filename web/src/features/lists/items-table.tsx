@@ -8,6 +8,7 @@ import { FieldDisplay } from '@/features/fields/display';
 import { downloadContent } from '@/features/documents/transfer';
 import { FileAction, useClickOrOpenFile, useOpenFile } from '@/features/files/file-action';
 import { FileTypeIcon } from '@/features/files/file-types';
+import { useTranslation } from '@/i18n';
 import { useFormat } from '@/lib/preferences';
 import { cn } from '@/lib/utils';
 import type { ListingSort } from '@/api/requests';
@@ -63,6 +64,7 @@ export function ItemsTable({
   /** Names of the folders rows sit in, shown under their names (search results). */
   locations?: Map<string, string>;
 }) {
+  const { t } = useTranslation('lists');
   const format = useFormat();
   const openFile = useOpenFile();
   const clicks = useClickOrOpenFile(onOpen);
@@ -153,7 +155,7 @@ export function ItemsTable({
               <th className="w-10 px-3 py-2">
                 <Checkbox
                   ref={allRef}
-                  aria-label="Select all"
+                  aria-label={t('table.selectAll')}
                   checked={all}
                   onChange={(event) => onToggleAll(event.target.checked)}
                 />
@@ -175,7 +177,7 @@ export function ItemsTable({
                         'group -mx-1 inline-flex items-center gap-1 rounded px-1 hover:text-foreground',
                         active && 'text-foreground',
                       )}
-                      title={`Sort by ${label}`}
+                      title={t('table.sortBy', { column: label })}
                       onClick={() =>
                         onSort(
                           active === undefined
@@ -196,7 +198,7 @@ export function ItemsTable({
                       )}
                     </button>
                   ) : (
-                    <span title="To sort by this column, make it filterable in the list's column settings.">{label}</span>
+                    <span title={t('table.notSortable')}>{label}</span>
                   )}
                 </th>
               );
@@ -240,7 +242,7 @@ export function ItemsTable({
                       tabIndex={-1}
                       checked={selected.has(resource.id)}
                       onChange={(event) => onToggle(resource, event.target.checked)}
-                      aria-label={`Select ${resource.name}`}
+                      aria-label={t('table.select', { name: resource.name })}
                     />
                   </td>
                 )}
@@ -261,13 +263,13 @@ export function ItemsTable({
                           {resource.kind === 'folder' && <Folder className="size-4 shrink-0 text-muted" />}
                           {resource.file && <FileTypeIcon media={resource.file.content_type} />}
                           <span className="truncate">{resource.name}</span>
-                          {resource.archived && <Badge>Archived</Badge>}
+                          {resource.archived && <Badge>{t('system.archived')}</Badge>}
                           {provenance?.get(resource.id) && <Badge>{provenance.get(resource.id)}</Badge>}
-                          {state && <Badge tone={state === 'Published' ? 'success' : 'warning'}>{state}</Badge>}
+                          {state && <Badge tone={state === 'Published' ? 'success' : 'warning'}>{t(`publish.${state}`)}</Badge>}
                         </button>
                         {resource.parent_id && locations?.get(resource.parent_id) && (
                           <span className="flex items-center gap-1 text-xs text-muted">
-                            <FolderOpen className="size-3" /> in {locations.get(resource.parent_id)}
+                            <FolderOpen className="size-3" /> {t('table.in', { folder: locations.get(resource.parent_id) })}
                           </span>
                         )}
                         </div>

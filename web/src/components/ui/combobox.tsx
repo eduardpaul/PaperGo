@@ -1,6 +1,7 @@
 import { Command as CommandPrimitive } from 'cmdk';
 import { Check, ChevronDown, Plus, X } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
+import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { Spinner } from './feedback';
 import { Popover, PopoverContent, PopoverTrigger } from './popover';
@@ -23,7 +24,7 @@ export function Combobox({
   options,
   multiple,
   loading,
-  placeholder = 'Select…',
+  placeholder,
   onSearch,
   onChange,
   onCreate,
@@ -50,6 +51,7 @@ export function Combobox({
   /** The id of the visible label (a <label for> cannot name a custom combobox). */
   'aria-labelledby'?: string;
 }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
   const chosen = new Set(selected.map((o) => o.value));
@@ -91,7 +93,7 @@ export function Combobox({
             }
           }}
         >
-          {selected.length === 0 && <span className="px-1 text-muted">{placeholder}</span>}
+          {selected.length === 0 && <span className="px-1 text-muted">{placeholder ?? t('select.placeholder')}</span>}
           {selected.map((option) =>
             multiple ? (
               <span
@@ -102,7 +104,7 @@ export function Combobox({
                 {option.label}
                 <button
                   type="button"
-                  aria-label={`Remove ${option.label}`}
+                  aria-label={t('actions.remove', { name: option.label })}
                   className="text-muted hover:text-foreground"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -132,14 +134,14 @@ export function Combobox({
                 setText(value);
                 onSearch?.(value);
               }}
-              placeholder="Search…"
+              placeholder={t('search.placeholder')}
               className="h-9 w-full bg-transparent text-sm outline-none placeholder:text-muted"
             />
             {loading && <Spinner />}
           </div>
           <CommandPrimitive.List className="max-h-64 overflow-y-auto p-1">
             <CommandPrimitive.Empty className="px-2 py-4 text-center text-xs text-muted">
-              {loading ? 'Searching…' : 'No matches.'}
+              {loading ? t('status.searching') : t('search.noMatches')}
             </CommandPrimitive.Empty>
             {options.map((option) => (
               <CommandPrimitive.Item
@@ -165,7 +167,7 @@ export function Combobox({
                 }}
                 className="flex cursor-default items-center gap-2 rounded px-2 py-1.5 text-[13px] text-accent data-[selected=true]:bg-surface-muted"
               >
-                <Plus className="size-3.5" /> Add “{text.trim()}”
+                <Plus className="size-3.5" /> {t('actions.add', { text: text.trim() })}
               </CommandPrimitive.Item>
             )}
           </CommandPrimitive.List>

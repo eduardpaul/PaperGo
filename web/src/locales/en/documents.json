@@ -1,0 +1,35 @@
+{
+  "preview": {
+    "generating": "Generating preview…",
+    "unavailable": "Preview unavailable"
+  },
+  "transfer": {
+    "interrupted": "The upload was interrupted. Check the connection and try again.",
+    "nameConflict": "A file with this name is already here."
+  },
+  "uploads": {
+    "alreadyStored": "Already stored as {{names}}",
+    "cancelled": "Cancelled",
+    "close": "Close uploads",
+    "complete_one": "{{count}} upload complete",
+    "complete_other": "{{count}} uploads complete",
+    "failed_one": "{{count}} upload failed",
+    "failed_other": "{{count}} uploads failed",
+    "hide": "Hide uploads",
+    "label": "Uploads",
+    "nameTaken": "A file with this name is already here. Choose Rename, or Replace existing when available.",
+    "progress": "{{percent}}% of {{size}} to {{target}}",
+    "progressLabel": "Upload of {{name}}",
+    "rename": {
+      "fileName": "File name",
+      "submit": "Rename and upload",
+      "title": "Rename upload"
+    },
+    "replaceExisting": "Replace existing",
+    "show": "Show uploads",
+    "uploaded": "Uploaded to {{target}}",
+    "uploading_one": "Uploading {{count}} file",
+    "uploading_other": "Uploading {{count}} files",
+    "waiting": "Waiting · {{size}}"
+  }
+}

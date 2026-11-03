@@ -12,59 +12,58 @@ import { Checkbox, Select } from '@/components/ui/select';
 import { useHasScope } from '@/features/admin/common';
 import { groupsQuery } from '@/features/admin/principals';
 import { usePeopleNames } from '@/features/fields/people';
+import { i18n, useTranslation } from '@/i18n';
 import { problemMessage } from '@/lib/errors';
 import { permissionsQuery } from './access';
 
-export const accessLevels = [
-  { value: 'read', label: 'Read', hint: 'See published content' },
-  { value: 'read_draft', label: 'Read drafts', hint: 'Also see unpublished changes' },
-  { value: 'write', label: 'Edit', hint: 'Add, change and delete content' },
-  { value: 'publish', label: 'Publish', hint: 'Edit and publish' },
-  { value: 'manage', label: 'Manage', hint: 'Everything, including settings and permissions' },
-] as const;
+/** The access levels; their names are `access.levels.<value>`, their meanings `access.summary.<value>`. */
+export const accessLevels = ['read', 'read_draft', 'write', 'publish', 'manage'] as const;
 
+/** An access level's name in the user's language. */
 export function accessLabel(action: string) {
-  return accessLevels.find((level) => level.value === action)?.label ?? action;
+  const level = accessLevels.find((value) => value === action);
+  return level ? i18n.t(`lists:access.levels.${level}`) : action;
 }
 
-const roleNames: Record<string, string> = {
-  workspace_visitor: 'Workspace visitors',
-  workspace_member: 'Workspace members',
-  workspace_owner: 'Workspace owners',
-};
+const roles = ['workspace_visitor', 'workspace_member', 'workspace_owner'] as const;
 
 const principalKey = (grant: Pick<PermissionGrant, 'principal_type' | 'principal_id'>) =>
   `${grant.principal_type}:${grant.principal_id}`;
 
 /** Names and pickable options for people and groups, as far as the caller may read them. */
 function usePrincipals() {
+  const { t } = useTranslation('lists');
   const names = usePeopleNames();
   const people = useQuery(peopleQuery);
   const groups = useQuery({ ...groupsQuery, enabled: useHasScope('group.read') });
   const groupNames = new Map((groups.data ?? []).map((group) => [group.id, group.name]));
-  const nameOf = (grant: Pick<PermissionGrant, 'principal_type' | 'principal_id'>) =>
-    roleNames[grant.principal_type] ??
-    (grant.principal_type === 'group'
+  const role = (type: string) => roles.find((role) => role === type);
+  const nameOf = (grant: Pick<PermissionGrant, 'principal_type' | 'principal_id'>) => {
+    const roleType = role(grant.principal_type);
+    if (roleType) return t(`access.roles.${roleType}`);
+    return grant.principal_type === 'group'
       ? (groupNames.get(grant.principal_id) ?? grant.principal_id)
-      : (names.get(grant.principal_id) ?? grant.principal_id));
+      : (names.get(grant.principal_id) ?? grant.principal_id);
+  };
   const options: ComboboxOption[] = [
     ...(people.data ?? []).map((subject) => ({
       value: `user:${subject}`,
       label: names.get(subject) ?? subject,
-      hint: 'Person',
+      hint: t('access.person'),
     })),
-    ...(groups.data ?? []).map((group) => ({ value: `group:${group.id}`, label: group.name, hint: 'Group' })),
+    ...(groups.data ?? []).map((group) => ({ value: `group:${group.id}`, label: group.name, hint: t('access.group') })),
   ];
   return { nameOf, options };
 }
 
 /** Who can use a list, library, folder or item: inherited from its parent, or its own grants. */
 export function AccessEditor({ resource }: { resource: Resource }) {
+  const { t } = useTranslation(['lists', 'common']);
   const queryClient = useQueryClient();
   const current = useQuery(permissionsQuery(resource.id));
-  if (current.isPending) return <p className="text-sm text-muted">Loading…</p>;
+  if (current.isPending) return <p className="text-sm text-muted">{t('common:status.loading')}</p>;
   if (!current.data)
-    return <p className="text-sm text-muted">Only people who manage this {resource.kind} can see and change its permissions.</p>;
+    return <p className="text-sm text-muted">{t(`access.managersOnly.${resource.kind}`)}</p>;
   return (
     <AccessForm
       key={`${resource.version}:${current.data.inherit}`}
@@ -90,6 +89,7 @@ function AccessForm({
   effective: PermissionGrant[];
   onSaved: () => void;
 }) {
+  const { t } = useTranslation(['lists', 'common']);
   const queryClient = useQueryClient();
   const { nameOf, options } = usePrincipals();
   const [localInherit, setInherit] = useState(inherit);
@@ -110,7 +110,7 @@ function AccessForm({
         },
       }),
     onSuccess: async () => {
-      toast.success('Permissions saved');
+      toast.success(t('access.saved'));
       await queryClient.invalidateQueries({ queryKey: ['resources', resource.id] });
       onSaved();
     },
@@ -130,22 +130,22 @@ function AccessForm({
         <label className="flex items-start gap-2">
           <input type="radio" name="inherit" className="mt-0.5" checked={localInherit} onChange={() => setInherit(true)} />
           <span>
-            <span className="font-medium">Same as the parent</span>
-            <span className="block text-xs text-muted">Changes to the parent’s permissions apply here too.</span>
+            <span className="font-medium">{t('access.inherit')}</span>
+            <span className="block text-xs text-muted">{t('access.inheritHint')}</span>
           </span>
         </label>
         <label className="flex items-start gap-2">
           <input type="radio" name="inherit" className="mt-0.5" checked={!localInherit} onChange={() => setInherit(false)} />
           <span>
-            <span className="font-medium">Its own permissions</span>
-            <span className="block text-xs text-muted">Only the people and groups listed below have access.</span>
+            <span className="font-medium">{t('access.own')}</span>
+            <span className="block text-xs text-muted">{t('access.ownHint')}</span>
           </span>
         </label>
       </fieldset>
       {breaking && (
         <label className="flex items-center gap-2 text-[13px]">
           <Checkbox checked={copyInherited} onChange={(event) => setCopy(event.target.checked)} />
-          Start with the parent’s permissions
+          {t('access.copy')}
         </label>
       )}
       <ul className="flex flex-col divide-y rounded-md border">
@@ -153,14 +153,14 @@ function AccessForm({
           <li key={`${principalKey(grant)}-${grant.action}-${index}`} className="flex items-center gap-2 px-3 py-2">
             <span className="min-w-0 flex-1 truncate text-[13px]">
               {nameOf(grant)}
-              <span className="ml-1 text-xs text-muted">{grant.principal_type === 'group' ? 'Group' : ''}</span>
+              <span className="ml-1 text-xs text-muted">{grant.principal_type === 'group' ? t('access.group') : ''}</span>
             </span>
             {localInherit || breaking ? (
               <span className="text-xs text-muted">{accessLabel(grant.action)}</span>
             ) : (
               <>
                 <Select
-                  aria-label={`Access of ${nameOf(grant)}`}
+                  aria-label={t('access.of', { name: nameOf(grant) })}
                   className="w-36"
                   value={grant.action}
                   onChange={(event) =>
@@ -169,16 +169,16 @@ function AccessForm({
                     )
                   }
                 >
-                  {accessLevels.map((entry) => (
-                    <option key={entry.value} value={entry.value}>
-                      {entry.label}
+                  {accessLevels.map((level) => (
+                    <option key={level} value={level}>
+                      {t(`access.levels.${level}`)}
                     </option>
                   ))}
                 </Select>
                 <Button
                   size="icon"
                   variant="ghost"
-                  aria-label={`Remove ${nameOf(grant)}`}
+                  aria-label={t('common:actions.remove', { name: nameOf(grant) })}
                   onClick={() => setGrants((current) => current.filter((_, i) => i !== index))}
                 >
                   <Trash2 />
@@ -187,7 +187,7 @@ function AccessForm({
             )}
           </li>
         ))}
-        {shown.length === 0 && <li className="px-3 py-2 text-[13px] text-muted">Nobody has access yet.</li>}
+        {shown.length === 0 && <li className="px-3 py-2 text-[13px] text-muted">{t('access.nobody')}</li>}
       </ul>
       {!localInherit && !breaking && (
         <div className="flex flex-col gap-2 sm:flex-row">
@@ -197,14 +197,14 @@ function AccessForm({
               options={options.filter(
                 (option) => !localGrants.some((grant) => principalKey(grant) === option.value),
               )}
-              placeholder="Add a person or group…"
+              placeholder={t('access.addPlaceholder')}
               onChange={setAdding}
             />
           </div>
-          <Select aria-label="Access level" className="sm:w-36" value={level} onChange={(event) => setLevel(event.target.value)}>
+          <Select aria-label={t('access.level')} className="sm:w-36" value={level} onChange={(event) => setLevel(event.target.value)}>
             {accessLevels.map((entry) => (
-              <option key={entry.value} value={entry.value}>
-                {entry.label}
+              <option key={entry} value={entry}>
+                {t(`access.levels.${entry}`)}
               </option>
             ))}
           </Select>
@@ -219,16 +219,16 @@ function AccessForm({
               setAdding([]);
             }}
           >
-            <UserPlus /> Add
+            <UserPlus /> {t('access.add')}
           </Button>
         </div>
       )}
       <p className="text-xs text-muted">
-        {accessLevels.map((entry) => `${entry.label}: ${entry.hint.toLowerCase()}`).join(' · ')}
+        {accessLevels.map((level) => t(`access.summary.${level}`)).join(' · ')}
       </p>
       <div className="flex justify-end">
         <Button type="submit" variant="primary" disabled={save.isPending || (localInherit === inherit && localInherit)}>
-          Save permissions
+          {t('access.save')}
         </Button>
       </div>
     </form>

@@ -1,7 +1,9 @@
 import { Download } from 'lucide-react';
 import { Component, createContext, useContext, useEffect, useRef, type ReactNode, type RefObject } from 'react';
 import { Button } from '@/components/ui/button';
+import { useTranslation } from '@/i18n';
 import { typingIn } from '@/lib/keys';
+import { useFormat } from '@/lib/preferences';
 import { cn } from '@/lib/utils';
 
 /** Keys typed into a field, or pressed with a modifier the viewer does not use, are not viewer shortcuts. */
@@ -56,24 +58,44 @@ export class HandlerBoundary extends Component<{ children: ReactNode; onDownload
   }
   render() {
     if (!this.state.failed) return this.props.children;
-    return (
-      <ViewerMessage title="This file could not be shown.">
-        <span>Reload the page to try again, or download the file.</span>
-        <Button variant="primary" onClick={this.props.onDownload}>
-          <Download /> Download
-        </Button>
-      </ViewerMessage>
-    );
+    return <HandlerFailure onDownload={this.props.onDownload} />;
   }
+}
+
+function HandlerFailure({ onDownload }: { onDownload: () => void }) {
+  const { t } = useTranslation(['files', 'common']);
+  return (
+    <ViewerMessage title={t('viewer.failed')}>
+      <span>{t('viewer.reloadOrDownload')}</span>
+      <Button variant="primary" onClick={onDownload}>
+        <Download /> {t('common:actions.download')}
+      </Button>
+    </ViewerMessage>
+  );
 }
 
 /** The bar of page, zoom and find controls under a handler's canvas. */
 export function ViewerBar({ children, className }: { children: ReactNode; className?: string }) {
+  const { t } = useTranslation('files');
   return (
-    <div role="toolbar" aria-label="File controls" className={cn('flex shrink-0 flex-wrap items-center justify-center gap-1 border-t bg-surface px-2 py-1.5 text-[13px]', className)}>
+    <div role="toolbar" aria-label={t('viewer.controls')} className={cn('flex shrink-0 flex-wrap items-center justify-center gap-1 border-t bg-surface px-2 py-1.5 text-[13px]', className)}>
       {children}
     </div>
   );
+}
+
+/** A zoom choice: fitting the page, named in words, or a scale (1 is 100%). */
+export type ZoomChoice = { value: string; fit: 'viewer.fitWidth' | 'viewer.fitPage' } | { value: string; scale: number };
+
+/** The options of a zoom select, with scales as percentages in the user's number format. */
+export function ZoomOptions({ choices }: { choices: readonly ZoomChoice[] }) {
+  const { t } = useTranslation('files');
+  const format = useFormat();
+  return choices.map((choice) => (
+    <option key={choice.value} value={choice.value}>
+      {'fit' in choice ? t(choice.fit) : format.percent(choice.scale)}
+    </option>
+  ));
 }
 
 /** A state that fills the canvas: loading, a failure, or a question such as a password. */

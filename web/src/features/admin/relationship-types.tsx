@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { SettingsSection } from '@/features/settings/section';
 import { JsonInput } from '@/features/workflows/schema-form';
+import { useTranslation } from '@/i18n';
 import { Field, QueryFeedback, useHasScope } from './common';
 
 export interface RelationshipType {
@@ -26,19 +27,20 @@ export const relationshipTypesQuery = {
 };
 
 export function RelationshipTypesCatalog() {
+  const { t } = useTranslation('admin');
   const listRead = useHasScope('item.read');
   const taxonomyRead = useHasScope('taxonomy.read');
   const canRead = listRead && taxonomyRead;
   const canCreate = useHasScope('item.write');
   const types = useQuery({ ...relationshipTypesQuery, enabled: canRead });
   const [creating, setCreating] = useState(false);
-  if (!canRead) return <p>You need item.read and taxonomy.read to view relationship types.</p>;
+  if (!canRead) return <p>{t('relationshipTypes.needRead')}</p>;
   return (
     <>
       <SettingsSection
-        title="Relationship types"
-        description="Labels belong to the term store. Direction, limits and attributes stay fixed once created."
-        actions={canCreate && <Button onClick={() => setCreating(true)}>New relationship type</Button>}
+        title={t('relationshipTypes.title')}
+        description={t('relationshipTypes.description')}
+        actions={canCreate && <Button onClick={() => setCreating(true)}>{t('relationshipTypes.new')}</Button>}
       >
         <QueryFeedback query={types} />
         <ul className="divide-y">
@@ -46,20 +48,23 @@ export function RelationshipTypesCatalog() {
             <li key={type.id} className="py-3">
               <h3 className="font-medium">{type.term.name}</h3>
               <p className="text-xs text-muted">
-                {type.directed
-                  ? `Directed${type.inverse_label ? ` · inverse: ${type.inverse_label}` : ''}`
-                  : 'Symmetric'}
-                {type.max_incoming ? ` · maximum incoming ${type.max_incoming}` : ''}
-                {type.max_outgoing ? ` · maximum outgoing ${type.max_outgoing}` : ''}
+                {[
+                  type.directed ? t('relationshipTypes.directed') : t('relationshipTypes.symmetric'),
+                  type.directed && type.inverse_label ? t('relationshipTypes.inverse', { label: type.inverse_label }) : '',
+                  type.max_incoming ? t('relationshipTypes.maxIncoming', { max: type.max_incoming }) : '',
+                  type.max_outgoing ? t('relationshipTypes.maxOutgoing', { max: type.max_outgoing }) : '',
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
               </p>
               {!!type.attributes?.fields.length && (
                 <details>
-                  <summary className="text-sm">Attributes</summary>
+                  <summary className="text-sm">{t('relationshipTypes.attributes')}</summary>
                   <ul>
                     {type.attributes.fields.map((field) => (
                       <li key={field.id} className="text-xs">
                         {field.label} · {field.type}
-                        {field.required ? ' · required' : ''}
+                        {field.required ? ` · ${t('relationshipTypes.required')}` : ''}
                       </li>
                     ))}
                   </ul>
@@ -82,6 +87,7 @@ export function CreateRelationshipType({
   onClose: () => void;
   onCreated?: (type: RelationshipType) => void;
 }) {
+  const { t } = useTranslation(['admin', 'common']);
   const client = useQueryClient();
   const [name, setName] = useState('');
   const [directed, setDirected] = useState(false);
@@ -112,32 +118,32 @@ export function CreateRelationshipType({
   return (
     <FormDialog
       open
-      title="Create relationship type"
-      description="Types use the shared term store. Direction and limits stay fixed once created."
-      submitLabel="Create type"
+      title={t('relationshipTypes.create')}
+      description={t('relationshipTypes.createDescription')}
+      submitLabel={t('relationshipTypes.createType')}
       pending={create.isPending}
       onClose={onClose}
       onSubmit={() => create.mutate()}
     >
-      <Field id="relationship-name" label="Name">
+      <Field id="relationship-name" label={t('common:fields.name')}>
         <Input id="relationship-name" required value={name} onChange={(event) => setName(event.target.value)} />
       </Field>
-      <Field id="relationship-direction" label="Direction">
+      <Field id="relationship-direction" label={t('relationshipTypes.direction')}>
         <Select
           id="relationship-direction"
           value={directed ? 'directed' : 'symmetric'}
           onChange={(event) => setDirected(event.target.value === 'directed')}
         >
-          <option value="symmetric">Symmetric</option>
-          <option value="directed">Directed</option>
+          <option value="symmetric">{t('relationshipTypes.symmetric')}</option>
+          <option value="directed">{t('relationshipTypes.directed')}</option>
         </Select>
       </Field>
       {directed && (
         <>
-          <Field id="relationship-inverse" label="Inverse label">
+          <Field id="relationship-inverse" label={t('relationshipTypes.inverseLabel')}>
             <Input id="relationship-inverse" value={inverse} onChange={(event) => setInverse(event.target.value)} />
           </Field>
-          <Field id="relationship-incoming" label="Maximum incoming links per item">
+          <Field id="relationship-incoming" label={t('relationshipTypes.incoming')}>
             <Input
               id="relationship-incoming"
               type="number"
@@ -147,7 +153,7 @@ export function CreateRelationshipType({
               onChange={(event) => setIncoming(event.target.value)}
             />
           </Field>
-          <Field id="relationship-outgoing" label="Maximum outgoing links per item">
+          <Field id="relationship-outgoing" label={t('relationshipTypes.outgoing')}>
             <Input
               id="relationship-outgoing"
               type="number"
@@ -160,16 +166,15 @@ export function CreateRelationshipType({
         </>
       )}
       <details>
-        <summary className="cursor-pointer text-sm">Attribute definitions</summary>
+        <summary className="cursor-pointer text-sm">{t('relationshipTypes.definitions')}</summary>
         <p className="my-2 text-xs text-muted">
-          Optional scalar fields. Each definition has key, label, type and optional required, choices, scale and
-          options. Reference fields, indexing and unique values are unsupported.
+          {t('relationshipTypes.definitionsHint')}
         </p>
         <JsonInput
-          label="Relationship attribute definitions"
+          label={t('relationshipTypes.definitionsLabel')}
           value={attributes}
           onChange={(value) => {
-            if (!Array.isArray(value)) throw new Error('Attributes must be an array.');
+            if (!Array.isArray(value)) throw new Error(t('relationshipTypes.notArray'));
             setAttributes(value);
           }}
         />

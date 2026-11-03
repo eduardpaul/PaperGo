@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/utils';
 import type { ViewerProps } from '../handlers';
 import { TextDocument } from '../text-document';
@@ -80,13 +81,14 @@ export function Rendered({ source, className }: { source: string; className?: st
 }
 
 function Reader({ source }: { source: string }) {
+  const { t } = useTranslation('files');
   const headings = useMemo(() => outline(source), [source]);
   return (
     <div className="flex min-h-full">
       <Rendered source={source} className="min-w-0 flex-1" />
       {headings.length > 2 && (
-        <nav aria-label="Outline" className="sticky top-0 hidden max-h-full w-60 shrink-0 self-start overflow-auto border-l px-4 py-8 text-[13px] xl:block">
-          <p className="mb-2 text-xs font-medium text-muted uppercase">On this page</p>
+        <nav aria-label={t('markdown.outline')} className="sticky top-0 hidden max-h-full w-60 shrink-0 self-start overflow-auto border-l px-4 py-8 text-[13px] xl:block">
+          <p className="mb-2 text-xs font-medium text-muted uppercase">{t('markdown.onThisPage')}</p>
           <ul className="grid gap-1">
             {headings.map((heading) => (
               <li key={heading.id} style={{ paddingLeft: (heading.depth - 1) * 12 }}>

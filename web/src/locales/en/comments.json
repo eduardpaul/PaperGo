@@ -1,0 +1,72 @@
+{
+  "deleted": "This comment was deleted.",
+  "peopleToMention": "People to mention",
+  "cannotSee": "can't see this item",
+  "unseen": "{{names}} can't see this item and won't be told. A mention doesn't share it.",
+  "onPage": "On page {{page}}",
+  "onEarlierPage": "On page {{page}} of an earlier version",
+  "commentBy": "Comment by {{name}}",
+  "workflow": "workflow",
+  "edited": "(edited)",
+  "actionsFor": "Actions for {{name}}'s comment",
+  "editPlaceholder": "Edit the comment",
+  "reply": "Reply",
+  "reopen": "Reopen",
+  "resolve": "Resolve",
+  "resolvedBy": "Resolved by {{name}}",
+  "status": {
+    "all": "All",
+    "open": "Open",
+    "resolved": "Resolved"
+  },
+  "turnedOffBy": {
+    "collection": "this list or library",
+    "default": "default",
+    "deployment": "this deployment",
+    "organization": "the organization",
+    "workspace": "this workspace"
+  },
+  "offTitle": "Comments are off here",
+  "offBody": "Turned off by {{origin}}.",
+  "collaboratorsTitle": "The discussion is for collaborators",
+  "collaboratorsBody": "People who can read this item's drafts discuss it here.",
+  "discussion": "Discussion",
+  "threadViews": "Thread views",
+  "followedMissing": "The comment you followed was deleted or is no longer in this discussion.",
+  "noResolved": "No resolved threads.",
+  "noDiscussion": "No discussion yet.",
+  "threads": "Threads",
+  "loadMore": "Load more threads",
+  "startPlaceholder": "Start a thread — type @ to mention someone",
+  "comment": "Comment",
+  "readOnly": "You can read this discussion but not add to it.",
+  "settings": {
+    "title": "Comments",
+    "saved": "Comment settings saved",
+    "workspaceDescription": "Who discusses items in this workspace. Lists and libraries can choose their own.",
+    "collectionDescription": "Who discusses the items of this list or library.",
+    "discussion": "Discussion",
+    "now": "Now: {{mode}}, set by {{origin}}.",
+    "inherit": "Inherit",
+    "organizationDescription": "Discussions on items across the organization. Turning them off here wins over every workspace and collection.",
+    "enabled": "Comments",
+    "enabledHint": "Off hides every discussion and keeps its comments.",
+    "on": "On",
+    "off": "Off",
+    "defaultMode": "Default discussion",
+    "defaultModeHint": "Workspaces, lists and libraries that choose nothing use this.",
+    "defaultOption": "{{mode}} (default)",
+    "modes": {
+      "collaborators": "Collaborators: people who can read drafts",
+      "off": "Off",
+      "readers": "Readers: everyone who can read the item"
+    },
+    "setBy": {
+      "collection": "this list or library",
+      "default": "the default",
+      "deployment": "the deployment",
+      "organization": "the organization",
+      "workspace": "the workspace"
+    }
+  }
+}

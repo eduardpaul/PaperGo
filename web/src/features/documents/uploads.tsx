@@ -8,6 +8,7 @@ import { FormDialog } from '@/components/form-dialog';
 import { Input, Label } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { api, isApiError } from '@/api/http';
+import { i18n, useTranslation } from '@/i18n';
 import { problemMessage } from '@/lib/errors';
 import { useFormat } from '@/lib/preferences';
 import { cn } from '@/lib/utils';
@@ -49,7 +50,7 @@ interface Uploads {
 /** Upload failures in people's words: the server's generic conflict here means the file name is taken. */
 function uploadError(error: unknown): string {
   if (isApiError(error, 409) && ['conflict', 'name_conflict'].includes(error.code))
-    return 'A file with this name is already here. Choose Rename, or Replace existing when available.';
+    return i18n.t('documents:uploads.nameTaken');
   const message = problemMessage(error);
   return message.charAt(0).toUpperCase() + message.slice(1);
 }
@@ -197,6 +198,7 @@ function UploadTray({
   onRename: (entry: UploadEntry, name: string) => void;
   onReplace: (entry: UploadEntry) => void;
 }) {
+  const { t } = useTranslation(['documents', 'common']);
   const format = useFormat();
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
@@ -206,13 +208,13 @@ function UploadTray({
   const active = entries.filter((entry) => entry.status === 'queued' || entry.status === 'uploading').length;
   const failed = entries.filter((entry) => entry.status === 'failed').length;
   const title = active
-    ? `Uploading ${active} ${active === 1 ? 'file' : 'files'}`
+    ? t('uploads.uploading', { count: active })
     : failed
-      ? `${failed} ${failed === 1 ? 'upload' : 'uploads'} failed`
-      : `${entries.length} ${entries.length === 1 ? 'upload' : 'uploads'} complete`;
+      ? t('uploads.failed', { count: failed })
+      : t('uploads.complete', { count: entries.length });
   return (
     <section
-      aria-label="Uploads"
+      aria-label={t('uploads.label')}
       className="fixed right-4 bottom-4 z-40 flex w-[min(24rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-lg border bg-surface shadow-xl"
     >
       <header className="flex items-center gap-2 border-b px-3 py-2">
@@ -224,14 +226,14 @@ function UploadTray({
           size="icon"
           variant="ghost"
           className="size-7"
-          aria-label={collapsed ? 'Show uploads' : 'Hide uploads'}
+          aria-label={collapsed ? t('uploads.show') : t('uploads.hide')}
           aria-expanded={!collapsed}
           onClick={() => setCollapsed(!collapsed)}
         >
           {collapsed ? <ChevronUp /> : <ChevronDown />}
         </Button>
         {active === 0 && (
-          <Button size="icon" variant="ghost" className="size-7" aria-label="Close uploads" onClick={onClear}>
+          <Button size="icon" variant="ghost" className="size-7" aria-label={t('uploads.close')} onClick={onClear}>
             <X />
           </Button>
         )}
@@ -257,27 +259,27 @@ function UploadTray({
                   </span>
                   {(entry.status === 'queued' || entry.status === 'uploading') && (
                     <Button size="sm" variant="ghost" className="h-6 px-1.5" onClick={() => onCancel(entry.id)}>
-                      Cancel
+                      {t('common:actions.cancel')}
                     </Button>
                   )}
                   {(entry.status === 'failed' || entry.status === 'cancelled') && entry.retryable && (
                     <Button size="sm" variant="ghost" className="h-6 px-1.5" onClick={() => onRetry(entry.id)}>
-                      <RotateCw /> Retry
+                      <RotateCw /> {t('common:actions.retry')}
                     </Button>
                   )}
                   {entry.status === 'failed' && entry.nameConflict && <>
-                    <Button size="sm" onClick={() => { setRenaming(entry); setName(entry.file.name); }}>Rename</Button>
-                    {entry.conflict && <Button size="sm" onClick={() => onReplace(entry)}>Replace existing</Button>}
+                    <Button size="sm" onClick={() => { setRenaming(entry); setName(entry.file.name); }}>{t('common:actions.rename')}</Button>
+                    {entry.conflict && <Button size="sm" onClick={() => onReplace(entry)}>{t('uploads.replaceExisting')}</Button>}
                   </>}
                   {link && (
                     <Button size="sm" variant="ghost" className="h-6 px-1.5" onClick={() => void navigate(link as never)}>
-                      Open
+                      {t('common:actions.open')}
                     </Button>
                   )}
                 </div>
                 {entry.status === 'uploading' && (
                   <progress
-                    aria-label={`Upload of ${entry.file.name}`}
+                    aria-label={t('uploads.progressLabel', { name: entry.file.name })}
                     value={percent}
                     max={100}
                     className="h-1.5 w-full accent-accent"
@@ -285,19 +287,19 @@ function UploadTray({
                 )}
                 <p className={cn('text-xs text-muted', entry.status === 'failed' && 'text-danger')}>
                   {entry.status === 'queued'
-                    ? `Waiting · ${format.fileSize(entry.file.size)}`
+                    ? t('uploads.waiting', { size: format.fileSize(entry.file.size) })
                     : entry.status === 'uploading'
-                      ? `${percent}% of ${format.fileSize(entry.file.size)} to ${entry.target.label}`
+                      ? t('uploads.progress', { percent, size: format.fileSize(entry.file.size), target: entry.target.label })
                       : entry.status === 'done'
-                        ? `Uploaded to ${entry.target.label}`
+                        ? t('uploads.uploaded', { target: entry.target.label })
                         : entry.status === 'cancelled'
-                          ? 'Cancelled'
+                          ? t('uploads.cancelled')
                           : entry.error}
                 </p>
                 {duplicates.length > 0 && (
                   <p className="flex items-center gap-1 text-xs">
                     <AlertTriangle className="size-3 shrink-0 text-warning" />
-                    Already stored as {duplicates.map((duplicate) => duplicate.name).join(', ')}
+                    {t('uploads.alreadyStored', { names: duplicates.map((duplicate) => duplicate.name).join(', ') })}
                   </p>
                 )}
               </li>
@@ -305,8 +307,8 @@ function UploadTray({
           })}
         </ul>
       )}
-      {renaming && <FormDialog open title="Rename upload" submitLabel="Rename and upload" submitDisabled={!name.trim() || /[/\\]/.test(name)} onClose={() => setRenaming(undefined)} onSubmit={() => { onRename(renaming, name.trim()); setRenaming(undefined); }}>
-        <Label htmlFor="upload-name">File name</Label><Input id="upload-name" value={name} maxLength={1024} onChange={(event) => setName(event.target.value)} autoFocus />
+      {renaming && <FormDialog open title={t('uploads.rename.title')} submitLabel={t('uploads.rename.submit')} submitDisabled={!name.trim() || /[/\\]/.test(name)} onClose={() => setRenaming(undefined)} onSubmit={() => { onRename(renaming, name.trim()); setRenaming(undefined); }}>
+        <Label htmlFor="upload-name">{t('uploads.rename.fileName')}</Label><Input id="upload-name" value={name} maxLength={1024} onChange={(event) => setName(event.target.value)} autoFocus />
       </FormDialog>}
     </section>
   );

@@ -1,0 +1,58 @@
+{
+  "title": "Search",
+  "notSetUp": "Search is not set up",
+  "notSetUpBody": "This PaperGo runs without search. Lists and libraries still find items by name.",
+  "description": "Find items and folders across your workspaces by name, fields and keywords.",
+  "searchFor": "Search for",
+  "placeholder": "Words, \"a phrase\", word*, -exclude",
+  "items": "Items",
+  "archive": {
+    "active": "Active",
+    "all": "All",
+    "archived": "Archived"
+  },
+  "find": "Find",
+  "kind": {
+    "all": "Items and folders",
+    "folder": "Folders",
+    "item": "Items"
+  },
+  "contentType": "Content type",
+  "allContentTypes": "All content types",
+  "selectedContentType": "Selected content type",
+  "submit": "Search",
+  "workspaces": "Workspaces",
+  "typeToSearch": "Type to search",
+  "typeToSearchBody": "Every word must match, in names, fields or keywords; other forms of a word match too. Use quotes for a phrase, * for the start of a word and - to leave a word out.",
+  "home": "Home",
+  "workspace": "Workspace",
+  "list": "List",
+  "keyword": "Keyword",
+  "results": "Results",
+  "resultCount_one": "{{count}} result",
+  "resultCount_other": "{{count}} results",
+  "aboutResults_one": "About {{count}} result",
+  "aboutResults_other": "About {{count}} results",
+  "removeFilter": "Remove filter {{label}}",
+  "nothingMatches": "Nothing matches “{{q}}”",
+  "nothingMatchesFilters": "Nothing matches these filters",
+  "moreResults": "More results",
+  "refine": "Refine",
+  "listsAndLibraries": "Lists and libraries",
+  "contentTypes": "Content types",
+  "keywords": "Keywords",
+  "hit": {
+    "archived": "Archived",
+    "draft": "Draft",
+    "folderIn": "Folder in {{where}}",
+    "itemIn": "Item in {{where}}",
+    "page": "page {{page}}",
+    "similar": "similar meaning"
+  },
+  "relationships": {
+    "title": "Relationships",
+    "related": "Related",
+    "none": "No related items.",
+    "more": "More related items"
+  }
+}

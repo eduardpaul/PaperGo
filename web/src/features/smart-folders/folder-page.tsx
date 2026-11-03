@@ -19,6 +19,7 @@ import { ItemContextMenu } from '@/features/lists/item-context-menu';
 import { ItemsGallery } from '@/features/lists/items-layouts';
 import { ItemsTable } from '@/features/lists/items-table';
 import { ConfirmDialog } from '@/features/settings/section';
+import { useTranslation } from '@/i18n';
 import { ClassifyDialog } from './classification';
 import { SmartFolderDialog } from './editor-dialog';
 import { RuleSummary } from './rule-summary';
@@ -27,6 +28,7 @@ export function SmartFolderPage({ folderId, edit = false }: { folderId: string; 
   return <FolderContents key={folderId} folderId={folderId} edit={edit} />;
 }
 function FolderContents({ folderId, edit }: { folderId: string; edit: boolean }) {
+  const { t } = useTranslation(['smartFolders', 'common']);
   const navigate = useNavigate();
   const client = useQueryClient();
   const folder = useQuery({ queryKey: ['smart-folders', folderId], queryFn: () => smartFolder(folderId) });
@@ -65,7 +67,7 @@ function FolderContents({ folderId, edit }: { folderId: string; edit: boolean })
     if (edit) void navigate({ to: '/f/$folderId', params: { folderId }, search: { edit: undefined }, replace: true });
   };
   if (folder.isPending) return <Screen><Skeleton className="h-16" /></Screen>;
-  if (!folder.data) return <Screen><QueryFeedback query={folder} /><EmptyState title="Smart folder unavailable" /></Screen>;
+  if (!folder.data) return <Screen><QueryFeedback query={folder} /><EmptyState title={t('page.unavailable')} /></Screen>;
   const current = folder.data;
   const classification = current.definition.mode === 'classification';
   const byItem = new Map(entries.items.map(entry => [entry.item.id, entry]));
@@ -81,28 +83,28 @@ function FolderContents({ folderId, edit }: { folderId: string; edit: boolean })
   };
   const total = (entries.data?.pages[0] as Page<SmartFolderEntry> | undefined)?.total;
   return <Screen>
-    <PageHeader title={<span className="flex flex-wrap items-center gap-2">{current.name}<Badge>{classification ? 'Classification folder' : 'Saved search'}</Badge></span>} description={current.description || (current.owner_id ? 'Personal smart folder' : 'Shared smart folder')} actions={<>
-      {classification && writable && <Button variant="primary" onClick={() => setClassifying(true)}>Classify item…</Button>}
-      {canManage && <><Button onClick={() => setEditing(true)}>Edit rules…</Button><Button variant="ghost" onClick={() => setDeleting(true)}>Delete…</Button></>}
+    <PageHeader title={<span className="flex flex-wrap items-center gap-2">{current.name}<Badge>{classification ? t('classificationFolder') : t('savedSearch')}</Badge></span>} description={current.description || (current.owner_id ? t('page.personal') : t('page.shared'))} actions={<>
+      {classification && writable && <Button variant="primary" onClick={() => setClassifying(true)}>{t('page.classifyItem')}</Button>}
+      {canManage && <><Button onClick={() => setEditing(true)}>{t('editRules')}</Button><Button variant="ghost" onClick={() => setDeleting(true)}>{t('deleteMenu')}</Button></>}
     </>} />
     <RuleSummary folder={current} />
     <div className="mb-3 flex flex-wrap items-center gap-2">
-      <Select aria-label="Results layout" value={layout} onChange={event => setLayout(event.target.value)}><option value="table">Table</option><option value="gallery">Grid</option></Select>
-      {!grouped && <Select aria-label="Sort results" value={`${sort.field}:${sort.direction}`} onChange={event => { const [field, direction] = event.target.value.split(':'); setSort({ field, direction: direction as 'asc' | 'desc' }); }}><option value="$modified_at:desc">Modified — newest first</option><option value="$modified_at:asc">Modified — oldest first</option><option value="$name:asc">Name — A to Z</option><option value="$name:desc">Name — Z to A</option><option value="$created_at:desc">Created — newest first</option><option value="$created_at:asc">Created — oldest first</option></Select>}
-      {!!groupBy.length && <Button onClick={() => { setGrouping(!grouping); setPath([]); }}>{grouping ? 'Show all results' : 'Browse groups'}</Button>}
-      {total !== undefined && !grouped && <span className="text-xs text-muted">{total} matching items</span>}
+      <Select aria-label={t('page.layout')} value={layout} onChange={event => setLayout(event.target.value)}><option value="table">{t('page.table')}</option><option value="gallery">{t('page.grid')}</option></Select>
+      {!grouped && <Select aria-label={t('page.sort')} value={`${sort.field}:${sort.direction}`} onChange={event => { const [field, direction] = event.target.value.split(':'); setSort({ field, direction: direction as 'asc' | 'desc' }); }}><option value="$modified_at:desc">{t('page.modifiedDesc')}</option><option value="$modified_at:asc">{t('page.modifiedAsc')}</option><option value="$name:asc">{t('page.nameAsc')}</option><option value="$name:desc">{t('page.nameDesc')}</option><option value="$created_at:desc">{t('page.createdDesc')}</option><option value="$created_at:asc">{t('page.createdAsc')}</option></Select>}
+      {!!groupBy.length && <Button onClick={() => { setGrouping(!grouping); setPath([]); }}>{grouping ? t('page.showAll') : t('page.browseGroups')}</Button>}
+      {total !== undefined && !grouped && <span className="text-xs text-muted">{t('matching', { count: total, total })}</span>}
     </div>
-    {grouping && <nav aria-label="Group path" className="mb-3 flex flex-wrap gap-2 text-sm"><button type="button" className="text-accent" onClick={() => { setGrouping(false); setPath([]); }}>All results</button><button type="button" className="text-accent" onClick={() => setPath([])}>Groups</button>{path.map((segment, index) => <button type="button" key={index} onClick={() => setPath(path.slice(0, index + 1))}>/ {segment.label}</button>)}</nav>}
+    {grouping && <nav aria-label={t('page.groupPath')} className="mb-3 flex flex-wrap gap-2 text-sm"><button type="button" className="text-accent" onClick={() => { setGrouping(false); setPath([]); }}>{t('page.allResults')}</button><button type="button" className="text-accent" onClick={() => setPath([])}>{t('page.groups')}</button>{path.map((segment, index) => <button type="button" key={index} onClick={() => setPath(path.slice(0, index + 1))}>/ {segment.label}</button>)}</nav>}
     <QueryFeedback query={grouped ? groups : entries} />
-    {grouped ? <><ul className="divide-y rounded-lg border bg-surface">{groups.items.map(group => <li key={String(group.value)}><button type="button" className="flex w-full justify-between px-4 py-3 text-left text-sm hover:bg-surface-muted" onClick={() => setPath([...path, { value: group.value == null ? null : String(group.value), label: group.label || String(group.value ?? 'No value') }])}><span>{group.label || String(group.value ?? 'No value')}</span><Badge>{group.count}</Badge></button></li>)}</ul>{groups.isSuccess && !groups.items.length && <EmptyState title="No matching groups" />}{groups.hasNextPage && <Button className="mt-3" disabled={groups.isFetchingNextPage} onClick={() => void groups.fetchNextPage()}>More groups</Button>}</> : <>
+    {grouped ? <><ul className="divide-y rounded-lg border bg-surface">{groups.items.map(group => <li key={String(group.value)}><button type="button" className="flex w-full justify-between px-4 py-3 text-left text-sm hover:bg-surface-muted" onClick={() => setPath([...path, { value: group.value == null ? null : String(group.value), label: group.label || String(group.value ?? t('page.noValue')) }])}><span>{group.label || String(group.value ?? t('page.noValue'))}</span><Badge>{group.count}</Badge></button></li>)}</ul>{groups.isSuccess && !groups.items.length && <EmptyState title={t('page.noGroups')} />}{groups.hasNextPage && <Button className="mt-3" disabled={groups.isFetchingNextPage} onClick={() => void groups.fetchNextPage()}>{t('page.moreGroups')}</Button>}</> : <>
       {entries.items.length > 0 && (layout === 'gallery' ? <ItemsGallery previewItems={new Set(entries.items.filter(entry => entry.collection_kind === 'library').map(entry => entry.item.id))} items={entries.items.map(entry => entry.item)} fields={[]} provenance={provenance} onOpen={open} renderItem={renderItem} /> : <ItemsTable rows={entries.items.map(entry => entry.item)} columns={['$name', '$modified_at', '$keywords']} fields={[]} publishing={false} names={names} selectable={false} selected={new Map()} sortable={new Set(['$name', '$modified_at'])} sort={sort} onSort={next => setSort(next ?? { field: '$modified_at', direction: 'desc' })} onToggle={() => {}} onToggleAll={() => {}} onOpen={open} provenance={provenance} renderRow={renderItem} />)}
-      {entries.isSuccess && !entries.items.length && <EmptyState title="No matching items">Matching items appear here automatically as their information changes.</EmptyState>}
-      {classification && writable && entries.items.length > 0 && <details className="mt-4 text-sm"><summary className="cursor-pointer">Remove a classification</summary><ul>{entries.items.filter(entry => entry.item.kind === 'item').map(entry => <li key={entry.item.id} className="flex items-center justify-between gap-2 py-1"><span>{entry.item.name}</span><Button size="sm" onClick={() => setUnclassifying(entry)}>Remove classification</Button></li>)}</ul></details>}
-      {entries.hasNextPage && <Button className="mt-3" disabled={entries.isFetchingNextPage} onClick={() => void entries.fetchNextPage()}>More results</Button>}
+      {entries.isSuccess && !entries.items.length && <EmptyState title={t('page.noItems')}>{t('page.noItemsHint')}</EmptyState>}
+      {classification && writable && entries.items.length > 0 && <details className="mt-4 text-sm"><summary className="cursor-pointer">{t('page.removeSummary')}</summary><ul>{entries.items.filter(entry => entry.item.kind === 'item').map(entry => <li key={entry.item.id} className="flex items-center justify-between gap-2 py-1"><span>{entry.item.name}</span><Button size="sm" onClick={() => setUnclassifying(entry)}>{t('page.removeClassification')}</Button></li>)}</ul></details>}
+      {entries.hasNextPage && <Button className="mt-3" disabled={entries.isFetchingNextPage} onClick={() => void entries.fetchNextPage()}>{t('page.moreResults')}</Button>}
     </>}
     <SmartFolderDialog open={editing || (edit && canManage)} folder={current} onClose={closeEditor} onSaved={closeEditor} />
     {classifying && <ClassifyDialog folder={current} path={activePath} onClose={() => setClassifying(false)} />}
-    <ConfirmDialog open={deleting} onOpenChange={setDeleting} title={`Delete “${current.name}”?`} description="Removes the saved rules. Items stay in their collections." confirm="Delete smart folder" busy={remove.isPending} error={remove.error} onConfirm={() => remove.mutate()} />
-    <ConfirmDialog open={!!unclassifying} onOpenChange={value => !value && setUnclassifying(undefined)} title={`Remove classification from “${unclassifying?.item.name ?? ''}”?`} description="Clears the folder's keywords and equality values. The item stays in its collection; other rules may still match it." confirm="Remove classification" busy={unclassify.isPending} error={unclassify.error} onConfirm={() => unclassify.mutate()} />
+    <ConfirmDialog open={deleting} onOpenChange={setDeleting} title={t('delete.title', { name: current.name })} description={t('delete.description')} confirm={t('delete.confirm')} busy={remove.isPending} error={remove.error} onConfirm={() => remove.mutate()} />
+    <ConfirmDialog open={!!unclassifying} onOpenChange={value => !value && setUnclassifying(undefined)} title={t('page.unclassifyTitle', { name: unclassifying?.item.name ?? '' })} description={t('page.unclassifyDescription')} confirm={t('page.removeClassification')} busy={unclassify.isPending} error={unclassify.error} onConfirm={() => unclassify.mutate()} />
   </Screen>;
 }

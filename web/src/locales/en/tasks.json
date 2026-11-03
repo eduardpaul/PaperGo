@@ -1,0 +1,74 @@
+{
+  "page": {
+    "title": "Tasks",
+    "description": "Approvals and other requests waiting for you.",
+    "new": "New task",
+    "views": "Task views",
+    "list": "Tasks",
+    "loadMore": "Load more",
+    "nothingWaiting": "Nothing is waiting for you",
+    "none": "No tasks yet"
+  },
+  "views": {
+    "all": "All",
+    "approvals": "Approvals",
+    "completed": "Completed",
+    "waiting": "Waiting for me"
+  },
+  "status": {
+    "cancelled": "cancelled",
+    "completed": "completed",
+    "expired": "expired",
+    "open": "open"
+  },
+  "approval": "approval",
+  "highPriority": "high priority",
+  "due": "due {{date}}",
+  "requestedByWorkflow": "Requested {{date}} by a workflow",
+  "requestedBy": "Requested {{date}} by {{person}}",
+  "everyAssignee": "every assignee answers",
+  "waitingForOthers": "You answered; the task waits for the other assignees.",
+  "openItem": "Open {{name}}",
+  "answer": "Answer",
+  "comment": "Comment",
+  "needsComment": "{{outcome}} needs a comment.",
+  "addPeople": "Add people",
+  "reassign": "Reassign",
+  "assignees": "Assignees",
+  "reassignHint": "Answers of assignees you keep count; with every assignee answering, the task completes once everyone left has answered. No assignees means the workspace owners.",
+  "saveAssignees": "Save assignees",
+  "answers": "Answers",
+  "forAssignee": "for {{assignee}}",
+  "quoted": "“{{comment}}”",
+  "create": {
+    "title": "New task",
+    "submit": "Create task",
+    "workspace": "Workspace",
+    "taskTitle": "Title",
+    "assigneesHint": "None means the workspace owners.",
+    "priority": "Priority",
+    "due": "Due date"
+  },
+  "review": {
+    "label": "Review",
+    "promoted": "This file was promoted.",
+    "discarded": "This file was discarded.",
+    "stale": "A file this was made from changed after the review was requested. It can no longer be accepted; only a rejection is possible.",
+    "currentFile": "Current file",
+    "proposed": "Proposed: {{filename}}",
+    "proposedFile": "Proposed file",
+    "metrics": {
+      "bytes": "Size",
+      "height": "Height",
+      "pages": "Pages",
+      "savings_percent": "Savings",
+      "scale": "Scale",
+      "smallest_text_height": "Smallest text height",
+      "source_bytes": "Original size",
+      "source_height": "Original height",
+      "source_width": "Original width",
+      "text_regions": "Text regions",
+      "width": "Width"
+    }
+  }
+}

@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { QueryFeedback, useHasScope } from '@/features/admin/common';
 import { serverMatches } from '@/features/files/trust';
 import { ConfirmDialog, SettingsSection } from '@/features/settings/section';
+import { i18n, Trans, useTranslation } from '@/i18n';
 import { problemMessage } from '@/lib/errors';
 
 interface HostUse {
@@ -23,16 +24,16 @@ export function hostEntry(raw: string): { entry?: string; problem?: string } {
   const value = raw.trim().toLowerCase().replace(/\.$/, '');
   if (!value) return {};
   if (value === '*') return { entry: '*' };
-  if (/^[a-z][a-z0-9+.-]*:\/\//.test(value) || /[/:@?#\s]/.test(value)) return { problem: 'Use a host name without a scheme, port or path, such as docs.example.com.' };
-  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(value)) return { problem: "IP addresses can't be listed; use a host name, or * to trust every public host." };
+  if (/^[a-z][a-z0-9+.-]*:\/\//.test(value) || /[/:@?#\s]/.test(value)) return { problem: i18n.t('admin:trustedHosts.problem.url') };
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(value)) return { problem: i18n.t('admin:trustedHosts.problem.ip') };
   const name = value.startsWith('*.') ? value.slice(2) : value;
-  if (name.includes('*')) return { problem: 'A wildcard is * on its own, or starts the entry, as in *.example.com.' };
-  if (!name.includes('.')) return { problem: 'Use a full host name, such as docs.example.com.' };
+  if (name.includes('*')) return { problem: i18n.t('admin:trustedHosts.problem.wildcard') };
+  if (!name.includes('.')) return { problem: i18n.t('admin:trustedHosts.problem.full') };
   let ascii: string;
   try {
     ascii = new URL(`https://${name}`).hostname;
   } catch {
-    return { problem: `${name} is not a valid host name.` };
+    return { problem: i18n.t('admin:trustedHosts.problem.invalid', { name }) };
   }
   return { entry: value.startsWith('*.') ? `*.${ascii}` : ascii };
 }
@@ -42,6 +43,7 @@ export function hostEntry(raw: string): { entry?: string; problem?: string } {
  * hosts that documents, URL fields and integrations reach without asking.
  */
 export function TrustedHostsPage() {
+  const { t } = useTranslation(['admin', 'common']);
   const client = useQueryClient();
   const canEdit = useHasScope('organization.manage');
   const list = useQuery(trustedHostsQuery);
@@ -62,7 +64,7 @@ export function TrustedHostsPage() {
     onError: (error) => {
       if (isApiError(error, 412)) {
         void client.invalidateQueries({ queryKey: trustedHostsQuery.queryKey });
-        toast.error('Someone else changed the list. It has been reloaded; try again.');
+        toast.error(t('trustedHosts.reloaded'));
       }
     },
   });
@@ -85,8 +87,8 @@ export function TrustedHostsPage() {
 
   return (
     <SettingsSection
-      title="Trusted hosts"
-      description="PaperGo shows and fetches content from these hosts without asking. Links to other hosts ask before they open, their images wait to be shown, and integrations can't use them."
+      title={t('trustedHosts.title')}
+      description={t('trustedHosts.description')}
     >
       <QueryFeedback query={list} />
       {list.data && (
@@ -95,24 +97,24 @@ export function TrustedHostsPage() {
             <Alert tone="warning" className="flex items-start gap-2">
               <TriangleAlert className="mt-0.5 size-4 shrink-0" />
               <span>
-                <strong>*</strong> trusts every public host. Add the hosts your organization uses, then remove <strong>*</strong> to trust only those.
+                <Trans t={t} i18nKey="trustedHosts.wildcardWarning" components={{ strong: <strong /> }} />
               </span>
             </Alert>
           )}
           {hosts.length === 0 ? (
-            <p className="rounded-md border border-dashed px-3 py-4 text-center text-[13px] text-muted">No host is trusted. Every link asks first, no remote image loads, and integrations can't fetch.</p>
+            <p className="rounded-md border border-dashed px-3 py-4 text-center text-[13px] text-muted">{t('trustedHosts.empty')}</p>
           ) : (
-            <ul className="divide-y rounded-md border" aria-label="Trusted hosts">
+            <ul className="divide-y rounded-md border" aria-label={t('trustedHosts.title')}>
               {hosts.map((entry) => {
                 const used = usedBy(entry);
                 return (
                   <li key={entry} className="flex items-center gap-3 px-3 py-2 text-[13px]">
                     <Globe className="size-4 shrink-0 text-muted" />
                     <span className="min-w-0 flex-1 truncate font-mono">{entry}</span>
-                    {canEdit && <span className="text-xs text-muted">{used ? `Used by ${used} integration${used === 1 ? '' : 's'}` : '—'}</span>}
+                    {canEdit && <span className="text-xs text-muted">{used ? t('trustedHosts.usedBy', { count: used }) : '—'}</span>}
                     {canEdit && (
-                      <Button size="sm" variant="ghost" disabled={save.isPending} onClick={() => remove(entry)} aria-label={`Remove ${entry}`}>
-                        Remove
+                      <Button size="sm" variant="ghost" disabled={save.isPending} onClick={() => remove(entry)} aria-label={t('trustedHosts.remove', { entry })}>
+                        {t('common:actions.removeItem')}
                       </Button>
                     )}
                   </li>
@@ -129,29 +131,27 @@ export function TrustedHostsPage() {
               }}
             >
               <div className="flex gap-2">
-                <Input aria-label="Host to trust" placeholder="docs.example.com, *.example.com or *" value={draft} onChange={(event) => setDraft(event.target.value)} aria-invalid={!!parsed.problem || duplicate} />
+                <Input aria-label={t('trustedHosts.hostToTrust')} placeholder={t('trustedHosts.placeholder')} value={draft} onChange={(event) => setDraft(event.target.value)} aria-invalid={!!parsed.problem || duplicate} />
                 <Button type="submit" variant="primary" disabled={!parsed.entry || duplicate || save.isPending}>
-                  <Plus /> Add
+                  <Plus /> {t('trustedHosts.add')}
                 </Button>
               </div>
-              {(parsed.problem || duplicate) && <p className="text-xs text-danger">{parsed.problem ?? `${parsed.entry} is already trusted.`}</p>}
-              {parsed.entry?.startsWith('*.') && <p className="text-xs text-muted">Trusts every subdomain of {parsed.entry.slice(2)}, but not {parsed.entry.slice(2)} itself.</p>}
+              {(parsed.problem || duplicate) && <p className="text-xs text-danger">{parsed.problem ?? t('trustedHosts.duplicate', { entry: parsed.entry })}</p>}
+              {parsed.entry?.startsWith('*.') && <p className="text-xs text-muted">{t('trustedHosts.subdomains', { host: parsed.entry.slice(2) })}</p>}
             </form>
           )}
           {save.isError && !isApiError(save.error, 412) && <Alert>{problemMessage(save.error)}</Alert>}
-          <p className="text-xs text-muted">Applies to images and links in Markdown, links in PDFs, URL fields and calendar integrations. Server-side fetches still reach only public addresses over HTTPS.</p>
+          <p className="text-xs text-muted">{t('trustedHosts.appliesTo')}</p>
         </div>
       )}
       <ConfirmDialog
         open={!!removing}
         onOpenChange={(open) => !open && setRemoving(undefined)}
-        title={`Stop trusting ${removing}?`}
-        description={
-          <>
-            {stopping.map((use) => `${use.integrations} integration${use.integrations === 1 ? '' : 's'} on ${use.host}`).join(', ')} will stop refreshing and show “Host no longer trusted”. Their items stay, and they resume when the host is trusted again.
-          </>
-        }
-        confirm="Remove"
+        title={t('trustedHosts.stopTitle', { entry: removing })}
+        description={t('trustedHosts.stopDescription', {
+          uses: stopping.map((use) => t('trustedHosts.stopUse', { count: use.integrations, host: use.host })).join(', '),
+        })}
+        confirm={t('common:actions.removeItem')}
         busy={save.isPending}
         onConfirm={() => removing && save.mutate(hosts.filter((host) => host !== removing))}
       />

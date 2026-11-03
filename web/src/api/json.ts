@@ -1,4 +1,5 @@
 import { isSafeNumber, LosslessNumber, parse, stringify } from 'lossless-json';
+import { i18n } from '@/i18n';
 
 /** Keep ordinary API counters as numbers and retain exact field values as numeric literals. */
 function parseNumber(value: string): number | LosslessNumber {
@@ -17,7 +18,7 @@ export function stringifyJSON(value: unknown): string | undefined {
 export function numericInput(text: string, integer = false): number | LosslessNumber {
   const input = text.trim();
   const valid = integer ? /^[+-]?\d+$/.test(input) : /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(input);
-  if (!valid) throw new Error(integer ? 'Enter a valid integer.' : 'Enter a valid number.');
+  if (!valid) throw new Error(i18n.t(integer ? 'home:values.invalidInteger' : 'home:values.invalidNumber'));
   const unsigned = input.replace(/^[+-]/, '');
   const [mantissa, exponent] = unsigned.split(/[eE]/);
   const [whole, fraction] = mantissa.split('.');

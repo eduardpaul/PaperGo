@@ -5,6 +5,7 @@ import { api } from '@/api/http';
 import { downloadFile } from '@/api/files';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { useTranslation } from '@/i18n';
 import { QueryFeedback } from './common';
 
 export interface Operation {
@@ -31,6 +32,7 @@ export interface Operation {
   };
 }
 export function OperationProgress({ id, label }: { id: string; label: string }) {
+  const { t } = useTranslation('admin');
   const client = useQueryClient();
   const completed = useRef('');
   const operation = useQuery({
@@ -58,14 +60,19 @@ export function OperationProgress({ id, label }: { id: string; label: string }) 
       <div className="flex items-center gap-2">
         <span className="flex-1 font-medium">{label}</span>
         <Badge tone={data?.status === 'succeeded' ? 'success' : data?.status === 'failed' ? 'danger' : 'neutral'}>
-          {data?.status ?? 'Loading'}
+          {data ? t(`operation.status.${data.status}`) : t('operation.loading')}
         </Badge>
       </div>
-      <progress aria-label={`${label} progress`} value={percent} max={100} className="h-2 w-full accent-accent" />
+      <progress aria-label={t('operation.progress', { label })} value={percent} max={100} className="h-2 w-full accent-accent" />
       {data && (
         <p className="text-xs text-muted">
-          {data.processed ?? 0} processed{data.updated ? ` · ${data.updated} updated` : ''}
-          {data.failed ? ` · ${data.failed} failed` : ''}
+          {[
+            t('operation.processed', { count: data.processed ?? 0 }),
+            data.updated ? t('operation.updated', { count: data.updated }) : '',
+            data.failed ? t('operation.failed', { count: data.failed }) : '',
+          ]
+            .filter(Boolean)
+            .join(' · ')}
         </p>
       )}
       <ul className="text-xs text-danger">
@@ -79,17 +86,19 @@ export function OperationProgress({ id, label }: { id: string; label: string }) 
       {data?.result && (
         <div className="text-xs">
           <p>
-            {data.result.valid === false ? 'Package validation failed.' : data.result.valid ? 'Package is valid.' : ''}
-            {data.result.dry_run && ' Validation only; content was not imported.'}
+            {data.result.valid === false ? t('operation.invalid') : data.result.valid ? t('operation.valid') : ''}
+            {data.result.dry_run && ` ${t('operation.dryRun')}`}
           </p>
           {data.result.rows !== undefined && (
             <p>
-              {data.result.rows} records · {data.result.objects ?? 0} files
+              {t('operation.records', { count: data.result.rows })} · {t('operation.files', { count: data.result.objects ?? 0 })}
             </p>
           )}
           {data.status === 'succeeded' && data.result.valid && data.result.workspace_id && !data.result.dry_run && (
             <Link to="/w/$workspaceId" params={{ workspaceId: data.result.workspace_id }}>
-              Open {data.result.workspace_name ?? 'imported workspace'}
+              {data.result.workspace_name
+                ? t('operation.openWorkspace', { name: data.result.workspace_name })
+                : t('operation.openImported')}
             </Link>
           )}
           <ul>
@@ -104,10 +113,10 @@ export function OperationProgress({ id, label }: { id: string; label: string }) 
       )}
       {data?.kind === 'portability.export' && data.status === 'succeeded' && (
         <Button disabled={download.isPending} onClick={() => download.mutate()}>
-          Download package
+          {t('operation.download')}
         </Button>
       )}
-      <span className="text-xs text-muted">Operation {id}</span>
+      <span className="text-xs text-muted">{t('operation.id', { id })}</span>
     </div>
   );
 }

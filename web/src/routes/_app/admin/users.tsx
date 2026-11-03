@@ -13,6 +13,7 @@ import { Alert, EmptyState } from '@/components/ui/feedback';
 import { Input } from '@/components/ui/input';
 import { Field, QueryFeedback, useHasScope } from '@/features/admin/common';
 import { ConfirmDialog, SettingsSection } from '@/features/settings/section';
+import { useTranslation } from '@/i18n';
 import { problemMessage } from '@/lib/errors';
 import { useFormat } from '@/lib/preferences';
 
@@ -20,6 +21,7 @@ export const Route = createFileRoute('/_app/admin/users')({ component: UsersPage
 const userPath = (subject: string) => `/v1/identity/users/${encodeURIComponent(subject)}`;
 
 function UsersPage() {
+  const { t } = useTranslation('admin');
   const client = useQueryClient();
   const canRead = useHasScope('user.read');
   const canEdit = useHasScope('user.manage');
@@ -57,24 +59,24 @@ function UsersPage() {
   const shown = (users.data ?? []).filter((user) =>
     [user.subject, user.display_name, user.email].some((value) => value.toLowerCase().includes(text)),
   );
-  if (!canRead) return <Alert>You need user.read to view accounts.</Alert>;
+  if (!canRead) return <Alert>{t('users.needRead')}</Alert>;
   return (
     <>
       <SettingsSection
-        title="Users"
-        description="Active accounts. Find an account by subject to inspect or reactivate it."
+        title={t('users.title')}
+        description={t('users.description')}
         actions={
           canEdit && (
             <Button variant="primary" onClick={() => setEditing('new')}>
-              <Plus /> New user
+              <Plus /> {t('users.new')}
             </Button>
           )
         }
       >
         <div className="mb-4 flex flex-wrap gap-2">
           <Input
-            aria-label="Find users"
-            placeholder="Filter active accounts…"
+            aria-label={t('users.find')}
+            placeholder={t('users.filter')}
             value={filter}
             onChange={(event) => setFilter(event.target.value)}
             className="max-w-xs"
@@ -87,14 +89,14 @@ function UsersPage() {
             }}
           >
             <Input
-              aria-label="Account subject"
-              placeholder="Subject of any account"
+              aria-label={t('users.subject')}
+              placeholder={t('users.subjectPlaceholder')}
               value={subject}
               onChange={(event) => setSubject(event.target.value)}
               required
             />
             <Button type="submit" disabled={lookup.isPending}>
-              <Search /> Find
+              <Search /> {t('users.findButton')}
             </Button>
           </form>
         </div>
@@ -105,22 +107,23 @@ function UsersPage() {
               <Avatar name={user.display_name || user.subject} />
               <div className="min-w-0 flex-1">
                 <p className="font-medium">
-                  {user.display_name || user.subject}
-                  {user.subject === me.data?.subject && ' (you)'}
+                  {user.subject === me.data?.subject
+                    ? t('users.you', { name: user.display_name || user.subject })
+                    : user.display_name || user.subject}
                 </p>
                 <p className="truncate text-xs text-muted">
                   {user.subject} · {user.email}
-                  {user.created_at && ` · since ${format.date(user.created_at)}`}
+                  {user.created_at && ` · ${t('users.since', { date: format.date(user.created_at) })}`}
                 </p>
               </div>
-              <Button size="icon" variant="ghost" aria-label={`Edit ${user.subject}`} onClick={() => setEditing(user)}>
+              <Button size="icon" variant="ghost" aria-label={t('users.edit', { subject: user.subject })} onClick={() => setEditing(user)}>
                 <Pencil />
               </Button>
               {canEdit && user.subject !== me.data?.subject && (
                 <Button
                   size="icon"
                   variant="ghost"
-                  aria-label={`Delete ${user.subject}`}
+                  aria-label={t('users.delete', { subject: user.subject })}
                   onClick={() => setDeleting(user)}
                 >
                   <Trash2 />
@@ -129,7 +132,7 @@ function UsersPage() {
             </li>
           ))}
         </ul>
-        {!users.isPending && !users.error && shown.length === 0 && <EmptyState title="No users match" />}
+        {!users.isPending && !users.error && shown.length === 0 && <EmptyState title={t('users.noMatch')} />}
       </SettingsSection>
       {editing && (
         <UserDialog
@@ -142,9 +145,9 @@ function UsersPage() {
       <ConfirmDialog
         open={!!deleting}
         onOpenChange={(open) => !open && setDeleting(undefined)}
-        title={`Delete ${deleting?.subject ?? ''}?`}
-        description="This anonymizes the account and permanently deletes its personal workspace and credentials. Shared content remains. This cannot be undone."
-        confirm="Delete user"
+        title={t('users.deleteTitle', { subject: deleting?.subject ?? '' })}
+        description={t('users.deleteDescription')}
+        confirm={t('users.deleteConfirm')}
         busy={remove.isPending}
         error={remove.error}
         onConfirm={() => deleting && remove.mutate(deleting)}
@@ -164,6 +167,7 @@ function UserDialog({
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
+  const { t } = useTranslation('admin');
   const [subject, setSubject] = useState(user?.subject ?? '');
   const [name, setName] = useState(user?.display_name ?? '');
   const [email, setEmail] = useState(user?.email ?? '');
@@ -193,15 +197,15 @@ function UserDialog({
     <>
       <FormDialog
         open
-        title={user ? `Account ${user.subject}` : 'New user'}
-        submitLabel="Save account"
+        title={user ? t('users.account', { subject: user.subject }) : t('users.new')}
+        submitLabel={t('users.saveAccount')}
         submitDisabled={!canEdit || !!user?.deleted_at}
         pending={save.isPending || status.isPending}
         onClose={onClose}
         onSubmit={() => canEdit && save.mutate()}
       >
         <fieldset disabled={!canEdit || !!user?.deleted_at} className="flex flex-col gap-3">
-          <Field id="user-subject" label="Subject">
+          <Field id="user-subject" label={t('users.subjectLabel')}>
             <Input
               id="user-subject"
               required
@@ -210,17 +214,17 @@ function UserDialog({
               onChange={(event) => setSubject(event.target.value)}
             />
           </Field>
-          <Field id="user-display" label="Display name">
+          <Field id="user-display" label={t('users.displayName')}>
             <Input id="user-display" value={name} onChange={(event) => setName(event.target.value)} maxLength={200} />
           </Field>
-          <Field id="user-email" label="Email">
+          <Field id="user-email" label={t('users.email')}>
             <Input id="user-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
           </Field>
           {user && (
             <div className="flex items-center gap-3">
-              <Badge tone={active ? 'success' : 'danger'}>{active ? 'Active' : 'Disabled'}</Badge>
+              <Badge tone={active ? 'success' : 'danger'}>{active ? t('users.active') : t('users.disabled')}</Badge>
               <Button disabled={status.isPending} onClick={() => setConfirmStatus(true)}>
-                {active ? 'Disable account' : 'Activate account'}
+                {active ? t('users.disableAccount') : t('users.activateAccount')}
               </Button>
             </div>
           )}
@@ -230,13 +234,13 @@ function UserDialog({
       <ConfirmDialog
         open={confirmStatus}
         onOpenChange={setConfirmStatus}
-        title={active ? 'Disable this account?' : 'Activate this account?'}
+        title={active ? t('users.disableTitle') : t('users.activateTitle')}
         description={
           active
-            ? 'The user loses access immediately.'
-            : 'The user can access PaperGo with their assigned scopes and permissions.'
+            ? t('users.disableDescription')
+            : t('users.activateDescription')
         }
-        confirm={active ? 'Disable' : 'Activate'}
+        confirm={active ? t('users.disable') : t('users.activate')}
         busy={status.isPending}
         error={status.error}
         onConfirm={() => status.mutate()}

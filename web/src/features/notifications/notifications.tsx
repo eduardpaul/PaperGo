@@ -17,18 +17,19 @@ import type { Notification } from '@/api/types';
 import { Button } from '@/components/ui/button';
 import { Alert, Skeleton } from '@/components/ui/feedback';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useTranslation } from '@/i18n';
 import { problemMessage } from '@/lib/errors';
 import { useFormat } from '@/lib/preferences';
 import { cn } from '@/lib/utils';
 
-const kinds: Record<Notification['type'], { label: string; icon: LucideIcon }> = {
-  message: { label: 'Message', icon: Mail },
-  'task.assigned': { label: 'Task for you', icon: ClipboardCheck },
-  'task.completed': { label: 'Task answered', icon: CheckCheck },
-  'workflow.failed': { label: 'Workflow failed', icon: AlertTriangle },
-  'comment.mentioned': { label: 'Mention', icon: AtSign },
-  'comment.replied': { label: 'Reply', icon: MessageSquare },
-};
+const kinds = {
+  message: { label: 'kinds.message', icon: Mail },
+  'task.assigned': { label: 'kinds.taskAssigned', icon: ClipboardCheck },
+  'task.completed': { label: 'kinds.taskCompleted', icon: CheckCheck },
+  'workflow.failed': { label: 'kinds.workflowFailed', icon: AlertTriangle },
+  'comment.mentioned': { label: 'kinds.commentMentioned', icon: AtSign },
+  'comment.replied': { label: 'kinds.commentReplied', icon: MessageSquare },
+} as const satisfies Record<Notification['type'], { label: string; icon: LucideIcon }>;
 
 /** Marks notifications read, or with no IDs all of them, and deletes them. */
 export function useNotificationActions() {
@@ -75,6 +76,7 @@ export function useOpenNotification() {
 
 /** One notification: what it is, its title and message, who and when. */
 export function NotificationRow({ notification, onOpen }: { notification: Notification; onOpen: () => void }) {
+  const { t } = useTranslation('notifications');
   const format = useFormat();
   const kind = kinds[notification.type] ?? kinds.message;
   const unread = !notification.read_at;
@@ -97,17 +99,18 @@ export function NotificationRow({ notification, onOpen }: { notification: Notifi
           <span className="line-clamp-2 block text-xs whitespace-pre-line text-muted">{notification.body}</span>
         )}
         <span className="block text-xs text-muted">
-          {kind.label}
+          {t(kind.label)}
           {notification.sender ? ` · ${notification.sender}` : ''} · {format.dateTime(notification.created_at)}
         </span>
       </span>
-      {unread && <span className="mt-1.5 size-2 shrink-0 rounded-full bg-accent" aria-label="Unread" />}
+      {unread && <span className="mt-1.5 size-2 shrink-0 rounded-full bg-accent" aria-label={t('unread')} />}
     </button>
   );
 }
 
 /** The top bar's bell: the unread count and the latest notifications. */
 export function NotificationBell() {
+  const { t } = useTranslation('notifications');
   const [open, setOpen] = useState(false);
   const unread = useQuery(unreadNotificationsQuery);
   const latest = useInfiniteQuery({ ...notificationsQuery(false), enabled: open });
@@ -122,7 +125,7 @@ export function NotificationBell() {
           variant="ghost"
           size="icon"
           className="relative"
-          aria-label={count ? `Notifications, ${count} unread` : 'Notifications'}
+          aria-label={count ? t('bellUnread', { unread: count }) : t('title')}
         >
           <Bell />
           {count > 0 && (
@@ -134,23 +137,23 @@ export function NotificationBell() {
       </PopoverTrigger>
       <PopoverContent className="w-96 max-w-[calc(100vw-2rem)] p-0">
         <div className="flex items-center justify-between border-b px-3 py-2">
-          <p className="text-[13px] font-semibold">Notifications</p>
+          <p className="text-[13px] font-semibold">{t('title')}</p>
           <Button
             size="sm"
             variant="ghost"
             disabled={!count || markRead.isPending}
             onClick={() => markRead.mutate(undefined)}
           >
-            Mark all read
+            {t('markAllRead')}
           </Button>
         </div>
         <div className="max-h-[60vh] overflow-y-auto p-1">
           {latest.isLoading && <Skeleton className="m-2 h-12" />}
           {latest.error && <Alert>{problemMessage(latest.error)}</Alert>}
           {latest.isSuccess && rows.length === 0 && (
-            <p className="px-3 py-6 text-center text-[13px] text-muted">Nothing new</p>
+            <p className="px-3 py-6 text-center text-[13px] text-muted">{t('nothingNew')}</p>
           )}
-          <ul aria-label="Latest notifications">
+          <ul aria-label={t('latest')}>
             {rows.map((notification) => (
               <li key={notification.id}>
                 <NotificationRow
@@ -167,7 +170,7 @@ export function NotificationBell() {
         </div>
         <div className="border-t px-3 py-2 text-center">
           <Link to="/notifications" className="text-[13px] text-accent hover:underline" onClick={() => setOpen(false)}>
-            View all notifications
+            {t('viewAll')}
           </Link>
         </div>
       </PopoverContent>

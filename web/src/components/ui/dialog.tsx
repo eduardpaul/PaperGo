@@ -1,6 +1,7 @@
 import { X } from 'lucide-react';
 import { Dialog as Primitive } from 'radix-ui';
 import type * as React from 'react';
+import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/utils';
 
 export const Dialog = Primitive.Root;
@@ -13,6 +14,7 @@ export function DialogContent({
   hideClose,
   ...props
 }: React.ComponentProps<typeof Primitive.Content> & { hideClose?: boolean }) {
+  const { t } = useTranslation();
   return (
     <Primitive.Portal>
       <Primitive.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px]" />
@@ -27,7 +29,7 @@ export function DialogContent({
         {!hideClose && (
           <Primitive.Close
             className="absolute top-3 right-3 rounded-md p-1 text-muted hover:bg-surface-muted"
-            aria-label="Close"
+            aria-label={t('actions.close')}
           >
             <X className="size-4" />
           </Primitive.Close>

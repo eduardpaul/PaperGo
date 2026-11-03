@@ -12,6 +12,7 @@ import { EmptyState, Skeleton } from '@/components/ui/feedback';
 import { Card } from '@/components/ui/card';
 import { QueryFeedback } from '@/features/admin/common';
 import { useValueNames } from '@/features/fields/names';
+import { Trans, useTranslation } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { ItemsTable } from './items-table';
 
@@ -44,13 +45,14 @@ function termOf(selection?: NavigationSelection) {
 }
 
 function Count({ node, subterms }: { node: NavigationNode; subterms: boolean }) {
+  const { t } = useTranslation('lists');
   const below = node.subtree_count - node.count;
   return (
     <span className="ml-auto flex shrink-0 items-center gap-1">
-      <Badge aria-label={`${node.count} items`}>{node.count}</Badge>
+      <Badge aria-label={t('navigation.items', { count: node.count })}>{node.count}</Badge>
       {!subterms && below > 0 && (
-        <span className="text-xs text-muted" title={`${below} more items hold a term below ${node.name}`}>
-          +{below} below
+        <span className="text-xs text-muted" title={t('navigation.belowTitle', { count: below, name: node.name })}>
+          {t('navigation.below', { count: below })}
         </span>
       )}
     </span>
@@ -76,10 +78,11 @@ function TreeLevel({
   onSelect: (term: string) => void;
   onToggle: (term: string) => void;
 }) {
+  const { t } = useTranslation(['lists', 'common']);
   const level = useLevel(tree, parentId);
   if (level.isPending) return <Skeleton className="m-1 h-6" />;
   if (level.isError) return <QueryFeedback query={level} />;
-  if (level.items.length === 0) return <p className={cn('py-1 text-xs text-muted', depth > 0 ? 'pl-8' : 'px-2')}>No terms</p>;
+  if (level.items.length === 0) return <p className={cn('py-1 text-xs text-muted', depth > 0 ? 'pl-8' : 'px-2')}>{t('navigation.noTerms')}</p>;
   return (
     <ul role="group" className={cn(depth > 0 && 'ml-3 border-l pl-1')}>
       {level.items.map((node) => {
@@ -90,7 +93,7 @@ function TreeLevel({
               {node.has_children ? (
                 <button
                   type="button"
-                  aria-label={`${open ? 'Collapse' : 'Expand'} ${node.name}`}
+                  aria-label={open ? t('navigation.collapse', { name: node.name }) : t('navigation.expand', { name: node.name })}
                   className="rounded p-0.5 hover:bg-surface-muted"
                   onClick={() => onToggle(node.term_id)}
                 >
@@ -127,7 +130,7 @@ function TreeLevel({
       {level.hasNextPage && (
         <li>
           <Button size="sm" variant="ghost" disabled={level.isFetchingNextPage} onClick={() => void level.fetchNextPage()}>
-            {level.isFetchingNextPage ? 'Loading…' : 'More terms'}
+            {level.isFetchingNextPage ? t('common:status.loading') : t('navigation.moreTerms')}
           </Button>
         </li>
       )}
@@ -151,6 +154,7 @@ function useTermPath(term?: string) {
 
 /** One field's tree with its mode, an entry clearing its term and its "No value" node. */
 function FieldTree({ tree, selection, onOpen }: { tree: Tree; selection?: NavigationSelection; onOpen: (term?: string) => void }) {
+  const { t } = useTranslation('lists');
   const roots = useLevel(tree);
   const info = levelInfo(roots);
   const term = termOf(selection);
@@ -170,7 +174,7 @@ function FieldTree({ tree, selection, onOpen }: { tree: Tree; selection?: Naviga
   const subterms = !!info?.include_subterms;
   // Narrow screens stack the trees above the items, so trees start closed there; the header names the opened term.
   const [initiallyOpen] = useState(() => typeof window.matchMedia !== 'function' || window.matchMedia('(min-width: 768px)').matches);
-  const opened = selection?.no_value ? `No ${tree.label.toLowerCase()}` : path.data?.at(-1)?.name;
+  const opened = selection?.no_value ? t('navigation.none', { label: tree.label.toLowerCase() }) : path.data?.at(-1)?.name;
   return (
     <details open={initiallyOpen} className="group rounded-lg border bg-surface p-2 text-sm">
       <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 px-1">
@@ -178,8 +182,8 @@ function FieldTree({ tree, selection, onOpen }: { tree: Tree; selection?: Naviga
         <Tags className="size-4 text-muted" />
         <span className="font-medium">{tree.label}</span>
         {info && (
-          <Badge className="ml-auto" title={subterms ? 'A term shows the items of the terms below it too' : 'A term shows only the items tagged with it'}>
-            {subterms ? 'Includes subterms' : 'This term only'}
+          <Badge className="ml-auto" title={subterms ? t('navigation.subtermsTitle') : t('navigation.termOnlyTitle')}>
+            {subterms ? t('navigation.subterms') : t('navigation.termOnly')}
           </Badge>
         )}
         {selection && (
@@ -187,19 +191,19 @@ function FieldTree({ tree, selection, onOpen }: { tree: Tree; selection?: Naviga
             <span className="truncate font-medium text-accent">{opened ?? '…'}</span>
             <button
               type="button"
-              aria-label={`Clear ${tree.label}`}
+              aria-label={t('navigation.clear', { label: tree.label })}
               className="ml-auto text-muted hover:text-foreground hover:underline"
               onClick={(event) => {
                 event.preventDefault();
                 select(undefined);
               }}
             >
-              Clear
+              {t('navigation.clearShort')}
             </button>
           </span>
         )}
       </summary>
-      <nav aria-label={`${tree.label} navigation`} className="mt-1">
+      <nav aria-label={t('navigation.tree', { label: tree.label })} className="mt-1">
         {roots.isError ? (
           <QueryFeedback query={roots} />
         ) : (
@@ -221,7 +225,7 @@ function FieldTree({ tree, selection, onOpen }: { tree: Tree; selection?: Naviga
             className={cn('mt-1 flex w-full items-center gap-2 rounded px-2 py-0.5 text-left text-muted', term === noTerm && 'bg-accent-soft text-accent')}
             onClick={() => select(noTerm)}
           >
-            <Folder className="size-4" /> No {tree.label.toLowerCase()}
+            <Folder className="size-4" /> {t('navigation.none', { label: tree.label.toLowerCase() })}
             <Badge className="ml-auto">{info.no_value_count}</Badge>
           </button>
         )}
@@ -232,12 +236,13 @@ function FieldTree({ tree, selection, onOpen }: { tree: Tree; selection?: Naviga
 
 /** An opened term as a removable chip whose ancestors open the parent terms. */
 function SelectionChip({ tree, selection, onOpen }: { tree: Tree; selection: NavigationSelection; onOpen: (term?: string) => void }) {
+  const { t } = useTranslation(['lists', 'common']);
   const path = useTermPath(selection.term_id);
   return (
     <span className="inline-flex items-center gap-1 rounded-full border bg-surface px-2 py-0.5">
       <span className="text-muted">{tree.label}:</span>
       {selection.no_value ? (
-        <span className="font-medium">No {tree.label.toLowerCase()}</span>
+        <span className="font-medium">{t('navigation.none', { label: tree.label.toLowerCase() })}</span>
       ) : (
         path.data?.map((entry, index) =>
           index === path.data.length - 1 ? (
@@ -254,7 +259,7 @@ function SelectionChip({ tree, selection, onOpen }: { tree: Tree; selection: Nav
           ),
         ) ?? <Skeleton className="h-4 w-16" />
       )}
-      <button type="button" aria-label={`Remove ${tree.label}`} className="rounded-full p-0.5 hover:bg-surface-muted" onClick={() => onOpen(undefined)}>
+      <button type="button" aria-label={t('common:actions.remove', { name: tree.label })} className="rounded-full p-0.5 hover:bg-surface-muted" onClick={() => onOpen(undefined)}>
         <X className="size-3" />
       </button>
     </span>
@@ -263,25 +268,31 @@ function SelectionChip({ tree, selection, onOpen }: { tree: Tree; selection: Nav
 
 /** What an opened term shows: its items alone, or those below it too. */
 function SelectionNote({ tree, selection }: { tree: Tree; selection: NavigationSelection }) {
+  const { t } = useTranslation('lists');
   const path = useTermPath(selection.term_id);
   const subterms = !!levelInfo(useLevel(tree))?.include_subterms;
   const current = path.data?.at(-1);
   const parent = useLevel(tree, path.data && path.data.length > 1 ? path.data.at(-2)!.id : undefined, !!current && !subterms);
   const self = parent.items.find((entry) => entry.term_id === selection.term_id);
-  if (selection.no_value) return <li>No {tree.label.toLowerCase()}: the items without a {tree.label.toLowerCase()}.</li>;
+  if (selection.no_value) return <li>{t('navigation.noteNone', { label: tree.label.toLowerCase() })}</li>;
   if (!current) return null;
   const below = !subterms && self ? self.subtree_count - self.count : 0;
   return (
     <li>
-      <span className="font-medium text-foreground">{current.name}</span>
-      {subterms ? ': its items and those tagged with any term below it.' : ': only the items tagged with it'}
-      {!subterms && (below > 0 ? `; ${below} more ${below === 1 ? 'is' : 'are'} tagged below it, open a subterm to see ${below === 1 ? 'it' : 'them'}.` : '.')}
+      <Trans
+        t={t}
+        i18nKey={subterms ? 'navigation.noteSubterms' : below > 0 ? 'navigation.noteBelow' : 'navigation.noteOnly'}
+        count={below}
+        values={{ term: current.name }}
+        components={{ term: <span className="font-medium text-foreground" /> }}
+      />
     </li>
   );
 }
 
 /** The terms below a tree's opened term as folders; at the top level, its roots and the items without a term. */
 function Folders({ tree, parentId, onOpen }: { tree: Tree; parentId?: string; onOpen: (term: string) => void }) {
+  const { t } = useTranslation('lists');
   const roots = useLevel(tree);
   const level = useLevel(tree, parentId);
   const info = levelInfo(roots);
@@ -292,16 +303,16 @@ function Folders({ tree, parentId, onOpen }: { tree: Tree; parentId?: string; on
   if (level.items.length === 0 && !noValue) {
     return parentId ? null : (
       <Card>
-        <EmptyState icon={Tags} title={`No ${tree.label.toLowerCase()} yet`}>
-          Tag items with {tree.label.toLowerCase()} to browse them here.
+        <EmptyState icon={Tags} title={t('navigation.emptyTitle', { label: tree.label.toLowerCase() })}>
+          {t('navigation.emptyHint', { label: tree.label.toLowerCase() })}
         </EmptyState>
       </Card>
     );
   }
   return (
     <div className="mb-4">
-      <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">{parentId ? 'Subterms' : `Browse by ${tree.label.toLowerCase()}`}</h3>
-      <ul aria-label={parentId ? 'Subterms' : `${tree.label} terms`} className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+      <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">{parentId ? t('navigation.subtermsHeading') : t('navigation.browseBy', { label: tree.label.toLowerCase() })}</h3>
+      <ul aria-label={parentId ? t('navigation.subtermsHeading') : t('navigation.terms', { label: tree.label })} className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
       {level.items.map((entry) => (
         <li key={entry.term_id}>
           <button
@@ -323,13 +334,13 @@ function Folders({ tree, parentId, onOpen }: { tree: Tree; parentId?: string; on
             onClick={() => onOpen(noTerm)}
           >
             <Folder className="size-4 shrink-0" />
-            <span className="truncate">No {tree.label.toLowerCase()}</span>
+            <span className="truncate">{t('navigation.none', { label: tree.label.toLowerCase() })}</span>
             <Badge className="ml-auto">{noValue}</Badge>
           </button>
         </li>
       )}
       </ul>
-      {!parentId && <p className="mt-3 text-sm text-muted">Open a term to see its items.</p>}
+      {!parentId && <p className="mt-3 text-sm text-muted">{t('navigation.openTerm')}</p>}
     </div>
   );
 }
@@ -358,6 +369,7 @@ function NodeItems({
   renderItem?: (item: Resource, element: ReactElement) => ReactNode;
   onOpen: (item: Resource) => void;
 }) {
+  const { t } = useTranslation(['lists', 'common']);
   const call = navigationItemsRequest(view.id, selected);
   const items = useApiPages<Resource>(['resources', view.container_id, 'navigation-items', view.id, selected], call.path, {
     query: call.query,
@@ -370,11 +382,11 @@ function NodeItems({
   if (items.items.length === 0) {
     return (
       <Card>
-        <EmptyState icon={FolderOpen} title={selected.length > 1 && match === 'all' ? 'No items have all of these terms' : 'No items here'}>
-          {selected.length > 1 && match === 'all' ? 'Remove a term to see more items.' : 'Open another term to see its items.'}
+        <EmptyState icon={FolderOpen} title={selected.length > 1 && match === 'all' ? t('navigation.noneAll') : t('navigation.noneHere')}>
+          {selected.length > 1 && match === 'all' ? t('navigation.removeTermHint') : t('navigation.openAnother')}
           <div className="mt-3">
             <Button size="sm" onClick={onBack}>
-              {selected.length > 1 ? 'Remove the last opened term' : 'Clear term'}
+              {selected.length > 1 ? t('navigation.removeLast') : t('navigation.clearTerm')}
             </Button>
           </div>
         </EmptyState>
@@ -385,8 +397,7 @@ function NodeItems({
     <>
       {first?.total !== undefined && (
         <p role="status" className="mb-2 text-xs text-muted">
-          {first.total}
-          {first.total_capped ? '+' : ''} {first.total === 1 && !first.total_capped ? 'item' : 'items'}
+          {first.total_capped ? t('navigation.totalCapped', { total: first.total }) : t('navigation.total', { count: first.total, total: first.total })}
         </p>
       )}
       <ItemsTable
@@ -407,7 +418,7 @@ function NodeItems({
       />
       {items.hasNextPage && (
         <Button className="mt-2" size="sm" variant="ghost" disabled={items.isFetchingNextPage} onClick={() => void items.fetchNextPage()}>
-          {items.isFetchingNextPage ? 'Loading…' : 'Load more'}
+          {items.isFetchingNextPage ? t('common:status.loading') : t('loadMore')}
         </Button>
       )}
     </>
@@ -441,11 +452,12 @@ export function ItemsNavigation({
   renderItem?: (item: Resource, element: ReactElement) => ReactNode;
   onOpen: (item: Resource) => void;
 }) {
+  const { t } = useTranslation('lists');
   const match = view.settings?.match ?? 'all';
   const trees: Tree[] = (view.settings?.fields ?? []).map(({ field }) => ({
     viewId: view.id,
     field,
-    label: field === '$keywords' ? 'Keywords' : (fields.find((entry) => entry.key === field)?.label ?? field),
+    label: field === '$keywords' ? t('columns.keywords') : (fields.find((entry) => entry.key === field)?.label ?? field),
     // Matching all, a tree counts within the terms opened in the others; matching any, those add items instead.
     others: match === 'all' ? selected.filter((entry) => entry.field !== field) : [],
   }));
@@ -465,13 +477,13 @@ export function ItemsNavigation({
         {opened.length > 0 && (
           <div className="mb-3 grid gap-2 text-sm">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-muted">{opened.length > 1 ? `Items matching ${match} of` : 'Items in'}</span>
-              <ul aria-label="Opened terms" className="flex flex-wrap items-center gap-2">
+              <span className="text-muted">{opened.length > 1 ? (match === 'any' ? t('navigation.matchingAny') : t('navigation.matchingAll')) : t('navigation.itemsIn')}</span>
+              <ul aria-label={t('navigation.opened')} className="flex flex-wrap items-center gap-2">
                 {opened.map((selection, index) => {
                   const tree = trees.find((entry) => entry.field === selection.field)!;
                   return (
                     <li key={selection.field} className="flex items-center gap-2">
-                      {index > 0 && <span className="text-xs font-medium uppercase text-muted">{match === 'all' ? 'and' : 'or'}</span>}
+                      {index > 0 && <span className="text-xs font-medium uppercase text-muted">{match === 'all' ? t('navigation.and') : t('navigation.or')}</span>}
                       <SelectionChip tree={tree} selection={selection} onOpen={(term) => open(tree.field, term)} />
                     </li>
                   );
@@ -479,7 +491,7 @@ export function ItemsNavigation({
               </ul>
               {opened.length > 1 && (
                 <Button size="sm" variant="ghost" onClick={() => onSelect([])}>
-                  Clear all
+                  {t('navigation.clearAll')}
                 </Button>
               )}
             </div>

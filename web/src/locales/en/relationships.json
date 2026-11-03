@@ -1,0 +1,123 @@
+{
+  "title": "Relationships",
+  "description": "Follow the connections between your workspace’s items.",
+  "workspace": "Workspace",
+  "thisWorkspace": "this workspace",
+  "directed": "Directed",
+  "symmetric": "Symmetric",
+  "incoming": "Incoming",
+  "outgoing": "Outgoing",
+  "connections": "Connections",
+  "loadingConnections": "Loading connections",
+  "types": {
+    "title": "Relationship types",
+    "hint": "Choose a connection to explore.",
+    "filter": "Filter relationship types",
+    "filterPlaceholder": "Filter types…",
+    "all": "All relationships",
+    "untyped": "Untyped",
+    "untypedHint": "No type assigned",
+    "noMatches": "No matching types.",
+    "none": "No typed connections here.",
+    "more": "More types",
+    "browse": "Browse types"
+  },
+  "find": {
+    "label": "Find an item to explore",
+    "placeholder": "Find an item by name…",
+    "failed": "Search failed. Retry",
+    "more": "More matches",
+    "hint": "Search item names from the beginning."
+  },
+  "filters": {
+    "collection": "Filter collection",
+    "allCollections": "All lists and libraries",
+    "moreCollections": "More collections",
+    "scope": "Filter workspace scope",
+    "direction": "Filter direction",
+    "allDirections": "All directions",
+    "clear": "Clear filters"
+  },
+  "scope": {
+    "all": "All connections",
+    "internal": "Within this workspace",
+    "external": "Across workspaces"
+  },
+  "trail": {
+    "back": "Back in exploration",
+    "label": "Exploration trail",
+    "root": "Workspace connections",
+    "steps_one": "{{count}} step",
+    "steps_other": "{{count}} steps"
+  },
+  "focus": {
+    "loading": "Loading item…",
+    "unavailable": "Item unavailable",
+    "showingTo": "Showing connections to {{workspace}}"
+  },
+  "view": {
+    "label": "Connection view",
+    "list": "List",
+    "graph": "Graph"
+  },
+  "unavailable": {
+    "title": "This item is unavailable here",
+    "hint": "It may have moved, become unreadable, or no longer connect to this workspace."
+  },
+  "start": {
+    "title": "Start with an item",
+    "hint": "Find an item above, or choose one in the list to see its immediate connections.",
+    "browse": "Browse connections"
+  },
+  "empty": {
+    "title": "No relationships yet",
+    "hint": "Relationships added to items will appear here. Start from an item’s Relationships tab.",
+    "filteredTitle": "No connections match",
+    "filteredHint": "Try another type or broaden your filters.",
+    "allTypes": "Show all relationship types"
+  },
+  "loaded_one": "{{formatted}} connection loaded",
+  "loaded_other": "{{formatted}} connections loaded",
+  "recentPages": "Most recent pages",
+  "refreshPages": "Refresh loaded pages",
+  "loadMore": "Load more",
+  "list": {
+    "label": "Relationship connections",
+    "inspect": "Inspect {{type}} relationship between {{source}} and {{target}}",
+    "sourceToTarget": "Source to target",
+    "symmetricConnection": "Symmetric connection",
+    "explore": "Explore {{name}}",
+    "otherWorkspace": "Other workspace"
+  },
+  "inspector": {
+    "label": "Inspector",
+    "relationshipDetails": "Relationship details",
+    "itemDetails": "Item details",
+    "close": "Close relationship details",
+    "openItem": "Open item",
+    "exploreItem": "Explore item",
+    "showingTo": "Showing connections to {{workspace}}.",
+    "unavailable": "Relationship unavailable",
+    "unavailableHint": "It may have been removed or become unreadable.",
+    "relationship": "Relationship",
+    "inverse": "Inverse: {{label}}",
+    "source": "Source",
+    "target": "Target",
+    "connectedItem": "Connected item",
+    "attributes": "Attributes",
+    "noAttributes": "No attributes on this relationship.",
+    "created": "Created {{date}}"
+  },
+  "graph": {
+    "emptyHint": "Broaden the type, direction, or workspace filters to explore more.",
+    "viewList": "View connections in list",
+    "summary_one": "Immediate connections · {{count}} related item",
+    "summary_other": "Immediate connections · {{count}} related items",
+    "label": "Immediate relationship graph",
+    "inspect": "Inspect item {{name}}",
+    "exploreFrom": "Explore from {{name}}",
+    "exploreHere": "Explore from here",
+    "truncated": "Showing part of this item’s connections. Refine your filters or use the list to see more.",
+    "footer": "Each step shows a new neighborhood. Use the list for all connections."
+  }
+}

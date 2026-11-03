@@ -13,9 +13,11 @@ import { GroupInbox } from '@/features/admin/group-inbox';
 import { groupsQuery, Principals } from '@/features/admin/principals';
 import type { IdentityGroup } from '@/features/admin/principals';
 import { ConfirmDialog, SettingsSection } from '@/features/settings/section';
+import { useTranslation } from '@/i18n';
 
 export const Route = createFileRoute('/_app/admin/groups')({ component: GroupsPage });
 function GroupsPage() {
+  const { t } = useTranslation('admin');
   const client = useQueryClient();
   const canRead = useHasScope('group.read');
   const canEdit = useHasScope('group.manage');
@@ -31,16 +33,16 @@ function GroupsPage() {
       await client.invalidateQueries({ queryKey: groupsQuery.queryKey });
     },
   });
-  if (!canRead) return <Alert>You need group.read to view groups.</Alert>;
+  if (!canRead) return <Alert>{t('groups.needRead')}</Alert>;
   return (
     <>
       <SettingsSection
-        title="Groups"
-        description="Give access to people together. Groups can contain other groups."
+        title={t('groups.title')}
+        description={t('groups.description')}
         actions={
           canEdit && (
             <Button variant="primary" onClick={() => setEditing('new')}>
-              <Plus /> New group
+              <Plus /> {t('groups.new')}
             </Button>
           )
         }
@@ -62,13 +64,13 @@ function GroupsPage() {
                     <span className="block text-xs text-muted">{group.description}</span>
                   </span>
                 </button>
-                {group.source === 'oidc' && <Badge>Identity provider</Badge>}
+                {group.source === 'oidc' && <Badge>{t('groups.identityProvider')}</Badge>}
                 {canEdit && (
                   <>
                     <Button
                       size="icon"
                       variant="ghost"
-                      aria-label={`Edit ${group.name}`}
+                      aria-label={t('groups.edit', { name: group.name })}
                       onClick={() => setEditing(group)}
                     >
                       <Pencil />
@@ -76,7 +78,7 @@ function GroupsPage() {
                     <Button
                       size="icon"
                       variant="ghost"
-                      aria-label={`Delete ${group.name}`}
+                      aria-label={t('groups.delete', { name: group.name })}
                       onClick={() => setDeleting(group)}
                     >
                       <Trash2 />
@@ -87,7 +89,7 @@ function GroupsPage() {
               {open === group.id && (
                 <>
                   {group.source === 'oidc' && (
-                    <p className="mb-2 text-xs text-muted">Membership is managed by your identity provider.</p>
+                    <p className="mb-2 text-xs text-muted">{t('groups.managedByProvider')}</p>
                   )}
                   <Principals
                     path={`/v1/identity/groups/${group.id}/members`}
@@ -105,9 +107,9 @@ function GroupsPage() {
       <ConfirmDialog
         open={!!deleting}
         onOpenChange={(next) => !next && setDeleting(undefined)}
-        title={`Delete ${deleting?.name ?? ''}?`}
-        description="Members lose the access granted through this group."
-        confirm="Delete group"
+        title={t('groups.deleteTitle', { name: deleting?.name ?? '' })}
+        description={t('groups.deleteDescription')}
+        confirm={t('groups.deleteConfirm')}
         busy={remove.isPending}
         error={remove.error}
         onConfirm={() => deleting && remove.mutate(deleting)}
@@ -116,6 +118,7 @@ function GroupsPage() {
   );
 }
 function GroupDialog({ group, onClose }: { group?: IdentityGroup; onClose: () => void }) {
+  const { t } = useTranslation(['admin', 'common']);
   const client = useQueryClient();
   const [name, setName] = useState(group?.name ?? '');
   const [description, setDescription] = useState(group?.description ?? '');
@@ -134,16 +137,16 @@ function GroupDialog({ group, onClose }: { group?: IdentityGroup; onClose: () =>
   return (
     <FormDialog
       open
-      title={group ? `Edit ${group.name}` : 'New group'}
-      submitLabel="Save group"
+      title={group ? t('groups.edit', { name: group.name }) : t('groups.new')}
+      submitLabel={t('groups.save')}
       pending={save.isPending}
       onClose={onClose}
       onSubmit={() => save.mutate()}
     >
-      <Field id="group-name" label="Name">
+      <Field id="group-name" label={t('common:fields.name')}>
         <Input id="group-name" required value={name} onChange={(event) => setName(event.target.value)} />
       </Field>
-      <Field id="group-description" label="Description">
+      <Field id="group-description" label={t('common:fields.description')}>
         <Textarea id="group-description" value={description} onChange={(event) => setDescription(event.target.value)} />
       </Field>
     </FormDialog>

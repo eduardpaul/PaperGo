@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
+import { setLanguage } from '@/i18n';
 import { PlaceContextMenu } from './place-context-menu';
 
 const navigate = vi.hoisted(() => vi.fn());
@@ -17,4 +18,19 @@ it('routes collection shortcuts to the same permission-checked creation flow', a
   fireEvent.click(await screen.findByRole('menuitem', { name: 'New folder…' }));
   expect(navigate).toHaveBeenCalledWith({ to: '/w/$workspaceId/l/$listId', params: { workspaceId: 'w', listId: 'lib' }, search: { create: 'folder' } });
   expect(screen.queryByRole('menuitem', { name: 'Delete…' })).toBeNull();
+});
+
+it('offers the shortcuts in Spanish', async () => {
+  const collection = { id: 'lib', workspace_id: 'w', name: 'Facturas', kind: 'library' as const, version: 2 };
+  vi.stubGlobal('fetch', vi.fn(async (input: URL | string) => new Response(JSON.stringify(new URL(String(input)).pathname === '/v1/resources/lib' ? { ...collection, access: ['read', 'write', 'manage'] } : {}))));
+  await act(() => setLanguage('es'));
+  try {
+    render(<QueryClientProvider client={new QueryClient()}><PlaceContextMenu resource={collection}><button>Facturas</button></PlaceContextMenu></QueryClientProvider>);
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'Facturas' }));
+    expect(await screen.findByRole('menuitem', { name: 'Nueva carpeta…' })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'Subir…' })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'Eliminar…' })).toBeTruthy();
+  } finally {
+    await act(() => setLanguage('en'));
+  }
 });

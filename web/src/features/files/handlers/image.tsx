@@ -3,6 +3,7 @@ import { Maximize, RotateCw, ZoomIn, ZoomOut } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/feedback';
+import { useTranslation } from '@/i18n';
 import type { ViewerProps } from '../handlers';
 import { typing, useViewerKeys, ViewerBar, ViewerMessage } from '../viewer-kit';
 
@@ -12,6 +13,7 @@ const clamp = (value: number) => Math.min(maxZoom, Math.max(minZoom, value));
 
 /** An image at full resolution: fit by default, then zoom, pan and rotate. */
 export default function ImageView({ file, source, onStep }: ViewerProps) {
+  const { t } = useTranslation('files');
   const image = useQuery({
     queryKey: ['file-bytes', source.url, file.blobId],
     queryFn: async ({ signal }) => {
@@ -128,13 +130,13 @@ export default function ImageView({ file, source, onStep }: ViewerProps) {
     return false;
   }, { first: true });
 
-  if (image.isError || broken) return <ViewerMessage title="This image could not be shown.">Download the file to open it in another application.</ViewerMessage>;
+  if (image.isError || broken) return <ViewerMessage title={t('image.failed')}>{t('viewer.downloadFile')}</ViewerMessage>;
   return (
     <div className="flex h-full flex-col">
       <div
         ref={frame}
         tabIndex={0}
-        aria-label={`Image ${file.filename}`}
+        aria-label={t('image.label', { name: file.filename })}
         className="min-h-0 flex-1 touch-none overflow-auto bg-surface-muted outline-none select-none"
         style={{ cursor: zoom !== undefined && (width * scale > box.width || height * scale > box.height) ? 'grab' : 'zoom-in' }}
         onDoubleClick={fitOrActual}
@@ -158,30 +160,30 @@ export default function ImageView({ file, source, onStep }: ViewerProps) {
             </div>
           </div>
         ) : (
-          <ViewerMessage title="Opening the image…">
+          <ViewerMessage title={t('image.opening')}>
             <Spinner />
           </ViewerMessage>
         )}
       </div>
       <ViewerBar>
-        <Button size="icon" variant="ghost" aria-label="Zoom out (−)" disabled={!natural} onClick={() => zoomTo(scale / 1.25)}>
+        <Button size="icon" variant="ghost" aria-label={t('viewer.zoomOut')} disabled={!natural} onClick={() => zoomTo(scale / 1.25)}>
           <ZoomOut />
         </Button>
         <span className="w-14 text-center tabular-nums" aria-live="polite">
           {Math.round(scale * 100)}%
         </span>
-        <Button size="icon" variant="ghost" aria-label="Zoom in (+)" disabled={!natural} onClick={() => zoomTo(scale * 1.25)}>
+        <Button size="icon" variant="ghost" aria-label={t('viewer.zoomIn')} disabled={!natural} onClick={() => zoomTo(scale * 1.25)}>
           <ZoomIn />
         </Button>
         <Button size="sm" variant="ghost" disabled={!natural} onClick={fitOrActual}>
-          <Maximize /> {zoom === undefined && fit < 1 ? 'Actual size' : 'Fit'}
+          <Maximize /> {zoom === undefined && fit < 1 ? t('viewer.actualSize') : t('viewer.fit')}
         </Button>
-        <Button size="icon" variant="ghost" aria-label="Rotate the view (R)" disabled={!natural} onClick={() => setRotation((value) => (value + 90) % 360)}>
+        <Button size="icon" variant="ghost" aria-label={t('viewer.rotate')} disabled={!natural} onClick={() => setRotation((value) => (value + 90) % 360)}>
           <RotateCw />
         </Button>
         {natural && (
           <span className="ml-2 text-xs text-muted">
-            {natural.width} × {natural.height} px
+            {t('image.dimensions', { width: natural.width, height: natural.height })}
           </span>
         )}
       </ViewerBar>

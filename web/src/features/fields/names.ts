@@ -1,7 +1,8 @@
 import { useQueries } from '@tanstack/react-query';
-import { useMemo } from 'react';
-import { loadResourceName, loadTermName } from '@/api/names';
+import { useCallback, useMemo } from 'react';
+import { loadResourceName, loadTermName, unavailable, type Name } from '@/api/names';
 import type { FieldDefinition, Resource } from '@/api/types';
+import { useTranslation } from '@/i18n';
 import { usePeopleNames } from './people';
 import { asList } from './values';
 
@@ -25,35 +26,48 @@ export function useValueNames(fields: FieldDefinition[], rows: Pick<Resource, 'v
   return useMemo(() => new Map([...people, ...terms, ...items]), [people, terms, items]);
 }
 
-type NameResult = { data?: readonly [string, string | null] };
+type NameResult = { data?: readonly [string, Name | null] };
 
-/** The names loaded so far, by id; ids still loading or unknown are missing. */
-function namesById(results: NameResult[]): Map<string, string> {
-  const names = new Map<string, string>();
-  for (const result of results) if (result.data && result.data[1] !== null) names.set(result.data[0], result.data[1]);
-  return names;
+/**
+ * The names loaded so far, by id, with unavailable ones named in the screen's language; ids still loading, or not
+ * readable at all, are missing. The function stays the same while the language does, so the names do too.
+ */
+function useNamesById(unavailableName: 'values.unknownTerm' | 'values.unavailableItem') {
+  const { t } = useTranslation('home');
+  return useCallback(
+    (results: NameResult[]) => {
+      const names = new Map<string, string>();
+      for (const result of results)
+        if (result.data && result.data[1] !== null)
+          names.set(result.data[0], result.data[1] === unavailable ? t(unavailableName) : result.data[1]);
+      return names;
+    },
+    [t, unavailableName],
+  );
 }
 
 /** Names of terms and keywords. Each id is cached on its own, so more rows only read the ids not seen yet. */
 export function useTermNames(ids: string[]) {
+  const combine = useNamesById('values.unknownTerm');
   return useQueries({
     queries: ids.map((id) => ({
       queryKey: ['names', 'terms', id],
       queryFn: async () => [id, await loadTermName(id)] as const,
       staleTime: nameStaleTime,
     })),
-    combine: namesById,
+    combine,
   });
 }
 
 /** Names of items. Each id is cached on its own, so more rows only read the ids not seen yet. */
 export function useResourceNames(ids: string[]) {
+  const combine = useNamesById('values.unavailableItem');
   return useQueries({
     queries: ids.map((id) => ({
       queryKey: ['resources', 'name', id],
       queryFn: async () => [id, await loadResourceName(id)] as const,
       staleTime: nameStaleTime,
     })),
-    combine: namesById,
+    combine,
   });
 }

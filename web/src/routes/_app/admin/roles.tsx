@@ -14,9 +14,11 @@ import { Field, QueryFeedback, useHasScope } from '@/features/admin/common';
 import { Principals, rolesQuery } from '@/features/admin/principals';
 import type { IdentityRole } from '@/features/admin/principals';
 import { ConfirmDialog, SettingsSection } from '@/features/settings/section';
+import { useTranslation } from '@/i18n';
 
 export const Route = createFileRoute('/_app/admin/roles')({ component: RolesPage });
 function RolesPage() {
+  const { t } = useTranslation('admin');
   const client = useQueryClient();
   const canRead = useHasScope('role.read');
   const canEdit = useHasScope('role.manage');
@@ -38,16 +40,16 @@ function RolesPage() {
       await refresh();
     },
   });
-  if (!canRead) return <Alert>You need role.read to view roles.</Alert>;
+  if (!canRead) return <Alert>{t('roles.needRead')}</Alert>;
   return (
     <>
       <SettingsSection
-        title="Roles"
-        description="What people may do across the organization. Workspace and collection access is managed separately."
+        title={t('roles.title')}
+        description={t('roles.description')}
         actions={
           canEdit && (
             <Button variant="primary" onClick={() => setEditing('new')}>
-              <Plus /> New role
+              <Plus /> {t('roles.new')}
             </Button>
           )
         }
@@ -67,15 +69,15 @@ function RolesPage() {
                   <span>
                     <span className="font-medium">{role.name}</span>
                     <span className="block text-xs text-muted">
-                      {role.scopes.length} scopes · {role.description}
+                      {t('roles.summary', { count: role.scopes.length, description: role.description })}
                     </span>
                   </span>
                 </button>
-                {role.builtin && <Badge>Built in</Badge>}
+                {role.builtin && <Badge>{t('roles.builtIn')}</Badge>}
                 <Button
                   size="icon"
                   variant="ghost"
-                  aria-label={`Inspect ${role.name}`}
+                  aria-label={t('roles.inspect', { name: role.name })}
                   onClick={() => setEditing(role)}
                 >
                   <Pencil />
@@ -84,7 +86,7 @@ function RolesPage() {
                   <Button
                     size="icon"
                     variant="ghost"
-                    aria-label={`Delete ${role.name}`}
+                    aria-label={t('roles.delete', { name: role.name })}
                     onClick={() => setDeleting(role)}
                   >
                     <Trash2 />
@@ -107,9 +109,9 @@ function RolesPage() {
       <ConfirmDialog
         open={!!deleting}
         onOpenChange={(next) => !next && setDeleting(undefined)}
-        title={`Delete ${deleting?.name ?? ''}?`}
-        description="Everyone assigned this role loses its scopes."
-        confirm="Delete role"
+        title={t('roles.deleteTitle', { name: deleting?.name ?? '' })}
+        description={t('roles.deleteDescription')}
+        confirm={t('roles.deleteConfirm')}
         busy={remove.isPending}
         error={remove.error}
         onConfirm={() => deleting && remove.mutate(deleting)}
@@ -128,6 +130,7 @@ function RoleDialog({
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
+  const { t } = useTranslation(['admin', 'common']);
   const catalog = useQuery({ queryKey: ['scope-catalog'], queryFn: scopeCatalog });
   const [name, setName] = useState(role?.name ?? '');
   const [description, setDescription] = useState(role?.description ?? '');
@@ -148,8 +151,8 @@ function RoleDialog({
   return (
     <FormDialog
       open
-      title={role ? `Role ${role.name}` : 'New role'}
-      submitLabel="Save role"
+      title={role ? t('roles.role', { name: role.name }) : t('roles.new')}
+      submitLabel={t('roles.save')}
       submitDisabled={readOnly || !name.trim()}
       pending={save.isPending}
       onClose={onClose}
@@ -157,14 +160,14 @@ function RoleDialog({
     >
       {role?.builtin && (
         <p className="text-xs text-muted">
-          Built-in role scopes and metadata are read-only. Assign people and groups from the role list.
+          {t('roles.builtInHint')}
         </p>
       )}
       <fieldset disabled={readOnly} className="flex flex-col gap-3">
-        <Field id="role-name" label="Name">
+        <Field id="role-name" label={t('common:fields.name')}>
           <Input id="role-name" required value={name} onChange={(event) => setName(event.target.value)} />
         </Field>
-        <Field id="role-description" label="Description">
+        <Field id="role-description" label={t('common:fields.description')}>
           <Textarea
             id="role-description"
             value={description}
@@ -173,7 +176,7 @@ function RoleDialog({
         </Field>
         <QueryFeedback query={catalog} />
         <fieldset>
-          <legend className="mb-2 font-medium">Scopes</legend>
+          <legend className="mb-2 font-medium">{t('roles.scopes')}</legend>
           <ul className="grid gap-1">
             {catalog.data?.map((scope) => (
               <li key={scope.name}>

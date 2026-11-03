@@ -7,13 +7,18 @@ import type { CreatedAccessToken } from '@/api/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { CopyField, SettingRow, SettingsSection } from '@/features/settings/section';
+import { useTranslation } from '@/i18n';
 import { useFormat } from '@/lib/preferences';
 
 export const Route = createFileRoute('/_app/settings/tokens')({
   component: TokensPage,
 });
 
+// Scope names are API values, the same in every language.
+const scopesExample = 'scope.read, scope.write';
+
 function TokensPage() {
+  const { t } = useTranslation(['settings', 'common']);
   const format = useFormat();
   const queryClient = useQueryClient();
   const list = useQuery({ queryKey: ['tokens'], queryFn: tokens });
@@ -56,24 +61,24 @@ function TokensPage() {
   return (
     <div className="flex flex-col gap-5">
       <SettingsSection
-        title="New token"
-        description="The secret is shown once. Scopes limit what the token can do."
+        title={t('tokens.newTitle')}
+        description={t('tokens.newDescription')}
         actions={
           <Button variant="primary" disabled={issue.isPending || !name.trim()} onClick={() => issue.mutate()}>
-            Create token
+            {t('tokens.create')}
           </Button>
         }
       >
-        <SettingRow id="token-name" label="Name">
+        <SettingRow id="token-name" label={t('common:fields.name')}>
           <Input id="token-name" value={name} onChange={(event) => setName(event.target.value)} />
         </SettingRow>
-        <SettingRow id="token-days" label="Expires in days">
+        <SettingRow id="token-days" label={t('tokens.expiresInDays')}>
           <Input id="token-days" inputMode="numeric" value={days} onChange={(event) => setDays(event.target.value)} />
         </SettingRow>
         <SettingRow
           id="token-scopes"
-          label="Scopes"
-          hint={mine.data ? `Your account has ${mine.data.length} scopes.` : undefined}
+          label={t('tokens.scopes')}
+          hint={mine.data ? t('tokens.scopesHint', { count: mine.data.length }) : undefined}
         >
           {options.length > 0 ? (
             <div className="flex max-h-40 flex-col gap-1 overflow-auto">
@@ -97,28 +102,28 @@ function TokensPage() {
               id="token-scopes"
               value={custom}
               onChange={(event) => setCustom(event.target.value)}
-              placeholder="scope.read, scope.write"
+              placeholder={scopesExample}
             />
           )}
         </SettingRow>
-        {created && <CopyField label="Secret" value={created.secret} />}
+        {created && <CopyField label={t('tokens.secret')} value={created.secret} />}
       </SettingsSection>
-      <SettingsSection title="Tokens">
+      <SettingsSection title={t('tokens.listTitle')}>
         <ul className="flex flex-col gap-2">
           {(list.data ?? []).map((token) => (
             <li key={token.id} className="flex items-center gap-3 rounded-md border px-3 py-2">
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[13px] font-medium">{token.name}</p>
                 <p className="text-xs text-muted">
-                  {token.prefix}… · expires {token.expires_at ? format.date(token.expires_at) : 'Never'}
+                  {t('tokens.expires', { prefix: token.prefix, date: token.expires_at ? format.date(token.expires_at) : t('tokens.never') })}
                 </p>
               </div>
               <Button size="sm" variant="danger" disabled={revoke.isPending} onClick={() => revoke.mutate(token.id)}>
-                Revoke
+                {t('tokens.revoke')}
               </Button>
             </li>
           ))}
-          {list.isFetched && (list.data?.length ?? 0) === 0 && <li className="text-sm text-muted">No tokens.</li>}
+          {list.isFetched && (list.data?.length ?? 0) === 0 && <li className="text-sm text-muted">{t('tokens.none')}</li>}
         </ul>
       </SettingsSection>
     </div>

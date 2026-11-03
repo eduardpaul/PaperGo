@@ -8,9 +8,11 @@ import { Alert, EmptyState } from '@/components/ui/feedback';
 import { Input } from '@/components/ui/input';
 import { Field, QueryFeedback, useHasScope } from '@/features/admin/common';
 import { SettingsSection } from '@/features/settings/section';
+import { useTranslation } from '@/i18n';
 import { useFormat } from '@/lib/preferences';
 
 const filterKeys = ['actor', 'entity_type', 'entity_id', 'workspace_id', 'from', 'to'] as const;
+const columns = ['when', 'who', 'what', 'changed'] as const;
 type Filters = Partial<Record<(typeof filterKeys)[number], string>>;
 interface AuditEvent {
   id: string;
@@ -31,14 +33,15 @@ export const Route = createFileRoute('/_app/admin/audit')({
 });
 
 function AuditPage() {
+  const { t } = useTranslation('admin');
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const format = useFormat();
   const canRead = useHasScope('audit.read');
   const entries = useApiPages<AuditEvent>(['auditLog'], '/v1/audit', { enabled: canRead, query: search });
-  if (!canRead) return <Alert>You need audit.read to view the audit log.</Alert>;
+  if (!canRead) return <Alert>{t('audit.needRead')}</Alert>;
   return (
-    <SettingsSection title="Audit log" description="Who changed what and when, newest first.">
+    <SettingsSection title={t('audit.title')} description={t('audit.description')}>
       <AuditFilters
         key={JSON.stringify(search)}
         current={search}
@@ -49,9 +52,9 @@ function AuditPage() {
         <table className="w-full text-left text-[13px]">
           <thead className="bg-surface-muted text-muted">
             <tr>
-              {['When', 'Who', 'What', 'Changed'].map((column) => (
+              {columns.map((column) => (
                 <th key={column} className="p-2">
-                  {column}
+                  {t(`audit.column.${column}`)}
                 </th>
               ))}
             </tr>
@@ -61,9 +64,9 @@ function AuditPage() {
               <tr key={entry.id}>
                 <td className="p-2 whitespace-nowrap">{format.dateTime(entry.created_at)}</td>
                 <td className="p-2">
-                  {entry.subject || 'System'}
+                  {entry.subject || t('audit.system')}
                   {entry.credential && (
-                    <p className="mt-1 text-xs text-muted">via {entry.credential.name ?? 'a removed access token'}</p>
+                    <p className="mt-1 text-xs text-muted">{entry.credential.name ? t('audit.via', { name: entry.credential.name }) : t('audit.viaRemoved')}</p>
                   )}
                 </td>
                 <td className="p-2">
@@ -76,7 +79,7 @@ function AuditPage() {
                   {entry.properties?.join(', ')}
                   {entry.details && (
                     <details>
-                      <summary className="cursor-pointer text-xs text-accent">Details</summary>
+                      <summary className="cursor-pointer text-xs text-accent">{t('audit.details')}</summary>
                       <pre className="mt-2 max-w-md overflow-auto whitespace-pre-wrap text-xs">
                         {stringifyJSON(entry.details)}
                       </pre>
@@ -89,17 +92,18 @@ function AuditPage() {
         </table>
       </div>
       {!entries.isPending && !entries.error && entries.items.length === 0 && (
-        <EmptyState title="Nothing recorded for these filters" />
+        <EmptyState title={t('audit.empty')} />
       )}
       {entries.hasNextPage && (
         <Button className="mt-3" disabled={entries.isFetchingNextPage} onClick={() => void entries.fetchNextPage()}>
-          Show more
+          {t('audit.more')}
         </Button>
       )}
     </SettingsSection>
   );
 }
 function AuditFilters({ current, onApply }: { current: Filters; onApply: (filters: Filters) => void }) {
+  const { t } = useTranslation(['admin', 'common']);
   const [draft, setDraft] = useState(current);
   return (
     <form
@@ -116,16 +120,7 @@ function AuditFilters({ current, onApply }: { current: Filters; onApply: (filter
         <Field
           key={key}
           id={`audit-${key}`}
-          label={
-            {
-              actor: 'Who (subject)',
-              entity_type: 'Entity type',
-              entity_id: 'Entity id',
-              workspace_id: 'Workspace id',
-              from: 'From (local time)',
-              to: 'Until (local time)',
-            }[key]
-          }
+          label={t(`audit.filter.${key}`)}
         >
           <Input
             id={`audit-${key}`}
@@ -137,9 +132,9 @@ function AuditFilters({ current, onApply }: { current: Filters; onApply: (filter
         </Field>
       ))}
       <Button type="submit" variant="primary">
-        Filter
+        {t('audit.filter.apply')}
       </Button>
-      <Button onClick={() => onApply({})}>Clear</Button>
+      <Button onClick={() => onApply({})}>{t('common:actions.clear')}</Button>
     </form>
   );
 }

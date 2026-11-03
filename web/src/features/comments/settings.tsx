@@ -9,21 +9,10 @@ import { Button } from '@/components/ui/button';
 import { Alert } from '@/components/ui/feedback';
 import { Select } from '@/components/ui/select';
 import { SettingRow, SettingsSection } from '@/features/settings/section';
+import { useTranslation } from '@/i18n';
 import { problemMessage } from '@/lib/errors';
 
-export const modeLabels: Record<CommentMode, string> = {
-  off: 'Off',
-  collaborators: 'Collaborators: people who can read drafts',
-  readers: 'Readers: everyone who can read the item',
-};
-
-const origins: Record<CommentSettings['effective']['from'], string> = {
-  deployment: 'the deployment',
-  organization: 'the organization',
-  workspace: 'the workspace',
-  collection: 'this list or library',
-  default: 'the default',
-};
+export const modes: CommentMode[] = ['off', 'collaborators', 'readers'];
 
 /** A workspace's, list's or library's comment mode, which places below inherit. */
 export function PlaceCommentSettings({
@@ -35,6 +24,7 @@ export function PlaceCommentSettings({
   canManage: boolean;
   workspace?: boolean;
 }) {
+  const { t } = useTranslation(['comments', 'common']);
   const queryClient = useQueryClient();
   const settings = useQuery({ ...commentSettingsQuery(resourceId), enabled: commentsAvailable() });
   const [mode, setMode] = useState<string | null>(null);
@@ -48,7 +38,7 @@ export function PlaceCommentSettings({
       }),
     onSuccess: async () => {
       setMode(null);
-      toast.success('Comment settings saved');
+      toast.success(t('settings.saved'));
       await queryClient.invalidateQueries({ queryKey: ['comment-settings'] });
       await queryClient.invalidateQueries({ queryKey: keys.comments });
     },
@@ -57,12 +47,8 @@ export function PlaceCommentSettings({
   const effective = settings.data.effective;
   return (
     <SettingsSection
-      title="Comments"
-      description={
-        workspace
-          ? 'Who discusses items in this workspace. Lists and libraries can choose their own.'
-          : 'Who discusses the items of this list or library.'
-      }
+      title={t('settings.title')}
+      description={workspace ? t('settings.workspaceDescription') : t('settings.collectionDescription')}
       actions={
         canManage && (
           <Button
@@ -70,15 +56,15 @@ export function PlaceCommentSettings({
             disabled={save.isPending || current === (settings.data.mode ?? '')}
             onClick={() => save.mutate()}
           >
-            Save
+            {t('common:actions.save')}
           </Button>
         )
       }
     >
       <SettingRow
         id={`comments-${resourceId}`}
-        label="Discussion"
-        hint={`Now: ${modeLabels[effective.mode]}, set by ${origins[effective.from]}.`}
+        label={t('settings.discussion')}
+        hint={t('settings.now', { mode: t(`settings.modes.${effective.mode}`), origin: t(`settings.setBy.${effective.from}`) })}
       >
         <Select
           id={`comments-${resourceId}`}
@@ -86,10 +72,10 @@ export function PlaceCommentSettings({
           disabled={!canManage}
           onChange={(event) => setMode(event.target.value)}
         >
-          <option value="">Inherit</option>
-          {(Object.keys(modeLabels) as CommentMode[]).map((m) => (
+          <option value="">{t('settings.inherit')}</option>
+          {modes.map((m) => (
             <option key={m} value={m}>
-              {modeLabels[m]}
+              {t(`settings.modes.${m}`)}
             </option>
           ))}
         </Select>
@@ -101,6 +87,7 @@ export function PlaceCommentSettings({
 
 /** The organization's switch for comments and its default mode. */
 export function OrganizationCommentSettingsForm({ canEdit }: { canEdit: boolean }) {
+  const { t } = useTranslation(['comments', 'common']);
   const queryClient = useQueryClient();
   const settings = useQuery({ ...organizationCommentSettingsQuery, enabled: commentsAvailable() });
   const [enabled, setEnabled] = useState<boolean | null>(null);
@@ -117,7 +104,7 @@ export function OrganizationCommentSettingsForm({ canEdit }: { canEdit: boolean 
     onSuccess: async () => {
       setEnabled(null);
       setMode(null);
-      toast.success('Comment settings saved');
+      toast.success(t('settings.saved'));
       await queryClient.invalidateQueries({ queryKey: ['comment-settings'] });
       await queryClient.invalidateQueries({ queryKey: keys.comments });
     },
@@ -126,31 +113,31 @@ export function OrganizationCommentSettingsForm({ canEdit }: { canEdit: boolean 
   const dirty = currentEnabled !== settings.data.enabled || currentMode !== (settings.data.mode ?? '');
   return (
     <SettingsSection
-      title="Comments"
-      description="Discussions on items across the organization. Turning them off here wins over every workspace and collection."
+      title={t('settings.title')}
+      description={t('settings.organizationDescription')}
       actions={
         canEdit && (
           <Button variant="primary" disabled={save.isPending || !dirty} onClick={() => save.mutate()}>
-            Save
+            {t('common:actions.save')}
           </Button>
         )
       }
     >
-      <SettingRow id="comments-enabled" label="Comments" hint="Off hides every discussion and keeps its comments.">
+      <SettingRow id="comments-enabled" label={t('settings.enabled')} hint={t('settings.enabledHint')}>
         <Select
           id="comments-enabled"
           value={currentEnabled ? 'on' : 'off'}
           disabled={!canEdit}
           onChange={(event) => setEnabled(event.target.value === 'on')}
         >
-          <option value="on">On</option>
-          <option value="off">Off</option>
+          <option value="on">{t('settings.on')}</option>
+          <option value="off">{t('settings.off')}</option>
         </Select>
       </SettingRow>
       <SettingRow
         id="comments-mode"
-        label="Default discussion"
-        hint="Workspaces, lists and libraries that choose nothing use this."
+        label={t('settings.defaultMode')}
+        hint={t('settings.defaultModeHint')}
       >
         <Select
           id="comments-mode"
@@ -158,10 +145,10 @@ export function OrganizationCommentSettingsForm({ canEdit }: { canEdit: boolean 
           disabled={!canEdit || !currentEnabled}
           onChange={(event) => setMode(event.target.value)}
         >
-          <option value="">{modeLabels.collaborators} (default)</option>
-          {(Object.keys(modeLabels) as CommentMode[]).map((m) => (
+          <option value="">{t('settings.defaultOption', { mode: t('settings.modes.collaborators') })}</option>
+          {modes.map((m) => (
             <option key={m} value={m}>
-              {modeLabels[m]}
+              {t(`settings.modes.${m}`)}
             </option>
           ))}
         </Select>

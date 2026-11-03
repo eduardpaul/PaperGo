@@ -1,0 +1,126 @@
+{
+  "title": "Relaciones",
+  "description": "Sigue las conexiones entre los elementos de tu espacio de trabajo.",
+  "workspace": "Espacio de trabajo",
+  "thisWorkspace": "este espacio de trabajo",
+  "directed": "Dirigida",
+  "symmetric": "Simétrica",
+  "incoming": "Entrantes",
+  "outgoing": "Salientes",
+  "connections": "Conexiones",
+  "loadingConnections": "Cargando las conexiones",
+  "types": {
+    "title": "Tipos de relación",
+    "hint": "Elige una conexión para explorarla.",
+    "filter": "Filtrar los tipos de relación",
+    "filterPlaceholder": "Filtrar tipos…",
+    "all": "Todas las relaciones",
+    "untyped": "Sin tipo",
+    "untypedHint": "Sin tipo asignado",
+    "noMatches": "Ningún tipo coincide.",
+    "none": "Aquí no hay conexiones con tipo.",
+    "more": "Más tipos",
+    "browse": "Explorar tipos"
+  },
+  "find": {
+    "label": "Busca un elemento para explorar",
+    "placeholder": "Busca un elemento por nombre…",
+    "failed": "La búsqueda falló. Reintentar",
+    "more": "Más resultados",
+    "hint": "Busca por el comienzo del nombre del elemento."
+  },
+  "filters": {
+    "collection": "Filtrar por colección",
+    "allCollections": "Todas las listas y bibliotecas",
+    "moreCollections": "Más colecciones",
+    "scope": "Filtrar por ámbito del espacio de trabajo",
+    "direction": "Filtrar por dirección",
+    "allDirections": "Todas las direcciones",
+    "clear": "Borrar los filtros"
+  },
+  "scope": {
+    "all": "Todas las conexiones",
+    "internal": "Dentro de este espacio de trabajo",
+    "external": "Entre espacios de trabajo"
+  },
+  "trail": {
+    "back": "Volver atrás en la exploración",
+    "label": "Recorrido de la exploración",
+    "root": "Conexiones del espacio de trabajo",
+    "steps_one": "{{count}} paso",
+    "steps_many": "{{count}} pasos",
+    "steps_other": "{{count}} pasos"
+  },
+  "focus": {
+    "loading": "Cargando el elemento…",
+    "unavailable": "Elemento no disponible",
+    "showingTo": "Se muestran las conexiones con {{workspace}}"
+  },
+  "view": {
+    "label": "Vista de conexiones",
+    "list": "Lista",
+    "graph": "Gráfico"
+  },
+  "unavailable": {
+    "title": "Este elemento no está disponible aquí",
+    "hint": "Puede que se haya movido, que ya no se pueda leer o que ya no esté conectado con este espacio de trabajo."
+  },
+  "start": {
+    "title": "Empieza por un elemento",
+    "hint": "Busca un elemento arriba o elige uno de la lista para ver sus conexiones directas.",
+    "browse": "Explorar las conexiones"
+  },
+  "empty": {
+    "title": "Aún no hay relaciones",
+    "hint": "Aquí aparecerán las relaciones que se añadan a los elementos. Empieza desde la pestaña Relaciones de un elemento.",
+    "filteredTitle": "Ninguna conexión coincide",
+    "filteredHint": "Prueba con otro tipo o amplía los filtros.",
+    "allTypes": "Mostrar todos los tipos de relación"
+  },
+  "loaded_one": "{{formatted}} conexión cargada",
+  "loaded_many": "{{formatted}} conexiones cargadas",
+  "loaded_other": "{{formatted}} conexiones cargadas",
+  "recentPages": "Páginas más recientes",
+  "refreshPages": "Actualizar las páginas cargadas",
+  "loadMore": "Cargar más",
+  "list": {
+    "label": "Conexiones de relación",
+    "inspect": "Examinar la relación {{type}} entre {{source}} y {{target}}",
+    "sourceToTarget": "De origen a destino",
+    "symmetricConnection": "Conexión simétrica",
+    "explore": "Explorar {{name}}",
+    "otherWorkspace": "Otro espacio de trabajo"
+  },
+  "inspector": {
+    "label": "Inspector",
+    "relationshipDetails": "Detalles de la relación",
+    "itemDetails": "Detalles del elemento",
+    "close": "Cerrar los detalles de la relación",
+    "openItem": "Abrir el elemento",
+    "exploreItem": "Explorar el elemento",
+    "showingTo": "Se muestran las conexiones con {{workspace}}.",
+    "unavailable": "Relación no disponible",
+    "unavailableHint": "Puede que se haya eliminado o que ya no se pueda leer.",
+    "relationship": "Relación",
+    "inverse": "Inversa: {{label}}",
+    "source": "Origen",
+    "target": "Destino",
+    "connectedItem": "Elemento conectado",
+    "attributes": "Atributos",
+    "noAttributes": "Esta relación no tiene atributos.",
+    "created": "Creada el {{date}}"
+  },
+  "graph": {
+    "emptyHint": "Amplía los filtros de tipo, dirección o espacio de trabajo para explorar más.",
+    "viewList": "Ver las conexiones en la lista",
+    "summary_one": "Conexiones directas · {{count}} elemento relacionado",
+    "summary_many": "Conexiones directas · {{count}} elementos relacionados",
+    "summary_other": "Conexiones directas · {{count}} elementos relacionados",
+    "label": "Gráfico de relaciones directas",
+    "inspect": "Examinar el elemento {{name}}",
+    "exploreFrom": "Explorar desde {{name}}",
+    "exploreHere": "Explorar desde aquí",
+    "truncated": "Se muestra solo una parte de las conexiones de este elemento. Ajusta los filtros o usa la lista para ver más.",
+    "footer": "Cada paso muestra un nuevo entorno. Usa la lista para ver todas las conexiones."
+  }
+}

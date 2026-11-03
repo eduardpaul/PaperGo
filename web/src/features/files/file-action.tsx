@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
 import { FilePreview } from '@/features/documents/preview';
 import { downloadContent } from '@/features/documents/transfer';
+import { Trans, useTranslation } from '@/i18n';
 import { useFormat } from '@/lib/preferences';
 import { cn } from '@/lib/utils';
 import { FileTypeIcon, fileFamily, fileTypeLabel } from './file-types';
@@ -107,15 +108,16 @@ export function editableFile(item: { file?: FileSummary | null }) {
  * otherwise. Clicks do not reach the row or card around it.
  */
 export function FileAction({ item, options, variant = 'icon', className }: { item: FileItem; options?: OpenFileOptions; variant?: 'icon' | 'button'; className?: string }) {
+  const { t } = useTranslation(['files', 'common']);
   const link = useOpenFileLink();
   if (!item.file) return null;
   const stop = { onClick: (event: React.MouseEvent) => event.stopPropagation(), onDoubleClick: (event: React.MouseEvent) => event.stopPropagation(), onKeyDown: (event: React.KeyboardEvent) => event.stopPropagation() };
   const style = variant === 'icon' ? buttonVariants({ variant: 'ghost', size: 'icon' }) : buttonVariants({ variant: 'primary' });
   if (viewable(item)) {
     return (
-      <Link {...link(item, options)} {...stop} data-open-item={item.id} aria-label={`Open ${item.file.filename}${options?.page ? ` at page ${options.page}` : ''}`} title="Open (O)" className={cn(style, className)}>
+      <Link {...link(item, options)} {...stop} data-open-item={item.id} aria-label={options?.page ? t('action.openAtPage', { name: item.file.filename, page: options.page }) : t('action.open', { name: item.file.filename })} title={t('action.openTitle')} className={cn(style, className)}>
         <Expand />
-        {variant === 'button' && 'Open'}
+        {variant === 'button' && t('common:actions.open')}
       </Link>
     );
   }
@@ -127,12 +129,12 @@ export function FileAction({ item, options, variant = 'icon', className }: { ite
         event.stopPropagation();
         void downloadContent(item.id, item.file?.filename ?? item.name);
       }}
-      aria-label={`Download ${item.file.filename}`}
-      title="Download (D)"
+      aria-label={t('action.download', { name: item.file.filename })}
+      title={t('action.downloadTitle')}
       className={cn(style, className)}
     >
       <Download />
-      {variant === 'button' && 'Download'}
+      {variant === 'button' && t('common:actions.download')}
     </button>
   );
 }
@@ -182,6 +184,7 @@ function TextExcerpt({ item, className, iconClassName }: { item: FileItem; class
  * and Open or Download.
  */
 export function FileBar({ item, collection, draft, canWrite, onUpload }: { item: FileItem & { parent_id?: string }; collection?: Pick<Resource, 'id' | 'webdav_enabled'>; draft?: boolean; canWrite?: boolean; onUpload?: () => void }) {
+  const { t } = useTranslation(['files', 'common']);
   const link = useOpenFileLink();
   const format = useFormat();
   const file = item.file;
@@ -195,10 +198,10 @@ export function FileBar({ item, collection, draft, canWrite, onUpload }: { item:
     return (
       <div className="flex items-center gap-3 border-b px-4 py-2.5 text-[13px] text-muted">
         <FileTypeIcon media={undefined} className="size-5" />
-        <span className="flex-1">No file yet</span>
+        <span className="flex-1">{t('action.noFile')}</span>
         {canWrite && onUpload && (
           <button type="button" className={buttonVariants({ size: 'sm' })} onClick={onUpload}>
-            <Upload /> Upload file
+            <Upload /> {t('action.uploadFile')}
           </button>
         )}
       </div>
@@ -209,7 +212,7 @@ export function FileBar({ item, collection, draft, canWrite, onUpload }: { item:
     <div className="border-b">
     <div className="flex items-center gap-3 px-4 py-2.5">
       {open ? (
-        <Link {...link(item)} aria-label={`Open ${file.filename}`} className="hidden shrink-0 cursor-zoom-in rounded-md focus-visible:ring-2 focus-visible:ring-ring sm:block">
+        <Link {...link(item)} aria-label={t('action.open', { name: file.filename })} className="hidden shrink-0 cursor-zoom-in rounded-md focus-visible:ring-2 focus-visible:ring-ring sm:block">
           {thumb}
         </Link>
       ) : (
@@ -221,19 +224,19 @@ export function FileBar({ item, collection, draft, canWrite, onUpload }: { item:
           <span className="truncate">{file.filename}</span>
         </p>
         <p className="truncate text-xs text-muted">
-          {fileTypeLabel(file.content_type)} · {format.fileSize(file.size)} · version {file.version}
-          {draft && <Badge className="ml-1.5">Draft</Badge>}
+          {t('action.summary', { type: fileTypeLabel(file.content_type), size: format.fileSize(file.size), version: file.version })}
+          {draft && <Badge className="ml-1.5">{t('action.draft')}</Badge>}
         </p>
       </div>
       {canWrite && editableFile(item) && (
-        <Link {...link(item, { edit: true })} aria-label={`Edit ${file.filename}`} title="Edit (E in the viewer)" className={buttonVariants()}>
-          <Pencil /> Edit
+        <Link {...link(item, { edit: true })} aria-label={t('action.edit', { name: file.filename })} title={t('action.editTitle')} className={buttonVariants()}>
+          <Pencil /> {t('common:actions.edit')}
         </Link>
       )}
       <OpenInOffice item={item} collection={collection} className="hidden sm:inline-flex" />
       <FileAction item={item} variant="button" />
       {open && (
-        <button type="button" aria-label={`Download ${file.filename}`} title="Download (D)" className={buttonVariants({ variant: 'ghost', size: 'icon' })} onClick={() => void downloadContent(item.id, file.filename)}>
+        <button type="button" aria-label={t('action.download', { name: file.filename })} title={t('action.downloadTitle')} className={buttonVariants({ variant: 'ghost', size: 'icon' })} onClick={() => void downloadContent(item.id, file.filename)}>
           <Download />
         </button>
       )}
@@ -241,10 +244,10 @@ export function FileBar({ item, collection, draft, canWrite, onUpload }: { item:
     {hint && (
       <p role="note" className="mx-4 mb-2.5 flex items-center gap-2 rounded-md bg-accent-soft px-3 py-1.5 text-xs">
         <span className="flex-1">
-          Open the whole file here, full screen. From the list, double-click a row or press <kbd className="font-sans font-semibold">O</kbd>.
+          <Trans t={t} i18nKey="action.hint" components={{ key: <kbd className="font-sans font-semibold" /> }} />
         </span>
         <button type="button" className="font-medium text-accent hover:underline" onClick={dismiss}>
-          Got it
+          {t('action.gotIt')}
         </button>
       </p>
     )}

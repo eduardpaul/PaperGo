@@ -4,13 +4,14 @@ import { CheckCircle2, MapPin, MessageSquare, MoreHorizontal, RotateCcw } from '
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { api } from '@/api/http';
 import { commentsQuery, keys, resourceQuery } from '@/api/queries';
-import type { Comment, CommentPage, CommentPerson, CommentThread, MentionCandidate } from '@/api/types';
+import type { Comment, CommentPerson, CommentThread, MentionCandidate } from '@/api/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Alert, EmptyState, Skeleton } from '@/components/ui/feedback';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/menu';
 import { useOpenFileLink } from '@/features/files/file-action';
 import { fileRegion } from '@/features/files/regions';
+import { useTranslation } from '@/i18n';
 import { problemMessage } from '@/lib/errors';
 import { useFormat } from '@/lib/preferences';
 import { cn } from '@/lib/utils';
@@ -69,7 +70,8 @@ export function toTokens(text: string, chosen: Mention[]): string {
 
 /** A comment's text with its mentions shown as names. */
 function Body({ comment }: { comment: Comment }) {
-  if (comment.deleted) return <p className="text-[13px] text-muted italic">This comment was deleted.</p>;
+  const { t } = useTranslation('comments');
+  if (comment.deleted) return <p className="text-[13px] text-muted italic">{t('deleted')}</p>;
   const parts: ReactNode[] = [];
   let last = 0;
   for (const match of comment.body.matchAll(mentionToken)) {
@@ -106,6 +108,7 @@ function Composer({
   onSubmit: (body: string) => Promise<unknown>;
   onCancel?: () => void;
 }) {
+  const { t } = useTranslation(['comments', 'common']);
   const [text, setText] = useState(initial);
   const [chosen, setChosen] = useState<Mention[]>(() => labelled(initialMentions));
   const [query, setQuery] = useState<string | null>(null);
@@ -171,7 +174,7 @@ function Composer({
         {query !== null && (candidates.data?.length ?? 0) > 0 && (
           <ul
             className="absolute right-0 left-0 z-10 mt-1 max-h-48 overflow-y-auto rounded-md border bg-surface shadow-lg"
-            aria-label="People to mention"
+            aria-label={t('peopleToMention')}
           >
             {candidates.data!.map((person) => (
               <li key={person.subject}>
@@ -183,7 +186,7 @@ function Composer({
                   <span>
                     {person.name} <span className="text-xs text-muted">{person.subject}</span>
                   </span>
-                  {!person.can_see && <span className="text-xs text-warning">can't see this item</span>}
+                  {!person.can_see && <span className="text-xs text-warning">{t('cannotSee')}</span>}
                 </button>
               </li>
             ))}
@@ -192,13 +195,13 @@ function Composer({
       </div>
       {unseen.length > 0 && (
         <p className="text-xs text-warning">
-          {unseen.map((p) => p.name).join(', ')} can't see this item and won't be told. A mention doesn't share it.
+          {t('unseen', { names: unseen.map((p) => p.name).join(', ') })}
         </p>
       )}
       <div className="flex justify-end gap-2">
         {onCancel && (
           <Button type="button" size="sm" variant="ghost" onClick={onCancel}>
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
         )}
         <Button type="submit" size="sm" variant="primary" disabled={pending || !text.trim()}>
@@ -215,6 +218,7 @@ function Composer({
  * written on.
  */
 function ThreadPlace({ thread, itemId }: { thread: CommentThread; itemId: string }) {
+  const { t } = useTranslation('comments');
   const region = fileRegion(thread.anchor);
   const item = useQuery({ ...resourceQuery(itemId), enabled: !!region });
   const link = useOpenFileLink();
@@ -225,14 +229,14 @@ function ThreadPlace({ thread, itemId }: { thread: CommentThread; itemId: string
       {...link(item.data, { page: region.page, blob: earlier ? region.blob_id : undefined, comment: thread.id })}
       className="flex w-fit items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 hover:underline dark:bg-amber-900/40 dark:text-amber-100"
     >
-      <MapPin className="size-3.5" /> On page {region.page}
-      {earlier && ' of an earlier version'}
+      <MapPin className="size-3.5" /> {t(earlier ? 'onEarlierPage' : 'onPage', { page: region.page })}
     </Link>
   );
 }
 
 /** One comment: who, when, its text and what the reader may do with it. */
 function CommentEntry({ comment, itemId, compact }: { comment: Comment; itemId: string; compact?: boolean }) {
+  const { t } = useTranslation(['comments', 'common']);
   const format = useFormat();
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
@@ -252,24 +256,24 @@ function CommentEntry({ comment, itemId, compact }: { comment: Comment; itemId: 
   return (
     <article
       className={cn('flex flex-col gap-1', compact && 'border-l-2 pl-3')}
-      aria-label={`Comment by ${comment.author.name}`}
+      aria-label={t('commentBy', { name: comment.author.name })}
     >
       <header className="flex items-center gap-2 text-xs text-muted">
         <span className="font-medium text-foreground">{comment.author.name}</span>
-        {comment.source === 'workflow' && <Badge>workflow</Badge>}
+        {comment.source === 'workflow' && <Badge>{t('workflow')}</Badge>}
         <span>{format.dateTime(comment.created_at)}</span>
-        {comment.edited_at && !comment.deleted && <span>(edited)</span>}
+        {comment.edited_at && !comment.deleted && <span>{t('edited')}</span>}
         {(comment.can_edit || comment.can_delete) && !editing && (
           <DropdownMenu>
             <DropdownMenuTrigger
               className="ml-auto rounded p-0.5 hover:bg-surface-muted"
-              aria-label={`Actions for ${comment.author.name}'s comment`}
+              aria-label={t('actionsFor', { name: comment.author.name })}
             >
               <MoreHorizontal className="size-4" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {comment.can_edit && <DropdownMenuItem onSelect={() => setEditing(true)}>Edit</DropdownMenuItem>}
-              {comment.can_delete && <DropdownMenuItem onSelect={() => remove.mutate()}>Delete</DropdownMenuItem>}
+              {comment.can_edit && <DropdownMenuItem onSelect={() => setEditing(true)}>{t('common:actions.edit')}</DropdownMenuItem>}
+              {comment.can_delete && <DropdownMenuItem onSelect={() => remove.mutate()}>{t('common:actions.delete')}</DropdownMenuItem>}
             </DropdownMenuContent>
           </DropdownMenu>
         )}
@@ -279,8 +283,8 @@ function CommentEntry({ comment, itemId, compact }: { comment: Comment; itemId: 
           itemId={itemId}
           initial={fromTokens(comment.body, comment.mentions)}
           initialMentions={comment.mentions}
-          placeholder="Edit the comment"
-          submitLabel="Save"
+          placeholder={t('editPlaceholder')}
+          submitLabel={t('common:actions.save')}
           pending={edit.isPending}
           onSubmit={(body) => edit.mutateAsync(body)}
           onCancel={() => setEditing(false)}
@@ -305,6 +309,7 @@ function ThreadCard({
   canPost: boolean;
   focused?: boolean;
 }) {
+  const { t } = useTranslation('comments');
   const queryClient = useQueryClient();
   const [replying, setReplying] = useState(false);
   const refresh = () => queryClient.invalidateQueries({ queryKey: keys.comments });
@@ -346,8 +351,8 @@ function ThreadCard({
       {replying ? (
         <Composer
           itemId={itemId}
-          placeholder="Reply"
-          submitLabel="Reply"
+          placeholder={t('reply')}
+          submitLabel={t('reply')}
           pending={reply.isPending}
           onSubmit={(body) => reply.mutateAsync(body)}
           onCancel={() => setReplying(false)}
@@ -356,16 +361,16 @@ function ThreadCard({
         <div className="flex flex-wrap items-center gap-2">
           {canPost && !thread.deleted && (
             <Button size="sm" variant="ghost" onClick={() => setReplying(true)}>
-              Reply
+              {t('reply')}
             </Button>
           )}
           {thread.can_resolve && (
             <Button size="sm" variant="ghost" disabled={resolve.isPending} onClick={() => resolve.mutate()}>
               {thread.resolved_at ? <RotateCcw className="size-4" /> : <CheckCircle2 className="size-4" />}
-              {thread.resolved_at ? 'Reopen' : 'Resolve'}
+              {thread.resolved_at ? t('reopen') : t('resolve')}
             </Button>
           )}
-          {thread.resolved_by && <span className="text-xs text-muted">Resolved by {thread.resolved_by.name}</span>}
+          {thread.resolved_by && <span className="text-xs text-muted">{t('resolvedBy', { name: thread.resolved_by.name })}</span>}
         </div>
       )}
       {(reply.error || resolve.error) && <Alert>{problemMessage(reply.error ?? resolve.error)}</Alert>}
@@ -373,19 +378,7 @@ function ThreadCard({
   );
 }
 
-const statuses = [
-  { value: 'open', label: 'Open' },
-  { value: 'resolved', label: 'Resolved' },
-  { value: 'all', label: 'All' },
-];
-
-const origins: Record<CommentPage['mode_from'], string> = {
-  deployment: 'this deployment',
-  organization: 'the organization',
-  workspace: 'this workspace',
-  collection: 'this list or library',
-  default: 'default',
-};
+const statuses = ['open', 'resolved', 'all'] as const;
 
 /**
  * An item's discussion: its threads, and a box to start one. With focus, a
@@ -393,8 +386,9 @@ const origins: Record<CommentPage['mode_from'], string> = {
  * the comment's thread is there and brings that thread into view.
  */
 export function Discussion({ itemId, focus }: { itemId: string; focus?: string }) {
+  const { t } = useTranslation(['comments', 'common']);
   const queryClient = useQueryClient();
-  const [status, setStatus] = useState(focus ? 'all' : 'open');
+  const [status, setStatus] = useState<(typeof statuses)[number]>(focus ? 'all' : 'open');
   const pages = useInfiniteQuery(commentsQuery(itemId, status));
   const threads = pages.data?.pages.flatMap((page) => page.value ?? []) ?? [];
   const target = focus ? threads.find((t) => t.id === focus || t.replies.some((r) => r.id === focus)) : undefined;
@@ -413,44 +407,44 @@ export function Discussion({ itemId, focus }: { itemId: string; focus?: string }
   const data = pages.data!.pages[0];
   if (data.mode === 'off') {
     return (
-      <EmptyState icon={MessageSquare} title="Comments are off here">
-        Turned off by {origins[data.mode_from]}.
+      <EmptyState icon={MessageSquare} title={t('offTitle')}>
+        {t('offBody', { origin: t(`turnedOffBy.${data.mode_from}`) })}
       </EmptyState>
     );
   }
   if (!data.can_read) {
     return (
-      <EmptyState icon={MessageSquare} title="The discussion is for collaborators">
-        People who can read this item's drafts discuss it here.
+      <EmptyState icon={MessageSquare} title={t('collaboratorsTitle')}>
+        {t('collaboratorsBody')}
       </EmptyState>
     );
   }
   const missing = focus && status === 'all' && !target && !hasNextPage && !pages.isFetching;
   return (
-    <section className="flex flex-col gap-3" aria-label="Discussion">
-      <div className="flex gap-2" role="tablist" aria-label="Thread views">
+    <section className="flex flex-col gap-3" aria-label={t('discussion')}>
+      <div className="flex gap-2" role="tablist" aria-label={t('threadViews')}>
         {statuses.map((s) => (
           <Button
-            key={s.value}
+            key={s}
             role="tab"
             size="sm"
-            aria-selected={status === s.value}
-            variant={status === s.value ? 'primary' : 'secondary'}
-            onClick={() => setStatus(s.value)}
+            aria-selected={status === s}
+            variant={status === s ? 'primary' : 'secondary'}
+            onClick={() => setStatus(s)}
           >
-            {s.label}
+            {t(`status.${s}`)}
           </Button>
         ))}
       </div>
       {missing && (
-        <p className="text-xs text-muted">The comment you followed was deleted or is no longer in this discussion.</p>
+        <p className="text-xs text-muted">{t('followedMissing')}</p>
       )}
       {threads.length === 0 && (
         <p className="py-4 text-center text-[13px] text-muted">
-          {status === 'resolved' ? 'No resolved threads.' : 'No discussion yet.'}
+          {status === 'resolved' ? t('noResolved') : t('noDiscussion')}
         </p>
       )}
-      <ul className="flex flex-col gap-3" aria-label="Threads">
+      <ul className="flex flex-col gap-3" aria-label={t('threads')}>
         {threads.map((thread) => (
           <ThreadCard
             key={thread.id}
@@ -463,20 +457,20 @@ export function Discussion({ itemId, focus }: { itemId: string; focus?: string }
       </ul>
       {pages.hasNextPage && (
         <Button size="sm" disabled={pages.isFetching} onClick={() => void pages.fetchNextPage()}>
-          {pages.isFetchingNextPage ? 'Loading…' : 'Load more threads'}
+          {pages.isFetchingNextPage ? t('common:status.loading') : t('loadMore')}
         </Button>
       )}
       {pages.error && <Alert>{problemMessage(pages.error)}</Alert>}
       {data.can_post ? (
         <Composer
           itemId={itemId}
-          placeholder="Start a thread — type @ to mention someone"
-          submitLabel="Comment"
+          placeholder={t('startPlaceholder')}
+          submitLabel={t('comment')}
           pending={start.isPending}
           onSubmit={(body) => start.mutateAsync(body)}
         />
       ) : (
-        <p className="text-xs text-muted">You can read this discussion but not add to it.</p>
+        <p className="text-xs text-muted">{t('readOnly')}</p>
       )}
       {start.error && <Alert>{problemMessage(start.error)}</Alert>}
     </section>

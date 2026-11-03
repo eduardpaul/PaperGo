@@ -1,15 +1,19 @@
 import { api, isApiError } from './http';
 import { termsById } from './queries';
 
-/** Labels of term and keyword ids. Ids the store does not return read "Unknown term"; without taxonomy access, none. */
-export async function termNames(ids: string[]): Promise<Map<string, string>> {
-  const names = new Map<string, string>();
+/** A name that was looked up and is not there: an unknown term, an item the caller cannot read. Screens name it in their language. */
+export const unavailable = Symbol('unavailable');
+export type Name = string | typeof unavailable;
+
+/** Labels of term and keyword ids. Ids the store does not return are unavailable; without taxonomy access, none. */
+export async function termNames(ids: string[]): Promise<Map<string, Name>> {
+  const names = new Map<string, Name>();
   try {
     for (let index = 0; index < ids.length; index += 200) {
       const chunk = ids.slice(index, index + 200);
       const found = await termsById(chunk);
       for (const term of found) names.set(term.id, term.name);
-      for (const id of chunk) if (!names.has(id)) names.set(id, 'Unknown term');
+      for (const id of chunk) if (!names.has(id)) names.set(id, unavailable);
     }
   } catch (error) {
     if (!isApiError(error, 403)) throw error;
@@ -23,9 +27,9 @@ interface BatchResponse {
   body?: { name?: string };
 }
 
-/** Names of looked-up items, read 20 at a time through $batch. Items the caller cannot read are "Unavailable item". */
-export async function resourceNames(ids: string[]): Promise<Map<string, string>> {
-  const names = new Map<string, string>();
+/** Names of looked-up items, read 20 at a time through $batch. Items the caller cannot read are unavailable. */
+export async function resourceNames(ids: string[]): Promise<Map<string, Name>> {
+  const names = new Map<string, Name>();
   const chunks: string[][] = [];
   for (let index = 0; index < ids.length; index += 20) chunks.push(ids.slice(index, index + 20));
   await Promise.all(
@@ -38,7 +42,7 @@ export async function resourceNames(ids: string[]): Promise<Map<string, string>>
       ).data;
       for (const id of chunk) {
         const response = result.responses.find((entry) => entry.id === id);
-        names.set(id, response?.status === 200 && response.body?.name ? response.body.name : 'Unavailable item');
+        names.set(id, response?.status === 200 && response.body?.name ? response.body.name : unavailable);
       }
     }),
   );
@@ -49,8 +53,8 @@ export async function resourceNames(ids: string[]): Promise<Map<string, string>>
  * Reads names one id at a time for the caller, but together for every id asked for in the same tick: each id is its
  * own cache entry, and the ids a screen needs at once still go in a few requests. Unknown ids resolve to null.
  */
-export function nameLoader(readMany: (ids: string[]) => Promise<Map<string, string>>) {
-  type Waiter = { resolve: (name: string | null) => void; reject: (error: unknown) => void };
+export function nameLoader(readMany: (ids: string[]) => Promise<Map<string, Name>>) {
+  type Waiter = { resolve: (name: Name | null) => void; reject: (error: unknown) => void };
   let pending = new Map<string, Waiter[]>();
   async function flush() {
     const batch = pending;
@@ -63,7 +67,7 @@ export function nameLoader(readMany: (ids: string[]) => Promise<Map<string, stri
     }
   }
   return (id: string) =>
-    new Promise<string | null>((resolve, reject) => {
+    new Promise<Name | null>((resolve, reject) => {
       if (pending.size === 0) setTimeout(() => void flush(), 0);
       pending.set(id, [...(pending.get(id) ?? []), { resolve, reject }]);
     });

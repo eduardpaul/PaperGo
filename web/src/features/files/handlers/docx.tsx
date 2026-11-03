@@ -3,6 +3,7 @@ import { Maximize, ZoomIn, ZoomOut } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/feedback';
+import { useTranslation } from '@/i18n';
 import type { ViewerProps } from '../handlers';
 import { useFollowLink } from '../trust';
 import { typing, useViewerKeys, ViewerBar, ViewerMessage } from '../viewer-kit';
@@ -32,6 +33,7 @@ const maxZoom = 3;
  * objects may differ. Links follow the organization's trusted hosts.
  */
 export default function DocxView({ file, source }: ViewerProps) {
+  const { t } = useTranslation('files');
   const bytes = useQuery({
     queryKey: ['file-bytes', source.url, file.blobId],
     queryFn: async ({ signal }) => {
@@ -138,13 +140,13 @@ export default function DocxView({ file, source }: ViewerProps) {
     { first: true },
   );
 
-  if (bytes.isError) return <ViewerMessage title="The file could not be loaded.">Download it to open it in Word.</ViewerMessage>;
+  if (bytes.isError) return <ViewerMessage title={t('viewer.notLoaded')}>{t('docx.downloadForWord')}</ViewerMessage>;
   return (
     <div className="flex h-full flex-col">
       <div className="relative min-h-0 flex-1">
         <iframe
           ref={frame}
-          title={`Pages of ${file.filename}`}
+          title={t('viewer.pagesOf', { name: file.filename })}
           // Same origin lets the app draw into the frame; without allow-scripts nothing in the document runs.
           sandbox="allow-same-origin"
           srcDoc={frameDocument}
@@ -154,9 +156,9 @@ export default function DocxView({ file, source }: ViewerProps) {
         {rendered !== 'done' && (
           <div className="absolute inset-0 bg-surface-muted">
             {rendered === 'failed' ? (
-              <ViewerMessage title="This Word document could not be shown.">It may be damaged, protected or in an older format. Download it to open it in Word.</ViewerMessage>
+              <ViewerMessage title={t('docx.failed')}>{t('docx.failedHint')}</ViewerMessage>
             ) : (
-              <ViewerMessage title="Opening the document…">
+              <ViewerMessage title={t('docx.opening')}>
                 <Spinner />
               </ViewerMessage>
             )}
@@ -165,20 +167,20 @@ export default function DocxView({ file, source }: ViewerProps) {
       </div>
       {rendered === 'done' && (
         <ViewerBar>
-          <Button size="icon" variant="ghost" aria-label="Zoom out (−)" onClick={() => step(1 / 1.2)}>
+          <Button size="icon" variant="ghost" aria-label={t('viewer.zoomOut')} onClick={() => step(1 / 1.2)}>
             <ZoomOut />
           </Button>
           <span className="w-12 text-center text-muted" aria-live="polite">
             {Math.round(scale * 100)}%
           </span>
-          <Button size="icon" variant="ghost" aria-label="Zoom in (+)" onClick={() => step(1.2)}>
+          <Button size="icon" variant="ghost" aria-label={t('viewer.zoomIn')} onClick={() => step(1.2)}>
             <ZoomIn />
           </Button>
           <Button size="sm" variant="ghost" aria-pressed={zoom === undefined} onClick={() => setZoom(undefined)}>
-            <Maximize /> Fit width
+            <Maximize /> {t('viewer.fitWidth')}
           </Button>
           <span className="mx-1 h-5 w-px bg-border" aria-hidden />
-          <span className="text-xs text-muted">Shown in a simplified layout; Word may differ.</span>
+          <span className="text-xs text-muted">{t('docx.simplified')}</span>
         </ViewerBar>
       )}
       {dialog}

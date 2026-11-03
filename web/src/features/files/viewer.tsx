@@ -20,6 +20,7 @@ import { ConfirmDialog } from '@/features/settings/section';
 import { useFormat } from '@/lib/preferences';
 import { cn } from '@/lib/utils';
 import { usePeopleNames } from '@/features/fields/people';
+import { useTranslation } from '@/i18n';
 import { FileTypeIcon, fileTypeLabel } from './file-types';
 import { OpenInOffice } from './office';
 import { comparable, TextCompareDialog } from './text-compare';
@@ -94,6 +95,7 @@ export function FileViewer({
   onDetails: () => void;
   onMoved: (resource: Resource) => void;
 }) {
+  const { t } = useTranslation(['files', 'common']);
   const format = useFormat();
   const names = usePeopleNames();
   const itemQuery = useQuery(resourceQuery(itemId));
@@ -177,7 +179,7 @@ export function FileViewer({
       ? {
           active: !!edit && canEdit,
           allowed: canEdit,
-          reason: tooLarge ? `This file is too large to edit in the browser (the limit is ${format.fileSize(fileEditMax())}). Download it, or edit it over WebDAV.` : undefined,
+          reason: tooLarge ? t('fileViewer.tooLarge', { limit: format.fileSize(fileEditMax()) }) : undefined,
           version: item.version,
           history: collection.versioning === 'major',
           containerId: item.container_id ?? collection.id,
@@ -195,8 +197,8 @@ export function FileViewer({
   const close = () => guard(onClose);
   const copyLink = () =>
     void navigator.clipboard.writeText(window.location.href).then(
-      () => toast.success('Link copied'),
-      () => toast.error('The link could not be copied'),
+      () => toast.success(t('fileViewer.linkCopied')),
+      () => toast.error(t('fileViewer.linkFailed')),
     );
 
   useViewerKeys((event) => {
@@ -215,24 +217,24 @@ export function FileViewer({
 
   const draft = item && publishState(item, !!collection.publishing_enabled) === 'Draft';
   const folder = parent.data && parent.data.id !== collection.id ? parent.data : undefined;
-  const title = file?.filename ?? item?.name ?? 'File';
+  const title = file?.filename ?? item?.name ?? t('fileViewer.file');
 
   let canvas: ReactNode;
   if (itemQuery.isPending || (earlierVersion && versions.isPending))
     canvas = (
-      <ViewerMessage title="Opening…">
+      <ViewerMessage title={t('viewer.opening')}>
         <Spinner />
       </ViewerMessage>
     );
-  else if (!item) canvas = <ViewerMessage title="This item is not available.">It was deleted or moved, or you no longer have access.</ViewerMessage>;
-  else if (earlierVersion && versions.isError) canvas = <ViewerMessage title="The file history could not be loaded.">Try again in a moment.</ViewerMessage>;
-  else if (earlierVersion && versions.data?.availability === 'reclaimed') canvas = <ViewerMessage title="This file version is no longer stored.">Its bytes were reclaimed; its details stay in the File tab.</ViewerMessage>;
-  else if (earlierVersion && !version) canvas = <ViewerMessage title="This file version is not available.">It is not in this item's history, or you can read only the published file.</ViewerMessage>;
+  else if (!item) canvas = <ViewerMessage title={t('fileViewer.notAvailable')}>{t('fileViewer.notAvailableHint')}</ViewerMessage>;
+  else if (earlierVersion && versions.isError) canvas = <ViewerMessage title={t('fileViewer.historyFailed')}>{t('fileViewer.tryAgain')}</ViewerMessage>;
+  else if (earlierVersion && versions.data?.availability === 'reclaimed') canvas = <ViewerMessage title={t('fileViewer.reclaimed')}>{t('fileViewer.reclaimedHint')}</ViewerMessage>;
+  else if (earlierVersion && !version) canvas = <ViewerMessage title={t('fileViewer.versionUnavailable')}>{t('fileViewer.versionUnavailableHint')}</ViewerMessage>;
   else if (!file)
     canvas = (
-      <ViewerMessage title="This item has no file yet.">
+      <ViewerMessage title={t('fileViewer.noFile')}>
         <Button onClick={onDetails}>
-          <Upload /> Upload a file from the details
+          <Upload /> {t('fileViewer.uploadFromDetails')}
         </Button>
       </ViewerMessage>
     );
@@ -243,9 +245,9 @@ export function FileViewer({
         <span>
           {fileTypeLabel(file.contentType)} · {format.fileSize(file.size)}
         </span>
-        <span>PaperGo cannot show this kind of file yet.</span>
+        <span>{t('fileViewer.cannotShowKind')}</span>
         <Button variant="primary" onClick={download}>
-          <Download /> Download
+          <Download /> {t('common:actions.download')}
         </Button>
       </ViewerMessage>
     );
@@ -255,7 +257,7 @@ export function FileViewer({
       <HandlerBoundary key={`${file.itemId}:${file.earlier ? file.blobId : 'current'}`} onDownload={download}>
         <Suspense
           fallback={
-            <ViewerMessage title="Opening…">
+            <ViewerMessage title={t('viewer.opening')}>
               <Spinner />
             </ViewerMessage>
           }
@@ -303,16 +305,16 @@ export function FileViewer({
       >
         <DialogPrimitive.Title className="sr-only">{title}</DialogPrimitive.Title>
           <header className="flex shrink-0 items-center gap-1 border-b bg-surface px-2 py-1.5 sm:gap-2 sm:px-3">
-            <Button variant="ghost" size="icon" aria-label={`Back to ${collection.name}`} title="Back (Esc)" onClick={close}>
+            <Button variant="ghost" size="icon" aria-label={t('fileViewer.back', { name: collection.name })} title={t('fileViewer.backTitle')} onClick={close}>
               <ArrowLeft />
             </Button>
             <div className="min-w-0 flex-1">
               <p className="flex min-w-0 items-center gap-1.5 text-sm font-medium">
                 {file && <FileTypeIcon media={file.contentType} />}
                 <span className="truncate">{title}</span>
-                {draft && !file?.earlier && <Badge>Draft</Badge>}
-                {item?.archived && <Badge>Archived</Badge>}
-                {file?.earlier && <Badge>Version {file.version}</Badge>}
+                {draft && !file?.earlier && <Badge>{t('fileViewer.draft')}</Badge>}
+                {item?.archived && <Badge>{t('fileViewer.archived')}</Badge>}
+                {file?.earlier && <Badge>{t('fileViewer.version', { version: file.version })}</Badge>}
               </p>
               <p className="hidden truncate text-xs text-muted sm:block">
                 {collection.name}
@@ -322,74 +324,74 @@ export function FileViewer({
             </div>
             {(siblings.previous || siblings.next) && (
               <div className="flex items-center">
-                <Button variant="ghost" size="icon" aria-label="Previous item (←)" disabled={!siblings.previous} onClick={() => step(siblings.previous)}>
+                <Button variant="ghost" size="icon" aria-label={t('fileViewer.previousItem')} disabled={!siblings.previous} onClick={() => step(siblings.previous)}>
                   <ChevronLeft />
                 </Button>
                 {siblings.position && (
                   <span className="hidden text-xs text-muted tabular-nums md:inline">
-                    {format.number(siblings.position)} of {format.number(siblings.total ?? 0)}
-                    {siblings.more && '+'}
+                    {t('fileViewer.position', { position: format.number(siblings.position), total: `${format.number(siblings.total ?? 0)}${siblings.more ? '+' : ''}` })}
                   </span>
                 )}
-                <Button variant="ghost" size="icon" aria-label="Next item (→)" disabled={!siblings.next} onClick={() => step(siblings.next)}>
+                <Button variant="ghost" size="icon" aria-label={t('fileViewer.nextItem')} disabled={!siblings.next} onClick={() => step(siblings.next)}>
                   <ChevronRight />
                 </Button>
               </div>
             )}
             {item && !file?.earlier && <OpenInOffice item={item} collection={collection} className="hidden sm:inline-flex" />}
             {canEdit && !edit && (
-              <Button variant="secondary" onClick={() => onEdit(true)} title="Edit (E)">
-                <Pencil /> <span className="hidden sm:inline">Edit</span>
+              <Button variant="secondary" onClick={() => onEdit(true)} title={t('fileViewer.editTitle')}>
+                <Pencil /> <span className="hidden sm:inline">{t('common:actions.edit')}</span>
               </Button>
             )}
             {file && (
-              <Button variant="ghost" className="hidden sm:inline-flex" onClick={download} title="Download (D)">
-                <Download /> Download
+              <Button variant="ghost" className="hidden sm:inline-flex" onClick={download} title={t('action.downloadTitle')}>
+                <Download /> {t('common:actions.download')}
               </Button>
             )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" aria-label="More file actions">
+                <Button variant="ghost" size="icon" aria-label={t('fileViewer.moreActions')}>
                   <MoreHorizontal />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onSelect={copyLink}>
-                  <Link2 /> Copy file link
+                  <Link2 /> {t('fileViewer.copyLink')}
                 </DropdownMenuItem>
                 {file && (
                   <DropdownMenuItem className="sm:hidden" onSelect={download}>
-                    <Download /> Download
+                    <Download /> {t('common:actions.download')}
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onSelect={() => guard(onDetails)}>
-                  <PanelRight /> Open details
+                  <PanelRight /> {t('fileViewer.openDetails')}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button variant={info ? 'secondary' : 'ghost'} size="icon" aria-label="Info (I)" aria-pressed={info} title="Info (I)" onClick={() => toggleInfo()}>
+            <Button variant={info ? 'secondary' : 'ghost'} size="icon" aria-label={t('fileViewer.info')} aria-pressed={info} title={t('fileViewer.info')} onClick={() => toggleInfo()}>
               <Info />
             </Button>
-            <Button variant="ghost" size="icon" aria-label="Close" title="Close (Esc)" className="hidden sm:inline-flex" onClick={close}>
+            <Button variant="ghost" size="icon" aria-label={t('common:actions.close')} title={t('fileViewer.closeTitle')} className="hidden sm:inline-flex" onClick={close}>
               <X />
             </Button>
           </header>
           {file?.earlier && version && (
             <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b bg-warning-soft px-4 py-2 text-[13px]">
               <span>
-                You are viewing version {version.version}, uploaded {format.dateTime(version.created_at)}
-                {version.created_by && ` by ${names.get(version.created_by) ?? version.created_by}`}.
+                {version.created_by
+                  ? t('fileViewer.viewingBy', { version: version.version, date: format.dateTime(version.created_at), person: names.get(version.created_by) ?? version.created_by })
+                  : t('fileViewer.viewing', { version: version.version, date: format.dateTime(version.created_at) })}
               </span>
               <Button size="sm" variant="ghost" onClick={() => guard(onDetails)}>
-                Restore it from the File tab
+                {t('fileViewer.restoreFromFileTab')}
               </Button>
               <Button size="sm" variant="ghost" onClick={() => item && onStep(item.id)}>
-                View the current file
+                {t('fileViewer.viewCurrent')}
               </Button>
               {item?.file && comparable(version.content_type) && comparable(item.file.content_type) && (
                 <Button size="sm" variant="ghost" onClick={() => setComparing(true)}>
-                  <GitCompare /> Compare with the current file
+                  <GitCompare /> {t('fileViewer.compareCurrent')}
                 </Button>
               )}
             </div>
@@ -430,13 +432,9 @@ export function FileViewer({
             setPending(undefined);
             blocker.reset?.();
           }}
-          title={unsaved === 'file' ? 'Leave with unsaved changes?' : 'Discard unsaved changes?'}
-          description={
-            unsaved === 'file'
-              ? 'Your changes to this file have not been saved. This browser keeps them and offers them back when you edit the file again.'
-              : "Your changes to this item's details have not been saved."
-          }
-          confirm={unsaved === 'file' ? 'Leave' : 'Discard changes'}
+          title={unsaved === 'file' ? t('fileViewer.leaveTitle') : t('fileViewer.discardTitle')}
+          description={unsaved === 'file' ? t('fileViewer.leaveDescription') : t('fileViewer.discardDetailsDescription')}
+          confirm={unsaved === 'file' ? t('fileViewer.leave') : t('edit.discardChanges')}
           onConfirm={() => {
             const action = pending;
             setPending(undefined);

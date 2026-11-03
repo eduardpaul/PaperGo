@@ -11,6 +11,7 @@ import { SmartFolderDialog } from '@/features/smart-folders/editor-dialog';
 import { useHasScope } from '@/features/admin/common';
 import { PlaceContextMenu } from '@/features/workspaces/place-context-menu';
 import { CollectionIcon } from '@/features/lists/collection-icon';
+import { useTranslation } from '@/i18n';
 import { useSearchAvailable } from '@/lib/search';
 import { cn } from '@/lib/utils';
 
@@ -19,17 +20,18 @@ const itemClass =
 const activeClass = 'bg-accent-soft! text-accent! font-medium [&_svg]:text-accent!';
 
 const navigation = [
-  { to: '/', label: 'Home', icon: House, exact: true },
-  { to: '/inbox', label: 'Inbox', icon: Inbox, exact: false },
-  { to: '/tasks', label: 'Tasks', icon: ClipboardCheck, exact: false },
-  { to: '/search', label: 'Search', icon: Search, exact: false },
-  { to: '/archive', label: 'Archive', icon: Archive, exact: false },
+  { to: '/', label: 'nav.home', icon: House, exact: true },
+  { to: '/inbox', label: 'nav.inbox', icon: Inbox, exact: false },
+  { to: '/tasks', label: 'nav.tasks', icon: ClipboardCheck, exact: false },
+  { to: '/search', label: 'nav.search', icon: Search, exact: false },
+  { to: '/archive', label: 'nav.archive', icon: Archive, exact: false },
 ] as const;
 
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
+  const { t } = useTranslation('shell');
   const searchAvailable = useSearchAvailable();
   return (
-    <nav aria-label="Main" className="flex h-full flex-col border-r bg-sidebar">
+    <nav aria-label={t('nav.label')} className="flex h-full flex-col border-r bg-sidebar">
       <div className="flex h-14 items-center px-4">
         <Link to="/" onClick={onNavigate}>
           <Logo />
@@ -41,7 +43,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             <li key={entry.to}>
               <Link to={entry.to} onClick={onNavigate} className={itemClass} activeProps={{ className: activeClass }} activeOptions={{ exact: entry.exact }}>
                 <entry.icon />
-                <span className="flex-1">{entry.label}</span>
+                <span className="flex-1">{t(entry.label)}</span>
               </Link>
             </li>
           ))}
@@ -54,6 +56,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 function SmartFolders({ onNavigate }: { onNavigate?: () => void }) {
+  const { t } = useTranslation('shell');
   const navigate = useNavigate();
   const { data } = useQuery(smartFoldersQuery);
   const [open, setOpen] = useState(true);
@@ -64,9 +67,9 @@ function SmartFolders({ onNavigate }: { onNavigate?: () => void }) {
       <div className="flex items-center px-2 pb-1">
         <Collapsible.Trigger className="flex flex-1 items-center gap-1 text-xs font-medium text-muted hover:text-foreground">
           <ChevronRight className={cn('size-3 transition-transform', open && 'rotate-90')} />
-          Smart folders
+          {t('nav.smartFolders')}
         </Collapsible.Trigger>
-        {canCreate && <button type="button" aria-label="New smart folder" className="rounded p-0.5 text-muted hover:bg-surface-muted hover:text-foreground" onClick={() => setCreating(true)}>
+        {canCreate && <button type="button" aria-label={t('nav.newSmartFolder')} className="rounded p-0.5 text-muted hover:bg-surface-muted hover:text-foreground" onClick={() => setCreating(true)}>
           <Plus className="size-3.5" />
         </button>}
       </div>
@@ -95,6 +98,7 @@ function SmartFolders({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 function Workspaces({ onNavigate }: { onNavigate?: () => void }) {
+  const { t } = useTranslation('shell');
   const { data, isPending } = useQuery(workspacesQuery);
   const { workspaceId: current } = useParams({ strict: false });
   const [open, setOpen] = useState(true);
@@ -106,10 +110,10 @@ function Workspaces({ onNavigate }: { onNavigate?: () => void }) {
       <div className="flex items-center px-2 pb-1">
         <Collapsible.Trigger className="flex flex-1 items-center gap-1 text-xs font-medium text-muted hover:text-foreground">
           <ChevronRight className={cn('size-3 transition-transform', open && 'rotate-90')} />
-          Workspaces
+          {t('nav.workspaces')}
         </Collapsible.Trigger>
         {canCreate && (
-          <Link to="/w" search={{ create: true }} onClick={onNavigate} aria-label="New workspace" className="rounded p-0.5 text-muted hover:bg-surface-muted hover:text-foreground">
+          <Link to="/w" search={{ create: true }} onClick={onNavigate} aria-label={t('nav.newWorkspace')} className="rounded p-0.5 text-muted hover:bg-surface-muted hover:text-foreground">
             <Plus className="size-3.5" />
           </Link>
         )}

@@ -10,6 +10,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { Input, Label, Textarea } from '@/components/ui/input';
 import { Checkbox, Select } from '@/components/ui/select';
 import { typeTree } from '@/features/lists/schema';
+import { useTranslation } from '@/i18n';
 import { formDefaults } from './model';
 import type { FormSchema } from './model';
 
@@ -22,6 +23,7 @@ export function JsonInput({
   onChange: (value: unknown) => void;
   label: string;
 }) {
+  const { t } = useTranslation('workflows');
   const [text, setText] = useState(stringifyJSON(value) ?? '');
   const [error, setError] = useState('');
   return (
@@ -39,7 +41,7 @@ export function JsonInput({
             event.target.setCustomValidity('');
             setError('');
           } catch (cause) {
-            const message = cause instanceof Error ? cause.message : 'Enter valid JSON.';
+            const message = cause instanceof Error ? cause.message : t('form.invalidJson');
             event.target.setCustomValidity(message);
             setError(message);
           }
@@ -98,6 +100,7 @@ function SchemaValue({
   required?: boolean;
   workspaceId: string;
 }) {
+  const { t } = useTranslation(['workflows', 'common']);
   const id = useId();
   const present = value !== undefined || required;
   const empty =
@@ -123,7 +126,7 @@ function SchemaValue({
               checked={value !== undefined}
               onChange={(event) => onChange(event.target.checked ? empty : undefined)}
             />
-            Include
+            {t('form.include')}
           </label>
         )}
       </div>
@@ -145,7 +148,7 @@ function SchemaValue({
             required={required}
             onChange={(event) => onChange(schema.enum![Number(event.target.value)])}
           >
-            <option value={-1}>Choose…</option>
+            <option value={-1}>{t('form.choose')}</option>
             {schema.enum.map((option, index) => (
               <option key={index} value={index}>
                 {String(option)}
@@ -155,7 +158,7 @@ function SchemaValue({
         ) : schema.type === 'boolean' ? (
           <label className="flex gap-2">
             <Checkbox id={id} checked={value === true} onChange={(event) => onChange(event.target.checked)} />
-            Yes
+            {t('common:answer.yes')}
           </label>
         ) : schema.type === 'object' && schema.properties && !schema.additionalProperties ? (
           <SchemaFields
@@ -290,6 +293,7 @@ function DomainPicker({
 function ArrayValues({schema,value,onChange,label,workspaceId}: {
  schema:FormSchema; value:unknown; onChange:(value:unknown)=>void; label:string; workspaceId:string;
 }) {
+ const { t } = useTranslation(['workflows', 'common']);
  const prefix=useId();
  const entries=Array.isArray(value)?value:[];
  const [ids,setIds]=useState(()=>entries.map((_,i)=>`${prefix}:${i}`));
@@ -306,14 +310,14 @@ function ArrayValues({schema,value,onChange,label,workspaceId}: {
     onChange={next=>onChange(entries.map((current,i)=>i===index?next:current))}
     label={`${label} ${index+1}`} required workspaceId={workspaceId}/>
    <div className="flex gap-2">
-    <Button size="sm" disabled={index===0} onClick={()=>move(index,-1)}>Move up</Button>
-    <Button size="sm" disabled={index===entries.length-1} onClick={()=>move(index,1)}>Move down</Button>
-    <Button size="sm" onClick={()=>{setIds(ids.filter((_,i)=>i!==index));onChange(entries.filter((_,i)=>i!==index))}}>Remove</Button>
+    <Button size="sm" disabled={index===0} onClick={()=>move(index,-1)}>{t('form.moveUp')}</Button>
+    <Button size="sm" disabled={index===entries.length-1} onClick={()=>move(index,1)}>{t('form.moveDown')}</Button>
+    <Button size="sm" onClick={()=>{setIds(ids.filter((_,i)=>i!==index));onChange(entries.filter((_,i)=>i!==index))}}>{t('common:actions.removeItem')}</Button>
    </div>
   </div>)}
   <Button size="sm" disabled={schema.maxItems!==undefined && entries.length>=schema.maxItems} onClick={()=>{
    setIds([...ids,`${prefix}:${serial}`]);setSerial(serial+1);
    onChange([...entries,schema.items?.default??(schema.items?.type==='object'?formDefaults(schema.items):schema.items?.type==='boolean'?false:schema.items?.type==='array'?[]:'')]);
-  }}>Add {label.toLowerCase()}</Button>
+  }}>{t('form.add', { label: label.toLowerCase() })}</Button>
  </div>;
 }

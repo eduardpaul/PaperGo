@@ -11,6 +11,7 @@ import { Alert } from '@/components/ui/feedback';
 import { Input, Textarea } from '@/components/ui/input';
 import { Checkbox, Select } from '@/components/ui/select';
 import { ConfirmDialog, SettingsSection } from '@/features/settings/section';
+import { useTranslation } from '@/i18n';
 import { Field, QueryFeedback, useHasScope } from './common';
 import { PackageTransfer } from './package-transfer';
 
@@ -50,6 +51,7 @@ export const termSetsQuery = { queryKey: ['termStore', 'sets'], queryFn: () => a
 const groupQuery = { queryKey: ['termStore', 'groups'], queryFn: () => allPages<TermGroup>('/v1/term-groups') };
 
 export function TermStore() {
+  const { t } = useTranslation(['admin', 'common']);
   const client = useQueryClient();
   const canRead = useHasScope('taxonomy.read');
   const canEdit = useHasScope('taxonomy.manage');
@@ -74,16 +76,16 @@ export function TermStore() {
     },
   });
   const selected = sets.data?.find((set) => set.id === setId);
-  if (!canRead) return <Alert>You need taxonomy.read to view the term store.</Alert>;
+  if (!canRead) return <Alert>{t('terms.needRead')}</Alert>;
   return (
     <div className="flex flex-col gap-5">
       <div className="grid gap-5 lg:grid-cols-[18rem_1fr]">
         <SettingsSection
-          title="Term sets"
+          title={t('terms.sets')}
           actions={
             canEdit && (
               <Button onClick={() => setEditing({ kind: 'group' })}>
-                <Plus /> Group
+                <Plus /> {t('terms.group')}
               </Button>
             )
           }
@@ -100,7 +102,7 @@ export function TermStore() {
                       <Button
                         size="icon"
                         variant="ghost"
-                        aria-label={`Edit ${group.name}`}
+                        aria-label={t('terms.edit', { name: group.name })}
                         onClick={() => setEditing({ kind: 'group', entity: group })}
                       >
                         <Pencil />
@@ -108,7 +110,7 @@ export function TermStore() {
                       <Button
                         size="icon"
                         variant="ghost"
-                        aria-label={`New set in ${group.name}`}
+                        aria-label={t('terms.newSetIn', { name: group.name })}
                         onClick={() => setEditing({ kind: 'set', groupId: group.id })}
                       >
                         <Plus />
@@ -116,13 +118,13 @@ export function TermStore() {
                       <Button
                         size="icon"
                         variant="ghost"
-                        aria-label={`Delete ${group.name}`}
+                        aria-label={t('terms.delete', { name: group.name })}
                         onClick={() => setDeleting({ kind: 'group', entity: group })}
                       >
                         <Trash2 />
                       </Button>
                       <Button size="sm" onClick={() => setImportGroup(group.id)}>
-                        Import CSV
+                        {t('terms.importCsv')}
                       </Button>
                     </>
                   )}
@@ -138,7 +140,7 @@ export function TermStore() {
                           onClick={() => setSetId(set.id)}
                         >
                           {set.name}
-                          {set.is_keywords && <Badge className="ml-2">Keywords</Badge>}
+                          {set.is_keywords && <Badge className="ms-2">{t('terms.keywords')}</Badge>}
                         </button>
                       </li>
                     ))}
@@ -150,16 +152,16 @@ export function TermStore() {
         {selected ? (
           <SettingsSection
             title={selected.name}
-            description={selected.is_open ? 'People can add terms when assigning metadata.' : 'Managed terms.'}
+            description={selected.is_open ? t('terms.open') : t('terms.managed')}
             actions={
               canEdit &&
               !selected.is_keywords && (
                 <>
                   <Button onClick={() => setEditing({ kind: 'set', entity: selected, groupId: selected.group_id })}>
-                    Edit set
+                    {t('terms.editSet')}
                   </Button>
                   <Button variant="danger" onClick={() => setDeleting({ kind: 'set', entity: selected })}>
-                    Delete set
+                    {t('terms.deleteSet')}
                   </Button>
                 </>
               )
@@ -172,20 +174,20 @@ export function TermStore() {
           </SettingsSection>
         ) : (
           <SettingsSection
-            title="Choose a term set"
-            description="Shared keywords and categories for managed metadata and free keywords."
+            title={t('terms.choose')}
+            description={t('terms.chooseDescription')}
           />
         )}
       </div>
-      <PackageTransfer title="Taxonomy" path="/v1/taxonomy" canImport={canEdit} onImported={refresh} />
+      <PackageTransfer kind="taxonomy" path="/v1/taxonomy" canImport={canEdit} onImported={refresh} />
       {editing && <TaxonomyNameDialog {...editing} onClose={() => setEditing(undefined)} onSaved={refresh} />}
       {importGroup && <CSVImport groupId={importGroup} onClose={() => setImportGroup('')} onSaved={refresh} />}
       <ConfirmDialog
         open={!!deleting}
         onOpenChange={(open) => !open && setDeleting(undefined)}
-        title={`Delete ${deleting?.entity.name ?? ''}?`}
-        description="The server checks that no fields or terms still reference this definition."
-        confirm="Delete"
+        title={t('terms.deleteTitle', { name: deleting?.entity.name ?? '' })}
+        description={t('terms.deleteDescription')}
+        confirm={t('common:actions.delete')}
         busy={remove.isPending}
         error={remove.error}
         onConfirm={() => remove.mutate()}
@@ -207,6 +209,7 @@ function TaxonomyNameDialog({
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
+  const { t } = useTranslation(['admin', 'common']);
   const [name, setName] = useState(entity?.name ?? '');
   const [key, setKey] = useState(entity && 'key' in entity ? entity.key : '');
   const [description, setDescription] = useState(entity?.description ?? '');
@@ -232,17 +235,21 @@ function TaxonomyNameDialog({
   return (
     <FormDialog
       open
-      title={`${entity ? 'Edit' : 'New'} term ${kind}`}
-      submitLabel="Save"
+      title={
+        kind === 'group'
+          ? entity ? t('terms.dialog.editGroup') : t('terms.dialog.newGroup')
+          : entity ? t('terms.dialog.editSet') : t('terms.dialog.newSet')
+      }
+      submitLabel={t('common:actions.save')}
       pending={save.isPending}
       onClose={onClose}
       onSubmit={() => save.mutate()}
     >
-      <Field id="taxonomy-name" label="Name">
+      <Field id="taxonomy-name" label={t('common:fields.name')}>
         <Input id="taxonomy-name" required value={name} onChange={(event) => setName(event.target.value)} />
       </Field>
       {kind === 'set' && (
-        <Field id="taxonomy-key" label="Key">
+        <Field id="taxonomy-key" label={t('terms.key')}>
           <Input
             id="taxonomy-key"
             required
@@ -252,7 +259,7 @@ function TaxonomyNameDialog({
           />
         </Field>
       )}
-      <Field id="taxonomy-description" label="Description">
+      <Field id="taxonomy-description" label={t('common:fields.description')}>
         <Textarea
           id="taxonomy-description"
           value={description}
@@ -262,7 +269,7 @@ function TaxonomyNameDialog({
       {kind === 'set' && (
         <label className="flex gap-2">
           <Checkbox checked={open} onChange={(event) => setOpen(event.target.checked)} />
-          Allow people to add terms when assigning metadata
+          {t('terms.allowAdd')}
         </label>
       )}
     </FormDialog>
@@ -270,6 +277,7 @@ function TaxonomyNameDialog({
 }
 
 function TermLevel({ set, parentId, canEdit }: { set: TermSet; parentId?: string; canEdit: boolean }) {
+  const { t } = useTranslation('admin');
   const [editing, setEditing] = useState<ManagedTerm | 'new'>();
   const [expanded, setExpanded] = useState('');
   const terms = useQuery({
@@ -287,17 +295,17 @@ function TermLevel({ set, parentId, canEdit }: { set: TermSet; parentId?: string
               <Button
                 size="icon"
                 variant="ghost"
-                aria-label={`Expand ${term.name}`}
+                aria-label={t('terms.expand', { name: term.name })}
                 disabled={!term.has_children}
                 onClick={() => setExpanded(expanded === term.id ? '' : term.id)}
               >
                 <ChevronRight />
               </Button>
               <span className="flex-1" style={{ color: term.color || undefined }}>
-                {term.name} {term.deprecated && <Badge>Deprecated</Badge>}
+                {term.name} {term.deprecated && <Badge>{t('terms.deprecated')}</Badge>}
               </span>
               {canEdit && (
-                <Button size="icon" variant="ghost" aria-label={`Edit ${term.name}`} onClick={() => setEditing(term)}>
+                <Button size="icon" variant="ghost" aria-label={t('terms.edit', { name: term.name })} onClick={() => setEditing(term)}>
                   <Pencil />
                 </Button>
               )}
@@ -308,7 +316,7 @@ function TermLevel({ set, parentId, canEdit }: { set: TermSet; parentId?: string
       </ul>
       {canEdit && (
         <Button size="sm" onClick={() => setEditing('new')}>
-          <Plus /> New term {parentId ? 'below' : ''}
+          <Plus /> {parentId ? t('terms.newTermBelow') : t('terms.newTerm')}
         </Button>
       )}
       {editing && (
@@ -334,6 +342,7 @@ function TermDialog({
   parentId?: string;
   onClose: () => void;
 }) {
+  const { t } = useTranslation(['admin', 'common']);
   const client = useQueryClient();
   const [name, setName] = useState(term?.name ?? '');
   const [description, setDescription] = useState(term?.description ?? '');
@@ -393,65 +402,65 @@ function TermDialog({
   return (
     <FormDialog
       open
-      title={term ? `Term ${term.name}` : 'New term'}
-      submitLabel="Save term"
+      title={term ? t('terms.term', { name: term.name }) : t('terms.newTerm')}
+      submitLabel={t('terms.saveTerm')}
       pending={save.isPending || move.isPending || merge.isPending}
       onClose={onClose}
       onSubmit={() => save.mutate()}
     >
-      <Field id="term-name" label="Name">
+      <Field id="term-name" label={t('common:fields.name')}>
         <Input id="term-name" required value={name} onChange={(event) => setName(event.target.value)} />
       </Field>
-      <Field id="term-synonyms" label="Synonyms">
+      <Field id="term-synonyms" label={t('terms.synonyms')}>
         <Input
           id="term-synonyms"
           value={synonyms}
           onChange={(event) => setSynonyms(event.target.value)}
-          placeholder="Comma separated"
+          placeholder={t('terms.commaSeparated')}
         />
       </Field>
-      <Field id="term-description" label="Description">
+      <Field id="term-description" label={t('common:fields.description')}>
         <Textarea id="term-description" value={description} onChange={(event) => setDescription(event.target.value)} />
       </Field>
-      <Field id="term-color" label="Color">
+      <Field id="term-color" label={t('terms.color')}>
         <Input
           id="term-color"
           value={color}
           onChange={(event) => setColor(event.target.value)}
-          placeholder="#4f46e5 or empty"
+          placeholder={t('terms.colorPlaceholder')}
         />
       </Field>
       <label className="flex gap-2">
         <Checkbox checked={deprecated} onChange={(event) => setDeprecated(event.target.checked)} />
-        Deprecated
+        {t('terms.deprecated')}
       </label>
       <label className="flex gap-2">
         <Checkbox checked={keyword} onChange={(event) => setKeyword(event.target.checked)} />
-        Available as a keyword
+        {t('terms.availableAsKeyword')}
       </label>
       {term && (
         <>
-          <Field id="term-parent" label="Move below term">
+          <Field id="term-parent" label={t('terms.moveBelow')}>
             <Input
               id="term-parent"
               value={parent}
               onChange={(event) => setParent(event.target.value)}
-              placeholder="Parent term id, empty for root"
+              placeholder={t('terms.parentPlaceholder')}
             />
           </Field>
           <Button disabled={move.isPending} onClick={() => move.mutate()}>
-            Move term
+            {t('terms.move')}
           </Button>
-          <Field id="term-target" label="Merge into term">
+          <Field id="term-target" label={t('terms.mergeInto')}>
             <Input
               id="term-target"
               value={target}
               onChange={(event) => setTarget(event.target.value)}
-              placeholder="Target term id"
+              placeholder={t('terms.targetPlaceholder')}
             />
           </Field>
           <Button disabled={!target.trim() || merge.isPending} onClick={() => merge.mutate()}>
-            Merge term and its references
+            {t('terms.merge')}
           </Button>
         </>
       )}
@@ -468,6 +477,7 @@ function CSVImport({
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
+  const { t } = useTranslation('admin');
   const [csv, setCSV] = useState('');
   const upload = useMutation({
     mutationFn: () =>
@@ -477,7 +487,12 @@ function CSVImport({
         headers: { 'Content-Type': 'text/csv' },
       }),
     onSuccess: async (result) => {
-      toast.success(`${result.data.terms_created} terms and ${result.data.sets_created} sets imported`);
+      toast.success(
+        t('terms.imported', {
+          terms: t('terms.termCount', { count: result.data.terms_created }),
+          sets: t('terms.setCount', { count: result.data.sets_created }),
+        }),
+      );
       await onSaved();
       onClose();
     },
@@ -485,20 +500,21 @@ function CSVImport({
   return (
     <FormDialog
       open
-      title="Import term CSV"
-      description="SharePoint term-set format: Term Set Name, Term Set Description, LCID, Available for Tagging, Term Description and Level 1 Term through Level 7 Term."
-      submitLabel="Import"
+      title={t('terms.csvTitle')}
+      description={t('terms.csvDescription')}
+      submitLabel={t('terms.import')}
       pending={upload.isPending}
       submitDisabled={!csv.trim()}
       onClose={onClose}
       onSubmit={() => upload.mutate()}
     >
-      <Textarea aria-label="Term CSV" rows={10} value={csv} onChange={(event) => setCSV(event.target.value)} />
+      <Textarea aria-label={t('terms.csv')} rows={10} value={csv} onChange={(event) => setCSV(event.target.value)} />
     </FormDialog>
   );
 }
 
 function KeywordPromotion({ sets, canEdit }: { sets: TermSet[]; canEdit: boolean }) {
+  const { t } = useTranslation('admin');
   const client = useQueryClient();
   const popular = useQuery({
     queryKey: ['termStore', 'popular'],
@@ -513,11 +529,11 @@ function KeywordPromotion({ sets, canEdit }: { sets: TermSet[]; canEdit: boolean
   });
   return (
     <div className="mt-4 border-t pt-3">
-      <p className="mb-2 font-medium">Popular keywords</p>
+      <p className="mb-2 font-medium">{t('terms.popular')}</p>
       <QueryFeedback query={popular} />
       {canEdit && (
-        <Select aria-label="Promote into term set" value={target} onChange={(event) => setTarget(event.target.value)}>
-          <option value="">Target set…</option>
+        <Select aria-label={t('terms.promoteInto')} value={target} onChange={(event) => setTarget(event.target.value)}>
+          <option value="">{t('terms.targetSet')}</option>
           {sets.map((set) => (
             <option key={set.id} value={set.id}>
               {set.name}
@@ -529,11 +545,11 @@ function KeywordPromotion({ sets, canEdit }: { sets: TermSet[]; canEdit: boolean
         {popular.data?.map(({ term, count }) => (
           <li key={term.id} className="flex items-center gap-3 py-2">
             <span className="flex-1">
-              {term.name} · {count} uses
+              {t('terms.uses', { name: term.name, count })}
             </span>
             {canEdit && (
               <Button size="sm" disabled={!target || promote.isPending} onClick={() => promote.mutate(term)}>
-                Promote
+                {t('terms.promote')}
               </Button>
             )}
           </li>

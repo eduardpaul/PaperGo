@@ -37,6 +37,7 @@ import { AddToSmartFolder } from '@/features/smart-folders/classification';
 import { Discussion } from '@/features/comments/discussion';
 import { commentsAvailable } from '@/api/auth';
 import { ItemWorkflows } from '@/features/workflows/item-workflows';
+import { useTranslation } from '@/i18n';
 import { useFormat } from '@/lib/preferences';
 import { can } from './access';
 import { AccessEditor } from './access-editor';
@@ -82,6 +83,7 @@ export function ItemPanel({
   chrome,
   onDirty,
 }: ItemPanelProps & { chrome: 'sheet' | 'panel'; onDirty?: (dirty: boolean) => void }) {
+  const { t } = useTranslation(['lists', 'common']);
   const queryClient = useQueryClient();
   const format = useFormat();
   const names = usePeopleNames();
@@ -104,7 +106,7 @@ export function ItemPanel({
       }),
     onSuccess: async () => {
       setDialog(undefined);
-      toast.success('Moved to the recycle bin');
+      toast.success(t('menu.deleted'));
       await queryClient.invalidateQueries({ queryKey: keys.resources });
       onClose();
     },
@@ -136,47 +138,47 @@ export function ItemPanel({
     <>
         <header className="flex items-start gap-2 border-b px-4 py-3">
           <div className="min-w-0 flex-1">
-            <Title className="truncate text-base font-semibold">{item?.name ?? (itemQuery.isPending ? '…' : 'Item')}{item?.archived && <Badge className="ml-2">Archived</Badge>}</Title>
+            <Title className="truncate text-base font-semibold">{item?.name ?? (itemQuery.isPending ? '…' : t('moves.unnamed'))}{item?.archived && <Badge className="ml-2">{t('system.archived')}</Badge>}</Title>
             <Description className="truncate text-xs text-muted">
               {collection.name}
-              {item?.updated_at && ` · Updated ${format.relative(item.updated_at)}${editor ? ` by ${editor}` : ''}`}
+              {item?.updated_at && ` · ${editor ? t('sheet.updatedBy', { time: format.relative(item.updated_at), editor }) : t('sheet.updated', { time: format.relative(item.updated_at) })}`}
             </Description>
           </div>
           {item && hasActions && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" aria-label="Item actions">
+                <Button variant="ghost" size="icon" aria-label={t('sheet.actions')}>
                   <MoreHorizontal />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 {isFile && (
                   <DropdownMenuItem onSelect={() => void downloadContent(item.id, item.name)}>
-                    <Download /> Download original
+                    <Download /> {t('sheet.downloadOriginal')}
                   </DropdownMenuItem>
                 )}
                 {item.kind === 'item' && canWrite && (
                   <>
-                    <DropdownMenuItem disabled={archive.isPending} onSelect={() => archive.mutate({ items: [item], archived: !item.archived })}>{item.archived ? 'Unarchive' : 'Archive'}</DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => setDialog('rename')}>Rename…</DropdownMenuItem>
+                    <DropdownMenuItem disabled={archive.isPending} onSelect={() => archive.mutate({ items: [item], archived: !item.archived })}>{item.archived ? t('common:actions.unarchive') : t('common:actions.archive')}</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setDialog('rename')}>{t('menu.rename')}</DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => setDialog('move')}>
-                      <FolderInput /> Move…
+                      <FolderInput /> {t('menu.move')}
                     </DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => setDialog('classify')}>
-                      <FolderSearch /> Add to smart folder…
+                      <FolderSearch /> {t('sheet.addToSmartFolder')}
                     </DropdownMenuItem>
                   </>
                 )}
                 {item.kind === 'item' && (
                   <DropdownMenuItem onSelect={() => setDialog('schema')}>
-                    <FileCode2 /> Field definitions
+                    <FileCode2 /> {t('sheet.fieldDefinitions')}
                   </DropdownMenuItem>
                 )}
                 {canWrite && (
                   <>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem tone="danger" onSelect={() => setDialog('delete')}>
-                      <Trash2 /> Delete
+                      <Trash2 /> {t('common:actions.delete')}
                     </DropdownMenuItem>
                   </>
                 )}
@@ -186,7 +188,7 @@ export function ItemPanel({
           {sheet ? (
             <SheetClose />
           ) : (
-            <Button variant="ghost" size="icon" aria-label="Close the info panel" onClick={close}>
+            <Button variant="ghost" size="icon" aria-label={t('sheet.closePanel')} onClick={close}>
               <X />
             </Button>
           )}
@@ -200,14 +202,14 @@ export function ItemPanel({
         {item ? (
           <Tabs value={current} onValueChange={onTab} className="flex min-h-0 flex-1 flex-col">
             <TabsList className="shrink-0 overflow-x-auto">
-              <TabsTrigger value="details">Details</TabsTrigger>
-              {isFile && <TabsTrigger value="content">File</TabsTrigger>}
-              <TabsTrigger value="versions">Versions</TabsTrigger>
-              <TabsTrigger value="links">Links</TabsTrigger>
-              {item.kind === 'item' && <TabsTrigger value="workflows">Workflows</TabsTrigger>}
-              {discussed && <TabsTrigger value="discussion">Discussion</TabsTrigger>}
-              {canManage && <TabsTrigger value="access">Permissions</TabsTrigger>}
-              {collection.publishing_enabled && <TabsTrigger value="publish">Publishing</TabsTrigger>}
+              <TabsTrigger value="details">{t('menu.details')}</TabsTrigger>
+              {isFile && <TabsTrigger value="content">{t('sheet.tabs.file')}</TabsTrigger>}
+              <TabsTrigger value="versions">{t('sheet.tabs.versions')}</TabsTrigger>
+              <TabsTrigger value="links">{t('sheet.tabs.links')}</TabsTrigger>
+              {item.kind === 'item' && <TabsTrigger value="workflows">{t('sheet.tabs.workflows')}</TabsTrigger>}
+              {discussed && <TabsTrigger value="discussion">{t('sheet.tabs.discussion')}</TabsTrigger>}
+              {canManage && <TabsTrigger value="access">{t('menu.permissions')}</TabsTrigger>}
+              {collection.publishing_enabled && <TabsTrigger value="publish">{t('general.publishing')}</TabsTrigger>}
             </TabsList>
             {/* Kept mounted so switching tabs does not lose unsaved edits. */}
             <TabsContent value="details" forceMount className="flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden">
@@ -257,7 +259,7 @@ export function ItemPanel({
             <Skeleton className="h-9" />
           </div>
         ) : (
-          <p className="p-4 text-sm text-muted">This item is not available. It was deleted or moved, or you no longer have access.</p>
+          <p className="p-4 text-sm text-muted">{t('sheet.unavailable')}</p>
         )}
         {item && dialog === 'rename' && <RenameDialog item={item} onClose={() => setDialog(undefined)} />}
         {item && dialog === 'move' && (
@@ -268,7 +270,7 @@ export function ItemPanel({
           <Dialog open onOpenChange={(open) => !open && setDialog(undefined)}>
             <DialogContent className="max-h-[85vh] overflow-auto">
               <DialogHeader>
-                <DialogTitle>Field definitions</DialogTitle>
+                <DialogTitle>{t('sheet.fieldDefinitions')}</DialogTitle>
               </DialogHeader>
               <div className="px-5 pb-5">
                 <ItemSchemaView itemId={item.id} />
@@ -279,13 +281,9 @@ export function ItemPanel({
         <ConfirmDialog
           open={dialog === 'delete'}
           onOpenChange={(open) => !open && setDialog(undefined)}
-          title={`Delete “${item?.name ?? ''}”?`}
-          description={
-            item?.kind === 'folder'
-              ? 'The folder is deleted with everything in it. You can restore it from the recycle bin.'
-              : 'You can restore it from the recycle bin.'
-          }
-          confirm="Delete"
+          title={t('menu.deleteTitle', { name: item?.name ?? '' })}
+          description={item?.kind === 'folder' ? t('sheet.deleteFolder') : t('sheet.deleteItem')}
+          confirm={t('common:actions.delete')}
           busy={remove.isPending}
           error={remove.error}
           onConfirm={() => remove.mutate()}
@@ -293,9 +291,9 @@ export function ItemPanel({
         <ConfirmDialog
           open={confirmingClose}
           onOpenChange={setConfirmingClose}
-          title="Discard unsaved changes?"
-          description="Your changes to this item have not been saved."
-          confirm="Discard changes"
+          title={t('sheet.discardTitle')}
+          description={t('sheet.discardDescription')}
+          confirm={t('general.discard')}
           onConfirm={() => {
             setConfirmingClose(false);
             onClose();
@@ -308,7 +306,7 @@ export function ItemPanel({
       <SheetContent aria-describedby={undefined}>{body}</SheetContent>
     </Sheet>
   ) : (
-    <aside aria-label="Item info" className="flex h-full min-h-0 flex-col bg-surface">
+    <aside aria-label={t('sheet.info')} className="flex h-full min-h-0 flex-col bg-surface">
       {body}
     </aside>
   );
@@ -316,6 +314,7 @@ export function ItemPanel({
 
 /** Replaces an item's file with a new version. */
 function useReplaceFile(item: Resource | undefined) {
+  const { t } = useTranslation('lists');
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (file: File) => replaceContent(item!.id, item!.version, file),
@@ -323,20 +322,21 @@ function useReplaceFile(item: Resource | undefined) {
       await queryClient.invalidateQueries({ queryKey: keys.resources });
       const duplicates = result.data.duplicates ?? [];
       if (duplicates.length)
-        toast.warning(`Already stored elsewhere: ${duplicates.map((duplicate) => duplicate.name).join(', ')}`);
-      else toast.success(item?.file ? 'File replaced' : 'File uploaded');
+        toast.warning(t('sheet.duplicates', { names: duplicates.map((duplicate) => duplicate.name).join(', ') }));
+      else toast.success(item?.file ? t('sheet.replaced') : t('sheet.uploaded'));
     },
   });
 }
 
 function ReplaceInput({ input, onFile }: { input: React.RefObject<HTMLInputElement | null>; onFile: (file: File) => void }) {
+  const { t } = useTranslation('lists');
   return (
     <input
       ref={input}
       type="file"
       className="sr-only"
       tabIndex={-1}
-      aria-label="Replacement file"
+      aria-label={t('sheet.replacement')}
       onChange={(event) => {
         const file = event.target.files?.[0];
         if (file) onFile(file);
@@ -359,6 +359,7 @@ function Details({
   readOnly: boolean;
   onDirty: (dirty: boolean) => void;
 }) {
+  const { t } = useTranslation(['lists', 'common']);
   const queryClient = useQueryClient();
   const ownership = useQuery({ queryKey: ['resources', item.id, 'integration'], queryFn: async () => (await api<{ integration_id: string | null; name?: string; managed_fields: string[] }>(`/v1/items/${item.id}/integration`)).data, enabled: item.kind === 'item' });
   const managed = new Set(ownership.data?.managed_fields ?? []);
@@ -391,7 +392,7 @@ function Details({
       setContentTypeId(updated.content_type_id ?? '');
       queryClient.setQueryData(keys.resource(item.id), updated);
       await queryClient.invalidateQueries({ queryKey: keys.resources });
-      toast.success('Saved');
+      toast.success(t('common:status.saved'));
     },
   });
 
@@ -404,14 +405,14 @@ function Details({
       }}
     >
       <fieldset disabled={readOnly || save.isPending} className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4">
-        {readOnly && <p className="text-xs text-muted">You can read this item but not change it.</p>}
-        <Label htmlFor="item-name">Name</Label>
+        {readOnly && <p className="text-xs text-muted">{t('sheet.readOnly')}</p>}
+        <Label htmlFor="item-name">{t('common:fields.name')}</Label>
         <Input id="item-name" disabled={ownershipPending || managed.has('$name')} value={name} onChange={(event) => setName(event.target.value)} required />
         {contentTypes.length > 1 && item.kind === 'item' && (
           <>
-            <Label htmlFor="item-type">Content type</Label>
+            <Label htmlFor="item-type">{t('system.contentType')}</Label>
             <Select id="item-type" disabled={ownershipPending || managed.has('$content_type')} value={contentTypeId} onChange={(event) => setContentTypeId(event.target.value)}>
-              {!item.content_type_id && <option value="">Default</option>}
+              {!item.content_type_id && <option value="">{t('sheet.defaultType')}</option>}
               {contentTypes.map((type) => (
                 <option key={type.id} value={type.id}>
                   {type.name}
@@ -420,7 +421,7 @@ function Details({
             </Select>
           </>
         )}
-        {ownership.data?.integration_id && <p className="text-xs text-muted">{ownership.data.name} manages the event details. Local metadata stays editable.</p>}
+        {ownership.data?.integration_id && <p className="text-xs text-muted">{t('sheet.managedBy', { name: ownership.data.name })}</p>}
         <QueryFeedback query={ownership} />
         {visible.map((field) => (
           <fieldset key={field.id} disabled={ownershipPending || managed.has(field.key)}><FieldEditor
@@ -428,14 +429,14 @@ function Details({
             field={field}
             value={values[field.key]}
             onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))}
-          />{managed.has(field.key) && <p className="text-xs text-muted">Managed by integration</p>}</fieldset>
+          />{managed.has(field.key) && <p className="text-xs text-muted">{t('sheet.managed')}</p>}</fieldset>
         ))}
-        <Label htmlFor="item-keywords">Keywords</Label>
+        <Label htmlFor="item-keywords">{t('columns.keywords')}</Label>
         <KeywordInput id="item-keywords" value={keywords} onChange={setKeywords} disabled={readOnly} />
       </fieldset>
       {!readOnly && (
       <footer className="flex shrink-0 items-center justify-end gap-2 border-t bg-surface px-4 py-3">
-        {dirty && <span className="mr-auto text-xs text-muted">Unsaved changes</span>}
+        {dirty && <span className="mr-auto text-xs text-muted">{t('sheet.unsaved')}</span>}
         <Button
           type="button"
           disabled={!dirty || save.isPending}
@@ -446,10 +447,10 @@ function Details({
             setValues({ ...(item.values ?? {}) });
           }}
         >
-          Discard
+          {t('common:actions.discard')}
         </Button>
         <Button type="submit" variant="primary" disabled={!dirty || save.isPending || !name.trim()}>
-          {save.isPending ? 'Saving…' : 'Save'}
+          {save.isPending ? t('common:status.saving') : t('common:actions.save')}
         </Button>
       </footer>
       )}
@@ -458,6 +459,7 @@ function Details({
 }
 
 function Content({ item, canWrite }: { item: Resource; canWrite: boolean }) {
+  const { t } = useTranslation(['lists', 'common']);
   const queryClient = useQueryClient();
   const format = useFormat();
   const names = usePeopleNames();
@@ -474,7 +476,7 @@ function Content({ item, canWrite }: { item: Resource; canWrite: boolean }) {
       setRestoring(undefined);
       await queryClient.invalidateQueries({ queryKey: keys.resources });
       await queryClient.invalidateQueries({ queryKey: ['revisions', item.id] });
-      toast.success('File restored as a new version');
+      toast.success(t('sheet.fileRestored'));
     },
   });
   const replace = useReplaceFile(item);
@@ -483,28 +485,28 @@ function Content({ item, canWrite }: { item: Resource; canWrite: boolean }) {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap gap-2">
         <Button variant="primary" onClick={() => void downloadContent(item.id, item.name)}>
-          <Download /> Download original
+          <Download /> {t('sheet.downloadOriginal')}
         </Button>
         {canWrite && (
           <Button disabled={replace.isPending} onClick={() => input.current?.click()}>
-            <Upload /> {replace.isPending ? 'Uploading…' : 'Replace file'}
+            <Upload /> {replace.isPending ? t('sheet.uploading') : t('sheet.replace')}
           </Button>
         )}
         <ReplaceInput input={input} onFile={(file) => replace.mutate(file)} />
       </div>
       {viewable(item) ? (
-        <Link {...link(item)} aria-label={`Open ${item.file?.filename ?? item.name}`} className="cursor-zoom-in rounded-md focus-visible:ring-2 focus-visible:ring-ring">
-          <FilePreview itemId={item.id} version={item.version} alt={`Preview of ${item.name}`} />
+        <Link {...link(item)} aria-label={t('sheet.open', { name: item.file?.filename ?? item.name })} className="cursor-zoom-in rounded-md focus-visible:ring-2 focus-visible:ring-ring">
+          <FilePreview itemId={item.id} version={item.version} alt={t('sheet.preview', { name: item.name })} />
         </Link>
       ) : (
         <FileThumb item={item} className="h-40" iconClassName="size-12" />
       )}
       {canWrite && (
-        <p className="text-xs text-muted">Replacing the file keeps the name, keywords and columns, and adds a new file version.</p>
+        <p className="text-xs text-muted">{t('sheet.replaceHint')}</p>
       )}
       <section aria-labelledby="file-versions" className="flex flex-col gap-2">
         <h3 id="file-versions" className="text-[13px] font-medium">
-          File versions
+          {t('sheet.fileVersions')}
         </h3>
         <QueryFeedback query={versions} />
         <ul className="flex flex-col divide-y rounded-md border">
@@ -514,18 +516,18 @@ function Content({ item, canWrite }: { item: Resource; canWrite: boolean }) {
               <li key={version.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[13px] font-medium">
-                    Version {version.version}
-                    {version.is_current && <Badge className="ml-2">Current</Badge>}
-                    {unavailable && <Badge className="ml-2">Unavailable</Badge>}
+                    {t('sheet.version', { version: version.version })}
+                    {version.is_current && <Badge className="ml-2">{t('sheet.current')}</Badge>}
+                    {unavailable && <Badge className="ml-2">{t('sheet.unavailableBadge')}</Badge>}
                   </p>
                   <p className="truncate text-xs text-muted">
                     {version.filename} · {format.fileSize(version.size)} · {format.dateTime(version.created_at)}
                     {version.created_by && ` · ${names.get(version.created_by) ?? version.created_by}`}
-                    {unavailable && ' · content unavailable'}
+                    {unavailable && ` · ${t('sheet.contentUnavailable')}`}
                   </p>
                 </div>
                 {!unavailable && viewable({ file: { blob_id: version.id, content_type: version.content_type, filename: version.filename, size: version.size, version: version.version } }) && (
-                  <Link {...link(item, version.is_current ? {} : { blob: version.id })} aria-label={`Open version ${version.version}`} className={buttonVariants({ size: 'sm', variant: 'ghost' })}>
+                  <Link {...link(item, version.is_current ? {} : { blob: version.id })} aria-label={t('sheet.openVersion', { version: version.version })} className={buttonVariants({ size: 'sm', variant: 'ghost' })}>
                     <Expand />
                   </Link>
                 )}
@@ -533,32 +535,32 @@ function Content({ item, canWrite }: { item: Resource; canWrite: boolean }) {
                   <Button
                     size="sm"
                     variant="ghost"
-                    aria-label={`Download version ${version.version}`}
+                    aria-label={t('sheet.downloadVersion', { version: version.version })}
                     onClick={() => void downloadContent(item.id, version.filename, version.is_current ? undefined : version.id)}
                   >
                     <Download />
                   </Button>
                 )}
                 {!version.is_current && !unavailable && current && comparable(version.content_type) && comparable(current.content_type) && (
-                  <Button size="sm" variant="ghost" aria-label={`Compare version ${version.version} with the current file`} title="Compare with the current file" onClick={() => setComparing(version)}>
+                  <Button size="sm" variant="ghost" aria-label={t('sheet.compareVersion', { version: version.version })} title={t('sheet.compare')} onClick={() => setComparing(version)}>
                     <GitCompare />
                   </Button>
                 )}
                 {canWrite && !version.is_current && !unavailable && (
                   <Button size="sm" onClick={() => setRestoring(version)}>
-                    Restore
+                    {t('common:actions.restore')}
                   </Button>
                 )}
               </li>
             );
           })}
           {!versions.isPending && versions.items.length === 0 && (
-            <li className="px-3 py-2 text-[13px] text-muted">No file yet.</li>
+            <li className="px-3 py-2 text-[13px] text-muted">{t('sheet.noFile')}</li>
           )}
         </ul>
         {versions.hasNextPage && (
           <Button size="sm" disabled={versions.isFetchingNextPage} onClick={() => void versions.fetchNextPage()}>
-            Older versions
+            {t('sheet.older')}
           </Button>
         )}
       </section>
@@ -574,9 +576,9 @@ function Content({ item, canWrite }: { item: Resource; canWrite: boolean }) {
       <ConfirmDialog
         open={restoring !== undefined}
         onOpenChange={(open) => !open && setRestoring(undefined)}
-        title={`Restore file version ${restoring?.version ?? ''}?`}
-        description="The earlier file becomes the current file as a new version. The name, keywords and columns stay as they are, and the current file stays in the version list."
-        confirm="Restore file"
+        title={t('sheet.restoreFileTitle', { version: restoring?.version ?? '' })}
+        description={t('sheet.restoreFileDescription')}
+        confirm={t('sheet.restoreFile')}
         busy={restore.isPending}
         error={restore.error}
         onConfirm={() => restoring && restore.mutate(restoring)}
@@ -586,6 +588,7 @@ function Content({ item, canWrite }: { item: Resource; canWrite: boolean }) {
 }
 
 function Versions({ item, collection, canWrite }: { item: Resource; collection: Resource; canWrite: boolean }) {
+  const { t } = useTranslation(['lists', 'common']);
   const format = useFormat();
   const names = usePeopleNames();
   const queryClient = useQueryClient();
@@ -599,7 +602,7 @@ function Versions({ item, collection, canWrite }: { item: Resource; collection: 
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: keys.resource(item.id) });
       await queryClient.invalidateQueries({ queryKey: ['revisions', item.id] });
-      toast.success('Earlier version restored');
+      toast.success(t('sheet.versionRestored'));
     },
   });
   const rows = history.data?.value ?? [];
@@ -607,35 +610,36 @@ function Versions({ item, collection, canWrite }: { item: Resource; collection: 
     <div className="flex flex-col gap-2">
       <p className="text-xs text-muted">
         {collection.versioning === 'off'
-          ? `Version history is off for this ${collection.kind === 'library' ? 'library' : 'list'}. Retained earlier versions are shown.`
-          : 'Restoring brings back the name, keywords and columns of that version as a new version.'}
-        {collection.kind === 'library' && ' The file stays as it is; restore files on the File tab.'}
+          ? collection.kind === 'library' ? t('sheet.versioningOffLibrary') : t('sheet.versioningOffList')
+          : t('sheet.restoreHint')}
+        {collection.kind === 'library' && ` ${t('sheet.fileStays')}`}
       </p>
       {rows.map((revision) => (
         <div key={revision.id} className="flex items-center gap-3 rounded-md border px-3 py-2">
           <div className="min-w-0 flex-1">
             <p className="truncate text-[13px] font-medium">
-              Version {revision.revision_number}
-              {revision.is_current && <span className="font-normal text-muted"> · current</span>}
+              {t('sheet.version', { version: revision.revision_number })}
+              {revision.is_current && <span className="font-normal text-muted"> · {t('sheet.currentLower')}</span>}
             </p>
             <p className="text-xs text-muted">
               {format.dateTime(revision.created_at)} · {names.get(revision.created_by) ?? revision.created_by}
-              {!!revision.changed_fields?.length && ` · changed ${revision.changed_fields.map((key) => key.replace(/^\$/, '')).join(', ')}`}
+              {!!revision.changed_fields?.length && ` · ${t('sheet.changed', { fields: revision.changed_fields.map((key) => key.replace(/^\$/, '')).join(', ') })}`}
             </p>
           </div>
           {canWrite && !revision.is_current && (
             <Button size="sm" disabled={restore.isPending} onClick={() => restore.mutate(revision)}>
-              Restore
+              {t('common:actions.restore')}
             </Button>
           )}
         </div>
       ))}
-      {!history.isPending && rows.length === 0 && <p className="text-sm text-muted">No earlier versions.</p>}
+      {!history.isPending && rows.length === 0 && <p className="text-sm text-muted">{t('sheet.noVersions')}</p>}
     </div>
   );
 }
 
 function Publish({ item, collection, canPublish }: { item: Resource; collection: Resource; canPublish: boolean }) {
+  const { t } = useTranslation('lists');
   const queryClient = useQueryClient();
   const state = publishState(item, !!collection.publishing_enabled);
   const act = useMutation({
@@ -645,7 +649,7 @@ function Publish({ item, collection, canPublish }: { item: Resource; collection:
         ifMatch: item.version,
       }),
     onSuccess: async (_result, action) => {
-      toast.success(action === 'publish' ? 'Published' : 'Unpublished');
+      toast.success(action === 'publish' ? t('publish.Published') : t('publish.Unpublished'));
       await queryClient.invalidateQueries({ queryKey: keys.resource(item.id) });
       await queryClient.invalidateQueries({ queryKey: keys.resources });
       await queryClient.invalidateQueries({ queryKey: ['publications', item.id] });
@@ -653,22 +657,22 @@ function Publish({ item, collection, canPublish }: { item: Resource; collection:
   });
   const explanation =
     state === 'Published'
-      ? 'Readers see the current version.'
+      ? t('publishing.published')
       : state === 'Draft'
-        ? 'Readers see the last published version; publish to show them your changes.'
-        : 'Readers do not see this item yet.';
+        ? t('publishing.draft')
+        : t('publishing.unpublished');
   return (
     <div className="flex flex-col gap-3">
       <p className="text-sm">
-        <span className="font-medium">{state}.</span> {explanation}
+        {state && <span className="font-medium">{t('publishing.state', { state: t(`publish.${state}`) })}</span>} {explanation}
       </p>
       {canPublish && (
       <div className="flex gap-2">
         <Button variant="primary" disabled={act.isPending || state === 'Published'} onClick={() => act.mutate('publish')}>
-          Publish
+          {t('publishing.publish')}
         </Button>
         <Button disabled={act.isPending || state === 'Unpublished'} onClick={() => act.mutate('unpublish')}>
-          Unpublish
+          {t('publishing.unpublish')}
         </Button>
       </div>
       )}

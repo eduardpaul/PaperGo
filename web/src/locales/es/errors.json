@@ -1,0 +1,24 @@
+{
+  "generic": "Algo salió mal.",
+  "code": {
+    "conflict": "Entra en conflicto con el estado actual de lo que estás cambiando.",
+    "content_unavailable": "El contenido del archivo ya no está disponible.",
+    "duplicate_file": "Este archivo ya está guardado.",
+    "folder_not_empty": "La carpeta no está vacía.",
+    "forbidden": "No tienes acceso a esto.",
+    "group_managed_by_identity_provider": "El proveedor de identidad gestiona los miembros de este grupo.",
+    "internal_error": "El servidor no pudo completar la solicitud.",
+    "last_administrator": "Una organización necesita al menos un administrador.",
+    "last_owner": "Un espacio de trabajo necesita al menos un propietario. Haz propietario a otra persona primero.",
+    "not_found": "Ya no existe o no tienes acceso.",
+    "operation_quota": "Hay demasiadas operaciones en curso. Inténtalo de nuevo dentro de un minuto.",
+    "overloaded": "El servidor está ocupado. Inténtalo de nuevo en breve.",
+    "payload_too_large": "Supera el tamaño que acepta el servidor.",
+    "precondition_failed": "Otra persona lo cambió mientras tanto. Vuelve a cargar e inténtalo de nuevo.",
+    "storage_unavailable": "El almacenamiento de archivos no está disponible. Inténtalo de nuevo en breve.",
+    "text_not_read": "Todavía no se ha leído el texto del archivo. Lo lee un flujo de trabajo con document.read_text.",
+    "timeout": "El servidor tardó demasiado. Inténtalo de nuevo.",
+    "unauthorized": "Tienes que iniciar sesión.",
+    "unavailable": "El servidor no está disponible. Inténtalo de nuevo en breve."
+  }
+}

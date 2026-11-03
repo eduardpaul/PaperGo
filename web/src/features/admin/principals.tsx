@@ -8,6 +8,7 @@ import { Combobox } from '@/components/ui/combobox';
 import type { ComboboxOption } from '@/components/ui/combobox';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
+import { useTranslation } from '@/i18n';
 import { QueryFeedback, useHasScope } from './common';
 
 export interface Principal {
@@ -40,6 +41,7 @@ export const rolesQuery = {
 
 /** PaperDotNet's people/group picker, with PaperGo's principal-keyed membership endpoints. */
 export function Principals({ path, canEdit, excludeGroup }: { path: string; canEdit: boolean; excludeGroup?: string }) {
+  const { t } = useTranslation('admin');
   const client = useQueryClient();
   const key = ['admin', 'principals', path];
   const list = useQuery({ queryKey: key, queryFn: async () => (await api<Principal[]>(path)).data });
@@ -97,7 +99,7 @@ export function Principals({ path, canEdit, excludeGroup }: { path: string; canE
       .map((group) => ({
         value: JSON.stringify({ principal_type: 'group', principal_id: group.id }),
         label: group.name,
-        hint: 'Group',
+        hint: t('principals.group'),
       })),
   ].filter((option) => !taken.has(option.value));
   return (
@@ -107,21 +109,21 @@ export function Principals({ path, canEdit, excludeGroup }: { path: string; canE
         {list.data?.map((principal) => (
           <li key={JSON.stringify(principal)} className="flex items-center gap-2">
             <span className="flex-1">
-              {nameOf(principal)} <span className="text-xs text-muted">{principal.principal_type}</span>
+              {nameOf(principal)} <span className="text-xs text-muted">{t(principal.principal_type === 'group' ? 'principals.kind.group' : 'principals.kind.user')}</span>
             </span>
             {canEdit && (
               <Button size="sm" disabled={remove.isPending} onClick={() => remove.mutate(principal)}>
-                Remove {nameOf(principal)}
+                {t('principals.remove', { name: nameOf(principal) })}
               </Button>
             )}
           </li>
         ))}
       </ul>
-      {list.data?.length === 0 && <p className="text-muted">Nobody assigned.</p>}
+      {list.data?.length === 0 && <p className="text-muted">{t('principals.nobody')}</p>}
       {canEdit && (
         <>
           <span id={`principals-${path}`} className="sr-only">
-            People and groups
+            {t('principals.label')}
           </span>
           <Combobox
             aria-labelledby={`principals-${path}`}
@@ -129,26 +131,26 @@ export function Principals({ path, canEdit, excludeGroup }: { path: string; canE
             selected={selected}
             options={options}
             onChange={setSelected}
-            placeholder="Choose people or groups…"
+            placeholder={t('principals.choose')}
           />
           <div className="flex gap-2">
             <Select
-              aria-label="Principal type"
+              aria-label={t('principals.typeLabel')}
               value={type}
               onChange={(event) => setType(event.target.value as Principal['principal_type'])}
             >
-              <option value="user">User</option>
-              <option value="group">Group</option>
+              <option value="user">{t('principals.user')}</option>
+              <option value="group">{t('principals.group')}</option>
             </Select>
             <Input
-              aria-label="Principal identifier"
+              aria-label={t('principals.identifier')}
               value={id}
               onChange={(event) => setId(event.target.value)}
-              placeholder={type === 'user' ? 'Account subject' : 'Group id'}
+              placeholder={type === 'user' ? t('principals.subject') : t('principals.groupId')}
             />
           </div>
           <Button disabled={add.isPending || (!selected.length && !id.trim())} onClick={() => add.mutate()}>
-            Add people or groups
+            {t('principals.add')}
           </Button>
         </>
       )}

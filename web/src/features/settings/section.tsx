@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import { Alert, Spinner } from '@/components/ui/feedback';
 import { Input } from '@/components/ui/input';
+import { useTranslation } from '@/i18n';
 import { problemMessage } from '@/lib/errors';
 import { cn } from '@/lib/utils';
 
@@ -76,14 +77,15 @@ export function SettingRow({
 
 /** A secret or URL shown once, with a copy button. */
 export function CopyField({ label, value }: { label: string; value: string }) {
+  const { t } = useTranslation('settings');
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(value);
       setCopied(true);
-      toast.success('Copied.');
+      toast.success(t('copy.copied'));
     } catch {
-      toast.error('Copying is not allowed here; select the text and copy it yourself.');
+      toast.error(t('copy.blocked'));
     }
   };
   return (
@@ -95,8 +97,8 @@ export function CopyField({ label, value }: { label: string; value: string }) {
         className="font-mono text-xs"
         onFocus={(e) => e.currentTarget.select()}
       />
-      <Button onClick={() => void copy()} aria-label={`Copy ${label.toLowerCase()}`}>
-        {copied ? <Check /> : <Copy />} Copy
+      <Button onClick={() => void copy()} aria-label={t('copy.label', { label: label.toLowerCase() })}>
+        {copied ? <Check /> : <Copy />} {t('copy.button')}
       </Button>
     </div>
   );
@@ -122,6 +124,7 @@ export function ConfirmDialog({
   error?: unknown;
   onConfirm: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent role="alertdialog">
@@ -131,7 +134,7 @@ export function ConfirmDialog({
         </DialogHeader>
         {!!error && <Alert className="mx-5 mb-3">{problemMessage(error)}</Alert>}
         <DialogFooter>
-          <Button onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={() => onOpenChange(false)}>{t('actions.cancel')}</Button>
           <Button variant="danger" disabled={busy} onClick={onConfirm}>
             {busy && <Spinner />}
             {confirm}

@@ -1,5 +1,8 @@
 import { cn } from '@/lib/utils';
 
+// The product name is the same in every language.
+const productName = 'PaperGo';
+
 export function Logo({ className, withName = true }: { className?: string; withName?: boolean }) {
   return (
     <span className={cn('inline-flex items-center gap-2 font-semibold tracking-tight', className)}>
@@ -9,7 +12,7 @@ export function Logo({ className, withName = true }: { className?: string; withN
         <path d="M18 7v5h5" fill="#c7d2fe" />
         <path d="M12 17h8M12 21h6" className="stroke-accent" strokeWidth="1.8" strokeLinecap="round" />
       </svg>
-      {withName && <span>PaperGo</span>}
+      {withName && <span>{productName}</span>}
     </span>
   );
 }

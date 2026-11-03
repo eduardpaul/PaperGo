@@ -1,0 +1,144 @@
+{
+  "workspace": "Espacio de trabajo",
+  "list": {
+    "title": "Espacios de trabajo",
+    "description": "Lugares compartidos para un equipo o un proyecto.",
+    "new": "Nuevo espacio de trabajo",
+    "emptyTitle": "Aún no hay espacios de trabajo",
+    "emptyHint": "Un espacio de trabajo contiene las listas y bibliotecas de un equipo o un proyecto.",
+    "emptyAsk": "Pide a un administrador que cree uno o que te añada a uno.",
+    "noDescription": "Sin descripción"
+  },
+  "home": {
+    "keywords": "Palabras clave",
+    "relationships": "Relaciones",
+    "settings": "Configuración",
+    "newCollection": "Nueva lista o biblioteca",
+    "collections": "Listas y bibliotecas",
+    "library": "Biblioteca",
+    "list": "Lista",
+    "updated": "Actualizada {{when}}",
+    "emptyTitle": "Aún no hay listas ni bibliotecas",
+    "emptyHint": "Las listas contienen filas de información, como contactos o presupuestos; las bibliotecas contienen archivos."
+  },
+  "settings": {
+    "title": "Configuración del espacio de trabajo",
+    "general": "General",
+    "members": "Miembros",
+    "workflows": "Flujos de trabajo",
+    "runs": "Ejecuciones",
+    "readOnly": "Solo los propietarios del espacio de trabajo cambian esta configuración. Tú puedes consultarla."
+  },
+  "keywords": {
+    "title": "Palabras clave",
+    "description": "Palabras clave usadas en este espacio de trabajo. Elige una para ver qué la lleva.",
+    "filter": "Filtrar por el comienzo de la palabra clave",
+    "filterPlaceholder": "Filtrar palabras clave…",
+    "more": "Más palabras clave",
+    "keyword": "Palabra clave",
+    "moreResources": "Más recursos"
+  },
+  "general": {
+    "saved": "Espacio de trabajo guardado",
+    "currency": "Moneda predeterminada",
+    "currencyHint": "Déjala vacía para usar la predeterminada de la organización. Se aplica al crear campos de moneda.",
+    "orgDefault": "Predeterminada de la organización",
+    "copyTitle": "Copiar el espacio de trabajo",
+    "copyDescription": "Exporta la configuración de este espacio de trabajo, con elementos y archivos opcionales, e impórtala en otra instancia de PaperGo.",
+    "copyLink": "Exportar este espacio de trabajo",
+    "deleteTitle": "Eliminar el espacio de trabajo",
+    "deleteDescription": "Elimina el espacio de trabajo con todas sus listas, bibliotecas, carpetas, elementos y flujos de trabajo.",
+    "confirmTitle": "¿Eliminar {{name}}?",
+    "confirmDescription": "Todo lo que hay en este espacio de trabajo deja de estar disponible para todos, incluidas sus listas, bibliotecas y flujos de trabajo. No se puede deshacer aquí."
+  },
+  "members": {
+    "roles": {
+      "owner": {
+        "label": "Propietario",
+        "hint": "Administra el espacio de trabajo, sus miembros, listas y bibliotecas"
+      },
+      "member": {
+        "label": "Miembro",
+        "hint": "Añade y edita contenido"
+      },
+      "visitor": {
+        "label": "Visitante",
+        "hint": "Lee el contenido publicado"
+      }
+    },
+    "added": "{{name}} añadido",
+    "roleChanged": "Rol cambiado",
+    "addTitle": "Añadir personas",
+    "addDescription": "Las personas deben ser usuarios activos de la organización.",
+    "add": "Añadir al espacio de trabajo",
+    "person": "Persona",
+    "findPerson": "Busca una persona…",
+    "role": "Rol",
+    "description": "Los propietarios administran el espacio de trabajo; un espacio de trabajo siempre conserva un propietario.",
+    "you": "(tú)",
+    "roleOf": "Rol de {{name}}",
+    "none": "Aún no hay miembros.",
+    "removeTitle": "¿Quitar a {{name}}?",
+    "removeSelf": "Pierdes el acceso a este espacio de trabajo, salvo que un grupo u otro permiso te lo siga dando.",
+    "removeOther": "Pierde el acceso que le da ser miembro del espacio de trabajo. Los permisos explícitos sobre listas o elementos se mantienen.",
+    "removeConfirm": "Quitar al miembro"
+  },
+  "collection": {
+    "back": "Atrás",
+    "librarySettings": "Configuración de la biblioteca",
+    "listSettings": "Configuración de la lista",
+    "columns": "Columnas",
+    "views": "Vistas",
+    "permissions": "Permisos",
+    "permissionsDescription": "De forma predeterminada, todas las personas del espacio de trabajo tienen acceso según su rol en él. Las carpetas y los elementos también pueden tener sus propios permisos.",
+    "integrations": "Integraciones",
+    "integrationsOnLists": "Las integraciones están disponibles en las listas.",
+    "activity": "Trabajo en segundo plano",
+    "readOnlyLibrary": "Solo quienes administran esta biblioteca cambian su configuración. Tú puedes consultarla.",
+    "readOnlyList": "Solo quienes administran esta lista cambian su configuración. Tú puedes consultarla."
+  },
+  "bin": {
+    "collection": "Colección",
+    "title": "Papelera",
+    "description": "Elementos y carpetas eliminados de esta lista. Restáuralos o elimínalos definitivamente.",
+    "empty": "La papelera está vacía",
+    "restored": "{{name}} restaurado",
+    "deleted": "Eliminado",
+    "by": "por {{name}}",
+    "with_one": "con {{formatted}} entrada dentro",
+    "with_many": "con {{formatted}} entradas dentro",
+    "with_other": "con {{formatted}} entradas dentro",
+    "purge": "Eliminar definitivamente",
+    "loadMore": "Cargar más",
+    "purgeTitle": "¿Eliminar «{{name}}» definitivamente?",
+    "purgeFolder": "La carpeta y todo lo que contiene ya no se podrán restaurar.",
+    "purgeItem": "Ya no se podrá restaurar."
+  },
+  "menu": {
+    "collectionDeleted": "Colección eliminada",
+    "keywords": "Palabras clave",
+    "newCollection": "Nueva lista o biblioteca…",
+    "manageMembers": "Administrar los miembros",
+    "settings": "Configuración",
+    "exportPackage": "Exportar un paquete…",
+    "newFolder": "Nueva carpeta…",
+    "upload": "Subir…",
+    "permissions": "Permisos",
+    "delete": "Eliminar…",
+    "deleteTitle": "¿Eliminar «{{name}}»?",
+    "deleteDescription": "La colección y todo su contenido se mueven a la papelera."
+  },
+  "newCollection": {
+    "title": "Nueva lista o biblioteca",
+    "description": "Las listas contienen filas de información; las bibliotecas contienen archivos. Las columnas y las vistas se pueden cambiar más adelante.",
+    "startFrom": "Empezar desde",
+    "blankList": "Lista en blanco",
+    "blankListHint": "Filas con un título; añade tus propias columnas.",
+    "blankLibrary": "Biblioteca en blanco",
+    "blankLibraryHint": "Archivos con un nombre; añade tus propias columnas.",
+    "library": "Biblioteca",
+    "list": "Lista",
+    "createList": "Crear la lista",
+    "createLibrary": "Crear la biblioteca"
+  }
+}

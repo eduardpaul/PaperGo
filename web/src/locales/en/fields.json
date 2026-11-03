@@ -1,0 +1,11 @@
+{
+  "currency": {
+    "placeholder": "Choose a currency…"
+  },
+  "person": {
+    "placeholder": "Select a person…"
+  },
+  "lookup": {
+    "more": "More items match. Type to narrow the list."
+  }
+}

@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { replaceContent, UploadNameConflict, uploadDocument } from '@/features/documents/transfer';
 import { usePeopleNames } from '@/features/fields/people';
 import { ConfirmDialog } from '@/features/settings/section';
+import { i18n, useTranslation } from '@/i18n';
 import { problemMessage } from '@/lib/errors';
 import { useFormat } from '@/lib/preferences';
 import { cn } from '@/lib/utils';
@@ -103,6 +104,7 @@ function writeDraft(key: string, draft: Draft | undefined): boolean {
 let warnedNoRoom = false;
 
 const mediaTypes = { markdown: 'text/markdown', plaintext: 'text/plain' };
+const panes = ['write', 'preview'] as const;
 
 /**
  * A text file in the viewer: read as rendered by render, and edited as
@@ -111,6 +113,7 @@ const mediaTypes = { markdown: 'text/markdown', plaintext: 'text/plain' };
  * what to keep. Unsaved text is guarded and kept in this browser.
  */
 export function TextDocument({ file, source, editing, language, render, preview }: ViewerProps & { language: 'markdown' | 'plaintext'; render: (text: string) => ReactNode; preview?: (text: string) => ReactNode }) {
+  const { t } = useTranslation(['files', 'common']);
   const client = useQueryClient();
   const format = useFormat();
   const editorId = useId();
@@ -165,7 +168,7 @@ export function TextDocument({ file, source, editing, language, render, preview 
     pending.current = undefined;
     if (next && !writeDraft(next.key, next.draft) && !warnedNoRoom) {
       warnedNoRoom = true;
-      toast.warning("This browser has no room to keep your unsaved changes. Save soon so they aren't lost.");
+      toast.warning(i18n.t('files:edit.noRoom'));
     }
   }, []);
   const keep = (text: string, from: Base) => {
@@ -236,7 +239,7 @@ export function TextDocument({ file, source, editing, language, render, preview 
         setBase(next);
         keep(rest, next);
       }
-      toast.success(`Saved · version ${result.version}`);
+      toast.success(t('edit.saved', { version: result.version }));
       await client.invalidateQueries({ queryKey: keys.resources });
     },
     onError: async (error, { body, ifMatch, replaced }) => {
@@ -274,13 +277,13 @@ export function TextDocument({ file, source, editing, language, render, preview 
 
   if (loaded.isPending)
     return (
-      <ViewerMessage title="Opening…">
+      <ViewerMessage title={t('viewer.opening')}>
         <Spinner />
       </ViewerMessage>
     );
-  if (loaded.isError || !loaded.data) return <ViewerMessage title="This file could not be shown.">Download it to open it in another application.</ViewerMessage>;
+  if (loaded.isError || !loaded.data) return <ViewerMessage title={t('viewer.failed')}>{t('viewer.downloadToOpen')}</ViewerMessage>;
 
-  const notice = !loaded.data.utf8 ? "This file isn't UTF-8 text, so it opens read-only." : editing && !editing.allowed && editing.reason ? editing.reason : undefined;
+  const notice = !loaded.data.utf8 ? t('edit.notUtf8') : editing && !editing.allowed && editing.reason ? editing.reason : undefined;
   if (!active)
     return (
       <div className="flex h-full flex-col">
@@ -291,33 +294,33 @@ export function TextDocument({ file, source, editing, language, render, preview 
 
   return (
     <div ref={area} className="flex h-full flex-col">
-      <div role="toolbar" aria-label="Editing" className="flex shrink-0 flex-wrap items-center gap-2 border-b bg-surface px-3 py-1.5 text-[13px]">
+      <div role="toolbar" aria-label={t('edit.editing')} className="flex shrink-0 flex-wrap items-center gap-2 border-b bg-surface px-3 py-1.5 text-[13px]">
         <span className="flex items-center gap-1.5 font-medium">
-          <PencilLine className="size-4 text-accent" /> Editing
+          <PencilLine className="size-4 text-accent" /> {t('edit.editing')}
         </span>
         <span aria-live="polite" className="text-xs text-muted">
-          {save.isPending ? 'Saving…' : dirty ? 'Unsaved changes' : fresh ? 'All changes saved' : ''}
+          {save.isPending ? t('common:status.saving') : dirty ? t('edit.unsaved') : fresh ? t('edit.allSaved') : ''}
         </span>
         {preview && (
-          <div role="tablist" aria-label="Editor panes" className="ml-2 flex rounded-md bg-surface-muted p-0.5 lg:hidden">
-            {(['write', 'preview'] as const).map((choice) => (
+          <div role="tablist" aria-label={t('edit.panes')} className="ml-2 flex rounded-md bg-surface-muted p-0.5 lg:hidden">
+            {panes.map((choice) => (
               <button key={choice} type="button" role="tab" aria-selected={pane === choice} onClick={() => setPane(choice)} className={cn('rounded px-2 py-0.5 text-xs font-medium text-muted', pane === choice && 'bg-surface text-foreground shadow-xs')}>
-                {choice === 'write' ? 'Write' : 'Preview'}
+                {choice === 'write' ? t('edit.write') : t('edit.preview')}
               </button>
             ))}
           </div>
         )}
-        <span className="ml-auto hidden text-xs text-muted md:inline">Each save is a new file version and starts the file's workflows.</span>
+        <span className="ml-auto hidden text-xs text-muted md:inline">{t('edit.eachSave')}</span>
         <Button size="sm" onClick={() => (dirty ? setDiscarding(true) : done())}>
-          <X /> {dirty ? 'Cancel' : 'Done'}
+          <X /> {dirty ? t('common:actions.cancel') : t('common:actions.done')}
         </Button>
-        <Button size="sm" variant="primary" disabled={!dirty || save.isPending} onClick={submit} title="Save (Ctrl+S)">
-          <Save /> Save
+        <Button size="sm" variant="primary" disabled={!dirty || save.isPending} onClick={submit} title={t('edit.saveTitle')}>
+          <Save /> {t('common:actions.save')}
         </Button>
       </div>
       {restorable && (
         <div className="flex shrink-0 flex-wrap items-center gap-2 border-b bg-accent-soft px-4 py-2 text-[13px]">
-          <span className="flex-1">This browser kept unsaved changes to this file from {format.dateTime(restorable.at)}.</span>
+          <span className="flex-1">{t('edit.kept', { date: format.dateTime(restorable.at) })}</span>
           <Button
             size="sm"
             variant="primary"
@@ -326,7 +329,7 @@ export function TextDocument({ file, source, editing, language, render, preview 
               setRevision((current) => current + 1);
             }}
           >
-            Restore them
+            {t('edit.restore')}
           </Button>
           <Button
             size="sm"
@@ -336,19 +339,19 @@ export function TextDocument({ file, source, editing, language, render, preview 
               setDeclined(true);
             }}
           >
-            Discard
+            {t('common:actions.discard')}
           </Button>
         </div>
       )}
       <div className="flex min-h-0 flex-1">
         <div className={cn('min-w-0 flex-1 border-r', preview && pane === 'preview' && 'hidden lg:block')}>
           {/* A clean editor follows the file; a draft keeps its own text. */}
-          <TextEditor id={editorId} value={text} revision={draft === undefined ? `${revision}:${current.blobId}` : String(revision)} language={language} label={`Text of ${file.filename}`} onChange={change} onSave={submit} />
+          <TextEditor id={editorId} value={text} revision={draft === undefined ? `${revision}:${current.blobId}` : String(revision)} language={language} label={t('edit.editorLabel', { name: file.filename })} onChange={change} onSave={submit} />
         </div>
         {preview && (
-          <div className={cn('min-w-0 flex-1 overflow-auto bg-surface', pane === 'write' && 'hidden lg:block')} aria-label="Preview">
+          <div className={cn('min-w-0 flex-1 overflow-auto bg-surface', pane === 'write' && 'hidden lg:block')} aria-label={t('edit.preview')}>
             <p className="flex items-center gap-1.5 border-b px-4 py-1.5 text-xs text-muted">
-              <Eye className="size-3.5" /> Preview
+              <Eye className="size-3.5" /> {t('edit.preview')}
             </p>
             {preview(text)}
           </div>
@@ -357,9 +360,9 @@ export function TextDocument({ file, source, editing, language, render, preview 
       <ConfirmDialog
         open={discarding}
         onOpenChange={setDiscarding}
-        title="Discard unsaved changes?"
-        description="Your changes to this file have not been saved."
-        confirm="Discard changes"
+        title={t('edit.discardTitle')}
+        description={t('edit.discardDescription')}
+        confirm={t('edit.discardChanges')}
         onConfirm={() => {
           setDiscarding(false);
           done();
@@ -380,7 +383,7 @@ export function TextDocument({ file, source, editing, language, render, preview 
             await client.invalidateQueries({ queryKey: keys.resources });
             await client.invalidateQueries({ queryKey: ['file-text', source.url] });
             setRevision((current) => current + 1);
-            toast.success(copied ? 'Loaded their version. Your text is on the clipboard.' : 'Loaded their version.');
+            toast.success(copied ? t('edit.loadedTheirsCopied') : t('edit.loadedTheirs'));
           }}
           onMine={async () => {
             const latest = await client.fetchQuery({ ...resourceQuery(file.itemId), staleTime: 0 });
@@ -396,7 +399,7 @@ export function TextDocument({ file, source, editing, language, render, preview 
               setConflict(false);
               done();
               await client.invalidateQueries({ queryKey: keys.resources });
-              toast.success(`Saved your text as ${name}`);
+              toast.success(t('edit.savedAs', { name }));
             } catch (error) {
               toast.error(problemMessage(error));
             }
@@ -417,7 +420,7 @@ async function saveCopy(client: QueryClient, file: ViewerProps['file'], editing:
   const dot = file.filename.lastIndexOf('.');
   const [stem, extension] = dot > 0 ? [file.filename.slice(0, dot), file.filename.slice(dot)] : [file.filename, ''];
   for (let n = 1; ; n++) {
-    const name = `${stem} (copy${n > 1 ? ` ${n}` : ''})${extension}`;
+    const name = n > 1 ? i18n.t('files:edit.copyNameNumbered', { stem, number: n, extension }) : i18n.t('files:edit.copyName', { stem, extension });
     try {
       await uploadDocument(`/v1/resources/${editing.containerId}/documents`, asFile(name), {
         name,
@@ -446,7 +449,8 @@ async function copyText(text: string) {
 /** Gives the person their text as a file, for when the clipboard cannot hold it. */
 function downloadText(text: string, filename: string) {
   const dot = filename.lastIndexOf('.');
-  const name = dot > 0 ? `${filename.slice(0, dot)} (mine)${filename.slice(dot)}` : `${filename} (mine)`;
+  const [stem, extension] = dot > 0 ? [filename.slice(0, dot), filename.slice(dot)] : [filename, ''];
+  const name = i18n.t('files:edit.mineName', { stem, extension });
   const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
   const link = Object.assign(document.createElement('a'), { href: url, download: name });
   link.click();
@@ -481,29 +485,30 @@ function ConflictDialog({
   onMine: () => void;
   onCopy: () => void;
 }) {
+  const { t } = useTranslation('files');
   const latest = useQuery({ ...resourceQuery(itemId), staleTime: 0 });
   const names = usePeopleNames();
   const format = useFormat();
   const [uncopied, setUncopied] = useState(false);
-  const who = latest.data?.updated_by ? (names.get(latest.data.updated_by) ?? latest.data.updated_by) : 'Someone';
+  const who = latest.data?.updated_by ? (names.get(latest.data.updated_by) ?? latest.data.updated_by) : t('conflict.someone');
   if (uncopied)
     return (
       <Dialog open onOpenChange={(open) => !open && onClose()}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Keep your text first</DialogTitle>
-            <DialogDescription>This browser didn't let PaperGo copy your text. Copy it from the box or download it before loading their version.</DialogDescription>
+            <DialogTitle>{t('conflict.keepFirst')}</DialogTitle>
+            <DialogDescription>{t('conflict.copyFailed')}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-2 px-5 pb-2">
-            <textarea readOnly aria-label="Your text" value={text} rows={8} className="w-full rounded-md border bg-surface-muted p-2 font-mono text-xs" onFocus={(event) => event.currentTarget.select()} />
-            <Button onClick={() => downloadText(text, filename)}>Download your text</Button>
+            <textarea readOnly aria-label={t('conflict.yourText')} value={text} rows={8} className="w-full rounded-md border bg-surface-muted p-2 font-mono text-xs" onFocus={(event) => event.currentTarget.select()} />
+            <Button onClick={() => downloadText(text, filename)}>{t('conflict.downloadYours')}</Button>
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={onClose}>
-              Keep editing
+              {t('conflict.keepEditing')}
             </Button>
             <Button variant="danger" onClick={() => onTheirs(false)}>
-              Load their version
+              {t('conflict.loadTheirs')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -513,26 +518,26 @@ function ConflictDialog({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>This file changed while you were editing</DialogTitle>
+          <DialogTitle>{t('conflict.changed')}</DialogTitle>
           <DialogDescription>
-            {who} saved it{latest.data?.updated_at ? ` ${format.relative(latest.data.updated_at)}` : ''}. Choose what to keep.
-            {!history && ' This library keeps no earlier file versions, so a version replaced here cannot be brought back.'}
+            {latest.data?.updated_at ? t('conflict.savedByWhen', { who, when: format.relative(latest.data.updated_at) }) : t('conflict.savedBy', { who })}
+            {!history && ` ${t('conflict.noHistory')}`}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-2 px-5 pb-2">
           <Button disabled={busy} onClick={async () => ((await copyText(text)) ? onTheirs(true) : setUncopied(true))}>
-            Load their version (your text goes to the clipboard)
+            {t('conflict.loadTheirsClipboard')}
           </Button>
           <Button disabled={busy} onClick={onMine}>
-            {history ? 'Save mine anyway (theirs becomes an earlier version)' : 'Replace theirs with mine (theirs is not kept)'}
+            {history ? t('conflict.saveMineAnyway') : t('conflict.replaceTheirs')}
           </Button>
           <Button disabled={busy} onClick={onCopy}>
-            Save mine as a new file
+            {t('conflict.saveAsNew')}
           </Button>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>
-            Keep editing
+            {t('conflict.keepEditing')}
           </Button>
         </DialogFooter>
       </DialogContent>

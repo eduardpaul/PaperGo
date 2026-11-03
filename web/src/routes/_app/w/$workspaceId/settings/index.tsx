@@ -13,10 +13,12 @@ import { SmartFolderPackages } from '@/features/smart-folders/packages';
 import { can } from '@/features/lists/access';
 import { ConfirmDialog, SettingRow, SettingsSection } from '@/features/settings/section';
 import { PlaceCommentSettings } from '@/features/comments/settings';
+import { useTranslation } from '@/i18n';
 
 export const Route = createFileRoute('/_app/w/$workspaceId/settings/')({ component: GeneralPage });
 
 function GeneralPage() {
+  const { t } = useTranslation(['workspaces', 'common']);
   const { workspaceId } = Route.useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -48,7 +50,7 @@ function GeneralPage() {
       setCurrency(null);
       setName(null);
       setDescription(null);
-      toast.success('Workspace saved');
+      toast.success(t('general.saved'));
     },
   });
   const remove = useMutation({
@@ -65,45 +67,45 @@ function GeneralPage() {
   return (
     <div className="grid gap-5">
       <SettingsSection
-        title="General"
+        title={t('settings.general')}
         actions={
           canManage && (
             <Button variant="primary" disabled={save.isPending || !dirty || !currentName.trim()} onClick={() => save.mutate()}>
-              Save
+              {t('common:actions.save')}
             </Button>
           )
         }
       >
         <fieldset disabled={!canManage} className="contents">
-        <SettingRow id="ws-name" label="Name">
+        <SettingRow id="ws-name" label={t('common:fields.name')}>
           <Input id="ws-name" value={currentName} onChange={(event) => setName(event.target.value)} />
         </SettingRow>
-        <SettingRow id="ws-description" label="Description">
+        <SettingRow id="ws-description" label={t('common:fields.description')}>
           <Textarea
             id="ws-description"
             value={currentDescription}
             onChange={(event) => setDescription(event.target.value)}
           />
         </SettingRow>
-        <SettingRow id="workspace-currency" label="Default currency" hint="Leave empty to use the organization default. Applies when creating currency fields.">
-          <CurrencyPicker id="workspace-currency" labelledBy="workspace-currency-label" value={currentCurrency} onChange={setCurrency} placeholder="Organization default" disabled={!canManage} />
+        <SettingRow id="workspace-currency" label={t('general.currency')} hint={t('general.currencyHint')}>
+          <CurrencyPicker id="workspace-currency" labelledBy="workspace-currency-label" value={currentCurrency} onChange={setCurrency} placeholder={t('general.orgDefault')} disabled={!canManage} />
         </SettingRow>
         </fieldset>
       </SettingsSection>
       {canManage && canTransfer && !workspace.data.personal_owner_id && (
-        <SettingsSection title="Copy workspace" description="Export this workspace's configuration, with optional items and files, and import it into another PaperGo instance.">
-          <Link to="/admin/maintenance" search={{ workspace: workspaceId }}>Export this workspace</Link>
+        <SettingsSection title={t('general.copyTitle')} description={t('general.copyDescription')}>
+          <Link to="/admin/maintenance" search={{ workspace: workspaceId }}>{t('general.copyLink')}</Link>
         </SettingsSection>
       )}
       <SmartFolderPackages workspaceId={workspaceId} />
       <PlaceCommentSettings resourceId={workspaceId} canManage={canManage} workspace />
       {canManage && !workspace.data.personal_owner_id && (
         <SettingsSection
-          title="Delete workspace"
-          description="Deletes the workspace with all its lists, libraries, folders, items and workflows."
+          title={t('general.deleteTitle')}
+          description={t('general.deleteDescription')}
           actions={
             <Button variant="danger" onClick={() => setDeleting(true)}>
-              Delete workspace
+              {t('general.deleteTitle')}
             </Button>
           }
         />
@@ -111,9 +113,9 @@ function GeneralPage() {
       <ConfirmDialog
         open={deleting}
         onOpenChange={setDeleting}
-        title={`Delete ${workspace.data.name}?`}
-        description="Everything in this workspace becomes unavailable to everyone, including its lists, libraries and workflows. This cannot be undone here."
-        confirm="Delete workspace"
+        title={t('general.confirmTitle', { name: workspace.data.name })}
+        description={t('general.confirmDescription')}
+        confirm={t('general.deleteTitle')}
         busy={remove.isPending}
         error={remove.error}
         onConfirm={() => remove.mutate()}

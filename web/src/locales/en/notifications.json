@@ -1,0 +1,29 @@
+{
+  "kinds": {
+    "commentMentioned": "Mention",
+    "commentReplied": "Reply",
+    "message": "Message",
+    "taskAssigned": "Task for you",
+    "taskCompleted": "Task answered",
+    "workflowFailed": "Workflow failed"
+  },
+  "unread": "Unread",
+  "title": "Notifications",
+  "bellUnread": "Notifications, {{unread}} unread",
+  "markAllRead": "Mark all read",
+  "nothingNew": "Nothing new",
+  "latest": "Latest notifications",
+  "viewAll": "View all notifications",
+  "page": {
+    "description": "What happened that concerns you: tasks, mentions, replies, messages and failed workflows.",
+    "views": "Notification views",
+    "all": "All",
+    "unreadCount": "Unread ({{unread}})",
+    "mentions": "Mentions",
+    "allRead": "You have read everything",
+    "noMentions": "Nobody mentioned you yet",
+    "none": "No notifications yet",
+    "delete": "Delete {{title}}",
+    "loadMore": "Load more"
+  }
+}

@@ -1,19 +1,33 @@
 import type { ContentType, FieldDefinition, FieldSetting, Resource } from '@/api/types';
+import { i18n } from '@/i18n';
 
-const labels: Record<string, string> = {
-  $name: 'Name',
-  $id: 'ID',
-  $keywords: 'Keywords',
-  $created_at: 'Created',
-  $created_by: 'Created by',
-  $modified_at: 'Modified',
-  $modified_by: 'Modified by',
-  $archived_at: 'Archived',
-  $archived_by: 'Archived by',
-};
+/** The built-in columns as fields. Each label is read in the user's language when it is used. */
+export const systemFields: FieldDefinition[] = (
+  [
+    ['name', 'text'],
+    ['id', 'text'],
+    ['keywords', 'keywords'],
+    ['created_at', 'datetime'],
+    ['modified_at', 'datetime'],
+    ['created_by', 'person'],
+    ['modified_by', 'person'],
+    ['archived_at', 'datetime'],
+    ['archived_by', 'person'],
+  ] as const
+).map(([column, type]) => ({
+  id: `$${column}`,
+  key: `$${column}`,
+  get label() {
+    return i18n.t(`lists:columns.${column}`);
+  },
+  type,
+  indexed: true,
+  options: column === 'keywords' ? { multiple: true } : undefined,
+}));
 
+/** A column's label: a built-in column's in the user's language, a field's as its schema names it. */
 export function columnLabel(key: string, fields: FieldDefinition[]): string {
-  return labels[key] ?? fields.find((field) => field.key === key)?.label ?? key;
+  return [...systemFields, ...fields].find((field) => field.key === key)?.label ?? key;
 }
 
 /**
@@ -73,6 +87,7 @@ export function treeLabel(name: string, depth: number): string {
   return `${'\u00a0\u00a0'.repeat(depth)}${depth ? '└ ' : ''}${name}`;
 }
 
+/** The publishing state; screens show it as t(`lists:publish.${state}`). */
 export function publishState(item: Resource, publishingEnabled: boolean): 'Published' | 'Draft' | 'Unpublished' | null {
   if (!publishingEnabled) return null;
   if (!item.published_revision_id) return 'Unpublished';

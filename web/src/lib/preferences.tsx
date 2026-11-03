@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
 import { preferencesQuery } from '@/api/queries';
+import { setLanguage } from '@/i18n';
+import { uiLocale } from '@/i18n/languages';
 import { createFormatter, type Formatter } from './format';
 
 export type Theme = 'system' | 'light' | 'dark';
@@ -17,7 +19,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   const formatter = useMemo(
     () =>
       createFormatter({
-        language: data?.language,
+        language: data && uiLocale(data.language),
         timeZone: data?.time_zone,
         dateFormat: data?.date_format,
         timeFormat: data?.time_format === '12h' ? '12h' : '24h',
@@ -31,7 +33,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   }, [data?.theme]);
 
   useEffect(() => {
-    if (data?.language) document.documentElement.lang = data.language;
+    if (data?.language) void setLanguage(data.language);
   }, [data?.language]);
 
   return <FormatterContext.Provider value={formatter}>{children}</FormatterContext.Provider>;

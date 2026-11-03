@@ -9,6 +9,7 @@ import { FormDialog } from '@/components/form-dialog';
 import { Alert } from '@/components/ui/feedback';
 import { Label } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
+import { useTranslation } from '@/i18n';
 import { problemMessage } from '@/lib/errors';
 import { QueryFeedback } from '@/features/admin/common';
 import { can } from './access';
@@ -28,8 +29,10 @@ export function MoveDialog({
   onClose: () => void;
   onMoved: (moved: Resource) => void;
 }) {
+  const { t } = useTranslation('lists');
   const queryClient = useQueryClient();
   const moving = items ?? [item];
+  const library = collection.kind === 'library';
   const bulk = moving.length > 1;
   const crossCollection = !bulk && item.kind === 'item';
   const [workspaceId, setWorkspaceId] = useState(item.workspace_id);
@@ -50,7 +53,8 @@ export function MoveDialog({
   const destination = useQuery({ ...resourceQuery(parentId), enabled: !!target });
   const changed = moving.filter(item => parentId !== (item.parent_id ?? collection.id));
   const unchanged = changed.length === 0;
-  const submitDisabled = unchanged || moving.length > 100 || !target || !can(destination.data, 'write');
+  const writable = can(destination.data, 'write');
+  const submitDisabled = unchanged || moving.length > 100 || !target || !writable;
   const move = useMutation({
     meta: { silent: true },
     mutationFn: async () => {
@@ -68,7 +72,7 @@ export function MoveDialog({
     },
     onSuccess: async (moved) => {
       await queryClient.invalidateQueries({ queryKey: keys.resources });
-      toast.success(`Moved to ${path.at(-1)?.name ?? target?.name}`);
+      toast.success(t('moveDialog.moved', { target: path.at(-1)?.name ?? target?.name }));
       onClose();
       onMoved(moved);
     },
@@ -77,8 +81,8 @@ export function MoveDialog({
   return (
     <FormDialog
       open
-      title={bulk ? `Move ${moving.length} selected entries` : `Move “${item.name}”`}
-      submitLabel="Move here"
+      title={bulk ? t('moveDialog.titleSelected', { count: moving.length }) : t('moveDialog.title', { name: item.name })}
+      submitLabel={t('moveDialog.submit')}
       pending={move.isPending}
       submitDisabled={submitDisabled}
       onClose={onClose}
@@ -87,18 +91,18 @@ export function MoveDialog({
       {move.isError && <Alert>{problemMessage(move.error)}</Alert>}
       <fieldset disabled={move.isPending} className="flex flex-col gap-3">
         {crossCollection && <>
-          <Label htmlFor="move-workspace">Workspace</Label>
+          <Label htmlFor="move-workspace">{t('moveDialog.workspace')}</Label>
           <Select id="move-workspace" value={workspaceId} onChange={(event) => {
             setWorkspaceId(event.target.value);
             setTargetId('');
             setPath([]);
           }}>
-            {!workspaces.data?.some(workspace => workspace.id === workspaceId) && <option value={workspaceId}>Current workspace</option>}
+            {!workspaces.data?.some(workspace => workspace.id === workspaceId) && <option value={workspaceId}>{t('moveDialog.currentWorkspace')}</option>}
             {workspaces.data?.map(workspace => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
           </Select>
           <QueryFeedback query={workspaces} />
         </>}
-        <Label htmlFor="move-target">{collection.kind === 'library' ? 'Library' : 'List'}</Label>
+        <Label htmlFor="move-target">{library ? t('moveDialog.library') : t('moveDialog.list')}</Label>
         <Select
           id="move-target"
           disabled={!crossCollection || targets.isPending}
@@ -108,31 +112,30 @@ export function MoveDialog({
             setPath([]);
           }}
         >
-          <option value="">Choose a {collection.kind === 'library' ? 'library' : 'list'}</option>
-          {targetId === collection.id && !options.some(entry => entry.id === collection.id) && <option value={collection.id}>{collection.name} (current)</option>}
+          <option value="">{library ? t('moveDialog.chooseLibrary') : t('moveDialog.chooseList')}</option>
+          {targetId === collection.id && !options.some(entry => entry.id === collection.id) && <option value={collection.id}>{t('moveDialog.current', { name: collection.name })}</option>}
           {options
             .filter((entry) => entry.kind === collection.kind)
             .map((entry) => (
               <option key={entry.id} value={entry.id}>
-                {entry.name}
-                {entry.id === collection.id ? ' (current)' : ''}
+                {entry.id === collection.id ? t('moveDialog.current', { name: entry.name }) : entry.name}
               </option>
             ))}
         </Select>
         {crossCollection && <QueryFeedback query={targets} />}
-        {crossCollection && targets.isSuccess && options.length === 0 && <p className="text-xs text-muted">No {collection.kind === 'library' ? 'libraries' : 'lists'} are available in this workspace.</p>}
+        {crossCollection && targets.isSuccess && options.length === 0 && <p className="text-xs text-muted">{library ? t('moveDialog.noLibraries') : t('moveDialog.noLists')}</p>}
         {target && <>
-          <p className="text-[13px] font-medium">Folder</p>
+          <p className="text-[13px] font-medium">{t('moveDialog.folder')}</p>
           <FolderBrowser root={target} path={path} onChange={setPath} excluded={moving.map(item => item.id)} />
           <QueryFeedback query={destination} />
-          {destination.isSuccess && !can(destination.data, 'write') && <p className="text-xs text-muted">You don’t have write access here. Choose another destination.</p>}
+          {destination.isSuccess && !writable && <p className="text-xs text-muted">{t('moveDialog.noAccess')}</p>}
         </>}
       </fieldset>
-      {bulk && <p className="text-xs text-muted">Move up to 100 entries between folders of this collection. The selection moves atomically.</p>}
+      {bulk && <p className="text-xs text-muted">{t('moveDialog.bulkHint')}</p>}
       <p className="text-xs text-muted">
         {unchanged
-          ? 'The item is already here. Choose another destination.'
-          : `The item moves into ${path.at(-1)?.name ?? target?.name ?? 'the destination'} and takes on its permissions.`}
+          ? t('moveDialog.alreadyHere')
+          : t('moveDialog.into', { target: path.at(-1)?.name ?? target?.name ?? t('moveDialog.destination') })}
       </p>
     </FormDialog>
   );

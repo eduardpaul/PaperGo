@@ -9,10 +9,12 @@ import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/feedback';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
+import { useTranslation } from '@/i18n';
 import type { FileRef, ViewerProps } from '../handlers';
 import { PageRegions, threadsOn, useRegionThreads } from '../regions';
 import { PageMatches, pagesMatching, useReadText } from '../text-find';
-import { typing, useViewerKeys, ViewerBar, ViewerMessage } from '../viewer-kit';
+import { useFormat } from '@/lib/preferences';
+import { typing, useViewerKeys, ViewerBar, ViewerMessage, ZoomOptions, type ZoomChoice } from '../viewer-kit';
 import { useFollowLink, useTrust } from '../trust';
 import { PageImages } from './pages';
 
@@ -36,19 +38,13 @@ function load() {
   return loading;
 }
 
-const scales = [
-  ['page-width', 'Fit width'],
-  ['page-fit', 'Fit page'],
-  ['0.5', '50%'],
-  ['0.75', '75%'],
-  ['1', '100%'],
-  ['1.5', '150%'],
-  ['2', '200%'],
-  ['3', '300%'],
-  ['4', '400%'],
-] as const;
+const scales: readonly ZoomChoice[] = [
+  { value: 'page-width', fit: 'viewer.fitWidth' },
+  { value: 'page-fit', fit: 'viewer.fitPage' },
+  ...[0.5, 0.75, 1, 1.5, 2, 3, 4].map((scale) => ({ value: String(scale), scale })),
+];
 
-type State = { status: 'loading' } | { status: 'password'; retry: (password: string) => void; wrong: boolean } | { status: 'failed'; message: string } | { status: 'ready'; pages: number };
+type State = { status: 'loading' } | { status: 'password'; retry: (password: string) => void; wrong: boolean } | { status: 'failed'; message: 'pdf.damaged' | 'viewer.notLoaded' | 'pdf.failed' } | { status: 'ready'; pages: number };
 
 /** Above this size a PDF opens as page images on phones and tablets with little memory. */
 const lightBytes = 25 * 1024 * 1024;
@@ -65,6 +61,7 @@ function opensLight(file: FileRef) {
  * devices or when PDF.js cannot draw it, as page images the server renders.
  */
 export default function PdfView(props: ViewerProps) {
+  const { t } = useTranslation('files');
   const [light, setLight] = useState(() => opensLight(props.file));
   if (light) {
     return (
@@ -72,9 +69,9 @@ export default function PdfView(props: ViewerProps) {
         {...props}
         notice={
           <span className="flex flex-wrap items-center gap-2">
-            <span className="flex-1">Showing page images, which use less memory on this device. Text selection and links need the full viewer.</span>
+            <span className="flex-1">{t('pdf.lightNotice')}</span>
             <Button size="sm" onClick={() => setLight(false)}>
-              Open the full viewer
+              {t('pdf.openFull')}
             </Button>
           </span>
         }
@@ -86,6 +83,7 @@ export default function PdfView(props: ViewerProps) {
 
 /** Every page of a PDF, with find, text selection, zoom and links, rendered by PDF.js without scripts. */
 function PdfDocument({ file, source, page, onPage, find: initialFind, comment, onComment, onLight }: ViewerProps & { onLight?: () => void }) {
+  const { t } = useTranslation('files');
   const container = useRef<HTMLDivElement>(null);
   const pages = useRef<HTMLDivElement>(null);
   const { follow, dialog } = useFollowLink();
@@ -99,6 +97,7 @@ function PdfDocument({ file, source, page, onPage, find: initialFind, comment, o
   const [state, setState] = useState<State>({ status: 'loading' });
   const [current, setCurrent] = useState(page ?? 1);
   const [scale, setScale] = useState<string>('page-width');
+  const format = useFormat();
   const [percent, setPercent] = useState(100);
   const [finding, setFinding] = useState(!!initialFind);
   const [query, setQuery] = useState(initialFind ?? '');
@@ -192,7 +191,7 @@ function PdfDocument({ file, source, page, onPage, find: initialFind, comment, o
           const name = (error as { name?: string })?.name;
           setState({
             status: 'failed',
-            message: name === 'InvalidPDFException' ? 'This PDF is damaged or not a PDF.' : name === 'ResponseException' ? 'The file could not be loaded.' : 'This PDF could not be shown.',
+            message: name === 'InvalidPDFException' ? 'pdf.damaged' : name === 'ResponseException' ? 'viewer.notLoaded' : 'pdf.failed',
           });
         },
       );
@@ -332,7 +331,7 @@ function PdfDocument({ file, source, page, onPage, find: initialFind, comment, o
     <div className="flex h-full flex-col">
       <div className="relative min-h-0 flex-1 bg-surface-muted">
         {/* PDF.js positions pages inside an absolutely positioned scroll container. */}
-        <div ref={container} tabIndex={0} aria-label={`Pages of ${file.filename}`} className="absolute inset-0 overflow-auto outline-none">
+        <div ref={container} tabIndex={0} aria-label={t('viewer.pagesOf', { name: file.filename })} className="absolute inset-0 overflow-auto outline-none">
           <div ref={pages} className="pdfViewer" />
         </div>
         {ready &&
@@ -358,23 +357,23 @@ function PdfDocument({ file, source, page, onPage, find: initialFind, comment, o
           )}
         {drawing && (
           <p role="status" className="absolute top-3 left-1/2 z-10 -translate-x-1/2 rounded-full bg-foreground px-3 py-1 text-xs text-background shadow">
-            Drag over the area to comment on, or click a spot. Esc cancels.
+            {t('pdf.drawing')}
           </p>
         )}
         {state.status !== 'ready' && (
           <div className="absolute inset-0 bg-surface-muted">
             {state.status === 'loading' ? (
-              <ViewerMessage title="Opening the PDF…">
+              <ViewerMessage title={t('pdf.opening')}>
                 <Spinner />
               </ViewerMessage>
             ) : state.status === 'password' ? (
               <PasswordForm wrong={state.wrong} onSubmit={state.retry} />
             ) : (
-              <ViewerMessage title={state.message}>
-                Download the file to open it in another application.
+              <ViewerMessage title={t(state.message)}>
+                {t('viewer.downloadFile')}
                 {onLight && (
                   <Button onClick={onLight}>
-                    <Images /> Show page images
+                    <Images /> {t('pdf.showPageImages')}
                   </Button>
                 )}
               </ViewerMessage>
@@ -384,34 +383,30 @@ function PdfDocument({ file, source, page, onPage, find: initialFind, comment, o
       </div>
       {ready && (
         <ViewerBar>
-          <Button size="icon" variant="ghost" aria-label="Previous page" disabled={current <= 1} onClick={() => go(current - 1)}>
+          <Button size="icon" variant="ghost" aria-label={t('viewer.previousPage')} disabled={current <= 1} onClick={() => go(current - 1)}>
             <ChevronUp />
           </Button>
           <PageBox current={current} total={total} onGo={go} />
-          <Button size="icon" variant="ghost" aria-label="Next page" disabled={current >= total} onClick={() => go(current + 1)}>
+          <Button size="icon" variant="ghost" aria-label={t('viewer.nextPage')} disabled={current >= total} onClick={() => go(current + 1)}>
             <ChevronDown />
           </Button>
           <span className="mx-1 h-5 w-px bg-border" aria-hidden />
-          <Button size="icon" variant="ghost" aria-label="Zoom out (−)" onClick={() => zoom(-1)}>
+          <Button size="icon" variant="ghost" aria-label={t('viewer.zoomOut')} onClick={() => zoom(-1)}>
             <ZoomOut />
           </Button>
-          <Select aria-label="Zoom" className="h-8 w-28" value={scales.some(([value]) => value === scale) ? scale : 'custom'} onChange={(event) => choose(event.target.value)}>
-            {!scales.some(([value]) => value === scale) && <option value="custom">{percent}%</option>}
-            {scales.map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
+          <Select aria-label={t('viewer.zoom')} className="h-8 w-28" value={scales.some((choice) => choice.value === scale) ? scale : 'custom'} onChange={(event) => choose(event.target.value)}>
+            {!scales.some((choice) => choice.value === scale) && <option value="custom">{format.percent(percent / 100)}</option>}
+            <ZoomOptions choices={scales} />
           </Select>
-          <Button size="icon" variant="ghost" aria-label="Zoom in (+)" onClick={() => zoom(1)}>
+          <Button size="icon" variant="ghost" aria-label={t('viewer.zoomIn')} onClick={() => zoom(1)}>
             <ZoomIn />
           </Button>
-          <Button size="icon" variant="ghost" aria-label="Rotate the view (R)" onClick={() => viewer.current && (viewer.current.pagesRotation = (viewer.current.pagesRotation + 90) % 360)}>
+          <Button size="icon" variant="ghost" aria-label={t('viewer.rotate')} onClick={() => viewer.current && (viewer.current.pagesRotation = (viewer.current.pagesRotation + 90) % 360)}>
             <RotateCw />
           </Button>
           {canComment && (
-            <Button size="sm" variant={drawing ? 'secondary' : 'ghost'} aria-pressed={drawing} aria-label="Comment on an area (C)" title="Comment on an area (C)" onClick={() => setDrawing(!drawing)}>
-              <MessageSquarePlus /> <span className="hidden md:inline">Comment</span>
+            <Button size="sm" variant={drawing ? 'secondary' : 'ghost'} aria-pressed={drawing} aria-label={t('pdf.commentArea')} title={t('pdf.commentArea')} onClick={() => setDrawing(!drawing)}>
+              <MessageSquarePlus /> <span className="hidden md:inline">{t('pdf.comment')}</span>
             </Button>
           )}
           <span className="mx-1 h-5 w-px bg-border" aria-hidden />
@@ -426,8 +421,8 @@ function PdfDocument({ file, source, page, onPage, find: initialFind, comment, o
             >
               <Input
                 ref={findInput}
-                aria-label="Find in the PDF"
-                placeholder="Find"
+                aria-label={t('pdf.findInPdf')}
+                placeholder={t('viewer.find')}
                 className="h-8 w-40"
                 value={query}
                 onChange={(event) => {
@@ -442,22 +437,22 @@ function PdfDocument({ file, source, page, onPage, find: initialFind, comment, o
                 }}
               />
               <span aria-live="polite" className="min-w-16 text-xs text-muted">
-                {query && matches ? (matches.total ? `${matches.current} of ${matches.total}` : scanned.length ? '' : 'No matches') : ''}
+                {query && matches ? (matches.total ? t('pdf.match', { current: matches.current, total: matches.total }) : scanned.length ? '' : t('viewer.noMatches')) : ''}
               </span>
-              <PageMatches label="Scanned pages" pages={scanned} current={current} onGo={go} />
-              <Button size="icon" variant="ghost" aria-label="Previous match" disabled={!matches?.total} onClick={() => find(true, true)}>
+              <PageMatches label={t('pdf.scannedPages')} pages={scanned} current={current} onGo={go} />
+              <Button size="icon" variant="ghost" aria-label={t('pdf.previousMatch')} disabled={!matches?.total} onClick={() => find(true, true)}>
                 <ChevronLeft />
               </Button>
-              <Button size="icon" variant="ghost" aria-label="Next match" disabled={!matches?.total} onClick={() => find(true)}>
+              <Button size="icon" variant="ghost" aria-label={t('pdf.nextMatch')} disabled={!matches?.total} onClick={() => find(true)}>
                 <ChevronRight />
               </Button>
-              <Button size="icon" variant="ghost" aria-label="Close find" onClick={closeFind}>
+              <Button size="icon" variant="ghost" aria-label={t('viewer.closeFind')} onClick={closeFind}>
                 <X />
               </Button>
             </form>
           ) : (
             <Button size="sm" variant="ghost" onClick={openFind}>
-              <Search /> Find
+              <Search /> {t('viewer.find')}
             </Button>
           )}
         </ViewerBar>
@@ -468,6 +463,7 @@ function PdfDocument({ file, source, page, onPage, find: initialFind, comment, o
 }
 
 function PageBox({ current, total, onGo }: { current: number; total: number; onGo: (page: number) => void }) {
+  const { t } = useTranslation('files');
   const [value, setValue] = useState(String(current));
   const [shown, setShown] = useState(current);
   if (shown !== current) {
@@ -484,18 +480,19 @@ function PageBox({ current, total, onGo }: { current: number; total: number; onG
         else setValue(String(current));
       }}
     >
-      <Input aria-label="Page" inputMode="numeric" className="h-8 w-14 text-center" value={value} onChange={(event) => setValue(event.target.value)} onBlur={() => setValue(String(current))} />
+      <Input aria-label={t('viewer.page')} inputMode="numeric" className="h-8 w-14 text-center" value={value} onChange={(event) => setValue(event.target.value)} onBlur={() => setValue(String(current))} />
       <span className="text-muted" aria-live="polite">
-        of {total}
+        {t('viewer.ofTotal', { total })}
       </span>
     </form>
   );
 }
 
 function PasswordForm({ wrong, onSubmit }: { wrong: boolean; onSubmit: (password: string) => void }) {
+  const { t } = useTranslation(['files', 'common']);
   const [password, setPassword] = useState('');
   return (
-    <ViewerMessage title="This PDF is protected with a password">
+    <ViewerMessage title={t('pdf.passwordTitle')}>
       <form
         className="flex w-64 flex-col gap-2"
         onSubmit={(event) => {
@@ -503,12 +500,12 @@ function PasswordForm({ wrong, onSubmit }: { wrong: boolean; onSubmit: (password
           onSubmit(password);
         }}
       >
-        <Input type="password" aria-label="PDF password" autoFocus value={password} onChange={(event) => setPassword(event.target.value)} />
-        {wrong && <p className="text-xs text-danger">That password is not correct.</p>}
+        <Input type="password" aria-label={t('pdf.password')} autoFocus value={password} onChange={(event) => setPassword(event.target.value)} />
+        {wrong && <p className="text-xs text-danger">{t('pdf.wrongPassword')}</p>}
         <Button type="submit" variant="primary" disabled={!password}>
-          Open
+          {t('common:actions.open')}
         </Button>
-        <p className="text-xs">The password is used in this browser only.</p>
+        <p className="text-xs">{t('pdf.browserOnly')}</p>
       </form>
     </ViewerMessage>
   );

@@ -5,6 +5,7 @@ import { stagedFileQuery } from "@/api/queries";
 import type { StagedFile, Task } from "@/api/types";
 import { Alert, Skeleton } from "@/components/ui/feedback";
 import { FileView } from "@/features/files/file-view";
+import { useTranslation } from "@/i18n";
 import type { FileRef } from "@/features/files/handlers";
 import { useFormat } from "@/lib/preferences";
 import { useBlobUrl } from "@/lib/use-blob-url";
@@ -12,6 +13,7 @@ import { problemMessage } from "@/lib/errors";
 
 /** The staged file a task asks to review, rendered by its review type. */
 export function Review({ task }: { task: Task }) {
+  const { t } = useTranslation("tasks");
   const review = task.review;
   const staged = useQuery({
     ...stagedFileQuery(review?.staged_file_id ?? ""),
@@ -22,15 +24,12 @@ export function Review({ task }: { task: Task }) {
   if (!staged.data) return <Skeleton className="h-64" />;
   const file = staged.data;
   return (
-    <section className="grid gap-3" aria-label="Review">
+    <section className="grid gap-3" aria-label={t("review.label")}>
       {file.state !== "pending" && (
-        <Alert tone="warning">This file was {file.state}.</Alert>
+        <Alert tone="warning">{t(`review.${file.state}`)}</Alert>
       )}
       {file.state === "pending" && !file.fresh && (
-        <Alert tone="warning">
-          A file this was made from changed after the review was requested. It
-          can no longer be accepted; only a rejection is possible.
-        </Alert>
+        <Alert tone="warning">{t("review.stale")}</Alert>
       )}
       {review.type === "file.compare" ? (
         <Compare file={file} />
@@ -78,17 +77,18 @@ function Pane({
 
 /** The item's current file beside the staged image, both at 100%. */
 function Compare({ file }: { file: StagedFile }) {
+  const { t } = useTranslation("tasks");
   const source = file.sources.find((s) => s.item_id === file.item_id);
   return (
     <div className="grid gap-3 lg:grid-cols-2">
       <Pane
-        title="Current file"
-        alt="Current file"
+        title={t("review.currentFile")}
+        alt={t("review.currentFile")}
         path={`/v1/items/${file.item_id}/content${source ? `?blob_id=${source.blob_id}` : ""}`}
       />
       <Pane
-        title={`Proposed: ${file.filename}`}
-        alt="Proposed file"
+        title={t("review.proposed", { filename: file.filename })}
+        alt={t("review.proposedFile")}
         path={`/v1/staged-files/${file.id}/content`}
       />
     </div>
@@ -109,24 +109,27 @@ function Preview({ file }: { file: StagedFile }) {
   );
 }
 
-const labels: Record<string, string> = {
-  source_width: "Original width",
-  source_height: "Original height",
-  width: "Width",
-  height: "Height",
-  source_bytes: "Original size",
-  bytes: "Size",
-  savings_percent: "Savings",
-  smallest_text_height: "Smallest text height",
-  scale: "Scale",
-  pages: "Pages",
-  text_regions: "Text regions",
-};
+const metricKeys = [
+  "source_width",
+  "source_height",
+  "width",
+  "height",
+  "source_bytes",
+  "bytes",
+  "savings_percent",
+  "smallest_text_height",
+  "scale",
+  "pages",
+  "text_regions",
+] as const;
+type MetricKey = (typeof metricKeys)[number];
+const isMetric = (key: string): key is MetricKey => (metricKeys as readonly string[]).includes(key);
 
 function Metrics({ metrics }: { metrics: Record<string, unknown> }) {
+  const { t } = useTranslation("tasks");
   const format = useFormat();
   const entries = Object.entries(metrics ?? {}).filter(
-    ([key, value]) => labels[key] && value != null,
+    (entry): entry is [MetricKey, unknown] => isMetric(entry[0]) && entry[1] != null,
   );
   if (entries.length === 0) return null;
   const show = (key: string, value: unknown) => {
@@ -144,7 +147,7 @@ function Metrics({ metrics }: { metrics: Record<string, unknown> }) {
     <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-[13px] sm:grid-cols-4">
       {entries.map(([key, value]) => (
         <div key={key} className="min-w-0">
-          <dt className="text-xs text-muted">{labels[key]}</dt>
+          <dt className="text-xs text-muted">{t(`review.metrics.${key}`)}</dt>
           <dd className="truncate">{show(key, value)}</dd>
         </div>
       ))}

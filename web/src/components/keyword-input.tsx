@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import { useId, useState, type KeyboardEvent } from 'react';
 import { keywords } from '@/api/queries';
 import { useTermNames } from '@/features/fields/names';
+import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/utils';
 
 export const maxKeywords = 50;
@@ -16,6 +17,7 @@ export function KeywordInput({ id, value, onChange, disabled, limit = maxKeyword
   disabled?: boolean;
   limit?: number;
 }) {
+  const { t } = useTranslation();
   const listId = useId();
   const [text, setText] = useState('');
   const [focused, setFocused] = useState(false);
@@ -58,9 +60,9 @@ export function KeywordInput({ id, value, onChange, disabled, limit = maxKeyword
     <div className={cn('flex min-h-9 w-full flex-wrap items-center gap-1 rounded-md border border-input bg-surface px-2 py-1 text-sm shadow-xs', 'focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/25', disabled && 'opacity-50')}>
       {value.map(keyword => <span key={keyword} className="inline-flex items-center gap-1 rounded bg-surface-muted px-1.5 py-0.5 text-xs">
         {nameOf(keyword)}
-        {!disabled && <button type="button" aria-label={`Remove keyword ${nameOf(keyword)}`} className="text-muted hover:text-foreground" onClick={() => onChange(value.filter(entry => entry !== keyword))}><X className="size-3" /></button>}
+        {!disabled && <button type="button" aria-label={t('keywords.remove', { name: nameOf(keyword) })} className="text-muted hover:text-foreground" onClick={() => onChange(value.filter(entry => entry !== keyword))}><X className="size-3" /></button>}
       </span>)}
-      <input id={id} role="combobox" aria-expanded={open} aria-controls={listId} aria-autocomplete="list" aria-activedescendant={highlight >= 0 ? `${listId}-${highlight}` : undefined} disabled={disabled || full} value={text} maxLength={maxKeywordLength} placeholder={full ? `At most ${limit} keywords` : value.length ? '' : 'Add keywords…'} className="min-w-24 flex-1 bg-transparent py-0.5 outline-none placeholder:text-muted"
+      <input id={id} role="combobox" aria-expanded={open} aria-controls={listId} aria-autocomplete="list" aria-activedescendant={highlight >= 0 ? `${listId}-${highlight}` : undefined} disabled={disabled || full} value={text} maxLength={maxKeywordLength} placeholder={full ? t('keywords.limit', { limit }) : value.length ? '' : t('keywords.placeholder')} className="min-w-24 flex-1 bg-transparent py-0.5 outline-none placeholder:text-muted"
         onChange={event => { const next = event.target.value; if (next.includes(',')) { const parts = next.split(','); add(parts.slice(0, -1)); setText(parts.at(-1) ?? ''); } else { setText(next); setHighlight(-1); } }} onKeyDown={onKeyDown} onFocus={() => setFocused(true)} onBlur={() => { setFocused(false); if (prefix) add(prefix); }} />
     </div>
     {open && <ul id={listId} role="listbox" className="absolute z-50 mt-1 max-h-56 w-full overflow-auto rounded-md border bg-surface p-1 shadow-lg">

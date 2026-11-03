@@ -7,6 +7,7 @@ import type { FieldDefinition, QuerySpec } from '@/api/types';
 import { FormDialog } from '@/components/form-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Alert } from '@/components/ui/feedback';
+import { useTranslation } from '@/i18n';
 import { problemMessage } from '@/lib/errors';
 import { Button } from '@/components/ui/button';
 import { SettingsSection } from '@/features/settings/section';
@@ -21,7 +22,7 @@ import type { Operation } from '@/features/admin/operation-progress';
 export function BulkEditDialog({
   collectionId,
   target,
-  count,
+  title,
   fields,
   onClose,
   onStarted,
@@ -29,12 +30,13 @@ export function BulkEditDialog({
   collectionId: string;
   /** The selected items, or everything a query matches. */
   target: { ids: string[] } | { query: QuerySpec };
-  /** How many items the query matches, as people should read it. */
-  count?: ReactNode;
+  /** The title for everything a query matches, with how many it matches once that is known. */
+  title?: ReactNode;
   fields: FieldDefinition[];
   onClose: () => void;
   onStarted: (operationIds: string[]) => void;
 }) {
+  const { t } = useTranslation('lists');
   const client = useQueryClient();
   const [key, setKey] = useState(fields[0]?.key ?? '');
   const [value, setValue] = useState<unknown>(null);
@@ -58,16 +60,16 @@ export function BulkEditDialog({
   return (
     <FormDialog
       open
-      title={all ? <>Edit {count ?? 'all matching items'}</> : `Edit ${target.ids.length} selected items`}
-      description={`Set one field on every ${all ? 'matching' : 'selected'} item in the background. Leave it empty to clear it. Each failure is reported separately.`}
-      submitLabel={all ? 'Apply to all matching items' : 'Apply to selected items'}
+      title={all ? (title ?? t('bulkEdit.editAll')) : t('bulkEdit.editSelected', { count: target.ids.length })}
+      description={all ? t('bulkEdit.descriptionAll') : t('bulkEdit.descriptionSelected')}
+      submitLabel={all ? t('bulkEdit.applyAll') : t('bulkEdit.applySelected')}
       pending={apply.isPending}
       submitDisabled={!field}
       onClose={onClose}
       onSubmit={() => apply.mutate()}
     >
       {apply.isError && <Alert>{problemMessage(apply.error)}</Alert>}
-      <Label htmlFor="bulk-field">Field</Label>
+      <Label htmlFor="bulk-field">{t('bulkEdit.field')}</Label>
       <Select
         id="bulk-field"
         value={key}
@@ -87,14 +89,12 @@ export function BulkEditDialog({
   );
 }
 
-const operationKinds: Record<string, string> = {
-  bulk_update: 'Field update on many items',
-  'integration.refresh': 'Refresh integration',
-  field_index: 'Column index build',
-};
+const operationKinds = { bulk_update: 'bulk_update', 'integration.refresh': 'integration_refresh', field_index: 'field_index' } as const;
+const operationStatuses: string[] = ['pending', 'succeeded', 'failed', 'superseded'] satisfies Operation['status'][];
 
 /** Background work on a collection (bulk field updates, index builds), newest first. */
 export function CollectionOperations({ collectionId }: { collectionId: string }) {
+  const { t } = useTranslation(['lists', 'common']);
   const operations = useApiPages<Operation>(
     ['operations', collectionId, 'list'],
     `/v1/resources/${collectionId}/operations`,
@@ -102,8 +102,8 @@ export function CollectionOperations({ collectionId }: { collectionId: string })
   const [selected, setSelected] = useState('');
   return (
     <SettingsSection
-      title="Background work"
-      description="Changes that run in the background, such as editing a field on many items or building a column index."
+      title={t('operations.title')}
+      description={t('operations.description')}
     >
       <QueryFeedback query={operations} />
       <ul className="flex flex-col divide-y">
@@ -115,23 +115,23 @@ export function CollectionOperations({ collectionId }: { collectionId: string })
               aria-expanded={selected === operation.id}
               onClick={() => setSelected(selected === operation.id ? '' : operation.id)}
             >
-              <span className="flex-1">{operationKinds[operation.kind] ?? operation.kind.replaceAll(/[_-]/g, ' ')}</span>
+              <span className="flex-1">{operation.kind in operationKinds ? t(`operations.kinds.${operationKinds[operation.kind as keyof typeof operationKinds]}`) : operation.kind.replaceAll(/[_-]/g, ' ')}</span>
               <Badge
                 tone={operation.status === 'succeeded' ? 'success' : operation.status === 'failed' ? 'danger' : 'neutral'}
               >
-                {operation.status}
+                {operationStatuses.includes(operation.status) ? t(`operations.status.${operation.status}`) : operation.status}
               </Badge>
             </button>
-            {selected === operation.id && <OperationProgress id={operation.id} label="Progress" />}
+            {selected === operation.id && <OperationProgress id={operation.id} label={t('operations.progress')} />}
           </li>
         ))}
       </ul>
       {!operations.isPending && operations.items.length === 0 && (
-        <p className="text-sm text-muted">Nothing has run in the background yet.</p>
+        <p className="text-sm text-muted">{t('operations.none')}</p>
       )}
       {operations.hasNextPage && (
         <Button disabled={operations.isFetchingNextPage} onClick={() => void operations.fetchNextPage()}>
-          Load more
+          {t('loadMore')}
         </Button>
       )}
     </SettingsSection>

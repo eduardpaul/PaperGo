@@ -5,6 +5,7 @@ import { useMemo, useRef, useState } from 'react';
 import { Spinner } from '@/components/ui/feedback';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/select';
+import { useTranslation } from '@/i18n';
 import { useFormat } from '@/lib/preferences';
 import { maxColumns, parseCsv } from '../csv';
 import type { ViewerProps } from '../handlers';
@@ -13,7 +14,7 @@ import { useViewerKeys, ViewerBar, ViewerMessage } from '../viewer-kit';
 /** Above this size a CSV file is not laid out as a table in the browser. */
 const maxBytes = 20 * 1024 * 1024;
 const rowHeight = 32;
-const delimiters: Record<string, string> = { ',': 'commas', ';': 'semicolons', '\t': 'tabs' };
+const delimiters = { ',': 'csv.commas', ';': 'csv.semicolons', '\t': 'csv.tabs' } as const;
 
 /**
  * A CSV file as a table: its first row as column names (or not), every row
@@ -21,6 +22,7 @@ const delimiters: Record<string, string> = { ',': 'commas', ';': 'semicolons', '
  * render only the rows in view.
  */
 export default function CsvView({ file, source, find }: ViewerProps) {
+  const { t } = useTranslation('files');
   const format = useFormat();
   const table = useQuery({
     queryKey: ['file-table', source.url, file.blobId],
@@ -59,15 +61,22 @@ export default function CsvView({ file, source, find }: ViewerProps) {
     { first: true },
   );
 
-  if (file.size > maxBytes) return <ViewerMessage title="This CSV file is too large to show as a table here.">Download it to open it in a spreadsheet application.</ViewerMessage>;
+  if (file.size > maxBytes) return <ViewerMessage title={t('csv.tooLarge')}>{t('csv.openInSpreadsheet')}</ViewerMessage>;
   if (table.isPending)
     return (
-      <ViewerMessage title="Opening…">
+      <ViewerMessage title={t('viewer.opening')}>
         <Spinner />
       </ViewerMessage>
     );
-  if (table.isError) return <ViewerMessage title="The file could not be loaded.">Download it to open it in a spreadsheet application.</ViewerMessage>;
+  if (table.isError) return <ViewerMessage title={t('viewer.notLoaded')}>{t('csv.openInSpreadsheet')}</ViewerMessage>;
 
+  const summary = [
+    t(filter.trim() ? 'csv.matching' : 'csv.rows', { count: body.length, number: format.number(body.length) }),
+    t('csv.columns', { count: columns, number: format.number(columns) }),
+    t('csv.separatedBy', { delimiter: t(delimiters[table.data.delimiter as keyof typeof delimiters] ?? 'csv.commas') }),
+    ...(table.data.truncated ? [t('csv.firstRows', { number: format.number(rows.length) })] : []),
+    ...(table.data.wide ? [t('csv.firstColumns', { number: format.number(maxColumns) })] : []),
+  ].join(' · ');
   const template = `4.5rem repeat(${Math.max(columns, 1)}, minmax(8rem, 20rem))`;
   return (
     <div className="flex h-full flex-col">
@@ -102,24 +111,21 @@ export default function CsvView({ file, source, find }: ViewerProps) {
               );
             })}
           </div>
-          {body.length === 0 && <p className="px-4 py-6 text-center text-muted">{filter ? 'No row holds that text.' : 'The file has no rows.'}</p>}
+          {body.length === 0 && <p className="px-4 py-6 text-center text-muted">{filter ? t('csv.noRowMatches') : t('csv.noRows')}</p>}
         </div>
       </div>
       <ViewerBar>
         <span className="text-muted" aria-live="polite">
-          {format.number(body.length)} {body.length === 1 ? 'row' : 'rows'}
-          {filter.trim() ? ' match' : ''} · {format.number(columns)} {columns === 1 ? 'column' : 'columns'} · separated by {delimiters[table.data.delimiter]}
-          {table.data.truncated && ` · the first ${format.number(rows.length)} rows`}
-          {table.data.wide && ` · the first ${format.number(maxColumns)} columns`}
+          {summary}
         </span>
         <span className="mx-1 h-5 w-px bg-border" aria-hidden />
         <label className="flex items-center gap-1.5">
-          <Checkbox checked={header} onChange={(event) => setHeader(event.target.checked)} /> First row names the columns
+          <Checkbox checked={header} onChange={(event) => setHeader(event.target.checked)} /> {t('csv.firstRowNames')}
         </label>
         <span className="mx-1 h-5 w-px bg-border" aria-hidden />
         <span className="flex items-center gap-1">
           <Search className="size-4 text-muted" aria-hidden />
-          <Input ref={filterInput} aria-label="Filter rows" placeholder="Filter rows" className="h-8 w-44" value={filter} onChange={(event) => setFilter(event.target.value)} />
+          <Input ref={filterInput} aria-label={t('csv.filterRows')} placeholder={t('csv.filterRows')} className="h-8 w-44" value={filter} onChange={(event) => setFilter(event.target.value)} />
         </span>
       </ViewerBar>
     </div>
