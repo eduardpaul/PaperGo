@@ -17,6 +17,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	sdk "github.com/klippa-app/go-pdfium"
 	"github.com/klippa-app/go-pdfium/enums"
@@ -60,13 +61,10 @@ const (
 // v1.21.4 embeds. Name keys stored text, and notices/ holds the licences
 // the module ships under: update both with go-pdfium.
 type Reader struct {
-	// start compiles the module, or loads it from the cache, on first use;
-	// compiling takes a few seconds. Every open gets a fresh instance,
-	// which returns its memory on close.
-	start func() (sdk.Pool, error)
-	// cache is where start took the compiled code from, and starts how
-	// often PDFium started, which is once.
-	cache  string
+	o Options
+	// mu guards the current or last start and the count of starts.
+	mu     sync.Mutex
+	run    *start
 	starts int
 	// slots holds one entry per open PDF, up to maxOpen; waiting counts
 	// the opens waiting for one.
@@ -74,40 +72,94 @@ type Reader struct {
 	waiting atomic.Int32
 }
 
-func New(o Options) *Reader {
-	r := &Reader{slots: make(chan struct{}, maxOpen)}
-	r.start = sync.OnceValues(func() (sdk.Pool, error) { return r.init(o) })
-	return r
+// start compiles the module, or loads it from the cache, in the
+// background; compiling takes a few seconds. Every open gets a fresh
+// instance of its pool, which returns its memory on close.
+type start struct {
+	done chan struct{}
+	// Set before done closes: the pool, where its code came from, or why
+	// it failed, and when the start ended.
+	pool  sdk.Pool
+	cache string
+	err   error
+	ended time.Time
 }
+
+// retryAfter is how long a failed start answers callers before the next
+// one tries again, so a lasting failure does not compile on every request.
+var retryAfter = time.Minute
+
+// newPool starts PDFium's pool; tests replace it.
+var newPool = startPool
+
+func New(o Options) *Reader { return &Reader{o: o, slots: make(chan struct{}, maxOpen)} }
 
 func (*Reader) Name() string { return "pdfium-8111-wasm" }
 
 // Warm starts PDFium as the first Open would: it compiles the module, or
 // loads it from the cache, and starts one instance. Opens meanwhile wait
-// for it and share it. It returns CacheHit, CacheMiss or CacheOff.
+// for the same start. It returns CacheHit, CacheMiss or CacheOff.
 func (r *Reader) Warm() (string, error) {
-	_, err := r.start()
-	return r.cache, err
+	s, err := r.started(context.Background())
+	if err != nil {
+		return "", err
+	}
+	return s.cache, nil
 }
 
-func (r *Reader) init(o Options) (sdk.Pool, error) {
-	r.starts++
-	if o.CacheDir != "" {
-		before := cached(o.CacheDir)
-		p, err := startPool(o.CacheDir)
-		if err == nil {
-			r.cache = CacheHit
-			if cached(o.CacheDir) > before {
-				r.cache = CacheMiss
+// started waits, as long as ctx allows, for the one start of PDFium that
+// runs at a time, beginning it unless it runs, succeeded, or failed less
+// than retryAfter ago.
+func (r *Reader) started(ctx context.Context) (*start, error) {
+	r.mu.Lock()
+	s := r.run
+	if s != nil {
+		select {
+		case <-s.done:
+			if s.err != nil && time.Since(s.ended) >= retryAfter {
+				s = nil
 			}
-			return p, nil
-		}
-		if o.Log != nil {
-			o.Log.Warn("PDFium starts without its compilation cache", "cache", o.CacheDir, "error", err)
+		default:
 		}
 	}
-	r.cache = CacheOff
-	return startPool("")
+	if s == nil {
+		s = &start{done: make(chan struct{})}
+		r.run = s
+		r.starts++
+		go func() {
+			s.pool, s.cache, s.err = r.init()
+			s.ended = time.Now()
+			close(s.done)
+		}()
+	}
+	r.mu.Unlock()
+	select {
+	case <-s.done:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	if s.err != nil {
+		return nil, fmt.Errorf("%w: PDFium cannot start: %w", doctext.ErrUnavailable, s.err)
+	}
+	return s, nil
+}
+
+func (r *Reader) init() (sdk.Pool, string, error) {
+	if dir := r.o.CacheDir; dir != "" {
+		before := cached(dir)
+		p, err := newPool(dir)
+		if err == nil {
+			if cached(dir) > before {
+				return p, CacheMiss, nil
+			}
+			return p, CacheHit, nil
+		}
+		if r.o.Log != nil {
+			r.o.Log.Warn("PDFium starts without its compilation cache", "cache", dir, "error", err)
+		}
+	}
+	p, err := newPool("")
+	return p, CacheOff, err
 }
 
 // startPool compiles PDFium, through a compilation cache in dir unless dir
@@ -168,10 +220,11 @@ func (r *Reader) Open(ctx context.Context, data []byte) (doctext.Document, error
 	if len(data) == 0 || len(data) > math.MaxInt32 {
 		return nil, errors.New("the PDF is empty or too large")
 	}
-	p, err := r.start()
+	s, err := r.started(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("PDFium cannot start: %w", err)
+		return nil, err
 	}
+	p := s.pool
 	// The pool is never asked for more instances than it may hold, so its
 	// borrowers never wait inside it: go-commons-pool can miss the wakeup
 	// of a borrower that found it full just before an instance closed.

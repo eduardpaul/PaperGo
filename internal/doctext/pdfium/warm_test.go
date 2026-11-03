@@ -2,9 +2,14 @@ package pdfium_test
 
 import (
 	"context"
+	"errors"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
+	sdk "github.com/klippa-app/go-pdfium"
+	"papergo/internal/doctext"
 	"papergo/internal/doctext/doctexttest"
 	"papergo/internal/doctext/pdfium"
 )
@@ -37,6 +42,66 @@ func TestWarmSharesTheStart(t *testing.T) {
 		t.Fatal(cache, err)
 	}
 	if n := pdfium.Starts(reader); n != 1 {
+		t.Fatalf("PDFium started %d times", n)
+	}
+}
+
+// An open waiting for PDFium to start gives up with its context, and the
+// start goes on for the next one.
+func TestOpenWaitingForTheStartEndsWithItsContext(t *testing.T) {
+	gate := make(chan struct{})
+	pdfium.ReplaceStarts(t, time.Hour, func(dir string, real func(string) (sdk.Pool, error)) (sdk.Pool, error) {
+		<-gate
+		return real(dir)
+	})
+	reader := pdfium.New(pdfium.Options{})
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	if _, err := reader.Open(ctx, doctexttest.TextPDF("Late")); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal(err)
+	}
+	close(gate)
+	doc, err := reader.Open(context.Background(), doctexttest.TextPDF("Late"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = doc.Close()
+	if n := pdfium.Starts(reader); n != 1 {
+		t.Fatalf("PDFium started %d times", n)
+	}
+}
+
+// A failed start answers opens as unavailable, not as unreadable files,
+// and is tried again only after a while.
+func TestFailedStartIsRetried(t *testing.T) {
+	var failing atomic.Bool
+	failing.Store(true)
+	pdfium.ReplaceStarts(t, time.Hour, func(dir string, real func(string) (sdk.Pool, error)) (sdk.Pool, error) {
+		if failing.Load() {
+			return nil, errors.New("no PDFium")
+		}
+		return real(dir)
+	})
+	reader := pdfium.New(pdfium.Options{})
+	for range 2 {
+		if _, err := reader.Open(context.Background(), doctexttest.TextPDF("Retry")); !errors.Is(err, doctext.ErrUnavailable) {
+			t.Fatal(err)
+		}
+	}
+	if _, err := reader.Warm(); !errors.Is(err, doctext.ErrUnavailable) {
+		t.Fatal(err)
+	}
+	if n := pdfium.Starts(reader); n != 1 {
+		t.Fatalf("a failed start was retried at once: %d starts", n)
+	}
+	failing.Store(false)
+	pdfium.AgeStart(reader)
+	doc, err := reader.Open(context.Background(), doctexttest.TextPDF("Retry"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = doc.Close()
+	if n := pdfium.Starts(reader); n != 2 {
 		t.Fatalf("PDFium started %d times", n)
 	}
 }

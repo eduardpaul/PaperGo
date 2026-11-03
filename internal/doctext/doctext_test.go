@@ -3,6 +3,7 @@ package doctext_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"errors"
 	"image"
 	"image/color"
@@ -161,6 +162,21 @@ func TestUnreadableFiles(t *testing.T) {
 	}
 	if _, err := doctext.Extract(ctx, doctexttest.TextPDF("x"), "application/pdf", doctext.Options{OCR: "sometimes"}, reader, nil); err == nil {
 		t.Error("unknown OCR mode")
+	}
+}
+
+type unavailablePDF struct{}
+
+func (unavailablePDF) Name() string { return "unavailable" }
+func (unavailablePDF) Open(context.Context, []byte) (doctext.Document, error) {
+	return nil, fmt.Errorf("%w: no engine", doctext.ErrUnavailable)
+}
+
+// A reader that cannot work now does not make the file unsupported.
+func TestUnavailableReader(t *testing.T) {
+	_, err := doctext.Extract(ctx, doctexttest.TextPDF("x"), "application/pdf", doctext.Options{}, unavailablePDF{}, nil)
+	if !errors.Is(err, doctext.ErrUnavailable) || errors.Is(err, doctext.ErrUnsupported) {
+		t.Fatal(err)
 	}
 }
 
