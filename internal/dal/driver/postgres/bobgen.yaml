@@ -15,14 +15,12 @@ psql:
     domain_events: []
     audit_events: []
     live_changes: []
-    workflow_waits: []
     blob_previews: []
     blob_deletions: []
     sync_views: []
     sync_states: []
     sync_tokens: []
     workflow_run_items: []
-    runner_step_results: []
     workflow_steps: []
     workflow_step_operations: []
     workflow_triggers: []
@@ -162,10 +160,6 @@ replacements:
     match:
       name: "details"
     replace: "types.JSON[map[string]any]"
-  - tables: ["workflow_waits"]
-    match:
-      name: "/^(data|completion)$/"
-    replace: "types.JSON[json.RawMessage]"
   - tables: ["sync_tokens"]
     match:
       name: "changes"
