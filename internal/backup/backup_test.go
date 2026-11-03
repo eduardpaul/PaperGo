@@ -287,7 +287,7 @@ func TestInstallRollsBackBothDestinationsOnFailure(t *testing.T) {
 	if err := os.WriteFile(snapshot, []byte("new"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := install(in, snapshot, filepath.Join(root, "missing"), ""); err == nil {
+	if err := install(in, snapshot, filepath.Join(root, "missing")); err == nil {
 		t.Fatal("missing staged files accepted")
 	}
 	got, err := os.ReadFile(in.DatabasePath)

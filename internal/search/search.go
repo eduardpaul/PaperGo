@@ -1,6 +1,6 @@
 // Package search is PaperGo's search layer: the store contract every search
 // store implements, the query language, and the service that answers
-// searches. Stores live in their own packages (sqlitestore, zvecstore) and
+// searches. Stores live in their own packages (such as sqlitestore) and
 // cmd/api picks one. Indexing runs in workflows (search.* activities); the
 // store holds derived data that a reindex rebuilds. docs/search.md is the
 // user documentation.

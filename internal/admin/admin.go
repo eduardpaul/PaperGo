@@ -20,7 +20,7 @@ import (
 	"papergo/internal/dal/database"
 )
 
-const usage = "usage: papergo admin initialize|health|backup|restore|search|workers; each command accepts --help"
+const usage = "usage: papergo admin initialize|health|backup|restore|workers; each command accepts --help"
 
 // Run runs an administrative command: papergo admin <command>. A command
 // asked for --help prints it and returns flag.ErrHelp.
@@ -38,8 +38,6 @@ func Run(ctx context.Context, args []string, out io.Writer) error {
 		return initializeCommand(ctx, args[1:], out)
 	case "backup", "restore":
 		return archiveCommand(ctx, args, out)
-	case "search":
-		return searchCommand(ctx, args[1:], out)
 	case "workers":
 		return workersCommand(ctx, args[1:], out)
 	}
@@ -122,12 +120,7 @@ func archiveCommand(ctx context.Context, args []string, out io.Writer) error {
 	flags.StringVar(&in.DatabasePath, "database", defaultPath("DATABASE_PATH", "data/papergo.db"), "SQLite database path")
 	flags.StringVar(&in.BlobPath, "blobs", defaultPath("BLOB_PATH", "data/blobs"), "Local blob directory")
 	flags.StringVar(&in.ArchivePath, "file", "", "Backup archive path")
-	flags.StringVar(&in.SearchStore, "search-store", defaultPath("SEARCH_STORE", "sqlite"), "Search store: sqlite or zvec (zvec backups require the API stopped)")
-	searchPath := defaultPath("SEARCH_DATABASE_PATH", filepath.Join(filepath.Dir(in.DatabasePath), "search.db"))
-	if in.SearchStore == "zvec" {
-		searchPath = defaultPath("SEARCH_ZVEC_PATH", filepath.Join(filepath.Dir(in.DatabasePath), "search", "zvec"))
-	}
-	flags.StringVar(&in.SearchPath, "search", searchPath, "Search file/directory; zvec snapshots are retained, SQLite indexes are rebuilt")
+	flags.StringVar(&in.SearchPath, "search", defaultPath("SEARCH_DATABASE_PATH", filepath.Join(filepath.Dir(in.DatabasePath), "search.db")), "SQLite search file; restore removes it and a reindex rebuilds it")
 	if args[0] == "restore" {
 		flags.BoolVar(&in.Force, "force", false, "Replace existing data after validating the complete archive")
 	}
@@ -137,11 +130,7 @@ func archiveCommand(ctx context.Context, args []string, out io.Writer) error {
 	searchExplicit := false
 	flags.Visit(func(f *flag.Flag) { searchExplicit = searchExplicit || f.Name == "search" })
 	if !searchExplicit {
-		if in.SearchStore == "zvec" {
-			in.SearchPath = defaultPath("SEARCH_ZVEC_PATH", filepath.Join(filepath.Dir(in.DatabasePath), "search", "zvec"))
-		} else {
-			in.SearchPath = defaultPath("SEARCH_DATABASE_PATH", filepath.Join(filepath.Dir(in.DatabasePath), "search.db"))
-		}
+		in.SearchPath = defaultPath("SEARCH_DATABASE_PATH", filepath.Join(filepath.Dir(in.DatabasePath), "search.db"))
 	}
 	if flags.NArg() != 0 || in.ArchivePath == "" {
 		return errors.New("--file is required; positional arguments are not supported")

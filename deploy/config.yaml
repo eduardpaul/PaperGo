@@ -22,8 +22,7 @@ auth:
   admin_password: admin
 
 search:
-  store: zvec
-  zvec_path: ./data/search/zvec
+  store: sqlite
 
 # Discussions on items: "on" (the default) or "off". Off keeps existing
 # comments but serves none of them; organizations, workspaces and

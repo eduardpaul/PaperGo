@@ -33,8 +33,8 @@ func TestDocumentedConfigYAML(t *testing.T) {
 	if c.AuthMode != "local" || c.AdminSubject != "admin" || c.AdminPassword != "admin" || c.AdminPasswordOmitted {
 		t.Fatalf("auth %+v", c)
 	}
-	if c.SearchStore != "zvec" || c.ZvecPath != "./data/search/zvec" {
-		t.Fatalf("search %s %s", c.SearchStore, c.ZvecPath)
+	if c.SearchStore != "sqlite" {
+		t.Fatalf("search %s", c.SearchStore)
 	}
 	if c.MaxUpload != 100*1024*1024 {
 		t.Fatalf("upload %d", c.MaxUpload)
@@ -42,15 +42,15 @@ func TestDocumentedConfigYAML(t *testing.T) {
 	if !c.MCP {
 		t.Fatal("MCP is off by default")
 	}
-	t.Logf("documented YAML address %s database %s blob %s public %s mode %s user %s password %s store %s zvec %s upload %d", c.Address, c.DatabasePath, c.BlobPath, c.PublicURL, c.AuthMode, c.AdminSubject, c.AdminPassword, c.SearchStore, c.ZvecPath, c.MaxUpload)
+	t.Logf("documented YAML address %s database %s blob %s public %s mode %s user %s password %s store %s upload %d", c.Address, c.DatabasePath, c.BlobPath, c.PublicURL, c.AuthMode, c.AdminSubject, c.AdminPassword, c.SearchStore, c.MaxUpload)
 }
 
-func TestDefaultsAreLocalZvecOnLocalhost(t *testing.T) {
+func TestDefaultsAreLocalSQLiteOnLocalhost(t *testing.T) {
 	c, err := LoadFrom(func(string) string { return "" }, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Address != "127.0.0.1:8080" || c.AuthMode != "local" || c.AdminSubject != "admin" || c.AdminPassword != "admin" || c.SearchStore != "zvec" {
+	if c.Address != "127.0.0.1:8080" || c.AuthMode != "local" || c.AdminSubject != "admin" || c.AdminPassword != "admin" || c.SearchStore != "sqlite" {
 		t.Fatalf("defaults address %s mode %s user %s store %s", c.Address, c.AuthMode, c.AdminSubject, c.SearchStore)
 	}
 	executable, err := os.Executable()
@@ -78,14 +78,14 @@ func TestEnvironmentOverridesYAML(t *testing.T) {
 			return "0123456789abcdef0123456789abcdef"
 		}
 		if key == "SEARCH_STORE" {
-			return "sqlite"
+			return "none"
 		}
 		return ""
 	}, documentedYAML(t))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Address != "127.0.0.1:9090" || c.AuthMode != "development" || c.SearchStore != "sqlite" || c.AdminPassword != "" {
+	if c.Address != "127.0.0.1:9090" || c.AuthMode != "development" || c.SearchStore != "none" || c.AdminPassword != "" {
 		t.Fatalf("override address %s mode %s store %s password %q", c.Address, c.AuthMode, c.SearchStore, c.AdminPassword)
 	}
 	t.Logf("environment override address %s mode %s store %s", c.Address, c.AuthMode, c.SearchStore)
@@ -127,8 +127,7 @@ auth:
   proxy_secret_file: ` + secret + `
   proxy_trusted_cidrs: [172.29.242.2/32]
 search:
-  store: zvec
-  zvec_path: ` + filepath.Join(dir, "zvec") + `
+  store: none
 `
 	c, err = LoadFrom(func(key string) string {
 		if key == "APP_ENV" {
@@ -142,7 +141,7 @@ search:
 		}
 		return ""
 	}, proxy)
-	if err != nil || c.AuthMode != "proxy" || c.AdminSubject != "papergo-admin" || len(c.ProxyTrustedCIDRs) != 1 || c.SearchStore != "zvec" || c.ProxySecret != strings.Repeat("s", 32) {
+	if err != nil || c.AuthMode != "proxy" || c.AdminSubject != "papergo-admin" || len(c.ProxyTrustedCIDRs) != 1 || c.SearchStore != "none" || c.ProxySecret != strings.Repeat("s", 32) {
 		t.Fatalf("proxy %+v %v", c, err)
 	}
 	t.Logf("explicit oidc and proxy loaded; proxy store %s", c.SearchStore)

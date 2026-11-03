@@ -31,8 +31,7 @@ type yamlConfig struct {
 		ProxyTrustedCIDRs []string  `yaml:"proxy_trusted_cidrs"`
 	} `yaml:"auth"`
 	Search struct {
-		Store    string `yaml:"store"`
-		ZvecPath string `yaml:"zvec_path"`
+		Store string `yaml:"store"`
 	} `yaml:"search"`
 	Comments string `yaml:"comments"`
 	Storage  struct {
@@ -129,7 +128,7 @@ func parseYAML(text string) (yamlFile, error) {
 		"PUBLIC_URL": in.Server.PublicURL, "MCP_EXTENSIONS": strings.Join(in.MCP.Extensions, ","), "DATABASE_URL": in.Database.URL, "AUTH_MODE": in.Auth.Mode,
 		"ADMIN_SUBJECT": in.Auth.AdminUser, "ADMIN_GROUP": in.Auth.AdminGroup,
 		"PROXY_SECRET_FILE": in.Auth.ProxySecretFile, "PROXY_TRUSTED_CIDRS": strings.Join(in.Auth.ProxyTrustedCIDRs, ","),
-		"SEARCH_STORE": in.Search.Store, "SEARCH_ZVEC_PATH": in.Search.ZvecPath, "BLOB_PATH": in.Storage.BlobPath, "COMMENTS": in.Comments,
+		"SEARCH_STORE": in.Search.Store, "BLOB_PATH": in.Storage.BlobPath, "COMMENTS": in.Comments,
 		"OIDC_ISSUER": in.OIDC.Issuer, "OIDC_AUDIENCE": in.OIDC.Audience,
 		"OIDC_CLIENT_ID": in.OIDC.ClientID, "OIDC_CLIENT_SCOPES": in.OIDC.ClientScopes,
 		"OIDC_GROUPS_CLAIM": in.OIDC.GroupsClaim, "OIDC_GROUPS_PREFIX": in.OIDC.GroupsPrefix,
@@ -160,9 +159,6 @@ func parseYAML(text string) (yamlFile, error) {
 		file.values["SEARCH_DATABASE_PATH"] = filepath.Join(dir, "search.db")
 		if in.Storage.BlobPath == "" {
 			file.values["BLOB_PATH"] = filepath.Join(dir, "blobs")
-		}
-		if in.Search.ZvecPath == "" {
-			file.values["SEARCH_ZVEC_PATH"] = filepath.Join(dir, "search", "zvec")
 		}
 	}
 	if in.Storage.MaxUploadMB != nil {

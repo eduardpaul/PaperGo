@@ -30,11 +30,9 @@ type Config struct {
 	// SearchPath is the search store's SQLite file (SEARCH_DATABASE_PATH),
 	// by default search.db next to the database.
 	SearchPath string
-	// SearchStore is the search extension's store (SEARCH_STORE): zvec
-	// (default), sqlite, or none to run without search.
-	SearchStore           string
-	ZvecPath              string
-	ZvecKeywordCandidates int
+	// SearchStore is the search extension's store (SEARCH_STORE): sqlite
+	// (default), or none to run without search.
+	SearchStore string
 	// SearchLanguages are the languages whose word stems search indexes
 	// (SEARCH_LANGUAGES, comma-separated Snowball names; default english,
 	// none for no stemming).
@@ -133,7 +131,6 @@ type Config struct {
 
 // Search stores (SEARCH_STORE).
 const (
-	SearchZvec   = "zvec"
 	SearchSQLite = "sqlite"
 	// SearchNone runs PaperGo without its search extension: listings match
 	// search text by name.
@@ -212,9 +209,9 @@ func loadFrom(getenv func(string) string, yamlText, directory string) (Config, e
 		}
 	}
 	c.SearchPath = value("SEARCH_DATABASE_PATH", filepath.Join(filepath.Dir(c.DatabasePath), "search.db"))
-	c.SearchStore = value("SEARCH_STORE", SearchZvec)
-	if c.SearchStore != SearchSQLite && c.SearchStore != SearchZvec && c.SearchStore != SearchNone {
-		return c, fmt.Errorf("SEARCH_STORE must be zvec, sqlite or none")
+	c.SearchStore = value("SEARCH_STORE", SearchSQLite)
+	if c.SearchStore != SearchSQLite && c.SearchStore != SearchNone {
+		return c, fmt.Errorf("SEARCH_STORE must be sqlite or none")
 	}
 	switch value("COMMENTS", "on") {
 	case "on":
@@ -231,20 +228,6 @@ func loadFrom(getenv func(string) string, yamlText, directory string) (Config, e
 		return c, fmt.Errorf("MCP must be on or off")
 	}
 	c.MCPExtensions = strings.FieldsFunc(value("MCP_EXTENSIONS", ""), func(r rune) bool { return r == ',' || r == ' ' })
-	c.ZvecPath = value("SEARCH_ZVEC_PATH", filepath.Join(filepath.Dir(c.DatabasePath), "search", "zvec"))
-	c.ZvecKeywordCandidates = 10000
-	if raw := lookup("SEARCH_ZVEC_KEYWORD_CANDIDATES"); raw != "" {
-		n, err := strconv.Atoi(raw)
-		if err != nil || n < 1 || n > 99999 {
-			return c, fmt.Errorf("SEARCH_ZVEC_KEYWORD_CANDIDATES must be between 1 and 99999")
-		}
-		c.ZvecKeywordCandidates = n
-	}
-	if c.SearchStore == SearchZvec {
-		if err := distinctZvecPath(c.ZvecPath, c.DatabasePath, c.BlobPath, c.SearchPath); err != nil {
-			return c, err
-		}
-	}
 	if c.SearchStore == SearchSQLite {
 		if err := distinctSearchPath(c.DatabasePath, c.SearchPath); err != nil {
 			return c, err
@@ -554,32 +537,6 @@ func distinctSearchPath(databasePath, searchPath string) error {
 		right, rerr := os.Stat(index)
 		if lerr == nil && rerr == nil && os.SameFile(left, right) {
 			return fmt.Errorf("SEARCH_DATABASE_PATH must not overlap DATABASE_PATH or its sidecar files")
-		}
-	}
-	return nil
-}
-
-// Native stores are disposable directories; never allow them to contain, or
-// sit inside, another data store. Resolve aliases before comparing parents.
-func distinctZvecPath(indexPath string, otherPaths ...string) error {
-	index, err := canonicalPath(indexPath)
-	if err != nil {
-		return err
-	}
-	for _, p := range otherPaths {
-		other, err := canonicalPath(p)
-		if err != nil {
-			return err
-		}
-		contains := func(parent, child string) bool {
-			relative, err := filepath.Rel(parent, child)
-			return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(os.PathSeparator))
-		}
-		if contains(index, other) || contains(other, index) {
-			return fmt.Errorf("SEARCH_ZVEC_PATH must not overlap DATABASE_PATH, BLOB_PATH or SEARCH_DATABASE_PATH")
-		}
-		if err = distinctSearchPath(p, index); err != nil {
-			return err
 		}
 	}
 	return nil

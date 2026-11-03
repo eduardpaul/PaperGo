@@ -425,18 +425,6 @@ func TestChatConfig(t *testing.T) {
 	}
 }
 
-func TestZvecPathDoesNotOverlapData(t *testing.T) {
-	root := t.TempDir()
-	for _, path := range []string{string(os.PathSeparator), root, filepath.Join(root, "papergo.db"), filepath.Join(root, "papergo.db-wal"), filepath.Join(root, "blobs"), filepath.Join(root, "blobs", "index")} {
-		if err := distinctZvecPath(path, filepath.Join(root, "papergo.db"), filepath.Join(root, "blobs"), filepath.Join(root, "search.db")); err == nil {
-			t.Errorf("accepted overlapping directory %s", path)
-		}
-	}
-	if err := distinctZvecPath(filepath.Join(root, "search", "zvec"), filepath.Join(root, "papergo.db"), filepath.Join(root, "blobs"), filepath.Join(root, "search.db")); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestDecisionConfiguration(t *testing.T) {
 	t.Setenv("APP_ENV", "test")
 	t.Setenv("AUTH_MODE", "development")
