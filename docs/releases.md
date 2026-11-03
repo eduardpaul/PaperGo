@@ -22,7 +22,7 @@ commit whose `verify` run on `main` succeeded. A commit that a newer push to
 `main` superseded before its run finished has no such run; tag the newer one.
 It then builds and runs native smoke tests for Linux amd64/arm64 and Windows amd64, using [GitHub hosted runners](https://docs.github.com/en/actions/reference/runners/github-hosted-runners). Each archive includes `papergo`,
 whose `admin` commands back up, restore and initialize databases, and this guide. `papergo --version` reports the version, commit and commit date injected into the build. The smoke test also lists the [MCP endpoint](mcp.md)'s tools.
-Each platform ZIP includes the executable, native libraries, compiler runtimes, license notices, sample `config.yaml` and operator documentation. Linux libraries live in `lib/`; Windows DLLs sit beside the executable. Packaging refuses a Linux ZIP whose `lib/` holds anything but ONNX Runtime, `libstdc++` and `libgcc_s`, or whose executable or libraries need a glibc newer than 2.39. macOS release and native CI builds are temporarily commented out.
+Each Linux ZIP includes the executable, native libraries and compiler runtimes in `lib/`, license notices, sample `config.yaml` and operator documentation. Packaging refuses a Linux ZIP whose `lib/` holds anything but ONNX Runtime, `libstdc++` and `libgcc_s`, or whose executable or libraries need a glibc newer than 2.39. The Windows ZIP holds only `papergo.exe`, license notices, sample `config.yaml` and operator documentation, and needs no Visual C++ Redistributable: the executable embeds ONNX Runtime with the Visual C++ runtime it requires, and links MinGW's C++, GCC and thread runtimes statically, so it imports only Windows system DLLs and the Universal CRT. Packaging refuses a Windows ZIP holding anything else, such as a DLL. Before the first OCR, embedding or decision the executable extracts that runtime to `cache/onnxruntime/<digest>/` beside the database; see [Windows runtime](#windows-runtime). macOS release and native CI builds are temporarily commented out.
 
 One platform-independent `papergo_vX.Y.Z_assets.zip` contains PaddleOCR, Laya multilingual FP32, EmbeddingGemma 2 Q4 and Harrier Q4 models, tokenizers and model notices. Extract it into the platform installation directory: `assets/` must sit beside the main executable and `config.yaml`. The application finds native libraries and models relative to its executable and loads them directly from disk. The web UI, database schema and migrations remain embedded. Linux requires glibc 2.39 or newer on amd64 and arm64 (e.g. Debian 13, Ubuntu 24.04, Fedora 40, RHEL 10): the executable needs it, and the bundled libstdc++ needs 2.38. Tokenizers are statically linked. OCR and local decisions use the shared assets automatically. For local embeddings set `AI_EMBEDDINGS_PROVIDER=local` and choose `AI_EMBEDDINGS_MODEL=embeddinggemma-2` or `harrier-oss-v1-0.6b`. Explicit `ONNXRUNTIME_LIB`, `OCR_MODELS`, `AI_DECISION_MODELS_PATH` and `AI_EMBEDDINGS_MODELS_PATH` settings select alternative inference assets. The release downloads and checksum-verifies the models once on Linux, packages one shared ZIP, and tests each platform ZIP with those same assets. The Docker image uses the same directory layout under `/opt/papergo`.
 
@@ -50,6 +50,39 @@ Version numbering is chosen by the maintainer; tagging and GitHub Releases are
 the only publishing operations. The workflow publishes downloadable binaries and the container images; it does not install updates on customer machines.
 The Windows archive is not Authenticode-signed; OS trust prompts
 remain possible until platform signing credentials are configured.
+
+## Windows runtime
+
+`papergo.exe` embeds zstd-compressed ONNX Runtime 1.23.2 (`onnxruntime.dll`)
+and the Microsoft Visual C++ runtime 14.44.35211 it imports
+(`vcruntime140.dll`, `vcruntime140_1.dll`, `msvcp140.dll`,
+`msvcp140_1.dll`), with a manifest of each file's size and SHA-256. Unless
+`ONNXRUNTIME_LIB` names another library, OCR, local embeddings and local
+decisions use this runtime. When the first of them loads, PaperGo:
+
+- uses `cache/onnxruntime/<digest>/` in the data folder, the directory of
+  `DATABASE_PATH`, where `<digest>` is the SHA-256 of the manifest;
+- opens every file there without sharing write or delete access, so it
+  cannot change until it is loaded, and checks its size and SHA-256 at every
+  start; when a file is missing or differs, it extracts the bundle again,
+  into a temporary directory beside it that it then renames into place;
+- loads the Visual C++ runtime, then ONNX Runtime, by absolute path, with
+  their imports resolved in that directory and `System32` only, never in the
+  working directory, beside the executable or on `PATH`. ONNX Runtime binds
+  to these modules even where a Visual C++ Redistributable is installed;
+  the runtime is backward compatible, and 14.44 is newer than the 14.40
+  toolset ONNX Runtime 1.23.2 is built with;
+- removes everything else in `cache/onnxruntime`, such as an earlier
+  release's runtime.
+
+The extracted files are read-only and inherit the data folder's
+permissions; keep the data folder writable only by the account that runs
+PaperGo. `cache/onnxruntime` is derived data: backups leave it out, and
+deleting it while PaperGo is stopped is safe.
+
+The `verify` workflow also runs the Windows ZIP with OCR in a
+process-isolated Windows Server Core container, which has no Visual C++
+runtime, and checks that the runtime loaded from the extracted cache.
 
 ## Container images
 
