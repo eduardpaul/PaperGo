@@ -151,7 +151,9 @@ function Connect({ endpoint }: { endpoint: string }) {
   const format = useFormat();
   const queryClient = useQueryClient();
   const mine = useQuery({ queryKey: ['my-scopes'], queryFn: scopes });
-  const [name, setName] = useState(() => t('assistants.defaultName'));
+  // Until the user names the connection, its default name follows the screen's language.
+  const [typedName, setName] = useState<string>();
+  const name = typedName ?? t('assistants.defaultName');
   const [write, setWrite] = useState(false);
   const [limited, setLimited] = useState(false);
   const [places, setPlaces] = useState<Place[]>([]);

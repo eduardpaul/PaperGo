@@ -1,7 +1,7 @@
 import type * as Api from "monaco-editor/editor/editor.api";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Textarea } from "@/components/ui/input";
-import { i18n } from "@/i18n";
+import { useTranslation } from "@/i18n";
 
 type Monaco = typeof Api;
 
@@ -12,6 +12,7 @@ type Monaco = typeof Api;
  * text, reporting each change: replacing the script means a new key.
  */
 export function ScriptEditor({ id, value, onChange, readOnly }: { id: string; value: string; onChange: (value: string) => void; readOnly?: boolean }) {
+  const { t } = useTranslation("workflows");
   const [monaco, setMonaco] = useState<Monaco>();
   const host = useRef<HTMLDivElement>(null);
   const editor = useRef<Api.editor.IStandaloneCodeEditor>(undefined);
@@ -35,7 +36,6 @@ export function ScriptEditor({ id, value, onChange, readOnly }: { id: string; va
     const model = monaco.editor.createModel(latest.current.value, "typescript", monaco.Uri.parse(`file:///${id}.ts`));
     const created = monaco.editor.create(host.current, {
       model,
-      ariaLabel: i18n.t("workflows:editor.script"),
       automaticLayout: true,
       fixedOverflowWidgets: true,
       fontSize: 12,
@@ -61,6 +61,10 @@ export function ScriptEditor({ id, value, onChange, readOnly }: { id: string; va
   useEffect(() => {
     editor.current?.updateOptions({ readOnly });
   }, [readOnly, monaco]);
+
+  useEffect(() => {
+    editor.current?.updateOptions({ ariaLabel: t("editor.script") });
+  }, [t, monaco, id]);
 
   if (!monaco) {
     return (

@@ -4,7 +4,7 @@ import { renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { stringifyJSON } from './json';
-import { resourceNames, termNames } from './names';
+import { resourceNames, termNames, unavailable } from './names';
 import { referencedIds, useResourceNames } from '@/features/fields/names';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -37,7 +37,7 @@ it('reads looked-up item names in batches of 20 and marks unreadable ones', asyn
   expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body)).requests[0]).toEqual({ id: 'item-0', method: 'GET', url: '/v1/resources/item-0' });
   expect(names.get('item-0')).toBe('Name item-0');
   expect(names.get('item-20')).toBe('Name item-20');
-  expect(names.get('item-3')).toBe('Unavailable item');
+  expect(names.get('item-3')).toBe(unavailable);
 });
 
 it('names terms, marks unknown ids and leaves ids alone without taxonomy access', async () => {
@@ -48,7 +48,7 @@ it('names terms, marks unknown ids and leaves ids alone without taxonomy access'
   });
   const names = await termNames(['t1', 't2']);
   expect(names.get('t1')).toBe('Finance');
-  expect(names.get('t2')).toBe('Unknown term');
+  expect(names.get('t2')).toBe(unavailable);
   respond(() => ({ status: 403, body: { code: 'forbidden', detail: 'forbidden' } }));
   expect((await termNames(['t1'])).size).toBe(0);
 });
