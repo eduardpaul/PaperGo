@@ -8,7 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	sdk "github.com/klippa-app/go-pdfium"
 	"papergo/internal/doctext/doctexttest"
 	"papergo/internal/doctext/pdfium"
 )
@@ -58,6 +60,14 @@ func TestUnusableCacheDirectory(t *testing.T) {
 		}
 		dirs["read-only"] = readOnly
 	}
+	// The start without a cache loads the shared one, as compiling again
+	// would test nothing more.
+	pdfium.ReplaceStarts(t, time.Hour, func(dir string, real func(string) (sdk.Pool, error)) (sdk.Pool, error) {
+		if dir == "" {
+			dir = doctexttest.CacheDir(t)
+		}
+		return real(dir)
+	})
 	for name, dir := range dirs {
 		t.Run(name, func(t *testing.T) {
 			var logged bytes.Buffer
