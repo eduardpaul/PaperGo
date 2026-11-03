@@ -10,7 +10,9 @@ Download the ZIP for your platform and `papergo_vX.Y.Z_assets.zip` from the same
 papergo/                 # your installation directory
   papergo[.exe]
   config.yaml
-  lib/                   # Linux native libraries (Windows needs none)
+  LICENSE
+  NOTICE
+  lib/                   # Linux: ONNX Runtime (Windows needs none)
   notices/
   assets/
     models/
@@ -24,7 +26,7 @@ papergo/                 # your installation directory
 
 Run the executable from that directory and open http://localhost:8080. The first start creates the database automatically. Node.js and Python are not needed at runtime. Linux amd64/arm64 and Windows amd64 release builds are enabled; macOS builds are temporarily disabled.
 
-The binary ZIP includes the web UI, database schema, native libraries, compiler runtimes and their license notices. On Windows it holds just `papergo.exe` with notices and documentation: the executable embeds ONNX Runtime and the Visual C++ runtime, so no DLLs or Visual C++ Redistributable are needed, and extracts them to `cache/onnxruntime` beside the database, derived data that is safe to delete while PaperGo is stopped ([Windows runtime](docs/releases.md#windows-runtime)). The shared ZIP contains PaddleOCR, Laya FP32, EmbeddingGemma 2 and Harrier Q4 models, tokenizers and model notices, and works with every platform. Native libraries and models are read directly from the installation; model paths are resolved beside the executable even when started from another working directory. The web UI stays embedded in the executable. OCR and local workflow decisions use the shared models automatically. Set `AI_EMBEDDINGS_PROVIDER=local` and select `AI_EMBEDDINGS_MODEL=embeddinggemma-2` (default) or `harrier-oss-v1-0.6b` for local semantic search. Inference never downloads models. `ONNXRUNTIME_LIB`, `OCR_MODELS`, `AI_DECISION_MODELS_PATH` and `AI_EMBEDDINGS_MODELS_PATH` select explicit alternatives. Linux builds need glibc 2.39 or newer (Debian 13, Ubuntu 24.04 or later).
+The binary ZIP includes the web UI, database schema, PaperGo's `LICENSE` and `NOTICE`, on Linux ONNX Runtime in `lib/`, and in `notices/` the notices of every third-party component it ships or compiles in, among them the Go modules and the npm packages of the web UI and workflow SDK. On Windows it holds just `papergo.exe` with licences, notices and documentation: the executable embeds ONNX Runtime and the Visual C++ runtime, so no DLLs or Visual C++ Redistributable are needed, and extracts them to `cache/onnxruntime` beside the database, derived data that is safe to delete while PaperGo is stopped ([Windows runtime](docs/releases.md#windows-runtime)). The Windows build includes Microsoft Visual C++ runtime files under Microsoft's terms in `notices/microsoft-visual-cpp-runtime.txt`; using or redistributing it means accepting them. The shared ZIP contains PaddleOCR, Laya FP32, EmbeddingGemma 2 and Harrier Q4 models, tokenizers and model notices, and works with every platform. Native libraries and models are read directly from the installation; model paths are resolved beside the executable even when started from another working directory. The web UI stays embedded in the executable. OCR and local workflow decisions use the shared models automatically. Set `AI_EMBEDDINGS_PROVIDER=local` and select `AI_EMBEDDINGS_MODEL=embeddinggemma-2` (default) or `harrier-oss-v1-0.6b` for local semantic search. Inference never downloads models. `ONNXRUNTIME_LIB`, `OCR_MODELS`, `AI_DECISION_MODELS_PATH` and `AI_EMBEDDINGS_MODELS_PATH` select explicit alternatives. Linux builds need glibc 2.39 or newer and the distribution's libstdc++ and libgcc_s (Debian 13, Ubuntu 24.04 or later, which install them by default).
 
 Configuration is optional. The sample `config.yaml` listens on port 8080, signs in a local administrator (`admin` / `admin`), and stores the database, files and search index under `./data`. Set the initial password before the first start. Set `auth.mode` to `oidc` or `proxy` when an identity provider or trusted proxy should sign people in. Non-empty environment variables override matching settings in `config.yaml`. Release archives include the optional configuration and operator documentation; `papergo admin` runs the maintenance commands.
 
@@ -356,3 +358,11 @@ custom-data routing, managed taxonomy suggestions and guarded human review.
 Right-click navigation entries, collection cards, rows or item cards for their available actions. A selected row keeps the selection for workflow, move and delete actions. Move selected entries between folders with `POST /v1/resources/{id}/move-selection`: up to 100 item/folder ids and current versions move together, with no partial changes on failure; nested ancestor/descendant selections are rejected.
 
 Drag entries or an explicit selection onto a folder or breadcrumb to move them. File uploads keep their own drop flow. A move name conflict offers rename-and-retry; a single writable file can replace the destination after confirmation, atomically recycling that destination and moving the source with both versions checked.
+
+## License
+
+PaperGo is licensed under the [Apache License 2.0](LICENSE). Copyright 2026 Eduard Paul; see [NOTICE](NOTICE).
+
+The release archives and the Docker image include third-party components under their own licences; their notices are in `notices/` beside the executable (`/opt/papergo/notices` in the image), and the models' in `assets/notices/`. [Dependencies](docs/dependencies.md) lists them and how the notices are generated.
+
+The Windows build also includes Microsoft Visual C++ runtime files, which are not licensed under Apache-2.0 but under Microsoft's terms in `notices/microsoft-visual-cpp-runtime.txt`. Installing, copying or using the Windows build means accepting those terms, and redistributing it means requiring recipients to accept them.

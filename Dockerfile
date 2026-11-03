@@ -20,6 +20,8 @@ COPY web/package.json web/package-lock.json ./
 RUN npm ci
 COPY web ./
 COPY sdk/dist/workflow.d.ts /src/sdk/dist/
+# The build writes the bundled packages' notices with it.
+COPY scripts/npm-notices.mjs /src/scripts/
 RUN npm run build
 
 # Exports the pinned Laya graph on a fixed CPU platform, which is why the

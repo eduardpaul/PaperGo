@@ -26,6 +26,10 @@ class DevelopmentChecksTests(unittest.TestCase):
         self.declarations = self.root / 'sdk/dist/workflow.d.ts'
         self.declarations.parent.mkdir(parents=True)
         self.declarations.write_text('export {};')
+        # The build writes the npm notices with this generator.
+        self.notices = self.root / 'scripts/npm-notices.mjs'
+        self.notices.parent.mkdir(parents=True)
+        self.notices.write_text('// notices')
         self.patch = patch.object(checks, 'ROOT', self.root)
         self.patch.start()
         self.addCleanup(self.patch.stop)
@@ -78,14 +82,17 @@ class DevelopmentChecksTests(unittest.TestCase):
             self.declarations.write_text('export declare const changed: true;')
             checks.prepare_frontend()
             self.assertEqual(run.call_count, 3)
-            (self.web / 'dist/index.html').write_text('tampered')
+            self.notices.write_text('// changed notices')
             checks.prepare_frontend()
             self.assertEqual(run.call_count, 4)
-            (self.web / 'dist/index.html').unlink()
+            (self.web / 'dist/index.html').write_text('tampered')
             checks.prepare_frontend()
             self.assertEqual(run.call_count, 5)
-            checks.prepare_frontend(force=True)
+            (self.web / 'dist/index.html').unlink()
+            checks.prepare_frontend()
             self.assertEqual(run.call_count, 6)
+            checks.prepare_frontend(force=True)
+            self.assertEqual(run.call_count, 7)
 
     def test_stale_dependencies_install_only_with_setup(self):
         (self.web / 'node_modules/example').rmdir()
