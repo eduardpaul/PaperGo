@@ -21,7 +21,7 @@ func TestReadAndRender(t *testing.T) {
 	if info, ok := debug.ReadBuildInfo(); ok {
 		for _, m := range info.Deps {
 			if m.Path == "github.com/klippa-app/go-pdfium" && m.Version != "v1.21.4" {
-				t.Fatalf("go-pdfium is %s: update Name to the PDFium build its module embeds", m.Version)
+				t.Fatalf("go-pdfium is %s: update Name to the PDFium build its module embeds, and startPool's runtime features to its default runtime's", m.Version)
 			}
 		}
 	}

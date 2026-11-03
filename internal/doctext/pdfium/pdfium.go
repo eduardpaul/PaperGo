@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"slices"
 	"strings"
 	"sync"
@@ -146,20 +147,33 @@ func (r *Reader) started(ctx context.Context) (*start, error) {
 
 func (r *Reader) init() (sdk.Pool, string, error) {
 	if dir := r.o.CacheDir; dir != "" {
-		before := cached(dir)
+		pruneVersions(dir)
+		before := entries(dir)
 		p, err := newPool(dir)
+		// wazero fails on an entry it cannot read, such as a damaged one,
+		// and leaves it in place: clear the cache and compile into it again.
+		if err != nil && clearCache(dir) {
+			r.warn("PDFium's compilation cache could not be read and was cleared", dir, err)
+			before = nil
+			p, err = newPool(dir)
+		}
 		if err == nil {
-			if cached(dir) > before {
+			if written := changed(before, entries(dir)); written != "" {
+				pruneEntries(dir, written)
 				return p, CacheMiss, nil
 			}
 			return p, CacheHit, nil
 		}
-		if r.o.Log != nil {
-			r.o.Log.Warn("PDFium starts without its compilation cache", "cache", dir, "error", err)
-		}
+		r.warn("PDFium starts without its compilation cache", dir, err)
 	}
 	p, err := newPool("")
 	return p, CacheOff, err
+}
+
+func (r *Reader) warn(msg, dir string, err error) {
+	if r.o.Log != nil {
+		r.o.Log.Warn(msg, "cache", dir, "error", err)
+	}
 }
 
 // startPool compiles PDFium, through a compilation cache in dir unless dir
@@ -179,7 +193,12 @@ func startPool(dir string) (sdk.Pool, error) {
 		if cache, err = wazero.NewCompilationCacheWithDir(dir); err != nil {
 			return nil, err
 		}
-		// The features go-pdfium's module needs, as its default runtime has.
+		// A runtime config replaces go-pdfium's default one, so it repeats
+		// the features that default enables for the module: compare with
+		// initWithConfig in go-pdfium's webassembly/webassembly.go on every
+		// go-pdfium upgrade, which TestReadAndRender's version check flags.
+		// With fewer features, starts with the cache fail and fall back to
+		// compiling without it.
 		config.RuntimeConfig = wazero.NewRuntimeConfig().WithCoreFeatures(api.CoreFeaturesV2 | experimental.CoreFeaturesExceptionHandling).WithCompilationCache(cache)
 	}
 	p, err := webassembly.Init(config)
@@ -201,16 +220,87 @@ func startPool(dir string) (sdk.Pool, error) {
 	return p, nil
 }
 
-// cached counts the compiled modules stored in a cache directory.
-func cached(dir string) int {
-	entries, _ := filepath.Glob(filepath.Join(dir, "wazero-*", "*"))
-	n := 0
-	for _, e := range entries {
-		if !strings.HasSuffix(e, ".tmp") {
-			n++
+// A cache directory holds one wazero-<version>-<arch>-<os> directory per
+// wazero version and platform, and in it one file per compiled module,
+// named by the module's hash and the CPU's features; files being written
+// end in .tmp until they are renamed into place.
+
+// entries are a cache directory's compiled modules, as paths relative to
+// it, with the times they were written.
+func entries(dir string) map[string]time.Time {
+	out := map[string]time.Time{}
+	paths, _ := filepath.Glob(filepath.Join(dir, "wazero-*", "*"))
+	for _, path := range paths {
+		info, err := os.Stat(path)
+		if err != nil || !info.Mode().IsRegular() || strings.HasSuffix(path, ".tmp") {
+			continue
+		}
+		rel, _ := filepath.Rel(dir, path)
+		out[rel] = info.ModTime()
+	}
+	return out
+}
+
+// changed is an entry that appeared or was rewritten between two listings.
+func changed(before, after map[string]time.Time) string {
+	for name, written := range after {
+		if old, ok := before[name]; !ok || !old.Equal(written) {
+			return name
 		}
 	}
-	return n
+	return ""
+}
+
+// pruneEntries removes the modules beside the one just written, which
+// earlier go-pdfium versions compiled.
+func pruneEntries(dir, written string) {
+	paths, _ := filepath.Glob(filepath.Join(dir, filepath.Dir(written), "*"))
+	for _, path := range paths {
+		if rel, _ := filepath.Rel(dir, path); rel != written && !strings.HasSuffix(path, ".tmp") {
+			_ = os.Remove(path)
+		}
+	}
+}
+
+// pruneVersions removes the directories of other wazero versions and
+// platforms, whose modules this executable cannot load.
+func pruneVersions(dir string) {
+	current := "wazero-" + wazeroVersion() + "-" + runtime.GOARCH + "-" + runtime.GOOS
+	paths, _ := filepath.Glob(filepath.Join(dir, "wazero-*"))
+	for _, path := range paths {
+		if filepath.Base(path) != current {
+			_ = os.RemoveAll(path)
+		}
+	}
+}
+
+// clearCache removes every compiled module, and reports whether there were any
+// and they are gone.
+func clearCache(dir string) bool {
+	paths, _ := filepath.Glob(filepath.Join(dir, "wazero-*"))
+	for _, path := range paths {
+		if os.RemoveAll(path) != nil {
+			return false
+		}
+	}
+	return len(paths) > 0
+}
+
+// wazeroVersion is the version wazero names its cache directory after, as
+// wazero's internal/version reads it.
+func wazeroVersion() string {
+	version := ""
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, dep := range info.Deps {
+			if strings.Contains(dep.Path, "github.com/tetratelabs/wazero") {
+				version = dep.Version
+			}
+		}
+	}
+	if version == "" || version == "(devel)" {
+		return "dev"
+	}
+	return version
 }
 
 func (r *Reader) Open(ctx context.Context, data []byte) (doctext.Document, error) {
