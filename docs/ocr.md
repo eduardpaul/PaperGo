@@ -13,7 +13,7 @@ Engines never read storage or the database. Callers decode the file, apply EXIF 
 
 ## Configuration
 
-Standalone executables and the Docker image include ONNX Runtime and PaddleOCR models and enable OCR automatically. Source builds (`go run ./cmd/api`) use the following environment settings:
+Release builds and the Docker image include ONNX Runtime and PaddleOCR models and enable OCR automatically. Source builds (`go run ./cmd/api`) use the following environment settings:
 
 | Setting | Meaning |
 | --- | --- |

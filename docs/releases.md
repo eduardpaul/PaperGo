@@ -141,7 +141,7 @@ WAL they write.
 Download the ZIP for your OS/CPU and the shared assets ZIP from the same release,
 and verify both against `SHA256SUMS`. Extract both into the same application
 directory, separate from data. Keep the resulting `assets/` beside `config.yaml`
-and the executables.
+and the executable.
 Set the normal production authentication and storage configuration from the
 README. The first start creates the database.
 

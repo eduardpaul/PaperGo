@@ -113,7 +113,7 @@ stage, so a failing job names the command that reproduces it.
 | `native` | Real decision, embedding and OCR models, with race detection |
 | `zvec` | Native search store conformance, backup and parity, with race detection |
 | `soak` | Native search soak at real dimensions and timed fuzzing |
-| `release` | Builds, packages and runs the release executables with the shared assets |
+| `release` | Builds, packages and runs the release executable with the shared assets |
 | `docker` | Builds the container image and runs its smoke test |
 | `vuln` | Reachable Go dependency vulnerabilities |
 

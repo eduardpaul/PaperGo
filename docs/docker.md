@@ -51,7 +51,7 @@ docker tag papergo:local ghcr.io/eduardpaul/papergo:local
 PAPERGO_VERSION=local docker compose -f deploy/compose.yaml up -d
 ```
 
-BuildKit builds the frontend, native SDKs, models and Go executables. The model stage downloads the published Laya bundle and the embedding presets and verifies their checksums. Release CI supplies the already verified shared model assets as the `model-assets` named build context, so each platform builds natively without re-exporting weights. A source build also accepts this context when assets have been prepared:
+BuildKit builds the frontend, native SDKs, models and the Go executable. The model stage downloads the published Laya bundle and the embedding presets and verifies their checksums. Release CI supplies the already verified shared model assets as the `model-assets` named build context, so each platform builds natively without re-exporting weights. A source build also accepts this context when assets have been prepared:
 
 ```sh
 python3 scripts/build-assets.py --output-dir .cache/container-assets/assets

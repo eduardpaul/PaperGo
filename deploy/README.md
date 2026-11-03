@@ -1,6 +1,6 @@
 # PaperGo
 
-Download the platform ZIP and `papergo_vX.Y.Z_assets.zip` from the same release. Extract both into this directory. The shared ZIP creates `assets/` beside the executables and `config.yaml`. Run the executable from this directory, then open http://localhost:8080.
+Download the platform ZIP and `papergo_vX.Y.Z_assets.zip` from the same release. Extract both into this directory. The shared ZIP creates `assets/` beside the executable and `config.yaml`. Run the executable from this directory, then open http://localhost:8080.
 
 - Linux: `./papergo`
 - Windows: `papergo.exe`
