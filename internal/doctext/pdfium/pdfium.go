@@ -16,6 +16,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	sdk "github.com/klippa-app/go-pdfium"
 	"github.com/klippa-app/go-pdfium/enums"
@@ -67,10 +68,14 @@ type Reader struct {
 	// often PDFium started, which is once.
 	cache  string
 	starts int
+	// slots holds one entry per open PDF, up to maxOpen; waiting counts
+	// the opens waiting for one.
+	slots   chan struct{}
+	waiting atomic.Int32
 }
 
 func New(o Options) *Reader {
-	r := &Reader{}
+	r := &Reader{slots: make(chan struct{}, maxOpen)}
 	r.start = sync.OnceValues(func() (sdk.Pool, error) { return r.init(o) })
 	return r
 }
@@ -167,34 +172,56 @@ func (r *Reader) Open(ctx context.Context, data []byte) (doctext.Document, error
 	if err != nil {
 		return nil, fmt.Errorf("PDFium cannot start: %w", err)
 	}
+	// The pool is never asked for more instances than it may hold, so its
+	// borrowers never wait inside it: go-commons-pool can miss the wakeup
+	// of a borrower that found it full just before an instance closed.
+	r.waiting.Add(1)
+	select {
+	case r.slots <- struct{}{}:
+		r.waiting.Add(-1)
+	case <-ctx.Done():
+		r.waiting.Add(-1)
+		return nil, ctx.Err()
+	}
+	release := sync.OnceFunc(func() { <-r.slots })
 	instance, err := p.GetInstanceWithContext(ctx)
 	if err != nil {
+		release()
+		// The pool reports a cancelled wait as its own timeout.
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, err
+	}
+	fail := func(err error) (doctext.Document, error) {
+		_ = instance.Close()
+		release()
 		return nil, err
 	}
 	opened, err := instance.OpenDocument(&requests.OpenDocument{File: &data})
 	if err != nil {
-		_ = instance.Close()
 		if errors.Is(err, sdkerrors.ErrPassword) {
-			return nil, doctext.ErrEncrypted
+			return fail(doctext.ErrEncrypted)
 		}
-		return nil, fmt.Errorf("the PDF cannot be read: %w", err)
+		return fail(fmt.Errorf("the PDF cannot be read: %w", err))
 	}
 	count, err := instance.FPDF_GetPageCount(&requests.FPDF_GetPageCount{Document: opened.Document})
-	if err != nil || count.PageCount < 0 || count.PageCount > 1<<20 {
-		_ = instance.Close()
-		if err != nil {
-			return nil, err
-		}
-		return nil, errors.New("the PDF has an invalid page count")
+	if err != nil {
+		return fail(err)
 	}
-	return &document{instance: instance, doc: opened.Document, pages: count.PageCount}, nil
+	if count.PageCount < 0 || count.PageCount > 1<<20 {
+		return fail(errors.New("the PDF has an invalid page count"))
+	}
+	return &document{instance: instance, release: release, doc: opened.Document, pages: count.PageCount}, nil
 }
 
 type document struct {
 	mu       sync.Mutex
 	instance sdk.Pdfium
-	doc      references.FPDF_DOCUMENT
-	pages    int
+	// release frees the reader's slot once the instance is closed.
+	release func()
+	doc     references.FPDF_DOCUMENT
+	pages   int
 }
 
 func (d *document) Pages() int { return d.pages }
@@ -282,5 +309,6 @@ func (d *document) Close() error {
 	}
 	err := d.instance.Close()
 	d.instance = nil
+	d.release()
 	return err
 }
