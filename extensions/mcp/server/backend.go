@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -91,7 +92,11 @@ func target(path string, query url.Values) (string, error) {
 	return u.String(), nil
 }
 
-// recorder keeps an in-process answer up to max bytes.
+// errTooLarge stops a handler whose answer passed the limit.
+var errTooLarge = errors.New("the answer is larger than the limit")
+
+// recorder keeps an in-process answer up to max bytes, and fails writes
+// past it, so the handler stops producing an answer that is thrown away.
 type recorder struct {
 	header http.Header
 	status int
@@ -112,10 +117,13 @@ func (r *recorder) Write(p []byte) (int, error) {
 	if r.status == 0 {
 		r.status = http.StatusOK
 	}
+	if r.over {
+		return 0, errTooLarge
+	}
 	if room := r.max - int64(r.body.Len()); int64(len(p)) > room {
 		r.over = true
-		r.body.Write(p[:max(room, 0)])
-		return len(p), nil
+		n, _ := r.body.Write(p[:max(room, 0)])
+		return n, errTooLarge
 	}
 	return r.body.Write(p)
 }
