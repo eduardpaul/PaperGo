@@ -113,7 +113,7 @@ def main():
     request("GET", "/assets/missing.js", expected=404)
     me = request("GET", "/v1/identity/me")
     assert me["subject"] == credentials["papergo_user"] and "workspace.manage" in me["scopes"]
-    assert request("GET", "/v1/search/status")["store"] == "zvec", "NPM sample must use native zvec search"
+    assert request("GET", "/v1/search/status")["store"] == "sqlite", "NPM sample must use SQLite search"
     spoofed = request("GET", "/v1/identity/me", headers={"X-Papergo-Subject": "forged-admin", "X-Papergo-Proxy-Secret": "forged"})
     assert spoofed["subject"] == me["subject"]
     assert isinstance(request("GET", "/v1/identity/me/tokens"), list)
@@ -123,7 +123,7 @@ def main():
     request("POST", "/v1/workspaces", {"name": "Cross-origin attempt"}, headers={"Origin": "https://attacker.example"}, expected=401)
     workspace = request("POST", "/v1/workspaces", {"name": "NPM verification " + secrets.token_hex(4)}, headers={"Origin": origin, "Sec-Fetch-Site": "same-origin"}, expected=201)
     library = request("POST", f"/v1/resources/{workspace['id']}/children", {"kind": "library", "name": "Documents", "webdav_enabled": True}, expected=201)
-    searchable = "Zvecverify" + secrets.token_hex(6)
+    searchable = "Searchverify" + secrets.token_hex(6)
     item = request("POST", f"/v1/resources/{library['id']}/children", {"kind": "item", "name": searchable}, expected=201)
     deadline = time.monotonic() + 60
     while True:
@@ -131,7 +131,7 @@ def main():
         if any(hit["id"] == item["id"] for hit in result["value"]):
             break
         if time.monotonic() >= deadline:
-            raise AssertionError("Native zvec keyword search did not index the verification item")
+            raise AssertionError("Keyword search did not index the verification item")
         time.sleep(0.25)
     folder = f"/webdav/{library['id']}/" + quote("Sample Ω")
     request("MKCOL", folder, expected=201)

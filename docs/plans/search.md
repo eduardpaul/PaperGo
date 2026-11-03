@@ -2,21 +2,20 @@
 
 This plan ports PaperDotNet's search layer to PaperGo. That layer is one search across everything a person may read: keyword, semantic and hybrid search, page hits, typed field filters and facets. It sits behind a replaceable **search store**.
 
-PaperGo gets two stores, built as separate packages:
+PaperGo's store is built as a separate package, and other stores can follow behind the same contract:
 
-- **`sqlite`**, the default: a separate `search.db`;
-- **`zvec`**, optional: an embedded vector and full-text engine.
+- **`sqlite`**, the default: a separate `search.db`.
 
 All indexing runs **asynchronously in workflows** that people can turn off and change per workspace or collection:
 
 - `search.index` keeps the basic list and library data (names, fields, terms, permissions) in the index;
 - `search.content` turns files into searchable content with activities: read text and OCR, chunk, optional AI steps, embed, publish.
 
-Workflows chain through declared **outputs**. The search store also replaces the FTS5 tables in the main database: `search` in collection queries and `q` in listings use it too. Implementation status and P6 validation are recorded below; [search.md](../search.md) describes the running app.
+Workflows chain through declared **outputs**. The search store also replaces the FTS5 tables in the main database: `search` in collection queries and `q` in listings use it too. [search.md](../search.md) describes the running app.
 
 Sources, PaperDotNet at `96df412`:
 
-- ADRs [0012](https://github.com/eduardpaul/PaperDotNet/blob/96df412f040f53cc14711aaba35880e24817e084/docs/adr/0012-full-text-search.md) (full text), [0027](https://github.com/eduardpaul/PaperDotNet/blob/96df412f040f53cc14711aaba35880e24817e084/docs/adr/0027-semantic-and-hybrid-search.md) (semantic, hybrid, pages), [0043](https://github.com/eduardpaul/PaperDotNet/blob/96df412f040f53cc14711aaba35880e24817e084/docs/adr/0043-search-indexing-as-workflows-over-a-search-store.md) (store contract, indexing as workflows) and [0044](https://github.com/eduardpaul/PaperDotNet/blob/96df412f040f53cc14711aaba35880e24817e084/docs/adr/0044-zvec-search-store.md) (zvec), and the [zvec spike](https://github.com/eduardpaul/PaperDotNet/blob/96df412f040f53cc14711aaba35880e24817e084/docs/performance-artifacts/zvec-spike/README.md).
+- ADRs [0012](https://github.com/eduardpaul/PaperDotNet/blob/96df412f040f53cc14711aaba35880e24817e084/docs/adr/0012-full-text-search.md) (full text), [0027](https://github.com/eduardpaul/PaperDotNet/blob/96df412f040f53cc14711aaba35880e24817e084/docs/adr/0027-semantic-and-hybrid-search.md) (semantic, hybrid, pages) and [0043](https://github.com/eduardpaul/PaperDotNet/blob/96df412f040f53cc14711aaba35880e24817e084/docs/adr/0043-search-indexing-as-workflows-over-a-search-store.md) (store contract, indexing as workflows).
 - The code in `src/Modules/Search` and the full-text providers in `src/BuildingBlocks/PaperDotNet.Persistence.*`.
 
 ## 1. How PaperDotNet does it
@@ -31,7 +30,7 @@ Sources, PaperDotNet at `96df412`:
 | Store contract | `ISearchStore : ISearchIndex` | Adds `SearchAsync(StoreSearchQuery)`, `GetFieldsAsync`, `CountTermsAsync`, `GetPassagesToEmbedAsync` and `SetEmbeddingsAsync`. It declares `Capabilities` (Keyword, Vector, Facets). It is chosen by `Search:Store` and registered with `AddSearchStore<T>(name)` |
 | Service | `SearchService` | Validates the request, picks the mode, parses `q` once (`FullTextQuery`) and `$filter` once (OData → store-neutral `SearchFilter` tree), resolves the caller's readable scopes and the child terms, embeds the query (cached 30 min), calls the store, and cuts snippets. It never touches tables |
 | Embeddings | `EmbeddingModel` and the job `search.embeddings` (every minute, per tenant) | Embed passages that have no vector of the configured model, batch 64, at most 2,000 per run. A provider failure stops the run and the next run retries |
-| Stores | `DatabaseSearchStore` (`database`, the default) and `ZvecSearchStore` (`zvec`, opt-in) | See below |
+| Stores | `DatabaseSearchStore` (`database`, the default) and a native vector store (opt-in) | See below |
 | Tests | `SearchStoreConformanceTests` | 20 tests per store, through `ISearchStore` only |
 
 ### The query model
@@ -78,28 +77,6 @@ The same EF Core code runs on both providers. Only the full-text engine differs,
   - before each search, the store checks the count and the newest stamp, then loads only what changed. A 30-second skew window keeps several servers consistent without messages;
   - the workspace and container filters apply in memory; trimming and the other filters apply afterwards, in SQL.
 - **Re-index:** a passage whose hash is unchanged keeps its row and its vector, so nothing is embedded twice.
-
-### The `zvec` store
-
-zvec is an embedded vector database (Apache-2.0), called through its C API.
-
-- **Layout:**
-  - one collection per tenant and embedding model, under `{data}/search/zvec/{tenant}`;
-  - a head row per document, and a row per passage. Every row carries all the metadata, so one filter expression covers both kinds of row.
-- **Full-text columns:** `metadata` and `content`; both contain encoded exact words, stems and prefixes. Native full-text tables have a substantial fixed memory cost. Name/keyword weighting and filter-only queries run against the Go catalog.
-- **Field values:**
-  - text kinds and booleans are tokens `{fieldkey}:{base64url(value)}` in one string-array column, so user text never appears raw in a filter;
-  - numbers, dates and times get a numeric column each (`n_{key}`), added on first use, up to the 1,024-column limit.
-- **Filters:** one builder writes them from `StoreFilter` and the field tree. Negations are pushed down, because the grammar has no general `NOT`.
-- **Writes:** one writer per collection. Passages are reused by hash.
-- **Queries:**
-  - keyword and semantic are two zvec queries, fused in .NET;
-  - counts and facets cover the first 10,000 candidates and are estimates beyond that.
-- **Operations:**
-  - at most 4 collections are open at once (LRU);
-  - backups close the collections and copy the folder;
-  - one server only, because zvec locks the folder;
-  - the native library is built in CI from a pinned commit.
 
 ### What PaperDotNet has not built yet
 
@@ -149,7 +126,7 @@ What arrived:
 **Layering: it fits.**
 
 - **Port and adapter.** `internal/workflow` imports only `internal/ocr`. The engine is constructed in `cmd/api` (and `cmd/ocr`) and handed over in `workflow.Tools`. Engines never read storage or the database, so a second engine (Tesseract, a GLM-OCR endpoint) needs no change in callers. This is the pattern the search stores follow: `internal/workflow` sees `search.Store`, and `cmd/api` picks the implementation.
-- **Native SDKs.** PaperGo uses cgo with maintained ONNX, PDFium and zvec Go SDKs. `scripts/native.py` installs pinned native libraries and headers. The Docker runtime uses `distroless/cc` with glibc and libstdc++.
+- **Native SDKs.** PaperGo uses cgo with maintained ONNX and PDFium Go SDKs. `scripts/native.py` installs pinned native libraries and headers. The Docker runtime uses `distroless/cc` with glibc and libstdc++.
 - **Heavy work outside the writer.** The three-step activity shape (`run` → `Exec.Work` → `commit`) is what search activities need. Search writes go to another database, so `search.*` activities do their store writes in `Work` and keep their main-database steps short.
 - **One wrinkle.** `internal/imaging` imports `internal/storage` only for the `storage.DocumentType` signature sniffer. It is harmless, but the sniffer belongs in a small leaf package (for example `internal/mediatype`), so imaging and later `internal/doctext` depend on no storage code. A cleanup, not a blocker.
 
@@ -163,7 +140,7 @@ What arrived:
    - Export and import (`internal/dms/portability.go`) cover workflow definitions but not tasks or staged files. Those count as installation state, like runs, so this is consistent.
    - Extracted page text is a new kind of derived data. It costs real time to recompute (OCR), so it is exported with the file bytes it belongs to: one entry per SHA-256, with the extractor and model hashes. An import keeps it instead of running OCR again (section 7.3). Search indexes stay out of packages and are rebuilt after an import, as the typed indexes are today.
 
-**License note from that commit.** `docs/dependencies.md` records that ONNX Runtime's release binaries include Eigen, partly under MPL-2.0. PaperGo has no written allow list yet. When one is written, it should cover this and the zvec notices (section 11) together.
+**License note from that commit.** `docs/dependencies.md` records that ONNX Runtime's release binaries include Eigen, partly under MPL-2.0. PaperGo has no written allow list yet. When one is written, it should cover this (section 11).
 
 ## 3. What is different in PaperGo
 
@@ -172,7 +149,7 @@ These differences shape the Go design. Each changes something in the port.
 | PaperGo fact | Consequence for search |
 | --- | --- |
 | One organization per deployment, no tenant ID | No tenant column and no per-tenant collections. Store isolation is per deployment |
-| SQLite (modernc, `CGO_ENABLED=1`), one writer shared by requests and the DBOS runner | Search data must not compete for the main writer. The `sqlite` store lives in its own file, `search.db`, with its own writer and WAL. zvec is loaded through cgo SDKs |
+| SQLite (modernc, `CGO_ENABLED=1`), one writer shared by requests and the DBOS runner | Search data must not compete for the main writer. The `sqlite` store lives in its own file, `search.db`, with its own writer and WAL |
 | Head and published surfaces; `read` and `read_draft` are separate | A search document is a **(resource, surface)** pair: an item or folder has one or two documents, and the caller's surface choice (auto, head or published) must apply exactly as in collection queries |
 | Authorization is immediate and transactional ([architecture](../architecture.md): "any asynchronous projection must retain authorization checks at query time") | The store trims by readable scopes to get candidates. The caller's SQL in the main database then applies the authoritative permission and surface predicate (sections 4 and 8). A stale index can never show what the caller may no longer read |
 | `resources.scope_id`: the nearest exclusive permission scope, maintained by triggers; null for rows without one | Scope trimming works like PaperDotNet's ADR-0035 model. The null scope is a real value: it is stored as `""` |
@@ -185,7 +162,7 @@ These differences shape the Go design. Each changes something in the port.
 ## 4. Target shape
 
 ```
-              main database (papergo.db)                               search store (search.db | zvec)
+              main database (papergo.db)                               search store (search.db)
  ┌────────────────────────────────────────────────┐              ┌───────────────────────────────────────────────┐
  │ writes ─► domain_events (item.*, folder.*,     │              │ documents (resource, surface): metadata, text │
  │           permissions.changed per item [E2],   │              │ fields, terms, keywords                           │
@@ -214,14 +191,13 @@ These differences shape the Go design. Each changes something in the port.
 | --- | --- | --- |
 | `internal/search` | Store interface and types, the `FullTextQuery` parser, `Filter` tree, `Service`, RRF, snippets, chunkers, the document builder (from a read snapshot to `Document`) | `dms` read API; standard library otherwise |
 | `internal/dal/search/sqlitestore` | The default store in `search.db`, with its in-memory vector index | `modernc.org/sqlite` |
-| `internal/dal/search/zvecstore` | Native zvec store through cgo | `github.com/zvec-ai/zvec-go` |
 | `internal/search/storetest` | Conformance suite that each store's tests call | `search` |
 | `internal/doctext` | Page text of a file: PDF text layer, rendering and OCR through the port, the text cache | `ocr`, `imaging`, a PDF reader (section 7.3) |
 | `internal/ai` | Embeddings client (OpenAI-compatible `/v1/embeddings`), retries, query cache | standard library |
 | `internal/workflow` (existing) | `search.*` and `document.read_text` activities and the built-ins | `search`, `doctext` through `Tools` |
 | `internal/httpapi` (existing) | `/v1/search` routes | `search` |
 
-Only `cmd/api` chooses the store (`SEARCH_STORE`) and passes it in `workflow.Tools` and to `dms`. Only `zvecstore` knows zvec, and only `sqlitestore` opens `search.db`.
+Only `cmd/api` chooses the store (`SEARCH_STORE`) and passes it in `workflow.Tools` and to `dms`. Only `sqlitestore` opens `search.db`.
 
 ## 5. Contracts (`internal/search`)
 
@@ -327,7 +303,7 @@ Collection queries need no extra check: the store only supplies candidate IDs, a
 
 ## 6. Stores
 
-The two stores are separate packages with nothing in common but the `search` contract and the conformance suite. Neither imports the other, and each can be tested and shipped alone.
+Each store is a separate package with nothing in common with another but the `search` contract and the conformance suite. No store imports another, and each can be tested and shipped alone.
 
 ### 6.1 `sqlite` (default)
 
@@ -368,43 +344,11 @@ The two stores are separate packages with nothing in common but the `search` con
   - excluded words remove semantic candidates;
   - memory is chunks × dimensions × 4 bytes, reported in `Stats`.
 
-  P0 measures a pure-Go dot product, unrolled by 8, at 100k × 768. If it is too slow, P3 adds an int8 scan with a float32 rescore of the top 1,000. Larger indexes use zvec.
+  P0 measures a pure-Go dot product, unrolled by 8, at 100k × 768. If it is too slow, P3 adds an int8 scan with a float32 rescore of the top 1,000.
 - **Facets:** exact `GROUP BY` over the keyword match set, or over the fused candidates. Workspace, collection, content type, terms and keywords, top 20 each.
 - **Scope lists:** passed as one JSON parameter (`scope_id IN (SELECT value FROM json_each(?))`), so 20,000 scopes are not 20,000 placeholders.
 
-### 6.2 `zvec` (optional)
-
-A port of `PaperDotNet.Search.Zvec`, with the lessons of its implementation notes.
-
-- **Binding:** the official zvec Go SDK through cgo, pinned to the string-array fix in `eduardpaul/zvec-go`. The SDK owns native error handling and memory.
-  - Document handles are closed explicitly. String arrays use the SDK's copying setter.
-- **Layout:** ZvecLayout without the tenant.
-  - One collection per embedding model and dimension, under `SEARCH_ZVEC_PATH` (default `data/search/zvec/{model-key}-{dims}`). Text-only installations use `text-only`.
-  - Head rows per (resource, surface); chunk rows per (item, blob).
-  - Every row carries `kind`, `views`, `surface`, `blob_id`, `scope_id`, `collection_id`, `parent_id`, the metadata columns, `field_tokens` and the `n_{key}` columns.
-  - Full-text columns: `metadata` and `content`, carrying encoded exact words, stems and prefixes. Name and keyword weighting runs in Go.
-  - A chunk that serves both surfaces (same blob) carries the union of their `views`. Metadata writes update chunk rows with `update`, never rewriting text or vectors.
-- **Exact numbers:**
-  - `integer`, `decimal` (units) and `datetime` (ns) go in INT64 columns.
-  - P0 checks whether zvec compares STRING columns by range. If it does, `number` and `currency` use the ordering key. Otherwise they are DOUBLE columns, documented as approximate beyond 15–17 significant digits, with a conformance test at the boundary.
-- **Writes:** one writer goroutine with a bounded channel, batching upserts, updates and `delete_by_filter`. Every write is an idempotent upsert, because zvec batches are not atomic.
-- **Queries:**
-  - keyword (`metadata` or `content`, with name and keyword weighting in Go) and semantic (HNSW) are separate queries, fused in Go;
-  - `matchedBy` comes from both lists;
-  - counts and facets are estimates beyond `SEARCH_ZVEC_KEYWORD_CANDIDATES` (10,000).
-  - `Match` for collection queries is a keyword query filtered on `collection_id`, `parent_id` and views. Its cap is the same candidate limit (section 8).
-- **Operations:**
-  - opened lazily, and reads never create a collection;
-  - backups flush, close and copy the folder through `internal/backup`;
-  - one node only (zvec's `LOCK`);
-  - about 120–160 MB per open collection, and there is one collection per deployment.
-- **Packaging:**
-  - CI downloads the pinned zvec v0.7.0 SDK using `scripts/native.py` and checks its archive hash;
-  - it ships in the image next to ONNX Runtime and PDFium;
-  - libaio (LGPL) is only `dlopen`ed when present, never linked or shipped;
-  - license notices as in section 11.
-
-**PostgreSQL** is out of scope. A PostgreSQL store (tsvector with languages, pgvector) can follow when PaperGo's main database supports PostgreSQL, as a third package behind the same contract and suite.
+**PostgreSQL** is out of scope. A PostgreSQL store (tsvector with languages, pgvector) can follow when PaperGo's main database supports PostgreSQL, as another package behind the same contract and suite.
 
 ## 7. Indexing pipeline: workflows people can change
 
@@ -619,7 +563,6 @@ Personalization changes quality and cost, never permissions or inclusion.
   - Search stays complete during a reindex, and vectors are found again by hash.
 - **Embedding sweep:** a DBOS-scheduled system function, `papergo.search_embed`, every 15 minutes. It embeds published chunks without a vector of the current model, 64 per call and at most 2,000 per run. It covers `deferred`, `later` and model changes.
 - **First start or lost store:** a missing or outdated `search.db` starts the reindex on start-up. Search, global and in collections, returns `503 search_unavailable` until metadata is complete.
-- **Copying:** `papergo admin search copy --to zvec`, offline, through `Export`. Nothing is computed again.
 - **Imports:** a content-package import restores `blob_texts` and starts a reindex with `content: true`, so OCR does not run again; only chunking and embedding do.
 
 ## 8. Collection queries and listings on the store
@@ -643,7 +586,7 @@ Personalization changes quality and cost, never permissions or inclusion.
 - **Freshness:** a write is findable once `search.index` has run, normally within a second; before, it was findable within the same transaction. Edit screens show the item from the API, not from search, so this affects only search results.
 - **Cap:** a common word in a very large collection is capped at 10,000 candidates, where today it is exact.
 
-**Optional optimization (P1 decides after measuring):** with the `sqlite` store, the read connection of `papergo.db` can `ATTACH` `search.db` read-only. `Match` then becomes a sub-select in the same statement, with no cap and no ID transfer. zvec always uses the ID path. Both must give the same results, which a test covers.
+**Optional optimization (P1 decides after measuring):** with the `sqlite` store, the read connection of `papergo.db` can `ATTACH` `search.db` read-only. `Match` then becomes a sub-select in the same statement, with no cap and no ID transfer. Both paths must give the same results, which a test covers.
 
 ## 9. Embeddings (`internal/ai`)
 
@@ -691,37 +634,13 @@ Personalization changes quality and cost, never permissions or inclusion.
 - SQLite uses `modernc.org/sqlite`, including DBOS's SQLite driver; native bindings use maintained cgo SDKs;
 - the Snowball stemmers are `github.com/blevesearch/snowballstem` (BSD-3-Clause, recorded in `docs/dependencies.md`); the language-detection library is checked when P3 needs it.
 
-**zvec native library.** Statically included, from PaperDotNet's spike (S9):
-
-| Component | License |
-| --- | --- |
-| zvec, CRoaring, FastPFOR, RaBitQ-Library, Arrow, Thrift | Apache-2.0 |
-| RocksDB | dual GPL-2.0 / Apache-2.0, used under Apache-2.0, with LevelDB's BSD notice |
-| cppjieba, limonp, magic_enum, yaml-cpp, utf8proc | MIT |
-| antlr4 runtime, gflags, glog, sparsehash, snowball, re2, xsimd | BSD-3-Clause |
-| lz4 | BSD-2-Clause |
-| zlib | zlib License |
-| Boost | BSL-1.0 |
-
-**Review: acceptable.**
-
-- **zlib License** is permissive. It requires only that the origin is not misrepresented and altered versions are marked. Source notices must stay in source distributions; binary distribution needs no notice.
-- **BSL-1.0** is permissive and OSI-approved. Its notice is required with source copies, not with binaries ("unless such copies or derivative works are solely in the form of machine-executable object code").
-- Neither is copyleft, and neither restricts linking or the license of PaperGo. Both are compatible with shipping alongside Apache-2.0 and MIT code.
-
-**What we do anyway:**
-
-- ship a `THIRD-PARTY-NOTICES` file for `libzvec_c_api` in the image next to ONNX Runtime's `ThirdPartyNotices.txt`, listing every component above with its license text. It is generated by the CI build from the pinned sources;
-- record RocksDB's dual license and our choice (Apache-2.0);
-- never link or ship libaio (LGPL): zvec `dlopen`s it only when present.
-
 **PDFium** (chosen in P3, through cgo SDKs) is BSD-3-Clause and Apache-2.0, plus the notices of its bundled libraries (FreeType FTL, libjpeg-turbo, OpenJPEG, lcms2, zlib), all permissive. It ships with its own notices file.
 
 **A written allow list.** `docs/dependencies.md` gets one: MIT, Apache-2.0, BSD, ISC, zlib, BSL-1.0 and PostgreSQL allowed; GPL, LGPL, AGPL and SSPL not linked. Its one exception is MPL-2.0 inside the ONNX Runtime binary (Eigen, header-only), which is file-level copyleft and satisfied by shipping the notices and pointing to the unmodified source.
 
 ## 12. Tests
 
-- **Conformance suite** (`internal/search/storetest`): `Run(t, func(t) search.Store)`. Both stores run it.
+- **Conformance suite** (`internal/search/storetest`): `Run(t, func(t) search.Store)`. Each store runs it.
   - Ported from PaperDotNet:
     - keyword search on name, body, keywords and pages; name ranks above body;
     - query syntax; trimming by scopes;
@@ -741,14 +660,13 @@ Personalization changes quality and cost, never permissions or inclusion.
     - reindex by stamp without a gap;
     - 20,000 readable scopes;
     - `Match` with `parent_id`, `ancestor_id`, the literal-prefix rule and the cap;
-    - an `Export` round trip into the other store.
-  - **How each store runs:** both stores use the installed native build environment. Native zvec tests run without a library-path setting or skip gate.
-- **Collection query parity:** the existing `search` tests of collection queries, views, smart folders, listings and WebDAV-adjacent listings run against both stores, with a helper that waits for `search.index` to finish. Results, ordering and totals must equal what the FTS5 tables gave, except that file text now also matches.
+    - an `Export` round trip into another store.
+- **Collection query parity:** the existing `search` tests of collection queries, views, smart folders, listings and WebDAV-adjacent listings run against the store, with a helper that waits for `search.index` to finish. Results, ordering and totals must equal what the FTS5 tables gave, except that file text now also matches.
 - **Unit tests and fuzzing:**
   - parser, `SemanticText`, snippets, RRF;
   - chunkers (golden files against PaperDotNet);
   - the field filter compiler;
-  - `go test -fuzz` on the parser, the FTS5 `MATCH` renderer and the zvec filter builder.
+  - `go test -fuzz` on the parser and the FTS5 `MATCH` renderer.
 - **Engine tests** (`internal/workflow`, `internal/runner`):
   - **outputs:** evaluation in `finish`; schema failure fails the run; `data.outputs` in `wf.{key}.completed`; a role filler with incompatible outputs is refused on save;
   - **per-item `permissions.changed`:** descendants at several depths; nested resources with their own permissions skipped; expansion resumes after a crash; no expansion without subscribers; `actions` filter;
@@ -773,7 +691,7 @@ Personalization changes quality and cost, never permissions or inclusion.
   - files per second for text and content indexing;
   - query p50 and p95 (keyword, filters, hybrid, collection `search`);
   - memory;
-  - at 20k and 200k items, with 1k and 20k readable scopes, for both stores.
+  - at 20k and 200k items, with 1k and 20k readable scopes.
 
 ## 13. Phases
 
@@ -781,25 +699,24 @@ Sizes are rough working days for one person. Each phase updates its docs in the 
 
 | Phase | Scope | Exit criteria | Size |
 | --- | --- | --- | --- |
-| **P0 Spike** | `contentless_delete` FTS5 in modernc; `SearchScopes` cost at 20k scopes; pure-Go dot product at 100k × 768; the zvec cgo SDK (string arrays and native filters); zvec string range comparison; PDFium through cgo SDKs (text and rendering) versus a pure-Go reader; Snowball and language-detection libraries | A short results section in this plan; go or no-go per choice | 4 |
+| **P0 Spike** | `contentless_delete` FTS5 in modernc; `SearchScopes` cost at 20k scopes; pure-Go dot product at 100k × 768; PDFium through cgo SDKs (text and rendering) versus a pure-Go reader; Snowball and language-detection libraries | A short results section in this plan; go or no-go per choice | 4 |
 | **P1 Engine additions and keyword search** | E1 workflow outputs and role output contracts; E2 per-item `permissions.changed` with dispatcher expansion and `actions`; E3 folder events; E4 `coalesce`; E5 workspace built-ins with collection overrides and the roles view; system queue and short retention for built-in runs; `internal/search` contracts, parser and service; `sqlitestore` (documents, terms, keywords, `doc_fts`, `Match`); `search.sync`, `search.items_with_term`; the `search.index` built-in; `dms.SearchScopes` and `VisibleSurfaces`; `GET /v1/search` (keyword, filters, facets, paging); **collection queries and listings move to `Match`, and `item_surface_search` and `resource_search` are deleted**; reindex and start-up rebuild (backups leave `search.db` out; a restore removes it, so it rebuilds at start); conformance (keyword part) | Global search works across workspaces, trimmed by permissions and surfaces; collection-query parity tests pass on the store; turning `search.index` off for a collection gives `search_off`; the write-throughput criterion of 7.2 holds | 16 |
 | **P2 Fields and languages** | `document_fields` with exact kinds; `filter` on search; `/v1/search/fields`; the `search_weight` option; Snowball stemming columns; `/v1/search/status`; web search page | Conformance field tests pass; `invoices` finds `invoice` in the configured languages | 6 |
 | **P3 File text** | E6 `media_types`; `internal/doctext` (PDF reader as decided in P0, OCR through the port); `document.read_text`; `blob_texts` with export and import; language hints and detection | A text PDF, a scanned PDF and a photo get page text; a composed PDF is not OCRed again; an import keeps text | 7 |
 | **P4 Content as workflows** | Chunks and `chunk_fts`; `search.chunk` (all sources and kinds), `search.publish`; the chunkers; the `search.content` built-in with its outputs; page hits and snippets; file text in `doc_fts`, so collection `search` matches content; reindex with `content: true` | Uploading a PDF makes its text findable with `page`, also in the library's search; a library overrides the chunker; a chained workflow reads `text_id`; a rename re-chunks nothing | 6 |
 | **P5 Semantic and hybrid** | `internal/ai` embeddings; `vectors` and the in-memory index; `search.embed` on staged generations; the sweep; semantic and hybrid modes with RRF and `matched_by` | Semantic and hybrid conformance tests pass with the fake server; memory reported | 6 |
-| **P6 zvec store — implemented** | cgo SDK, layout, writer, queries including `Match`, backup; CI native build in the image; notices; `search copy` | Full conformance and collection-query parity on zvec; soak test with real dimensions; documented as one node | 10 |
 | **P7 AI steps** | `ai.complete` (chat provider, `AI_CHAT_*`, cached by hash, JSON answers with `output_schema`); `search.enrich`; the receipts and contracts examples of 7.3 as samples | The examples run end to end against a fake chat server; equal inputs reuse unexpired results | 5 |
 
-P1 and P2 give global search over all items and folders, and move collection search to the store. P3 to P5 add files and meaning. P6 can start after P1, in parallel. P7 makes the AI steps in section 7.3 real.
+P1 and P2 give global search over all items and folders, and move collection search to the store. P3 to P5 add files and meaning. P7 makes the AI steps in section 7.3 real.
 
 ## 14. Decisions
 
 - **D1. All indexing is asynchronous workflows that people can change.** `search.index` (basic data) and `search.content` (files) are built-ins filling roles. Each can be turned off, copied and recomposed per workspace, with collection overrides. Workflows chain by events with declared outputs. What must not vary is enforced by the fixed checks inside `search.sync` and `search.publish` and by query-time authorization, not by locking the workflows. `coalesce`, the system queue and short retention bound the cost on the main writer, and P1 measures it.
 - **D2. Trim in the store, authorize in the main database.** The store's scopes give candidates, counts and facets. Global search checks the returned page against `papergo.db`. Collection queries run their normal SQL over the store's IDs. Visibility is never eventual.
 - **D3. The search store is not managed by Atlas.** It is disposable derived data, rebuilt by a reindex. The store owns its schema and recreates itself when the schema version changes. The single migration file keeps covering `papergo.db`, which now gains `blob_texts` and loses the two FTS5 tables.
-- **D4. Exact numbers.** The `sqlite` store keeps int64 and decimal semantics. zvec is approximate for `number` and `currency` only if P0 finds no exact option, and that is documented.
+- **D4. Exact numbers.** The `sqlite` store keeps int64 and decimal semantics.
 - **D5. The FTS5 tables in `papergo.db` are dropped.** The search store is the one full-text index for collection queries, listings and global search. Collection queries keep their exact SQL for everything but the word match. They gain file text and lose same-transaction freshness and uncapped word matches (section 8).
-- **D6. Two stores, built separately.** `sqlite` is the default, and `zvec` is optional, loaded through cgo SDKs like ONNX Runtime. They share only the contract and the conformance suite. One store per deployment (`SEARCH_STORE`), and one embedding model per store.
+- **D6. Stores are built separately.** `sqlite` is the default; another store shares only the contract and the conformance suite. One store per deployment (`SEARCH_STORE`), and one embedding model per store.
 - **D7. Page text is source data.** `blob_texts` lives in the main database and the blob store, travels in content packages, and is shared by identical files. Search chunks and vectors are derived and never exported.
 - **D8. `permissions.changed` is per item.** The request commits one root event, and the dispatcher expands it to every affected item and folder in resumable batches, only when someone listens. Workflows see ordinary item events, and requests stay small however large the subtree.
 
@@ -818,19 +735,9 @@ P1 and P2 give global search over all items and folders, and move collection sea
 - **Collection search caps.** `SEARCH_MATCH_LIMIT` bounds `Match`. The `ATTACH` path removes the cap for `sqlite` if measurements favour it.
 - **Rebuild window.** After a lost `search.db`, collection `search` returns 503 until metadata is rebuilt (minutes at 200k items). Backups leave the store out, so a restore pays this window once; including it is a later option.
 - **`doc_fts` rewrite cost.** A metadata change on an item with a large file re-tokenizes its published chunk text. If that hurts, split it into a metadata-only table and a per-blob content table that changes only on publish.
-- **Readable scopes at scale.** Long scope lists are passed as JSON parameters on SQLite and `IN` lists on zvec (60–75 ms at 20k in PaperDotNet's spike), and measured in P0 and P1.
-- **Native code in the process.** ONNX Runtime, PDFium and zvec run in-process: a crash in one stops PaperGo. Each stays behind a port and is pinned; PDFium reads untrusted PDFs, so its build is updated with PaperGo's releases. Each stays behind a port, pinned and fuzzed at its builders. zvec, pre-1.0, ships only after a soak test.
+- **Readable scopes at scale.** Long scope lists are passed as JSON parameters on SQLite, and measured in P0 and P1.
+- **Native code in the process.** ONNX Runtime and PDFium run in-process: a crash in one stops PaperGo. Each stays behind a port and is pinned; PDFium reads untrusted PDFs, so its build is updated with PaperGo's releases. Each stays behind a port, pinned and fuzzed at its builders.
 - **Open questions:**
   - ~~Should `search.enrich` text appear in snippets, or only be used for ranking?~~ Decided in P7: it is matched and embedded, and snippets show only the file's text.
   - Should `max_chunks` and `max_pages` stay parameters of the built-ins, or become library settings?
   - Should the `ATTACH` optimization become the only `sqlite` path?
-
-## P6 implementation and validation
-
-`internal/dal/search/zvecstore` implements the full contract independently through cgo SDKs. Native source records keep documents, staged/published chunks, enrichment and cached vectors; native FTS and cosine HNSW serve queries. `SEARCH_STORE` selects the backend, and the native directory is owned by one process. Offline CLI copy and native backup/restore preserve chunks and vectors without provider calls.
-
-Two layout refinements preserve the contract with the pinned C API: encoded whitespace FTS tokens provide exact words, stems and tiny prefixes instead of trigram substring matches; exact typed fields use the native source-record catalog to restrict document keys before FTS/HNSW candidate selection, because dynamically adding STRING columns is unsupported. Neither number nor currency filters use floats. A separate vector collection contains only embedded passage rows and carries each surface's metadata, so scope/filter restrictions apply before ANN top-k. Native index maintenance seals/optimizes buffered writes every 30 seconds and on close. Cached model activation rebuilds the native vector space without embedding calls.
-
-The pinned SDK archive checksums are in `scripts/native.json`; `scripts/native.py` installs the SDKs and copies native notices. CI runs conformance, lifecycle/crash, offline copy, native backup, service/HTTP/workflow parity, fuzz builders and real-dimension soak tests. Docker and native releases bundle the libraries. SQLite remains the default store.
-
-Measured local soak results and reproduction commands: [zvec validation](../performance-artifacts/zvec/README.md). This is a single-node backend; native index/catalog overhead is additional to cached vector bytes reported by the API.

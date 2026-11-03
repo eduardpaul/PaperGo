@@ -9593,13 +9593,13 @@ export interface SearchStatus extends Parsable {
      */
     rebuilding?: boolean | null;
     /**
-     * The configured search store: sqlite or zvec.
+     * The configured search store, such as sqlite.
      */
     store?: string | null;
 }
 export interface SearchStatus_embeddings extends Parsable {
     /**
-     * Cached normalized vector bytes for the model; native index and source-catalog overhead are additional.
+     * Cached normalized vector bytes for the model.
      */
     memoryBytes?: number | null;
     /**

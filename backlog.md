@@ -39,7 +39,6 @@ This backlog synthesizes user feedback and feature requests into actionable engi
 5. [Integrations, Identity & Samples](#5-integrations-identity--samples)
    - [ISSUE-20: Admin-Managed REST Access Tokens for External Integrations](#issue-20-admin-managed-rest-access-tokens-for-external-integrations)
    - [ISSUE-21: NPM Docker Compose iCal Integration DNS Resolution](#issue-21-npm-docker-compose-ical-integration-dns-resolution)
-   - [ISSUE-22: NPM Sample Native Vector Search with Zvec](#issue-22-npm-sample-native-vector-search-with-zvec)
 6. [Major Epic: Standalone Single Binary Distribution](#6-major-epic-standalone-single-binary-distribution)
    - [FEAT-01: Zero-Dependency Single Binary Executable (Linux & Windows)](#feat-01-zero-dependency-single-binary-executable-linux--windows)
 7. [Implementation Roadmap](#7-implementation-roadmap)
@@ -83,15 +82,14 @@ Phase 3 is complete. Final validation: full Go suite (988 test cases passed, 15 
 
 ## Phase 4 Progress
 
-Scope: ISSUE-21, ISSUE-22, ISSUE-20 and ISSUE-19. ISSUE-23 and FEAT-01 are deferred and excluded from this phase.
+Scope: ISSUE-21, ISSUE-20 and ISSUE-19. ISSUE-23 and FEAT-01 are deferred and excluded from this phase.
 
 - [x] **ISSUE-21** — Backend Docker bridge allows outbound DNS/HTTPS while PaperGo ports remain unpublished. Setup and verification check calendar.google.com from the actual container with TLS verification and actionable errors. Validation: 20 NPM Python tests, admin CLI tests, Compose configuration checks and live distroless-container DNS/HTTPS smoke test.
-- [x] **ISSUE-22** — NPM selects native zvec with a private persistent search directory owned by UID 65532. Setup requires live zvec status; verification also waits for a newly created item to appear in keyword search. Validation: 21 NPM Python tests, full Docker image build, fresh-volume permissions/schema startup, live zvec status and native keyword-index smoke test.
 - [x] **ISSUE-20** — Organization managers list/revoke organization credentials and issue scoped `pgo_` integration tokens with separate non-interactive service identities, 30/90/365-day or no expiration, one-time secrets and last-use metadata. Token scopes and resource ACLs apply in bearer/proxy modes and queued operations revalidate the credential. Validation: issuance/ACL/scope/expiry/disabled-identity/revocation and proxy API tests, personal-token/operation regressions, two admin UI tests, typecheck/lint, production frontend build, Ent/Atlas checks and sample-package regeneration.
 - [x] **ISSUE-19** — Default file-preview system workflow renders first-page PDF/TIFF and static-image WebP renditions under 100,000 bytes and 800 pixels asynchronously, with separate bounded preview work. Authorized viewing follows the caller’s visible revision, preserves originals, shares identical bytes and supports pending/unavailable placeholders. Gallery/board/content/selection views use previews. Packages, backup and cleanup preserve their lifecycle. Validation: 21.9 MB source → 77 KB in about 0.6 s, PDF/TIFF bounds, ACL/publication tests, asynchronous reuse/replacement and worker starvation tests, package/backup/cleanup regressions and preview UI tests.
 
 
-**Completed the four selected Phase 4 issues on 2026-10-17.** Final validation: all 1,000 Go test cases passed (15 optional integration cases skipped), all 171 frontend tests and all 56 Python tests passed, with frontend typecheck/lint, production API/admin/frontend builds, full Go vet/staticcheck, module checksum verification, reproducible Ent generation, Atlas validation and regenerated sample packages. The built Docker image passed fresh-volume startup, native zvec indexing, outbound calendar DNS/HTTPS, scoped service-token authentication/revocation and asynchronous preview/original-preservation checks. FEAT-01 remains deferred; ISSUE-23 is tracked below.
+**Completed the three selected Phase 4 issues on 2026-10-17.** Final validation: all 1,000 Go test cases passed (15 optional integration cases skipped), all 171 frontend tests and all 56 Python tests passed, with frontend typecheck/lint, production API/admin/frontend builds, full Go vet/staticcheck, module checksum verification, reproducible Ent generation, Atlas validation and regenerated sample packages. The built Docker image passed fresh-volume startup, search indexing, outbound calendar DNS/HTTPS, scoped service-token authentication/revocation and asynchronous preview/original-preservation checks. FEAT-01 remains deferred; ISSUE-23 is tracked below.
 
 **CI follow-up 2026-10-17:** The module minimum and documented build requirement are Go 1.27, matching the workflow JSON API and the Go 1.27.2 CI/container toolchain. Full-project vet, CI-pinned Staticcheck, complete race-test discovery and reproducible Ent generation pass under Go 1.27.2 without local experiment flags.
 
@@ -123,7 +121,6 @@ The CI race suite also exposed photos-to-PDF tests starting state deadlines whil
 | **ISSUE-19** | Async Low-Res Blob Previews via Workflow | Workflow / Storage | High | Large | Storage & performance |
 | **ISSUE-20** | Admin REST Tokens for External Integrations | Identity / Admin | High | Medium | External scripting & automation |
 | **ISSUE-21** | iCal Integration DNS Resolution in Docker NPM | Samples / Network | High | Small | Fixes external integration |
-| **ISSUE-22** | Configure NPM Sample with Native Zvec Search | Samples / DevOps | Medium | Small | Production parity sample |
 | **ISSUE-25** | Retention for Scheduled Maintenance Executions | Workflow / Storage | High | Small | Bounds database growth while idle |
 | **ISSUE-26** | Compact Transactional Step-Result Storage | Database / Workflow | High | Small | Measured 288 KiB sample database reduction |
 | **ISSUE-27** | Deduplicate Durable Workflow Payloads | Workflow Engine | High | Medium | Reduces repeated results and workflow definitions |
@@ -902,33 +899,6 @@ When configuring an external Google Calendar iCal feed in the NPM sample (`sampl
 
 ---
 
-### ISSUE-22: NPM Sample Native Vector Search with Zvec
-
-#### Problem Statement
-The NPM sample deployment defaults to SQLite full-text search. It should demonstrate PaperGo's native vector and hybrid search capabilities by configuring the built-in `zvec` search engine out of the box.
-
-#### Technical Analysis
-- **Config (`internal/config/config.go:102-115`)**:
-  - `SEARCH_STORE=zvec`
-  - `SEARCH_ZVEC_PATH=/data/search/zvec`
-  - `SEARCH_ZVEC_KEYWORD_CANDIDATES=10000`
-- `samples/npm/compose.yaml` currently omits these variables, falling back to basic SQLite.
-
-#### Proposed Specification
-1. Update `samples/npm/compose.yaml` under `services.papergo.environment`:
-   ```yaml
-   SEARCH_STORE: zvec
-   SEARCH_ZVEC_PATH: /data/search/zvec
-   ```
-2. Update volume initialization scripts to ensure `/data/search/zvec` permissions are configured properly during container startup.
-3. Update `samples/npm/setup.py` verification routines to assert `zvec` is active.
-
-#### Acceptance Criteria
-- Running `docker compose up` in `samples/npm` starts PaperGo with `SEARCH_STORE=zvec`.
-- Search operations utilize native `zvec` vector and keyword candidate indices.
-
----
-
 ## 6. Major Epic: Standalone Single Binary Distribution
 
 ### FEAT-01: Zero-Dependency Single Binary Executable (Linux & Windows)
@@ -948,8 +918,8 @@ Transform PaperGo into a single self-contained executable for Linux (`papergo`) 
 |  +-----------------------+           +-----------------------+  |
 |                                                  |              |
 |  +-----------------------+           +-----------------------+  |
-|  |  Native Zvec Engine   |           |    Local SQLite DB    |  |
-|  |   (Embedded CGO)      |           |     (WAL Mode)        |  |
+|  |  SQLite Search Store  |           |    Local SQLite DB    |  |
+|  |    (search.db)        |           |     (WAL Mode)        |  |
 |  +-----------------------+           +-----------------------+  |
 |                                                  |              |
 |  +-----------------------------------------------------------+  |
@@ -981,8 +951,7 @@ Transform PaperGo into a single self-contained executable for Linux (`papergo`) 
        admin_password: admin
 
      search:
-       store: zvec
-       zvec_path: ./data/search/zvec
+       store: sqlite
 
      storage:
        blob_path: ./data/blobs
@@ -994,9 +963,9 @@ Transform PaperGo into a single self-contained executable for Linux (`papergo`) 
    - On initial startup, if no admin account exists, create `admin` with credentials specified in `config.yaml` or prompt securely.
    - Support standard HTTP Basic Auth and Session Cookies for browser navigation without requiring an external OAuth2/OIDC identity provider.
 
-4. **Default Native Vector Store (`zvec`)**:
-   - Bundle pre-compiled native `zvec` and ONNX Runtime libraries.
-   - Configure `zvec` as default search provider on first boot.
+4. **Default Search Store (`sqlite`)**:
+   - Bundle pre-compiled ONNX Runtime libraries.
+   - Configure the SQLite search store as default search provider on first boot.
 
 5. **Cross-Platform Compilation & Distribution**:
    - Linux: One executable containing the native application, libraries and OCR models, extracted automatically into a private runtime cache.
@@ -1009,7 +978,7 @@ Transform PaperGo into a single self-contained executable for Linux (`papergo`) 
      - Remove the separate `initialize` services that previously invoked `[/papergo-admin] command: [initialize, --schema, /schema]`. Because the single binary executes self-contained startup schema checks and embedded migrations automatically on boot, auxiliary migration containers are completely redundant.
    - **Simplified Compose & Configuration**:
      - Modernize `compose.yaml` in both samples to mount a clean `config.yaml` (or set concise flags) rather than managing sprawling lists of environment variables.
-     - `samples/npm`: Configured with `auth.mode = proxy`, trusted proxy CIDRs, and `search.store = zvec`.
+     - `samples/npm`: Configured with `auth.mode = proxy`, trusted proxy CIDRs, and `search.store = sqlite`.
      - `samples/authentik`: Configured with `auth.mode = oidc`, provider issuer, client ID, and audience.
    - **Sample Setup & Verification Updates**:
      - Update `samples/npm/setup.py`, `samples/npm/verify.py`, `samples/authentik/setup.py`, and `samples/authentik/verify.py` to target and assert single binary behavior and remove obsolete `/papergo-admin` invocations.
@@ -1018,7 +987,7 @@ Transform PaperGo into a single self-contained executable for Linux (`papergo`) 
 - User downloads single binary (`papergo` / `papergo.exe`), runs `./papergo`, and navigates to `http://localhost:8080`.
 - Web UI mounts immediately from embedded assets.
 - Logging in with `admin:admin` grants full administrative access.
-- Uploading documents and executing searches uses native `zvec` out of the box without any third-party infrastructure.
+- Uploading documents and executing searches uses the SQLite search store out of the box without any third-party infrastructure.
 - Both `samples/npm` and `samples/authentik` (OIDC) Docker Compose environments run exclusively using the single application binary, with no separate `initialize` migration containers.
 - Setup and end-to-end verification scripts (`setup.py`, `verify.py`) pass cleanly across both samples using the single binary deployment.
 
@@ -1052,8 +1021,7 @@ graph TD
     end
 
     subgraph Phase 4: Integrations & Distribution
-        D1[ISSUE-21: Docker DNS Resolution Fix] --> D2[ISSUE-22: NPM Zvec Integration]
-        D2 --> D3[ISSUE-20: Admin REST Tokens]
+        D1[ISSUE-21: Docker DNS Resolution Fix] --> D3[ISSUE-20: Admin REST Tokens]
         D3 --> D4[ISSUE-19: Async Low-Res Previews]
     end
 
@@ -1080,7 +1048,7 @@ graph TD
 1. **Phase 1 (Immediate Stability)**: Fix search keystroke focus loss, Windows file drop failure, export blocker on publication references, and ensure libraries default to versioning off.
 2. **Phase 2 (Automation Core)**: Introduce `file.updated` to prevent redundant AI re-chunking, enable manual workflow execution on selected items, add trigger cardinality contracts and item workflow history, and support file renaming and upload conflict resolution.
 3. **Phase 3 (Productivity & UX)**: Deliver right-click context menus, drag-and-drop folder moves, currency combobox presets, smart folders complete rework, and relationship discovery in search.
-4. **Phase 4 (Integrations & Distribution)**: Deliver Docker network egress, native zvec in the NPM sample, admin integration tokens and asynchronous previews. ISSUE-23 (`sqlite3def` migrations) and FEAT-01 (standalone single-binary distribution) are deferred.
+4. **Phase 4 (Integrations & Distribution)**: Deliver Docker network egress, admin integration tokens and asynchronous previews. ISSUE-23 (`sqlite3def` migrations) and FEAT-01 (standalone single-binary distribution) are deferred.
 5. **Phase 5 (Storage Growth & Database Efficiency)**: Bound maintenance execution retention (ISSUE-25), compact step-result storage (ISSUE-26), reduce repeated durable payloads (ISSUE-27), tune operational retention and cleanup cadence (ISSUE-28), control retained WAL allocation (ISSUE-29), and establish storage diagnostics and growth regression coverage (ISSUE-30). Add measurement coverage alongside each change and complete the combined soak workload in ISSUE-30. Evidence and measured copy experiments are recorded in the sample storage analysis.
 
 **Deferred (unscheduled): ISSUE-24 — Changing Any Field in a List Schema.** Design general schema editing across field types and properties before implementing individual identity changes.

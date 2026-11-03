@@ -53,7 +53,7 @@ class StartupTests(unittest.TestCase):
 
 
 class SingleBinaryTests(unittest.TestCase):
-    def test_compose_has_no_initialize_service_and_mounts_proxy_zvec_config(self):
+    def test_compose_has_no_initialize_service_and_mounts_proxy_config(self):
         root = Path(__file__).parent
         for name in ('compose.yaml', 'setup.py', 'verify.py'):
             text = (root / name).read_text()
@@ -66,7 +66,7 @@ class SingleBinaryTests(unittest.TestCase):
         config = setup.papergo_config('https://docs.example.com', 'papergo-admin', '10.90.0.2/32')
         self.assertIn('  mode: proxy', config)
         self.assertIn('  proxy_trusted_cidrs:\n    - "10.90.0.2/32"', config)
-        self.assertIn('  store: zvec', config)
+        self.assertIn('  store: sqlite', config)
         self.assertIn('  admin_user: "papergo-admin"', config)
 
     def test_assistants_reach_the_mcp_endpoint_past_the_access_list(self):
@@ -95,16 +95,16 @@ class EgressTests(unittest.TestCase):
 
 
 class SearchStoreTests(unittest.TestCase):
-    def test_requires_active_zvec_store_on_verified_connection(self):
-        for store in ['zvec', 'sqlite']:
+    def test_requires_active_sqlite_store_on_verified_connection(self):
+        for store in ['sqlite', 'none']:
             connection = Mock()
             connection.getresponse.return_value.status = 200
             connection.getresponse.return_value.read.return_value = json.dumps({'store': store}).encode()
             with patch.object(setup.ssl, 'create_default_context'), patch.object(setup.http.client, 'HTTPSConnection', return_value=connection):
-                if store == 'zvec':
+                if store == 'sqlite':
                     setup.verify_search_store({'host': 'docs.example', 'https_port': 443, 'tls': 'letsencrypt'}, {'papergo_user': 'admin', 'papergo_password': 'private'})
                 else:
-                    with self.assertRaisesRegex(RuntimeError, 'zvec search store'):
+                    with self.assertRaisesRegex(RuntimeError, 'sqlite search store'):
                         setup.verify_search_store({'host': 'docs.example', 'https_port': 443, 'tls': 'letsencrypt'}, {'papergo_user': 'admin', 'papergo_password': 'private'})
             connection.close.assert_called_once()
             self.assertEqual(connection.request.call_args.args, ('GET', '/v1/search/status'))

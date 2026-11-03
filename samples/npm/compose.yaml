@@ -16,9 +16,6 @@ services:
       - -eu
       - -c
       - >-
-        mkdir -p /data/search/zvec;
-        chown 65532:65532 /data/search /data/search/zvec;
-        chmod 0700 /data/search /data/search/zvec;
         cp /run/secrets/proxy-secret /data/.proxy-secret;
         chmod 0400 /data/.proxy-secret;
         chown 65532:65532 /data /data/.proxy-secret;
