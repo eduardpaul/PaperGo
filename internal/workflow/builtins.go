@@ -203,7 +203,7 @@ func (s *Service) builtInScope(ctx context.Context, t *dms.Service, subject, wor
 	if err != nil {
 		return err
 	}
-	if (b.Key == "documents.optimize" || b.Key == "documents.photos_to_pdf") && c.Kind != "library" {
+	if b.Key == "documents.photos_to_pdf" && c.Kind != "library" {
 		return dms.Invalid("Choose a library for this file feature.")
 	}
 	if c.WorkspaceID != workspaceID || (c.Kind != "list" && c.Kind != "library") {

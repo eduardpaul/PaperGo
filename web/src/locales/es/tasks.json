@@ -54,21 +54,10 @@
     "promoted": "Este archivo se aceptó.",
     "discarded": "Este archivo se descartó.",
     "stale": "Un archivo a partir del que se creó este cambió después de solicitar la revisión. Ya no se puede aceptar; solo se puede rechazar.",
-    "currentFile": "Archivo actual",
-    "proposed": "Propuesto: {{filename}}",
-    "proposedFile": "Archivo propuesto",
     "metrics": {
       "bytes": "Tamaño",
-      "height": "Alto",
       "pages": "Páginas",
-      "savings_percent": "Ahorro",
-      "scale": "Escala",
-      "smallest_text_height": "Altura del texto más pequeño",
-      "source_bytes": "Tamaño original",
-      "source_height": "Alto original",
-      "source_width": "Ancho original",
-      "text_regions": "Regiones de texto",
-      "width": "Ancho"
+      "source_bytes": "Tamaño original"
     }
   }
 }

@@ -140,23 +140,22 @@ def exercise_native(base, workspace):
         time.sleep(.25)
     else:
         raise RuntimeError(f'shared Laya workflow did not complete: {run}')
-    # A blank PNG exercises ONNX Runtime and the shared PaddleOCR models.
-    flow = json.loads(request(base, f'/v1/workspaces/{workspace}/workflow-builtins/documents.optimize',
-                              {'collection_id': library, 'automatic_enabled': True}, method='PUT'))
+    # Reading a blank PNG exercises ONNX Runtime and the shared PaddleOCR models.
     def chunk(kind, data):
         return struct.pack('>I', len(data)) + kind + data + struct.pack('>I', zlib.crc32(kind + data))
     png = (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', 800, 600, 8, 0, 0, 0, 0)) +
            chunk(b'IDAT', zlib.compress((b'\x00' + b'\xff' * 800) * 600)) + chunk(b'IEND', b''))
     item = upload(base, library, 'blank.png', png)
+    operation = json.loads(request(base, f'/v1/items/{item}/text', {'ocr': 'always'}))
     for _ in range(180):
-        runs = json.loads(request(base, f'/v1/workspaces/{workspace}/workflow-runs?item_id={item}&workflow_id={flow["id"]}')).get('value') or []
-        if runs and runs[0]['status'] == 'completed':
+        operation = json.loads(request(base, f'/v1/operations/{operation["id"]}'))
+        if operation['status'] == 'succeeded':
             break
-        if runs and runs[0]['status'] == 'failed':
-            raise RuntimeError(f'shared OCR failed: {runs[0]}')
+        if operation['status'] != 'pending':
+            raise RuntimeError(f'shared OCR failed: {operation}')
         time.sleep(.25)
     else:
-        raise RuntimeError('shared OCR workflow did not complete')
+        raise RuntimeError('shared OCR read did not complete')
 
 
 def exercise(binary, directory, model='embeddinggemma-2'):

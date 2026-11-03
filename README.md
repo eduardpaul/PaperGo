@@ -296,7 +296,7 @@ Back up SQLite with its online backup API or `VACUUM INTO` and back up the refer
 
 This is an initial backend foundation, not a completed enterprise certification or deployment. S3 storage, antivirus scanning, quotas, notifications, document text extraction and tracing/metrics export remain future extensions. Benchmarks cover query latency and allocations, writer wait during index builds and WAL growth on configurable collection sizes; concurrent upload throughput, multi-client load and SLOs still need a target workload.
 
-[OCR](docs/ocr.md) reads text in page images with PaddleOCR in ONNX Runtime, for reading text, image optimization and photos to PDF ([documents](docs/documents.md#reading-text)). [AI completions](docs/ai.md) call a chat model immediately or in provider batches.
+[OCR](docs/ocr.md) reads text in page images with PaddleOCR in ONNX Runtime, for reading text and photos to PDF ([documents](docs/documents.md#reading-text)). [AI completions](docs/ai.md) call a chat model immediately or in provider batches.
 
 [Local embeddings](docs/embeddings.md) provides a lazy EmbeddingGemma 2 engine using the shared ONNX Runtime, plus a reproducible Harrier-OSS-v1-0.6B comparison. It can be exercised with `cmd/embed`; application search uses keywords.
 

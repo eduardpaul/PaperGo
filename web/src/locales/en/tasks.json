@@ -54,21 +54,10 @@
     "promoted": "This file was promoted.",
     "discarded": "This file was discarded.",
     "stale": "A file this was made from changed after the review was requested. It can no longer be accepted; only a rejection is possible.",
-    "currentFile": "Current file",
-    "proposed": "Proposed: {{filename}}",
-    "proposedFile": "Proposed file",
     "metrics": {
       "bytes": "Size",
-      "height": "Height",
       "pages": "Pages",
-      "savings_percent": "Savings",
-      "scale": "Scale",
-      "smallest_text_height": "Smallest text height",
-      "source_bytes": "Original size",
-      "source_height": "Original height",
-      "source_width": "Original width",
-      "text_regions": "Text regions",
-      "width": "Width"
+      "source_bytes": "Original size"
     }
   }
 }

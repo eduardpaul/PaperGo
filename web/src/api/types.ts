@@ -687,7 +687,7 @@ export interface Task {
   outcomes: TaskOutcome[];
   input_schema?: FormSchema;
   values?: Record<string, unknown>;
-  review?: { type: 'file.compare' | 'file.preview'; staged_file_id: string };
+  review?: { type: 'file.preview'; staged_file_id: string };
   priority: 'low' | 'normal' | 'high';
   due_at?: string;
   source: 'workflow' | 'user' | 'system';

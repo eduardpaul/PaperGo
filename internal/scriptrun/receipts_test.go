@@ -3,7 +3,6 @@ package scriptrun
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"image"
@@ -33,40 +32,11 @@ import (
 	"papergo/internal/dal/resultcache"
 	runstore "papergo/internal/dal/runs"
 	"papergo/internal/dms"
-	"papergo/internal/documentfiles"
 	"papergo/internal/httpapi"
-	"papergo/internal/ocr"
 	"papergo/internal/storage"
 	"papergo/internal/worker"
 	"papergo/internal/workflow"
 )
-
-// receiptText finds one line of text in a receipt photo: 24 pixels high in
-// a large photo, so the optimizer halves it, and 12 in a small one, which
-// it keeps.
-type receiptText struct{}
-
-func (receiptText) Detect(_ context.Context, img image.Image, _ ocr.DetectOptions) (ocr.Detection, error) {
-	b := img.Bounds()
-	line := 24
-	if b.Dy() < 600 {
-		line = 12
-	}
-	x, y := b.Dx()/4, b.Dy()/2
-	q := ocr.Quad{{x, y}, {3 * x, y}, {3 * x, y + line}, {x, y + line}}
-	return ocr.Detection{Regions: []ocr.Region{{Quad: q, Score: 0.9}}, Width: b.Dx(), Height: b.Dy()}, nil
-}
-
-func (receiptText) Recognize(_ context.Context, img image.Image) (ocr.Page, error) {
-	b := img.Bounds()
-	return ocr.Page{Width: b.Dx(), Height: b.Dy(), Lines: []ocr.Line{{Text: "Total 12.50", Confidence: 0.9, Quad: ocr.Quad{{10, 10}, {200, 10}, {200, 40}, {10, 40}}}}}, nil
-}
-
-func (receiptText) Info() ocr.Info { return ocr.Info{Engine: "test"} }
-func (receiptText) Close() error   { return nil }
-
-// animatedPNG is a two-frame image the optimizer keeps as it is.
-const animatedPNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACGFjVEwAAAACAAAAAPONk3AAAAAaZmNUTAAAAAAAAAABAAAAAQAAAAAAAAAAAAEACgAAWn8w0AAAAA1JREFUeJxj+M/A8B8ABQAB/4mZPR0AAAAaZmNUTAAAAAEAAAABAAAAAQAAAAAAAAAAAAEACgAAwQzaBAAAABFmZEFUAAAAAnicY2Bg+P8fAAMCAf/1e6XXAAAAAElFTkSuQmCC"
 
 // receiptPhoto is a w×h PNG that compresses badly, like a photographed page.
 func receiptPhoto(t *testing.T, w, h int) []byte {
@@ -121,15 +91,12 @@ func installReceipts(t *testing.T) *receipts {
 		t.Fatal(err)
 	}
 	assistant := &aiops.Assistant{Storage: blobs, Batch: client, Results: resultcache.New(db.SQL), ResultTTL: time.Hour, Records: activitystore.New(db.SQL), BatchDeadline: 72 * time.Hour}
-	files := &documentfiles.Maker{Storage: blobs, OCR: receiptText{}, MaxFileBytes: 32 << 20}
-	for _, register := range []func(*dms.Service) error{assistant.Register, files.Register} {
-		if err = register(s); err != nil {
-			t.Fatal(err)
-		}
+	if err = assistant.Register(s); err != nil {
+		t.Fatal(err)
 	}
-	wf := &workflow.Service{DMS: s, OCR: true}
+	wf := &workflow.Service{DMS: s}
 	api := &httpapi.API{DMS: s, Workflows: wf, Storage: blobs, Logger: log, Auth: auth.Development{Token: token, Subject: admin}, MaxUpload: 32 << 20,
-		Modules: []httpapi.Module{assistant.Module(), files.Module()}}
+		Modules: []httpapi.Module{assistant.Module()}}
 	runs := &Runner{DMS: s, API: api, Log: log}
 	if err = runs.Register(s); err != nil {
 		t.Fatal(err)
@@ -404,7 +371,7 @@ func (r *receipts) lineCount(t *testing.T) int {
 	return len(page.Value)
 }
 
-// The receipts package reads uploaded photos: each run optimizes the photo,
+// The receipts package reads uploaded photos: each run reads the photo,
 // waits for its batch answer and files the lines; a newer file replaces a
 // waiting run, a repeated run replaces the lines, and a refused answer
 // leaves the receipt for review.
@@ -412,11 +379,7 @@ func TestReceiptsPackage(t *testing.T) {
 	r := installReceipts(t)
 
 	large := r.upload(t, "market.png", receiptPhoto(t, 1200, 800))
-	animated, err := base64.StdEncoding.DecodeString(animatedPNG)
-	if err != nil {
-		t.Fatal(err)
-	}
-	small := r.upload(t, "animated.png", animated)
+	small := r.upload(t, "corner.png", receiptPhoto(t, 400, 300))
 	r.runOf(t, large, runstore.StatusWaiting)
 	r.queued(t, 2)
 	if r.batch.Creates() != 0 {
@@ -434,12 +397,8 @@ func TestReceiptsPackage(t *testing.T) {
 		Value []dms.FileVersion `json:"value"`
 	}
 	r.call(t, "GET", "/v1/items/"+large+"/content/versions", "", nil, 200, &versions)
-	if len(versions.Value) < 1 || versions.Value[0].ContentType != "image/webp" {
-		t.Fatalf("the large photo was not replaced by its smaller copy: %+v", versions.Value)
-	}
-	r.call(t, "GET", "/v1/items/"+small+"/content/versions", "", nil, 200, &versions)
 	if len(versions.Value) != 1 || versions.Value[0].ContentType != "image/png" {
-		t.Fatalf("the animated photo was replaced: %+v", versions.Value)
+		t.Fatalf("the photo was replaced: %+v", versions.Value)
 	}
 	if n := r.lineCount(t); n != 4 {
 		t.Fatalf("%d lines, want 4", n)
