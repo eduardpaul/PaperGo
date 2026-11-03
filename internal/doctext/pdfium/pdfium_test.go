@@ -2,8 +2,9 @@ package pdfium_test
 
 import (
 	"context"
+	"image"
 	"image/color"
-	"strings"
+	"runtime/debug"
 	"sync"
 	"testing"
 
@@ -12,8 +13,17 @@ import (
 
 func TestReadAndRender(t *testing.T) {
 	reader := doctexttest.PDF(t)
-	if !strings.HasPrefix(reader.Name(), "pdfium-") {
+	// The name keys stored text: it names the PDFium build go-pdfium embeds,
+	// so it changes with go-pdfium.
+	if reader.Name() != "pdfium-8057-wasm" {
 		t.Fatal(reader.Name())
+	}
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, m := range info.Deps {
+			if m.Path == "github.com/klippa-app/go-pdfium" && m.Version != "v1.21.3" {
+				t.Fatalf("go-pdfium is %s: update Name to the PDFium build its module embeds", m.Version)
+			}
+		}
 	}
 	doc, err := reader.Open(context.Background(), doctexttest.TextPDF("Invoice March", "Zweite Seite"))
 	if err != nil {
@@ -40,6 +50,27 @@ func TestReadAndRender(t *testing.T) {
 	if err != nil || img.Bounds().Dx() != 850 || img.Bounds().Dy() != 1100 {
 		t.Fatalf("render: %v %v", img.Bounds(), err)
 	}
+	ink := inked(img)
+	if ink == 0 || img.At(800, 1000) != (color.RGBA{255, 255, 255, 255}) {
+		t.Fatalf("the text is not drawn on white: %d dark pixels", ink)
+	}
+	bounded, err := doc.Render(0, 300, 1_000_000)
+	if err != nil || bounded.Bounds().Dx()*bounded.Bounds().Dy() > 1_000_000 {
+		t.Fatalf("bounded render: %v %v", bounded.Bounds(), err)
+	}
+	// Renders outlive later renders and the document.
+	if err = doc.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if inked(img) != ink || img.At(800, 1000) != (color.RGBA{255, 255, 255, 255}) {
+		t.Fatal("the render changed after the document closed")
+	}
+	if _, err = doc.Text(0); err == nil {
+		t.Fatal("a closed PDF read")
+	}
+}
+
+func inked(img image.Image) int {
 	ink := 0
 	for y := 0; y < 200; y++ {
 		for x := 0; x < 400; x++ {
@@ -48,15 +79,10 @@ func TestReadAndRender(t *testing.T) {
 			}
 		}
 	}
-	if ink == 0 || img.At(800, 1000) != (color.RGBA{255, 255, 255, 255}) {
-		t.Fatalf("the text is not drawn on white: %d dark pixels", ink)
-	}
-	if img, err = doc.Render(0, 300, 1_000_000); err != nil || img.Bounds().Dx()*img.Bounds().Dy() > 1_000_000 {
-		t.Fatalf("bounded render: %v %v", img.Bounds(), err)
-	}
+	return ink
 }
 
-// Calls from many goroutines are serialized, not crashed.
+// PDFs open and read from many goroutines at once.
 func TestConcurrentReads(t *testing.T) {
 	reader := doctexttest.PDF(t)
 	var wg sync.WaitGroup

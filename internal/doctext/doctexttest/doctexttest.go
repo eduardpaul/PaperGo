@@ -42,5 +42,5 @@ func TextPDF(pages ...string) []byte {
 	return []byte(b.String())
 }
 
-// PDF returns the linked native PDF reader.
+// PDF returns the PDF reader.
 func PDF(t testing.TB) doctext.PDF { t.Helper(); return pdfium.New() }
