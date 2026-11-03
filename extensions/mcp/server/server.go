@@ -2,53 +2,30 @@ package server
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strings"
-	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"papergo/extensions/mcp"
+	"papergo/internal/httpapi"
+	"papergo/internal/requestmeta"
 )
 
-// Server serves MCP and its health checks.
+// Server serves MCP as a module of the PaperGo API.
 type Server struct {
-	cfg        Config
-	registry   *mcp.Registry
-	rest       *rest
-	resolver   CredentialResolver
-	slots      chan struct{}
-	origins    map[string]bool
-	protection *http.CrossOriginProtection
-	tools      map[string]*sdk.Tool
-	mcp        http.Handler
+	cfg      Config
+	registry *mcp.Registry
+	tools    map[string]*sdk.Tool
+	mcp      http.Handler
 }
 
 // New returns a server for the registry's tools.
-func New(cfg Config, registry *mcp.Registry) (*Server, error) {
+func New(cfg Config, registry *mcp.Registry) *Server {
 	cfg.defaults()
-	if cfg.BackendURL == nil {
-		return nil, errors.New("the PaperGo API's URL is required")
-	}
-	s := &Server{cfg: cfg, registry: registry, rest: newREST(cfg.BackendURL, cfg.MaxBackendBytes, cfg.MaxBackendConns),
-		slots: make(chan struct{}, cfg.MaxInFlight), origins: map[string]bool{}, protection: http.NewCrossOriginProtection(), tools: map[string]*sdk.Tool{}}
-	s.resolver = bearer{rest: s.rest}
-	origins := cfg.AllowedOrigins
-	if cfg.PublicURL != nil {
-		origins = append(origins, origin(cfg.PublicURL))
-	}
-	for _, o := range origins {
-		s.origins[o] = true
-		if err := s.protection.AddTrustedOrigin(o); err != nil {
-			return nil, fmt.Errorf("allowed origin %s: %w", o, err)
-		}
-	}
+	s := &Server{cfg: cfg, registry: registry, tools: map[string]*sdk.Tool{}}
 	for _, t := range registry.Tools() {
 		s.tools[t.Name] = definition(t)
 	}
@@ -59,28 +36,35 @@ func New(cfg Config, registry *mcp.Registry) (*Server, error) {
 		JSONResponse:                 true,
 		MaxRequestBodyBytes:          cfg.MaxRequestBytes,
 		PropagateRequestCancellation: true,
-		Logger:                       slog.New(slog.DiscardHandler),
+		// Every request carries a bearer credential, which a page that
+		// rebinds a name to a loopback address does not have; and a proxy
+		// on loopback reaches PaperGo with its public host.
+		DisableLocalhostProtection: true,
+		Logger:                     slog.New(slog.DiscardHandler),
 	})
-	return s, nil
+	return s
 }
 
-// RequestTimeout is how long a request may take, and so how long a
-// graceful shutdown waits for requests in flight.
-func (s *Server) RequestTimeout() time.Duration { return s.cfg.RequestTimeout }
+// Module is the API module that serves the endpoint.
+func (s *Server) Module() httpapi.Module { return module{s} }
 
-// Handler serves /v1/mcp, /health/live and /health/ready.
-func (s *Server) Handler() http.Handler {
-	mux := http.NewServeMux()
-	mux.Handle(Path, s.observe(s.cors(s.admit(s.endpoint()))))
-	mux.HandleFunc("GET /health/live", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
-	mux.HandleFunc("GET /health/ready", func(w http.ResponseWriter, r *http.Request) {
-		if err := s.rest.ready(r.Context()); err != nil {
-			http.Error(w, "PaperGo is not ready", http.StatusServiceUnavailable)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	})
-	return mux
+type module struct{ s *Server }
+
+func (module) Name() string { return "mcp" }
+
+// Routes serve MCP on POST. Without sessions there is no stream to open or
+// session to end, so GET and DELETE answer 405, as the transport requires.
+func (m module) Routes() []httpapi.Route {
+	return []httpapi.Route{
+		{Method: http.MethodPost, Pattern: Path, OperationID: "mcp", Handle: m.s.serve},
+		{Method: http.MethodGet, Pattern: Path, OperationID: "mcpStream", Handle: notAllowed},
+		{Method: http.MethodDelete, Pattern: Path, OperationID: "mcpEndSession", Handle: notAllowed},
+	}
+}
+
+func notAllowed(w http.ResponseWriter, _ *http.Request, _ httpapi.Request) error {
+	w.Header().Set("Allow", http.MethodPost)
+	return &httpapi.Problem{Status: http.StatusMethodNotAllowed, Code: "method_not_allowed", Detail: "the MCP endpoint is stateless: POST each message"}
 }
 
 type contextKey int
@@ -95,122 +79,43 @@ type record struct {
 	id     string
 	tool   string
 	failed string
-	caller *Caller
 }
 
-// observe gives each request an ID, makes every response private and
-// uncacheable, and logs the request's metadata, never its credential,
-// arguments or results.
-func (s *Server) observe(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		started := time.Now()
-		rec := &record{id: newID()}
-		w.Header().Set("X-Request-ID", rec.id)
-		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
-		next.ServeHTTP(sw, r.WithContext(context.WithValue(r.Context(), recordKey, rec)))
-		attrs := []any{"request_id", rec.id, "method", r.Method, "status", sw.status, "duration_ms", time.Since(started).Milliseconds()}
-		if rec.tool != "" {
-			attrs = append(attrs, "tool", rec.tool)
-		}
+// serve answers an MCP message for the API caller. Assistants connect with
+// a credential of their own, never the browser's session or a proxy's
+// sign-in, so the connection's token decides what they reach.
+func (s *Server) serve(w http.ResponseWriter, r *http.Request, in httpapi.Request) error {
+	if !in.Bearer() {
+		w.Header().Set("WWW-Authenticate", `Bearer realm="PaperGo"`)
+		return &httpapi.Problem{Status: http.StatusUnauthorized, Code: "unauthorized", Detail: "AI assistants connect with an access token: create one in PaperGo under Settings, AI assistants"}
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), s.cfg.RequestTimeout)
+	defer cancel()
+	api := in.Loopback()
+	if s.cfg.wrapAPI != nil {
+		api = s.cfg.wrapAPI(api)
+	}
+	rec := &record{id: requestmeta.Trace(r.Context())}
+	// The scopes decide which tools the caller sees. Nothing is cached:
+	// every request asks again, and the API authorizes every request the
+	// tools make.
+	scopes, err := in.Scopes(ctx)
+	if err != nil {
+		s.cfg.Logger.Warn("mcp_caller_unresolved", "request_id", rec.id, "error", err)
+		w.Header().Set("Retry-After", "5")
+		return &httpapi.Problem{Status: http.StatusServiceUnavailable, Code: "unavailable", Detail: "PaperGo could not tell what the caller may do; try again shortly"}
+	}
+	caller := &Caller{subject: in.Subject, scopes: scopes, backend: backend{api: api, host: r.Host, requestID: rec.id, maxBody: s.cfg.MaxResultBytes},
+		app: appURL(s.cfg.AppURL, r)}
+	s.mcp.ServeHTTP(private{w}, r.WithContext(context.WithValue(context.WithValue(ctx, callerKey, caller), recordKey, rec)))
+	if rec.tool != "" {
+		attrs := []any{"request_id", rec.id, "tool", rec.tool}
 		if rec.failed != "" {
 			attrs = append(attrs, "tool_failure", rec.failed)
 		}
-		if rec.caller != nil {
-			if ids := rec.caller.trace.list(); len(ids) > 0 {
-				attrs = append(attrs, "backend_request_ids", ids)
-			}
-		}
-		level := slog.LevelInfo
-		if sw.status >= 500 {
-			level = slog.LevelWarn
-		}
-		s.cfg.Logger.Log(r.Context(), level, "mcp_request", attrs...)
-	})
-}
-
-// admit bounds the requests in flight: a request waits briefly for a slot,
-// then is refused as overloaded. Admitted requests run under the request
-// deadline.
-func (s *Server) admit(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		wait := time.NewTimer(s.cfg.AdmissionWait)
-		defer wait.Stop()
-		select {
-		case s.slots <- struct{}{}:
-		case <-wait.C:
-			w.Header().Set("Retry-After", "1")
-			http.Error(w, "papergo-mcp is busy; try again shortly", http.StatusServiceUnavailable)
-			return
-		case <-r.Context().Done():
-			return
-		}
-		defer func() { <-s.slots }()
-		ctx, cancel := context.WithTimeout(r.Context(), s.cfg.RequestTimeout)
-		defer cancel()
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
-}
-
-// cors lets a page of an allowed origin, such as PaperGo's web app checking
-// a new connection, call the endpoint from a browser: it answers preflights
-// and names the origin on responses. Credentials are bearer tokens, never
-// cookies. Other origins are refused by endpoint; native clients send none.
-func (s *Server) cors(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		o := r.Header.Get("Origin")
-		if o == "" || !s.origins[strings.ToLower(o)] {
-			next.ServeHTTP(w, r)
-			return
-		}
-		h := w.Header()
-		h.Set("Access-Control-Allow-Origin", o)
-		h.Add("Vary", "Origin")
-		h.Set("Access-Control-Expose-Headers", "WWW-Authenticate, X-Request-ID")
-		if r.Method == http.MethodOptions && r.Header.Get("Access-Control-Request-Method") != "" {
-			h.Set("Access-Control-Allow-Methods", "POST")
-			h.Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, MCP-Protocol-Version")
-			h.Set("Access-Control-Max-Age", "600")
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
-// endpoint checks the request's origin, resolves its caller and hands it
-// to the MCP handler.
-func (s *Server) endpoint() http.Handler {
-	authenticated := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// A browser may send requests only from an origin the deployment
-		// names; native clients send none.
-		if o := r.Header.Get("Origin"); o != "" && !s.origins[strings.ToLower(o)] {
-			http.Error(w, "origin not allowed", http.StatusForbidden)
-			return
-		}
-		caller, err := s.resolver.Resolve(r.Context(), r)
-		switch {
-		case errors.Is(err, errUnauthenticated):
-			w.Header().Set("WWW-Authenticate", `Bearer realm="PaperGo"`)
-			http.Error(w, "a bearer credential is required", http.StatusUnauthorized)
-			return
-		case errors.Is(err, errInvalidToken):
-			w.Header().Set("WWW-Authenticate", `Bearer realm="PaperGo", error="invalid_token"`)
-			http.Error(w, "the bearer credential is not valid: it may have expired or been revoked; create a new access token in PaperGo under Settings, Access tokens", http.StatusUnauthorized)
-			return
-		case errors.Is(err, errForbidden):
-			http.Error(w, "PaperGo does not admit this caller", http.StatusForbidden)
-			return
-		case err != nil:
-			w.Header().Set("Retry-After", "5")
-			http.Error(w, "PaperGo is unavailable", http.StatusServiceUnavailable)
-			return
-		}
-		if rec, ok := r.Context().Value(recordKey).(*record); ok {
-			rec.caller = caller
-		}
-		s.mcp.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), callerKey, caller)))
-	})
-	return s.protection.Handler(authenticated)
+		s.cfg.Logger.Info("mcp_tool", attrs...)
+	}
+	return nil
 }
 
 // serverFor is the MCP server of one request: the tools whose scopes its
@@ -283,8 +188,8 @@ func (s *Server) handler(t *mcp.Registered, caller *Caller, rec *record) sdk.Too
 		if err != nil {
 			return s.failed(rec, err), nil
 		}
-		if int64(len(out)) > s.cfg.MaxBackendBytes {
-			return s.failed(rec, mcp.Fail(mcp.CodeTooLarge, fmt.Sprintf("the result is larger than %d bytes; ask for fewer entries or values", s.cfg.MaxBackendBytes))), nil
+		if int64(len(out)) > s.cfg.MaxResultBytes {
+			return s.failed(rec, mcp.Fail(mcp.CodeTooLarge, fmt.Sprintf("the result is larger than %d bytes; ask for fewer entries or values", s.cfg.MaxResultBytes))), nil
 		}
 		return &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{Text: string(out)}}, StructuredContent: out}, nil
 	}
@@ -334,33 +239,20 @@ func definition(t *mcp.Registered) *sdk.Tool {
 	return out
 }
 
-func newID() string {
-	var b [16]byte
-	_, _ = rand.Read(b[:])
-	return hex.EncodeToString(b[:])
-}
+// private keeps every response private and uncacheable: what a caller
+// sees depends on who they are. The SDK sets Cache-Control: no-cache,
+// no-transform on its answers, replacing the API's private, no-store, so
+// the header is set again as the answer is written.
+type private struct{ http.ResponseWriter }
 
-// statusWriter records the response status for the log and keeps every
-// response private and uncacheable, whatever the MCP handler set.
-type statusWriter struct {
-	http.ResponseWriter
-	status int
-	wrote  bool
-}
-
-func (w *statusWriter) WriteHeader(code int) {
-	if !w.wrote {
-		w.status, w.wrote = code, true
-		w.Header().Set("Cache-Control", "private, no-store")
-	}
+func (w private) WriteHeader(code int) {
+	w.Header().Set("Cache-Control", "private, no-store")
 	w.ResponseWriter.WriteHeader(code)
 }
 
-func (w *statusWriter) Write(b []byte) (int, error) {
-	if !w.wrote {
-		w.WriteHeader(http.StatusOK)
-	}
+func (w private) Write(b []byte) (int, error) {
+	w.Header().Set("Cache-Control", "private, no-store")
 	return w.ResponseWriter.Write(b)
 }
 
-func (w *statusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+func (w private) Unwrap() http.ResponseWriter { return w.ResponseWriter }

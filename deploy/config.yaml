@@ -7,10 +7,10 @@ server:
   data_dir: ./data
   public_url: http://localhost:8080
 
-# Where AI assistants reach the optional MCP server, papergo-mcp; the web
-# app offers assistant connections only when it is set:
+# AI assistants connect at /v1/mcp with a personal access token, made under
+# Settings, AI assistants. To turn the endpoint off:
 # mcp:
-#   public_url: http://localhost:8090/v1/mcp
+#   enabled: false
 
 # PostgreSQL instead of the SQLite file in data_dir:
 # database:

@@ -1,4 +1,4 @@
-package integration
+package server
 
 import (
 	"bytes"
@@ -18,7 +18,6 @@ import (
 
 	"papergo/extensions/mcp"
 	"papergo/extensions/mcp/builtin"
-	"papergo/extensions/mcp/server"
 	"papergo/internal/auth"
 	"papergo/internal/dal/daltest"
 	"papergo/internal/dms"
@@ -33,33 +32,36 @@ import (
 // holds.
 const aliceToken = "0123456789abcdef0123456789abcdef"
 
-// env is a PaperGo API on a fixture database and papergo-mcp in front of it.
+// env is a PaperGo API serving MCP on a fixture database.
 type env struct {
 	svc    *dms.Service
 	files  storage.Store
 	search *documentsearch.Search
 	api    *httptest.Server
-	mcp    *httptest.Server
-	// mu guards gate, before and backend, which tests change while the API
+	// mu guards gate, before and wrap, which tests change while the API
 	// serves requests.
 	mu sync.Mutex
-	// gate, when set, holds workspace listings until it is closed.
+	// gate, when set, holds the tools' workspace listings until it is
+	// closed.
 	gate chan struct{}
-	// before, when set, runs before the API serves a request.
+	// before, when set, runs before the API serves a tool's request.
 	before func(*http.Request)
-	// backend answers the API's requests; tests replace it with serve.
-	backend http.Handler
-	logs    *bytes.Buffer
-	logsMu  *sync.Mutex
+	// wrap, when set, answers the tools' requests in place of the API,
+	// which it is given.
+	wrap   func(api http.Handler) http.Handler
+	logs   *bytes.Buffer
+	logsMu *sync.Mutex
 }
 
 type options struct {
 	search        bool
-	configure     func(*server.Config)
+	configure     func(*Config)
 	contributions []mcp.Contribution
 	enabled       []string
 	// app is the web app's origin results link to.
 	app *url.URL
+	// maxInFlight bounds the API's concurrent requests.
+	maxInFlight int
 }
 
 func setup(t *testing.T, o options) *env {
@@ -70,44 +72,47 @@ func setup(t *testing.T, o options) *env {
 		t.Fatal(err)
 	}
 	e := &env{svc: dms.NewService(db.SQL), files: files, logs: &bytes.Buffer{}, logsMu: &sync.Mutex{}}
-	a := &httpapi.API{DMS: e.svc, Auth: auth.Development{Token: aliceToken, Subject: "alice"}, Storage: files,
-		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), Ready: db.SQL.PingContext, MaxUpload: 1 << 20}
+	log := slog.New(slog.NewJSONHandler(lockedWriter{e.logs, e.logsMu}, nil))
+	cfg := Config{Version: "test", Logger: log, AppURL: o.app, wrapAPI: func(api http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			e.mu.Lock()
+			gate, before, wrap := e.gate, e.before, e.wrap
+			e.mu.Unlock()
+			if before != nil {
+				before(r)
+			}
+			if gate != nil && r.URL.Path == "/v1/workspaces" {
+				<-gate
+			}
+			if wrap != nil {
+				wrap(api).ServeHTTP(w, r)
+				return
+			}
+			api.ServeHTTP(w, r)
+		})
+	}}
+	if o.configure != nil {
+		o.configure(&cfg)
+	}
+	registry, err := mcp.NewRegistry(builtin.Tools(), o.contributions, o.enabled)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := &httpapi.API{DMS: e.svc, Auth: auth.Development{Token: aliceToken, Subject: "alice"}, Storage: files, Logger: log,
+		Ready: db.SQL.PingContext, MaxUpload: 1 << 20, MaxInFlight: o.maxInFlight, MCP: true,
+		Modules: []httpapi.Module{New(cfg, registry).Module()}}
 	if o.search {
 		e.search = &documentsearch.Search{Storage: files, Store: searchstore.Open(t, filepath.Join(t.TempDir(), "search.db"), []string{"english"})}
 		if err := e.search.Register(e.svc); err != nil {
 			t.Fatal(err)
 		}
-		a.Modules = []httpapi.Module{e.search.Module()}
+		a.Modules = append(a.Modules, e.search.Module())
 	}
-	e.backend = a.Handler()
-	e.api = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		e.mu.Lock()
-		gate, before, backend := e.gate, e.before, e.backend
-		e.mu.Unlock()
-		if before != nil {
-			before(r)
-		}
-		if gate != nil && r.URL.Path == "/v1/workspaces" {
-			<-gate
-		}
-		backend.ServeHTTP(w, r)
-	}))
+	if err := a.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	e.api = httptest.NewServer(a.Handler())
 	t.Cleanup(e.api.Close)
-	backendURL, _ := url.Parse(e.api.URL)
-	cfg := server.Config{BackendURL: backendURL, Version: "test", Logger: slog.New(slog.NewJSONHandler(lockedWriter{e.logs, e.logsMu}, nil))}
-	if o.configure != nil {
-		o.configure(&cfg)
-	}
-	registry, err := mcp.NewRegistry(builtin.Tools(builtin.Options{AppURL: o.app}), o.contributions, o.enabled)
-	if err != nil {
-		t.Fatal(err)
-	}
-	srv, err := server.New(cfg, registry)
-	if err != nil {
-		t.Fatal(err)
-	}
-	e.mcp = httptest.NewServer(srv.Handler())
-	t.Cleanup(e.mcp.Close)
 	return e
 }
 
@@ -128,14 +133,15 @@ func (e *env) log() string {
 	return e.logs.String()
 }
 
-// serve makes h answer the API's requests from now on.
-func (e *env) serve(h http.Handler) {
+// intercept makes wrap answer the tools' requests from now on; nil
+// restores the API.
+func (e *env) intercept(wrap func(api http.Handler) http.Handler) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.backend = h
+	e.wrap = wrap
 }
 
-func (e *env) endpoint() string { return e.mcp.URL + server.Path }
+func (e *env) endpoint() string { return e.api.URL + Path }
 
 // token is a personal access token of subject with scopes.
 func (e *env) token(t *testing.T, subject string, scopes ...string) identity.CreatedAccessToken {

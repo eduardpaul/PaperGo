@@ -25,7 +25,7 @@ Direct Go modules and the licences they ship under. Add a row when a change adds
 | `modernc.org/sqlite` | SQLite driver | BSD-3-Clause |
 | `github.com/dop251/goja` | JavaScript runtime for workflow scripts (`internal/script` only) | MIT |
 | `github.com/evanw/esbuild` | bundling workflow scripts (`internal/script` only) | MIT |
-| `github.com/modelcontextprotocol/go-sdk` | the [MCP server](mcp.md)'s protocol and Streamable HTTP transport (`extensions/mcp` only) | Apache-2.0, older contributions MIT |
+| `github.com/modelcontextprotocol/go-sdk` | the [MCP endpoint](mcp.md)'s protocol and Streamable HTTP transport (`extensions/mcp` only) | Apache-2.0, older contributions MIT |
 | `github.com/google/jsonschema-go` | validating MCP tool arguments against their schemas (`extensions/mcp` only) | MIT |
 
 goja also links `github.com/dlclark/regexp2` (MIT), `github.com/go-sourcemap/sourcemap` (BSD-2-Clause) and `github.com/google/pprof` (Apache-2.0).

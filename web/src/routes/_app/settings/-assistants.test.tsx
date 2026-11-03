@@ -40,16 +40,16 @@ interface Served {
   deleted: string[];
 }
 
-/** Serves the API, and the MCP endpoint answering with status. */
+/** Serves the API, and the MCP endpoint on the page's origin answering with status. */
 function serve(granted: string[], { existing = [] as unknown[], mcpStatus = 200 } = {}): Served {
   const served: Served = { posts: [], checks: [], deleted: [] };
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: URL | string, init: RequestInit = {}) => {
-      if (String(input) === auth.endpoint) {
+      if (String(input) === '/v1/mcp') {
         served.checks.push({ authorization: new Headers(init.headers).get('Authorization') });
         return new Response(
-          JSON.stringify({ jsonrpc: '2.0', id: 1, result: { serverInfo: { name: 'papergo-mcp' } } }),
+          JSON.stringify({ jsonrpc: '2.0', id: 1, result: { serverInfo: { name: 'papergo' } } }),
           {
             status: mcpStatus,
           },
@@ -172,11 +172,11 @@ it('offers read and write only to people who can write', async () => {
   client.clear();
 });
 
-it('explains that connections need an MCP server when the deployment runs none', async () => {
+it('explains that connections need MCP when the deployment turns it off', async () => {
   auth.endpoint = null;
   serve(reading);
   const client = show();
-  expect(screen.getByText(/does not run an MCP server yet/)).toBeTruthy();
+  expect(screen.getByText(/has turned MCP off/)).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Create connection' })).toBeNull();
   client.clear();
 });

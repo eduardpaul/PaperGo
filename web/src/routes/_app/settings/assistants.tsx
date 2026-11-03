@@ -49,13 +49,19 @@ export function clientSetup(endpoint: string, secret: string) {
   };
 }
 
+const McpPath = '/v1/mcp';
+
 export type CheckResult = { ok: true } | { ok: false; reason: string };
 
-/** Asks the MCP endpoint, with the new token, to start a session, as an assistant would. */
-export async function checkConnection(endpoint: string, secret: string): Promise<CheckResult> {
+/**
+ * Asks this PaperGo's MCP endpoint, with the new token, to start a session,
+ * as an assistant would. It asks on the page's own origin, which serves the
+ * same endpoint as the public address assistants are given.
+ */
+export async function checkConnection(secret: string): Promise<CheckResult> {
   let response: Response;
   try {
-    response = await fetch(endpoint, {
+    response = await fetch(McpPath, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${secret}`,
@@ -75,9 +81,9 @@ export async function checkConnection(endpoint: string, secret: string): Promise
       }),
     });
   } catch {
-    return { ok: false, reason: `Nothing answered at ${endpoint}.` };
+    return { ok: false, reason: `Nothing answered at ${McpPath}.` };
   }
-  if (response.status === 404) return { ok: false, reason: `${endpoint} is not an MCP server: it answered 404.` };
+  if (response.status === 404) return { ok: false, reason: `${McpPath} is not an MCP endpoint: it answered 404.` };
   if (response.status === 401) return { ok: false, reason: 'The assistant endpoint refused the token.' };
   if (!response.ok) return { ok: false, reason: `The assistant endpoint answered ${response.status}.` };
   try {
@@ -86,7 +92,7 @@ export async function checkConnection(endpoint: string, secret: string): Promise
   } catch {
     // Reported below.
   }
-  return { ok: false, reason: `${endpoint} did not answer as an MCP server.` };
+  return { ok: false, reason: `${McpPath} did not answer as an MCP endpoint.` };
 }
 
 /** The scopes a connection gets: reading, and item.write for read and write. */
@@ -130,11 +136,10 @@ function AssistantsPage() {
       ) : (
         <SettingsSection
           title="Connect an assistant"
-          description="AI assistants, such as Claude, can work with PaperGo through its MCP server."
+          description="AI assistants, such as Claude, can work with PaperGo through its MCP endpoint."
         >
           <p className="text-sm">
-            This PaperGo does not run an MCP server yet. An administrator runs <code>papergo-mcp</code> and sets{' '}
-            <code>MCP_PUBLIC_URL</code> to its address; then you can connect assistants here.
+            This PaperGo does not serve AI assistants: an administrator has turned MCP off (<code>MCP=off</code>).
           </p>
         </SettingsSection>
       )}
@@ -167,11 +172,11 @@ function Connect({ endpoint }: { endpoint: string }) {
   const verify = useCallback(
     async (secret: string) => {
       setCheck('checking');
-      setCheck(await checkConnection(endpoint, secret));
+      setCheck(await checkConnection(secret));
       // The check used the token, so its last use changed.
       await queryClient.invalidateQueries({ queryKey: ['tokens'] });
     },
-    [endpoint, queryClient],
+    [queryClient],
   );
   const issue = useMutation({
     mutationFn: () =>

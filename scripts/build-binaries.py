@@ -83,11 +83,10 @@ def main():
         target = output / name
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, target)
-    # papergo-mcp needs no native code and builds as pure Go.
-    for command, name, cgo in [('api', 'papergo', None), ('admin', 'papergo-admin', None), ('mcp', 'papergo-mcp', '0')]:
+    for command, name in [('api', 'papergo'), ('admin', 'papergo-admin')]:
         subprocess.run(['go', 'build', '-trimpath', '-ldflags=' + args.ldflags,
                         '-o', str(output / (name + suffix)), './cmd/' + command],
-                       cwd=ROOT, env=env | ({'CGO_ENABLED': cgo} if cgo else {}), check=True)
+                       cwd=ROOT, env=env, check=True)
     print(f'Executables and native libraries: {output}')
 
 

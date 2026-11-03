@@ -39,6 +39,9 @@ func TestDocumentedConfigYAML(t *testing.T) {
 	if c.MaxUpload != 100*1024*1024 {
 		t.Fatalf("upload %d", c.MaxUpload)
 	}
+	if !c.MCP {
+		t.Fatal("MCP is off by default")
+	}
 	t.Logf("documented YAML address %s database %s blob %s public %s mode %s user %s password %s store %s zvec %s upload %d", c.Address, c.DatabasePath, c.BlobPath, c.PublicURL, c.AuthMode, c.AdminSubject, c.AdminPassword, c.SearchStore, c.ZvecPath, c.MaxUpload)
 }
 
@@ -281,5 +284,21 @@ func TestWorkersYAML(t *testing.T) {
 	}
 	if _, err = LoadFrom(func(string) string { return "" }, "workers:\n  documents:\n    concurency: 2\n"); err == nil {
 		t.Fatal("an unknown worker setting was accepted")
+	}
+}
+
+func TestMCPYAML(t *testing.T) {
+	c, err := LoadFrom(func(string) string { return "" }, "mcp:\n  enabled: false\n  extensions: [acme.crm]\n")
+	if err != nil || c.MCP || strings.Join(c.MCPExtensions, ",") != "acme.crm" {
+		t.Fatalf("mcp %v %v %v", c.MCP, c.MCPExtensions, err)
+	}
+	c, err = LoadFrom(func(key string) string {
+		if key == "MCP" {
+			return "on"
+		}
+		return ""
+	}, "mcp:\n  enabled: false\n")
+	if err != nil || !c.MCP {
+		t.Fatalf("environment over YAML %v %v", c.MCP, err)
 	}
 }

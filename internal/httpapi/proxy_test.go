@@ -103,8 +103,8 @@ func TestProxyIdentityPreservesProfilesAndRejectsCredentialBypasses(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The token arrives from another peer, such as papergo-mcp, without the
-	// proxy's assertion.
+	// The token arrives on a route the proxy lets past its sign-in, such as
+	// /v1/mcp, without the proxy's assertion.
 	direct := func(credential string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest("GET", "/v1/identity/me", nil)
 		r.RemoteAddr = "172.29.242.9:1234"

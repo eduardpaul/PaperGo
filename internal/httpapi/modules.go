@@ -1,10 +1,13 @@
 package httpapi
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
+	"papergo/internal/dal"
 	"papergo/internal/dms"
+	"papergo/internal/identity"
 	"slices"
 	"strings"
 )
@@ -36,7 +39,50 @@ type Request struct {
 	Run     string
 	DMS     *dms.Service
 	api     *API
+	// caller is the module request's context before its idempotency key:
+	// who it acts for, with which credential, and its trace.
+	caller context.Context
+	bearer bool
 }
+
+// Bearer reports whether the caller authenticated with a bearer credential
+// it sent itself: an access token, or an OIDC access token in bearer mode.
+// A browser session or a proxy's assertion is not one. Modules that serve
+// clients other than the web app, such as protocol endpoints, require it.
+func (in Request) Bearer() bool { return in.bearer }
+
+// Scopes are the caller's effective scopes: its roles' grants narrowed to
+// its credential's, as GET /v1/identity/me reports them.
+func (in Request) Scopes(ctx context.Context) ([]string, error) {
+	return identity.EffectiveScopes(callerContext{ctx, in.caller}, dal.NewStore(in.DMS.Directory().DB), in.Subject)
+}
+
+// Loopback serves requests to the /v1 API in-process as the module
+// request's caller: the same subject, credential, scopes and resource
+// limit, workflow run and transaction. Each is authorized as the same REST
+// request would be, but neither authenticated nor admitted again: the
+// module request was. A request's own context bounds it.
+func (in Request) Loopback() http.Handler {
+	routes := in.api.inProcess()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				in.api.Logger.Error("handler panic", "path", r.URL.Path, "panic", recovered)
+				in.api.problem(w, r, 500, "internal_error", "request could not be completed")
+			}
+		}()
+		routes.ServeHTTP(w, r.WithContext(callerContext{r.Context(), in.caller}))
+	})
+}
+
+// callerContext is a request's own deadline and cancellation with the
+// values of the module request it is made for.
+type callerContext struct {
+	context.Context
+	caller context.Context
+}
+
+func (c callerContext) Value(key any) any { return c.caller.Value(key) }
 
 // Decode reads the request's JSON body into dst like core routes do. When
 // it reports false it has answered the request with the problem.
@@ -77,7 +123,7 @@ func (a *API) registerModules(m *router) error {
 				return fmt.Errorf("module %s: operation %s is also %s", module.Name(), route.OperationID, previous)
 			}
 			operations[route.OperationID] = module.Name()
-			m.HandleFunc(route.Method+" "+route.Pattern, a.idempotent(a.moduleHandler(route)))
+			m.HandleFunc(route.Method+" "+route.Pattern, a.moduleHandler(route))
 		}
 	}
 	return nil
@@ -85,9 +131,13 @@ func (a *API) registerModules(m *router) error {
 
 func (a *API) moduleHandler(route Route) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if err := route.Handle(w, r, Request{Subject: subject(r), Run: runOf(r), DMS: a.dms(r), api: a}); err != nil {
-			a.failure(w, r, err)
-		}
+		bearer, _ := r.Context().Value(bearerKey{}).(bool)
+		in := Request{Subject: subject(r), Run: runOf(r), DMS: a.dms(r), api: a, caller: r.Context(), bearer: bearer}
+		a.idempotent(func(w http.ResponseWriter, r *http.Request) {
+			if err := route.Handle(w, r, in); err != nil {
+				a.failure(w, r, err)
+			}
+		})(w, r)
 	}
 }
 

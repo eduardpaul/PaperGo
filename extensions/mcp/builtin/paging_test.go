@@ -16,6 +16,7 @@ type subject string
 func (s subject) Subject() string    { return string(s) }
 func (subject) HasScope(string) bool { return true }
 func (subject) Backend() mcp.Backend { return nil }
+func (subject) AppURL() *url.URL     { return nil }
 
 func paged(t *testing.T, tool string, who subject, args string) paging {
 	t.Helper()

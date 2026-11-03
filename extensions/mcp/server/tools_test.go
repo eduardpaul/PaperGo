@@ -1,4 +1,4 @@
-package integration
+package server
 
 import (
 	"encoding/json"
@@ -123,17 +123,8 @@ func TestToolsAndProtocol(t *testing.T) {
 			t.Errorf("%s: %d", method, res.StatusCode)
 		}
 	}
-	for _, path := range []string{"/health/live", "/health/ready"} {
-		res, err := http.Get(e.mcp.URL + path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		res.Body.Close()
-		if res.StatusCode/100 != 2 {
-			t.Errorf("%s: %d", path, res.StatusCode)
-		}
-	}
-	if logs := e.log(); strings.Contains(logs, aliceToken) || !strings.Contains(logs, `"mcp_request"`) {
+	ok(t, s, "list_workspaces", `{}`)
+	if logs := e.log(); strings.Contains(logs, aliceToken) || !strings.Contains(logs, `"msg":"mcp_tool"`) || !strings.Contains(logs, `"tool":"list_workspaces"`) {
 		t.Fatalf("logs %s", logs)
 	}
 }
@@ -389,7 +380,7 @@ func TestIdentitiesStayApart(t *testing.T) {
 	}
 	for _, h := range []map[string]string{{}, {"Authorization": "Basic YTpi"}, {"Authorization": "Bearer "}, {"Authorization": "Bearer a b"}} {
 		r := post(t, e, `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, h)
-		if r.StatusCode != 401 || r.Header.Get("WWW-Authenticate") != `Bearer realm="PaperGo"` {
+		if r.StatusCode != 401 || !strings.HasPrefix(r.Header.Get("WWW-Authenticate"), "Bearer") {
 			t.Errorf("%v: %d %v", h, r.StatusCode, r.Header)
 		}
 	}

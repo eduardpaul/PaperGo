@@ -1,4 +1,4 @@
-package integration
+package server
 
 import (
 	"bytes"
@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"papergo/extensions/mcp"
-	"papergo/extensions/mcp/server"
 	"papergo/internal/dal/blobs"
 	"papergo/internal/dms"
 )
@@ -273,7 +272,7 @@ func upload(t *testing.T, e *env, item, body, version string) string {
 // travels. Parts never mix two files: once the file is replaced, the read
 // must start again.
 func TestLargeTextIsReadInParts(t *testing.T) {
-	e := setup(t, options{configure: func(c *server.Config) { c.MaxBackendBytes = 64 << 10 }})
+	e := setup(t, options{configure: func(c *Config) { c.MaxResultBytes = 64 << 10 }})
 	f := seed(t, e)
 	s := e.connect(t, aliceToken)
 	doc := create(t, e.svc, "alice", f.library, dms.CreateResource{Kind: "item", Name: "Archive scan"})
@@ -293,5 +292,18 @@ func TestLargeTextIsReadInParts(t *testing.T) {
 	}
 	if again := ok(t, s, "get_item_text", `{"item_id": "`+doc+`", "max_chars": 1000}`); str(again["text_id"]) == str(out["text_id"]) {
 		t.Fatal("a new read kept the old text")
+	}
+}
+
+// Without a public origin, results link to the origin the client reached.
+func TestLinksFollowTheOriginReached(t *testing.T) {
+	e := setup(t, options{})
+	seed(t, e)
+	s := e.connect(t, aliceToken)
+	page := ok(t, s, "list_workspaces", `{}`)
+	for _, w := range page["value"].([]any) {
+		if link := str(w.(map[string]any)["url"]); !strings.HasPrefix(link, e.api.URL+"/w/") {
+			t.Fatalf("workspace link %q, want one at %s", link, e.api.URL)
+		}
 	}
 }

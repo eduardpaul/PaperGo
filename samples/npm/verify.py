@@ -66,7 +66,7 @@ def mcp(token, method, params, expected=200):
 
 def verify_mcp(workspace, library):
     """A person signed in through NPM connects an assistant limited to one
-    library; the assistant reaches papergo-mcp past the Basic sign-in with
+    library; the assistant reaches /v1/mcp past the Basic sign-in with
     that token alone, and sees only that library."""
     connection = request("POST", "/v1/identity/me/tokens", {"name": "NPM verification assistant", "scopes": ["workspace.read", "item.read"],
                                                             "resources": [library["id"]], "expires_in_days": 1}, expected=201)
@@ -151,10 +151,9 @@ def main():
         assert request("GET", folder + "/large.pdf") == large
         print("Verified a 64 MiB upload and download at MAX_UPLOAD_BYTES.")
     command = ["docker", "compose", "--env-file", str(ROOT / ".env"), "-f", str(ROOT / "compose.yaml")]
-    for service in ("papergo", "papergo-mcp"):
-        cid = subprocess.check_output(command + ["ps", "-q", service], text=True).strip()
-        ports = json.loads(subprocess.check_output(["docker", "inspect", "--format", "{{json .NetworkSettings.Ports}}", cid], text=True))
-        assert not any(ports.values()), f"{service} was published on the host"
+    cid = subprocess.check_output(command + ["ps", "-q", "papergo"], text=True).strip()
+    ports = json.loads(subprocess.check_output(["docker", "inspect", "--format", "{{json .NetworkSettings.Ports}}", cid], text=True))
+    assert not any(ports.values()), "papergo was published on the host"
     print("Verified embedded UI, deep links, frontend assets, proxy auth configuration, HTTP-to-HTTPS redirect, HTTPS, NPM login, header-spoofing rejection, batch identity, CSRF rejection, private backends, REST writes, Unicode WebDAV PUT/GET/MOVE/COPY with chunked uploads, and an AI assistant connection limited to one library through /v1/mcp.")
     print(f"Test workspace: {workspace['id']}; WebDAV library: {library['id']}")
 

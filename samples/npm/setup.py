@@ -44,9 +44,6 @@ def papergo_config(public_url, admin_user, trusted_cidr):
         "  data_dir: /data",
         f"  public_url: {json.dumps(public_url)}",
         "",
-        "mcp:",
-        f"  public_url: {json.dumps(public_url + '/v1/mcp')}",
-        "",
         "auth:",
         "  mode: proxy",
         f"  admin_user: {json.dumps(admin_user)}",
@@ -77,10 +74,10 @@ def proxy_server_config(public_url, https_port):
     # need an explicit public-origin redirect in the supported Advanced field.
     if https_port != 443:
         config += f'if ($scheme = http) {{ return 308 {public_url}$request_uri; }}\n'
-    # AI assistants reach papergo-mcp at /v1/mcp with their own bearer token,
+    # AI assistants reach PaperGo at /v1/mcp with their own bearer token,
     # which PaperGo checks on every request. The Access List's Basic sign-in
     # would claim that Authorization header, so this exact location has none,
-    # and no proxy identity is asserted to the MCP server.
+    # and asserts no proxy identity.
     config += ("location = /v1/mcp {\n"
                "    auth_basic off;\n"
                "    allow all;\n"
@@ -89,7 +86,7 @@ def proxy_server_config(public_url, https_port):
                "    proxy_set_header X-Papergo-Subject \"\";\n"
                "    proxy_set_header X-Papergo-Proxy-Secret \"\";\n"
                "    proxy_buffering off;\n"
-               "    proxy_pass http://papergo-mcp:8081;\n"
+               "    proxy_pass http://papergo:8080;\n"
                "}\n")
     return config
 
@@ -101,7 +98,7 @@ def start_stack(no_build):
         print("Docker Compose startup failed; recent service logs:", flush=True)
         try:
             compose("logs", "--no-color", "--tail", "80",
-                    "volume-permissions", "papergo", "papergo-mcp", "npm", check=False)
+                    "volume-permissions", "papergo", "npm", check=False)
         except OSError:
             pass
         raise RuntimeError(
@@ -378,9 +375,7 @@ def main():
     private_write(ROOT / ".env", "\n".join([
                    f"HTTP_PORT={args.http_port}", f"HTTPS_PORT={args.https_port}", f"ADMIN_PORT={args.admin_port}",
                    f"PRIVATE_SUBNET={network}", f"NPM_PRIVATE_IP={npm_ip}",
-                   f"PAPERGO_PRIVATE_IP={network.network_address + 3}",
-                   f"PAPERGO_MCP_PRIVATE_IP={network.network_address + 4}",
-                   f"PAPERGO_MCP_PUBLIC_URL={public_url}/v1/mcp"]) + "\n")
+                   f"PAPERGO_PRIVATE_IP={network.network_address + 3}"]) + "\n")
     write_shared_config(GENERATED / "config.yaml", papergo_config(public_url, args.admin_user, f"{npm_ip}/32"))
     private_write(GENERATED / "curl.netrc", f"machine {args.host}\nlogin {args.admin_user}\npassword {credentials['papergo_password']}\n")
     start_stack(args.no_build)

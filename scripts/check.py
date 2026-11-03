@@ -4,8 +4,8 @@ in the CI toolchain image with scripts/ci.sh.
 
 Stages:
   quick    (default) Go formatting and cached Go tests; the edit/check loop
-  lint     formatting, modules, generated code, vet, Staticcheck, the pure-Go
-           MCP server, frontend typecheck and lint, Python tests
+  lint     formatting, modules, generated code, vet, Staticcheck, frontend
+           typecheck and lint, Python tests
   test     uncached Go suite on SQLite, database suites on PostgreSQL 17 and
            frontend tests
   race     the Go suite with race detection, but for the packages the native
@@ -15,7 +15,7 @@ Stages:
   zvec     native search store conformance and parity
   soak     native search soak at real dimensions and timed fuzzing
   release  build, package and run the release executables
-  docker   build and smoke test the container images
+  docker   build and smoke test the container image
   vuln     reachable Go dependency vulnerabilities
 """
 
@@ -37,7 +37,7 @@ STAGES = ['quick', 'lint', 'test', 'race', 'web', 'native', 'zvec', 'soak', 'rel
 POSTGRES_PACKAGES = ['./internal/dms', './internal/httpapi', './internal/identity', './internal/scriptrun',
                      './internal/webdav', './internal/workflow', './internal/aiops', './internal/worker', './internal/documenttext',
                      './internal/documentpreview', './internal/documentfiles', './internal/documentsearch',
-                     './extensions/mcp/integration']
+                     './extensions/mcp/server']
 NATIVE_PACKAGES = ['./internal/onnx', './internal/decision', './internal/embedding', './internal/ocr/paddle', './internal/scriptrun',
                    './internal/compose', './internal/optimize', './cmd/embed']
 # Packages the zvec stage tests on the native search store.
@@ -46,9 +46,6 @@ ZVEC_PACKAGES = ['./internal/dal/search/zvecstore', './internal/backup', './cmd/
 NATIVE_ABI = (['./internal/onnx', './internal/ocr/paddle', './internal/imaging', './internal/doctext/pdfium', './internal/dal/search/zvecstore'],
               'TestNativeABI|TestReadAndRender|TestRecognize$|TestDecode|TestWebPRoundTripAndResize|TestIdle|TestConcurrentIdle')
 RELEASE_VERSION = 'v0.0.0-rc.1'
-# The only PaperGo packages papergo-mcp may import: it reaches PaperGo
-# through its HTTP API alone.
-MCP_IMPORTS = ['papergo/internal/buildinfo', 'papergo/internal/dal/refs']
 
 
 def analyzed_packages():
@@ -200,16 +197,6 @@ def check_formatting():
         raise ValueError('Run gofmt on:\n' + result.stdout)
 
 
-def check_mcp():
-    """papergo-mcp builds as pure Go and imports no application package."""
-    run('go', 'build', '-o', os.devnull, './cmd/mcp', env=environment(CGO_ENABLED='0'))
-    listed = subprocess.run(['go', 'list', '-deps', './cmd/mcp'], cwd=ROOT, check=True, stdout=subprocess.PIPE, text=True,
-                            env=environment(CGO_ENABLED='0')).stdout.split()
-    imported = sorted(package for package in listed if package.startswith('papergo/internal/'))
-    if imported != MCP_IMPORTS:
-        raise ValueError('papergo-mcp imports ' + ', '.join(imported) + '; it may only import ' + ', '.join(MCP_IMPORTS))
-
-
 def check_web(install=False, tests=True):
     node_dependencies('web', install)
     run('npm', '--prefix', 'web', 'run', 'typecheck')
@@ -316,7 +303,6 @@ def stage_lint(args):
     if not shutil.which('staticcheck'):
         raise ValueError('Staticcheck is required; it is in the toolchain image (scripts/ci.sh lint)')
     run('staticcheck', *analyzed_packages())
-    check_mcp()
     check_web(args.setup, tests=False)
     for directory in ('scripts/tests', 'samples/npm', 'samples/authentik'):
         run(sys.executable, '-m', 'unittest', 'discover', '-s', directory, '-p', 'test_*.py')
@@ -400,8 +386,6 @@ def stage_docker(args):
     run(sys.executable, 'scripts/build-assets.py', '--output-dir', assets / 'assets')
     run('docker', 'build', '--build-context', f'model-assets={assets}', '--tag', 'papergo:check', '.')
     run(sys.executable, 'scripts/docker-smoke.py', '--image', 'papergo:check')
-    run('docker', 'build', '--file', 'extensions/mcp/Dockerfile', '--tag', 'papergo-mcp:check', '.')
-    run('docker', 'run', '--rm', 'papergo-mcp:check', '--version')
 
 
 def stage_vuln(args):

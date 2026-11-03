@@ -42,9 +42,9 @@ type API struct {
 	RequestTimeout time.Duration
 	// WebDAV serves WebDAV-enabled libraries under webdav.Prefix with its own authentication.
 	WebDAV *webdav.Handler
-	// MCPURL, when set, is where AI assistants reach papergo-mcp; the web
-	// app learns it from /auth/config.
-	MCPURL *url.URL
+	// MCP says the deployment serves AI assistants at /v1/mcp; the web app
+	// learns it from /auth/config.
+	MCP bool
 	// FileEditMax is the largest file the web app edits (FILE_EDIT_MAX_BYTES).
 	FileEditMax int64
 	// CommentsOff runs the deployment without discussions (COMMENTS=off):
@@ -75,6 +75,9 @@ type BrowserSignIn struct {
 }
 
 type subjectKey struct{}
+
+// bearerKey marks a request authenticated with a bearer credential.
+type bearerKey struct{}
 type requestKey struct{}
 type publicURLKey struct{}
 
@@ -158,16 +161,23 @@ func (a *API) dms(r *http.Request) *dms.Service {
 // with the step that records it. It neither authenticates nor rate-limits.
 // The routes are built once and shared by every in-process request.
 func (a *API) Loopback(t *dms.Service, subject, run string) http.Handler {
+	routes := a.inProcess()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.WithValue(context.WithValue(context.WithValue(r.Context(), subjectKey{}, subject), runKey{}, run), serviceKey{}, t)
+		// What the run's requests start belongs to the run.
+		routes.ServeHTTP(w, r.WithContext(dms.WithParentOperation(ctx, run)))
+	})
+}
+
+// inProcess is the /v1 routes in-process requests are served by, built
+// once and shared.
+func (a *API) inProcess() *router {
 	a.loopback.once.Do(func() { a.loopback.routes, a.loopback.err = a.routes() })
 	if a.loopback.err != nil {
 		// Validate reports this before the API serves.
 		panic(a.loopback.err)
 	}
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := context.WithValue(context.WithValue(context.WithValue(r.Context(), subjectKey{}, subject), runKey{}, run), serviceKey{}, t)
-		// What the run's requests start belongs to the run.
-		a.loopback.routes.ServeHTTP(w, r.WithContext(dms.WithParentOperation(ctx, run)))
-	})
+	return a.loopback.routes
 }
 
 func (a *API) Handler() http.Handler {
@@ -198,27 +208,28 @@ func (a *API) root() (*router, error) {
 		}
 		// Features tells the web app which optional parts the deployment
 		// runs.
-		type mcp struct {
-			URL string `json:"url"`
-		}
 		type features struct {
 			Comments bool `json:"comments"`
-			MCP      *mcp `json:"mcp,omitempty"`
+			MCP      bool `json:"mcp"`
 			// FileTypes are the kinds of file PaperGo names, and which
 			// of them get previews and text reading.
 			FileTypes []fileType `json:"file_types"`
 			// FileEditMax is the largest file the web app edits.
 			FileEditMax int64 `json:"file_edit_max_bytes"`
 		}
-		f := features{Comments: !a.CommentsOff, FileTypes: fileTypes(), FileEditMax: a.FileEditMax}
-		if a.MCPURL != nil {
-			f.MCP = &mcp{URL: a.MCPURL.String()}
+		f := features{Comments: !a.CommentsOff, MCP: a.MCP, FileTypes: fileTypes(), FileEditMax: a.FileEditMax}
+		// PublicURL is the origin clients outside the browser reach, such
+		// as the address the web app gives AI assistants.
+		var public string
+		if a.PublicURL != nil {
+			public = a.PublicURL.String()
 		}
 		respond(w, r, 200, struct {
-			Mode     auth.Kind      `json:"mode"`
-			OIDC     *BrowserSignIn `json:"oidc,omitempty"`
-			Features features       `json:"features"`
-		}{mode, signIn, f})
+			Mode      auth.Kind      `json:"mode"`
+			PublicURL string         `json:"public_url,omitempty"`
+			OIDC      *BrowserSignIn `json:"oidc,omitempty"`
+			Features  features       `json:"features"`
+		}{mode, public, signIn, f})
 	})
 	if local, ok := a.Auth.(auth.Local); ok {
 		root.HandleFunc("POST /auth/login", a.localLogin(local))
@@ -844,9 +855,15 @@ func (a *API) authenticate(next http.Handler) http.Handler {
 			ident, err = a.Auth.Authenticate(r)
 		}
 		if err != nil {
-			w.Header().Set("WWW-Authenticate", "Bearer")
-			if a.Auth.Kind() == auth.TrustedProxy || a.Auth.Kind() == auth.LocalMode {
+			// A client that sent a bearer credential learns that it was
+			// refused, whatever the mode signs browsers in with.
+			switch bearer := len(parts) == 2 && strings.EqualFold(parts[0], "Bearer"); {
+			case bearer:
+				w.Header().Set("WWW-Authenticate", `Bearer realm="PaperGo", error="invalid_token"`)
+			case a.Auth.Kind() == auth.TrustedProxy || a.Auth.Kind() == auth.LocalMode:
 				w.Header().Set("WWW-Authenticate", `Basic realm="PaperGo", charset="UTF-8"`)
+			default:
+				w.Header().Set("WWW-Authenticate", "Bearer")
 			}
 			a.problem(w, r, 401, "unauthorized", "valid authentication is required")
 			return
@@ -874,6 +891,11 @@ func (a *API) authenticate(next http.Handler) http.Handler {
 			return
 		}
 		ctx := context.WithValue(r.Context(), subjectKey{}, ident.Subject)
+		// An access token, or any credential in bearer mode, which reads
+		// only the Authorization header, is one the client sent itself.
+		if _, token := identity.AccessTokenContext(ctx); token || a.Auth.Kind() == auth.Bearer {
+			ctx = context.WithValue(ctx, bearerKey{}, true)
+		}
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

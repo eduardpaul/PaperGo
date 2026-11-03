@@ -20,7 +20,7 @@ func tool(name string) mcp.Tool {
 }
 
 func TestBuiltinsRegister(t *testing.T) {
-	r, err := mcp.NewRegistry(builtin.Tools(builtin.Options{}), nil, nil)
+	r, err := mcp.NewRegistry(builtin.Tools(), nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

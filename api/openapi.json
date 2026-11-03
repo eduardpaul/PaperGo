@@ -14593,6 +14593,10 @@
                         "local"
                       ]
                     },
+                    "public_url": {
+                      "type": "string",
+                      "description": "The deployment's public origin (PUBLIC_URL), when it is set: where clients outside the browser, such as AI assistants, reach it."
+                    },
                     "oidc": {
                       "type": "object",
                       "description": "Present in OIDC deployments that set OIDC_CLIENT_ID. The web frontend signs in with this public client using the authorization code flow with PKCE.",
@@ -14622,6 +14626,7 @@
                       "description": "The optional parts this deployment runs, and what the web app needs to know about files.",
                       "required": [
                         "comments",
+                        "mcp",
                         "file_types",
                         "file_edit_max_bytes"
                       ],
@@ -14631,18 +14636,8 @@
                           "description": "False when the deployment runs without discussions (COMMENTS=off)."
                         },
                         "mcp": {
-                          "type": "object",
-                          "additionalProperties": false,
-                          "required": [
-                            "url"
-                          ],
-                          "properties": {
-                            "url": {
-                              "type": "string",
-                              "format": "uri"
-                            }
-                          },
-                          "description": "Present when MCP_PUBLIC_URL names the deployment's MCP server."
+                          "type": "boolean",
+                          "description": "True when the deployment serves AI assistants at /v1/mcp (MCP=on, the default)."
                         },
                         "file_types": {
                           "type": "array",
@@ -17618,6 +17613,83 @@
                 "$ref": "#/components/schemas/SearchRequest"
               }
             }
+          }
+        }
+      }
+    },
+    "/v1/mcp": {
+      "post": {
+        "tags": [
+          "MCP"
+        ],
+        "operationId": "mcp",
+        "summary": "Exchange an MCP message",
+        "description": "The Model Context Protocol endpoint for AI assistants: the Streamable HTTP transport, stateless, answering each JSON-RPC message with JSON. Protocol revisions 2026-07-28, 2025-11-25, 2025-06-18, 2025-03-26 and 2024-11-05 are negotiated. The caller must send a bearer credential of its own, such as a personal access token; a browser session or proxy sign-in is refused. Tools are listed and callable only with the scopes they need, and each acts through this API as the caller, within the credential's resource limit. See docs/mcp.md. Served unless the deployment turns MCP off (MCP=off).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "A JSON-RPC 2.0 request, notification or response."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The JSON-RPC response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "A notification or response was accepted."
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "MCP"
+        ],
+        "operationId": "mcpStream",
+        "summary": "Open an MCP event stream (not offered)",
+        "description": "The endpoint is stateless and opens no server-to-client stream, so it answers 405, as the MCP transport requires.",
+        "responses": {
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "405": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "MCP"
+        ],
+        "operationId": "mcpEndSession",
+        "summary": "End an MCP session (not offered)",
+        "description": "The endpoint is stateless and keeps no sessions, so it answers 405, as the MCP transport requires.",
+        "responses": {
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "405": {
+            "$ref": "#/components/responses/Problem"
           }
         }
       }
@@ -23584,7 +23656,7 @@
       "proxyBasicAuth": {
         "type": "http",
         "scheme": "basic",
-        "description": "In AUTH_MODE=proxy, authenticate at the trusted reverse proxy over HTTPS. PaperGo validates the proxy assertion and applies persisted permissions. WebDAV credential endpoints are unavailable in this mode. Personal and integration access tokens authenticate directly when an ingress forwards Authorization: Bearer pgo_… without proxy sign-in, as the MCP endpoint's route does."
+        "description": "In AUTH_MODE=proxy, authenticate at the trusted reverse proxy over HTTPS. PaperGo validates the proxy assertion and applies persisted permissions. WebDAV credential endpoints are unavailable in this mode. Personal and integration access tokens authenticate directly when an ingress forwards Authorization: Bearer pgo_… without proxy sign-in, as it must for /v1/mcp."
       },
       "localBasicAuth": {
         "type": "http",

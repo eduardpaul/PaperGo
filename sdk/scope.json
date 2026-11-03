@@ -9,6 +9,7 @@
     "/v1/events",
     "/v1/identity",
     "/v1/identity/**",
+    "/v1/mcp",
     "/v1/me",
     "/v1/me/**",
     "/v1/organization",

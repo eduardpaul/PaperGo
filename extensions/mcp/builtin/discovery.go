@@ -43,7 +43,7 @@ func listing(ctx context.Context, c mcp.Caller, tool string, args json.RawMessag
 	return out, next, err
 }
 
-func listWorkspaces(l links) mcp.Tool {
+func listWorkspaces() mcp.Tool {
 	const name = "list_workspaces"
 	return mcp.Tool{
 		Name:  name,
@@ -55,6 +55,7 @@ func listWorkspaces(l links) mcp.Tool {
 		Scopes:       []string{scopeWorkspaceRead},
 		Annotations:  mcp.Annotations{ReadOnly: true, Idempotent: true},
 		Call: func(ctx context.Context, c mcp.Caller, args json.RawMessage) (json.RawMessage, error) {
+			l := links{c.AppURL()}
 			var in struct {
 				Limit  *int   `json:"limit"`
 				Cursor string `json:"cursor"`
@@ -75,7 +76,7 @@ func listWorkspaces(l links) mcp.Tool {
 	}
 }
 
-func listCollections(l links) mcp.Tool {
+func listCollections() mcp.Tool {
 	const name = "list_collections"
 	return mcp.Tool{
 		Name:  name,
@@ -89,6 +90,7 @@ func listCollections(l links) mcp.Tool {
 		Scopes:       []string{scopeWorkspaceRead, scopeItemRead},
 		Annotations:  mcp.Annotations{ReadOnly: true, Idempotent: true},
 		Call: func(ctx context.Context, c mcp.Caller, args json.RawMessage) (json.RawMessage, error) {
+			l := links{c.AppURL()}
 			var in struct {
 				WorkspaceID string `json:"workspace_id"`
 				Limit       *int   `json:"limit"`
@@ -118,7 +120,7 @@ func listCollections(l links) mcp.Tool {
 	}
 }
 
-func getCollectionSchema(l links) mcp.Tool {
+func getCollectionSchema() mcp.Tool {
 	return mcp.Tool{
 		Name:  "get_collection_schema",
 		Title: "Get a collection's schema",
@@ -135,6 +137,7 @@ func getCollectionSchema(l links) mcp.Tool {
 		Scopes:      []string{scopeItemRead, scopeContentTypeRead},
 		Annotations: mcp.Annotations{ReadOnly: true, Idempotent: true},
 		Call: func(ctx context.Context, c mcp.Caller, args json.RawMessage) (json.RawMessage, error) {
+			l := links{c.AppURL()}
 			var in struct {
 				CollectionID string `json:"collection_id"`
 			}

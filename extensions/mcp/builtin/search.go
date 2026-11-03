@@ -24,7 +24,7 @@ const (
 	maxNamed = 20
 )
 
-func search(l links) mcp.Tool {
+func search() mcp.Tool {
 	const name = "search"
 	return mcp.Tool{
 		Name:  name,
@@ -63,6 +63,7 @@ total counts matches before current permissions are rechecked; total_estimated m
 			}), nil
 		},
 		Call: func(ctx context.Context, c mcp.Caller, args json.RawMessage) (json.RawMessage, error) {
+			l := links{c.AppURL()}
 			var in struct {
 				Query        string `json:"query"`
 				WorkspaceID  string `json:"workspace_id"`

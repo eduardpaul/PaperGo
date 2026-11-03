@@ -1,6 +1,7 @@
 # MCP server port from PaperDotNet
 
-Status: implemented in `cmd/mcp` and `extensions/mcp`; see [MCP](../mcp.md).
+Status: implemented in `extensions/mcp`, which the PaperGo API serves at
+`/v1/mcp` as a module; see [MCP](../mcp.md).
 Reviewed against PaperGo `main` at
 `15733bcb4a062359ecdfea9d8a922ca521a77f6c` on 2026-10-20, and again at
 `a8769d2` before implementation (see [review against a8769d2](#review-against-a8769d2)).
@@ -27,13 +28,13 @@ Reviewed against PaperGo `main` at
 ## Acceptance record
 
 Automated, with the official go-sdk client against the real API handlers, on
-SQLite and on PostgreSQL 17 (`extensions/mcp/integration`, also run with
-`-race`), plus pure-Go unit tests of the registry, configuration, path safety,
-cursors and the executable:
+SQLite and on PostgreSQL 17 (`extensions/mcp/server`, also run with
+`-race`), plus unit tests of the registry, path safety and cursors, and the
+module socket's tests in `internal/httpapi`:
 
 - Tool listing, schemas and annotations; protocol revisions 2026-07-28 to
   2024-11-05 without sessions; GET/DELETE 405; private, uncacheable responses;
-  health; logs free of credentials.
+  logs free of credentials.
 - Two users concurrently, scope-narrowed personal tokens, an integration
   token's own identity, revocation, missing/malformed/invalid credentials and
   an inactive user. Hidden and unknown tools fail alike.
@@ -47,18 +48,18 @@ cursors and the executable:
   the wire in both text and structured content.
 - Create with a caller ID repeated, wrong parent kinds, invalid values,
   updates with patch/null semantics, stale versions, and a write whose answer
-  is lost (sent once, never retried).
+  fails (sent once, never retried).
 - Keyword search with paging when search runs, another user's items absent,
   and the tool absent when it does not.
-- Origin and Host protection, overload with `Retry-After`, request and result
-  size limits, an unreachable or malformed backend, readiness, and graceful
-  shutdown draining a request in flight.
+- Bearer-only admission, a loopback proxy's public Host, overload with
+  `Retry-After` at the API's admission limit, request and result size limits,
+  and an API answer that is not JSON. The release smoke test lists the tools
+  of the packaged executable.
 
 Not automated: OIDC provider tokens, semantic and hybrid search with an
 embedding provider, task and event entries, and search-index leakage checks
 beyond permissions (tombstones, unpublished drafts, `document.read` on file
-text); those paths are the API's own and covered by its suites. The image
-build was verified locally; CI builds it in the `MCP server` job.
+text); those paths are the API's own and covered by its suites.
 
 ## 1. Goal and architectural decision
 
@@ -69,25 +70,31 @@ write versions. Include a compiled tool registry and schema discovery. Connect
 with existing bearer credentials; prepare a boundary for subsequent OAuth work,
 without implementing OAuth discovery or sign-in now.
 
-Apply the [Extension-First Protocol](../../AGENTS.md): **implement MCP as an
-optional REST-consuming extension**, with a separate `papergo-mcp` process.
-The existing HTTP API supplies all required data and mutations. No generic core
-socket is missing for this design. Do not change DMS, identity, HTTP API routing,
-base DAL tables, schemas or generated models to implement this feature.
+Apply the [Extension-First Protocol](../../AGENTS.md): **implement MCP as a
+REST-consuming extension module of the API**, on by default (`MCP=on`), so any
+person can connect an assistant without an administrator deploying anything.
+The existing HTTP API supplies all required data and mutations. Do not change
+DMS, identity, base DAL tables, schemas or generated models for this feature.
 
-The executable lives at `cmd/mcp`; implementation and the contribution contract
-live under `extensions/mcp`. The executable composes built-ins and explicitly
-registered compiled contributions. It talks to one configured PaperGo backend.
-Deployment can route public `/v1/mcp` to this process while retaining `/v1/*` on
-the API. A separate MCP hostname also works. This is an additional executable in
-this repository, not a new database owner or a separate repository.
+The implementation and the contribution contract live under `extensions/mcp`.
+`cmd/api` composes its built-ins and explicitly registered compiled
+contributions into an `httpapi.Module` serving `/v1/mcp`, behind the API's
+authentication and admission like any module route. Its tools consume the
+REST contract in-process, as the caller, never the DMS or the database.
 
-An embedded alternative would require an authenticated HTTP-module mounting
-socket and an extensible scope catalog. Both could also benefit calendar,
-import/export or other protocol modules, but neither exists on the reviewed
-main. They are unnecessary for this port. If embedding later becomes a
-requirement, propose those generic sockets and request approval before changing
-core, as AGENTS.md requires.
+The module socket gained two generic primitives, which other protocol modules,
+such as calendar or import/export, can use too:
+
+- `Request.Loopback()` serves `/v1` requests in-process as the module
+  request's caller: the same subject, credential, scopes and resource limit,
+  without authenticating or admitting them again.
+- `Request.Bearer()` reports whether the caller sent a bearer credential of
+  its own, rather than a browser session or a proxy's assertion.
+- `Request.Scopes(ctx)` is the caller's effective scopes, its roles' grants
+  narrowed to its credential's.
+
+An extensible scope catalog is not needed: existing domain scopes govern every
+tool.
 
 ## 2. Source analysis and mapping to current main
 
@@ -141,10 +148,10 @@ Important source details that must not become porting mistakes:
 
 ### Package and runtime boundaries
 
-- Add `cmd/mcp` for flags/environment, server lifecycle, signal handling and
-  composition. Add `extensions/mcp` for its public registry/handler contract,
-  with implementation packages beneath it for transport, backend access and
-  built-ins. Keep SDK types out of the contribution contract.
+- Add `extensions/mcp` for its public registry/handler contract, with
+  implementation packages beneath it for transport, in-process API access and
+  built-ins, and compose it among `cmd/api`'s feature modules. Keep SDK types
+  out of the contribution contract.
 - Add the official `github.com/modelcontextprotocol/go-sdk` dependency pinned
   to `v1.8.0`. Its [release](https://github.com/modelcontextprotocol/go-sdk/releases/tag/v1.8.0)
   supports protocol revision `2026-07-28` and exposes per-request cache policy.
@@ -158,55 +165,55 @@ Important source details that must not become porting mistakes:
   revisions; add no application compatibility branches. No persistent MCP
   sessions, resumption store, stdio, prompts, resources, subscriptions, sampling
   or server-initiated requests are part of this port.
-- Keep the SDK's default localhost protection, wrap the endpoint in Go's
-  cross-origin protection and explicitly validate any supplied Origin against
-  the configured public origin/allowlist. Native clients without Origin work.
-  Do not enable wildcard credentialed CORS. The pinned SDK's
+- Require a bearer credential the client sent (`Request.Bearer`): browser
+  sessions and proxy assertions are refused, so a cross-origin page or a
+  DNS-rebinding attack gains nothing. Disable the SDK's localhost protection,
+  which would refuse a loopback reverse proxy forwarding its public Host. Serve
+  no CORS: the web app checks connections from its own origin. The pinned SDK's
   [transport options](https://github.com/modelcontextprotocol/go-sdk/blob/v1.8.0/mcp/streamable.go)
   provide request limits and request-cancellation propagation.
 
 ### Existing-credential path
 
-1. Accept one `Authorization: Bearer ...` header on every MCP request. Support
-   PaperGo personal/integration tokens and provider/development bearer tokens
-   in the modes where the backend accepts them. Recommend personal tokens for
-   a user assistant and dedicated integration identities for automation.
-2. Resolve the caller through authenticated `GET /v1/identity/me` on the fixed
-   backend. Its `scopes` already intersect credential restrictions and current
-   role grants. An identity failure stops the request before MCP dispatch.
-3. Construct a request-bound backend client using that same credential. Forward
-   credentials only to the configured API origin. Do not use an administrator
-   credential, token fallback, asserted subject, shared mutable Authorization
-   header, browser session cookie, proxy identity headers or client-chosen URL.
+1. Accept a bearer credential on every MCP request, authenticated by the API:
+   PaperGo personal/integration tokens in every mode and provider/development
+   bearer tokens in bearer mode. Recommend personal tokens for a user
+   assistant and dedicated integration identities for automation.
+2. Resolve the caller's effective scopes with the module socket's
+   `Request.Scopes`, which intersects credential restrictions and current
+   role grants as `GET /v1/identity/me` does. A failure stops the request
+   before MCP dispatch with a retryable 503.
+3. Serve the tools' API requests through the module request's `Loopback`, as
+   that caller. Do not use an administrator credential, token fallback,
+   asserted subject, browser session, proxy identity or client-chosen URL.
 4. Filter the request's tool definitions by effective scopes, configured
    enablement and contribution availability. Recheck availability and required
-   scopes before execution. Each backend operation independently reauthenticates
-   and authorizes the same caller, so changes or revocation during a call fail
-   closed rather than trusting the initial discovery result.
-5. Return HTTP 401 with a Bearer challenge for absent/invalid credentials;
-   propagate backend inactive/forbidden admission as 403. Backend outages are
-   503, not an invalid-token response. Never cache principals or token results
+   scopes before execution. Each API request authorizes the same caller against
+   current permissions, so permission changes during a call fail closed rather
+   than trusting the initial discovery result. The credential is authenticated
+   once per MCP request, so revoking it takes effect from the next one.
+5. Return HTTP 401 with a Bearer challenge for absent, invalid or ambient
+   credentials, as the API does. Never cache principals or token results
    between requests. Unknown and inaccessible tools have the same public error.
 
-Trusted-proxy deployments use integration bearer tokens through an API ingress
-that forwards Authorization. Local deployments can issue personal tokens using
-their existing login/admin UI. Proxy Basic assertions, local Basic passwords
-and browser cookies are not forwarded by this bearer-only MCP endpoint.
+Trusted-proxy deployments route `/v1/mcp` past the proxy's sign-in, forwarding
+Authorization and asserting no identity, and people create personal tokens in
+the web app as in every mode. Proxy assertions, local Basic passwords and
+browser sessions do not admit this bearer-only endpoint.
 
 Do not add `mcp.use` or `search.read` to the core catalog. Existing domain scopes
-govern access, and running/routing the optional MCP module enables the protocol.
+govern access, and the `MCP` setting, on by default, enables the protocol.
 This intentionally omits PaperDotNet's separate per-user protocol gate. A future
 requirement for such a gate must first propose a generic module-scope
 registration socket and obtain approval; do not hard-code MCP into identity.
 
 ### Future OAuth boundary; infrastructure only
 
-Define module-local `CredentialResolver.Resolve(ctx, request)` returning the
-verified subject, effective scopes and a caller-bound `Backend` interface.
-The sole initial implementation performs the bearer relay above. Tools receive
-this resolved context, never parse credentials or mint their own clients.
-Keep public URL/authorization challenges at the transport boundary so a later
-resolver can supply OAuth metadata and challenges without changing tool inputs.
+The transport boundary resolves each request's caller: its verified subject,
+effective scopes and a caller-bound `Backend` interface. Tools receive this
+resolved context and never parse credentials or mint their own clients. Keep
+authorization challenges at that boundary so a later resolver can supply OAuth
+metadata and challenges without changing tool inputs.
 
 Do not add OAuth endpoints, registration, authorization-code/PKCE handlers,
 refresh tokens, unused database tables, inactive OAuth configuration or placeholder
@@ -305,7 +312,7 @@ contains JSON output or a typed tool failure. The caller exposes a constrained,
 request-bound backend interface; it does not expose secrets, SQL or an arbitrary
 URL fetcher. Built-ins use this same contract.
 
-Registration is explicit during executable composition; freeze the registry
+Registration is explicit during `cmd/api`'s composition; freeze the registry
 before serving. Contributed names begin with the extension ID normalized by
 replacing dots/hyphens with underscores, followed by `_`. Validate the complete
 name and collisions at startup, including normalized-prefix collisions. All
@@ -320,54 +327,45 @@ Set read-only hints for discovery/query/get/search/schema; create/update are
 non-read-only and conservatively non-idempotent, with open-world false. No delete
 tool is registered. Tool annotations are advisory, never an authorization check.
 
-Configuration is extension-owned: `PAPERGO_MCP_BACKEND_URL` (required fixed API
-origin), `PAPERGO_MCP_LISTEN` (default `127.0.0.1:8081`),
-`PAPERGO_MCP_PUBLIC_URL` (absolute `/v1/mcp` URL for remote ingress),
-`PAPERGO_MCP_ALLOWED_ORIGINS` (additional explicit origins) and
-`PAPERGO_MCP_ENABLED_EXTENSIONS` (compiled contribution IDs). Reject URL
-userinfo, fragments and backend query strings. Use HTTPS except loopback or a
-documented private container network. There is no backend-token setting.
+Configuration is part of PaperGo's: `MCP` (`on`, the default, or `off`;
+`mcp.enabled` in `config.yaml`) and `MCP_EXTENSIONS` (compiled contribution
+IDs; `mcp.extensions`). Results link to the web app at `PUBLIC_URL`, or at
+the origin the client reached; contributions read it from `Caller.AppURL`. The web
+app learns from `/auth/config` whether MCP is on and the public origin, and
+offers connections there, or at its own origin without `PUBLIC_URL`.
 
-Start with 32 in-flight MCP requests, at most a one-second admission wait,
-a 30-second whole-request deadline, 1 MiB request bodies and an 8 MiB decoded
-backend/result cap. Bound backend connections, cancel work on disconnect where
-the SDK permits, and disable HTTP redirect following. Return 503/Retry-After on
-admission saturation; return explicit size-limit errors rather than truncating
-JSON. The module performs no file transfers requiring longer deadlines.
+MCP requests share the API's admission limit; the API requests a tool makes are
+part of its MCP request and take no turn of their own. Each MCP request has the
+API's read deadline (`REQUEST_TIMEOUT`, 30 seconds by default), 1 MiB request bodies and an 8 MiB answer/result cap. Cancel
+work on disconnect where the SDK permits. Return explicit size-limit errors
+rather than truncating JSON. The module performs no file transfers requiring
+longer deadlines.
 
-Emit request IDs and metadata-only logs for duration, tool, status, backend
-request ID and overloads. Never log credentials, argument bodies or result data.
-Send HTTP `Cache-Control: private, no-store` and use the SDK's
+Log one metadata-only `mcp_tool` line per tool call with the request ID, tool
+and failure code; the API logs the request itself. Never log credentials,
+argument bodies or result data. Send HTTP `Cache-Control: private, no-store`
+and use the SDK's
 [`SetCacheable` hook](https://github.com/modelcontextprotocol/go-sdk/blob/v1.8.0/mcp/server.go)
 to make caller-dependent discovery/list results private with zero TTL. This is
 necessary because the SDK otherwise normalizes unset protocol cache policy.
 
-Add unprivileged liveness/readiness endpoints; readiness checks backend health,
-not a stored user credential. Graceful shutdown stops admission and drains
-within the request deadline. Provide a module-owned Dockerfile and optional
-Compose/reverse-proxy example. Use a private container network for proxy-to-module
-traffic. A proxy connecting over loopback must rewrite Host to the loopback
-upstream while the module separately validates the configured public Origin;
-do not disable the SDK's localhost protection to accommodate a public Host.
-Keep the current API image/startup unchanged;
-include `papergo-mcp` in binary packaging and CI explicitly. Its production
-dependency graph must build with `CGO_ENABLED=0` and require no PaperGo native
-inference/search libraries, database file or model assets.
+Health, readiness, graceful shutdown, packaging and images are PaperGo's own.
+`/v1/mcp` is described in `api/openapi.json` like every module route, and
+excluded from the paths workflow scripts may call (`sdk/scope.json`).
 
 ## 6. Implementation sequence and acceptance tests
 
 1. **Extension foundation:** add the module contract, immutable registry, SDK
-   transport, configuration, bounded caller-bound REST client and bearer
-   resolver. Verify dependency isolation, request identity separation and
-   private protocol caches before adding mutations.
+   transport, configuration, in-process caller-bound API client and bearer
+   requirement. Verify request identity separation and private protocol caches
+   before adding mutations.
 2. **Discovery and reads:** implement workspace/collection/schema tools, query,
    get and search; add schemas, cursor translation and precise JSON handling.
    Publish complete tool descriptions and representative structured filters.
 3. **Mutations:** add create/update through existing REST writes, required
    versions, safe kind checks, error translation and caller-supplied create ID.
 4. **Contributions and operations:** complete enablement/availability behavior,
-   limits, logs, health, shutdown, binary packaging and optional deployment
-   artifacts. Add user connection documentation and link it from README.
+   limits and logs. Add user connection documentation and link it from README.
 5. **Acceptance:** exercise the module with an official SDK HTTP client against
    real PaperGo HTTP handlers, first on SQLite and then PostgreSQL. Record
    completed checks and any environment limitations before claiming completion.
@@ -402,14 +400,12 @@ Required automated scenarios:
   above `2^53` plus large/precise decimal literals in input/output/filter JSON.
 - Repeated caller-ID create, ambiguous write failure without automatic retry,
   forbidden parent/kind, invalid UUIDs, wrong JSON types, unknown keys and limits.
-- Unavailable backend, invalid backend responses, deadlines/cancellation,
-  overload, body/result limits, origin/Host protection and graceful shutdown.
-  Ensure logs and user errors contain no secrets or content payloads.
+- Invalid API answers, deadlines/cancellation, overload, body/result limits,
+  bearer-only admission and a loopback proxy's public Host. Ensure logs and
+  user errors contain no secrets or content payloads.
 
-Run focused module unit/race tests and a pure-Go binary build without native
-setup. Put real-backend contract tests in an explicit integration test package
-so their existing DMS/native fixture requirements do not infect the standalone
-module build. Run those with PaperGo's normal test environment on SQLite and
+Run focused module unit/race tests, and real-API contract tests beside the
+transport in `extensions/mcp/server`. Run those with PaperGo's normal test environment on SQLite and
 `PAPERGO_TEST_POSTGRES_DSN` for PostgreSQL; preserve current DAL tests' separate
 `TEST_POSTGRES_DSN` convention. Use existing fixture/schema installation helpers.
 Run formatting, vet, Staticcheck and the applicable repository CI checks; no
@@ -418,14 +414,13 @@ frontend feature work is required.
 Deliver `docs/mcp.md` with endpoint/deployment instructions, scope bundles,
 token-revocation behavior, a header-based client configuration, the eight tools,
 query examples, version conflicts, pagination and current OAuth limitations.
-Document backend/proxy Authorization forwarding and write retry semantics.
-Leave the REST OpenAPI contract unchanged because no REST behavior changes;
-test the MCP schemas and consumed REST DTOs against that contract. Add dependency
-license attribution using the repository's existing process.
+Document proxy Authorization forwarding and write retry semantics. Describe
+`/v1/mcp` in the OpenAPI contract; test the MCP schemas and consumed REST DTOs
+against that contract. Add dependency license attribution using the
+repository's existing process.
 
 Completion means all eight tools work with a real MCP client, all content
-operations run under the caller's backend permissions, both database engines
-pass contract coverage, the optional module deploys independently, and core/DAL
-remain unchanged. OAuth sign-in, installable extensions, file transfer, extracted
+operations run under the caller's API permissions, both database engines
+pass contract coverage, and DMS, identity and DAL remain unchanged. OAuth sign-in, installable extensions, file transfer, extracted
 text retrieval, deletion, publishing, workflow execution and new task/calendar
 domain APIs remain outside this implementation.
