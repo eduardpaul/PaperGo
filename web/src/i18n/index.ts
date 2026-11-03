@@ -16,7 +16,8 @@ void i18n.use(initReactI18next).init({
   resources: { [sourceLanguage]: en },
   lng: sourceLanguage,
   fallbackLng: sourceLanguage,
-  ns: namespaces,
+  // A copy: i18next changes its own list as namespaces come and go.
+  ns: [...namespaces],
   defaultNS: 'common',
   initAsync: false,
   interpolation: { escapeValue: false },
@@ -27,29 +28,35 @@ const catalogs = import.meta.glob<Record<string, unknown>>(['../locales/*/*.json
   import: 'default',
 });
 
+/** Loads the language's namespaces that are not loaded yet; after a failed chunk, the next call loads only what is missing. */
 async function loadCatalogs(code: string) {
-  if (code === sourceLanguage || i18n.hasResourceBundle(code, 'common')) return;
+  if (code === sourceLanguage) return;
+  const missing = namespaces.filter((namespace) => !i18n.hasResourceBundle(code, namespace));
   if (code === 'en-XA') {
-    for (const [namespace, catalog] of Object.entries(en)) i18n.addResourceBundle(code, namespace, pseudoCatalog(catalog));
+    for (const namespace of missing) i18n.addResourceBundle(code, namespace, pseudoCatalog(en[namespace]));
     return;
   }
   const folder = `../locales/${code}/`;
   await Promise.all(
-    Object.entries(catalogs)
-      .filter(([path]) => path.startsWith(folder))
-      .map(async ([path, load]) => i18n.addResourceBundle(code, path.slice(folder.length, -'.json'.length), await load())),
+    missing.map(async (namespace) => i18n.addResourceBundle(code, namespace, await catalogs[`${folder}${namespace}.json`]())),
   );
 }
 
+// Each call to setLanguage; only the latest one changes the screen, however long the earlier ones take to load.
+let latestCall = 0;
+
 /** Shows the screen in the UI language for a locale (a preference, or the browser's). Never fails: English stays. */
 export async function setLanguage(locale: string | null | undefined): Promise<void> {
+  const call = ++latestCall;
   const language = uiLanguage(locale);
   try {
     await loadCatalogs(language.code);
+    if (call !== latestCall) return;
     await i18n.changeLanguage(language.code);
   } catch {
     return;
   }
+  if (call !== latestCall) return;
   document.documentElement.lang = language.code;
   document.documentElement.dir = language.dir;
   try {
