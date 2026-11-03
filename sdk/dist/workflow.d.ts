@@ -5185,7 +5185,7 @@ export interface SearchStatus extends Parsable {
 	 */
 	rebuilding?: boolean | null;
 	/**
-	 * The configured search store, such as sqlite.
+	 * The configured search store: sqlite or postgres.
 	 */
 	store?: string | null;
 }

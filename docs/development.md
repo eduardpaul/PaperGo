@@ -140,6 +140,10 @@ arguments: `./scripts/check.ps1 --packages ./internal/dms`.
 The Go stage covers SQLite. The PostgreSQL stage selects PostgreSQL for the
 shared fixtures and skips explicit SQLite contracts, schema-file tests and
 SQLite backups, so they run once per test stage.
+Search tests open the store of their fixture database, as `SEARCH_STORE`
+does: the PostgreSQL stage runs them, and the PostgreSQL store's own suite,
+on PostgreSQL. `PAPERGO_TEST_SEARCH_STORE=sqlite` or `postgres` chooses the
+store instead.
 
 Checks use the installed dependencies and never download them; `--setup` first
 runs `npm ci` where the installed packages do not match the lockfile, as CI does.

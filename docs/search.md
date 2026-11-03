@@ -1,6 +1,6 @@
 # Search
 
-Search is an extension (`internal/documentsearch`), on by default: a deployment runs it with a search store (`SEARCH_STORE=sqlite`, the default) and without it with `SEARCH_STORE=none`. It keeps a search index of every item and folder in a store of its own, next to the database. Global search (`GET /v1/search`) and the `q` search of collection queries and resource listings both read it. The index is kept current by [workflows](workflows.md) that people can see, turn off per collection, or replace, and every query is authorized against the database as it is now, whatever the index holds.
+Search is an extension (`internal/documentsearch`), on by default: a deployment runs it with a search store that follows its database, and without it with `SEARCH_STORE=none`. It keeps a search index of every item and folder in a store of its own, beside the database. Global search (`GET /v1/search`) and the `q` search of collection queries and resource listings both read it. The index is kept current by [workflows](workflows.md) that people can see, turn off per collection, or replace, and every query is authorized against the database as it is now, whatever the index holds.
 
 Without search, PaperGo has no global search, search routes or search workflows, and `q` in collection queries and listings matches names (see [search in collections and listings](#search-in-collections-and-listings)). Search plugs into the core through generic extension points: a text matcher for listings, a storage report and an import hook.
 
@@ -103,7 +103,7 @@ With an embedding model, search also finds file content close in meaning to `q`,
 - **Model.** `AI_EMBEDDINGS_PROVIDER` chooses it, `none` by default:
   - `local` runs EmbeddingGemma 2 (default) or Harrier in the process, on the ONNX Runtime OCR uses ([embeddings](embeddings.md)): `ONNXRUNTIME_LIB`, `AI_EMBEDDINGS_MODELS_PATH` (defaults to `assets/models/embedding/{model}` beside the executable), and optionally `AI_EMBEDDINGS_MODEL`, `AI_EMBEDDINGS_DIMENSIONS` (Gemma: 768, 512, 256 or 128), `AI_EMBEDDINGS_THREADS` and `AI_EMBEDDINGS_MAX_TOKENS` (512). Nothing loads until the first embedding; a chunk longer than the token limit is embedded by its beginning.
   - `openai` calls any OpenAI-compatible `/v1/embeddings` endpoint (OpenAI, Ollama, LM Studio, vLLM, llama.cpp): `AI_EMBEDDINGS_ENDPOINT` (default OpenAI's), `AI_EMBEDDINGS_MODEL`, optionally `AI_EMBEDDINGS_API_KEY_FILE` and `AI_EMBEDDINGS_DIMENSIONS` (else measured once). Requests carry 64 texts and time out after two minutes. A busy, failing or unreachable provider is called once per attempt: embedding and sweep operations defer themselves until its `Retry-After`, else for 30 seconds, keeping the vectors stored so far; a search whose query cannot be embedded searches by keyword.
-- **Vectors.** Chunks are embedded by their text, not their file's name, and vectors are kept per chunk input and model: identical text embeds once, a rename or reindex embeds nothing, and another model embeds everything again under its own key (`{provider}:{model}:…`). Vectors are normalized float32. SQLite compares the model's vectors in memory. Status reports the cached vector bytes (vectors × dimensions × 4).
+- **Vectors.** Chunks are embedded by their text, not their file's name, and vectors are kept per chunk input and model: identical text embeds once, a rename or reindex embeds nothing, and another model embeds everything again under its own key (`{provider}:{model}:…`). Vectors are normalized float32, and every store compares the model's vectors in memory. Status reports the cached vector bytes (vectors × dimensions × 4).
 - **When content is embedded.** `search.content` embeds before publishing. With `embed: later`, or when the model fails, content is published without vectors and keyword search finds it at once. Every 15 minutes, maintenance queues a `search.sweep` operation, unless one is pending, when published chunks lack a vector of the current model, which also covers a model change. The `search` worker runs it like other search work, under its window and concurrency, embedding 2,000 chunks per sweep. Vectors no chunk has used for 7 days are deleted then.
 - **Semantic.** The query's words, without operators, quotes and excluded words, are embedded (cached for 30 minutes) and searched against the chunk vectors. A file matches with its most similar chunk at a cosine similarity of at least 0.3, which gives the `page` and the snippet. Up to 200 entries, best first; excluded words still exclude. Only file content is embedded, so metadata alone never matches semantically, and file content needs `document.read`.
 - **Hybrid.** The best 200 keyword matches and the best 200 semantic matches are fused by reciprocal rank (k = 60): an entry found both ways ranks highest. `total` and facets cover the fused entries.
@@ -131,18 +131,29 @@ Without search, in a collection whose `search.index` provider is turned off, or 
 
 ## The store
 
-`SEARCH_STORE` selects the store engine: `sqlite`, the default, or `none` to run PaperGo without search. The SQLite store implements keyword, semantic and hybrid search, exact field filters, permissions and surfaces, and holds derived data independently of the main database.
+`SEARCH_STORE` selects the store. Unset, it follows the database:
+
+| Database | `SEARCH_STORE` unset | Allowed values |
+| --- | --- | --- |
+| SQLite (`DATABASE_PATH`) | `sqlite` | `sqlite`, `none` |
+| PostgreSQL (`DATABASE_URL`) | `postgres` | `postgres`, `sqlite`, `none` |
+
+`none` runs PaperGo without search; `postgres` without `DATABASE_URL` is a configuration error. Both stores implement keyword, semantic and hybrid search, exact field filters, permissions and surfaces, pass the same conformance suite, and hold derived data apart from the application's tables.
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
 | `SEARCH_DATABASE_PATH` | `search.db` beside `DATABASE_PATH` | SQLite search file, with FTS5 and vectors |
 
-The search path must differ from the application database and its sidecar files, including through symbolic or hard links. Startup rejects unrelated databases at the search path.
+**SQLite** (`sqlite`) keeps the index in its own file, with its own writer, so indexing never waits on the application database. **PostgreSQL** (`postgres`) keeps it in the schema `papergo_search` of the application's database, through the same connection pool. It needs stock PostgreSQL (the versions PaperGo supports) and no extension: PaperGo tokenizes, folds diacritics and stems words itself, as it does for SQLite, and stores them as `tsvector` columns with GIN indexes, so both stores match the same words; vectors are kept as bytes and searched in memory. The database user must be allowed to create a schema, as it creates the application's tables. A deployment runs one API process, but the store does not depend on it: its writes take a transaction advisory lock, so instances sharing a database write one at a time, and each instance's in-memory vectors load what the others wrote.
 
-- **Rebuild.** A new store, or one whose layout changed in a new release, is rebuilt from the database at startup. Until the rebuild completes, global search answers `503 search_unavailable`, and collection queries and listings match `q` by name.
+Ranking weighs the same places on both stores: the name and keywords ten times the body and file text, and words as written above other forms of them. SQLite ranks with FTS5's bm25, which also favours rare words; PostgreSQL ranks with `ts_rank`, which counts where and how often words occur, so equally good matches can come in another order. A phrase on PostgreSQL matches within one chunk of a file, and very long texts are indexed up to the size a `tsvector` holds (about 1 MiB of words).
+
+The SQLite search path must differ from the application database and its sidecar files, including through symbolic or hard links. Startup rejects unrelated databases at the search path, and a `papergo_search` schema holding other tables.
+
+- **Rebuild.** A new store, or one whose layout or `SEARCH_LANGUAGES` changed, is rebuilt from the database at startup: the SQLite file is recreated, the PostgreSQL schema dropped and created again. Until the rebuild completes, global search answers `503 search_unavailable`, and collection queries and listings match `q` by name.
 - **Reindex.** `POST /v1/search/reindex` (`organization.manage`) rewrites every document as an [operation](application-foundation.md) (202 with `Location: /v1/operations/{id}`), in batches of 200, and removes documents of entries that no longer exist. Search keeps answering meanwhile. With `{"content": true}` it also raises `file.updated` with the `reindex` source for the current file of every item without content (`"force": true`: every item), so the workflow filling `search.content` for its collection indexes it again; text read before is reused. A rebuild and an import do this too.
 - **Status.** `GET /v1/search/status` (`organization.manage`) gives the store's name, whether it is rebuilding, its document and chunk counts and its size; with an embedding model, its `model` and `embeddings`: stored `vectors`, chunk inputs `pending` a vector, and the `memory_bytes` semantic search holds. `GET /v1/storage/status` lists the store under `extensions`.
-- **Backups.** The search file is excluded from backups and removed on restore, then rebuilt.
+- **Backups.** The SQLite search file is excluded from `papergo admin backup` and removed on restore, then rebuilt. PostgreSQL deployments back up with PostgreSQL's tools: `pg_dump --exclude-schema=papergo_search` leaves the index out, and a database restored without it rebuilds it at startup; a dump that includes it restores an index consistent with its tables.
 
 ## API
 

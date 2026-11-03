@@ -31463,7 +31463,7 @@
         "properties": {
           "store": {
             "type": "string",
-            "description": "The configured search store, such as sqlite."
+            "description": "The configured search store: sqlite or postgres."
           },
           "rebuilding": {
             "type": "boolean",
@@ -33185,7 +33185,7 @@
           },
           "store": {
             "type": "string",
-            "description": "Its store, such as sqlite."
+            "description": "Its store, such as sqlite or postgres."
           },
           "bytes": {
             "type": "integer",
