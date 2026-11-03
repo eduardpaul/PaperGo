@@ -195,6 +195,10 @@ public sealed class LayaEngine : IDisposable
     /// <summary>validate: returns an error message, or null.</summary>
     public static string? Validate(DecisionRequest r)
     {
+        if (r.State is null || r.Question is null || r.Options is null || r.Type is null || r.Options.Any(o => o is null))
+        {
+            return "laya state, question, options and type must be strings";
+        }
         if (r.Options.Count < 2 || r.Options.Count > 20)
         {
             return "laya needs 2–20 options";

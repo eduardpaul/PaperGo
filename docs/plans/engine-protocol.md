@@ -9,7 +9,8 @@ in `engines/dotnet/` implements it.
 
 ## Transport
 
-- HTTP/1.1, JSON bodies in UTF-8 except the OCR request body.
+- HTTP/1.1, JSON bodies in UTF-8 except the OCR request body. JSON request
+  bodies are at most 64 MiB; unknown JSON fields are rejected.
 - `--listen unix:/path/to.sock`: a Unix domain socket created with mode 0600.
   File permissions are the only access control.
 - `--listen tcp:127.0.0.1:PORT`: every request needs

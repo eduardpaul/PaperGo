@@ -72,3 +72,15 @@ See [model build/install](../scripts/decision-model/README.md). Python and PyTor
 are model-build dependencies; they are not application runtime dependencies.
 
 Standalone API builds also include the pinned EmbeddingGemma 2 (Google DeepMind, Apache-2.0) and Harrier-OSS-v1-0.6B (Microsoft, MIT) text-only Q4 exports. Their model cards ship beside the extracted weights; license texts and attribution ship under `notices/models`. Revisions and file hashes are in `scripts/fetch-embedding-models.py`.
+
+## .NET engine (experimental)
+
+`engines/dotnet` is an experimental inference engine that runs beside the app and is not wired into it ([protocol](plans/engine-protocol.md)). It targets .NET 10 and publishes with NativeAOT. Its NuGet packages:
+
+| Package | Used for | Licence |
+| --- | --- | --- |
+| `Microsoft.ML.OnnxRuntime` 1.23.2 | the native ONNX Runtime (`libonnxruntime.so`), the same version the Go engines load | MIT |
+| `Microsoft.ML.OnnxRuntime.Managed` 1.23.2 | its C# binding (brought by the package above) | MIT |
+| `xunit.v3` 4.0.1 | tests only, with `Microsoft.Testing.Platform` | Apache-2.0 (Microsoft.Testing.Platform: MIT) |
+
+ASP.NET Core, System.Text.Json and the NativeAOT compiler come with the .NET SDK (MIT). The engine links the same Hugging Face Tokenizers static library the Go build links (`libtokenizers.a` from `daulet/tokenizers`, MIT/Apache-2.0) into its executable, and uses libstdc++ for that library's C++ part. `Microsoft.ML.Tokenizers` (MIT) was evaluated and is not used.
