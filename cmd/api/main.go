@@ -312,6 +312,7 @@ func run(log *slog.Logger) error {
 	result := make(chan error, 1)
 	go func() { result <- server.ListenAndServe() }()
 	log.Info("api listening", "address", c.Address, "environment", c.Env)
+	warmPDF(log, pdf)
 	select {
 	case err = <-result:
 		if errors.Is(err, http.ErrServerClosed) {
@@ -327,6 +328,21 @@ func run(log *slog.Logger) error {
 		return err
 	}
 	return nil
+}
+
+// warmPDF starts PDFium in the background, so the first PDF does not wait
+// for it; PDFs read meanwhile wait for the same start. Nothing waits for
+// it at shutdown.
+func warmPDF(log *slog.Logger, pdf *pdfium.Reader) {
+	go func() {
+		start := time.Now()
+		cache, err := pdf.Warm()
+		if err != nil {
+			log.Error("pdf reader cannot start", "error", err)
+			return
+		}
+		log.Info("pdf reader ready", "took", time.Since(start).Round(time.Millisecond).String(), "cache", cache)
+	}()
 }
 
 // upgradeSchema creates the database's schema or applies its pending

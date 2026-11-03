@@ -63,8 +63,10 @@ type Reader struct {
 	// compiling takes a few seconds. Every open gets a fresh instance,
 	// which returns its memory on close.
 	start func() (sdk.Pool, error)
-	// cache is where start took the compiled code from.
-	cache string
+	// cache is where start took the compiled code from, and starts how
+	// often PDFium started, which is once.
+	cache  string
+	starts int
 }
 
 func New(o Options) *Reader {
@@ -84,6 +86,7 @@ func (r *Reader) Warm() (string, error) {
 }
 
 func (r *Reader) init(o Options) (sdk.Pool, error) {
+	r.starts++
 	if o.CacheDir != "" {
 		before := cached(o.CacheDir)
 		p, err := startPool(o.CacheDir)
