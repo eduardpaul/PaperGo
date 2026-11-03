@@ -377,8 +377,7 @@ export interface BulkCreate extends Parsable {
 }
 export interface BulkCreate_values extends AdditionalDataHolder, Parsable {
 }
-export type BulkOperation = BulkOperationMember1 | BulkOperationMember2 | BulkOperationMember3 | BulkOperationMember4 | BulkOperationMember5 | BulkOperationMember6 | BulkOperationMember7;
-export interface BulkOperationMember1 extends Parsable {
+export interface BulkCreateOperation extends Parsable {
     /**
      * The action property
      */
@@ -392,29 +391,11 @@ export interface BulkOperationMember1 extends Parsable {
      */
     parentId?: string | null;
 }
-export interface BulkOperationMember2 extends Parsable {
+export interface BulkLifecycleOperation extends Parsable {
     /**
      * The action property
      */
-    action?: string | null;
-    /**
-     * Item in this collection. Each existing item may occur only once.
-     */
-    id?: string | null;
-    /**
-     * The update property
-     */
-    update?: BulkUpdate | null;
-    /**
-     * Current resource lock version; stale versions roll back the entire batch.
-     */
-    version?: number | null;
-}
-export interface BulkOperationMember3 extends Parsable {
-    /**
-     * The action property
-     */
-    action?: string | null;
+    action?: BulkLifecycleOperation_action | null;
     /**
      * Item in this collection. Each existing item may occur only once.
      */
@@ -424,67 +405,13 @@ export interface BulkOperationMember3 extends Parsable {
      */
     version?: number | null;
 }
-export interface BulkOperationMember4 extends Parsable {
-    /**
-     * The action property
-     */
-    action?: string | null;
-    /**
-     * Item in this collection. Each existing item may occur only once.
-     */
-    id?: string | null;
-    /**
-     * Current resource lock version; stale versions roll back the entire batch.
-     */
-    version?: number | null;
-}
-export interface BulkOperationMember5 extends Parsable {
-    /**
-     * The action property
-     */
-    action?: string | null;
-    /**
-     * Item in this collection. Each existing item may occur only once.
-     */
-    id?: string | null;
-    /**
-     * Current resource lock version; stale versions roll back the entire batch.
-     */
-    version?: number | null;
-}
-export interface BulkOperationMember6 extends Parsable {
-    /**
-     * The action property
-     */
-    action?: string | null;
-    /**
-     * Item in this collection. Each existing item may occur only once.
-     */
-    id?: string | null;
-    /**
-     * Current resource lock version; stale versions roll back the entire batch.
-     */
-    version?: number | null;
-}
-export interface BulkOperationMember7 extends Parsable {
-    /**
-     * The action property
-     */
-    action?: string | null;
-    /**
-     * Item in this collection. Each existing item may occur only once.
-     */
-    id?: string | null;
-    /**
-     * Current resource lock version; stale versions roll back the entire batch.
-     */
-    version?: number | null;
-}
+export type BulkLifecycleOperation_action = (typeof BulkLifecycleOperation_actionObject)[keyof typeof BulkLifecycleOperation_actionObject];
+export type BulkOperation = BulkCreateOperation | BulkLifecycleOperation | BulkUpdateOperation;
 export interface BulkRequest extends Parsable {
     /**
      * The operations property
      */
-    operations?: (BulkOperationMember1 | BulkOperationMember2 | BulkOperationMember3 | BulkOperationMember4 | BulkOperationMember5 | BulkOperationMember6 | BulkOperationMember7)[] | null;
+    operations?: (BulkCreateOperation | BulkLifecycleOperation | BulkUpdateOperation)[] | null;
 }
 export interface BulkResponse extends Parsable {
     /**
@@ -530,6 +457,24 @@ export interface BulkUpdate extends Parsable {
     values?: BulkUpdate_values | null;
 }
 export interface BulkUpdate_values extends AdditionalDataHolder, Parsable {
+}
+export interface BulkUpdateOperation extends Parsable {
+    /**
+     * The action property
+     */
+    action?: string | null;
+    /**
+     * Item in this collection. Each existing item may occur only once.
+     */
+    id?: string | null;
+    /**
+     * The update property
+     */
+    update?: BulkUpdate | null;
+    /**
+     * Current resource lock version; stale versions roll back the entire batch.
+     */
+    version?: number | null;
 }
 export interface CalendarOccurrence extends Parsable {
     /**
@@ -1221,74 +1166,51 @@ export function createBulkCreateFromDiscriminatorValue(parseNode: ParseNode | un
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
- * @returns {BulkOperationMember1 | BulkOperationMember2 | BulkOperationMember3 | BulkOperationMember4 | BulkOperationMember5 | BulkOperationMember6 | BulkOperationMember7}
+ * @returns {BulkCreateOperation}
+ */
+// @ts-ignore
+export function createBulkCreateOperationFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoBulkCreateOperation;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {BulkLifecycleOperation}
+ */
+// @ts-ignore
+export function createBulkLifecycleOperationFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoBulkLifecycleOperation;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {BulkCreateOperation | BulkLifecycleOperation | BulkUpdateOperation}
  */
 // @ts-ignore
 export function createBulkOperationFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    const mappingValueNode = parseNode?.getChildNode("action");
+    if (mappingValueNode) {
+        const mappingValue = mappingValueNode.getStringValue();
+        if (mappingValue) {
+            switch (mappingValue) {
+                case "archive":
+                    return deserializeIntoBulkLifecycleOperation;
+                case "create":
+                    return deserializeIntoBulkCreateOperation;
+                case "delete":
+                    return deserializeIntoBulkLifecycleOperation;
+                case "publish":
+                    return deserializeIntoBulkLifecycleOperation;
+                case "unarchive":
+                    return deserializeIntoBulkLifecycleOperation;
+                case "unpublish":
+                    return deserializeIntoBulkLifecycleOperation;
+                case "update":
+                    return deserializeIntoBulkUpdateOperation;
+            }
+        }
+    }
     return deserializeIntoBulkOperation;
-}
-/**
- * Creates a new instance of the appropriate class based on discriminator value
- * @param parseNode The parse node to use to read the discriminator value and create the object
- * @returns {BulkOperationMember1}
- */
-// @ts-ignore
-export function createBulkOperationMember1FromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
-    return deserializeIntoBulkOperationMember1;
-}
-/**
- * Creates a new instance of the appropriate class based on discriminator value
- * @param parseNode The parse node to use to read the discriminator value and create the object
- * @returns {BulkOperationMember2}
- */
-// @ts-ignore
-export function createBulkOperationMember2FromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
-    return deserializeIntoBulkOperationMember2;
-}
-/**
- * Creates a new instance of the appropriate class based on discriminator value
- * @param parseNode The parse node to use to read the discriminator value and create the object
- * @returns {BulkOperationMember3}
- */
-// @ts-ignore
-export function createBulkOperationMember3FromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
-    return deserializeIntoBulkOperationMember3;
-}
-/**
- * Creates a new instance of the appropriate class based on discriminator value
- * @param parseNode The parse node to use to read the discriminator value and create the object
- * @returns {BulkOperationMember4}
- */
-// @ts-ignore
-export function createBulkOperationMember4FromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
-    return deserializeIntoBulkOperationMember4;
-}
-/**
- * Creates a new instance of the appropriate class based on discriminator value
- * @param parseNode The parse node to use to read the discriminator value and create the object
- * @returns {BulkOperationMember5}
- */
-// @ts-ignore
-export function createBulkOperationMember5FromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
-    return deserializeIntoBulkOperationMember5;
-}
-/**
- * Creates a new instance of the appropriate class based on discriminator value
- * @param parseNode The parse node to use to read the discriminator value and create the object
- * @returns {BulkOperationMember6}
- */
-// @ts-ignore
-export function createBulkOperationMember6FromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
-    return deserializeIntoBulkOperationMember6;
-}
-/**
- * Creates a new instance of the appropriate class based on discriminator value
- * @param parseNode The parse node to use to read the discriminator value and create the object
- * @returns {BulkOperationMember7}
- */
-// @ts-ignore
-export function createBulkOperationMember7FromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
-    return deserializeIntoBulkOperationMember7;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -1334,6 +1256,15 @@ export function createBulkUpdate_valuesFromDiscriminatorValue(parseNode: ParseNo
 // @ts-ignore
 export function createBulkUpdateFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoBulkUpdate;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {BulkUpdateOperation}
+ */
+// @ts-ignore
+export function createBulkUpdateOperationFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoBulkUpdateOperation;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -3906,111 +3837,41 @@ export function deserializeIntoBulkCreate_values(bulkCreate_values: Partial<Bulk
 }
 /**
  * The deserialization information for the current model
+ * @param BulkCreateOperation The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoBulkCreateOperation(bulkCreateOperation: Partial<BulkCreateOperation> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "action": n => { bulkCreateOperation.action = n.getStringValue(); },
+        "create": n => { bulkCreateOperation.create = n.getObjectValue<BulkCreate>(createBulkCreateFromDiscriminatorValue); },
+        "parent_id": n => { bulkCreateOperation.parentId = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param BulkLifecycleOperation The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoBulkLifecycleOperation(bulkLifecycleOperation: Partial<BulkLifecycleOperation> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "action": n => { bulkLifecycleOperation.action = n.getEnumValue<BulkLifecycleOperation_action>(BulkLifecycleOperation_actionObject); },
+        "id": n => { bulkLifecycleOperation.id = n.getStringValue(); },
+        "version": n => { bulkLifecycleOperation.version = n.getNumberValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
  * @param BulkOperation The instance to deserialize into.
  * @returns {Record<string, (node: ParseNode) => void>}
  */
 // @ts-ignore
-export function deserializeIntoBulkOperation(bulkOperation: Partial<BulkOperationMember1 | BulkOperationMember2 | BulkOperationMember3 | BulkOperationMember4 | BulkOperationMember5 | BulkOperationMember6 | BulkOperationMember7> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+export function deserializeIntoBulkOperation(bulkOperation: Partial<BulkCreateOperation | BulkLifecycleOperation | BulkUpdateOperation> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
-        ...deserializeIntoBulkOperationMember1(bulkOperation as BulkOperationMember1),
-        ...deserializeIntoBulkOperationMember2(bulkOperation as BulkOperationMember2),
-        ...deserializeIntoBulkOperationMember3(bulkOperation as BulkOperationMember3),
-        ...deserializeIntoBulkOperationMember4(bulkOperation as BulkOperationMember4),
-        ...deserializeIntoBulkOperationMember5(bulkOperation as BulkOperationMember5),
-        ...deserializeIntoBulkOperationMember6(bulkOperation as BulkOperationMember6),
-        ...deserializeIntoBulkOperationMember7(bulkOperation as BulkOperationMember7),
-    }
-}
-/**
- * The deserialization information for the current model
- * @param BulkOperationMember1 The instance to deserialize into.
- * @returns {Record<string, (node: ParseNode) => void>}
- */
-// @ts-ignore
-export function deserializeIntoBulkOperationMember1(bulkOperationMember1: Partial<BulkOperationMember1> | undefined = {}) : Record<string, (node: ParseNode) => void> {
-    return {
-        "action": n => { bulkOperationMember1.action = n.getStringValue(); },
-        "create": n => { bulkOperationMember1.create = n.getObjectValue<BulkCreate>(createBulkCreateFromDiscriminatorValue); },
-        "parent_id": n => { bulkOperationMember1.parentId = n.getStringValue(); },
-    }
-}
-/**
- * The deserialization information for the current model
- * @param BulkOperationMember2 The instance to deserialize into.
- * @returns {Record<string, (node: ParseNode) => void>}
- */
-// @ts-ignore
-export function deserializeIntoBulkOperationMember2(bulkOperationMember2: Partial<BulkOperationMember2> | undefined = {}) : Record<string, (node: ParseNode) => void> {
-    return {
-        "action": n => { bulkOperationMember2.action = n.getStringValue(); },
-        "id": n => { bulkOperationMember2.id = n.getStringValue(); },
-        "update": n => { bulkOperationMember2.update = n.getObjectValue<BulkUpdate>(createBulkUpdateFromDiscriminatorValue); },
-        "version": n => { bulkOperationMember2.version = n.getNumberValue(); },
-    }
-}
-/**
- * The deserialization information for the current model
- * @param BulkOperationMember3 The instance to deserialize into.
- * @returns {Record<string, (node: ParseNode) => void>}
- */
-// @ts-ignore
-export function deserializeIntoBulkOperationMember3(bulkOperationMember3: Partial<BulkOperationMember3> | undefined = {}) : Record<string, (node: ParseNode) => void> {
-    return {
-        "action": n => { bulkOperationMember3.action = n.getStringValue(); },
-        "id": n => { bulkOperationMember3.id = n.getStringValue(); },
-        "version": n => { bulkOperationMember3.version = n.getNumberValue(); },
-    }
-}
-/**
- * The deserialization information for the current model
- * @param BulkOperationMember4 The instance to deserialize into.
- * @returns {Record<string, (node: ParseNode) => void>}
- */
-// @ts-ignore
-export function deserializeIntoBulkOperationMember4(bulkOperationMember4: Partial<BulkOperationMember4> | undefined = {}) : Record<string, (node: ParseNode) => void> {
-    return {
-        "action": n => { bulkOperationMember4.action = n.getStringValue(); },
-        "id": n => { bulkOperationMember4.id = n.getStringValue(); },
-        "version": n => { bulkOperationMember4.version = n.getNumberValue(); },
-    }
-}
-/**
- * The deserialization information for the current model
- * @param BulkOperationMember5 The instance to deserialize into.
- * @returns {Record<string, (node: ParseNode) => void>}
- */
-// @ts-ignore
-export function deserializeIntoBulkOperationMember5(bulkOperationMember5: Partial<BulkOperationMember5> | undefined = {}) : Record<string, (node: ParseNode) => void> {
-    return {
-        "action": n => { bulkOperationMember5.action = n.getStringValue(); },
-        "id": n => { bulkOperationMember5.id = n.getStringValue(); },
-        "version": n => { bulkOperationMember5.version = n.getNumberValue(); },
-    }
-}
-/**
- * The deserialization information for the current model
- * @param BulkOperationMember6 The instance to deserialize into.
- * @returns {Record<string, (node: ParseNode) => void>}
- */
-// @ts-ignore
-export function deserializeIntoBulkOperationMember6(bulkOperationMember6: Partial<BulkOperationMember6> | undefined = {}) : Record<string, (node: ParseNode) => void> {
-    return {
-        "action": n => { bulkOperationMember6.action = n.getStringValue(); },
-        "id": n => { bulkOperationMember6.id = n.getStringValue(); },
-        "version": n => { bulkOperationMember6.version = n.getNumberValue(); },
-    }
-}
-/**
- * The deserialization information for the current model
- * @param BulkOperationMember7 The instance to deserialize into.
- * @returns {Record<string, (node: ParseNode) => void>}
- */
-// @ts-ignore
-export function deserializeIntoBulkOperationMember7(bulkOperationMember7: Partial<BulkOperationMember7> | undefined = {}) : Record<string, (node: ParseNode) => void> {
-    return {
-        "action": n => { bulkOperationMember7.action = n.getStringValue(); },
-        "id": n => { bulkOperationMember7.id = n.getStringValue(); },
-        "version": n => { bulkOperationMember7.version = n.getNumberValue(); },
+        ...deserializeIntoBulkCreateOperation(bulkOperation as BulkCreateOperation),
+        ...deserializeIntoBulkLifecycleOperation(bulkOperation as BulkLifecycleOperation),
+        ...deserializeIntoBulkUpdateOperation(bulkOperation as BulkUpdateOperation),
     }
 }
 /**
@@ -4021,7 +3882,7 @@ export function deserializeIntoBulkOperationMember7(bulkOperationMember7: Partia
 // @ts-ignore
 export function deserializeIntoBulkRequest(bulkRequest: Partial<BulkRequest> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
-        "operations": n => { bulkRequest.operations = n.getCollectionOfObjectValues<BulkOperationMember1>(createBulkOperationMember1FromDiscriminatorValue) ?? n.getCollectionOfObjectValues<BulkOperationMember2>(createBulkOperationMember2FromDiscriminatorValue) ?? n.getCollectionOfObjectValues<BulkOperationMember3>(createBulkOperationMember3FromDiscriminatorValue) ?? n.getCollectionOfObjectValues<BulkOperationMember4>(createBulkOperationMember4FromDiscriminatorValue) ?? n.getCollectionOfObjectValues<BulkOperationMember5>(createBulkOperationMember5FromDiscriminatorValue) ?? n.getCollectionOfObjectValues<BulkOperationMember6>(createBulkOperationMember6FromDiscriminatorValue) ?? n.getCollectionOfObjectValues<BulkOperationMember7>(createBulkOperationMember7FromDiscriminatorValue); },
+        "operations": n => { bulkRequest.operations = n.getCollectionOfObjectValues<BulkCreateOperation>(createBulkCreateOperationFromDiscriminatorValue) ?? n.getCollectionOfObjectValues<BulkLifecycleOperation>(createBulkLifecycleOperationFromDiscriminatorValue) ?? n.getCollectionOfObjectValues<BulkUpdateOperation>(createBulkUpdateOperationFromDiscriminatorValue); },
     }
 }
 /**
@@ -4071,6 +3932,20 @@ export function deserializeIntoBulkUpdate(bulkUpdate: Partial<BulkUpdate> | unde
 // @ts-ignore
 export function deserializeIntoBulkUpdate_values(bulkUpdate_values: Partial<BulkUpdate_values> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param BulkUpdateOperation The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoBulkUpdateOperation(bulkUpdateOperation: Partial<BulkUpdateOperation> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "action": n => { bulkUpdateOperation.action = n.getStringValue(); },
+        "id": n => { bulkUpdateOperation.id = n.getStringValue(); },
+        "update": n => { bulkUpdateOperation.update = n.getObjectValue<BulkUpdate>(createBulkUpdateFromDiscriminatorValue); },
+        "version": n => { bulkUpdateOperation.version = n.getNumberValue(); },
     }
 }
 /**
@@ -9964,111 +9839,62 @@ export function serializeBulkCreate_values(writer: SerializationWriter, bulkCrea
 }
 /**
  * Serializes information the current object
+ * @param BulkCreateOperation The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeBulkCreateOperation(writer: SerializationWriter, bulkCreateOperation: Partial<BulkCreateOperation> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!bulkCreateOperation || isSerializingDerivedType) { return; }
+    writer.writeStringValue("action", bulkCreateOperation.action);
+    writer.writeObjectValue<BulkCreate>("create", bulkCreateOperation.create, serializeBulkCreate);
+    writer.writeStringValue("parent_id", bulkCreateOperation.parentId);
+}
+/**
+ * Serializes information the current object
+ * @param BulkLifecycleOperation The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeBulkLifecycleOperation(writer: SerializationWriter, bulkLifecycleOperation: Partial<BulkLifecycleOperation> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!bulkLifecycleOperation || isSerializingDerivedType) { return; }
+    writer.writeEnumValue<BulkLifecycleOperation_action>("action", bulkLifecycleOperation.action);
+    writer.writeStringValue("id", bulkLifecycleOperation.id);
+    writer.writeNumberValue("version", bulkLifecycleOperation.version);
+}
+/**
+ * Serializes information the current object
  * @param BulkOperation The instance to serialize from.
  * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
  * @param writer Serialization writer to use to serialize this model
  */
 // @ts-ignore
-export function serializeBulkOperation(writer: SerializationWriter, bulkOperation: Partial<BulkOperationMember1 | BulkOperationMember2 | BulkOperationMember3 | BulkOperationMember4 | BulkOperationMember5 | BulkOperationMember6 | BulkOperationMember7> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
-    serializeBulkOperationMember1(writer, bulkOperation as BulkOperationMember1);
-    serializeBulkOperationMember2(writer, bulkOperation as BulkOperationMember2);
-    serializeBulkOperationMember3(writer, bulkOperation as BulkOperationMember3);
-    serializeBulkOperationMember4(writer, bulkOperation as BulkOperationMember4);
-    serializeBulkOperationMember5(writer, bulkOperation as BulkOperationMember5);
-    serializeBulkOperationMember6(writer, bulkOperation as BulkOperationMember6);
-    serializeBulkOperationMember7(writer, bulkOperation as BulkOperationMember7);
-}
-/**
- * Serializes information the current object
- * @param BulkOperationMember1 The instance to serialize from.
- * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
- * @param writer Serialization writer to use to serialize this model
- */
-// @ts-ignore
-export function serializeBulkOperationMember1(writer: SerializationWriter, bulkOperationMember1: Partial<BulkOperationMember1> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
-    if (!bulkOperationMember1 || isSerializingDerivedType) { return; }
-    writer.writeStringValue("action", bulkOperationMember1.action);
-    writer.writeObjectValue<BulkCreate>("create", bulkOperationMember1.create, serializeBulkCreate);
-    writer.writeStringValue("parent_id", bulkOperationMember1.parentId);
-}
-/**
- * Serializes information the current object
- * @param BulkOperationMember2 The instance to serialize from.
- * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
- * @param writer Serialization writer to use to serialize this model
- */
-// @ts-ignore
-export function serializeBulkOperationMember2(writer: SerializationWriter, bulkOperationMember2: Partial<BulkOperationMember2> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
-    if (!bulkOperationMember2 || isSerializingDerivedType) { return; }
-    writer.writeStringValue("action", bulkOperationMember2.action);
-    writer.writeStringValue("id", bulkOperationMember2.id);
-    writer.writeObjectValue<BulkUpdate>("update", bulkOperationMember2.update, serializeBulkUpdate);
-    writer.writeNumberValue("version", bulkOperationMember2.version);
-}
-/**
- * Serializes information the current object
- * @param BulkOperationMember3 The instance to serialize from.
- * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
- * @param writer Serialization writer to use to serialize this model
- */
-// @ts-ignore
-export function serializeBulkOperationMember3(writer: SerializationWriter, bulkOperationMember3: Partial<BulkOperationMember3> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
-    if (!bulkOperationMember3 || isSerializingDerivedType) { return; }
-    writer.writeStringValue("action", bulkOperationMember3.action);
-    writer.writeStringValue("id", bulkOperationMember3.id);
-    writer.writeNumberValue("version", bulkOperationMember3.version);
-}
-/**
- * Serializes information the current object
- * @param BulkOperationMember4 The instance to serialize from.
- * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
- * @param writer Serialization writer to use to serialize this model
- */
-// @ts-ignore
-export function serializeBulkOperationMember4(writer: SerializationWriter, bulkOperationMember4: Partial<BulkOperationMember4> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
-    if (!bulkOperationMember4 || isSerializingDerivedType) { return; }
-    writer.writeStringValue("action", bulkOperationMember4.action);
-    writer.writeStringValue("id", bulkOperationMember4.id);
-    writer.writeNumberValue("version", bulkOperationMember4.version);
-}
-/**
- * Serializes information the current object
- * @param BulkOperationMember5 The instance to serialize from.
- * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
- * @param writer Serialization writer to use to serialize this model
- */
-// @ts-ignore
-export function serializeBulkOperationMember5(writer: SerializationWriter, bulkOperationMember5: Partial<BulkOperationMember5> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
-    if (!bulkOperationMember5 || isSerializingDerivedType) { return; }
-    writer.writeStringValue("action", bulkOperationMember5.action);
-    writer.writeStringValue("id", bulkOperationMember5.id);
-    writer.writeNumberValue("version", bulkOperationMember5.version);
-}
-/**
- * Serializes information the current object
- * @param BulkOperationMember6 The instance to serialize from.
- * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
- * @param writer Serialization writer to use to serialize this model
- */
-// @ts-ignore
-export function serializeBulkOperationMember6(writer: SerializationWriter, bulkOperationMember6: Partial<BulkOperationMember6> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
-    if (!bulkOperationMember6 || isSerializingDerivedType) { return; }
-    writer.writeStringValue("action", bulkOperationMember6.action);
-    writer.writeStringValue("id", bulkOperationMember6.id);
-    writer.writeNumberValue("version", bulkOperationMember6.version);
-}
-/**
- * Serializes information the current object
- * @param BulkOperationMember7 The instance to serialize from.
- * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
- * @param writer Serialization writer to use to serialize this model
- */
-// @ts-ignore
-export function serializeBulkOperationMember7(writer: SerializationWriter, bulkOperationMember7: Partial<BulkOperationMember7> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
-    if (!bulkOperationMember7 || isSerializingDerivedType) { return; }
-    writer.writeStringValue("action", bulkOperationMember7.action);
-    writer.writeStringValue("id", bulkOperationMember7.id);
-    writer.writeNumberValue("version", bulkOperationMember7.version);
+export function serializeBulkOperation(writer: SerializationWriter, bulkOperation: Partial<BulkCreateOperation | BulkLifecycleOperation | BulkUpdateOperation> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (bulkOperation === undefined || bulkOperation === null) return;
+    switch (bulkOperation.action) {
+        case "archive":
+            serializeBulkLifecycleOperation(writer, bulkOperation as BulkLifecycleOperation);
+            break;
+        case "create":
+            serializeBulkCreateOperation(writer, bulkOperation as BulkCreateOperation);
+            break;
+        case "delete":
+            serializeBulkLifecycleOperation(writer, bulkOperation as BulkLifecycleOperation);
+            break;
+        case "publish":
+            serializeBulkLifecycleOperation(writer, bulkOperation as BulkLifecycleOperation);
+            break;
+        case "unarchive":
+            serializeBulkLifecycleOperation(writer, bulkOperation as BulkLifecycleOperation);
+            break;
+        case "unpublish":
+            serializeBulkLifecycleOperation(writer, bulkOperation as BulkLifecycleOperation);
+            break;
+        case "update":
+            serializeBulkUpdateOperation(writer, bulkOperation as BulkUpdateOperation);
+            break;
+    }
 }
 /**
  * Serializes information the current object
@@ -10079,7 +9905,7 @@ export function serializeBulkOperationMember7(writer: SerializationWriter, bulkO
 // @ts-ignore
 export function serializeBulkRequest(writer: SerializationWriter, bulkRequest: Partial<BulkRequest> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!bulkRequest || isSerializingDerivedType) { return; }
-    writer.writeCollectionOfObjectValues<BulkOperationMember1 | BulkOperationMember2 | BulkOperationMember3 | BulkOperationMember4 | BulkOperationMember5 | BulkOperationMember6 | BulkOperationMember7>("operations", bulkRequest.operations, serializeBulkOperation);
+    writer.writeCollectionOfObjectValues<BulkCreateOperation | BulkLifecycleOperation | BulkUpdateOperation>("operations", bulkRequest.operations, serializeBulkOperation);
 }
 /**
  * Serializes information the current object
@@ -10130,6 +9956,20 @@ export function serializeBulkUpdate(writer: SerializationWriter, bulkUpdate: Par
 export function serializeBulkUpdate_values(writer: SerializationWriter, bulkUpdate_values: Partial<BulkUpdate_values> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!bulkUpdate_values || isSerializingDerivedType) { return; }
     writer.writeAdditionalData(bulkUpdate_values.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param BulkUpdateOperation The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeBulkUpdateOperation(writer: SerializationWriter, bulkUpdateOperation: Partial<BulkUpdateOperation> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!bulkUpdateOperation || isSerializingDerivedType) { return; }
+    writer.writeStringValue("action", bulkUpdateOperation.action);
+    writer.writeStringValue("id", bulkUpdateOperation.id);
+    writer.writeObjectValue<BulkUpdate>("update", bulkUpdateOperation.update, serializeBulkUpdate);
+    writer.writeNumberValue("version", bulkUpdateOperation.version);
 }
 /**
  * Serializes information the current object
@@ -15145,6 +14985,13 @@ export const Blob_content_typeObject = {
     ImageJpeg: "image/jpeg",
     ImagePng: "image/png",
     ImageWebp: "image/webp",
+} as const;
+export const BulkLifecycleOperation_actionObject = {
+    Publish: "publish",
+    Unpublish: "unpublish",
+    Delete: "delete",
+    Archive: "archive",
+    Unarchive: "unarchive",
 } as const;
 export const BulkResult_actionObject = {
     Create: "create",

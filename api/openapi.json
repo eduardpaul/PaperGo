@@ -26047,180 +26047,107 @@
       "BulkOperation": {
         "oneOf": [
           {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-              "action": {
-                "type": "string",
-                "const": "create"
-              },
-              "create": {
-                "$ref": "#/components/schemas/BulkCreate"
-              },
-              "parent_id": {
-                "type": "string",
-                "description": "Existing folder in this collection. Defaults to the collection."
-              }
-            },
-            "required": [
-              "action",
-              "create"
-            ]
+            "$ref": "#/components/schemas/BulkCreateOperation"
           },
           {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-              "action": {
-                "type": "string",
-                "const": "update"
-              },
-              "id": {
-                "type": "string",
-                "minLength": 1,
-                "description": "Item in this collection. Each existing item may occur only once."
-              },
-              "version": {
-                "type": "integer",
-                "minimum": 1,
-                "description": "Current resource lock version; stale versions roll back the entire batch."
-              },
-              "update": {
-                "$ref": "#/components/schemas/BulkUpdate"
-              }
-            },
-            "required": [
-              "action",
-              "id",
-              "version",
-              "update"
-            ]
+            "$ref": "#/components/schemas/BulkUpdateOperation"
           },
           {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-              "action": {
-                "type": "string",
-                "const": "publish"
-              },
-              "id": {
-                "type": "string",
-                "minLength": 1,
-                "description": "Item in this collection. Each existing item may occur only once."
-              },
-              "version": {
-                "type": "integer",
-                "minimum": 1,
-                "description": "Current resource lock version; stale versions roll back the entire batch."
-              }
-            },
-            "required": [
-              "action",
-              "id",
-              "version"
-            ]
-          },
-          {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-              "action": {
-                "type": "string",
-                "const": "unpublish"
-              },
-              "id": {
-                "type": "string",
-                "minLength": 1,
-                "description": "Item in this collection. Each existing item may occur only once."
-              },
-              "version": {
-                "type": "integer",
-                "minimum": 1,
-                "description": "Current resource lock version; stale versions roll back the entire batch."
-              }
-            },
-            "required": [
-              "action",
-              "id",
-              "version"
-            ]
-          },
-          {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-              "action": {
-                "type": "string",
-                "const": "delete"
-              },
-              "id": {
-                "type": "string",
-                "minLength": 1,
-                "description": "Item in this collection. Each existing item may occur only once."
-              },
-              "version": {
-                "type": "integer",
-                "minimum": 1,
-                "description": "Current resource lock version; stale versions roll back the entire batch."
-              }
-            },
-            "required": [
-              "action",
-              "id",
-              "version"
-            ]
-          },
-          {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-              "action": {
-                "type": "string",
-                "const": "archive"
-              },
-              "id": {
-                "type": "string",
-                "minLength": 1,
-                "description": "Item in this collection. Each existing item may occur only once."
-              },
-              "version": {
-                "type": "integer",
-                "minimum": 1,
-                "description": "Current resource lock version; stale versions roll back the entire batch."
-              }
-            },
-            "required": [
-              "action",
-              "id",
-              "version"
-            ]
-          },
-          {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-              "action": {
-                "type": "string",
-                "const": "unarchive"
-              },
-              "id": {
-                "type": "string",
-                "minLength": 1,
-                "description": "Item in this collection. Each existing item may occur only once."
-              },
-              "version": {
-                "type": "integer",
-                "minimum": 1,
-                "description": "Current resource lock version; stale versions roll back the entire batch."
-              }
-            },
-            "required": [
-              "action",
-              "id",
-              "version"
-            ]
+            "$ref": "#/components/schemas/BulkLifecycleOperation"
           }
+        ],
+        "discriminator": {
+          "propertyName": "action",
+          "mapping": {
+            "create": "#/components/schemas/BulkCreateOperation",
+            "update": "#/components/schemas/BulkUpdateOperation",
+            "publish": "#/components/schemas/BulkLifecycleOperation",
+            "unpublish": "#/components/schemas/BulkLifecycleOperation",
+            "delete": "#/components/schemas/BulkLifecycleOperation",
+            "archive": "#/components/schemas/BulkLifecycleOperation",
+            "unarchive": "#/components/schemas/BulkLifecycleOperation"
+          }
+        }
+      },
+      "BulkCreateOperation": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "type": "string",
+            "const": "create"
+          },
+          "create": {
+            "$ref": "#/components/schemas/BulkCreate"
+          },
+          "parent_id": {
+            "type": "string",
+            "description": "Existing folder in this collection. Defaults to the collection."
+          }
+        },
+        "required": [
+          "action",
+          "create"
+        ]
+      },
+      "BulkUpdateOperation": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "type": "string",
+            "const": "update"
+          },
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Item in this collection. Each existing item may occur only once."
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Current resource lock version; stale versions roll back the entire batch."
+          },
+          "update": {
+            "$ref": "#/components/schemas/BulkUpdate"
+          }
+        },
+        "required": [
+          "action",
+          "id",
+          "version",
+          "update"
+        ]
+      },
+      "BulkLifecycleOperation": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "publish",
+              "unpublish",
+              "delete",
+              "archive",
+              "unarchive"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Item in this collection. Each existing item may occur only once."
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Current resource lock version; stale versions roll back the entire batch."
+          }
+        },
+        "required": [
+          "action",
+          "id",
+          "version"
         ]
       },
       "BulkRequest": {
