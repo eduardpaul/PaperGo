@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>papergo-engine</AssemblyName>
+    <RootNamespace>PaperGo.Engine</RootNamespace>
+    <Version>0.1.0</Version>
+    <PublishAot>true</PublishAot>
+    <!-- The tokenizers' C++ part (esaxx) needs libstdc++, which ONNX Runtime
+         loads anyway; it replaces the runtime's libstdc++compat shim. -->
+    <LinkStandardCPlusPlusLibrary>true</LinkStandardCPlusPlusLibrary>
+    <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
+    <UseSystemResourceKeys>true</UseSystemResourceKeys>
+    <EventSourceSupport>false</EventSourceSupport>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <TokenizersArchive>$(PaperGoNativeDir)/lib/libtokenizers.a</TokenizersArchive>
+    <TokenizersShared>$(BaseIntermediateOutputPath)native/libtokenizers.so</TokenizersShared>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PaperGo.Engine.Tests" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.23.2" />
+    <!-- Laya's supported bundle manifest, shared with internal/decision. -->
+    <EmbeddedResource Include="../../../../internal/decision/manifest.json" LogicalName="laya-manifest.json" />
+  </ItemGroup>
+
+  <!-- NativeAOT links the Hugging Face tokenizers C ABI (the static library
+       the Go build links) into the executable. -->
+  <ItemGroup>
+    <DirectPInvoke Include="tokenizers" />
+    <NativeLibrary Include="$(TokenizersArchive)" />
+  </ItemGroup>
+
+  <!-- JIT runs (dotnet run, dotnet test) load the same archive as a shared library. -->
+  <Target Name="BuildTokenizersShared" BeforeTargets="BeforeBuild" Inputs="$(TokenizersArchive)" Outputs="$(TokenizersShared)">
+    <Error Condition="!Exists('$(TokenizersArchive)')" Text="$(TokenizersArchive) not found: set PAPERGO_NATIVE_DIR to the directory scripts/native.py installs (.tools/native)." />
+    <MakeDir Directories="$(BaseIntermediateOutputPath)native" />
+    <Exec Command="gcc -shared -o &quot;$(TokenizersShared)&quot; -Wl,--whole-archive &quot;$(TokenizersArchive)&quot; -Wl,--no-whole-archive -lstdc++ -ldl -lm -lpthread" />
+  </Target>
+  <ItemGroup>
+    <None Include="$(TokenizersShared)" Link="libtokenizers.so" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" Visible="false" />
+  </ItemGroup>
+
+  <!-- The NuGet package also ships the Windows DLL for every RID, and the
+       execution-provider bridge, which the CPU-only engine never loads. -->
+  <Target Name="DropWindowsOnnxRuntime" AfterTargets="Publish">
+    <Delete Files="$(PublishDir)onnxruntime.dll;$(PublishDir)onnxruntime_providers_shared.dll;$(PublishDir)libonnxruntime_providers_shared.so" />
+  </Target>
+
+</Project>

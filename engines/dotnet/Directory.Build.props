@@ -1,0 +1,20 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Trim and AOT warnings fail the build and the publish, one per occurrence. -->
+    <IlcTreatWarningsAsErrors>true</IlcTreatWarningsAsErrors>
+    <ILLinkTreatWarningsAsErrors>true</ILLinkTreatWarningsAsErrors>
+    <TrimmerSingleWarn>false</TrimmerSingleWarn>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- The repository's native libraries (libtokenizers.a); override with
+         -p:PaperGoNativeDir=... or PAPERGO_NATIVE_DIR. -->
+    <PaperGoNativeDir Condition="'$(PaperGoNativeDir)' == ''">$(PAPERGO_NATIVE_DIR)</PaperGoNativeDir>
+    <PaperGoNativeDir Condition="'$(PaperGoNativeDir)' == ''">$(MSBuildThisFileDirectory)../../.tools/native</PaperGoNativeDir>
+  </PropertyGroup>
+</Project>

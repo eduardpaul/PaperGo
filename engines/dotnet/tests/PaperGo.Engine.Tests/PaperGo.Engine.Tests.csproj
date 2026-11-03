@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>PaperGo.Engine.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" Version="4.0.1" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <Using Include="Xunit" />
+    <Using Include="Microsoft.AspNetCore.Builder" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/PaperGo.Engine/PaperGo.Engine.csproj" />
+    <None Include="testdata/**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

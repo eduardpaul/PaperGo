@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/PaperGo.Engine/PaperGo.Engine.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/PaperGo.Engine.Tests/PaperGo.Engine.Tests.csproj" />
+  </Folder>
+</Solution>
