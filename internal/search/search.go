@@ -109,6 +109,13 @@ type FieldFilter struct {
 	Values []FieldValue
 }
 
+// Field filters are bounded like collection query filters: at most
+// MaxFilterNodes conditions and groups, nested at most MaxFilterDepth deep.
+const (
+	MaxFilterNodes = 64
+	MaxFilterDepth = 8
+)
+
 // Key identifies a document: a surface of an entry.
 type Key struct{ ResourceID, Surface string }
 
@@ -428,3 +435,16 @@ var ErrUnavailable = errors.New("search is unavailable")
 // ErrSuperseded refuses to publish a generation older than the published
 // one.
 var ErrSuperseded = errors.New("a newer generation of the file's content is published")
+
+// Unique lists the distinct non-empty values, in their first order.
+func Unique(values []string) []string {
+	seen := map[string]bool{}
+	out := values[:0:0]
+	for _, v := range values {
+		if v != "" && !seen[v] {
+			seen[v] = true
+			out = append(out, v)
+		}
+	}
+	return out
+}

@@ -202,9 +202,9 @@ func TestSemanticSearchLooksPastFilteredCandidates(t *testing.T) {
 	}
 	var docs []search.Document
 	var vectors []search.HashVector
-	for i := range passageCandidates + 1 {
+	for i := range search.PassageCandidates + 1 {
 		id, blob, ws := fmt.Sprintf("d%d", i), fmt.Sprintf("b%d", i), "crowded"
-		if i == passageCandidates {
+		if i == search.PassageCandidates {
 			ws = "narrow"
 		}
 		docs = append(docs, search.Document{ResourceID: id, Kind: "item", Surface: search.SurfacePublished, Views: search.ViewHead | search.ViewPublished, WorkspaceID: ws, ScopeID: "s", BlobID: blob, Name: id})
@@ -214,7 +214,7 @@ func TestSemanticSearchLooksPastFilteredCandidates(t *testing.T) {
 			t.Fatal(err)
 		}
 		v := unit(i)
-		if i == passageCandidates {
+		if i == search.PassageCandidates {
 			v = []float32{0.6, 0.8, 0, 0} // less similar than all the others
 		}
 		vectors = append(vectors, search.HashVector{InputHash: chunk.InputHash, Vector: v})
@@ -233,7 +233,7 @@ func TestSemanticSearchLooksPastFilteredCandidates(t *testing.T) {
 	q := search.Query{Mode: search.ModeSemantic, Vector: []float32{1, 0, 0, 0}, Model: "m", Content: true, Limit: 5,
 		Filter: search.Filter{Access: search.Access{Draft: []string{"s"}, Read: []string{"s"}}, WorkspaceID: "narrow"}}
 	res, err := s.Search(ctx, q)
-	if err != nil || len(res.Hits) != 1 || res.Hits[0].ResourceID != fmt.Sprintf("d%d", passageCandidates) {
+	if err != nil || len(res.Hits) != 1 || res.Hits[0].ResourceID != fmt.Sprintf("d%d", search.PassageCandidates) {
 		t.Fatalf("%+v %v", res.Hits, err)
 	}
 	q.Filter.WorkspaceID = ""

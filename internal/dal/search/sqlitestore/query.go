@@ -1,12 +1,10 @@
 package sqlitestore
 
 import (
-	"cmp"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"slices"
 	"strings"
 
 	"papergo/internal/dal/refs"
@@ -166,19 +164,13 @@ func where(f search.Filter) (string, []any, error) {
 	return strings.Join(conds, " AND "), args, nil
 }
 
-// Field filters are bounded like collection query filters.
-const (
-	maxFilterNodes = 64
-	maxFilterDepth = 8
-)
-
 // errFilter reports a field filter the store cannot run; the service
 // validates filters first, so it means a bug.
 var errFilter = errors.New("invalid field filter")
 
 // fieldFilter compiles a field filter over documents d.
 func fieldFilter(f *search.FieldFilter, depth int, nodes *int) (string, []any, error) {
-	if *nodes++; *nodes > maxFilterNodes || depth > maxFilterDepth {
+	if *nodes++; *nodes > search.MaxFilterNodes || depth > search.MaxFilterDepth {
 		return "", nil, errFilter
 	}
 	if f.Not != nil {
@@ -369,26 +361,17 @@ func (s *Store) fused(ctx context.Context, tx *sql.Tx, q search.Query, filter st
 	if err != nil {
 		return err
 	}
-	scores := map[int64]float64{}
-	keywordIDs, semanticIDs := map[int64]bool{}, map[int64]semanticMatch{}
-	for i, id := range keyword {
-		scores[id] += 1 / float64(search.FusionK+i+1)
-		keywordIDs[id] = true
-	}
+	semanticIDs := map[int64]semanticMatch{}
+	semanticDocs := make([]int64, len(semantic))
 	for i, m := range semantic {
-		scores[m.doc] += 1 / float64(search.FusionK+i+1)
+		semanticDocs[i] = m.doc
 		semanticIDs[m.doc] = m
 	}
-	ordered := make([]int64, 0, len(scores))
-	for id := range scores {
-		ordered = append(ordered, id)
+	ordered, scores := search.Fuse(keyword, semanticDocs)
+	keywordIDs := map[int64]bool{}
+	for _, id := range keyword {
+		keywordIDs[id] = true
 	}
-	slices.SortFunc(ordered, func(a, b int64) int {
-		if c := cmp.Compare(scores[b], scores[a]); c != 0 {
-			return c
-		}
-		return cmp.Compare(a, b)
-	})
 	out.Total = len(ordered)
 	all, _ := json.Marshal(ordered)
 	if q.Facets {

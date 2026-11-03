@@ -1,77 +1,25 @@
 package sqlitestore
 
 import (
-	"container/heap"
 	"context"
 	"database/sql"
-	"encoding/binary"
 	"errors"
 	"fmt"
-	"math"
 	"strings"
-	"sync"
 	"time"
 
 	"papergo/internal/search"
 )
 
-// vectorIndex holds the vectors of one model in memory, a port of
-// PaperDotNet's VectorIndex: searches scan an immutable snapshot without
-// locks. Before each semantic search it checks the table (count and newest
-// stamp of the model) and loads only what changed, so writes by any process
-// are found.
-type vectorIndex struct {
-	mu        sync.Mutex
-	model     string
-	dims      int
-	hashes    []string
-	data      []float32
-	positions map[string]int
-	count     int64
-	newest    int64
+// VectorState is the count and newest stamp of a model's vectors.
+func (s *Store) VectorState(ctx context.Context, model string) (count, newest int64, err error) {
+	err = s.db.QueryRowContext(ctx, `SELECT count(*), coalesce(max(stamp),0) FROM vectors WHERE model=?`, model).Scan(&count, &newest)
+	return count, newest, err
 }
 
-// vectorSnapshot is a consistent view of the index. Later loads append past
-// its length, so it never changes.
-type vectorSnapshot struct {
-	dims   int
-	hashes []string
-	data   []float32
-}
-
-func (s vectorSnapshot) vector(i int) []float32 { return s.data[i*s.dims : (i+1)*s.dims] }
-
-// snapshot returns the index of model, current with the table.
-func (x *vectorIndex) snapshot(ctx context.Context, db *sql.DB, model string) (vectorSnapshot, error) {
-	x.mu.Lock()
-	defer x.mu.Unlock()
-	var count, newest int64
-	if err := db.QueryRowContext(ctx, `SELECT count(*), coalesce(max(stamp),0) FROM vectors WHERE model=?`, model).Scan(&count, &newest); err != nil {
-		return vectorSnapshot{}, err
-	}
-	if x.model != model || count < x.count {
-		// Another model, or vectors were deleted: load everything again.
-		x.model, x.dims, x.hashes, x.data, x.positions, x.count, x.newest = model, 0, nil, nil, map[string]int{}, 0, -1
-	}
-	if count != x.count || newest != x.newest {
-		if err := x.load(ctx, db, newest); err != nil {
-			return vectorSnapshot{}, err
-		}
-		if int64(len(x.hashes)) != count {
-			x.dims, x.hashes, x.data, x.positions, x.newest = 0, nil, nil, map[string]int{}, -1
-			if err := x.load(ctx, db, newest); err != nil {
-				return vectorSnapshot{}, err
-			}
-		}
-		x.count, x.newest = count, newest
-	}
-	return vectorSnapshot{dims: x.dims, hashes: x.hashes[:len(x.hashes):len(x.hashes)], data: x.data[:len(x.data):len(x.data)]}, nil
-}
-
-// load appends the model's vectors written after the newest loaded one, up
-// to newest.
-func (x *vectorIndex) load(ctx context.Context, db *sql.DB, newest int64) error {
-	rows, err := db.QueryContext(ctx, `SELECT input_hash, dims, vector FROM vectors WHERE model=? AND stamp>? AND stamp<=? ORDER BY stamp`, x.model, x.newest, newest)
+// LoadVectors yields a model's vectors stamped after after, up to newest.
+func (s *Store) LoadVectors(ctx context.Context, model string, after, newest int64, yield func(hash string, dims int, raw []byte) error) error {
+	rows, err := s.db.QueryContext(ctx, `SELECT input_hash, dims, vector FROM vectors WHERE model=? AND stamp>? AND stamp<=? ORDER BY stamp`, model, after, newest)
 	if err != nil {
 		return err
 	}
@@ -83,110 +31,12 @@ func (x *vectorIndex) load(ctx context.Context, db *sql.DB, newest int64) error 
 		if err = rows.Scan(&hash, &dims, &raw); err != nil {
 			return err
 		}
-		if _, ok := x.positions[hash]; ok || len(raw) != 4*dims {
-			continue
+		if err = yield(hash, dims, raw); err != nil {
+			return err
 		}
-		if x.dims == 0 {
-			x.dims = dims
-		}
-		if dims != x.dims {
-			continue
-		}
-		x.positions[hash] = len(x.hashes)
-		x.hashes = append(x.hashes, hash)
-		x.data = appendVector(x.data, raw)
 	}
 	return rows.Err()
 }
-
-func appendVector(data []float32, raw []byte) []float32 {
-	for i := 0; i < len(raw); i += 4 {
-		data = append(data, math.Float32frombits(binary.LittleEndian.Uint32(raw[i:])))
-	}
-	return data
-}
-
-func vectorBytes(v []float32) []byte {
-	raw := make([]byte, 4*len(v))
-	for i, x := range v {
-		binary.LittleEndian.PutUint32(raw[4*i:], math.Float32bits(x))
-	}
-	return raw
-}
-
-// dot is the dot product of two vectors of equal length, unrolled by 8.
-func dot(a, b []float32) float32 {
-	b = b[:len(a)]
-	var s0, s1, s2, s3, s4, s5, s6, s7 float32
-	i := 0
-	for ; i+8 <= len(a); i += 8 {
-		s0 += a[i] * b[i]
-		s1 += a[i+1] * b[i+1]
-		s2 += a[i+2] * b[i+2]
-		s3 += a[i+3] * b[i+3]
-		s4 += a[i+4] * b[i+4]
-		s5 += a[i+5] * b[i+5]
-		s6 += a[i+6] * b[i+6]
-		s7 += a[i+7] * b[i+7]
-	}
-	for ; i < len(a); i++ {
-		s0 += a[i] * b[i]
-	}
-	return s0 + s1 + s2 + s3 + s4 + s5 + s6 + s7
-}
-
-// similar is a chunk input and its similarity to the query.
-type similar struct {
-	hash       string
-	similarity float32
-}
-
-type similarHeap []similar
-
-func (h similarHeap) Len() int           { return len(h) }
-func (h similarHeap) Less(i, j int) bool { return h[i].similarity < h[j].similarity }
-func (h similarHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
-func (h *similarHeap) Push(x any)        { *h = append(*h, x.(similar)) }
-func (h *similarHeap) Pop() any {
-	old := *h
-	x := old[len(old)-1]
-	*h = old[:len(old)-1]
-	return x
-}
-
-// nearest returns the limit inputs most similar to the normalized query, at
-// least minSimilarity, by brute force; allowed, when not nil, restricts the
-// inputs.
-func (s vectorSnapshot) nearest(query []float32, limit int, minSimilarity float32, allowed map[string]bool) []similar {
-	if s.dims != len(query) || limit <= 0 {
-		return nil
-	}
-	top := make(similarHeap, 0, limit)
-	for i, hash := range s.hashes {
-		if allowed != nil && !allowed[hash] {
-			continue
-		}
-		similarity := dot(query, s.vector(i))
-		if similarity < minSimilarity {
-			continue
-		}
-		if len(top) < limit {
-			heap.Push(&top, similar{hash, similarity})
-		} else if similarity > top[0].similarity {
-			top[0] = similar{hash, similarity}
-			heap.Fix(&top, 0)
-		}
-	}
-	out := make([]similar, len(top))
-	for i := len(top) - 1; i >= 0; i-- {
-		out[i] = heap.Pop(&top).(similar)
-	}
-	return out
-}
-
-// passageCandidates is how many chunk inputs a semantic search takes from
-// the index before it filters them, as PaperDotNet's.
-const passageCandidates = 1000
 
 func (s *Store) GenerationToEmbed(ctx context.Context, model, generation string) ([]search.ChunkToEmbed, int, error) {
 	var inputs int
@@ -242,7 +92,7 @@ func (s *Store) SetVectors(ctx context.Context, model string, vectors []search.H
 			}
 			// One input has one vector per model: a second write changes nothing.
 			if _, err := tx.ExecContext(ctx, `INSERT INTO vectors(model,input_hash,dims,vector,stamp) VALUES (?,?,?,?,?) ON CONFLICT(model,input_hash) DO NOTHING`,
-				model, v.InputHash, len(v.Vector), vectorBytes(v.Vector), stamp); err != nil {
+				model, v.InputHash, len(v.Vector), search.VectorBytes(v.Vector), stamp); err != nil {
 				return err
 			}
 		}
@@ -294,7 +144,7 @@ func (s *Store) semantic(ctx context.Context, tx *sql.Tx, q search.Query, filter
 	if !q.Content {
 		return nil, nil
 	}
-	snapshot, err := s.vectors.snapshot(ctx, s.db, q.Model)
+	snapshot, err := s.vectors.Snapshot(ctx, s, q.Model)
 	if err != nil {
 		return nil, err
 	}
@@ -306,9 +156,9 @@ func (s *Store) semantic(ctx context.Context, tx *sql.Tx, q search.Query, filter
 		filter += " AND d.rowid NOT IN (SELECT rowid FROM doc_fts WHERE doc_fts MATCH ?)"
 		args = append(args, renderOn(&search.FullTextQuery{Groups: [][]search.Term{q.Text.Excluded}}, s.stem, docColumns))
 	}
-	candidates := snapshot.nearest(q.Vector, passageCandidates, minSimilarity, nil)
+	candidates := snapshot.Nearest(q.Vector, search.PassageCandidates, minSimilarity, nil)
 	matches, err := documentsOf(ctx, tx, candidates, filter, args, limit)
-	if err != nil || len(matches) >= limit || len(candidates) < passageCandidates {
+	if err != nil || len(matches) >= limit || len(candidates) < search.PassageCandidates {
 		return matches, err
 	}
 	// The best inputs belong mostly to documents the filters leave out:
@@ -317,12 +167,12 @@ func (s *Store) semantic(ctx context.Context, tx *sql.Tx, q search.Query, filter
 	if err != nil {
 		return nil, err
 	}
-	return documentsOf(ctx, tx, snapshot.nearest(q.Vector, passageCandidates, minSimilarity, allowed), filter, args, limit)
+	return documentsOf(ctx, tx, snapshot.Nearest(q.Vector, search.PassageCandidates, minSimilarity, allowed), filter, args, limit)
 }
 
 // documentsOf maps similar inputs to the documents whose published content
 // holds them and that pass the filter, each with its best chunk.
-func documentsOf(ctx context.Context, tx *sql.Tx, candidates []similar, filter string, args []any, limit int) ([]semanticMatch, error) {
+func documentsOf(ctx context.Context, tx *sql.Tx, candidates []search.Similar, filter string, args []any, limit int) ([]semanticMatch, error) {
 	if len(candidates) == 0 {
 		return nil, nil
 	}
@@ -332,7 +182,7 @@ func documentsOf(ctx context.Context, tx *sql.Tx, candidates []similar, filter s
 		if i > 0 {
 			list.WriteByte(',')
 		}
-		fmt.Fprintf(&list, `["%s",%g]`, c.hash, c.similarity)
+		fmt.Fprintf(&list, `["%s",%g]`, c.Hash, c.Similarity)
 	}
 	list.WriteByte(']')
 	// max() picks the bare columns of its row: the most similar chunk.
