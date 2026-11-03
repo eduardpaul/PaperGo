@@ -4,6 +4,7 @@ package doctexttest
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 
 	"papergo/internal/doctext"
@@ -42,5 +43,8 @@ func TextPDF(pages ...string) []byte {
 	return []byte(b.String())
 }
 
+// reader is shared by a test binary's tests, so PDFium compiles once.
+var reader = sync.OnceValue(func() *pdfium.Reader { return pdfium.New(pdfium.Options{}) })
+
 // PDF returns the PDF reader.
-func PDF(t testing.TB) doctext.PDF { t.Helper(); return pdfium.New() }
+func PDF(t testing.TB) doctext.PDF { t.Helper(); return reader() }

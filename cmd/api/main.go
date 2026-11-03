@@ -215,7 +215,9 @@ func run(log *slog.Logger) error {
 		defer decisions.Close()
 		log.Info("local decisions enabled", "model", decisions.ID())
 	}
-	pdf := pdfium.New()
+	// PDFium's compiled code is kept beside the database, as derived data
+	// that backups leave out and the next start rebuilds when it is gone.
+	pdf := pdfium.New(pdfium.Options{CacheDir: filepath.Join(filepath.Dir(c.DatabasePath), "cache", "pdfium"), Log: log})
 	log.Info("pdf reading enabled", "reader", pdf.Name())
 	var reader ocr.Engine
 	if c.OCRLibrary != "" {

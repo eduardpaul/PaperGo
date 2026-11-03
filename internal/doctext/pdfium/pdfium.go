@@ -8,10 +8,13 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"log/slog"
 	"math"
 	"os"
+	"path/filepath"
 	"runtime"
 	"slices"
+	"strings"
 	"sync"
 
 	sdk "github.com/klippa-app/go-pdfium"
@@ -21,6 +24,8 @@ import (
 	"github.com/klippa-app/go-pdfium/requests"
 	"github.com/klippa-app/go-pdfium/webassembly"
 	"github.com/tetratelabs/wazero"
+	"github.com/tetratelabs/wazero/api"
+	"github.com/tetratelabs/wazero/experimental"
 	"papergo/internal/doctext"
 )
 
@@ -30,30 +35,132 @@ import (
 // Further opens wait for a close.
 var maxOpen = max(1, runtime.NumCPU()/2) + 2
 
-// pool compiles the module on first use, which takes a few seconds. Every
-// open gets a fresh instance, which returns its memory on close. PDFs are
-// handed over in memory, so instances get no file system; PDFium then also
-// draws missing fonts with its built-in ones on every host.
-var pool = sync.OnceValues(func() (sdk.Pool, error) {
-	return webassembly.Init(webassembly.Config{MaxTotal: maxOpen, FSConfig: wazero.NewFSConfig(), Stdout: os.Stderr})
-})
+// Options configure a Reader.
+type Options struct {
+	// CacheDir keeps PDFium's compiled machine code between starts, so
+	// only the first start compiles it. Empty compiles it at every start.
+	CacheDir string
+	// Log receives a warning when CacheDir cannot be used; nil discards it.
+	Log *slog.Logger
+}
+
+// Where a start took PDFium's compiled code from.
+const (
+	// CacheHit loaded it from the cache directory.
+	CacheHit = "hit"
+	// CacheMiss compiled it and stored it in the cache directory.
+	CacheMiss = "miss"
+	// CacheOff compiled it without a cache directory, or without one that
+	// could be used.
+	CacheOff = "off"
+)
 
 // Reader opens PDFs with PDFium 8111 as WebAssembly, the module go-pdfium
 // v1.21.4 embeds. Name keys stored text, and notices/ holds the licences
 // the module ships under: update both with go-pdfium.
-type Reader struct{}
+type Reader struct {
+	// start compiles the module, or loads it from the cache, on first use;
+	// compiling takes a few seconds. Every open gets a fresh instance,
+	// which returns its memory on close.
+	start func() (sdk.Pool, error)
+	// cache is where start took the compiled code from.
+	cache string
+}
 
-func New() *Reader           { return &Reader{} }
+func New(o Options) *Reader {
+	r := &Reader{}
+	r.start = sync.OnceValues(func() (sdk.Pool, error) { return r.init(o) })
+	return r
+}
+
 func (*Reader) Name() string { return "pdfium-8111-wasm" }
 
-func (*Reader) Open(ctx context.Context, data []byte) (doctext.Document, error) {
+// Warm starts PDFium as the first Open would: it compiles the module, or
+// loads it from the cache, and starts one instance. Opens meanwhile wait
+// for it and share it. It returns CacheHit, CacheMiss or CacheOff.
+func (r *Reader) Warm() (string, error) {
+	_, err := r.start()
+	return r.cache, err
+}
+
+func (r *Reader) init(o Options) (sdk.Pool, error) {
+	if o.CacheDir != "" {
+		before := cached(o.CacheDir)
+		p, err := startPool(o.CacheDir)
+		if err == nil {
+			r.cache = CacheHit
+			if cached(o.CacheDir) > before {
+				r.cache = CacheMiss
+			}
+			return p, nil
+		}
+		if o.Log != nil {
+			o.Log.Warn("PDFium starts without its compilation cache", "cache", o.CacheDir, "error", err)
+		}
+	}
+	r.cache = CacheOff
+	return startPool("")
+}
+
+// startPool compiles PDFium, through a compilation cache in dir unless dir
+// is empty, and checks that an instance starts. PDFs are handed over in
+// memory, so instances get no file system; PDFium then also draws missing
+// fonts with its built-in ones on every host.
+func startPool(dir string) (sdk.Pool, error) {
+	config := webassembly.Config{MaxTotal: maxOpen, FSConfig: wazero.NewFSConfig(), Stdout: os.Stderr}
+	var cache wazero.CompilationCache
+	if dir != "" {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return nil, err
+		}
+		// wazero keeps entries per wazero version, platform and CPU
+		// features, keyed by the module's hash, and writes them atomically.
+		var err error
+		if cache, err = wazero.NewCompilationCacheWithDir(dir); err != nil {
+			return nil, err
+		}
+		// The features go-pdfium's module needs, as its default runtime has.
+		config.RuntimeConfig = wazero.NewRuntimeConfig().WithCoreFeatures(api.CoreFeaturesV2 | experimental.CoreFeaturesExceptionHandling).WithCompilationCache(cache)
+	}
+	p, err := webassembly.Init(config)
+	if err == nil {
+		var instance sdk.Pdfium
+		if instance, err = p.GetInstanceWithContext(context.Background()); err == nil {
+			err = instance.Close()
+		}
+		if err != nil {
+			_ = p.Close()
+		}
+	}
+	if err != nil {
+		if cache != nil {
+			_ = cache.Close(context.Background())
+		}
+		return nil, err
+	}
+	return p, nil
+}
+
+// cached counts the compiled modules stored in a cache directory.
+func cached(dir string) int {
+	entries, _ := filepath.Glob(filepath.Join(dir, "wazero-*", "*"))
+	n := 0
+	for _, e := range entries {
+		if !strings.HasSuffix(e, ".tmp") {
+			n++
+		}
+	}
+	return n
+}
+
+func (r *Reader) Open(ctx context.Context, data []byte) (doctext.Document, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	if len(data) == 0 || len(data) > math.MaxInt32 {
 		return nil, errors.New("the PDF is empty or too large")
 	}
-	p, err := pool()
+	p, err := r.start()
 	if err != nil {
 		return nil, fmt.Errorf("PDFium cannot start: %w", err)
 	}

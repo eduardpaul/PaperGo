@@ -496,7 +496,7 @@ Chunkers are a Go interface, `Chunker{ Key() string; Split(text Text, o Options)
 
 #### Reading text and where it is kept
 
-- **PDF reading.** PDFium 8111 as WebAssembly, embedded by `klippa-app/go-pdfium` and run in-process by wazero, behind `doctext.PDF`. It provides text extraction and page rendering for OCR with no native library. The module compiles in a few seconds on the first PDF after a start, and reads and renders about 2–4× slower than native PDFium. The Docker image and release archives ship its notices.
+- **PDF reading.** PDFium 8111 as WebAssembly, embedded by `klippa-app/go-pdfium` and run in-process by wazero, behind `doctext.PDF`. It provides text extraction and page rendering for OCR with no native library. The module compiles in a few seconds once and is then loaded from wazero's compilation cache in `cache/pdfium` beside the database; it reads and renders about 2–4× slower than native PDFium. The Docker image and release archives ship its notices.
   - **Not chosen:** PDFium through go-pdfium's cgo backend (faster, but a native library that every build, package and start depends on), pdfcpu (processes PDFs but neither extracts text nor renders pages), and a pure-Go text reader (no rendering, so scanned PDFs would stay without text).
   - **Alternative:** a pure-Go text-layer reader, with no rendering. Scanned PDFs would then stay without text until a renderer exists.
 - **No OCR configured.** When `ONNXRUNTIME_LIB` is empty, `ocr: auto` reads text layers only and reports the pages it skipped. It does not fail.

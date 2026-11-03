@@ -12,7 +12,7 @@ import (
 
 // Opens past the bound wait for a close, and give up with their context.
 func TestOpenWaitsForAnInstance(t *testing.T) {
-	reader, data := pdfium.New(), doctexttest.TextPDF("Held")
+	reader, data := doctexttest.PDF(t), doctexttest.TextPDF("Held")
 	open := make([]doctext.Document, 0, pdfium.MaxOpen)
 	defer func() {
 		for _, doc := range open {
