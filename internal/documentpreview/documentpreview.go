@@ -206,6 +206,11 @@ func (r *Renderer) render(ctx context.Context, j job) (storage.Object, int, int,
 		if ctx.Err() != nil {
 			return storage.Object{}, 0, 0, false, ctx.Err()
 		}
+		// A reader that cannot work now fails the operation instead of
+		// recording the file as one without a preview.
+		if errors.Is(err, doctext.ErrUnavailable) {
+			return storage.Object{}, 0, 0, false, err
+		}
 		return storage.Object{}, 0, 0, false, nil
 	}
 	object, err := r.Storage.Put(ctx, bytes.NewReader(image.WebP), int64(len(image.WebP))+1)

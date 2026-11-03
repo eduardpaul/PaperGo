@@ -16,6 +16,7 @@ import (
 	"sync"
 
 	"papergo/internal/dal/blobs"
+	"papergo/internal/doctext"
 	"papergo/internal/httpapi"
 	"papergo/internal/imaging"
 	"papergo/internal/ocr"
@@ -198,6 +199,18 @@ func unreadable(err error) error {
 	return &httpapi.Problem{Status: http.StatusUnprocessableEntity, Code: "unreadable_file", Detail: "the file's pages cannot be read: " + err.Error()}
 }
 
+// openFailed answers for a PDF that did not open: unreadable, unless the
+// request ended or the reader is unavailable, which say nothing about it.
+func openFailed(ctx context.Context, err error) error {
+	switch {
+	case ctx.Err() != nil:
+		return err
+	case errors.Is(err, doctext.ErrUnavailable):
+		return &httpapi.Problem{Status: http.StatusServiceUnavailable, Code: "pdf_unavailable", Detail: err.Error()}
+	}
+	return unreadable(err)
+}
+
 func (p *pages) sizes(ctx context.Context, data []byte, media string) ([]PageSize, bool, error) {
 	switch media {
 	case "application/pdf":
@@ -206,7 +219,7 @@ func (p *pages) sizes(ctx context.Context, data []byte, media string) ([]PageSiz
 		}
 		doc, err := p.renderer.PDF.Open(ctx, data)
 		if err != nil {
-			return nil, false, unreadable(err)
+			return nil, false, openFailed(ctx, err)
 		}
 		defer doc.Close()
 		n := min(doc.Pages(), maxListedPages)
@@ -254,7 +267,7 @@ func (p *pages) render(ctx context.Context, data []byte, media string, i, width 
 		}
 		doc, err := p.renderer.PDF.Open(ctx, data)
 		if err != nil {
-			return nil, unreadable(err)
+			return nil, openFailed(ctx, err)
 		}
 		defer doc.Close()
 		if i >= doc.Pages() {

@@ -10,10 +10,12 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parent.parent
 LIBRARIES = {
-    'linux': ['libonnxruntime.so', 'libpdfium.so'],
-    'darwin': ['libonnxruntime.dylib', 'libpdfium.dylib'],
-    'windows': ['onnxruntime.dll', 'pdfium.dll'],
+    'linux': ['libonnxruntime.so'],
+    'darwin': ['libonnxruntime.dylib'],
+    'windows': ['onnxruntime.dll'],
 }
+# The executable embeds PDFium as WebAssembly; these notices ship with it.
+PDFIUM_NOTICES = ROOT / 'internal/doctext/pdfium/notices'
 
 
 def compiler_runtime(system, env):
@@ -61,6 +63,8 @@ def runtime_files(native, system, env):
     for path in sorted((native / 'notices').rglob('*')):
         if path.is_file():
             files['notices/' + path.relative_to(native / 'notices').as_posix()] = path
+    for path in sorted(PDFIUM_NOTICES.iterdir()):
+        files['notices/pdfium/' + path.name] = path
     return files
 
 

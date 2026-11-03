@@ -3,7 +3,11 @@ package doctexttest
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"runtime/debug"
 	"strings"
+	"sync"
 	"testing"
 
 	"papergo/internal/doctext"
@@ -42,5 +46,31 @@ func TextPDF(pages ...string) []byte {
 	return []byte(b.String())
 }
 
-// PDF returns the linked native PDF reader.
-func PDF(t testing.TB) doctext.PDF { t.Helper(); return pdfium.New() }
+// reader is shared by a test binary's tests, and its compiled code by
+// every test binary and run.
+var reader = sync.OnceValue(func() *pdfium.Reader { return pdfium.New(pdfium.Options{CacheDir: cacheDir()}) })
+
+// cacheDir keeps PDFium's compiled code for tests on disk, per go-pdfium
+// version: under the user cache directory, or TMPDIR without one.
+func cacheDir() string {
+	base, err := os.UserCacheDir()
+	if err != nil {
+		base = os.TempDir()
+	}
+	version := "unknown"
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, m := range info.Deps {
+			if m.Path == "github.com/klippa-app/go-pdfium" {
+				version = m.Version
+			}
+		}
+	}
+	return filepath.Join(base, "papergo-test", "pdfium-"+version)
+}
+
+// CacheDir is the compilation cache tests share; tests of the cache itself
+// use their own.
+func CacheDir(t testing.TB) string { t.Helper(); return cacheDir() }
+
+// PDF returns the PDF reader.
+func PDF(t testing.TB) doctext.PDF { t.Helper(); return reader() }

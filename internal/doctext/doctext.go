@@ -45,6 +45,12 @@ type Document interface {
 // ErrEncrypted is returned by readers for password-protected PDFs.
 var ErrEncrypted = errors.New("the PDF is protected by a password")
 
+// ErrUnavailable is returned by readers that cannot read PDFs at the
+// moment, such as when PDFium could not start. It says nothing about the
+// file: callers report a server-side failure, which a later try may not
+// meet.
+var ErrUnavailable = errors.New("PDF reading is unavailable")
+
 // OCR modes.
 const (
 	// OCRAuto reads text layers and OCRs pages and images without one, when
@@ -211,6 +217,10 @@ func Extract(ctx context.Context, data []byte, mediaType string, o Options, pdf 
 func extractPDF(ctx context.Context, data []byte, o Options, pdf PDF, engine ocr.Engine) (Result, error) {
 	doc, err := pdf.Open(ctx, data)
 	if err != nil {
+		// Only the file's own problems make it unsupported.
+		if errors.Is(err, ErrUnavailable) || ctx.Err() != nil {
+			return Result{}, err
+		}
 		return Result{}, fmt.Errorf("%w: %w", ErrUnsupported, err)
 	}
 	defer doc.Close()

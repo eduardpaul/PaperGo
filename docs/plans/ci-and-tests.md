@@ -249,7 +249,7 @@ the dispatcher and seed several fields even when the scenario needs less.
   must be isolated and measured; do not change production defaults for test speed.
 - Move `surfaceBatch`, `operationBatch` and `candidateDriveLimit` test overrides
   from package globals into per-service configuration before parallelizing DMS
-  tests. Audit native ONNX/PDFium globals, environment mutation and runner
+  tests. Audit native ONNX and PDFium pool globals, environment mutation and runner
   lifecycle as well. Start with isolated pure/domain tests and bounded parallelism.
 
 Acceptance: unchanged assertions and isolation; no race findings or flakes in

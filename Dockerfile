@@ -77,7 +77,7 @@ RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
 # stamping of go list and go build, would otherwise refuse the repository.
 RUN git config --system --add safe.directory '*'
 # The pinned cgo SDKs: headers, libraries and license notices. Only WebP is
-# compiled; PDFium, ONNX Runtime and tokenizers use pinned binaries.
+# compiled; ONNX Runtime and tokenizers use pinned binaries.
 # Setup in a checkout rewrites their environment files for that checkout.
 COPY scripts/native.py scripts/native.json /opt/papergo/native-src/scripts/
 RUN python3 /opt/papergo/native-src/scripts/native.py --directory /opt/papergo/native \

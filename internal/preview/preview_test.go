@@ -10,7 +10,6 @@ import (
 
 	"golang.org/x/image/tiff"
 	"papergo/internal/doctext/doctexttest"
-	"papergo/internal/doctext/pdfium"
 	"papergo/internal/imaging"
 )
 
@@ -46,7 +45,7 @@ func TestTwentyMegabyteImageProducesBoundedWebP(t *testing.T) {
 	}
 }
 func TestPDFPreviewRendersOnlyTheFirstPageAndTIFFIsSupported(t *testing.T) {
-	pdf := pdfium.New()
+	pdf := doctexttest.PDF(t)
 	ctx := context.Background()
 	one, err := Generate(ctx, doctexttest.TextPDF("First page"), "application/pdf", pdf, 1000000)
 	if err != nil {
