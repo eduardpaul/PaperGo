@@ -134,21 +134,10 @@ def main():
         (output / 'lib').mkdir(parents=True)
         for name, archive in archives.items():
             extract(archive, output / 'sdk' / name)
-        pdfium = output / 'sdk/pdfium'
-        shutil.copytree(pdfium / 'include', output / 'include', dirs_exist_ok=True)
-        for native in list((pdfium / 'lib').glob('*')) + list((pdfium / 'bin').glob('*')):
-            if native.is_file():
-                shutil.copy2(native, output / 'lib' / native.name)
         ort = next((output / 'sdk/onnxruntime').iterdir())
         ort_name = {'linux': 'libonnxruntime.so', 'darwin': 'libonnxruntime.dylib', 'windows': 'onnxruntime.dll'}[system]
         ort_library = next(item for item in (ort / 'lib').iterdir() if item.name.startswith(ort_name) or (system == 'darwin' and item.name.startswith('libonnxruntime.') and item.suffix == '.dylib'))
         shutil.copy2(ort_library, output / 'lib' / ort_name)
-        if system == 'darwin':
-            # The published PDFium SDK uses a cwd-relative install name. Give
-            # the linked executable an executable-relative runtime dependency.
-            library = output / 'lib/libpdfium.dylib'
-            subprocess.run(['install_name_tool', '-id', '@rpath/libpdfium.dylib', str(library)], check=True)
-            subprocess.run(['codesign', '--force', '--sign', '-', str(library)], check=True)
         tokenizer_source = next((output / 'sdk/tokenizers_source').iterdir())
         if system == 'windows':
             subprocess.run(['cargo', 'build', '--locked', '--release', '-p', 'tokenizers-ffi',
@@ -160,14 +149,12 @@ def main():
         build_webp(next((output / 'sdk/webp').iterdir()), output, args.cmake)
         notices = output / 'notices'
         notices.mkdir()
-        shutil.copytree(pdfium / 'licenses', notices / 'pdfium')
         shutil.copy2(tokenizer_source / 'LICENSE', notices / 'tokenizers-LICENSE')
         for name in ['LICENSE', 'ThirdPartyNotices.txt']:
             shutil.copy2(ort / name, notices / ('onnxruntime-' + name))
         shutil.copy2(next((output / 'sdk/webp').iterdir()) / 'COPYING', notices / 'webp-COPYING')
         pkg = output / 'lib/pkgconfig'
         pkg.mkdir()
-        (pkg / 'pdfium.pc').write_text(f'Name: PDFium\nDescription: PDFium\nVersion: 8076\nLibs: -L{(output / "lib").as_posix()} -lpdfium\nCflags: -I{(output / "include").as_posix()}\n')
         (pkg / 'libwebp.pc').write_text(f'Name: libwebp\nDescription: libwebp\nVersion: 1.6.0\nLibs: -L{(output / "lib").as_posix()} -lwebp -lsharpyuv -lm\nCflags: -I{(output / "include").as_posix()}\n')
         stamp.write_text(json.dumps(fingerprint))
     if args.check:

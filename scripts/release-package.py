@@ -21,11 +21,13 @@ def package(version, system, arch, bin_dir, dist):
                 inputs[path.relative_to(bin_dir).as_posix()] = path
     if system == 'windows':
         inputs.update((path.name, path) for path in sorted(bin_dir.glob('*.dll')))
-    required = ['onnxruntime.dll', 'pdfium.dll'] if system == 'windows' else [
-        'lib/libonnxruntime.so', 'lib/libpdfium.so',
+    required = ['onnxruntime.dll'] if system == 'windows' else [
+        'lib/libonnxruntime.so',
     ] if system == 'linux' else [
-        'lib/libonnxruntime.dylib', 'lib/libpdfium.dylib',
+        'lib/libonnxruntime.dylib',
     ]
+    # The executable embeds PDFium, whose notices ship beside it.
+    required.append('notices/pdfium/pdfium.txt')
     if any(name not in inputs for name in required):
         raise ValueError('Build the native libraries alongside the executable before packaging')
     dist.mkdir(parents=True, exist_ok=True)

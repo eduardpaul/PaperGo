@@ -60,6 +60,9 @@ class PackagingTests(unittest.TestCase):
                     names = set(binary_zip.namelist())
                     self.assertFalse(any(name.startswith('assets/') for name in names))
                     self.assertTrue(set(files) <= names)
+                    # PDFium is embedded in the executable; only its notices ship.
+                    self.assertIn('notices/pdfium/pdfium.txt', names)
+                    self.assertFalse(any('pdfium' in name for name in names if not name.startswith('notices/')))
                     self.assertIn('config.yaml', names)
                     self.assertEqual((binary_zip.getinfo('papergo' + suffix).external_attr >> 16) & 0o777, 0o755)
                     binary_zip.extractall(installation)
