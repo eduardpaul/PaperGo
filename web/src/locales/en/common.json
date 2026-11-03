@@ -1,14 +1,41 @@
 {
   "actions": {
     "add": "Add “{{text}}”",
+    "apply": "Apply",
+    "archive": "Archive",
+    "back": "Back",
     "cancel": "Cancel",
+    "clear": "Clear",
     "close": "Close",
     "continue": "Continue",
+    "copy": "Copy",
+    "create": "Create",
+    "delete": "Delete",
+    "discard": "Discard",
+    "done": "Done",
+    "download": "Download",
+    "edit": "Edit",
+    "move": "Move",
+    "next": "Next",
+    "open": "Open",
+    "previous": "Previous",
+    "refresh": "Refresh",
     "remove": "Remove {{name}}",
-    "save": "Save"
+    "removeItem": "Remove",
+    "rename": "Rename",
+    "restore": "Restore",
+    "retry": "Retry",
+    "save": "Save",
+    "share": "Share",
+    "unarchive": "Unarchive",
+    "upload": "Upload"
   },
   "status": {
     "checking": "Checking…",
+    "creating": "Creating…",
+    "deleting": "Deleting…",
+    "loading": "Loading…",
+    "saved": "Saved",
     "saving": "Saving…",
     "searching": "Searching…"
   },
@@ -17,7 +44,20 @@
     "placeholder": "Search…"
   },
   "select": {
+    "none": "None",
     "placeholder": "Select…"
+  },
+  "answer": {
+    "no": "No",
+    "yes": "Yes"
+  },
+  "fields": {
+    "created": "Created",
+    "description": "Description",
+    "modified": "Modified",
+    "name": "Name",
+    "owner": "Owner",
+    "type": "Type"
   },
   "keywords": {
     "limit": "At most {{limit}} keywords",
@@ -28,5 +68,6 @@
     "dark": "Dark",
     "light": "Light",
     "system": "System"
-  }
+  },
+  "unsaved": "You have unsaved changes."
 }

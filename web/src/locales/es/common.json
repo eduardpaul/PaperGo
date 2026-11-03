@@ -1,14 +1,41 @@
 {
   "actions": {
     "add": "Añadir «{{text}}»",
+    "apply": "Aplicar",
+    "archive": "Archivar",
+    "back": "Atrás",
     "cancel": "Cancelar",
+    "clear": "Borrar",
     "close": "Cerrar",
     "continue": "Continuar",
+    "copy": "Copiar",
+    "create": "Crear",
+    "delete": "Eliminar",
+    "discard": "Descartar",
+    "done": "Listo",
+    "download": "Descargar",
+    "edit": "Editar",
+    "move": "Mover",
+    "next": "Siguiente",
+    "open": "Abrir",
+    "previous": "Anterior",
+    "refresh": "Actualizar",
     "remove": "Quitar {{name}}",
-    "save": "Guardar"
+    "removeItem": "Quitar",
+    "rename": "Cambiar el nombre",
+    "restore": "Restaurar",
+    "retry": "Reintentar",
+    "save": "Guardar",
+    "share": "Compartir",
+    "unarchive": "Desarchivar",
+    "upload": "Subir"
   },
   "status": {
     "checking": "Comprobando…",
+    "creating": "Creando…",
+    "deleting": "Eliminando…",
+    "loading": "Cargando…",
+    "saved": "Guardado",
     "saving": "Guardando…",
     "searching": "Buscando…"
   },
@@ -17,7 +44,20 @@
     "placeholder": "Buscar…"
   },
   "select": {
+    "none": "Ninguno",
     "placeholder": "Selecciona…"
+  },
+  "answer": {
+    "no": "No",
+    "yes": "Sí"
+  },
+  "fields": {
+    "created": "Creado",
+    "description": "Descripción",
+    "modified": "Modificado",
+    "name": "Nombre",
+    "owner": "Propietario",
+    "type": "Tipo"
   },
   "keywords": {
     "limit": "Como máximo {{limit}} palabras clave",
@@ -28,5 +68,6 @@
     "dark": "Oscuro",
     "light": "Claro",
     "system": "Sistema"
-  }
+  },
+  "unsaved": "Tienes cambios sin guardar."
 }
