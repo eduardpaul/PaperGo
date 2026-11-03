@@ -143,10 +143,8 @@ to be proposed and approved separately:
 
 Until those exist, the UI shows that server text as it arrives, in English.
 
-## Open questions
+## Spanish
 
-- Spanish form of address: informal `tú` (common in modern software) or
-  formal `usted`.
-- Neutral Spanish (`es`) only, or regional catalogs (`es-ES`, `es-MX`) as
-  well. Recommended: `es` only. Regional locales already fall back to it.
-- Who reviews the Spanish text before release.
+- Neutral Spanish (`es`) only. Regional locales fall back to it.
+- Informal `tú` throughout (`Guarda tus cambios`), as the product owner chose.
+- Before release, a native speaker reviews the text in the running app.

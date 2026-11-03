@@ -1,6 +1,7 @@
 import { X } from 'lucide-react';
 import { Dialog as Primitive } from 'radix-ui';
 import type * as React from 'react';
+import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/utils';
 
 export const Sheet = Primitive.Root;
@@ -26,8 +27,9 @@ export function SheetContent({ className, children, ...props }: React.ComponentP
 }
 
 export function SheetClose({ className }: { className?: string }) {
+  const { t } = useTranslation();
   return (
-    <Primitive.Close className={cn('rounded-md p-1.5 text-muted hover:bg-surface-muted', className)} aria-label="Close">
+    <Primitive.Close className={cn('rounded-md p-1.5 text-muted hover:bg-surface-muted', className)} aria-label={t('actions.close')}>
       <X className="size-4" />
     </Primitive.Close>
   );

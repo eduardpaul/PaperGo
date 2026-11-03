@@ -16,9 +16,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/menu';
+import { useTranslation } from '@/i18n';
 import { applyTheme, storedTheme, type Theme } from '@/lib/preferences';
 
 export function UserMenu() {
+  const { t } = useTranslation(['shell', 'common']);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: me } = useQuery(meQuery);
@@ -38,7 +40,7 @@ export function UserMenu() {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="rounded-full p-0.5 hover:bg-surface-muted" aria-label="Account">
+      <DropdownMenuTrigger className="rounded-full p-0.5 hover:bg-surface-muted" aria-label={t('account.label')}>
         <Avatar name={me?.display_name || me?.subject} />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-60">
@@ -49,31 +51,31 @@ export function UserMenu() {
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
           <Link to="/settings">
-            <Settings /> Settings
+            <Settings /> {t('account.settings')}
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
           <Link to="/admin">
-            <ShieldCheck /> Administration
+            <ShieldCheck /> {t('account.administration')}
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuLabel>Theme</DropdownMenuLabel>
+        <DropdownMenuLabel>{t('account.theme')}</DropdownMenuLabel>
         <DropdownMenuRadioGroup value={theme} onValueChange={(value) => setTheme.mutate(value as Theme)}>
           <DropdownMenuRadioItem value="system">
-            <Monitor className="size-4 text-muted" /> System
+            <Monitor className="size-4 text-muted" /> {t('common:theme.system')}
           </DropdownMenuRadioItem>
           <DropdownMenuRadioItem value="light">
-            <Sun className="size-4 text-muted" /> Light
+            <Sun className="size-4 text-muted" /> {t('common:theme.light')}
           </DropdownMenuRadioItem>
           <DropdownMenuRadioItem value="dark">
-            <Moon className="size-4 text-muted" /> Dark
+            <Moon className="size-4 text-muted" /> {t('common:theme.dark')}
           </DropdownMenuRadioItem>
         </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
         {authenticationMode() === 'proxy' ? (
-          <p className="px-2 py-2 text-xs text-muted">Sign-in is managed by your reverse proxy.</p>
+          <p className="px-2 py-2 text-xs text-muted">{t('account.proxy')}</p>
         ) : (
           <DropdownMenuItem
             onSelect={() => {
@@ -98,7 +100,7 @@ export function UserMenu() {
               void navigate({ to: '/login', search: { returnTo: '/' } });
             }}
           >
-            <LogOut /> Sign out
+            <LogOut /> {t('account.signOut')}
           </DropdownMenuItem>
         )}
       </DropdownMenuContent>

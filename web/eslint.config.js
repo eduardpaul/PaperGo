@@ -1,7 +1,15 @@
 import js from '@eslint/js';
+import i18next from 'eslint-plugin-i18next';
 import reactHooks from 'eslint-plugin-react-hooks';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
+
+// Screen text comes from src/locales. These folders are translated; text written into their JSX fails lint.
+const translated = [
+  'src/main.tsx',
+  'src/components/**/*.tsx',
+  'src/routes/login*.tsx',
+];
 
 export default tseslint.config(
   { ignores: ['dist', 'src/routeTree.gen.ts'] },
@@ -14,6 +22,23 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       '@typescript-eslint/consistent-type-imports': 'error',
+    },
+  },
+  {
+    files: translated,
+    ignores: ['**/*.test.tsx'],
+    plugins: { i18next },
+    rules: {
+      'i18next/no-literal-string': [
+        'error',
+        {
+          mode: 'jsx-only',
+          'jsx-attributes': {
+            include: ['^(label|title|placeholder|alt|aria-label|aria-description|description|hint|tooltip|heading|message|empty)$'],
+            exclude: [],
+          },
+        },
+      ],
     },
   },
 );

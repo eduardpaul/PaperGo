@@ -1,0 +1,32 @@
+{
+  "actions": {
+    "add": "Add “{{text}}”",
+    "cancel": "Cancel",
+    "close": "Close",
+    "continue": "Continue",
+    "remove": "Remove {{name}}",
+    "save": "Save"
+  },
+  "status": {
+    "checking": "Checking…",
+    "saving": "Saving…",
+    "searching": "Searching…"
+  },
+  "search": {
+    "noMatches": "No matches.",
+    "placeholder": "Search…"
+  },
+  "select": {
+    "placeholder": "Select…"
+  },
+  "keywords": {
+    "limit": "At most {{limit}} keywords",
+    "placeholder": "Add keywords…",
+    "remove": "Remove keyword {{name}}"
+  },
+  "theme": {
+    "dark": "Dark",
+    "light": "Light",
+    "system": "System"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "generic": "Something went wrong.",
+  "code": {
+    "conflict": "That conflicts with a change someone else made. Reload and try again.",
+    "content_unavailable": "The file content is no longer available.",
+    "duplicate_file": "This file is already stored.",
+    "folder_not_empty": "The folder is not empty.",
+    "forbidden": "You do not have access to this.",
+    "group_managed_by_identity_provider": "This group's members are managed by the identity provider.",
+    "internal_error": "The server could not complete the request.",
+    "last_administrator": "An organization needs at least one administrator.",
+    "last_owner": "A workspace needs at least one owner. Make someone else an owner first.",
+    "not_found": "This no longer exists, or you do not have access to it.",
+    "operation_quota": "Too many operations are running. Try again in a minute.",
+    "overloaded": "The server is busy. Try again shortly.",
+    "payload_too_large": "That is larger than the server accepts.",
+    "precondition_failed": "Someone else changed this in the meantime. Reload and try again.",
+    "storage_unavailable": "File storage is unavailable. Try again shortly.",
+    "text_not_read": "The file's text has not been read yet. A workflow with document.read_text reads it.",
+    "timeout": "The server took too long. Try again.",
+    "unauthorized": "Your sign-in has expired. Sign in again.",
+    "unavailable": "The server is unavailable. Try again shortly."
+  }
+}

@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { toast, Toaster } from 'sonner';
 import { clearToken, isApiError } from './api/http';
 import { loadAuthentication } from './api/auth';
+import { browserLanguage, i18n, setLanguage } from './i18n';
 import { problemMessage } from './lib/errors';
 import { routeTree } from './routeTree.gen';
 import './styles.css';
@@ -55,17 +56,21 @@ declare module '@tanstack/react-query' {
 
 async function start() {
   const root = createRoot(document.getElementById('root')!);
+  // Until the user's preference loads after sign-in, the screen follows this browser.
+  const language = setLanguage(browserLanguage());
   try {
     await loadAuthentication();
   } catch {
+    await language;
     root.render(
       <main className="p-8">
-        <h1 className="text-lg font-semibold">Unable to load sign-in settings</h1>
-        <p className="mt-2">Refresh this page after checking your connection and proxy authentication.</p>
+        <h1 className="text-lg font-semibold">{i18n.t('auth:unavailable.title')}</h1>
+        <p className="mt-2">{i18n.t('auth:unavailable.hint')}</p>
       </main>,
     );
     return;
   }
+  await language;
   root.render(
     <StrictMode>
       <QueryClientProvider client={queryClient}>

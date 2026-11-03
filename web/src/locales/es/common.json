@@ -1,0 +1,32 @@
+{
+  "actions": {
+    "add": "Añadir «{{text}}»",
+    "cancel": "Cancelar",
+    "close": "Cerrar",
+    "continue": "Continuar",
+    "remove": "Quitar {{name}}",
+    "save": "Guardar"
+  },
+  "status": {
+    "checking": "Comprobando…",
+    "saving": "Guardando…",
+    "searching": "Buscando…"
+  },
+  "search": {
+    "noMatches": "Sin resultados.",
+    "placeholder": "Buscar…"
+  },
+  "select": {
+    "placeholder": "Selecciona…"
+  },
+  "keywords": {
+    "limit": "Como máximo {{limit}} palabras clave",
+    "placeholder": "Añade palabras clave…",
+    "remove": "Quitar la palabra clave {{name}}"
+  },
+  "theme": {
+    "dark": "Oscuro",
+    "light": "Claro",
+    "system": "Sistema"
+  }
+}

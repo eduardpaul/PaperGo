@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Kbd } from '@/components/ui/feedback';
 import { UploadsProvider } from '@/features/documents/uploads';
 import { NotificationBell } from '@/features/notifications/notifications';
+import { useTranslation } from '@/i18n';
 import { rememberWorkspace } from '@/lib/recent-workspace';
 import { useSearchAvailable } from '@/lib/search';
 import { typingIn } from '@/lib/keys';
@@ -14,6 +15,7 @@ import { Sidebar } from './sidebar';
 import { UserMenu } from './user-menu';
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const { t } = useTranslation('shell');
   const [drawer, setDrawer] = useState(false);
   const { workspaceId } = useParams({ strict: false });
   useEffect(() => {
@@ -30,7 +32,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <DialogPrimitive.Portal>
             <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-black/40 lg:hidden" />
             <DialogPrimitive.Content className="fixed inset-y-0 left-0 z-50 w-72 shadow-xl lg:hidden" aria-describedby={undefined}>
-              <DialogPrimitive.Title className="sr-only">Navigation</DialogPrimitive.Title>
+              <DialogPrimitive.Title className="sr-only">{t('nav.navigation')}</DialogPrimitive.Title>
               <Sidebar onNavigate={() => setDrawer(false)} />
             </DialogPrimitive.Content>
           </DialogPrimitive.Portal>
@@ -48,10 +50,13 @@ export function AppShell({ children }: { children: ReactNode }) {
 }
 
 function TopBar({ onMenu }: { onMenu: () => void }) {
+  const { t } = useTranslation('shell');
   const palette = useCommandPalette();
   const navigate = useNavigate();
   const searchAvailable = useSearchAvailable();
   const mac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
+  // Key names, as printed on keyboards.
+  const shortcut = mac ? '⌘K' : 'Ctrl K';
 
   useEffect(() => {
     let prefix = false;
@@ -76,7 +81,7 @@ function TopBar({ onMenu }: { onMenu: () => void }) {
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-background/85 px-3 backdrop-blur sm:px-4">
-      <Button variant="ghost" size="icon" className="lg:hidden" aria-label="Open navigation" onClick={onMenu}>
+      <Button variant="ghost" size="icon" className="lg:hidden" aria-label={t('nav.open')} onClick={onMenu}>
         <Menu />
       </Button>
       <button
@@ -85,8 +90,8 @@ function TopBar({ onMenu }: { onMenu: () => void }) {
         className="flex h-9 w-full max-w-md items-center gap-2 rounded-md border bg-surface px-3 text-[13px] text-muted shadow-xs hover:border-input"
       >
         <Search className="size-4" />
-        <span className="flex-1 text-left">Search or jump to…</span>
-        <Kbd className="hidden sm:inline">{mac ? '⌘K' : 'Ctrl K'}</Kbd>
+        <span className="flex-1 text-start">{t('palette.placeholder')}</span>
+        <Kbd className="hidden sm:inline">{shortcut}</Kbd>
       </button>
       <div className="ml-auto flex items-center gap-1">
         <NotificationBell />

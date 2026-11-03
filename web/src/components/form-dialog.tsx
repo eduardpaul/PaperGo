@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { useTranslation } from '@/i18n';
 
 export function FormDialog({
   open,
@@ -30,6 +31,7 @@ export function FormDialog({
   onSubmit: () => void;
   children: ReactNode;
 }) {
+  const { t } = useTranslation();
   function submit(event: FormEvent) {
     event.preventDefault();
     onSubmit();
@@ -45,10 +47,10 @@ export function FormDialog({
           <div className="flex flex-col gap-3 px-5 pb-4">{children}</div>
           <DialogFooter>
             <Button type="button" onClick={onClose} disabled={pending}>
-              Cancel
+              {t('actions.cancel')}
             </Button>
             <Button type="submit" variant="primary" disabled={pending || submitDisabled}>
-              {pending ? 'Saving…' : submitLabel}
+              {pending ? t('status.saving') : submitLabel}
             </Button>
           </DialogFooter>
         </form>

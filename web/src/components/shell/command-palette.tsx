@@ -6,6 +6,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { downloadContent } from '@/features/documents/transfer';
 import { useOpenFile, viewable } from '@/features/files/file-action';
+import { useTranslation } from '@/i18n';
 import { useSearchAvailable } from '@/lib/search';
 
 interface Palette {
@@ -19,14 +20,15 @@ export function useCommandPalette() {
 }
 
 const jumps = [
-  { label: 'Home', to: '/' as const },
-  { label: 'Inbox', to: '/inbox' as const },
-  { label: 'Search', to: '/search' as const },
-  { label: 'Workspaces', to: '/w' as const },
-  { label: 'Settings', to: '/settings' as const },
-];
+  { label: 'nav.home', to: '/' },
+  { label: 'nav.inbox', to: '/inbox' },
+  { label: 'nav.search', to: '/search' },
+  { label: 'nav.workspaces', to: '/w' },
+  { label: 'nav.settings', to: '/settings' },
+] as const;
 
 export function CommandPaletteProvider({ children }: { children: ReactNode }) {
+  const { t } = useTranslation('shell');
   const [opened, setOpened] = useState(false);
   const value = useMemo(() => ({ open: () => setOpened(true) }), []);
 
@@ -46,7 +48,7 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
       {children}
       <Dialog open={opened} onOpenChange={setOpened}>
         <DialogContent className="top-[15vh] overflow-hidden p-0" hideClose>
-          <DialogTitle className="sr-only">Search or jump to</DialogTitle>
+          <DialogTitle className="sr-only">{t('palette.title')}</DialogTitle>
           <PaletteBody onClose={() => setOpened(false)} />
         </DialogContent>
       </Dialog>
@@ -55,6 +57,7 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
 }
 
 function PaletteBody({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation(['shell', 'common']);
   const navigate = useNavigate();
   const searchAvailable = useSearchAvailable();
   const workspaces = useQuery(workspacesQuery);
@@ -79,9 +82,9 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
 
   return (
     <Command>
-      <CommandInput placeholder="Search or jump to…" autoFocus />
+      <CommandInput placeholder={t('palette.placeholder')} autoFocus />
       <CommandList>
-        <CommandEmpty>{searchAvailable ? 'No matches. Press enter on Search to look through items.' : 'No matches.'}</CommandEmpty>
+        <CommandEmpty>{searchAvailable ? t('palette.noMatchesSearch') : t('common:search.noMatches')}</CommandEmpty>
         {item.data && file && (
           <CommandGroup heading={item.data.name}>
             {viewable(item.data) && (
@@ -91,7 +94,7 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
                   openFile(item.data!);
                 }}
               >
-                Open file
+                {t('palette.openFile')}
               </CommandItem>
             )}
             <CommandItem
@@ -100,18 +103,18 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
                 void downloadContent(item.data!.id, file.filename);
               }}
             >
-              Download file
+              {t('palette.downloadFile')}
             </CommandItem>
           </CommandGroup>
         )}
-        <CommandGroup heading="Go to">
+        <CommandGroup heading={t('palette.goTo')}>
           {jumps.filter((jump) => jump.to !== '/search' || searchAvailable).map((jump) => (
             <CommandItem key={jump.to} onSelect={() => go(jump.to)}>
-              {jump.label}
+              {t(jump.label)}
             </CommandItem>
           ))}
         </CommandGroup>
-        <CommandGroup heading="Workspaces">
+        <CommandGroup heading={t('nav.workspaces')}>
           {workspaces.data
             ?.filter((workspace) => !workspace.personal_owner_id)
             .map((workspace) => (
@@ -121,7 +124,7 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
             ))}
         </CommandGroup>
         {!!lists.data?.length && (
-          <CommandGroup heading="Lists and libraries">
+          <CommandGroup heading={t('palette.lists')}>
             {lists.data.map((list) => (
               <CommandItem key={list.id} onSelect={() => go(`/w/${list.workspace_id}/l/${list.id}`)}>
                 {list.name}
@@ -129,7 +132,7 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
             ))}
           </CommandGroup>
         )}
-        <CommandGroup heading="Smart folders">
+        <CommandGroup heading={t('nav.smartFolders')}>
           {folders.data?.map((folder) => (
             <CommandItem key={folder.id} onSelect={() => go(`/f/${folder.id}`)}>
               {folder.name}
