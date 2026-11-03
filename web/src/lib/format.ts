@@ -36,6 +36,8 @@ export interface Formatter {
   hour(value: Date | string): number;
   /** The weekday name of a moment in the user's time zone and language. */
   weekday(value: Date | string, style?: 'long' | 'short'): string;
+  /** A calendar month (yyyy-MM) with its year, in the user's language: "October 2026", "octubre de 2026". */
+  month(value: string): string;
 }
 
 type Parts = { year: string; month: string; day: string; hour: string; minute: string };
@@ -70,6 +72,10 @@ export function createFormatter(preferences: Partial<FormatPreferences> = {}): F
         minute: '2-digit',
         hourCycle: 'h23',
       }),
+  );
+  const monthFormat = safe(
+    () => new Intl.DateTimeFormat(p.language, { month: 'long', year: 'numeric', timeZone: 'UTC' }),
+    () => new Intl.DateTimeFormat('en', { month: 'long', year: 'numeric', timeZone: 'UTC' }),
   );
   const relativeFormat = safe(
     () => new Intl.RelativeTimeFormat(p.language, { numeric: 'auto' }),
@@ -166,6 +172,10 @@ export function createFormatter(preferences: Partial<FormatPreferences> = {}): F
         () => new Intl.DateTimeFormat(p.language, { weekday: style, timeZone: 'UTC' }).format(noon),
         () => new Intl.DateTimeFormat('en', { weekday: style, timeZone: 'UTC' }).format(noon),
       );
+    },
+    month: (value) => {
+      const [year, month] = value.split('-');
+      return monthFormat.format(Date.UTC(Number(year), Number(month) - 1, 1));
     },
   };
 }

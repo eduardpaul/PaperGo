@@ -21,6 +21,12 @@ describe('createFormatter', () => {
     expect(format.time('2026-10-01')).toBe('');
   });
 
+  it('names a calendar month with its year in the user’s language', () => {
+    expect(createFormatter({ language: 'en' }).month('2026-10')).toBe('October 2026');
+    expect(createFormatter({ language: 'es' }).month('2026-01')).toBe('enero de 2026');
+    expect(createFormatter({ language: 'not a locale!' }).month('2026-10')).toBe('October 2026');
+  });
+
   it('formats ratios as percentages in the number culture', () => {
     expect(createFormatter({ numberFormat: 'en' }).percent(0.75)).toBe('75%');
     expect(createFormatter({ numberFormat: 'es' }).percent(1.5)).toBe('150\u00a0%');

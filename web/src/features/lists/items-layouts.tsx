@@ -420,10 +420,6 @@ export function ItemsCalendar({
     if (day) byDay.set(day, [...(byDay.get(day) ?? []), item]);
   }
   const inMonth = [...byDay.entries()].filter(([day]) => day.startsWith(cursor)).reduce((sum, [, list]) => sum + list.length, 0);
-  // The month's name in the user's language, as "October 2026" or "octubre de 2026".
-  const monthName = new Intl.DateTimeFormat(format.preferences.language, { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(
-    Date.UTC(Number(cursor.slice(0, 4)), Number(cursor.slice(5, 7)) - 1, 1),
-  );
   const weekdays = new Map(days.slice(0, 7).map((day) => [day, format.weekday(day, 'short')]));
   const show = (month: Date) => {
     setCursor(dateKey(month, 'yyyy-MM'));
@@ -435,7 +431,7 @@ export function ItemsCalendar({
         <Button aria-label={t('calendar.previous')} onClick={() => show(addMonths(anchor, -1))}>
           ‹
         </Button>
-        <span className="font-semibold">{monthName}</span>
+        <span className="font-semibold">{format.month(cursor)}</span>
         <Button aria-label={t('calendar.next')} onClick={() => show(addMonths(anchor, 1))}>
           ›
         </Button>
