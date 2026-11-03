@@ -4,16 +4,16 @@ import { api } from '@/api/http';
 import { templatesQuery } from '@/api/queries';
 import type { FieldDefinition, FilterExpr, Page, SmartFolder } from '@/api/types';
 import { useTermNames, useValueNames } from '@/features/fields/names';
-import { systemFields, fileTypeField } from '@/features/lists/filter-editor';
+import { comparisons, relativeDates, systemFields, fileTypeField } from '@/features/lists/filter-editor';
 import { fileTypeLabel } from '@/features/files/file-types';
 import { useTranslation } from '@/i18n';
 import type { SmartQueryField } from './editor-dialog';
 
-const operators = ['eq', 'ne', 'in', 'missing', 'present', 'gt', 'gte', 'lt', 'lte', 'contains', 'under'] as const;
-const relatives = ['today', 'yesterday', 'tomorrow', 'last7Days', 'next7Days', 'last30Days', 'next30Days', 'weekStart', 'weekEnd', 'monthStart', 'monthEnd', 'me'] as const;
+// The filter editor's comparisons and relative values, in its words.
+const relatives = [...relativeDates, 'me'] as const;
 const known = <T extends string>(list: readonly T[], value: string | undefined): value is T => list.includes(value as T);
 
-export function describeFilter(filter: FilterExpr | undefined, fields: FieldDefinition[], t: TFunction<['smartFolders', 'common']>, names = new Map<string, string>()): string {
+export function describeFilter(filter: FilterExpr | undefined, fields: FieldDefinition[], t: TFunction<['smartFolders', 'common', 'lists']>, names = new Map<string, string>()): string {
   if (!filter) return t('rules.all');
   if (filter.and) return filter.and.map(child => `(${describeFilter(child, fields, t, names)})`).join(` ${t('rules.and')} `);
   if (filter.or) return filter.or.map(child => `(${describeFilter(child, fields, t, names)})`).join(` ${t('rules.or')} `);
@@ -21,7 +21,7 @@ export function describeFilter(filter: FilterExpr | undefined, fields: FieldDefi
   const field = fields.find(field => field.key === filter.field);
   const label = field?.label ?? t('rules.customField');
   const op = filter.op || 'eq';
-  const comparison = known(operators, op) ? t(`rules.op.${op}`) : t('rules.op.other');
+  const comparison = known(comparisons, op) ? t(`lists:filter.ops.${op}`) : t('rules.otherComparison');
   if (op === 'missing' || op === 'present') return t('rules.presence', { field: label, comparison });
   const value = (entry: unknown) => {
     if (typeof entry === 'boolean') return entry ? t('common:answer.yes') : t('common:answer.no');
@@ -29,12 +29,12 @@ export function describeFilter(filter: FilterExpr | undefined, fields: FieldDefi
     if (['person', 'lookup', 'term', 'keywords'].includes(field?.type ?? '')) return names.get(String(entry)) ?? t('rules.selectedValue');
     return String(entry ?? '');
   };
-  const expected = filter.value_ref ? known(relatives, filter.value_ref) ? t(`rules.relative.${filter.value_ref}`) : t('rules.relativeValue') : Array.isArray(filter.value) ? filter.value.map(value).join(', ') : value(filter.value);
+  const expected = filter.value_ref ? known(relatives, filter.value_ref) ? t(`lists:filter.relative.${filter.value_ref}`) : t('rules.relativeValue') : Array.isArray(filter.value) ? filter.value.map(value).join(', ') : value(filter.value);
   return t('rules.condition', { field: label, comparison, value: expected });
 }
 
 export function RuleSummary({ folder }: { folder: SmartFolder }) {
-  const { t } = useTranslation(['smartFolders', 'common']);
+  const { t } = useTranslation(['smartFolders', 'common', 'lists']);
   const metadata = useQuery({ queryKey: ['resources', 'smart-folder-fields', folder.workspace_id, undefined], queryFn: async () => (await api<Page<SmartQueryField>>('/v1/search/fields', { query: { workspace_id: folder.workspace_id } })).data.value });
   const fields: FieldDefinition[] = [...systemFields, fileTypeField(), ...(metadata.data ?? []).map(field => ({ id: field.key, key: field.key, label: field.label, type: field.type, options: { term_set_id: field.term_set_id, lookup_container_id: field.lookup_container_id } }))];
   const values: Record<string, unknown[]> = {};

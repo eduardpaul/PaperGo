@@ -133,33 +133,6 @@
     "anyKeywords": "Alguna palabra clave: {{names}}",
     "selectedKeyword": "Palabra clave seleccionada",
     "classifying": "Al clasificar se aplican las palabras clave y los valores de igualdad de la carpeta. Las demás reglas ya deben cumplirse.",
-    "op": {
-      "eq": "es",
-      "ne": "no es",
-      "in": "es uno de",
-      "missing": "está vacío",
-      "present": "tiene un valor",
-      "gt": "es posterior a / mayor que",
-      "gte": "es igual o posterior a / al menos",
-      "lt": "es anterior a / menor que",
-      "lte": "es igual o anterior a / como máximo",
-      "contains": "contiene",
-      "under": "está en este tema",
-      "other": "coincide con"
-    },
-    "relative": {
-      "today": "Hoy",
-      "yesterday": "Ayer",
-      "tomorrow": "Mañana",
-      "last7Days": "La semana pasada",
-      "next7Days": "La próxima semana",
-      "last30Days": "El mes pasado",
-      "next30Days": "El próximo mes",
-      "weekStart": "Inicio de la semana",
-      "weekEnd": "Fin de la semana",
-      "monthStart": "Inicio del mes",
-      "monthEnd": "Fin del mes",
-      "me": "Usuario actual"
-    }
+    "otherComparison": "coincide con"
   }
 }

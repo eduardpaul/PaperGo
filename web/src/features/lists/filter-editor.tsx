@@ -33,8 +33,10 @@ export const systemFields: FieldDefinition[] = (
   options: column === 'keywords' ? { multiple: true } : undefined,
 }));
 
-const comparisons = ['eq', 'ne', 'in', 'missing', 'present', 'gt', 'gte', 'lt', 'lte', 'contains', 'under'] as const;
-const relativeDates = ['today', 'yesterday', 'tomorrow', 'last7Days', 'next7Days', 'last30Days', 'next30Days', 'weekStart', 'weekEnd', 'monthStart', 'monthEnd'] as const;
+/** The comparisons a filter condition can make, in the order the editor offers them. */
+export const comparisons = ['eq', 'ne', 'in', 'missing', 'present', 'gt', 'gte', 'lt', 'lte', 'contains', 'under'] as const;
+/** The moments a date condition can compare with instead of a fixed date. */
+export const relativeDates = ['today', 'yesterday', 'tomorrow', 'last7Days', 'next7Days', 'last30Days', 'next30Days', 'weekStart', 'weekEnd', 'monthStart', 'monthEnd'] as const;
 /** The file type filter: the kinds of file the server names, and files it does not recognize. */
 export function fileTypeField(): FieldDefinition {
   return { id: '$file_type', key: '$file_type', label: i18n.t('lists:system.fileType'), type: 'choice', indexed: true, choices: [...fileTypes().map((type) => type.media_type), 'application/octet-stream'] };
