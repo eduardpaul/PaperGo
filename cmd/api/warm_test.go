@@ -33,7 +33,7 @@ func (l *lockedBuffer) String() string {
 // Warming PDFium returns at once and logs when it is ready, with its cache.
 func TestWarmPDF(t *testing.T) {
 	var logged lockedBuffer
-	reader := pdfium.New(pdfium.Options{CacheDir: t.TempDir()})
+	reader := pdfium.New(pdfium.Options{CacheDir: doctexttest.CacheDir(t)})
 	start := time.Now()
 	warmPDF(slog.New(slog.NewTextHandler(&logged, nil)), reader)
 	if took := time.Since(start); took > 100*time.Millisecond {
@@ -49,7 +49,7 @@ func TestWarmPDF(t *testing.T) {
 			t.Fatal(logged.String())
 		}
 	}
-	if !strings.Contains(logged.String(), "cache=miss") {
+	if !strings.Contains(logged.String(), "cache=hit") && !strings.Contains(logged.String(), "cache=miss") {
 		t.Fatal(logged.String())
 	}
 }

@@ -17,7 +17,7 @@ import (
 // Opens while PDFium warms up wait for that start instead of starting
 // their own, and later warm-ups reuse it.
 func TestWarmSharesTheStart(t *testing.T) {
-	reader := pdfium.New(pdfium.Options{})
+	reader := pdfium.New(pdfium.Options{CacheDir: doctexttest.CacheDir(t)})
 	warmed := make(chan error, 1)
 	go func() { _, err := reader.Warm(); warmed <- err }()
 	var wg sync.WaitGroup
@@ -38,7 +38,7 @@ func TestWarmSharesTheStart(t *testing.T) {
 	if err := <-warmed; err != nil {
 		t.Fatal(err)
 	}
-	if cache, err := reader.Warm(); err != nil || cache != pdfium.CacheOff {
+	if cache, err := reader.Warm(); err != nil || cache == pdfium.CacheOff {
 		t.Fatal(cache, err)
 	}
 	if n := pdfium.Starts(reader); n != 1 {
@@ -54,7 +54,7 @@ func TestOpenWaitingForTheStartEndsWithItsContext(t *testing.T) {
 		<-gate
 		return real(dir)
 	})
-	reader := pdfium.New(pdfium.Options{})
+	reader := pdfium.New(pdfium.Options{CacheDir: doctexttest.CacheDir(t)})
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 	if _, err := reader.Open(ctx, doctexttest.TextPDF("Late")); !errors.Is(err, context.DeadlineExceeded) {
@@ -82,6 +82,7 @@ func TestFailedStartIsRetried(t *testing.T) {
 		}
 		return real(dir)
 	})
+	// Without a cache: a failed start with one clears it.
 	reader := pdfium.New(pdfium.Options{})
 	for range 2 {
 		if _, err := reader.Open(context.Background(), doctexttest.TextPDF("Retry")); !errors.Is(err, doctext.ErrUnavailable) {

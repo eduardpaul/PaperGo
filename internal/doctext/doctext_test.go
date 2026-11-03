@@ -3,8 +3,8 @@ package doctext_test
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"errors"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
