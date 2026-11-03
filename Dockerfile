@@ -15,9 +15,10 @@ ARG CMAKE_VERSION=3.31.10
 FROM node:${NODE_VERSION}-bookworm-slim AS node
 
 FROM --platform=$BUILDPLATFORM node:${NODE_VERSION}-bookworm-slim AS frontend
+ENV NPM_CONFIG_UPDATE_NOTIFIER=false
 WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
-RUN npm ci --no-update-notifier
+RUN npm ci
 COPY web ./
 COPY sdk/dist/workflow.d.ts /src/sdk/dist/
 RUN npm run build
