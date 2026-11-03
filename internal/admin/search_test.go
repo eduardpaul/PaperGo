@@ -1,4 +1,4 @@
-package main
+package admin
 
 import (
 	"bytes"
@@ -28,7 +28,7 @@ func TestSearchCopyCommand(t *testing.T) {
 	}
 	source.Close()
 	args := []string{"search", "copy", "--to", "zvec", "--database", database}
-	if err = admin(ctx, append(append([]string{}, args...), "--languages", "none"), new(bytes.Buffer)); err == nil {
+	if err = Run(ctx, append(append([]string{}, args...), "--languages", "none"), new(bytes.Buffer)); err == nil {
 		t.Fatal("copied with incompatible source languages")
 	}
 	// A rejected copy must not recreate or empty the source.
@@ -40,10 +40,10 @@ func TestSearchCopyCommand(t *testing.T) {
 		t.Fatal(stats, err)
 	}
 	preserved.Close()
-	if err = admin(ctx, args, new(bytes.Buffer)); err != nil {
+	if err = Run(ctx, args, new(bytes.Buffer)); err != nil {
 		t.Fatal(err)
 	}
-	if err = admin(ctx, args, new(bytes.Buffer)); err == nil {
+	if err = Run(ctx, args, new(bytes.Buffer)); err == nil {
 		t.Fatal("existing destination overwritten")
 	}
 	s, err := zvecstore.Open(ctx, filepath.Join(root, "search", "zvec"), zvecstore.Options{Languages: []string{"english"}})

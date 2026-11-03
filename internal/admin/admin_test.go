@@ -1,4 +1,4 @@
-package main
+package admin
 
 import (
 	"bytes"
@@ -24,21 +24,21 @@ func TestAdminHealth(t *testing.T) {
 	}))
 	defer server.Close()
 	health := []string{"health", "--url", server.URL + "/health/ready"}
-	if err := admin(context.Background(), health, new(bytes.Buffer)); err != nil {
+	if err := Run(context.Background(), health, new(bytes.Buffer)); err != nil {
 		t.Fatal(err)
 	}
 	ready.Store(false)
-	if err := admin(context.Background(), health, new(bytes.Buffer)); err == nil || !strings.Contains(err.Error(), "503") {
+	if err := Run(context.Background(), health, new(bytes.Buffer)); err == nil || !strings.Contains(err.Error(), "503") {
 		t.Fatalf("not ready: %v", err)
 	}
-	if err := admin(context.Background(), []string{"health", "extra"}, new(bytes.Buffer)); err == nil {
+	if err := Run(context.Background(), []string{"health", "extra"}, new(bytes.Buffer)); err == nil {
 		t.Fatal("positional argument accepted")
 	}
 	// Without --url it probes the configured listen address.
 	ready.Store(true)
 	t.Setenv("PAPERGO_CONFIG", "")
 	t.Setenv("HTTP_ADDR", strings.TrimPrefix(server.URL, "http://"))
-	if err := admin(context.Background(), []string{"health"}, new(bytes.Buffer)); err != nil {
+	if err := Run(context.Background(), []string{"health"}, new(bytes.Buffer)); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -61,7 +61,7 @@ func TestReadinessURL(t *testing.T) {
 
 func TestAdminUsage(t *testing.T) {
 	for _, args := range [][]string{nil, {"unknown"}} {
-		if err := admin(context.Background(), args, new(bytes.Buffer)); err == nil || !strings.Contains(err.Error(), "usage: papergo admin") {
+		if err := Run(context.Background(), args, new(bytes.Buffer)); err == nil || !strings.Contains(err.Error(), "usage: papergo admin") {
 			t.Fatalf("%v: %v", args, err)
 		}
 	}
@@ -69,7 +69,7 @@ func TestAdminUsage(t *testing.T) {
 	// success.
 	for _, args := range [][]string{{"--help"}, {"health", "--help"}, {"backup", "--help"}, {"workers", "status", "--help"}} {
 		out := new(bytes.Buffer)
-		if err := admin(context.Background(), args, out); !errors.Is(err, flag.ErrHelp) || out.Len() == 0 {
+		if err := Run(context.Background(), args, out); !errors.Is(err, flag.ErrHelp) || out.Len() == 0 {
 			t.Fatalf("%v: %v %q", args, err, out)
 		}
 	}

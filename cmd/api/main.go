@@ -12,6 +12,7 @@ import (
 	"papergo/extensions/mcp"
 	"papergo/extensions/mcp/builtin"
 	mcpserver "papergo/extensions/mcp/server"
+	"papergo/internal/admin"
 	"papergo/internal/ai"
 	"papergo/internal/aiops"
 	"papergo/internal/auth"
@@ -53,7 +54,7 @@ func main() {
 	}
 	if len(os.Args) >= 2 && os.Args[1] == "admin" {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-		err := admin(ctx, os.Args[2:], os.Stdout)
+		err := admin.Run(ctx, os.Args[2:], os.Stdout)
 		stop()
 		// A command asked for --help has printed it.
 		if err != nil && !errors.Is(err, flag.ErrHelp) {
