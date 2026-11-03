@@ -8,6 +8,7 @@ import type { FieldDefinition, Page, Resource } from '@/api/types';
 import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
 import { Input, Label, Textarea } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
+import { useTranslation } from '@/i18n';
 import { useDebounced } from '@/lib/use-debounced';
 import { useResourceNames, useTermNames } from './names';
 import { usePeopleNames } from './people';
@@ -51,11 +52,12 @@ function Control({
   value: unknown;
   onChange: (value: unknown) => void;
 }) {
+  const { t } = useTranslation();
   if (field.type === 'boolean') {
     return (
       <label className="flex items-center gap-2 text-[13px]">
         <input id={id} type="checkbox" checked={value === true} onChange={(event) => onChange(event.target.checked)} />
-        Yes
+        {t('answer.yes')}
       </label>
     );
   }
@@ -127,10 +129,11 @@ function ChoiceEditor({
   value: unknown;
   onChange: (value: unknown) => void;
 }) {
+  const { t } = useTranslation();
   if (!multiple) {
     return (
       <Select id={id} value={fieldText(value)} onChange={(event) => onChange(event.target.value)}>
-        <option value="">Select…</option>
+        <option value="">{t('select.placeholder')}</option>
         {choices.map((choice) => (
           <option key={choice} value={choice}>
             {choice}
@@ -162,6 +165,7 @@ function ChoiceEditor({
 }
 
 function PersonEditor({ id, multiple, value, onChange }: { id: string; multiple: boolean; value: unknown; onChange: (value: unknown) => void }) {
+  const { t } = useTranslation('fields');
   const people = useQuery(peopleQuery);
   const names = usePeopleNames();
   const subjects = people.data ?? [...names.keys()];
@@ -172,7 +176,7 @@ function PersonEditor({ id, multiple, value, onChange }: { id: string; multiple:
       id={id}
       aria-labelledby={`${id}-label`}
       multiple={multiple}
-      placeholder="Select a person…"
+      placeholder={t('person.placeholder')}
       loading={people.isPending}
       selected={selected.map(option)}
       options={subjects.map(option)}
@@ -195,6 +199,7 @@ function LookupEditor({
   value: unknown;
   onChange: (value: unknown) => void;
 }) {
+  const { t } = useTranslation(['fields', 'common']);
   const [text, setText] = useState('');
   const search = useDebounced(text);
   const call = lookupOptionsRequest(containerId, search);
@@ -214,11 +219,11 @@ function LookupEditor({
       aria-labelledby={`${id}-label`}
       multiple={multiple}
       loading={found.isFetching}
-      selected={selected.map((item) => ({ value: item, label: names?.get(item) ?? labels.get(item) ?? 'Loading…' }))}
+      selected={selected.map((item) => ({ value: item, label: names?.get(item) ?? labels.get(item) ?? t('common:status.loading') }))}
       options={options}
       onSearch={setText}
       onChange={(chosen) => onChange(multiple ? chosen.map((entry) => entry.value) : (chosen[0]?.value ?? ''))}
-      footer={found.data?.['@odata.nextLink'] ? 'More items match. Type to narrow the list.' : undefined}
+      footer={found.data?.['@odata.nextLink'] ? t('lookup.more') : undefined}
     />
   );
 }
@@ -236,6 +241,7 @@ function TermEditor({
   value: unknown;
   onChange: (value: unknown) => void;
 }) {
+  const { t } = useTranslation();
   const [text, setText] = useState('');
   const [options, setOptions] = useState<{ id: string; name: string }[]>([]);
   // Names of terms picked here; others come from the term store.
@@ -271,7 +277,7 @@ function TermEditor({
               key={id}
               type="button"
               className="rounded-full bg-surface-muted px-2 py-0.5 text-xs"
-              aria-label={`Remove ${nameOf(id)}`}
+              aria-label={t('actions.remove', { name: nameOf(id) })}
               onClick={() => onChange(multiple ? selected.filter((item) => item !== id) : '')}
             >
               {nameOf(id)} ×
@@ -279,7 +285,7 @@ function TermEditor({
           ))}
         </div>
       )}
-      <Input id={id} value={text} placeholder="Search…" onChange={(event) => void search(event.target.value)} />
+      <Input id={id} value={text} placeholder={t('search.placeholder')} onChange={(event) => void search(event.target.value)} />
       {options.length > 0 && (
         <ul className="overflow-hidden rounded-md border">
           {options.map((option) => (

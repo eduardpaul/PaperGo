@@ -1,8 +1,20 @@
 # Web UI translation (plan)
 
-Status: **planned.** Goal: the web UI in English and Spanish, built so that
-another language is a new folder of JSON files and one registry line, with no
-code changes.
+Status: **phases 0 to 7 implemented.** The whole web UI is in English and
+Spanish, as [Preferences](../preferences.md#web-ui-language) and
+[`web/src/locales/README.md`](../web/src/locales/README.md) describe. Another
+language is a new folder of JSON files and one registry line, with no code
+changes. Still open: a native speaker's review of the Spanish text in the
+running app, and the [server text](#server-text-not-part-of-this-plan)
+proposals.
+
+What the migration learned:
+- The lint rule also flags code values written into JSX (`can(x, 'write')`,
+  URLs, examples); they move into constants.
+- Screens that compared displayed text (`=== 'Available'`) now compare a
+  value, since the text changes with the language.
+- A component that builds a phrase from a title (`Export {title}`) takes a
+  kind instead and has one whole sentence per kind.
 
 ## Where the app stands
 

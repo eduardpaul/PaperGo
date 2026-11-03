@@ -4,12 +4,8 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
-// Screen text comes from src/locales. These folders are translated; text written into their JSX fails lint.
-const translated = [
-  'src/main.tsx',
-  'src/components/**/*.tsx',
-  'src/routes/login*.tsx',
-];
+// Screen text comes from src/locales; text written into JSX fails lint.
+const translated = ['src/main.tsx', 'src/components/**/*.tsx', 'src/features/**/*.tsx', 'src/routes/**/*.tsx'];
 
 export default tseslint.config(
   { ignores: ['dist', 'src/routeTree.gen.ts'] },

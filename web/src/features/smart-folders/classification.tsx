@@ -14,9 +14,11 @@ import { FieldEditor } from '@/features/fields/editor';
 import { valuesPatch } from '@/features/fields/values';
 import { FolderBrowser } from '@/features/lists/folder-browser';
 import { fieldsForType } from '@/features/lists/schema';
+import { useTranslation } from '@/i18n';
 
 /** PaperDotNet's AddToFolderDialog with Go's folder and item concurrency checks. */
 export function AddToSmartFolder({ item, onClose }: { item: Resource; onClose: () => void }) {
+  const { t } = useTranslation('smartFolders');
   const client = useQueryClient();
   const folders = useQuery(smartFoldersQuery);
   const [id, setId] = useState('');
@@ -41,18 +43,18 @@ export function AddToSmartFolder({ item, onClose }: { item: Resource; onClose: (
   return (
     <FormDialog
       open
-      title={`Add ${item.name} to a smart folder`}
-      description="Apply the folder’s terms and equality values to this item. The folder’s other conditions must also match."
-      submitLabel="Classify item"
+      title={t('classify.addTitle', { name: item.name })}
+      description={t('classify.addDescription')}
+      submitLabel={t('classify.classifyItem')}
       pending={add.isPending}
       submitDisabled={!folder}
       onClose={onClose}
       onSubmit={() => add.mutate()}
     >
       <QueryFeedback query={folders} />
-      <Label htmlFor="classify-folder">Smart folder</Label>
+      <Label htmlFor="classify-folder">{t('classify.smartFolder')}</Label>
       <Select id="classify-folder" required value={id} onChange={(event) => setId(event.target.value)}>
-        <option value="">Choose…</option>
+        <option value="">{t('classify.choose')}</option>
         {folders.data
           ?.filter((folder) => folder.definition.mode === 'classification' && (!folder.workspace_id || folder.workspace_id === item.workspace_id))
           .map((folder) => (
@@ -74,6 +76,7 @@ export function ClassifyDialog({
   path: (string | null)[];
   onClose: () => void;
 }) {
+  const { t } = useTranslation(['smartFolders', 'common']);
   const client = useQueryClient();
   const [chosenCollectionId, setCollectionId] = useState('');
   const [mode, setMode] = useState('existing');
@@ -145,16 +148,16 @@ export function ClassifyDialog({
   return (
     <FormDialog
       open
-      title={`Add to ${folder.name}`}
-      description="Apply terms, equality conditions and the open group’s values. Other conditions must match. File uploads can be classified after upload."
-      submitLabel={mode === 'new' ? 'Create and classify' : 'Classify item'}
+      title={t('classify.toTitle', { name: folder.name })}
+      description={t('classify.description')}
+      submitLabel={mode === 'new' ? t('classify.createAndClassify') : t('classify.classifyItem')}
       pending={add.isPending}
       submitDisabled={!collectionId || (mode === 'existing' && !item.data)}
       onClose={onClose}
       onSubmit={() => add.mutate()}
     >
       <QueryFeedback query={collections} />
-      <Label htmlFor="classify-collection">Collection</Label>
+      <Label htmlFor="classify-collection">{t('classify.collection')}</Label>
       <Select
         id="classify-collection"
         required
@@ -167,20 +170,20 @@ export function ClassifyDialog({
           setValues({});
         }}
       >
-        <option value="">Choose…</option>
+        <option value="">{t('classify.choose')}</option>
         {collections.data?.map((collection) => (
           <option key={collection.id} value={collection.id}>
             {collection.name}
           </option>
         ))}
       </Select>
-      <Select aria-label="Classification mode" value={mode} onChange={(event) => setMode(event.target.value)}>
-        <option value="existing">Existing item</option>
-        <option value="new">Create an item</option>
+      <Select aria-label={t('classify.mode')} value={mode} onChange={(event) => setMode(event.target.value)}>
+        <option value="existing">{t('classify.existing')}</option>
+        <option value="new">{t('classify.new')}</option>
       </Select>
       {mode === 'existing' ? (
         <>
-          <Label id="classify-item-label">Item</Label>
+          <Label id="classify-item-label">{t('classify.item')}</Label>
           <Combobox
             aria-labelledby="classify-item-label"
             options={options}
@@ -199,27 +202,24 @@ export function ClassifyDialog({
             loading={items.isFetching}
           />
           <QueryFeedback query={items} />
-          {items.hasNextPage && <Button onClick={() => void items.fetchNextPage()}>More items</Button>}
+          {items.hasNextPage && <Button onClick={() => void items.fetchNextPage()}>{t('classify.moreItems')}</Button>}
           {itemId && <QueryFeedback query={item} />}
         </>
       ) : (
         <>
-          <Label htmlFor="classify-name">Name</Label>
+          <Label htmlFor="classify-name">{t('common:fields.name')}</Label>
           <Input id="classify-name" required value={name} onChange={(event) => setName(event.target.value)} />
-          <Label htmlFor="classify-type">Content type</Label>
+          <Label htmlFor="classify-type">{t('classify.contentType')}</Label>
           <Select id="classify-type" value={typeId} onChange={(event) => setTypeId(event.target.value)}>
-            <option value="">Default</option>
+            <option value="">{t('classify.default')}</option>
             {typeOptions.map((type) => (
               <option key={type.id} value={type.id}>
                 {type.name}
               </option>
             ))}
           </Select>
-          {collections.data?.find(collection => collection.id === collectionId) && <><p className="text-sm font-medium">Destination folder</p><FolderBrowser root={collections.data.find(collection => collection.id === collectionId)!} path={destinationPath} onChange={setDestinationPath} /></>}
-          <p className="text-xs text-muted">
-            Leave fields assigned by the smart folder empty; classification fills them before validating required
-            fields.
-          </p>
+          {collections.data?.find(collection => collection.id === collectionId) && <><p className="text-sm font-medium">{t('classify.destination')}</p><FolderBrowser root={collections.data.find(collection => collection.id === collectionId)!} path={destinationPath} onChange={setDestinationPath} /></>}
+          <p className="text-xs text-muted">{t('classify.emptyHint')}</p>
           {visible.map((field) => (
             <FieldEditor
               key={field.id}

@@ -34,7 +34,7 @@ it('builds typed rules from labels, previews matches and saves workspace scope a
   fireEvent.change(screen.getByLabelText('Filter field'), { target: { value: 'status_key' } });
   expect(screen.getByRole('option', { name: 'is' })).toBeTruthy();
   fireEvent.change(screen.getByLabelText(/^Filter value/), { target: { value: 'Closed' } });
-  expect(await screen.findByText('1 matching items', {}, { timeout: 8_000 })).toBeTruthy();
+  expect(await screen.findByText('1 matching item', {}, { timeout: 8_000 })).toBeTruthy();
   expect(screen.getByText('Matched invoice')).toBeTruthy();
   await waitFor(() => expect((screen.getByRole('button', { name: 'Create' }) as HTMLButtonElement).disabled).toBe(false), { timeout: 8_000 });
   fireEvent.click(screen.getByRole('button', { name: 'Create' }));

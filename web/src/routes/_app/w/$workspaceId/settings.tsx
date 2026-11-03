@@ -6,39 +6,42 @@ import { Page, PageHeader } from '@/components/page';
 import { SubNav, SubNavLayout, SubNavLink } from '@/components/sub-nav';
 import { Alert } from '@/components/ui/feedback';
 import { can } from '@/features/lists/access';
+import { useTranslation } from '@/i18n';
 
 export const Route = createFileRoute('/_app/w/$workspaceId/settings')({ component: WorkspaceSettings });
 
 function WorkspaceSettings() {
+  const { t } = useTranslation('workspaces');
   const { workspaceId } = Route.useParams();
   const workspace = useQuery(resourceQuery(workspaceId));
   const params = { workspaceId };
+  const readOnly = workspace.data && !can(workspace.data, 'manage');
   return (
     <Page className="max-w-5xl">
       <Link to="/w/$workspaceId" params={params} className="mb-2 inline-flex items-center gap-1 text-xs text-muted hover:text-foreground">
-        <ArrowLeft className="size-3.5" /> {workspace.data?.name ?? 'Workspace'}
+        <ArrowLeft className="size-3.5" /> {workspace.data?.name ?? t('workspace')}
       </Link>
-      <PageHeader icon={Settings2} title="Workspace settings" description={workspace.data?.name} />
+      <PageHeader icon={Settings2} title={t('settings.title')} description={workspace.data?.name} />
       <SubNavLayout
         nav={
-          <SubNav label="Workspace settings">
+          <SubNav label={t('settings.title')}>
             <SubNavLink to="/w/$workspaceId/settings" params={params} activeOptions={{ exact: true }}>
-              <Settings2 /> General
+              <Settings2 /> {t('settings.general')}
             </SubNavLink>
             <SubNavLink to="/w/$workspaceId/settings/members" params={params}>
-              <Users /> Members
+              <Users /> {t('settings.members')}
             </SubNavLink>
             <SubNavLink to="/w/$workspaceId/settings/workflows" params={params}>
-              <Workflow /> Workflows
+              <Workflow /> {t('settings.workflows')}
             </SubNavLink>
             <SubNavLink to="/w/$workspaceId/settings/runs" params={params}>
-              <History /> Runs
+              <History /> {t('settings.runs')}
             </SubNavLink>
           </SubNav>
         }
       >
-        {workspace.data && !can(workspace.data, 'manage') && (
-          <Alert tone="warning">Only workspace owners change these settings. You can look at them.</Alert>
+        {readOnly && (
+          <Alert tone="warning">{t('settings.readOnly')}</Alert>
         )}
         <Outlet />
       </SubNavLayout>

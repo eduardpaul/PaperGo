@@ -1,6 +1,9 @@
 import { api } from '@/api/http';
 import type { Resource, SearchContentType, Workflow } from '@/api/types';
+import { i18n } from '@/i18n';
 import type { Trigger, WorkflowDefinition } from './model';
+
+// These run while screens render, so the text follows the language of the screen that shows it.
 
 /** The catalog types a workspace's lists and libraries use, which name the content types of triggers; fetched only when a trigger has one. */
 export const workspaceTypesQuery = (workspaceId: string, triggers: Trigger[] = []) => ({
@@ -13,38 +16,64 @@ export const workspaceTypesQuery = (workspaceId: string, triggers: Trigger[] = [
 export function triggerLabel(trigger: Trigger, types: SearchContentType[] = []): string {
   if (!trigger.content_type_id) return eventLabel(trigger);
   const type = types.find(entry => entry.id === trigger.content_type_id);
-  return `${eventLabel(trigger)} (${type ? `${type.name} or a subtype` : 'selected content type'})`;
+  return type
+    ? i18n.t('workflows:trigger.withType', { event: eventLabel(trigger), type: type.name })
+    : i18n.t('workflows:trigger.withSelectedType', { event: eventLabel(trigger) });
 }
 
+const events = ['manual', 'call', 'file.added', 'file.updated', 'item.created', 'item.updated', 'item.published', 'permissions.changed', 'term.changed', 'term.merged', 'term.moved', 'task.completed'] as const;
+
 function eventLabel(trigger: Trigger): string {
-  const labels: Record<string, string> = { manual: 'Run on demand', call: 'When another workflow calls it', 'file.added': 'When a file is added', 'file.updated': 'When a file is replaced', 'item.created': 'When an item is created', 'item.updated': 'When metadata changes', 'item.published': 'When an item is published', 'permissions.changed': 'When permissions change', 'term.changed': 'When a term changes', 'term.merged': 'When terms merge', 'term.moved': 'When a term moves', 'task.completed': 'When a task is completed' };
   if (trigger.type === 'schedule') {
-    if (trigger.cron === '* * * * *') return 'Every minute';
+    const timeZone = trigger.time_zone ?? 'UTC';
+    if (trigger.cron === '* * * * *') return i18n.t('workflows:trigger.everyMinute');
     const daily = /^(\d+) (\d+) \* \* \*$/.exec(trigger.cron ?? '');
-    return daily ? `Daily at ${daily[2].padStart(2, '0')}:${daily[1].padStart(2, '0')} (${trigger.time_zone ?? 'UTC'})` : `On a schedule (${trigger.time_zone ?? 'UTC'})`;
+    return daily
+      ? i18n.t('workflows:trigger.daily', { time: `${daily[2].padStart(2, '0')}:${daily[1].padStart(2, '0')}`, timeZone })
+      : i18n.t('workflows:trigger.schedule', { timeZone });
   }
-  return labels[trigger.type] ?? trigger.type.replaceAll('.', ' · ').replaceAll('_', ' ');
+  const known = events.find(event => event === trigger.type);
+  return known ? i18n.t(`workflows:trigger.event.${known}`) : trigger.type.replaceAll('.', ' · ').replaceAll('_', ' ');
 }
 
 export function automaticSummary(workflow: Workflow, collections: Resource[] = [], types: SearchContentType[] = []) {
-  if (workflow.state !== 'published') return `Off · ${workflow.state === 'draft' ? 'Draft' : 'Archived'}`;
+  if (workflow.state !== 'published') return workflow.state === 'draft' ? i18n.t('workflows:automatic.offDraft') : i18n.t('workflows:automatic.offArchived');
   // Manual starts and calls do not depend on automatic processing.
   const triggers = (workflow.definition as WorkflowDefinition).triggers.filter(trigger => trigger.type !== 'manual' && trigger.type !== 'call');
-  if (!triggers.length) return 'Not configured';
-  if (!workflow.automatic_enabled) return 'Off';
+  if (!triggers.length) return i18n.t('workflows:automatic.notConfigured');
+  if (!workflow.automatic_enabled) return i18n.t('workflows:automatic.off');
   const active = triggers.filter(trigger => !trigger.disabled);
-  if (!active.length) return 'Off · All rules paused';
-  return `On · ${active.map(trigger => {
+  if (!active.length) return i18n.t('workflows:automatic.paused');
+  return i18n.t('workflows:automatic.on', { rules: active.map(trigger => {
     const collection = collections.find(entry => entry.id === trigger.collection_id);
-    return `${triggerLabel(trigger, types)}${collection ? ` in ${collection.name}` : trigger.collection_id ? ' in the selected collection' : ''}`;
-  }).join('; ')}`;
+    const label = triggerLabel(trigger, types);
+    return collection
+      ? i18n.t('workflows:automatic.inCollection', { rule: label, collection: collection.name })
+      : trigger.collection_id ? i18n.t('workflows:automatic.inSelectedCollection', { rule: label }) : label;
+  }).join('; ') });
+}
+
+/** Whether people can start the workflow by hand now. */
+export function manuallyAvailable(workflow: Workflow) {
+  return workflow.state === 'published' && workflow.manual_enabled && (workflow.definition as WorkflowDefinition).triggers.some(trigger => trigger.type === 'manual');
 }
 
 export function manualSummary(workflow: Workflow) {
-  if (!(workflow.definition as WorkflowDefinition).triggers.some(trigger => trigger.type === 'manual')) return 'No manual entry point';
-  if (workflow.state !== 'published') return workflow.state === 'draft' ? 'Publish to use' : 'Archived';
-  return workflow.manual_enabled ? 'Available' : 'Not allowed';
+  if (!(workflow.definition as WorkflowDefinition).triggers.some(trigger => trigger.type === 'manual')) return i18n.t('workflows:manual.none');
+  if (workflow.state !== 'published') return workflow.state === 'draft' ? i18n.t('workflows:manual.publishToUse') : i18n.t('workflows:manual.archived');
+  return workflow.manual_enabled ? i18n.t('workflows:manual.available') : i18n.t('workflows:manual.notAllowed');
 }
 
-export const runStatusLabel = (status: string) => ({ queued: 'Queued', running: 'Running', waiting: 'Waiting', completed: 'Completed', failed: 'Failed', cancelled: 'Cancelled' })[status] ?? status;
-export const runOriginLabel = (event = 'unknown') => event === 'manual' ? 'Manual' : event === 'schedule' ? 'Scheduled' : event === 'test' ? 'Test' : event === 'call' ? 'Called' : `Automatic · ${triggerLabel({ type: event })}`;
+const statuses = ['queued', 'running', 'waiting', 'completed', 'failed', 'cancelled'] as const;
+
+export const runStatusLabel = (status: string) => {
+  const known = statuses.find(entry => entry === status);
+  return known ? i18n.t(`workflows:run.status.${known}`) : status;
+};
+
+export const runOriginLabel = (event = 'unknown') =>
+  event === 'manual' ? i18n.t('workflows:run.origin.manual')
+    : event === 'schedule' ? i18n.t('workflows:run.origin.schedule')
+      : event === 'test' ? i18n.t('workflows:run.origin.test')
+        : event === 'call' ? i18n.t('workflows:run.origin.call')
+          : i18n.t('workflows:run.origin.automatic', { event: triggerLabel({ type: event }) });

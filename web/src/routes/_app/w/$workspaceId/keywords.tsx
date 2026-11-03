@@ -9,9 +9,11 @@ import { Page, PageHeader } from '@/components/page';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { QueryFeedback } from '@/features/admin/common';
+import { useTranslation } from '@/i18n';
 
 export const Route = createFileRoute('/_app/w/$workspaceId/keywords')({ component: WorkspaceKeywords });
 function WorkspaceKeywords() {
+  const { t } = useTranslation('workspaces');
   const { workspaceId } = Route.useParams();
   const workspace = useQuery(resourceQuery(workspaceId));
   const [prefix, setPrefix] = useState('');
@@ -32,16 +34,16 @@ function WorkspaceKeywords() {
         params={{ workspaceId }}
         className="mb-2 inline-flex items-center gap-1 text-xs text-muted hover:text-foreground"
       >
-        <ArrowLeft className="size-3.5" /> {workspace.data?.name ?? 'Workspace'}
+        <ArrowLeft className="size-3.5" /> {workspace.data?.name ?? t('workspace')}
       </Link>
       <PageHeader
         icon={KeywordIcon}
-        title="Keywords"
-        description="Keywords used in this workspace. Choose one to see what carries it."
+        title={t('keywords.title')}
+        description={t('keywords.description')}
       />
       <Input
-        aria-label="Filter keyword prefix"
-        placeholder="Filter keywords…"
+        aria-label={t('keywords.filter')}
+        placeholder={t('keywords.filterPlaceholder')}
         value={prefix}
         onChange={(event) => setPrefix(event.target.value)}
       />
@@ -61,12 +63,12 @@ function WorkspaceKeywords() {
       </div>
       {keywords.hasNextPage && (
         <Button onClick={() => void keywords.fetchNextPage()} disabled={keywords.isFetchingNextPage}>
-          More keywords
+          {t('keywords.more')}
         </Button>
       )}
       {keyword && (
         <>
-          <h2 className="mt-5 mb-2 font-medium">{keywords.items.find(entry => entry.keyword === keyword)?.name ?? 'Keyword'}</h2>
+          <h2 className="mt-5 mb-2 font-medium">{keywords.items.find(entry => entry.keyword === keyword)?.name ?? t('keywords.keyword')}</h2>
           <QueryFeedback query={matches} />
           <ul className="divide-y">
             {matches.items.map((item) => (
@@ -91,7 +93,7 @@ function WorkspaceKeywords() {
           </ul>
           {matches.hasNextPage && (
             <Button onClick={() => void matches.fetchNextPage()} disabled={matches.isFetchingNextPage}>
-              More resources
+              {t('keywords.moreResources')}
             </Button>
           )}
         </>

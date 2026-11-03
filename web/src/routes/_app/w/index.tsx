@@ -12,6 +12,7 @@ import { Card } from '@/components/ui/card';
 import { EmptyState, Skeleton } from '@/components/ui/feedback';
 import { Input, Label, Textarea } from '@/components/ui/input';
 import { useHasScope } from '@/features/admin/common';
+import { useTranslation } from '@/i18n';
 
 export const Route = createFileRoute('/_app/w/')({
   validateSearch: (search: Record<string, unknown>): { create?: boolean } => ({
@@ -21,6 +22,7 @@ export const Route = createFileRoute('/_app/w/')({
 });
 
 function WorkspacesPage() {
+  const { t } = useTranslation(['workspaces', 'common']);
   const { create } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const queryClient = useQueryClient();
@@ -43,12 +45,12 @@ function WorkspacesPage() {
     <Page>
       <PageHeader
         icon={Briefcase}
-        title="Workspaces"
-        description="Shared places for a team or a project."
+        title={t('list.title')}
+        description={t('list.description')}
         actions={
           canCreate && (
             <Button variant="primary" onClick={() => setCreate(true)}>
-              New workspace
+              {t('list.new')}
             </Button>
           )
         }
@@ -57,14 +59,14 @@ function WorkspacesPage() {
         <Skeleton className="h-24" />
       ) : workspaces.length === 0 ? (
         <Card>
-          <EmptyState icon={Briefcase} title="No workspaces yet">
+          <EmptyState icon={Briefcase} title={t('list.emptyTitle')}>
             <p className="mb-3">
-              A workspace holds the lists and libraries of a team or a project.
-              {!canCreate && ' Ask an administrator to create one or add you to one.'}
+              {t('list.emptyHint')}
+              {!canCreate && ` ${t('list.emptyAsk')}`}
             </p>
             {canCreate && (
               <Button variant="primary" onClick={() => setCreate(true)}>
-                New workspace
+                {t('list.new')}
               </Button>
             )}
           </EmptyState>
@@ -78,7 +80,7 @@ function WorkspacesPage() {
                   <Briefcase className="mt-0.5 size-4 shrink-0 text-accent" />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium">{workspace.name}</span>
-                    <span className="mt-1 line-clamp-2 text-[13px] text-muted">{workspace.description || 'No description'}</span>
+                    <span className="mt-1 line-clamp-2 text-[13px] text-muted">{workspace.description || t('list.noDescription')}</span>
                   </span>
                 </Link>
               </Card>
@@ -88,15 +90,15 @@ function WorkspacesPage() {
       )}
       <FormDialog
         open={!!create && canCreate}
-        title="New workspace"
-        submitLabel="Create"
+        title={t('list.new')}
+        submitLabel={t('common:actions.create')}
         pending={mutation.isPending}
         onClose={() => setCreate(false)}
         onSubmit={() => name.trim() && mutation.mutate()}
       >
-        <Label htmlFor="workspace-name">Name</Label>
+        <Label htmlFor="workspace-name">{t('common:fields.name')}</Label>
         <Input id="workspace-name" value={name} onChange={(event) => setName(event.target.value)} required autoFocus />
-        <Label htmlFor="workspace-description">Description</Label>
+        <Label htmlFor="workspace-description">{t('common:fields.description')}</Label>
         <Textarea id="workspace-description" value={description} onChange={(event) => setDescription(event.target.value)} />
       </FormDialog>
     </Page>

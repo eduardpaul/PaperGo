@@ -13,6 +13,7 @@ import { Alert } from '@/components/ui/feedback';
 import { problemMessage } from '@/lib/errors';
 import { QueryFeedback } from '@/features/admin/common';
 import { FilePreview } from '@/features/documents/preview';
+import { useTranslation } from '@/i18n';
 import { useFormat } from '@/lib/preferences';
 import { formDefaults, manualItemMode, normalizeForm } from './model';
 import type { WorkflowDefinition } from './model';
@@ -30,6 +31,7 @@ export function LaunchWorkflow({
   itemIds?: string[];
   fixedSelection?: Resource[];
 }) {
+  const { t } = useTranslation('workflows');
   const client = useQueryClient();
   const definition = workflow.definition as WorkflowDefinition;
   const types = useQuery(workspaceTypesQuery(workflow.workspace_id, definition.triggers));
@@ -63,8 +65,8 @@ export function LaunchWorkflow({
         body: launchBody,
       }),
     onSuccess: async (result) => {
-      toast.success(`${result.data.run_ids.length} workflow run${result.data.run_ids.length === 1 ? '' : 's'} queued`, {
-        description: <a className="underline" href={(() => { const first = (fixedSelection ?? items.items).find(item => item.id === (launchBody.primary_item_id ?? itemIds[0])); return first?.container_id ? `/w/${workflow.workspace_id}/l/${first.container_id}?item=${first.id}&tab=workflows` : `/w/${workflow.workspace_id}/settings/runs?run=${result.data.run_ids[0]}`; })()}>View status</a>,
+      toast.success(t('launch.queued', { count: result.data.run_ids.length }), {
+        description: <a className="underline" href={(() => { const first = (fixedSelection ?? items.items).find(item => item.id === (launchBody.primary_item_id ?? itemIds[0])); return first?.container_id ? `/w/${workflow.workspace_id}/l/${first.container_id}?item=${first.id}&tab=workflows` : `/w/${workflow.workspace_id}/settings/runs?run=${result.data.run_ids[0]}`; })()}>{t('launch.viewStatus')}</a>,
       });
       await client.invalidateQueries({ queryKey: ['workflow-runs'] });
       onClose();
@@ -80,27 +82,25 @@ export function LaunchWorkflow({
   return (
     <FormDialog
       open
-      title={`Run ${workflow.name}`}
-      submitLabel="Run once"
+      title={t('launch.title', { name: workflow.name })}
+      submitLabel={t('launch.runOnce')}
       pending={launch.isPending}
       submitDisabled={check.isPending || check.isError || !check.data?.can_run || !manual || (itemMode === 'single' ? itemIds.length !== 1 : itemMode === 'multiple' ? itemIds.length < 1 || itemIds.length > 100 : itemIds.length !== 0)}
       onClose={onClose}
       onSubmit={() => { if (check.data?.can_run) launch.mutate(); }}
     >
-      <p className="text-sm">Automatic runs: {automaticSummary(workflow, [], types.data)}. Running once keeps these settings unchanged.</p>
-      <p className="text-xs text-muted">Execution author: {workflow.execution_author ?? 'Workflow author'}. The server rechecks permissions before execution.</p>
+      <p className="text-sm">{t('launch.automaticRuns', { summary: automaticSummary(workflow, [], types.data) })}</p>
+      <p className="text-xs text-muted">{t('launch.author', { author: workflow.execution_author ?? t('launch.workflowAuthor') })}</p>
       <QueryFeedback query={check} />
       {check.data && <p role="status" className="text-sm">{check.data.reason}</p>}
       {launch.error && <Alert>{problemMessage(launch.error)}</Alert>}
-      {fixedSelection && <p className="text-sm">{fixedSelection.length} selected: {fixedSelection.map((item) => item.name).join(', ')}</p>}
+      {fixedSelection && <p className="text-sm">{t('launch.selected', { count: fixedSelection.length, names: fixedSelection.map((item) => item.name).join(', ') })}</p>}
       {manual && itemMode !== 'none' && (
         <>
           {!fixedSelection && <>
-          <Label id="launch-items-label">{itemMode === 'single' ? 'Item' : 'Items'}</Label>
+          <Label id="launch-items-label">{itemMode === 'single' ? t('launch.item') : t('launch.items')}</Label>
           {!manual.collection_id && (
-            <p className="text-xs text-muted">
-              Choose from any collection in this workspace.
-            </p>
+            <p className="text-xs text-muted">{t('launch.anyCollection')}</p>
           )}
           <Combobox
             aria-labelledby="launch-items-label"
@@ -113,13 +113,13 @@ export function LaunchWorkflow({
           <QueryFeedback query={items} />
           {items.hasNextPage && (
             <Button disabled={items.isFetchingNextPage} onClick={() => void items.fetchNextPage()}>
-              More items
+              {t('launch.moreItems')}
             </Button>
           )}
           </>}
           {manual.selection === 'selection' && (
             <>
-              <Label htmlFor="launch-primary">Primary {hints?.item_label ?? 'item'}</Label>
+              <Label htmlFor="launch-primary">{t('launch.primary', { label: hints?.item_label ?? t('launch.itemWord') })}</Label>
               <Select
                 id="launch-primary"
                 value={itemIds.includes(primary) ? primary : (itemIds[0] ?? '')}
@@ -132,7 +132,7 @@ export function LaunchWorkflow({
                 ))}
               </Select>
               {hints?.primary_description && <p className="text-xs text-muted">{hints.primary_description}</p>}
-              <Label id="launch-order-label">{hints?.order_label ?? 'Order'}</Label>
+              <Label id="launch-order-label">{hints?.order_label ?? t('launch.order')}</Label>
               <ol aria-labelledby="launch-order-label">
                 {itemIds.map((id, index) => (
                   <li key={id} className="flex items-center gap-2 py-1">
@@ -146,10 +146,10 @@ export function LaunchWorkflow({
                       {options.find((option) => option.value === id)?.label ?? id}
                     </span>
                     <Button disabled={index === 0} onClick={() => move(index, -1)}>
-                      Up
+                      {t('launch.up')}
                     </Button>
                     <Button disabled={index === itemIds.length - 1} onClick={() => move(index, 1)}>
-                      Down
+                      {t('launch.down')}
                     </Button>
                   </li>
                 ))}
@@ -165,7 +165,8 @@ export function LaunchWorkflow({
 
 /** A small preview of an item's current image file. */
 function ItemImage({ itemId }: { itemId: string }) {
-  return <FilePreview itemId={itemId} alt="Selected item preview" className="size-12 min-h-0 shrink-0" />;
+  const { t } = useTranslation('workflows');
+  return <FilePreview itemId={itemId} alt={t('launch.previewAlt')} className="size-12 min-h-0 shrink-0" />;
 }
 
 export function WorkflowVersions({
@@ -179,6 +180,7 @@ export function WorkflowVersions({
   onEdit: (workflow: Workflow) => void;
   onClose: () => void;
 }) {
+  const { t } = useTranslation('workflows');
   const format = useFormat();
   const versions = useQuery({
     queryKey: ['workflow-versions', workflow.id],
@@ -192,8 +194,8 @@ export function WorkflowVersions({
   return (
     <FormDialog
       open
-      title={`Versions of ${workflow.name}`}
-      submitLabel="Edit from this version"
+      title={t('versions.title', { name: workflow.name })}
+      submitLabel={t('versions.edit')}
       submitDisabled={!canManage || !!workflow.builtin_key || !selected}
       onClose={onClose}
       onSubmit={() => {
@@ -202,10 +204,10 @@ export function WorkflowVersions({
       }}
     >
       <QueryFeedback query={versions} />
-      <Select aria-label="Workflow version" value={number} onChange={(event) => setNumber(Number(event.target.value))}>
+      <Select aria-label={t('versions.label')} value={number} onChange={(event) => setNumber(Number(event.target.value))}>
         {versions.data?.map((version) => (
           <option key={version.number} value={version.number}>
-            Version {version.number} · {format.dateTime(version.created_at)} · {version.created_by}
+            {t('versions.option', { number: version.number, date: format.dateTime(version.created_at), author: version.created_by })}
           </option>
         ))}
       </Select>
@@ -231,6 +233,7 @@ export function CopyBuiltIn({
   onClose: () => void;
   onCopied: () => Promise<void>;
 }) {
+  const { t } = useTranslation(['workflows', 'common']);
   const [name, setName] = useState('');
   const copy = useMutation({
     mutationFn: () =>
@@ -246,14 +249,14 @@ export function CopyBuiltIn({
   return (
     <FormDialog
       open
-      title="Duplicate to customize"
-      description="Creates an editable draft with automatic runs off. Current automatic processing stays unchanged."
-      submitLabel="Create draft"
+      title={t('copy.title')}
+      description={t('copy.description')}
+      submitLabel={t('copy.create')}
       pending={copy.isPending}
       onClose={onClose}
       onSubmit={() => copy.mutate()}
     >
-      <Label htmlFor="workflow-copy-name">Name</Label>
+      <Label htmlFor="workflow-copy-name">{t('common:fields.name')}</Label>
       <Input
         id="workflow-copy-name"
         required

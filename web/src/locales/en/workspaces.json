@@ -1,1 +1,143 @@
-{}
+{
+  "workspace": "Workspace",
+  "list": {
+    "title": "Workspaces",
+    "description": "Shared places for a team or a project.",
+    "new": "New workspace",
+    "emptyTitle": "No workspaces yet",
+    "emptyHint": "A workspace holds the lists and libraries of a team or a project.",
+    "emptyAsk": "Ask an administrator to create one or add you to one.",
+    "noDescription": "No description"
+  },
+  "home": {
+    "keywords": "Keywords",
+    "relationships": "Relationships",
+    "settings": "Settings",
+    "newCollection": "New list or library",
+    "collections": "Lists and libraries",
+    "library": "Library",
+    "list": "List",
+    "updated": "Updated {{when}}",
+    "emptyTitle": "No lists or libraries yet",
+    "emptyHint": "Lists hold rows of information such as contacts or budgets; libraries hold files."
+  },
+  "settings": {
+    "title": "Workspace settings",
+    "general": "General",
+    "members": "Members",
+    "workflows": "Workflows",
+    "runs": "Runs",
+    "readOnly": "Only workspace owners change these settings. You can look at them."
+  },
+  "keywords": {
+    "title": "Keywords",
+    "description": "Keywords used in this workspace. Choose one to see what carries it.",
+    "filter": "Filter keyword prefix",
+    "filterPlaceholder": "Filter keywords…",
+    "more": "More keywords",
+    "keyword": "Keyword",
+    "moreResources": "More resources"
+  },
+  "general": {
+    "saved": "Workspace saved",
+    "currency": "Default currency",
+    "currencyHint": "Leave empty to use the organization default. Applies when creating currency fields.",
+    "orgDefault": "Organization default",
+    "copyTitle": "Copy workspace",
+    "copyDescription": "Export this workspace's configuration, with optional items and files, and import it into another PaperGo instance.",
+    "copyLink": "Export this workspace",
+    "deleteTitle": "Delete workspace",
+    "deleteDescription": "Deletes the workspace with all its lists, libraries, folders, items and workflows.",
+    "confirmTitle": "Delete {{name}}?",
+    "confirmDescription": "Everything in this workspace becomes unavailable to everyone, including its lists, libraries and workflows. This cannot be undone here."
+  },
+  "members": {
+    "roles": {
+      "owner": {
+        "label": "Owner",
+        "hint": "Manages the workspace, its members, lists and libraries"
+      },
+      "member": {
+        "label": "Member",
+        "hint": "Adds and edits content"
+      },
+      "visitor": {
+        "label": "Visitor",
+        "hint": "Reads published content"
+      }
+    },
+    "added": "{{name}} added",
+    "roleChanged": "Role changed",
+    "addTitle": "Add people",
+    "addDescription": "People must be active users of the organization.",
+    "add": "Add to workspace",
+    "person": "Person",
+    "findPerson": "Find a person…",
+    "role": "Role",
+    "description": "Owners manage the workspace; a workspace always keeps one owner.",
+    "you": "(you)",
+    "roleOf": "Role of {{name}}",
+    "none": "No members yet.",
+    "removeTitle": "Remove {{name}}?",
+    "removeSelf": "You lose access to this workspace unless a group or another grant still gives it to you.",
+    "removeOther": "They lose access given by workspace membership. Explicit grants on lists or items stay.",
+    "removeConfirm": "Remove member"
+  },
+  "collection": {
+    "back": "Back",
+    "librarySettings": "Library settings",
+    "listSettings": "List settings",
+    "columns": "Columns",
+    "views": "Views",
+    "permissions": "Permissions",
+    "permissionsDescription": "By default everyone in the workspace has access by their workspace role. Folders and items can have their own permissions too.",
+    "integrations": "Integrations",
+    "integrationsOnLists": "Integrations are available on lists.",
+    "activity": "Background work",
+    "readOnlyLibrary": "Only people who manage this library change its settings. You can look at them.",
+    "readOnlyList": "Only people who manage this list change its settings. You can look at them."
+  },
+  "bin": {
+    "collection": "Collection",
+    "title": "Recycle bin",
+    "description": "Deleted items and folders of this list. Restore them, or delete them for good.",
+    "empty": "The recycle bin is empty",
+    "restored": "{{name}} restored",
+    "deleted": "Deleted",
+    "by": "by {{name}}",
+    "with_one": "with {{formatted}} entry inside",
+    "with_other": "with {{formatted}} entries inside",
+    "purge": "Delete permanently",
+    "loadMore": "Load more",
+    "purgeTitle": "Delete “{{name}}” permanently?",
+    "purgeFolder": "The folder and everything in it can no longer be restored.",
+    "purgeItem": "It can no longer be restored."
+  },
+  "menu": {
+    "collectionDeleted": "Collection deleted",
+    "keywords": "Keywords",
+    "newCollection": "New list or library…",
+    "manageMembers": "Manage members",
+    "settings": "Settings",
+    "exportPackage": "Export package…",
+    "newFolder": "New folder…",
+    "upload": "Upload…",
+    "permissions": "Permissions",
+    "delete": "Delete…",
+    "deleteTitle": "Delete “{{name}}”?",
+    "deleteDescription": "The collection and all its contents move to the recycle bin."
+  },
+  "newCollection": {
+    "title": "New list or library",
+    "description": "Lists hold rows of information; libraries hold files. Columns and views can be changed later.",
+    "startFrom": "Start from",
+    "blankList": "Blank list",
+    "blankListHint": "Rows with a title; add your own columns.",
+    "blankLibrary": "Blank library",
+    "blankLibraryHint": "Files with a name; add your own columns.",
+    "library": "Library",
+    "list": "List",
+    "createList": "Create list",
+    "createLibrary": "Create library"
+  }
+}

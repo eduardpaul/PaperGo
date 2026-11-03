@@ -12,6 +12,7 @@ import { useAccess } from '@/features/lists/access';
 import { CollectionIcon } from '@/features/lists/collection-icon';
 import { PlaceContextMenu } from '@/features/workspaces/place-context-menu';
 import { NewCollectionDialog } from '@/features/workspaces/new-collection-dialog';
+import { useTranslation } from '@/i18n';
 import { useFormat } from '@/lib/preferences';
 
 export const Route = createFileRoute('/_app/w/$workspaceId/')({
@@ -19,6 +20,7 @@ export const Route = createFileRoute('/_app/w/$workspaceId/')({
 });
 
 function WorkspacePage() {
+  const { t } = useTranslation('workspaces');
   const { workspaceId } = Route.useParams();
   const format = useFormat();
   const workspace = useQuery(resourceQuery(workspaceId));
@@ -46,30 +48,30 @@ function WorkspacePage() {
           <>
             <Button asChild variant="ghost">
               <Link to="/w/$workspaceId/keywords" params={{ workspaceId }}>
-                <KeywordIcon /> Keywords
+                <KeywordIcon /> {t('home.keywords')}
               </Link>
             </Button>
             <Button asChild variant="ghost">
               <Link to="/w/$workspaceId/relationships" params={{ workspaceId }}>
-                <GitFork /> Relationships
+                <GitFork /> {t('home.relationships')}
               </Link>
             </Button>
             {canManage && (
               <Button asChild>
                 <Link to="/w/$workspaceId/settings" params={{ workspaceId }}>
-                  <Settings /> Settings
+                  <Settings /> {t('home.settings')}
                 </Link>
               </Button>
             )}
             {canManage && (
               <Button variant="primary" onClick={() => setCreating(true)}>
-                <Plus /> New list or library
+                <Plus /> {t('home.newCollection')}
               </Button>
             )}
           </>
         }
       />
-      <h2 className="mb-3 text-xs font-medium tracking-wide text-muted uppercase">Lists and libraries</h2>
+      <h2 className="mb-3 text-xs font-medium tracking-wide text-muted uppercase">{t('home.collections')}</h2>
       {collections.isPending ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Skeleton className="h-24" />
@@ -92,10 +94,10 @@ function WorkspacePage() {
                     <span className="truncate font-semibold">{collection.name}</span>
                   </span>
                   <span className="line-clamp-2 flex-1 text-[13px] text-muted">
-                    {collection.description || (collection.kind === 'library' ? 'Library' : 'List')}
+                    {collection.description || (collection.kind === 'library' ? t('home.library') : t('home.list'))}
                   </span>
                   {collection.updated_at && (
-                    <span className="text-xs text-muted">Updated {format.relative(collection.updated_at)}</span>
+                    <span className="text-xs text-muted">{t('home.updated', { when: format.relative(collection.updated_at) })}</span>
                   )}
                 </Card>
               </Link></PlaceContextMenu>
@@ -104,11 +106,11 @@ function WorkspacePage() {
         </ul>
       ) : (
         <Card>
-          <EmptyState icon={Library} title="No lists or libraries yet">
-            <p className="mb-3">Lists hold rows of information such as contacts or budgets; libraries hold files.</p>
+          <EmptyState icon={Library} title={t('home.emptyTitle')}>
+            <p className="mb-3">{t('home.emptyHint')}</p>
             {canManage && (
               <Button variant="primary" onClick={() => setCreating(true)}>
-                <Plus /> New list or library
+                <Plus /> {t('home.newCollection')}
               </Button>
             )}
           </EmptyState>

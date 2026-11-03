@@ -5,3 +5,9 @@
 PATCH either endpoint with a JSON object. Omitted fields stay unchanged; a string sets an override; `null` removes it and resumes inheritance. The fields are `language`, `time_zone`, `date_format`, `time_format`, `number_format`, `theme` and `document_languages`. Locale names, IANA time zones, date patterns containing `d`, `M` and `y`, `12h`/`24h`, `system`/`light`/`dark` and lowercase document language codes joined by `+` are validated. Unknown fields are rejected.
 
 Both endpoints return a quoted numeric ETag. PATCH requires that ETag in `If-Match`; a missing preference row starts at `"0"`. Missing preconditions return 428 and stale ones return 409. Versions track each owner's overrides. Changing organization defaults affects inherited personal values immediately without advancing the personal version. Personal settings are isolated by the authenticated subject. Any active user can read defaults and edit their own preferences; modifying organization defaults requires `organization.manage`, including through a delegated role. Inactive users cannot read or change preferences.
+
+## Web UI language
+
+The web UI is available in English and Spanish and shows the `language` preference. A regional locale uses its base language (`es-MX` shows Spanish), and a language without a translation shows English. Relative dates and weekday names follow the same language; `number_format`, `date_format`, `time_format` and `time_zone` keep their own settings. The language picker offers the translated languages, and a value set through the API or as an organization default stays selectable.
+
+Before sign-in, the UI uses the language this browser showed last, then the first of the browser's languages that has a translation. API problems whose code has a fixed meaning are shown in the UI language; other problems show the server's English `detail`, as do notification texts. [`web/src/locales/README.md`](../web/src/locales/README.md) describes adding a language.

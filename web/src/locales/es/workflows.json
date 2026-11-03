@@ -1,1 +1,247 @@
-{}
+{
+  "moreRuns": "Más ejecuciones",
+  "trigger": {
+    "withType": "{{event}} ({{type}} o un subtipo)",
+    "withSelectedType": "{{event}} (tipo de contenido seleccionado)",
+    "everyMinute": "Cada minuto",
+    "daily": "Cada día a las {{time}} ({{timeZone}})",
+    "schedule": "Según una programación ({{timeZone}})",
+    "event": {
+      "manual": "Ejecutar a petición",
+      "call": "Cuando otro flujo de trabajo lo llama",
+      "file": {
+        "added": "Cuando se añade un archivo",
+        "updated": "Cuando se reemplaza un archivo"
+      },
+      "item": {
+        "created": "Cuando se crea un elemento",
+        "updated": "Cuando cambian los metadatos",
+        "published": "Cuando se publica un elemento"
+      },
+      "permissions": {
+        "changed": "Cuando cambian los permisos"
+      },
+      "term": {
+        "changed": "Cuando cambia un término",
+        "merged": "Cuando se fusionan términos",
+        "moved": "Cuando se mueve un término"
+      },
+      "task": {
+        "completed": "Cuando se completa una tarea"
+      }
+    }
+  },
+  "automatic": {
+    "offDraft": "Desactivado · Borrador",
+    "offArchived": "Desactivado · Archivado",
+    "notConfigured": "Sin configurar",
+    "off": "Desactivado",
+    "paused": "Desactivado · Todas las reglas en pausa",
+    "on": "Activado · {{rules}}",
+    "inCollection": "{{rule}} en {{collection}}",
+    "inSelectedCollection": "{{rule}} en la colección seleccionada"
+  },
+  "manual": {
+    "none": "Sin punto de entrada manual",
+    "publishToUse": "Publícalo para usarlo",
+    "archived": "Archivado",
+    "available": "Disponible",
+    "notAllowed": "No permitido"
+  },
+  "run": {
+    "status": {
+      "queued": "En cola",
+      "running": "En ejecución",
+      "waiting": "En espera",
+      "completed": "Completada",
+      "failed": "Fallida",
+      "cancelled": "Cancelada"
+    },
+    "origin": {
+      "manual": "Manual",
+      "schedule": "Programada",
+      "test": "Prueba",
+      "call": "Llamada",
+      "automatic": "Automática · {{event}}"
+    },
+    "detailsTitle": "Detalles de la ejecución del flujo de trabajo",
+    "retryQueued": "Reintento en cola",
+    "cancelled": "Ejecución cancelada",
+    "version": "versión {{version}}",
+    "continued_one": "La ejecución continuó como nueva una vez; los pasos son los de su generación actual.",
+    "continued_many": "La ejecución continuó como nueva {{count}} veces; los pasos son los de su generación actual.",
+    "continued_other": "La ejecución continuó como nueva {{count}} veces; los pasos son los de su generación actual.",
+    "carriedState": "Estado transferido",
+    "calledBy": "Llamada por <link>otra ejecución</link>",
+    "continuesAt": "Continúa el {{date}}",
+    "retry": "Reintentar la ejecución",
+    "cancel": "Cancelar la ejecución",
+    "result": "Resultado",
+    "steps": "Pasos",
+    "noSteps": "Aún no se ha registrado ningún paso.",
+    "log": "Registro"
+  },
+  "step": {
+    "kind": {
+      "request": "Solicitud a la API",
+      "wait": "Espera",
+      "value": "Valor"
+    },
+    "waiting": "en espera",
+    "failed": "fallido",
+    "operations": "Operaciones: {{operations}}",
+    "request": "Solicitud",
+    "response": "Respuesta",
+    "output": "Salida",
+    "responseNotKept": "Respuesta de {{size}}, no se guardó al terminar la ejecución",
+    "outputNotKept": "Salida de {{size}}, no se guardó al terminar la ejecución"
+  },
+  "action": {
+    "run": "Ejecutar un flujo de trabajo",
+    "runOnce": "Ejecutar una vez · la configuración automática no cambia",
+    "loading": "Cargando los flujos de trabajo…",
+    "none": "No hay flujos de trabajo con un punto de entrada manual"
+  },
+  "item": {
+    "history": "Historial de flujos de trabajo",
+    "elapsed": "Duración: {{seconds}} s",
+    "viewSteps": "Ver los pasos",
+    "viewStepsRetry": "Ver los pasos y reintentar",
+    "none": "No hay ejecuciones de flujos de trabajo para este elemento.",
+    "managersOnly": "Los administradores del espacio de trabajo pueden examinar los detalles de ejecución y reintentar las ejecuciones fallidas."
+  },
+  "explain": {
+    "summary": "Explicar el comportamiento automático",
+    "event": "Comprobar un evento",
+    "eventLabel": "Evento automático",
+    "fileUpdated": "Archivo reemplazado al subirlo",
+    "fileAdded": "Archivo añadido al subirlo",
+    "itemUpdated": "Metadatos actualizados",
+    "hint": "Una comprobación de idoneidad de solo lectura. No se crean eventos ni ejecuciones de flujos de trabajo.",
+    "check": "Comprobar este archivo"
+  },
+  "editor": {
+    "script": "Script",
+    "savedVersion": "Versión {{version}} guardada",
+    "title": "Flujo de trabajo {{name}}",
+    "newTitle": "Nuevo flujo de trabajo",
+    "description": "Un script de TypeScript: su exportación declara cuándo se ejecuta y run() llama a la API de PaperGo.",
+    "runAutomatically": "Ejecutar automáticamente con los desencadenadores del script",
+    "allowManual": "Permitir ejecuciones manuales",
+    "state": "Estado de publicación",
+    "draft": "Borrador",
+    "published": "Publicado",
+    "archived": "Archivado",
+    "stateHint": "Los borradores y los flujos de trabajo archivados no aceptan ejecuciones nuevas, salvo las de prueba. Los desencadenadores automáticos sobre contenido indican una biblioteca o lista.",
+    "replacesProvider": "Al guardar un flujo de trabajo automático publicado, se reemplaza el proveedor automático de este rol en su colección.",
+    "scriptHint": "Cada llamada a la API, espera y pausa es un paso registrado: una ejecución que se reanuda los reproduce en lugar de repetirlos. ctx.wait(operation) descarga la ejecución hasta que termina un trabajo largo, como el OCR o una tarea.",
+    "parameters": "Parámetros",
+    "parametersHint": "Un objeto JSON que el script lee como ctx.params, por ejemplo los ID de las listas con las que trabaja.",
+    "versionRuns": "La versión {{version}} se ejecuta",
+    "onlyCalled": "Solo cuando lo inicia otro flujo de trabajo o una llamada a la API.",
+    "paused": "en pausa",
+    "concurrency": "Inicios simultáneos en un elemento: {{mode}}"
+  },
+  "test": {
+    "label": "Prueba",
+    "hint": "Guarda el script y ejecuta ya su versión actual, sea borrador o publicada, sin importar sus desencadenadores. Las ejecuciones de prueba hacen cambios reales como autor del flujo de trabajo y no inician otros flujos de trabajo: usa elementos pensados para pruebas.",
+    "hintChanged": "Guarda el script (tiene cambios) y ejecuta ya su versión actual, sea borrador o publicada, sin importar sus desencadenadores. Las ejecuciones de prueba hacen cambios reales como autor del flujo de trabajo y no inician otros flujos de trabajo: usa elementos pensados para pruebas.",
+    "items": "Elementos",
+    "itemsHint": "Sin elementos, se ejecuta sin ninguno; con uno, se ejecuta sobre él; con varios, se ejecuta una vez sobre todos y el primero es el elemento de la ejecución.",
+    "run": "Ejecutar la prueba",
+    "saveAndRun": "Guardar y ejecutar la prueba",
+    "createsDraft": "Al guardar se crea el flujo de trabajo tal como lo configures, como borrador de forma predeterminada."
+  },
+  "launch": {
+    "queued_one": "{{count}} ejecución del flujo de trabajo en cola",
+    "queued_many": "{{count}} ejecuciones del flujo de trabajo en cola",
+    "queued_other": "{{count}} ejecuciones del flujo de trabajo en cola",
+    "viewStatus": "Ver el estado",
+    "title": "Ejecutar {{name}}",
+    "runOnce": "Ejecutar una vez",
+    "automaticRuns": "Ejecuciones automáticas: {{summary}}. Ejecutarlo una vez no cambia esta configuración.",
+    "author": "Autor de la ejecución: {{author}}. El servidor vuelve a comprobar los permisos antes de ejecutarlo.",
+    "workflowAuthor": "Autor del flujo de trabajo",
+    "selected_one": "{{count}} seleccionado: {{names}}",
+    "selected_many": "{{count}} seleccionados: {{names}}",
+    "selected_other": "{{count}} seleccionados: {{names}}",
+    "item": "Elemento",
+    "items": "Elementos",
+    "anyCollection": "Elige de cualquier colección de este espacio de trabajo.",
+    "moreItems": "Más elementos",
+    "primary": "{{label}} principal",
+    "itemWord": "Elemento",
+    "order": "Orden",
+    "up": "Subir",
+    "down": "Bajar",
+    "previewAlt": "Vista previa del elemento seleccionado"
+  },
+  "versions": {
+    "title": "Versiones de {{name}}",
+    "edit": "Editar a partir de esta versión",
+    "label": "Versión del flujo de trabajo",
+    "option": "Versión {{number}} · {{date}} · {{author}}"
+  },
+  "copy": {
+    "title": "Duplicar para personalizar",
+    "description": "Crea un borrador editable con las ejecuciones automáticas desactivadas. El procesamiento automático actual no cambia.",
+    "create": "Crear el borrador"
+  },
+  "form": {
+    "invalidJson": "Introduce un JSON válido.",
+    "include": "Incluir",
+    "choose": "Elige…",
+    "moveUp": "Subir",
+    "moveDown": "Bajar",
+    "add": "Añadir {{label}}"
+  },
+  "page": {
+    "title": "Flujos de trabajo",
+    "description": "Funciones reutilizables que puedes ejecutar a petición. El procesamiento automático se configura por separado para cada biblioteca o lista.",
+    "collection": "Biblioteca o lista",
+    "catalogOnly": "Catálogo del espacio de trabajo · solo uso manual",
+    "collectionHint": "Elige una biblioteca o lista para ver y configurar su procesamiento automático. Los servicios del espacio de trabajo mantienen su propia programación.",
+    "custom": "Personalizado · {{state}}",
+    "canReplace": "Puede reemplazar a un proveedor automático",
+    "configure": "Configurar",
+    "view": "Ver",
+    "versions": "Versiones",
+    "deleteTitle": "¿Eliminar {{name}}?",
+    "deleteDescription": "Impide nuevos usos. Las ejecuciones aceptadas y el historial de versiones se conservan.",
+    "deleteConfirm": "Eliminar el flujo de trabajo",
+    "manualUse": "Uso manual",
+    "automaticRuns": "Ejecuciones automáticas",
+    "builtIn": "Integrado",
+    "system": "Función del sistema",
+    "productDefault": "Predeterminado del producto para cada colección",
+    "notSetUp": "Uso manual: {{manual}} · Ejecuciones automáticas: desactivadas",
+    "needsSetup": "Requiere configuración",
+    "prepareManager": "Guarda la configuración de abajo para preparar el uso manual. El procesamiento automático puede seguir desactivado.",
+    "prepareAsk": "Pide a un administrador del espacio de trabajo que prepare esta función para el uso manual.",
+    "chooseLibrary": "Elige una biblioteca para configurar esta función de archivos."
+  },
+  "settings": {
+    "saved": "Configuración guardada.",
+    "summary": "Configurar el uso y los parámetros",
+    "runInCollection": "Ejecutar automáticamente en esta colección",
+    "runInService": "Ejecutar automáticamente en este servicio del espacio de trabajo",
+    "chooseCollection": "Elige una biblioteca o lista para configurar el procesamiento automático.",
+    "rules": "Reglas automáticas",
+    "providerAlert": "Esto selecciona el proveedor automático de esta colección. Cualquier otro proveedor automático de esta función aquí quedará en pausa; el uso manual no se ve afectado.",
+    "save": "Guardar la configuración"
+  },
+  "runs": {
+    "title": "Ejecuciones",
+    "description": "Ejecuciones recientes de flujos de trabajo en este espacio de trabajo.",
+    "workflow": "Flujo de trabajo",
+    "allWorkflows": "Todos los flujos de trabajo",
+    "origin": "Origen de la ejecución",
+    "allOrigins": "Todos los orígenes",
+    "automatic": "Eventos automáticos",
+    "called": "Llamada por otra ejecución",
+    "status": "Estado de la ejecución",
+    "allStatuses": "Todos los estados",
+    "includeSystem": "Incluir las ejecuciones automáticas del sistema. Las ejecuciones manuales siempre se muestran.",
+    "none": "Aún no hay ejecuciones."
+  }
+}

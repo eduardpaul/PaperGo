@@ -1,1 +1,11 @@
-{}
+{
+  "currency": {
+    "placeholder": "Elige una moneda…"
+  },
+  "person": {
+    "placeholder": "Selecciona una persona…"
+  },
+  "lookup": {
+    "more": "Hay más elementos que coinciden. Escribe para acotar la lista."
+  }
+}

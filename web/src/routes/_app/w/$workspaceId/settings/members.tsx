@@ -13,16 +13,15 @@ import { QueryFeedback } from '@/features/admin/common';
 import { usePeopleNames } from '@/features/fields/people';
 import { useAccess } from '@/features/lists/access';
 import { ConfirmDialog, SettingRow, SettingsSection } from '@/features/settings/section';
+import { useTranslation } from '@/i18n';
 
 export const Route = createFileRoute('/_app/w/$workspaceId/settings/members')({ component: MembersPage });
 
-const roles = [
-  { value: 'owner', label: 'Owner', hint: 'Manages the workspace, its members, lists and libraries' },
-  { value: 'member', label: 'Member', hint: 'Adds and edits content' },
-  { value: 'visitor', label: 'Visitor', hint: 'Reads published content' },
-];
+const roles = ['owner', 'member', 'visitor'] as const;
+const knownRole = (role: string) => roles.find((entry) => entry === role);
 
 function MembersPage() {
+  const { t } = useTranslation(['workspaces', 'common']);
   const { workspaceId } = Route.useParams();
   const queryClient = useQueryClient();
   const me = useQuery(meQuery);
@@ -45,8 +44,8 @@ function MembersPage() {
     onSuccess: async (_result, variables) => {
       if (person[0]?.value === variables.subject) {
         setPerson([]);
-        toast.success(`${nameOf(variables.subject)} added`);
-      } else toast.success('Role changed');
+        toast.success(t('members.added', { name: nameOf(variables.subject) }));
+      } else toast.success(t('members.roleChanged'));
       await refresh();
     },
   });
@@ -64,41 +63,41 @@ function MembersPage() {
     <div className="flex flex-col gap-5">
       {canManage && (
       <SettingsSection
-        title="Add people"
-        description="People must be active users of the organization."
+        title={t('members.addTitle')}
+        description={t('members.addDescription')}
         actions={
           <Button
             variant="primary"
             disabled={setMember.isPending || !person.length}
             onClick={() => setMember.mutate({ subject: person[0].value, role })}
           >
-            Add to workspace
+            {t('members.add')}
           </Button>
         }
       >
-        <SettingRow id="member-person" label="Person">
+        <SettingRow id="member-person" label={t('members.person')}>
           <Combobox
             id="member-person"
             aria-labelledby="member-person-label"
             selected={person}
             options={options}
             loading={people.isPending}
-            placeholder="Find a person…"
+            placeholder={t('members.findPerson')}
             onChange={setPerson}
           />
         </SettingRow>
-        <SettingRow id="member-role" label="Role" hint={roles.find((entry) => entry.value === role)?.hint}>
+        <SettingRow id="member-role" label={t('members.role')} hint={knownRole(role) && t(`members.roles.${knownRole(role)!}.hint`)}>
           <Select id="member-role" value={role} onChange={(event) => setRole(event.target.value)}>
             {roles.map((entry) => (
-              <option key={entry.value} value={entry.value}>
-                {entry.label}
+              <option key={entry} value={entry}>
+                {t(`members.roles.${entry}.label`)}
               </option>
             ))}
           </Select>
         </SettingRow>
       </SettingsSection>
       )}
-      <SettingsSection title="Members" description="Owners manage the workspace; a workspace always keeps one owner.">
+      <SettingsSection title={t('settings.members')} description={t('members.description')}>
         <QueryFeedback query={list} />
         <ul className="flex flex-col divide-y">
           {sorted.map((member) => (
@@ -107,7 +106,7 @@ function MembersPage() {
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[13px] font-medium">
                   {nameOf(member.subject)}
-                  {member.subject === me.data?.subject && <span className="font-normal text-muted"> (you)</span>}
+                  {member.subject === me.data?.subject && <span className="font-normal text-muted"> {t('members.you')}</span>}
                 </span>
                 {nameOf(member.subject) !== member.subject && (
                   <span className="block truncate text-xs text-muted">{member.subject}</span>
@@ -116,40 +115,40 @@ function MembersPage() {
               {canManage ? (
                 <>
                   <Select
-                    aria-label={`Role of ${nameOf(member.subject)}`}
+                    aria-label={t('members.roleOf', { name: nameOf(member.subject) })}
                     className="w-32"
                     value={member.role}
                     disabled={setMember.isPending}
                     onChange={(event) => setMember.mutate({ subject: member.subject, role: event.target.value })}
                   >
                     {roles.map((entry) => (
-                      <option key={entry.value} value={entry.value}>
-                        {entry.label}
+                      <option key={entry} value={entry}>
+                        {t(`members.roles.${entry}.label`)}
                       </option>
                     ))}
                   </Select>
                   <Button size="sm" variant="ghost" onClick={() => setRemoving(member)}>
-                    Remove
+                    {t('common:actions.removeItem')}
                   </Button>
                 </>
               ) : (
-                <span className="text-xs text-muted">{roles.find((entry) => entry.value === member.role)?.label ?? member.role}</span>
+                <span className="text-xs text-muted">{knownRole(member.role) ? t(`members.roles.${knownRole(member.role)!}.label`) : member.role}</span>
               )}
             </li>
           ))}
-          {list.isSuccess && list.data.length === 0 && <li className="py-2 text-sm text-muted">No members yet.</li>}
+          {list.isSuccess && list.data.length === 0 && <li className="py-2 text-sm text-muted">{t('members.none')}</li>}
         </ul>
       </SettingsSection>
       <ConfirmDialog
         open={!!removing}
         onOpenChange={(open) => !open && setRemoving(undefined)}
-        title={`Remove ${removing ? nameOf(removing.subject) : ''}?`}
+        title={t('members.removeTitle', { name: removing ? nameOf(removing.subject) : '' })}
         description={
           removing?.subject === me.data?.subject
-            ? 'You lose access to this workspace unless a group or another grant still gives it to you.'
-            : 'They lose access given by workspace membership. Explicit grants on lists or items stay.'
+            ? t('members.removeSelf')
+            : t('members.removeOther')
         }
-        confirm="Remove member"
+        confirm={t('members.removeConfirm')}
         busy={remove.isPending}
         error={remove.error}
         onConfirm={() => removing && remove.mutate(removing.subject)}

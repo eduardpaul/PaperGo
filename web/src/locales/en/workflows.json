@@ -1,1 +1,244 @@
-{}
+{
+  "moreRuns": "More runs",
+  "trigger": {
+    "withType": "{{event}} ({{type}} or a subtype)",
+    "withSelectedType": "{{event}} (selected content type)",
+    "everyMinute": "Every minute",
+    "daily": "Daily at {{time}} ({{timeZone}})",
+    "schedule": "On a schedule ({{timeZone}})",
+    "event": {
+      "manual": "Run on demand",
+      "call": "When another workflow calls it",
+      "file": {
+        "added": "When a file is added",
+        "updated": "When a file is replaced"
+      },
+      "item": {
+        "created": "When an item is created",
+        "updated": "When metadata changes",
+        "published": "When an item is published"
+      },
+      "permissions": {
+        "changed": "When permissions change"
+      },
+      "term": {
+        "changed": "When a term changes",
+        "merged": "When terms merge",
+        "moved": "When a term moves"
+      },
+      "task": {
+        "completed": "When a task is completed"
+      }
+    }
+  },
+  "automatic": {
+    "offDraft": "Off · Draft",
+    "offArchived": "Off · Archived",
+    "notConfigured": "Not configured",
+    "off": "Off",
+    "paused": "Off · All rules paused",
+    "on": "On · {{rules}}",
+    "inCollection": "{{rule}} in {{collection}}",
+    "inSelectedCollection": "{{rule}} in the selected collection"
+  },
+  "manual": {
+    "none": "No manual entry point",
+    "publishToUse": "Publish to use",
+    "archived": "Archived",
+    "available": "Available",
+    "notAllowed": "Not allowed"
+  },
+  "run": {
+    "status": {
+      "queued": "Queued",
+      "running": "Running",
+      "waiting": "Waiting",
+      "completed": "Completed",
+      "failed": "Failed",
+      "cancelled": "Cancelled"
+    },
+    "origin": {
+      "manual": "Manual",
+      "schedule": "Scheduled",
+      "test": "Test",
+      "call": "Called",
+      "automatic": "Automatic · {{event}}"
+    },
+    "detailsTitle": "Workflow run details",
+    "retryQueued": "Retry queued",
+    "cancelled": "Run cancelled",
+    "version": "version {{version}}",
+    "continued_one": "The run continued as new once; the steps are its current generation's.",
+    "continued_other": "The run continued as new {{count}} times; the steps are its current generation's.",
+    "carriedState": "Carried state",
+    "calledBy": "Called by <link>another run</link>",
+    "continuesAt": "Continues at {{date}}",
+    "retry": "Retry run",
+    "cancel": "Cancel run",
+    "result": "Result",
+    "steps": "Steps",
+    "noSteps": "No steps recorded yet.",
+    "log": "Log"
+  },
+  "step": {
+    "kind": {
+      "request": "API request",
+      "wait": "Wait",
+      "value": "Value"
+    },
+    "waiting": "waiting",
+    "failed": "failed",
+    "operations": "Operations: {{operations}}",
+    "request": "Request",
+    "response": "Response",
+    "output": "Output",
+    "responseNotKept": "Response of {{size}}, not kept after the run ended",
+    "outputNotKept": "Output of {{size}}, not kept after the run ended"
+  },
+  "action": {
+    "run": "Run workflow",
+    "runOnce": "Run once · automatic settings stay unchanged",
+    "loading": "Loading workflows…",
+    "none": "No workflows with a manual entry point"
+  },
+  "item": {
+    "history": "Workflow history",
+    "elapsed": "Elapsed: {{seconds}}s",
+    "viewSteps": "View steps",
+    "viewStepsRetry": "View steps and retry",
+    "none": "No workflow runs for this item.",
+    "managersOnly": "Workspace managers can inspect execution details and retry failed runs."
+  },
+  "explain": {
+    "summary": "Explain automatic behavior",
+    "event": "Check an event",
+    "eventLabel": "Automatic event",
+    "fileUpdated": "File replaced by upload",
+    "fileAdded": "File added by upload",
+    "itemUpdated": "Metadata updated",
+    "hint": "A read-only eligibility check. No events or workflow runs are created.",
+    "check": "Check this file"
+  },
+  "editor": {
+    "script": "Script",
+    "savedVersion": "Saved version {{version}}",
+    "title": "Workflow {{name}}",
+    "newTitle": "New workflow",
+    "description": "A TypeScript script: its export declares when it runs, and run() calls the PaperGo API.",
+    "runAutomatically": "Run automatically on the script's triggers",
+    "allowManual": "Allow manual runs",
+    "state": "Publication state",
+    "draft": "Draft",
+    "published": "Published",
+    "archived": "Archived",
+    "stateHint": "Drafts and archived workflows accept no new runs, except test runs. Automatic triggers on content name a library or list.",
+    "replacesProvider": "Saving a published automatic workflow replaces the automatic provider for this role in its collection.",
+    "scriptHint": "Each API call, wait and sleep is a recorded step: a run that resumes replays them instead of repeating them. ctx.wait(operation) unloads the run until long work, such as OCR or a task, finishes.",
+    "parameters": "Parameters",
+    "parametersHint": "A JSON object the script reads as ctx.params, such as the IDs of the lists it works on.",
+    "versionRuns": "Version {{version}} runs",
+    "onlyCalled": "Only when another workflow or an API call starts it.",
+    "paused": "paused",
+    "concurrency": "Concurrent starts on an item: {{mode}}"
+  },
+  "test": {
+    "label": "Test",
+    "hint": "Saves the script and runs its current version now, draft or published, whatever its triggers. Test runs make real changes as the workflow's author and start no other workflow: use items meant for testing.",
+    "hintChanged": "Saves the script (it has changes) and runs its current version now, draft or published, whatever its triggers. Test runs make real changes as the workflow's author and start no other workflow: use items meant for testing.",
+    "items": "Items",
+    "itemsHint": "None runs without an item; one runs on it; several run once on all of them, the first as the run's item.",
+    "run": "Run test",
+    "saveAndRun": "Save and run test",
+    "createsDraft": "Saving creates the workflow as you set it, a draft by default."
+  },
+  "launch": {
+    "queued_one": "{{count}} workflow run queued",
+    "queued_other": "{{count}} workflow runs queued",
+    "viewStatus": "View status",
+    "title": "Run {{name}}",
+    "runOnce": "Run once",
+    "automaticRuns": "Automatic runs: {{summary}}. Running once keeps these settings unchanged.",
+    "author": "Execution author: {{author}}. The server rechecks permissions before execution.",
+    "workflowAuthor": "Workflow author",
+    "selected_one": "{{count}} selected: {{names}}",
+    "selected_other": "{{count}} selected: {{names}}",
+    "item": "Item",
+    "items": "Items",
+    "anyCollection": "Choose from any collection in this workspace.",
+    "moreItems": "More items",
+    "primary": "Primary {{label}}",
+    "itemWord": "item",
+    "order": "Order",
+    "up": "Up",
+    "down": "Down",
+    "previewAlt": "Selected item preview"
+  },
+  "versions": {
+    "title": "Versions of {{name}}",
+    "edit": "Edit from this version",
+    "label": "Workflow version",
+    "option": "Version {{number}} · {{date}} · {{author}}"
+  },
+  "copy": {
+    "title": "Duplicate to customize",
+    "description": "Creates an editable draft with automatic runs off. Current automatic processing stays unchanged.",
+    "create": "Create draft"
+  },
+  "form": {
+    "invalidJson": "Enter valid JSON.",
+    "include": "Include",
+    "choose": "Choose…",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "add": "Add {{label}}"
+  },
+  "page": {
+    "title": "Workflows",
+    "description": "Reusable features you can run on demand. Automatic processing is configured separately for each library or list.",
+    "collection": "Library or list",
+    "catalogOnly": "Workspace catalog · manual use only",
+    "collectionHint": "Choose a library or list to see and configure its automatic processing. Workspace services keep their own schedules.",
+    "custom": "Custom · {{state}}",
+    "canReplace": "Can replace an automatic provider",
+    "configure": "Configure",
+    "view": "View",
+    "versions": "Versions",
+    "deleteTitle": "Delete {{name}}?",
+    "deleteDescription": "Stops new uses. Accepted runs and version history remain.",
+    "deleteConfirm": "Delete workflow",
+    "manualUse": "Manual use",
+    "automaticRuns": "Automatic runs",
+    "builtIn": "Built-in",
+    "system": "System feature",
+    "productDefault": "Product default for each collection",
+    "notSetUp": "Manual use: {{manual}} · Automatic runs: Off",
+    "needsSetup": "Needs setup",
+    "prepareManager": "Save settings below to prepare manual use. Automatic processing can stay off.",
+    "prepareAsk": "Ask a workspace manager to prepare this feature for manual use.",
+    "chooseLibrary": "Choose a library to configure this file feature."
+  },
+  "settings": {
+    "saved": "Settings saved.",
+    "summary": "Configure use and parameters",
+    "runInCollection": "Run automatically in this collection",
+    "runInService": "Run automatically in this workspace service",
+    "chooseCollection": "Choose a library or list to configure automatic processing.",
+    "rules": "Automatic rules",
+    "providerAlert": "This selects the automatic provider for this collection. Any other automatic provider for this feature here will be paused; manual use stays independent.",
+    "save": "Save settings"
+  },
+  "runs": {
+    "title": "Runs",
+    "description": "Recent workflow runs in this workspace.",
+    "workflow": "Workflow",
+    "allWorkflows": "All workflows",
+    "origin": "Run origin",
+    "allOrigins": "All origins",
+    "automatic": "Automatic events",
+    "called": "Called by another run",
+    "status": "Run status",
+    "allStatuses": "All statuses",
+    "includeSystem": "Include automatic system runs. Manual runs are always shown.",
+    "none": "No runs yet."
+  }
+}

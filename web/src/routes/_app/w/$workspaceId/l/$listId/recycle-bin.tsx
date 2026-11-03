@@ -14,6 +14,7 @@ import { EmptyState, Skeleton } from '@/components/ui/feedback';
 import { usePeopleNames } from '@/features/fields/people';
 import { can } from '@/features/lists/access';
 import { ConfirmDialog } from '@/features/settings/section';
+import { useTranslation } from '@/i18n';
 import { useFormat } from '@/lib/preferences';
 
 /** A recycle bin entry; a folder counts what was deleted with it. */
@@ -22,6 +23,7 @@ type DeletedEntry = Resource & { deleted_with?: number };
 export const Route = createFileRoute('/_app/w/$workspaceId/l/$listId/recycle-bin')({ component: RecycleBinPage });
 
 function RecycleBinPage() {
+  const { t } = useTranslation(['workspaces', 'common']);
   const { workspaceId, listId } = Route.useParams();
   const format = useFormat();
   const names = usePeopleNames();
@@ -36,7 +38,7 @@ function RecycleBinPage() {
   const restore = useMutation({
     mutationFn: (item: DeletedEntry) => api(`/v1/resources/${listId}/recycle-bin/${item.id}/restore`, { method: 'POST', query: { recursive: 'true' } }),
     onSuccess: async (_result, item) => {
-      toast.success(`${item.name} restored`);
+      toast.success(t('bin.restored', { name: item.name }));
       await refresh();
     },
   });
@@ -49,17 +51,18 @@ function RecycleBinPage() {
     },
   });
   const rows = bin.items;
+  const manageable = can(collection.data, 'manage');
   return (
     <Page>
       <Link to="/w/$workspaceId/l/$listId" params={{ workspaceId, listId }} className="mb-2 inline-flex items-center gap-1 text-xs text-muted hover:text-foreground">
-        <ArrowLeft className="size-3.5" /> {collection.data?.name ?? 'Collection'}
+        <ArrowLeft className="size-3.5" /> {collection.data?.name ?? t('bin.collection')}
       </Link>
-      <PageHeader icon={Trash2} title="Recycle bin" description="Deleted items and folders of this list. Restore them, or delete them for good." />
+      <PageHeader icon={Trash2} title={t('bin.title')} description={t('bin.description')} />
       {bin.isPending ? (
         <Skeleton className="h-16" />
       ) : rows.length === 0 ? (
         <Card>
-          <EmptyState icon={Trash2} title="The recycle bin is empty" />
+          <EmptyState icon={Trash2} title={t('bin.empty')} />
         </Card>
       ) : (
         <>
@@ -72,20 +75,20 @@ function RecycleBinPage() {
                     {item.name}
                   </p>
                   <p className="text-xs text-muted">
-                    Deleted
-                    {item.deleted_at ? ` ${format.relative(item.deleted_at)}` : ''}
-                    {item.deleted_by ? ` by ${names.get(item.deleted_by) ?? item.deleted_by}` : ''}
-                    {item.deleted_with
-                      ? ` with ${format.number(item.deleted_with)} ${item.deleted_with === 1 ? 'entry' : 'entries'} inside`
-                      : ''}
+                    {[
+                      t('bin.deleted'),
+                      item.deleted_at && format.relative(item.deleted_at),
+                      item.deleted_by && t('bin.by', { name: names.get(item.deleted_by) ?? item.deleted_by }),
+                      item.deleted_with && t('bin.with', { count: item.deleted_with, formatted: format.number(item.deleted_with) }),
+                    ].filter(Boolean).join(' ')}
                   </p>
                 </div>
                 <Button size="sm" disabled={restore.isPending} onClick={() => restore.mutate(item)}>
-                  Restore
+                  {t('common:actions.restore')}
                 </Button>
-                {can(collection.data, 'manage') && (
+                {manageable && (
                   <Button size="sm" variant="ghost" onClick={() => setPurging(item)}>
-                    Delete permanently
+                    {t('bin.purge')}
                   </Button>
                 )}
               </li>
@@ -93,7 +96,7 @@ function RecycleBinPage() {
           </ul>
           {bin.hasNextPage && (
             <Button className="mt-3" disabled={bin.isFetchingNextPage} onClick={() => void bin.fetchNextPage()}>
-              {bin.isFetchingNextPage ? 'Loading…' : 'Load more'}
+              {bin.isFetchingNextPage ? t('common:status.loading') : t('bin.loadMore')}
             </Button>
           )}
         </>
@@ -101,9 +104,9 @@ function RecycleBinPage() {
       <ConfirmDialog
         open={!!purging}
         onOpenChange={(open) => !open && setPurging(undefined)}
-        title={`Delete “${purging?.name ?? ''}” permanently?`}
-        description={purging?.kind === 'folder' ? 'The folder and everything in it can no longer be restored.' : 'It can no longer be restored.'}
-        confirm="Delete permanently"
+        title={t('bin.purgeTitle', { name: purging?.name ?? '' })}
+        description={purging?.kind === 'folder' ? t('bin.purgeFolder') : t('bin.purgeItem')}
+        confirm={t('bin.purge')}
         busy={purge.isPending}
         error={purge.error}
         onConfirm={() => purging && purge.mutate(purging)}

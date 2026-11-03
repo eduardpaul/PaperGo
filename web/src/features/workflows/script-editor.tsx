@@ -1,6 +1,7 @@
 import type * as Api from "monaco-editor/editor/editor.api";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Textarea } from "@/components/ui/input";
+import { i18n } from "@/i18n";
 
 type Monaco = typeof Api;
 
@@ -34,7 +35,7 @@ export function ScriptEditor({ id, value, onChange, readOnly }: { id: string; va
     const model = monaco.editor.createModel(latest.current.value, "typescript", monaco.Uri.parse(`file:///${id}.ts`));
     const created = monaco.editor.create(host.current, {
       model,
-      ariaLabel: "Script",
+      ariaLabel: i18n.t("workflows:editor.script"),
       automaticLayout: true,
       fixedOverflowWidgets: true,
       fontSize: 12,
