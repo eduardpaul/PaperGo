@@ -24,7 +24,7 @@ export function authenticationMode(): AuthenticationMode {
   return mode;
 }
 
-/** Where AI assistants reach this deployment, on its own origin; null when MCP is off. */
+/** Where AI assistants reach this deployment, at its public origin; null when MCP is off. */
 export function mcpEndpoint(): string | null {
   return mcp;
 }
@@ -69,6 +69,17 @@ function oidcSettings(value: unknown): OidcSettings | null {
   return { issuer, client_id, scope };
 }
 
+/** The deployment's public origin, which clients outside the browser use; null when it names none. */
+function publicOrigin(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.origin : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Initialize before mounting the router; never render the app with unknown server capabilities. */
 export async function loadAuthentication() {
   const response = await fetch('/auth/config', { credentials: 'same-origin', cache: 'no-store' });
@@ -82,7 +93,8 @@ export async function loadAuthentication() {
   mode = reported;
   oidc = null;
   const features = (config as { features?: { comments?: unknown; mcp?: unknown; file_types?: unknown; file_edit_max_bytes?: unknown } }).features;
-  mcp = features?.mcp === true ? `${window.location.origin}/v1/mcp` : null;
+  const origin = publicOrigin((config as { public_url?: unknown }).public_url) ?? window.location.origin;
+  mcp = features?.mcp === true ? `${origin}/v1/mcp` : null;
   comments = features?.comments === true;
   types = fileTypeList(features?.file_types);
   if (typeof features?.file_edit_max_bytes === 'number' && features.file_edit_max_bytes > 0) editMax = features.file_edit_max_bytes;

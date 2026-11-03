@@ -218,11 +218,18 @@ func (a *API) root() (*router, error) {
 			FileEditMax int64 `json:"file_edit_max_bytes"`
 		}
 		f := features{Comments: !a.CommentsOff, MCP: a.MCP, FileTypes: fileTypes(), FileEditMax: a.FileEditMax}
+		// PublicURL is the origin clients outside the browser reach, such
+		// as the address the web app gives AI assistants.
+		var public string
+		if a.PublicURL != nil {
+			public = a.PublicURL.String()
+		}
 		respond(w, r, 200, struct {
-			Mode     auth.Kind      `json:"mode"`
-			OIDC     *BrowserSignIn `json:"oidc,omitempty"`
-			Features features       `json:"features"`
-		}{mode, signIn, f})
+			Mode      auth.Kind      `json:"mode"`
+			PublicURL string         `json:"public_url,omitempty"`
+			OIDC      *BrowserSignIn `json:"oidc,omitempty"`
+			Features  features       `json:"features"`
+		}{mode, public, signIn, f})
 	})
 	if local, ok := a.Auth.(auth.Local); ok {
 		root.HandleFunc("POST /auth/login", a.localLogin(local))

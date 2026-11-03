@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"papergo/internal/auth"
 	"strings"
 	"testing"
@@ -11,9 +12,10 @@ import (
 
 func TestAuthConfigNamesTheDeploymentsFeatures(t *testing.T) {
 	_, s, _ := setup(t)
-	h := (&API{DMS: s, Auth: auth.Development{Token: testToken, Subject: "alice"}, Logger: slog.Default(), MCP: true, CommentsOff: true}).Handler()
+	public, _ := url.Parse("https://docs.example.com")
+	h := (&API{DMS: s, Auth: auth.Development{Token: testToken, Subject: "alice"}, Logger: slog.Default(), MCP: true, CommentsOff: true, PublicURL: public}).Handler()
 	config := request(h, "GET", "/auth/config", "", "", "", "")
-	if config.Code != 200 || discoveredCore(config.Body.String()) != `{"mode":"bearer","features":{"comments":false,"mcp":true}}` {
+	if config.Code != 200 || discoveredCore(config.Body.String()) != `{"mode":"bearer","public_url":"https://docs.example.com","features":{"comments":false,"mcp":true}}` {
 		t.Fatal(config.Code, config.Body.String())
 	}
 	if w := request(h, "GET", "/v1/items/x/comments", "", testToken, "", ""); w.Code != 404 {

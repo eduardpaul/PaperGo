@@ -14593,6 +14593,10 @@
                         "local"
                       ]
                     },
+                    "public_url": {
+                      "type": "string",
+                      "description": "The deployment's public origin (PUBLIC_URL), when it is set: where clients outside the browser, such as AI assistants, reach it."
+                    },
                     "oidc": {
                       "type": "object",
                       "description": "Present in OIDC deployments that set OIDC_CLIENT_ID. The web frontend signs in with this public client using the authorization code flow with PKCE.",

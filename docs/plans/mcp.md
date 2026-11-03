@@ -331,8 +331,8 @@ Configuration is part of PaperGo's: `MCP` (`on`, the default, or `off`;
 `mcp.enabled` in `config.yaml`) and `MCP_EXTENSIONS` (compiled contribution
 IDs; `mcp.extensions`). Results link to the web app at `PUBLIC_URL`, or at
 the origin the client reached; contributions read it from `Caller.AppURL`. The web
-app learns from `/auth/config` whether MCP is on and offers connections at its
-own origin.
+app learns from `/auth/config` whether MCP is on and the public origin, and
+offers connections there, or at its own origin without `PUBLIC_URL`.
 
 MCP requests share the API's admission limit; the API requests a tool makes are
 part of its MCP request and take no turn of their own. Each MCP request has a

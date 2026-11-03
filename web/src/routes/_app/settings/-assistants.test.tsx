@@ -40,13 +40,13 @@ interface Served {
   deleted: string[];
 }
 
-/** Serves the API, and the MCP endpoint answering with status. */
+/** Serves the API, and the MCP endpoint on the page's origin answering with status. */
 function serve(granted: string[], { existing = [] as unknown[], mcpStatus = 200 } = {}): Served {
   const served: Served = { posts: [], checks: [], deleted: [] };
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: URL | string, init: RequestInit = {}) => {
-      if (String(input) === auth.endpoint) {
+      if (String(input) === '/v1/mcp') {
         served.checks.push({ authorization: new Headers(init.headers).get('Authorization') });
         return new Response(
           JSON.stringify({ jsonrpc: '2.0', id: 1, result: { serverInfo: { name: 'papergo' } } }),
