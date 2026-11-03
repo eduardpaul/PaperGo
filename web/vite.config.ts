@@ -56,5 +56,5 @@ export default defineConfig({
   },
   // Monaco's editor chunk loads only with the script editor, PDF.js only with the PDF viewer.
   build: { outDir: 'dist', chunkSizeWarningLimit: 3000 },
-  test: { include: ['src/**/*.test.{ts,tsx}'], environment: 'node' },
+  test: { include: ['src/**/*.test.{ts,tsx}'], environment: 'node', setupFiles: ['./src/test-setup.ts'] },
 });

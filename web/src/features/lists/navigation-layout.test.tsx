@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type * as Router from '@tanstack/react-router';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -7,6 +8,11 @@ import { parseJSON, stringifyJSON } from '@/api/json';
 import type { FieldDefinition, ListView, NavigationNode, Term } from '@/api/types';
 import { PreferencesProvider } from '@/lib/preferences';
 import { ItemsNavigation } from './navigation-layout';
+
+vi.mock('@tanstack/react-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof Router>()),
+  useNavigate: () => vi.fn(),
+}));
 
 const clients: QueryClient[] = [];
 afterEach(() => {

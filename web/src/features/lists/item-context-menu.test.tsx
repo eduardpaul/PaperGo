@@ -1,9 +1,15 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type * as Router from '@tanstack/react-router';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { Resource } from '@/api/types';
 import { ItemContextMenu } from './item-context-menu';
+
+vi.mock('@tanstack/react-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof Router>()),
+  useNavigate: () => vi.fn(),
+}));
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 const collection: Resource = { id: 'list', workspace_id: 'w', kind: 'list', name: 'List', version: 1 };

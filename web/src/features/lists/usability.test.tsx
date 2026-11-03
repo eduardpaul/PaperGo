@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type * as Router from '@tanstack/react-router';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -8,6 +9,11 @@ import type { FieldDefinition, Resource } from '@/api/types';
 import { keyFromLabel } from '@/features/admin/field-dialog';
 import { ItemSheet } from './item-sheet';
 import { ItemsTable } from './items-table';
+
+vi.mock('@tanstack/react-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof Router>()),
+  useNavigate: () => vi.fn(),
+}));
 
 const clients: QueryClient[] = [];
 afterEach(() => {
@@ -37,6 +43,8 @@ describe('items table', () => {
     const rows = Array.from({ length: 1000 }, (_, index) => row(`r${index}`, `Row ${index}`));
     // jsdom has no layout: give rows a height so they can be measured.
     vi.spyOn(HTMLTableRowElement.prototype, 'offsetHeight', 'get').mockReturnValue(41);
+    // The virtualizer scrolls the window to keep measured rows in place; jsdom cannot scroll.
+    vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
     renderWithClient(
       <ItemsTable
         rows={rows}
