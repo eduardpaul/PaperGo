@@ -54,6 +54,7 @@ start_database() {
         # Disposable: test databases live in memory.
         docker run --detach --name "$database" --network "$network" --tmpfs /var/lib/postgresql/data \
             --env POSTGRES_USER=papergo --env POSTGRES_PASSWORD=papergo --env POSTGRES_DB=papergo \
+            --env POSTGRES_INITDB_ARGS='--auth-local=trust --auth-host=scram-sha-256' \
             postgres:17-alpine >/dev/null
     fi
     for _ in $(seq 60); do

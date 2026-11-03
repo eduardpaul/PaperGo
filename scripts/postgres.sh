@@ -42,7 +42,7 @@ start() {
             docker start "$name" >/dev/null
         else
             docker run -d --name "$name" -p "127.0.0.1:$port:5432" \
-                -e POSTGRES_USER="$user" -e POSTGRES_PASSWORD="$password" -e POSTGRES_DB=papergo \
+                -e POSTGRES_USER="$user" -e POSTGRES_PASSWORD="$password" -e POSTGRES_DB=papergo -e POSTGRES_INITDB_ARGS='--auth-local=trust --auth-host=scram-sha-256' \
                 "$image" >/dev/null
         fi
     fi

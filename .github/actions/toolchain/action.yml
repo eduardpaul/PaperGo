@@ -53,6 +53,8 @@ runs:
         key: native-${{ runner.os }}-${{ runner.arch }}-${{ env.ImageOS }}-${{ hashFiles('.github/actions/toolchain/action.yml', 'Dockerfile', 'scripts/native.py', 'scripts/native.json', 'scripts/native-notices/**') }}
     - name: Install native SDKs
       shell: bash
+      env:
+        PIP_DISABLE_PIP_VERSION_CHECK: '1'
       run: |
         python -m pip install cmake==${{ steps.versions.outputs.cmake }}
         python scripts/native.py --github-env

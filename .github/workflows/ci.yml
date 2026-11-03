@@ -77,6 +77,8 @@ jobs:
           POSTGRES_USER: papergo
           POSTGRES_PASSWORD: papergo
           POSTGRES_DB: papergo
+          # initdb warns when it picks the authentication methods itself.
+          POSTGRES_INITDB_ARGS: --auth-local=trust --auth-host=scram-sha-256
         options: >-
           --health-cmd "pg_isready -U papergo -d papergo"
           --health-interval 5s
