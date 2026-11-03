@@ -55,7 +55,6 @@ import { RunWorkflowAction } from '@/features/workflows/item-workflows';
 import { cn } from '@/lib/utils';
 import { can } from './access';
 import { CollectionIcon } from './collection-icon';
-import { systemFields } from './filter-editor';
 import { useFolderMoves } from './folder-moves';
 import { ItemContextMenu } from './item-context-menu';
 import { MoveDialog } from './move-dialog';
@@ -65,7 +64,7 @@ import { ItemsTable } from './items-table';
 import { BulkEditDialog } from './operations';
 import { ColumnPicker } from './column-picker';
 import { ItemsNavigation } from './navigation-layout';
-import { columnLabel, fieldsForType, parseSort, sortableColumns, sortParam } from './schema';
+import { columnLabel, fieldsForType, parseSort, sortableColumns, sortParam, systemFields } from './schema';
 
 export interface CollectionSearch {
   create?: 'folder' | 'upload';

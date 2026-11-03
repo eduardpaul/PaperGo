@@ -1,12 +1,33 @@
 import type { ContentType, FieldDefinition, FieldSetting, Resource } from '@/api/types';
 import { i18n } from '@/i18n';
 
-const systemColumns = ['name', 'id', 'keywords', 'created_at', 'created_by', 'modified_at', 'modified_by', 'archived_at', 'archived_by'] as const;
+/** The built-in columns as fields. Each label is read in the user's language when it is used. */
+export const systemFields: FieldDefinition[] = (
+  [
+    ['name', 'text'],
+    ['id', 'text'],
+    ['keywords', 'keywords'],
+    ['created_at', 'datetime'],
+    ['modified_at', 'datetime'],
+    ['created_by', 'person'],
+    ['modified_by', 'person'],
+    ['archived_at', 'datetime'],
+    ['archived_by', 'person'],
+  ] as const
+).map(([column, type]) => ({
+  id: `$${column}`,
+  key: `$${column}`,
+  get label() {
+    return i18n.t(`lists:columns.${column}`);
+  },
+  type,
+  indexed: true,
+  options: column === 'keywords' ? { multiple: true } : undefined,
+}));
 
 /** A column's label: a built-in column's in the user's language, a field's as its schema names it. */
 export function columnLabel(key: string, fields: FieldDefinition[]): string {
-  const system = systemColumns.find((column) => `$${column}` === key);
-  return system ? i18n.t(`lists:columns.${system}`) : fields.find((field) => field.key === key)?.label ?? key;
+  return [...systemFields, ...fields].find((field) => field.key === key)?.label ?? key;
 }
 
 /**

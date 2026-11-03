@@ -9,30 +9,6 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { i18n, useTranslation } from '@/i18n';
 
-/** The built-in columns as fields. Each label is read in the user's language when it is used. */
-export const systemFields: FieldDefinition[] = (
-  [
-    ['name', 'text'],
-    ['id', 'text'],
-    ['keywords', 'keywords'],
-    ['created_at', 'datetime'],
-    ['modified_at', 'datetime'],
-    ['created_by', 'person'],
-    ['modified_by', 'person'],
-    ['archived_at', 'datetime'],
-    ['archived_by', 'person'],
-  ] as const
-).map(([column, type]) => ({
-  id: `$${column}`,
-  key: `$${column}`,
-  get label() {
-    return i18n.t(`lists:columns.${column}`);
-  },
-  type,
-  indexed: true,
-  options: column === 'keywords' ? { multiple: true } : undefined,
-}));
-
 /** The comparisons a filter condition can make, in the order the editor offers them. */
 export const comparisons = ['eq', 'ne', 'in', 'missing', 'present', 'gt', 'gte', 'lt', 'lte', 'contains', 'under'] as const;
 /** The moments a date condition can compare with instead of a fixed date. */

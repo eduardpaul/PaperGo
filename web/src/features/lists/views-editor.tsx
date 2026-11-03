@@ -14,8 +14,8 @@ import { Checkbox, Select } from '@/components/ui/select';
 import { QueryFeedback } from '@/features/admin/common';
 import { useTranslation } from '@/i18n';
 import { ConfirmDialog, SettingsSection } from '@/features/settings/section';
-import { columnLabel } from './schema';
-import { FilterEditor, normalizeFilter, systemFields } from './filter-editor';
+import { columnLabel, systemFields } from './schema';
+import { FilterEditor, normalizeFilter } from './filter-editor';
 
 const layouts = ['table', 'board', 'calendar', 'gallery', 'navigation'] as const;
 const isLayout = (value: string): value is (typeof layouts)[number] => layouts.some((layout) => layout === value);
