@@ -97,14 +97,14 @@ def main():
             workspace = server.json('POST', '/v1/workspaces', {'name': 'Memory'})['id']
             collection = server.json('POST', f'/v1/resources/{workspace}/children', {'kind': 'list', 'name': 'Invoices'})['id']
             for start in range(0, args.items, 100):
-                operations = [{'action': 'create', 'create': {'name': f'Invoice {i:06d} Acme', 'tags': ['finance']}}
+                operations = [{'action': 'create', 'create': {'name': f'Invoice {i:06d} Acme', 'keywords': ['finance']}}
                               for i in range(start, min(start + 100, args.items))]
                 server.json('POST', f'/v1/resources/{collection}/bulk', {'operations': operations})
             deadline = time.monotonic() + 600
             while True:
                 with sqlite3.connect(dbpath) as db:
                     pending = db.execute('SELECT count(*) FROM domain_events WHERE dispatched_at IS NULL').fetchone()[0]
-                    pending += db.execute("SELECT count(*) FROM workflow_runs WHERE live_status IN ('queued', 'running', 'waiting')").fetchone()[0]
+                    pending += db.execute("SELECT count(*) FROM operations WHERE status = 'pending'").fetchone()[0]
                 if not pending:
                     break
                 if time.monotonic() > deadline:
