@@ -516,11 +516,11 @@ export function CollectionPage({
       {selected.size > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-accent-soft px-3 py-2 text-[13px]">
           <span className="font-medium">
-            {allMatching ? <MatchingCount collectionId={listId} query={matching} /> : t('page.selected', { count: selected.size })}
+            {allMatching ? <MatchingCount collectionId={listId} query={matching} phrase="selected" /> : t('page.selected', { count: selected.size })}
           </span>
           {!allMatching && allLoadedSelected && next && canEdit && (
             <Button size="sm" variant="ghost" className="text-accent" onClick={() => setAllMatching(true)}>
-              <MatchingCount collectionId={listId} query={matching} action />
+              <MatchingCount collectionId={listId} query={matching} phrase="selectAll" />
             </Button>
           )}
           <Button size="sm" disabled={!allMatching && items.length === 0} onClick={() => setBulkEditing(true)}>
@@ -711,7 +711,7 @@ export function CollectionPage({
         <BulkEditDialog
           collectionId={listId}
           target={allMatching ? { query: matching } : { ids: items.map((item) => item.id) }}
-          count={allMatching ? <MatchingCount collectionId={listId} query={matching} bare /> : undefined}
+          title={allMatching ? <MatchingCount collectionId={listId} query={matching} phrase="edit" /> : undefined}
           fields={fieldList}
           onClose={() => setBulkEditing(false)}
           onStarted={(ids) => {
@@ -1022,15 +1022,17 @@ function useMatchingTotal(collectionId: string, query: QuerySpec, enabled = true
   }).data;
 }
 
-/** "2,490 items" or "100,000+ items" matching a query. */
-/** The matching items: "1,204 items", in "All 1,204 items selected", or in the "Select all 1,204 items" action. */
-function MatchingCount({ collectionId, query, bare, action }: { collectionId: string; query: QuerySpec; bare?: boolean; action?: boolean }) {
+/**
+ * A sentence about the items a query matches, counted ("2,490 items", "100,000+ items") once the count is known:
+ * "All 2,490 items selected", the "Select all 2,490 items" action or the "Edit 2,490 items" title.
+ */
+function MatchingCount({ collectionId, query, phrase }: { collectionId: string; query: QuerySpec; phrase: 'selected' | 'selectAll' | 'edit' }) {
   const { t } = useTranslation('lists');
   const format = useFormat();
   const counted = useMatchingTotal(collectionId, query);
-  if (!counted) return <>{action ? t('matching.selectAllUncounted') : bare ? t('matching.allBare') : t('matching.allSelected')}</>;
+  if (!counted) return <>{t(({ selected: 'matching.allSelected', selectAll: 'matching.selectAllUncounted', edit: 'bulkEdit.editAll' } as const)[phrase])}</>;
   const items = counted.capped
     ? t('matching.countCapped', { number: format.number(counted.total) })
     : t('matching.count', { count: counted.total, number: format.number(counted.total) });
-  return <>{action ? t('matching.selectAll', { items }) : bare ? items : t('matching.selected', { items })}</>;
+  return <>{t(({ selected: 'matching.selected', selectAll: 'matching.selectAll', edit: 'bulkEdit.editMatching' } as const)[phrase], { items })}</>;
 }

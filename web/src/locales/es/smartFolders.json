@@ -114,8 +114,6 @@
     "label": "Reglas",
     "title": "Los elementos que cumplan estas reglas aparecen automáticamente",
     "all": "Todos los elementos visibles",
-    "and": "y",
-    "or": "o",
     "not": "No cumple ({{rule}})",
     "customField": "Campo personalizado",
     "condition": "{{field}} {{comparison}} {{value}}",

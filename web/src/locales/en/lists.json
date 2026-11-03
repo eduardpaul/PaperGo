@@ -62,7 +62,7 @@
     "applySelected": "Apply to selected items",
     "descriptionAll": "Set one field on every matching item in the background. Leave it empty to clear it. Each failure is reported separately.",
     "descriptionSelected": "Set one field on every selected item in the background. Leave it empty to clear it. Each failure is reported separately.",
-    "edit": "Edit",
+    "editMatching": "Edit {{items}}",
     "editAll": "Edit all matching items",
     "editSelected_one": "Edit {{count}} selected item",
     "editSelected_other": "Edit {{count}} selected items",
@@ -241,7 +241,6 @@
   },
   "loadMore": "Load more",
   "matching": {
-    "allBare": "all matching items",
     "allSelected": "All matching items selected",
     "countCapped": "{{number}}+ items",
     "count_one": "{{number}} item",

@@ -113,8 +113,6 @@
     "label": "Rules",
     "title": "Items matching these rules appear automatically",
     "all": "All visible items",
-    "and": "and",
-    "or": "or",
     "not": "Does not match ({{rule}})",
     "customField": "Custom field",
     "condition": "{{field}} {{comparison}} {{value}}",

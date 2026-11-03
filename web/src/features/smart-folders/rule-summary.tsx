@@ -7,7 +7,7 @@ import { useTermNames, useValueNames } from '@/features/fields/names';
 import { comparisons, relativeDates, fileTypeField } from '@/features/lists/filter-editor';
 import { systemFields } from '@/features/lists/schema';
 import { fileTypeLabel } from '@/features/files/file-types';
-import { useTranslation } from '@/i18n';
+import { i18n, useTranslation } from '@/i18n';
 import type { SmartQueryField } from './editor-dialog';
 
 // The filter editor's comparisons and relative values, in its words.
@@ -16,8 +16,11 @@ const known = <T extends string>(list: readonly T[], value: string | undefined):
 
 export function describeFilter(filter: FilterExpr | undefined, fields: FieldDefinition[], t: TFunction<['smartFolders', 'common', 'lists']>, names = new Map<string, string>()): string {
   if (!filter) return t('rules.all');
-  if (filter.and) return filter.and.map(child => `(${describeFilter(child, fields, t, names)})`).join(` ${t('rules.and')} `);
-  if (filter.or) return filter.or.map(child => `(${describeFilter(child, fields, t, names)})`).join(` ${t('rules.or')} `);
+  // Joined as the language joins a list: "(A), (B) and (C)", "(A), (B) y (C)".
+  const join = (children: FilterExpr[], type: 'conjunction' | 'disjunction') =>
+    new Intl.ListFormat(i18n.language, { type }).format(children.map(child => `(${describeFilter(child, fields, t, names)})`));
+  if (filter.and) return join(filter.and, 'conjunction');
+  if (filter.or) return join(filter.or, 'disjunction');
   if (filter.not) return t('rules.not', { rule: describeFilter(filter.not, fields, t, names) });
   const field = fields.find(field => field.key === filter.field);
   const label = field?.label ?? t('rules.customField');

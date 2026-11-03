@@ -22,7 +22,7 @@ import type { Operation } from '@/features/admin/operation-progress';
 export function BulkEditDialog({
   collectionId,
   target,
-  count,
+  title,
   fields,
   onClose,
   onStarted,
@@ -30,8 +30,8 @@ export function BulkEditDialog({
   collectionId: string;
   /** The selected items, or everything a query matches. */
   target: { ids: string[] } | { query: QuerySpec };
-  /** How many items the query matches, as people should read it. */
-  count?: ReactNode;
+  /** The title for everything a query matches, with how many it matches once that is known. */
+  title?: ReactNode;
   fields: FieldDefinition[];
   onClose: () => void;
   onStarted: (operationIds: string[]) => void;
@@ -60,7 +60,7 @@ export function BulkEditDialog({
   return (
     <FormDialog
       open
-      title={all ? (count ? <>{t('bulkEdit.edit')} {count}</> : t('bulkEdit.editAll')) : t('bulkEdit.editSelected', { count: target.ids.length })}
+      title={all ? (title ?? t('bulkEdit.editAll')) : t('bulkEdit.editSelected', { count: target.ids.length })}
       description={all ? t('bulkEdit.descriptionAll') : t('bulkEdit.descriptionSelected')}
       submitLabel={all ? t('bulkEdit.applyAll') : t('bulkEdit.applySelected')}
       pending={apply.isPending}

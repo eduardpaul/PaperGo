@@ -65,7 +65,7 @@
     "applySelected": "Aplicar a los elementos seleccionados",
     "descriptionAll": "Establece un campo en cada elemento coincidente en segundo plano. Déjalo vacío para borrarlo. Cada error se informa por separado.",
     "descriptionSelected": "Establece un campo en cada elemento seleccionado en segundo plano. Déjalo vacío para borrarlo. Cada error se informa por separado.",
-    "edit": "Editar",
+    "editMatching": "Editar los {{items}}",
     "editAll": "Editar todos los elementos coincidentes",
     "editSelected_many": "Editar {{count}} elementos seleccionados",
     "editSelected_one": "Editar {{count}} elemento seleccionado",
@@ -249,7 +249,6 @@
   },
   "loadMore": "Cargar más",
   "matching": {
-    "allBare": "todos los elementos coincidentes",
     "allSelected": "Todos los elementos coincidentes seleccionados",
     "countCapped": "más de {{number}} elementos",
     "count_many": "{{number}} elementos",
