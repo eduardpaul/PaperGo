@@ -43,18 +43,10 @@ const (
 	maxCursorBytes     = 4096
 )
 
-// Options configure the built-in tools.
-type Options struct {
-	// AppURL is the origin of the PaperGo web app the tools link to. Without
-	// it, results carry no links.
-	AppURL *url.URL
-}
-
 // Tools are the built-in tools.
-func Tools(o Options) []mcp.Tool {
-	l := links{o.AppURL}
-	return []mcp.Tool{listWorkspaces(l), listCollections(l), getCollectionSchema(l), queryItems(l), getItem(l), getItemText(), listTerms(),
-		createItem(l), updateItem(l), search(l)}
+func Tools() []mcp.Tool {
+	return []mcp.Tool{listWorkspaces(), listCollections(), getCollectionSchema(), queryItems(), getItem(), getItemText(), listTerms(),
+		createItem(), updateItem(), search()}
 }
 
 // decode reads validated arguments into dst, keeping numbers exact.

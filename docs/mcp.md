@@ -21,7 +21,7 @@ The endpoint serves the MCP [Streamable HTTP transport](https://modelcontextprot
 | `MCP` | `mcp.enabled` | `on` (the default) serves `/v1/mcp` and lets the web app offer connections; `off` serves neither. |
 | `MCP_EXTENSIONS` | `mcp.extensions` | Compiled tool [contributions](#contributions) to serve, by ID, comma-separated. None ship today. |
 
-Results link to the web app at [`PUBLIC_URL`](reverse-proxies.md); without it they carry no links. Behind a reverse proxy, `/v1/mcp` is served with the rest of the API: the proxy forwards `Authorization` unchanged and does not cache responses, as for any API request.
+Results link to the web app at [`PUBLIC_URL`](reverse-proxies.md), or without it at the origin the client reached. Behind a reverse proxy, `/v1/mcp` is served with the rest of the API: the proxy forwards `Authorization` unchanged and does not cache responses, as for any API request.
 
 Each tool call logs an `mcp_tool` line with its request ID, the tool and its failure code, beside the API's `http_request` line for the same request ID. Logs never contain credentials, arguments or results.
 
@@ -106,7 +106,7 @@ Items are returned with `id`, `kind`, `workspace_id`, `collection_id`, `parent_i
 
 Term, keywords, person and lookup fields hold IDs, and so do `keywords`, `created_by` and `updated_by`. `labels` names them by ID, so an assistant can say "Acme" rather than an ID: term and keyword names with `taxonomy.read`, people's display names with `user.read`, and the names of linked items the caller can read. Names the caller may not read are left out; they never fail the call. A page resolves them in a few batched API requests.
 
-`draft` is true while an item has changes that are not published: people who read only published content do not see them. `archived` is true for archived entries. Workspaces, collections, items and search hits carry a `url` that opens them in the web app when `PUBLIC_URL` is set.
+`draft` is true while an item has changes that are not published: people who read only published content do not see them. `archived` is true for archived entries. Workspaces, collections, items and search hits carry a `url` that opens them in the web app.
 
 ### Querying
 

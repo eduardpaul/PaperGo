@@ -9,6 +9,7 @@ package server
 import (
 	"log/slog"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -19,6 +20,9 @@ const Path = "/v1/mcp"
 type Config struct {
 	// Version is reported to clients.
 	Version string
+	// AppURL is the web app's public origin (PUBLIC_URL) results link to;
+	// nil links to the origin each client reached.
+	AppURL *url.URL
 	Logger  *slog.Logger
 	// WrapAPI, when set, wraps the API handler tools act through, such as
 	// for tests that watch or fail its answers.

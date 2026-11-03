@@ -105,7 +105,8 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request, in httpapi.Reques
 		w.Header().Set("Retry-After", "5")
 		return &httpapi.Problem{Status: http.StatusServiceUnavailable, Code: "unavailable", Detail: "PaperGo could not tell what the caller may do; try again shortly"}
 	}
-	caller := &Caller{subject: in.Subject, scopes: scopes, backend: backend{api: api, host: r.Host, requestID: rec.id, maxBody: s.cfg.MaxResultBytes}}
+	caller := &Caller{subject: in.Subject, scopes: scopes, backend: backend{api: api, host: r.Host, requestID: rec.id, maxBody: s.cfg.MaxResultBytes},
+		app: appURL(s.cfg.AppURL, r)}
 	s.mcp.ServeHTTP(private{w}, r.WithContext(context.WithValue(context.WithValue(ctx, callerKey, caller), recordKey, rec)))
 	if rec.tool != "" {
 		attrs := []any{"request_id", rec.id, "tool", rec.tool}

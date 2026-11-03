@@ -74,7 +74,7 @@ func setup(t *testing.T, o options) *env {
 	}
 	e := &env{svc: dms.NewService(db.SQL), files: files, logs: &bytes.Buffer{}, logsMu: &sync.Mutex{}}
 	log := slog.New(slog.NewJSONHandler(lockedWriter{e.logs, e.logsMu}, nil))
-	cfg := server.Config{Version: "test", Logger: log, WrapAPI: func(api http.Handler) http.Handler {
+	cfg := server.Config{Version: "test", Logger: log, AppURL: o.app, WrapAPI: func(api http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			e.mu.Lock()
 			gate, before, wrap := e.gate, e.before, e.wrap
@@ -95,7 +95,7 @@ func setup(t *testing.T, o options) *env {
 	if o.configure != nil {
 		o.configure(&cfg)
 	}
-	registry, err := mcp.NewRegistry(builtin.Tools(builtin.Options{AppURL: o.app}), o.contributions, o.enabled)
+	registry, err := mcp.NewRegistry(builtin.Tools(), o.contributions, o.enabled)
 	if err != nil {
 		t.Fatal(err)
 	}

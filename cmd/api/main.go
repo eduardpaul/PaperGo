@@ -244,11 +244,11 @@ func run(log *slog.Logger) error {
 		feats.search = &documentsearch.Search{Storage: store, Store: index, Embeddings: embeddings}
 	}
 	if c.MCP {
-		registry, err := mcp.NewRegistry(builtin.Tools(builtin.Options{AppURL: c.PublicURL}), mcpContributions, c.MCPExtensions)
+		registry, err := mcp.NewRegistry(builtin.Tools(), mcpContributions, c.MCPExtensions)
 		if err != nil {
 			return fmt.Errorf("MCP_EXTENSIONS: %w", err)
 		}
-		feats.mcp = mcpserver.New(mcpserver.Config{Version: buildinfo.Version, Logger: log}, registry)
+		feats.mcp = mcpserver.New(mcpserver.Config{Version: buildinfo.Version, Logger: log, AppURL: c.PublicURL}, registry)
 	}
 	if err = feats.register(service); err != nil {
 		return err

@@ -6,8 +6,8 @@ import (
 	"papergo/internal/dal/refs"
 )
 
-// links are the web app's addresses of what the tools return, so an
-// assistant can send people to it. Without an app origin there are none.
+// links are the web app's addresses of what the tools return, at the
+// caller's app origin, so an assistant can send people to it.
 type links struct{ app *url.URL }
 
 func (l links) to(path string, query url.Values) *string {

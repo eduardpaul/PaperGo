@@ -329,7 +329,8 @@ tool is registered. Tool annotations are advisory, never an authorization check.
 
 Configuration is part of PaperGo's: `MCP` (`on`, the default, or `off`;
 `mcp.enabled` in `config.yaml`) and `MCP_EXTENSIONS` (compiled contribution
-IDs; `mcp.extensions`). Results link to the web app at `PUBLIC_URL`. The web
+IDs; `mcp.extensions`). Results link to the web app at `PUBLIC_URL`, or at
+the origin the client reached; contributions read it from `Caller.AppURL`. The web
 app learns from `/auth/config` whether MCP is on and offers connections at its
 own origin.
 

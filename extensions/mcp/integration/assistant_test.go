@@ -295,3 +295,16 @@ func TestLargeTextIsReadInParts(t *testing.T) {
 		t.Fatal("a new read kept the old text")
 	}
 }
+
+// Without a public origin, results link to the origin the client reached.
+func TestLinksFollowTheOriginReached(t *testing.T) {
+	e := setup(t, options{})
+	seed(t, e)
+	s := e.connect(t, aliceToken)
+	page := ok(t, s, "list_workspaces", `{}`)
+	for _, w := range page["value"].([]any) {
+		if link := str(w.(map[string]any)["url"]); !strings.HasPrefix(link, e.api.URL+"/w/") {
+			t.Fatalf("workspace link %q, want one at %s", link, e.api.URL)
+		}
+	}
+}

@@ -58,6 +58,9 @@ type Caller interface {
 	HasScope(scope string) bool
 	// Backend is the PaperGo API, as the caller.
 	Backend() Backend
+	// AppURL is the origin of the PaperGo web app that results link to:
+	// the deployment's PUBLIC_URL, or the origin the client reached.
+	AppURL() *url.URL
 }
 
 // Backend sends requests to the PaperGo API as the caller, with the

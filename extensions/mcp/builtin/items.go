@@ -59,7 +59,7 @@ var queryItemsSchema = json.RawMessage(`{"type": "object", "additionalProperties
 // the terms to open and so cannot run as a plain query.
 const navigationLayout = "navigation"
 
-func queryItems(l links) mcp.Tool {
+func queryItems() mcp.Tool {
 	const name = "query_items"
 	return mcp.Tool{
 		Name:         name,
@@ -70,6 +70,7 @@ func queryItems(l links) mcp.Tool {
 		Scopes:       []string{scopeItemRead},
 		Annotations:  mcp.Annotations{ReadOnly: true, Idempotent: true},
 		Call: func(ctx context.Context, c mcp.Caller, args json.RawMessage) (json.RawMessage, error) {
+			l := links{c.AppURL()}
 			var in struct {
 				CollectionID string          `json:"collection_id"`
 				Query        json.RawMessage `json:"query"`
@@ -194,7 +195,7 @@ func unindexed(ctx context.Context, c mcp.Caller, collectionID string, err error
 
 func isEntryResource(r resource) bool { return isEntry(r.Kind) }
 
-func getItem(l links) mcp.Tool {
+func getItem() mcp.Tool {
 	return mcp.Tool{
 		Name:  "get_item",
 		Title: "Get an item",
@@ -207,6 +208,7 @@ func getItem(l links) mcp.Tool {
 		Scopes:       []string{scopeItemRead},
 		Annotations:  mcp.Annotations{ReadOnly: true, Idempotent: true},
 		Call: func(ctx context.Context, c mcp.Caller, args json.RawMessage) (json.RawMessage, error) {
+			l := links{c.AppURL()}
 			var in struct {
 				ItemID  string `json:"item_id"`
 				Surface string `json:"surface"`
@@ -230,7 +232,7 @@ func getItem(l links) mcp.Tool {
 	}
 }
 
-func createItem(l links) mcp.Tool {
+func createItem() mcp.Tool {
 	return mcp.Tool{
 		Name:  "create_item",
 		Title: "Create an item",
@@ -251,6 +253,7 @@ func createItem(l links) mcp.Tool {
 		Scopes:      []string{scopeItemRead, scopeItemWrite},
 		Annotations: mcp.Annotations{},
 		Call: func(ctx context.Context, c mcp.Caller, args json.RawMessage) (json.RawMessage, error) {
+			l := links{c.AppURL()}
 			var in struct {
 				ParentID      string          `json:"parent_id"`
 				Name          string          `json:"name"`
@@ -299,7 +302,7 @@ func createItem(l links) mcp.Tool {
 	}
 }
 
-func updateItem(l links) mcp.Tool {
+func updateItem() mcp.Tool {
 	return mcp.Tool{
 		Name:  "update_item",
 		Title: "Update an item",
@@ -319,6 +322,7 @@ func updateItem(l links) mcp.Tool {
 		Scopes:       []string{scopeItemRead, scopeItemWrite},
 		Annotations:  mcp.Annotations{Destructive: true},
 		Call: func(ctx context.Context, c mcp.Caller, args json.RawMessage) (json.RawMessage, error) {
+			l := links{c.AppURL()}
 			var in struct {
 				ItemID   string          `json:"item_id"`
 				Version  int             `json:"version"`
