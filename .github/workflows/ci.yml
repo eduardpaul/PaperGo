@@ -281,12 +281,24 @@ jobs:
       # The runner has the Visual C++ runtime installed, which a clean
       # Windows lacks; Windows Server Core containers do not. The packaged
       # executable must run there with OCR, from its embedded runtime.
+      # The runner's Docker engine is not always running when the job
+      # reaches this step, so it is started and waited for first.
       - name: Run the Windows package without the Visual C++ runtime
         if: runner.os == 'Windows' && matrix.stage == 'release'
-        shell: bash
+        shell: pwsh
         run: |
+          Start-Service docker -ErrorAction SilentlyContinue
+          $ready = $false
+          foreach ($i in 1..36) {
+            docker info *> $null
+            if ($LASTEXITCODE -eq 0) { $ready = $true; break }
+            Start-Sleep -Seconds 5
+          }
+          if (-not $ready) { throw 'The Docker engine did not start within 3 minutes.' }
           docker pull mcr.microsoft.com/windows/servercore:ltsc2025
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/windows-clean-smoke.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
   docker:
     name: Container image
