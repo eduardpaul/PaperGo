@@ -202,7 +202,8 @@ export function useAggregates(listId: string | undefined, request: AggregateQuer
     // The key stands for the request's content.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ctx, key, round]);
-  useLive(Boolean(options.live && listId), (changes) => changes.some((c) => c.collectionId === listId), reload);
+  // A removal does not say which list the item was in, and any may change the figures.
+  useLive(Boolean(options.live && listId), (changes) => changes.some((c) => c.removed || c.collectionId === listId), reload);
   return { ...state, reload };
 }
 

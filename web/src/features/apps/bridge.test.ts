@@ -77,8 +77,14 @@ it('sends an app request as the viewer, with only the headers apps may set', asy
 
 it('writes a frame document whose scripts cannot be ended early and that loads nothing', () => {
   const html = appDocument('var runtime = "</script><img src=x>";', 'var app = 1; // </SCRIPT>', { app: { name: '</script><b>' } });
-  expect(html).toContain(`content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'"`);
+  expect(html).toContain(`content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; webrtc 'block'; form-action 'none'; base-uri 'none'"`);
   expect(html.match(/<script>/g)).toHaveLength(3);
   expect(html.match(/<\/script>/gi)).toHaveLength(3);
   expect(html).toContain('"\\u003c/script>\\u003cb>"');
+});
+
+it('keeps a <!-- in a script from swallowing the scripts after it', () => {
+  const html = appDocument('var runtime = 1;', 'var text = "<!-- <script>";', {});
+  expect(html).not.toContain('<!--');
+  expect(html).toContain('"<\\!-- <script>"');
 });

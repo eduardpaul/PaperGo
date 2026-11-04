@@ -253,14 +253,14 @@ func (s *Store) Views() *views.Repo {
 	return views.NewRepo(s.bind(s.exec()), writer[views.Queries](s))
 }
 
-// Workflows returns the workflow definition repository, bound to the store's
-// transaction when WithTx was used.
 // Apps returns the apps of workspaces, bound to the store's transaction when
 // WithTx was used.
 func (s *Store) Apps() *apps.Repo {
 	return apps.NewRepo(s.bind(s.exec()), writer[apps.Queries](s))
 }
 
+// Workflows returns the workflow definition repository, bound to the store's
+// transaction when WithTx was used.
 func (s *Store) Workflows() *workflows.Repo {
 	return workflows.NewRepo(s.bind(s.exec()), writer[workflows.Queries](s))
 }

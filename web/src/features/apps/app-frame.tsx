@@ -61,7 +61,7 @@ export function AppFrame({ app }: { app: App }) {
     const open = async (target: Target) => {
       if ('taskId' in target) return navigate({ to: '/tasks', search: { id: target.taskId } });
       if ('listId' in target) return navigate({ to: '/w/$workspaceId/l/$listId', params: { workspaceId: app.workspace_id, listId: target.listId } });
-      const item = (await api<Resource>(`/v1/resources/${target.itemId}`)).data;
+      const item = (await api<Resource>(`/v1/resources/${encodeURIComponent(target.itemId)}`)).data;
       if (item.container_id) await navigate({ to: '/w/$workspaceId/l/$listId', params: { workspaceId: item.workspace_id, listId: item.container_id }, search: { item: item.id } });
     };
     const serve = async (message: FrameMessage) => {
@@ -104,7 +104,9 @@ export function AppFrame({ app }: { app: App }) {
     };
   }, [document_, app.workspace_id, navigate]);
 
-  const failed = [runtime, bundle, me, preferences, workspace].find((q) => q.isError);
+  // Only what never loaded stops the app: a refetch that fails, as when a
+  // phone wakes without a network, keeps it and what the viewer was doing.
+  const failed = [runtime, bundle, me, preferences, workspace].find((q) => q.isLoadingError);
   if (failed) return <Alert tone="danger">{t('frame.notLoaded')}</Alert>;
   if (stopped) return <Alert tone="danger">{t('frame.stopped')}</Alert>;
   return (

@@ -30,7 +30,7 @@ const methods = new Set(['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE']);
 const requestHeaders = new Set(['accept', 'content-type', 'if-match', 'if-none-match', 'idempotency-key', 'prefer']);
 
 // The response headers an app reads.
-const responseHeaders = ['content-type', 'etag', 'location', 'retry-after', 'papergo-app-version'];
+const responseHeaders = ['content-type', 'etag', 'location', 'retry-after'];
 
 const segment = '[^/?#]+';
 // Routes refused whatever the method: administration, credentials, apps
@@ -113,10 +113,10 @@ export async function send(request: BridgeRequest, fetcher: typeof fetch = fetch
 
 /** The frame's document: the runtime, the app's code and the start, under a CSP without network. */
 export function appDocument(runtime: string, code: string, init: unknown): string {
-  // A script ends at the first </script, whatever its case; nothing else in
-  // a script's text is special to the HTML parser.
-  const script = (text: string) => `<script>${text.replace(/<\/(script)/gi, '<\\/$1')}</script>`;
-  const csp = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'";
+  // A script ends at the first </script, whatever its case, unless a <!-- and
+  // a <script before it make the parser read on: neither stays as written.
+  const script = (text: string) => `<script>${text.replace(/<\/(script)/gi, '<\\/$1').replace(/<!--/g, '<\\!--')}</script>`;
+  const csp = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; webrtc 'block'; form-action 'none'; base-uri 'none'";
   const start = `globalThis.__papergoApp.start(${JSON.stringify(init).replace(/</g, '\\u003c')});`;
   return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp}"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body>${script(runtime)}${script(code)}${script(start)}</body></html>`;
 }

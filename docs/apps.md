@@ -35,7 +35,7 @@ export default app({
 - One file of up to 1 MiB.
 - It imports only `react`, `react/jsx-runtime` and `@papergo/app`, which the app's runtime supplies; any other import is refused, naming it.
 
-The server then loads the code with stand-ins for those modules to read the parameters form. Loading must finish within two seconds and must not throw. A source that does not compile, exports no `app({ render })` or declares an invalid form is refused with 422 and the reason.
+The server then loads the code with stand-ins for those modules to read the parameters form. Loading must finish within two seconds and must not throw; the server has no browser, so `window`, `document` and `Intl` belong inside `render`. A source that does not compile, exports no `app({ render })` or declares an invalid form is refused with 422 and the reason.
 
 **Parameters** are the values of that form, which the app reads as `ctx.params`. Pickers let the people who set up the app choose the workspace's lists, content types or items instead of typing IDs. Saving checks the values as the person who saves:
 - their types and picks always, so a draft can be saved before its lists are chosen;
@@ -86,7 +86,7 @@ The app page puts the app in a sandboxed frame:
 
 1. The page reads the app's compiled code with the viewer's login and writes the frame's one document: the runtime, the app's code and its start, inline.
    - The frame has `sandbox="allow-scripts"`, so it has no origin of its own and cannot read the page's storage, where the login is kept.
-   - Its document's CSP allows only those inline scripts and styles, and images from `data:` and `blob:`. It can make no network requests and post no forms.
+   - Its document's CSP allows only those inline scripts and styles, and images from `data:` and `blob:`. It can make no network requests and post no forms, and blocks WebRTC in the browsers that support the `webrtc` directive.
    - PaperGo's page allows frames to show only the documents it writes (`frame-src 'none'`), so the frame cannot navigate anywhere. A frame that loads another document all the same is stopped.
 2. Before the app's code runs, the runtime asks the page for a message port, and the page answers that first request only. Every API request the app makes travels over that port.
 3. The page sends each request as the viewer and returns the status, the body, and the `Content-Type`, `ETag`, `Location` and `Retry-After` headers. The app sets only `Accept`, `Content-Type`, `If-Match`, `If-None-Match`, `Idempotency-Key` and `Prefer`.
@@ -124,7 +124,7 @@ Creating, changing and deleting an app are audited as `app.create`, `app.update`
 - **Keys.** An app's `key` comes from its name unless creation gives one, and never changes. Keys and names are unique in a workspace.
 - **States.** A new app is a `draft` unless it is created `published`.
 - **Versions.** A replacement with a new source becomes the next version; one with the same source keeps the current version.
-- **Not for scripts.** Workflow scripts cannot call these routes.
+- **Not for scripts.** The workflow SDK's client leaves these routes out.
 
 The complete contract is in [OpenAPI](../api/openapi.json).
 

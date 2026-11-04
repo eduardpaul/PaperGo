@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"mime"
@@ -138,7 +139,10 @@ func (a *API) updateTask(w http.ResponseWriter, r *http.Request) {
 			err = json.Unmarshal(raw, &p.DueAt)
 		case "values":
 			p.SetValues = true
-			err = json.Unmarshal(raw, &p.Values)
+			// Numbers keep their literals, as in every other request.
+			decoder := json.NewDecoder(bytes.NewReader(raw))
+			decoder.UseNumber()
+			err = decoder.Decode(&p.Values)
 		default:
 			err = errors.New("a task update has no field " + key)
 		}

@@ -28,6 +28,29 @@ export default app({
 });
 `
 
+// What React and the kit export can be used as the code loads, as in the
+// browser: an error boundary extends Component, and an error RequestError.
+func TestAppsMayExtendTheRuntimesClassesAsTheyLoad(t *testing.T) {
+	c, err := Compile(`import { Component, createRef, useSyncExternalStore } from "react";
+import { app, RequestError, narrowWidth } from "@papergo/app";
+
+class Boundary extends Component<{ children: React.ReactNode }> {
+  render() { return this.props.children; }
+}
+class Refused extends RequestError {}
+const wide = narrowWidth * 2;
+const field = createRef();
+
+export default app({ render() { useSyncExternalStore; return <Boundary>{[wide, field, Refused].length}</Boundary>; } });
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(c.Code, "sourceMappingURL") {
+		t.Fatal("the bundle carries the source, which only those who write apps may read")
+	}
+}
+
 // An app compiles to code that reads the runtime's modules, and declares
 // its parameters form.
 func TestAppsCompileAndDeclareTheirParameters(t *testing.T) {

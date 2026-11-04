@@ -76,8 +76,6 @@ func Compile(source string) (Compiled, error) {
 		Supported:       map[string]bool{"inline-script": true},
 		JSX:             api.JSXAutomatic,
 		JSXImportSource: ModuleReact,
-		Sourcemap:       api.SourceMapInline,
-		SourcesContent:  api.SourcesContentInclude,
 		Plugins: []api.Plugin{{
 			Name: "app",
 			Setup: func(build api.PluginBuild) {
@@ -132,12 +130,13 @@ func message(m api.Message) string {
 
 // stubs stand for the runtime's modules while the server reads an app's
 // declarations: app() returns its definition, and React and the kit render
-// nothing, since nothing renders.
+// nothing, since nothing renders. Classes stay classes, which code may extend
+// as it loads.
 const stubs = `(() => {
   const nothing = () => null;
   const names = (list, value) => Object.fromEntries(list.map((n) => [n, value]));
-  const react = Object.assign(names(["createElement", "cloneElement", "createContext", "forwardRef", "memo", "lazy", "useState", "useEffect", "useLayoutEffect", "useMemo", "useCallback", "useRef", "useReducer", "useContext", "useId", "useTransition", "useDeferredValue", "startTransition", "isValidElement"], nothing), { Fragment: "fragment", Suspense: "suspense", StrictMode: "strict", Children: {} });
-  const app = Object.assign(names(["useApp", "useQuery", "useAggregates", "useItem", "json", "plain", "Card", "Grid", "Gauge", "Stat", "LineChart", "BarChart", "Table", "Button", "NumberField", "TextField", "DateField", "DateTimeField", "Notice", "Legend", "Toolbar", "Modal", "useNarrow", "RequestError"], nothing), { app: (definition) => definition, models: {} });
+  const react = Object.assign(names(["createElement", "cloneElement", "createContext", "forwardRef", "memo", "lazy", "useState", "useEffect", "useLayoutEffect", "useMemo", "useCallback", "useRef", "useReducer", "useContext", "useId", "useTransition", "useDeferredValue", "useImperativeHandle", "useInsertionEffect", "useSyncExternalStore", "useDebugValue", "useActionState", "useOptimistic", "use", "createRef", "startTransition", "isValidElement"], nothing), { Fragment: "fragment", Suspense: "suspense", StrictMode: "strict", Children: {}, Component: class {}, PureComponent: class {} });
+  const app = Object.assign(names(["useApp", "useQuery", "useAggregates", "useItem", "json", "plain", "Card", "Grid", "Gauge", "Stat", "LineChart", "BarChart", "Table", "Button", "NumberField", "TextField", "DateField", "DateTimeField", "Notice", "Legend", "Toolbar", "Modal", "useNarrow"], nothing), { app: (definition) => definition, models: {}, narrowWidth: 640, RequestError: class extends Error {} });
   globalThis.__papergoApp = { modules: { "react": react, "react/jsx-runtime": { jsx: nothing, jsxs: nothing, Fragment: "fragment" }, "@papergo/app": app } };
 })();`
 

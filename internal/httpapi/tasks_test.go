@@ -71,6 +71,9 @@ func TestTaskRoutes(t *testing.T) {
 	if w = request(h, "PATCH", "/v1/tasks/"+standalone.ID, `{"priority": "high"}`, testToken, `"1"`, json_); w.Code != 412 {
 		t.Fatalf("stale update: %d %s", w.Code, w.Body)
 	}
+	if w = request(h, "PATCH", "/v1/tasks/"+standalone.ID, `{"values": {"amount": 12345678901234567.891}}`, testToken, `"2"`, json_); w.Code != 200 || !strings.Contains(w.Body.String(), `"amount":12345678901234567.891`) {
+		t.Fatalf("a number's literal in an update: %d %s", w.Code, w.Body)
+	}
 	if w = request(h, "POST", "/v1/tasks/"+standalone.ID+"/responses", `{"outcome": "maybe"}`, testToken, "", json_); w.Code != 422 {
 		t.Fatalf("bad outcome: %d %s", w.Code, w.Body)
 	}
