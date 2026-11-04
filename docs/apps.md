@@ -95,7 +95,7 @@ An app does what its viewer may, through the API only, and never holds a login, 
 
 **Refused requests.** The page refuses some requests whoever views, with 403 `app_refused`, so an administrator who opens an app does not let it change who administers the organization:
 - **Any method:** `/v1/identity` (users, groups, roles, tokens, WebDAV credentials), `/v1/organization`, `/v1/portability`, `/v1/audit`, `/v1/storage`, `/v1/events`, `/v1/mcp`, `/v1/$batch` and the apps routes.
-- **Anything but reads:** a workflow's definition (`/v1/workflows/{id}`, `/v1/workspaces/{id}/workflows`, its built-ins), workspace members and permissions.
+- **Anything but reads:** a workflow's definition (`/v1/workflows/{id}`, `/v1/workspaces/{id}/workflows`, its built-ins), workspace members, permissions, and a list's integrations, which have the server fetch from the network.
 
 An app still starts workflow runs, answers and updates tasks, and reads and writes items.
 

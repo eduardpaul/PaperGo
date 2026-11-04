@@ -779,12 +779,7 @@ func (s *Service) planStart(ctx context.Context, t *dms.Service, subject, id str
 		if err != nil {
 			return err
 		}
-		var manual *Trigger
-		for i := range def.Triggers {
-			if def.Triggers[i].Type == TriggerManual {
-				manual = &def.Triggers[i]
-			}
-		}
+		manual := def.Manual()
 		if manual == nil {
 			return dms.Invalid("the workflow has no manual trigger")
 		}
@@ -1019,8 +1014,13 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event) (started []s
 			}
 			members := eventMembers(e)
 			if e.Type == TriggerManual || e.Type == TestStart {
+				// A manual start is checked again with its trigger's access.
+				access := AccessWrite
+				if manual := m.def.Manual(); e.Type == TriggerManual && manual != nil {
+					access = manual.StartAccess()
+				}
 				for _, id := range members {
-					if _, err := t.Authorize(ctx, e.Actor, id, "write"); err != nil {
+					if _, err := t.Authorize(ctx, e.Actor, id, access); err != nil {
 						startError = "Manual run is no longer authorized for the selected items."
 						break
 					}

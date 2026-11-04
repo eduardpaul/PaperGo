@@ -42,8 +42,8 @@ it('refreshes once for a burst of item events', async () => {
   client.clear();
 });
 
-it('tells item listeners which item changed, in which list', async () => {
-  const frames = 'id: 1\nevent: item\ndata: {"id":"i1","action":"updated","item":{"id":"i1","container_id":"l1"}}\n\nid: 2\nevent: item\ndata: {"id":"i2","@removed":{"reason":"deleted"}}\n\n';
+it('tells item listeners which item changed, in which list, and when to read everything again', async () => {
+  const frames = 'id: 1\nevent: item\ndata: {"id":"i1","action":"updated","item":{"id":"i1","container_id":"l1"}}\n\nid: 2\nevent: item\ndata: {"id":"i2","@removed":{"reason":"deleted"}}\n\nid: 3\nevent: resync\ndata: {}\n\n';
   let served = false;
   vi.stubGlobal(
     'fetch',
@@ -58,10 +58,11 @@ it('tells item listeners which item changed, in which list', async () => {
   const client = new QueryClient();
   const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
   const { unmount } = renderHook(() => useLiveEvents(), { wrapper });
-  await vi.waitFor(() => expect(changes).toHaveLength(2));
+  await vi.waitFor(() => expect(changes).toHaveLength(3));
   expect(changes).toEqual([
     { id: 'i1', collectionId: 'l1', removed: false },
     { id: 'i2', collectionId: undefined, removed: true },
+    { id: '', resync: true },
   ]);
   stop();
   unmount();

@@ -4,13 +4,19 @@ import { clearToken } from '@/api/http';
 import { authorizationHeaders } from '@/api/auth';
 import { keys } from '@/api/queries';
 
-/** A live change of an item the viewer may see, for apps that read again when their items change. */
+/**
+ * A live change of an item the viewer may see, for apps that read again
+ * when their items change. A resync has no item: the stream reconnected and
+ * may have missed changes, so everything should be read again.
+ */
 export interface ItemChange {
   id: string;
   /** The item's list or library, when the stream says. */
   collectionId?: string;
   /** The item was deleted or is no longer visible. */
   removed?: boolean;
+  /** Changes may have been missed; read everything again. */
+  resync?: boolean;
 }
 
 const itemListeners = new Set<(change: ItemChange) => void>();
@@ -65,8 +71,8 @@ export function useLiveEvents() {
     };
     controller.signal.addEventListener('abort', () => clearTimeout(timer), { once: true });
     void readEvents(controller.signal, (event, data) => {
-      if (event === 'item' && itemListeners.size > 0) {
-        const change = itemChange(data);
+      if (itemListeners.size > 0) {
+        const change = event === 'item' ? itemChange(data) : event === 'resync' || event === 'connected' ? { id: '', resync: true } : undefined;
         if (change) for (const listener of itemListeners) listener(change);
       }
       if (event === 'item' || event === 'resync' || event === 'connected') schedule('content');

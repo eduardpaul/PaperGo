@@ -327,4 +327,31 @@ func TestManualAccessDecidesWhoStartsRuns(t *testing.T) {
 			t.Errorf("%s: the owner cannot start it", tc.name)
 		}
 	}
+
+	// The run a reader starts is checked again with the same access when it
+	// is dispatched.
+	w, err := s.Create(ctx, "alice", ws.ID, Save{Name: "Dispatched for readers", Source: source(`[{"type":"manual","collection_id":"`+a.ID+`","access":"read"}]`, "Dispatched for readers")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runIDs, err := s.StartRuns(ctx, "carol", w.ID, Start{ItemIDs: []string{item.ID}})
+	if err != nil || len(runIDs) != 1 {
+		t.Fatal(runIDs, err)
+	}
+	event, err := s.DMS.DAL.Events().Find(ctx, strings.TrimPrefix(runIDs[0], "wf:"+w.ID+":"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	started(t, s, []dms.Event{{ID: event.ID, Type: event.Type, WorkspaceID: event.WorkspaceID, ResourceID: event.ResourceID, CollectionID: event.CollectionID, Actor: event.Actor, Data: event.Data}})
+	op, err := s.DMS.DAL.Operations().Find(ctx, runIDs[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var p RunPayload
+	if err := json.Unmarshal(op.Payload, &p); err != nil {
+		t.Fatal(err)
+	}
+	if p.StartError != "" {
+		t.Fatalf("the reader's run is refused when dispatched: %s", p.StartError)
+	}
 }

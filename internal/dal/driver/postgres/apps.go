@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/aarondl/opt/omit"
 	"github.com/stephenafamo/bob/dialect/psql/sm"
@@ -28,12 +29,6 @@ func (q Queries) Apps(ctx context.Context, f apps.Filter) ([]apps.App, error) {
 	}
 	if f.Key != "" {
 		query.Apply(w.Key.EQ(f.Key))
-	}
-	if f.Name != "" {
-		query.Apply(w.Name.EQ(f.Name))
-	}
-	if f.ExcludeID != "" {
-		query.Apply(w.ID.NE(f.ExcludeID))
 	}
 	if f.State != "" {
 		query.Apply(w.State.EQ(string(f.State)))
@@ -107,6 +102,15 @@ func (q Queries) AppVersion(ctx context.Context, appID string, number int64) (ap
 		return apps.Version{}, dberr.Translate(err)
 	}
 	return appVersionRecord(row), nil
+}
+
+func (q Queries) AppVersionSchema(ctx context.Context, appID string, number int64) (json.RawMessage, error) {
+	w := models.SelectWhere.AppVersions
+	row, err := models.AppVersions.Query(sm.Columns(models.AppVersions.Columns.ParametersSchema), w.AppID.EQ(appID), w.Number.EQ(number)).One(ctx, q.exec)
+	if err != nil {
+		return nil, dberr.Translate(err)
+	}
+	return row.ParametersSchema.Val, nil
 }
 
 func (q Queries) InsertAppVersion(ctx context.Context, v apps.Version) error {

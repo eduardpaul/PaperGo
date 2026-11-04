@@ -190,6 +190,16 @@ func (t Trigger) StartAccess() string {
 	}
 }
 
+// Manual returns the definition's manual trigger, or nil when it has none.
+func (d Definition) Manual() *Trigger {
+	for i := range d.Triggers {
+		if d.Triggers[i].Type == TriggerManual {
+			return &d.Triggers[i]
+		}
+	}
+	return nil
+}
+
 var (
 	keyPattern   = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
 	eventPattern = regexp.MustCompile(`^wf\.([a-z0-9][a-z0-9_-]*)\.([a-z0-9][a-z0-9_-]*)$`)

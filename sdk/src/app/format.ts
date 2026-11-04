@@ -58,9 +58,19 @@ export function formatter(p: Preferences): Format {
   const locale = p.number_format || "en";
   const zone = p.time_zone || "UTC";
   const separator = decimalSeparator(locale);
+  // Intl formatters are costly to make and charts format many values: each
+  // is made once.
+  const numbers = new Map<string, Intl.NumberFormat>();
+  const numberFormat = (key: string, options: () => Intl.NumberFormatOptions) => {
+    let format = numbers.get(key);
+    if (!format) numbers.set(key, (format = new Intl.NumberFormat(locale, options())));
+    return format;
+  };
+  let calendar: Intl.DateTimeFormat | undefined;
   const parts = (d: Date) => {
     const out: Record<string, string> = {};
-    for (const part of new Intl.DateTimeFormat("en-US", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(d)) {
+    calendar ??= new Intl.DateTimeFormat("en-US", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+    for (const part of calendar.formatToParts(d)) {
       out[part.type] = part.value;
     }
     return out;
@@ -87,19 +97,19 @@ export function formatter(p: Preferences): Format {
   return {
     number(value, digits = 2) {
       const n = toNumber(value);
-      return n === undefined ? "" : new Intl.NumberFormat(locale, { maximumFractionDigits: digits }).format(n);
+      return n === undefined ? "" : numberFormat(`n${digits}`, () => ({ maximumFractionDigits: digits })).format(n);
     },
     decimal(value, scale) {
       const n = toNumber(value);
-      return n === undefined ? "" : new Intl.NumberFormat(locale, { minimumFractionDigits: scale, maximumFractionDigits: scale }).format(n);
+      return n === undefined ? "" : numberFormat(`d${scale}`, () => ({ minimumFractionDigits: scale, maximumFractionDigits: scale })).format(n);
     },
     currency(value, code) {
       const n = toNumber(value);
       if (n === undefined) return "";
       try {
-        return new Intl.NumberFormat(locale, { style: "currency", currency: code }).format(n);
+        return numberFormat(`c${code}`, () => ({ style: "currency", currency: code })).format(n);
       } catch {
-        return `${new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)} ${code}`;
+        return `${numberFormat("d2", () => ({ minimumFractionDigits: 2, maximumFractionDigits: 2 })).format(n)} ${code}`;
       }
     },
     date(value) {

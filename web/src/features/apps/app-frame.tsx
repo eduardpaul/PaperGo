@@ -13,7 +13,7 @@ import { appDocument, send, type BridgeRequest } from './bridge';
 
 type Target = { itemId: string } | { taskId: string } | { listId: string };
 
-type FrameMessage = ({ type: 'papergo:request'; id: number } & BridgeRequest) | { type: 'papergo:open'; target: Target } | { type: 'papergo:ready' };
+type FrameMessage = ({ type: 'papergo:request'; id: number } & BridgeRequest) | { type: 'papergo:open'; target: Target };
 
 const runtimeQuery = { queryKey: ['app-runtime'], queryFn: async () => (await import('@sdk/app-runtime.js?raw')).default, staleTime: Infinity };
 
@@ -36,19 +36,20 @@ export function AppFrame({ app }: { app: App }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const [stopped, setStopped] = useState(false);
 
-  const document_ = useMemo(() => {
-    if (!runtime.data || !bundle.data || !me.data || !preferences.data || !workspace.data) return undefined;
-    const p = preferences.data;
-    const role = can(workspace.data, 'manage') ? 'owner' : can(workspace.data, 'write') ? 'member' : 'visitor';
-    const init = {
-      app: { id: app.id, key: app.key, name: app.name, version: app.current_version },
-      params: app.parameters,
-      user: { subject: me.data.subject, name: me.data.display_name, preferences: { language: p.language, time_zone: p.time_zone, date_format: p.date_format, time_format: p.time_format, number_format: p.number_format } },
-      workspace: { id: workspace.data.id, name: workspace.data.name, role },
-      theme: window.document.documentElement.classList.contains('dark') ? 'dark' : 'light',
-    };
-    return appDocument(runtime.data, bundle.data, init);
-  }, [runtime.data, bundle.data, me.data, preferences.data, workspace.data, app]);
+  // The start is built from plain values, so a refetch that changes nothing
+  // the app is told does not restart it and lose what the viewer was doing.
+  const p = preferences.data;
+  const init =
+    me.data && p && workspace.data
+      ? JSON.stringify({
+          app: { id: app.id, key: app.key, name: app.name, version: app.current_version },
+          params: app.parameters,
+          user: { subject: me.data.subject, name: me.data.display_name, preferences: { language: p.language, time_zone: p.time_zone, date_format: p.date_format, time_format: p.time_format, number_format: p.number_format } },
+          workspace: { id: workspace.data.id, name: workspace.data.name, role: can(workspace.data, 'manage') ? 'owner' : can(workspace.data, 'write') ? 'member' : 'visitor' },
+          theme: window.document.documentElement.classList.contains('dark') ? 'dark' : 'light',
+        })
+      : undefined;
+  const document_ = useMemo(() => (runtime.data && bundle.data && init ? appDocument(runtime.data, bundle.data, JSON.parse(init)) : undefined), [runtime.data, bundle.data, init]);
 
   useEffect(() => {
     const element = frame.current;

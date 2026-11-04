@@ -27,6 +27,8 @@ it('refuses the routes that administer PaperGo, whoever views the app', () => {
     ['POST', '/v1/workspaces/w1/members'],
     ['DELETE', '/v1/workspaces/w1/members/bob'],
     ['PUT', '/v1/resources/r1/permissions'],
+    ['POST', '/v1/resources/l1/integrations'],
+    ['PATCH', '/v1/resources/l1/integrations/i1'],
     ['GET', 'https://example.com/v1/items'],
     ['GET', '//example.com/v1/items'],
     ['TRACE', '/v1/resources/r1'],
@@ -44,6 +46,7 @@ it('refuses the routes that administer PaperGo, whoever views the app', () => {
     ['GET', '/v1/workspaces/w1/workflows'],
     ['POST', '/v1/workflows/wf1/runs'],
     ['GET', '/v1/workspaces/w1/members'],
+    ['GET', '/v1/resources/l1/integrations'],
   ]) {
     expect(refusal(method, url), `${method} ${url}`).toBeUndefined();
   }

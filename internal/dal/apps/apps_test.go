@@ -45,6 +45,9 @@ func TestApps(t *testing.T) {
 			if err != nil || v.Source != "1" || v.Bundle != "bundle of 1" || string(v.ParametersSchema) != `{"type":"object"}` && string(v.ParametersSchema) != `{"type": "object"}` {
 				t.Fatalf("first version: %+v %v", v, err)
 			}
+			if schema, err := s.Apps().Schema(ctx, a.ID, 1); err != nil || string(schema) != string(v.ParametersSchema) {
+				t.Fatalf("the first version's form alone: %s %v", schema, err)
+			}
 			if _, err := s.Apps().Create(ctx, in); !errors.Is(err, dberr.ErrUniqueViolation) {
 				t.Fatalf("a second app with the key: %v", err)
 			}

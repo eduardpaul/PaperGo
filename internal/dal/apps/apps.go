@@ -75,8 +75,8 @@ type Changes struct {
 
 // Filter selects apps, ordered by name.
 type Filter struct {
-	WorkspaceID, Key, Name, ExcludeID string
-	State                             State
+	WorkspaceID, Key string
+	State            State
 }
 
 // Queries are the statements a driver runs for apps. Each method executes on
@@ -93,6 +93,8 @@ type Queries interface {
 	// AppVersions returns an app's versions, newest first.
 	AppVersions(ctx context.Context, appID string) ([]Version, error)
 	AppVersion(ctx context.Context, appID string, number int64) (Version, error)
+	// AppVersionSchema returns only the parameters form of a version.
+	AppVersionSchema(ctx context.Context, appID string, number int64) (json.RawMessage, error)
 	InsertAppVersion(ctx context.Context, v Version) error
 }
 
@@ -121,6 +123,12 @@ func (r *Repo) Versions(ctx context.Context, id string) ([]Version, error) {
 
 func (r *Repo) Version(ctx context.Context, id string, number int64) (Version, error) {
 	return r.read.AppVersion(ctx, id, number)
+}
+
+// Schema returns the parameters form of an app's version, without reading
+// its source and bundle.
+func (r *Repo) Schema(ctx context.Context, id string, number int64) (json.RawMessage, error) {
+	return r.read.AppVersionSchema(ctx, id, number)
 }
 
 func check(name string, state State, content Content) error {

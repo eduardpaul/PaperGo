@@ -71,7 +71,6 @@ function start(init: Init): void {
       </Boundary>
     </RuntimeContext.Provider>,
   );
-  bridge.ready();
 }
 
 (globalThis as Record<string, unknown>).__papergoApp = {

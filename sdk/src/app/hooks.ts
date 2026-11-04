@@ -72,7 +72,7 @@ function useLive(enabled: boolean, matches: (changes: Change[]) => boolean, relo
     if (!enabled) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const stop = bridge.watch((changes) => {
-      if (!latest.current.matches(changes)) return;
+      if (!changes.some((c) => c.resync) && !latest.current.matches(changes)) return;
       clearTimeout(timer);
       timer = setTimeout(() => latest.current.reload(), settle);
     });
@@ -104,7 +104,10 @@ export function useQuery(listId: string | undefined, query: Query = {}, options:
   const [round, setRound] = useState(0);
   const reload = useCallback(() => setRound((n) => n + 1), []);
   useEffect(() => {
-    if (!listId) return;
+    if (!listId) {
+      setState({ data: [], loading: false });
+      return;
+    }
     let stale = false;
     setState((s) => ({ ...s, loading: true }));
     (async () => {
@@ -138,7 +141,10 @@ export function useItem(id: string | undefined, options: { live?: boolean } = {}
   const [round, setRound] = useState(0);
   const reload = useCallback(() => setRound((n) => n + 1), []);
   useEffect(() => {
-    if (!id) return;
+    if (!id) {
+      setState({ loading: false });
+      return;
+    }
     let stale = false;
     setState((s) => ({ ...s, loading: true }));
     ctx

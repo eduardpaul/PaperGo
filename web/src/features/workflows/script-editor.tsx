@@ -29,6 +29,7 @@ export function ScriptEditor({ id, value, onChange, readOnly, kind = "workflow" 
     import("./monaco")
       .then(async (module) => {
         if (kind === "app") await module.addAppTypes();
+        module.checkAs(kind);
         if (live) setMonaco(module.monaco);
       })
       .catch(() => undefined);

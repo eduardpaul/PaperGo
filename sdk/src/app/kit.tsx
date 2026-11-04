@@ -1,7 +1,7 @@
 // A small kit in PaperGo's theme, for apps: tiles, charts, a table, buttons
 // and fields. Charts are plain SVG, since apps load nothing from the network.
 
-import { useEffect, useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 /** Phones and narrow windows: at most this wide, the kit lays out for touch. */
 export const narrowWidth = 640;
@@ -147,9 +147,19 @@ export function Toolbar({ children }: { children?: ReactNode }) {
 
 /** A dialog over the app; Escape and the backdrop close it. */
 export function Modal({ open, title, onClose, children, actions }: { open: boolean; title: ReactNode; onClose: () => void; children?: ReactNode; actions?: ReactNode }) {
+  // Escape closes it wherever the focus is, as the button that opened it
+  // keeps the focus.
+  const close = useRef(onClose);
+  close.current = onClose;
+  useEffect(() => {
+    if (!open) return;
+    const key = (e: KeyboardEvent) => e.key === "Escape" && close.current();
+    document.addEventListener("keydown", key);
+    return () => document.removeEventListener("keydown", key);
+  }, [open]);
   if (!open) return null;
   return (
-    <div className="pg-modal-back" onClick={onClose} onKeyDown={(e) => e.key === "Escape" && onClose()}>
+    <div className="pg-modal-back" onClick={onClose}>
       <div className="pg-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="pg-modal-head">
           <h2 style={{ margin: 0 }}>{title}</h2>

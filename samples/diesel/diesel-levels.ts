@@ -80,7 +80,10 @@ async function convert(api: PaperGoClient, p: Params, reading: Item, readings: I
   let flag = value(reading, "diesel_flag") === "reviewed" ? "reviewed" : "ok";
   if (before) {
     const since = time(value(before, "diesel_measured_at"));
-    previous = number(value(before, "diesel_level_liters")) ?? liters(p, number(value(before, "diesel_stick_cm")) ?? p.stick_length_cm);
+    // From its stick with today's settings: after the tank's settings
+    // change, the litres stored on it may still be the old ones.
+    const beforeStick = number(value(before, "diesel_stick_cm"));
+    previous = beforeStick === undefined ? number(value(before, "diesel_level_liters")) ?? 0 : liters(p, beforeStick);
     const bought = purchases
       .filter((b) => time(value(b, "diesel_purchased_at")) > since && time(value(b, "diesel_purchased_at")) <= at)
       .reduce((sum, b) => sum + (number(value(b, "diesel_bought_liters")) ?? 0), 0);

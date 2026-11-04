@@ -218,16 +218,42 @@ function useDiesel(ctx: AppContext<Params>) {
 
 interface Task { id: string; title: string }
 
-function useTasks(ctx: AppContext<Params>, key: string): Task[] {
+/** The viewer's open tasks with key, read again when changed changes: a reading or a fill closes them. */
+function useTasks(ctx: AppContext<Params>, key: string, changed: unknown): Task[] {
   const [tasks, setTasks] = useState<Task[]>([]);
   useEffect(() => {
     let stale = false;
-    ctx.request<{ value: Task[] }>("GET", `/v1/me/tasks?key=${key}&status=open`).then((r) => !stale && setTasks(r.data.value ?? []), () => !stale && setTasks([]));
+    ctx.request<{ value: Task[] }>("GET", `/v1/me/tasks?key=${encodeURIComponent(key)}&status=open`).then((r) => !stale && setTasks(r.data.value ?? []), () => !stale && setTasks([]));
     return () => {
       stale = true;
     };
-  }, [ctx, key]);
+  }, [ctx, key, changed]);
   return tasks;
+}
+
+/** A dialog's date, now each time it opens, and its save, which closes it or says why it failed. */
+function useEntry(open: boolean, onClose: () => void) {
+  const [when, setWhen] = useState(() => new Date().toISOString());
+  const [saving, setSaving] = useState(false);
+  const [failed, setFailed] = useState<string>();
+  useEffect(() => {
+    if (!open) return;
+    setWhen(new Date().toISOString());
+    setFailed(undefined);
+  }, [open]);
+  const save = async (write: () => Promise<unknown>) => {
+    setSaving(true);
+    setFailed(undefined);
+    try {
+      await write();
+      onClose();
+    } catch (e) {
+      setFailed(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+  return { when, setWhen, saving, failed, save };
 }
 
 /** How the Diesel levels workflow reads the stick, from its settings. */
@@ -269,8 +295,8 @@ function Dashboard({ w }: { w: Words }) {
   const lang = ctx.user.preferences.language;
   const { model: m, error } = useDiesel(ctx);
   const geometry = useGeometry(ctx);
-  const measure = useTasks(ctx, "diesel_measure");
-  const refill = useTasks(ctx, "diesel_refill");
+  const measure = useTasks(ctx, "diesel_measure", m);
+  const refill = useTasks(ctx, "diesel_refill", m);
   const [dialog, setDialog] = useState<"reading" | "purchase" | "heating">();
   const narrow = useNarrow();
   const reserveLiters = (p.reserve_percent / 100) * p.capacity_l;
@@ -433,22 +459,17 @@ function ReadingDialog({ w, open, onClose, geometry }: { w: Words; open: boolean
   const ctx = useApp<Params>();
   const f = ctx.format;
   const [stick, setStick] = useState("");
-  const [when, setWhen] = useState(() => new Date().toISOString());
-  const [saving, setSaving] = useState(false);
+  const { when, setWhen, saving, failed, save: run } = useEntry(open, onClose);
   const value = f.parseDecimal(stick);
   const tooLong = value !== undefined && geometry !== undefined && Number(value) > geometry.stick_length_cm;
   const liters = value !== undefined && geometry && !tooLong ? litersOf(geometry, Number(value)) : undefined;
-  const save = async () => {
-    if (value === undefined || tooLong) return;
-    setSaving(true);
-    try {
+  const save = () =>
+    value !== undefined &&
+    !tooLong &&
+    run(async () => {
       await ctx.api.v1.resources.byId(ctx.params.list).children.post({ kind: "item", name: `Reading ${when.slice(0, 10)} · ${value} cm`, contentTypeId: ctx.params.reading as never, values: json({ diesel_measured_at: when, diesel_stick_cm: value }) });
       setStick("");
-      onClose();
-    } finally {
-      setSaving(false);
-    }
-  };
+    });
   return (
     <Modal open={open} title={w.readingTitle} onClose={onClose} actions={<><Button onClick={onClose}>{w.cancel}</Button><Button variant="primary" disabled={value === undefined || tooLong || saving} onClick={() => void save()}>{w.save}</Button></>}>
       <NumberField
@@ -461,6 +482,7 @@ function ReadingDialog({ w, open, onClose, geometry }: { w: Words; open: boolean
         hint={liters !== undefined && geometry ? say(w.preview, { p: f.number((liters / geometry.capacity_l) * 100, 0), l: f.number(liters, 0) }) : undefined}
       />
       <DateField label={w.measuredAt} value={when} onChange={setWhen} />
+      {failed && <p className="pg-error">{failed}</p>}
     </Modal>
   );
 }
@@ -471,14 +493,13 @@ function PurchaseDialog({ w, open, onClose }: { w: Words; open: boolean; onClose
   const [liters, setLiters] = useState("");
   const [total, setTotal] = useState("");
   const [supplier, setSupplier] = useState("");
-  const [when, setWhen] = useState(() => new Date().toISOString());
-  const [saving, setSaving] = useState(false);
+  const { when, setWhen, saving, failed, save: run } = useEntry(open, onClose);
   const l = f.parseDecimal(liters);
   const t = f.parseDecimal(total);
-  const save = async () => {
-    if (l === undefined || t === undefined) return;
-    setSaving(true);
-    try {
+  const save = () =>
+    l !== undefined &&
+    t !== undefined &&
+    run(async () => {
       await ctx.api.v1.resources.byId(ctx.params.list).children.post({
         kind: "item",
         name: `Purchase ${when.slice(0, 10)} · ${l} L`,
@@ -488,17 +509,14 @@ function PurchaseDialog({ w, open, onClose }: { w: Words; open: boolean; onClose
       setLiters("");
       setTotal("");
       setSupplier("");
-      onClose();
-    } finally {
-      setSaving(false);
-    }
-  };
+    });
   return (
     <Modal open={open} title={w.purchaseTitle} onClose={onClose} actions={<><Button onClick={onClose}>{w.cancel}</Button><Button variant="primary" disabled={l === undefined || t === undefined || saving} onClick={() => void save()}>{w.save}</Button></>}>
       <NumberField autoFocus label={w.bought} unit="L" value={liters} onChange={setLiters} error={liters && l === undefined ? w.invalid : undefined} />
       <NumberField label={w.total} unit="€" value={total} onChange={setTotal} error={total && t === undefined ? w.invalid : undefined} hint={l && t && Number(l) > 0 ? say(w.pricePreview, { price: f.currency(Number(t) / Number(l), "EUR") }) : undefined} />
       <DateField label={w.boughtAt} value={when} onChange={setWhen} />
       <TextField label={w.supplier} value={supplier} onChange={setSupplier} maxLength={200} />
+      {failed && <p className="pg-error">{failed}</p>}
     </Modal>
   );
 }
@@ -506,23 +524,18 @@ function PurchaseDialog({ w, open, onClose }: { w: Words; open: boolean; onClose
 function HeatingDialog({ w, open, onClose, on, assumed, since }: { w: Words; open: boolean; onClose: () => void; on: boolean; assumed: boolean; since?: number }) {
   const ctx = useApp<Params>();
   const f = ctx.format;
-  const [when, setWhen] = useState(() => new Date().toISOString());
-  const [saving, setSaving] = useState(false);
+  const { when, setWhen, saving, failed, save: run } = useEntry(open, onClose);
   const state = on ? w.stateOn : w.stateOff;
-  const save = async () => {
-    setSaving(true);
-    try {
+  const save = () =>
+    run(async () => {
       const next = !on;
       await ctx.api.v1.resources.byId(ctx.params.list).children.post({ kind: "item", name: `Heating ${next ? "on" : "off"} ${when.slice(0, 10)}`, contentTypeId: ctx.params.heating as never, values: json({ diesel_heating_at: when, diesel_heating: next ? "on" : "off" }) });
-      onClose();
-    } finally {
-      setSaving(false);
-    }
-  };
+    });
   return (
     <Modal open={open} title={w.heatingTitle} onClose={onClose} actions={<><Button onClick={onClose}>{w.cancel}</Button><Button variant="primary" disabled={saving} onClick={() => void save()}>{on ? w.turnOff : w.turnOn}</Button></>}>
       <p>{since && !assumed ? say(w.heatingIs, { state, date: f.date(since) }) : say(w.heatingNow, { state, assumed: w.assumed })}</p>
       <DateField label={w.changedAt} value={when} onChange={setWhen} />
+      {failed && <p className="pg-error">{failed}</p>}
     </Modal>
   );
 }

@@ -50,7 +50,9 @@ export default app({
 | `ctx` | What it is |
 | --- | --- |
 | `ctx.api` | The generated REST client, the same as the workflow SDK's, sent as the viewer |
+| `ctx.request(method, path, { body })` | Any API route by path, as the viewer |
 | `ctx.params` | The app's parameters |
+| `ctx.app` | The app's ID, key, name and running version |
 | `ctx.user` | Who is viewing: subject, name, and preferences (language, time zone, number and date formats) |
 | `ctx.workspace` | Where: ID, name and the viewer's role |
 | `ctx.format` | Numbers, decimals, currencies and dates in the viewer's preferences; `parseDecimal` reads typed decimals with their decimal separator |
@@ -60,6 +62,7 @@ export default app({
 | --- | --- |
 | `useQuery(list, query, { live, all })` | A collection query; `all` reads every page; `live` reads it again when an item of the list changes |
 | `useItem(id, { live })` | One item |
+| `useApp()` | The context, for components below `render` |
 
 The runtime also ships a small kit in PaperGo's theme: `Card`, `Grid`, `Toolbar`, `Modal`, `Stat`, `Gauge`, `LineChart` (bands, reference lines, ticks), `BarChart`, `Legend`, `Table`, `Button`, `NumberField`, `TextField`, `DateField`, `DateTimeField` and `Notice`. Everything else is the app's own React.
 
@@ -73,9 +76,10 @@ The runtime also ships a small kit in PaperGo's theme: `Card`, `Grid`, `Toolbar`
 
 The app can do what the viewer may, and only through the API. It never sees a login, so it cannot keep acting as the viewer once the page closes.
 
-The page refuses two kinds of request:
+The page refuses, whoever views:
 - paths outside `/v1`;
-- the administration routes, whoever views: identity users, groups, roles and tokens, organization settings and preferences, trusted hosts, portability and WebDAV credentials. Without this, an administrator who opens an app would let it change who administers the organization.
+- with any method, the routes that administer PaperGo or would carry requests past these rules: `/v1/identity`, `/v1/organization`, `/v1/portability`, `/v1/audit`, `/v1/storage`, `/v1/events`, `/v1/mcp`, `/v1/$batch` and the apps routes. Without this, an administrator who opens an app would let it change who administers the organization;
+- anything but reads of workflow definitions and built-ins, workspace members, permissions and list integrations, which run as their author, decide who has access, or have the server fetch from the network.
 
 The page passes on the live changes of the items the app's queries read, so `live` queries refresh. Errors in the app show inside its frame, without affecting the page.
 
@@ -130,15 +134,15 @@ Saving compiles the source with the esbuild the server embeds, as workflows are 
 ## The diesel sample
 
 `samples/diesel/` holds the complete sample, built from its sources like the [receipts package](../../samples/receipts-package/README.md):
-- **`diesel.zip`**, a workspace package: the Diesel list, its fields, the Reading and Purchase content types, the saved views, and the three workflows (`diesel-levels`, `diesel-measure-reminder`, `diesel-refill`);
-- **`diesel-app.tsx`**, the dashboard: the tiles and charts of the use case, the Add reading and Add purchase forms, and the open reminder or refill task with a link to answer it;
+- **`diesel.zip`**, a workspace package: the Diesel list, its fields, the Reading, Purchase and Heating content types, the saved views, and the four workflows (`diesel-levels`, `diesel-measure-reminder`, `diesel-refill`, `diesel-sample-data`);
+- **`diesel-app.tsx`**, the dashboard: the figures and charts of the use case, the reading, fill and heating dialogs, and the open reminder or refill task with a link to answer it;
 - **a README** with the two install steps:
   1. Import the package.
   2. Add the app with its parameters chosen by the pickers.
 
   Phase 0 has no way to install both at once: that comes with solutions.
 
-The sample takes the corrections from the [use case review](use-case-diesel-analysis.md#phase-0-sample).
+The [use case analysis](use-case-diesel-analysis.md) explains its design.
 
 ## Delivery
 
@@ -154,7 +158,7 @@ Each step is a commit with the narrowest tests that prove it:
    - The package sources and ZIP, the app and the README.
    - Tests:
      - the sample package test;
-     - a `scriptrun` test of the three workflows;
+     - a `scriptrun` test of the workflows;
      - a browser check that imports the package, adds the app and sees a reading turn into litres on the dashboard.
 
 ## Core changes

@@ -155,13 +155,12 @@ func (s *Service) List(ctx context.Context, subject, workspaceID string) ([]View
 		}
 		out := make([]View, 0, len(rows))
 		for _, a := range rows {
-			v, err := t.DAL.Apps().Version(ctx, a.ID, int64(a.CurrentVersion))
+			// Only the form: a version's source and bundle are large.
+			schema, err := t.DAL.Apps().Schema(ctx, a.ID, int64(a.CurrentVersion))
 			if err != nil {
 				return nil, err
 			}
-			item := view(a, v, write)
-			item.Source = ""
-			out = append(out, item)
+			out = append(out, view(a, appstore.Version{Content: appstore.Content{ParametersSchema: schema}}, write))
 		}
 		return out, nil
 	})

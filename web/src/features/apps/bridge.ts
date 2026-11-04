@@ -47,14 +47,15 @@ const refused = [
   /^\/v1\/apps(\/|$)/,
   new RegExp(`^/v1/workspaces/${segment}/apps(/|$)`),
 ];
-// Routes an app may read but not change: what runs as its author or
-// decides who has access.
+// Routes an app may read but not change: what runs as its author, decides
+// who has access, or has the server fetch from the network.
 const readOnly = [
   new RegExp(`^/v1/workflows/${segment}$`),
   new RegExp(`^/v1/workspaces/${segment}/workflows$`),
   new RegExp(`^/v1/workspaces/${segment}/workflow-builtins(/|$)`),
   new RegExp(`^/v1/workspaces/${segment}/members(/|$)`),
   new RegExp(`^/v1/resources/${segment}/permissions$`),
+  new RegExp(`^/v1/resources/${segment}/integrations(/|$)`),
 ];
 
 /** Why the page refuses an app's request, or undefined when it sends it. */
@@ -69,7 +70,7 @@ export function refusal(method: string, url: string): string | undefined {
   }
   if (path.includes('/../') || path.endsWith('/..')) return 'the path is not valid';
   if (refused.some((pattern) => pattern.test(path))) return 'apps cannot call the routes that administer PaperGo';
-  if (method !== 'GET' && method !== 'HEAD' && readOnly.some((pattern) => pattern.test(path))) return 'apps cannot change workflows, members or permissions';
+  if (method !== 'GET' && method !== 'HEAD' && readOnly.some((pattern) => pattern.test(path))) return 'apps cannot change workflows, members, permissions or integrations';
   return undefined;
 }
 

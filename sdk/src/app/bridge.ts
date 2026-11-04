@@ -15,13 +15,14 @@ export interface Change {
   collectionId?: string;
   /** Whether the item was removed or is no longer visible. */
   removed?: boolean;
+  /** The page's live stream reconnected and may have missed changes: read everything again. */
+  resync?: boolean;
 }
 
 // Messages the app sends.
 export type AppMessage =
   | { type: "papergo:request"; id: number; method: string; url: string; headers: Record<string, string>; body?: string | ArrayBuffer }
-  | { type: "papergo:open"; target: OpenTarget }
-  | { type: "papergo:ready" };
+  | { type: "papergo:open"; target: OpenTarget };
 
 // Messages the page sends.
 export type PageMessage = { type: "papergo:response"; id: number; response: HostResponse } | { type: "papergo:change"; changes: Change[] };
@@ -91,10 +92,6 @@ export class Bridge {
 
   open(target: OpenTarget): void {
     this.port.post({ type: "papergo:open", target });
-  }
-
-  ready(): void {
-    this.port.post({ type: "papergo:ready" });
   }
 
   /** Calls watcher with the live changes of items; returns what stops it. */

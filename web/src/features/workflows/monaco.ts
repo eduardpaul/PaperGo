@@ -78,9 +78,19 @@ export function addAppTypes(): Promise<void> {
     typescriptDefaults.addExtraLib(reactGlobal.default, 'file:///node_modules/@types/react/global.d.ts');
     typescriptDefaults.addExtraLib(jsxRuntime.default, 'file:///node_modules/@types/react/jsx-runtime.d.ts');
     typescriptDefaults.addExtraLib(csstype.default, 'file:///node_modules/csstype/index.d.ts');
-    typescriptDefaults.setCompilerOptions({ ...typescriptDefaults.getCompilerOptions(), lib: ['es2022', 'dom', 'dom.iterable'] });
   });
   return appTypes;
+}
+
+/**
+ * Checks what is edited next as a workflow script, without the DOM, or as
+ * an app, with it. Compiler options are Monaco's, not an editor's, so the
+ * editor that opens sets them.
+ */
+export function checkAs(kind: 'workflow' | 'app'): void {
+  const lib = kind === 'app' ? ['es2022', 'dom', 'dom.iterable'] : ['es2022'];
+  const options = typescriptDefaults.getCompilerOptions();
+  if (options.lib?.join() !== lib.join()) typescriptDefaults.setCompilerOptions({ ...options, lib });
 }
 
 export { monaco };
