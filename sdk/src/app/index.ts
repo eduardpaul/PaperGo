@@ -11,7 +11,7 @@ export type { Format, Preferences } from "./format.js";
 export type { Item, Loaded, Query, QueryOptions } from "./hooks.js";
 export { useApp, useItem, useQuery } from "./hooks.js";
 export type { Band, Column, Series } from "./kit.js";
-export { BarChart, Button, Card, DateTimeField, Gauge, Grid, LineChart, Notice, NumberField, Stat, Table, TextField } from "./kit.js";
+export { BarChart, Button, Card, DateField, DateTimeField, Gauge, Grid, Legend, LineChart, Modal, Notice, NumberField, Stat, Table, TextField, Toolbar } from "./kit.js";
 export type { PaperGoClient } from "../client/paperGoClient.js";
 export * as models from "../client/models/index.js";
 export { json, plain } from "../values.js";

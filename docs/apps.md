@@ -63,11 +63,11 @@ The server then loads the code with stand-ins for those modules to read the para
 | `useApp()` | The context, in components below `render` |
 
 The kit draws in PaperGo's theme, light or dark as the viewer's:
-- **Layout:** `Card` and `Grid`.
+- **Layout:** `Card` (with actions or a legend beside its title), `Grid`, `Toolbar` and `Modal`.
 - **Figures:** `Stat` and `Gauge`, a half-circle of how full something is.
-- **Charts:** `LineChart` (series over numbers or dates, with markers and shaded bands, such as seasons) and `BarChart`, drawn as SVG.
+- **Charts:** `LineChart` and `BarChart`, drawn as SVG, with `Legend` pills. `LineChart` draws series over numbers or dates, with markers, shaded bands (such as seasons), reference lines and the ticks it is given.
 - **Data:** `Table`.
-- **Controls:** `Button`, `Notice`, `NumberField` (a decimal typed with a phone's numeric keyboard), `TextField` and `DateTimeField`.
+- **Controls:** `Button`, `Notice`, `NumberField` (a decimal typed with a phone's numeric keyboard, with an optional live hint), `TextField`, `DateField` and `DateTimeField`.
 
 `json()` wraps free-form values, such as an item's, for the generated client, and `plain()` turns its untyped answers into JSON. An error in the app shows inside its screen.
 

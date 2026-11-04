@@ -61,7 +61,7 @@ export default app({
 | `useQuery(list, query, { live, all })` | A collection query; `all` reads every page; `live` reads it again when an item of the list changes |
 | `useItem(id, { live })` | One item |
 
-The runtime also ships a small kit in PaperGo's theme: `Card`, `Grid`, `Stat`, `Gauge`, `LineChart` (with shaded bands), `BarChart`, `Table`, `Button`, `NumberField`, `TextField`, `DateTimeField` and `Notice`. Everything else is the app's own React.
+The runtime also ships a small kit in PaperGo's theme: `Card`, `Grid`, `Toolbar`, `Modal`, `Stat`, `Gauge`, `LineChart` (bands, reference lines, ticks), `BarChart`, `Legend`, `Table`, `Button`, `NumberField`, `TextField`, `DateField`, `DateTimeField` and `Notice`. Everything else is the app's own React.
 
 ## How it runs
 

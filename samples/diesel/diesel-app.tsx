@@ -1,26 +1,30 @@
 // The diesel tracker: how full the tank is now, what the diesel left is
 // worth, how many days it lasts and when to order, from the dipstick
 // readings, the purchases and when the heating went on and off. Readings
-// are converted to litres by the Diesel levels workflow; the screen
+// are converted to litres by the Diesel levels workflow, whose settings
+// also give the preview of a reading before it is saved; the screen
 // estimates today's level from the last reading at the season's rate of
 // consumption, and forecasts forward the same way, assuming the heating
 // goes on and off on its usual days. People add readings, purchases and
-// heating changes here, or answer the measuring and refill tasks.
+// heating changes from the buttons at the top, or answer the measuring and
+// refill tasks.
 import { useEffect, useMemo, useState } from "react";
 import {
   app,
   BarChart,
   Button,
   Card,
-  DateTimeField,
+  DateField,
   Gauge,
   Grid,
+  Legend,
   LineChart,
+  Modal,
   Notice,
   NumberField,
-  Stat,
   Table,
   TextField,
+  Toolbar,
   json,
   useApp,
   useQuery,
@@ -47,26 +51,34 @@ const DAY = 24 * 3600 * 1000;
 
 const words = {
   en: {
-    now: "Now", liters: "{n} L", estimated: "Estimated from {date}, {rate} L/day since", worth: "Worth {value} at {price}/L", reserve: "Days to the {p} % reserve", reserveOn: "On {date}", order: "Next order", orderAt: "When {l} L are left, in {days} days", daily: "Daily cost", dailyHint: "{rate} L/day, {season}",
-    noReading: "No reading yet", noEstimate: "Not enough readings to estimate", heatingOn: "heating on", heatingOff: "heating off", peak: "heating on, winter", assumed: "assumed",
-    level: "Level and heating", levelHint: "Red: heating on. Blue: heating off. Dashed lines: purchases.", forecast: "Forecast", percent: "Level %",
+    tank: "Tank", autonomy: "Autonomy and forecast", pace: "Pace of consumption",
+    liters: "{n} L", worth: "Worth {value} at {price}/L", estimated: "Estimated from the reading of {date}", noReading: "No reading yet", noEstimate: "Not enough readings to forecast",
+    orderIn: "Order in {days} days, when {l} L are left", reserveOn: "{p} % reserve on {date}, in {days} days", perDay: "{cost}/day", paceHint: "{rate} L/day · {season}", extremes: "Deep winter {peak}/day · summer {summer}/day",
+    off: "Hot water only (heating off)", on: "Spring and autumn (heating on)", winter: "Deep winter ({months})", assumed: "assumed",
+    level: "Level and heating", heatingOnBand: "Heating on", heatingOffBand: "Heating off", levelLine: "Level", forecastLine: "Forecast", fillLine: "Fill", forecast: "Forecast", percent: "Level %", reserveLine: "Reserve {p} %",
     price: "Price per litre", monthly: "Cost of the diesel used, per month", consumption: "Consumption", season: "Season", measured: "Measured", used: "Used in the forecast", days: "Days",
-    off: "Heating off", on: "Heating on", winter: "Heating on, {months}",
-    addReading: "Add a reading", stick: "Stick reading from the mouth", measuredAt: "Measured at", save: "Save", addPurchase: "Add a purchase", bought: "Litres bought", total: "Total price", boughtAt: "Bought at", supplier: "Supplier",
-    heating: "Heating", heatingIs: "The heating is {state} since {date}.", heatingNow: "The heating is {state}.", stateOn: "on", stateOff: "off", turnOn: "It went on now", turnOff: "It went off now",
+    addReading: "+ Reading", addPurchase: "+ Fill", heatingButton: "Heating: {state}", stateOn: "on", stateOff: "off",
+    readingTitle: "New reading", stick: "Stick reading from the mouth", measuredAt: "Date", preview: "That is about {p} % ({l} L)", outOfRange: "The stick is {max} cm long",
+    purchaseTitle: "New fill", bought: "Litres bought", total: "Total price", boughtAt: "Date", supplier: "Supplier", pricePreview: "{price}/L",
+    heatingTitle: "Heating", heatingIs: "The heating is {state} since {date}.", heatingNow: "The heating is {state} ({assumed}).", changedAt: "Since", turnOn: "It went on", turnOff: "It went off",
+    save: "Save", cancel: "Cancel", invalid: "Type a number",
     measureDue: "A reading is due", refillDue: "Diesel is low: buy some", answer: "Answer", check: "Needs a look", checkHint: "Higher than the reading before and what was bought since. Open it to correct it, or mark it reviewed.",
-    readings: "Readings", purchases: "Purchases", date: "Date", stickCol: "Stick", litersCol: "Litres", fill: "Fill", perLiter: "€/L", recalc: "Recalculate all", recalcStarted: "Recalculating every reading.", invalid: "Type a number", saved: "Saved", setUp: "Choose the Diesel list and its types in Workspace settings → Apps.",
+    readings: "Readings", purchases: "Fills", date: "Date", stickCol: "Stick", litersCol: "Litres", fill: "Level", perLiter: "€/L", supplierCol: "Supplier", history: "See the whole history", setUp: "Choose the Diesel list and its types in Workspace settings → Apps.",
   },
   es: {
-    now: "Ahora", liters: "{n} L", estimated: "Estimado desde el {date}, a {rate} L/día", worth: "Vale {value} a {price}/L", reserve: "Días hasta la reserva del {p} %", reserveOn: "El {date}", order: "Próximo pedido", orderAt: "Cuando queden {l} L, en {days} días", daily: "Coste diario", dailyHint: "{rate} L/día, {season}",
-    noReading: "Aún no hay mediciones", noEstimate: "Faltan mediciones para estimar", heatingOn: "calefacción encendida", heatingOff: "calefacción apagada", peak: "calefacción encendida, invierno", assumed: "supuesto",
-    level: "Nivel y calefacción", levelHint: "Rojo: calefacción encendida. Azul: apagada. Líneas discontinuas: llenados.", forecast: "Previsión", percent: "Nivel %",
+    tank: "Estado del tanque", autonomy: "Autonomía y previsión", pace: "Ritmo de consumo",
+    liters: "{n} L", worth: "Vale {value} a {price}/L", estimated: "Estimado desde la medición del {date}", noReading: "Aún no hay mediciones", noEstimate: "Faltan mediciones para prever",
+    orderIn: "Pedir en {days} días, cuando queden {l} L", reserveOn: "Reserva del {p} % el {date}, en {days} días", perDay: "{cost}/día", paceHint: "{rate} L/día · {season}", extremes: "Pleno invierno {peak}/día · verano {summer}/día",
+    off: "Solo agua caliente (calefacción apagada)", on: "Entretiempo (otoño / primavera)", winter: "Pleno invierno ({months})", assumed: "supuesto",
+    level: "Nivel y calefacción", heatingOnBand: "Calefacción encendida", heatingOffBand: "Calefacción apagada", levelLine: "Nivel", forecastLine: "Previsión", fillLine: "Llenado", forecast: "Previsión", percent: "Nivel %", reserveLine: "Reserva {p} %",
     price: "Precio por litro", monthly: "Coste del gasóleo consumido, por mes", consumption: "Consumo", season: "Temporada", measured: "Medido", used: "Usado en la previsión", days: "Días",
-    off: "Calefacción apagada", on: "Calefacción encendida", winter: "Calefacción encendida, {months}",
-    addReading: "Añadir una medición", stick: "Medida del palo desde la boca", measuredAt: "Medido el", save: "Guardar", addPurchase: "Añadir un llenado", bought: "Litros comprados", total: "Precio total", boughtAt: "Comprado el", supplier: "Proveedor",
-    heating: "Calefacción", heatingIs: "La calefacción está {state} desde el {date}.", heatingNow: "La calefacción está {state}.", stateOn: "encendida", stateOff: "apagada", turnOn: "Se ha encendido ahora", turnOff: "Se ha apagado ahora",
+    addReading: "+ Medición", addPurchase: "+ Llenado", heatingButton: "Calefacción: {state}", stateOn: "encendida", stateOff: "apagada",
+    readingTitle: "Nueva medición", stick: "Medida del palo desde la boca", measuredAt: "Fecha", preview: "Equivale a ~{p} % ({l} L)", outOfRange: "El palo mide {max} cm",
+    purchaseTitle: "Nuevo llenado", bought: "Litros comprados", total: "Precio total", boughtAt: "Fecha", supplier: "Proveedor", pricePreview: "{price}/L",
+    heatingTitle: "Calefacción", heatingIs: "La calefacción está {state} desde el {date}.", heatingNow: "La calefacción está {state} ({assumed}).", changedAt: "Desde", turnOn: "Se ha encendido", turnOff: "Se ha apagado",
+    save: "Guardar", cancel: "Cancelar", invalid: "Escribe un número",
     measureDue: "Toca medir", refillDue: "Queda poco gasóleo: hay que pedir", answer: "Responder", check: "Para revisar", checkHint: "Más alta que la medición anterior y lo comprado desde entonces. Ábrela para corregirla o márcala como revisada.",
-    readings: "Mediciones", purchases: "Llenados", date: "Fecha", stickCol: "Palo", litersCol: "Litros", fill: "Nivel", perLiter: "€/L", recalc: "Recalcular todo", recalcStarted: "Recalculando todas las mediciones.", invalid: "Escribe un número", saved: "Guardado", setUp: "Elige la lista Diesel y sus tipos en Ajustes del espacio de trabajo → Aplicaciones.",
+    readings: "Mediciones", purchases: "Llenados", date: "Fecha", stickCol: "Palo", litersCol: "Litros", fill: "Nivel", perLiter: "€/L", supplierCol: "Proveedor", history: "Ver historial completo", setUp: "Elige la lista Diesel y sus tipos en Ajustes del espacio de trabajo → Aplicaciones.",
   },
 };
 type Words = typeof words.en;
@@ -80,7 +92,7 @@ const num = (v: unknown): number | undefined => (v === null || v === undefined |
 const at = (v: unknown): number => new Date(String(v)).getTime();
 
 interface Reading { id: string; at: number; stick?: number; liters?: number; percent?: number; flag?: string }
-interface Purchase { id: string; at: number; liters: number; total: number; price: number }
+interface Purchase { id: string; at: number; liters: number; total: number; price: number; supplier: string }
 interface Switch { at: number; on: boolean }
 
 const dayOfYear = (t: number) => {
@@ -133,7 +145,7 @@ function useDiesel(ctx: AppContext<Params>) {
     const purchases: Purchase[] = purchaseItems.data.map((i) => {
       const liters = num(get(i, "diesel_bought_liters")) ?? 0;
       const total = num(get(i, "diesel_total_price")) ?? 0;
-      return { id: i.id, at: at(get(i, "diesel_purchased_at")), liters, total, price: num(get(i, "diesel_price_per_liter")) ?? (liters ? total / liters : 0) };
+      return { id: i.id, at: at(get(i, "diesel_purchased_at")), liters, total, price: num(get(i, "diesel_price_per_liter")) ?? (liters ? total / liters : 0), supplier: String(get(i, "diesel_supplier") ?? "") };
     });
     const switches: Switch[] = heatingItems.data.map((i) => ({ at: at(get(i, "diesel_heating_at")), on: get(i, "diesel_heating") === "on" }));
     const heating = heatingModel(switches);
@@ -217,76 +229,158 @@ function useTasks(ctx: AppContext<Params>, key: string): Task[] {
   return tasks;
 }
 
+/** How the Diesel levels workflow reads the stick, from its settings. */
+interface Geometry {
+  capacity_l: number;
+  useful_height_cm: number;
+  stick_length_cm: number;
+  measure: "from_top" | "depth";
+  orientation: "upright" | "horizontal";
+}
+
+function useGeometry(ctx: AppContext<Params>): Geometry | undefined {
+  const [geometry, setGeometry] = useState<Geometry>();
+  useEffect(() => {
+    ctx.request<{ value: { key: string; parameters?: Geometry }[] }>("GET", `/v1/workspaces/${ctx.workspace.id}/workflows`).then(
+      (r) => setGeometry(r.data.value.find((w) => w.key === "diesel-levels")?.parameters),
+      () => undefined,
+    );
+  }, [ctx]);
+  return geometry;
+}
+
+/** The litres of a stick reading, as the Diesel levels workflow works them out. */
+function litersOf(g: Geometry, stick: number): number {
+  const wet = Math.min(Math.max(g.measure === "depth" ? stick : g.stick_length_cm - stick, 0), g.useful_height_cm);
+  if (g.orientation === "horizontal") {
+    const theta = 2 * Math.acos(1 - (2 * wet) / g.useful_height_cm);
+    return (g.capacity_l * (theta - Math.sin(theta))) / (2 * Math.PI);
+  }
+  return (wet / g.useful_height_cm) * g.capacity_l;
+}
+
+const big = { fontSize: 26, fontWeight: 650, fontVariantNumeric: "tabular-nums" } as const;
+
 function Dashboard({ w }: { w: Words }) {
   const ctx = useApp<Params>();
   const p = ctx.params;
   const f = ctx.format;
+  const lang = ctx.user.preferences.language;
   const { model: m, error } = useDiesel(ctx);
+  const geometry = useGeometry(ctx);
   const measure = useTasks(ctx, "diesel_measure");
   const refill = useTasks(ctx, "diesel_refill");
-  const [notice, setNotice] = useState<string>();
-  const seasonName = (s: "off" | "on" | "peak") => ({ off: w.heatingOff, on: w.heatingOn, peak: w.peak })[s];
+  const [dialog, setDialog] = useState<"reading" | "purchase" | "heating">();
   const reserveLiters = (p.reserve_percent / 100) * p.capacity_l;
   const toReserve = m.until(reserveLiters);
   const toOrder = m.until(p.order_at_l);
-  const date = (days?: number) => (days === undefined ? "–" : f.date(m.now + days * DAY));
+  const date = (days: number) => f.date(m.now + days * DAY);
   const euro = (v: number) => f.currency(v, "EUR");
+  const monthName = (t: number) => new Date(t).toLocaleDateString(lang, { month: "short", year: "2-digit", timeZone: "UTC" });
+  const peakNames = (p.peak_months ?? []).map((n) => new Date(Date.UTC(2000, n - 1, 15)).toLocaleDateString(lang, { month: "short", timeZone: "UTC" }));
+  const seasonName = (s: "off" | "on" | "peak") => (s === "off" ? w.off : s === "on" ? w.on : say(w.winter, { months: peakNames.length > 1 ? `${peakNames[0]} – ${peakNames.at(-1)}` : peakNames.join("") }));
   const nowSeason = m.season(m.now);
   const heatingNow = m.heating(m.now);
   const flagged = m.readings.filter((r) => r.flag === "check");
   const months = [...m.used.entries()].sort(([a], [b]) => a.localeCompare(b)).slice(-12);
-  const monthName = (month: string) => new Date(`${month}-15T00:00:00Z`).toLocaleDateString(ctx.user.preferences.language, { month: "short", year: "2-digit", timeZone: "UTC" });
-
-  const recalc = async () => {
-    const list = await ctx.request<{ value: { id: string; key: string }[] }>("GET", `/v1/workspaces/${ctx.workspace.id}/workflows`);
-    const levels = list.data.value.find((wf) => wf.key === "diesel-levels");
-    if (!levels) return;
-    await ctx.request("POST", `/v1/workflows/${levels.id}/runs`, { body: {} });
-    setNotice(w.recalcStarted);
+  // A tick at the start of every third month of the chart.
+  const ticks = (from: number, to: number) => {
+    const out: number[] = [];
+    const d = new Date(from);
+    for (let t = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1); t <= to; ) {
+      out.push(t);
+      const n = new Date(t);
+      t = Date.UTC(n.getUTCFullYear(), n.getUTCMonth() + 3, 1);
+    }
+    return out;
   };
+  const levelEnd = toOrder ? m.now + toOrder * DAY : m.now;
 
   if (error) return <Notice tone="danger" title={error.message}>{w.setUp}</Notice>;
   return (
     <>
+      <Toolbar>
+        <Button variant="primary" onClick={() => setDialog("reading")}>{w.addReading}</Button>
+        <Button onClick={() => setDialog("purchase")}>{w.addPurchase}</Button>
+        <Button onClick={() => setDialog("heating")}>
+          {"🔥 " + say(w.heatingButton, { state: heatingNow.on ? w.stateOn : w.stateOff }) + (heatingNow.assumed ? ` (${w.assumed})` : "")}
+        </Button>
+      </Toolbar>
       {measure.map((task) => <Notice key={task.id} tone="warning" title={w.measureDue} action={{ label: w.answer, onClick: () => ctx.open({ taskId: task.id }) }}>{task.title}</Notice>)}
       {refill.map((task) => <Notice key={task.id} tone="danger" title={w.refillDue} action={{ label: w.answer, onClick: () => ctx.open({ taskId: task.id }) }}>{task.title}</Notice>)}
-      {notice && <Notice tone="success">{notice}</Notice>}
 
-      <Grid min={200}>
-        {m.current === undefined ? (
-          <Stat label={w.now} value={w.noReading} />
-        ) : (
-          <Gauge label={w.now} value={m.current} max={p.capacity_l} warn={p.order_at_l / p.capacity_l} danger={p.reserve_percent / 100} hint={say(w.estimated, { date: f.date(m.last!.at), rate: f.number(m.rate(m.now), 1) })} />
-        )}
-        <Stat label={w.litersCol} value={m.current === undefined ? "–" : say(w.liters, { n: f.number(m.current, 0) })} hint={m.current === undefined ? undefined : say(w.worth, { value: euro(m.current * m.price), price: f.decimal(m.price, 3) })} />
-        <Stat label={say(w.reserve, { p: p.reserve_percent })} value={toReserve ?? "–"} hint={toReserve === undefined ? w.noEstimate : say(w.reserveOn, { date: date(toReserve) })} tone={toReserve !== undefined && toReserve < 30 ? "warning" : "default"} />
-        <Stat label={w.order} value={date(toOrder)} hint={toOrder === undefined ? w.noEstimate : say(w.orderAt, { l: p.order_at_l, days: toOrder })} tone={toOrder !== undefined && toOrder < 14 ? "danger" : "default"} />
-        <Stat label={w.daily} value={euro(m.rate(m.now) * m.price)} hint={say(w.dailyHint, { rate: f.number(m.rate(m.now), 1), season: seasonName(nowSeason) + (heatingNow.assumed ? ` (${w.assumed})` : "") })} />
+      <Grid min={280}>
+        <Card title={w.tank}>
+          {m.current === undefined ? (
+            <p>{w.noReading}</p>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(110px, 1fr) 1.2fr", gap: 12, alignItems: "center" }}>
+              <Gauge bare value={m.current} max={p.capacity_l} warn={p.order_at_l / p.capacity_l} danger={p.reserve_percent / 100} />
+              <div>
+                <div style={big}>{say(w.liters, { n: f.number(m.current, 0) })}</div>
+                <div className="pg-stat-hint">{say(w.worth, { value: euro(m.current * m.price), price: euro(m.price) })}</div>
+                <div className="pg-stat-hint">{say(w.estimated, { date: f.date(m.last!.at) })}</div>
+              </div>
+            </div>
+          )}
+        </Card>
+        <Card title={w.autonomy}>
+          {toOrder === undefined ? (
+            <p>{w.noEstimate}</p>
+          ) : (
+            <>
+              <div style={big}>{date(toOrder)}</div>
+              <div className="pg-stat-hint">{say(w.orderIn, { days: toOrder, l: p.order_at_l })}</div>
+              {toReserve !== undefined && <div className="pg-stat-hint">{say(w.reserveOn, { p: p.reserve_percent, date: date(toReserve), days: toReserve })}</div>}
+            </>
+          )}
+        </Card>
+        <Card title={w.pace}>
+          <div style={big}>{say(w.perDay, { cost: euro(m.rate(m.now) * m.price) })}</div>
+          <div className="pg-stat-hint">{say(w.paceHint, { rate: f.number(m.rate(m.now), 1), season: seasonName(nowSeason) + (heatingNow.assumed ? ` (${w.assumed})` : "") })}</div>
+          <div className="pg-stat-hint">{say(w.extremes, { peak: euro(p.rate_peak * m.price), summer: euro(p.rate_off * m.price) })}</div>
+        </Card>
       </Grid>
 
-      <Card title={w.level}>
+      <Card
+        title={w.level}
+        actions={<Legend items={[{ label: w.heatingOnBand, color: "rgba(220, 38, 38, .35)" }, { label: w.heatingOffBand, color: "rgba(37, 99, 235, .25)" }, { label: w.levelLine, color: "var(--pg-series-1)" }, { label: w.forecastLine, color: "var(--pg-series-2)" }]} />}
+      >
         <LineChart
-          height={240}
+          height={260}
           yMin={0}
           yMax={100}
           bands={m.bands}
-          markers={m.purchases.map((b) => ({ x: b.at, label: `${f.date(b.at)} · ${f.number(b.liters, 0)} L · ${euro(b.total)}` }))}
+          references={[{ y: p.reserve_percent, label: say(w.reserveLine, { p: p.reserve_percent }) }]}
+          xTicks={m.readings[0] ? ticks(m.readings[0].at, levelEnd) : undefined}
+          markers={m.purchases.map((b) => ({ x: b.at, label: `${w.fillLine} ${f.date(b.at)} · ${f.number(b.liters, 0)} L · ${euro(b.total)}` }))}
           series={[
             { name: w.percent, points: m.readings.filter((r) => r.percent !== undefined).map((r) => ({ x: r.at, y: r.percent! })) },
-            ...(m.current !== undefined && m.last ? [{ name: w.forecast, points: [{ x: m.last.at, y: m.last.percent ?? (m.last.liters! / p.capacity_l) * 100 }, { x: m.now, y: (m.current / p.capacity_l) * 100 }, ...(toOrder ? [{ x: m.now + toOrder * DAY, y: (p.order_at_l / p.capacity_l) * 100 }] : [])] }] : []),
+            ...(m.current !== undefined && m.last ? [{ name: w.forecast, points: [{ x: m.last.at, y: m.last.percent ?? (m.last.liters! / p.capacity_l) * 100 }, { x: m.now, y: (m.current / p.capacity_l) * 100 }, ...(toOrder ? [{ x: levelEnd, y: (p.order_at_l / p.capacity_l) * 100 }] : [])] }] : []),
           ]}
           formatX={(x) => f.date(x)}
+          formatTick={monthName}
           formatY={(y) => `${Math.round(y)} %`}
         />
-        <p className="pg-stat-hint">{w.levelHint}</p>
       </Card>
 
       <Grid min={300}>
         <Card title={w.price}>
-          <LineChart height={200} series={[{ name: w.perLiter, points: m.purchases.map((b) => ({ x: b.at, y: b.price })) }]} formatX={(x) => f.date(x)} formatY={(y) => f.decimal(y, 2)} />
+          {m.purchases.length > 0 && (
+            <LineChart
+              height={200}
+              yMin={Math.max(0, Math.min(...m.purchases.map((b) => b.price)) - 0.1)}
+              yMax={Math.max(...m.purchases.map((b) => b.price)) + 0.1}
+              xTicks={m.purchases.map((b) => b.at)}
+              series={[{ name: w.perLiter, points: m.purchases.map((b) => ({ x: b.at, y: b.price })) }]}
+              formatX={(x) => f.date(x)}
+              formatTick={monthName}
+              formatY={(y) => euro(y)}
+            />
+          )}
         </Card>
         <Card title={w.monthly}>
-          <BarChart height={200} data={months.map(([month, u]) => ({ label: monthName(month), value: u.cost }))} formatY={(y) => `${f.number(y, 0)} €`} />
+          <BarChart height={200} data={months.map(([month, u]) => ({ label: monthName(Date.parse(`${month}-15T00:00:00Z`)), value: u.cost }))} formatY={(y) => `${f.number(y, 0)} €`} />
         </Card>
       </Grid>
 
@@ -300,7 +394,7 @@ function Dashboard({ w }: { w: Words }) {
           ]}
           rows={(["off", "on", "peak"] as const).map((s) => ({
             id: s,
-            season: s === "off" ? w.off : s === "on" ? w.on : say(w.winter, { months: (p.peak_months ?? []).join(", ") }),
+            season: seasonName(s),
             measured: m.measured[s].days ? `${f.number(m.measured[s].liters / m.measured[s].days, 1)} L/d` : "–",
             used: `${f.number({ off: p.rate_off, on: p.rate_on, peak: p.rate_peak }[s], 1)} L/d`,
             days: f.number(m.measured[s].days, 0),
@@ -311,94 +405,121 @@ function Dashboard({ w }: { w: Words }) {
       {flagged.length > 0 && (
         <Card title={w.check}>
           <p className="pg-stat-hint">{w.checkHint}</p>
-          <Table columns={[{ key: "date", label: w.date }, { key: "stick", label: w.stickCol, align: "right" }, { key: "liters", label: w.litersCol, align: "right" }]} rows={flagged.map((r) => ({ id: r.id, date: f.dateTime(r.at), stick: `${f.number(r.stick, 1)} cm`, liters: f.number(r.liters, 1) }))} onRowClick={(row) => ctx.open({ itemId: String(row.id) })} />
+          <Table columns={[{ key: "date", label: w.date }, { key: "stick", label: w.stickCol, align: "right" }, { key: "liters", label: w.litersCol, align: "right" }]} rows={flagged.map((r) => ({ id: r.id, date: f.date(r.at), stick: `${f.number(r.stick, 1)} cm`, liters: f.number(r.liters, 1) }))} onRowClick={(row) => ctx.open({ itemId: String(row.id) })} />
         </Card>
       )}
 
-      <Grid min={260}>
-        <AddReading w={w} />
-        <AddPurchase w={w} />
-        <Card title={w.heating}>
-          <p>{heatingNow.since && !heatingNow.assumed ? say(w.heatingIs, { state: heatingNow.on ? w.stateOn : w.stateOff, date: f.date(heatingNow.since) }) : say(w.heatingNow, { state: (heatingNow.on ? w.stateOn : w.stateOff) + ` (${w.assumed})` })}</p>
-          <Button variant="primary" onClick={() => void addHeating(ctx, !heatingNow.on)}>{heatingNow.on ? w.turnOff : w.turnOn}</Button>
-          {ctx.workspace.role === "owner" && (
-            <p style={{ marginTop: 12 }}>
-              <Button onClick={() => void recalc()}>{w.recalc}</Button>
-            </p>
-          )}
+      <Grid min={320}>
+        <Card title={w.readings} actions={<Button onClick={() => ctx.open({ listId: p.list })}>{w.history}</Button>}>
+          <Table columns={[{ key: "date", label: w.date }, { key: "stick", label: w.stickCol, align: "right" }, { key: "liters", label: w.litersCol, align: "right" }, { key: "fill", label: w.fill, align: "right" }]} rows={[...m.readings].reverse().slice(0, 5).map((r) => ({ id: r.id, date: f.date(r.at), stick: `${f.number(r.stick, 1)} cm`, liters: f.number(r.liters, 1), fill: r.percent === undefined ? "…" : `${f.number(r.percent, 1)} %` }))} onRowClick={(row) => ctx.open({ itemId: String(row.id) })} />
+        </Card>
+        <Card title={w.purchases} actions={<Button onClick={() => ctx.open({ listId: p.list })}>{w.history}</Button>}>
+          <Table columns={[{ key: "date", label: w.date }, { key: "liters", label: w.litersCol, align: "right" }, { key: "total", label: w.total, align: "right" }, { key: "price", label: w.perLiter, align: "right" }, { key: "supplier", label: w.supplierCol }]} rows={[...m.purchases].reverse().slice(0, 5).map((b) => ({ id: b.id, date: f.date(b.at), liters: f.number(b.liters, 0), total: euro(b.total), price: f.decimal(b.price, 3), supplier: b.supplier || "–" }))} onRowClick={(row) => ctx.open({ itemId: String(row.id) })} />
         </Card>
       </Grid>
 
-      <Grid min={320}>
-        <Card title={w.readings}>
-          <Table columns={[{ key: "date", label: w.date }, { key: "stick", label: w.stickCol, align: "right" }, { key: "liters", label: w.litersCol, align: "right" }, { key: "fill", label: w.fill, align: "right" }]} rows={[...m.readings].reverse().slice(0, 12).map((r) => ({ id: r.id, date: f.date(r.at), stick: `${f.number(r.stick, 1)} cm`, liters: f.number(r.liters, 1), fill: r.percent === undefined ? "…" : `${f.number(r.percent, 1)} %` }))} onRowClick={(row) => ctx.open({ itemId: String(row.id) })} />
-        </Card>
-        <Card title={w.purchases}>
-          <Table columns={[{ key: "date", label: w.date }, { key: "liters", label: w.litersCol, align: "right" }, { key: "total", label: w.total, align: "right" }, { key: "price", label: w.perLiter, align: "right" }]} rows={[...m.purchases].reverse().map((b) => ({ id: b.id, date: f.date(b.at), liters: f.number(b.liters, 0), total: euro(b.total), price: f.decimal(b.price, 3) }))} onRowClick={(row) => ctx.open({ itemId: String(row.id) })} />
-        </Card>
-      </Grid>
+      <ReadingDialog w={w} open={dialog === "reading"} onClose={() => setDialog(undefined)} geometry={geometry} />
+      <PurchaseDialog w={w} open={dialog === "purchase"} onClose={() => setDialog(undefined)} />
+      <HeatingDialog w={w} open={dialog === "heating"} onClose={() => setDialog(undefined)} on={heatingNow.on} assumed={heatingNow.assumed} since={heatingNow.since} />
     </>
   );
 }
 
-function addHeating(ctx: AppContext<Params>, on: boolean) {
-  const now = new Date().toISOString();
-  return ctx.api.v1.resources.byId(ctx.params.list).children.post({ kind: "item", name: `Heating ${on ? "on" : "off"} ${now.slice(0, 10)}`, contentTypeId: ctx.params.heating as never, values: json({ diesel_heating_at: now, diesel_heating: on ? "on" : "off" }) });
-}
-
-function AddReading({ w }: { w: Words }) {
+function ReadingDialog({ w, open, onClose, geometry }: { w: Words; open: boolean; onClose: () => void; geometry?: Geometry }) {
   const ctx = useApp<Params>();
+  const f = ctx.format;
   const [stick, setStick] = useState("");
   const [when, setWhen] = useState(() => new Date().toISOString());
-  const [state, setState] = useState<"idle" | "saving" | "saved">("idle");
-  const value = ctx.format.parseDecimal(stick);
+  const [saving, setSaving] = useState(false);
+  const value = f.parseDecimal(stick);
+  const tooLong = value !== undefined && geometry !== undefined && Number(value) > geometry.stick_length_cm;
+  const liters = value !== undefined && geometry && !tooLong ? litersOf(geometry, Number(value)) : undefined;
   const save = async () => {
-    if (value === undefined) return;
-    setState("saving");
-    await ctx.api.v1.resources.byId(ctx.params.list).children.post({ kind: "item", name: `Reading ${when.slice(0, 10)} · ${value} cm`, contentTypeId: ctx.params.reading as never, values: json({ diesel_measured_at: when, diesel_stick_cm: value }) });
-    setStick("");
-    setState("saved");
+    if (value === undefined || tooLong) return;
+    setSaving(true);
+    try {
+      await ctx.api.v1.resources.byId(ctx.params.list).children.post({ kind: "item", name: `Reading ${when.slice(0, 10)} · ${value} cm`, contentTypeId: ctx.params.reading as never, values: json({ diesel_measured_at: when, diesel_stick_cm: value }) });
+      setStick("");
+      onClose();
+    } finally {
+      setSaving(false);
+    }
   };
   return (
-    <Card title={w.addReading}>
-      <NumberField label={w.stick} unit="cm" value={stick} onChange={(v) => { setStick(v); setState("idle"); }} error={stick && value === undefined ? w.invalid : undefined} />
-      <DateTimeField label={w.measuredAt} value={when} onChange={setWhen} />
-      <Button variant="primary" disabled={value === undefined || state === "saving"} onClick={() => void save()}>{state === "saved" ? w.saved : w.save}</Button>
-    </Card>
+    <Modal open={open} title={w.readingTitle} onClose={onClose} actions={<><Button onClick={onClose}>{w.cancel}</Button><Button variant="primary" disabled={value === undefined || tooLong || saving} onClick={() => void save()}>{w.save}</Button></>}>
+      <NumberField
+        autoFocus
+        label={w.stick}
+        unit="cm"
+        value={stick}
+        onChange={setStick}
+        error={stick && value === undefined ? w.invalid : tooLong ? say(w.outOfRange, { max: geometry!.stick_length_cm }) : undefined}
+        hint={liters !== undefined && geometry ? say(w.preview, { p: f.number((liters / geometry.capacity_l) * 100, 0), l: f.number(liters, 0) }) : undefined}
+      />
+      <DateField label={w.measuredAt} value={when} onChange={setWhen} />
+    </Modal>
   );
 }
 
-function AddPurchase({ w }: { w: Words }) {
+function PurchaseDialog({ w, open, onClose }: { w: Words; open: boolean; onClose: () => void }) {
   const ctx = useApp<Params>();
+  const f = ctx.format;
   const [liters, setLiters] = useState("");
   const [total, setTotal] = useState("");
   const [supplier, setSupplier] = useState("");
   const [when, setWhen] = useState(() => new Date().toISOString());
-  const [state, setState] = useState<"idle" | "saving" | "saved">("idle");
-  const l = ctx.format.parseDecimal(liters);
-  const t = ctx.format.parseDecimal(total);
+  const [saving, setSaving] = useState(false);
+  const l = f.parseDecimal(liters);
+  const t = f.parseDecimal(total);
   const save = async () => {
     if (l === undefined || t === undefined) return;
-    setState("saving");
-    await ctx.api.v1.resources.byId(ctx.params.list).children.post({
-      kind: "item",
-      name: `Purchase ${when.slice(0, 10)} · ${l} L`,
-      contentTypeId: ctx.params.purchase as never,
-      values: json({ diesel_purchased_at: when, diesel_bought_liters: l, diesel_total_price: Number(t), ...(supplier ? { diesel_supplier: supplier } : {}) }),
-    });
-    setLiters("");
-    setTotal("");
-    setSupplier("");
-    setState("saved");
+    setSaving(true);
+    try {
+      await ctx.api.v1.resources.byId(ctx.params.list).children.post({
+        kind: "item",
+        name: `Purchase ${when.slice(0, 10)} · ${l} L`,
+        contentTypeId: ctx.params.purchase as never,
+        values: json({ diesel_purchased_at: when, diesel_bought_liters: l, diesel_total_price: Number(t), ...(supplier ? { diesel_supplier: supplier } : {}) }),
+      });
+      setLiters("");
+      setTotal("");
+      setSupplier("");
+      onClose();
+    } finally {
+      setSaving(false);
+    }
   };
   return (
-    <Card title={w.addPurchase}>
-      <NumberField label={w.bought} unit="L" value={liters} onChange={(v) => { setLiters(v); setState("idle"); }} error={liters && l === undefined ? w.invalid : undefined} />
-      <NumberField label={w.total} unit="€" value={total} onChange={setTotal} error={total && t === undefined ? w.invalid : undefined} />
-      <DateTimeField label={w.boughtAt} value={when} onChange={setWhen} />
+    <Modal open={open} title={w.purchaseTitle} onClose={onClose} actions={<><Button onClick={onClose}>{w.cancel}</Button><Button variant="primary" disabled={l === undefined || t === undefined || saving} onClick={() => void save()}>{w.save}</Button></>}>
+      <NumberField autoFocus label={w.bought} unit="L" value={liters} onChange={setLiters} error={liters && l === undefined ? w.invalid : undefined} />
+      <NumberField label={w.total} unit="€" value={total} onChange={setTotal} error={total && t === undefined ? w.invalid : undefined} hint={l && t && Number(l) > 0 ? say(w.pricePreview, { price: f.currency(Number(t) / Number(l), "EUR") }) : undefined} />
+      <DateField label={w.boughtAt} value={when} onChange={setWhen} />
       <TextField label={w.supplier} value={supplier} onChange={setSupplier} maxLength={200} />
-      <Button variant="primary" disabled={l === undefined || t === undefined || state === "saving"} onClick={() => void save()}>{state === "saved" ? w.saved : w.save}</Button>
-    </Card>
+    </Modal>
+  );
+}
+
+function HeatingDialog({ w, open, onClose, on, assumed, since }: { w: Words; open: boolean; onClose: () => void; on: boolean; assumed: boolean; since?: number }) {
+  const ctx = useApp<Params>();
+  const f = ctx.format;
+  const [when, setWhen] = useState(() => new Date().toISOString());
+  const [saving, setSaving] = useState(false);
+  const state = on ? w.stateOn : w.stateOff;
+  const save = async () => {
+    setSaving(true);
+    try {
+      const next = !on;
+      await ctx.api.v1.resources.byId(ctx.params.list).children.post({ kind: "item", name: `Heating ${next ? "on" : "off"} ${when.slice(0, 10)}`, contentTypeId: ctx.params.heating as never, values: json({ diesel_heating_at: when, diesel_heating: next ? "on" : "off" }) });
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <Modal open={open} title={w.heatingTitle} onClose={onClose} actions={<><Button onClick={onClose}>{w.cancel}</Button><Button variant="primary" disabled={saving} onClick={() => void save()}>{on ? w.turnOff : w.turnOn}</Button></>}>
+      <p>{since && !assumed ? say(w.heatingIs, { state, date: f.date(since) }) : say(w.heatingNow, { state, assumed: w.assumed })}</p>
+      <DateField label={w.changedAt} value={when} onChange={setWhen} />
+    </Modal>
   );
 }
 

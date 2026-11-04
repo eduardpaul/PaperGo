@@ -14087,11 +14087,31 @@ export declare function useItem(id: string | undefined, options?: {
 	live?: boolean;
 }): Loaded<Item | undefined>;
 export type Tone = "default" | "warning" | "danger" | "success";
-/** A surface with an optional title. */
-export declare function Card({ title, children }: {
+/** A surface with an optional title, and actions or a legend on its right. */
+export declare function Card({ title, actions, children }: {
 	title?: ReactNode;
+	actions?: ReactNode;
 	children?: ReactNode;
 }): import("react").JSX.Element;
+/** Coloured pills that name what a chart's colours mean. */
+export declare function Legend({ items }: {
+	items: {
+		label: ReactNode;
+		color: string;
+	}[];
+}): import("react").JSX.Element;
+/** Buttons on the right, above what follows. */
+export declare function Toolbar({ children }: {
+	children?: ReactNode;
+}): import("react").JSX.Element;
+/** A dialog over the app; Escape and the backdrop close it. */
+export declare function Modal({ open, title, onClose, children, actions }: {
+	open: boolean;
+	title: ReactNode;
+	onClose: () => void;
+	children?: ReactNode;
+	actions?: ReactNode;
+}): import("react").JSX.Element | null;
 /** Columns that wrap on narrow screens; min is a column's narrowest width in pixels. */
 export declare function Grid({ min, children }: {
 	min?: number;
@@ -14132,12 +14152,20 @@ export interface FieldProps {
  * A decimal typed as text, with a phone's numeric keyboard; read it with
  * ctx.format.parseDecimal, which knows the viewer's decimal separator.
  */
-export declare function NumberField({ label, value, onChange, unit, error, required }: FieldProps & {
+export declare function NumberField({ label, value, onChange, unit, error, required, hint, autoFocus }: FieldProps & {
 	unit?: ReactNode;
+	hint?: ReactNode;
+	autoFocus?: boolean;
 }): import("react").JSX.Element;
 export declare function TextField({ label, value, onChange, error, required, maxLength }: FieldProps & {
 	maxLength?: number;
 }): import("react").JSX.Element;
+/**
+ * A date; value and onChange use ISO timestamps. Today keeps the current
+ * time, so entries of one day stay in the order they were made; another
+ * day is noon.
+ */
+export declare function DateField({ label, value, onChange, error, required }: FieldProps): import("react").JSX.Element;
 /** A date and time; value and onChange use ISO timestamps. */
 export declare function DateTimeField({ label, value, onChange, error, required }: FieldProps): import("react").JSX.Element;
 export interface Column<R> {
@@ -14170,15 +14198,21 @@ export interface Band {
  * Lines over a numeric or time axis, with optional markers on the x axis,
  * such as purchases on a level chart, and shaded bands behind them.
  */
-export declare function LineChart({ series, markers, bands, height, formatX, formatY, yMin, yMax }: {
+export declare function LineChart({ series, markers, bands, references, xTicks, height, formatX, formatTick, formatY, yMin, yMax }: {
 	series: Series[];
 	markers?: {
 		x: number | Date;
 		label?: string;
 	}[];
 	bands?: Band[];
+	references?: {
+		y: number;
+		label?: string;
+	}[];
+	xTicks?: (number | Date)[];
 	height?: number;
 	formatX?: (x: number) => string;
+	formatTick?: (x: number) => string;
 	formatY?: (y: number) => string;
 	yMin?: number;
 	yMax?: number;
@@ -14186,16 +14220,17 @@ export declare function LineChart({ series, markers, bands, height, formatX, for
 /**
  * How full something is, as a half-circle arc: value of max, its label and
  * an optional hint. The arc turns amber below warn and red below danger,
- * fractions of max.
+ * fractions of max. A bare gauge has no card around it, to sit in one.
  */
-export declare function Gauge({ value, max, label, hint, text, warn, danger }: {
+export declare function Gauge({ value, max, label, hint, text, warn, danger, bare }: {
 	value: number;
 	max?: number;
-	label: ReactNode;
+	label?: ReactNode;
 	hint?: ReactNode;
 	text?: ReactNode;
 	warn?: number;
 	danger?: number;
+	bare?: boolean;
 }): import("react").JSX.Element;
 /** Bars, one per label, such as a month. */
 export declare function BarChart({ data, height, formatY }: {

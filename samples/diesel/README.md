@@ -47,18 +47,24 @@ After importing, set these in **Workspace settings → Workflows**:
 
 ## The dashboard
 
-- **Now:**
+- **The tank:**
   - The last reading, less what the season burns each day since. After the last recorded heating change, the heating is assumed to go on and off on its usual days, the average of the recorded ones.
-  - The litres left, what they are worth at the last price per litre, and what a day costs at today's rate.
-- **Autonomy:** the days to the reserve and the date to order, counted forward a day at a time at the rate of each day's season.
+  - Shown as a gauge, beside the litres and what they are worth at the last price per litre.
+- **Autonomy and forecast:** the date to order, and the date the reserve is reached, counted forward a day at a time at the rate of each day's season. The two are close when the order point (200 L) is close to the reserve (25 %, 187.5 L), but they are different thresholds.
+- **Pace of consumption:** today's cost a day and rate, and the costs of deep winter and summer.
 - **Charts:**
-  - The level over time, with the heating seasons shaded and the fills marked, and the forecast to the next order.
-  - The price per litre of each fill, and the cost of the diesel used each month: what was burnt between readings, valued at the price of the fill it came from.
+  - **The level over time:** the heating seasons shaded, fills marked, a tick every three months, the reserve as a dashed line, and the forecast to the next order.
+  - **The price per litre of each fill:** its axis fits the prices, so a rise shows.
+  - **The cost of the diesel used each month:** what was burnt between readings, valued at the price of the fill it came from.
 - **Consumption:** what each season actually burnt between readings, beside the rates the forecast uses, so the rates can be tuned.
-- **Forms:**
-  - **Add a reading**, **Add a purchase**, and the heating going on or off now.
+- **Actions:** **+ Medición**, **+ Llenado** and the heating button open a dialog.
+  - Typing a stick reading shows what it means before it is saved, worked out with the Diesel levels workflow's settings.
   - Decimals are typed in your number format, so `86,8` is 86.8 cm where the decimal separator is a comma.
+  - Dates are dates: today keeps the current time, so a reading before and one after a fill stay in order; another day is noon.
+- **Lists:** the last five readings and fills, with the supplier, and the whole history in the list.
 - **Tasks and checks:** the measuring and refill tasks waiting for you, and the readings that need a look.
+
+Converting readings again after the tank's settings change is **Run once** of Diesel levels, in Workspace settings → Workflows. The dashboard itself reads again whenever something changes.
 
 ## Sources
 

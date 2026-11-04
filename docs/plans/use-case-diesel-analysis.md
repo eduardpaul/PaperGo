@@ -101,13 +101,11 @@ The app computes everything in the browser from the three types: about 150 items
 
 | Figure | Definition |
 | --- | --- |
-| **Now** (gauge) | The last converted reading, less each day's rate since, plus what was bought after it |
-| **Litres and value** | The estimate in litres, and its value at the last price per litre |
-| **Days to the reserve** | Days, counted forward at each day's rate, until 25 % is left, and the date |
-| **Next order** | The date 200 L are left, and the days to it |
-| **Daily cost** | Today's rate × the last price per litre |
-| **Level and heating** (chart) | Fill % per reading over time, with the heating seasons shaded red (on) and blue (off), fills marked, and the forecast from the last reading to the next order |
-| **Price per litre** (chart) | `total / litres` per purchase |
+| **Tank** (gauge, litres, value) | The last converted reading, less each day's rate since, plus what was bought after it; its value at the last price per litre |
+| **Autonomy and forecast** | The date 200 L are left, counted forward at each day's rate, and the date 25 % is left: two thresholds that are close for this tank |
+| **Pace of consumption** | Today's rate × the last price per litre, and the costs of deep winter and summer |
+| **Level and heating** (chart) | Fill % per reading over time, with the heating seasons shaded red (on) and blue (off) and named in a legend, fills marked, a tick every three months, the reserve as a dashed line, and the forecast from the last reading to the next order |
+| **Price per litre** (chart) | `total / litres` per purchase, on an axis that fits the prices |
 | **Cost of the diesel used** (bars) | Each interval's consumption (`level before + bought − level after`), spread over its days, valued at the price of the last fill before each day, per month |
 | **Consumption** (table) | What each season burnt, from the intervals, beside the rates the forecast uses |
 
@@ -116,10 +114,13 @@ The sample history ends with the tank filled on 3 September 2026. On 4 November 
 - the next order on 13 January 2027 and the 25 % reserve a day later;
 - 4.2 L a day measured with the heating on, against the 4.5 L used, and 6.5 L in the coldest months, against 7.5 L.
 
-The screen has three forms: **Add a reading**, **Add a purchase** and **The heating went on or off now**.
-- Their inputs default to now and work on a phone.
+Three buttons at the top open dialogs: a reading, a fill, and the heating going on or off.
+- The reading's dialog previews the litres and fill before saving, with the Diesel levels workflow's settings, so the tank's geometry is set in one place.
+- Dates are dates; today keeps the current time, so readings around a fill stay in order.
 - Decimals are typed in the viewer's number format.
 - Live queries show a reading's litres as soon as the workflow writes them.
+
+The tables show the last five readings and fills, with the supplier, and open the list for the whole history.
 
 It also shows the viewer's open measuring and refill tasks, and the readings that need a look, each linked to answer or open it.
 
