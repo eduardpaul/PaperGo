@@ -240,7 +240,9 @@ function Field({ label, error, children }: { label: ReactNode; error?: ReactNode
 /**
  * A decimal typed as text, with a phone's numeric keyboard; read it with
  * ctx.format.parseDecimal, which knows the viewer's decimal separator. A
- * signed field has a ± button, since phones' decimal keyboards have no minus.
+ * signed field has a ± button, since phones' decimal keyboards have no minus:
+ * it turns the number typed negative or back, so the field never holds a
+ * sign without a number.
  */
 export function NumberField({ label, value, onChange, unit, error, required, hint, autoFocus, signed }: FieldProps & { unit?: ReactNode; hint?: ReactNode; autoFocus?: boolean; signed?: boolean }) {
   return (
@@ -249,7 +251,7 @@ export function NumberField({ label, value, onChange, unit, error, required, hin
         <>
           <div className="pg-field-row">
             {signed && (
-              <button type="button" className="pg-button pg-sign" aria-label="±" onClick={() => onChange(value.trim().startsWith("-") ? value.trim().slice(1) : `-${value.trim()}`)}>
+              <button type="button" className="pg-button pg-sign" aria-label="±" disabled={!/\d/.test(value)} onClick={() => onChange(flipSign(value))}>
                 ±
               </button>
             )}
@@ -261,6 +263,12 @@ export function NumberField({ label, value, onChange, unit, error, required, hin
       )}
     </Field>
   );
+}
+
+/** The number in text with its sign turned: 3 and +3 become -3, -3 becomes 3. */
+export function flipSign(text: string): string {
+  const t = text.trim();
+  return t.startsWith("-") ? t.slice(1) : `-${t.replace(/^\+/, "")}`;
 }
 
 export function TextField({ label, value, onChange, error, required, maxLength }: FieldProps & { maxLength?: number }) {
@@ -389,10 +397,19 @@ function spaced(ticks: number[], at: (t: number) => number, gap: number): number
   return out;
 }
 
-function ticks(min: number, max: number, count = 4): number[] {
-  if (min === max) return [min];
-  const step = (max - min) / count;
-  return Array.from({ length: count + 1 }, (_, i) => min + step * i);
+/**
+ * About count + 1 ticks between min and max, on round values: steps of 1,
+ * 2, 2.5 or 5 times a power of ten, so their labels read 10 °C or 25 %, not
+ * 12.4 °C.
+ */
+export function ticks(min: number, max: number, count = 4): number[] {
+  if (!(max > min)) return [min];
+  const raw = (max - min) / count;
+  const power = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * power).find((s) => s >= raw * (1 - 1e-9)) ?? 10 * power;
+  const out: number[] = [];
+  for (let i = Math.ceil(min / step - 1e-9); i * step <= max + step * 1e-9; i++) out.push(Number((i * step).toFixed(12)));
+  return out;
 }
 
 export interface Series {

@@ -67,7 +67,7 @@ The kit draws in PaperGo's theme, light or dark as the viewer's:
 - **Figures:** `Stat` and `Gauge`, a half-circle of how full something is.
 - **Charts:** `LineChart` and `BarChart`, drawn as SVG, with `Legend` pills. `LineChart` draws series over numbers or dates, with markers, shaded bands (such as seasons), reference lines and the ticks it is given.
 - **Data:** `Table`.
-- **Controls:** `Button`, `Notice`, `NumberField` (a decimal typed with a phone's numeric keyboard, with an optional live hint; `signed` adds a ± button, as those keyboards have no minus), `TextField`, `DateField` and `DateTimeField` (dates picked and shown in the viewer's time zone, as `ctx.format` shows them).
+- **Controls:** `Button`, `Notice`, `NumberField` (a decimal typed with a phone's numeric keyboard, with an optional live hint; `signed` adds a ± button that turns the typed number negative, as those keyboards have no minus), `TextField`, `DateField` and `DateTimeField` (dates picked and shown in the viewer's time zone, as `ctx.format` shows them).
 
 **Phones.** The kit lays out for touch up to 640 pixels wide (`narrowWidth`), and `useNarrow()` tells an app when it is shown that narrow:
 - **Toolbar:** it becomes a bar fixed to the bottom of the app, in equal parts, under the thumb, and the content keeps clear of it.

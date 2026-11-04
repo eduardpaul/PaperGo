@@ -5,6 +5,7 @@
 import { Bridge, type AppMessage, type PageMessage } from "../../src/app/bridge.js";
 import { appContext, RequestError, type Init } from "../../src/app/context.js";
 import { formatter, wallClock } from "../../src/app/format.js";
+import { flipSign, ticks } from "../../src/app/kit.js";
 import { json } from "../../src/values.js";
 
 declare const process: { exit(code: number): never };
@@ -46,6 +47,16 @@ expect("a time the clocks skip is the time after", york.instant(2026, 3, 8, 2, 3
 expect("a time the clocks show twice is the first", york.instant(2026, 11, 1, 1, 30).toISOString(), "2026-11-01T05:30:00.000Z");
 expect("just before Madrid's clocks go forward", madrid.instant(2026, 3, 29, 1, 30).toISOString(), "2026-03-29T00:30:00.000Z");
 expect("an unknown zone is UTC", wallClock("Nowhere/Else").instant(2026, 11, 4, 12).toISOString(), "2026-11-04T12:00:00.000Z");
+
+// Charts put their ticks on round values, and ± turns a typed number's sign.
+expect("ticks of a percentage", ticks(0, 100), [0, 25, 50, 75, 100]);
+expect("ticks of temperatures", ticks(-1.5, 26.3), [0, 10, 20]);
+expect("ticks of prices", ticks(1.0, 1.69), [1, 1.2, 1.4, 1.6]);
+expect("ticks below zero", ticks(-12, 7), [-10, -5, 0, 5]);
+expect("one value", ticks(3, 3), [3]);
+expect("± turns a number negative", flipSign("3,5"), "-3,5");
+expect("± turns a plus", flipSign(" +3"), "-3");
+expect("± turns a negative back", flipSign("-3"), "3");
 
 // A page that answers every request with what answer returns.
 function page(answer: (m: Extract<AppMessage, { type: "papergo:request" }>) => { status: number; body: unknown }) {

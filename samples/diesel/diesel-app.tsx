@@ -33,6 +33,7 @@ import {
   useQuery,
   type AppContext,
   type Band,
+  type Format,
   type Item,
 } from "@papergo/app";
 
@@ -65,7 +66,7 @@ const words = {
     readingTitle: "New reading", stick: "Stick reading from the mouth", measuredAt: "Date", preview: "That is about {p} % ({l} L)", outOfRange: "The stick is {max} cm long",
     purchaseTitle: "New fill", bought: "Litres bought", total: "Total price", boughtAt: "Date", supplier: "Supplier", pricePreview: "{price}/L",
     heatingTitle: "Heating", heatingIs: "The heating is {state} since {date}.", heatingNow: "The heating is {state} ({assumed}).", changedAt: "Since", turnOn: "It went on", turnOff: "It went off",
-    save: "Save", cancel: "Cancel", invalid: "Type a number",
+    save: "Save", cancel: "Cancel", invalid: "Type a number", tooPrecise: "Too many decimals (at most {n})", pickDate: "Choose a date",
     temperature: "Temperature and heating", addTemperature: "+ Temperature", temperatureTitle: "New temperature", indoor: "Indoor", outdoor: "Outdoor", takenAt: "Date and time", takenOn: "Taken on {date}", noTemperature: "No temperature yet", oneTemperature: "Type at least one temperature", outdoorAverage: "Outdoor average",
     measureDue: "A reading is due", refillDue: "Diesel is low: buy some", answer: "Answer", check: "Needs a look", checkHint: "Higher than the reading before and what was bought since. Open it to correct it, or mark it reviewed.",
     readings: "Readings", purchases: "Fills", date: "Date", stickCol: "Stick", litersCol: "Litres", fill: "Level", perLiter: "€/L", supplierCol: "Supplier", history: "See the whole history", setUp: "Choose the Diesel list and its types in Workspace settings → Apps.",
@@ -81,7 +82,7 @@ const words = {
     readingTitle: "Nueva medición", stick: "Medida del palo desde la boca", measuredAt: "Fecha", preview: "Equivale a ~{p} % ({l} L)", outOfRange: "El palo mide {max} cm",
     purchaseTitle: "Nuevo llenado", bought: "Litros comprados", total: "Precio total", boughtAt: "Fecha", supplier: "Proveedor", pricePreview: "{price}/L",
     heatingTitle: "Calefacción", heatingIs: "La calefacción está {state} desde el {date}.", heatingNow: "La calefacción está {state} ({assumed}).", changedAt: "Desde", turnOn: "Se ha encendido", turnOff: "Se ha apagado",
-    save: "Guardar", cancel: "Cancelar", invalid: "Escribe un número",
+    save: "Guardar", cancel: "Cancelar", invalid: "Escribe un número", tooPrecise: "Demasiados decimales (máximo {n})", pickDate: "Elige una fecha",
     temperature: "Temperatura y calefacción", addTemperature: "+ Temperatura", temperatureTitle: "Nueva temperatura", indoor: "Interior", outdoor: "Exterior", takenAt: "Fecha y hora", takenOn: "Tomada el {date}", noTemperature: "Aún no hay temperaturas", oneTemperature: "Escribe al menos una temperatura", outdoorAverage: "Exterior medio",
     measureDue: "Toca medir", refillDue: "Queda poco gasóleo: hay que pedir", answer: "Responder", check: "Para revisar", checkHint: "Más alta que la medición anterior y lo comprado desde entonces. Ábrela para corregirla o márcala como revisada.",
     readings: "Mediciones", purchases: "Llenados", date: "Fecha", stickCol: "Palo", litersCol: "Litros", fill: "Nivel", perLiter: "€/L", supplierCol: "Proveedor", history: "Ver historial completo", setUp: "Elige la lista Diesel y sus tipos en Ajustes del espacio de trabajo → Aplicaciones.",
@@ -274,6 +275,19 @@ function useEntry(open: boolean, onClose: () => void) {
   return { when, setWhen, saving, failed, save };
 }
 
+/**
+ * A decimal typed in the viewer's format, as its field saves it: the
+ * canonical text, or why it cannot be saved, since a field keeps at most
+ * scale fraction digits; empty when nothing is typed.
+ */
+function decimal(f: Format, w: Words, text: string, scale: number): { value?: string; error?: string; empty: boolean } {
+  if (text.trim() === "") return { empty: true };
+  const value = f.parseDecimal(text);
+  if (value === undefined) return { error: w.invalid, empty: false };
+  if ((value.split(".")[1] ?? "").length > scale) return { error: say(w.tooPrecise, { n: scale }), empty: false };
+  return { value, empty: false };
+}
+
 /** How the Diesel levels workflow reads the stick, from its settings. */
 interface Geometry {
   capacity_l: number;
@@ -342,7 +356,13 @@ function Dashboard({ w }: { w: Words }) {
   };
   const levelEnd = toOrder ? m.now + toOrder * DAY : m.now;
   const degrees = (v: number | undefined) => (v === undefined ? "–" : `${f.number(v, 1)} °C`);
-  const lastTemperature = m.temperatures.at(-1);
+  // An entry may hold one of the two: each shows its own latest.
+  const lastIndoor = m.temperatures.filter((c) => c.indoor !== undefined).at(-1);
+  const lastOutdoor = m.temperatures.filter((c) => c.outdoor !== undefined).at(-1);
+  const heatingBands = [
+    { label: w.heatingOnBand, color: "rgba(220, 38, 38, .35)" },
+    { label: w.heatingOffBand, color: "rgba(37, 99, 235, .25)" },
+  ];
 
   if (error) return <Notice tone="danger" title={error.message}>{w.setUp}</Notice>;
   return (
@@ -394,7 +414,7 @@ function Dashboard({ w }: { w: Words }) {
 
       <Card
         title={w.level}
-        actions={<Legend items={[{ label: w.heatingOnBand, color: "rgba(220, 38, 38, .35)" }, { label: w.heatingOffBand, color: "rgba(37, 99, 235, .25)" }, { label: w.levelLine, color: "var(--pg-series-1)" }, { label: w.forecastLine, color: "var(--pg-series-2)" }]} />}
+        actions={<Legend items={[...heatingBands, { label: w.levelLine, color: "var(--pg-series-1)" }, { label: w.forecastLine, color: "var(--pg-series-2)" }]} />}
       >
         <LineChart
           height={260}
@@ -415,21 +435,22 @@ function Dashboard({ w }: { w: Words }) {
       </Card>
 
       <Card title={w.temperature} actions={<Button onClick={() => setDialog("temperature")}>{w.addTemperature}</Button>}>
-        {lastTemperature ? (
+        {lastIndoor || lastOutdoor ? (
           <>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 24px", alignItems: "baseline", marginBottom: 8 }}>
-              <div>
-                <div className="pg-stat-label">{w.indoor}</div>
-                <div style={big}>{degrees(lastTemperature.indoor)}</div>
-              </div>
-              <div>
-                <div className="pg-stat-label">{w.outdoor}</div>
-                <div style={big}>{degrees(lastTemperature.outdoor)}</div>
-              </div>
-              <div className="pg-stat-hint">{say(w.takenOn, { date: f.dateTime(lastTemperature.at) })}</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 32px", marginBottom: 8 }}>
+              {[
+                { label: w.indoor, last: lastIndoor, value: lastIndoor?.indoor },
+                { label: w.outdoor, last: lastOutdoor, value: lastOutdoor?.outdoor },
+              ].map((t) => (
+                <div key={t.label}>
+                  <div className="pg-stat-label">{t.label}</div>
+                  <div style={big}>{degrees(t.value)}</div>
+                  {t.last && <div className="pg-stat-hint">{say(w.takenOn, { date: f.dateTime(t.last.at) })}</div>}
+                </div>
+              ))}
             </div>
             <div style={{ marginBottom: 8 }}>
-              <Legend items={[{ label: w.heatingOnBand, color: "rgba(220, 38, 38, .35)" }, { label: w.heatingOffBand, color: "rgba(37, 99, 235, .25)" }, { label: w.outdoor, color: "var(--pg-series-1)" }, { label: w.indoor, color: "var(--pg-series-2)" }]} />
+              <Legend items={[...heatingBands, { label: w.outdoor, color: "var(--pg-series-1)" }, { label: w.indoor, color: "var(--pg-series-2)" }]} />
             </div>
             <LineChart
               height={220}
@@ -442,8 +463,8 @@ function Dashboard({ w }: { w: Words }) {
               // A tapped point says when it was taken, to the minute.
               formatX={(x) => f.dateTime(x)}
               formatTick={monthName}
-              // One decimal, as the temperatures are taken: a tapped point reads 18,5 °C, not 19.
-              formatY={(y) => `${f.number(y, 1)} °C`}
+              // One decimal, as they are taken: a tapped point reads 18,5 °C, and the axis's round ticks 10 °C.
+              formatY={degrees}
             />
           </>
         ) : (
@@ -521,28 +542,30 @@ function ReadingDialog({ w, open, onClose, geometry }: { w: Words; open: boolean
   const f = ctx.format;
   const [stick, setStick] = useState("");
   const { when, setWhen, saving, failed, save: run } = useEntry(open, onClose);
-  const value = f.parseDecimal(stick);
+  const typed = decimal(f, w, stick, 1);
+  const value = typed.value;
   const tooLong = value !== undefined && geometry !== undefined && Number(value) > geometry.stick_length_cm;
   const liters = value !== undefined && geometry && !tooLong ? litersOf(geometry, Number(value)) : undefined;
   const save = () =>
     value !== undefined &&
     !tooLong &&
+    !!when &&
     run(async () => {
       await ctx.api.v1.resources.byId(ctx.params.list).children.post({ kind: "item", name: `Reading ${when.slice(0, 10)} · ${value} cm`, contentTypeId: ctx.params.reading as never, values: json({ diesel_measured_at: when, diesel_stick_cm: value }) });
       setStick("");
     });
   return (
-    <Modal open={open} title={w.readingTitle} onClose={onClose} actions={<><Button onClick={onClose}>{w.cancel}</Button><Button variant="primary" disabled={value === undefined || tooLong || saving} onClick={() => void save()}>{w.save}</Button></>}>
+    <Modal open={open} title={w.readingTitle} onClose={onClose} actions={<><Button onClick={onClose}>{w.cancel}</Button><Button variant="primary" disabled={value === undefined || tooLong || !when || saving} onClick={() => void save()}>{w.save}</Button></>}>
       <NumberField
         autoFocus
         label={w.stick}
         unit="cm"
         value={stick}
         onChange={setStick}
-        error={stick && value === undefined ? w.invalid : tooLong ? say(w.outOfRange, { max: geometry!.stick_length_cm }) : undefined}
+        error={typed.error ?? (tooLong ? say(w.outOfRange, { max: geometry!.stick_length_cm }) : undefined)}
         hint={liters !== undefined && geometry ? say(w.preview, { p: f.number((liters / geometry.capacity_l) * 100, 0), l: f.number(liters, 0) }) : undefined}
       />
-      <DateField label={w.measuredAt} value={when} onChange={setWhen} />
+      <DateField label={w.measuredAt} value={when} onChange={setWhen} error={when ? undefined : w.pickDate} />
       {failed && <p className="pg-error">{failed}</p>}
     </Modal>
   );
@@ -555,11 +578,14 @@ function PurchaseDialog({ w, open, onClose }: { w: Words; open: boolean; onClose
   const [total, setTotal] = useState("");
   const [supplier, setSupplier] = useState("");
   const { when, setWhen, saving, failed, save: run } = useEntry(open, onClose);
-  const l = f.parseDecimal(liters);
-  const t = f.parseDecimal(total);
+  // Litres keep one decimal, the price two.
+  const typedLiters = decimal(f, w, liters, 1);
+  const typedTotal = decimal(f, w, total, 2);
+  const l = typedLiters.value;
+  const t = typedTotal.value;
+  const ready = l !== undefined && t !== undefined && !!when;
   const save = () =>
-    l !== undefined &&
-    t !== undefined &&
+    ready &&
     run(async () => {
       await ctx.api.v1.resources.byId(ctx.params.list).children.post({
         kind: "item",
@@ -572,10 +598,10 @@ function PurchaseDialog({ w, open, onClose }: { w: Words; open: boolean; onClose
       setSupplier("");
     });
   return (
-    <Modal open={open} title={w.purchaseTitle} onClose={onClose} actions={<><Button onClick={onClose}>{w.cancel}</Button><Button variant="primary" disabled={l === undefined || t === undefined || saving} onClick={() => void save()}>{w.save}</Button></>}>
-      <NumberField autoFocus label={w.bought} unit="L" value={liters} onChange={setLiters} error={liters && l === undefined ? w.invalid : undefined} />
-      <NumberField label={w.total} unit="€" value={total} onChange={setTotal} error={total && t === undefined ? w.invalid : undefined} hint={l && t && Number(l) > 0 ? say(w.pricePreview, { price: f.currency(Number(t) / Number(l), "EUR") }) : undefined} />
-      <DateField label={w.boughtAt} value={when} onChange={setWhen} />
+    <Modal open={open} title={w.purchaseTitle} onClose={onClose} actions={<><Button onClick={onClose}>{w.cancel}</Button><Button variant="primary" disabled={!ready || saving} onClick={() => void save()}>{w.save}</Button></>}>
+      <NumberField autoFocus label={w.bought} unit="L" value={liters} onChange={setLiters} error={typedLiters.error} />
+      <NumberField label={w.total} unit="€" value={total} onChange={setTotal} error={typedTotal.error} hint={l && t && Number(l) > 0 ? say(w.pricePreview, { price: f.currency(Number(t) / Number(l), "EUR") }) : undefined} />
+      <DateField label={w.boughtAt} value={when} onChange={setWhen} error={when ? undefined : w.pickDate} />
       <TextField label={w.supplier} value={supplier} onChange={setSupplier} maxLength={200} />
       {failed && <p className="pg-error">{failed}</p>}
     </Modal>
@@ -588,32 +614,31 @@ function TemperatureDialog({ w, open, onClose }: { w: Words; open: boolean; onCl
   const [indoor, setIndoor] = useState("");
   const [outdoor, setOutdoor] = useState("");
   const { when, setWhen, saving, failed, save: run } = useEntry(open, onClose);
-  // A lone minus, typed with the ± button, waits for its number.
-  const read = (text: string) => (text.trim() === "" || text.trim() === "-" ? null : f.parseDecimal(text));
-  const i = read(indoor);
-  const o = read(outdoor);
-  const invalid = i === undefined || o === undefined;
-  const empty = i === null && o === null;
+  // Both keep one decimal; either may be left out, not both.
+  const i = decimal(f, w, indoor, 1);
+  const o = decimal(f, w, outdoor, 1);
+  const empty = i.empty && o.empty;
+  const ready = !i.error && !o.error && !empty && !!when;
   const save = () =>
-    !invalid &&
-    !empty &&
+    ready &&
     run(async () => {
       await ctx.api.v1.resources.byId(ctx.params.list).children.post({
         kind: "item",
-        name: `Temperature ${f.dateTime(when)} · ${i ?? "–"} / ${o ?? "–"} °C`,
+        // Named in UTC, as the sample data and the other entries are, so every viewer reads the same name.
+        name: `Temperature ${when.slice(0, 10)} ${when.slice(11, 16)} UTC · ${i.value ?? "–"} / ${o.value ?? "–"} °C`,
         contentTypeId: ctx.params.temperature as never,
-        values: json({ diesel_temperature_at: when, ...(i !== null ? { diesel_indoor_c: i } : {}), ...(o !== null ? { diesel_outdoor_c: o } : {}) }),
+        values: json({ diesel_temperature_at: when, ...(i.value ? { diesel_indoor_c: i.value } : {}), ...(o.value ? { diesel_outdoor_c: o.value } : {}) }),
       });
       setIndoor("");
       setOutdoor("");
     });
   return (
-    <Modal open={open} title={w.temperatureTitle} onClose={onClose} actions={<><Button onClick={onClose}>{w.cancel}</Button><Button variant="primary" disabled={invalid || empty || saving} onClick={() => void save()}>{w.save}</Button></>}>
-      <NumberField autoFocus label={w.indoor} unit="°C" value={indoor} onChange={setIndoor} error={i === undefined ? w.invalid : undefined} />
-      <NumberField signed label={w.outdoor} unit="°C" value={outdoor} onChange={setOutdoor} error={o === undefined ? w.invalid : undefined} />
+    <Modal open={open} title={w.temperatureTitle} onClose={onClose} actions={<><Button onClick={onClose}>{w.cancel}</Button><Button variant="primary" disabled={!ready || saving} onClick={() => void save()}>{w.save}</Button></>}>
+      <NumberField autoFocus label={w.indoor} unit="°C" value={indoor} onChange={setIndoor} error={i.error} />
+      <NumberField signed label={w.outdoor} unit="°C" value={outdoor} onChange={setOutdoor} error={o.error} />
       {empty && <p className="pg-stat-hint">{w.oneTemperature}</p>}
       {/* Temperatures change through the day: they are taken at a time, now unless changed. */}
-      <DateTimeField label={w.takenAt} value={when} onChange={setWhen} required />
+      <DateTimeField label={w.takenAt} value={when} onChange={setWhen} error={when ? undefined : w.pickDate} />
       {failed && <p className="pg-error">{failed}</p>}
     </Modal>
   );
@@ -625,14 +650,15 @@ function HeatingDialog({ w, open, onClose, on, assumed, since }: { w: Words; ope
   const { when, setWhen, saving, failed, save: run } = useEntry(open, onClose);
   const state = on ? w.stateOn : w.stateOff;
   const save = () =>
+    !!when &&
     run(async () => {
       const next = !on;
       await ctx.api.v1.resources.byId(ctx.params.list).children.post({ kind: "item", name: `Heating ${next ? "on" : "off"} ${when.slice(0, 10)}`, contentTypeId: ctx.params.heating as never, values: json({ diesel_heating_at: when, diesel_heating: next ? "on" : "off" }) });
     });
   return (
-    <Modal open={open} title={w.heatingTitle} onClose={onClose} actions={<><Button onClick={onClose}>{w.cancel}</Button><Button variant="primary" disabled={saving} onClick={() => void save()}>{on ? w.turnOff : w.turnOn}</Button></>}>
+    <Modal open={open} title={w.heatingTitle} onClose={onClose} actions={<><Button onClick={onClose}>{w.cancel}</Button><Button variant="primary" disabled={!when || saving} onClick={() => void save()}>{on ? w.turnOff : w.turnOn}</Button></>}>
       <p>{since && !assumed ? say(w.heatingIs, { state, date: f.date(since) }) : say(w.heatingNow, { state, assumed: w.assumed })}</p>
-      <DateField label={w.changedAt} value={when} onChange={setWhen} />
+      <DateField label={w.changedAt} value={when} onChange={setWhen} error={when ? undefined : w.pickDate} />
       {failed && <p className="pg-error">{failed}</p>}
     </Modal>
   );

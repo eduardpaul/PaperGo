@@ -96,7 +96,7 @@ func TestTheDieselSampleCompiles(t *testing.T) {
 	var schema struct {
 		Required []string `json:"required"`
 	}
-	if err = json.Unmarshal(c.ParametersSchema, &schema); err != nil || strings.Join(schema.Required, ",") != "list,reading,purchase,heating" {
+	if err = json.Unmarshal(c.ParametersSchema, &schema); err != nil || strings.Join(schema.Required, ",") != "list,reading,purchase,heating,temperature" {
 		t.Fatalf("parameters: %s %v", c.ParametersSchema, err)
 	}
 }

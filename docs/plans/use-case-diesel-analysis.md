@@ -88,7 +88,7 @@ Readings and purchases keep separate date fields, and every timestamp is a datet
 
 ## The dashboard
 
-The app computes everything in the browser from the three types: about 150 items a year.
+The app computes everything in the browser from the four types: about 150 items a year.
 
 **Rates.** The forecast uses one rate a day, by season:
 

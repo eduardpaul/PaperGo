@@ -14158,7 +14158,9 @@ export interface FieldProps {
 /**
  * A decimal typed as text, with a phone's numeric keyboard; read it with
  * ctx.format.parseDecimal, which knows the viewer's decimal separator. A
- * signed field has a ± button, since phones' decimal keyboards have no minus.
+ * signed field has a ± button, since phones' decimal keyboards have no minus:
+ * it turns the number typed negative or back, so the field never holds a
+ * sign without a number.
  */
 export declare function NumberField({ label, value, onChange, unit, error, required, hint, autoFocus, signed }: FieldProps & {
 	unit?: ReactNode;

@@ -57,11 +57,11 @@ After importing, set these in **Workspace settings → Workflows**:
   - **The level over time:** the heating seasons shaded, fills marked, a tick every three months, the reserve as a dashed line, and the forecast to the next order.
   - **The price per litre of each fill:** its axis fits the prices, so a rise shows.
   - **The cost of the diesel used each month:** what was burnt between readings, valued at the price of the fill it came from.
-- **Temperature and heating:** the last indoor and outdoor temperatures, and both over time against the heating seasons. **+ Temperatura** on the card records them at a date and time, now unless changed, since temperatures change through the day; the ± button types a temperature below zero, which phones' decimal keyboards cannot. Tapping a point says when it was taken.
+- **Temperature and heating:** the last indoor and outdoor temperatures, and both over time against the heating seasons. **+ Temperatura** on the card records them at a date and time, now unless changed, since temperatures change through the day; the ± button turns a typed temperature below zero, which phones' decimal keyboards cannot. Each figure says when it was taken, and an entry may hold just one of the two. Tapping a point says when it was taken.
 - **Consumption:** what each season actually burnt between readings, beside the rates the forecast uses, so the rates can be tuned, and the season's average outdoor temperature.
 - **Actions:** **+ Medición**, **+ Llenado** and the heating button open a dialog.
   - Typing a stick reading shows what it means before it is saved, worked out with the Diesel levels workflow's settings.
-  - Decimals are typed in your number format, so `86,8` is 86.8 cm where the decimal separator is a comma.
+  - Decimals are typed in your number format, so `86,8` is 86.8 cm where the decimal separator is a comma, with as many decimals as the field keeps: one for centimetres, litres and degrees, two for prices.
   - Dates are dates in your time zone: today keeps the current time, so a reading before and one after a fill stay in order; another day is noon.
 - **Lists:** the last five readings and fills, with the supplier, and the whole history in the list.
 - **Tasks and checks:** the measuring and refill tasks waiting for you, and the readings that need a look.
