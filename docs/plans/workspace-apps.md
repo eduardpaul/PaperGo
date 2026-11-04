@@ -115,9 +115,10 @@ The app editor reuses the workflow editor's Monaco setup with JSX: completion, h
 
 An app does three kinds of work through workflows. All three use workflows as they exist, and one needs a small socket.
 
-1. **Reactive: the app writes items, a workflow derives.** The app creates or updates an item; a workflow on `item.created` / `item.updated` computes values, checks consistency or notifies people. The rule holds whatever wrote the item: the list screen, MCP, another app. This is the default pattern, and the [diesel tracker](use-case-diesel-analysis.md) uses only this one.
+1. **Reactive: the app writes items, a workflow derives.** The app creates or updates an item; a workflow on `item.created` / `item.updated` computes values, checks consistency or notifies people. The rule holds whatever wrote the item: the list screen, MCP, another app. This is the default pattern, and the [diesel tracker](use-case-diesel-analysis.md) uses it with pattern 4.
 2. **Actions: the app calls a workflow and waits for its output.** `ctx.run(key, input, { itemId })` starts a declared workflow's manual run with an `Idempotency-Key`, waits for it through `GET /v1/workflow-runs/{id}?wait=25`, and resolves with its output or rejects with its error. The run acts as the workflow's author. This suits work the viewer may not do directly, several writes that belong together, AI completions, OCR or anything that returns an operation. A run on an item needs the viewer's write access to the item, as manual runs do today. A run on no item needs workspace manage today. Socket S5 lets an owner open such a workflow to members.
 3. **Summaries: a scheduled workflow precomputes.** For lists too large to read in the browser, a workflow on a schedule writes summary items, such as one per month, and the app reads those.
+4. **People in the loop: a workflow asks, and the answer is the data.** A scheduled or reactive workflow creates a [task](../workflows.md#tasks) whose form collects what the app would, and files the item from the answer. Reminders and alerts are [notifications](../notifications.md) the workflow sends. The app is then one way in among several, and a package works for people who never open it. The diesel tracker's [measuring reminder and low-level alert](use-case-diesel-analysis.md#measuring-reminder) use this pattern.
 
 ## Execution
 

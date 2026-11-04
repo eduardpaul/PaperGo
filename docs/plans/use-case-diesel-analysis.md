@@ -22,6 +22,8 @@ They want to open one screen, type a number, and see how much diesel is left, ho
 | D5 | the owner | set the barrel's size once and fix it later | every reading, including old ones, converts correctly |
 | D6 | the owner | be told when a reading makes no sense (higher than the last one with no purchase in between) | a typo or a forgotten purchase doesn't corrupt the figures |
 | D7 | anyone | correct a wrong entry in the normal list screen | the app is not the only way in |
+| D8 | the person who measures | be asked to measure when 15 days have passed since the last reading, and answer with the reading itself | readings happen regularly without anyone keeping a calendar |
+| D9 | the owner, or the people who buy | be told when the barrel falls below a level I choose | we fill it up before it runs dry |
 
 ## Converting centimetres to litres
 
@@ -57,18 +59,192 @@ The two types use different field keys (`level_liters` and `bought_liters`), so 
 
 Saved views: **Readings** (table, type Reading, `measured_at` desc), **Purchases** (table, type Purchase, `purchased_at` desc) and **Calendar** (both). D7 is met by the existing list screens with no extra work.
 
-## Backend: one reactive workflow
+## Backend: three workflows
+
+| Workflow | Starts on | Does |
+| --- | --- | --- |
+| `diesel-levels` | a reading or purchase created or changed | litres, fill %, price per litre and the consistency flag (D2, D5, D6) |
+| `diesel-measure-reminder` | every morning, and every new reading | a measuring task when the last reading is 15 days old (D8) |
+| `diesel-low-level` | `diesel-levels` finishing a reading | a notification when the level falls below the threshold (D9) |
+
+They are three workflows rather than one, so the owner can turn the reminder or the alert off, or change who gets them, without touching the arithmetic. All three compile with the server's workflow compiler and type-check against the SDK as written here.
+
+### Levels
 
 `diesel-levels` reacts to `item.created` and `item.updated` of both types in the Diesel list. Its parameters are the barrel: `list`, `capacity_l`, `height_cm` and `orientation`. Parameters are remapped when the workspace package is imported elsewhere, so nobody edits IDs.
 
 - **Reading:** compute `level_liters` and `fill_percent`. Then read the previous reading and the purchases between the two. If the new level exceeds the previous level plus what was bought, plus a 5 L tolerance, set `flag = check`.
 - **Purchase:** `price_per_liter = total_price / bought_liters`.
 - **Writes back** with `If-Match`, and only when a value actually changes. Its own write raises `item.updated` again, finds nothing to change and stops. Event depth stops any loop at 5 levels regardless.
-- **Recalculate:** a manual trigger on a selection re-runs it after the owner changes the barrel (D5).
+- **Recalculate:** a manual trigger on a selected item re-runs it after the owner changes the barrel (D5).
+- **Returns** `{ level_liters, fill_percent, previous_level_liters }` for a reading. The run's output reaches the workflows that follow it through the `wf.diesel-levels.completed` event, which the alert uses.
 
 Values are exact decimal strings in PaperGo, so the script computes in tenths of a litre and thousandths of a currency unit before writing.
 
 This is the **reactive** backend pattern of [workspace apps](workspace-apps.md#backend-patterns). The app only writes items. A reading entered from the list screen, over MCP by an assistant, or by another app gets its litres too, and the formula lives in one script the owner can read and change.
+
+### Measuring reminder
+
+Every morning at 08:00 in the owner's time zone, the reminder looks at the last reading. When it is `every_days` (15) old or more, and no reminder is open, it creates a **task** for `assignees`. The task's form asks for the centimetres on the dipstick. Answering it files the reading, so the person never opens the list or the app: the task in their Tasks screen is the data entry. `diesel-levels` then converts it like any other reading.
+
+- **15 days after the last reading, not on fixed dates.** Someone who measures on day 10 is next asked on day 25. A fixed calendar (`cron: "0 8 1,16 * *"`) would ask even after a fresh reading. The daily check is cheap: one query, and nothing written on most days.
+- **A reading filed any other way closes the reminder.** The same workflow starts on every new reading and cancels the open `diesel_measure` task. The run waiting on that task ends quietly.
+- **One reminder at a time.** Workflow concurrency applies only to runs on items, and a schedule run has none, so the script checks for an open task itself.
+- **Nothing nags.** The task stays open until someone measures. It is due two days after it was created, which shows it as overdue but does not repeat it. Assignees are told when it is created, as for every task.
+- **Assignees** are a parameter: a person, `group:<id>`, `role:owners` or `role:members`. Packages carry neither people nor groups, so the package ships `["role:owners"]`, and the owner names the person after installing.
+
+```ts
+// Every morning, asks someone to dip the barrel when the last reading is
+// older than every_days. The task's form is the reading: answering it
+// files the reading, and a reading filed any other way closes the task.
+// The task stays open until then; nothing asks twice.
+import { OperationError, json, workflow } from "@papergo/workflow";
+
+interface Params {
+  list: string;
+  reading_type: string;
+  every_days: number;
+  // People, group:<id>, role:owners or role:members.
+  assignees: string[];
+  time_zone: string;
+}
+
+const KEY = "diesel_measure";
+const DAY = 24 * 3600 * 1000;
+
+export default workflow<unknown, unknown, Params>({
+  triggers: (p) => [
+    { type: "schedule", cron: "0 8 * * *", time_zone: p.time_zone },
+    { type: "item.created", collection_id: p.list, content_type_id: p.reading_type },
+  ],
+  async run(ctx) {
+    const p = ctx.params;
+    const api = ctx.api;
+    const open = await api.v1.workspaces.byId(ctx.run.workspace_id).tasks.get({ queryParameters: { key: KEY, status: "open" } });
+
+    if (ctx.trigger?.kind === "item") {
+      // Someone measured: close the open reminder, whose run then ends.
+      for (const task of open?.value ?? []) await api.v1.tasks.byId(task.id!).cancel.post();
+      return;
+    }
+    // Concurrency applies to runs on items only, so a schedule run checks
+    // for the reminder still waiting itself.
+    if (open?.value?.length) return;
+
+    const last = await api.v1.resources.byId(p.list).query.post(
+      { query: { contentTypeId: p.reading_type, sort: [{ field: "measured_at", direction: "desc" }] }, select: ["measured_at"] },
+      { queryParameters: { top: 1 } },
+    );
+    const at = last?.value?.[0]?.values?.additionalData?.measured_at;
+    const now = new Date();
+    if (at && now.getTime() - new Date(String(at)).getTime() < p.every_days * DAY) return;
+
+    let answer;
+    try {
+      answer = await ctx.ask<{ depth_cm: number }>({
+        key: KEY,
+        title: "Measure the diesel barrel",
+        description: at ? `The last reading was on ${String(at).slice(0, 10)}.` : "There is no reading yet.",
+        assignees: p.assignees,
+        priority: "normal",
+        dueAt: new Date(now.getTime() + 2 * DAY),
+        inputSchema: {
+          type: "object",
+          required: ["depth_cm"],
+          properties: {
+            depth_cm: { type: "number", title: "Diesel on the dipstick (cm)", minimum: 0 },
+          },
+        },
+        outcomes: [{ key: "measured", label: "Save reading", style: "primary" }],
+      });
+    } catch (e) {
+      if (e instanceof OperationError) return "measured elsewhere";
+      throw e;
+    }
+
+    const depth = Number(answer.input!.depth_cm).toFixed(1);
+    const when = new Date().toISOString();
+    await api.v1.resources.byId(p.list).children.post({
+      kind: "item",
+      name: `Reading ${when.slice(0, 10)} · ${depth} cm`,
+      contentTypeId: p.reading_type,
+      values: json({ measured_at: when, depth_cm: depth }),
+    });
+    return "measured";
+  },
+});
+```
+
+### Low-level alert
+
+When `diesel-levels` finishes a reading, the alert reads its output. If the level is below `threshold_l`, it notifies `recipients`, a person or a group, with a link to the reading.
+
+- **Once per refill.** The notification's `dedup_key` is the last purchase, and PaperGo sends a key to each person only once. Readings that stay low, or a reading corrected after the fact, send nothing more, while the first low reading after the next purchase alerts again. No state is kept anywhere.
+- **It reacts to the levels workflow, not to item changes.** It sees the litres just computed, never an item halfway through being converted. Turning the levels workflow off turns the alert off too.
+- **Recipients** follow the reminder's rule: `["role:owners"]` in the package, a person or group set after installing.
+
+```ts
+// Tells people when the barrel falls below threshold_l, once per refill:
+// the notification's dedup key is the last purchase, so the next alert
+// can only come after diesel has been bought.
+import { workflow } from "@papergo/workflow";
+
+// What diesel-levels returns for a reading.
+interface Levels {
+  level_liters: string;
+  fill_percent: string;
+  previous_level_liters: string | null;
+}
+
+interface Params {
+  list: string;
+  reading_type: string;
+  purchase_type: string;
+  threshold_l: number;
+  // People, group:<id>, role:owners or role:members.
+  recipients: string[];
+}
+
+export default workflow<unknown, unknown, Params>({
+  triggers: (p) => [{ type: "wf.diesel-levels.completed", collection_id: p.list, content_type_id: p.reading_type }],
+  async run(ctx) {
+    const p = ctx.params;
+    const levels = ctx.run.event.data.outputs as Levels | undefined;
+    if (!levels || Number(levels.level_liters) >= p.threshold_l) return;
+
+    const last = await ctx.api.v1.resources.byId(p.list).query.post(
+      { query: { contentTypeId: p.purchase_type, sort: [{ field: "purchased_at", direction: "desc" }] }, select: ["purchased_at"] },
+      { queryParameters: { top: 1 } },
+    );
+    const refill = last?.value?.[0]?.id ?? "none";
+
+    const sent = await ctx.notify({
+      recipients: p.recipients,
+      title: `Diesel is low: ${levels.level_liters} L left`,
+      body: `The barrel is at ${levels.fill_percent} %, below ${p.threshold_l} L. Record the purchase when you fill it up.`,
+      itemId: ctx.itemId,
+      dedupKey: `diesel-low-${refill}`,
+    });
+    return sent;
+  },
+});
+```
+
+A variant the owner can choose instead: a **"Buy diesel" task** for the buyer, whose form takes the litres and the price and files the purchase, like the measuring task files the reading. The notification is the simpler default.
+
+### How people hear about it
+
+Tasks and notifications reach people inside PaperGo: the bell and its unread count, the Notifications page, the Tasks screen, and live updates while PaperGo is open. PaperGo sends no email or push notifications today, and workflows cannot reach the network to send one. Someone who does not open PaperGo will not notice a reminder until they do. For a barrel in a shed, that is the weak point of D8 and D9. A delivery channel for notifications, such as email over SMTP or a push service the instance already uses, would be a core addition of its own, useful to every task and notification and not only to apps. It is listed under [decisions](#decisions-needed).
+
+### What the owner sets after installing
+
+| Workflow | Parameter | Ships as | Set to |
+| --- | --- | --- | --- |
+| `diesel-levels` | `capacity_l`, `height_cm`, `orientation` | 200, 88, `upright` | the barrel's size and position |
+| `diesel-measure-reminder` | `every_days`, `assignees`, `time_zone` | 15, `["role:owners"]`, `UTC` | how often, who measures, where |
+| `diesel-low-level` | `threshold_l`, `recipients` | 50, `["role:owners"]` | when to warn, and whom |
+
+The list and type IDs in all three are set by the package and remapped on import.
 
 ## Dashboard: figures and formulas
 
@@ -102,11 +278,11 @@ The screen also has two forms, **Add reading** and **Add purchase**. They are la
 | Piece | What it is |
 | --- | --- |
 | Diesel list, two content types, three views | ordinary workspace configuration, works today |
-| `diesel-levels` | an ordinary workflow, works today |
+| `diesel-levels`, `diesel-measure-reminder`, `diesel-low-level` | ordinary workflows, work today |
 | Diesel tracker screen | one app, `diesel-tracker.tsx`, declaring read/write access to the Diesel list and nothing else |
 | Distribution | one [app package](workspace-apps.md#app-packages), `diesel.zip`: the workspace **Diesel**, the list and its types and views, the workflow and the app. `requires` is empty, since nothing needs AI, OCR or search |
 | Example data | an optional manual workflow, **Load example data**, that creates a season of readings and purchases so the dashboard shows something at once |
-| After install | the owner sets `capacity_l`, `height_cm` and `orientation` in the workflow's parameters, as the readme says; the app shows a setup message until they are set |
+| After install | the owner sets the [parameters](#what-the-owner-sets-after-installing) of the three workflows, as the readme says; the app shows a setup message until the barrel's size is set |
 
 ```tsx
 import { app, useQuery, Page, Stat, LineChart, BarChart, ItemForm } from "@papergo/app";
@@ -142,4 +318,5 @@ export default app<Params>({
 ## Decisions needed
 
 1. Barrel geometry for version one: upright only, or upright and horizontal (recommended).
-2. Ship the package without the app first, while the app runtime is built?
+2. Ship the package without the app first, while the app runtime is built? Everything in it, the three workflows included, works today.
+3. Add a notification delivery channel (email or push) to the core, so reminders and alerts reach people who are not in PaperGo? It is a separate proposal from apps.
