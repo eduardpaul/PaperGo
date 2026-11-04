@@ -258,6 +258,16 @@ func (r *Repo) groupColumn(g GroupBy) (string, []any, Kind) {
 	return column, args, kind
 }
 
+// figureGroupColumn is a group of figures: a merged term counts as the term
+// it was merged into, as filters count it, so the two agree.
+func (r *Repo) figureGroupColumn(g GroupBy) (string, []any, Kind) {
+	column, args, kind := r.groupColumn(g)
+	if g.Field.Def == nil || !g.Field.Def.Type.Terms() {
+		return column, args, kind
+	}
+	return "coalesce((SELECT merged_into_id FROM terms WHERE id=" + column + ")," + column + ")", append(append([]any{}, args...), args...), kind
+}
+
 // filter is the SQL of a filter tree over r and p.
 func (r *Repo) filter(f *Filter) (string, []any) {
 	switch {
@@ -387,7 +397,7 @@ func (r *Repo) Compile(p Plan) *Query {
 	if a := p.Aggregation; a != nil {
 		q.aggregation = a
 		for i, g := range a.Groups {
-			column, args, kind := r.groupColumn(g)
+			column, args, kind := r.figureGroupColumn(g)
 			rankParts = append(rankParts, column+" AS "+groupAlias(i))
 			q.rankArgs = append(q.rankArgs, args...)
 			q.GroupKinds = append(q.GroupKinds, kind)

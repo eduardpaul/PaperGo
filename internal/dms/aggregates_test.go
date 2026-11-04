@@ -317,6 +317,29 @@ func TestAggregateKeys(t *testing.T) {
 	if regions[east.ID] != "East" || regions[west.ID] != "West" || regions[nil] != "" || len(regions) != 3 {
 		t.Fatalf("term keys hold their names: %+v", regions)
 	}
+
+	// A merged term counts as the term it was merged into, as in filters.
+	orient := mustTerm(t, s, set.ID, TermInput{Name: "Orient"})
+	publishItem(t, s, create(t, s, l.ID, "item", "Row", map[string]any{"region": orient.ID}))
+	if _, err = s.MergeTerm(testContext, "alice", orient.ID, orient.Version, MergeTermInput{TargetTermID: east.ID}); err != nil {
+		t.Fatal(err)
+	}
+	tally := Aggregate{Op: AggregateCount, Field: "region"}
+	out, err := s.QueryAggregates(testContext, "alice", l.ID, aggregateRequest(groupedBy("region"), tally))
+	if err != nil {
+		t.Fatal(err)
+	}
+	counts := map[any]int{}
+	for _, g := range out.Data {
+		counts[g.Keys[0].Value] = g.Count
+	}
+	filtered, err := s.QueryAggregates(testContext, "alice", l.ID, AggregateRequest{Query: QuerySpec{Filter: &FilterExpr{Field: "region", Op: "eq", Value: json.RawMessage(`"` + east.ID + `"`)}}, AggregateSpec: AggregateSpec{Aggregates: []Aggregate{tally}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(counts) != 3 || counts[east.ID] != 2 || filtered.Data[0].Count != 2 {
+		t.Fatalf("a merged term in its own group: %+v, filtered %d", counts, filtered.Data[0].Count)
+	}
 }
 
 // A figure's default name holds its field's key, however long the key is.
