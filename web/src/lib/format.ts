@@ -180,6 +180,13 @@ export function createFormatter(preferences: Partial<FormatPreferences> = {}): F
   };
 }
 
+/** The decimal separator of a number format: "." for en, "," for es or de. */
+export function decimalSeparator(numberFormat: string): string {
+  const find = (locale: string) =>
+    new Intl.NumberFormat(locale).formatToParts(1.5).find((part) => part.type === 'decimal')?.value ?? '.';
+  return safe(() => find(numberFormat), () => '.');
+}
+
 function safe<T>(make: () => T, fallback: () => T): T {
   try {
     return make();

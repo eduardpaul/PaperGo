@@ -95,6 +95,9 @@ type Queries interface {
 	// DeleteNotification deletes the recipient's notification and reports
 	// whether there was one.
 	DeleteNotification(ctx context.Context, recipient, id string) (bool, error)
+	// TaskNotifications returns every recipient's notifications of a type
+	// that open a task.
+	TaskNotifications(ctx context.Context, taskID string, typ Type) ([]Notification, error)
 	// LinkNotificationComment records that a notification tells of a
 	// comment; UnlinkNotificationComment forgets it.
 	LinkNotificationComment(ctx context.Context, notificationID, commentID string) error
@@ -263,6 +266,26 @@ func (r *Repo) Delete(ctx context.Context, recipient, id string) error {
 			return dberr.ErrNotFound
 		}
 		return live.Notify(ctx, q, live.KindNotification, LiveID(recipient, id), live.ActionDeleted)
+	})
+}
+
+// DeleteForTask deletes every recipient's notifications of a type that open
+// a task, and tells their live streams.
+func (r *Repo) DeleteForTask(ctx context.Context, taskID string, typ Type) error {
+	return r.write(ctx, func(q Queries) error {
+		rows, err := q.TaskNotifications(ctx, taskID, typ)
+		if err != nil {
+			return err
+		}
+		for _, n := range rows {
+			if _, err = q.DeleteNotification(ctx, n.Recipient, n.ID); err != nil {
+				return err
+			}
+			if err = live.Notify(ctx, q, live.KindNotification, LiveID(n.Recipient, n.ID), live.ActionDeleted); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 

@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -32,6 +33,11 @@ import (
 // presentation hints the server keeps but ignores. Validation keywords the
 // server does not enforce (pattern, oneOf, ...) are rejected, so a form
 // never promises a check that does not happen.
+//
+// format "date" (YYYY-MM-DD) and "date-time" (RFC 3339) are checked on
+// strings; other formats are presentation hints. x-papergo-default "now"
+// on a date or date-time property fills it, when a submission leaves it out,
+// with the moment the server receives it: today's date in UTC, or the time.
 //
 // x-papergo on a property makes it a domain picker whose values are IDs the
 // server checks against PaperGo data (see domainKinds). x-papergo-selection
@@ -75,6 +81,16 @@ var domainKinds = map[string]map[string]bool{
 }
 
 var selectionHints = map[string]bool{"preview": true, "item_label": true, "order_label": true, "primary_description": true}
+
+// The formats the server checks, and the layouts of their values.
+const (
+	FormatDate     = "date"
+	FormatDateTime = "date-time"
+)
+
+// DefaultNow is the x-papergo-default that fills a date or date-time with
+// the moment of the submission.
+const DefaultNow = "now"
 
 // NamePattern is the pattern of property names: lowercase identifiers.
 var NamePattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
@@ -149,9 +165,26 @@ func validateSchema(s map[string]any, path string, depth int, root, launch bool)
 					return fmt.Errorf("%s.x-papergo-selection: %s is not a text hint (preview, item_label, order_label, primary_description)", path, k)
 				}
 			}
+		case key == "x-papergo-default":
+			format, _ := s["format"].(string)
+			if value != DefaultNow || typ != "string" || format != FormatDate && format != FormatDateTime {
+				return fmt.Errorf("%s.x-papergo-default must be %q, on a string with format date or date-time", path, DefaultNow)
+			}
+			if _, ok := s["default"]; ok {
+				return fmt.Errorf("%s: default and x-papergo-default cannot both be set", path)
+			}
 		case strings.HasPrefix(key, "x-"):
 		default:
 			return fmt.Errorf("%s: %s is not supported; the server would not enforce it", path, key)
+		}
+	}
+	if f, ok := s["format"]; ok {
+		format, isText := f.(string)
+		if !isText || format == "" {
+			return fmt.Errorf("%s.format must be a name", path)
+		}
+		if (format == FormatDate || format == FormatDateTime) && typ != "string" {
+			return fmt.Errorf("%s: format %s applies to strings", path, format)
 		}
 	}
 	for _, key := range []string{"minLength", "maxLength", "minItems", "maxItems"} {
@@ -358,6 +391,8 @@ func withDefaults(s map[string]any, values map[string]any) map[string]any {
 		if _, set := out[name]; !set {
 			if d, ok := child["default"]; ok {
 				out[name] = Plain(d)
+			} else if child["x-papergo-default"] == DefaultNow {
+				out[name] = nowValue(child)
 			}
 		}
 		if v, present := out[name]; present {
@@ -373,6 +408,16 @@ func withDefaults(s map[string]any, values map[string]any) map[string]any {
 		}
 	}
 	return out
+}
+
+// nowValue is the moment of a submission as a date or date-time property
+// holds it.
+func nowValue(s map[string]any) string {
+	now := time.Now().UTC()
+	if s["format"] == FormatDate {
+		return now.Format(time.DateOnly)
+	}
+	return now.Truncate(time.Second).Format(time.RFC3339)
 }
 
 func defaultValue(s map[string]any, v any) any {
@@ -476,6 +521,16 @@ func checkValue(s map[string]any, v any, path string) error {
 	}
 	switch t := v.(type) {
 	case string:
+		switch s["format"] {
+		case FormatDate:
+			if _, err := time.Parse(time.DateOnly, t); err != nil {
+				return fmt.Errorf("%s must be a date such as 2026-11-04", path)
+			}
+		case FormatDateTime:
+			if _, err := time.Parse(time.RFC3339, t); err != nil {
+				return fmt.Errorf("%s must be a date and time such as 2026-11-04T09:30:00Z", path)
+			}
+		}
 		n := utf8.RuneCountInString(t)
 		if min, ok := WholeNumber(s["minLength"]); ok && n < min {
 			return fmt.Errorf("%s needs at least %d characters", path, min)

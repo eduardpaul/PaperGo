@@ -14,9 +14,26 @@ export function stringifyJSON(value: unknown): string | undefined {
   return stringify(value);
 }
 
+let decimalMark = '.';
+
+/** Sets the decimal separator people type: the one of their number format preference. */
+export function setDecimalSeparator(mark: string): void {
+  decimalMark = mark;
+}
+
+/**
+ * A typed decimal as the text of a JSON number: where the number format's decimal separator is a comma,
+ * "41,5" is "41.5". A dot stays a decimal point, and anything with both, or several commas, is left as typed
+ * so that it is rejected rather than guessed.
+ */
+export function decimalText(text: string): string {
+  const input = text.trim();
+  return decimalMark === ',' && !input.includes('.') && input.split(',').length === 2 ? input.replace(',', '.') : input;
+}
+
 /** Convert a numeric input to a JSON number without passing its digits through float64. */
 export function numericInput(text: string, integer = false): number | LosslessNumber {
-  const input = text.trim();
+  const input = integer ? text.trim() : decimalText(text);
   const valid = integer ? /^[+-]?\d+$/.test(input) : /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(input);
   if (!valid) throw new Error(i18n.t(integer ? 'home:values.invalidInteger' : 'home:values.invalidNumber'));
   const unsigned = input.replace(/^[+-]/, '');

@@ -127,7 +127,7 @@ func Register(s *dms.Service) error {
 		Cancelled: func(ctx context.Context, t *dms.Service, op *operations.Operation) error {
 			rows, err := t.DAL.Tasks().List(ctx, taskstore.Filter{OperationID: op.ID, Status: taskstore.StatusOpen})
 			for _, tk := range rows {
-				if _, err = cancel(ctx, t, tk, tk.CreatedBy); err != nil {
+				if _, err = cancel(ctx, t, tk, tk.CreatedBy, ReasonRunCancelled); err != nil {
 					return err
 				}
 			}
@@ -687,6 +687,9 @@ func eventData(tk taskstore.Task) map[string]any {
 	if tk.CompletedBy != "" {
 		data["completed_by"] = tk.CompletedBy
 	}
+	if tk.Status == taskstore.StatusCancelled && tk.Comment != "" {
+		data["reason"] = tk.Comment
+	}
 	if tk.RunID != "" {
 		data["run_id"] = tk.RunID
 	}
@@ -711,10 +714,26 @@ func raise(ctx context.Context, t *dms.Service, tk taskstore.Task, typ, actor st
 // ErrCancelled is the error a run waiting for a cancelled task gets.
 var ErrCancelled = errors.New("the task was cancelled")
 
+// MaxReason bounds the reason a task was cancelled for, which the task keeps
+// as its comment.
+const MaxReason = 4000
+
+// The reasons PaperGo gives when it cancels a task itself.
+const (
+	ReasonRunCancelled    = "The workflow run that asked for it was cancelled."
+	ReasonWorkflowDeleted = "The workflow that asked for it was deleted."
+	ReasonItemDeleted     = "The item it is about was deleted."
+)
+
 // Cancel cancels an open task inside t's write transaction, as its creator
-// or an owner of its workspace. A run waiting for a workflow's task gets the
-// cancellation as the outcome of its wait.
-func Cancel(ctx context.Context, t *dms.Service, subject, id string) (taskstore.Task, error) {
+// or an owner of its workspace, for an optional reason the task keeps. A run
+// waiting for a workflow's task gets the cancellation, and its reason, as the
+// outcome of its wait.
+func Cancel(ctx context.Context, t *dms.Service, subject, id, reason string) (taskstore.Task, error) {
+	reason = strings.TrimSpace(reason)
+	if utf8.RuneCountInString(reason) > MaxReason {
+		return taskstore.Task{}, dms.Invalid(fmt.Sprintf("reason takes at most %d characters", MaxReason))
+	}
 	tk, err := t.DAL.Tasks().Find(ctx, id)
 	if dberr.IsNotFound(err) {
 		return taskstore.Task{}, dms.ErrNotFound
@@ -735,13 +754,18 @@ func Cancel(ctx context.Context, t *dms.Service, subject, id string) (taskstore.
 	if tk.Status != taskstore.StatusOpen {
 		return taskstore.Task{}, fmt.Errorf("%w: the task is %s", dms.ErrConflict, tk.Status)
 	}
-	return cancel(ctx, t, tk, subject)
+	return cancel(ctx, t, tk, subject, reason)
 }
 
-func cancel(ctx context.Context, t *dms.Service, tk taskstore.Task, actor string) (taskstore.Task, error) {
-	tk, err := t.DAL.Tasks().Cancel(ctx, tk.ID, tk.Version)
+// cancel ends an open task as actor, for reason. Its assignment
+// notifications go with it: what they asked for no longer waits for anyone.
+func cancel(ctx context.Context, t *dms.Service, tk taskstore.Task, actor, reason string) (taskstore.Task, error) {
+	tk, err := t.DAL.Tasks().Cancel(ctx, tk.ID, tk.Version, actor, reason)
 	if err != nil {
 		return taskstore.Task{}, taskError(err)
+	}
+	if err = t.DAL.Notifications().DeleteForTask(ctx, tk.ID, notifications.TypeTaskAssigned); err != nil {
+		return taskstore.Task{}, err
 	}
 	if err = raise(ctx, t, tk, EventCancelled, actor); err != nil {
 		return taskstore.Task{}, err
@@ -754,7 +778,11 @@ func cancel(ctx context.Context, t *dms.Service, tk taskstore.Task, actor string
 			return taskstore.Task{}, err
 		}
 		if op.Status == operations.StatusPending {
-			if err = t.EndExternalOperation(ctx, tk.OperationID, operations.StatusCancelled, nil, ErrCancelled.Error()); err != nil {
+			message := ErrCancelled.Error()
+			if reason != "" {
+				message += ": " + reason
+			}
+			if err = t.EndExternalOperation(ctx, tk.OperationID, operations.StatusCancelled, nil, message); err != nil {
 				return taskstore.Task{}, err
 			}
 		}
@@ -763,8 +791,9 @@ func cancel(ctx context.Context, t *dms.Service, tk taskstore.Task, actor string
 }
 
 // CancelOpen cancels the open tasks f selects except those of the run
-// except, such as the tasks about a deleted item or of a deleted workflow.
-func CancelOpen(ctx context.Context, t *dms.Service, f taskstore.Filter, except string) error {
+// except, for reason, such as the tasks about a deleted item or of a deleted
+// workflow.
+func CancelOpen(ctx context.Context, t *dms.Service, f taskstore.Filter, except, reason string) error {
 	f.Status = taskstore.StatusOpen
 	rows, err := t.DAL.Tasks().List(ctx, f)
 	if err != nil {
@@ -774,7 +803,7 @@ func CancelOpen(ctx context.Context, t *dms.Service, f taskstore.Filter, except 
 		if except != "" && tk.RunID == except {
 			continue
 		}
-		if _, err = cancel(ctx, t, tk, tk.CreatedBy); err != nil {
+		if _, err = cancel(ctx, t, tk, tk.CreatedBy, reason); err != nil {
 			return err
 		}
 	}

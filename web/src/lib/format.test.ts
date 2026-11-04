@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createFormatter } from './format';
+import { createFormatter, decimalSeparator } from './format';
 
 describe('createFormatter', () => {
   const moment = new Date('2026-03-29T00:30:00Z'); // 01:30 in Berlin (CET), 20:30 the day before in New York
@@ -64,5 +64,14 @@ describe('createFormatter', () => {
     const format = createFormatter({ language: 'en' });
     expect(format.relative(new Date('2026-01-01T12:00:00Z'), new Date('2026-01-01T15:00:00Z'))).toBe('3 hours ago');
     expect(format.relative(new Date('2026-01-02T12:00:00Z'), new Date('2026-01-01T12:00:00Z'))).toBe('tomorrow');
+  });
+});
+
+describe('decimalSeparator', () => {
+  it('is the separator the number format writes', () => {
+    expect(decimalSeparator('en')).toBe('.');
+    expect(decimalSeparator('es')).toBe(',');
+    expect(decimalSeparator('de-CH')).toBe('.');
+    expect(decimalSeparator('not a locale!')).toBe('.');
   });
 });

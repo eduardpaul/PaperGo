@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
+import { setDecimalSeparator } from '@/api/json';
 import { preferencesQuery } from '@/api/queries';
 import { setLanguage } from '@/i18n';
 import { uiLocale } from '@/i18n/languages';
-import { createFormatter, type Formatter } from './format';
+import { createFormatter, decimalSeparator, type Formatter } from './format';
 
 export type Theme = 'system' | 'light' | 'dark';
 const ThemeKey = 'papergo.theme';
@@ -27,6 +28,11 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       }),
     [data],
   );
+
+  // Numbers people type use the decimal separator they read.
+  useEffect(() => {
+    setDecimalSeparator(decimalSeparator(formatter.preferences.numberFormat));
+  }, [formatter]);
 
   useEffect(() => {
     if (data?.theme) applyTheme(data.theme);

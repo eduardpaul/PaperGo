@@ -74,7 +74,10 @@ func TestTaskRoutes(t *testing.T) {
 	if w = request(h, "POST", "/v1/tasks/"+standalone.ID+"/reassign", `{"assignees": ["role:owners"]}`, testToken, "", json_); w.Code != 200 || !strings.Contains(w.Body.String(), `"assignees":["alice"]`) {
 		t.Fatalf("reassign: %d %s", w.Code, w.Body)
 	}
-	if w = request(h, "POST", "/v1/tasks/"+standalone.ID+"/cancel", "", testToken, "", json_); w.Code != 200 || !strings.Contains(w.Body.String(), `"status":"cancelled"`) {
+	if w = request(h, "POST", "/v1/tasks/"+standalone.ID+"/cancel", `{"why": "x"}`, testToken, "", json_); w.Code != 400 {
+		t.Fatalf("cancel with an unknown field: %d %s", w.Code, w.Body)
+	}
+	if w = request(h, "POST", "/v1/tasks/"+standalone.ID+"/cancel", `{"reason": "Done in the list"}`, testToken, "", json_); w.Code != 200 || !strings.Contains(w.Body.String(), `"status":"cancelled"`) || !strings.Contains(w.Body.String(), `"comment":"Done in the list"`) {
 		t.Fatalf("cancel: %d %s", w.Code, w.Body)
 	}
 	if w = request(h, "GET", "/v1/staged-files/missing", "", testToken, "", ""); w.Code != 404 {

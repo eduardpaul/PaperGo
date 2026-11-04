@@ -177,12 +177,12 @@ func cleanUp(ctx context.Context, t *dms.Service, e dms.Event) error {
 		if workflowID == "" {
 			return nil
 		}
-		if err := tasks.CancelOpen(ctx, t, taskstore.Filter{WorkflowID: workflowID}, ""); err != nil {
+		if err := tasks.CancelOpen(ctx, t, taskstore.Filter{WorkflowID: workflowID}, "", tasks.ReasonWorkflowDeleted); err != nil {
 			return err
 		}
 		return t.DiscardStagedFiles(ctx, blobs.StagedSelection{WorkflowID: workflowID})
 	case e.Type == dms.EventItemDeleted && e.ResourceID != "":
-		if err := tasks.CancelOpen(ctx, t, taskstore.Filter{ItemID: e.ResourceID}, e.CauseRunID); err != nil {
+		if err := tasks.CancelOpen(ctx, t, taskstore.Filter{ItemID: e.ResourceID}, e.CauseRunID, tasks.ReasonItemDeleted); err != nil {
 			return err
 		}
 		if err := t.DiscardStagedFiles(ctx, blobs.StagedSelection{ItemID: e.ResourceID, ExceptRunID: e.CauseRunID}); err != nil {
