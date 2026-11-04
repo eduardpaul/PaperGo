@@ -19,7 +19,8 @@ WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
 COPY web ./
-COPY sdk/dist/workflow.d.ts /src/sdk/dist/
+COPY sdk/dist/ /src/sdk/dist/
+COPY sdk/src/format.ts /src/sdk/src/
 # The build writes the bundled packages' notices with it.
 COPY scripts/npm-notices.mjs /src/scripts/
 RUN npm run build

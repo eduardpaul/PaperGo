@@ -93,7 +93,9 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 	defer keepalive.Stop()
 	end := time.NewTimer(30 * time.Minute)
 	defer end.Stop()
-	known := map[string]bool{}
+	// known holds where each item this stream showed was, which a removal
+	// still names once the item can no longer be read.
+	known := map[string]map[string]any{}
 	mine := notifications.RecipientKey(subject(r))
 	notes := map[string]bool{}
 	_, token := identity.AccessTokenContext(r.Context())
@@ -147,18 +149,19 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 			case live.KindItem:
 				item, e := a.dms(r).Get(r.Context(), subject(r), change.EntityID)
 				if e == nil {
-					known[item.ID] = true
+					known[item.ID] = map[string]any{"workspace_id": item.WorkspaceID, "container_id": item.ContainerID, "content_type_id": item.ContentTypeID}
 					if err = frame("item", position, map[string]any{"id": item.ID, "action": change.Action, "item": item}); err != nil {
 						return
 					}
 				} else if errors.Is(e, dms.ErrForbidden) || errors.Is(e, dms.ErrNotFound) {
-					if known[change.EntityID] {
+					if removed, ok := known[change.EntityID]; ok {
 						reason := "changed"
 						if change.Action == live.ActionDeleted {
 							reason = "deleted"
 						}
 						delete(known, change.EntityID)
-						if err = frame("item", position, map[string]any{"id": change.EntityID, "@removed": dms.DeltaRemoved{Reason: reason}}); err != nil {
+						removed["id"], removed["@removed"] = change.EntityID, dms.DeltaRemoved{Reason: reason}
+						if err = frame("item", position, removed); err != nil {
 							return
 						}
 					}

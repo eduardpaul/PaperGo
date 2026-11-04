@@ -6,6 +6,7 @@
 // administers the organization.
 
 import { authenticationMode, authorizationHeaders } from '@/api/auth';
+import type { ItemChange } from '@/lib/live';
 
 /** A response as the app's runtime reads it. */
 export interface BridgeResponse {
@@ -109,6 +110,17 @@ export async function send(request: BridgeRequest, fetcher: typeof fetch = fetch
   } catch {
     return problem(503, 'network', 'PaperGo could not be reached');
   }
+}
+
+/**
+ * The live change an app of a workspace is told of, if any: an app hears of
+ * its own workspace, whatever else its viewer may see. A resync may have
+ * missed changes anywhere, and names no item.
+ */
+export function appChange(change: ItemChange, workspaceId: string): Omit<ItemChange, 'workspaceId'> | undefined {
+  if (change.resync) return { id: '', resync: true };
+  if (change.workspaceId !== workspaceId) return undefined;
+  return { id: change.id, collectionId: change.collectionId, contentTypeId: change.contentTypeId, removed: change.removed };
 }
 
 /** The frame's document: the runtime, the app's code and the start, under a CSP without network. */

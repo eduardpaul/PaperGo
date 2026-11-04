@@ -11,8 +11,12 @@ import { keys } from '@/api/queries';
  */
 export interface ItemChange {
   id: string;
+  /** The item's workspace; a resync has none. */
+  workspaceId?: string;
   /** The item's list or library, when the stream says. */
   collectionId?: string;
+  /** The item's content type, when it has one. */
+  contentTypeId?: string;
   /** The item was deleted or is no longer visible. */
   removed?: boolean;
   /** Changes may have been missed; read everything again. */
@@ -29,9 +33,12 @@ export function onItemChange(listener: (change: ItemChange) => void): () => void
 
 function itemChange(data: string): ItemChange | undefined {
   try {
-    const frame = JSON.parse(data) as { id?: string; item?: { container_id?: string | null }; '@removed'?: unknown };
+    type Place = { workspace_id?: string; container_id?: string | null; content_type_id?: string | null };
+    const frame = JSON.parse(data) as Place & { id?: string; item?: Place; '@removed'?: unknown };
     if (!frame.id) return undefined;
-    return { id: frame.id, collectionId: frame.item?.container_id ?? undefined, removed: frame['@removed'] !== undefined };
+    // A removal says where the item was, as it can no longer send the item.
+    const place = frame.item ?? frame;
+    return { id: frame.id, workspaceId: place.workspace_id, collectionId: place.container_id ?? undefined, contentTypeId: place.content_type_id ?? undefined, removed: frame['@removed'] !== undefined };
   } catch {
     return undefined;
   }

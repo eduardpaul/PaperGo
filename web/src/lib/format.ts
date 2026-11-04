@@ -1,6 +1,10 @@
 // Dates, times and numbers in the user's preferences (PLT-17): time zone, date pattern, 12/24h, number culture.
 // Screens format through a Formatter, never with toLocaleString, so every value follows the same settings.
 
+import { calendarDay, formatClock, formatDay, formatRelative } from '@papergo/format';
+
+export { decimalSeparator } from '@papergo/format';
+
 export interface FormatPreferences {
   language: string;
   timeZone: string;
@@ -47,7 +51,7 @@ function toDate(value: Date | string): Date {
 }
 
 function isDateOnly(value: Date | string): value is string {
-  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+  return calendarDay(value) !== undefined;
 }
 
 export function createFormatter(preferences: Partial<FormatPreferences> = {}): Formatter {
@@ -96,23 +100,12 @@ export function createFormatter(preferences: Partial<FormatPreferences> = {}): F
 
   const date = (value: Date | string) => {
     const { year, month, day } = parts(value);
-    return p.dateFormat.replace(/y+|M+|d+/g, (token) => {
-      switch (token[0]) {
-        case 'y':
-          return token.length <= 2 ? year.slice(-2) : year;
-        case 'M':
-          return token.length === 1 ? String(Number(month)) : month;
-        default:
-          return token.length === 1 ? String(Number(day)) : day;
-      }
-    });
+    return formatDay(p.dateFormat, { year: Number(year), month: Number(month), day: Number(day) });
   };
 
   const time = (value: Date | string) => {
     const { hour, minute } = parts(value);
-    if (p.timeFormat === '24h') return `${hour}:${minute}`;
-    const h = Number(hour);
-    return `${h % 12 === 0 ? 12 : h % 12}:${minute} ${h < 12 ? 'AM' : 'PM'}`;
+    return formatClock(Number(hour), Number(minute), p.timeFormat);
   };
 
   const number = (value: number | string, options?: Intl.NumberFormatOptions) =>
@@ -130,19 +123,7 @@ export function createFormatter(preferences: Partial<FormatPreferences> = {}): F
       value == null || value === '' ? '' : isDateOnly(value) ? date(value) : `${date(value)} ${time(value)}`,
     relative: (value, now = new Date()) => {
       if (value == null || value === '') return '';
-      const seconds = (toDate(value).getTime() - now.getTime()) / 1000;
-      const units: [Intl.RelativeTimeFormatUnit, number][] = [
-        ['year', 31536000],
-        ['month', 2592000],
-        ['week', 604800],
-        ['day', 86400],
-        ['hour', 3600],
-        ['minute', 60],
-      ];
-      for (const [unit, size] of units) {
-        if (Math.abs(seconds) >= size) return relativeFormat.format(Math.round(seconds / size), unit);
-      }
-      return relativeFormat.format(0, 'minute');
+      return formatRelative((toDate(value).getTime() - now.getTime()) / 1000, relativeFormat);
     },
     number: (value, options) => (value == null ? '' : number(value, options)),
     currency: (value, currencyCode) =>
@@ -178,13 +159,6 @@ export function createFormatter(preferences: Partial<FormatPreferences> = {}): F
       return monthFormat.format(Date.UTC(Number(year), Number(month) - 1, 1));
     },
   };
-}
-
-/** The decimal separator of a number format: "." for en, "," for es or de. */
-export function decimalSeparator(numberFormat: string): string {
-  const find = (locale: string) =>
-    new Intl.NumberFormat(locale).formatToParts(1.5).find((part) => part.type === 'decimal')?.value ?? '.';
-  return safe(() => find(numberFormat), () => '.');
 }
 
 function safe<T>(make: () => T, fallback: () => T): T {

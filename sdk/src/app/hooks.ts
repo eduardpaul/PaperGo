@@ -91,6 +91,53 @@ function useLive(enabled: boolean, matches: (changes: Change[]) => boolean, relo
   }, [bridge, enabled]);
 }
 
+/** What a list says of a type it accepts, to tell what a query of a type covers. */
+export interface ListType {
+  id: string;
+  parent_id?: string | null;
+  collection_id?: string | null;
+  ancestor_ids?: string[];
+}
+
+/**
+ * Whether an item of a type cannot be in a query of a type: a query names a
+ * type with its subtypes, and a list's own copy of a type stands for the type
+ * it copies, as the server reads them. Whatever is not known may match.
+ */
+export function cannotMatch(types: ListType[] | undefined, queried: string | undefined, type: string | undefined): boolean {
+  if (!types || !queried || !type || !types.some((t) => t.id === type)) return false;
+  const named = types.find((t) => t.id === queried);
+  const base = named?.collection_id ? named.parent_id ?? queried : queried;
+  return !types.some((t) => t.id === type && (t.ancestor_ids ?? []).includes(base));
+}
+
+// The types of each list, read once for all of an app's live queries.
+const listTypes = new Map<string, Promise<ListType[]>>();
+
+/** Whether a live change of an item of a list can concern a query of a type. */
+function useConcerns(listId: string | undefined, contentTypeId: string | undefined, live: boolean): (change: Change) => boolean {
+  const { ctx } = useRuntime();
+  const [types, setTypes] = useState<ListType[]>();
+  useEffect(() => {
+    if (!live || !listId || !contentTypeId) return;
+    let stale = false;
+    let read = listTypes.get(listId);
+    if (!read) {
+      read = ctx.request<{ value?: ListType[] }>("GET", `/v1/resources/${encodeURIComponent(listId)}/content-types`).then((r) => r.data.value ?? []);
+      listTypes.set(listId, read);
+    }
+    read.then(
+      (value) => !stale && setTypes(value),
+      // Without the types every change of the list may concern the query.
+      () => listTypes.delete(listId),
+    );
+    return () => {
+      stale = true;
+    };
+  }, [ctx, listId, contentTypeId, live]);
+  return (change) => change.collectionId === listId && !cannotMatch(types, contentTypeId, change.contentTypeId);
+}
+
 function toSpec(q: Query): Record<string, unknown> {
   const { contentTypeId, groupBy, ...rest } = q;
   return { ...rest, ...(contentTypeId ? { content_type_id: contentTypeId } : {}), ...(groupBy ? { group_by: groupBy } : {}) };
@@ -139,7 +186,8 @@ export function useQuery(listId: string | undefined, query: Query = {}, options:
     // The key stands for the query's content.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ctx, key, round]);
-  useLive(Boolean(options.live && listId), (changes) => changes.some((c) => c.collectionId === listId || state.data.some((i) => i.id === c.id)), reload);
+  const concerns = useConcerns(listId, query.contentTypeId, Boolean(options.live));
+  useLive(Boolean(options.live && listId), (changes) => changes.some((c) => concerns(c) || state.data.some((i) => i.id === c.id)), reload);
   return { ...state, reload };
 }
 
@@ -202,8 +250,8 @@ export function useAggregates(listId: string | undefined, request: AggregateQuer
     // The key stands for the request's content.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ctx, key, round]);
-  // A removal does not say which list the item was in, and any may change the figures.
-  useLive(Boolean(options.live && listId), (changes) => changes.some((c) => c.removed || c.collectionId === listId), reload);
+  const concerns = useConcerns(listId, request.query?.contentTypeId, Boolean(options.live));
+  useLive(Boolean(options.live && listId), (changes) => changes.some(concerns), reload);
   return { ...state, reload };
 }
 

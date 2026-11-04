@@ -1,5 +1,9 @@
 // Numbers and dates in the viewer's preferences, as PaperGo shows them.
 
+import { calendarDay, canonicalDecimal, decimalSeparator, formatClock, formatDay, formatRelative, typedNumber } from "../format.js";
+
+export { decimalSeparator };
+
 /** The viewer's display preferences (docs/preferences.md). */
 export interface Preferences {
   language: string;
@@ -25,10 +29,10 @@ export interface Format {
   /** How long ago or from now, such as "3 days ago", in the viewer's language. */
   relative(value: Date | string | number | null | undefined, now?: Date): string;
   /**
-   * Reads a decimal typed in the viewer's number format: 41,5 is 41.5 where
-   * the separator is a comma, and a dot is always a decimal point. Returns
-   * the canonical text, such as "41.5", or undefined for anything else,
-   * such as text with both separators.
+   * Reads a decimal typed in the viewer's number format, as PaperGo's own
+   * fields do: 41,5 is 41.5 where the separator is a comma, and a dot is
+   * always a decimal point. Returns the canonical text, such as "41.5", or
+   * undefined for anything else, such as text with both separators.
    */
   parseDecimal(text: string): string | undefined;
 }
@@ -43,15 +47,6 @@ function toDate(value: Date | string | number | null | undefined): Date | undefi
   if (value === null || value === undefined || value === "") return undefined;
   const d = value instanceof Date ? value : new Date(value);
   return Number.isNaN(d.getTime()) ? undefined : d;
-}
-
-/** The decimal separator of a number format. */
-export function decimalSeparator(locale: string): string {
-  try {
-    return new Intl.NumberFormat(locale).formatToParts(1.5).find((p) => p.type === "decimal")?.value ?? ".";
-  } catch {
-    return ".";
-  }
 }
 
 /** A date and time as a clock on the wall shows it: month 1 to 12, hour 0 to 23. */
@@ -107,8 +102,6 @@ export function wallClock(zone: string): WallClock {
   };
 }
 
-const pad = (n: number) => String(n).padStart(2, "0");
-
 export function formatter(p: Preferences): Format {
   const locale = p.number_format || "en";
   const zone = p.time_zone || "UTC";
@@ -122,73 +115,50 @@ export function formatter(p: Preferences): Format {
     return format;
   };
   const clock = wallClock(zone);
-  const date = (d: Date) => {
-    const x = clock.at(d);
-    return (p.date_format || "yyyy-MM-dd").replace(/y+|M+|d+/g, (token) => {
-      switch (token[0]) {
-        case "y":
-          return token.length === 2 ? String(x.year).slice(-2) : String(x.year);
-        case "M":
-          return token.length === 1 ? String(x.month) : pad(x.month);
-        default:
-          return token.length === 1 ? String(x.day) : pad(x.day);
-      }
-    });
-  };
+  const pattern = p.date_format || "yyyy-MM-dd";
+  const date = (d: Date) => formatDay(pattern, clock.at(d));
   const time = (d: Date) => {
     const x = clock.at(d);
-    if (p.time_format !== "12h") return `${pad(x.hour)}:${pad(x.minute)}`;
-    return `${x.hour % 12 || 12}:${pad(x.minute)} ${x.hour < 12 ? "AM" : "PM"}`;
+    return formatClock(x.hour, x.minute, p.time_format);
   };
+  // Intl reads decimal text exactly; a JavaScript number would round it.
+  const exact = (value: number | string) => value as number;
   return {
     number(value, digits = 2) {
-      const n = toNumber(value);
-      return n === undefined ? "" : numberFormat(`n${digits}`, () => ({ maximumFractionDigits: digits })).format(n);
+      return toNumber(value) === undefined ? "" : numberFormat(`n${digits}`, () => ({ maximumFractionDigits: digits })).format(exact(value as number | string));
     },
     decimal(value, scale) {
-      const n = toNumber(value);
-      return n === undefined ? "" : numberFormat(`d${scale}`, () => ({ minimumFractionDigits: scale, maximumFractionDigits: scale })).format(n);
+      return toNumber(value) === undefined ? "" : numberFormat(`d${scale}`, () => ({ minimumFractionDigits: scale, maximumFractionDigits: scale })).format(exact(value as number | string));
     },
     currency(value, code) {
-      const n = toNumber(value);
-      if (n === undefined) return "";
+      if (toNumber(value) === undefined) return "";
+      const amount = exact(value as number | string);
       try {
-        return numberFormat(`c${code}`, () => ({ style: "currency", currency: code })).format(n);
+        return numberFormat(`c${code}`, () => ({ style: "currency", currency: code })).format(amount);
       } catch {
-        return `${numberFormat("d2", () => ({ minimumFractionDigits: 2, maximumFractionDigits: 2 })).format(n)} ${code}`;
+        return `${numberFormat("d2", () => ({ minimumFractionDigits: 2, maximumFractionDigits: 2 })).format(amount)} ${code}`;
       }
     },
     date(value) {
+      const day = calendarDay(value);
+      if (day) return formatDay(pattern, day);
       const d = toDate(value);
       return d ? date(d) : "";
     },
     dateTime(value) {
+      const day = calendarDay(value);
+      if (day) return formatDay(pattern, day);
       const d = toDate(value);
       return d ? `${date(d)} ${time(d)}` : "";
     },
     relative(value, now = new Date()) {
       const d = toDate(value);
       if (!d) return "";
-      const seconds = (d.getTime() - now.getTime()) / 1000;
-      const units: [Intl.RelativeTimeFormatUnit, number][] = [["year", 31536000], ["month", 2592000], ["day", 86400], ["hour", 3600], ["minute", 60]];
-      const rtf = new Intl.RelativeTimeFormat(p.language || "en", { numeric: "auto" });
-      for (const [unit, size] of units) {
-        if (Math.abs(seconds) >= size) return rtf.format(Math.round(seconds / size), unit);
-      }
-      return rtf.format(0, "minute");
+      return formatRelative((d.getTime() - now.getTime()) / 1000, new Intl.RelativeTimeFormat(p.language || "en", { numeric: "auto" }));
     },
     parseDecimal(text) {
-      let t = text.trim().replace(/\s/g, "");
-      if (separator === ",") {
-        if (t.includes(",") && t.includes(".")) return undefined;
-        t = t.replace(",", ".");
-      }
-      if (!/^[-+]?(\d+(\.\d*)?|\.\d+)$/.test(t)) return undefined;
-      const n = Number(t);
-      if (!Number.isFinite(n)) return undefined;
-      const [whole, fraction = ""] = t.replace(/^\+/, "").split(".");
-      const canonical = (whole.replace(/^(-?)0+(?=\d)/, "$1") || "0") + (fraction.replace(/0+$/, "") ? "." + fraction.replace(/0+$/, "") : "");
-      return canonical.startsWith(".") ? "0" + canonical : canonical.replace(/^-\./, "-0.");
+      const number = typedNumber(text, separator);
+      return number === undefined ? undefined : canonicalDecimal(number);
     },
   };
 }

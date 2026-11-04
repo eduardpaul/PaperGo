@@ -8,11 +8,16 @@ import type { HostResponse } from "../host.js";
 /** Where an app asks PaperGo to go; the app cannot navigate itself. */
 export type OpenTarget = { itemId: string } | { taskId: string } | { listId: string };
 
-/** A live change of an item the viewer may see. */
+/** The page's theme. */
+export type Theme = "light" | "dark";
+
+/** A live change of an item the viewer may see, in the app's workspace. */
 export interface Change {
   id: string;
   /** The item's list or library, when the page knows it. */
   collectionId?: string;
+  /** The item's content type, when it has one. */
+  contentTypeId?: string;
   /** Whether the item was removed or is no longer visible. */
   removed?: boolean;
   /** The page's live stream reconnected and may have missed changes: read everything again. */
@@ -25,7 +30,7 @@ export type AppMessage =
   | { type: "papergo:open"; target: OpenTarget };
 
 // Messages the page sends.
-export type PageMessage = { type: "papergo:response"; id: number; response: HostResponse } | { type: "papergo:change"; changes: Change[] };
+export type PageMessage = { type: "papergo:response"; id: number; response: HostResponse } | { type: "papergo:change"; changes: Change[] } | { type: "papergo:theme"; theme: Theme };
 
 export interface Port {
   post(message: AppMessage): void;
@@ -68,6 +73,7 @@ export class Bridge {
   private next = 1;
   private readonly pending = new Map<number, (response: HostResponse) => void>();
   private readonly watchers = new Set<(changes: Change[]) => void>();
+  private themed?: (theme: Theme) => void;
 
   constructor(private readonly port: Port) {
     port.listen((message) => {
@@ -77,6 +83,8 @@ export class Bridge {
         resolve?.(message.response);
       } else if (message.type === "papergo:change") {
         for (const watcher of this.watchers) watcher(message.changes);
+      } else if (message.type === "papergo:theme") {
+        this.themed?.(message.theme);
       }
     });
   }
@@ -92,6 +100,11 @@ export class Bridge {
 
   open(target: OpenTarget): void {
     this.port.post({ type: "papergo:open", target });
+  }
+
+  /** Calls listener when the page's theme changes. */
+  onTheme(listener: (theme: Theme) => void): void {
+    this.themed = listener;
   }
 
   /** Calls watcher with the live changes of items; returns what stops it. */

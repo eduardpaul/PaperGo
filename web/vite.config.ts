@@ -43,6 +43,8 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
       // The workflow SDK's declarations, for the script editor.
       '@sdk': fileURLToPath(new URL('../sdk/dist', import.meta.url)),
+      // How numbers and dates read and show, which the app runtime shares.
+      '@papergo/format': fileURLToPath(new URL('../sdk/src/format.ts', import.meta.url)),
       // React's own declarations, for the app editor; their package exports hide the files.
       '@react-types': fileURLToPath(new URL('./node_modules/@types/react', import.meta.url)),
       '@csstype': fileURLToPath(new URL('./node_modules/csstype', import.meta.url)),
@@ -50,7 +52,7 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    fs: { allow: ['.', '../sdk/dist'] },
+    fs: { allow: ['.', '../sdk/dist', '../sdk/src/format.ts'] },
     proxy: {
       '/v1': { target: api, changeOrigin: false },
       '/health': { target: api, changeOrigin: false },

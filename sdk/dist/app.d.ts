@@ -13936,6 +13936,8 @@ export type OpenTarget = {
 } | {
 	listId: string;
 };
+/** The page's theme. */
+export type Theme = "light" | "dark";
 /** The viewer's display preferences (docs/preferences.md). */
 export interface Preferences {
 	language: string;
@@ -13960,10 +13962,10 @@ export interface Format {
 	/** How long ago or from now, such as "3 days ago", in the viewer's language. */
 	relative(value: Date | string | number | null | undefined, now?: Date): string;
 	/**
-	 * Reads a decimal typed in the viewer's number format: 41,5 is 41.5 where
-	 * the separator is a comma, and a dot is always a decimal point. Returns
-	 * the canonical text, such as "41.5", or undefined for anything else,
-	 * such as text with both separators.
+	 * Reads a decimal typed in the viewer's number format, as PaperGo's own
+	 * fields do: 41,5 is 41.5 where the separator is a comma, and a dot is
+	 * always a decimal point. Returns the canonical text, such as "41.5", or
+	 * undefined for anything else, such as text with both separators.
 	 */
 	parseDecimal(text: string): string | undefined;
 }
@@ -13988,7 +13990,8 @@ export interface Init {
 		name: string;
 		role: Role;
 	};
-	theme: "light" | "dark";
+	/** The page's theme at the start; the page tells of changes over the bridge. */
+	theme: Theme;
 }
 /** A request the API refused: its status, and the problem's code and detail. */
 export declare class RequestError extends Error {

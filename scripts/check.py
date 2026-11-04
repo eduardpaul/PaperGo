@@ -76,8 +76,10 @@ def frontend_state():
     for directory, folders, names in os.walk(web):
         folders[:] = sorted(name for name in folders if name not in {'node_modules', 'dist', '.git'})
         sources.extend(Path(directory) / name for name in names if not name.endswith('.tsbuildinfo'))
-    # The script editor bundles the workflow SDK's declarations.
-    sources.append(ROOT / 'sdk/dist/workflow.d.ts')
+    # The editors bundle the SDK's declarations, the app page its runtime, and
+    # both read numbers and dates through its format module.
+    sources.extend(ROOT / 'sdk/dist' / name for name in ('workflow.d.ts', 'app.d.ts', 'app-runtime.js'))
+    sources.append(ROOT / 'sdk/src/format.ts')
     # The build writes the npm notices with it.
     sources.append(ROOT / 'scripts/npm-notices.mjs')
     outputs = [path for path in (web / 'dist').rglob('*') if path.is_file()]

@@ -48,6 +48,11 @@ function fail(message: string): void {
 
 // The bridge connects as the runtime loads, before the app's code runs.
 const bridge = new Bridge(parentPort());
+// The kit's colours follow the attribute, so a change of theme keeps the app
+// and what the viewer was doing.
+bridge.onTheme((theme) => {
+  document.documentElement.dataset.theme = theme;
+});
 
 /** Renders the app whose compiled code ran last, with what the page knows. */
 function start(init: Init): void {

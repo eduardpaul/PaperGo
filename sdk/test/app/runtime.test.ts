@@ -5,6 +5,7 @@
 import { Bridge, type AppMessage, type PageMessage } from "../../src/app/bridge.js";
 import { appContext, RequestError, type Init } from "../../src/app/context.js";
 import { formatter, wallClock } from "../../src/app/format.js";
+import { cannotMatch } from "../../src/app/hooks.js";
 import { flipSign, ticks } from "../../src/app/kit.js";
 import { json } from "../../src/values.js";
 
@@ -25,8 +26,17 @@ expect("not a number", comma.parseDecimal("4x"), undefined);
 expect("a whole number", comma.parseDecimal("007"), "7");
 expect("a fraction", comma.parseDecimal(",5"), "0.5");
 expect("a negative", comma.parseDecimal("-0,25"), "-0.25");
+expect("an exponent, as PaperGo's fields read one", comma.parseDecimal("1,5e3"), "1500");
+expect("a negative exponent", comma.parseDecimal("1.5e-2"), "0.015");
+expect("a large exponent", comma.parseDecimal("1e999999"), undefined);
+expect("spaces within a number", comma.parseDecimal("1 000"), undefined);
+expect("exact digits", comma.parseDecimal("9007199254740993,50"), "9007199254740993.5");
+expect("negative zero", comma.parseDecimal("-0,00"), "0");
 expect("a decimal in a comma format", comma.decimal("93.18", 1), "93,2");
 expect("a date in the viewer's zone and format", comma.date("2026-11-03T23:30:00Z"), "04/11/2026");
+const honolulu = formatter({ language: "en", time_zone: "Pacific/Honolulu", date_format: "yyyy-MM-dd", time_format: "24h", number_format: "en" });
+expect("a day without a time stays on its day", [honolulu.date("2026-10-01"), honolulu.dateTime("2026-10-01")], ["2026-10-01", "2026-10-01"]);
+expect("a decimal keeps its digits", comma.decimal("9007199254740993.5", 1), "9.007.199.254.740.993,5");
 expect("a date and time", comma.dateTime("2026-11-03T23:30:00Z"), "04/11/2026 00:30");
 const dot = formatter({ language: "en", time_zone: "UTC", date_format: "yyyy-MM-dd", time_format: "12h", number_format: "en" });
 expect("41,5 in a dot format", dot.parseDecimal("41,5"), undefined);
@@ -116,6 +126,22 @@ let seen: unknown;
 const stop = bridge.watch((changes) => (seen = changes));
 stop();
 expect("a stopped watcher hears nothing", seen, undefined);
+
+// A live query reads again for what may be in it: a query names a type with
+// its subtypes, and the list's own copy of it counts as the type.
+const types = [
+  { id: "copy", parent_id: "invoice", collection_id: "l1", ancestor_ids: ["invoice"] },
+  { id: "credit", parent_id: "credit-note", collection_id: "l1", ancestor_ids: ["credit-note", "invoice"] },
+  { id: "reading", parent_id: "measure", collection_id: "l1", ancestor_ids: ["measure"] },
+];
+expect("a list's copy of the type", cannotMatch(types, "invoice", "copy"), false);
+expect("a subtype", cannotMatch(types, "invoice", "credit"), false);
+expect("the type named by the list's copy", cannotMatch(types, "copy", "credit"), false);
+expect("another type", cannotMatch(types, "invoice", "reading"), true);
+expect("a type the list did not have when read", cannotMatch(types, "invoice", "new"), false);
+expect("a query of any type", cannotMatch(types, undefined, "reading"), false);
+expect("an item without a type", cannotMatch(types, "invoice", undefined), false);
+expect("before the types are read", cannotMatch(undefined, "invoice", "reading"), false);
 
 if (failed) process.exit(1);
 console.log("the app runtime reads formats and sends requests through the page");

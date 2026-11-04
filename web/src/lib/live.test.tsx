@@ -43,7 +43,7 @@ it('refreshes once for a burst of item events', async () => {
 });
 
 it('tells item listeners which item changed, in which list, and when to read everything again', async () => {
-  const frames = 'id: 1\nevent: item\ndata: {"id":"i1","action":"updated","item":{"id":"i1","container_id":"l1"}}\n\nid: 2\nevent: item\ndata: {"id":"i2","@removed":{"reason":"deleted"}}\n\nid: 3\nevent: resync\ndata: {}\n\n';
+  const frames = 'id: 1\nevent: item\ndata: {"id":"i1","action":"updated","item":{"id":"i1","workspace_id":"w1","container_id":"l1","content_type_id":"t1"}}\n\nid: 2\nevent: item\ndata: {"id":"i2","workspace_id":"w1","container_id":"l1","content_type_id":"t2","@removed":{"reason":"deleted"}}\n\nid: 3\nevent: resync\ndata: {}\n\n';
   let served = false;
   vi.stubGlobal(
     'fetch',
@@ -60,8 +60,8 @@ it('tells item listeners which item changed, in which list, and when to read eve
   const { unmount } = renderHook(() => useLiveEvents(), { wrapper });
   await vi.waitFor(() => expect(changes).toHaveLength(3));
   expect(changes).toEqual([
-    { id: 'i1', collectionId: 'l1', removed: false },
-    { id: 'i2', collectionId: undefined, removed: true },
+    { id: 'i1', workspaceId: 'w1', collectionId: 'l1', contentTypeId: 't1', removed: false },
+    { id: 'i2', workspaceId: 'w1', collectionId: 'l1', contentTypeId: 't2', removed: true },
     { id: '', resync: true },
   ]);
   stop();

@@ -6,7 +6,7 @@ import { HostRequestAdapter } from "../adapter.js";
 import { client } from "../builders.js";
 import { createPaperGoClient, PaperGoClientNavigationMetadata, type PaperGoClient } from "../client/paperGoClient.js";
 import type { HostResponse } from "../host.js";
-import { Bridge, type OpenTarget } from "./bridge.js";
+import { Bridge, type OpenTarget, type Theme } from "./bridge.js";
 import { formatter, type Format, type Preferences } from "./format.js";
 
 export type { OpenTarget } from "./bridge.js";
@@ -20,7 +20,8 @@ export interface Init {
   params: Record<string, unknown>;
   user: { subject: string; name: string; preferences: Preferences };
   workspace: { id: string; name: string; role: Role };
-  theme: "light" | "dark";
+  /** The page's theme at the start; the page tells of changes over the bridge. */
+  theme: Theme;
 }
 
 /** A request the API refused: its status, and the problem's code and detail. */

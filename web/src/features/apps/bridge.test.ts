@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest';
 import { setToken } from '@/api/http';
-import { appDocument, refusal, send } from './bridge';
+import { appChange, appDocument, refusal, send } from './bridge';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -87,4 +87,12 @@ it('keeps a <!-- in a script from swallowing the scripts after it', () => {
   const html = appDocument('var runtime = 1;', 'var text = "<!-- <script>";', {});
   expect(html).not.toContain('<!--');
   expect(html).toContain('"<\\!-- <script>"');
+});
+
+it('tells an app of the changes of its own workspace only', () => {
+  const change = { id: 'i1', workspaceId: 'w1', collectionId: 'l1', contentTypeId: 't1', removed: false };
+  expect(appChange(change, 'w1')).toEqual({ id: 'i1', collectionId: 'l1', contentTypeId: 't1', removed: false });
+  expect(appChange(change, 'w2')).toBeUndefined();
+  expect(appChange({ id: 'i2', workspaceId: 'w2', removed: true }, 'w1')).toBeUndefined();
+  expect(appChange({ id: '', resync: true }, 'w1')).toEqual({ id: '', resync: true });
 });

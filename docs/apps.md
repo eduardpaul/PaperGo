@@ -53,7 +53,7 @@ The server then loads the code with stand-ins for those modules to read the para
 | `ctx.user` | Who is viewing: `subject`, `name` and `preferences` (language, time zone, date, time and number formats) |
 | `ctx.workspace` | `id`, `name` and the viewer's `role`: `owner`, `member` or `visitor` |
 | `ctx.app` | The app's `id`, `key`, `name` and the `version` running |
-| `ctx.format` | `number`, `decimal`, `currency`, `date`, `dateTime` and `relative` in the viewer's preferences; `parseDecimal` reads a typed decimal with the viewer's decimal separator, as PaperGo's own fields do, and returns its canonical text, such as `"41.5"` |
+| `ctx.format` | `number`, `decimal`, `currency`, `date`, `dateTime` and `relative` in the viewer's preferences; `parseDecimal` reads a typed decimal with the viewer's decimal separator, by the rules of PaperGo's own fields, and returns its canonical text, such as `"41.5"`; a date without a time stays on its day, in any time zone |
 | `ctx.open({ itemId } \| { taskId } \| { listId })` | Opens it in PaperGo; an app cannot navigate itself |
 
 | Hook | What it does |
@@ -90,7 +90,7 @@ The app page puts the app in a sandboxed frame:
    - PaperGo's page allows frames to show only the documents it writes (`frame-src 'none'`), so the frame cannot navigate anywhere. A frame that loads another document all the same is stopped.
 2. Before the app's code runs, the runtime asks the page for a message port, and the page answers that first request only. Every API request the app makes travels over that port.
 3. The page sends each request as the viewer and returns the status, the body, and the `Content-Type`, `ETag`, `Location` and `Retry-After` headers. The app sets only `Accept`, `Content-Type`, `If-Match`, `If-None-Match`, `Idempotency-Key` and `Prefer`.
-4. The page passes on the live changes of the items the viewer may see, so live queries read again.
+4. The page passes on the live changes of the items the viewer may see in the app's workspace, so live queries read again, and changes of its theme, so the app follows without restarting.
 
 An app does what its viewer may, through the API only, and never holds a login, so it cannot act as the viewer once the page is closed.
 

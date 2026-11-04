@@ -9,11 +9,13 @@ import { can } from '@/features/lists/access';
 import { useTranslation } from '@/i18n';
 import { onItemChange } from '@/lib/live';
 import { appBundle, type App } from './api';
-import { appDocument, send, type BridgeRequest } from './bridge';
+import { appChange, appDocument, send, type BridgeRequest } from './bridge';
 
 type Target = { itemId: string } | { taskId: string } | { listId: string };
 
 type FrameMessage = ({ type: 'papergo:request'; id: number } & BridgeRequest) | { type: 'papergo:open'; target: Target };
+
+const currentTheme = () => (window.document.documentElement.classList.contains('dark') ? 'dark' : 'light');
 
 const runtimeQuery = { queryKey: ['app-runtime'], queryFn: async () => (await import('@sdk/app-runtime.js?raw')).default, staleTime: Infinity };
 
@@ -38,6 +40,7 @@ export function AppFrame({ app }: { app: App }) {
 
   // The start is built from plain values, so a refetch that changes nothing
   // the app is told does not restart it and lose what the viewer was doing.
+  // The theme is told over the port, as it can change while the app runs.
   const p = preferences.data;
   const init =
     me.data && p && workspace.data
@@ -46,10 +49,9 @@ export function AppFrame({ app }: { app: App }) {
           params: app.parameters,
           user: { subject: me.data.subject, name: me.data.display_name, preferences: { language: p.language, time_zone: p.time_zone, date_format: p.date_format, time_format: p.time_format, number_format: p.number_format } },
           workspace: { id: workspace.data.id, name: workspace.data.name, role: can(workspace.data, 'manage') ? 'owner' : can(workspace.data, 'write') ? 'member' : 'visitor' },
-          theme: window.document.documentElement.classList.contains('dark') ? 'dark' : 'light',
         })
       : undefined;
-  const document_ = useMemo(() => (runtime.data && bundle.data && init ? appDocument(runtime.data, bundle.data, JSON.parse(init)) : undefined), [runtime.data, bundle.data, init]);
+  const document_ = useMemo(() => (runtime.data && bundle.data && init ? appDocument(runtime.data, bundle.data, { ...JSON.parse(init), theme: currentTheme() }) : undefined), [runtime.data, bundle.data, init]);
 
   useEffect(() => {
     const element = frame.current;
@@ -58,6 +60,8 @@ export function AppFrame({ app }: { app: App }) {
     let port: MessagePort | undefined;
     let loads = 0;
     let stopLive: (() => void) | undefined;
+    const tellTheme = () => port?.postMessage({ type: 'papergo:theme', theme: currentTheme() });
+    const themes = new MutationObserver(tellTheme);
     const open = async (target: Target) => {
       if ('taskId' in target) return navigate({ to: '/tasks', search: { id: target.taskId } });
       if ('listId' in target) return navigate({ to: '/w/$workspaceId/l/$listId', params: { workspaceId: app.workspace_id, listId: target.listId } });
@@ -78,9 +82,16 @@ export function AppFrame({ app }: { app: App }) {
       port = channel.port1;
       port.onmessage = (e: MessageEvent<FrameMessage>) => void serve(e.data);
       element.contentWindow?.postMessage({ type: 'papergo:port' }, '*', [channel.port2]);
-      stopLive = onItemChange((change) => port?.postMessage({ type: 'papergo:change', changes: [change] }));
+      stopLive = onItemChange((item) => {
+        const change = appChange(item, app.workspace_id);
+        if (change) port?.postMessage({ type: 'papergo:change', changes: [change] });
+      });
+      // The theme may have changed since the document was written.
+      tellTheme();
+      themes.observe(window.document.documentElement, { attributes: true, attributeFilter: ['class'] });
     };
     const stop = () => {
+      themes.disconnect();
       stopLive?.();
       port?.close();
       port = undefined;
