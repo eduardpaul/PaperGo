@@ -1,6 +1,37 @@
 package dms
 
-import "strconv"
+import (
+	"strconv"
+
+	"papergo/internal/dal/resources"
+)
+
+// CompactItem is an item as compact queries return it: what tells it apart
+// and what it holds, without the resource's metadata. Its fields are the
+// required fields of a resource and a few more, so it reads as a resource.
+type CompactItem struct {
+	ID            string         `json:"id"`
+	WorkspaceID   string         `json:"workspace_id"`
+	Kind          string         `json:"kind"`
+	Name          string         `json:"name"`
+	ParentID      *string        `json:"parent_id,omitempty"`
+	ContentTypeID *string        `json:"content_type_id,omitempty"`
+	Version       int            `json:"version"`
+	Values        map[string]any `json:"values"`
+	Keywords      []string       `json:"keywords,omitempty"`
+}
+
+func compactItems(rows []*resources.Resource) []CompactItem {
+	out := make([]CompactItem, len(rows))
+	for i, r := range rows {
+		values := r.Values
+		if values == nil {
+			values = map[string]any{}
+		}
+		out[i] = CompactItem{ID: r.ID, WorkspaceID: r.WorkspaceID, Kind: string(r.Kind), Name: r.Name, ParentID: r.ParentID, ContentTypeID: r.ContentTypeID, Version: r.Version, Values: values, Keywords: r.Keywords}
+	}
+	return out
+}
 
 func numberedPage[T any](rows []T, limit int, number func(T) int) Page[T] {
 	result := Page[T]{Data: rows}
@@ -23,6 +54,9 @@ func (p Page[T]) APIPage() (map[string]any, string) {
 }
 func (p QueryResult) APIPage() (map[string]any, string) {
 	result := map[string]any{"value": p.Data}
+	if p.Compact {
+		result["value"] = compactItems(p.Data)
+	}
 	if p.Total != nil {
 		result["total"] = p.Total
 	}

@@ -41,12 +41,36 @@ type QuerySpec struct {
 	Search     string `json:"search,omitempty"`
 	Keyword    string `json:"keyword,omitempty"`
 }
+
+// QueryEnvelope is how much of each item a query returns: the full
+// resource, or a compact one of its identity, version and values.
+type QueryEnvelope string
+
+const (
+	EnvelopeFull    QueryEnvelope = "full"
+	EnvelopeCompact QueryEnvelope = "compact"
+)
+
+// compact reports whether e asks for compact items.
+func (e QueryEnvelope) compact() (bool, error) {
+	switch e {
+	case "", EnvelopeFull:
+		return false, nil
+	case EnvelopeCompact:
+		return true, nil
+	}
+	return false, invalid("envelope is full or compact")
+}
+
 type QueryRequest struct {
-	Select  []string  `json:"select,omitempty"`
-	Query   QuerySpec `json:"query"`
-	Surface string    `json:"surface,omitempty"`
-	After   string    `json:"-"`
-	Limit   int       `json:"-"`
+	Select []string `json:"select,omitempty"`
+	// Envelope compact returns each item's id, workspace_id, kind, name,
+	// parent_id, content_type_id, version, values and keywords only.
+	Envelope QueryEnvelope `json:"envelope,omitempty"`
+	Query    QuerySpec     `json:"query"`
+	Surface  string        `json:"surface,omitempty"`
+	After    string        `json:"-"`
+	Limit    int           `json:"-"`
 	// IncludeTotal counts every authorized match; omitted, total is absent.
 	IncludeTotal bool `json:"include_total,omitempty"`
 	// TotalLimit stops counting there and reports total_capped when more
@@ -57,11 +81,15 @@ type QueryRequest struct {
 	rowACL bool
 	// itemsOnly leaves folders out (navigation views).
 	itemsOnly bool
+	// measures are the fields aggregates read of each row.
+	measures []string
 }
 type QueryResult struct {
-	Data       []*resources.Resource `json:"value"`
-	NextCursor string                `json:"-"`
-	Total      *int                  `json:"total,omitempty"`
+	Data []*resources.Resource `json:"value"`
+	// Compact writes the items as CompactItem (QueryRequest.Envelope).
+	Compact    bool   `json:"-"`
+	NextCursor string `json:"-"`
+	Total      *int   `json:"total,omitempty"`
 	// TotalCapped means more than total items match (see TotalLimit).
 	TotalCapped bool `json:"total_capped,omitempty"`
 	// SearchCapped means the search text matched more entries than a query
@@ -86,6 +114,8 @@ type compiledQuery struct {
 	// searchCapped means the search text matched more entries than queries
 	// consider (searchMatchLimit).
 	searchCapped bool
+	// measures are the fields of QueryRequest.measures, in their order.
+	measures []content.Field
 }
 type queryCursor struct {
 	Fingerprint string            `json:"fingerprint"`
@@ -441,6 +471,15 @@ func (s *Service) collectionPlan(ctx context.Context, subject string, c *resourc
 	if err != nil {
 		return content.Plan{}, compiledQuery{}, err
 	}
+	var measures []content.Field
+	for _, key := range in.measures {
+		field, err := compiler.column(key)
+		if err != nil {
+			return content.Plan{}, compiledQuery{}, err
+		}
+		measures = append(measures, field)
+	}
+	plan.Measures = measures
 	if in.Query.ParentID != "" {
 		parent, e := s.authorize(ctx, subject, in.Query.ParentID, "read")
 		if e != nil {
@@ -487,7 +526,7 @@ func (s *Service) collectionPlan(ctx context.Context, subject string, c *resourc
 		Select                               []string
 	}{subject, c.ID, in.Surface, *c.SchemaHeadID, in.Query, grouped, in.itemsOnly, in.Select})
 	sum := sha256.Sum256(fingerprint)
-	return plan, compiledQuery{fingerprint: hex.EncodeToString(sum[:]), projection: projection, includeKeywords: includeKeywords, searchCapped: searchCapped}, nil
+	return plan, compiledQuery{fingerprint: hex.EncodeToString(sum[:]), projection: projection, includeKeywords: includeKeywords, searchCapped: searchCapped, measures: measures}, nil
 }
 func cursorEncode(q compiledQuery, id string, value any) string {
 	values := []any{value}
@@ -613,6 +652,10 @@ func (s *Service) queryCompiled(ctx context.Context, subject string, in QueryReq
 	if in.TotalLimit < 0 || in.TotalLimit > 1_000_000 {
 		return QueryResult{}, invalid("total_limit must be between 1 and 1000000")
 	}
+	compact, e := in.Envelope.compact()
+	if e != nil {
+		return QueryResult{}, e
+	}
 	return read(ctx, s, func(t *Service) (QueryResult, error) {
 		limit := pageSize(in.Limit)
 		after, e := position(q, in.After)
@@ -628,7 +671,7 @@ func (s *Service) queryCompiled(ctx context.Context, subject string, in QueryReq
 		for i, r := range page {
 			ids[i], ranks[i] = r.ID, r.Rank
 		}
-		out := QueryResult{Data: []*resources.Resource{}, SearchCapped: q.searchCapped}
+		out := QueryResult{Data: []*resources.Resource{}, SearchCapped: q.searchCapped, Compact: compact}
 		if len(ids) > limit {
 			out.NextCursor = cursorEncode(q, ids[limit-1], ranks[limit-1])
 			ids = ids[:limit]
@@ -729,52 +772,59 @@ func (s *Service) queryGroupsCompiled(ctx context.Context, in QueryRequest, q co
 			out.NextCursor = cursorEncode(q, "", last.Value)
 			out.Data = groups[:pageSize(in.Limit)]
 		}
-		// Integer/decimal group values are returned as exact strings, decimal units
-		// converted back using the configured scale rather than float arithmetic.
 		kind := q.q.Orders[0].Kind
 		for i := range out.Data {
-			g := &out.Data[i]
-			if g.Value == nil {
-				continue
-			}
-			switch kind {
-			case content.KindInteger:
-				n, ok := g.Value.(int64)
-				if ok {
-					value := strconv.FormatInt(n, 10)
-					if d := q.q.RankDef; d != nil && d.Type == catalog.FieldDecimal {
-						negative := n < 0
-						digits := strings.TrimPrefix(value, "-")
-						for len(digits) <= d.Scale {
-							digits = "0" + digits
-						}
-						if d.Scale > 0 {
-							digits = digits[:len(digits)-d.Scale] + "." + digits[len(digits)-d.Scale:]
-						}
-						if negative {
-							digits = "-" + digits
-						}
-						value = digits
-					}
-					g.Value = value
-				}
-			case content.KindExact:
-				key, ok := g.Value.(string)
-				if !ok {
-					return Page[QueryGroup]{}, invalid("invalid exact numeric group")
-				}
-				g.Value, e = numberFromKey(key)
-				if e != nil {
-					return Page[QueryGroup]{}, e
-				}
-			case content.KindBoolean:
-				if n, ok := g.Value.(int64); ok {
-					g.Value = n != 0
-				}
+			if out.Data[i].Value, e = groupValue(kind, q.q.RankDef, out.Data[i].Value); e != nil {
+				return Page[QueryGroup]{}, e
 			}
 		}
 		return out, nil
 	})
+}
+
+// groupValue is a group column's value as the API shows it: integer and
+// decimal values as exact strings, decimal units converted back with the
+// field's scale rather than float arithmetic; exact numbers decoded; and
+// booleans as booleans. def is the field behind the column, nil for
+// built-in columns.
+func groupValue(kind content.Kind, def *catalog.FieldDefinition, v any) (any, error) {
+	if v == nil {
+		return nil, nil
+	}
+	switch kind {
+	case content.KindInteger:
+		n, ok := v.(int64)
+		if !ok {
+			return v, nil
+		}
+		value := strconv.FormatInt(n, 10)
+		if def != nil && def.Type == catalog.FieldDecimal {
+			negative := n < 0
+			digits := strings.TrimPrefix(value, "-")
+			for len(digits) <= def.Scale {
+				digits = "0" + digits
+			}
+			if def.Scale > 0 {
+				digits = digits[:len(digits)-def.Scale] + "." + digits[len(digits)-def.Scale:]
+			}
+			if negative {
+				digits = "-" + digits
+			}
+			value = digits
+		}
+		return value, nil
+	case content.KindExact:
+		key, ok := v.(string)
+		if !ok {
+			return nil, invalid("invalid exact numeric group")
+		}
+		return numberFromKey(key)
+	case content.KindBoolean:
+		if n, ok := v.(int64); ok {
+			return n != 0, nil
+		}
+	}
+	return v, nil
 }
 
 // Used when saving views: compilation validates references and bounded input

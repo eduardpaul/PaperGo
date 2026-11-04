@@ -177,8 +177,10 @@ func (s *Service) DeleteView(ctx context.Context, subject, id string, version in
 }
 
 type ViewQueryRequest struct {
-	Select  []string `json:"select,omitempty"`
-	Surface string   `json:"surface,omitempty"`
+	Select []string `json:"select,omitempty"`
+	// Envelope compact returns compact items, as QueryRequest.Envelope.
+	Envelope QueryEnvelope `json:"envelope,omitempty"`
+	Surface  string        `json:"surface,omitempty"`
 	// Selected lists the items a navigation view shows at the terms opened
 	// in its fields, combined as the view matches them.
 	Selected     []NavigationSelection `json:"selected,omitempty"`
@@ -202,7 +204,7 @@ func (s *Service) QueryView(ctx context.Context, subject, id string, in ViewQuer
 		if selection == nil {
 			selection = v.Columns
 		}
-		request := QueryRequest{Query: spec, Surface: in.Surface, After: in.After, Limit: in.Limit, IncludeTotal: in.IncludeTotal, TotalLimit: in.TotalLimit, Select: selection}
+		request := QueryRequest{Query: spec, Surface: in.Surface, After: in.After, Limit: in.Limit, IncludeTotal: in.IncludeTotal, TotalLimit: in.TotalLimit, Select: selection, Envelope: in.Envelope}
 		if v.Layout == viewstore.LayoutNavigation {
 			if e = t.requireTaxonomy(ctx, subject, "read"); e != nil {
 				return QueryResult{}, e

@@ -4,6 +4,8 @@
 // @ts-ignore
 import { createProblemFromDiscriminatorValue, createQueryResultFromDiscriminatorValue, serializeQueryRequest, serializeQueryResult, type Problem, type QueryRequest, type QueryResult } from '../../../../models/index.js';
 // @ts-ignore
+import { AggregatesRequestBuilderRequestsMetadata, type AggregatesRequestBuilder } from './aggregates/index.js';
+// @ts-ignore
 import { GroupsRequestBuilderRequestsMetadata, type GroupsRequestBuilder } from './groups/index.js';
 // @ts-ignore
 import { type BaseRequestBuilder, type KeysToExcludeForNavigationMetadata, type NavigationMetadata, type Parsable, type ParsableFactory, type RequestConfiguration, type RequestInformation, type RequestsMetadata } from '@microsoft/kiota-abstractions';
@@ -19,6 +21,10 @@ export interface QueryRequestBuilder extends BaseRequestBuilder<QueryRequestBuil
      * @returns {Promise<NonNullable<QueryResult["value"]>>}
      */
      all(body: QueryRequest, requestConfiguration?: RequestConfiguration<QueryRequestBuilderPostQueryParameters> | undefined) : Promise<NonNullable<QueryResult["value"]>>;
+    /**
+     * The aggregates property
+     */
+    get aggregates(): AggregatesRequestBuilder;
     /**
      * The groups property
      */
@@ -65,6 +71,9 @@ export const QueryRequestBuilderUriTemplate = "{+baseurl}/v1/resources/{id}/quer
  * Metadata for all the navigation properties in the request builder.
  */
 export const QueryRequestBuilderNavigationMetadata: Record<Exclude<keyof QueryRequestBuilder, KeysToExcludeForNavigationMetadata | "all">, NavigationMetadata> = {
+    aggregates: {
+        requestsMetadata: AggregatesRequestBuilderRequestsMetadata,
+    },
     groups: {
         requestsMetadata: GroupsRequestBuilderRequestsMetadata,
     },

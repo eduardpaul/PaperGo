@@ -160,6 +160,9 @@ type Plan struct {
 	Orders     []Order
 	// Group sorts by a group column instead of Orders, for group counts.
 	Group *GroupBy
+	// Measures adds each row's value of these fields, as measure columns,
+	// for aggregates (Repo.Measured).
+	Measures []Field
 	// RowACL checks permissions row by row, so queries over several
 	// collections share one statement shape.
 	RowACL bool
@@ -207,6 +210,8 @@ func (q *Query) Shape() string {
 	}{q.ranks, q.conds, q.rankArgs, q.condArgs, q.surface})
 	return string(raw)
 }
+
+func measureAlias(i int) string { return "measure_" + strconv.Itoa(i) }
 
 func sortAlias(i int) string {
 	if i == 0 {
@@ -389,6 +394,11 @@ func (r *Repo) Compile(p Plan) *Query {
 			q.Orders = append(q.Orders, OrderInfo{Kind: kind, Descending: o.Descending})
 		}
 		q.RankDef = p.Orders[0].Field.Def
+	}
+	for i, m := range p.Measures {
+		column, args, _ := r.column(m)
+		rankParts = append(rankParts, column+" AS "+measureAlias(i))
+		q.rankArgs = append(q.rankArgs, args...)
 	}
 	q.ranks = strings.Join(rankParts, ",")
 	// Conditions reference only r and p, so the eligible rows and the

@@ -200,6 +200,9 @@ func (a *API) registerFoundation(m *router) {
 	m.HandleFunc("POST /v1/resources/{id}/query/groups", foundationMutation(a, 200, false, func(r *http.Request, in dms.QueryRequest, v int) (any, error) {
 		return a.dms(r).QueryGroups(r.Context(), subject(r), r.PathValue("id"), in)
 	}))
+	m.HandleFunc("POST /v1/resources/{id}/query/aggregates", foundationMutation(a, 200, false, func(r *http.Request, in dms.AggregateRequest, v int) (any, error) {
+		return a.dms(r).QueryAggregates(r.Context(), subject(r), r.PathValue("id"), in)
+	}))
 	m.HandleFunc("GET /v1/resources/{id}/operations", foundationRead(a, func(r *http.Request) (any, error) {
 		return a.dms(r).Operations(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("$skiptoken"), queryInt(r, "$top"))
 	}))

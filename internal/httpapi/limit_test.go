@@ -97,6 +97,8 @@ func TestQueriesReceiveTheReadDeadline(t *testing.T) {
 		{"PROPFIND", "/webdav/lib/", true},
 		{"POST", "/v1/resources/x/query", true},
 		{"POST", "/v1/resources/x/query/groups", true},
+		{"POST", "/v1/resources/x/query/aggregates", true},
+		{"POST", "/v1/views/x/query/aggregates", false},
 		{"POST", "/v1/views/x/query", true},
 		{"POST", "/v1/views/x/query/groups", true},
 		{"POST", "/v1/smart-folders/x/query", true},

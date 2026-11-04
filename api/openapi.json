@@ -3550,6 +3550,135 @@
         }
       }
     },
+    "/v1/resources/{id}/query/aggregates": {
+      "post": {
+        "summary": "Query Aggregates",
+        "operationId": "queryAggregates",
+        "description": "Figures of the items a collection query matches, as the caller may read them: count, sum, avg, min and max of indexed scalar fields, for all of them as one group with a null key, or in groups of query.group_by. A date or date-time group_by groups by interval (day, week from Monday, month or year), date-times in time_zone (UTC by default); a group's key is then the first day of its period, YYYY-MM-DD. Groups come in key order, items without a key last; query.sort is ignored. Counts are numbers. Sums, minimums and maximums of numeric fields are exact strings in the field's form; averages are exact strings rounded half to even to four digits beyond an integer or decimal field's scale, ten for number and currency fields. Minimums and maximums of dates and date-times are as items show them. A figure of a group whose items hold no value is null. Each matching item is read once; at most 10000 groups.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AggregateResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AggregateRequest"
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/resources/{id}/operations": {
       "get": {
         "summary": "Operations",
@@ -25413,6 +25542,15 @@
               "type": "string"
             },
             "description": "Selected custom fields and optional $keywords; system columns are accepted and the resource metadata envelope remains present. Omitted returns full values on direct queries and saved columns on views; an empty array returns no custom values. Selected fields need not be indexed. Cursors bind this selection."
+          },
+          "envelope": {
+            "type": "string",
+            "enum": [
+              "full",
+              "compact"
+            ],
+            "default": "full",
+            "description": "compact returns each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords only: under half the size of a full item, for reading many items. full returns the whole resource."
           }
         },
         "required": [],
@@ -25450,6 +25588,15 @@
               "type": "string"
             },
             "description": "Selected custom fields and optional $keywords; system columns are accepted and the resource metadata envelope remains present. Omitted returns full values on direct queries and saved columns on views; an empty array returns no custom values. Selected fields need not be indexed. Cursors bind this selection."
+          },
+          "envelope": {
+            "type": "string",
+            "enum": [
+              "full",
+              "compact"
+            ],
+            "default": "full",
+            "description": "compact returns each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords only: under half the size of a full item, for reading many items. full returns the whole resource."
           },
           "selected": {
             "type": "array",
@@ -34138,6 +34285,127 @@
             "description": "Default for new items of the type, valid for the field like the field's own default; JSON null removes an inherited default."
           }
         }
+      },
+      "Aggregate": {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "count",
+              "sum",
+              "avg",
+              "min",
+              "max"
+            ],
+            "description": "count counts the items holding a value; sum and avg take integer, decimal, number and currency fields; min and max also take dates and date-times."
+          },
+          "field": {
+            "type": "string",
+            "description": "An indexed scalar field, or a built-in one such as $created_at."
+          },
+          "as": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]{1,64}$",
+            "description": "The figure's name in values; op_field by default, without the $ of a built-in field."
+          }
+        },
+        "required": [
+          "op",
+          "field"
+        ],
+        "additionalProperties": false
+      },
+      "AggregateRequest": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "$ref": "#/components/schemas/QuerySpec"
+          },
+          "surface": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "head",
+              "published"
+            ],
+            "default": "auto"
+          },
+          "interval": {
+            "type": "string",
+            "enum": [
+              "day",
+              "week",
+              "month",
+              "year"
+            ],
+            "description": "Groups a date or date-time query.group_by by the period holding its value."
+          },
+          "time_zone": {
+            "type": "string",
+            "description": "With interval: the IANA time zone date-times are grouped in, such as Europe/Madrid. UTC by default; dates have no time zone."
+          },
+          "aggregates": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "items": {
+              "$ref": "#/components/schemas/Aggregate"
+            }
+          }
+        },
+        "required": [
+          "aggregates"
+        ],
+        "additionalProperties": false
+      },
+      "AggregateGroup": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "The group's value of query.group_by: with an interval, the first day of the period as YYYY-MM-DD; otherwise as group queries show it. Null for the items without one, and for the single group of a query without group_by."
+          },
+          "count": {
+            "type": "integer",
+            "description": "The items of the group."
+          },
+          "values": {
+            "type": "object",
+            "additionalProperties": {
+              "type": [
+                "string",
+                "integer",
+                "null"
+              ]
+            },
+            "description": "Each figure by its name."
+          }
+        },
+        "required": [
+          "key",
+          "count",
+          "values"
+        ],
+        "additionalProperties": false
+      },
+      "AggregateResult": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AggregateGroup"
+            }
+          },
+          "search_capped": {
+            "type": "boolean",
+            "description": "The search text matched more than 10,000 entries; the figures cover only the first 10,000 matches. Narrow the search."
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "additionalProperties": false
       }
     },
     "parameters": {
