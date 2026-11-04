@@ -114,11 +114,17 @@ func resourceWhere(f resources.Filter) []bob.Mod[*dialect.SelectQuery] {
 	return mods
 }
 
-// resourceOrder sorts by f.Order.
+// resourceOrder sorts by f.Order. Without a limit every matching row is read,
+// so walking an index for its order never pays: the unary plus leaves the
+// planner free to seek the most selective filter, as (workspace_id, kind, id)
+// for a workspace's lists, instead of scanning the workspace in ID order.
 func resourceOrder(f resources.Filter) []bob.Mod[*dialect.SelectQuery] {
 	c := models.Resources.Columns
 	if f.Order == resources.NewestDeletion {
 		return []bob.Mod[*dialect.SelectQuery]{sm.OrderBy(c.DeletedAt).Desc(), sm.OrderBy(c.ID).Desc()}
+	}
+	if f.Limit == 0 {
+		return []bob.Mod[*dialect.SelectQuery]{sm.OrderBy(sqlite.Raw(`+"resources"."id"`))}
 	}
 	return []bob.Mod[*dialect.SelectQuery]{sm.OrderBy(c.ID)}
 }

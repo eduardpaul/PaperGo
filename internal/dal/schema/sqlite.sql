@@ -735,6 +735,11 @@ CREATE INDEX operation_group ON operations(kind, group_key, created_at) WHERE st
 CREATE INDEX operation_pending_workspace ON operations(workspace_id) WHERE status = 'pending';
 CREATE INDEX operation_pending_creator ON operations(created_by) WHERE status = 'pending';
 CREATE INDEX operation_execution_id ON operations(execution_id) WHERE execution_id <> '';
+-- A worker's next due operation of a kind, pending and not parked by an
+-- external execution: the earliest attempt, and the earliest claim to
+-- expire. One seek a kind, however many operations of other kinds wait.
+CREATE INDEX operation_next_attempt ON operations(kind, attempt_at) WHERE status = 'pending' AND execution_id = '';
+CREATE INDEX operation_next_claim ON operations(kind, claim_until) WHERE status = 'pending' AND execution_id = '' AND claim_until IS NOT NULL;
 CREATE UNIQUE INDEX operation_idempotency ON operations(created_by, kind, COALESCE(container_id, ''), idempotency_key) WHERE idempotency_key <> '';
 
 CREATE TABLE operation_items (

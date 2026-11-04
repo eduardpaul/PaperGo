@@ -46,8 +46,18 @@ func (q Queries) WorkflowRuns(ctx context.Context, f runs.Filter, statuses []ope
 	if f.WorkspaceID != "" {
 		query.Apply(w.WorkspaceID.EQ(f.WorkspaceID))
 	}
+	// Named items pick the runs: their few runs are found through the items'
+	// indexes and then tested, however many runs the workflow has. Without
+	// this, SQLite walks every run of the workflow, which a backlog of
+	// thousands makes slow on each event a coalescing workflow dispatches.
+	byItems := len(f.ItemIDs) > 0
 	if f.WorkflowID != "" {
-		query.Apply(w.WorkflowID.EQ(f.WorkflowID))
+		if byItems {
+			// The unary plus keeps the workflow's index out of the plan.
+			query.Apply(sm.Where(sqlite.Raw(`+"workflow_runs"."workflow_id" = ?`, f.WorkflowID)))
+		} else {
+			query.Apply(w.WorkflowID.EQ(f.WorkflowID))
+		}
 	}
 	if f.AfterID != "" {
 		query.Apply(w.ID.GT(f.AfterID))
@@ -57,9 +67,15 @@ func (q Queries) WorkflowRuns(ctx context.Context, f runs.Filter, statuses []ope
 		for i, status := range statuses {
 			values[i] = string(status)
 		}
-		oc := models.Operations.Columns
-		matching := models.Operations.Query(sm.Columns(oc.ID), sm.Where(oc.Status.In(sqlite.Arg(values...))))
-		query.Apply(sm.Where(sqlite.Raw(`"workflow_runs"."id" IN ?`, matching)))
+		if byItems {
+			// Each candidate run's operation is read by its key, not the
+			// list of every operation with these statuses.
+			query.Apply(sm.Where(sqlite.Raw(`EXISTS (SELECT 1 FROM "operations" WHERE "operations"."id" = "workflow_runs"."id" AND "operations"."status" IN ?)`, sqlite.ArgGroup(values...))))
+		} else {
+			oc := models.Operations.Columns
+			matching := models.Operations.Query(sm.Columns(oc.ID), sm.Where(oc.Status.In(sqlite.Arg(values...))))
+			query.Apply(sm.Where(sqlite.Raw(`"workflow_runs"."id" IN ?`, matching)))
+		}
 	}
 	if len(f.ExcludeEventTypes) > 0 {
 		query.Apply(w.EventType.NotIn(f.ExcludeEventTypes...))
@@ -81,9 +97,8 @@ func (q Queries) WorkflowRuns(ctx context.Context, f runs.Filter, statuses []ope
 		for i, id := range f.ItemIDs {
 			items[i] = id
 		}
-		ic := models.WorkflowRunItems.Columns
-		members := models.WorkflowRunItems.Query(sm.Columns(ic.RunID), sm.Where(ic.ItemID.In(sqlite.Arg(items...))))
-		query.Apply(sm.Where(sqlite.Or(c.ItemID.In(sqlite.Arg(items...)), sqlite.Raw(`"workflow_runs"."id" IN ?`, members))))
+		// A run holds an item as its own or among its selection.
+		query.Apply(sm.Where(sqlite.Raw(`"workflow_runs"."id" IN (SELECT "id" FROM "workflow_runs" WHERE "item_id" IN ? UNION SELECT "run_id" FROM "workflow_run_items" WHERE "item_id" IN ?)`, sqlite.ArgGroup(items...), sqlite.ArgGroup(items...))))
 	}
 	if f.HideSystem || f.SystemOnly {
 		if len(f.SystemKeys) > 0 {

@@ -67,6 +67,24 @@ func testWorkflowRunRepository(t *testing.T, s *dal.Store) {
 	if err != nil || found.Status != runstore.StatusCompleted || !jsonutil.Equal(found.Output, []byte(`{"ok":true}`)) || len(found.Logs) != 1 || found.CompletedAt == nil {
 		t.Fatalf("run does not follow its operation: %+v %v", found, err)
 	}
+	// A coalescing workflow asks for its active runs on an item: the run
+	// holding the item as its own, not a finished one or another workflow's.
+	other, err := s.Workflows().Create(ctx, workflows.CreateInput{WorkspaceID: f.Workspace, Key: "other", Name: "Other", Content: daltest.Script, CreatedBy: "alice"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, in := range []runstore.CreateInput{
+		{ID: "own", WorkflowID: wf.ID, WorkflowVersion: 1, WorkspaceID: f.Workspace, ItemID: f.Item, EventID: "event-own", EventType: "item.created", Actor: "alice"},
+		{ID: "elsewhere", WorkflowID: other.ID, WorkflowVersion: 1, WorkspaceID: f.Workspace, ItemID: f.Item, EventID: "event-elsewhere", EventType: "item.created", Actor: "alice"},
+	} {
+		if err := daltest.Run(ctx, s, in); err != nil {
+			t.Fatal(err)
+		}
+	}
+	active, err := s.Runs().List(ctx, runstore.Filter{WorkflowID: wf.ID, ItemIDs: []string{f.Item, "missing"}, Statuses: runstore.Active})
+	if err != nil || len(active) != 1 || active[0].ID != "own" {
+		t.Fatalf("the workflow's active runs on the item: %+v %v", active, err)
+	}
 	if err := daltest.Run(ctx, s, runstore.CreateInput{ID: "retry", WorkflowID: wf.ID, WorkspaceID: f.Workspace, WorkflowVersion: 1, EventID: "retry", EventType: "manual", Actor: "alice", RetryOf: "first"}); err != nil {
 		t.Fatal(err)
 	}

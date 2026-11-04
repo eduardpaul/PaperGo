@@ -341,7 +341,10 @@ func (q Queries) ReadyWorkspaces(ctx context.Context, kinds []string, now time.T
 
 func (q Queries) NextAttempt(ctx context.Context, kinds []string, now time.Time) (*time.Time, error) {
 	c := models.Operations.Columns
-	pending := []dialect.Expression{c.Status.EQ(psql.Arg(string(operations.StatusPending))), c.Kind.In(psql.Arg(anys(kinds)...)), c.ExecutionID.EQ(psql.Arg(""))}
+	// Each kind is one seek of the partial indexes operation_next_attempt and
+	// operation_next_claim, whose terms the literals match: workers wake on
+	// every accepted operation, and a walk past a backlog of other kinds
+	// would grow with it.
 	var next *time.Time
 	earliest := func(where []dialect.Expression, order any, at func(*models.Operation) time.Time) error {
 		query := models.Operations.Query(sm.OrderBy(order), sm.Limit(1))
@@ -360,13 +363,16 @@ func (q Queries) NextAttempt(ctx context.Context, kinds []string, now time.Time)
 		}
 		return nil
 	}
-	unclaimed := append(append([]dialect.Expression{}, pending...), psql.Or(c.ClaimUntil.IsNull(), c.ClaimUntil.LTE(psql.Arg(now))))
-	if err := earliest(unclaimed, c.AttemptAt, func(r *models.Operation) time.Time { return r.AttemptAt }); err != nil {
-		return nil, err
-	}
-	claimed := append(append([]dialect.Expression{}, pending...), c.ClaimUntil.GT(psql.Arg(now)))
-	if err := earliest(claimed, c.ClaimUntil, func(r *models.Operation) time.Time { return r.ClaimUntil.GetOrZero() }); err != nil {
-		return nil, err
+	for _, kind := range kinds {
+		pending := []dialect.Expression{psql.Raw(`"operations"."status" = 'pending' AND "operations"."execution_id" = ''`), c.Kind.EQ(psql.Arg(kind))}
+		unclaimed := append(append([]dialect.Expression{}, pending...), psql.Or(c.ClaimUntil.IsNull(), c.ClaimUntil.LTE(psql.Arg(now))))
+		if err := earliest(unclaimed, c.AttemptAt, func(r *models.Operation) time.Time { return r.AttemptAt }); err != nil {
+			return nil, err
+		}
+		claimed := append(append([]dialect.Expression{}, pending...), c.ClaimUntil.IsNotNull(), c.ClaimUntil.GT(psql.Arg(now)))
+		if err := earliest(claimed, c.ClaimUntil, func(r *models.Operation) time.Time { return r.ClaimUntil.GetOrZero() }); err != nil {
+			return nil, err
+		}
 	}
 	return next, nil
 }
