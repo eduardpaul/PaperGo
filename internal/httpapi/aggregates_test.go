@@ -39,7 +39,7 @@ func TestQueryAggregatesRoute(t *testing.T) {
 	}
 	for body, code := range map[string]int{
 		`{"aggregates":[]}`: 422,
-		`{"aggregates":[{"op":"sum","field":"outdoor"}],"unknown":true}`: 400,
+		`{"aggregates":[{"op":"sum","field":"outdoor"}],"unknown":true}`:                                  400,
 		`{"query":{"group_by":"outdoor"},"interval":"day","aggregates":[{"op":"sum","field":"outdoor"}]}`: 422,
 	} {
 		if w = request(h, "POST", "/v1/resources/"+list.ID+"/query/aggregates", body, testToken, "", "application/json"); w.Code != code {

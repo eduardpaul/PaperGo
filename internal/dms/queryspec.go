@@ -80,8 +80,8 @@ type QueryRequest struct {
 	rowACL bool
 	// itemsOnly leaves folders out (navigation views).
 	itemsOnly bool
-	// measures are the fields aggregates read of each row.
-	measures []string
+	// aggregation makes the query's rows those of these aggregates.
+	aggregation *aggregationSpec
 }
 type QueryResult struct {
 	Data []*resources.Resource `json:"value"`
@@ -90,7 +90,7 @@ type QueryResult struct {
 	Compact    bool     `json:"-"`
 	Selection  []string `json:"-"`
 	NextCursor string   `json:"-"`
-	Total      *int   `json:"total,omitempty"`
+	Total      *int     `json:"total,omitempty"`
 	// TotalCapped means more than total items match (see TotalLimit).
 	TotalCapped bool `json:"total_capped,omitempty"`
 	// SearchCapped means the search text matched more entries than a query
@@ -115,8 +115,6 @@ type compiledQuery struct {
 	// searchCapped means the search text matched more entries than queries
 	// consider (searchMatchLimit).
 	searchCapped bool
-	// measures are the fields of QueryRequest.measures, in their order.
-	measures []content.Field
 }
 type queryCursor struct {
 	Fingerprint string            `json:"fingerprint"`
@@ -472,15 +470,11 @@ func (s *Service) collectionPlan(ctx context.Context, subject string, c *resourc
 	if err != nil {
 		return content.Plan{}, compiledQuery{}, err
 	}
-	var measures []content.Field
-	for _, key := range in.measures {
-		field, err := compiler.column(key)
-		if err != nil {
+	if in.aggregation != nil {
+		if plan.Aggregation, err = in.aggregation.resolve(compiler.column); err != nil {
 			return content.Plan{}, compiledQuery{}, err
 		}
-		measures = append(measures, field)
 	}
-	plan.Measures = measures
 	if in.Query.ParentID != "" {
 		parent, e := s.authorize(ctx, subject, in.Query.ParentID, "read")
 		if e != nil {
@@ -527,7 +521,7 @@ func (s *Service) collectionPlan(ctx context.Context, subject string, c *resourc
 		Select                               []string
 	}{subject, c.ID, in.Surface, *c.SchemaHeadID, in.Query, grouped, in.itemsOnly, in.Select})
 	sum := sha256.Sum256(fingerprint)
-	return plan, compiledQuery{fingerprint: hex.EncodeToString(sum[:]), projection: projection, includeKeywords: includeKeywords, searchCapped: searchCapped, measures: measures}, nil
+	return plan, compiledQuery{fingerprint: hex.EncodeToString(sum[:]), projection: projection, includeKeywords: includeKeywords, searchCapped: searchCapped}, nil
 }
 func cursorEncode(q compiledQuery, id string, value any) string {
 	values := []any{value}

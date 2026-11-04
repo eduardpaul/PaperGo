@@ -141,8 +141,11 @@ func (d Dialect) FirstSegment(text string) string {
 func (d Dialect) Prefix(text string, size int, timestamp bool) string {
 	if d.Postgres && timestamp {
 		layout := "YYYY"
-		if size == 7 {
+		switch size {
+		case 7:
 			layout = "YYYY-MM"
+		case 10:
+			layout = "YYYY-MM-DD"
 		}
 		return `to_char(` + text + ` AT TIME ZONE 'UTC', '` + layout + `')`
 	}

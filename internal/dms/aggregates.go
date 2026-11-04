@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"maps"
 	"math/big"
 	"regexp"
 	"slices"
@@ -69,55 +70,18 @@ type AggregateResult struct {
 	SearchCapped bool `json:"search_capped,omitempty"`
 }
 
-// Aggregate limits: figures a request asks for and groups it returns.
+// Aggregate limits: figures a request asks for, groups it returns and items
+// it reads. A request past the items or groups fails rather than answering
+// about part of them.
 const (
 	maxAggregates      = 20
 	maxAggregateGroups = 10000
+	maxAggregateItems  = 1_000_000
+	// maxAggregateGroupBy is the fields a group's key can hold.
+	maxAggregateGroupBy = 1
 )
 
 var aggregateName = regexp.MustCompile(`^[a-z0-9_]{1,64}$`)
-
-// exact is a number as a coefficient and its scale (decimal digits).
-type exact struct {
-	n     *big.Int
-	scale int
-}
-
-// numberScale is the scale of number and currency index keys.
-const numberScale = 28
-
-// exactOf reads a measure's raw value as an exact number.
-func exactOf(d *catalog.FieldDefinition, v any) (exact, error) {
-	switch d.Type {
-	case catalog.FieldInteger, catalog.FieldDecimal:
-		n, ok := v.(int64)
-		if !ok {
-			return exact{}, fmt.Errorf("invalid %s value", d.Type)
-		}
-		scale := 0
-		if d.Type == catalog.FieldDecimal {
-			scale = d.Scale
-		}
-		return exact{big.NewInt(n), scale}, nil
-	default:
-		key, ok := v.(string)
-		if !ok || len(key) != 58 || key[0] != '0' && key[0] != '1' {
-			return exact{}, fmt.Errorf("invalid %s value", d.Type)
-		}
-		digits := key[1:]
-		if key[0] == '0' {
-			digits = complementDigits(digits)
-		}
-		n, ok := new(big.Int).SetString(digits, 10)
-		if !ok {
-			return exact{}, fmt.Errorf("invalid %s value", d.Type)
-		}
-		if key[0] == '0' {
-			n.Neg(n)
-		}
-		return exact{n, numberScale}, nil
-	}
-}
 
 // decimalText writes n at scale; trim drops trailing fraction zeros.
 func decimalText(n *big.Int, scale int, trim bool) string {
@@ -153,22 +117,6 @@ func divide(num, den *big.Int) *big.Int {
 }
 
 func pow10(n int) *big.Int { return new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(n)), nil) }
-
-// measure is how one aggregate reads its field and what it has gathered in
-// a group.
-type measure struct {
-	spec  Aggregate
-	name  string
-	def   *catalog.FieldDefinition
-	typ   catalog.FieldType
-	index int // the measure column the field is read from
-}
-
-type tally struct {
-	count    int
-	sum      exact
-	min, max any // raw values of min and max
-}
 
 func numericType(t catalog.FieldType) bool {
 	return t == catalog.FieldInteger || t == catalog.FieldDecimal || t == catalog.FieldNumber || t == catalog.FieldCurrency
@@ -270,260 +218,375 @@ func temporalText(typ catalog.FieldType, v any) (any, error) {
 	return t.UTC().Format(time.RFC3339Nano), nil
 }
 
-// QueryAggregates works out figures of the items a collection query
-// matches, in groups of query.group_by or as one group with a null key.
-// It reads each matching item once, as the caller may read it.
-func (s *Service) QueryAggregates(ctx context.Context, subject, containerID string, in AggregateRequest) (AggregateResult, error) {
+// aggregateGrouping is one field of a group's key.
+type aggregateGrouping struct {
+	field    string
+	interval AggregateInterval
+	zone     *time.Location
+	typ      catalog.FieldType
+	def      *catalog.FieldDefinition
+	// byDay means the group column holds the UTC day or date of the value;
+	// otherwise, with an interval, it holds the value.
+	byDay bool
+}
+
+// aggregatedField is a field the aggregates read, whatever number of them
+// do: one measure works out all they need.
+type aggregatedField struct {
+	key   string
+	typ   catalog.FieldType
+	scale int
+}
+
+// aggregateFigure is one figure of each group, of one aggregated field.
+type aggregateFigure struct {
+	spec  Aggregate
+	name  string
+	field int
+}
+
+// aggregationSpec is a validated request for aggregates.
+type aggregationSpec struct {
+	groups   []aggregateGrouping
+	fields   []aggregatedField
+	measures []content.Measure
+	figures  []aggregateFigure
+	// maxItems and maxGroups are the limits it answers within.
+	maxItems, maxGroups int
+}
+
+// aggregation validates what can be without the collection's fields.
+func aggregation(in AggregateRequest) (*aggregationSpec, error) {
 	if len(in.Aggregates) == 0 || len(in.Aggregates) > maxAggregates {
-		return AggregateResult{}, invalid(fmt.Sprintf("aggregates needs 1 to %d figures", maxAggregates))
+		return nil, invalid(fmt.Sprintf("aggregates needs 1 to %d figures", maxAggregates))
 	}
-	grouped := in.Query.GroupBy != ""
+	spec := &aggregationSpec{maxItems: maxAggregateItems, maxGroups: maxAggregateGroups}
+	if in.Query.GroupBy != "" {
+		g := aggregateGrouping{field: in.Query.GroupBy, interval: in.Interval, zone: time.UTC}
+		if in.TimeZone != "" {
+			loc, err := time.LoadLocation(in.TimeZone)
+			if err != nil || in.TimeZone == "Local" {
+				return nil, invalid("time_zone is an IANA time zone, such as Europe/Madrid")
+			}
+			g.zone = loc
+		}
+		spec.groups = append(spec.groups, g)
+	}
 	if in.Interval != "" && !slices.Contains([]AggregateInterval{IntervalDay, IntervalWeek, IntervalMonth, IntervalYear}, in.Interval) {
-		return AggregateResult{}, invalid("interval is day, week, month or year")
+		return nil, invalid("interval is day, week, month or year")
 	}
-	if in.Interval != "" && !grouped {
-		return AggregateResult{}, invalid("interval groups the group_by field; name one")
+	if in.Interval != "" && in.Query.GroupBy == "" {
+		return nil, invalid("interval groups the group_by field; name one")
 	}
 	if in.TimeZone != "" && in.Interval == "" {
-		return AggregateResult{}, invalid("time_zone belongs to an interval")
+		return nil, invalid("time_zone belongs to an interval")
 	}
-	zone := time.UTC
-	if in.TimeZone != "" {
-		loc, err := time.LoadLocation(in.TimeZone)
-		if err != nil || in.TimeZone == "Local" {
-			return AggregateResult{}, invalid("time_zone is an IANA time zone, such as Europe/Madrid")
-		}
-		zone = loc
-	}
-	// Figures come by group key; a sort would not change them.
-	in.Query.Sort = nil
-	fields := []string{}
-	measures := make([]measure, len(in.Aggregates))
 	names := map[string]bool{}
-	for i, a := range in.Aggregates {
+	for _, a := range in.Aggregates {
 		if !slices.Contains([]AggregateOp{AggregateCount, AggregateSum, AggregateAvg, AggregateMin, AggregateMax}, a.Op) {
-			return AggregateResult{}, invalid("an aggregate's op is count, sum, avg, min or max")
+			return nil, invalid("an aggregate's op is count, sum, avg, min or max")
 		}
 		if a.Field == "" {
-			return AggregateResult{}, invalid("an aggregate names its field; every group has its count")
+			return nil, invalid("an aggregate names its field; every group has its count")
 		}
 		name := a.As
 		if name == "" {
 			name = string(a.Op) + "_" + strings.TrimPrefix(a.Field, "$")
 		}
 		if !aggregateName.MatchString(name) {
-			return AggregateResult{}, invalid("an aggregate's name has 1 to 64 lowercase letters, digits or _: " + name)
+			return nil, invalid("an aggregate's name has 1 to 64 lowercase letters, digits or _: " + name)
 		}
 		if names[name] {
-			return AggregateResult{}, invalid("aggregate names are unique: " + name)
+			return nil, invalid("aggregate names are unique: " + name)
 		}
 		names[name] = true
-		index := slices.Index(fields, a.Field)
+		index := slices.IndexFunc(spec.fields, func(f aggregatedField) bool { return f.key == a.Field })
 		if index < 0 {
-			index = len(fields)
-			fields = append(fields, a.Field)
+			index = len(spec.fields)
+			spec.fields = append(spec.fields, aggregatedField{key: a.Field})
+			spec.measures = append(spec.measures, content.Measure{})
 		}
-		measures[i] = measure{spec: a, name: name, index: index}
+		m := &spec.measures[index]
+		switch a.Op {
+		case AggregateSum, AggregateAvg:
+			m.Sum = true
+		case AggregateMin:
+			m.Min = true
+		case AggregateMax:
+			m.Max = true
+		}
+		spec.figures = append(spec.figures, aggregateFigure{spec: a, name: name, field: index})
 	}
-	ctx, err := s.matchQueryText(ctx, subject, containerID, in.Query.Search, in.Query.Archive.Default())
-	if err != nil {
-		return AggregateResult{}, err
-	}
-	return read(ctx, s, func(t *Service) (AggregateResult, error) {
-		q, e := t.compileQuery(ctx, subject, containerID, QueryRequest{Query: in.Query, Surface: in.Surface, itemsOnly: true, measures: fields}, grouped)
-		if e != nil {
-			return AggregateResult{}, e
-		}
-		for i := range measures {
-			m := &measures[i]
-			field := q.measures[m.index]
-			m.def, m.typ = field.Def, fieldType(field)
-			switch m.spec.Op {
-			case AggregateSum, AggregateAvg:
-				if !numericType(m.typ) {
-					return AggregateResult{}, invalid(fmt.Sprintf("%s adds up integer, decimal, number or currency fields, not %s", m.spec.Op, m.spec.Field))
-				}
-			case AggregateMin, AggregateMax:
-				if !numericType(m.typ) && !temporalType(m.typ) {
-					return AggregateResult{}, invalid(fmt.Sprintf("%s compares numeric, date or date-time fields, not %s", m.spec.Op, m.spec.Field))
-				}
-			}
-		}
-		groupType := catalog.FieldType("")
-		if grouped {
-			groupType = fieldType(content.Field{Key: in.Query.GroupBy, Def: q.q.RankDef})
-			if in.Interval != "" && !temporalType(groupType) {
-				return AggregateResult{}, invalid("interval groups a date or date-time group_by field")
-			}
-		}
-		type group struct {
-			raw     any
-			count   int
-			tallies []tally
-		}
-		groups := map[string]*group{}
-		var nullGroup *group
-		e = t.DAL.Content().Measured(ctx, q.q, grouped, len(fields), func(key any, values []any) error {
-			if key != nil && in.Interval != "" {
-				at, err := rawTime(key)
-				if err != nil {
-					return err
-				}
-				if groupType == catalog.FieldDatetime {
-					at = at.In(zone)
-				}
-				key = period(at, in.Interval)
-			}
-			var g *group
-			if key == nil {
-				if nullGroup == nil {
-					nullGroup = &group{tallies: make([]tally, len(measures))}
-				}
-				g = nullGroup
-			} else {
-				id := fmt.Sprintf("%T:%v", key, key)
-				if g = groups[id]; g == nil {
-					if len(groups) >= maxAggregateGroups {
-						return invalid(fmt.Sprintf("more than %d groups: filter the items or group by a longer interval", maxAggregateGroups))
-					}
-					g = &group{raw: key, tallies: make([]tally, len(measures))}
-					groups[id] = g
-				}
-			}
-			g.count++
-			for i := range measures {
-				m := &measures[i]
-				v := values[m.index]
-				if v == nil {
-					continue
-				}
-				tl := &g.tallies[i]
-				tl.count++
-				switch m.spec.Op {
-				case AggregateSum, AggregateAvg:
-					x, err := exactOf(m.def, v)
-					if err != nil {
-						return err
-					}
-					if tl.sum.n == nil {
-						tl.sum = exact{new(big.Int), x.scale}
-					}
-					tl.sum.n.Add(tl.sum.n, x.n)
-				case AggregateMin:
-					if tl.min == nil || m.less(v, tl.min) {
-						tl.min = v
-					}
-				case AggregateMax:
-					if tl.max == nil || m.less(tl.max, v) {
-						tl.max = v
-					}
-				}
-			}
-			return nil
-		})
-		if e != nil {
-			return AggregateResult{}, e
-		}
-		ordered := make([]*group, 0, len(groups)+1)
-		for _, g := range groups {
-			ordered = append(ordered, g)
-		}
-		slices.SortFunc(ordered, func(a, b *group) int { return compareRaw(a.raw, b.raw) })
-		if nullGroup != nil {
-			ordered = append(ordered, nullGroup)
-		}
-		out := AggregateResult{Data: make([]AggregateGroup, 0, len(ordered)), SearchCapped: q.searchCapped}
-		for _, g := range ordered {
-			key := g.raw
-			if key != nil && in.Interval == "" {
-				if key, e = groupValue(q.q.Orders[0].Kind, q.q.RankDef, key); e != nil {
-					return AggregateResult{}, e
-				}
-				if temporalType(groupType) {
-					if key, e = temporalText(groupType, key); e != nil {
-						return AggregateResult{}, e
-					}
-				}
-			}
-			values := make(map[string]any, len(measures))
-			for i, m := range measures {
-				if values[m.name], e = m.figure(g.tallies[i]); e != nil {
-					return AggregateResult{}, e
-				}
-			}
-			out.Data = append(out.Data, AggregateGroup{Key: key, Count: g.count, Values: values})
-		}
-		return out, nil
-	})
+	return spec, nil
 }
 
-// less orders two raw values of the measure's field.
-func (m measure) less(a, b any) bool {
-	if numericType(m.typ) {
-		x, errX := exactOf(m.def, a)
-		y, errY := exactOf(m.def, b)
-		if errX == nil && errY == nil {
-			return x.n.Cmp(y.n) < 0
+// resolve checks the aggregates against a collection's fields and says what
+// the database works out.
+func (a *aggregationSpec) resolve(column func(string) (content.Field, error)) (*content.Aggregation, error) {
+	out := &content.Aggregation{Measures: a.measures}
+	for i := range a.groups {
+		g := &a.groups[i]
+		field, err := column(g.field)
+		if err != nil {
+			return nil, err
+		}
+		g.def, g.typ = field.Def, fieldType(field)
+		group := content.GroupBy{Field: field}
+		if g.interval != "" {
+			if !temporalType(g.typ) {
+				return nil, invalid("interval groups a date or date-time group_by field")
+			}
+			// The database can read a date's day and a date-time's UTC day; any
+			// other zone's days are worked out from the values here.
+			if g.typ == catalog.FieldDate || g.zone == time.UTC {
+				group.By, g.byDay = "day", true
+			}
+		}
+		out.Groups = append(out.Groups, group)
+	}
+	for i := range a.fields {
+		f := &a.fields[i]
+		field, err := column(f.key)
+		if err != nil {
+			return nil, err
+		}
+		f.typ = fieldType(field)
+		if field.Def != nil {
+			f.scale = field.Def.Scale
+		}
+		out.Measures[i].Field = field
+	}
+	for _, figure := range a.figures {
+		typ := a.fields[figure.field].typ
+		switch figure.spec.Op {
+		case AggregateSum, AggregateAvg:
+			if !numericType(typ) {
+				return nil, invalid(fmt.Sprintf("%s adds up integer, decimal, number or currency fields, not %s", figure.spec.Op, figure.spec.Field))
+			}
+		case AggregateMin, AggregateMax:
+			if !numericType(typ) && !temporalType(typ) {
+				return nil, invalid(fmt.Sprintf("%s compares numeric, date or date-time fields, not %s", figure.spec.Op, figure.spec.Field))
+			}
 		}
 	}
-	if temporalType(m.typ) {
-		x, errX := rawTime(a)
-		y, errY := rawTime(b)
-		if errX == nil && errY == nil {
-			return x.Before(y)
-		}
+	return out, nil
+}
+
+// key is a group column's value as the group's key: the period holding it
+// with an interval; otherwise a comparable raw value.
+func (g aggregateGrouping) key(v any) (any, error) {
+	switch x := v.(type) {
+	case nil:
+		return nil, nil
+	case []byte:
+		v = string(x)
+	case time.Time:
+		v = x.UTC()
 	}
-	return compareRaw(a, b) < 0
+	if g.interval == "" {
+		return v, nil
+	}
+	at, err := rawTime(v)
+	if err != nil {
+		return nil, err
+	}
+	if !g.byDay {
+		at = at.In(g.zone)
+	}
+	return period(at, g.interval), nil
+}
+
+// show is a group's key as the API shows it.
+func (g aggregateGrouping) show(kind content.Kind, key any) (any, error) {
+	if key == nil || g.interval != "" {
+		return key, nil
+	}
+	shown, err := groupValue(kind, g.def, key)
+	if err != nil {
+		return nil, err
+	}
+	if temporalType(g.typ) {
+		return temporalText(g.typ, shown)
+	}
+	return shown, nil
+}
+
+// aggregateKey is a group's raw key, comparable as a map key.
+type aggregateKey [maxAggregateGroupBy]any
+
+// tally gathers what a measure worked out in the rows of a group.
+type tally struct {
+	count    int
+	sum      *big.Int
+	min, max any
+}
+
+func (t *tally) add(f content.Figures) {
+	t.count += f.Count
+	if f.Sum != nil {
+		if t.sum == nil {
+			t.sum = new(big.Int)
+		}
+		t.sum.Add(t.sum, f.Sum)
+	}
+	if f.Min != nil && (t.min == nil || compareRaw(f.Min, t.min) < 0) {
+		t.min = f.Min
+	}
+	if f.Max != nil && (t.max == nil || compareRaw(f.Max, t.max) > 0) {
+		t.max = f.Max
+	}
+}
+
+// sumScale is the fraction digits of a field's stored values.
+func (f aggregatedField) sumScale() int {
+	if f.typ == catalog.FieldNumber || f.typ == catalog.FieldCurrency {
+		return content.ExactScale
+	}
+	return f.scale
 }
 
 // averageScale is the fraction digits of an average: four beyond an
 // integer or decimal field's scale, ten for number and currency fields.
-func (m measure) averageScale() int {
-	switch m.typ {
-	case catalog.FieldInteger:
-		return 4
-	case catalog.FieldDecimal:
-		return m.def.Scale + 4
+func (f aggregatedField) averageScale() int {
+	if f.typ == catalog.FieldNumber || f.typ == catalog.FieldCurrency {
+		return 10
 	}
-	return 10
+	return f.scale + 4
 }
 
-// figure is a tally as the API shows it: counts as numbers; sums, minimums
-// and maximums of numeric fields as exact strings in the field's form;
-// averages as exact strings rounded half to even (averageScale); dates as
-// items show them; null without values.
-func (m measure) figure(t tally) (any, error) {
-	if m.spec.Op == AggregateCount {
+// show is a minimum or maximum as the API shows it.
+func (f aggregatedField) show(v any) (any, error) {
+	if temporalType(f.typ) {
+		return temporalText(f.typ, v)
+	}
+	if n, ok := v.(int64); ok {
+		return decimalText(big.NewInt(n), f.scale, false), nil
+	}
+	key, ok := v.(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid %s value", f.typ)
+	}
+	n, err := numberFromKey(key)
+	return n.String(), err
+}
+
+// value is a figure of a group as the API shows it: counts as numbers; sums,
+// minimums and maximums of numeric fields as exact strings in the field's
+// form; averages as exact strings rounded half to even (averageScale); dates
+// as items show them; null without values.
+func (figure aggregateFigure) value(f aggregatedField, t tally) (any, error) {
+	if figure.spec.Op == AggregateCount {
 		return t.count, nil
 	}
 	if t.count == 0 {
 		return nil, nil
 	}
-	numeric := func(v exact) string {
-		if m.typ == catalog.FieldNumber || m.typ == catalog.FieldCurrency {
-			return decimalText(v.n, v.scale, true)
-		}
-		return decimalText(v.n, v.scale, false)
-	}
-	switch m.spec.Op {
+	switch figure.spec.Op {
 	case AggregateSum:
-		return numeric(t.sum), nil
+		return decimalText(t.sum, f.sumScale(), f.sumScale() == content.ExactScale), nil
 	case AggregateAvg:
-		scale := m.averageScale()
-		num := new(big.Int).Mul(t.sum.n, pow10(scale))
-		den := new(big.Int).Mul(big.NewInt(int64(t.count)), pow10(t.sum.scale))
+		scale := f.averageScale()
+		num := new(big.Int).Mul(t.sum, pow10(scale))
+		den := new(big.Int).Mul(big.NewInt(int64(t.count)), pow10(f.sumScale()))
 		return decimalText(divide(num, den), scale, true), nil
+	case AggregateMin:
+		return f.show(t.min)
 	}
-	v := t.min
-	if m.spec.Op == AggregateMax {
-		v = t.max
-	}
-	if temporalType(m.typ) {
-		return temporalText(m.typ, v)
-	}
-	x, err := exactOf(m.def, v)
+	return f.show(t.max)
+}
+
+// QueryAggregates works out figures of the items a collection query
+// matches, in groups of query.group_by or as one group with a null key.
+// The database reads each matching item once, as the caller may read it.
+func (s *Service) QueryAggregates(ctx context.Context, subject, containerID string, in AggregateRequest) (AggregateResult, error) {
+	spec, err := aggregation(in)
 	if err != nil {
-		return nil, err
+		return AggregateResult{}, err
 	}
-	return numeric(x), nil
+	// Figures come by group key; a sort would not change them.
+	in.Query.Sort = nil
+	ctx, err = s.matchQueryText(ctx, subject, containerID, in.Query.Search, in.Query.Archive.Default())
+	if err != nil {
+		return AggregateResult{}, err
+	}
+	return snapshot(ctx, s, func(t *Service) (AggregateResult, error) {
+		q, e := t.compileQuery(ctx, subject, containerID, QueryRequest{Query: in.Query, Surface: in.Surface, itemsOnly: true, aggregation: spec}, false)
+		if e != nil {
+			return AggregateResult{}, e
+		}
+		return t.aggregates(ctx, q, spec)
+	})
+}
+
+// aggregates runs a compiled aggregation and writes its groups.
+func (s *Service) aggregates(ctx context.Context, q compiledQuery, spec *aggregationSpec) (AggregateResult, error) {
+	type group struct {
+		key     aggregateKey
+		count   int
+		tallies []tally
+	}
+	groups := map[aggregateKey]*group{}
+	items := 0
+	e := s.DAL.Content().Aggregate(ctx, q.q, spec.maxItems+1, func(row content.AggregateRow) error {
+		if items += row.Count; items > spec.maxItems {
+			return invalid(fmt.Sprintf("more than %d items match: filter them", spec.maxItems))
+		}
+		var key aggregateKey
+		for i, v := range row.Keys {
+			var err error
+			if key[i], err = spec.groups[i].key(v); err != nil {
+				return err
+			}
+		}
+		g := groups[key]
+		if g == nil {
+			if len(groups) >= spec.maxGroups {
+				return invalid(fmt.Sprintf("more than %d groups: filter the items or group by a longer interval", spec.maxGroups))
+			}
+			g = &group{key: key, tallies: make([]tally, len(spec.fields))}
+			groups[key] = g
+		}
+		g.count += row.Count
+		for i, f := range row.Figures {
+			g.tallies[i].add(f)
+		}
+		return nil
+	})
+	if e != nil {
+		return AggregateResult{}, e
+	}
+	ordered := slices.Collect(maps.Values(groups))
+	slices.SortFunc(ordered, func(a, b *group) int {
+		for i := range spec.groups {
+			switch x, y := a.key[i], b.key[i]; {
+			case x == nil && y == nil:
+			case x == nil:
+				return 1
+			case y == nil:
+				return -1
+			default:
+				if c := compareRaw(x, y); c != 0 {
+					return c
+				}
+			}
+		}
+		return 0
+	})
+	out := AggregateResult{Data: make([]AggregateGroup, 0, len(ordered)), SearchCapped: q.searchCapped}
+	for _, g := range ordered {
+		var key any
+		if len(spec.groups) > 0 {
+			if key, e = spec.groups[0].show(q.q.GroupKinds[0], g.key[0]); e != nil {
+				return AggregateResult{}, e
+			}
+		}
+		values := make(map[string]any, len(spec.figures))
+		for _, figure := range spec.figures {
+			if values[figure.name], e = figure.value(spec.fields[figure.field], g.tallies[figure.field]); e != nil {
+				return AggregateResult{}, e
+			}
+		}
+		out.Data = append(out.Data, AggregateGroup{Key: key, Count: g.count, Values: values})
+	}
+	return out, nil
 }

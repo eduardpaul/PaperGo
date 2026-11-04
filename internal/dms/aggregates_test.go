@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"papergo/internal/dal/catalog"
 	"papergo/internal/model"
 )
 
@@ -168,12 +167,85 @@ func TestAggregateArithmetic(t *testing.T) {
 			t.Errorf("decimalText(%d, %d, %v) = %q, want %q", tc.n, tc.scale, tc.trim, got, tc.want)
 		}
 	}
-	key, _ := numberKey(json.Number("-12.5"))
-	if x, err := exactOf(&catalog.FieldDefinition{Type: catalog.FieldCurrency}, key); err != nil || decimalText(x.n, x.scale, true) != "-12.5" {
-		t.Fatal("an exact number from its key", x, err)
-	}
 	sunday, _ := time.Parse(time.RFC3339, "2026-03-29T14:00:00+02:00")
 	if !reflect.DeepEqual(period(sunday, IntervalWeek), "2026-03-23") {
 		t.Fatal("weeks start on Monday")
+	}
+}
+
+// Sums stay exact at the edges of what fields hold, negative values and
+// values of many digits included, and a query that matches nothing still
+// has its one group.
+func TestAggregateExactSums(t *testing.T) {
+	s, _, l := fixture(t)
+	fieldOK(t, s, l.ID, CreateField{Key: "amount", Label: "Amount", Type: "number", Indexed: true})
+	fieldOK(t, s, l.ID, CreateField{Key: "big", Label: "Big", Type: "integer", Indexed: true})
+	fieldOK(t, s, l.ID, CreateField{Key: "cents", Label: "Cents", Type: "decimal", Scale: 2, Indexed: true})
+	fieldOK(t, s, l.ID, CreateField{Key: "kind", Label: "Kind", Type: "text", Indexed: true})
+	for _, values := range []map[string]any{
+		{"amount": json.Number("79228162514264337593543950335"), "big": json.Number("9007199254740993"), "cents": json.Number("-0.05"), "kind": "a"},
+		{"amount": json.Number("79228162514264337593543950335"), "big": json.Number("9007199254740993"), "cents": json.Number("-1999999999.99"), "kind": "a"},
+		{"amount": json.Number("-0.0000000000000000000000000001"), "big": json.Number("-1000000001"), "cents": json.Number("0.01"), "kind": "a"},
+		{"amount": json.Number("-12.5"), "big": json.Number("-1"), "kind": "b"},
+		{"amount": json.Number("12.5"), "big": json.Number("1"), "kind": "b"},
+	} {
+		publishItem(t, s, create(t, s, l.ID, "item", "Row", values))
+	}
+	figures := []Aggregate{
+		{Op: AggregateSum, Field: "amount"}, {Op: AggregateSum, Field: "big"}, {Op: AggregateSum, Field: "cents"},
+		{Op: AggregateAvg, Field: "amount"}, {Op: AggregateAvg, Field: "big"}, {Op: AggregateAvg, Field: "cents"},
+		{Op: AggregateMin, Field: "amount"}, {Op: AggregateMax, Field: "amount"}, {Op: AggregateMin, Field: "big"}, {Op: AggregateMax, Field: "cents"},
+		{Op: AggregateCount, Field: "cents"},
+	}
+	out, err := s.QueryAggregates(testContext, "alice", l.ID, AggregateRequest{Query: QuerySpec{GroupBy: "kind"}, Aggregates: figures})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := json.Marshal(out.Data)
+	want := `[{"key":"a","count":3,"values":{"avg_amount":"52818775009509558395695966890","avg_big":"6004799169827328.3333","avg_cents":"-666666666.676667","count_cents":3,"max_amount":"79228162514264337593543950335","max_cents":"0.01","min_amount":"-0.0000000000000000000000000001","min_big":"-1000000001","sum_amount":"158456325028528675187087900669.9999999999999999999999999999","sum_big":"18014397509481985","sum_cents":"-2000000000.03"}},` +
+		`{"key":"b","count":2,"values":{"avg_amount":"0","avg_big":"0","avg_cents":null,"count_cents":0,"max_amount":"12.5","max_cents":null,"min_amount":"-12.5","min_big":"-1","sum_amount":"0","sum_big":"0","sum_cents":null}}]`
+	if string(got) != want {
+		t.Fatalf("exact figures:\n got %s\nwant %s", got, want)
+	}
+	none, err := s.QueryAggregates(testContext, "alice", l.ID, AggregateRequest{Query: QuerySpec{Filter: &FilterExpr{Field: "kind", Op: "eq", Value: json.RawMessage(`"z"`)}}, Aggregates: figures[:1]})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ = json.Marshal(none.Data); string(got) != `[{"key":null,"count":0,"values":{"sum_amount":null}}]` {
+		t.Fatalf("no match: %s", got)
+	}
+}
+
+// Past its limits a request fails rather than answering about part of the
+// items, and a group of items without a value counts as a group.
+func TestAggregateLimits(t *testing.T) {
+	s, _, l := fixture(t)
+	fieldOK(t, s, l.ID, CreateField{Key: "kind", Label: "Kind", Type: "text", Indexed: true})
+	for _, values := range []map[string]any{{"kind": "a"}, {"kind": "b"}, {}} {
+		publishItem(t, s, create(t, s, l.ID, "item", "Row", values))
+	}
+	run := func(items, groups int) error {
+		spec, err := aggregation(AggregateRequest{Query: QuerySpec{GroupBy: "kind"}, Aggregates: []Aggregate{{Op: AggregateCount, Field: "kind"}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		spec.maxItems, spec.maxGroups = items, groups
+		_, err = snapshot(testContext, s, func(tx *Service) (AggregateResult, error) {
+			q, e := tx.compileQuery(testContext, "alice", l.ID, QueryRequest{Query: QuerySpec{GroupBy: "kind"}, Surface: "auto", itemsOnly: true, aggregation: spec}, false)
+			if e != nil {
+				return AggregateResult{}, e
+			}
+			return tx.aggregates(testContext, q, spec)
+		})
+		return err
+	}
+	if err := run(3, 3); err != nil {
+		t.Fatal("within the limits:", err)
+	}
+	if err := run(2, 3); err == nil || !strings.Contains(err.Error(), "more than 2 items") {
+		t.Fatal("past the items:", err)
+	}
+	if err := run(3, 2); err == nil || !strings.Contains(err.Error(), "more than 2 groups") {
+		t.Fatal("past the groups, the group of no value included:", err)
 	}
 }
