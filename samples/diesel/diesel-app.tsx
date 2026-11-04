@@ -6,7 +6,9 @@
 // estimates today's level from the last reading at the season's rate of
 // consumption, and forecasts forward the same way, assuming the heating
 // goes on and off on its usual days. Indoor and outdoor temperatures show
-// beside the heating seasons. People add readings, purchases and heating
+// beside the heating seasons, as daily figures the server works out, so a
+// sensor filing one every hour costs the screen 365 days a year, not 8,760
+// readings. Lists are read as compact items of the fields used. People add readings, purchases and heating
 // changes from the buttons at the top, temperatures from their card, or
 // answer the measuring and refill tasks.
 import { useEffect, useMemo, useState } from "react";
@@ -30,6 +32,7 @@ import {
   json,
   useApp,
   useNarrow,
+  useAggregates,
   useQuery,
   type AppContext,
   type Band,
@@ -67,7 +70,7 @@ const words = {
     purchaseTitle: "New fill", bought: "Litres bought", total: "Total price", boughtAt: "Date", supplier: "Supplier", pricePreview: "{price}/L",
     heatingTitle: "Heating", heatingIs: "The heating is {state} since {date}.", heatingNow: "The heating is {state} ({assumed}).", changedAt: "Since", turnOn: "It went on", turnOff: "It went off",
     save: "Save", cancel: "Cancel", invalid: "Type a number", tooPrecise: "Too many decimals (at most {n})", pickDate: "Choose a date",
-    temperature: "Temperature and heating", addTemperature: "+ Temperature", temperatureTitle: "New temperature", indoor: "Indoor", outdoor: "Outdoor", takenAt: "Date and time", takenOn: "Taken on {date}", noTemperature: "No temperature yet", oneTemperature: "Type at least one temperature", outdoorAverage: "Outdoor average",
+    temperature: "Temperature and heating", addTemperature: "+ Temperature", temperatureTitle: "New temperature", indoor: "Indoor", outdoor: "Outdoor", takenAt: "Date and time", takenOn: "Taken on {date}", noTemperature: "No temperature yet", oneTemperature: "Type at least one temperature", outdoorAverage: "Outdoor average", dailyMean: "{name}, daily average",
     measureDue: "A reading is due", refillDue: "Diesel is low: buy some", answer: "Answer", check: "Needs a look", checkHint: "Higher than the reading before and what was bought since. Open it to correct it, or mark it reviewed.",
     readings: "Readings", purchases: "Fills", date: "Date", stickCol: "Stick", litersCol: "Litres", fill: "Level", perLiter: "€/L", supplierCol: "Supplier", history: "See the whole history", setUp: "Choose the Diesel list and its types in Workspace settings → Apps.",
   },
@@ -83,7 +86,7 @@ const words = {
     purchaseTitle: "Nuevo llenado", bought: "Litros comprados", total: "Precio total", boughtAt: "Fecha", supplier: "Proveedor", pricePreview: "{price}/L",
     heatingTitle: "Calefacción", heatingIs: "La calefacción está {state} desde el {date}.", heatingNow: "La calefacción está {state} ({assumed}).", changedAt: "Desde", turnOn: "Se ha encendido", turnOff: "Se ha apagado",
     save: "Guardar", cancel: "Cancelar", invalid: "Escribe un número", tooPrecise: "Demasiados decimales (máximo {n})", pickDate: "Elige una fecha",
-    temperature: "Temperatura y calefacción", addTemperature: "+ Temperatura", temperatureTitle: "Nueva temperatura", indoor: "Interior", outdoor: "Exterior", takenAt: "Fecha y hora", takenOn: "Tomada el {date}", noTemperature: "Aún no hay temperaturas", oneTemperature: "Escribe al menos una temperatura", outdoorAverage: "Exterior medio",
+    temperature: "Temperatura y calefacción", addTemperature: "+ Temperatura", temperatureTitle: "Nueva temperatura", indoor: "Interior", outdoor: "Exterior", takenAt: "Fecha y hora", takenOn: "Tomada el {date}", noTemperature: "Aún no hay temperaturas", oneTemperature: "Escribe al menos una temperatura", outdoorAverage: "Exterior medio", dailyMean: "{name}, media diaria",
     measureDue: "Toca medir", refillDue: "Queda poco gasóleo: hay que pedir", answer: "Responder", check: "Para revisar", checkHint: "Más alta que la medición anterior y lo comprado desde entonces. Ábrela para corregirla o márcala como revisada.",
     readings: "Mediciones", purchases: "Llenados", date: "Fecha", stickCol: "Palo", litersCol: "Litros", fill: "Nivel", perLiter: "€/L", supplierCol: "Proveedor", history: "Ver historial completo", setUp: "Elige la lista Diesel y sus tipos en Ajustes del espacio de trabajo → Aplicaciones.",
   },
@@ -101,7 +104,10 @@ const at = (v: unknown): number => new Date(String(v)).getTime();
 interface Reading { id: string; at: number; stick?: number; liters?: number; percent?: number; flag?: string }
 interface Purchase { id: string; at: number; liters: number; total: number; price: number; supplier: string }
 interface Switch { at: number; on: boolean }
-interface Temperature { id: string; at: number; indoor?: number; outdoor?: number }
+/** A day's temperatures, at noon UTC of the viewer's calendar day: their averages. */
+interface TemperatureDay { at: number; indoor?: number; outdoor?: number }
+/** The latest temperature taken of one side. */
+interface Latest { at: number; value: number }
 
 const dayOfYear = (t: number) => {
   const d = new Date(t);
@@ -145,10 +151,20 @@ function heatingModel(switches: Switch[]) {
 
 function useDiesel(ctx: AppContext<Params>) {
   const p = ctx.params;
-  const readingItems = useQuery(p.list, { contentTypeId: p.reading, sort: [{ field: "diesel_measured_at", direction: "asc" }] }, { all: true, live: true });
-  const purchaseItems = useQuery(p.list, { contentTypeId: p.purchase, sort: [{ field: "diesel_purchased_at", direction: "asc" }] }, { all: true, live: true });
-  const heatingItems = useQuery(p.list, { contentTypeId: p.heating, sort: [{ field: "diesel_heating_at", direction: "asc" }] }, { all: true, live: true });
-  const temperatureItems = useQuery(p.list, { contentTypeId: p.temperature, sort: [{ field: "diesel_temperature_at", direction: "asc" }] }, { all: true, live: true });
+  // Compact items of the fields the screen uses.
+  const readingItems = useQuery(p.list, { contentTypeId: p.reading, sort: [{ field: "diesel_measured_at", direction: "asc" }] }, { all: true, live: true, compact: true, select: ["diesel_measured_at", "diesel_stick_cm", "diesel_level_liters", "diesel_fill_percent", "diesel_flag"] });
+  const purchaseItems = useQuery(p.list, { contentTypeId: p.purchase, sort: [{ field: "diesel_purchased_at", direction: "asc" }] }, { all: true, live: true, compact: true, select: ["diesel_purchased_at", "diesel_bought_liters", "diesel_total_price", "diesel_price_per_liter", "diesel_supplier"] });
+  const heatingItems = useQuery(p.list, { contentTypeId: p.heating, sort: [{ field: "diesel_heating_at", direction: "asc" }] }, { all: true, live: true, compact: true, select: ["diesel_heating_at", "diesel_heating"] });
+  // Temperatures as the server works them out by the viewer's days, and the
+  // latest of each side.
+  const temperatureDays = useAggregates(
+    p.list,
+    { query: { contentTypeId: p.temperature, groupBy: "diesel_temperature_at" }, interval: "day", timeZone: ctx.user.preferences.time_zone || "UTC", aggregates: [{ op: "avg", field: "diesel_indoor_c", as: "indoor" }, { op: "avg", field: "diesel_outdoor_c", as: "outdoor" }] },
+    { live: true },
+  );
+  const latest = (field: string) => useQuery(p.list, { contentTypeId: p.temperature, filter: { field, op: "present" }, sort: [{ field: "diesel_temperature_at", direction: "desc" }] }, { top: 1, live: true, compact: true, select: ["diesel_temperature_at", field] });
+  const latestIndoor = latest("diesel_indoor_c");
+  const latestOutdoor = latest("diesel_outdoor_c");
   const model = useMemo(() => {
     const readings: Reading[] = readingItems.data.map((i) => ({ id: i.id, at: at(get(i, "diesel_measured_at")), stick: num(get(i, "diesel_stick_cm")), liters: num(get(i, "diesel_level_liters")), percent: num(get(i, "diesel_fill_percent")), flag: get(i, "diesel_flag") as string | undefined }));
     const purchases: Purchase[] = purchaseItems.data.map((i) => {
@@ -157,7 +173,16 @@ function useDiesel(ctx: AppContext<Params>) {
       return { id: i.id, at: at(get(i, "diesel_purchased_at")), liters, total, price: num(get(i, "diesel_price_per_liter")) ?? (liters ? total / liters : 0), supplier: String(get(i, "diesel_supplier") ?? "") };
     });
     const switches: Switch[] = heatingItems.data.map((i) => ({ at: at(get(i, "diesel_heating_at")), on: get(i, "diesel_heating") === "on" }));
-    const temperatures: Temperature[] = temperatureItems.data.map((i) => ({ id: i.id, at: at(get(i, "diesel_temperature_at")), indoor: num(get(i, "diesel_indoor_c")), outdoor: num(get(i, "diesel_outdoor_c")) }));
+    const temperatures: TemperatureDay[] = temperatureDays.data
+      .filter((d) => typeof d.key === "string")
+      .map((d) => ({ at: Date.parse(`${d.key}T12:00:00Z`), indoor: num(d.values.indoor), outdoor: num(d.values.outdoor) }));
+    const latestOf = (items: Item[], field: string): Latest | undefined => {
+      const item = items[0];
+      const value = item && num(get(item, field));
+      return item && value !== undefined ? { at: at(get(item, "diesel_temperature_at")), value } : undefined;
+    };
+    const lastIndoor = latestOf(latestIndoor.data, "diesel_indoor_c");
+    const lastOutdoor = latestOf(latestOutdoor.data, "diesel_outdoor_c");
     const heating = heatingModel(switches);
     const peak = new Set(p.peak_months ?? [12, 1, 2]);
     const season = (t: number): "off" | "on" | "peak" => (!heating(t).on ? "off" : peak.has(new Date(t).getUTCMonth() + 1) ? "peak" : "on");
@@ -188,7 +213,8 @@ function useDiesel(ctx: AppContext<Params>) {
       }
     }
 
-    // The outdoor temperature of each season, beside what it burnt.
+    // The outdoor temperature of each season, beside what it burnt: the
+    // average of its days' averages.
     const outdoor = { off: { sum: 0, n: 0 }, on: { sum: 0, n: 0 }, peak: { sum: 0, n: 0 } };
     for (const c of temperatures) {
       if (c.outdoor === undefined) continue;
@@ -229,9 +255,9 @@ function useDiesel(ctx: AppContext<Params>) {
         else bands.push({ from: t, to: t + DAY, tone: on ? "warm" : "cool" });
       }
     }
-    return { readings, purchases, switches, temperatures, heating, season, rate, current, until, price, used, measured, outdoor, bands, last, now };
-  }, [readingItems.data, purchaseItems.data, heatingItems.data, temperatureItems.data, p]);
-  const all = [readingItems, purchaseItems, heatingItems, temperatureItems];
+    return { readings, purchases, switches, temperatures, lastIndoor, lastOutdoor, heating, season, rate, current, until, price, used, measured, outdoor, bands, last, now };
+  }, [readingItems.data, purchaseItems.data, heatingItems.data, temperatureDays.data, latestIndoor.data, latestOutdoor.data, p]);
+  const all = [readingItems, purchaseItems, heatingItems, temperatureDays, latestIndoor, latestOutdoor];
   return { model, loading: all.some((q) => q.loading), error: all.find((q) => q.error)?.error };
 }
 
@@ -357,8 +383,7 @@ function Dashboard({ w }: { w: Words }) {
   const levelEnd = toOrder ? m.now + toOrder * DAY : m.now;
   const degrees = (v: number | undefined) => (v === undefined ? "–" : `${f.number(v, 1)} °C`);
   // An entry may hold one of the two: each shows its own latest.
-  const lastIndoor = m.temperatures.filter((c) => c.indoor !== undefined).at(-1);
-  const lastOutdoor = m.temperatures.filter((c) => c.outdoor !== undefined).at(-1);
+  const { lastIndoor, lastOutdoor } = m;
   const heatingBands = [
     { label: w.heatingOnBand, color: "rgba(220, 38, 38, .35)" },
     { label: w.heatingOffBand, color: "rgba(37, 99, 235, .25)" },
@@ -439,8 +464,8 @@ function Dashboard({ w }: { w: Words }) {
           <>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 32px", marginBottom: 8 }}>
               {[
-                { label: w.indoor, last: lastIndoor, value: lastIndoor?.indoor },
-                { label: w.outdoor, last: lastOutdoor, value: lastOutdoor?.outdoor },
+                { label: w.indoor, last: lastIndoor, value: lastIndoor?.value },
+                { label: w.outdoor, last: lastOutdoor, value: lastOutdoor?.value },
               ].map((t) => (
                 <div key={t.label}>
                   <div className="pg-stat-label">{t.label}</div>
@@ -450,7 +475,7 @@ function Dashboard({ w }: { w: Words }) {
               ))}
             </div>
             <div style={{ marginBottom: 8 }}>
-              <Legend items={[...heatingBands, { label: w.outdoor, color: "var(--pg-series-1)" }, { label: w.indoor, color: "var(--pg-series-2)" }]} />
+              <Legend items={[...heatingBands, { label: say(w.dailyMean, { name: w.outdoor }), color: "var(--pg-series-1)" }, { label: say(w.dailyMean, { name: w.indoor }), color: "var(--pg-series-2)" }]} />
             </div>
             <LineChart
               height={220}
@@ -460,8 +485,8 @@ function Dashboard({ w }: { w: Words }) {
                 { name: w.outdoor, points: m.temperatures.filter((c) => c.outdoor !== undefined).map((c) => ({ x: c.at, y: c.outdoor! })) },
                 { name: w.indoor, points: m.temperatures.filter((c) => c.indoor !== undefined).map((c) => ({ x: c.at, y: c.indoor! })) },
               ]}
-              // A tapped point says when it was taken, to the minute.
-              formatX={(x) => f.dateTime(x)}
+              // A point is a day's average.
+              formatX={(x) => f.date(x)}
               formatTick={monthName}
               // One decimal, as they are taken: a tapped point reads 18,5 °C, and the axis's round ticks 10 °C.
               formatY={degrees}

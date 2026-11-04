@@ -14056,6 +14056,8 @@ export interface Query {
 	}[];
 	contentTypeId?: string;
 	search?: string;
+	/** The field aggregates group by. */
+	groupBy?: string;
 	[key: string]: unknown;
 }
 export interface QueryOptions {
@@ -14063,10 +14065,16 @@ export interface QueryOptions {
 	all?: boolean;
 	/** Read again when an item of the list changes. */
 	live?: boolean;
-	/** Items per page, 200 by default. */
+	/** Items per page, 500 (the most) by default. */
 	top?: number;
 	/** The fields to read; all by default. */
 	select?: string[];
+	/**
+	 * Compact items: id, workspace_id, kind, name, parent_id,
+	 * content_type_id, version, values and keywords only, under half the
+	 * size of a full item. For reading many items.
+	 */
+	compact?: boolean;
 }
 export interface Loaded<T> {
 	data: T;
@@ -14082,6 +14090,39 @@ export declare function useApp<P = Record<string, unknown>>(): AppContext<P>;
  * live, a change to one of the list's items reads them again.
  */
 export declare function useQuery(listId: string | undefined, query?: Query, options?: QueryOptions): Loaded<Item[]>;
+/** A figure of each group (docs/application-foundation.md): op of field's values, named as (op_field by default). */
+interface Aggregate$1 {
+	op: "count" | "sum" | "avg" | "min" | "max";
+	field: string;
+	as?: string;
+}
+/** Figures of a list's items: all of them, or in groups of query.groupBy, a date or date-time by interval in timeZone. */
+export interface AggregateQuery {
+	query?: Query;
+	interval?: "day" | "week" | "month" | "year";
+	/** Where days begin, for date-times; the viewer's time zone suits most apps. UTC by default. */
+	timeZone?: string;
+	aggregates: Aggregate$1[];
+}
+/**
+ * A group: its key (with an interval, the period's first day as
+ * YYYY-MM-DD; null for items without one), its items, and each figure by
+ * name: counts as numbers, numbers as exact strings, null without values.
+ */
+interface AggregateGroup$1 {
+	key: string | number | boolean | null;
+	count: number;
+	values: Record<string, string | number | null>;
+}
+/**
+ * Figures of the items of a list that match a query, worked out by the
+ * server, as the viewer may read them: a chart of two years of hourly
+ * readings reads 730 days, not 17,520 items. With live, a change to one of
+ * the list's items works them out again.
+ */
+export declare function useAggregates(listId: string | undefined, request: AggregateQuery, options?: {
+	live?: boolean;
+}): Loaded<AggregateGroup$1[]>;
 /** One item, as the viewer may read it; with live, read again when it changes. */
 export declare function useItem(id: string | undefined, options?: {
 	live?: boolean;
@@ -14284,6 +14325,8 @@ declare namespace models {
 }
 
 export {
+	Aggregate$1 as Aggregate,
+	AggregateGroup$1 as AggregateGroup,
 	Response$1 as Response,
 	models,
 };

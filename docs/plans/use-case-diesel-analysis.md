@@ -88,7 +88,7 @@ Readings and purchases keep separate date fields, and every timestamp is a datet
 
 ## The dashboard
 
-The app computes everything in the browser from the four types: about 150 items a year.
+The app computes the tank's figures in the browser from the readings, purchases and heating changes, about 150 items a year, read as compact items of the fields it uses. Temperatures can come every hour from a sensor, 8,760 a year, so the server works them out into daily averages in the viewer's time zone ([aggregates](../application-foundation.md)), and the app reads the latest indoor and outdoor ones alone.
 
 **Rates.** The forecast uses one rate a day, by season:
 
@@ -112,8 +112,8 @@ The app computes everything in the browser from the four types: about 150 items 
 | **Level and heating** (chart) | Fill % per reading over time, with the heating seasons shaded red (on) and blue (off) and named in a legend, fills marked, a tick every three months, the reserve as a dashed line, and the forecast from the last reading to the next order |
 | **Price per litre** (chart) | `total / litres` per purchase, on an axis that fits the prices |
 | **Cost of the diesel used** (bars) | Each interval's consumption (`level before + bought − level after`), spread over its days, valued at the price of the last fill before each day, per month |
-| **Temperature and heating** (chart) | The last indoor and outdoor temperatures, and both over time over the heating seasons |
-| **Consumption** (table) | What each season burnt, from the intervals, beside the rates the forecast uses and the season's average outdoor temperature |
+| **Temperature and heating** (chart) | The last indoor and outdoor temperatures, and each day's average indoor and outdoor over the heating seasons |
+| **Consumption** (table) | What each season burnt, from the intervals, beside the rates the forecast uses and the season's average outdoor temperature, the average of its days |
 
 The sample history ends with the tank filled on 3 September 2026. On 4 November 2026 the dashboard shows:
 - about 85 % (639 L), worth about 1,018 €;

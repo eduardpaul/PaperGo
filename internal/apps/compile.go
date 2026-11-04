@@ -137,7 +137,7 @@ const stubs = `(() => {
   const nothing = () => null;
   const names = (list, value) => Object.fromEntries(list.map((n) => [n, value]));
   const react = Object.assign(names(["createElement", "cloneElement", "createContext", "forwardRef", "memo", "lazy", "useState", "useEffect", "useLayoutEffect", "useMemo", "useCallback", "useRef", "useReducer", "useContext", "useId", "useTransition", "useDeferredValue", "startTransition", "isValidElement"], nothing), { Fragment: "fragment", Suspense: "suspense", StrictMode: "strict", Children: {} });
-  const app = Object.assign(names(["useApp", "useQuery", "useItem", "json", "plain", "Card", "Grid", "Gauge", "Stat", "LineChart", "BarChart", "Table", "Button", "NumberField", "TextField", "DateField", "DateTimeField", "Notice", "Legend", "Toolbar", "Modal", "useNarrow", "RequestError"], nothing), { app: (definition) => definition, models: {} });
+  const app = Object.assign(names(["useApp", "useQuery", "useAggregates", "useItem", "json", "plain", "Card", "Grid", "Gauge", "Stat", "LineChart", "BarChart", "Table", "Button", "NumberField", "TextField", "DateField", "DateTimeField", "Notice", "Legend", "Toolbar", "Modal", "useNarrow", "RequestError"], nothing), { app: (definition) => definition, models: {} });
   globalThis.__papergoApp = { modules: { "react": react, "react/jsx-runtime": { jsx: nothing, jsxs: nothing, Fragment: "fragment" }, "@papergo/app": app } };
 })();`
 

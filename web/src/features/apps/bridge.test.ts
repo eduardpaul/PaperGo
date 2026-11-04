@@ -38,6 +38,7 @@ it('refuses the routes that administer PaperGo, whoever views the app', () => {
   for (const [method, url] of [
     ['GET', '/v1/resources/l1'],
     ['POST', '/v1/resources/l1/query?$top=200'],
+    ['POST', '/v1/resources/l1/query/aggregates'],
     ['POST', '/v1/resources/l1/children'],
     ['PATCH', '/v1/resources/i1'],
     ['DELETE', '/v1/resources/i1'],

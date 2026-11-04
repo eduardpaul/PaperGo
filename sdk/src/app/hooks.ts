@@ -28,6 +28,8 @@ export interface Query {
   sort?: { field: string; direction?: "asc" | "desc" }[];
   contentTypeId?: string;
   search?: string;
+  /** The field aggregates group by. */
+  groupBy?: string;
   [key: string]: unknown;
 }
 
@@ -36,10 +38,16 @@ export interface QueryOptions {
   all?: boolean;
   /** Read again when an item of the list changes. */
   live?: boolean;
-  /** Items per page, 200 by default. */
+  /** Items per page, 500 (the most) by default. */
   top?: number;
   /** The fields to read; all by default. */
   select?: string[];
+  /**
+   * Compact items: id, workspace_id, kind, name, parent_id,
+   * content_type_id, version, values and keywords only, under half the
+   * size of a full item. For reading many items.
+   */
+  compact?: boolean;
 }
 
 export interface Loaded<T> {
@@ -84,8 +92,8 @@ function useLive(enabled: boolean, matches: (changes: Change[]) => boolean, relo
 }
 
 function toSpec(q: Query): Record<string, unknown> {
-  const { contentTypeId, ...rest } = q;
-  return contentTypeId ? { ...rest, content_type_id: contentTypeId } : rest;
+  const { contentTypeId, groupBy, ...rest } = q;
+  return { ...rest, ...(contentTypeId ? { content_type_id: contentTypeId } : {}), ...(groupBy ? { group_by: groupBy } : {}) };
 }
 
 interface Page {
@@ -100,7 +108,7 @@ interface Page {
 export function useQuery(listId: string | undefined, query: Query = {}, options: QueryOptions = {}): Loaded<Item[]> {
   const { ctx } = useRuntime();
   const [state, setState] = useState<{ data: Item[]; loading: boolean; error?: Error }>({ data: [], loading: Boolean(listId) });
-  const key = JSON.stringify([listId, query, options.all, options.top, options.select]);
+  const key = JSON.stringify([listId, query, options.all, options.top, options.select, options.compact]);
   const [round, setRound] = useState(0);
   const reload = useCallback(() => setRound((n) => n + 1), []);
   useEffect(() => {
@@ -113,7 +121,8 @@ export function useQuery(listId: string | undefined, query: Query = {}, options:
     (async () => {
       const body: Record<string, unknown> = { query: toSpec(query) };
       if (options.select) body.select = options.select;
-      let url: string | undefined = `/v1/resources/${encodeURIComponent(listId)}/query?$top=${options.top ?? 200}`;
+      if (options.compact) body.envelope = "compact";
+      let url: string | undefined = `/v1/resources/${encodeURIComponent(listId)}/query?$top=${options.top ?? 500}`;
       const items: Item[] = [];
       while (url) {
         const page: Page = (await ctx.request<Page>("POST", url, { body })).data;
@@ -131,6 +140,69 @@ export function useQuery(listId: string | undefined, query: Query = {}, options:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ctx, key, round]);
   useLive(Boolean(options.live && listId), (changes) => changes.some((c) => c.collectionId === listId || state.data.some((i) => i.id === c.id)), reload);
+  return { ...state, reload };
+}
+
+/** A figure of each group (docs/application-foundation.md): op of field's values, named as (op_field by default). */
+export interface Aggregate {
+  op: "count" | "sum" | "avg" | "min" | "max";
+  field: string;
+  as?: string;
+}
+
+/** Figures of a list's items: all of them, or in groups of query.groupBy, a date or date-time by interval in timeZone. */
+export interface AggregateQuery {
+  query?: Query;
+  interval?: "day" | "week" | "month" | "year";
+  /** Where days begin, for date-times; the viewer's time zone suits most apps. UTC by default. */
+  timeZone?: string;
+  aggregates: Aggregate[];
+}
+
+/**
+ * A group: its key (with an interval, the period's first day as
+ * YYYY-MM-DD; null for items without one), its items, and each figure by
+ * name: counts as numbers, numbers as exact strings, null without values.
+ */
+export interface AggregateGroup {
+  key: string | number | boolean | null;
+  count: number;
+  values: Record<string, string | number | null>;
+}
+
+/**
+ * Figures of the items of a list that match a query, worked out by the
+ * server, as the viewer may read them: a chart of two years of hourly
+ * readings reads 730 days, not 17,520 items. With live, a change to one of
+ * the list's items works them out again.
+ */
+export function useAggregates(listId: string | undefined, request: AggregateQuery, options: { live?: boolean } = {}): Loaded<AggregateGroup[]> {
+  const { ctx } = useRuntime();
+  const [state, setState] = useState<{ data: AggregateGroup[]; loading: boolean; error?: Error }>({ data: [], loading: Boolean(listId) });
+  const key = JSON.stringify([listId, request]);
+  const [round, setRound] = useState(0);
+  const reload = useCallback(() => setRound((n) => n + 1), []);
+  useEffect(() => {
+    if (!listId) {
+      setState({ data: [], loading: false });
+      return;
+    }
+    let stale = false;
+    setState((s) => ({ ...s, loading: true }));
+    const body: Record<string, unknown> = { query: toSpec(request.query ?? {}), aggregates: request.aggregates };
+    if (request.interval) body.interval = request.interval;
+    if (request.timeZone) body.time_zone = request.timeZone;
+    ctx
+      .request<{ value?: AggregateGroup[] }>("POST", `/v1/resources/${encodeURIComponent(listId)}/query/aggregates`, { body })
+      .then((r) => !stale && setState({ data: r.data.value ?? [], loading: false }))
+      .catch((error: Error) => !stale && setState((s) => ({ ...s, loading: false, error })));
+    return () => {
+      stale = true;
+    };
+    // The key stands for the request's content.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ctx, key, round]);
+  useLive(Boolean(options.live && listId), (changes) => changes.some((c) => c.collectionId === listId), reload);
   return { ...state, reload };
 }
 

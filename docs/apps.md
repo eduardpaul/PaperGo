@@ -58,7 +58,8 @@ The server then loads the code with stand-ins for those modules to read the para
 
 | Hook | What it does |
 | --- | --- |
-| `useQuery(listId, query, { all, live, top, select })` | The list's items that match a [collection query](application-foundation.md) (`filter`, `sort`, `contentTypeId`, `search`), as plain JSON; `all` reads every page; `live` reads again when one of the list's items changes |
+| `useQuery(listId, query, { all, live, top, select, compact })` | The list's items that match a [collection query](application-foundation.md) (`filter`, `sort`, `contentTypeId`, `search`), as plain JSON; `all` reads every page, 500 items a request unless `top` says otherwise; `live` reads again when one of the list's items changes; `compact` reads [compact items](application-foundation.md), under half the size: identity, version and values |
+| `useAggregates(listId, { query, interval, timeZone, aggregates }, { live })` | Figures the server works out of the matching items ([aggregates](application-foundation.md)): `count`, `sum`, `avg`, `min` and `max` of fields, in groups of `query.groupBy`, a date or date-time by `day`, `week`, `month` or `year` in `timeZone`. A chart of two years of hourly readings reads 730 days, not 17,520 items |
 | `useItem(id, { live })` | One item |
 | `useApp()` | The context, in components below `render` |
 
