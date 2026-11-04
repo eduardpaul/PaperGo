@@ -87,7 +87,15 @@ it('writes a frame document whose scripts cannot be ended early and that loads n
 it('keeps a <!-- in a script from swallowing the scripts after it', () => {
   const html = appDocument('var runtime = 1;', 'var text = "<!-- <script>";', {});
   expect(html).not.toContain('<!--');
-  expect(html).toContain('"<\\!-- <script>"');
+  expect(html).toContain('"\\x3C!-- <script>"');
+});
+
+it('keeps what a <!-- in a script means, in a string and in a regular expression', () => {
+  const code = 'globalThis.read = ["<!-- a", /<!--/u.test("<!--"), /a<!--/v.test("a<!--")];';
+  const written = appDocument('', code, {}).split('<script>')[2].split('</script>')[0];
+  expect(written).not.toContain('<!--');
+  const read = new Function(`${written}; return globalThis.read;`)() as unknown[];
+  expect(read).toEqual(['<!-- a', true, true]);
 });
 
 it('tells an app of the changes of its own workspace only', () => {
