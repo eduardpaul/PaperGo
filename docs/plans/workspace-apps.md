@@ -253,6 +253,23 @@ The first release does not update installed packages, because imports never merg
 - It adds missing fields, content types, lists and views, and updates labels and options.
 - It never deletes anything or touches items. A change it cannot apply safely, such as a field whose type changed, fails the whole upgrade with the reason.
 
+### Uninstalling
+
+An installed package can be removed as a whole. Removing only an app's screen is ordinary deletion and leaves the package's workflows alone, because the backend serves the lists without its frontend: readings entered in the list still get their litres.
+
+**What the package owns.** The install record (socket S6) keeps the package's `id` and `version` and the apps and workflows the install created. Workflows and apps carry an optional reference to it, as built-in workflows already reference their collection and are deleted with it. Owned objects stay ordinary: the owner edits, publishes, pauses or deletes them one by one as before. A workflow or app the owner creates later in the workspace belongs to no package.
+
+**Uninstall** is a workspace setting (**Workspace settings → Package → Uninstall**), for a workspace owner. It first shows what will go, then offers two choices:
+
+| Choice | Removes | Keeps |
+| --- | --- | --- |
+| **Remove everything** | the workspace with its lists, items, files, apps and workflows, as deleting a workspace does today | answered tasks until the workspace is purged from the recycle bin |
+| **Keep the data** | the package's apps and workflows, and the install record | the workspace, its lists, items, files and views as ordinary lists, and every workflow and app the package did not install |
+
+Both use existing cleanup for what follows. Deleting a workflow raises `workflow.deleted`, which cancels its queued, running and waiting runs and the open tasks of all its runs, each with the reason "The workflow that asked for it was deleted." Their "task assigned" notifications go with them. **Answered tasks are kept** as the record of who answered what, as for any deleted workflow today. The uninstall commits in one transaction and is recorded in the workspace's audit trail as `package.uninstall`.
+
+After **Keep the data**, the lists work as plain lists. Values the workflows used to derive, such as litres from centimetres, are no longer filled in. Installing the same package again creates a new workspace, as every install does. Joining the kept data to a new install is an [upgrade](#updates) question, not part of uninstall.
+
 ### What PaperGo does not do
 
 - **No store, accounts, licences or payments.** A package is a file. Publishers sell, give or link to it however they want. A self-hosted instance cannot enforce a licence, so PaperGo does not pretend to.
@@ -293,7 +310,7 @@ The first release does not update installed packages, because imports never merg
 
 ## Extension-first assessment
 
-**Can apps be a pure extension?** The app feature itself is a module: its routes, compiler, runtime, frame, editor page and the SDK entry. It does not change how items, queries, views or workflows behave. But today the core has no hook for the eight things below. Each is generic and has other uses.
+**Can apps be a pure extension?** The app feature itself is a module: its routes, compiler, runtime, frame, editor page and the SDK entry. It does not change how items, queries, views or workflows behave. But today the core has no hook for the nine things below. Each is generic and has other uses.
 
 | # | Socket | Why apps need it | Other uses |
 | --- | --- | --- | --- |
@@ -306,8 +323,9 @@ The first release does not update installed packages, because imports never merg
 | S6 | **Template export and package about.** An export option that writes a configuration-only template with the exporter as `template_subject`, an `about` block in the manifest (`id`, `title`, `version`, `publisher`, `summary`, `readme`, `requires`), a dry run that reports it, lists what the package adds and checks `requires` against the instance, and the installed package's `id` and `version` recorded on its workspace. | Templates can be imported today but only test tooling can make one; publishers need to make them from the UI, and installers need to see what they install. | Every shared workspace template, with or without apps: the receipts and workflow samples. |
 | S7 | **Package upgrade.** Import a newer version of an installed package into its workspace: add versions of apps and workflows by key, add missing schema and views, never delete or touch items. | Publishers' fixes reach users without a new workspace. | Any template, with or without apps. |
 | S8 | **Package identity.** Install a package's workflows under a service identity that owns only the new workspace. | A package's workflows cannot reach outside their workspace. | Any workflow an owner wants bounded to one workspace. |
+| S9 | **Package ownership and uninstall.** An optional install reference on workflows and apps, set by the install, and an uninstall route that deletes what an install owns ("keep the data") or the whole workspace ("remove everything"), with a read-only preview of what goes. Cleanup of runs and tasks is the existing `workflow.deleted` handling. | Removing a package leaves no workflows running, tasks waiting or apps behind. | Any template installed without apps: the receipts and workflow samples. |
 
-S1–S4 and S6 are needed for the first release. S5, S7 and S8 can follow it, in that order of need. Server-side sums and averages in queries are deliberately not proposed: apps aggregate in the browser, and summaries cover larger lists.
+S1–S4, S6 and S9 are needed for the first release. S5, S7 and S8 can follow it, in that order of need. Server-side sums and averages in queries are deliberately not proposed: apps aggregate in the browser, and summaries cover larger lists.
 
 ## Out of scope
 
@@ -326,13 +344,13 @@ S1–S4 and S6 are needed for the first release. S5, S7 and S8 can follow it, in
 3. **`internal/apps`**: routes, TSX bundling, declaration reading and validation, frame document, packages.
 4. **Web:** Apps settings page, editor with live preview and console, sidebar entries, frame host and bridge, update banner.
 5. **UI kit and charts**, themed in both themes and both locales.
-6. **S6:** template export, the about block and the install review.
+6. **S6 and S9:** template export, the about block, the install review, and uninstall with its preview.
 7. **The diesel tracker** as `samples/diesel-package`: list, workflow and app in one app package ([use case](use-case-diesel-analysis.md)), built from its sources by the sample package test as the receipts sample is.
 8. **S7, S8 and S5** after the first release.
 
 ## Decisions needed
 
-1. Approve sockets S1–S4 and S6 for the first release, and S5, S7 and S8 for later.
+1. Approve sockets S1–S4, S6 and S9 for the first release, and S5, S7 and S8 for later.
 2. Apps act as the viewer, and workflows remain the only way to act as someone else.
 3. Recharts as the vendored chart library, or another.
 4. Version one without file upload and download.
