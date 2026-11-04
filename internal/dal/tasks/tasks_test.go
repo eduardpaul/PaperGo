@@ -211,11 +211,11 @@ func runDALTaskSuite(t *testing.T, newStore func(testing.TB) *dal.Store) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		cancelled, err := s.Tasks().Cancel(ctx, task.ID, task.Version)
+		cancelled, err := s.Tasks().Cancel(ctx, task.ID, task.Version, "alice", "Measured in the list")
 		if err != nil {
 			t.Fatal(err)
 		}
-		if cancelled.Status != "cancelled" || cancelled.CompletedAt == nil {
+		if cancelled.Status != "cancelled" || cancelled.CompletedAt == nil || cancelled.CompletedBy != "alice" || cancelled.Comment != "Measured in the list" {
 			t.Fatalf("incorrect cancellation: %+v", cancelled)
 		}
 		if _, err := s.Tasks().Respond(ctx, task.ID, cancelled.Version, taskstore.ResponseInput{Subject: "alice", Assignee: "alice", Outcome: "approved"}); !errors.Is(err, dberr.ErrInvalidStateTransition) {

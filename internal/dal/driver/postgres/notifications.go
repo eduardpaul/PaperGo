@@ -198,6 +198,19 @@ func (q Queries) DeleteNotification(ctx context.Context, recipient, id string) (
 	return n == 1, dberr.Translate(err)
 }
 
+func (q Queries) TaskNotifications(ctx context.Context, taskID string, typ notifications.Type) ([]notifications.Notification, error) {
+	w := models.SelectWhere.Notifications
+	rows, err := models.Notifications.Query(w.TaskID.EQ(taskID), w.Type.EQ(string(typ))).All(ctx, q.exec)
+	if err != nil {
+		return nil, dberr.Translate(err)
+	}
+	out := make([]notifications.Notification, len(rows))
+	for i, row := range rows {
+		out[i] = notificationRecord(row)
+	}
+	return out, nil
+}
+
 func notificationRecord(r *models.Notification) notifications.Notification {
 	return notifications.Notification{
 		ID: r.ID, Recipient: r.Recipient, WorkspaceID: r.WorkspaceID.GetOrZero(), Type: notifications.Type(r.Type), Title: r.Title, Body: r.Body,

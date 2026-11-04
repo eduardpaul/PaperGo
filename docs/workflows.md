@@ -293,7 +293,7 @@ The `data` for each event type:
 - `term.merged`: `source_term_id`, `target_term_id`, `term_set_id`
 - `term.moved`: `term_id`, `term_set_id`, `previous_term_set_id`, `parent_id`, `previous_parent_id` (empty at the root)
 - `term.changed`: `term_id`, `term_set_id`, `version`, sorted `changed_fields`, and `previous` / `current` term properties (`name`, `parent_id`, `description`, `color`, `sort_order`, `labels`, `synonyms`, `deprecated`, `available_as_keyword`; absent optional fields mean unset). The event has no `resource_id` because the term is organization taxonomy, not a workspace resource.
-- `task.*`: `task_id`, `kind`, `key`, `assignees`, `source`, `item_id`, `run_id`; `task.completed` adds `outcome` and `completed_by`
+- `task.*`: `task_id`, `kind`, `key`, `assignees`, `source`, `item_id`, `run_id`; `task.completed` adds `outcome` and `completed_by`; `task.cancelled` adds `completed_by`, who cancelled it, and `reason` when one was given
 - `wf.*` and `role.*`: `run_id`, `workflow_id` and `status`; `failed` adds `error`, and `completed` adds the run's [`outputs`](#outputs): what its script returned
 
 Only items raise item events; folders raise folder events.
@@ -465,6 +465,19 @@ const approved = legal.outcome === "approved" && finance.outcome === "approved";
 
   An approval's outcomes are `approved` and `rejected`; a rejection needs a comment.
 - **Completion.** `any` (default): the first answer completes the task. `all`: every assignee answers once, a group by any one of its members; someone assigned by name and through a group answers once for each. A decisive outcome completes it at once; otherwise it completes when everyone has answered, with the outcome chosen most often (ties go to the outcome listed first). The result's `completed_by`, `comment` and `input` are the completing answer's: the latest answer with that outcome.
+- **Cancelling.** The task's creator or a workspace owner cancels an open task with `POST /v1/tasks/{id}/cancel`, optionally with a `reason` of up to 4,000 characters. A cancelled task keeps who cancelled it in `completed_by` and the reason in `comment`, and its assignees' "task assigned" notifications are removed, since it no longer waits for them. A run waiting on it gets an `OperationError` whose message carries the reason. PaperGo cancels tasks itself, with a reason, when the run waiting on them is cancelled, when their workflow is deleted and when their item is deleted. A workflow that sees the work done another way, such as a value entered in the list, finds the open task by its `key` and cancels it:
+
+  ```ts
+  const open = await ctx.api.v1.workspaces.byId(ctx.run.workspace_id).tasks.get({ queryParameters: { key: "diesel_measure", status: "open" } });
+  for (const task of open?.value ?? []) {
+    try {
+      await ctx.api.v1.tasks.byId(task.id!).cancel.post({ reason: "Measured in the list." });
+    } catch (e) {
+      // Answered or cancelled meanwhile: it is no longer open.
+      if ((e as { responseStatusCode?: number }).responseStatusCode !== 409) throw e;
+    }
+  }
+  ```
 - **Reassigning.** When an assignee can no longer answer, for example after leaving, a workspace owner (or the creator of a person's task) replaces the open task's assignees. Answers of entries that stay count; with `all`, the task completes once every entry left has answered, and a waiting run continues.
 - **Form.** `input_schema` is a [form](#forms), frozen on the task when it is created. Its pickers must point at the workspace. `values` prefill it and must be valid answers, picks included. An answer sends the form's values unless its outcome skips the form; the server applies defaults and checks them, and pickers are checked against the person who answers.
 - **Review.** `review` shows a staged file of the run, an [artifact](documents.md#artifacts-and-staged-files) it staged, beside the form: `file.preview` shows a staged document, such as a PDF. An answer whose outcome does not `allow_stale` fails with 409 when the staged file was made from a file that is no longer current.
@@ -635,7 +648,7 @@ Audit events and publication snapshots are a separate product record. Run retent
 | GET | /v1/tasks/{id} | A task with its answers, `can_respond` and `answered` |
 | POST | /v1/tasks/{id}/responses | Answer: `{"outcome", "comment", "input"}` |
 | POST | /v1/tasks/{id}/reassign | Replace an open task's `assignees` (owners, and the creator of a person's task) |
-| POST | /v1/tasks/{id}/cancel | Cancel an open task |
+| POST | /v1/tasks/{id}/cancel | Cancel an open task, with an optional `{"reason"}` |
 
 ## Running workflows from other apps
 

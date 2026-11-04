@@ -131,7 +131,14 @@ func (a *API) reassignTask(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) cancelTask(w http.ResponseWriter, r *http.Request) {
-	out, err := a.tasks(r).Cancel(r.Context(), subject(r), r.PathValue("id"))
+	// The body, with the reason, is optional.
+	var in struct {
+		Reason string `json:"reason"`
+	}
+	if r.ContentLength != 0 && !a.decode(w, r, &in) {
+		return
+	}
+	out, err := a.tasks(r).Cancel(r.Context(), subject(r), r.PathValue("id"), in.Reason)
 	if err != nil {
 		a.failure(w, r, err)
 		return

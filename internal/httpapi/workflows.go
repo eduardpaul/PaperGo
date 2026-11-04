@@ -62,7 +62,7 @@ var triggerTypes = []map[string]string{
 	{"type": dms.EventTermChanged, "description": "A term's name, localized labels or other editable properties changed; data has term_id, term_set_id, version, changed_fields, previous and current term properties. Delivered to every live workspace; the run has no item and the trigger takes no options. Subscriptions require taxonomy.read, rechecked for the workflow version author at dispatch."},
 	{"type": tasks.EventCreated, "description": "A task was created; data has task_id, kind, key, assignees, source, item_id and run_id, and the run has the task's item. task_key limits it to tasks with that key."},
 	{"type": tasks.EventCompleted, "description": "A task was completed; data as for task.created, with outcome and completed_by. task_key as for task.created."},
-	{"type": tasks.EventCancelled, "description": "A task was cancelled; data as for task.created. task_key as for task.created."},
+	{"type": tasks.EventCancelled, "description": "A task was cancelled; data as for task.created, with completed_by (who cancelled it) and reason when one was given. task_key as for task.created."},
 	{"type": "wf.{key}.{event}", "description": "Raised by runs of workflow key: completed, with the run's output as data.outputs, or failed, with data.error; carries the run's item."},
 	{"type": "role.{role}.{event}", "description": "Raised by runs of the workflow that fills role, as for wf.{key}.{event}: completed or failed."},
 }

@@ -271,8 +271,9 @@ func (r *Repo) Reassign(ctx context.Context, id string, version int64, assignees
 	return result, err
 }
 
-// Cancel marks an open task terminal; an already terminal task is unchanged.
-func (r *Repo) Cancel(ctx context.Context, id string, version int64) (Task, error) {
+// Cancel marks an open task terminal, recording who cancelled it in
+// CompletedBy and why in Comment; an already terminal task is unchanged.
+func (r *Repo) Cancel(ctx context.Context, id string, version int64, by, reason string) (Task, error) {
 	var result Task
 	err := r.write(ctx, func(q Queries) error {
 		task, err := mutable(ctx, q, id, version)
@@ -284,7 +285,7 @@ func (r *Repo) Cancel(ctx context.Context, id string, version int64) (Task, erro
 			return nil
 		}
 		now := Now()
-		task.Status, task.CompletedAt = StatusCancelled, &now
+		task.Status, task.CompletedAt, task.CompletedBy, task.Comment = StatusCancelled, &now, by, reason
 		result, err = save(ctx, q, task)
 		return err
 	})

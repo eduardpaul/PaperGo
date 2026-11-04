@@ -82,7 +82,7 @@ People see and change only their own notifications; someone else's reads as not 
 
 Through an access token, the inbox keeps to what the token may read: notifications about an item it may read, about a task whose item it may read, or about a workspace it may read. A token limited to places sees only notifications about items in them, since a notification about a workspace may concern anything there. It counts, marks read and deletes only what it sees; its unread count considers the latest 2,000 unread notifications. Marking read and deleting change the inbox, so they need a token with the `item.write` scope: a read-only token changes nothing.
 
-Notifications are removed with what they link to: purging an item or a task removes its notifications, and a run that retention deletes leaves its notification without a link. Deleting a person removes their inbox.
+Notifications are removed with what they link to: purging an item or a task removes its notifications, cancelling a task removes its "task assigned" notifications, and a run that retention deletes leaves its notification without a link. Deleting a person removes their inbox.
 
 ## Live updates
 
