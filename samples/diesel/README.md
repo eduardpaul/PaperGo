@@ -1,0 +1,67 @@
+# Diesel tracker
+
+A heating-oil tank, read with a dipstick: how much is left, what it is worth, how fast it goes with the heating on and off, and when to order. It is a workspace package with a list and four workflows, and an [app](../../docs/apps.md), the dashboard. The [use case analysis](../../docs/plans/use-case-diesel-analysis.md) explains the design.
+
+## Install
+
+1. **The workspace.** As an organization administrator, open **Administration → Export and import**, select [`diesel.zip`](diesel.zip), choose **Try it**, then **Import**. This creates the **Diesel tracker** workspace, which has:
+   - the **Diesel** list, with three content types:
+     - **Reading**: when, the stick reading from the mouth in cm, and the litres, fill and check the levels workflow works out;
+     - **Purchase**: when, litres, total price in EUR, price per litre, supplier;
+     - **Heating**: when the heating went on or off;
+   - four saved views: Readings, Purchases, Heating and Needs a look;
+   - the four workflows below.
+
+   The importer becomes the workflows' author.
+2. **The app.** In the workspace, open **Workspace settings → Apps → New app** and paste [`diesel-app.tsx`](diesel-app.tsx).
+   - Save it, then choose its parameters with the pickers: the **Diesel** list and its **Reading**, **Purchase** and **Heating** types. The tank and consumption settings have defaults.
+   - Set the state to **Published** and save again.
+   - The app appears in the sidebar under the list.
+
+To try it with real data, run **Load diesel sample data** once from **Workspace settings → Workflows**. It files eighteen months of a 750 L tank into the empty list: four fills, nineteen readings and three heating changes.
+
+## The workflows
+
+| Workflow | Starts on | Does |
+| --- | --- | --- |
+| **Diesel levels** | a reading or purchase created or changed; **Run once** for owners | Converts the stick reading to litres and fill. Marks a reading `check` when it is higher than the reading before plus what was bought between, unless it is marked `reviewed`. Works out each purchase's price per litre and checks the reading after it again. **Run once** recalculates every reading. |
+| **Diesel measuring reminder** | every morning at 08:00; a new reading; **Run once** | Asks the assignees to measure when the last reading is older than `every_days`. The task's form is the reading, and a reading filed any other way closes it. |
+| **Diesel refill** | a reading converted below `threshold_l`; a new purchase | Asks the buyers to fill the tank. The task's form is the purchase. A later low reading updates the open task to its level, and a purchase closes it. |
+| **Load diesel sample data** | **Run once** for owners | Files the sample history into an empty list. |
+
+## Settings
+
+After importing, set these in **Workspace settings → Workflows**:
+
+| Workflow | Parameter | Ships as |
+| --- | --- | --- |
+| Diesel levels | `capacity_l`, `useful_height_cm`, `stick_length_cm` | 750, 125 and 200: 6 L a centimetre, with a 75 cm margin above the diesel |
+| | `measure` | `from_top`: the stick measures from the mouth down to the diesel; `depth` reads its wet length |
+| | `orientation` | `upright` or `horizontal` (a cylinder on its side) |
+| | `tolerance_l` | 5 |
+| Diesel measuring reminder | `every_days`, `assignees`, `time_zone` | 15, `["role:owners"]`, `UTC`; set your time zone and who measures |
+| Diesel refill | `threshold_l`, `buyers` | 200, `["role:owners"]` |
+
+- **The app's parameters:** the tank's capacity, when to order (200 L), the reserve (25 %), the litres a day with the heating off (1.5), on (4.5) and on in the coldest months (7.5), and those months (December to February).
+- **Currency:** prices are kept in EUR (`diesel_total_price`). Change the field's currency in the catalog before the first purchase to use another.
+
+## The dashboard
+
+- **Now:**
+  - The last reading, less what the season burns each day since. After the last recorded heating change, the heating is assumed to go on and off on its usual days, the average of the recorded ones.
+  - The litres left, what they are worth at the last price per litre, and what a day costs at today's rate.
+- **Autonomy:** the days to the reserve and the date to order, counted forward a day at a time at the rate of each day's season.
+- **Charts:**
+  - The level over time, with the heating seasons shaded and the fills marked, and the forecast to the next order.
+  - The price per litre of each fill, and the cost of the diesel used each month: what was burnt between readings, valued at the price of the fill it came from.
+- **Consumption:** what each season actually burnt between readings, beside the rates the forecast uses, so the rates can be tuned.
+- **Forms:**
+  - **Add a reading**, **Add a purchase**, and the heating going on or off now.
+  - Decimals are typed in your number format, so `86,8` is 86.8 cm where the decimal separator is a comma.
+- **Tasks and checks:** the measuring and refill tasks waiting for you, and the readings that need a look.
+
+## Sources
+
+[`resources.json`](resources.json), the workflow scripts with their settings (`diesel-*.ts` and `diesel-*.json`), and [`diesel-app.tsx`](diesel-app.tsx) are the editable sources.
+- The [sample package test](../../internal/httpapi/samplepackages_test.go) imports the ZIP. It rebuilds it with `-update-sample-packages`.
+- The [diesel test](../../internal/scriptrun/diesel_test.go) runs the workflows end to end on the sample data.

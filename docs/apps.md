@@ -64,8 +64,8 @@ The server then loads the code with stand-ins for those modules to read the para
 
 The kit draws in PaperGo's theme, light or dark as the viewer's:
 - **Layout:** `Card` and `Grid`.
-- **Figures:** `Stat`.
-- **Charts:** `LineChart` (series over numbers or dates, with markers) and `BarChart`, drawn as SVG.
+- **Figures:** `Stat` and `Gauge`, a half-circle of how full something is.
+- **Charts:** `LineChart` (series over numbers or dates, with markers and shaded bands, such as seasons) and `BarChart`, drawn as SVG.
 - **Data:** `Table`.
 - **Controls:** `Button`, `Notice`, `NumberField` (a decimal typed with a phone's numeric keyboard), `TextField` and `DateTimeField`.
 
@@ -119,3 +119,7 @@ Creating, changing and deleting an app are audited as `app.create`, `app.update`
 - **Not for scripts.** Workflow scripts cannot call these routes.
 
 The complete contract is in [OpenAPI](../api/openapi.json).
+
+## Sample
+
+The [diesel tracker](../samples/diesel/README.md) is a complete app: a workspace package with a list and four workflows, and a dashboard that estimates and forecasts a heating-oil tank from its dipstick readings, purchases and heating seasons.

@@ -14159,20 +14159,43 @@ export interface Series {
 		y: number;
 	}[];
 }
+/** A shaded stretch of a chart's x axis, such as a season. */
+export interface Band {
+	from: number | Date;
+	to: number | Date;
+	tone: "warm" | "cool" | "neutral";
+	label?: string;
+}
 /**
  * Lines over a numeric or time axis, with optional markers on the x axis,
- * such as purchases on a level chart.
+ * such as purchases on a level chart, and shaded bands behind them.
  */
-export declare function LineChart({ series, markers, height, formatX, formatY, yMin }: {
+export declare function LineChart({ series, markers, bands, height, formatX, formatY, yMin, yMax }: {
 	series: Series[];
 	markers?: {
 		x: number | Date;
 		label?: string;
 	}[];
+	bands?: Band[];
 	height?: number;
 	formatX?: (x: number) => string;
 	formatY?: (y: number) => string;
 	yMin?: number;
+	yMax?: number;
+}): import("react").JSX.Element;
+/**
+ * How full something is, as a half-circle arc: value of max, its label and
+ * an optional hint. The arc turns amber below warn and red below danger,
+ * fractions of max.
+ */
+export declare function Gauge({ value, max, label, hint, text, warn, danger }: {
+	value: number;
+	max?: number;
+	label: ReactNode;
+	hint?: ReactNode;
+	text?: ReactNode;
+	warn?: number;
+	danger?: number;
 }): import("react").JSX.Element;
 /** Bars, one per label, such as a month. */
 export declare function BarChart({ data, height, formatY }: {

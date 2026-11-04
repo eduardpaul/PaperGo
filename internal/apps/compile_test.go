@@ -2,6 +2,7 @@ package apps
 
 import (
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 )
@@ -79,5 +80,23 @@ func TestAppsThatDoNotCompileAreRefused(t *testing.T) {
 		if _, ok := err.(*CompileError); err != nil && !ok {
 			t.Errorf("%s: not a CompileError: %T", name, err)
 		}
+	}
+}
+
+// The diesel sample's dashboard compiles and declares its parameters.
+func TestTheDieselSampleCompiles(t *testing.T) {
+	source, err := os.ReadFile("../../samples/diesel/diesel-app.tsx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := Compile(string(source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema struct {
+		Required []string `json:"required"`
+	}
+	if err = json.Unmarshal(c.ParametersSchema, &schema); err != nil || strings.Join(schema.Required, ",") != "list,reading,purchase,heating" {
+		t.Fatalf("parameters: %s %v", c.ParametersSchema, err)
 	}
 }

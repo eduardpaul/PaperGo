@@ -1,6 +1,6 @@
 # Workspace apps (plan)
 
-Status: phase 0, approved. Nothing here is implemented yet. The end result of phase 0 is working app infrastructure and the [diesel tracker](use-case-diesel-analysis.md) running on it as a complete sample.
+Status: phase 0 implemented. [Apps](../apps.md) describes them as they are; the [diesel tracker](../../samples/diesel/README.md) runs on them as the complete sample ([analysis](use-case-diesel-analysis.md)). This plan keeps the decisions and what comes later.
 
 Decisions taken: apps run in a sandboxed frame and act with the viewer's own credentials; writing apps needs the new `app.manage` scope; apps join workspace packages later. Packaging lists, workflows and apps together ("solutions") comes after phase 0.
 
@@ -61,7 +61,7 @@ export default app({
 | `useQuery(list, query, { live, all })` | A collection query; `all` reads every page; `live` reads it again when an item of the list changes |
 | `useItem(id, { live })` | One item |
 
-The runtime also ships a small kit in PaperGo's theme: `Stat`, `LineChart`, `BarChart`, `Table`, `Button`, `NumberField`, `DateTimeField` and `Notice`. Everything else is the app's own React.
+The runtime also ships a small kit in PaperGo's theme: `Card`, `Grid`, `Stat`, `Gauge`, `LineChart` (with shaded bands), `BarChart`, `Table`, `Button`, `NumberField`, `TextField`, `DateTimeField` and `Notice`. Everything else is the app's own React.
 
 ## How it runs
 

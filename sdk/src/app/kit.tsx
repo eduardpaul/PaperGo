@@ -7,7 +7,8 @@ import { useId, type ReactNode } from "react";
 export const styles = `
 :root { color-scheme: light; --pg-bg: #ffffff; --pg-surface: #f7f7f8; --pg-border: #e4e4e7; --pg-text: #18181b; --pg-muted: #71717a;
   --pg-primary: #2563eb; --pg-primary-text: #ffffff; --pg-danger: #dc2626; --pg-warning: #d97706; --pg-success: #16a34a;
-  --pg-series-1: #2563eb; --pg-series-2: #d97706; --pg-series-3: #16a34a; --pg-radius: 10px; }
+  --pg-series-1: #2563eb; --pg-series-2: #d97706; --pg-series-3: #16a34a; --pg-radius: 10px;
+  --pg-band-warm: rgba(220, 38, 38, .10); --pg-band-cool: rgba(37, 99, 235, .08); --pg-band-neutral: rgba(113, 113, 122, .08); }
 :root[data-theme="dark"] { color-scheme: dark; --pg-bg: #09090b; --pg-surface: #18181b; --pg-border: #27272a; --pg-text: #fafafa; --pg-muted: #a1a1aa;
   --pg-primary: #3b82f6; --pg-series-1: #60a5fa; --pg-series-2: #fbbf24; --pg-series-3: #4ade80; }
 * { box-sizing: border-box; }
@@ -220,21 +221,39 @@ export interface Series {
   points: { x: number | Date; y: number }[];
 }
 
+/** A shaded stretch of a chart's x axis, such as a season. */
+export interface Band {
+  from: number | Date;
+  to: number | Date;
+  tone: "warm" | "cool" | "neutral";
+  label?: string;
+}
+
 /**
  * Lines over a numeric or time axis, with optional markers on the x axis,
- * such as purchases on a level chart.
+ * such as purchases on a level chart, and shaded bands behind them.
  */
-export function LineChart({ series, markers = [], height = 220, formatX = (x) => new Date(x).toLocaleDateString(), formatY = (y) => String(Math.round(y)), yMin }: { series: Series[]; markers?: { x: number | Date; label?: string }[]; height?: number; formatX?: (x: number) => string; formatY?: (y: number) => string; yMin?: number }) {
+export function LineChart({ series, markers = [], bands = [], height = 220, formatX = (x) => new Date(x).toLocaleDateString(), formatY = (y) => String(Math.round(y)), yMin, yMax }: { series: Series[]; markers?: { x: number | Date; label?: string }[]; bands?: Band[]; height?: number; formatX?: (x: number) => string; formatY?: (y: number) => string; yMin?: number; yMax?: number }) {
   const points = series.flatMap((s) => s.points.map((p) => ({ x: +p.x, y: p.y })));
   if (points.length === 0) return <div className="pg-empty">No data yet</div>;
   const xs = points.map((p) => p.x).concat(markers.map((m) => +m.x));
   const ys = points.map((p) => p.y);
   const [x0, x1] = [Math.min(...xs), Math.max(...xs)];
-  const [y0, y1] = [yMin ?? Math.min(0, ...ys), Math.max(...ys)];
+  const [y0, y1] = [yMin ?? Math.min(0, ...ys), yMax ?? Math.max(...ys)];
   const sx = (x: number) => pad.left + (x1 === x0 ? 0.5 : (x - x0) / (x1 - x0)) * (width - pad.left - pad.right);
   const sy = (y: number) => height - pad.bottom - (y1 === y0 ? 0.5 : (y - y0) / (y1 - y0)) * (height - pad.top - pad.bottom);
   return (
     <svg className="pg-chart" viewBox={`0 0 ${width} ${height}`} role="img">
+      {bands.map((b, i) => {
+        const from = sx(Math.max(+b.from, x0));
+        const to = sx(Math.min(+b.to, x1));
+        if (to <= from) return null;
+        return (
+          <rect key={i} x={from} width={to - from} y={pad.top} height={height - pad.top - pad.bottom} fill={`var(--pg-band-${b.tone})`}>
+            {b.label && <title>{b.label}</title>}
+          </rect>
+        );
+      })}
       {ticks(y0, y1).map((t) => (
         <g key={t}>
           <line className="pg-axis" x1={pad.left} x2={width - pad.right} y1={sy(t)} y2={sy(t)} />
@@ -269,6 +288,34 @@ export function LineChart({ series, markers = [], height = 220, formatX = (x) =>
         );
       })}
     </svg>
+  );
+}
+
+/**
+ * How full something is, as a half-circle arc: value of max, its label and
+ * an optional hint. The arc turns amber below warn and red below danger,
+ * fractions of max.
+ */
+export function Gauge({ value, max = 100, label, hint, text, warn = 0.3, danger = 0.15 }: { value: number; max?: number; label: ReactNode; hint?: ReactNode; text?: ReactNode; warn?: number; danger?: number }) {
+  const share = Math.min(Math.max(max > 0 ? value / max : 0, 0), 1);
+  const color = share < danger ? "var(--pg-danger)" : share < warn ? "var(--pg-warning)" : "var(--pg-success)";
+  const r = 80;
+  const arc = (to: number) => {
+    const angle = Math.PI * (1 - to);
+    return `M ${100 - r} 100 A ${r} ${r} 0 0 1 ${100 + r * Math.cos(angle)} ${100 - r * Math.sin(angle)}`;
+  };
+  return (
+    <div className="pg-card" style={{ textAlign: "center" }}>
+      <div className="pg-stat-label">{label}</div>
+      <svg viewBox="0 0 200 112" style={{ width: "100%", maxWidth: 260 }} role="img">
+        <path d={arc(1)} fill="none" stroke="var(--pg-border)" strokeWidth={16} strokeLinecap="round" />
+        {share > 0 && <path d={arc(share)} fill="none" stroke={color} strokeWidth={16} strokeLinecap="round" />}
+        <text x={100} y={96} textAnchor="middle" style={{ fontSize: 30, fontWeight: 650, fill: "var(--pg-text)" }}>
+          {text ?? `${Math.round(share * 100)} %`}
+        </text>
+      </svg>
+      {hint !== undefined && <div className="pg-stat-hint">{hint}</div>}
+    </div>
   );
 }
 
