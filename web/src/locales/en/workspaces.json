@@ -27,6 +27,7 @@
     "members": "Members",
     "workflows": "Workflows",
     "runs": "Runs",
+    "apps": "Apps",
     "readOnly": "Only workspace owners change these settings. You can look at them."
   },
   "keywords": {

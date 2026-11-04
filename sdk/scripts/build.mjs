@@ -52,7 +52,7 @@ await build({
     "@std-uritemplate/std-uritemplate": join(sdk, "src", "stduritemplate.ts"),
   },
   // The page inlines the runtime in the frame's document.
-  supported: { "inline-script": false },
+  supported: { "inline-script": true },
   target: "es2020",
   minify: true,
   legalComments: "eof",

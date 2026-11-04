@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link, Outlet } from '@tanstack/react-router';
-import { ArrowLeft, History, Settings2, Users, Workflow } from 'lucide-react';
+import { AppWindow, ArrowLeft, History, Settings2, Users, Workflow } from 'lucide-react';
 import { resourceQuery } from '@/api/queries';
 import { Page, PageHeader } from '@/components/page';
 import { SubNav, SubNavLayout, SubNavLink } from '@/components/sub-nav';
@@ -36,6 +36,9 @@ function WorkspaceSettings() {
             </SubNavLink>
             <SubNavLink to="/w/$workspaceId/settings/runs" params={params}>
               <History /> {t('settings.runs')}
+            </SubNavLink>
+            <SubNavLink to="/w/$workspaceId/settings/apps" params={params}>
+              <AppWindow /> {t('settings.apps')}
             </SubNavLink>
           </SubNav>
         }

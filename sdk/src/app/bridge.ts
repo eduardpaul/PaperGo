@@ -26,29 +26,49 @@ export type AppMessage =
 // Messages the page sends.
 export type PageMessage = { type: "papergo:response"; id: number; response: HostResponse } | { type: "papergo:change"; changes: Change[] };
 
-interface Port {
+export interface Port {
   post(message: AppMessage): void;
   listen(handler: (message: PageMessage) => void): void;
 }
 
-// The frame's parent, which is the PaperGo page. Messages from anywhere else
-// are ignored.
-const parentPort: Port = {
-  post: (message) => window.parent.postMessage(message, "*"),
-  listen: (handler) =>
-    window.addEventListener("message", (event) => {
-      if (event.source !== window.parent) return;
-      const data = event.data as PageMessage | undefined;
-      if (data && typeof data === "object" && typeof data.type === "string" && data.type.startsWith("papergo:")) handler(data);
-    }),
-};
+/**
+ * The port to the PaperGo page. The runtime asks the page for a
+ * MessageChannel port as soon as it loads, before the app's own code runs,
+ * and the page answers only that first request: everything then travels
+ * over the port, which no other document can reach and which ends with this
+ * one. Messages sent before the port arrives wait for it.
+ */
+export function parentPort(): Port {
+  let port: MessagePort | undefined;
+  let handler: ((message: PageMessage) => void) | undefined;
+  const waiting: AppMessage[] = [];
+  const send = (p: MessagePort, message: AppMessage) => p.postMessage(message, message.type === "papergo:request" && message.body instanceof ArrayBuffer ? [message.body] : []);
+  const receive = (event: MessageEvent) => {
+    if (port || event.source !== window.parent || (event.data as { type?: string } | undefined)?.type !== "papergo:port" || !event.ports[0]) return;
+    port = event.ports[0];
+    window.removeEventListener("message", receive);
+    port.onmessage = (e: MessageEvent) => {
+      const data = e.data as PageMessage | undefined;
+      if (data && typeof data === "object" && typeof data.type === "string") handler?.(data);
+    };
+    for (const message of waiting.splice(0)) send(port, message);
+  };
+  window.addEventListener("message", receive);
+  window.parent.postMessage({ type: "papergo:hello" }, "*");
+  return {
+    post: (message) => (port ? send(port, message) : void waiting.push(message)),
+    listen: (h) => {
+      handler = h;
+    },
+  };
+}
 
 export class Bridge {
   private next = 1;
   private readonly pending = new Map<number, (response: HostResponse) => void>();
   private readonly watchers = new Set<(changes: Change[]) => void>();
 
-  constructor(private readonly port: Port = parentPort) {
+  constructor(private readonly port: Port) {
     port.listen((message) => {
       if (message.type === "papergo:response") {
         const resolve = this.pending.get(message.id);

@@ -64,14 +64,16 @@ func Compile(source string) (Compiled, error) {
 		return Compiled{}, problem("an app's source is limited to %d bytes", MaxSource)
 	}
 	result := api.Build(api.BuildOptions{
-		Stdin:           &api.StdinOptions{Contents: entry, Sourcefile: "entry.js", Loader: api.LoaderJS},
-		Bundle:          true,
-		Write:           false,
-		Format:          api.FormatIIFE,
-		Platform:        api.PlatformBrowser,
-		Target:          api.ES2020,
-		Charset:         api.CharsetUTF8,
-		LogLevel:        api.LogLevelSilent,
+		Stdin:    &api.StdinOptions{Contents: entry, Sourcefile: "entry.js", Loader: api.LoaderJS},
+		Bundle:   true,
+		Write:    false,
+		Format:   api.FormatIIFE,
+		Platform: api.PlatformBrowser,
+		Target:   api.ES2020,
+		Charset:  api.CharsetUTF8,
+		LogLevel: api.LogLevelSilent,
+		// The page inlines the code in the frame's document.
+		Supported:       map[string]bool{"inline-script": true},
 		JSX:             api.JSXAutomatic,
 		JSXImportSource: ModuleReact,
 		Sourcemap:       api.SourceMapInline,

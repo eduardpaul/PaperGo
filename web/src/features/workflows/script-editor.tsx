@@ -6,12 +6,13 @@ import { useTranslation } from "@/i18n";
 type Monaco = typeof Api;
 
 /**
- * Edits a workflow script in Monaco, which completes and checks it against
- * the workflow SDK as TypeScript. A plain text area stands in while Monaco
- * loads, and stays if it cannot. Monaco starts from value and then owns the
- * text, reporting each change: replacing the script means a new key.
+ * Edits a workflow script, or an app's TSX source, in Monaco, which
+ * completes and checks it against the workflow SDK or @papergo/app as
+ * TypeScript. A plain text area stands in while Monaco loads, and stays if
+ * it cannot. Monaco starts from value and then owns the text, reporting each
+ * change: replacing the script means a new key.
  */
-export function ScriptEditor({ id, value, onChange, readOnly }: { id: string; value: string; onChange: (value: string) => void; readOnly?: boolean }) {
+export function ScriptEditor({ id, value, onChange, readOnly, kind = "workflow" }: { id: string; value: string; onChange: (value: string) => void; readOnly?: boolean; kind?: "workflow" | "app" }) {
   const { t } = useTranslation("workflows");
   const [monaco, setMonaco] = useState<Monaco>();
   const host = useRef<HTMLDivElement>(null);
@@ -25,15 +26,20 @@ export function ScriptEditor({ id, value, onChange, readOnly }: { id: string; va
 
   useEffect(() => {
     let live = true;
-    import("./monaco").then((module) => live && setMonaco(module.monaco), () => undefined);
+    import("./monaco")
+      .then(async (module) => {
+        if (kind === "app") await module.addAppTypes();
+        if (live) setMonaco(module.monaco);
+      })
+      .catch(() => undefined);
     return () => {
       live = false;
     };
-  }, []);
+  }, [kind]);
 
   useEffect(() => {
     if (!monaco || !host.current) return;
-    const model = monaco.editor.createModel(latest.current.value, "typescript", monaco.Uri.parse(`file:///${id}.ts`));
+    const model = monaco.editor.createModel(latest.current.value, "typescript", monaco.Uri.parse(`file:///${id}.${kind === "app" ? "tsx" : "ts"}`));
     const created = monaco.editor.create(host.current, {
       model,
       automaticLayout: true,
@@ -56,7 +62,7 @@ export function ScriptEditor({ id, value, onChange, readOnly }: { id: string; va
       model.dispose();
       editor.current = undefined;
     };
-  }, [monaco, id]);
+  }, [monaco, id, kind]);
 
   useEffect(() => {
     editor.current?.updateOptions({ readOnly });

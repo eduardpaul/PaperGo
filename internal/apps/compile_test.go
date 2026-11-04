@@ -46,6 +46,12 @@ func TestAppsCompileAndDeclareTheirParameters(t *testing.T) {
 		t.Fatalf("compiling again changed the code: %v", err)
 	}
 
+	inline, err := Compile(`import { app } from "@papergo/app";
+export default app({ render: () => "</script><b>" });`)
+	if err != nil || strings.Contains(strings.ToLower(inline.Code), "</script") {
+		t.Fatalf("code with a closing script tag in a string: %v %s", err, inline.Code)
+	}
+
 	plain, err := Compile(`import { app } from "@papergo/app";
 export default app({ render: () => null });`)
 	if err != nil || string(plain.ParametersSchema) != `{"type":"object","properties":{}}` {

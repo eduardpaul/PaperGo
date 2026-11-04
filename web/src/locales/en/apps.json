@@ -1,0 +1,40 @@
+{
+  "page": {
+    "title": "Apps",
+    "description": "Screens of this workspace that its people open from the sidebar. An app reads and changes the workspace's data as the person viewing it.",
+    "app": "App",
+    "settings": "App settings",
+    "needScope": "Writing apps needs manage access to the workspace and the app.manage scope, which administrators have.",
+    "empty": "This workspace has no apps yet.",
+    "version": "Version {{version}} · {{key}}",
+    "deleteTitle": "Delete {{name}}?",
+    "deleteDescription": "The app and its versions are deleted. The lists it shows stay as they are.",
+    "deleteConfirm": "Delete app"
+  },
+  "state": {
+    "draft": "Draft",
+    "published": "Published"
+  },
+  "actions": {
+    "new": "New app",
+    "open": "Open",
+    "edit": "Edit"
+  },
+  "editor": {
+    "newTitle": "New app",
+    "title": "Edit {{name}}",
+    "description": "An app is one TSX file whose default export is app() from @papergo/app. Saving compiles it; the app acts as each person who opens it.",
+    "source": "Source",
+    "sourceHint": "Import only react and @papergo/app. Each new source becomes the next version.",
+    "state": "State",
+    "stateHint": "A published app is in the workspace's sidebar for everyone who can read the workspace; a draft only for those who write apps.",
+    "parameters": "Parameters",
+    "noParameters": "This app declares no parameters.",
+    "parametersAfterSave": "Save the app to choose the parameters its source declares.",
+    "saved": "Saved version {{version}}"
+  },
+  "frame": {
+    "notLoaded": "The app could not be loaded.",
+    "stopped": "The app tried to leave its page and was stopped. Open it again to restart it."
+  }
+}

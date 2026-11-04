@@ -1,0 +1,40 @@
+{
+  "page": {
+    "title": "Aplicaciones",
+    "description": "Pantallas de este espacio de trabajo que sus personas abren desde la barra lateral. Una aplicación lee y cambia los datos del espacio de trabajo como la persona que la ve.",
+    "app": "Aplicación",
+    "settings": "Ajustes de la aplicación",
+    "needScope": "Escribir aplicaciones requiere acceso de gestión al espacio de trabajo y el permiso app.manage, que tienen los administradores.",
+    "empty": "Este espacio de trabajo aún no tiene aplicaciones.",
+    "version": "Versión {{version}} · {{key}}",
+    "deleteTitle": "¿Eliminar {{name}}?",
+    "deleteDescription": "Se eliminan la aplicación y sus versiones. Las listas que muestra quedan como están.",
+    "deleteConfirm": "Eliminar aplicación"
+  },
+  "state": {
+    "draft": "Borrador",
+    "published": "Publicada"
+  },
+  "actions": {
+    "new": "Nueva aplicación",
+    "open": "Abrir",
+    "edit": "Editar"
+  },
+  "editor": {
+    "newTitle": "Nueva aplicación",
+    "title": "Editar {{name}}",
+    "description": "Una aplicación es un archivo TSX cuya exportación por defecto es app() de @papergo/app. Al guardar se compila; la aplicación actúa como cada persona que la abre.",
+    "source": "Código",
+    "sourceHint": "Importa solo react y @papergo/app. Cada código nuevo es la siguiente versión.",
+    "state": "Estado",
+    "stateHint": "Una aplicación publicada aparece en la barra lateral del espacio de trabajo para todos los que pueden leerlo; un borrador, solo para quienes escriben aplicaciones.",
+    "parameters": "Parámetros",
+    "noParameters": "Esta aplicación no declara parámetros.",
+    "parametersAfterSave": "Guarda la aplicación para elegir los parámetros que declara su código.",
+    "saved": "Versión {{version}} guardada"
+  },
+  "frame": {
+    "notLoaded": "No se pudo cargar la aplicación.",
+    "stopped": "La aplicación intentó salir de su página y se detuvo. Ábrela de nuevo para reiniciarla."
+  }
+}

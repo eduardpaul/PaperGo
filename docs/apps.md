@@ -71,6 +71,28 @@ The kit draws in PaperGo's theme, light or dark as the viewer's:
 
 `json()` wraps free-form values, such as an item's, for the generated client, and `plain()` turns its untyped answers into JSON. An error in the app shows inside its screen.
 
+## How it runs
+
+People open a workspace's published apps from the sidebar, below its lists, and those who write apps add and change them in **Workspace settings → Apps**. The editor checks the source against `@papergo/app` and React as it is typed. Once a version is saved, it shows the parameters form with its pickers.
+
+The app page puts the app in a sandboxed frame:
+
+1. The page reads the app's compiled code with the viewer's login and writes the frame's one document: the runtime, the app's code and its start, inline.
+   - The frame has `sandbox="allow-scripts"`, so it has no origin of its own and cannot read the page's storage, where the login is kept.
+   - Its document's CSP allows only those inline scripts and styles, and images from `data:` and `blob:`. It can make no network requests and post no forms.
+   - PaperGo's page allows frames to show only the documents it writes (`frame-src 'none'`), so the frame cannot navigate anywhere. A frame that loads another document all the same is stopped.
+2. Before the app's code runs, the runtime asks the page for a message port, and the page answers that first request only. Every API request the app makes travels over that port.
+3. The page sends each request as the viewer and returns the status, the body, and the `Content-Type`, `ETag`, `Location` and `Retry-After` headers. The app sets only `Accept`, `Content-Type`, `If-Match`, `If-None-Match`, `Idempotency-Key` and `Prefer`.
+4. The page passes on the live changes of the items the viewer may see, so live queries read again.
+
+An app does what its viewer may, through the API only, and never holds a login, so it cannot act as the viewer once the page is closed.
+
+**Refused requests.** The page refuses some requests whoever views, with 403 `app_refused`, so an administrator who opens an app does not let it change who administers the organization:
+- **Any method:** `/v1/identity` (users, groups, roles, tokens, WebDAV credentials), `/v1/organization`, `/v1/portability`, `/v1/audit`, `/v1/storage`, `/v1/events`, `/v1/mcp`, `/v1/$batch` and the apps routes.
+- **Anything but reads:** a workflow's definition (`/v1/workflows/{id}`, `/v1/workspaces/{id}/workflows`, its built-ins), workspace members and permissions.
+
+An app still starts workflow runs, answers and updates tasks, and reads and writes items.
+
 ## Who may do what
 
 | Action | Needs |

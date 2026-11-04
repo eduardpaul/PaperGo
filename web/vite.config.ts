@@ -43,6 +43,9 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
       // The workflow SDK's declarations, for the script editor.
       '@sdk': fileURLToPath(new URL('../sdk/dist', import.meta.url)),
+      // React's own declarations, for the app editor; their package exports hide the files.
+      '@react-types': fileURLToPath(new URL('./node_modules/@types/react', import.meta.url)),
+      '@csstype': fileURLToPath(new URL('./node_modules/csstype', import.meta.url)),
     },
   },
   server: {

@@ -4,6 +4,33 @@ import { clearToken } from '@/api/http';
 import { authorizationHeaders } from '@/api/auth';
 import { keys } from '@/api/queries';
 
+/** A live change of an item the viewer may see, for apps that read again when their items change. */
+export interface ItemChange {
+  id: string;
+  /** The item's list or library, when the stream says. */
+  collectionId?: string;
+  /** The item was deleted or is no longer visible. */
+  removed?: boolean;
+}
+
+const itemListeners = new Set<(change: ItemChange) => void>();
+
+/** Calls listener with each live item change while the page's stream runs; returns what stops it. */
+export function onItemChange(listener: (change: ItemChange) => void): () => void {
+  itemListeners.add(listener);
+  return () => itemListeners.delete(listener);
+}
+
+function itemChange(data: string): ItemChange | undefined {
+  try {
+    const frame = JSON.parse(data) as { id?: string; item?: { container_id?: string | null }; '@removed'?: unknown };
+    if (!frame.id) return undefined;
+    return { id: frame.id, collectionId: frame.item?.container_id ?? undefined, removed: frame['@removed'] !== undefined };
+  } catch {
+    return undefined;
+  }
+}
+
 /** Changes arriving within this many milliseconds refresh the page once. */
 export const liveRefreshInterval = 1000;
 
@@ -37,7 +64,11 @@ export function useLiveEvents() {
       timer ??= setTimeout(flush, liveRefreshInterval);
     };
     controller.signal.addEventListener('abort', () => clearTimeout(timer), { once: true });
-    void readEvents(controller.signal, (event) => {
+    void readEvents(controller.signal, (event, data) => {
+      if (event === 'item' && itemListeners.size > 0) {
+        const change = itemChange(data);
+        if (change) for (const listener of itemListeners) listener(change);
+      }
       if (event === 'item' || event === 'resync' || event === 'connected') schedule('content');
       if (event === 'run') schedule('run');
       if (event === 'comment' || event === 'connected' || event === 'resync') schedule('comment');
@@ -51,7 +82,7 @@ export function useLiveEvents() {
   }, [queryClient]);
 }
 
-async function readEvents(signal: AbortSignal, onEvent: (event: string) => void) {
+async function readEvents(signal: AbortSignal, onEvent: (event: string, data: string) => void) {
   let lastId = '';
   while (!signal.aborted) {
     const headers: Record<string, string> = { Accept: 'text/event-stream', ...authorizationHeaders() };
@@ -59,7 +90,7 @@ async function readEvents(signal: AbortSignal, onEvent: (event: string) => void)
     try {
       const response = await fetch('/v1/events', { headers, signal, credentials: 'same-origin' });
       if (response.status === 401) {
-        onEvent('reauthenticate');
+        onEvent('reauthenticate', '');
         return;
       }
       if (!response.ok || !response.body) {
@@ -77,11 +108,13 @@ async function readEvents(signal: AbortSignal, onEvent: (event: string) => void)
         buffer = frames.pop() ?? '';
         for (const frame of frames) {
           let event = 'message';
+          let data = '';
           for (const line of frame.split('\n')) {
             if (line.startsWith('event:')) event = line.slice(6).trim();
             else if (line.startsWith('id:')) lastId = line.slice(3).trim();
+            else if (line.startsWith('data:')) data += line.slice(5).trim();
           }
-          if (event !== 'message') onEvent(event);
+          if (event !== 'message') onEvent(event, data);
         }
       }
     } catch (error) {

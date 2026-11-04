@@ -7,7 +7,7 @@ import * as React from "react";
 import * as jsxRuntime from "react/jsx-runtime";
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
-import { Bridge } from "./bridge.js";
+import { Bridge, parentPort } from "./bridge.js";
 import { appContext, RuntimeContext, type Init, type Runtime } from "./context.js";
 import * as appModule from "./index.js";
 import type { AppDefinition } from "./index.js";
@@ -46,6 +46,9 @@ function fail(message: string): void {
   document.body.append(p);
 }
 
+// The bridge connects as the runtime loads, before the app's code runs.
+const bridge = new Bridge(parentPort());
+
 /** Renders the app whose compiled code ran last, with what the page knows. */
 function start(init: Init): void {
   document.documentElement.dataset.theme = init.theme;
@@ -58,7 +61,6 @@ function start(init: Init): void {
     fail("This app's code did not load.");
     return;
   }
-  const bridge = new Bridge();
   const runtime: Runtime = { ctx: appContext(init, bridge), bridge };
   const root = document.createElement("div");
   document.body.append(root);

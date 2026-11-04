@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { liveRefreshInterval, useLiveEvents } from './live';
+import { liveRefreshInterval, onItemChange, useLiveEvents, type ItemChange } from './live';
 import { keys } from '@/api/queries';
 
 afterEach(() => {
@@ -40,4 +40,29 @@ it('refreshes once for a burst of item events', async () => {
   expect(invalidate).toHaveBeenCalledTimes(3);
   unmount();
   client.clear();
+});
+
+it('tells item listeners which item changed, in which list', async () => {
+  const frames = 'id: 1\nevent: item\ndata: {"id":"i1","action":"updated","item":{"id":"i1","container_id":"l1"}}\n\nid: 2\nevent: item\ndata: {"id":"i2","@removed":{"reason":"deleted"}}\n\n';
+  let served = false;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => {
+      if (served) return new Promise<Response>(() => {});
+      served = true;
+      return new Response(frames, { headers: { 'Content-Type': 'text/event-stream' } });
+    }),
+  );
+  const changes: ItemChange[] = [];
+  const stop = onItemChange((change) => changes.push(change));
+  const client = new QueryClient();
+  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  const { unmount } = renderHook(() => useLiveEvents(), { wrapper });
+  await vi.waitFor(() => expect(changes).toHaveLength(2));
+  expect(changes).toEqual([
+    { id: 'i1', collectionId: 'l1', removed: false },
+    { id: 'i2', collectionId: undefined, removed: true },
+  ]);
+  stop();
+  unmount();
 });
