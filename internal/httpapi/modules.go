@@ -204,12 +204,14 @@ func (a *API) routes() (api *router, err error) {
 	return api, nil
 }
 
-// Problem is an error a module route answers with its own problem status
-// and code, such as 503 when a store it needs is unavailable.
+// Problem is an error a route answers with its own problem status and code,
+// such as 503 when a store it needs is unavailable. Extensions are further
+// members of the response, such as the resource a conflict names.
 type Problem struct {
-	Status int
-	Code   string
-	Detail string
+	Status     int
+	Code       string
+	Detail     string
+	Extensions map[string]any
 }
 
 func (p *Problem) Error() string { return p.Detail }

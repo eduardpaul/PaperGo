@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	appstore "papergo/internal/dal/apps"
 	"papergo/internal/dal/daltest"
@@ -213,7 +214,7 @@ export default app({ render: () => null });`, State: appstore.StatePublished})
 		}
 		out := []string{}
 		for _, a := range apps {
-			if a.Source != "" || len(a.ParametersSchema) == 0 {
+			if a.Source != "" || a.ParametersSchema != nil {
 				t.Fatalf("a launcher entry: %+v", a)
 			}
 			out = append(out, a.Name+" in "+a.WorkspaceName)
@@ -228,5 +229,115 @@ export default app({ render: () => null });`, State: appstore.StatePublished})
 	}
 	if got := names("stranger"); len(got) != 0 {
 		t.Fatalf("someone in no workspace: %v", got)
+	}
+}
+
+// A failure that says nothing about access stays a failure: a viewer is not
+// told an app is missing, or that they may not write it, because the database
+// could not answer.
+func TestAFailedAccessCheckIsNotAnAnswer(t *testing.T) {
+	ctx := context.Background()
+	db := daltest.Database(t)
+	s := dms.NewService(db.SQL)
+	ws, err := s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Farm"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = dms.Read(ctx, s, func(t2 *dms.Service) (struct{}, error) {
+		if write, err := writes(ctx, t2, "stranger", ws.ID); err != nil || write {
+			t.Errorf("no access is an answer: %v %v", write, err)
+		}
+		canceled, cancel := context.WithCancel(ctx)
+		cancel()
+		if write, err := writes(canceled, t2, "alice", ws.ID); !errors.Is(err, context.Canceled) || write {
+			t.Errorf("a failed check: %v %v", write, err)
+		}
+		return struct{}{}, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Running a source can take seconds; other writes do not wait for it.
+func TestCompilingAnAppHoldsUpNoWrites(t *testing.T) {
+	ctx := context.Background()
+	db := daltest.Database(t)
+	s := dms.NewService(db.SQL)
+	svc := &Service{DMS: s}
+	ws, err := s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Farm"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	directory := identity.Directory{DB: db.SQL}
+	role, err := directory.SaveRole(ctx, "organization-admin", "", 0, identity.RoleInput{Name: "App writers", Scopes: []string{Scope}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = directory.SetAssignment(ctx, "organization-admin", role.ID, identity.Principal{Type: "user", ID: "alice"}, false); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := svc.Create(ctx, "alice", ws.ID, Save{Name: "Spins", Source: `import { app } from "@papergo/app"; while (true) {} export default app({ render: () => null });`})
+		done <- err
+	}()
+	time.Sleep(300 * time.Millisecond)
+	if _, err = s.Create(ctx, "alice", ws.ID, dms.CreateResource{Kind: "list", Name: "Meanwhile"}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err = <-done:
+		t.Fatalf("the write waited for the source to stop running: %v", err)
+	default:
+	}
+	invalid(t, <-done, "too long")
+}
+
+// The launcher's queries do not grow with the apps or the workspaces.
+func TestTheLauncherReadsInAFixedNumberOfQueries(t *testing.T) {
+	ctx := context.Background()
+	db := daltest.Database(t)
+	meter := daltest.NewWriteMeter(t, db)
+	s := dms.NewService(meter.SQL)
+	svc := &Service{DMS: s}
+	directory := identity.Directory{DB: db.SQL}
+	role, err := directory.SaveRole(ctx, "organization-admin", "", 0, identity.RoleInput{Name: "App writers", Scopes: []string{Scope}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = directory.SetAssignment(ctx, "organization-admin", role.ID, identity.Principal{Type: "user", ID: "alice"}, false); err != nil {
+		t.Fatal(err)
+	}
+	add := func(name string) {
+		t.Helper()
+		ws, err := s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: name})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, app := range []string{name + " one", name + " two"} {
+			if _, err = svc.Create(ctx, "alice", ws.ID, Save{Name: app, Source: `import { app } from "@papergo/app";
+export default app({ render: () => null });`, State: appstore.StatePublished}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	read := func(want int) int {
+		t.Helper()
+		meter.Start(t)
+		apps, err := svc.Launcher(ctx, "alice")
+		cost := meter.Stop(t)
+		if err != nil || len(apps) != want {
+			t.Fatalf("the launcher: %d apps, want %d: %v", len(apps), want, err)
+		}
+		return cost.Statements
+	}
+	add("First")
+	few := read(2)
+	for _, name := range []string{"Second", "Third", "Fourth"} {
+		add(name)
+	}
+	if many := read(8); many != few {
+		t.Fatalf("the launcher took %d statements for 2 apps and %d for 8", few, many)
 	}
 }

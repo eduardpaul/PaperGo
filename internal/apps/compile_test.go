@@ -1,10 +1,13 @@
 package apps
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"strings"
 	"testing"
+
+	"papergo/internal/script"
 )
 
 const dashboard = `import { useState } from "react";
@@ -31,7 +34,7 @@ export default app({
 // What React and the kit export can be used as the code loads, as in the
 // browser: an error boundary extends Component, and an error RequestError.
 func TestAppsMayExtendTheRuntimesClassesAsTheyLoad(t *testing.T) {
-	c, err := Compile(`import { Component, createRef, useSyncExternalStore } from "react";
+	c, err := Compile(context.Background(), `import { Component, createRef, useSyncExternalStore } from "react";
 import { app, RequestError, narrowWidth } from "@papergo/app";
 
 class Boundary extends Component<{ children: React.ReactNode }> {
@@ -54,7 +57,7 @@ export default app({ render() { useSyncExternalStore; return <Boundary>{[wide, f
 // An app compiles to code that reads the runtime's modules, and declares
 // its parameters form.
 func TestAppsCompileAndDeclareTheirParameters(t *testing.T) {
-	c, err := Compile(dashboard)
+	c, err := Compile(context.Background(), dashboard)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,18 +68,18 @@ func TestAppsCompileAndDeclareTheirParameters(t *testing.T) {
 	if err = json.Unmarshal(c.ParametersSchema, &schema); err != nil || schema["required"].([]any)[0] != "list" {
 		t.Fatalf("parameters form: %s %v", c.ParametersSchema, err)
 	}
-	again, err := Compile(dashboard)
+	again, err := Compile(context.Background(), dashboard)
 	if err != nil || again.Hash != c.Hash {
 		t.Fatalf("compiling again changed the code: %v", err)
 	}
 
-	inline, err := Compile(`import { app } from "@papergo/app";
+	inline, err := Compile(context.Background(), `import { app } from "@papergo/app";
 export default app({ render: () => "</script><b>" });`)
 	if err != nil || strings.Contains(strings.ToLower(inline.Code), "</script") {
 		t.Fatalf("code with a closing script tag in a string: %v %s", err, inline.Code)
 	}
 
-	plain, err := Compile(`import { app } from "@papergo/app";
+	plain, err := Compile(context.Background(), `import { app } from "@papergo/app";
 export default app({ render: () => null });`)
 	if err != nil || string(plain.ParametersSchema) != `{"type":"object","properties":{}}` {
 		t.Fatalf("an app without parameters: %s %v", plain.ParametersSchema, err)
@@ -95,13 +98,14 @@ func TestAppsThatDoNotCompileAreRefused(t *testing.T) {
 		"bad parameters":  {`import { app } from "@papergo/app"; export default app({ parameters: [1], render: () => null });`, "parameters must be a form"},
 		"a loop":          {`import { app } from "@papergo/app"; while (true) {} export default app({ render: () => null });`, "too long"},
 		"a throw":         {`import { app } from "@papergo/app"; throw new Error("boom"); export default app({ render: () => null });`, "boom"},
+		"a recursion":     {`import { app } from "@papergo/app"; const f = () => f(); f(); export default app({ render: () => null });`, "failed while it was loaded"},
 	} {
-		_, err := Compile(tc.source)
+		_, err := Compile(context.Background(), tc.source)
 		if err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%s: %v, want %q", name, err, tc.want)
 		}
-		if _, ok := err.(*CompileError); err != nil && !ok {
-			t.Errorf("%s: not a CompileError: %T", name, err)
+		if _, ok := err.(*script.BundleError); err != nil && !ok {
+			t.Errorf("%s: not a BundleError: %T", name, err)
 		}
 	}
 }
@@ -112,7 +116,7 @@ func TestTheDieselSampleCompiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c, err := Compile(string(source))
+	c, err := Compile(context.Background(), string(source))
 	if err != nil {
 		t.Fatal(err)
 	}

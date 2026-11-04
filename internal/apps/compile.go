@@ -5,16 +5,13 @@
 package apps
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
+	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
 
-	"github.com/dop251/goja"
-	"github.com/evanw/esbuild/pkg/api"
+	"papergo/internal/script"
 )
 
 // Modules an app may import; the runtime supplies them.
@@ -34,13 +31,8 @@ type Compiled struct {
 	ParametersSchema json.RawMessage
 }
 
-// CompileError lists what is wrong with a source, one problem per line.
-type CompileError struct{ Problems []string }
-
-func (e *CompileError) Error() string { return strings.Join(e.Problems, "\n") }
-
 func problem(format string, args ...any) error {
-	return &CompileError{Problems: []string{fmt.Sprintf(format, args...)}}
+	return &script.BundleError{Problems: []string{fmt.Sprintf(format, args...)}}
 }
 
 // entry hands the runtime the app's default export.
@@ -55,77 +47,31 @@ func runtimeModule(name string) string {
 }
 
 // Compile compiles an app's TSX source. It imports only the runtime's
-// modules, and its default export is app({ render, parameters? }).
-func Compile(source string) (Compiled, error) {
+// modules, and its default export is app({ render, parameters? }). Everything
+// wrong with the source is a *script.BundleError.
+func Compile(ctx context.Context, source string) (Compiled, error) {
 	if strings.TrimSpace(source) == "" {
 		return Compiled{}, problem("the app has no source")
 	}
 	if len(source) > MaxSource {
 		return Compiled{}, problem("an app's source is limited to %d bytes", MaxSource)
 	}
-	result := api.Build(api.BuildOptions{
-		Stdin:    &api.StdinOptions{Contents: entry, Sourcefile: "entry.js", Loader: api.LoaderJS},
-		Bundle:   true,
-		Write:    false,
-		Format:   api.FormatIIFE,
-		Platform: api.PlatformBrowser,
-		Target:   api.ES2020,
-		Charset:  api.CharsetUTF8,
-		LogLevel: api.LogLevelSilent,
-		// The page inlines the code in the frame's document.
-		Supported:       map[string]bool{"inline-script": true},
-		JSX:             api.JSXAutomatic,
-		JSXImportSource: ModuleReact,
-		Plugins: []api.Plugin{{
-			Name: "app",
-			Setup: func(build api.PluginBuild) {
-				build.OnResolve(api.OnResolveOptions{Filter: `^app:source$`}, func(api.OnResolveArgs) (api.OnResolveResult, error) {
-					return api.OnResolveResult{Path: "app.tsx", Namespace: "app"}, nil
-				})
-				build.OnResolve(api.OnResolveOptions{Filter: `.*`}, func(args api.OnResolveArgs) (api.OnResolveResult, error) {
-					switch args.Path {
-					case ModuleApp, ModuleReact, ModuleJSXRuntime:
-						return api.OnResolveResult{Path: args.Path, Namespace: "runtime"}, nil
-					}
-					return api.OnResolveResult{}, fmt.Errorf("an app can import only %s, %s and %s, not %q", ModuleApp, ModuleReact, ModuleJSXRuntime, args.Path)
-				})
-				build.OnLoad(api.OnLoadOptions{Filter: `.*`, Namespace: "app"}, func(api.OnLoadArgs) (api.OnLoadResult, error) {
-					return api.OnLoadResult{Contents: &source, Loader: api.LoaderTSX}, nil
-				})
-				build.OnLoad(api.OnLoadOptions{Filter: `.*`, Namespace: "runtime"}, func(args api.OnLoadArgs) (api.OnLoadResult, error) {
-					code := runtimeModule(args.Path)
-					return api.OnLoadResult{Contents: &code, Loader: api.LoaderJS}, nil
-				})
-			},
-		}},
+	artifact, err := script.Compile(script.Spec{
+		Name: "app.tsx", Source: source, Namespace: "app", Entry: entry, Page: true,
+		Modules: map[string]string{ModuleApp: runtimeModule(ModuleApp), ModuleReact: runtimeModule(ModuleReact), ModuleJSXRuntime: runtimeModule(ModuleJSXRuntime)},
+		Refused: func(path string) string {
+			return fmt.Sprintf("an app can import only %s, %s and %s, not %q", ModuleApp, ModuleReact, ModuleJSXRuntime, path)
+		},
+		EntryProblem: "the app's default export must be app({ render })",
 	})
-	if len(result.Errors) > 0 {
-		problems := make([]string, len(result.Errors))
-		for i, m := range result.Errors {
-			problems[i] = message(m)
-			if m.Location != nil && m.Location.File == "entry.js" {
-				problems[i] = "the app's default export must be app({ render })"
-			}
-		}
-		return Compiled{}, &CompileError{Problems: problems}
-	}
-	if len(result.OutputFiles) != 1 {
-		return Compiled{}, errors.New("the compiler produced no code")
-	}
-	code := string(result.OutputFiles[0].Contents)
-	schema, err := declarations(code)
 	if err != nil {
 		return Compiled{}, err
 	}
-	sum := sha256.Sum256([]byte(code))
-	return Compiled{Code: code, Hash: hex.EncodeToString(sum[:]), ParametersSchema: schema}, nil
-}
-
-func message(m api.Message) string {
-	if m.Location == nil {
-		return m.Text
+	schema, err := declarations(ctx, artifact.Code)
+	if err != nil {
+		return Compiled{}, err
 	}
-	return fmt.Sprintf("%s:%d:%d: %s", m.Location.File, m.Location.Line, m.Location.Column+1, m.Text)
+	return Compiled{Code: artifact.Code, Hash: artifact.Hash, ParametersSchema: schema}, nil
 }
 
 // stubs stand for the runtime's modules while the server reads an app's
@@ -146,37 +92,30 @@ const declarationTimeout = 2 * time.Second
 // defaultParameters is the form of an app that declares none.
 var defaultParameters = json.RawMessage(`{"type":"object","properties":{}}`)
 
-// declarations runs an app's code with stub modules and returns the
-// parameters form its default export declares.
-func declarations(code string) (json.RawMessage, error) {
-	vm := goja.New()
-	timer := time.AfterFunc(declarationTimeout, func() { vm.Interrupt("the app took too long to declare itself") })
-	defer timer.Stop()
-	if _, err := vm.RunString(stubs); err != nil {
-		return nil, err
-	}
-	if _, err := vm.RunString(code); err != nil {
-		return nil, problem("the app failed while it was loaded: %v", err)
-	}
-	out, err := vm.RunString(`(() => {
+// readDefinition reads what an app's default export declares, as JSON.
+const readDefinition = `JSON.stringify((() => {
   const d = globalThis.__papergoAppDefinition;
   if (!d || typeof d !== "object" || typeof d.render !== "function") return { error: "the app's default export must be app({ render })" };
-  if (d.parameters === undefined) return { schema: null };
+  if (d.parameters === undefined) return {};
   if (!d.parameters || typeof d.parameters !== "object" || Array.isArray(d.parameters)) return { error: "parameters must be a form: a JSON Schema object" };
-  return { schema: JSON.stringify(d.parameters) };
-})()`)
+  return { schema: d.parameters };
+})())`
+
+// declarations runs an app's code with stub modules and returns the
+// parameters form its default export declares.
+func declarations(ctx context.Context, code string) (json.RawMessage, error) {
+	raw, err := script.Declare(ctx, script.Declarations{Prelude: stubs, Code: code, Read: readDefinition, Budget: declarationTimeout, TooLong: "the app took too long to declare itself"})
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	if err != nil {
 		return nil, problem("the app failed while it was loaded: %v", err)
 	}
 	var result struct {
-		Error  string  `json:"error"`
-		Schema *string `json:"schema"`
+		Error  string          `json:"error"`
+		Schema json.RawMessage `json:"schema"`
 	}
-	raw, err := json.Marshal(out.Export())
-	if err != nil {
-		return nil, err
-	}
-	if err = json.Unmarshal(raw, &result); err != nil {
+	if err = json.Unmarshal([]byte(raw), &result); err != nil {
 		return nil, err
 	}
 	if result.Error != "" {
@@ -185,5 +124,5 @@ func declarations(code string) (json.RawMessage, error) {
 	if result.Schema == nil {
 		return defaultParameters, nil
 	}
-	return json.RawMessage(*result.Schema), nil
+	return result.Schema, nil
 }

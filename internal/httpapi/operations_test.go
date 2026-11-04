@@ -33,6 +33,9 @@ func TestModuleRoutes(t *testing.T) {
 		if r.PathValue("id") == "missing" {
 			return dms.ErrNotFound
 		}
+		if r.PathValue("id") == "taken" {
+			return &Problem{Status: 409, Code: "taken", Detail: "taken", Extensions: map[string]any{"holder_id": "h1"}}
+		}
 		respond(w, r, 200, map[string]string{"subject": in.Subject, "id": r.PathValue("id")})
 		return nil
 	}}
@@ -50,6 +53,10 @@ func TestModuleRoutes(t *testing.T) {
 	}
 	if res = request(h, "POST", "/v1/test-module/missing", "", testToken, "", ""); res.Code != 404 || !strings.Contains(res.Body.String(), `"code":"not_found"`) {
 		t.Fatal("module errors map like core errors", res.Code, res.Body.String())
+	}
+	// A module's problem can name what it conflicts with, as core conflicts do.
+	if res = request(h, "POST", "/v1/test-module/taken", "", testToken, "", ""); res.Code != 409 || !strings.Contains(res.Body.String(), `"code":"taken"`) || !strings.Contains(res.Body.String(), `"holder_id":"h1"`) {
+		t.Fatal("a problem's extensions", res.Code, res.Body.String())
 	}
 	// Module routes accept idempotency keys like core routes.
 	keyed := httptest.NewRequest("POST", "/v1/test-module/one", nil)

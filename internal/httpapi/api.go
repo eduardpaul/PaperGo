@@ -399,12 +399,20 @@ func respond(w http.ResponseWriter, r *http.Request, status int, body any) {
 	_ = json.NewEncoder(w).Encode(body)
 }
 func (a *API) problem(w http.ResponseWriter, r *http.Request, status int, code, message string, operationIndex ...int) {
+	a.extendedProblem(w, r, status, code, message, nil, operationIndex...)
+}
+
+// extendedProblem answers with a problem that has further members.
+func (a *API) extendedProblem(w http.ResponseWriter, r *http.Request, status int, code, message string, extensions map[string]any, operationIndex ...int) {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(status)
 	id, _ := r.Context().Value(requestKey{}).(string)
 	body := map[string]any{"type": "about:blank", "title": http.StatusText(status), "status": status, "code": code, "detail": message, "request_id": id}
 	if len(operationIndex) > 0 {
 		body["operation_index"] = operationIndex[0]
+	}
+	for k, v := range extensions {
+		body[k] = v
 	}
 	_ = json.NewEncoder(w).Encode(body)
 }
@@ -427,19 +435,13 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 	var openTask *taskstore.OpenError
 	switch {
 	case errors.As(err, &moveConflict):
-		w.Header().Set("Content-Type", "application/problem+json")
-		w.WriteHeader(http.StatusConflict)
-		requestID, _ := r.Context().Value(requestKey{}).(string)
-		body := map[string]any{"type": "about:blank", "title": "Conflict", "status": 409, "code": "name_conflict", "detail": moveConflict.Error(), "request_id": requestID, "source_item_id": moveConflict.SourceID}
+		extensions := map[string]any{"source_item_id": moveConflict.SourceID}
 		if moveConflict.Existing != nil {
-			body["existing_item"] = moveConflict.Existing
+			extensions["existing_item"] = moveConflict.Existing
 		}
-		_ = json.NewEncoder(w).Encode(body)
+		a.extendedProblem(w, r, 409, "name_conflict", moveConflict.Error(), extensions, operationIndex...)
 	case errors.As(err, &nameConflict):
-		w.Header().Set("Content-Type", "application/problem+json")
-		w.WriteHeader(http.StatusConflict)
-		requestID, _ := r.Context().Value(requestKey{}).(string)
-		_ = json.NewEncoder(w).Encode(map[string]any{"type": "about:blank", "title": "Conflict", "status": 409, "code": "name_conflict", "detail": nameConflict.Error(), "request_id": requestID, "existing_item": nameConflict})
+		a.extendedProblem(w, r, 409, "name_conflict", nameConflict.Error(), map[string]any{"existing_item": nameConflict}, operationIndex...)
 	case errors.As(err, &duplicate):
 		problem(409, "duplicate_file", duplicate.Error()+"; matching item "+duplicate.Documents[0].ItemID)
 	case errors.As(err, &identityValidation):
@@ -457,7 +459,7 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, dms.ErrNoText):
 		problem(404, "text_not_read", "The file's text has not been read; a workflow with document.read_text reads it.")
 	case errors.As(err, &moduleProblem):
-		problem(moduleProblem.Status, moduleProblem.Code, moduleProblem.Detail)
+		a.extendedProblem(w, r, moduleProblem.Status, moduleProblem.Code, moduleProblem.Detail, moduleProblem.Extensions, operationIndex...)
 	case errors.Is(err, dms.ErrLiveExpired):
 		problem(410, "live_cursor_expired", err.Error())
 	case errors.Is(err, dms.ErrDeltaExpired):
@@ -471,10 +473,7 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, dms.ErrProtectedHome):
 		problem(409, "protected_home", err.Error())
 	case errors.As(err, &openTask):
-		w.Header().Set("Content-Type", "application/problem+json")
-		w.WriteHeader(http.StatusConflict)
-		requestID, _ := r.Context().Value(requestKey{}).(string)
-		_ = json.NewEncoder(w).Encode(map[string]any{"type": "about:blank", "title": "Conflict", "status": 409, "code": "task_open", "detail": openTask.Error(), "request_id": requestID, "open_task_id": openTask.ID})
+		a.extendedProblem(w, r, 409, "task_open", openTask.Error(), map[string]any{"open_task_id": openTask.ID}, operationIndex...)
 	case errors.Is(err, dms.ErrLastOwner):
 		problem(409, "last_owner", "A workspace needs at least one owner. Make someone else an owner first.")
 	case errors.Is(err, dms.ErrFolderNotEmpty):

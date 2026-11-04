@@ -13,8 +13,10 @@ import (
 
 	appstore "papergo/internal/dal/apps"
 	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/resources"
 	"papergo/internal/dms"
 	"papergo/internal/forms"
+	"papergo/internal/script"
 )
 
 // Scope is the module scope writing apps needs, with manage access to the
@@ -38,14 +40,15 @@ type Save struct {
 // View is an app as the API shows it. Source is shown to those who may
 // write apps.
 type View struct {
-	ID               string          `json:"id"`
-	WorkspaceID      string          `json:"workspace_id"`
-	Key              string          `json:"key"`
-	Name             string          `json:"name"`
-	Description      string          `json:"description"`
-	State            appstore.State  `json:"state"`
-	Parameters       map[string]any  `json:"parameters"`
-	ParametersSchema json.RawMessage `json:"parameters_schema"`
+	ID          string         `json:"id"`
+	WorkspaceID string         `json:"workspace_id"`
+	Key         string         `json:"key"`
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	State       appstore.State `json:"state"`
+	Parameters  map[string]any `json:"parameters"`
+	// ParametersSchema is the current version's form; lists leave it out.
+	ParametersSchema json.RawMessage `json:"parameters_schema,omitempty"`
 	CurrentVersion   int             `json:"current_version"`
 	// WorkspaceName is set in lists of every workspace's apps.
 	WorkspaceName string    `json:"workspace_name,omitempty"`
@@ -89,12 +92,24 @@ func keyFromName(name string) string {
 	return k
 }
 
-// writes reports whether subject may write the workspace's apps.
-func writes(ctx context.Context, t *dms.Service, subject, workspaceID string) bool {
-	if _, err := t.Authorize(ctx, subject, workspaceID, "manage"); err != nil {
-		return false
+// denied is nil when err says only that subject has no access, and err when
+// the answer could not be found out.
+func denied(err error) error {
+	if errors.Is(err, dms.ErrForbidden) || errors.Is(err, dms.ErrNotFound) {
+		return nil
 	}
-	return t.RequireScope(ctx, subject, Scope) == nil
+	return err
+}
+
+// writes reports whether subject may write the workspace's apps.
+func writes(ctx context.Context, t *dms.Service, subject, workspaceID string) (bool, error) {
+	if _, err := t.Authorize(ctx, subject, workspaceID, "manage"); err != nil {
+		return false, denied(err)
+	}
+	if err := t.RequireScope(ctx, subject, Scope); err != nil {
+		return false, denied(err)
+	}
+	return true, nil
 }
 
 // readable returns the app with id that subject may see, and whether they
@@ -109,13 +124,34 @@ func readable(ctx context.Context, t *dms.Service, subject, id string) (appstore
 		return appstore.App{}, false, err
 	}
 	if _, err = t.Authorize(ctx, subject, a.WorkspaceID, "read"); err != nil {
+		if err = denied(err); err != nil {
+			return appstore.App{}, false, err
+		}
 		return appstore.App{}, false, dms.ErrNotFound
 	}
-	write := writes(ctx, t, subject, a.WorkspaceID)
+	write, err := writes(ctx, t, subject, a.WorkspaceID)
+	if err != nil {
+		return appstore.App{}, false, err
+	}
 	if a.State != appstore.StatePublished && !write {
 		return appstore.App{}, false, dms.ErrNotFound
 	}
 	return a, write, nil
+}
+
+// creatable reports why subject may not add apps to a workspace, if so.
+func creatable(ctx context.Context, t *dms.Service, subject, workspaceID string) error {
+	if _, err := t.Authorize(ctx, subject, workspaceID, "read"); err != nil {
+		return err
+	}
+	write, err := writes(ctx, t, subject, workspaceID)
+	if err != nil {
+		return err
+	}
+	if !write {
+		return dms.ErrForbidden
+	}
+	return nil
 }
 
 // writable returns the app with id that subject may write.
@@ -146,8 +182,11 @@ func (s *Service) List(ctx context.Context, subject, workspaceID string) ([]View
 		if _, err := t.Authorize(ctx, subject, workspaceID, "read"); err != nil {
 			return nil, err
 		}
-		write := writes(ctx, t, subject, workspaceID)
-		f := appstore.Filter{WorkspaceID: workspaceID}
+		write, err := writes(ctx, t, subject, workspaceID)
+		if err != nil {
+			return nil, err
+		}
+		f := appstore.Filter{WorkspaceIDs: []string{workspaceID}}
 		if !write {
 			f.State = appstore.StatePublished
 		}
@@ -155,76 +194,72 @@ func (s *Service) List(ctx context.Context, subject, workspaceID string) ([]View
 		if err != nil {
 			return nil, err
 		}
-		out := make([]View, 0, len(rows))
-		for _, a := range rows {
-			item, err := summary(ctx, t, a, write)
-			if err != nil {
-				return nil, err
-			}
-			out = append(out, item)
+		out := make([]View, len(rows))
+		for i, a := range rows {
+			out[i] = summary(a, write)
 		}
 		return out, nil
 	})
 }
 
-// summary is an app as lists show it, with its parameters form but not
-// its source: only the form is read, since a version's source and bundle
-// are large.
-func summary(ctx context.Context, t *dms.Service, a appstore.App, write bool) (View, error) {
-	schema, err := t.DAL.Apps().Schema(ctx, a.ID, int64(a.CurrentVersion))
-	if err != nil {
-		return View{}, err
-	}
-	return view(a, appstore.Version{Content: appstore.Content{ParametersSchema: schema}}, write), nil
+// summary is an app as lists show it: neither its source nor its parameters
+// form, which belong to its version and which a list does not use.
+func summary(a appstore.App, write bool) View {
+	return view(a, appstore.Version{}, write)
 }
 
 // Launcher returns the apps subject may see in every workspace, by name,
 // each with its workspace's name: published apps of the workspaces subject
-// reads, and drafts too where subject writes apps.
+// reads, and drafts too where subject writes apps. Its queries do not grow
+// with the apps or the workspaces.
 func (s *Service) Launcher(ctx context.Context, subject string) ([]View, error) {
 	return dms.Read(ctx, s.DMS, func(t *dms.Service) ([]View, error) {
-		rows, err := t.DAL.Apps().List(ctx, appstore.Filter{})
+		withApps, err := t.DAL.Apps().Workspaces(ctx)
 		if err != nil {
 			return nil, err
 		}
-		var ids []string
-		seen := map[string]bool{}
-		for _, a := range rows {
-			if !seen[a.WorkspaceID] {
-				seen[a.WorkspaceID] = true
-				ids = append(ids, a.WorkspaceID)
-			}
-		}
-		reads, err := t.AuthorizeMany(ctx, subject, "read", ids)
+		reads, err := t.AuthorizeMany(ctx, subject, "read", withApps)
 		if err != nil {
 			return nil, err
 		}
-		type workspace struct {
-			name  string
-			write bool
-		}
-		workspaces := map[string]workspace{}
-		for _, id := range ids {
-			if !reads[id] {
-				continue
+		ids := make([]string, 0, len(reads))
+		for _, id := range withApps {
+			if reads[id] {
+				ids = append(ids, id)
 			}
-			ws, err := t.DAL.Resources().Resource(ctx, id)
-			if err != nil {
-				return nil, err
-			}
-			workspaces[id] = workspace{name: ws.Name, write: writes(ctx, t, subject, id)}
 		}
 		out := []View{}
-		for _, a := range rows {
-			ws, ok := workspaces[a.WorkspaceID]
-			if !ok || a.State != appstore.StatePublished && !ws.write {
-				continue
-			}
-			item, err := summary(ctx, t, a, ws.write)
-			if err != nil {
+		if len(ids) == 0 {
+			return out, nil
+		}
+		manages := map[string]bool{}
+		err = t.RequireScope(ctx, subject, Scope)
+		if err == nil {
+			if manages, err = t.AuthorizeMany(ctx, subject, "manage", ids); err != nil {
 				return nil, err
 			}
-			item.WorkspaceName = ws.name
+		} else if err = denied(err); err != nil {
+			return nil, err
+		}
+		workspaces, err := t.DAL.Resources().Resources(ctx, resources.Filter{IDs: ids, State: resources.Live})
+		if err != nil {
+			return nil, err
+		}
+		names := make(map[string]string, len(workspaces))
+		for _, ws := range workspaces {
+			names[ws.ID] = ws.Name
+		}
+		rows, err := t.DAL.Apps().List(ctx, appstore.Filter{WorkspaceIDs: ids})
+		if err != nil {
+			return nil, err
+		}
+		for _, a := range rows {
+			write := manages[a.WorkspaceID]
+			if a.State != appstore.StatePublished && !write {
+				continue
+			}
+			item := summary(a, write)
+			item.WorkspaceName = names[a.WorkspaceID]
 			out = append(out, item)
 		}
 		return out, nil
@@ -280,42 +315,47 @@ func (s *Service) Versions(ctx context.Context, subject, id string) ([]VersionVi
 	})
 }
 
-// prepare checks an app's settings and compiles its source. Its parameters
-// are checked against its form as subject: their types and picks always,
-// and the form's required fields once the app is published.
-func prepare(ctx context.Context, t *dms.Service, subject, workspaceID string, in *Save) (appstore.Content, error) {
+// compile checks an app's settings and compiles its source. It takes no
+// database connection: running a source may take seconds, so it runs after
+// authorizing and before the write's transaction, which would hold up every
+// other write meanwhile.
+func compile(ctx context.Context, in *Save) (Compiled, error) {
 	in.Name = strings.TrimSpace(in.Name)
 	if in.Name == "" || utf8.RuneCountInString(in.Name) > 200 {
-		return appstore.Content{}, dms.Invalid("name needs 1 to 200 characters")
+		return Compiled{}, dms.Invalid("name needs 1 to 200 characters")
 	}
 	if utf8.RuneCountInString(in.Description) > 2000 {
-		return appstore.Content{}, dms.Invalid("description is limited to 2000 characters")
+		return Compiled{}, dms.Invalid("description is limited to 2000 characters")
 	}
 	if in.State == "" {
 		in.State = appstore.StateDraft
 	}
 	if !in.State.Valid() {
-		return appstore.Content{}, dms.Invalid("state is draft or published")
+		return Compiled{}, dms.Invalid("state is draft or published")
 	}
-	compiled, err := Compile(in.Source)
-	var problem *CompileError
+	compiled, err := Compile(ctx, in.Source)
+	var problem *script.BundleError
 	if errors.As(err, &problem) {
-		return appstore.Content{}, dms.Invalid("the app does not compile:\n" + problem.Error())
+		return Compiled{}, dms.Invalid("the app does not compile:\n" + problem.Error())
 	}
-	if err != nil {
-		return appstore.Content{}, err
-	}
+	return compiled, err
+}
+
+// prepare checks a compiled app's parameters against its form as subject:
+// their types and picks always, and the form's required fields once the app
+// is published.
+func prepare(ctx context.Context, t *dms.Service, subject, workspaceID string, in *Save, compiled Compiled) (appstore.Content, error) {
 	schema := map[string]any{}
 	dec := json.NewDecoder(bytes.NewReader(compiled.ParametersSchema))
 	dec.UseNumber()
-	if err = dec.Decode(&schema); err != nil {
+	if err := dec.Decode(&schema); err != nil {
 		return appstore.Content{}, dms.Invalid("parameters: " + err.Error())
 	}
 	schema = forms.Plain(schema).(map[string]any)
-	if err = forms.Validate(schema, "parameters"); err != nil {
+	if err := forms.Validate(schema, "parameters"); err != nil {
 		return appstore.Content{}, dms.Invalid(err.Error())
 	}
-	if err = forms.CheckConfig(ctx, t, subject, workspaceID, schema, "parameters"); err != nil {
+	if err := forms.CheckConfig(ctx, t, subject, workspaceID, schema, "parameters"); err != nil {
 		return appstore.Content{}, err
 	}
 	check := schema
@@ -366,15 +406,21 @@ func conflict(err error, what string) error {
 
 // Create adds an app to a workspace as subject.
 func (s *Service) Create(ctx context.Context, subject, workspaceID string, in Save) (View, error) {
+	if _, err := dms.Read(ctx, s.DMS, func(t *dms.Service) (struct{}, error) {
+		return struct{}{}, creatable(ctx, t, subject, workspaceID)
+	}); err != nil {
+		return View{}, err
+	}
+	compiled, err := compile(ctx, &in)
+	if err != nil {
+		return View{}, err
+	}
 	var out View
-	err := s.DMS.Write(ctx, func(t *dms.Service) error {
-		if _, err := t.Authorize(ctx, subject, workspaceID, "read"); err != nil {
+	err = s.DMS.Write(ctx, func(t *dms.Service) error {
+		if err := creatable(ctx, t, subject, workspaceID); err != nil {
 			return err
 		}
-		if !writes(ctx, t, subject, workspaceID) {
-			return dms.ErrForbidden
-		}
-		content, err := prepare(ctx, t, subject, workspaceID, &in)
+		content, err := prepare(ctx, t, subject, workspaceID, &in, compiled)
 		if err != nil {
 			return err
 		}
@@ -403,7 +449,7 @@ func (s *Service) Create(ctx context.Context, subject, workspaceID string, in Sa
 func freeKey(ctx context.Context, t *dms.Service, workspaceID, base string) (string, error) {
 	key := base
 	for n := 2; ; n++ {
-		taken, err := t.DAL.Apps().List(ctx, appstore.Filter{WorkspaceID: workspaceID, Key: key})
+		taken, err := t.DAL.Apps().List(ctx, appstore.Filter{WorkspaceIDs: []string{workspaceID}, Key: key})
 		if err != nil || len(taken) == 0 {
 			return key, err
 		}
@@ -414,8 +460,15 @@ func freeKey(ctx context.Context, t *dms.Service, workspaceID, base string) (str
 // Update replaces an app read at version: its name, description, state,
 // parameters and source. A source that changes becomes the next version.
 func (s *Service) Update(ctx context.Context, subject, id string, version int, in Save) (View, error) {
+	if _, err := dms.Read(ctx, s.DMS, func(t *dms.Service) (appstore.App, error) { return writable(ctx, t, subject, id) }); err != nil {
+		return View{}, err
+	}
+	compiled, err := compile(ctx, &in)
+	if err != nil {
+		return View{}, err
+	}
 	var out View
-	err := s.DMS.Write(ctx, func(t *dms.Service) error {
+	err = s.DMS.Write(ctx, func(t *dms.Service) error {
 		a, err := writable(ctx, t, subject, id)
 		if err != nil {
 			return err
@@ -423,7 +476,7 @@ func (s *Service) Update(ctx context.Context, subject, id string, version int, i
 		if in.Key != "" && in.Key != a.Key {
 			return dms.Invalid("an app's key does not change")
 		}
-		content, err := prepare(ctx, t, subject, a.WorkspaceID, &in)
+		content, err := prepare(ctx, t, subject, a.WorkspaceID, &in, compiled)
 		if err != nil {
 			return err
 		}

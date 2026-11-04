@@ -45,8 +45,8 @@ func TestApps(t *testing.T) {
 			if err != nil || v.Source != "1" || v.Bundle != "bundle of 1" || string(v.ParametersSchema) != `{"type":"object"}` && string(v.ParametersSchema) != `{"type": "object"}` {
 				t.Fatalf("first version: %+v %v", v, err)
 			}
-			if schema, err := s.Apps().Schema(ctx, a.ID, 1); err != nil || string(schema) != string(v.ParametersSchema) {
-				t.Fatalf("the first version's form alone: %s %v", schema, err)
+			if workspaces, err := s.Apps().Workspaces(ctx); err != nil || len(workspaces) != 1 || workspaces[0] != ws.ID {
+				t.Fatalf("the workspaces with apps: %v %v", workspaces, err)
 			}
 			if _, err := s.Apps().Create(ctx, in); !errors.Is(err, dberr.ErrUniqueViolation) {
 				t.Fatalf("a second app with the key: %v", err)
@@ -87,7 +87,7 @@ func TestApps(t *testing.T) {
 			if err != nil || len(versions) != 2 || versions[0].Number != 2 || versions[1].Source != "1" {
 				t.Fatalf("versions: %+v %v", versions, err)
 			}
-			listed, err := s.Apps().List(ctx, apps.Filter{WorkspaceID: ws.ID, State: apps.StatePublished})
+			listed, err := s.Apps().List(ctx, apps.Filter{WorkspaceIDs: []string{ws.ID}, State: apps.StatePublished})
 			if err != nil || len(listed) != 1 || listed[0].ID != a.ID {
 				t.Fatalf("published apps: %+v %v", listed, err)
 			}

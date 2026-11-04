@@ -13,7 +13,8 @@ export interface App {
   description: string;
   state: AppState;
   parameters: Record<string, unknown>;
-  parameters_schema: Record<string, unknown>;
+  /** The current version's form; lists of apps leave it out. */
+  parameters_schema?: Record<string, unknown>;
   current_version: number;
   source?: string;
   /** Set in the launcher's list. */

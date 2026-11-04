@@ -115,8 +115,8 @@ Creating, changing and deleting an app are audited as `app.create`, `app.update`
 
 | Method | Route | Purpose |
 | --- | --- | --- |
-| GET | `/v1/apps` | The apps the caller may see in every workspace, by name, each with `workspace_name`, for the launcher |
-| GET / POST | `/v1/workspaces/{id}/apps` | List the apps the caller may see, by name, without their source; or create one: `{"name", "description", "source", "parameters", "state", "key"}` |
+| GET | `/v1/apps` | The apps the caller may see in every workspace, by name, without their source or parameters form, each with `workspace_name`, for the launcher |
+| GET / POST | `/v1/workspaces/{id}/apps` | List the apps the caller may see, by name, without their source or parameters form; or create one: `{"name", "description", "source", "parameters", "state", "key"}` |
 | GET / PUT / DELETE | `/v1/apps/{id}` | Read; replace name, description, state, parameters and source (`If-Match`); delete with its versions (`If-Match`) |
 | GET | `/v1/apps/{id}/versions` | Versions with their sources and forms, newest first |
 | GET | `/v1/apps/{id}/bundle` | The current version's compiled code, for the app page; its `ETag` is the code's hash and `PaperGo-App-Version` the version |

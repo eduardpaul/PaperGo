@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/aarondl/opt/omit"
 	"github.com/stephenafamo/bob/dialect/psql/sm"
@@ -24,8 +23,8 @@ func (q Queries) FindApp(ctx context.Context, id string) (apps.App, error) {
 func (q Queries) Apps(ctx context.Context, f apps.Filter) ([]apps.App, error) {
 	query := models.Apps.Query(sm.OrderBy(models.Apps.Columns.Name))
 	w := models.SelectWhere.Apps
-	if f.WorkspaceID != "" {
-		query.Apply(w.WorkspaceID.EQ(f.WorkspaceID))
+	if f.WorkspaceIDs != nil {
+		query.Apply(w.WorkspaceID.In(f.WorkspaceIDs...))
 	}
 	if f.Key != "" {
 		query.Apply(w.Key.EQ(f.Key))
@@ -104,13 +103,16 @@ func (q Queries) AppVersion(ctx context.Context, appID string, number int64) (ap
 	return appVersionRecord(row), nil
 }
 
-func (q Queries) AppVersionSchema(ctx context.Context, appID string, number int64) (json.RawMessage, error) {
-	w := models.SelectWhere.AppVersions
-	row, err := models.AppVersions.Query(sm.Columns(models.AppVersions.Columns.ParametersSchema), w.AppID.EQ(appID), w.Number.EQ(number)).One(ctx, q.exec)
+func (q Queries) AppWorkspaces(ctx context.Context) ([]string, error) {
+	rows, err := models.Apps.Query(sm.Columns(models.Apps.Columns.WorkspaceID), sm.Distinct()).All(ctx, q.exec)
 	if err != nil {
 		return nil, dberr.Translate(err)
 	}
-	return row.ParametersSchema.Val, nil
+	out := make([]string, len(rows))
+	for i, row := range rows {
+		out[i] = row.WorkspaceID
+	}
+	return out, nil
 }
 
 func (q Queries) InsertAppVersion(ctx context.Context, v apps.Version) error {

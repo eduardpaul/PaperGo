@@ -35004,7 +35004,6 @@
           "description",
           "state",
           "parameters",
-          "parameters_schema",
           "current_version",
           "can_write",
           "created_by",
@@ -35041,7 +35040,7 @@
           "parameters_schema": {
             "type": "object",
             "additionalProperties": true,
-            "description": "The parameters form the current version's source declares (docs/workflows.md#forms)."
+            "description": "The parameters form the current version's source declares (docs/workflows.md#forms). Lists of apps leave it out."
           },
           "current_version": {
             "type": "integer"
