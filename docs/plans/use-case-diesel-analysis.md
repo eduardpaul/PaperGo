@@ -38,7 +38,7 @@ A barrel lying on its side is **not** linear: the litres follow the circular seg
 
 ## Data model
 
-One list, **Diesel**, with two content types. One list keeps the history in one place and lets the app read everything with one query.
+One list, **Diesel**, with two content types, `diesel_reading` (**Reading**) and `diesel_purchase` (**Purchase**). One list keeps the history in one place and lets the app read everything with one query. The keys carry the package's prefix because content type keys are organization-wide; see [app packages](workspace-apps.md#building-one).
 
 | Content type | Field | Type | Notes |
 | --- | --- | --- | --- |
@@ -104,7 +104,9 @@ The screen also has two forms, **Add reading** and **Add purchase**. They are la
 | Diesel list, two content types, three views | ordinary workspace configuration, works today |
 | `diesel-levels` | an ordinary workflow, works today |
 | Diesel tracker screen | one app, `diesel-tracker.tsx`, declaring read/write access to the Diesel list and nothing else |
-| Install | one workspace package with the list, the workflow and the app |
+| Distribution | one [app package](workspace-apps.md#app-packages), `diesel.zip`: the workspace **Diesel**, the list and its types and views, the workflow and the app. `requires` is empty, since nothing needs AI, OCR or search |
+| Example data | an optional manual workflow, **Load example data**, that creates a season of readings and purchases so the dashboard shows something at once |
+| After install | the owner sets `capacity_l`, `height_cm` and `orientation` in the workflow's parameters, as the readme says; the app shows a setup message until they are set |
 
 ```tsx
 import { app, useQuery, Page, Stat, LineChart, BarChart, ItemForm } from "@papergo/app";
@@ -135,7 +137,7 @@ export default app<Params>({
 - **Measure before refilling.** Ask for an optional reading right after the **Add purchase** form ("Dip it now?"). Two readings around a refill make that interval exact and catch mistakes at once.
 - **One barrel.** Version one keeps the barrel in the workflow's parameters. Several tanks (a tractor tank, a heating tank) would become a third content type, **Tank**, and a lookup field on readings and purchases. The data model allows it without breaking anything, so it can wait until someone asks for it.
 - **Currency** comes from the workspace default, which already exists.
-- **Without the app**, the list, the workflow and the views are already useful, and they can ship first as `samples/diesel-package`.
+- **Without the app**, the list, the workflow and the views are already useful as a package today, and they can ship first as `samples/diesel-package`.
 
 ## Decisions needed
 

@@ -1,4 +1,4 @@
-# Workspace apps (architecture plan)
+# Workspace apps and app packages (architecture plan)
 
 Status: proposal. Nothing here is implemented. The core sockets in [Extension-first assessment](#extension-first-assessment) need approval before any code is written (see the Extension-First Protocol in [AGENTS.md](../../AGENTS.md)). The first app is the [diesel tracker](use-case-diesel-analysis.md).
 
@@ -9,6 +9,7 @@ A **workspace app** is a screen that a workspace owner writes in PaperGo, in Typ
 - **Lists are its database.** An app reads and writes ordinary items through the PaperGo REST API. It has no tables, files or storage of its own.
 - **Workflows are its backend.** Anything that must hold whoever enters the data, needs more permission than the viewer has, or takes long, is a workflow. Workflows need nothing new for this.
 - **The SDK is the same client.** Apps use the client generated from `api/openapi.json` that workflow scripts use, over a browser transport instead of the workflow engine's.
+- **A package is what people share.** The screens, the workflows behind them, and the lists, content types and views they use travel together as one ZIP that any PaperGo administrator installs in a few clicks. It is the [workspace package](../workspace-portability.md) PaperGo already has, as a template; see [App packages](#app-packages).
 
 PaperGo is self-hosted by people, families and small organizations, not run as an enterprise app platform. So there is no drag-and-drop builder, no npm, no build step on the author's machine, no second domain and no per-app server code. It is also not a toy: an app is a real React screen with forms, tables, charts and live data, and the runtime is safe to open for every member.
 
@@ -193,6 +194,70 @@ The shell checks the route policy, because only the route is visible to it. Whet
 | Offline | none; a request without a connection fails visibly |
 | Audience | every member who can read the workspace sees its published apps; their data access is still their own |
 
+## App packages
+
+An **app package** is a configuration-only [workspace package](../workspace-portability.md) declared as a template. It is the same ZIP, export, dry run and import PaperGo uses today to copy a workspace between instances. The [receipts](../../samples/receipts-package/README.md) and [workflow](../../samples/workflows/README.md) samples are already shared this way, minus the screens. Apps add one more kind of object to it and a short **about** block. There is no second package format, no registry and no installer service.
+
+### What a package holds
+
+| Part | Carried as | Today |
+| --- | --- | --- |
+| The workspace: name, description | the workspace | ✅ |
+| Data model: lists, libraries, their settings and views | collections and list views, empty | ✅ |
+| Content types and fields | catalog types matched by key, fields matched by key, list types copied | ✅ |
+| Taxonomy and relationship types the workspace uses | shared dependencies | ✅ |
+| Backend: workflows, their versions, parameters, triggers and automatic/manual settings | workflow rows, parameters remapped to the new IDs | ✅ |
+| Frontend: apps, their versions and parameters | app rows, parameters remapped to the new IDs | socket S4 |
+| About: `id`, `title`, `version`, `publisher`, `summary`, `readme` (Markdown), `requires` | the package manifest | socket S6 |
+| Example data, when a publisher wants it | a manual workflow, such as **Load example data**, that creates items when the owner starts it | ✅ (an ordinary workflow) |
+
+A package never holds items or files (it is configuration-only), members, groups, credentials, AI provider settings, run history or audit. The template's single author account becomes the installing administrator, as `template_subject` does today.
+
+### Building one
+
+1. Build it in PaperGo: create a workspace, its lists, content types and views; write its workflows and apps; try them on test items.
+2. Choose **Workspace settings → Export as app package** (socket S6). It is an ordinary configuration-only export that also marks the package as a template, with the exporter as its author, and asks for the about block. The title and summary come from the workspace's name and description. `requires` lists the features its workflows need: `ai.chat`, `ai.batch`, `ai.embeddings`, `ocr`, `search`, `decisions`. The export fails, as template imports already do, when the workspace uses groups, group inboxes, other people's accounts or anything outside itself. Test items are never exported.
+3. Share the ZIP however the publisher likes: a website, a Git release, a forum post, an email.
+
+Field and content type keys are organization-wide, and an install reuses an existing type or field with the same key only when its definition agrees. Otherwise it fails. Publishers should therefore prefix package-specific keys (`diesel_reading`, not `reading`). The export warns about unprefixed keys that are not PaperGo's own.
+
+### Installing one
+
+1. As an organization administrator, open **Administration → Export and import**, choose the ZIP, then **Try it**. This is the dry run that exists today.
+2. The dry run shows, before anything changes:
+   - **About:** the title, version, publisher and readme.
+   - **What it adds:** the lists and content types (new or reused), the workflows with their triggers and whether they run automatically, the apps with their declared access.
+   - **Requirements:** each `requires` entry, met or not. An unmet one is a warning, not an error: the package installs, and the workflows that need it fail visibly when they run.
+   - **Problems:** the conflicts and errors imports already report.
+3. **Install** creates a new workspace named after the package, or the name typed in. The installer owns it and is the author of its workflows and apps.
+4. The owner adds members, as for any workspace. Members find the apps in the sidebar.
+5. The owner adjusts instance-specific settings, such as the barrel's size, in the parameters of the workflows and apps. The readme says which. An app whose parameters are incomplete should say so and link there with `ctx.open({ settings: true })`.
+
+### Trust
+
+Installing a package installs code. The two halves are bounded differently:
+
+- **Apps act as the viewer,** limited to their declared collections in the new workspace. A hostile app can do no more than the person looking at it allows, within that workspace.
+- **Workflows act as their author,** who is the installing administrator. A hostile workflow could read or change whatever that administrator can, in every workspace.
+
+So installing stays an administrator's decision, and the dry run shows every workflow and its triggers, with its source one click away, before anything is written. Socket S8, after the first release, removes the remaining reach: install the package's workflows under a **package identity**, a service identity like those of [integration access tokens](../identity.md#integration-access-tokens) that owns only the new workspace. A workflow from a package then cannot reach outside its workspace.
+
+### Updates
+
+Every package carries `about.id` and `about.version`. The install records them on the workspace with the map from the package's IDs to the installed ones.
+
+The first release does not update installed packages, because imports never merge into an existing workspace today. A publisher's fix reaches users when the owner opens the workflow or app and saves the new source, which keeps the data. Socket S7 then adds **upgrade**: importing a newer version of the same `id` into the workspace it was installed in.
+
+- It adds the package's apps and workflows as new versions of the ones with the same key. Local edits stay in their version history, and the dry run lists which ones were edited.
+- It adds missing fields, content types, lists and views, and updates labels and options.
+- It never deletes anything or touches items. A change it cannot apply safely, such as a field whose type changed, fails the whole upgrade with the reason.
+
+### What PaperGo does not do
+
+- **No store, accounts, licences or payments.** A package is a file. Publishers sell, give or link to it however they want. A self-hosted instance cannot enforce a licence, so PaperGo does not pretend to.
+- **No dependencies between packages.** A package is one self-contained workspace. Lookups and views reach only its own lists, which imports already require.
+- **No cross-version promise yet.** A package imports into a PaperGo with the same package contract, as today. Once a release is published, the contract follows the [migration discipline](../releases.md#database-upgrades) of the schema: older package contracts must keep importing (see [decisions](#decisions-needed)).
+
 ## The SDK
 
 `sdk/` becomes one package with a shared core and two entry points:
@@ -207,7 +272,7 @@ The shell checks the route policy, because only the route is visible to it. Whet
 
 - **Module.** `internal/apps`, a feature module registered through `httpapi.Module`, like `internal/documentpreview`. It owns the app routes, compiling and the frame document, and contributes the app route policy and the `PaperGo-App` narrowing through socket S3.
 - **Storage.** `apps` and `app_versions` in the DAL schema masters, owned by the apps module, as `blob_previews` belongs to previews (socket S4). Their columns mirror `workflows` and `workflow_versions`: workspace, key, name, description, state, parameters, current and published version, ETag version, and per version the source, bundle, bundle hash, normalized declaration and author. Deleting a workspace deletes its apps.
-- **Packages.** The two tables join the workspace package's owned tables, so apps travel with the lists and workflows they use, and the package's UUID remapping covers their parameters.
+- **Packages.** The two tables join the workspace package's owned tables, so apps travel with the lists and workflows they use, and the package's UUID remapping covers their parameters. The template import that binds a workflow's author to the installer binds an app's author the same way. See [App packages](#app-packages).
 - **Workflows cannot manage apps:** `/v1/apps/**` and `/v1/workspaces/*/apps` join the workflow `scope.json` exclusions.
 
 | Method | Route | Purpose |
@@ -227,7 +292,7 @@ The shell checks the route policy, because only the route is visible to it. Whet
 
 ## Extension-first assessment
 
-**Can apps be a pure extension?** The app feature itself is a module: its routes, compiler, runtime, frame, editor page and the SDK entry. It does not change how items, queries, views or workflows behave. But today the core has no hook for five things it needs. Each is generic and has other uses.
+**Can apps be a pure extension?** The app feature itself is a module: its routes, compiler, runtime, frame, editor page and the SDK entry. It does not change how items, queries, views or workflows behave. But today the core has no hook for the eight things below. Each is generic and has other uses.
 
 | # | Socket | Why apps need it | Other uses |
 | --- | --- | --- | --- |
@@ -237,7 +302,11 @@ The shell checks the route policy, because only the route is visible to it. Whet
 | S4 | **Module tables in the DAL masters and workspace packages.** `apps` and `app_versions`, owned by the apps module, registered as package-owned tables. | Versioned source and bundle per app, deleted with the workspace, and carried in packages. The activity store cannot do this: a record holds at most 1 MiB of JSON for source and bundle together, expires, carries leases, and is not in packages. | Any future module with versioned workspace configuration. |
 | S5 | **Member-startable manual workflows.** A manual trigger option, `starters: "members"`, lets workspace members start a standalone run that acts as its author. | App [actions](#backend-patterns) that have no item. | Buttons in other clients, integrations, MCP. |
 
-S1–S4 are needed for the first release; S5 can follow it. Server-side sums and averages in queries are deliberately not proposed: apps aggregate in the browser, and summaries cover larger lists.
+| S6 | **Template export and package about.** An export option that writes a configuration-only template with the exporter as `template_subject`, an `about` block in the manifest (`id`, `title`, `version`, `publisher`, `summary`, `readme`, `requires`), a dry run that reports it, lists what the package adds and checks `requires` against the instance, and the installed package's `id` and `version` recorded on its workspace. | Templates can be imported today but only test tooling can make one; publishers need to make them from the UI, and installers need to see what they install. | Every shared workspace template, with or without apps: the receipts and workflow samples. |
+| S7 | **Package upgrade.** Import a newer version of an installed package into its workspace: add versions of apps and workflows by key, add missing schema and views, never delete or touch items. | Publishers' fixes reach users without a new workspace. | Any template, with or without apps. |
+| S8 | **Package identity.** Install a package's workflows under a service identity that owns only the new workspace. | A package's workflows cannot reach outside their workspace. | Any workflow an owner wants bounded to one workspace. |
+
+S1–S4 and S6 are needed for the first release. S5, S7 and S8 can follow it, in that order of need. Server-side sums and averages in queries are deliberately not proposed: apps aggregate in the browser, and summaries cover larger lists.
 
 ## Out of scope
 
@@ -246,6 +315,7 @@ S1–S4 are needed for the first release; S5 can follow it. Server-side sums and
 - App-owned server code or storage; workflows and lists are both
 - Network access from apps; public, anonymous or embedded-elsewhere apps
 - Native mobile apps; the runtime is responsive and opens without the shell on a phone
+- An app store, licensing or payments; a package is a file its publisher distributes
 - File upload and download in version one
 
 ## Delivery
@@ -255,12 +325,14 @@ S1–S4 are needed for the first release; S5 can follow it. Server-side sums and
 3. **`internal/apps`**: routes, TSX bundling, declaration reading and validation, frame document, packages.
 4. **Web:** Apps settings page, editor with live preview and console, sidebar entries, frame host and bridge, update banner.
 5. **UI kit and charts**, themed in both themes and both locales.
-6. **The diesel tracker** as `samples/diesel-package`: list, workflow and app ([use case](use-case-diesel-analysis.md)).
-7. **S5** when an app needs an action without an item.
+6. **S6:** template export, the about block and the install review.
+7. **The diesel tracker** as `samples/diesel-package`: list, workflow and app in one app package ([use case](use-case-diesel-analysis.md)), built from its sources by the sample package test as the receipts sample is.
+8. **S7, S8 and S5** after the first release.
 
 ## Decisions needed
 
-1. Approve sockets S1–S4 for the first release, and S5 for later.
+1. Approve sockets S1–S4 and S6 for the first release, and S5, S7 and S8 for later.
 2. Apps act as the viewer, and workflows remain the only way to act as someone else.
 3. Recharts as the vendored chart library, or another.
 4. Version one without file upload and download.
+5. Once a release is published, older package contracts keep importing, as old databases keep upgrading. Packages shared in the wild depend on it.
