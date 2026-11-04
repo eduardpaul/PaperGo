@@ -2986,6 +2986,15 @@ export function createTaskAnswerFromDiscriminatorValue(parseNode: ParseNode | un
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {TaskCancel}
+ */
+// @ts-ignore
+export function createTaskCancelFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoTaskCancel;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {TaskCreate_review}
  */
 // @ts-ignore
@@ -6475,6 +6484,17 @@ export function deserializeIntoTaskAnswer(taskAnswer: Partial<TaskAnswer> | unde
 // @ts-ignore
 export function deserializeIntoTaskAnswer_input(taskAnswer_input: Partial<TaskAnswer_input> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param TaskCancel The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoTaskCancel(taskCancel: Partial<TaskCancel> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "reason": n => { taskCancel.reason = n.getStringValue(); },
     }
 }
 /**
@@ -12502,6 +12522,17 @@ export function serializeTaskAnswer_input(writer: SerializationWriter, taskAnswe
 /**
  * Serializes information the current object
  * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param TaskCancel The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeTaskCancel(writer: SerializationWriter, taskCancel: Partial<TaskCancel> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!taskCancel || isSerializingDerivedType) { return; }
+    writer.writeStringValue("reason", taskCancel.reason);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
  * @param TaskCreate The instance to serialize from.
  * @param writer Serialization writer to use to serialize this model
  */
@@ -13910,6 +13941,12 @@ export interface TaskAnswer extends AdditionalDataHolder, Parsable {
     subject?: string | null;
 }
 export interface TaskAnswer_input extends AdditionalDataHolder, Parsable {
+}
+export interface TaskCancel extends Parsable {
+    /**
+     * Why the task was cancelled, such as "Measured in the list by Ana".
+     */
+    reason?: string | null;
 }
 export interface TaskCreate extends Parsable {
     /**
