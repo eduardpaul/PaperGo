@@ -214,6 +214,16 @@ type Problem struct {
 
 func (p *Problem) Error() string { return p.Detail }
 
+// IfMatch reads the version a write names in If-Match, like core routes
+// do. When it reports false it has answered the request with the problem:
+// 428 without the header, 400 when it is not a quoted version.
+func (in Request) IfMatch(w http.ResponseWriter, r *http.Request) (int, bool) {
+	return in.api.version(w, r)
+}
+
+// ETag sets the response's ETag to a quoted version, as core routes do.
+func ETag(w http.ResponseWriter, version int) { etag(w, version) }
+
 // Respond writes body as the JSON response with status.
 func Respond(w http.ResponseWriter, r *http.Request, status int, body any) {
 	respond(w, r, status, body)

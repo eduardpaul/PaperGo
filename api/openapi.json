@@ -23848,6 +23848,338 @@
           "list.manage"
         ]
       }
+    },
+    "/v1/workspaces/{id}/apps": {
+      "get": {
+        "summary": "List Apps",
+        "operationId": "listApps",
+        "tags": [
+          "Apps"
+        ],
+        "description": "The workspace's apps the caller may see, by name: published apps for the workspace's readers, drafts too for those who may write apps (manage access to the workspace and app.manage). Lists leave out the source.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppList"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create App",
+        "operationId": "createApp",
+        "tags": [
+          "Apps"
+        ],
+        "description": "Adds an app to the workspace, as a draft unless state says published. The source is compiled and its parameters form read; a source that does not compile, imports another module or declares an invalid form is 422 with the reason. Needs manage access to the workspace and app.manage.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppSave"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/App"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "description": "Current entity version",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "app.manage"
+        ]
+      }
+    },
+    "/v1/apps/{id}": {
+      "get": {
+        "summary": "Get App",
+        "operationId": "getApp",
+        "tags": [
+          "Apps"
+        ],
+        "description": "One app the caller may see, with its source for those who may write it.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/App"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "description": "Current entity version",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update App",
+        "operationId": "updateApp",
+        "tags": [
+          "Apps"
+        ],
+        "description": "Replaces an app's name, description, state, parameters and source at the version If-Match names. A source that changes becomes the next version; the key never changes. Needs manage access to the workspace and app.manage.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\"[1-9][0-9]*\"$"
+            },
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppSave"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/App"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "description": "Current entity version",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "app.manage"
+        ]
+      },
+      "delete": {
+        "summary": "Delete App",
+        "operationId": "deleteApp",
+        "tags": [
+          "Apps"
+        ],
+        "description": "Deletes an app and its versions at the version If-Match names. Needs manage access to the workspace and app.manage.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\"[1-9][0-9]*\"$"
+            },
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "app.manage"
+        ]
+      }
+    },
+    "/v1/apps/{id}/versions": {
+      "get": {
+        "summary": "List App Versions",
+        "operationId": "listAppVersions",
+        "tags": [
+          "Apps"
+        ],
+        "description": "An app's versions with their sources, newest first, for those who may write it.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppVersionList"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "app.manage"
+        ]
+      }
+    },
+    "/v1/apps/{id}/bundle": {
+      "get": {
+        "summary": "Get App Bundle",
+        "operationId": "getAppBundle",
+        "tags": [
+          "Apps"
+        ],
+        "description": "The compiled code of the app's current version, for the app page, which runs it in a sandboxed frame; the code never runs in PaperGo's own page. Its ETag is the code's hash; If-None-Match answers 304. PaperGo-App-Version names the version.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The code",
+            "headers": {
+              "ETag": {
+                "description": "Hash of the code",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "PaperGo-App-Version": {
+                "description": "The version's number",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "text/javascript": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Not modified"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -34628,6 +34960,191 @@
           "value"
         ],
         "additionalProperties": false
+      },
+      "AppState": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "published"
+        ],
+        "description": "A draft is seen by those who write apps; a published app by the workspace's readers."
+      },
+      "App": {
+        "type": "object",
+        "required": [
+          "id",
+          "workspace_id",
+          "key",
+          "name",
+          "description",
+          "state",
+          "parameters",
+          "parameters_schema",
+          "current_version",
+          "can_write",
+          "created_by",
+          "updated_by",
+          "created_at",
+          "updated_at",
+          "version"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "workspace_id": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string",
+            "description": "Stable name in the workspace, from the name unless given on creation; it never changes."
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/AppState"
+          },
+          "parameters": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "The values of the app's parameters form, which the app reads as ctx.params."
+          },
+          "parameters_schema": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "The parameters form the current version's source declares (docs/workflows.md#forms)."
+          },
+          "current_version": {
+            "type": "integer"
+          },
+          "source": {
+            "type": "string",
+            "description": "The current version's TSX source, shown to those who may write apps."
+          },
+          "can_write": {
+            "type": "boolean",
+            "description": "Whether the caller may change and delete the app."
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "updated_by": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "description": "ETag version."
+          }
+        }
+      },
+      "AppList": {
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "value": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/App"
+            }
+          }
+        }
+      },
+      "AppSave": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "source"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]*$",
+            "maxLength": 100,
+            "description": "On creation only; from the name when left out."
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "source": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1048576,
+            "description": "One TSX file whose default export is app({ render, parameters }); it imports only react, react/jsx-runtime and @papergo/app."
+          },
+          "parameters": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Values of the parameters form, checked against it as the caller: types and picks always, required fields once the app is published."
+          },
+          "state": {
+            "$ref": "#/components/schemas/AppState"
+          }
+        },
+        "description": "An app as it is created or replaced."
+      },
+      "AppVersion": {
+        "type": "object",
+        "required": [
+          "number",
+          "source",
+          "parameters_schema",
+          "created_by",
+          "created_at"
+        ],
+        "properties": {
+          "number": {
+            "type": "integer"
+          },
+          "source": {
+            "type": "string"
+          },
+          "parameters_schema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AppVersionList": {
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "value": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppVersion"
+            }
+          }
+        }
       }
     },
     "parameters": {

@@ -12,7 +12,7 @@ Role scopes are additive and resolve through direct assignments and nested group
 
 Content authorization combines module scopes and resource ACLs inside the database transaction. Workspace owners retain ACL control but still need the relevant module scope. `workspace.manage` is the explicit organization-wide ACL override; it does not grant other module scopes implicitly. Copying an ACL preserves group IDs, and copying workspace inheritance preserves dynamic workspace roles. REST, WebDAV and workflow item actions all use current persisted role and group membership.
 
-`app.manage` permits writing a workspace's apps, together with manage access to the workspace. An app acts as everyone who opens it, so the Member role does not grant it: administrators have it, and organizations grant it as they grant administration. Limited access tokens cannot hold it.
+`app.manage` permits writing a workspace's [apps](apps.md), together with manage access to the workspace. An app acts as everyone who opens it, so the Member role does not grant it: administrators have it, and organizations grant it as they grant administration. Limited access tokens cannot hold it.
 
 Taxonomy roles operate on one organization term store shared by every workspace. `taxonomy.read` permits reads and open-set/keyword contributions without workspace membership. `taxonomy.manage` permits curation, imports, promotion, usage counts and organization taxonomy audit access. These scopes do not grant workspace or content access.
 

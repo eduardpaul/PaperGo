@@ -1,5 +1,5 @@
 {
-  "descriptionHash": "43673EC2A110D3BD873527BE5418D464F4FEF6C36CE74B5ACCC201797CC3C6BD80C5B956545C6A6574A6DAC405E47FC0B45749AAD81BF591C749822AFD2B119D",
+  "descriptionHash": "BF80BED6C8D643C46EA2E7EF6A8E238696CE9AAC3A382319154C301216779C36DBE2B7CC6E3E53C450AEE7C21B2720C02D60EB68A554053EB3E98A004E903CFB",
   "descriptionLocation": "../../../api/openapi.json",
   "lockFileVersion": "1.0.0",
   "kiotaVersion": "1.35.0",
@@ -35,6 +35,8 @@
     "/health",
     "/health/**",
     "/v1/$batch",
+    "/v1/apps",
+    "/v1/apps/**",
     "/v1/events",
     "/v1/identity",
     "/v1/identity/**",
@@ -55,6 +57,7 @@
     "/v1/workflows",
     "/v1/workflows/**",
     "/v1/resources/*/workflow-roles",
+    "/v1/workspaces/*/apps",
     "/v1/workspaces/*/workflow-actions",
     "/v1/workspaces/*/workflow-builtins",
     "/v1/workspaces/*/workflow-builtins/**",
