@@ -329,7 +329,7 @@ func readRequest(r *http.Request) bool {
 		return false
 	}
 	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) == 6 && (parts[5] == "groups" || parts[5] == "aggregates" && parts[2] == "resources") {
+	if len(parts) == 6 && (parts[5] == "groups" || parts[5] == "aggregates") {
 		parts = parts[:5]
 	}
 	if len(parts) != 5 || parts[1] != "v1" || parts[4] != "query" {
