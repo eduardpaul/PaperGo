@@ -424,7 +424,16 @@ func (s *Service) checkOperationQuota(ctx context.Context, op operations.Operati
 	// person, nor the work an operation starts: a backlog of runs must not
 	// refuse the requests those runs make. Workspace and installation
 	// quotas still bound them.
-	totals, err := s.DAL.Operations().PendingTotals(ctx, op.CreatedBy, op.WorkspaceID, []string{OperationKindFieldIndex}, []string{OperationKindRun})
+	exempt := []string{OperationKindFieldIndex}
+	if op.ParentID != "" {
+		// Nor is work an operation starts, such as a run's search sync,
+		// refused for the runs waiting behind it: thousands of items filed
+		// at once queue as many runs, which would otherwise fill the
+		// workspace's quota and refuse each run the work it does, failing
+		// it. The other pending operations still count.
+		exempt = append(exempt, OperationKindRun)
+	}
+	totals, err := s.DAL.Operations().PendingTotals(ctx, op.CreatedBy, op.WorkspaceID, exempt, []string{OperationKindRun})
 	if err != nil {
 		return err
 	}

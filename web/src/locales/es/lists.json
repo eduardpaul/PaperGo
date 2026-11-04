@@ -517,6 +517,16 @@
     "surface": "Superficie del esquema",
     "visible": "Versión visible"
   },
+  "search": {
+    "title": "Búsqueda",
+    "description": "Si los elementos de esta lista se guardan en la búsqueda, con sus campos, términos y palabras clave.",
+    "label": "Buscar en los elementos",
+    "on": "Activada",
+    "off": "Desactivada: solo nombres",
+    "onHint": "Cada cambio actualiza el índice de búsqueda.",
+    "offHint": "Buscar dentro de la lista solo encuentra nombres y los cambios no pasan por el índice: lo adecuado para listas de lecturas o mediciones.",
+    "saved": "Ajuste de búsqueda guardado"
+  },
   "sheet": {
     "actions": "Acciones del elemento",
     "addToSmartFolder": "Añadir a una carpeta inteligente…",

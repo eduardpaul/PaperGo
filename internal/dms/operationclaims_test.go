@@ -69,6 +69,37 @@ func TestOperationQuotas(t *testing.T) {
 	}
 }
 
+// A backlog of workflow runs fills a workspace's quota, so people's new
+// work waits; the work those runs start is not refused for it, or each run
+// would fail.
+func TestRunBacklogDoesNotRefuseTheRunsWork(t *testing.T) {
+	s, w, list := fixture(t)
+	if err := s.RegisterOperationHandler("checkpoint", checkpointHandler()); err != nil {
+		t.Fatal(err)
+	}
+	s.SetOperationQuotas(OperationQuotas{PerWorkspace: 3})
+	var runs []string
+	for range 3 {
+		run, _, err := s.DAL.Operations().Accept(testContext, operations.Operation{Kind: OperationKindRun, WorkspaceID: w.ID, ContainerID: list.ID, CreatedBy: "alice"}, time.Now())
+		if err != nil {
+			t.Fatal(err)
+		}
+		runs = append(runs, run.ID)
+	}
+	if _, err := s.EnqueueOperation(testContext, "alice", list.ID, "checkpoint", json.RawMessage(`{}`)); !errors.Is(err, ErrOperationQuota) {
+		t.Fatal("a person's new work past the workspace quota", err)
+	}
+	for _, run := range runs {
+		if _, err := s.EnqueueOperation(WithParentOperation(testContext, run), "alice", list.ID, "checkpoint", json.RawMessage(`{}`)); err != nil {
+			t.Fatal("a run's own work refused for the runs waiting", err)
+		}
+	}
+	// The work the runs started still counts: past the quota, more is refused.
+	if _, err := s.EnqueueOperation(WithParentOperation(testContext, runs[0]), "alice", list.ID, "checkpoint", json.RawMessage(`{}`)); !errors.Is(err, ErrOperationQuota) {
+		t.Fatal("work past the quota beside the runs", err)
+	}
+}
+
 func TestOperationCancellation(t *testing.T) {
 	s, _, list := fixture(t)
 	if err := s.RegisterOperationHandler("checkpoint", checkpointHandler()); err != nil {

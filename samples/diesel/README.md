@@ -18,6 +18,7 @@ A heating-oil tank, read with a dipstick: how much is left, what it is worth, ho
    - Save it, then choose its parameters with the pickers: the **Diesel** list and its **Reading**, **Purchase**, **Heating** and **Temperature** types. The tank and consumption settings have defaults.
    - Set the state to **Published** and save again.
    - The app appears in the sidebar under the list.
+3. **Search off.** In the **Diesel** list's settings, set **Search** to **Off: names only**. Readings and temperatures are found by date on the dashboard and in the views, not by searching their values, and a sensor filing a temperature every hour would otherwise index each one.
 
 To try it with real data, run **Load diesel sample data** once from **Workspace settings → Workflows**. It files eighteen months of a 750 L tank into the empty list: four fills, nineteen readings, three heating changes and eighteen temperatures taken with the readings. The tank's figures are real; the temperatures are illustrative.
 

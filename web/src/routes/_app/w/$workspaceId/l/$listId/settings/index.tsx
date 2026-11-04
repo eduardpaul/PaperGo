@@ -4,6 +4,7 @@ import { resourceQuery } from '@/api/queries';
 import { useAccess } from '@/features/lists/access';
 import { PlaceCommentSettings } from '@/features/comments/settings';
 import { CollectionGeneral } from '@/features/lists/collection-settings';
+import { CollectionSearchSettings } from '@/features/lists/search-settings';
 
 export const Route = createFileRoute('/_app/w/$workspaceId/l/$listId/settings/')({ component: GeneralPage });
 
@@ -22,6 +23,7 @@ function GeneralPage() {
         onDeleted={() => void navigate({ to: '/w/$workspaceId', params: { workspaceId } })}
       />
       <PlaceCommentSettings resourceId={listId} canManage={canManage} />
+      <CollectionSearchSettings workspaceId={workspaceId} collectionId={listId} canManage={canManage} />
     </div>
   );
 }
