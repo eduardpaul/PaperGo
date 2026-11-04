@@ -15,18 +15,22 @@
     {"key": "diesel_price_per_liter", "label": "Price per litre", "type": "decimal", "scale": 3, "indexed": true},
     {"key": "diesel_supplier", "label": "Supplier", "type": "text", "options": {"max_length": 200}},
     {"key": "diesel_heating_at", "label": "Changed at", "type": "datetime", "required": true, "indexed": true},
-    {"key": "diesel_heating", "label": "Heating", "type": "choice", "required": true, "indexed": true, "choices": ["on", "off"]}
+    {"key": "diesel_heating", "label": "Heating", "type": "choice", "required": true, "indexed": true, "choices": ["on", "off"]},
+    {"key": "diesel_temperature_at", "label": "Taken at", "type": "datetime", "required": true, "indexed": true},
+    {"key": "diesel_indoor_c", "label": "Indoor (°C)", "type": "decimal", "scale": 1, "indexed": true, "options": {"description": "Inside the house."}},
+    {"key": "diesel_outdoor_c", "label": "Outdoor (°C)", "type": "decimal", "scale": 1, "indexed": true, "options": {"description": "Outside, in the shade."}}
   ],
   "content_types": [
     {"key": "diesel_reading", "name": "Reading", "fields": ["diesel_measured_at", "diesel_stick_cm", "diesel_level_liters", "diesel_fill_percent", "diesel_flag"]},
     {"key": "diesel_purchase", "name": "Purchase", "fields": ["diesel_purchased_at", "diesel_bought_liters", "diesel_total_price", "diesel_price_per_liter", "diesel_supplier"]},
-    {"key": "diesel_heating", "name": "Heating", "fields": ["diesel_heating_at", "diesel_heating"]}
+    {"key": "diesel_heating", "name": "Heating", "fields": ["diesel_heating_at", "diesel_heating"]},
+    {"key": "diesel_temperature", "name": "Temperature", "fields": ["diesel_temperature_at", "diesel_indoor_c", "diesel_outdoor_c"]}
   ],
   "collections": [
     {
       "name": "Diesel",
       "kind": "list",
-      "content_types": ["diesel_reading", "diesel_purchase", "diesel_heating"],
+      "content_types": ["diesel_reading", "diesel_purchase", "diesel_heating", "diesel_temperature"],
       "views": [
         {
           "name": "Readings",
@@ -46,6 +50,12 @@
           "layout": "table",
           "columns": ["$name", "diesel_heating_at", "diesel_heating"],
           "query": {"content_type_id": "$diesel_heating", "sort": [{"field": "diesel_heating_at", "direction": "desc"}]}
+        },
+        {
+          "name": "Temperatures",
+          "layout": "table",
+          "columns": ["$name", "diesel_temperature_at", "diesel_indoor_c", "diesel_outdoor_c"],
+          "query": {"content_type_id": "$diesel_temperature", "sort": [{"field": "diesel_temperature_at", "direction": "desc"}]}
         },
         {
           "name": "Needs a look",

@@ -1,13 +1,14 @@
 {
   "key": "diesel-sample-data",
   "name": "Load diesel sample data",
-  "description": "Files a year and a half of a real 750 L tank into an empty Diesel list, once.",
+  "description": "Files a year and a half of a real 750 L tank into an empty Diesel list, once, with illustrative temperatures.",
   "script": "diesel-sample-data.ts",
   "parameters": {
     "list": "$LIST",
     "reading_type": "$READING_TYPE",
     "purchase_type": "$PURCHASE_TYPE",
-    "heating_type": "$HEATING_TYPE"
+    "heating_type": "$HEATING_TYPE",
+    "temperature_type": "$TEMPERATURE_TYPE"
   },
   "automatic_enabled": false,
   "manual_enabled": true,

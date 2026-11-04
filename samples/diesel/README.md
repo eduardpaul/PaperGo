@@ -1,24 +1,25 @@
 # Diesel tracker
 
-A heating-oil tank, read with a dipstick: how much is left, what it is worth, how fast it goes with the heating on and off, and when to order. It is a workspace package with a list and four workflows, and an [app](../../docs/apps.md), the dashboard. The [use case analysis](../../docs/plans/use-case-diesel-analysis.md) explains the design.
+A heating-oil tank, read with a dipstick: how much is left, what it is worth, how fast it goes with the heating on and off, how warm it is inside and out, and when to order. It is a workspace package with a list and four workflows, and an [app](../../docs/apps.md), the dashboard. The [use case analysis](../../docs/plans/use-case-diesel-analysis.md) explains the design.
 
 ## Install
 
 1. **The workspace.** As an organization administrator, open **Administration → Export and import**, select [`diesel.zip`](diesel.zip), choose **Try it**, then **Import**. This creates the **Diesel tracker** workspace, which has:
-   - the **Diesel** list, with three content types:
+   - the **Diesel** list, with four content types:
      - **Reading**: when, the stick reading from the mouth in cm, and the litres, fill and check the levels workflow works out;
      - **Purchase**: when, litres, total price in EUR, price per litre, supplier;
      - **Heating**: when the heating went on or off;
-   - four saved views: Readings, Purchases, Heating and Needs a look;
+     - **Temperature**: when, and the indoor and outdoor °C, either or both;
+   - five saved views: Readings, Purchases, Heating, Temperatures and Needs a look;
    - the four workflows below.
 
    The importer becomes the workflows' author.
 2. **The app.** In the workspace, open **Workspace settings → Apps → New app** and paste [`diesel-app.tsx`](diesel-app.tsx).
-   - Save it, then choose its parameters with the pickers: the **Diesel** list and its **Reading**, **Purchase** and **Heating** types. The tank and consumption settings have defaults.
+   - Save it, then choose its parameters with the pickers: the **Diesel** list and its **Reading**, **Purchase**, **Heating** and **Temperature** types. The tank and consumption settings have defaults.
    - Set the state to **Published** and save again.
    - The app appears in the sidebar under the list.
 
-To try it with real data, run **Load diesel sample data** once from **Workspace settings → Workflows**. It files eighteen months of a 750 L tank into the empty list: four fills, nineteen readings and three heating changes.
+To try it with real data, run **Load diesel sample data** once from **Workspace settings → Workflows**. It files eighteen months of a 750 L tank into the empty list: four fills, nineteen readings, three heating changes and eighteen temperatures taken with the readings. The tank's figures are real; the temperatures are illustrative.
 
 ## The workflows
 
@@ -56,7 +57,8 @@ After importing, set these in **Workspace settings → Workflows**:
   - **The level over time:** the heating seasons shaded, fills marked, a tick every three months, the reserve as a dashed line, and the forecast to the next order.
   - **The price per litre of each fill:** its axis fits the prices, so a rise shows.
   - **The cost of the diesel used each month:** what was burnt between readings, valued at the price of the fill it came from.
-- **Consumption:** what each season actually burnt between readings, beside the rates the forecast uses, so the rates can be tuned.
+- **Temperature and heating:** the last indoor and outdoor temperatures, and both over time against the heating seasons. **+ Temperatura** on the card records them; the ± button types a temperature below zero, which phones' decimal keyboards cannot.
+- **Consumption:** what each season actually burnt between readings, beside the rates the forecast uses, so the rates can be tuned, and the season's average outdoor temperature.
 - **Actions:** **+ Medición**, **+ Llenado** and the heating button open a dialog.
   - Typing a stick reading shows what it means before it is saved, worked out with the Diesel levels workflow's settings.
   - Decimals are typed in your number format, so `86,8` is 86.8 cm where the decimal separator is a comma.

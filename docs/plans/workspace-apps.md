@@ -135,7 +135,7 @@ Saving compiles the source with the esbuild the server embeds, as workflows are 
 ## The diesel sample
 
 `samples/diesel/` holds the complete sample, built from its sources like the [receipts package](../../samples/receipts-package/README.md):
-- **`diesel.zip`**, a workspace package: the Diesel list, its fields, the Reading, Purchase and Heating content types, the saved views, and the four workflows (`diesel-levels`, `diesel-measure-reminder`, `diesel-refill`, `diesel-sample-data`);
+- **`diesel.zip`**, a workspace package: the Diesel list, its fields, the Reading, Purchase, Heating and Temperature content types, the saved views, and the four workflows (`diesel-levels`, `diesel-measure-reminder`, `diesel-refill`, `diesel-sample-data`);
 - **`diesel-app.tsx`**, the dashboard: the figures and charts of the use case, the reading, fill and heating dialogs, and the open reminder or refill task with a link to answer it;
 - **a README** with the two install steps:
   1. Import the package.

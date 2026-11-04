@@ -9,8 +9,9 @@ A house keeps heating oil in a 750 L tank. Three things happen:
 1. **Measure.** Someone puts a 2 m stick down the filling mouth and reads where the diesel starts.
 2. **Buy.** Someone buys some litres for a price on a date, and the tank is filled.
 3. **Heat.** The heating goes on in autumn and off in spring; without it the tank only feeds hot water, and lasts several times longer.
+4. **Feel.** Someone notes how warm it is inside the house and outside.
 
-They want one screen that says how much is left, what it is worth, how fast it goes in each season, and when to order.
+They want one screen that says how much is left, what it is worth, how fast it goes in each season, how warm the house is for it, and when to order.
 
 ## User stories
 
@@ -27,6 +28,8 @@ They want one screen that says how much is left, what it is worth, how fast it g
 | D9 | anyone | correct an entry in the ordinary list screen | the app is not the only way in |
 | D10 | the person who measures | be asked to measure when 15 days have passed, and answer with the reading itself | readings happen without anyone keeping a calendar |
 | D11 | the people who buy | be asked to fill the tank when it falls below 200 L, and answer with the purchase | it is filled before it runs dry, and the purchase is recorded |
+| D12 | anyone | record the indoor and outdoor temperature, below zero too, on a phone | we see how cold it was and how warm the house kept |
+| D13 | the owner | see the temperatures beside the heating seasons and each season's consumption | I know what the cold costs, and whether the heating keeps the house warm |
 
 ## From the stick to litres
 
@@ -42,7 +45,7 @@ A stick reading of 86.8 cm leaves 113.2 cm of diesel: 679.2 L, 90.6 %. The workf
 
 ## Data model
 
-One list, **Diesel**, with three content types: **Reading**, **Purchase** and **Heating**. One list keeps the history in one place, and the app reads each type with one live query. Every field and type key carries the `diesel_` prefix, because catalog keys are organization-wide.
+One list, **Diesel**, with four content types: **Reading**, **Purchase**, **Heating** and **Temperature**. One list keeps the history in one place, and the app reads each type with one live query. Every field and type key carries the `diesel_` prefix, because catalog keys are organization-wide.
 
 | Content type | Field | Type | Notes |
 | --- | --- | --- | --- |
@@ -57,8 +60,10 @@ One list, **Diesel**, with three content types: **Reading**, **Purchase** and **
 | | `diesel_supplier` | text | optional |
 | **Heating** | `diesel_heating_at` | datetime, required, indexed | |
 | | `diesel_heating` | choice: `on`, `off`, required | |
+| **Temperature** | `diesel_temperature_at` | datetime, required, indexed | |
+| | `diesel_indoor_c`, `diesel_outdoor_c` | decimal, scale 1 | either or both; outdoor goes below zero |
 
-Readings and purchases keep separate date fields, and every timestamp is a datetime. The tank is often measured on the day it is filled, and the maths needs to know which came first. Saved views: **Readings**, **Purchases**, **Heating** and **Needs a look** (flag `check`). D9 is met by the ordinary list screens.
+Readings and purchases keep separate date fields, and every timestamp is a datetime. The tank is often measured on the day it is filled, and the maths needs to know which came first. Saved views: **Readings**, **Purchases**, **Heating**, **Temperatures** and **Needs a look** (flag `check`). Temperatures are a type of their own, not fields of a reading: they are taken when the tank is not read, and a reading stays what the stick says. D9 is met by the ordinary list screens.
 
 ## Backend: workflows
 
@@ -107,14 +112,15 @@ The app computes everything in the browser from the three types: about 150 items
 | **Level and heating** (chart) | Fill % per reading over time, with the heating seasons shaded red (on) and blue (off) and named in a legend, fills marked, a tick every three months, the reserve as a dashed line, and the forecast from the last reading to the next order |
 | **Price per litre** (chart) | `total / litres` per purchase, on an axis that fits the prices |
 | **Cost of the diesel used** (bars) | Each interval's consumption (`level before + bought − level after`), spread over its days, valued at the price of the last fill before each day, per month |
-| **Consumption** (table) | What each season burnt, from the intervals, beside the rates the forecast uses |
+| **Temperature and heating** (chart) | The last indoor and outdoor temperatures, and both over time over the heating seasons |
+| **Consumption** (table) | What each season burnt, from the intervals, beside the rates the forecast uses and the season's average outdoor temperature |
 
 The sample history ends with the tank filled on 3 September 2026. On 4 November 2026 the dashboard shows:
 - about 85 % (639 L), worth about 1,018 €;
 - the next order on 13 January 2027 and the 25 % reserve a day later;
 - 4.2 L a day measured with the heating on, against the 4.5 L used, and 6.5 L in the coldest months, against 7.5 L.
 
-Three buttons at the top open dialogs: a reading, a fill, and the heating going on or off.
+Three buttons at the top open dialogs: a reading, a fill, and the heating going on or off. The temperature card has its own, so the bar under a phone user's thumb keeps three; its outdoor field has a ± button, since phones' decimal keyboards have no minus.
 - The reading's dialog previews the litres and fill before saving, with the Diesel levels workflow's settings, so the tank's geometry is set in one place.
 - Dates are dates; today keeps the current time, so readings around a fill stay in order.
 - Decimals are typed in the viewer's number format.

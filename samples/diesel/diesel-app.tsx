@@ -5,9 +5,10 @@
 // also give the preview of a reading before it is saved; the screen
 // estimates today's level from the last reading at the season's rate of
 // consumption, and forecasts forward the same way, assuming the heating
-// goes on and off on its usual days. People add readings, purchases and
-// heating changes from the buttons at the top, or answer the measuring and
-// refill tasks.
+// goes on and off on its usual days. Indoor and outdoor temperatures show
+// beside the heating seasons. People add readings, purchases and heating
+// changes from the buttons at the top, temperatures from their card, or
+// answer the measuring and refill tasks.
 import { useEffect, useMemo, useState } from "react";
 import {
   app,
@@ -39,6 +40,7 @@ interface Params {
   reading: string;
   purchase: string;
   heating: string;
+  temperature: string;
   capacity_l: number;
   order_at_l: number;
   reserve_percent: number;
@@ -63,6 +65,7 @@ const words = {
     purchaseTitle: "New fill", bought: "Litres bought", total: "Total price", boughtAt: "Date", supplier: "Supplier", pricePreview: "{price}/L",
     heatingTitle: "Heating", heatingIs: "The heating is {state} since {date}.", heatingNow: "The heating is {state} ({assumed}).", changedAt: "Since", turnOn: "It went on", turnOff: "It went off",
     save: "Save", cancel: "Cancel", invalid: "Type a number",
+    temperature: "Temperature and heating", addTemperature: "+ Temperature", temperatureTitle: "New temperature", indoor: "Indoor", outdoor: "Outdoor", takenAt: "Date", takenOn: "Taken on {date}", noTemperature: "No temperature yet", oneTemperature: "Type at least one temperature", outdoorAverage: "Outdoor average",
     measureDue: "A reading is due", refillDue: "Diesel is low: buy some", answer: "Answer", check: "Needs a look", checkHint: "Higher than the reading before and what was bought since. Open it to correct it, or mark it reviewed.",
     readings: "Readings", purchases: "Fills", date: "Date", stickCol: "Stick", litersCol: "Litres", fill: "Level", perLiter: "€/L", supplierCol: "Supplier", history: "See the whole history", setUp: "Choose the Diesel list and its types in Workspace settings → Apps.",
   },
@@ -78,6 +81,7 @@ const words = {
     purchaseTitle: "Nuevo llenado", bought: "Litros comprados", total: "Precio total", boughtAt: "Fecha", supplier: "Proveedor", pricePreview: "{price}/L",
     heatingTitle: "Calefacción", heatingIs: "La calefacción está {state} desde el {date}.", heatingNow: "La calefacción está {state} ({assumed}).", changedAt: "Desde", turnOn: "Se ha encendido", turnOff: "Se ha apagado",
     save: "Guardar", cancel: "Cancelar", invalid: "Escribe un número",
+    temperature: "Temperatura y calefacción", addTemperature: "+ Temperatura", temperatureTitle: "Nueva temperatura", indoor: "Interior", outdoor: "Exterior", takenAt: "Fecha", takenOn: "Tomada el {date}", noTemperature: "Aún no hay temperaturas", oneTemperature: "Escribe al menos una temperatura", outdoorAverage: "Exterior medio",
     measureDue: "Toca medir", refillDue: "Queda poco gasóleo: hay que pedir", answer: "Responder", check: "Para revisar", checkHint: "Más alta que la medición anterior y lo comprado desde entonces. Ábrela para corregirla o márcala como revisada.",
     readings: "Mediciones", purchases: "Llenados", date: "Fecha", stickCol: "Palo", litersCol: "Litros", fill: "Nivel", perLiter: "€/L", supplierCol: "Proveedor", history: "Ver historial completo", setUp: "Elige la lista Diesel y sus tipos en Ajustes del espacio de trabajo → Aplicaciones.",
   },
@@ -95,6 +99,7 @@ const at = (v: unknown): number => new Date(String(v)).getTime();
 interface Reading { id: string; at: number; stick?: number; liters?: number; percent?: number; flag?: string }
 interface Purchase { id: string; at: number; liters: number; total: number; price: number; supplier: string }
 interface Switch { at: number; on: boolean }
+interface Temperature { id: string; at: number; indoor?: number; outdoor?: number }
 
 const dayOfYear = (t: number) => {
   const d = new Date(t);
@@ -141,6 +146,7 @@ function useDiesel(ctx: AppContext<Params>) {
   const readingItems = useQuery(p.list, { contentTypeId: p.reading, sort: [{ field: "diesel_measured_at", direction: "asc" }] }, { all: true, live: true });
   const purchaseItems = useQuery(p.list, { contentTypeId: p.purchase, sort: [{ field: "diesel_purchased_at", direction: "asc" }] }, { all: true, live: true });
   const heatingItems = useQuery(p.list, { contentTypeId: p.heating, sort: [{ field: "diesel_heating_at", direction: "asc" }] }, { all: true, live: true });
+  const temperatureItems = useQuery(p.list, { contentTypeId: p.temperature, sort: [{ field: "diesel_temperature_at", direction: "asc" }] }, { all: true, live: true });
   const model = useMemo(() => {
     const readings: Reading[] = readingItems.data.map((i) => ({ id: i.id, at: at(get(i, "diesel_measured_at")), stick: num(get(i, "diesel_stick_cm")), liters: num(get(i, "diesel_level_liters")), percent: num(get(i, "diesel_fill_percent")), flag: get(i, "diesel_flag") as string | undefined }));
     const purchases: Purchase[] = purchaseItems.data.map((i) => {
@@ -149,6 +155,7 @@ function useDiesel(ctx: AppContext<Params>) {
       return { id: i.id, at: at(get(i, "diesel_purchased_at")), liters, total, price: num(get(i, "diesel_price_per_liter")) ?? (liters ? total / liters : 0), supplier: String(get(i, "diesel_supplier") ?? "") };
     });
     const switches: Switch[] = heatingItems.data.map((i) => ({ at: at(get(i, "diesel_heating_at")), on: get(i, "diesel_heating") === "on" }));
+    const temperatures: Temperature[] = temperatureItems.data.map((i) => ({ id: i.id, at: at(get(i, "diesel_temperature_at")), indoor: num(get(i, "diesel_indoor_c")), outdoor: num(get(i, "diesel_outdoor_c")) }));
     const heating = heatingModel(switches);
     const peak = new Set(p.peak_months ?? [12, 1, 2]);
     const season = (t: number): "off" | "on" | "peak" => (!heating(t).on ? "off" : peak.has(new Date(t).getUTCMonth() + 1) ? "peak" : "on");
@@ -177,6 +184,15 @@ function useDiesel(ctx: AppContext<Params>) {
         measured[s].liters += share;
         measured[s].days += Math.min(DAY, b.at - t) / DAY;
       }
+    }
+
+    // The outdoor temperature of each season, beside what it burnt.
+    const outdoor = { off: { sum: 0, n: 0 }, on: { sum: 0, n: 0 }, peak: { sum: 0, n: 0 } };
+    for (const c of temperatures) {
+      if (c.outdoor === undefined) continue;
+      const o = outdoor[season(c.at)];
+      o.sum += c.outdoor;
+      o.n++;
     }
 
     // Today's level: the last reading less the season's consumption since,
@@ -211,9 +227,10 @@ function useDiesel(ctx: AppContext<Params>) {
         else bands.push({ from: t, to: t + DAY, tone: on ? "warm" : "cool" });
       }
     }
-    return { readings, purchases, switches, heating, season, rate, current, until, price, used, measured, bands, last, now };
-  }, [readingItems.data, purchaseItems.data, heatingItems.data, p]);
-  return { model, loading: readingItems.loading || purchaseItems.loading || heatingItems.loading, error: readingItems.error ?? purchaseItems.error ?? heatingItems.error };
+    return { readings, purchases, switches, temperatures, heating, season, rate, current, until, price, used, measured, outdoor, bands, last, now };
+  }, [readingItems.data, purchaseItems.data, heatingItems.data, temperatureItems.data, p]);
+  const all = [readingItems, purchaseItems, heatingItems, temperatureItems];
+  return { model, loading: all.some((q) => q.loading), error: all.find((q) => q.error)?.error };
 }
 
 interface Task { id: string; title: string }
@@ -297,7 +314,7 @@ function Dashboard({ w }: { w: Words }) {
   const geometry = useGeometry(ctx);
   const measure = useTasks(ctx, "diesel_measure", m);
   const refill = useTasks(ctx, "diesel_refill", m);
-  const [dialog, setDialog] = useState<"reading" | "purchase" | "heating">();
+  const [dialog, setDialog] = useState<"reading" | "purchase" | "heating" | "temperature">();
   const narrow = useNarrow();
   const reserveLiters = (p.reserve_percent / 100) * p.capacity_l;
   const toReserve = m.until(reserveLiters);
@@ -323,6 +340,8 @@ function Dashboard({ w }: { w: Words }) {
     return out;
   };
   const levelEnd = toOrder ? m.now + toOrder * DAY : m.now;
+  const degrees = (v: number | undefined) => (v === undefined ? "–" : `${f.number(v, 1)} °C`);
+  const lastTemperature = m.temperatures.at(-1);
 
   if (error) return <Notice tone="danger" title={error.message}>{w.setUp}</Notice>;
   return (
@@ -394,6 +413,41 @@ function Dashboard({ w }: { w: Words }) {
         />
       </Card>
 
+      <Card title={w.temperature} actions={<Button onClick={() => setDialog("temperature")}>{w.addTemperature}</Button>}>
+        {lastTemperature ? (
+          <>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 24px", alignItems: "baseline", marginBottom: 8 }}>
+              <div>
+                <div className="pg-stat-label">{w.indoor}</div>
+                <div style={big}>{degrees(lastTemperature.indoor)}</div>
+              </div>
+              <div>
+                <div className="pg-stat-label">{w.outdoor}</div>
+                <div style={big}>{degrees(lastTemperature.outdoor)}</div>
+              </div>
+              <div className="pg-stat-hint">{say(w.takenOn, { date: f.dateTime(lastTemperature.at) })}</div>
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <Legend items={[{ label: w.heatingOnBand, color: "rgba(220, 38, 38, .35)" }, { label: w.heatingOffBand, color: "rgba(37, 99, 235, .25)" }, { label: w.outdoor, color: "var(--pg-series-1)" }, { label: w.indoor, color: "var(--pg-series-2)" }]} />
+            </div>
+            <LineChart
+              height={220}
+              bands={m.bands}
+              xTicks={m.readings[0] ? ticks(m.readings[0].at, m.now) : undefined}
+              series={[
+                { name: w.outdoor, points: m.temperatures.filter((c) => c.outdoor !== undefined).map((c) => ({ x: c.at, y: c.outdoor! })) },
+                { name: w.indoor, points: m.temperatures.filter((c) => c.indoor !== undefined).map((c) => ({ x: c.at, y: c.indoor! })) },
+              ]}
+              formatX={(x) => f.date(x)}
+              formatTick={monthName}
+              formatY={(y) => `${f.number(y, 0)} °C`}
+            />
+          </>
+        ) : (
+          <p>{w.noTemperature}</p>
+        )}
+      </Card>
+
       <Grid min={300}>
         <Card title={w.price}>
           {m.purchases.length > 0 && (
@@ -419,7 +473,9 @@ function Dashboard({ w }: { w: Words }) {
           columns={[
             { key: "season", label: w.season },
             { key: "measured", label: w.measured, align: "right" },
-            { key: "used", label: w.used, align: "right" },
+            // Shorter headings on a phone, where the table has no room.
+            { key: "used", label: narrow ? w.forecast : w.used, align: "right" },
+            { key: "outdoor", label: narrow ? w.outdoor : w.outdoorAverage, align: "right" },
             { key: "days", label: w.days, align: "right", optional: true },
           ]}
           rows={(["off", "on", "peak"] as const).map((s) => ({
@@ -427,6 +483,7 @@ function Dashboard({ w }: { w: Words }) {
             season: seasonName(s),
             measured: m.measured[s].days ? `${f.number(m.measured[s].liters / m.measured[s].days, 1)} L/d` : "–",
             used: `${f.number({ off: p.rate_off, on: p.rate_on, peak: p.rate_peak }[s], 1)} L/d`,
+            outdoor: m.outdoor[s].n ? degrees(m.outdoor[s].sum / m.outdoor[s].n) : "–",
             days: f.number(m.measured[s].days, 0),
           }))}
         />
@@ -450,6 +507,7 @@ function Dashboard({ w }: { w: Words }) {
 
       <ReadingDialog w={w} open={dialog === "reading"} onClose={() => setDialog(undefined)} geometry={geometry} />
       <PurchaseDialog w={w} open={dialog === "purchase"} onClose={() => setDialog(undefined)} />
+      <TemperatureDialog w={w} open={dialog === "temperature"} onClose={() => setDialog(undefined)} />
       <HeatingDialog w={w} open={dialog === "heating"} onClose={() => setDialog(undefined)} on={heatingNow.on} assumed={heatingNow.assumed} since={heatingNow.since} />
     </>
   );
@@ -521,6 +579,42 @@ function PurchaseDialog({ w, open, onClose }: { w: Words; open: boolean; onClose
   );
 }
 
+function TemperatureDialog({ w, open, onClose }: { w: Words; open: boolean; onClose: () => void }) {
+  const ctx = useApp<Params>();
+  const f = ctx.format;
+  const [indoor, setIndoor] = useState("");
+  const [outdoor, setOutdoor] = useState("");
+  const { when, setWhen, saving, failed, save: run } = useEntry(open, onClose);
+  // A lone minus, typed with the ± button, waits for its number.
+  const read = (text: string) => (text.trim() === "" || text.trim() === "-" ? null : f.parseDecimal(text));
+  const i = read(indoor);
+  const o = read(outdoor);
+  const invalid = i === undefined || o === undefined;
+  const empty = i === null && o === null;
+  const save = () =>
+    !invalid &&
+    !empty &&
+    run(async () => {
+      await ctx.api.v1.resources.byId(ctx.params.list).children.post({
+        kind: "item",
+        name: `Temperature ${when.slice(0, 10)} · ${i ?? "–"} / ${o ?? "–"} °C`,
+        contentTypeId: ctx.params.temperature as never,
+        values: json({ diesel_temperature_at: when, ...(i !== null ? { diesel_indoor_c: i } : {}), ...(o !== null ? { diesel_outdoor_c: o } : {}) }),
+      });
+      setIndoor("");
+      setOutdoor("");
+    });
+  return (
+    <Modal open={open} title={w.temperatureTitle} onClose={onClose} actions={<><Button onClick={onClose}>{w.cancel}</Button><Button variant="primary" disabled={invalid || empty || saving} onClick={() => void save()}>{w.save}</Button></>}>
+      <NumberField autoFocus label={w.indoor} unit="°C" value={indoor} onChange={setIndoor} error={i === undefined ? w.invalid : undefined} />
+      <NumberField signed label={w.outdoor} unit="°C" value={outdoor} onChange={setOutdoor} error={o === undefined ? w.invalid : undefined} />
+      {empty && <p className="pg-stat-hint">{w.oneTemperature}</p>}
+      <DateField label={w.takenAt} value={when} onChange={setWhen} />
+      {failed && <p className="pg-error">{failed}</p>}
+    </Modal>
+  );
+}
+
 function HeatingDialog({ w, open, onClose, on, assumed, since }: { w: Words; open: boolean; onClose: () => void; on: boolean; assumed: boolean; since?: number }) {
   const ctx = useApp<Params>();
   const f = ctx.format;
@@ -543,12 +637,13 @@ function HeatingDialog({ w, open, onClose, on, assumed, since }: { w: Words; ope
 export default app<Params>({
   parameters: {
     type: "object",
-    required: ["list", "reading", "purchase", "heating"],
+    required: ["list", "reading", "purchase", "heating", "temperature"],
     properties: {
       list: { type: "string", title: "Diesel list", "x-papergo": { kind: "collection" } },
       reading: { type: "string", title: "Reading type", "x-papergo": { kind: "content_type" } },
       purchase: { type: "string", title: "Purchase type", "x-papergo": { kind: "content_type" } },
       heating: { type: "string", title: "Heating type", "x-papergo": { kind: "content_type" } },
+      temperature: { type: "string", title: "Temperature type", "x-papergo": { kind: "content_type" } },
       capacity_l: { type: "number", title: "Tank capacity (L)", default: 750, minimum: 1 },
       order_at_l: { type: "number", title: "Order when this much is left (L)", default: 200, minimum: 0 },
       reserve_percent: { type: "number", title: "Reserve (%)", default: 25, minimum: 0, maximum: 100 },

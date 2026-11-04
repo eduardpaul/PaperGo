@@ -14157,12 +14157,14 @@ export interface FieldProps {
 }
 /**
  * A decimal typed as text, with a phone's numeric keyboard; read it with
- * ctx.format.parseDecimal, which knows the viewer's decimal separator.
+ * ctx.format.parseDecimal, which knows the viewer's decimal separator. A
+ * signed field has a ± button, since phones' decimal keyboards have no minus.
  */
-export declare function NumberField({ label, value, onChange, unit, error, required, hint, autoFocus }: FieldProps & {
+export declare function NumberField({ label, value, onChange, unit, error, required, hint, autoFocus, signed }: FieldProps & {
 	unit?: ReactNode;
 	hint?: ReactNode;
 	autoFocus?: boolean;
+	signed?: boolean;
 }): import("react").JSX.Element;
 export declare function TextField({ label, value, onChange, error, required, maxLength }: FieldProps & {
 	maxLength?: number;

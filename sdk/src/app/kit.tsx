@@ -87,6 +87,7 @@ h1 { font-size: 20px; } h2 { font-size: 16px; } h3 { font-size: 14px; }
 .pg-field-row { display: flex; align-items: center; gap: 8px; }
 .pg-field input { font: inherit; font-size: 18px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--pg-border); background: var(--pg-bg); color: var(--pg-text); width: 100%; min-height: 44px; }
 .pg-field-unit { color: var(--pg-muted); }
+.pg-sign { flex: none; min-width: 44px; padding: 8px 0; font-size: 18px; }
 .pg-field-error { color: var(--pg-danger); font-size: 12px; }
 .pg-notice { border-radius: var(--pg-radius); padding: 10px 14px; border: 1px solid var(--pg-border); display: flex; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .pg-notice-warning { border-color: var(--pg-warning); } .pg-notice-danger { border-color: var(--pg-danger); } .pg-notice-success { border-color: var(--pg-success); }
@@ -238,14 +239,20 @@ function Field({ label, error, children }: { label: ReactNode; error?: ReactNode
 
 /**
  * A decimal typed as text, with a phone's numeric keyboard; read it with
- * ctx.format.parseDecimal, which knows the viewer's decimal separator.
+ * ctx.format.parseDecimal, which knows the viewer's decimal separator. A
+ * signed field has a ± button, since phones' decimal keyboards have no minus.
  */
-export function NumberField({ label, value, onChange, unit, error, required, hint, autoFocus }: FieldProps & { unit?: ReactNode; hint?: ReactNode; autoFocus?: boolean }) {
+export function NumberField({ label, value, onChange, unit, error, required, hint, autoFocus, signed }: FieldProps & { unit?: ReactNode; hint?: ReactNode; autoFocus?: boolean; signed?: boolean }) {
   return (
     <Field label={label} error={error}>
       {(id) => (
         <>
           <div className="pg-field-row">
+            {signed && (
+              <button type="button" className="pg-button pg-sign" aria-label="±" onClick={() => onChange(value.trim().startsWith("-") ? value.trim().slice(1) : `-${value.trim()}`)}>
+                ±
+              </button>
+            )}
             <input id={id} type="text" inputMode="decimal" autoComplete="off" autoFocus={autoFocus} value={value} required={required} onChange={(e) => onChange(e.target.value)} />
             {unit !== undefined && <span className="pg-field-unit">{unit}</span>}
           </div>

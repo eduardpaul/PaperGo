@@ -1,6 +1,8 @@
 // Loads a year and a half of a real 750 L heating-oil tank into an empty
 // Diesel list, for trying the tracker: four fills, nineteen dipstick
-// readings and when the heating went on and off. Owners start it by hand,
+// readings and when the heating went on and off, with indoor and outdoor
+// temperatures taken at the readings. The temperatures are illustrative,
+// typical of an inland winter; the rest is real. Owners start it by hand,
 // once; a list that has readings already is left as it is. The items are
 // filed in time order, so the levels workflow checks each reading against
 // the one before it.
@@ -11,6 +13,7 @@ interface Params {
   reading_type: string;
   purchase_type: string;
   heating_type: string;
+  temperature_type: string;
 }
 
 // The stick is read from the filling mouth, 200 cm above the bottom.
@@ -43,6 +46,28 @@ const purchases = [
   { at: "2026-09-03T12:00:00Z", liters: "535.0", total: 852.78 },
 ];
 
+// Indoor and outdoor °C, taken with the readings.
+const temperatures = [
+  { at: "2025-03-04T11:05:00Z", indoor: "20.5", outdoor: "6.5" },
+  { at: "2025-03-22T10:05:00Z", indoor: "20.8", outdoor: "9.0" },
+  { at: "2025-04-12T10:05:00Z", indoor: "21.0", outdoor: "11.5" },
+  { at: "2025-05-11T10:05:00Z", indoor: "21.5", outdoor: "14.0" },
+  { at: "2025-07-25T10:05:00Z", indoor: "25.8", outdoor: "24.5" },
+  { at: "2025-09-02T10:05:00Z", indoor: "24.6", outdoor: "20.0" },
+  { at: "2025-10-29T10:05:00Z", indoor: "18.9", outdoor: "11.0" },
+  { at: "2025-11-08T10:05:00Z", indoor: "20.4", outdoor: "8.5" },
+  { at: "2025-11-14T09:05:00Z", indoor: "20.2", outdoor: "6.0" },
+  { at: "2025-11-24T10:05:00Z", indoor: "20.6", outdoor: "4.5" },
+  { at: "2026-01-02T10:05:00Z", indoor: "19.8", outdoor: "-1.5" },
+  { at: "2026-01-26T13:05:00Z", indoor: "20.1", outdoor: "3.0" },
+  { at: "2026-03-14T10:05:00Z", indoor: "20.7", outdoor: "9.5" },
+  { at: "2026-04-18T10:05:00Z", indoor: "20.9", outdoor: "13.0" },
+  { at: "2026-05-21T10:05:00Z", indoor: "22.4", outdoor: "17.5" },
+  { at: "2026-06-23T10:05:00Z", indoor: "25.1", outdoor: "23.0" },
+  { at: "2026-08-02T10:05:00Z", indoor: "26.3", outdoor: "26.0" },
+  { at: "2026-09-03T13:05:00Z", indoor: "24.8", outdoor: "21.5" },
+];
+
 const heating = [
   { at: "2025-05-05T12:00:00Z", state: "off" },
   { at: "2025-10-29T12:00:00Z", state: "on" },
@@ -61,10 +86,11 @@ export default workflow<unknown, unknown, Params>({
       ...readings.map((r) => ({ at: r.at, name: `Reading ${r.at.slice(0, 10)} · ${r.stick} cm`, type: p.reading_type, values: { diesel_measured_at: r.at, diesel_stick_cm: r.stick } })),
       ...purchases.map((b) => ({ at: b.at, name: `Purchase ${b.at.slice(0, 10)} · ${b.liters} L`, type: p.purchase_type, values: { diesel_purchased_at: b.at, diesel_bought_liters: b.liters, diesel_total_price: b.total } })),
       ...heating.map((h) => ({ at: h.at, name: `Heating ${h.state} ${h.at.slice(0, 10)}`, type: p.heating_type, values: { diesel_heating_at: h.at, diesel_heating: h.state } })),
+      ...temperatures.map((c) => ({ at: c.at, name: `Temperature ${c.at.slice(0, 10)} · ${c.indoor} / ${c.outdoor} °C`, type: p.temperature_type, values: { diesel_temperature_at: c.at, diesel_indoor_c: c.indoor, diesel_outdoor_c: c.outdoor } })),
     ].sort((a, b) => a.at.localeCompare(b.at));
     for (const entry of entries) {
       await api.v1.resources.byId(p.list).children.post({ kind: "item", name: entry.name, contentTypeId: entry.type as never, values: json(entry.values) });
     }
-    return { readings: readings.length, purchases: purchases.length, heating: heating.length };
+    return { readings: readings.length, purchases: purchases.length, heating: heating.length, temperatures: temperatures.length };
   },
 });

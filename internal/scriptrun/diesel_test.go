@@ -59,7 +59,7 @@ func diesel(t *testing.T, r *runtime) (list string, types map[string]string, wor
 	if err != nil {
 		t.Fatal(err)
 	}
-	bindings := strings.NewReplacer("$LIST", l.ID, "$READING_TYPE", types["diesel_reading"], "$PURCHASE_TYPE", types["diesel_purchase"], "$HEATING_TYPE", types["diesel_heating"])
+	bindings := strings.NewReplacer("$LIST", l.ID, "$READING_TYPE", types["diesel_reading"], "$PURCHASE_TYPE", types["diesel_purchase"], "$HEATING_TYPE", types["diesel_heating"], "$TEMPERATURE_TYPE", types["diesel_temperature"])
 	workflows = map[string]workflow.Workflow{}
 	for _, name := range []string{"diesel-levels", "diesel-measure-reminder", "diesel-refill", "diesel-sample-data"} {
 		raw, err := os.ReadFile(filepath.Join("../../samples/diesel", name+".json"))
@@ -137,7 +137,7 @@ func TestDieselSample(t *testing.T) {
 	reading, purchase := types["diesel_reading"], types["diesel_purchase"]
 
 	loaded := r.await(t, r.start(t, workflows["diesel-sample-data"], nil), "completed")
-	if !strings.Contains(string(loaded.Result), `"readings":19`) {
+	if !strings.Contains(string(loaded.Result), `"readings":19`) || !strings.Contains(string(loaded.Result), `"temperatures":18`) {
 		t.Fatalf("sample data: %s", loaded.Result)
 	}
 	settle(t, "converting the sample readings", func() bool {
@@ -148,6 +148,20 @@ func TestDieselSample(t *testing.T) {
 		}
 		return true
 	})
+	// The temperatures are filed with their indoor and outdoor degrees, below zero included.
+	temperatures := dieselItems(t, r, list, types["diesel_temperature"])
+	if len(temperatures) != 18 {
+		t.Fatalf("sample temperatures: %d", len(temperatures))
+	}
+	frost := false
+	for _, item := range temperatures {
+		if item.Name == "Temperature 2026-01-02 · 19.8 / -1.5 °C" {
+			frost = fmt.Sprint(item.Values["diesel_outdoor_c"]) == "-1.5" && fmt.Sprint(item.Values["diesel_indoor_c"]) == "19.8"
+		}
+	}
+	if !frost {
+		t.Fatal("the frosty morning's temperature is missing or wrong")
+	}
 	byName := map[string]dieselItem{}
 	for _, item := range dieselItems(t, r, list, reading) {
 		byName[item.Name] = item

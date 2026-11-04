@@ -171,7 +171,7 @@ func checkImportedSampleSource(t *testing.T, s *dms.Service, w workflow.Workflow
 	case "Diesel levels", "Diesel measuring reminder", "Diesel refill", "Load diesel sample data":
 		types := map[string]string{}
 		listTypes, err := s.CollectionContentTypes(t.Context(), "organization-admin", ids["Diesel"])
-		if err != nil || len(listTypes) != 3 {
+		if err != nil || len(listTypes) != 4 {
 			t.Fatal(listTypes, err)
 		}
 		for _, lt := range listTypes {
@@ -208,7 +208,7 @@ var dieselWorkflows = []string{"diesel/diesel-levels.json", "diesel/diesel-measu
 // dieselBindings bind the placeholders of the diesel workflows' parameters
 // to its list and catalog types.
 func dieselBindings(list string, types map[string]string) []string {
-	return []string{"$LIST", list, "$READING_TYPE", types["diesel_reading"], "$PURCHASE_TYPE", types["diesel_purchase"], "$HEATING_TYPE", types["diesel_heating"]}
+	return []string{"$LIST", list, "$READING_TYPE", types["diesel_reading"], "$PURCHASE_TYPE", types["diesel_purchase"], "$HEATING_TYPE", types["diesel_heating"], "$TEMPERATURE_TYPE", types["diesel_temperature"]}
 }
 
 // buildSampleSpec creates a sample's catalog fields and types, workspace,
@@ -498,7 +498,7 @@ func TestSampleWorkspacePackages(t *testing.T) {
 						t.Fatal("imported workflow cannot be saved", w.Name, err)
 					}
 					raw := string(mustJSON(t, w.Definition)) + string(mustJSON(t, w.Parameters))
-					for _, placeholder := range []string{"$LIBRARY", "$LINES", "$LINE_TYPE", "$TERM_SET", "$FIELD", "$LIST", "$READING_TYPE", "$PURCHASE_TYPE", "$HEATING_TYPE", sampleSubject} {
+					for _, placeholder := range []string{"$LIBRARY", "$LINES", "$LINE_TYPE", "$TERM_SET", "$FIELD", "$LIST", "$READING_TYPE", "$PURCHASE_TYPE", "$HEATING_TYPE", "$TEMPERATURE_TYPE", sampleSubject} {
 						if strings.Contains(raw, placeholder) {
 							t.Fatal("unbound sample", placeholder)
 						}
