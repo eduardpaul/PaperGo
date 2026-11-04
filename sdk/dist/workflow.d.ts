@@ -13874,6 +13874,13 @@ export interface Trigger {
 	time_zone?: string;
 	surface?: "head" | "published";
 	selection?: "per_item" | "selection";
+	/**
+	 * On manual triggers: who may start runs by hand, as the permission they
+	 * need on the workspace (standalone) or on each chosen item. Default
+	 * manage for a standalone run and write on items. The run still acts as
+	 * its author.
+	 */
+	access?: "read" | "write" | "manage";
 	terms?: string[];
 	term_change?: "present" | "added" | "removed";
 	sources?: string[];

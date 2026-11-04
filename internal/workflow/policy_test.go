@@ -263,3 +263,68 @@ func TestPublishingPreparedDraftClaimsOnlyItsCollection(t *testing.T) {
 	}
 	t.Fatal("role missing")
 }
+
+// A manual trigger's access says who may start its runs by hand: by
+// default workspace managers for a standalone run and item writers on
+// items; access opens or closes that to readers, writers or managers.
+func TestManualAccessDecidesWhoStartsRuns(t *testing.T) {
+	for _, tc := range []struct {
+		trigger Trigger
+		want    string
+	}{
+		{Trigger{Type: TriggerManual, Access: AccessWrite}, ""},
+		{Trigger{Type: TriggerManual, Access: "owners"}, "access is read, write or manage"},
+		{Trigger{Type: TriggerSchedule, Cron: "0 * * * *", Access: AccessRead}, "on manual triggers"},
+	} {
+		err := Definition{Triggers: []Trigger{tc.trigger}}.validate()
+		if tc.want == "" && err != nil || tc.want != "" && (err == nil || !strings.Contains(err.Error(), tc.want)) {
+			t.Errorf("%+v: %v, want %q", tc.trigger, err, tc.want)
+		}
+	}
+
+	s, ws, a, _, item := policyFixture(t)
+	ctx := t.Context()
+	for subject, role := range map[string]string{"bob": "member", "carol": "visitor"} {
+		if err := s.DMS.SetWorkspaceMember(ctx, "alice", ws.ID, dms.WorkspaceMember{Subject: subject, Role: role}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	starts := func(name, trigger, subject string, items ...string) bool {
+		t.Helper()
+		w, err := s.Create(ctx, "alice", ws.ID, Save{Name: name, Source: source(`[`+trigger+`]`, name)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ready, err := s.CheckStart(ctx, subject, w.ID, Start{ItemIDs: items}, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = s.StartRuns(ctx, subject, w.ID, Start{ItemIDs: items})
+		if ready.CanRun != (err == nil) {
+			t.Fatalf("%s for %s: the check says %+v, the start %v", name, subject, ready, err)
+		}
+		return err == nil
+	}
+	for _, tc := range []struct {
+		name, trigger string
+		items         []string
+		bob, carol    bool
+	}{
+		{"Standalone", `{"type":"manual"}`, nil, false, false},
+		{"Standalone for members", `{"type":"manual","access":"write"}`, nil, true, false},
+		{"Standalone for everyone", `{"type":"manual","access":"read"}`, nil, true, true},
+		{"On an item", `{"type":"manual","collection_id":"` + a.ID + `"}`, []string{item.ID}, true, false},
+		{"On an item for readers", `{"type":"manual","collection_id":"` + a.ID + `","access":"read"}`, []string{item.ID}, true, true},
+		{"On an item for managers", `{"type":"manual","collection_id":"` + a.ID + `","access":"manage"}`, []string{item.ID}, false, false},
+	} {
+		if got := starts(tc.name, tc.trigger, "bob", tc.items...); got != tc.bob {
+			t.Errorf("%s: the member starts it: %v", tc.name, got)
+		}
+		if got := starts(tc.name+" (visitor)", tc.trigger, "carol", tc.items...); got != tc.carol {
+			t.Errorf("%s: the visitor starts it: %v", tc.name, got)
+		}
+		if !starts(tc.name+" (owner)", tc.trigger, "alice", tc.items...) {
+			t.Errorf("%s: the owner cannot start it", tc.name)
+		}
+	}
+}

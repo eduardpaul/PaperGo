@@ -93,6 +93,10 @@ type Trigger struct {
 	// selection of items). A collection implies per_item by default; without
 	// either option a manual trigger is standalone and accepts no items.
 	Selection string `json:"selection,omitempty"`
+	// Access, on manual triggers, is the permission a person needs to start
+	// a run by hand (StartAccess): on the workspace for a standalone run, on
+	// each chosen item otherwise. The run still acts as its author.
+	Access string `json:"access,omitempty"`
 	// Terms, on item.created, item.updated and item.published triggers,
 	// limits them to revisions whose term and keywords fields hold one of
 	// these terms (or a descendant, or a term merged into one). TermChange
@@ -164,6 +168,28 @@ const (
 	SelectionAll     = "selection"
 )
 
+// Access levels of manual triggers: the permission a person needs on the
+// workspace, or on each chosen item, to start a run.
+const (
+	AccessRead   = "read"
+	AccessWrite  = "write"
+	AccessManage = "manage"
+)
+
+// StartAccess is the permission a manual trigger's starts need: its access,
+// or by default manage on the workspace for a standalone run and write on
+// each chosen item otherwise.
+func (t Trigger) StartAccess() string {
+	switch {
+	case t.Access != "":
+		return t.Access
+	case t.CollectionID == "" && t.Selection == "":
+		return AccessManage
+	default:
+		return AccessWrite
+	}
+}
+
 var (
 	keyPattern   = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
 	eventPattern = regexp.MustCompile(`^wf\.([a-z0-9][a-z0-9_-]*)\.([a-z0-9][a-z0-9_-]*)$`)
@@ -231,6 +257,9 @@ func (d Definition) validate() error {
 		}
 		if t.Selection != "" && (t.Type != TriggerManual || t.Selection != SelectionPerItem && t.Selection != SelectionAll) {
 			return dms.Invalid(at + "selection is per_item or selection, on manual triggers")
+		}
+		if t.Access != "" && (t.Type != TriggerManual || t.Access != AccessRead && t.Access != AccessWrite && t.Access != AccessManage) {
+			return dms.Invalid(at + "access is read, write or manage, on manual triggers")
 		}
 		if len(t.Terms) > 0 || t.TermChange != "" {
 			if t.Type != dms.EventItemCreated && t.Type != dms.EventItemUpdated && t.Type != dms.EventItemPublished {

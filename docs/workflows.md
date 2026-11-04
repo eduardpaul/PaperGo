@@ -147,7 +147,7 @@ const checked = await Promise.all(invoices.map((invoice) => ctx.call<{ total: nu
 
 - **Calls made together are batched.** Calls a script starts before it next waits go out as one request per workflow and 500 calls, and their runs are waited for together, 64 operations per wait step. Calling a workflow on 1,000 items costs the caller two requests and 16 short steps. The server checks a request as a whole, so a call it refuses, such as one on an item the author cannot write, fails every call sent with it.
 - **The trigger** takes `collection_id`, which then requires every call to name an item of that collection; without it a call names any item of the workspace, or none. `input_schema` is the form of a call's input, with defaults applied and values checked as for a manual start. `disabled: true` stops calls. Calls need the workflow published; `manual_enabled` and `automatic_enabled` do not apply.
-- **Who may call.** The calling run's author needs write access to each item, or workspace manage for a call on no item, and the `item.write` scope, as a manual start does. A called run acts as its own version's author.
+- **Who may call.** The calling run's author needs write access to each item, or workspace manage for a call on no item, and the `item.write` scope, as a manual start does by default. A called run acts as its own version's author.
 - **The called run** sees `ctx.trigger` as `{ kind: "call", input, parent_run_id }` and its input as `run(ctx, input)`'s second argument. It carries no item snapshot: it reads its item through the API. Its run shows the caller as `parent_run_id`, and run lists filter called runs with `origin=call`.
 - **It belongs to the caller.** Cancelling the calling run cancels the runs it called that are still active; a caller can wait for them even when another author wrote the called workflow. A called run that fails or is cancelled throws an `OperationError` in the caller; use `Promise.allSettled` to go on with the others.
 - **Retrying a caller.** [Retrying](#runs) a caller that failed also retries the runs it called that failed, all the way down, and its replay receives their retries in their place: fix what made them fail, such as an item's values, and retry the caller. Runs it called that succeeded replay what they returned, so nothing they did happens twice, and a retry can wait for runs an earlier attempt called. Cancelled runs are not retried.
@@ -263,11 +263,12 @@ Fields of a trigger:
   - Occurrences missed while PaperGo was down start once.
   - A change to a workflow never starts runs for times already past.
 - Manual triggers expose **Item association** in the editor:
-  - **None (Standalone)** has neither `collection_id` nor `selection`, requires workspace manage access, and rejects selected items.
+  - **None (Standalone)** has neither `collection_id` nor `selection`, requires workspace manage access by default, and rejects selected items.
   - **Single Item** uses `selection: "per_item"` and requires exactly one item.
   - **Multiple Items** uses `selection: "selection"` and starts one run for 1–100 ordered items, which the script reads as `ctx.run.items`.
   - Single and multiple modes can target any collection in the workspace or a specific `collection_id`. A collection without an explicit selection uses single-item mode.
   - A manual workflow can declare `input_schema` for its launch form (see [Forms](#forms)).
+  - `access` says who may start runs by hand: the permission a person needs on the workspace for a standalone run, or on each chosen item. It is `read` (visitors too), `write` (members) or `manage` (owners). By default a standalone run needs `manage` and a run on items `write`. A run acts as its author whoever starts it, so `access: "write"` lets members run a standalone workflow that does what only its author may. Whoever starts a run can read its status and result. People also need the `item.write` scope.
 
 The event that started a run is `ctx.run.event`:
 
@@ -664,7 +665,7 @@ Audit events and publication snapshots are a separate product record. Run retent
 
 Another application runs a manual workflow through the API like a person does, and reads what it returned:
 
-1. Create an [integration access token](identity.md#integration-access-tokens) with the `item.read` and `item.write` scopes: starting a run needs `item.write`, reading it read access to the workspace. The run itself acts as its workflow's author, whatever the token may do. Add its service identity to the workspace: as a member to run workflows on items it may write, as an owner to run standalone workflows, which need workspace manage.
+1. Create an [integration access token](identity.md#integration-access-tokens) with the `item.read` and `item.write` scopes: starting a run needs `item.write`, reading it read access to the workspace. The run itself acts as its workflow's author, whatever the token may do. Add its service identity to the workspace: as a member to run workflows on items it may write, as an owner to run standalone workflows, which need workspace manage unless their manual trigger's `access` says otherwise.
 2. Find the workflow's ID with `GET /v1/workspaces/{id}/workflows`. It must be published, allow manual runs and have a `manual` trigger; its `input_schema` is the request's `inputs`.
 3. Start it, with an `Idempotency-Key` so a retry after a timeout starts nothing twice, and wait for the result:
 
