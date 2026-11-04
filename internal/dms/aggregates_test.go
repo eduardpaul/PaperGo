@@ -265,6 +265,60 @@ func TestAggregateExactSums(t *testing.T) {
 	}
 }
 
+// Keys read as figures do: exact numbers as strings, dates and date-times as
+// items show them, booleans as booleans, and terms with their names.
+func TestAggregateKeys(t *testing.T) {
+	s, _, l := fixture(t)
+	set, err := s.CreateTermSet(testContext, "alice", TermSetInput{GroupID: testTermGroup(s), Key: "regions", Name: "Regions"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	east := mustTerm(t, s, set.ID, TermInput{Name: "East"})
+	west := mustTerm(t, s, set.ID, TermInput{Name: "West"})
+	fieldOK(t, s, l.ID, CreateField{Key: "region", Label: "Region", Type: "term", Indexed: true, Options: model.FieldOptions{TermSetID: set.ID}})
+	fieldOK(t, s, l.ID, CreateField{Key: "weight", Label: "Weight", Type: "number", Indexed: true})
+	fieldOK(t, s, l.ID, CreateField{Key: "at", Label: "At", Type: "datetime", Indexed: true})
+	fieldOK(t, s, l.ID, CreateField{Key: "done", Label: "Done", Type: "boolean", Indexed: true})
+	for _, values := range []map[string]any{
+		{"region": east.ID, "weight": json.Number("9007199254740993.25"), "at": "2026-03-28T22:30:00Z", "done": true},
+		{"region": west.ID, "weight": json.Number("-1.5"), "at": "2026-03-28T22:30:00.5Z", "done": false},
+		{},
+	} {
+		publishItem(t, s, create(t, s, l.ID, "item", "Row", values))
+	}
+	keys := func(field string) []AggregateKey {
+		t.Helper()
+		out, err := s.QueryAggregates(testContext, "alice", l.ID, aggregateRequest(groupedBy(field), Aggregate{Op: AggregateCount, Field: "weight"}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		list := []AggregateKey{}
+		for _, g := range out.Data {
+			list = append(list, g.Keys[0])
+		}
+		return list
+	}
+	for _, tc := range []struct {
+		field string
+		want  []AggregateKey
+	}{
+		{"weight", []AggregateKey{{Value: "-1.5"}, {Value: "9007199254740993.25"}, {}}},
+		{"at", []AggregateKey{{Value: "2026-03-28T22:30:00Z"}, {Value: "2026-03-28T22:30:00.5Z"}, {}}},
+		{"done", []AggregateKey{{Value: false}, {Value: true}, {}}},
+	} {
+		if got := keys(tc.field); !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("%s: %+v, want %+v", tc.field, got, tc.want)
+		}
+	}
+	regions := map[any]string{}
+	for _, key := range keys("region") {
+		regions[key.Value] = key.Label
+	}
+	if regions[east.ID] != "East" || regions[west.ID] != "West" || regions[nil] != "" || len(regions) != 3 {
+		t.Fatalf("term keys hold their names: %+v", regions)
+	}
+}
+
 // The groups come in pages, in the order a request sorts them by, missing
 // values last whichever the direction, and a cursor belongs to its request.
 func TestAggregateSortAndPages(t *testing.T) {
@@ -392,7 +446,7 @@ func TestAggregateLimits(t *testing.T) {
 			if e != nil {
 				return AggregateResult{}, e
 			}
-			return tx.aggregates(testContext, q, spec)
+			return tx.aggregates(testContext, "alice", q, spec)
 		})
 		return err
 	}

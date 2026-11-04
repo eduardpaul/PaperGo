@@ -34739,7 +34739,11 @@
         "type": "object",
         "properties": {
           "value": {
-            "description": "The value of the group's field: with an interval, the first day of the period as YYYY-MM-DD; otherwise as group queries show it. Null for the items without one."
+            "description": "The value of the group's field. With an interval, the first day of the period as YYYY-MM-DD. Otherwise integers, decimals, numbers and currency as exact strings, dates and date-times as items show them, booleans as booleans, and text, choice, person and term values as they are stored. Null for the items without one."
+          },
+          "label": {
+            "type": "string",
+            "description": "The name of the term of a term or keywords field, when the caller can read the workspace's taxonomy."
           }
         },
         "required": [

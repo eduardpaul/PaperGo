@@ -93,9 +93,12 @@ type SmartFolderAggregateRequest struct {
 	AggregateSpec
 }
 
-// AggregateKey is a group's value of one of the request's groups.
+// AggregateKey is a group's value of one of the request's groups. Label
+// names the term of a term or keywords field when the caller can read the
+// workspace's taxonomy.
 type AggregateKey struct {
-	Value any `json:"value"`
+	Value any    `json:"value"`
+	Label string `json:"label,omitempty"`
 }
 
 // AggregateGroup is a group's key, one entry for each of the request's
@@ -497,7 +500,8 @@ func (g aggregateGrouping) key(v any) (any, error) {
 	return period(at, g.interval), nil
 }
 
-// show is a group's key as the API shows it.
+// show is a group's key as the API shows it: numeric values as exact strings,
+// as figures are; dates and date-times as items show them.
 func (g aggregateGrouping) show(kind content.Kind, key any) (any, error) {
 	if key == nil || g.interval != "" {
 		return key, nil
@@ -506,10 +510,18 @@ func (g aggregateGrouping) show(kind content.Kind, key any) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	if n, ok := shown.(json.Number); ok {
+		return n.String(), nil
+	}
 	if temporalType(g.typ) {
 		return temporalText(g.typ, shown)
 	}
 	return shown, nil
+}
+
+// labelled reports whether the group's values are terms that have names.
+func (g aggregateGrouping) labelled() bool {
+	return g.typ == catalog.FieldTerm || g.typ == catalog.FieldKeywords
 }
 
 // aggregateKey is a group's raw key, comparable as a map key.
@@ -619,7 +631,7 @@ func (s *Service) QueryAggregates(ctx context.Context, subject, containerID stri
 		if e != nil {
 			return AggregateResult{}, e
 		}
-		return t.aggregates(ctx, q, spec)
+		return t.aggregates(ctx, subject, q, spec)
 	})
 }
 
@@ -645,7 +657,7 @@ func (s *Service) QueryViewAggregates(ctx context.Context, subject, id string, i
 		if e != nil {
 			return AggregateResult{}, e
 		}
-		return t.aggregates(ctx, q, spec)
+		return t.aggregates(ctx, subject, q, spec)
 	})
 }
 
@@ -669,7 +681,7 @@ func (s *Service) QuerySmartFolderAggregates(ctx context.Context, subject, id st
 		if e != nil {
 			return AggregateResult{}, e
 		}
-		return t.aggregates(ctx, q, spec)
+		return t.aggregates(ctx, subject, q, spec)
 	})
 }
 
@@ -795,7 +807,7 @@ func decodeAggregateCursor(after, fingerprint string) (int, error) {
 }
 
 // aggregates runs a compiled aggregation and writes a page of its groups.
-func (s *Service) aggregates(ctx context.Context, q compiledQuery, spec *aggregationSpec) (AggregateResult, error) {
+func (s *Service) aggregates(ctx context.Context, subject string, q compiledQuery, spec *aggregationSpec) (AggregateResult, error) {
 	sum := sha256.Sum256([]byte(q.fingerprint + spec.fingerprint))
 	fingerprint := hex.EncodeToString(sum[:])
 	offset, e := decodeAggregateCursor(spec.after, fingerprint)
@@ -860,5 +872,33 @@ func (s *Service) aggregates(ctx context.Context, q compiledQuery, spec *aggrega
 		}
 		out.Data = append(out.Data, AggregateGroup{Keys: keys, Count: g.count, Values: values})
 	}
-	return out, nil
+	return out, s.labelAggregateKeys(ctx, subject, spec, out.Data)
+}
+
+// labelAggregateKeys names the terms of a page's keys.
+func (s *Service) labelAggregateKeys(ctx context.Context, subject string, spec *aggregationSpec, groups []AggregateGroup) error {
+	ids := []string{}
+	for i, grouping := range spec.groups {
+		if grouping.labelled() {
+			for _, g := range groups {
+				if id, ok := g.Keys[i].Value.(string); ok {
+					ids = append(ids, id)
+				}
+			}
+		}
+	}
+	names, err := s.termNames(ctx, subject, ids)
+	if err != nil {
+		return err
+	}
+	for i, grouping := range spec.groups {
+		if grouping.labelled() {
+			for _, g := range groups {
+				if id, ok := g.Keys[i].Value.(string); ok {
+					g.Keys[i].Label = names[id]
+				}
+			}
+		}
+	}
+	return nil
 }
