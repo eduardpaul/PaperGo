@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/stephenafamo/bob"
+	"papergo/internal/dal/apps"
 	"papergo/internal/dal/audit"
 	"papergo/internal/dal/blobs"
 	"papergo/internal/dal/catalog"
@@ -65,6 +66,7 @@ type Store struct {
 
 // queries is every domain contract a driver implements.
 type queries interface {
+	apps.Queries
 	audit.Queries
 	blobs.Queries
 	catalog.Queries
@@ -253,6 +255,12 @@ func (s *Store) Views() *views.Repo {
 
 // Workflows returns the workflow definition repository, bound to the store's
 // transaction when WithTx was used.
+// Apps returns the apps of workspaces, bound to the store's transaction when
+// WithTx was used.
+func (s *Store) Apps() *apps.Repo {
+	return apps.NewRepo(s.bind(s.exec()), writer[apps.Queries](s))
+}
+
 func (s *Store) Workflows() *workflows.Repo {
 	return workflows.NewRepo(s.bind(s.exec()), writer[workflows.Queries](s))
 }
