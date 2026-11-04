@@ -16,3 +16,9 @@ PaperGo is being built from scratch. It has never been released and has no deplo
 
 - Keep SQL and Bob query construction inside `internal/dal`. Application packages call typed repository methods for database reads and writes.
 - Never spell a fixed value set (a column with `CHECK (column IN (...))`) as string literals in Go. Use the domain package's named type and constants; see "Fixed value sets" in `internal/dal/README.md`.
+
+## Checks while working
+
+- Run only the narrowest test that proves a change: the tests of the package or component you touched. Say which ones you ran.
+- Do not run full suites (`go test ./...`, `vitest run` without a path, full `typecheck` or `lint`, `scripts/check.sh`, `scripts/ci.sh`) unless asked. CI runs them.
+- Do not regenerate the SDK or rebuild its bundle when only a description or comment in `api/openapi.json` changes; update the same text in `sdk/src/client` and `sdk/dist/workflow.d.ts`. Ask before any step expected to take minutes.
