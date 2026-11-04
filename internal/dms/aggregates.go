@@ -749,10 +749,13 @@ func (a *aggregationSpec) compareGroups(x, y *aggregatedGroup) int {
 }
 
 // aggregateCursor continues the groups of one request at an offset of their
-// order: they are worked out again for each page.
+// order. They are worked out again for each page, so it holds a digest of
+// the groups it was taken from: a page whose groups differ would repeat or
+// skip some, and is refused.
 type aggregateCursor struct {
 	Fingerprint string `json:"fingerprint"`
 	Offset      int    `json:"offset"`
+	Digest      string `json:"digest"`
 }
 
 func encodeAggregateCursor(c aggregateCursor) string {
@@ -760,32 +763,49 @@ func encodeAggregateCursor(c aggregateCursor) string {
 	return "a1." + base64.RawURLEncoding.EncodeToString(raw)
 }
 
-func decodeAggregateCursor(after, fingerprint string) (int, error) {
+func decodeAggregateCursor(after, fingerprint string) (aggregateCursor, error) {
 	if after == "" {
-		return 0, nil
+		return aggregateCursor{}, nil
 	}
 	if len(after) > 1024 || !strings.HasPrefix(after, "a1.") {
-		return 0, invalid("invalid query cursor")
+		return aggregateCursor{}, invalid("invalid query cursor")
 	}
 	raw, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(after, "a1."))
 	if err != nil {
-		return 0, invalid("invalid query cursor")
+		return aggregateCursor{}, invalid("invalid query cursor")
 	}
 	var c aggregateCursor
-	if err = json.Unmarshal(raw, &c); err != nil || c.Offset < 0 {
-		return 0, invalid("invalid query cursor")
+	if err = json.Unmarshal(raw, &c); err != nil || c.Offset < 0 || c.Digest == "" {
+		return aggregateCursor{}, invalid("invalid query cursor")
 	}
 	if c.Fingerprint != fingerprint {
-		return 0, invalid("cursor does not match this query, schema or caller")
+		return aggregateCursor{}, invalid("cursor does not match this query, schema or caller")
 	}
-	return c.Offset, nil
+	return c, nil
+}
+
+// groupsDigest stands for the ordered groups: their keys and what each
+// worked out, so groups that moved, came or went change it.
+func groupsDigest(ordered []*aggregatedGroup) string {
+	h := sha256.New()
+	for _, g := range ordered {
+		fmt.Fprintf(h, "%d", g.count)
+		for _, k := range g.key {
+			fmt.Fprintf(h, "|%T:%v", k, k)
+		}
+		for _, t := range g.tallies {
+			fmt.Fprintf(h, "|%d:%v:%T:%v:%T:%v", t.count, t.sum, t.min, t.min, t.max, t.max)
+		}
+		h.Write([]byte{0})
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 // aggregates runs a compiled aggregation and writes a page of its groups.
 func (s *Service) aggregates(ctx context.Context, subject string, q compiledQuery, spec *aggregationSpec) (AggregateResult, error) {
 	sum := sha256.Sum256([]byte(q.fingerprint + spec.fingerprint))
 	fingerprint := hex.EncodeToString(sum[:])
-	offset, e := decodeAggregateCursor(spec.after, fingerprint)
+	cursor, e := decodeAggregateCursor(spec.after, fingerprint)
 	if e != nil {
 		return AggregateResult{}, e
 	}
@@ -829,11 +849,17 @@ func (s *Service) aggregates(ctx context.Context, subject string, q compiledQuer
 		return AggregateResult{}, e
 	}
 	ordered := slices.SortedFunc(maps.Values(groups), spec.compareGroups)
+	digest := ""
+	if spec.after != "" || len(ordered) > spec.limit {
+		if digest = groupsDigest(ordered); spec.after != "" && digest != cursor.Digest {
+			return AggregateResult{}, ErrFiguresChanged
+		}
+	}
 	out := AggregateResult{Data: []AggregateGroup{}, Total: len(ordered)}
-	page := ordered[min(offset, len(ordered)):]
+	page := ordered[min(cursor.Offset, len(ordered)):]
 	if len(page) > spec.limit {
 		page = page[:spec.limit]
-		out.NextCursor = encodeAggregateCursor(aggregateCursor{fingerprint, offset + spec.limit})
+		out.NextCursor = encodeAggregateCursor(aggregateCursor{fingerprint, cursor.Offset + spec.limit, digest})
 	}
 	for _, g := range page {
 		keys := make([]AggregateKey, len(spec.groups))

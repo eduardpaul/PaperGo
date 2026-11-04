@@ -88,6 +88,21 @@ expect("every page's request", served.splice(0), ["first", "second"]);
 expect("one page", await readPages<number>(serve, "first", {}, false), [1, 2]);
 expect("one page's request", served.splice(0), ["first"]);
 
+// A link read already ends the reading; a replaced request stops it; figures
+// that changed between pages are read again from the first page.
+const looping = async <T,>(_method: "POST", url: string) => ({ data: { value: [url], "@odata.nextLink": "again" } as T });
+expect("a repeated link", await readPages<string>(looping, "first", {}, true).then(() => "read", (e: Error) => e.message), "the server linked a page read already: again");
+let reads = 0;
+const replaced = async <T,>() => (reads++, { data: { value: [reads], "@odata.nextLink": "next" + reads } as T });
+expect("a replaced request", await readPages<number>(replaced, "first", {}, true, () => reads >= 2).then(() => "read", (e: Error) => e.name), "Superseded");
+expect("pages read before it stopped", reads, 2);
+let changes = 1;
+const changing = async <T,>(_method: "POST", url: string) => {
+  if (url === "second" && changes-- > 0) throw new RequestError(409, "figures_changed", "changed", {});
+  return { data: pagesOf[url] as T };
+};
+expect("figures read again from the first page", await readPages<number>(changing, "first", {}, true), [1, 2, 3]);
+
 // A page that answers every request with what answer returns.
 function page(answer: (m: Extract<AppMessage, { type: "papergo:request" }>) => { status: number; body: unknown }) {
   const sent: AppMessage[] = [];

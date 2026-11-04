@@ -16,6 +16,9 @@ var (
 	// ErrContentUnavailable is a file version whose bytes were reclaimed.
 	// Its identity and metadata remain.
 	ErrContentUnavailable = errors.New("content unavailable")
+	// ErrFiguresChanged is a page of figures whose items changed since the
+	// first page: its groups would repeat or skip some of those read.
+	ErrFiguresChanged = errors.New("the figures changed while their pages were read; read them again from the first page")
 )
 
 type ValidationError struct{ Message string }

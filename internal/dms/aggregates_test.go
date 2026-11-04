@@ -2,6 +2,7 @@ package dms
 
 import (
 	"encoding/json"
+	"errors"
 	"math/big"
 	"reflect"
 	"strings"
@@ -442,6 +443,13 @@ func TestAggregateSortAndPages(t *testing.T) {
 	in.After = "a1.nonsense"
 	if _, err = s.QueryAggregates(testContext, "alice", l.ID, in); err == nil || !strings.Contains(err.Error(), "invalid query cursor") {
 		t.Fatal("a broken cursor:", err)
+	}
+	// Each page works the figures out again: one whose items changed since
+	// the first would repeat or skip groups, and is refused.
+	publishItem(t, s, create(t, s, l.ID, "item", "Row", map[string]any{"kind": "c", "units": json.Number("500"), "cost": json.Number("1")}))
+	in.After = first.NextCursor
+	if _, err = s.QueryAggregates(testContext, "alice", l.ID, in); !errors.Is(err, ErrFiguresChanged) {
+		t.Fatal("a page of figures that changed since the first:", err)
 	}
 	for _, tc := range []struct {
 		sort []SortSpec

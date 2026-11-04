@@ -3,7 +3,7 @@
 
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { Change } from "./bridge.js";
-import { RuntimeContext, type AppContext, type Runtime } from "./context.js";
+import { RequestError, RuntimeContext, type AppContext, type Runtime } from "./context.js";
 
 /** An item or folder as queries return it, with plain JSON values. */
 export interface Item {
@@ -163,16 +163,41 @@ interface Page<T> {
 /** Sends a request and reads its answer, as an app's context does. */
 type Requester = <T>(method: "POST", url: string, init: { body: unknown }) => Promise<{ data: T }>;
 
-/** The values of a POST request's first page, or of every page with all. */
-export async function readPages<T>(request: Requester, first: string, body: unknown, all: boolean): Promise<T[]> {
-  const values: T[] = [];
-  let url: string | undefined = first;
-  while (url) {
-    const page: Page<T> = (await request<Page<T>>("POST", url, { body })).data;
-    values.push(...(page.value ?? []));
-    url = all ? page["@odata.nextLink"] ?? undefined : undefined;
+/** How often every page is read again when figures change between pages. */
+const pageRestarts = 3;
+
+/** A reading of pages stopped because its request was replaced. */
+export class Superseded extends Error {
+  constructor() {
+    super("the request was replaced");
+    this.name = "Superseded";
   }
-  return values;
+}
+
+/**
+ * The values of a POST request's first page, or of every page with all. It
+ * stops when stopped says so, and on a link it has read already. Figures
+ * whose groups changed between pages are read again from the first page.
+ */
+export async function readPages<T>(request: Requester, first: string, body: unknown, all: boolean, stopped: () => boolean = () => false): Promise<T[]> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const values: T[] = [];
+      const read = new Set<string>();
+      let url: string | undefined = first;
+      while (url) {
+        if (read.has(url)) throw new Error(`the server linked a page read already: ${url}`);
+        read.add(url);
+        const page: Page<T> = (await request<Page<T>>("POST", url, { body })).data;
+        if (stopped()) throw new Superseded();
+        values.push(...(page.value ?? []));
+        url = all ? page["@odata.nextLink"] ?? undefined : undefined;
+      }
+      return values;
+    } catch (error) {
+      if (!(error instanceof RequestError && error.code === "figures_changed") || attempt + 1 >= pageRestarts) throw error;
+    }
+  }
 }
 
 /** The URL and body of a useQuery request. */
@@ -209,7 +234,7 @@ export function useQuery(listId: string | undefined, query: Query = {}, options:
     let stale = false;
     setState((s) => ({ ...s, loading: true }));
     const { url, body } = queryRequest(listId, query, options);
-    readPages<Item>(ctx.request, url, body, Boolean(options.all))
+    readPages<Item>(ctx.request, url, body, Boolean(options.all), () => stale)
       .then((data) => !stale && setState({ data, loading: false }))
       .catch((error: Error) => !stale && setState((s) => ({ ...s, loading: false, error })));
     return () => {
@@ -270,8 +295,9 @@ export interface AggregateGroup {
  * Figures of the items of a list that match a query, worked out by the
  * server, as the viewer may read them: a chart of two years of hourly
  * readings reads 730 days, not 17,520 items. It reads every group, or with top
- * the first that many in the order of sort. With live, a change to one of the
- * list's items works them out again.
+ * the first that many in the order of sort; figures that change while their
+ * pages are read are read again from the first page. With live, a change to
+ * one of the list's items works them out again.
  */
 export function useAggregates(listId: string | undefined, request: AggregateQuery, options: { live?: boolean; top?: number } = {}): Loaded<AggregateGroup[]> {
   const { ctx } = useRuntime();
@@ -287,7 +313,7 @@ export function useAggregates(listId: string | undefined, request: AggregateQuer
     let stale = false;
     setState((s) => ({ ...s, loading: true }));
     const { url, body } = aggregateRequest(listId, request, options.top);
-    readPages<AggregateGroup>(ctx.request, url, body, !options.top)
+    readPages<AggregateGroup>(ctx.request, url, body, !options.top, () => stale)
       .then((data) => !stale && setState({ data, loading: false }))
       .catch((error: Error) => !stale && setState((s) => ({ ...s, loading: false, error })));
     return () => {

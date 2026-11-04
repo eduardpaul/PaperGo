@@ -468,6 +468,8 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 		a.extendedProblem(w, r, moduleProblem.Status, moduleProblem.Code, moduleProblem.Detail, moduleProblem.Extensions, operationIndex...)
 	case errors.Is(err, dms.ErrLiveExpired):
 		problem(410, "live_cursor_expired", err.Error())
+	case errors.Is(err, dms.ErrFiguresChanged):
+		problem(409, "figures_changed", err.Error())
 	case errors.Is(err, dms.ErrDeltaExpired):
 		problem(410, "delta_expired", err.Error())
 	case errors.Is(err, dms.ErrContentUnavailable):
