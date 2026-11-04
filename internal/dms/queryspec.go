@@ -43,7 +43,7 @@ type QuerySpec struct {
 }
 
 // QueryEnvelope is how much of each item a query returns: the full
-// resource, or a compact one of its identity, version and values.
+// resource, or a CompactItem.
 type QueryEnvelope string
 
 const (
@@ -64,8 +64,7 @@ func (e QueryEnvelope) compact() (bool, error) {
 
 type QueryRequest struct {
 	Select []string `json:"select,omitempty"`
-	// Envelope compact returns each item's id, workspace_id, kind, name,
-	// parent_id, content_type_id, version, values and keywords only.
+	// Envelope compact returns each item as a CompactItem.
 	Envelope QueryEnvelope `json:"envelope,omitempty"`
 	Query    QuerySpec     `json:"query"`
 	Surface  string        `json:"surface,omitempty"`
@@ -86,9 +85,11 @@ type QueryRequest struct {
 }
 type QueryResult struct {
 	Data []*resources.Resource `json:"value"`
-	// Compact writes the items as CompactItem (QueryRequest.Envelope).
-	Compact    bool   `json:"-"`
-	NextCursor string `json:"-"`
+	// Compact writes the items as CompactItem (QueryRequest.Envelope), with
+	// the built-in columns of Selection.
+	Compact    bool     `json:"-"`
+	Selection  []string `json:"-"`
+	NextCursor string   `json:"-"`
 	Total      *int   `json:"total,omitempty"`
 	// TotalCapped means more than total items match (see TotalLimit).
 	TotalCapped bool `json:"total_capped,omitempty"`
@@ -671,7 +672,7 @@ func (s *Service) queryCompiled(ctx context.Context, subject string, in QueryReq
 		for i, r := range page {
 			ids[i], ranks[i] = r.ID, r.Rank
 		}
-		out := QueryResult{Data: []*resources.Resource{}, SearchCapped: q.searchCapped, Compact: compact}
+		out := QueryResult{Data: []*resources.Resource{}, SearchCapped: q.searchCapped, Compact: compact, Selection: in.Select}
 		if len(ids) > limit {
 			out.NextCursor = cursorEncode(q, ids[limit-1], ranks[limit-1])
 			ids = ids[:limit]

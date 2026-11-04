@@ -25541,7 +25541,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Selected custom fields and optional $keywords; system columns are accepted and the resource metadata envelope remains present. Omitted returns full values on direct queries and saved columns on views; an empty array returns no custom values. Selected fields need not be indexed. Cursors bind this selection."
+            "description": "Selected custom fields and optional $keywords. System columns are accepted: a full item always holds them, a compact one holds those selected. Omitted returns full values on direct queries and saved columns on views; an empty array returns no custom values. Selected fields need not be indexed. Cursors bind this selection."
           },
           "envelope": {
             "type": "string",
@@ -25550,7 +25550,7 @@
               "compact"
             ],
             "default": "full",
-            "description": "compact returns each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords only: under half the size of a full item, for reading many items. full returns the whole resource."
+            "description": "compact returns each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords, its archived, archived_at and archived_by when archived, and the built-in columns select names, as the resource's created_at, created_by, updated_at, updated_by and file: under half the size of a full item, for reading many items. full returns the whole resource."
           }
         },
         "required": [],
@@ -25587,7 +25587,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Selected custom fields and optional $keywords; system columns are accepted and the resource metadata envelope remains present. Omitted returns full values on direct queries and saved columns on views; an empty array returns no custom values. Selected fields need not be indexed. Cursors bind this selection."
+            "description": "Selected custom fields and optional $keywords. System columns are accepted: a full item always holds them, a compact one holds those selected. Omitted returns full values on direct queries and saved columns on views; an empty array returns no custom values. Selected fields need not be indexed. Cursors bind this selection."
           },
           "envelope": {
             "type": "string",
@@ -25596,7 +25596,7 @@
               "compact"
             ],
             "default": "full",
-            "description": "compact returns each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords only: under half the size of a full item, for reading many items. full returns the whole resource."
+            "description": "compact returns each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords, its archived, archived_at and archived_by when archived, and the built-in columns select names, as the resource's created_at, created_by, updated_at, updated_by and file: under half the size of a full item, for reading many items. full returns the whole resource."
           },
           "selected": {
             "type": "array",

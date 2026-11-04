@@ -73,6 +73,41 @@ func TestCompactQueryEnvelope(t *testing.T) {
 		t.Fatalf("an unknown envelope: %d", code)
 	}
 
+	// What a query asks for stays: selected built-in columns, and whether an
+	// item is archived.
+	code, stamped := page("/v1/resources/"+list.ID+"/query", `{"envelope":"compact","select":["$created_at","$created_by","$modified_at","$modified_by"]}`)
+	if code != 200 || len(stamped) != 2 || stamped[0]["created_at"] == nil || stamped[0]["created_by"] == nil || stamped[0]["updated_at"] == nil || stamped[0]["updated_by"] == nil || string(stamped[0]["created_at"]) != string(full[0]["created_at"]) && string(stamped[0]["created_at"]) != string(full[1]["created_at"]) {
+		t.Fatalf("a compact query's selected built-in columns: %d %v", code, stamped)
+	}
+	var first string
+	if err = json.Unmarshal(full[0]["id"], &first); err != nil {
+		t.Fatal(err)
+	}
+	item, err := s.Get(ctx, "alice", first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.SetArchived(ctx, "alice", first, item.Version, true); err != nil {
+		t.Fatal(err)
+	}
+	if code, rows := page("/v1/resources/"+list.ID+"/query", `{"envelope":"compact","query":{"archive":"all","sort":[{"field":"outdoor"}]}}`); code != 200 || len(rows) != 2 || string(rows[0]["archived"]) != "true" || rows[0]["archived_at"] == nil || rows[0]["archived_by"] == nil || rows[1]["archived"] != nil {
+		t.Fatalf("a compact item says it is archived: %d %v", code, rows)
+	}
+	views, err := s.Views(ctx, "alice", list.ID, "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code, rows := page("/v1/views/"+views.Data[0].ID+"/query", `{"envelope":"compact"}`); code != 200 || len(rows) != 1 || rows[0]["archived_at"] == nil || rows[0]["archived_by"] == nil {
+		t.Fatalf("the Archived view keeps its columns: %d %v", code, rows)
+	}
+	item, err = s.Get(ctx, "alice", first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.SetArchived(ctx, "alice", first, item.Version, false); err != nil {
+		t.Fatal(err)
+	}
+
 	view, err := s.CreateView(ctx, "alice", list.ID, dms.ViewInput{Name: "Cold first", Layout: "table", Columns: []string{"$name", "outdoor"}, Query: dms.QuerySpec{Sort: []dms.SortSpec{{Field: "outdoor"}}}})
 	if err != nil {
 		t.Fatal(err)
