@@ -6,12 +6,12 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"math/big"
 	"papergo/internal/dal/catalog"
 	"papergo/internal/dal/content"
 	"papergo/internal/dal/refs"
 	"papergo/internal/dal/resources"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -779,22 +779,11 @@ func groupValue(kind content.Kind, def *catalog.FieldDefinition, v any) (any, er
 		if !ok {
 			return v, nil
 		}
-		value := strconv.FormatInt(n, 10)
+		scale := 0
 		if def != nil && def.Type == catalog.FieldDecimal {
-			negative := n < 0
-			digits := strings.TrimPrefix(value, "-")
-			for len(digits) <= def.Scale {
-				digits = "0" + digits
-			}
-			if def.Scale > 0 {
-				digits = digits[:len(digits)-def.Scale] + "." + digits[len(digits)-def.Scale:]
-			}
-			if negative {
-				digits = "-" + digits
-			}
-			value = digits
+			scale = def.Scale
 		}
-		return value, nil
+		return decimalText(big.NewInt(n), scale, false), nil
 	case content.KindExact:
 		key, ok := v.(string)
 		if !ok {

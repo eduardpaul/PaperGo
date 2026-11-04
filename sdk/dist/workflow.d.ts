@@ -1008,7 +1008,7 @@ export interface MultipartEntry {
 }
 export interface Aggregate extends Parsable {
 	/**
-	 * The figure's name in values; op_field by default, without the $ of a built-in field.
+	 * The figure's name in values; op_field by default, without the $ of a built-in field, which this limit does not apply to.
 	 */
 	as?: string | null;
 	/**

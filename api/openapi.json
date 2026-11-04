@@ -35085,7 +35085,7 @@
           "as": {
             "type": "string",
             "pattern": "^[a-z0-9_]{1,64}$",
-            "description": "The figure's name in values; op_field by default, without the $ of a built-in field."
+            "description": "The figure's name in values; op_field by default, without the $ of a built-in field, which this limit does not apply to."
           }
         },
         "required": [

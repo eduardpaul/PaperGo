@@ -135,24 +135,6 @@ const (
 
 var aggregateName = regexp.MustCompile(`^[a-z0-9_]{1,64}$`)
 
-// decimalText writes n at scale; trim drops trailing fraction zeros.
-func decimalText(n *big.Int, scale int, trim bool) string {
-	text := new(big.Int).Abs(n).String()
-	for len(text) <= scale {
-		text = "0" + text
-	}
-	if scale > 0 {
-		text = text[:len(text)-scale] + "." + text[len(text)-scale:]
-		if trim {
-			text = strings.TrimRight(strings.TrimRight(text, "0"), ".")
-		}
-	}
-	if n.Sign() < 0 && strings.Trim(text, "0.") != "" {
-		text = "-" + text
-	}
-	return text
-}
-
 // divide rounds num/den half to even.
 func divide(num, den *big.Int) *big.Int {
 	q, r := new(big.Int).QuoRem(num, den, new(big.Int))
@@ -359,9 +341,9 @@ func aggregation(in AggregateSpec) (*aggregationSpec, error) {
 		}
 		name := a.As
 		if name == "" {
+			// As long as it needs to be: a field key can fill a name's limit.
 			name = string(a.Op) + "_" + strings.TrimPrefix(a.Field, "$")
-		}
-		if !aggregateName.MatchString(name) {
+		} else if !aggregateName.MatchString(name) {
 			return nil, invalid("an aggregate's name has 1 to 64 lowercase letters, digits or _: " + name)
 		}
 		if names[name] {

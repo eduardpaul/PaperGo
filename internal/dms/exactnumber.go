@@ -164,3 +164,21 @@ func numberFromKey(key string) (json.Number, error) {
 	}
 	return n, nil
 }
+
+// decimalText writes n at scale; trim drops trailing fraction zeros.
+func decimalText(n *big.Int, scale int, trim bool) string {
+	text := new(big.Int).Abs(n).String()
+	for len(text) <= scale {
+		text = "0" + text
+	}
+	if scale > 0 {
+		text = text[:len(text)-scale] + "." + text[len(text)-scale:]
+		if trim {
+			text = strings.TrimRight(strings.TrimRight(text, "0"), ".")
+		}
+	}
+	if n.Sign() < 0 {
+		text = "-" + text
+	}
+	return text
+}

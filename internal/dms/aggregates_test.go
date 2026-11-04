@@ -319,6 +319,21 @@ func TestAggregateKeys(t *testing.T) {
 	}
 }
 
+// A figure's default name holds its field's key, however long the key is.
+func TestAggregateDefaultNameOfALongKey(t *testing.T) {
+	s, _, l := fixture(t)
+	key := strings.Repeat("k", 64)
+	fieldOK(t, s, l.ID, CreateField{Key: key, Label: "Long", Type: "integer", Indexed: true})
+	publishItem(t, s, create(t, s, l.ID, "item", "Row", map[string]any{key: json.Number("3")}))
+	out, err := s.QueryAggregates(testContext, "alice", l.ID, aggregateRequest(nil, Aggregate{Op: AggregateSum, Field: key}))
+	if err != nil || out.Data[0].Values["sum_"+key] != "3" {
+		t.Fatal(out, err)
+	}
+	if _, err = s.QueryAggregates(testContext, "alice", l.ID, aggregateRequest(nil, Aggregate{Op: AggregateSum, Field: key, As: "sum_" + key})); err == nil || !strings.Contains(err.Error(), "1 to 64") {
+		t.Fatal("a name the caller chooses keeps its limit:", err)
+	}
+}
+
 // The groups come in pages, in the order a request sorts them by, missing
 // values last whichever the direction, and a cursor belongs to its request.
 func TestAggregateSortAndPages(t *testing.T) {
