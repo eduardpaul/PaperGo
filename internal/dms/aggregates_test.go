@@ -569,3 +569,27 @@ func TestSmartFolderFiguresAddUpOneCurrency(t *testing.T) {
 		t.Fatal("euros and yen added up:", err)
 	}
 }
+
+// A smart folder reads its fields in the collections whose items it lists:
+// one its filter skips holds none of the figures.
+func TestSmartFolderFiguresReadTheCollectionsTheyList(t *testing.T) {
+	s, w, _ := fixture(t)
+	euros := create(t, s, w.ID, "list", "Euros", nil)
+	fieldOK(t, s, euros.ID, CreateField{Key: "price", Label: "Price", Type: "currency", Indexed: true, Options: model.FieldOptions{CurrencyCode: "EUR"}})
+	fieldOK(t, s, euros.ID, CreateField{Key: "region", Label: "Region", Type: "text", Indexed: true})
+	loose := create(t, s, w.ID, "list", "Loose", nil)
+	fieldOK(t, s, loose.ID, CreateField{Key: "price", Label: "Price", Type: "currency", Options: model.FieldOptions{CurrencyCode: "EUR"}})
+	publishItem(t, s, create(t, s, euros.ID, "item", "Ten", map[string]any{"price": json.Number("10"), "region": "east"}))
+	publishItem(t, s, create(t, s, loose.ID, "item", "Five", map[string]any{"price": json.Number("5")}))
+	sum := AggregateSpec{Aggregates: []Aggregate{{Op: AggregateSum, Field: "price"}}}
+
+	// Loose holds price unindexed, but the filter on region leaves it out.
+	east := smartOK(t, s, SmartFolderInput{Name: "East", WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Mode: "query", Collections: []string{"Euros", "Loose"}, Filter: &FilterExpr{Field: "region", Op: "eq", Value: json.RawMessage(`"east"`)}}})
+	out, err := s.QuerySmartFolderAggregates(testContext, "alice", east.ID, SmartFolderAggregateRequest{AggregateSpec: sum})
+	if err != nil {
+		t.Fatal("a collection the folder does not list failed its figures:", err)
+	}
+	if got, _ := json.Marshal(out.Data); string(got) != `[{"keys":[],"count":1,"values":{"sum_price":"10"}}]` {
+		t.Fatalf("figures of the listed items: %s", got)
+	}
+}

@@ -292,12 +292,6 @@ func (s *Service) compileSmartFolder(ctx context.Context, subject string, f *vie
 	if err != nil {
 		return compiledQuery{}, nil, err
 	}
-	var aggregated *content.Aggregation
-	if in.aggregation != nil && len(candidates) > 0 {
-		if aggregated, err = in.aggregation.resolve(smartColumn(candidates)); err != nil {
-			return compiledQuery{}, nil, err
-		}
-	}
 	var firstError error
 	keep := func(err error) {
 		if firstError == nil {
@@ -305,12 +299,11 @@ func (s *Service) compileSmartFolder(ctx context.Context, subject string, f *vie
 		}
 	}
 	rankIdentity := ""
-	var ranked *content.Query
 	usable := []smartCandidate{}
-	queries := []*content.Query{}
-	shapes := []string{}
-	collections := []string{}
-	schemas := []string{}
+	plans := []content.Plan{}
+	// Whether a plan's order ranks the union: the first whose group the
+	// collection holds.
+	rankable := []bool{}
 	for _, c := range candidates {
 		spec := QuerySpec{Archive: d.Archive, Filter: d.Filter, Sort: []SortSpec{order}}
 		plan, _, err := s.collectionPlan(ctx, subject, c.collection, c.defs, QueryRequest{Query: spec, Surface: in.Surface, rowACL: true}, false)
@@ -323,9 +316,6 @@ func (s *Service) compileSmartFolder(ctx context.Context, subject string, f *vie
 			return compiledQuery{}, nil, err
 		}
 		plan.ItemsOnly = !d.IncludeFolders
-		if aggregated != nil {
-			plan.ItemsOnly, plan.Aggregation = true, aggregated
-		}
 		if len(d.ContentTypes) > 0 {
 			for _, typ := range c.types {
 				plan.ContentTypes = append(plan.ContentTypes, typ.ID)
@@ -363,18 +353,36 @@ func (s *Service) compileSmartFolder(ctx context.Context, subject string, f *vie
 			}
 			plan.Group = &group
 		}
-		q := s.DAL.Content().Compile(plan)
-		if ranked == nil && (!grouped || rankIdentity != "") {
-			ranked = q
-		}
-		queries = append(queries, q)
-		shapes = append(shapes, q.Shape())
-		collections = append(collections, c.collection.ID)
-		schemas = append(schemas, *c.collection.SchemaHeadID)
+		plans = append(plans, plan)
+		rankable = append(rankable, !grouped || rankIdentity != "")
 		usable = append(usable, c)
 	}
-	if len(queries) == 0 && firstError != nil {
+	if len(plans) == 0 && firstError != nil {
 		return compiledQuery{}, nil, firstError
+	}
+	// Aggregates read their fields in the collections the folder reads, and
+	// only there: a collection it skips holds none of the figures.
+	if in.aggregation != nil && len(usable) > 0 {
+		aggregated, err := in.aggregation.resolve(smartColumn(usable))
+		if err != nil {
+			return compiledQuery{}, nil, err
+		}
+		for i := range plans {
+			plans[i].ItemsOnly, plans[i].Aggregation = true, aggregated
+		}
+	}
+	var ranked *content.Query
+	queries := make([]*content.Query, len(plans))
+	shapes := make([]string, len(plans))
+	collections := make([]string, len(plans))
+	schemas := make([]string, len(plans))
+	for i, plan := range plans {
+		q := s.DAL.Content().Compile(plan)
+		if ranked == nil && rankable[i] {
+			ranked = q
+		}
+		queries[i], shapes[i] = q, q.Shape()
+		collections[i], schemas[i] = usable[i].collection.ID, *usable[i].collection.SchemaHeadID
 	}
 	rootIDs := make([]string, len(roots))
 	for i, root := range roots {
