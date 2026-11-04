@@ -552,3 +552,20 @@ func TestViewAndSmartFolderAggregates(t *testing.T) {
 	out, err = s.QuerySmartFolderAggregates(testContext, "alice", nothing.ID, SmartFolderAggregateRequest{AggregateSpec: AggregateSpec{Groups: groupedBy("kind"), Aggregates: []Aggregate{sum}}})
 	same("and no others", out, err, `[]`)
 }
+
+// A smart folder adds up amounts of one currency only.
+func TestSmartFolderFiguresAddUpOneCurrency(t *testing.T) {
+	s, w, _ := fixture(t)
+	euros := create(t, s, w.ID, "list", "Euros", nil)
+	fieldOK(t, s, euros.ID, CreateField{Key: "price", Label: "Price", Type: "currency", Indexed: true, Options: model.FieldOptions{CurrencyCode: "EUR"}})
+	yen := create(t, s, w.ID, "list", "Yen", nil)
+	fieldOK(t, s, yen.ID, CreateField{Key: "price", Label: "Price", Type: "currency", Indexed: true, Options: model.FieldOptions{CurrencyCode: "JPY"}})
+	publishItem(t, s, create(t, s, euros.ID, "item", "Ten", map[string]any{"price": json.Number("10")}))
+	publishItem(t, s, create(t, s, yen.ID, "item", "Thousand", map[string]any{"price": json.Number("1000")}))
+	sum := AggregateSpec{Aggregates: []Aggregate{{Op: AggregateSum, Field: "price"}}}
+
+	mixed := smartOK(t, s, SmartFolderInput{Name: "Mixed", WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Mode: "query", Collections: []string{"Euros", "Yen"}}})
+	if _, err := s.QuerySmartFolderAggregates(testContext, "alice", mixed.ID, SmartFolderAggregateRequest{AggregateSpec: sum}); err == nil || !strings.Contains(err.Error(), "compatible") {
+		t.Fatal("euros and yen added up:", err)
+	}
+}

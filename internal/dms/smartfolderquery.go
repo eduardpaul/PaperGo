@@ -354,7 +354,7 @@ func (s *Service) compileSmartFolder(ctx context.Context, subject string, f *vie
 			if !missing {
 				identity := "text"
 				if fd != nil {
-					identity = string(fd.Type) + ":" + strconv.Itoa(fd.Scale) + ":" + fd.Options.TermSetID + ":" + fd.Options.LookupContainerID
+					identity = smartFieldIdentity(fd)
 				}
 				if rankIdentity != "" && rankIdentity != identity {
 					return compiledQuery{}, nil, invalid("grouping fields must have compatible types and scopes across collections")
@@ -412,9 +412,10 @@ func (s *Service) compileSmartFolder(ctx context.Context, subject string, f *vie
 }
 
 // smartFieldIdentity says which fields of several collections hold values
-// that can be grouped or added together.
+// that can be grouped or added together: of one type and scale, the same
+// term set or looked-up collection, and amounts in the same currency.
 func smartFieldIdentity(fd *catalog.FieldDefinition) string {
-	return string(fd.Type) + ":" + strconv.Itoa(fd.Scale) + ":" + fd.Options.TermSetID + ":" + fd.Options.LookupContainerID
+	return string(fd.Type) + ":" + strconv.Itoa(fd.Scale) + ":" + fd.Options.TermSetID + ":" + fd.Options.LookupContainerID + ":" + fd.Options.CurrencyCode
 }
 
 // smartColumn finds a field aggregates read across a folder's collections.
