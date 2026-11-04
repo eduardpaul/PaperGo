@@ -40,7 +40,7 @@ A barrel lying on its side is **not** linear: the litres follow the circular seg
 
 ## Data model
 
-One list, **Diesel**, with two content types, `diesel_reading` (**Reading**) and `diesel_purchase` (**Purchase**). One list keeps the history in one place and lets the app read everything with one query. The keys carry the package's prefix because content type keys are organization-wide; see [app packages](workspace-apps.md#building-one).
+One list, **Diesel**, with two content types, `diesel_reading` (**Reading**) and `diesel_purchase` (**Purchase**). One list keeps the history in one place and lets the app read everything with one query. The keys carry the app's prefix because content type keys are organization-wide, and the [app package](workspace-apps.md#the-app-package) reuses a type only when its definition matches.
 
 | Content type | Field | Type | Notes |
 | --- | --- | --- | --- |
@@ -71,7 +71,7 @@ They are three workflows rather than one, so the owner can turn the reminder or 
 
 ### Levels
 
-`diesel-levels` reacts to `item.created` and `item.updated` of both types in the Diesel list. Its parameters are the barrel: `list`, `capacity_l`, `height_cm` and `orientation`. Parameters are remapped when the workspace package is imported elsewhere, so nobody edits IDs.
+`diesel-levels` reacts to `item.created` and `item.updated` of both types in the Diesel list. Its parameters are the barrel: `list`, `capacity_l`, `height_cm` and `orientation`. The app package fills the list and type IDs when it is installed, so nobody edits IDs.
 
 - **Reading:** compute `level_liters` and `fill_percent`. Then read the previous reading and the purchases between the two. If the new level exceeds the previous level plus what was bought, plus a 5 L tolerance, set `flag = check`.
 - **Purchase:** `price_per_liter = total_price / bought_liters`.
@@ -81,7 +81,7 @@ They are three workflows rather than one, so the owner can turn the reminder or 
 
 Values are exact decimal strings in PaperGo, so the script computes in tenths of a litre and thousandths of a currency unit before writing.
 
-This is the **reactive** backend pattern of [workspace apps](workspace-apps.md#backend-patterns). The app only writes items. A reading entered from the list screen, over MCP by an assistant, or by another app gets its litres too, and the formula lives in one script the owner can read and change.
+The app only writes items; the workflow derives. A reading entered from the list screen, over MCP by an assistant, or by another app gets its litres too, and the formula lives in one script the owner can read and change.
 
 ### Measuring reminder
 
@@ -91,7 +91,7 @@ Every morning at 08:00 in the owner's time zone, the reminder looks at the last 
 - **A reading filed any other way closes the reminder.** The same workflow starts on every new reading and cancels the open `diesel_measure` task with a reason naming the reading, which the cancelled task shows. Its "task assigned" notification goes with it, and the run waiting on it ends quietly. A task answered at the same moment is no longer open; the cancel's 409 is ignored.
 - **One reminder at a time.** Workflow concurrency applies only to runs on items, and a schedule run has none, so the script checks for an open task itself.
 - **Nothing nags.** The task stays open until someone measures. It is due two days after it was created, which shows it as overdue but does not repeat it. Assignees are told when it is created, as for every task.
-- **Assignees** are a parameter: a person, `group:<id>`, `role:owners` or `role:members`. Packages carry neither people nor groups, so the package ships `["role:owners"]`, and the owner names the person after installing.
+- **Assignees** are a parameter: a person, `group:<id>`, `role:owners` or `role:members`. The app package can name neither people nor groups of the instance it is installed on, so it ships `["role:owners"]`, and the owner names the person after installing.
 
 ```ts
 // Every morning, asks someone to dip the barrel when the last reading is
@@ -302,11 +302,11 @@ Both workflows reach people through tasks, inside PaperGo: assigning a task noti
 | `diesel-measure-reminder` | `every_days`, `assignees`, `time_zone` | 15, `["role:owners"]`, `UTC` | how often, who measures, where |
 | `diesel-refill` | `threshold_l`, `buyers` | 50, `["role:owners"]` | when to ask, and whom |
 
-The list and type IDs in all three are set by the package and remapped on import.
+The list and type IDs in all three are set by the app package when it is installed.
 
 ## Dashboard: figures and formulas
 
-The list is tiny: about two readings a week and one purchase a month is under 150 items a year. The app reads the whole list with one paged query and computes everything in the browser, within the [data limits](workspace-apps.md#limitations) of apps for decades of use.
+The list is tiny: about two readings a week and one purchase a month is under 150 items a year. The app reads the whole list with one paged query and computes everything in the browser, for decades of use.
 
 Sort readings `R` and purchases `P` by time. For each pair of consecutive readings `Rᵢ₋₁ → Rᵢ`:
 
@@ -335,33 +335,28 @@ The screen also has two forms, **Add reading** and **Add purchase**. They are la
 
 | Piece | What it is |
 | --- | --- |
-| Diesel list, two content types, three views | ordinary workspace configuration, works today |
-| `diesel-levels`, `diesel-measure-reminder`, `diesel-refill` | ordinary workflows, work today |
-| Diesel tracker screen | one app, `diesel-tracker.tsx`, declaring read/write access to the Diesel list and nothing else |
-| Distribution | one [app package](workspace-apps.md#app-packages), `diesel.zip`: the workspace **Diesel**, the list and its types and views, the workflow and the app. `requires` is empty, since nothing needs AI, OCR or search |
-| Example data | an optional manual workflow, **Load example data**, that creates a season of readings and purchases so the dashboard shows something at once |
-| After install | the owner sets the [parameters](#what-the-owner-sets-after-installing) of the three workflows, as the readme says; the app shows a setup message until the barrel's size is set |
+| Diesel list, two content types, three views | the app package's `setup`, created in the workspace when it is installed |
+| `diesel-levels`, `diesel-measure-reminder`, `diesel-refill` | the app's workflows, owned by it and authored by the installer |
+| Diesel tracker screen | `app.tsx`: the dashboard and the two forms, with item CRUD through `ctx.api` |
+| Distribution | one [app package](workspace-apps.md#the-app-package), `diesel.zip`, installed into an existing workspace |
+| After install | the owner sets the [parameters](#what-the-owner-sets-after-installing) of the three workflows; the app shows a setup message until the barrel's size is set |
+| Uninstall | removes the app and its three workflows, cancels their open tasks and keeps the answered ones; the Diesel list and its history stay unless the owner deletes them too |
+
+The screen finds its own open tasks with `ctx.tasks({ status: "open" })` and shows "A reading is due" or "Diesel is low, buy some" with a link to answer them.
 
 ```tsx
-import { app, useQuery, Page, Stat, LineChart, BarChart, ItemForm } from "@papergo/app";
+import { app, json, useQuery } from "@papergo/app";
 
-interface Params { list: string; reading: string; purchase: string }
-
-export default app<Params>({
-  parameters_schema: {
-    type: "object",
-    required: ["list", "reading", "purchase"],
-    properties: {
-      list: { type: "string", title: "Diesel list", "x-papergo": { kind: "collection" } },
-      reading: { type: "string", title: "Reading type", "x-papergo": { kind: "content_type" } },
-      purchase: { type: "string", title: "Purchase type", "x-papergo": { kind: "content_type" } },
-    },
-  },
-  access: (p) => ({ collections: [{ id: p.list, access: "write" }] }),
-  render: ({ params }) => {
-    const rows = useQuery(params.list, { sort: [{ field: "$id", direction: "asc" }] }, { all: true, live: true });
-    // compute the figures above from rows.data, then:
-    return <Page title="Diesel">…<ItemForm collection={params.list} contentType={params.reading} fields={["measured_at", "depth_cm"]} />…</Page>;
+export default app<{ list: string; reading: string; purchase: string }>({
+  render: (ctx) => {
+    const rows = useQuery(ctx.params.list, { sort: [{ field: "$id", direction: "asc" }] }, { all: true, live: true });
+    const add = (depth: string) =>
+      ctx.api.v1.resources.byId(ctx.params.list).children.post({
+        kind: "item", name: "Reading", contentTypeId: ctx.params.reading,
+        values: json({ measured_at: new Date().toISOString(), depth_cm: depth }),
+      });
+    // compute the figures above from rows.data, then render the tiles, charts and forms
+    return <Dashboard rows={rows.data} onAddReading={add} />;
   },
 });
 ```
@@ -371,9 +366,8 @@ export default app<Params>({
 - **Measure before refilling.** Ask for an optional reading right after the **Add purchase** form ("Dip it now?"). Two readings around a refill make that interval exact and catch mistakes at once.
 - **One barrel.** Version one keeps the barrel in the workflow's parameters. Several tanks (a tractor tank, a heating tank) would become a third content type, **Tank**, and a lookup field on readings and purchases. The data model allows it without breaking anything, so it can wait until someone asks for it.
 - **Currency** comes from the workspace default, which already exists.
-- **Without the app**, the list, the workflow and the views are already useful as a package today, and they can ship first as `samples/diesel-package`.
+- **Without the app**, the list, the workflows and the views are already useful today, set up by hand or copied with a workspace package.
 
 ## Decisions needed
 
 1. Barrel geometry for version one: upright only, or upright and horizontal (recommended).
-2. Ship the package without the app first, while the app runtime is built? Everything in it, the three workflows included, works today.
