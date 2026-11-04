@@ -114,10 +114,10 @@ type OrderInfo struct {
 	Descending bool
 }
 
-// GroupBy groups by a field, or by the year or month of a date field.
+// GroupBy groups by a field, or by the year, month or day of a date field.
 type GroupBy struct {
 	Field Field
-	// By is year, month or empty.
+	// By is year, month, day or empty.
 	By string
 }
 
@@ -160,9 +160,9 @@ type Plan struct {
 	Orders     []Order
 	// Group sorts by a group column instead of Orders, for group counts.
 	Group *GroupBy
-	// Measures adds each row's value of these fields, as measure columns,
-	// for aggregates (Repo.Measured).
-	Measures []Field
+	// Aggregation selects the group and measure columns of Repo.Aggregate
+	// instead of Orders and Group.
+	Aggregation *Aggregation
 	// RowACL checks permissions row by row, so queries over several
 	// collections share one statement shape.
 	RowACL bool
@@ -179,6 +179,11 @@ type Query struct {
 	// RankDef is the definition behind the first sort column; nil for
 	// built-in columns.
 	RankDef *catalog.FieldDefinition
+	// GroupKinds is how an aggregation's group columns hold their values.
+	GroupKinds []Kind
+
+	aggregation  *Aggregation
+	measureKinds []Kind
 
 	reader     access.Principal
 	collection string
@@ -211,8 +216,6 @@ func (q *Query) Shape() string {
 	return string(raw)
 }
 
-func measureAlias(i int) string { return "measure_" + strconv.Itoa(i) }
-
 func sortAlias(i int) string {
 	if i == 0 {
 		return "sort_value"
@@ -244,8 +247,11 @@ func (r *Repo) groupColumn(g GroupBy) (string, []any, Kind) {
 	column, args, kind := r.column(g.Field)
 	if g.By != "" {
 		size := 4
-		if g.By == "month" {
+		switch g.By {
+		case "month":
 			size = 7
+		case "day":
+			size = 10
 		}
 		column, kind = r.d.Prefix(column, size, kind == KindTime), KindText
 	}
@@ -378,7 +384,21 @@ func (r *Repo) termCondition(c *Condition, prefix string, args []any) (string, [
 func (r *Repo) Compile(p Plan) *Query {
 	q := &Query{reader: p.Reader, collection: p.CollectionID, surface: p.Surface, publishes: p.Publishes, rowACL: p.RowACL}
 	rankParts := []string{}
-	if p.Group != nil {
+	if a := p.Aggregation; a != nil {
+		q.aggregation = a
+		for i, g := range a.Groups {
+			column, args, kind := r.groupColumn(g)
+			rankParts = append(rankParts, column+" AS "+groupAlias(i))
+			q.rankArgs = append(q.rankArgs, args...)
+			q.GroupKinds = append(q.GroupKinds, kind)
+		}
+		for i, m := range a.Measures {
+			column, args, kind := r.column(m.Field)
+			rankParts = append(rankParts, column+" AS "+measureAlias(i))
+			q.rankArgs = append(q.rankArgs, args...)
+			q.measureKinds = append(q.measureKinds, kind)
+		}
+	} else if p.Group != nil {
 		column, args, kind := r.groupColumn(*p.Group)
 		rankParts = append(rankParts, column+" AS sort_value")
 		q.rankArgs = append(q.rankArgs, args...)
@@ -394,11 +414,6 @@ func (r *Repo) Compile(p Plan) *Query {
 			q.Orders = append(q.Orders, OrderInfo{Kind: kind, Descending: o.Descending})
 		}
 		q.RankDef = p.Orders[0].Field.Def
-	}
-	for i, m := range p.Measures {
-		column, args, _ := r.column(m)
-		rankParts = append(rankParts, column+" AS "+measureAlias(i))
-		q.rankArgs = append(q.rankArgs, args...)
 	}
 	q.ranks = strings.Join(rankParts, ",")
 	// Conditions reference only r and p, so the eligible rows and the
@@ -458,7 +473,7 @@ func (r *Repo) Compile(p Plan) *Query {
 		q.sql, q.args = r.rows(q)
 		q.built = true
 	}
-	if p.Group == nil && len(p.Orders) == 1 && !p.RowACL {
+	if p.Aggregation == nil && p.Group == nil && len(p.Orders) == 1 && !p.RowACL {
 		column := ""
 		if s, ok := systemFields[p.Orders[0].Field.Key]; ok && p.Orders[0].Field.Def == nil {
 			column = s.column
@@ -537,7 +552,7 @@ func (r *Repo) Union(queries []*Query, roots []string) *Query {
 		args = append(rootArgs, args...)
 	}
 	first := queries[0]
-	return &Query{Orders: first.Orders, RankDef: first.RankDef, sql: text, args: args, built: true}
+	return &Query{Orders: first.Orders, RankDef: first.RankDef, GroupKinds: first.GroupKinds, aggregation: first.aggregation, measureKinds: first.measureKinds, sql: text, args: args, built: true}
 }
 
 // Arguments counts the statement arguments of a built query.

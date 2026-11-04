@@ -595,7 +595,8 @@ export default workflow({
 	}
 }
 
-// A workflow works out figures of a list through the generated client.
+// A workflow works out figures of a list and reads its compact items through
+// the generated client.
 func TestScriptsQueryAggregates(t *testing.T) {
 	r := run(t)
 	r.item(t, "First")
@@ -606,13 +607,12 @@ export default workflow({
   triggers: [{ type: "manual" }],
   async run(ctx) {
     const out = await ctx.api.v1.resources.byId("`+r.list+`").query.aggregates.post({
-      query: { groupBy: "$created_at" },
-      interval: "day" as never,
-      timeZone: "Europe/Madrid",
+      groups: [{ field: "$created_at", interval: "day" as never, timeZone: "Europe/Madrid" }],
       aggregates: [{ op: "max" as never, field: "$created_at", as: "latest" }],
     });
     const groups = out?.value ?? [];
-    return { groups: groups.length, count: groups[0]?.count, latest: plain(groups[0]?.values?.additionalData?.latest as never) !== null };
+    const compact = await ctx.api.v1.resources.byId("`+r.list+`").query.compact.all({ query: { sort: [{ field: "$name" }] } });
+    return { groups: groups.length, count: groups[0]?.count, latest: plain(groups[0]?.values?.additionalData?.latest as never) !== null, compact: compact.map((item) => item.name) };
   },
 });
 `)
@@ -620,8 +620,9 @@ export default workflow({
 	var got struct {
 		Groups, Count int
 		Latest        bool
+		Compact       []string
 	}
-	if json.Unmarshal(done.Result, &got) != nil || got.Groups != 1 || got.Count != 2 || !got.Latest {
-		t.Fatalf("aggregates from a script: %s", done.Result)
+	if json.Unmarshal(done.Result, &got) != nil || got.Groups != 1 || got.Count != 2 || !got.Latest || len(got.Compact) != 2 || got.Compact[0] != "First" {
+		t.Fatalf("aggregates and compact items from a script: %s", done.Result)
 	}
 }

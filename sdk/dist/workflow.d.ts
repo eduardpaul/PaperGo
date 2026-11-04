@@ -1008,7 +1008,7 @@ export interface MultipartEntry {
 }
 export interface Aggregate extends Parsable {
 	/**
-	 * The figure's name in values; op_field by default, without the $ of a built-in field.
+	 * The figure's name in values; op_field by default, without the $ of a built-in field, which this limit does not apply to.
 	 */
 	as?: string | null;
 	/**
@@ -1027,9 +1027,9 @@ export interface AggregateGroup extends Parsable {
 	 */
 	count?: number | null;
 	/**
-	 * The group's value of query.group_by: with an interval, the first day of the period as YYYY-MM-DD; otherwise as group queries show it. Null for the items without one, and for the single group of a query without group_by.
+	 * The group's key: one entry for each of the request's groups, in their order; empty without groups.
 	 */
-	key?: UntypedNode | null;
+	keys?: AggregateKey[] | null;
 	/**
 	 * Each figure by its name.
 	 */
@@ -1040,35 +1040,66 @@ export interface AggregateGroup extends Parsable {
  */
 export interface AggregateGroup_values extends AdditionalDataHolder, Parsable {
 }
+export interface AggregateGroupBy extends Parsable {
+	/**
+	 * An indexed scalar field, or a built-in one such as $created_at.
+	 */
+	field?: string | null;
+	/**
+	 * Groups a date or date-time field by the period holding its value: day, week from Monday, month or year.
+	 */
+	interval?: AggregateGroupBy_interval | null;
+	/**
+	 * With interval: the IANA time zone date-times are grouped in, such as Europe/Madrid. UTC by default; dates have no time zone.
+	 */
+	timeZone?: string | null;
+}
+export type AggregateGroupBy_interval = (typeof AggregateGroupBy_intervalObject)[keyof typeof AggregateGroupBy_intervalObject];
+export interface AggregateKey extends Parsable {
+	/**
+	 * The name of the term of a term or keywords field, when the caller can read the workspace's taxonomy.
+	 */
+	label?: string | null;
+	/**
+	 * The value of the group's field. With an interval, the first day of the period as YYYY-MM-DD. Otherwise integers, decimals, numbers and currency as exact strings, dates and date-times as items show them, booleans as booleans, and text, choice, person and term values as they are stored. Null for the items without one.
+	 */
+	value?: UntypedNode | null;
+}
+/**
+ * Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
+ */
 export interface AggregateRequest extends Parsable {
 	/**
 	 * The aggregates property
 	 */
 	aggregates?: Aggregate[] | null;
 	/**
-	 * Groups a date or date-time query.group_by by the period holding its value.
+	 * The fields a group's key holds, one group per combination of their values; without any, all items are one group.
 	 */
-	interval?: AggregateRequest_interval | null;
+	groups?: AggregateGroupBy[] | null;
 	/**
 	 * Collection query over visible surfaces. System fields: $id, $name, $keywords, $created_at, $created_by, $modified_at, $modified_by. Times are RFC3339 UTC and modification metadata follows the selected revision. Archive filters apply before paging, counts, and grouping. $archived_at and $archived_by are system fields usable in columns, filters, and sorting.
 	 */
 	query?: QuerySpec | null;
 	/**
+	 * Orders the groups by a figure's name, $count or a field of groups, as for the highest totals first. Their keys order groups that tie.
+	 */
+	sort?: SortSpec[] | null;
+	/**
 	 * The surface property
 	 */
 	surface?: AggregateRequest_surface | null;
-	/**
-	 * With interval: the IANA time zone date-times are grouped in, such as Europe/Madrid. UTC by default; dates have no time zone.
-	 */
-	timeZone?: string | null;
 }
-export type AggregateRequest_interval = (typeof AggregateRequest_intervalObject)[keyof typeof AggregateRequest_intervalObject];
 export type AggregateRequest_surface = (typeof AggregateRequest_surfaceObject)[keyof typeof AggregateRequest_surfaceObject];
 export interface AggregateResult extends Parsable {
 	/**
-	 * The search text matched more than 10,000 entries; the figures cover only the first 10,000 matches. Narrow the search.
+	 * Absolute continuation URL, or null on the final page. Repeat the request method and body.
 	 */
-	searchCapped?: boolean | null;
+	odataNextLink?: string | null;
+	/**
+	 * The groups of every page.
+	 */
+	total?: number | null;
 	/**
 	 * The value property
 	 */
@@ -1895,6 +1926,151 @@ export interface CommentThreadList extends AdditionalDataHolder, Parsable {
 }
 export type CommentThreadList_mode = (typeof CommentThreadList_modeObject)[keyof typeof CommentThreadList_modeObject];
 export type CommentThreadList_mode_from = (typeof CommentThreadList_mode_fromObject)[keyof typeof CommentThreadList_mode_fromObject];
+export interface CompactQueryResult extends Parsable {
+	/**
+	 * Absolute continuation URL, or null on the final page. Repeat the request method and body.
+	 */
+	odataNextLink?: string | null;
+	/**
+	 * The search text matched more than 10,000 entries; the page covers only the first 10,000 matches. Narrow the search.
+	 */
+	searchCapped?: boolean | null;
+	/**
+	 * The total property
+	 */
+	total?: number | null;
+	/**
+	 * More entries match than total_limit; total is the limit.
+	 */
+	totalCapped?: boolean | null;
+	/**
+	 * The value property
+	 */
+	value?: CompactResource[] | null;
+}
+/**
+ * An item as a compact query returns it: what tells it apart and what it holds, with the names a Resource gives those fields.
+ */
+export interface CompactResource extends Parsable {
+	/**
+	 * Present and true when the item is archived, with archived_at and archived_by.
+	 */
+	archived?: boolean | null;
+	/**
+	 * The archived_at property
+	 */
+	archivedAt?: Date | null;
+	/**
+	 * The archived_by property
+	 */
+	archivedBy?: string | null;
+	/**
+	 * Items and folders: a list type of the collection. Writes may name the catalog type it copies instead. Creation selects the default when omitted. PATCH changes type, keeps shared fields and removes fields absent from the destination type. Folder required fields and creation defaults do not apply.
+	 */
+	contentTypeId?: Guid | null;
+	/**
+	 * Present when select names $created_at.
+	 */
+	createdAt?: Date | null;
+	/**
+	 * Present when select names $created_by.
+	 */
+	createdBy?: string | null;
+	/**
+	 * Present when select names $file_type.
+	 */
+	file?: FileSummary | null;
+	/**
+	 * The id property
+	 */
+	id?: Guid | null;
+	/**
+	 * Shared folksonomy keywords. Responses contain term IDs. Writes accept existing IDs or trimmed labels; new labels create terms in the organization Keywords term set. Keywords fields use the same vocabulary.
+	 */
+	keywords?: string[] | null;
+	/**
+	 * The kind property
+	 */
+	kind?: CompactResource_kind | null;
+	/**
+	 * Item and folder titles contain at most 1024 UTF-16 units before trimming. Workspace and collection names allow 200 units. Library names also exclude path separators and control characters and are unique among live siblings ignoring case.
+	 */
+	name?: string | null;
+	/**
+	 * The parent_id property
+	 */
+	parentId?: Guid | null;
+	/**
+	 * Present when select names $modified_at.
+	 */
+	updatedAt?: Date | null;
+	/**
+	 * Present when select names $modified_by.
+	 */
+	updatedBy?: string | null;
+	/**
+	 * Custom fields on items and folders, validated against their attached collection content type. Folder fields are optional and receive no creation defaults. Folder edits are immediately visible; items follow publishing settings.
+	 */
+	values?: CompactResource_values | null;
+	/**
+	 * Optimistic resource lock version, independent of content revision_number and blob version.
+	 */
+	version?: number | null;
+	/**
+	 * The workspace_id property
+	 */
+	workspaceId?: Guid | null;
+}
+export type CompactResource_kind = (typeof CompactResource_kindObject)[keyof typeof CompactResource_kindObject];
+/**
+ * Custom fields on items and folders, validated against their attached collection content type. Folder fields are optional and receive no creation defaults. Folder edits are immediately visible; items follow publishing settings.
+ */
+export interface CompactResource_values extends AdditionalDataHolder, Parsable {
+}
+export interface CompactSmartFolderEntry extends AdditionalDataHolder, Parsable {
+	/**
+	 * The collection_id property
+	 */
+	collectionId?: Guid | null;
+	/**
+	 * The collection_kind property
+	 */
+	collectionKind?: CompactSmartFolderEntry_collection_kind | null;
+	/**
+	 * The collection_name property
+	 */
+	collectionName?: string | null;
+	/**
+	 * An item as a compact query returns it: what tells it apart and what it holds, with the names a Resource gives those fields.
+	 */
+	item?: CompactResource | null;
+	/**
+	 * The workspace_id property
+	 */
+	workspaceId?: Guid | null;
+}
+export type CompactSmartFolderEntry_collection_kind = (typeof CompactSmartFolderEntry_collection_kindObject)[keyof typeof CompactSmartFolderEntry_collection_kindObject];
+/**
+ * Authorized items sorted by name, created or modified time, with ID ties in the same direction. Default is modified descending. Cursors bind folder version, caller, surface, path, ordering, schemas and resolved references.
+ */
+export interface CompactSmartFolderResult extends AdditionalDataHolder, Parsable {
+	/**
+	 * Absolute continuation URL, or null on the final page. Repeat the request method and body.
+	 */
+	odataNextLink?: string | null;
+	/**
+	 * The total property
+	 */
+	total?: number | null;
+	/**
+	 * Preview counts stop at 10,000. True means total is a lower bound.
+	 */
+	totalCapped?: boolean | null;
+	/**
+	 * The value property
+	 */
+	value?: CompactSmartFolderEntry[] | null;
+}
 /**
  * A completion. Give item_id with text_id or image_blob_id, else workspace_id.
  */
@@ -2109,7 +2285,9 @@ export interface ContentTypeInput extends Parsable {
 }
 declare function createAggregateFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createAggregateGroup_valuesFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
+declare function createAggregateGroupByFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createAggregateGroupFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
+declare function createAggregateKeyFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createAggregateRequestFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createAggregateResultFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createApplyTemplateInputFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
@@ -2187,6 +2365,11 @@ declare function createCommentSettingsFromDiscriminatorValue(parseNode: ParseNod
 declare function createCommentSettingsInputFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createCommentThreadFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createCommentThreadListFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
+declare function createCompactQueryResultFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
+declare function createCompactResource_valuesFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
+declare function createCompactResourceFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
+declare function createCompactSmartFolderEntryFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
+declare function createCompactSmartFolderResultFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createCompletionRequest_output_schemaFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createCompletionRequestFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createComposePDFFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
@@ -2465,6 +2648,7 @@ declare function createSearchStatus_embeddingsFromDiscriminatorValue(parseNode: 
 declare function createSearchStatusFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createSearchSyncFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createSetWorkspaceMemberFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
+declare function createSmartFolderAggregateRequestFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createSmartFolderDefinitionFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createSmartFolderDropFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createSmartFolderEntryFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
@@ -2536,6 +2720,7 @@ declare function createUpdateResourceFromDiscriminatorValue(parseNode: ParseNode
 declare function createValidationRuleFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createValidationRuleMember1FromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createValidationRuleMember2FromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
+declare function createViewAggregateRequestFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createViewInputFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createViewQueryRequestFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
 declare function createViewSettingsFromDiscriminatorValue(parseNode: ParseNode | undefined): ((instance?: Parsable) => Record<string, (node: ParseNode) => void>);
@@ -2672,6 +2857,8 @@ export type DeltaPage_valueMember1_Removed_reason = (typeof DeltaPage_valueMembe
 declare function deserializeIntoAggregate(aggregate?: Partial<Aggregate> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoAggregateGroup(aggregateGroup?: Partial<AggregateGroup> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoAggregateGroup_values(aggregateGroup_values?: Partial<AggregateGroup_values> | undefined): Record<string, (node: ParseNode) => void>;
+declare function deserializeIntoAggregateGroupBy(aggregateGroupBy?: Partial<AggregateGroupBy> | undefined): Record<string, (node: ParseNode) => void>;
+declare function deserializeIntoAggregateKey(aggregateKey?: Partial<AggregateKey> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoAggregateRequest(aggregateRequest?: Partial<AggregateRequest> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoAggregateResult(aggregateResult?: Partial<AggregateResult> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoApplyTemplateInput(applyTemplateInput?: Partial<ApplyTemplateInput> | undefined): Record<string, (node: ParseNode) => void>;
@@ -2714,6 +2901,11 @@ declare function deserializeIntoCommentSettings_effective(commentSettings_effect
 declare function deserializeIntoCommentSettingsInput(commentSettingsInput?: Partial<CommentSettingsInput> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoCommentThread(commentThread?: Partial<CommentThread> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoCommentThreadList(commentThreadList?: Partial<CommentThreadList> | undefined): Record<string, (node: ParseNode) => void>;
+declare function deserializeIntoCompactQueryResult(compactQueryResult?: Partial<CompactQueryResult> | undefined): Record<string, (node: ParseNode) => void>;
+declare function deserializeIntoCompactResource(compactResource?: Partial<CompactResource> | undefined): Record<string, (node: ParseNode) => void>;
+declare function deserializeIntoCompactResource_values(compactResource_values?: Partial<CompactResource_values> | undefined): Record<string, (node: ParseNode) => void>;
+declare function deserializeIntoCompactSmartFolderEntry(compactSmartFolderEntry?: Partial<CompactSmartFolderEntry> | undefined): Record<string, (node: ParseNode) => void>;
+declare function deserializeIntoCompactSmartFolderResult(compactSmartFolderResult?: Partial<CompactSmartFolderResult> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoCompletionRequest(completionRequest?: Partial<CompletionRequest> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoCompletionRequest_output_schema(completionRequest_output_schema?: Partial<CompletionRequest_output_schema> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoComposePDF(composePDF?: Partial<ComposePDF> | undefined): Record<string, (node: ParseNode) => void>;
@@ -2841,6 +3033,7 @@ declare function deserializeIntoSearchStatus_embeddings(searchStatus_embeddings?
 declare function deserializeIntoSearchSync(searchSync?: Partial<SearchSync> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoSetWorkspaceMember(setWorkspaceMember?: Partial<SetWorkspaceMember> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoSmartFolder(smartFolder?: Partial<SmartFolder> | undefined): Record<string, (node: ParseNode) => void>;
+declare function deserializeIntoSmartFolderAggregateRequest(smartFolderAggregateRequest?: Partial<SmartFolderAggregateRequest> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoSmartFolderDefinition(smartFolderDefinition?: Partial<SmartFolderDefinition> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoSmartFolderDrop(smartFolderDrop?: Partial<SmartFolderDrop> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoSmartFolderEntry(smartFolderEntry?: Partial<SmartFolderEntry> | undefined): Record<string, (node: ParseNode) => void>;
@@ -2911,6 +3104,7 @@ declare function deserializeIntoUpdateResource_values(updateResource_values?: Pa
 declare function deserializeIntoValidationRule(validationRule?: Partial<ValidationRuleMember1 | ValidationRuleMember2> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoValidationRuleMember1(validationRuleMember1?: Partial<ValidationRuleMember1> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoValidationRuleMember2(validationRuleMember2?: Partial<ValidationRuleMember2> | undefined): Record<string, (node: ParseNode) => void>;
+declare function deserializeIntoViewAggregateRequest(viewAggregateRequest?: Partial<ViewAggregateRequest> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoViewInput(viewInput?: Partial<ViewInput> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoViewQueryRequest(viewQueryRequest?: Partial<ViewQueryRequest> | undefined): Record<string, (node: ParseNode) => void>;
 declare function deserializeIntoViewSettings(viewSettings?: Partial<ViewSettings> | undefined): Record<string, (node: ParseNode) => void>;
@@ -4365,10 +4559,6 @@ export interface QueryGroupPage extends Parsable {
  */
 export interface QueryRequest extends Parsable {
 	/**
-	 * compact returns each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords only: under half the size of a full item, for reading many items. full returns the whole resource.
-	 */
-	envelope?: QueryRequest_envelope | null;
-	/**
 	 * Count every authorized match before pagination. An exact total evaluates the whole result set, so it is returned only when requested.
 	 */
 	includeTotal?: boolean | null;
@@ -4377,7 +4567,7 @@ export interface QueryRequest extends Parsable {
 	 */
 	query?: QuerySpec | null;
 	/**
-	 * Selected custom fields and optional $keywords; system columns are accepted and the resource metadata envelope remains present. Omitted returns full values on direct queries and saved columns on views; an empty array returns no custom values. Selected fields need not be indexed. Cursors bind this selection.
+	 * Selected custom fields and optional $keywords. System columns are accepted: a full item always holds them, a compact one holds those selected. Omitted returns full values on direct queries and saved columns on views; an empty array returns no custom values. Selected fields need not be indexed. Cursors bind this selection.
 	 */
 	select?: string[] | null;
 	/**
@@ -4385,7 +4575,6 @@ export interface QueryRequest extends Parsable {
 	 */
 	surface?: QueryRequest_surface | null;
 }
-export type QueryRequest_envelope = (typeof QueryRequest_envelopeObject)[keyof typeof QueryRequest_envelopeObject];
 export type QueryRequest_surface = (typeof QueryRequest_surfaceObject)[keyof typeof QueryRequest_surfaceObject];
 export interface QueryResult extends Parsable {
 	/**
@@ -5273,6 +5462,8 @@ export interface SearchSync extends Parsable {
 declare function serializeAggregate(writer: SerializationWriter, aggregate?: Partial<Aggregate> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeAggregateGroup(writer: SerializationWriter, aggregateGroup?: Partial<AggregateGroup> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeAggregateGroup_values(writer: SerializationWriter, aggregateGroup_values?: Partial<AggregateGroup_values> | undefined | null, isSerializingDerivedType?: boolean): void;
+declare function serializeAggregateGroupBy(writer: SerializationWriter, aggregateGroupBy?: Partial<AggregateGroupBy> | undefined | null, isSerializingDerivedType?: boolean): void;
+declare function serializeAggregateKey(writer: SerializationWriter, aggregateKey?: Partial<AggregateKey> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeAggregateRequest(writer: SerializationWriter, aggregateRequest?: Partial<AggregateRequest> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeAggregateResult(writer: SerializationWriter, aggregateResult?: Partial<AggregateResult> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeApplyTemplateInput(writer: SerializationWriter, applyTemplateInput?: Partial<ApplyTemplateInput> | undefined | null, isSerializingDerivedType?: boolean): void;
@@ -5315,6 +5506,11 @@ declare function serializeCommentSettings_effective(writer: SerializationWriter,
 declare function serializeCommentSettingsInput(writer: SerializationWriter, commentSettingsInput?: Partial<CommentSettingsInput> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeCommentThread(writer: SerializationWriter, commentThread?: Partial<CommentThread> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeCommentThreadList(writer: SerializationWriter, commentThreadList?: Partial<CommentThreadList> | undefined | null, isSerializingDerivedType?: boolean): void;
+declare function serializeCompactQueryResult(writer: SerializationWriter, compactQueryResult?: Partial<CompactQueryResult> | undefined | null, isSerializingDerivedType?: boolean): void;
+declare function serializeCompactResource(writer: SerializationWriter, compactResource?: Partial<CompactResource> | undefined | null, isSerializingDerivedType?: boolean): void;
+declare function serializeCompactResource_values(writer: SerializationWriter, compactResource_values?: Partial<CompactResource_values> | undefined | null, isSerializingDerivedType?: boolean): void;
+declare function serializeCompactSmartFolderEntry(writer: SerializationWriter, compactSmartFolderEntry?: Partial<CompactSmartFolderEntry> | undefined | null, isSerializingDerivedType?: boolean): void;
+declare function serializeCompactSmartFolderResult(writer: SerializationWriter, compactSmartFolderResult?: Partial<CompactSmartFolderResult> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeCompletionRequest(writer: SerializationWriter, completionRequest?: Partial<CompletionRequest> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeCompletionRequest_output_schema(writer: SerializationWriter, completionRequest_output_schema?: Partial<CompletionRequest_output_schema> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeComposePDF(writer: SerializationWriter, composePDF?: Partial<ComposePDF> | undefined | null, isSerializingDerivedType?: boolean): void;
@@ -5442,6 +5638,7 @@ declare function serializeSearchStatus_embeddings(writer: SerializationWriter, s
 declare function serializeSearchSync(writer: SerializationWriter, searchSync?: Partial<SearchSync> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeSetWorkspaceMember(writer: SerializationWriter, setWorkspaceMember?: Partial<SetWorkspaceMember> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeSmartFolder(writer: SerializationWriter, smartFolder?: Partial<SmartFolder> | undefined | null, isSerializingDerivedType?: boolean): void;
+declare function serializeSmartFolderAggregateRequest(writer: SerializationWriter, smartFolderAggregateRequest?: Partial<SmartFolderAggregateRequest> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeSmartFolderDefinition(writer: SerializationWriter, smartFolderDefinition?: Partial<SmartFolderDefinition> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeSmartFolderDrop(writer: SerializationWriter, smartFolderDrop?: Partial<SmartFolderDrop> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeSmartFolderEntry(writer: SerializationWriter, smartFolderEntry?: Partial<SmartFolderEntry> | undefined | null, isSerializingDerivedType?: boolean): void;
@@ -5512,6 +5709,7 @@ declare function serializeUpdateResource_values(writer: SerializationWriter, upd
 declare function serializeValidationRule(writer: SerializationWriter, validationRule?: Partial<ValidationRuleMember1 | ValidationRuleMember2> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeValidationRuleMember1(writer: SerializationWriter, validationRuleMember1?: Partial<ValidationRuleMember1> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeValidationRuleMember2(writer: SerializationWriter, validationRuleMember2?: Partial<ValidationRuleMember2> | undefined | null, isSerializingDerivedType?: boolean): void;
+declare function serializeViewAggregateRequest(writer: SerializationWriter, viewAggregateRequest?: Partial<ViewAggregateRequest> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeViewInput(writer: SerializationWriter, viewInput?: Partial<ViewInput> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeViewQueryRequest(writer: SerializationWriter, viewQueryRequest?: Partial<ViewQueryRequest> | undefined | null, isSerializingDerivedType?: boolean): void;
 declare function serializeViewSettings(writer: SerializationWriter, viewSettings?: Partial<ViewSettings> | undefined | null, isSerializingDerivedType?: boolean): void;
@@ -5584,6 +5782,32 @@ export interface SmartFolder extends AdditionalDataHolder, Parsable {
 	 */
 	workspaceId?: Guid | null;
 }
+/**
+ * Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
+ */
+export interface SmartFolderAggregateRequest extends Parsable {
+	/**
+	 * The aggregates property
+	 */
+	aggregates?: Aggregate[] | null;
+	/**
+	 * The fields a group's key holds, one group per combination of their values; without any, all items are one group.
+	 */
+	groups?: AggregateGroupBy[] | null;
+	/**
+	 * One value per navigation level; null means missing. Numeric and boolean values use canonical strings, dates use YYYY or YYYY-MM when grouped.
+	 */
+	path?: string[] | null;
+	/**
+	 * Orders the groups by a figure's name, $count or a field of groups, as for the highest totals first. Their keys order groups that tie.
+	 */
+	sort?: SortSpec[] | null;
+	/**
+	 * The surface property
+	 */
+	surface?: SmartFolderAggregateRequest_surface | null;
+}
+export type SmartFolderAggregateRequest_surface = (typeof SmartFolderAggregateRequest_surfaceObject)[keyof typeof SmartFolderAggregateRequest_surfaceObject];
 /**
  * Live query across at most 100 readable collections. Name/key selectors ignore case. Terms include descendants and can occupy different term fields. Incompatible collection filters are skipped; none compatible returns validation. Metadata navigation is scalar and indexed, with compatible field types/scopes across collections. Physical folders have content types and optional custom fields, and participate in taxonomy/content-type selectors when include_folders is true. Equivalent collection predicates share one SQL branch; distinct shapes use UNION ALL. Queries are bounded to 30,000 SQL parameters. Mode is explicit. Results can be read directly without supplying a group path. $file_type filters the MIME type on the authorized visible revision.
  */
@@ -6945,6 +7169,32 @@ export interface ValidationRuleMember2 extends AdditionalDataHolder, Parsable {
 }
 export type ValidationRuleMember2_op = (typeof ValidationRuleMember2_opObject)[keyof typeof ValidationRuleMember2_opObject];
 /**
+ * Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
+ */
+export interface ViewAggregateRequest extends Parsable {
+	/**
+	 * The aggregates property
+	 */
+	aggregates?: Aggregate[] | null;
+	/**
+	 * The fields a group's key holds, one group per combination of their values; without any, all items are one group.
+	 */
+	groups?: AggregateGroupBy[] | null;
+	/**
+	 * Navigation views only, required there: lists the items at the terms opened in the view's fields, combined as the view's settings.match says.
+	 */
+	selected?: NavigationSelection[] | null;
+	/**
+	 * Orders the groups by a figure's name, $count or a field of groups, as for the highest totals first. Their keys order groups that tie.
+	 */
+	sort?: SortSpec[] | null;
+	/**
+	 * The surface property
+	 */
+	surface?: ViewAggregateRequest_surface | null;
+}
+export type ViewAggregateRequest_surface = (typeof ViewAggregateRequest_surfaceObject)[keyof typeof ViewAggregateRequest_surfaceObject];
+/**
  * Collection-managed saved view. Columns use field keys and $id/$name/$keywords; empty columns default to $name. PUT replaces the definition. Layout is a client hint; a navigation view browses the terms of each of settings.fields as folders (POST /v1/views/{id}/navigation) and lists the items at the opened terms through POST /v1/views/{id}/query with selected.
  */
 export interface ViewInput extends Parsable {
@@ -6979,15 +7229,11 @@ export type ViewInput_layout = (typeof ViewInput_layoutObject)[keyof typeof View
  */
 export interface ViewQueryRequest extends Parsable {
 	/**
-	 * compact returns each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords only: under half the size of a full item, for reading many items. full returns the whole resource.
-	 */
-	envelope?: ViewQueryRequest_envelope | null;
-	/**
 	 * Count every authorized match before pagination. An exact total evaluates the whole result set, so it is returned only when requested.
 	 */
 	includeTotal?: boolean | null;
 	/**
-	 * Selected custom fields and optional $keywords; system columns are accepted and the resource metadata envelope remains present. Omitted returns full values on direct queries and saved columns on views; an empty array returns no custom values. Selected fields need not be indexed. Cursors bind this selection.
+	 * Selected custom fields and optional $keywords. System columns are accepted: a full item always holds them, a compact one holds those selected. Omitted returns full values on direct queries and saved columns on views; an empty array returns no custom values. Selected fields need not be indexed. Cursors bind this selection.
 	 */
 	select?: string[] | null;
 	/**
@@ -7003,7 +7249,6 @@ export interface ViewQueryRequest extends Parsable {
 	 */
 	totalLimit?: number | null;
 }
-export type ViewQueryRequest_envelope = (typeof ViewQueryRequest_envelopeObject)[keyof typeof ViewQueryRequest_envelopeObject];
 export type ViewQueryRequest_surface = (typeof ViewQueryRequest_surfaceObject)[keyof typeof ViewQueryRequest_surfaceObject];
 /**
  * Layout settings. Only navigation views take settings; other layouts take an empty object.
@@ -7184,7 +7429,7 @@ declare const Aggregate_opObject: {
 	readonly Min: "min";
 	readonly Max: "max";
 };
-declare const AggregateRequest_intervalObject: {
+declare const AggregateGroupBy_intervalObject: {
 	readonly Day: "day";
 	readonly Week: "week";
 	readonly Month: "month";
@@ -7311,6 +7556,14 @@ declare const CommentThreadList_modeObject: {
 	readonly Off: "off";
 	readonly Collaborators: "collaborators";
 	readonly Readers: "readers";
+};
+declare const CompactResource_kindObject: {
+	readonly Folder: "folder";
+	readonly Item: "item";
+};
+declare const CompactSmartFolderEntry_collection_kindObject: {
+	readonly List: "list";
+	readonly Library: "library";
 };
 declare const CompletionRequest_executionObject: {
 	readonly Immediate: "immediate";
@@ -7516,10 +7769,6 @@ declare const Publication_actionObject: {
 	readonly Publish: "publish";
 	readonly Unpublish: "unpublish";
 };
-declare const QueryRequest_envelopeObject: {
-	readonly Full: "full";
-	readonly Compact: "compact";
-};
 declare const QueryRequest_surfaceObject: {
 	readonly Auto: "auto";
 	readonly Head: "head";
@@ -7615,6 +7864,11 @@ declare const SetWorkspaceMember_roleObject: {
 	readonly Owner: "owner";
 	readonly Member: "member";
 	readonly Visitor: "visitor";
+};
+declare const SmartFolderAggregateRequest_surfaceObject: {
+	readonly Auto: "auto";
+	readonly Head: "head";
+	readonly Published: "published";
 };
 declare const SmartFolderDefinition_collection_kindObject: {
 	readonly List: "list";
@@ -7756,16 +8010,17 @@ declare const ValidationRuleMember2_opObject: {
 	readonly Lt: "lt";
 	readonly Lte: "lte";
 };
+declare const ViewAggregateRequest_surfaceObject: {
+	readonly Auto: "auto";
+	readonly Head: "head";
+	readonly Published: "published";
+};
 declare const ViewInput_layoutObject: {
 	readonly Table: "table";
 	readonly Board: "board";
 	readonly Calendar: "calendar";
 	readonly Gallery: "gallery";
 	readonly Navigation: "navigation";
-};
-declare const ViewQueryRequest_envelopeObject: {
-	readonly Full: "full";
-	readonly Compact: "compact";
 };
 declare const ViewQueryRequest_surfaceObject: {
 	readonly Auto: "auto";
@@ -10507,8 +10762,15 @@ export interface PermissionsRequestBuilder extends BaseRequestBuilder<Permission
  */
 export interface AggregatesRequestBuilder extends BaseRequestBuilder<AggregatesRequestBuilder> {
 	/**
-	 * Figures of the items a collection query matches, as the caller may read them: count, sum, avg, min and max of indexed scalar fields, for all of them as one group with a null key, or in groups of query.group_by. A date or date-time group_by groups by interval (day, week from Monday, month or year), date-times in time_zone (UTC by default); a group's key is then the first day of its period, YYYY-MM-DD. Groups come in key order, items without a key last; query.sort is ignored. Counts are numbers. Sums, minimums and maximums of numeric fields are exact strings in the field's form; averages are exact strings rounded half to even to four digits beyond an integer or decimal field's scale, ten for number and currency fields. Minimums and maximums of dates and date-times are as items show them. A figure of a group whose items hold no value is null. Each matching item is read once; at most 10000 groups.
-	 * @param body The request body
+	 * Reads every page of the POST request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param body The request body, sent again for every page
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<AggregateResult["value"]>>}
+	 */
+	all(body: AggregateRequest, requestConfiguration?: RequestConfiguration<AggregatesRequestBuilderPostQueryParameters> | undefined): Promise<NonNullable<AggregateResult["value"]>>;
+	/**
+	 * Figures of the items a collection query matches, as the caller may read them: count, sum, avg, min and max of indexed scalar fields, for all of them as one group, which exists even when nothing matches, or in groups by up to four fields. A date or date-time field in groups groups by interval (day, week from Monday, month or year), date-times in time_zone (UTC by default); that key is then the first day of its period, YYYY-MM-DD. Groups come in the order of sort, then of their keys, missing values last in either direction; query.group_by and query.sort are refused. A page holds $top groups and @odata.nextLink continues it; each page works the figures out again, so a cursor keeps its place in the order, not the values seen. Counts are numbers. Sums, minimums and maximums of numeric fields are exact strings in the field's form; averages are exact strings rounded half to even to four digits beyond an integer or decimal field's scale, ten for number and currency fields. Minimums and maximums of dates and date-times are as items show them. A figure of a group whose items hold no value is null. The database reads each matching item once. A request is refused when more than 1000000 items match, there are more than 100000 groups, the group of items without a key included, or query.search matches more than 10000 entries, so that figures never cover part of the items.
+	 * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<AggregateResult>}
 	 * @throws {Problem} error when the service returns a 400 status code
@@ -10521,14 +10783,69 @@ export interface AggregatesRequestBuilder extends BaseRequestBuilder<AggregatesR
 	 * @throws {Problem} error when the service returns a 422 status code
 	 * @throws {Problem} error when the service returns a 500 status code
 	 */
-	post(body: AggregateRequest, requestConfiguration?: RequestConfiguration<object> | undefined): Promise<AggregateResult | undefined>;
+	post(body: AggregateRequest, requestConfiguration?: RequestConfiguration<AggregatesRequestBuilderPostQueryParameters> | undefined): Promise<AggregateResult | undefined>;
 	/**
-	 * Figures of the items a collection query matches, as the caller may read them: count, sum, avg, min and max of indexed scalar fields, for all of them as one group with a null key, or in groups of query.group_by. A date or date-time group_by groups by interval (day, week from Monday, month or year), date-times in time_zone (UTC by default); a group's key is then the first day of its period, YYYY-MM-DD. Groups come in key order, items without a key last; query.sort is ignored. Counts are numbers. Sums, minimums and maximums of numeric fields are exact strings in the field's form; averages are exact strings rounded half to even to four digits beyond an integer or decimal field's scale, ten for number and currency fields. Minimums and maximums of dates and date-times are as items show them. A figure of a group whose items hold no value is null. Each matching item is read once; at most 10000 groups.
-	 * @param body The request body
+	 * Figures of the items a collection query matches, as the caller may read them: count, sum, avg, min and max of indexed scalar fields, for all of them as one group, which exists even when nothing matches, or in groups by up to four fields. A date or date-time field in groups groups by interval (day, week from Monday, month or year), date-times in time_zone (UTC by default); that key is then the first day of its period, YYYY-MM-DD. Groups come in the order of sort, then of their keys, missing values last in either direction; query.group_by and query.sort are refused. A page holds $top groups and @odata.nextLink continues it; each page works the figures out again, so a cursor keeps its place in the order, not the values seen. Counts are numbers. Sums, minimums and maximums of numeric fields are exact strings in the field's form; averages are exact strings rounded half to even to four digits beyond an integer or decimal field's scale, ten for number and currency fields. Minimums and maximums of dates and date-times are as items show them. A figure of a group whose items hold no value is null. The database reads each matching item once. A request is refused when more than 1000000 items match, there are more than 100000 groups, the group of items without a key included, or query.search matches more than 10000 entries, so that figures never cover part of the items.
+	 * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
-	toPostRequestInformation(body: AggregateRequest, requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
+	toPostRequestInformation(body: AggregateRequest, requestConfiguration?: RequestConfiguration<AggregatesRequestBuilderPostQueryParameters> | undefined): RequestInformation;
+}
+/**
+ * Figures of the items a collection query matches, as the caller may read them: count, sum, avg, min and max of indexed scalar fields, for all of them as one group, which exists even when nothing matches, or in groups by up to four fields. A date or date-time field in groups groups by interval (day, week from Monday, month or year), date-times in time_zone (UTC by default); that key is then the first day of its period, YYYY-MM-DD. Groups come in the order of sort, then of their keys, missing values last in either direction; query.group_by and query.sort are refused. A page holds $top groups and @odata.nextLink continues it; each page works the figures out again, so a cursor keeps its place in the order, not the values seen. Counts are numbers. Sums, minimums and maximums of numeric fields are exact strings in the field's form; averages are exact strings rounded half to even to four digits beyond an integer or decimal field's scale, ten for number and currency fields. Minimums and maximums of dates and date-times are as items show them. A figure of a group whose items hold no value is null. The database reads each matching item once. A request is refused when more than 1000000 items match, there are more than 100000 groups, the group of items without a key included, or query.search matches more than 10000 entries, so that figures never cover part of the items.
+ */
+export interface AggregatesRequestBuilderPostQueryParameters {
+	/**
+	 * Continuation from @odata.nextLink; resend the same query body.
+	 */
+	skiptoken?: string;
+	top?: number;
+}
+/**
+ * Builds and executes requests for operations under /v1/resources/{id}/query/compact
+ */
+export interface CompactRequestBuilder extends BaseRequestBuilder<CompactRequestBuilder> {
+	/**
+	 * Reads every page of the POST request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param body The request body, sent again for every page
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<CompactQueryResult["value"]>>}
+	 */
+	all(body: QueryRequest, requestConfiguration?: RequestConfiguration<CompactRequestBuilderPostQueryParameters> | undefined): Promise<NonNullable<CompactQueryResult["value"]>>;
+	/**
+	 * The items a collection query matches as compact items. Each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords, its archived, archived_at and archived_by when archived, and the built-in columns select names, as the resource's created_at, created_by, updated_at, updated_by and file: under half the size of a full item, for clients that read many items. Items, order and cursors are those of the query. Queries include collection items and folders; folder metadata is live on both surfaces. Indexed filters, sorting, selection, totals and pagination apply to both.
+	 * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {Promise<CompactQueryResult>}
+	 * @throws {Problem} error when the service returns a 400 status code
+	 * @throws {Problem} error when the service returns a 401 status code
+	 * @throws {Problem} error when the service returns a 403 status code
+	 * @throws {Problem} error when the service returns a 404 status code
+	 * @throws {Problem} error when the service returns a 409 status code
+	 * @throws {Problem} error when the service returns a 413 status code
+	 * @throws {Problem} error when the service returns a 415 status code
+	 * @throws {Problem} error when the service returns a 422 status code
+	 * @throws {Problem} error when the service returns a 500 status code
+	 */
+	post(body: QueryRequest, requestConfiguration?: RequestConfiguration<CompactRequestBuilderPostQueryParameters> | undefined): Promise<CompactQueryResult | undefined>;
+	/**
+	 * The items a collection query matches as compact items. Each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords, its archived, archived_at and archived_by when archived, and the built-in columns select names, as the resource's created_at, created_by, updated_at, updated_by and file: under half the size of a full item, for clients that read many items. Items, order and cursors are those of the query. Queries include collection items and folders; folder metadata is live on both surfaces. Indexed filters, sorting, selection, totals and pagination apply to both.
+	 * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {RequestInformation}
+	 */
+	toPostRequestInformation(body: QueryRequest, requestConfiguration?: RequestConfiguration<CompactRequestBuilderPostQueryParameters> | undefined): RequestInformation;
+}
+/**
+ * The items a collection query matches as compact items. Each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords, its archived, archived_at and archived_by when archived, and the built-in columns select names, as the resource's created_at, created_by, updated_at, updated_by and file: under half the size of a full item, for clients that read many items. Items, order and cursors are those of the query. Queries include collection items and folders; folder metadata is live on both surfaces. Indexed filters, sorting, selection, totals and pagination apply to both.
+ */
+export interface CompactRequestBuilderPostQueryParameters {
+	/**
+	 * Continuation from @odata.nextLink; resend the same query body.
+	 */
+	skiptoken?: string;
+	top?: number;
 }
 /**
  * Builds and executes requests for operations under /v1/resources/{id}/query/groups
@@ -10590,6 +10907,10 @@ export interface QueryRequestBuilder extends BaseRequestBuilder<QueryRequestBuil
 	 * The aggregates property
 	 */
 	get aggregates(): AggregatesRequestBuilder;
+	/**
+	 * The compact property
+	 */
+	get compact(): CompactRequestBuilder;
 	/**
 	 * The groups property
 	 */
@@ -11654,6 +11975,68 @@ interface ItemsRequestBuilder$1 extends BaseRequestBuilder<ItemsRequestBuilder$1
 	 */
 	toPostRequestInformation(body: SmartFolderDrop, requestConfiguration?: RequestConfiguration<object> | undefined): RequestInformation;
 }
+interface AggregatesRequestBuilder$1 extends BaseRequestBuilder<AggregatesRequestBuilder$1> {
+	/**
+	 * Reads every page of the POST request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param body The request body, sent again for every page
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<AggregateResult["value"]>>}
+	 */
+	all(body: SmartFolderAggregateRequest, requestConfiguration?: RequestConfiguration<AggregatesRequestBuilderPostQueryParameters$1> | undefined): Promise<NonNullable<AggregateResult["value"]>>;
+	/**
+	 * Figures of the items at a path of a smart folder, folders aside, across its collections, as the caller may read them: count, sum, avg, min and max of indexed scalar fields, for all of them as one group, which exists even when nothing matches, or in groups by up to four fields. A date or date-time field in groups groups by interval (day, week from Monday, month or year), date-times in time_zone (UTC by default); that key is then the first day of its period, YYYY-MM-DD. Groups come in the order of sort, then of their keys, missing values last in either direction. A page holds $top groups and @odata.nextLink continues it; each page works the figures out again, so a cursor keeps its place in the order, not the values seen. Counts are numbers. Sums, minimums and maximums of numeric fields are exact strings in the field's form; averages are exact strings rounded half to even to four digits beyond an integer or decimal field's scale, ten for number and currency fields. Minimums and maximums of dates and date-times are as items show them. A figure of a group whose items hold no value is null. The database reads each matching item once. A request is refused when more than 1000000 items match or there are more than 100000 groups, the group of items without a key included, so that figures never cover part of the items. Fields are those every collection of the folder that has them holds indexed with one type and scale; other collections hold no values of them. Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
+	 * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {Promise<AggregateResult>}
+	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
+	 */
+	post(body: SmartFolderAggregateRequest, requestConfiguration?: RequestConfiguration<AggregatesRequestBuilderPostQueryParameters$1> | undefined): Promise<AggregateResult | undefined>;
+	/**
+	 * Figures of the items at a path of a smart folder, folders aside, across its collections, as the caller may read them: count, sum, avg, min and max of indexed scalar fields, for all of them as one group, which exists even when nothing matches, or in groups by up to four fields. A date or date-time field in groups groups by interval (day, week from Monday, month or year), date-times in time_zone (UTC by default); that key is then the first day of its period, YYYY-MM-DD. Groups come in the order of sort, then of their keys, missing values last in either direction. A page holds $top groups and @odata.nextLink continues it; each page works the figures out again, so a cursor keeps its place in the order, not the values seen. Counts are numbers. Sums, minimums and maximums of numeric fields are exact strings in the field's form; averages are exact strings rounded half to even to four digits beyond an integer or decimal field's scale, ten for number and currency fields. Minimums and maximums of dates and date-times are as items show them. A figure of a group whose items hold no value is null. The database reads each matching item once. A request is refused when more than 1000000 items match or there are more than 100000 groups, the group of items without a key included, so that figures never cover part of the items. Fields are those every collection of the folder that has them holds indexed with one type and scale; other collections hold no values of them. Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
+	 * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {RequestInformation}
+	 */
+	toPostRequestInformation(body: SmartFolderAggregateRequest, requestConfiguration?: RequestConfiguration<AggregatesRequestBuilderPostQueryParameters$1> | undefined): RequestInformation;
+}
+interface AggregatesRequestBuilderPostQueryParameters$1 {
+	/**
+	 * Continuation from @odata.nextLink; resend the same query body.
+	 */
+	skiptoken?: string;
+	top?: number;
+}
+interface CompactRequestBuilder$1 extends BaseRequestBuilder<CompactRequestBuilder$1> {
+	/**
+	 * Reads every page of the POST request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param body The request body, sent again for every page
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<CompactSmartFolderResult["value"]>>}
+	 */
+	all(body: SmartFolderQueryRequest, requestConfiguration?: RequestConfiguration<CompactRequestBuilderPostQueryParameters$1> | undefined): Promise<NonNullable<CompactSmartFolderResult["value"]>>;
+	/**
+	 * The items of a smart folder as compact items. Each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords, its archived, archived_at and archived_by when archived, and the built-in columns select names, as the resource's created_at, created_by, updated_at, updated_by and file: under half the size of a full item, for clients that read many items. Items, order and cursors are those of the query. Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
+	 * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink. An empty path returns all matching items even when group_by is configured.
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {Promise<CompactSmartFolderResult>}
+	 * @throws {Problem} error when the service returns a 4XX or 5XX status code
+	 */
+	post(body: SmartFolderQueryRequest, requestConfiguration?: RequestConfiguration<CompactRequestBuilderPostQueryParameters$1> | undefined): Promise<CompactSmartFolderResult | undefined>;
+	/**
+	 * The items of a smart folder as compact items. Each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords, its archived, archived_at and archived_by when archived, and the built-in columns select names, as the resource's created_at, created_by, updated_at, updated_by and file: under half the size of a full item, for clients that read many items. Items, order and cursors are those of the query. Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
+	 * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink. An empty path returns all matching items even when group_by is configured.
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {RequestInformation}
+	 */
+	toPostRequestInformation(body: SmartFolderQueryRequest, requestConfiguration?: RequestConfiguration<CompactRequestBuilderPostQueryParameters$1> | undefined): RequestInformation;
+}
+interface CompactRequestBuilderPostQueryParameters$1 {
+	/**
+	 * Continuation from @odata.nextLink; resend the same query body.
+	 */
+	skiptoken?: string;
+	top?: number;
+}
 interface GroupsRequestBuilder$1 extends BaseRequestBuilder<GroupsRequestBuilder$1> {
 	/**
 	 * Reads every page of the POST request, following @odata.nextLink, and returns their values in order. Each page is one request.
@@ -11693,6 +12076,14 @@ interface QueryRequestBuilder$1 extends BaseRequestBuilder<QueryRequestBuilder$1
 	 * @returns {Promise<NonNullable<SmartFolderResult["value"]>>}
 	 */
 	all(body: SmartFolderQueryRequest, requestConfiguration?: RequestConfiguration<QueryRequestBuilderPostQueryParameters$1> | undefined): Promise<NonNullable<SmartFolderResult["value"]>>;
+	/**
+	 * The aggregates property
+	 */
+	get aggregates(): AggregatesRequestBuilder$1;
+	/**
+	 * The compact property
+	 */
+	get compact(): CompactRequestBuilder$1;
 	/**
 	 * The groups property
 	 */
@@ -12846,6 +13237,84 @@ export interface NavigationRequestBuilderPostQueryParameters {
 	skiptoken?: string;
 	top?: number;
 }
+interface AggregatesRequestBuilder$2 extends BaseRequestBuilder<AggregatesRequestBuilder$2> {
+	/**
+	 * Reads every page of the POST request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param body The request body, sent again for every page
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<AggregateResult["value"]>>}
+	 */
+	all(body: ViewAggregateRequest, requestConfiguration?: RequestConfiguration<AggregatesRequestBuilderPostQueryParameters$2> | undefined): Promise<NonNullable<AggregateResult["value"]>>;
+	/**
+	 * Figures of the items a saved view lists, by its filters whatever its grouping and sort, so they follow the view when it changes, as the caller may read them: count, sum, avg, min and max of indexed scalar fields, for all of them as one group, which exists even when nothing matches, or in groups by up to four fields. A date or date-time field in groups groups by interval (day, week from Monday, month or year), date-times in time_zone (UTC by default); that key is then the first day of its period, YYYY-MM-DD. Groups come in the order of sort, then of their keys, missing values last in either direction. A page holds $top groups and @odata.nextLink continues it; each page works the figures out again, so a cursor keeps its place in the order, not the values seen. Counts are numbers. Sums, minimums and maximums of numeric fields are exact strings in the field's form; averages are exact strings rounded half to even to four digits beyond an integer or decimal field's scale, ten for number and currency fields. Minimums and maximums of dates and date-times are as items show them. A figure of a group whose items hold no value is null. The database reads each matching item once. A request is refused when more than 1000000 items match, there are more than 100000 groups, the group of items without a key included, or the view's search matches more than 10000 entries, so that figures never cover part of the items.
+	 * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {Promise<AggregateResult>}
+	 * @throws {Problem} error when the service returns a 400 status code
+	 * @throws {Problem} error when the service returns a 401 status code
+	 * @throws {Problem} error when the service returns a 403 status code
+	 * @throws {Problem} error when the service returns a 404 status code
+	 * @throws {Problem} error when the service returns a 409 status code
+	 * @throws {Problem} error when the service returns a 413 status code
+	 * @throws {Problem} error when the service returns a 415 status code
+	 * @throws {Problem} error when the service returns a 422 status code
+	 * @throws {Problem} error when the service returns a 500 status code
+	 */
+	post(body: ViewAggregateRequest, requestConfiguration?: RequestConfiguration<AggregatesRequestBuilderPostQueryParameters$2> | undefined): Promise<AggregateResult | undefined>;
+	/**
+	 * Figures of the items a saved view lists, by its filters whatever its grouping and sort, so they follow the view when it changes, as the caller may read them: count, sum, avg, min and max of indexed scalar fields, for all of them as one group, which exists even when nothing matches, or in groups by up to four fields. A date or date-time field in groups groups by interval (day, week from Monday, month or year), date-times in time_zone (UTC by default); that key is then the first day of its period, YYYY-MM-DD. Groups come in the order of sort, then of their keys, missing values last in either direction. A page holds $top groups and @odata.nextLink continues it; each page works the figures out again, so a cursor keeps its place in the order, not the values seen. Counts are numbers. Sums, minimums and maximums of numeric fields are exact strings in the field's form; averages are exact strings rounded half to even to four digits beyond an integer or decimal field's scale, ten for number and currency fields. Minimums and maximums of dates and date-times are as items show them. A figure of a group whose items hold no value is null. The database reads each matching item once. A request is refused when more than 1000000 items match, there are more than 100000 groups, the group of items without a key included, or the view's search matches more than 10000 entries, so that figures never cover part of the items.
+	 * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {RequestInformation}
+	 */
+	toPostRequestInformation(body: ViewAggregateRequest, requestConfiguration?: RequestConfiguration<AggregatesRequestBuilderPostQueryParameters$2> | undefined): RequestInformation;
+}
+interface AggregatesRequestBuilderPostQueryParameters$2 {
+	/**
+	 * Continuation from @odata.nextLink; resend the same query body.
+	 */
+	skiptoken?: string;
+	top?: number;
+}
+interface CompactRequestBuilder$2 extends BaseRequestBuilder<CompactRequestBuilder$2> {
+	/**
+	 * Reads every page of the POST request, following @odata.nextLink, and returns their values in order. Each page is one request.
+	 * @param body The request body, sent again for every page
+	 * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+	 * @returns {Promise<NonNullable<CompactQueryResult["value"]>>}
+	 */
+	all(body: ViewQueryRequest, requestConfiguration?: RequestConfiguration<CompactRequestBuilderPostQueryParameters$2> | undefined): Promise<NonNullable<CompactQueryResult["value"]>>;
+	/**
+	 * The items a saved view lists as compact items. Each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords, its archived, archived_at and archived_by when archived, and the built-in columns select names, as the resource's created_at, created_by, updated_at, updated_by and file: under half the size of a full item, for clients that read many items. Items, order and cursors are those of the query. Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
+	 * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {Promise<CompactQueryResult>}
+	 * @throws {Problem} error when the service returns a 400 status code
+	 * @throws {Problem} error when the service returns a 401 status code
+	 * @throws {Problem} error when the service returns a 403 status code
+	 * @throws {Problem} error when the service returns a 404 status code
+	 * @throws {Problem} error when the service returns a 409 status code
+	 * @throws {Problem} error when the service returns a 413 status code
+	 * @throws {Problem} error when the service returns a 415 status code
+	 * @throws {Problem} error when the service returns a 422 status code
+	 * @throws {Problem} error when the service returns a 500 status code
+	 */
+	post(body: ViewQueryRequest, requestConfiguration?: RequestConfiguration<CompactRequestBuilderPostQueryParameters$2> | undefined): Promise<CompactQueryResult | undefined>;
+	/**
+	 * The items a saved view lists as compact items. Each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords, its archived, archived_at and archived_by when archived, and the built-in columns select names, as the resource's created_at, created_by, updated_at, updated_by and file: under half the size of a full item, for clients that read many items. Items, order and cursors are those of the query. Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.
+	 * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
+	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+	 * @returns {RequestInformation}
+	 */
+	toPostRequestInformation(body: ViewQueryRequest, requestConfiguration?: RequestConfiguration<CompactRequestBuilderPostQueryParameters$2> | undefined): RequestInformation;
+}
+interface CompactRequestBuilderPostQueryParameters$2 {
+	/**
+	 * Continuation from @odata.nextLink; resend the same query body.
+	 */
+	skiptoken?: string;
+	top?: number;
+}
 interface GroupsRequestBuilder$2 extends BaseRequestBuilder<GroupsRequestBuilder$2> {
 	/**
 	 * Reads every page of the POST request, following @odata.nextLink, and returns their values in order. Each page is one request.
@@ -12893,6 +13362,14 @@ interface QueryRequestBuilder$2 extends BaseRequestBuilder<QueryRequestBuilder$2
 	 * @returns {Promise<NonNullable<QueryResult["value"]>>}
 	 */
 	all(body: ViewQueryRequest, requestConfiguration?: RequestConfiguration<QueryRequestBuilderPostQueryParameters$2> | undefined): Promise<NonNullable<QueryResult["value"]>>;
+	/**
+	 * The aggregates property
+	 */
+	get aggregates(): AggregatesRequestBuilder$2;
+	/**
+	 * The compact property
+	 */
+	get compact(): CompactRequestBuilder$2;
 	/**
 	 * The groups property
 	 */
@@ -14220,7 +14697,7 @@ export declare function __start(definition: unknown, run: string): Promise<strin
 export declare function __manifest(definition: unknown, params: string): string;
 
 declare namespace models {
-	export { Aggregate, AggregateGroup, AggregateGroup_values, AggregateRequest, AggregateRequest_interval, AggregateRequest_intervalObject, AggregateRequest_surface, AggregateRequest_surfaceObject, AggregateResult, Aggregate_op, Aggregate_opObject, ApplyTemplateInput, ArchiveEntry, ArchiveEntry_duplicate_policy, ArchiveEntry_duplicate_policyObject, ArchiveEntry_kind, ArchiveEntry_kindObject, ArchiveEntry_system_key, ArchiveEntry_system_keyObject, ArchiveEntry_values, ArchiveEntry_versioning, ArchiveEntry_versioningObject, ArchiveSelection, ArchiveSelectionObject, Artifact, Artifact_metrics, Artifact_sources, AttachContentTypeInput, AuditEvent, AuditEvent_credential, AuditEvent_details, AuditPage, Blob, Blob_content_type, Blob_content_typeObject, BulkCreate, BulkCreateOperation, BulkCreate_values, BulkLifecycleOperation, BulkLifecycleOperation_action, BulkLifecycleOperation_actionObject, BulkOperation, BulkRequest, BulkResponse, BulkResult, BulkResult_action, BulkResult_actionObject, BulkUpdate, BulkUpdateOperation, BulkUpdate_values, CalendarOccurrence, CalendarQuery, CalendarQuery_surface, CalendarQuery_surfaceObject, ChunkText, ChunkText_chunker, ChunkText_chunkerObject, ChunkText_kind, ChunkText_kindObject, CollectionTemplate, CollectionTemplate_duplicate_policy, CollectionTemplate_duplicate_policyObject, CollectionTemplate_kind, CollectionTemplate_kindObject, CollectionTemplate_versioning, CollectionTemplate_versioningObject, Comment, CommentAnchor, CommentCounts, CommentCountsRequest, CommentCounts_counts, CommentCreate, CommentEdit, CommentPerson, CommentSettings, CommentSettingsInput, CommentSettingsInput_mode, CommentSettingsInput_modeObject, CommentSettings_effective, CommentSettings_effective_from, CommentSettings_effective_fromObject, CommentSettings_effective_mode, CommentSettings_effective_modeObject, CommentSettings_mode, CommentSettings_modeObject, CommentThread, CommentThreadList, CommentThreadList_mode, CommentThreadList_modeObject, CommentThreadList_mode_from, CommentThreadList_mode_fromObject, Comment_source, Comment_sourceObject, CompletionRequest, CompletionRequest_execution, CompletionRequest_executionObject, CompletionRequest_output_schema, ComposePDF, ContentType, ContentTypeInput, ContentType_effective, CreateCatalogField, CreateCatalogField_type, CreateCatalogField_typeObject, CreateField, CreateField_type, CreateField_typeObject, CreateListIntegration, CreateListIntegration_configuration, CreateRelationship, CreateRelationship_metadata, CreateResource, CreateResource_duplicate_policy, CreateResource_duplicate_policyObject, CreateResource_kind, CreateResource_kindObject, CreateResource_values, CreateResource_versioning, CreateResource_versioningObject, DecisionRequest, DecisionRequest_context, DecisionRequest_data, DecisionRequest_questions, DecisionRequest_questions_options, DecisionRequest_questions_type, DecisionRequest_questions_typeObject, DeletedResource, DeltaPage, DeltaPage_value, DeltaPage_valueMember1, DeltaPage_valueMember1_Removed, DeltaPage_valueMember1_Removed_reason, DeltaPage_valueMember1_Removed_reasonObject, DocumentMetadata, DocumentMetadata_values, DocumentUpload, DuplicateDocument, FieldDefinition, FieldDefinition_index_status, FieldDefinition_index_statusObject, FieldDefinition_type, FieldDefinition_typeObject, FieldOptions, FieldOptions_search_weight, FieldOptions_search_weightObject, FieldSetting, FileSummary, FileVersion, FileVersion_availability, FileVersion_availabilityObject, FilterExpr, FilterExpr_op, FilterExpr_opObject, FilterExpr_value_ref, FilterExpr_value_refObject, FilteredBulkUpdate, FilteredBulkUpdate_values, GenerationChunk, GenerationChunkPage, GenerationEnrichments, GenerationEnrichments_enrichments, ItemIntegration, ItemRevision, ItemRevision_payload, ItemText, ItemText_next, ItemText_pages, KeywordCount, KeywordCountList, KeywordInput, ListIntegration, ListIntegration_kind, ListIntegration_kindObject, ListTypeInput, ListView, ListViewPage, ListView_system_key, ListView_system_keyObject, LocatedItem, MentionCandidateList, MentionCandidateList_value, MergeTerm, MoveItem, MoveTerm, NavigationFieldSetting, NavigationNode, NavigationPage, NavigationRequest, NavigationRequest_surface, NavigationRequest_surfaceObject, NavigationSelection, NewMenuInput, NotificationSend, NotificationSendResult, Operation, OperationFailure, OperationPage, Operation_error_code, Operation_error_codeObject, Operation_status, Operation_statusObject, Operation_waiting, Operation_waitingObject, PageList, PageSize, Permissions, Permissions_effective_grants, Permissions_effective_grants_action, Permissions_effective_grants_actionObject, Permissions_effective_grants_effect, Permissions_effective_grants_effectObject, Permissions_effective_grants_principal_type, Permissions_effective_grants_principal_typeObject, Permissions_grants, Permissions_grants_action, Permissions_grants_actionObject, Permissions_grants_effect, Permissions_grants_effectObject, Permissions_grants_principal_type, Permissions_grants_principal_typeObject, PortableSmartFolder, PortableSmartFolderDefinition, PortableSmartFolderDefinition_collection_kind, PortableSmartFolderDefinition_collection_kindObject, PortableSmartFolderDefinition_mode, PortableSmartFolderDefinition_modeObject, PortableSmartFolderDefinition_term_match, PortableSmartFolderDefinition_term_matchObject, PortableTerm, PortableTermGroup, PortableTermSet, PortableTerm_labels, Problem, Problem_existing_item, PromoteKeyword, PromoteStagedFile, PromotedFile, Publication, Publication_action, Publication_actionObject, Publication_snapshot, QueryGroup, QueryGroupPage, QueryRequest, QueryRequest_envelope, QueryRequest_envelopeObject, QueryRequest_surface, QueryRequest_surfaceObject, QueryResult, QuerySpec, ReadText, ReadText_ocr, ReadText_ocrObject, ReclaimFileVersion, ReclaimedFileVersion, RecycleBinPage, Relationship, RelationshipEndpoint, RelationshipEndpointPage, RelationshipNeighborhood, RelationshipType, RelationshipTypeInput, RelationshipTypePage, RelationshipType_attributes, RelationshipView, Relationship_metadata, Resource, ResourceAccess, ResourceAccess_access, ResourceAccess_accessObject, Resource_duplicate_policy, Resource_duplicate_policyObject, Resource_kind, Resource_kindObject, Resource_system_key, Resource_system_keyObject, Resource_values, Resource_versioning, Resource_versioningObject, SchemaRevision, SchemaRevision_definition, SchemaRevision_definition_fields, SchemaRevision_definition_fields_type, SchemaRevision_definition_fields_typeObject, SchemaTemplate, SchemaTemplatePage, SchemaTemplate_definition, SearchFacetValue, SearchFacets, SearchField, SearchField_operators, SearchField_operatorsObject, SearchHit, SearchHit_kind, SearchHit_kindObject, SearchHit_matched_by, SearchHit_matched_byObject, SearchHit_surface, SearchHit_surfaceObject, SearchPage, SearchPage_mode, SearchPage_modeObject, SearchRequest, SearchRequest_kind, SearchRequest_kindObject, SearchRequest_mode, SearchRequest_modeObject, SearchRequest_surface, SearchRequest_surfaceObject, SearchStatus, SearchStatus_embeddings, SearchSync, SetWorkspaceMember, SetWorkspaceMember_role, SetWorkspaceMember_roleObject, SmartFolder, SmartFolderDefinition, SmartFolderDefinition_collection_kind, SmartFolderDefinition_collection_kindObject, SmartFolderDefinition_mode, SmartFolderDefinition_modeObject, SmartFolderDefinition_term_match, SmartFolderDefinition_term_matchObject, SmartFolderDrop, SmartFolderEntry, SmartFolderEntry_collection_kind, SmartFolderEntry_collection_kindObject, SmartFolderGroup, SmartFolderGroupBy, SmartFolderGroupBy_by, SmartFolderGroupBy_byObject, SmartFolderGroupsResult, SmartFolderImportResult, SmartFolderInput, SmartFolderPackage, SmartFolderPage, SmartFolderPreview, SmartFolderQueryRequest, SmartFolderQueryRequest_sort, SmartFolderQueryRequest_sort_direction, SmartFolderQueryRequest_sort_directionObject, SmartFolderQueryRequest_sort_field, SmartFolderQueryRequest_sort_fieldObject, SmartFolderQueryRequest_surface, SmartFolderQueryRequest_surfaceObject, SmartFolderResult, SmartFolderTermRef, SmartFolderUnclassify, SortSpec, SortSpec_direction, SortSpec_directionObject, StagedArtifact, StagedFile, StagedFile_metrics, StagedFile_sources, StagedFile_state, StagedFile_stateObject, Task, TaskAnswer, TaskAnswer_input, TaskCancel, TaskCreate, TaskCreate_completion, TaskCreate_completionObject, TaskCreate_kind, TaskCreate_kindObject, TaskCreate_priority, TaskCreate_priorityObject, TaskCreate_review, TaskCreate_review_type, TaskCreate_review_typeObject, TaskCreate_values, TaskList, TaskOutcome, TaskOutcome_comment, TaskOutcome_commentObject, TaskOutcome_style, TaskOutcome_styleObject, TaskReassign, TaskResponseInput, TaskResponseInput_input, TaskUpdate, TaskUpdate_priority, TaskUpdate_priorityObject, TaskUpdate_values, Task_completion, Task_completionObject, Task_input, Task_kind, Task_kindObject, Task_priority, Task_priorityObject, Task_review, Task_review_type, Task_review_typeObject, Task_source, Task_sourceObject, Task_status, Task_statusObject, Task_values, TaxonomyDecisionRequest, TaxonomyDecisionRequest_context, TaxonomyDecisionRequest_data, TaxonomyDecisionRequest_description_overrides, TaxonomyDecisionRequest_selection, TaxonomyDecisionRequest_selectionObject, TaxonomyImportResult, TaxonomyPackage, TemplateField, TemplateField_type, TemplateField_typeObject, TemplateInput, Term, TermEntries, TermGroup, TermGroupInput, TermGroupPage, TermImportResult, TermInput, TermInput_labels, TermList, TermPage, TermSet, TermSetInput, TermSetPage, Term_labels, UpdateField, UpdateListIntegration, UpdateListIntegration_configuration, UpdateRelationship, UpdateRelationship_metadata, UpdateResource, UpdateResource_duplicate_policy, UpdateResource_duplicate_policyObject, UpdateResource_values, UpdateResource_versioning, UpdateResource_versioningObject, ValidationRule, ValidationRuleMember1, ValidationRuleMember2, ValidationRuleMember2_op, ValidationRuleMember2_opObject, ViewInput, ViewInput_layout, ViewInput_layoutObject, ViewQueryRequest, ViewQueryRequest_envelope, ViewQueryRequest_envelopeObject, ViewQueryRequest_surface, ViewQueryRequest_surfaceObject, ViewSettings, ViewSettings_match, ViewSettings_matchObject, WorkflowCall, WorkflowCall_input, WorkflowCalls, WorkflowForm, WorkflowStarted, WorkspaceKeywordCount, WorkspaceKeywordCountPage, WorkspaceMember, WorkspaceMember_role, WorkspaceMember_roleObject, WorkspaceRelationshipPage, WorkspaceRelationshipType, WorkspaceRelationshipTypePage, WorkspaceRelationshipView, createAggregateFromDiscriminatorValue, createAggregateGroupFromDiscriminatorValue, createAggregateGroup_valuesFromDiscriminatorValue, createAggregateRequestFromDiscriminatorValue, createAggregateResultFromDiscriminatorValue, createApplyTemplateInputFromDiscriminatorValue, createArchiveEntryFromDiscriminatorValue, createArchiveEntry_valuesFromDiscriminatorValue, createArtifactFromDiscriminatorValue, createArtifact_metricsFromDiscriminatorValue, createArtifact_sourcesFromDiscriminatorValue, createAttachContentTypeInputFromDiscriminatorValue, createAuditEventFromDiscriminatorValue, createAuditEvent_credentialFromDiscriminatorValue, createAuditEvent_detailsFromDiscriminatorValue, createAuditPageFromDiscriminatorValue, createBlobFromDiscriminatorValue, createBulkCreateFromDiscriminatorValue, createBulkCreateOperationFromDiscriminatorValue, createBulkCreate_valuesFromDiscriminatorValue, createBulkLifecycleOperationFromDiscriminatorValue, createBulkOperationFromDiscriminatorValue, createBulkRequestFromDiscriminatorValue, createBulkResponseFromDiscriminatorValue, createBulkResultFromDiscriminatorValue, createBulkUpdateFromDiscriminatorValue, createBulkUpdateOperationFromDiscriminatorValue, createBulkUpdate_valuesFromDiscriminatorValue, createCalendarOccurrenceFromDiscriminatorValue, createCalendarQueryFromDiscriminatorValue, createChunkTextFromDiscriminatorValue, createCollectionTemplateFromDiscriminatorValue, createCommentAnchorFromDiscriminatorValue, createCommentCountsFromDiscriminatorValue, createCommentCountsRequestFromDiscriminatorValue, createCommentCounts_countsFromDiscriminatorValue, createCommentCreateFromDiscriminatorValue, createCommentEditFromDiscriminatorValue, createCommentFromDiscriminatorValue, createCommentPersonFromDiscriminatorValue, createCommentSettingsFromDiscriminatorValue, createCommentSettingsInputFromDiscriminatorValue, createCommentSettings_effectiveFromDiscriminatorValue, createCommentThreadFromDiscriminatorValue, createCommentThreadListFromDiscriminatorValue, createCompletionRequestFromDiscriminatorValue, createCompletionRequest_output_schemaFromDiscriminatorValue, createComposePDFFromDiscriminatorValue, createContentTypeFromDiscriminatorValue, createContentTypeInputFromDiscriminatorValue, createContentType_effectiveFromDiscriminatorValue, createCreateCatalogFieldFromDiscriminatorValue, createCreateFieldFromDiscriminatorValue, createCreateListIntegrationFromDiscriminatorValue, createCreateListIntegration_configurationFromDiscriminatorValue, createCreateRelationshipFromDiscriminatorValue, createCreateRelationship_metadataFromDiscriminatorValue, createCreateResourceFromDiscriminatorValue, createCreateResource_valuesFromDiscriminatorValue, createDecisionRequestFromDiscriminatorValue, createDecisionRequest_contextFromDiscriminatorValue, createDecisionRequest_dataFromDiscriminatorValue, createDecisionRequest_questionsFromDiscriminatorValue, createDecisionRequest_questions_optionsFromDiscriminatorValue, createDeletedResourceFromDiscriminatorValue, createDeltaPageFromDiscriminatorValue, createDeltaPage_valueFromDiscriminatorValue, createDeltaPage_valueMember1FromDiscriminatorValue, createDeltaPage_valueMember1_RemovedFromDiscriminatorValue, createDocumentMetadataFromDiscriminatorValue, createDocumentMetadata_valuesFromDiscriminatorValue, createDocumentUploadFromDiscriminatorValue, createDuplicateDocumentFromDiscriminatorValue, createFieldDefinitionFromDiscriminatorValue, createFieldOptionsFromDiscriminatorValue, createFieldSettingFromDiscriminatorValue, createFileSummaryFromDiscriminatorValue, createFileVersionFromDiscriminatorValue, createFilterExprFromDiscriminatorValue, createFilteredBulkUpdateFromDiscriminatorValue, createFilteredBulkUpdate_valuesFromDiscriminatorValue, createGenerationChunkFromDiscriminatorValue, createGenerationChunkPageFromDiscriminatorValue, createGenerationEnrichmentsFromDiscriminatorValue, createGenerationEnrichments_enrichmentsFromDiscriminatorValue, createItemIntegrationFromDiscriminatorValue, createItemRevisionFromDiscriminatorValue, createItemRevision_payloadFromDiscriminatorValue, createItemTextFromDiscriminatorValue, createItemText_nextFromDiscriminatorValue, createItemText_pagesFromDiscriminatorValue, createKeywordCountFromDiscriminatorValue, createKeywordCountListFromDiscriminatorValue, createKeywordInputFromDiscriminatorValue, createListIntegrationFromDiscriminatorValue, createListTypeInputFromDiscriminatorValue, createListViewFromDiscriminatorValue, createListViewPageFromDiscriminatorValue, createLocatedItemFromDiscriminatorValue, createMentionCandidateListFromDiscriminatorValue, createMentionCandidateList_valueFromDiscriminatorValue, createMergeTermFromDiscriminatorValue, createMoveItemFromDiscriminatorValue, createMoveTermFromDiscriminatorValue, createNavigationFieldSettingFromDiscriminatorValue, createNavigationNodeFromDiscriminatorValue, createNavigationPageFromDiscriminatorValue, createNavigationRequestFromDiscriminatorValue, createNavigationSelectionFromDiscriminatorValue, createNewMenuInputFromDiscriminatorValue, createNotificationSendFromDiscriminatorValue, createNotificationSendResultFromDiscriminatorValue, createOperationFailureFromDiscriminatorValue, createOperationFromDiscriminatorValue, createOperationPageFromDiscriminatorValue, createPageListFromDiscriminatorValue, createPageSizeFromDiscriminatorValue, createPermissionsFromDiscriminatorValue, createPermissions_effective_grantsFromDiscriminatorValue, createPermissions_grantsFromDiscriminatorValue, createPortableSmartFolderDefinitionFromDiscriminatorValue, createPortableSmartFolderFromDiscriminatorValue, createPortableTermFromDiscriminatorValue, createPortableTermGroupFromDiscriminatorValue, createPortableTermSetFromDiscriminatorValue, createPortableTerm_labelsFromDiscriminatorValue, createProblemFromDiscriminatorValue, createProblem_existing_itemFromDiscriminatorValue, createPromoteKeywordFromDiscriminatorValue, createPromoteStagedFileFromDiscriminatorValue, createPromotedFileFromDiscriminatorValue, createPublicationFromDiscriminatorValue, createPublication_snapshotFromDiscriminatorValue, createQueryGroupFromDiscriminatorValue, createQueryGroupPageFromDiscriminatorValue, createQueryRequestFromDiscriminatorValue, createQueryResultFromDiscriminatorValue, createQuerySpecFromDiscriminatorValue, createReadTextFromDiscriminatorValue, createReclaimFileVersionFromDiscriminatorValue, createReclaimedFileVersionFromDiscriminatorValue, createRecycleBinPageFromDiscriminatorValue, createRelationshipEndpointFromDiscriminatorValue, createRelationshipEndpointPageFromDiscriminatorValue, createRelationshipFromDiscriminatorValue, createRelationshipNeighborhoodFromDiscriminatorValue, createRelationshipTypeFromDiscriminatorValue, createRelationshipTypeInputFromDiscriminatorValue, createRelationshipTypePageFromDiscriminatorValue, createRelationshipType_attributesFromDiscriminatorValue, createRelationshipViewFromDiscriminatorValue, createRelationship_metadataFromDiscriminatorValue, createResourceAccessFromDiscriminatorValue, createResourceFromDiscriminatorValue, createResource_valuesFromDiscriminatorValue, createSchemaRevisionFromDiscriminatorValue, createSchemaRevision_definitionFromDiscriminatorValue, createSchemaRevision_definition_fieldsFromDiscriminatorValue, createSchemaTemplateFromDiscriminatorValue, createSchemaTemplatePageFromDiscriminatorValue, createSchemaTemplate_definitionFromDiscriminatorValue, createSearchFacetValueFromDiscriminatorValue, createSearchFacetsFromDiscriminatorValue, createSearchFieldFromDiscriminatorValue, createSearchHitFromDiscriminatorValue, createSearchPageFromDiscriminatorValue, createSearchRequestFromDiscriminatorValue, createSearchStatusFromDiscriminatorValue, createSearchStatus_embeddingsFromDiscriminatorValue, createSearchSyncFromDiscriminatorValue, createSetWorkspaceMemberFromDiscriminatorValue, createSmartFolderDefinitionFromDiscriminatorValue, createSmartFolderDropFromDiscriminatorValue, createSmartFolderEntryFromDiscriminatorValue, createSmartFolderFromDiscriminatorValue, createSmartFolderGroupByFromDiscriminatorValue, createSmartFolderGroupFromDiscriminatorValue, createSmartFolderGroupsResultFromDiscriminatorValue, createSmartFolderImportResultFromDiscriminatorValue, createSmartFolderInputFromDiscriminatorValue, createSmartFolderPackageFromDiscriminatorValue, createSmartFolderPageFromDiscriminatorValue, createSmartFolderPreviewFromDiscriminatorValue, createSmartFolderQueryRequestFromDiscriminatorValue, createSmartFolderQueryRequest_sortFromDiscriminatorValue, createSmartFolderResultFromDiscriminatorValue, createSmartFolderTermRefFromDiscriminatorValue, createSmartFolderUnclassifyFromDiscriminatorValue, createSortSpecFromDiscriminatorValue, createStagedArtifactFromDiscriminatorValue, createStagedFileFromDiscriminatorValue, createStagedFile_metricsFromDiscriminatorValue, createStagedFile_sourcesFromDiscriminatorValue, createTaskAnswerFromDiscriminatorValue, createTaskAnswer_inputFromDiscriminatorValue, createTaskCancelFromDiscriminatorValue, createTaskCreateFromDiscriminatorValue, createTaskCreate_reviewFromDiscriminatorValue, createTaskCreate_valuesFromDiscriminatorValue, createTaskFromDiscriminatorValue, createTaskListFromDiscriminatorValue, createTaskOutcomeFromDiscriminatorValue, createTaskReassignFromDiscriminatorValue, createTaskResponseInputFromDiscriminatorValue, createTaskResponseInput_inputFromDiscriminatorValue, createTaskUpdateFromDiscriminatorValue, createTaskUpdate_valuesFromDiscriminatorValue, createTask_inputFromDiscriminatorValue, createTask_reviewFromDiscriminatorValue, createTask_valuesFromDiscriminatorValue, createTaxonomyDecisionRequestFromDiscriminatorValue, createTaxonomyDecisionRequest_contextFromDiscriminatorValue, createTaxonomyDecisionRequest_dataFromDiscriminatorValue, createTaxonomyDecisionRequest_description_overridesFromDiscriminatorValue, createTaxonomyImportResultFromDiscriminatorValue, createTaxonomyPackageFromDiscriminatorValue, createTemplateFieldFromDiscriminatorValue, createTemplateInputFromDiscriminatorValue, createTermEntriesFromDiscriminatorValue, createTermFromDiscriminatorValue, createTermGroupFromDiscriminatorValue, createTermGroupInputFromDiscriminatorValue, createTermGroupPageFromDiscriminatorValue, createTermImportResultFromDiscriminatorValue, createTermInputFromDiscriminatorValue, createTermInput_labelsFromDiscriminatorValue, createTermListFromDiscriminatorValue, createTermPageFromDiscriminatorValue, createTermSetFromDiscriminatorValue, createTermSetInputFromDiscriminatorValue, createTermSetPageFromDiscriminatorValue, createTerm_labelsFromDiscriminatorValue, createUpdateFieldFromDiscriminatorValue, createUpdateListIntegrationFromDiscriminatorValue, createUpdateListIntegration_configurationFromDiscriminatorValue, createUpdateRelationshipFromDiscriminatorValue, createUpdateRelationship_metadataFromDiscriminatorValue, createUpdateResourceFromDiscriminatorValue, createUpdateResource_valuesFromDiscriminatorValue, createValidationRuleFromDiscriminatorValue, createValidationRuleMember1FromDiscriminatorValue, createValidationRuleMember2FromDiscriminatorValue, createViewInputFromDiscriminatorValue, createViewQueryRequestFromDiscriminatorValue, createViewSettingsFromDiscriminatorValue, createWorkflowCallFromDiscriminatorValue, createWorkflowCall_inputFromDiscriminatorValue, createWorkflowCallsFromDiscriminatorValue, createWorkflowFormFromDiscriminatorValue, createWorkflowStartedFromDiscriminatorValue, createWorkspaceKeywordCountFromDiscriminatorValue, createWorkspaceKeywordCountPageFromDiscriminatorValue, createWorkspaceMemberFromDiscriminatorValue, createWorkspaceRelationshipPageFromDiscriminatorValue, createWorkspaceRelationshipTypeFromDiscriminatorValue, createWorkspaceRelationshipTypePageFromDiscriminatorValue, createWorkspaceRelationshipViewFromDiscriminatorValue, deserializeIntoAggregate, deserializeIntoAggregateGroup, deserializeIntoAggregateGroup_values, deserializeIntoAggregateRequest, deserializeIntoAggregateResult, deserializeIntoApplyTemplateInput, deserializeIntoArchiveEntry, deserializeIntoArchiveEntry_values, deserializeIntoArtifact, deserializeIntoArtifact_metrics, deserializeIntoArtifact_sources, deserializeIntoAttachContentTypeInput, deserializeIntoAuditEvent, deserializeIntoAuditEvent_credential, deserializeIntoAuditEvent_details, deserializeIntoAuditPage, deserializeIntoBlob, deserializeIntoBulkCreate, deserializeIntoBulkCreateOperation, deserializeIntoBulkCreate_values, deserializeIntoBulkLifecycleOperation, deserializeIntoBulkOperation, deserializeIntoBulkRequest, deserializeIntoBulkResponse, deserializeIntoBulkResult, deserializeIntoBulkUpdate, deserializeIntoBulkUpdateOperation, deserializeIntoBulkUpdate_values, deserializeIntoCalendarOccurrence, deserializeIntoCalendarQuery, deserializeIntoChunkText, deserializeIntoCollectionTemplate, deserializeIntoComment, deserializeIntoCommentAnchor, deserializeIntoCommentCounts, deserializeIntoCommentCountsRequest, deserializeIntoCommentCounts_counts, deserializeIntoCommentCreate, deserializeIntoCommentEdit, deserializeIntoCommentPerson, deserializeIntoCommentSettings, deserializeIntoCommentSettingsInput, deserializeIntoCommentSettings_effective, deserializeIntoCommentThread, deserializeIntoCommentThreadList, deserializeIntoCompletionRequest, deserializeIntoCompletionRequest_output_schema, deserializeIntoComposePDF, deserializeIntoContentType, deserializeIntoContentTypeInput, deserializeIntoContentType_effective, deserializeIntoCreateCatalogField, deserializeIntoCreateField, deserializeIntoCreateListIntegration, deserializeIntoCreateListIntegration_configuration, deserializeIntoCreateRelationship, deserializeIntoCreateRelationship_metadata, deserializeIntoCreateResource, deserializeIntoCreateResource_values, deserializeIntoDecisionRequest, deserializeIntoDecisionRequest_context, deserializeIntoDecisionRequest_data, deserializeIntoDecisionRequest_questions, deserializeIntoDecisionRequest_questions_options, deserializeIntoDeletedResource, deserializeIntoDeltaPage, deserializeIntoDeltaPage_value, deserializeIntoDeltaPage_valueMember1, deserializeIntoDeltaPage_valueMember1_Removed, deserializeIntoDocumentMetadata, deserializeIntoDocumentMetadata_values, deserializeIntoDocumentUpload, deserializeIntoDuplicateDocument, deserializeIntoFieldDefinition, deserializeIntoFieldOptions, deserializeIntoFieldSetting, deserializeIntoFileSummary, deserializeIntoFileVersion, deserializeIntoFilterExpr, deserializeIntoFilteredBulkUpdate, deserializeIntoFilteredBulkUpdate_values, deserializeIntoGenerationChunk, deserializeIntoGenerationChunkPage, deserializeIntoGenerationEnrichments, deserializeIntoGenerationEnrichments_enrichments, deserializeIntoItemIntegration, deserializeIntoItemRevision, deserializeIntoItemRevision_payload, deserializeIntoItemText, deserializeIntoItemText_next, deserializeIntoItemText_pages, deserializeIntoKeywordCount, deserializeIntoKeywordCountList, deserializeIntoKeywordInput, deserializeIntoListIntegration, deserializeIntoListTypeInput, deserializeIntoListView, deserializeIntoListViewPage, deserializeIntoLocatedItem, deserializeIntoMentionCandidateList, deserializeIntoMentionCandidateList_value, deserializeIntoMergeTerm, deserializeIntoMoveItem, deserializeIntoMoveTerm, deserializeIntoNavigationFieldSetting, deserializeIntoNavigationNode, deserializeIntoNavigationPage, deserializeIntoNavigationRequest, deserializeIntoNavigationSelection, deserializeIntoNewMenuInput, deserializeIntoNotificationSend, deserializeIntoNotificationSendResult, deserializeIntoOperation, deserializeIntoOperationFailure, deserializeIntoOperationPage, deserializeIntoPageList, deserializeIntoPageSize, deserializeIntoPermissions, deserializeIntoPermissions_effective_grants, deserializeIntoPermissions_grants, deserializeIntoPortableSmartFolder, deserializeIntoPortableSmartFolderDefinition, deserializeIntoPortableTerm, deserializeIntoPortableTermGroup, deserializeIntoPortableTermSet, deserializeIntoPortableTerm_labels, deserializeIntoProblem, deserializeIntoProblem_existing_item, deserializeIntoPromoteKeyword, deserializeIntoPromoteStagedFile, deserializeIntoPromotedFile, deserializeIntoPublication, deserializeIntoPublication_snapshot, deserializeIntoQueryGroup, deserializeIntoQueryGroupPage, deserializeIntoQueryRequest, deserializeIntoQueryResult, deserializeIntoQuerySpec, deserializeIntoReadText, deserializeIntoReclaimFileVersion, deserializeIntoReclaimedFileVersion, deserializeIntoRecycleBinPage, deserializeIntoRelationship, deserializeIntoRelationshipEndpoint, deserializeIntoRelationshipEndpointPage, deserializeIntoRelationshipNeighborhood, deserializeIntoRelationshipType, deserializeIntoRelationshipTypeInput, deserializeIntoRelationshipTypePage, deserializeIntoRelationshipType_attributes, deserializeIntoRelationshipView, deserializeIntoRelationship_metadata, deserializeIntoResource, deserializeIntoResourceAccess, deserializeIntoResource_values, deserializeIntoSchemaRevision, deserializeIntoSchemaRevision_definition, deserializeIntoSchemaRevision_definition_fields, deserializeIntoSchemaTemplate, deserializeIntoSchemaTemplatePage, deserializeIntoSchemaTemplate_definition, deserializeIntoSearchFacetValue, deserializeIntoSearchFacets, deserializeIntoSearchField, deserializeIntoSearchHit, deserializeIntoSearchPage, deserializeIntoSearchRequest, deserializeIntoSearchStatus, deserializeIntoSearchStatus_embeddings, deserializeIntoSearchSync, deserializeIntoSetWorkspaceMember, deserializeIntoSmartFolder, deserializeIntoSmartFolderDefinition, deserializeIntoSmartFolderDrop, deserializeIntoSmartFolderEntry, deserializeIntoSmartFolderGroup, deserializeIntoSmartFolderGroupBy, deserializeIntoSmartFolderGroupsResult, deserializeIntoSmartFolderImportResult, deserializeIntoSmartFolderInput, deserializeIntoSmartFolderPackage, deserializeIntoSmartFolderPage, deserializeIntoSmartFolderPreview, deserializeIntoSmartFolderQueryRequest, deserializeIntoSmartFolderQueryRequest_sort, deserializeIntoSmartFolderResult, deserializeIntoSmartFolderTermRef, deserializeIntoSmartFolderUnclassify, deserializeIntoSortSpec, deserializeIntoStagedArtifact, deserializeIntoStagedFile, deserializeIntoStagedFile_metrics, deserializeIntoStagedFile_sources, deserializeIntoTask, deserializeIntoTaskAnswer, deserializeIntoTaskAnswer_input, deserializeIntoTaskCancel, deserializeIntoTaskCreate, deserializeIntoTaskCreate_review, deserializeIntoTaskCreate_values, deserializeIntoTaskList, deserializeIntoTaskOutcome, deserializeIntoTaskReassign, deserializeIntoTaskResponseInput, deserializeIntoTaskResponseInput_input, deserializeIntoTaskUpdate, deserializeIntoTaskUpdate_values, deserializeIntoTask_input, deserializeIntoTask_review, deserializeIntoTask_values, deserializeIntoTaxonomyDecisionRequest, deserializeIntoTaxonomyDecisionRequest_context, deserializeIntoTaxonomyDecisionRequest_data, deserializeIntoTaxonomyDecisionRequest_description_overrides, deserializeIntoTaxonomyImportResult, deserializeIntoTaxonomyPackage, deserializeIntoTemplateField, deserializeIntoTemplateInput, deserializeIntoTerm, deserializeIntoTermEntries, deserializeIntoTermGroup, deserializeIntoTermGroupInput, deserializeIntoTermGroupPage, deserializeIntoTermImportResult, deserializeIntoTermInput, deserializeIntoTermInput_labels, deserializeIntoTermList, deserializeIntoTermPage, deserializeIntoTermSet, deserializeIntoTermSetInput, deserializeIntoTermSetPage, deserializeIntoTerm_labels, deserializeIntoUpdateField, deserializeIntoUpdateListIntegration, deserializeIntoUpdateListIntegration_configuration, deserializeIntoUpdateRelationship, deserializeIntoUpdateRelationship_metadata, deserializeIntoUpdateResource, deserializeIntoUpdateResource_values, deserializeIntoValidationRule, deserializeIntoValidationRuleMember1, deserializeIntoValidationRuleMember2, deserializeIntoViewInput, deserializeIntoViewQueryRequest, deserializeIntoViewSettings, deserializeIntoWorkflowCall, deserializeIntoWorkflowCall_input, deserializeIntoWorkflowCalls, deserializeIntoWorkflowForm, deserializeIntoWorkflowStarted, deserializeIntoWorkspaceKeywordCount, deserializeIntoWorkspaceKeywordCountPage, deserializeIntoWorkspaceMember, deserializeIntoWorkspaceRelationshipPage, deserializeIntoWorkspaceRelationshipType, deserializeIntoWorkspaceRelationshipTypePage, deserializeIntoWorkspaceRelationshipView, serializeAggregate, serializeAggregateGroup, serializeAggregateGroup_values, serializeAggregateRequest, serializeAggregateResult, serializeApplyTemplateInput, serializeArchiveEntry, serializeArchiveEntry_values, serializeArtifact, serializeArtifact_metrics, serializeArtifact_sources, serializeAttachContentTypeInput, serializeAuditEvent, serializeAuditEvent_credential, serializeAuditEvent_details, serializeAuditPage, serializeBlob, serializeBulkCreate, serializeBulkCreateOperation, serializeBulkCreate_values, serializeBulkLifecycleOperation, serializeBulkOperation, serializeBulkRequest, serializeBulkResponse, serializeBulkResult, serializeBulkUpdate, serializeBulkUpdateOperation, serializeBulkUpdate_values, serializeCalendarOccurrence, serializeCalendarQuery, serializeChunkText, serializeCollectionTemplate, serializeComment, serializeCommentAnchor, serializeCommentCounts, serializeCommentCountsRequest, serializeCommentCounts_counts, serializeCommentCreate, serializeCommentEdit, serializeCommentPerson, serializeCommentSettings, serializeCommentSettingsInput, serializeCommentSettings_effective, serializeCommentThread, serializeCommentThreadList, serializeCompletionRequest, serializeCompletionRequest_output_schema, serializeComposePDF, serializeContentType, serializeContentTypeInput, serializeContentType_effective, serializeCreateCatalogField, serializeCreateField, serializeCreateListIntegration, serializeCreateListIntegration_configuration, serializeCreateRelationship, serializeCreateRelationship_metadata, serializeCreateResource, serializeCreateResource_values, serializeDecisionRequest, serializeDecisionRequest_context, serializeDecisionRequest_data, serializeDecisionRequest_questions, serializeDecisionRequest_questions_options, serializeDeletedResource, serializeDeltaPage, serializeDeltaPage_value, serializeDeltaPage_valueMember1, serializeDeltaPage_valueMember1_Removed, serializeDocumentMetadata, serializeDocumentMetadata_values, serializeDocumentUpload, serializeDuplicateDocument, serializeFieldDefinition, serializeFieldOptions, serializeFieldSetting, serializeFileSummary, serializeFileVersion, serializeFilterExpr, serializeFilteredBulkUpdate, serializeFilteredBulkUpdate_values, serializeGenerationChunk, serializeGenerationChunkPage, serializeGenerationEnrichments, serializeGenerationEnrichments_enrichments, serializeItemIntegration, serializeItemRevision, serializeItemRevision_payload, serializeItemText, serializeItemText_next, serializeItemText_pages, serializeKeywordCount, serializeKeywordCountList, serializeKeywordInput, serializeListIntegration, serializeListTypeInput, serializeListView, serializeListViewPage, serializeLocatedItem, serializeMentionCandidateList, serializeMentionCandidateList_value, serializeMergeTerm, serializeMoveItem, serializeMoveTerm, serializeNavigationFieldSetting, serializeNavigationNode, serializeNavigationPage, serializeNavigationRequest, serializeNavigationSelection, serializeNewMenuInput, serializeNotificationSend, serializeNotificationSendResult, serializeOperation, serializeOperationFailure, serializeOperationPage, serializePageList, serializePageSize, serializePermissions, serializePermissions_effective_grants, serializePermissions_grants, serializePortableSmartFolder, serializePortableSmartFolderDefinition, serializePortableTerm, serializePortableTermGroup, serializePortableTermSet, serializePortableTerm_labels, serializeProblem, serializeProblem_existing_item, serializePromoteKeyword, serializePromoteStagedFile, serializePromotedFile, serializePublication, serializePublication_snapshot, serializeQueryGroup, serializeQueryGroupPage, serializeQueryRequest, serializeQueryResult, serializeQuerySpec, serializeReadText, serializeReclaimFileVersion, serializeReclaimedFileVersion, serializeRecycleBinPage, serializeRelationship, serializeRelationshipEndpoint, serializeRelationshipEndpointPage, serializeRelationshipNeighborhood, serializeRelationshipType, serializeRelationshipTypeInput, serializeRelationshipTypePage, serializeRelationshipType_attributes, serializeRelationshipView, serializeRelationship_metadata, serializeResource, serializeResourceAccess, serializeResource_values, serializeSchemaRevision, serializeSchemaRevision_definition, serializeSchemaRevision_definition_fields, serializeSchemaTemplate, serializeSchemaTemplatePage, serializeSchemaTemplate_definition, serializeSearchFacetValue, serializeSearchFacets, serializeSearchField, serializeSearchHit, serializeSearchPage, serializeSearchRequest, serializeSearchStatus, serializeSearchStatus_embeddings, serializeSearchSync, serializeSetWorkspaceMember, serializeSmartFolder, serializeSmartFolderDefinition, serializeSmartFolderDrop, serializeSmartFolderEntry, serializeSmartFolderGroup, serializeSmartFolderGroupBy, serializeSmartFolderGroupsResult, serializeSmartFolderImportResult, serializeSmartFolderInput, serializeSmartFolderPackage, serializeSmartFolderPage, serializeSmartFolderPreview, serializeSmartFolderQueryRequest, serializeSmartFolderQueryRequest_sort, serializeSmartFolderResult, serializeSmartFolderTermRef, serializeSmartFolderUnclassify, serializeSortSpec, serializeStagedArtifact, serializeStagedFile, serializeStagedFile_metrics, serializeStagedFile_sources, serializeTask, serializeTaskAnswer, serializeTaskAnswer_input, serializeTaskCancel, serializeTaskCreate, serializeTaskCreate_review, serializeTaskCreate_values, serializeTaskList, serializeTaskOutcome, serializeTaskReassign, serializeTaskResponseInput, serializeTaskResponseInput_input, serializeTaskUpdate, serializeTaskUpdate_values, serializeTask_input, serializeTask_review, serializeTask_values, serializeTaxonomyDecisionRequest, serializeTaxonomyDecisionRequest_context, serializeTaxonomyDecisionRequest_data, serializeTaxonomyDecisionRequest_description_overrides, serializeTaxonomyImportResult, serializeTaxonomyPackage, serializeTemplateField, serializeTemplateInput, serializeTerm, serializeTermEntries, serializeTermGroup, serializeTermGroupInput, serializeTermGroupPage, serializeTermImportResult, serializeTermInput, serializeTermInput_labels, serializeTermList, serializeTermPage, serializeTermSet, serializeTermSetInput, serializeTermSetPage, serializeTerm_labels, serializeUpdateField, serializeUpdateListIntegration, serializeUpdateListIntegration_configuration, serializeUpdateRelationship, serializeUpdateRelationship_metadata, serializeUpdateResource, serializeUpdateResource_values, serializeValidationRule, serializeValidationRuleMember1, serializeValidationRuleMember2, serializeViewInput, serializeViewQueryRequest, serializeViewSettings, serializeWorkflowCall, serializeWorkflowCall_input, serializeWorkflowCalls, serializeWorkflowForm, serializeWorkflowStarted, serializeWorkspaceKeywordCount, serializeWorkspaceKeywordCountPage, serializeWorkspaceMember, serializeWorkspaceRelationshipPage, serializeWorkspaceRelationshipType, serializeWorkspaceRelationshipTypePage, serializeWorkspaceRelationshipView };
+	export { Aggregate, AggregateGroup, AggregateGroupBy, AggregateGroupBy_interval, AggregateGroupBy_intervalObject, AggregateGroup_values, AggregateKey, AggregateRequest, AggregateRequest_surface, AggregateRequest_surfaceObject, AggregateResult, Aggregate_op, Aggregate_opObject, ApplyTemplateInput, ArchiveEntry, ArchiveEntry_duplicate_policy, ArchiveEntry_duplicate_policyObject, ArchiveEntry_kind, ArchiveEntry_kindObject, ArchiveEntry_system_key, ArchiveEntry_system_keyObject, ArchiveEntry_values, ArchiveEntry_versioning, ArchiveEntry_versioningObject, ArchiveSelection, ArchiveSelectionObject, Artifact, Artifact_metrics, Artifact_sources, AttachContentTypeInput, AuditEvent, AuditEvent_credential, AuditEvent_details, AuditPage, Blob, Blob_content_type, Blob_content_typeObject, BulkCreate, BulkCreateOperation, BulkCreate_values, BulkLifecycleOperation, BulkLifecycleOperation_action, BulkLifecycleOperation_actionObject, BulkOperation, BulkRequest, BulkResponse, BulkResult, BulkResult_action, BulkResult_actionObject, BulkUpdate, BulkUpdateOperation, BulkUpdate_values, CalendarOccurrence, CalendarQuery, CalendarQuery_surface, CalendarQuery_surfaceObject, ChunkText, ChunkText_chunker, ChunkText_chunkerObject, ChunkText_kind, ChunkText_kindObject, CollectionTemplate, CollectionTemplate_duplicate_policy, CollectionTemplate_duplicate_policyObject, CollectionTemplate_kind, CollectionTemplate_kindObject, CollectionTemplate_versioning, CollectionTemplate_versioningObject, Comment, CommentAnchor, CommentCounts, CommentCountsRequest, CommentCounts_counts, CommentCreate, CommentEdit, CommentPerson, CommentSettings, CommentSettingsInput, CommentSettingsInput_mode, CommentSettingsInput_modeObject, CommentSettings_effective, CommentSettings_effective_from, CommentSettings_effective_fromObject, CommentSettings_effective_mode, CommentSettings_effective_modeObject, CommentSettings_mode, CommentSettings_modeObject, CommentThread, CommentThreadList, CommentThreadList_mode, CommentThreadList_modeObject, CommentThreadList_mode_from, CommentThreadList_mode_fromObject, Comment_source, Comment_sourceObject, CompactQueryResult, CompactResource, CompactResource_kind, CompactResource_kindObject, CompactResource_values, CompactSmartFolderEntry, CompactSmartFolderEntry_collection_kind, CompactSmartFolderEntry_collection_kindObject, CompactSmartFolderResult, CompletionRequest, CompletionRequest_execution, CompletionRequest_executionObject, CompletionRequest_output_schema, ComposePDF, ContentType, ContentTypeInput, ContentType_effective, CreateCatalogField, CreateCatalogField_type, CreateCatalogField_typeObject, CreateField, CreateField_type, CreateField_typeObject, CreateListIntegration, CreateListIntegration_configuration, CreateRelationship, CreateRelationship_metadata, CreateResource, CreateResource_duplicate_policy, CreateResource_duplicate_policyObject, CreateResource_kind, CreateResource_kindObject, CreateResource_values, CreateResource_versioning, CreateResource_versioningObject, DecisionRequest, DecisionRequest_context, DecisionRequest_data, DecisionRequest_questions, DecisionRequest_questions_options, DecisionRequest_questions_type, DecisionRequest_questions_typeObject, DeletedResource, DeltaPage, DeltaPage_value, DeltaPage_valueMember1, DeltaPage_valueMember1_Removed, DeltaPage_valueMember1_Removed_reason, DeltaPage_valueMember1_Removed_reasonObject, DocumentMetadata, DocumentMetadata_values, DocumentUpload, DuplicateDocument, FieldDefinition, FieldDefinition_index_status, FieldDefinition_index_statusObject, FieldDefinition_type, FieldDefinition_typeObject, FieldOptions, FieldOptions_search_weight, FieldOptions_search_weightObject, FieldSetting, FileSummary, FileVersion, FileVersion_availability, FileVersion_availabilityObject, FilterExpr, FilterExpr_op, FilterExpr_opObject, FilterExpr_value_ref, FilterExpr_value_refObject, FilteredBulkUpdate, FilteredBulkUpdate_values, GenerationChunk, GenerationChunkPage, GenerationEnrichments, GenerationEnrichments_enrichments, ItemIntegration, ItemRevision, ItemRevision_payload, ItemText, ItemText_next, ItemText_pages, KeywordCount, KeywordCountList, KeywordInput, ListIntegration, ListIntegration_kind, ListIntegration_kindObject, ListTypeInput, ListView, ListViewPage, ListView_system_key, ListView_system_keyObject, LocatedItem, MentionCandidateList, MentionCandidateList_value, MergeTerm, MoveItem, MoveTerm, NavigationFieldSetting, NavigationNode, NavigationPage, NavigationRequest, NavigationRequest_surface, NavigationRequest_surfaceObject, NavigationSelection, NewMenuInput, NotificationSend, NotificationSendResult, Operation, OperationFailure, OperationPage, Operation_error_code, Operation_error_codeObject, Operation_status, Operation_statusObject, Operation_waiting, Operation_waitingObject, PageList, PageSize, Permissions, Permissions_effective_grants, Permissions_effective_grants_action, Permissions_effective_grants_actionObject, Permissions_effective_grants_effect, Permissions_effective_grants_effectObject, Permissions_effective_grants_principal_type, Permissions_effective_grants_principal_typeObject, Permissions_grants, Permissions_grants_action, Permissions_grants_actionObject, Permissions_grants_effect, Permissions_grants_effectObject, Permissions_grants_principal_type, Permissions_grants_principal_typeObject, PortableSmartFolder, PortableSmartFolderDefinition, PortableSmartFolderDefinition_collection_kind, PortableSmartFolderDefinition_collection_kindObject, PortableSmartFolderDefinition_mode, PortableSmartFolderDefinition_modeObject, PortableSmartFolderDefinition_term_match, PortableSmartFolderDefinition_term_matchObject, PortableTerm, PortableTermGroup, PortableTermSet, PortableTerm_labels, Problem, Problem_existing_item, PromoteKeyword, PromoteStagedFile, PromotedFile, Publication, Publication_action, Publication_actionObject, Publication_snapshot, QueryGroup, QueryGroupPage, QueryRequest, QueryRequest_surface, QueryRequest_surfaceObject, QueryResult, QuerySpec, ReadText, ReadText_ocr, ReadText_ocrObject, ReclaimFileVersion, ReclaimedFileVersion, RecycleBinPage, Relationship, RelationshipEndpoint, RelationshipEndpointPage, RelationshipNeighborhood, RelationshipType, RelationshipTypeInput, RelationshipTypePage, RelationshipType_attributes, RelationshipView, Relationship_metadata, Resource, ResourceAccess, ResourceAccess_access, ResourceAccess_accessObject, Resource_duplicate_policy, Resource_duplicate_policyObject, Resource_kind, Resource_kindObject, Resource_system_key, Resource_system_keyObject, Resource_values, Resource_versioning, Resource_versioningObject, SchemaRevision, SchemaRevision_definition, SchemaRevision_definition_fields, SchemaRevision_definition_fields_type, SchemaRevision_definition_fields_typeObject, SchemaTemplate, SchemaTemplatePage, SchemaTemplate_definition, SearchFacetValue, SearchFacets, SearchField, SearchField_operators, SearchField_operatorsObject, SearchHit, SearchHit_kind, SearchHit_kindObject, SearchHit_matched_by, SearchHit_matched_byObject, SearchHit_surface, SearchHit_surfaceObject, SearchPage, SearchPage_mode, SearchPage_modeObject, SearchRequest, SearchRequest_kind, SearchRequest_kindObject, SearchRequest_mode, SearchRequest_modeObject, SearchRequest_surface, SearchRequest_surfaceObject, SearchStatus, SearchStatus_embeddings, SearchSync, SetWorkspaceMember, SetWorkspaceMember_role, SetWorkspaceMember_roleObject, SmartFolder, SmartFolderAggregateRequest, SmartFolderAggregateRequest_surface, SmartFolderAggregateRequest_surfaceObject, SmartFolderDefinition, SmartFolderDefinition_collection_kind, SmartFolderDefinition_collection_kindObject, SmartFolderDefinition_mode, SmartFolderDefinition_modeObject, SmartFolderDefinition_term_match, SmartFolderDefinition_term_matchObject, SmartFolderDrop, SmartFolderEntry, SmartFolderEntry_collection_kind, SmartFolderEntry_collection_kindObject, SmartFolderGroup, SmartFolderGroupBy, SmartFolderGroupBy_by, SmartFolderGroupBy_byObject, SmartFolderGroupsResult, SmartFolderImportResult, SmartFolderInput, SmartFolderPackage, SmartFolderPage, SmartFolderPreview, SmartFolderQueryRequest, SmartFolderQueryRequest_sort, SmartFolderQueryRequest_sort_direction, SmartFolderQueryRequest_sort_directionObject, SmartFolderQueryRequest_sort_field, SmartFolderQueryRequest_sort_fieldObject, SmartFolderQueryRequest_surface, SmartFolderQueryRequest_surfaceObject, SmartFolderResult, SmartFolderTermRef, SmartFolderUnclassify, SortSpec, SortSpec_direction, SortSpec_directionObject, StagedArtifact, StagedFile, StagedFile_metrics, StagedFile_sources, StagedFile_state, StagedFile_stateObject, Task, TaskAnswer, TaskAnswer_input, TaskCancel, TaskCreate, TaskCreate_completion, TaskCreate_completionObject, TaskCreate_kind, TaskCreate_kindObject, TaskCreate_priority, TaskCreate_priorityObject, TaskCreate_review, TaskCreate_review_type, TaskCreate_review_typeObject, TaskCreate_values, TaskList, TaskOutcome, TaskOutcome_comment, TaskOutcome_commentObject, TaskOutcome_style, TaskOutcome_styleObject, TaskReassign, TaskResponseInput, TaskResponseInput_input, TaskUpdate, TaskUpdate_priority, TaskUpdate_priorityObject, TaskUpdate_values, Task_completion, Task_completionObject, Task_input, Task_kind, Task_kindObject, Task_priority, Task_priorityObject, Task_review, Task_review_type, Task_review_typeObject, Task_source, Task_sourceObject, Task_status, Task_statusObject, Task_values, TaxonomyDecisionRequest, TaxonomyDecisionRequest_context, TaxonomyDecisionRequest_data, TaxonomyDecisionRequest_description_overrides, TaxonomyDecisionRequest_selection, TaxonomyDecisionRequest_selectionObject, TaxonomyImportResult, TaxonomyPackage, TemplateField, TemplateField_type, TemplateField_typeObject, TemplateInput, Term, TermEntries, TermGroup, TermGroupInput, TermGroupPage, TermImportResult, TermInput, TermInput_labels, TermList, TermPage, TermSet, TermSetInput, TermSetPage, Term_labels, UpdateField, UpdateListIntegration, UpdateListIntegration_configuration, UpdateRelationship, UpdateRelationship_metadata, UpdateResource, UpdateResource_duplicate_policy, UpdateResource_duplicate_policyObject, UpdateResource_values, UpdateResource_versioning, UpdateResource_versioningObject, ValidationRule, ValidationRuleMember1, ValidationRuleMember2, ValidationRuleMember2_op, ValidationRuleMember2_opObject, ViewAggregateRequest, ViewAggregateRequest_surface, ViewAggregateRequest_surfaceObject, ViewInput, ViewInput_layout, ViewInput_layoutObject, ViewQueryRequest, ViewQueryRequest_surface, ViewQueryRequest_surfaceObject, ViewSettings, ViewSettings_match, ViewSettings_matchObject, WorkflowCall, WorkflowCall_input, WorkflowCalls, WorkflowForm, WorkflowStarted, WorkspaceKeywordCount, WorkspaceKeywordCountPage, WorkspaceMember, WorkspaceMember_role, WorkspaceMember_roleObject, WorkspaceRelationshipPage, WorkspaceRelationshipType, WorkspaceRelationshipTypePage, WorkspaceRelationshipView, createAggregateFromDiscriminatorValue, createAggregateGroupByFromDiscriminatorValue, createAggregateGroupFromDiscriminatorValue, createAggregateGroup_valuesFromDiscriminatorValue, createAggregateKeyFromDiscriminatorValue, createAggregateRequestFromDiscriminatorValue, createAggregateResultFromDiscriminatorValue, createApplyTemplateInputFromDiscriminatorValue, createArchiveEntryFromDiscriminatorValue, createArchiveEntry_valuesFromDiscriminatorValue, createArtifactFromDiscriminatorValue, createArtifact_metricsFromDiscriminatorValue, createArtifact_sourcesFromDiscriminatorValue, createAttachContentTypeInputFromDiscriminatorValue, createAuditEventFromDiscriminatorValue, createAuditEvent_credentialFromDiscriminatorValue, createAuditEvent_detailsFromDiscriminatorValue, createAuditPageFromDiscriminatorValue, createBlobFromDiscriminatorValue, createBulkCreateFromDiscriminatorValue, createBulkCreateOperationFromDiscriminatorValue, createBulkCreate_valuesFromDiscriminatorValue, createBulkLifecycleOperationFromDiscriminatorValue, createBulkOperationFromDiscriminatorValue, createBulkRequestFromDiscriminatorValue, createBulkResponseFromDiscriminatorValue, createBulkResultFromDiscriminatorValue, createBulkUpdateFromDiscriminatorValue, createBulkUpdateOperationFromDiscriminatorValue, createBulkUpdate_valuesFromDiscriminatorValue, createCalendarOccurrenceFromDiscriminatorValue, createCalendarQueryFromDiscriminatorValue, createChunkTextFromDiscriminatorValue, createCollectionTemplateFromDiscriminatorValue, createCommentAnchorFromDiscriminatorValue, createCommentCountsFromDiscriminatorValue, createCommentCountsRequestFromDiscriminatorValue, createCommentCounts_countsFromDiscriminatorValue, createCommentCreateFromDiscriminatorValue, createCommentEditFromDiscriminatorValue, createCommentFromDiscriminatorValue, createCommentPersonFromDiscriminatorValue, createCommentSettingsFromDiscriminatorValue, createCommentSettingsInputFromDiscriminatorValue, createCommentSettings_effectiveFromDiscriminatorValue, createCommentThreadFromDiscriminatorValue, createCommentThreadListFromDiscriminatorValue, createCompactQueryResultFromDiscriminatorValue, createCompactResourceFromDiscriminatorValue, createCompactResource_valuesFromDiscriminatorValue, createCompactSmartFolderEntryFromDiscriminatorValue, createCompactSmartFolderResultFromDiscriminatorValue, createCompletionRequestFromDiscriminatorValue, createCompletionRequest_output_schemaFromDiscriminatorValue, createComposePDFFromDiscriminatorValue, createContentTypeFromDiscriminatorValue, createContentTypeInputFromDiscriminatorValue, createContentType_effectiveFromDiscriminatorValue, createCreateCatalogFieldFromDiscriminatorValue, createCreateFieldFromDiscriminatorValue, createCreateListIntegrationFromDiscriminatorValue, createCreateListIntegration_configurationFromDiscriminatorValue, createCreateRelationshipFromDiscriminatorValue, createCreateRelationship_metadataFromDiscriminatorValue, createCreateResourceFromDiscriminatorValue, createCreateResource_valuesFromDiscriminatorValue, createDecisionRequestFromDiscriminatorValue, createDecisionRequest_contextFromDiscriminatorValue, createDecisionRequest_dataFromDiscriminatorValue, createDecisionRequest_questionsFromDiscriminatorValue, createDecisionRequest_questions_optionsFromDiscriminatorValue, createDeletedResourceFromDiscriminatorValue, createDeltaPageFromDiscriminatorValue, createDeltaPage_valueFromDiscriminatorValue, createDeltaPage_valueMember1FromDiscriminatorValue, createDeltaPage_valueMember1_RemovedFromDiscriminatorValue, createDocumentMetadataFromDiscriminatorValue, createDocumentMetadata_valuesFromDiscriminatorValue, createDocumentUploadFromDiscriminatorValue, createDuplicateDocumentFromDiscriminatorValue, createFieldDefinitionFromDiscriminatorValue, createFieldOptionsFromDiscriminatorValue, createFieldSettingFromDiscriminatorValue, createFileSummaryFromDiscriminatorValue, createFileVersionFromDiscriminatorValue, createFilterExprFromDiscriminatorValue, createFilteredBulkUpdateFromDiscriminatorValue, createFilteredBulkUpdate_valuesFromDiscriminatorValue, createGenerationChunkFromDiscriminatorValue, createGenerationChunkPageFromDiscriminatorValue, createGenerationEnrichmentsFromDiscriminatorValue, createGenerationEnrichments_enrichmentsFromDiscriminatorValue, createItemIntegrationFromDiscriminatorValue, createItemRevisionFromDiscriminatorValue, createItemRevision_payloadFromDiscriminatorValue, createItemTextFromDiscriminatorValue, createItemText_nextFromDiscriminatorValue, createItemText_pagesFromDiscriminatorValue, createKeywordCountFromDiscriminatorValue, createKeywordCountListFromDiscriminatorValue, createKeywordInputFromDiscriminatorValue, createListIntegrationFromDiscriminatorValue, createListTypeInputFromDiscriminatorValue, createListViewFromDiscriminatorValue, createListViewPageFromDiscriminatorValue, createLocatedItemFromDiscriminatorValue, createMentionCandidateListFromDiscriminatorValue, createMentionCandidateList_valueFromDiscriminatorValue, createMergeTermFromDiscriminatorValue, createMoveItemFromDiscriminatorValue, createMoveTermFromDiscriminatorValue, createNavigationFieldSettingFromDiscriminatorValue, createNavigationNodeFromDiscriminatorValue, createNavigationPageFromDiscriminatorValue, createNavigationRequestFromDiscriminatorValue, createNavigationSelectionFromDiscriminatorValue, createNewMenuInputFromDiscriminatorValue, createNotificationSendFromDiscriminatorValue, createNotificationSendResultFromDiscriminatorValue, createOperationFailureFromDiscriminatorValue, createOperationFromDiscriminatorValue, createOperationPageFromDiscriminatorValue, createPageListFromDiscriminatorValue, createPageSizeFromDiscriminatorValue, createPermissionsFromDiscriminatorValue, createPermissions_effective_grantsFromDiscriminatorValue, createPermissions_grantsFromDiscriminatorValue, createPortableSmartFolderDefinitionFromDiscriminatorValue, createPortableSmartFolderFromDiscriminatorValue, createPortableTermFromDiscriminatorValue, createPortableTermGroupFromDiscriminatorValue, createPortableTermSetFromDiscriminatorValue, createPortableTerm_labelsFromDiscriminatorValue, createProblemFromDiscriminatorValue, createProblem_existing_itemFromDiscriminatorValue, createPromoteKeywordFromDiscriminatorValue, createPromoteStagedFileFromDiscriminatorValue, createPromotedFileFromDiscriminatorValue, createPublicationFromDiscriminatorValue, createPublication_snapshotFromDiscriminatorValue, createQueryGroupFromDiscriminatorValue, createQueryGroupPageFromDiscriminatorValue, createQueryRequestFromDiscriminatorValue, createQueryResultFromDiscriminatorValue, createQuerySpecFromDiscriminatorValue, createReadTextFromDiscriminatorValue, createReclaimFileVersionFromDiscriminatorValue, createReclaimedFileVersionFromDiscriminatorValue, createRecycleBinPageFromDiscriminatorValue, createRelationshipEndpointFromDiscriminatorValue, createRelationshipEndpointPageFromDiscriminatorValue, createRelationshipFromDiscriminatorValue, createRelationshipNeighborhoodFromDiscriminatorValue, createRelationshipTypeFromDiscriminatorValue, createRelationshipTypeInputFromDiscriminatorValue, createRelationshipTypePageFromDiscriminatorValue, createRelationshipType_attributesFromDiscriminatorValue, createRelationshipViewFromDiscriminatorValue, createRelationship_metadataFromDiscriminatorValue, createResourceAccessFromDiscriminatorValue, createResourceFromDiscriminatorValue, createResource_valuesFromDiscriminatorValue, createSchemaRevisionFromDiscriminatorValue, createSchemaRevision_definitionFromDiscriminatorValue, createSchemaRevision_definition_fieldsFromDiscriminatorValue, createSchemaTemplateFromDiscriminatorValue, createSchemaTemplatePageFromDiscriminatorValue, createSchemaTemplate_definitionFromDiscriminatorValue, createSearchFacetValueFromDiscriminatorValue, createSearchFacetsFromDiscriminatorValue, createSearchFieldFromDiscriminatorValue, createSearchHitFromDiscriminatorValue, createSearchPageFromDiscriminatorValue, createSearchRequestFromDiscriminatorValue, createSearchStatusFromDiscriminatorValue, createSearchStatus_embeddingsFromDiscriminatorValue, createSearchSyncFromDiscriminatorValue, createSetWorkspaceMemberFromDiscriminatorValue, createSmartFolderAggregateRequestFromDiscriminatorValue, createSmartFolderDefinitionFromDiscriminatorValue, createSmartFolderDropFromDiscriminatorValue, createSmartFolderEntryFromDiscriminatorValue, createSmartFolderFromDiscriminatorValue, createSmartFolderGroupByFromDiscriminatorValue, createSmartFolderGroupFromDiscriminatorValue, createSmartFolderGroupsResultFromDiscriminatorValue, createSmartFolderImportResultFromDiscriminatorValue, createSmartFolderInputFromDiscriminatorValue, createSmartFolderPackageFromDiscriminatorValue, createSmartFolderPageFromDiscriminatorValue, createSmartFolderPreviewFromDiscriminatorValue, createSmartFolderQueryRequestFromDiscriminatorValue, createSmartFolderQueryRequest_sortFromDiscriminatorValue, createSmartFolderResultFromDiscriminatorValue, createSmartFolderTermRefFromDiscriminatorValue, createSmartFolderUnclassifyFromDiscriminatorValue, createSortSpecFromDiscriminatorValue, createStagedArtifactFromDiscriminatorValue, createStagedFileFromDiscriminatorValue, createStagedFile_metricsFromDiscriminatorValue, createStagedFile_sourcesFromDiscriminatorValue, createTaskAnswerFromDiscriminatorValue, createTaskAnswer_inputFromDiscriminatorValue, createTaskCancelFromDiscriminatorValue, createTaskCreateFromDiscriminatorValue, createTaskCreate_reviewFromDiscriminatorValue, createTaskCreate_valuesFromDiscriminatorValue, createTaskFromDiscriminatorValue, createTaskListFromDiscriminatorValue, createTaskOutcomeFromDiscriminatorValue, createTaskReassignFromDiscriminatorValue, createTaskResponseInputFromDiscriminatorValue, createTaskResponseInput_inputFromDiscriminatorValue, createTaskUpdateFromDiscriminatorValue, createTaskUpdate_valuesFromDiscriminatorValue, createTask_inputFromDiscriminatorValue, createTask_reviewFromDiscriminatorValue, createTask_valuesFromDiscriminatorValue, createTaxonomyDecisionRequestFromDiscriminatorValue, createTaxonomyDecisionRequest_contextFromDiscriminatorValue, createTaxonomyDecisionRequest_dataFromDiscriminatorValue, createTaxonomyDecisionRequest_description_overridesFromDiscriminatorValue, createTaxonomyImportResultFromDiscriminatorValue, createTaxonomyPackageFromDiscriminatorValue, createTemplateFieldFromDiscriminatorValue, createTemplateInputFromDiscriminatorValue, createTermEntriesFromDiscriminatorValue, createTermFromDiscriminatorValue, createTermGroupFromDiscriminatorValue, createTermGroupInputFromDiscriminatorValue, createTermGroupPageFromDiscriminatorValue, createTermImportResultFromDiscriminatorValue, createTermInputFromDiscriminatorValue, createTermInput_labelsFromDiscriminatorValue, createTermListFromDiscriminatorValue, createTermPageFromDiscriminatorValue, createTermSetFromDiscriminatorValue, createTermSetInputFromDiscriminatorValue, createTermSetPageFromDiscriminatorValue, createTerm_labelsFromDiscriminatorValue, createUpdateFieldFromDiscriminatorValue, createUpdateListIntegrationFromDiscriminatorValue, createUpdateListIntegration_configurationFromDiscriminatorValue, createUpdateRelationshipFromDiscriminatorValue, createUpdateRelationship_metadataFromDiscriminatorValue, createUpdateResourceFromDiscriminatorValue, createUpdateResource_valuesFromDiscriminatorValue, createValidationRuleFromDiscriminatorValue, createValidationRuleMember1FromDiscriminatorValue, createValidationRuleMember2FromDiscriminatorValue, createViewAggregateRequestFromDiscriminatorValue, createViewInputFromDiscriminatorValue, createViewQueryRequestFromDiscriminatorValue, createViewSettingsFromDiscriminatorValue, createWorkflowCallFromDiscriminatorValue, createWorkflowCall_inputFromDiscriminatorValue, createWorkflowCallsFromDiscriminatorValue, createWorkflowFormFromDiscriminatorValue, createWorkflowStartedFromDiscriminatorValue, createWorkspaceKeywordCountFromDiscriminatorValue, createWorkspaceKeywordCountPageFromDiscriminatorValue, createWorkspaceMemberFromDiscriminatorValue, createWorkspaceRelationshipPageFromDiscriminatorValue, createWorkspaceRelationshipTypeFromDiscriminatorValue, createWorkspaceRelationshipTypePageFromDiscriminatorValue, createWorkspaceRelationshipViewFromDiscriminatorValue, deserializeIntoAggregate, deserializeIntoAggregateGroup, deserializeIntoAggregateGroupBy, deserializeIntoAggregateGroup_values, deserializeIntoAggregateKey, deserializeIntoAggregateRequest, deserializeIntoAggregateResult, deserializeIntoApplyTemplateInput, deserializeIntoArchiveEntry, deserializeIntoArchiveEntry_values, deserializeIntoArtifact, deserializeIntoArtifact_metrics, deserializeIntoArtifact_sources, deserializeIntoAttachContentTypeInput, deserializeIntoAuditEvent, deserializeIntoAuditEvent_credential, deserializeIntoAuditEvent_details, deserializeIntoAuditPage, deserializeIntoBlob, deserializeIntoBulkCreate, deserializeIntoBulkCreateOperation, deserializeIntoBulkCreate_values, deserializeIntoBulkLifecycleOperation, deserializeIntoBulkOperation, deserializeIntoBulkRequest, deserializeIntoBulkResponse, deserializeIntoBulkResult, deserializeIntoBulkUpdate, deserializeIntoBulkUpdateOperation, deserializeIntoBulkUpdate_values, deserializeIntoCalendarOccurrence, deserializeIntoCalendarQuery, deserializeIntoChunkText, deserializeIntoCollectionTemplate, deserializeIntoComment, deserializeIntoCommentAnchor, deserializeIntoCommentCounts, deserializeIntoCommentCountsRequest, deserializeIntoCommentCounts_counts, deserializeIntoCommentCreate, deserializeIntoCommentEdit, deserializeIntoCommentPerson, deserializeIntoCommentSettings, deserializeIntoCommentSettingsInput, deserializeIntoCommentSettings_effective, deserializeIntoCommentThread, deserializeIntoCommentThreadList, deserializeIntoCompactQueryResult, deserializeIntoCompactResource, deserializeIntoCompactResource_values, deserializeIntoCompactSmartFolderEntry, deserializeIntoCompactSmartFolderResult, deserializeIntoCompletionRequest, deserializeIntoCompletionRequest_output_schema, deserializeIntoComposePDF, deserializeIntoContentType, deserializeIntoContentTypeInput, deserializeIntoContentType_effective, deserializeIntoCreateCatalogField, deserializeIntoCreateField, deserializeIntoCreateListIntegration, deserializeIntoCreateListIntegration_configuration, deserializeIntoCreateRelationship, deserializeIntoCreateRelationship_metadata, deserializeIntoCreateResource, deserializeIntoCreateResource_values, deserializeIntoDecisionRequest, deserializeIntoDecisionRequest_context, deserializeIntoDecisionRequest_data, deserializeIntoDecisionRequest_questions, deserializeIntoDecisionRequest_questions_options, deserializeIntoDeletedResource, deserializeIntoDeltaPage, deserializeIntoDeltaPage_value, deserializeIntoDeltaPage_valueMember1, deserializeIntoDeltaPage_valueMember1_Removed, deserializeIntoDocumentMetadata, deserializeIntoDocumentMetadata_values, deserializeIntoDocumentUpload, deserializeIntoDuplicateDocument, deserializeIntoFieldDefinition, deserializeIntoFieldOptions, deserializeIntoFieldSetting, deserializeIntoFileSummary, deserializeIntoFileVersion, deserializeIntoFilterExpr, deserializeIntoFilteredBulkUpdate, deserializeIntoFilteredBulkUpdate_values, deserializeIntoGenerationChunk, deserializeIntoGenerationChunkPage, deserializeIntoGenerationEnrichments, deserializeIntoGenerationEnrichments_enrichments, deserializeIntoItemIntegration, deserializeIntoItemRevision, deserializeIntoItemRevision_payload, deserializeIntoItemText, deserializeIntoItemText_next, deserializeIntoItemText_pages, deserializeIntoKeywordCount, deserializeIntoKeywordCountList, deserializeIntoKeywordInput, deserializeIntoListIntegration, deserializeIntoListTypeInput, deserializeIntoListView, deserializeIntoListViewPage, deserializeIntoLocatedItem, deserializeIntoMentionCandidateList, deserializeIntoMentionCandidateList_value, deserializeIntoMergeTerm, deserializeIntoMoveItem, deserializeIntoMoveTerm, deserializeIntoNavigationFieldSetting, deserializeIntoNavigationNode, deserializeIntoNavigationPage, deserializeIntoNavigationRequest, deserializeIntoNavigationSelection, deserializeIntoNewMenuInput, deserializeIntoNotificationSend, deserializeIntoNotificationSendResult, deserializeIntoOperation, deserializeIntoOperationFailure, deserializeIntoOperationPage, deserializeIntoPageList, deserializeIntoPageSize, deserializeIntoPermissions, deserializeIntoPermissions_effective_grants, deserializeIntoPermissions_grants, deserializeIntoPortableSmartFolder, deserializeIntoPortableSmartFolderDefinition, deserializeIntoPortableTerm, deserializeIntoPortableTermGroup, deserializeIntoPortableTermSet, deserializeIntoPortableTerm_labels, deserializeIntoProblem, deserializeIntoProblem_existing_item, deserializeIntoPromoteKeyword, deserializeIntoPromoteStagedFile, deserializeIntoPromotedFile, deserializeIntoPublication, deserializeIntoPublication_snapshot, deserializeIntoQueryGroup, deserializeIntoQueryGroupPage, deserializeIntoQueryRequest, deserializeIntoQueryResult, deserializeIntoQuerySpec, deserializeIntoReadText, deserializeIntoReclaimFileVersion, deserializeIntoReclaimedFileVersion, deserializeIntoRecycleBinPage, deserializeIntoRelationship, deserializeIntoRelationshipEndpoint, deserializeIntoRelationshipEndpointPage, deserializeIntoRelationshipNeighborhood, deserializeIntoRelationshipType, deserializeIntoRelationshipTypeInput, deserializeIntoRelationshipTypePage, deserializeIntoRelationshipType_attributes, deserializeIntoRelationshipView, deserializeIntoRelationship_metadata, deserializeIntoResource, deserializeIntoResourceAccess, deserializeIntoResource_values, deserializeIntoSchemaRevision, deserializeIntoSchemaRevision_definition, deserializeIntoSchemaRevision_definition_fields, deserializeIntoSchemaTemplate, deserializeIntoSchemaTemplatePage, deserializeIntoSchemaTemplate_definition, deserializeIntoSearchFacetValue, deserializeIntoSearchFacets, deserializeIntoSearchField, deserializeIntoSearchHit, deserializeIntoSearchPage, deserializeIntoSearchRequest, deserializeIntoSearchStatus, deserializeIntoSearchStatus_embeddings, deserializeIntoSearchSync, deserializeIntoSetWorkspaceMember, deserializeIntoSmartFolder, deserializeIntoSmartFolderAggregateRequest, deserializeIntoSmartFolderDefinition, deserializeIntoSmartFolderDrop, deserializeIntoSmartFolderEntry, deserializeIntoSmartFolderGroup, deserializeIntoSmartFolderGroupBy, deserializeIntoSmartFolderGroupsResult, deserializeIntoSmartFolderImportResult, deserializeIntoSmartFolderInput, deserializeIntoSmartFolderPackage, deserializeIntoSmartFolderPage, deserializeIntoSmartFolderPreview, deserializeIntoSmartFolderQueryRequest, deserializeIntoSmartFolderQueryRequest_sort, deserializeIntoSmartFolderResult, deserializeIntoSmartFolderTermRef, deserializeIntoSmartFolderUnclassify, deserializeIntoSortSpec, deserializeIntoStagedArtifact, deserializeIntoStagedFile, deserializeIntoStagedFile_metrics, deserializeIntoStagedFile_sources, deserializeIntoTask, deserializeIntoTaskAnswer, deserializeIntoTaskAnswer_input, deserializeIntoTaskCancel, deserializeIntoTaskCreate, deserializeIntoTaskCreate_review, deserializeIntoTaskCreate_values, deserializeIntoTaskList, deserializeIntoTaskOutcome, deserializeIntoTaskReassign, deserializeIntoTaskResponseInput, deserializeIntoTaskResponseInput_input, deserializeIntoTaskUpdate, deserializeIntoTaskUpdate_values, deserializeIntoTask_input, deserializeIntoTask_review, deserializeIntoTask_values, deserializeIntoTaxonomyDecisionRequest, deserializeIntoTaxonomyDecisionRequest_context, deserializeIntoTaxonomyDecisionRequest_data, deserializeIntoTaxonomyDecisionRequest_description_overrides, deserializeIntoTaxonomyImportResult, deserializeIntoTaxonomyPackage, deserializeIntoTemplateField, deserializeIntoTemplateInput, deserializeIntoTerm, deserializeIntoTermEntries, deserializeIntoTermGroup, deserializeIntoTermGroupInput, deserializeIntoTermGroupPage, deserializeIntoTermImportResult, deserializeIntoTermInput, deserializeIntoTermInput_labels, deserializeIntoTermList, deserializeIntoTermPage, deserializeIntoTermSet, deserializeIntoTermSetInput, deserializeIntoTermSetPage, deserializeIntoTerm_labels, deserializeIntoUpdateField, deserializeIntoUpdateListIntegration, deserializeIntoUpdateListIntegration_configuration, deserializeIntoUpdateRelationship, deserializeIntoUpdateRelationship_metadata, deserializeIntoUpdateResource, deserializeIntoUpdateResource_values, deserializeIntoValidationRule, deserializeIntoValidationRuleMember1, deserializeIntoValidationRuleMember2, deserializeIntoViewAggregateRequest, deserializeIntoViewInput, deserializeIntoViewQueryRequest, deserializeIntoViewSettings, deserializeIntoWorkflowCall, deserializeIntoWorkflowCall_input, deserializeIntoWorkflowCalls, deserializeIntoWorkflowForm, deserializeIntoWorkflowStarted, deserializeIntoWorkspaceKeywordCount, deserializeIntoWorkspaceKeywordCountPage, deserializeIntoWorkspaceMember, deserializeIntoWorkspaceRelationshipPage, deserializeIntoWorkspaceRelationshipType, deserializeIntoWorkspaceRelationshipTypePage, deserializeIntoWorkspaceRelationshipView, serializeAggregate, serializeAggregateGroup, serializeAggregateGroupBy, serializeAggregateGroup_values, serializeAggregateKey, serializeAggregateRequest, serializeAggregateResult, serializeApplyTemplateInput, serializeArchiveEntry, serializeArchiveEntry_values, serializeArtifact, serializeArtifact_metrics, serializeArtifact_sources, serializeAttachContentTypeInput, serializeAuditEvent, serializeAuditEvent_credential, serializeAuditEvent_details, serializeAuditPage, serializeBlob, serializeBulkCreate, serializeBulkCreateOperation, serializeBulkCreate_values, serializeBulkLifecycleOperation, serializeBulkOperation, serializeBulkRequest, serializeBulkResponse, serializeBulkResult, serializeBulkUpdate, serializeBulkUpdateOperation, serializeBulkUpdate_values, serializeCalendarOccurrence, serializeCalendarQuery, serializeChunkText, serializeCollectionTemplate, serializeComment, serializeCommentAnchor, serializeCommentCounts, serializeCommentCountsRequest, serializeCommentCounts_counts, serializeCommentCreate, serializeCommentEdit, serializeCommentPerson, serializeCommentSettings, serializeCommentSettingsInput, serializeCommentSettings_effective, serializeCommentThread, serializeCommentThreadList, serializeCompactQueryResult, serializeCompactResource, serializeCompactResource_values, serializeCompactSmartFolderEntry, serializeCompactSmartFolderResult, serializeCompletionRequest, serializeCompletionRequest_output_schema, serializeComposePDF, serializeContentType, serializeContentTypeInput, serializeContentType_effective, serializeCreateCatalogField, serializeCreateField, serializeCreateListIntegration, serializeCreateListIntegration_configuration, serializeCreateRelationship, serializeCreateRelationship_metadata, serializeCreateResource, serializeCreateResource_values, serializeDecisionRequest, serializeDecisionRequest_context, serializeDecisionRequest_data, serializeDecisionRequest_questions, serializeDecisionRequest_questions_options, serializeDeletedResource, serializeDeltaPage, serializeDeltaPage_value, serializeDeltaPage_valueMember1, serializeDeltaPage_valueMember1_Removed, serializeDocumentMetadata, serializeDocumentMetadata_values, serializeDocumentUpload, serializeDuplicateDocument, serializeFieldDefinition, serializeFieldOptions, serializeFieldSetting, serializeFileSummary, serializeFileVersion, serializeFilterExpr, serializeFilteredBulkUpdate, serializeFilteredBulkUpdate_values, serializeGenerationChunk, serializeGenerationChunkPage, serializeGenerationEnrichments, serializeGenerationEnrichments_enrichments, serializeItemIntegration, serializeItemRevision, serializeItemRevision_payload, serializeItemText, serializeItemText_next, serializeItemText_pages, serializeKeywordCount, serializeKeywordCountList, serializeKeywordInput, serializeListIntegration, serializeListTypeInput, serializeListView, serializeListViewPage, serializeLocatedItem, serializeMentionCandidateList, serializeMentionCandidateList_value, serializeMergeTerm, serializeMoveItem, serializeMoveTerm, serializeNavigationFieldSetting, serializeNavigationNode, serializeNavigationPage, serializeNavigationRequest, serializeNavigationSelection, serializeNewMenuInput, serializeNotificationSend, serializeNotificationSendResult, serializeOperation, serializeOperationFailure, serializeOperationPage, serializePageList, serializePageSize, serializePermissions, serializePermissions_effective_grants, serializePermissions_grants, serializePortableSmartFolder, serializePortableSmartFolderDefinition, serializePortableTerm, serializePortableTermGroup, serializePortableTermSet, serializePortableTerm_labels, serializeProblem, serializeProblem_existing_item, serializePromoteKeyword, serializePromoteStagedFile, serializePromotedFile, serializePublication, serializePublication_snapshot, serializeQueryGroup, serializeQueryGroupPage, serializeQueryRequest, serializeQueryResult, serializeQuerySpec, serializeReadText, serializeReclaimFileVersion, serializeReclaimedFileVersion, serializeRecycleBinPage, serializeRelationship, serializeRelationshipEndpoint, serializeRelationshipEndpointPage, serializeRelationshipNeighborhood, serializeRelationshipType, serializeRelationshipTypeInput, serializeRelationshipTypePage, serializeRelationshipType_attributes, serializeRelationshipView, serializeRelationship_metadata, serializeResource, serializeResourceAccess, serializeResource_values, serializeSchemaRevision, serializeSchemaRevision_definition, serializeSchemaRevision_definition_fields, serializeSchemaTemplate, serializeSchemaTemplatePage, serializeSchemaTemplate_definition, serializeSearchFacetValue, serializeSearchFacets, serializeSearchField, serializeSearchHit, serializeSearchPage, serializeSearchRequest, serializeSearchStatus, serializeSearchStatus_embeddings, serializeSearchSync, serializeSetWorkspaceMember, serializeSmartFolder, serializeSmartFolderAggregateRequest, serializeSmartFolderDefinition, serializeSmartFolderDrop, serializeSmartFolderEntry, serializeSmartFolderGroup, serializeSmartFolderGroupBy, serializeSmartFolderGroupsResult, serializeSmartFolderImportResult, serializeSmartFolderInput, serializeSmartFolderPackage, serializeSmartFolderPage, serializeSmartFolderPreview, serializeSmartFolderQueryRequest, serializeSmartFolderQueryRequest_sort, serializeSmartFolderResult, serializeSmartFolderTermRef, serializeSmartFolderUnclassify, serializeSortSpec, serializeStagedArtifact, serializeStagedFile, serializeStagedFile_metrics, serializeStagedFile_sources, serializeTask, serializeTaskAnswer, serializeTaskAnswer_input, serializeTaskCancel, serializeTaskCreate, serializeTaskCreate_review, serializeTaskCreate_values, serializeTaskList, serializeTaskOutcome, serializeTaskReassign, serializeTaskResponseInput, serializeTaskResponseInput_input, serializeTaskUpdate, serializeTaskUpdate_values, serializeTask_input, serializeTask_review, serializeTask_values, serializeTaxonomyDecisionRequest, serializeTaxonomyDecisionRequest_context, serializeTaxonomyDecisionRequest_data, serializeTaxonomyDecisionRequest_description_overrides, serializeTaxonomyImportResult, serializeTaxonomyPackage, serializeTemplateField, serializeTemplateInput, serializeTerm, serializeTermEntries, serializeTermGroup, serializeTermGroupInput, serializeTermGroupPage, serializeTermImportResult, serializeTermInput, serializeTermInput_labels, serializeTermList, serializeTermPage, serializeTermSet, serializeTermSetInput, serializeTermSetPage, serializeTerm_labels, serializeUpdateField, serializeUpdateListIntegration, serializeUpdateListIntegration_configuration, serializeUpdateRelationship, serializeUpdateRelationship_metadata, serializeUpdateResource, serializeUpdateResource_values, serializeValidationRule, serializeValidationRuleMember1, serializeValidationRuleMember2, serializeViewAggregateRequest, serializeViewInput, serializeViewQueryRequest, serializeViewSettings, serializeWorkflowCall, serializeWorkflowCall_input, serializeWorkflowCalls, serializeWorkflowForm, serializeWorkflowStarted, serializeWorkspaceKeywordCount, serializeWorkspaceKeywordCountPage, serializeWorkspaceMember, serializeWorkspaceRelationshipPage, serializeWorkspaceRelationshipType, serializeWorkspaceRelationshipTypePage, serializeWorkspaceRelationshipView };
 }
 
 export {

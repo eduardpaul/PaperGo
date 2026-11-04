@@ -159,7 +159,7 @@ function useDiesel(ctx: AppContext<Params>) {
   // latest of each side.
   const temperatureDays = useAggregates(
     p.list,
-    { query: { contentTypeId: p.temperature, groupBy: "diesel_temperature_at" }, interval: "day", timeZone: ctx.user.preferences.time_zone || "UTC", aggregates: [{ op: "avg", field: "diesel_indoor_c", as: "indoor" }, { op: "avg", field: "diesel_outdoor_c", as: "outdoor" }] },
+    { query: { contentTypeId: p.temperature }, groups: [{ field: "diesel_temperature_at", interval: "day", timeZone: ctx.user.preferences.time_zone || "UTC" }], aggregates: [{ op: "avg", field: "diesel_indoor_c", as: "indoor" }, { op: "avg", field: "diesel_outdoor_c", as: "outdoor" }] },
     { live: true },
   );
   const latest = (field: string) => useQuery(p.list, { contentTypeId: p.temperature, filter: { field, op: "present" }, sort: [{ field: "diesel_temperature_at", direction: "desc" }] }, { top: 1, live: true, compact: true, select: ["diesel_temperature_at", field] });
@@ -174,8 +174,8 @@ function useDiesel(ctx: AppContext<Params>) {
     });
     const switches: Switch[] = heatingItems.data.map((i) => ({ at: at(get(i, "diesel_heating_at")), on: get(i, "diesel_heating") === "on" }));
     const temperatures: TemperatureDay[] = temperatureDays.data
-      .filter((d) => typeof d.key === "string")
-      .map((d) => ({ at: Date.parse(`${d.key}T12:00:00Z`), indoor: num(d.values.indoor), outdoor: num(d.values.outdoor) }));
+      .filter((d) => typeof d.keys[0].value === "string")
+      .map((d) => ({ at: Date.parse(`${d.keys[0].value}T12:00:00Z`), indoor: num(d.values.indoor), outdoor: num(d.values.outdoor) }));
     const latestOf = (items: Item[], field: string): Latest | undefined => {
       const item = items[0];
       const value = item && num(get(item, field));

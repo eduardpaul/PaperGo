@@ -156,36 +156,6 @@ func (r *Repo) Groups(ctx context.Context, q *Query, after *any, n int) ([]Group
 	return out, err
 }
 
-// Measured calls fn with each of q's rows, in no order: its group value
-// (nil when grouped is false) and the values of the plan's measures. It
-// reads every row once, for aggregates the caller works out.
-func (r *Repo) Measured(ctx context.Context, q *Query, grouped bool, measures int, fn func(group any, values []any) error) error {
-	query, args, err := r.eligible(ctx, q)
-	if err != nil {
-		return err
-	}
-	columns := "NULL"
-	if grouped {
-		columns = "sort_value"
-	}
-	for i := range measures {
-		columns += "," + measureAlias(i)
-	}
-	return r.each(ctx, func(rows scan.Rows) error {
-		var group any
-		values := make([]any, measures)
-		targets := make([]any, measures+1)
-		targets[0] = &group
-		for i := range values {
-			targets[i+1] = &values[i]
-		}
-		if err := rows.Scan(targets...); err != nil {
-			return err
-		}
-		return fn(group, values)
-	}, "WITH eligible AS ("+query+") SELECT "+columns+" FROM eligible", args...)
-}
-
 // Contains reports whether q selects a resource.
 func (r *Repo) Contains(ctx context.Context, q *Query, id string) (bool, error) {
 	query, args, err := r.eligible(ctx, q)

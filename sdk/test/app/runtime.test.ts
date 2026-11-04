@@ -5,7 +5,7 @@
 import { Bridge, type AppMessage, type PageMessage } from "../../src/app/bridge.js";
 import { appContext, RequestError, type Init } from "../../src/app/context.js";
 import { formatter, wallClock } from "../../src/app/format.js";
-import { cannotMatch } from "../../src/app/hooks.js";
+import { aggregateRequest, cannotMatch, queryRequest, readPages } from "../../src/app/hooks.js";
 import { flipSign, ticks } from "../../src/app/kit.js";
 import { json } from "../../src/values.js";
 
@@ -58,6 +58,22 @@ expect("a time the clocks show twice is the first", york.instant(2026, 11, 1, 1,
 expect("just before Madrid's clocks go forward", madrid.instant(2026, 3, 29, 1, 30).toISOString(), "2026-03-29T00:30:00.000Z");
 expect("an unknown zone is UTC", wallClock("Nowhere/Else").instant(2026, 11, 4, 12).toISOString(), "2026-11-04T12:00:00.000Z");
 
+// Hooks read what the API serves: compact items on their own route, groups by
+// their own definitions, and every page of a chart's groups.
+expect("a compact query", queryRequest("l/1", { contentTypeId: "t" }, { compact: true, select: ["a"] }), { url: "/v1/resources/l%2F1/query/compact?$top=500", body: { query: { content_type_id: "t" }, select: ["a"] } });
+expect("a full query", queryRequest("l", {}, { top: 1 }), { url: "/v1/resources/l/query?$top=1", body: { query: {} } });
+expect(
+  "aggregates by day",
+  aggregateRequest("l", { query: { contentTypeId: "t" }, groups: [{ field: "at", interval: "day", timeZone: "Europe/Madrid" }, { field: "kind" }], aggregates: [{ op: "avg", field: "c" }], sort: [{ field: "$count", direction: "desc" }] }, undefined),
+  { url: "/v1/resources/l/query/aggregates?$top=500", body: { query: { content_type_id: "t" }, aggregates: [{ op: "avg", field: "c" }], groups: [{ field: "at", interval: "day", time_zone: "Europe/Madrid" }, { field: "kind" }], sort: [{ field: "$count", direction: "desc" }] } },
+);
+const served: string[] = [];
+const pagesOf: Record<string, { value: number[]; "@odata.nextLink": string | null }> = { first: { value: [1, 2], "@odata.nextLink": "second" }, second: { value: [3], "@odata.nextLink": null } };
+const serve = async <T,>(_method: "POST", url: string) => {
+  served.push(url);
+  return { data: pagesOf[url] as T };
+};
+
 // Charts put their ticks on round values, and ± turns a typed number's sign.
 expect("ticks of a percentage", ticks(0, 100), [0, 25, 50, 75, 100]);
 expect("ticks of temperatures", ticks(-1.5, 26.3), [0, 10, 20]);
@@ -67,6 +83,10 @@ expect("one value", ticks(3, 3), [3]);
 expect("± turns a number negative", flipSign("3,5"), "-3,5");
 expect("± turns a plus", flipSign(" +3"), "-3");
 expect("± turns a negative back", flipSign("-3"), "3");
+expect("every page", await readPages<number>(serve, "first", {}, true), [1, 2, 3]);
+expect("every page's request", served.splice(0), ["first", "second"]);
+expect("one page", await readPages<number>(serve, "first", {}, false), [1, 2]);
+expect("one page's request", served.splice(0), ["first"]);
 
 // A page that answers every request with what answer returns.
 function page(answer: (m: Extract<AppMessage, { type: "papergo:request" }>) => { status: number; body: unknown }) {

@@ -52,6 +52,10 @@ type SmartFolderQueryRequest struct {
 	After        string    `json:"-"`
 	Limit        int       `json:"-"`
 	IncludeTotal bool      `json:"include_total,omitempty"`
+	// aggregation makes the query's rows those of these aggregates.
+	aggregation *aggregationSpec
+	// compact reads what compact items hold (QuerySmartFolderCompact).
+	compact bool
 }
 
 func smartDefinition(f *viewstore.SmartFolder) (SmartFolderDefinition, error) {

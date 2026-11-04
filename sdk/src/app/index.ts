@@ -8,7 +8,7 @@ import type { AppContext } from "./context.js";
 export type { AppContext, Init, OpenTarget, RequestOptions, Response, Role } from "./context.js";
 export { RequestError } from "./context.js";
 export type { Format, Preferences } from "./format.js";
-export type { Aggregate, AggregateGroup, AggregateQuery, Item, Loaded, Query, QueryOptions } from "./hooks.js";
+export type { Aggregate, AggregateGroup, AggregateGroupBy, AggregateKey, AggregateQuery, Item, Loaded, Query, QueryOptions } from "./hooks.js";
 export { useAggregates, useApp, useItem, useQuery } from "./hooks.js";
 export type { Band, Column, Series } from "./kit.js";
 export { BarChart, Button, Card, DateField, DateTimeField, Gauge, Grid, Legend, LineChart, Modal, Notice, NumberField, Stat, Table, TextField, Toolbar, narrowWidth, useNarrow } from "./kit.js";
