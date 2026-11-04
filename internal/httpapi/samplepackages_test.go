@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"papergo/internal/auth"
+	appstore "papergo/internal/dal/apps"
 	"papergo/internal/dal/daltest"
 	"papergo/internal/dal/database"
 	"papergo/internal/dms"
@@ -202,6 +203,91 @@ func checkImportedSampleSource(t *testing.T, s *dms.Service, w workflow.Workflow
 	}
 }
 
+// SampleApp is a sample's app: its settings file, with its source read and
+// the placeholders of its parameters bound.
+type SampleApp struct {
+	Key         string         `json:"key"`
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	Source      string         `json:"source"`
+	Parameters  map[string]any `json:"parameters"`
+	State       appstore.State `json:"state"`
+}
+
+// SaveSampleApp creates a sample's app in a workspace as
+// organization-admin, or with an id replaces that app at version, through
+// the apps service, which compiles it and checks its parameters. The apps
+// module imports this package, so its test in package httpapi_test sets it.
+var SaveSampleApp func(t *testing.T, s *dms.Service, workspace, id string, version int, app SampleApp)
+
+// sampleAppSource reads a sample app's settings and the source they name.
+func sampleAppSource(t *testing.T, file string, bindings ...string) SampleApp {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("../../samples", file))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sample SampleApp
+	if err := json.Unmarshal([]byte(strings.NewReplacer(bindings...).Replace(string(raw))), &sample); err != nil {
+		t.Fatal(err)
+	}
+	source, err := os.ReadFile(filepath.Join("../../samples", filepath.Dir(file), sample.Source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sample.Source = string(source)
+	return sample
+}
+
+// checkImportedSampleApps checks that an imported sample carries its apps
+// as their sources say, with their parameters bound to the copy, and that
+// each can be saved again as the importer.
+func checkImportedSampleApps(t *testing.T, s *dms.Service, workspace string, files []string) {
+	t.Helper()
+	apps, err := s.DAL.Apps().List(t.Context(), appstore.Filter{WorkspaceIDs: []string{workspace}})
+	if err != nil || len(apps) != len(files) {
+		t.Fatal("sample apps", apps, err)
+	}
+	if len(files) == 0 {
+		return
+	}
+	diesel, err := s.DAL.Resources().One(t.Context(), resources.Filter{WorkspaceID: workspace, Name: "Diesel", Kinds: []refs.ResourceKind{refs.KindList}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	listTypes, err := s.CollectionContentTypes(t.Context(), "organization-admin", diesel.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	types := map[string]string{}
+	for _, lt := range listTypes {
+		types[lt.Key] = *lt.ParentID
+	}
+	for i, a := range apps {
+		want := sampleAppSource(t, files[i], dieselBindings(diesel.ID, types)...)
+		version, err := s.DAL.Apps().Version(t.Context(), a.ID, int64(a.CurrentVersion))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if a.Key != want.Key || a.Name != want.Name || a.Description != want.Description || a.State != want.State || version.Source != want.Source || version.Bundle == "" {
+			t.Fatal("sample ZIP differs from its app source; rebuild the sample packages", a.Name)
+		}
+		for key, value := range want.Parameters {
+			if !bytes.Equal(mustJSON(t, a.Parameters[key]), mustJSON(t, value)) {
+				t.Fatal("sample app parameter not bound to the copy", key, a.Parameters[key], value)
+			}
+		}
+		if a.CreatedBy != "organization-admin" || a.UpdatedBy != "organization-admin" || version.CreatedBy != "organization-admin" {
+			t.Fatal("template retained the app's source author", a, version.CreatedBy)
+		}
+		want.Parameters = a.Parameters
+		SaveSampleApp(t, s, workspace, a.ID, a.Version, want)
+	}
+}
+
+// dieselApps are the diesel sample's apps, by their settings files.
+var dieselApps = []string{"diesel/diesel-app.json"}
+
 // dieselWorkflows are the diesel sample's workflows, by their settings files.
 var dieselWorkflows = []string{"diesel/diesel-levels.json", "diesel/diesel-measure-reminder.json", "diesel/diesel-refill.json", "diesel/diesel-sample-data.json"}
 
@@ -358,6 +444,9 @@ func buildSamplePackage(t *testing.T, kind, path string) {
 		for _, file := range dieselWorkflows {
 			sampleWorkflow(t, wf, workspace, file, dieselBindings(collections["Diesel"], types)...)
 		}
+		for _, file := range dieselApps {
+			SaveSampleApp(t, s, workspace, "", 0, sampleAppSource(t, file, dieselBindings(collections["Diesel"], types)...))
+		}
 	default:
 		workspace = create("", dms.CreateResource{Kind: "workspace", Name: "Workflow samples", Description: "Receipt summaries, contract indexing, local routing and taxonomy review."})
 		receipts := create(workspace, dms.CreateResource{Kind: "library", Name: "Receipt summaries", WebDAVEnabled: true})
@@ -455,7 +544,8 @@ func TestSampleWorkspacePackages(t *testing.T) {
 	for _, sample := range []struct {
 		Path, Name, Kind string
 		Workflows        int
-	}{{"receipts-package/receipts.zip", "Receipts desk", "receipts", 1}, {"diesel/diesel.zip", "Diesel tracker", "diesel", 4}, {"workflows/workflows.zip", "Workflow samples", "workflows", 4}} {
+		Apps             []string
+	}{{"receipts-package/receipts.zip", "Receipts desk", "receipts", 1, nil}, {"diesel/diesel.zip", "Diesel tracker", "diesel", 4, dieselApps}, {"workflows/workflows.zip", "Workflow samples", "workflows", 4, nil}} {
 		t.Run(sample.Name, func(t *testing.T) {
 			path := filepath.Join("../../samples", sample.Path)
 			if *updateSamplePackages {
@@ -504,6 +594,7 @@ func TestSampleWorkspacePackages(t *testing.T) {
 						}
 					}
 				}
+				checkImportedSampleApps(t, s, result.WorkspaceID, sample.Apps)
 				if count, err := s.DAL.Resources().Count(t.Context(), resources.Filter{WorkspaceID: result.WorkspaceID, Kinds: []refs.ResourceKind{refs.KindItem, refs.KindFolder}}); err != nil || count != 0 {
 					t.Fatal("sample included content", count, err)
 				}

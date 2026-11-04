@@ -116,7 +116,7 @@ func selectWorkspacePackage(p *corePackage) error {
 	}
 	// Owned rows are selected by their owner, never by the incidental appearance
 	// of an ID elsewhere. This also excludes personal saved queries.
-	owners := map[string]string{"content_types": "collection_id", "schema_revisions": "container_id", "schema_templates": "workspace_id", "list_views": "container_id", "smart_folders": "workspace_id", "blobs": "item_id", "item_revisions": "item_id", "integration_items": "item_id", "item_histories": "item_id", "publications": "item_id", "item_surfaces": "item_id", "business_keys": "item_id", "grants": "resource_id", "workflows": "workspace_id", "workflow_triggers": "workspace_id", "group_inboxes": "library_id"}
+	owners := map[string]string{"content_types": "collection_id", "schema_revisions": "container_id", "schema_templates": "workspace_id", "list_views": "container_id", "smart_folders": "workspace_id", "blobs": "item_id", "item_revisions": "item_id", "integration_items": "item_id", "item_histories": "item_id", "publications": "item_id", "item_surfaces": "item_id", "business_keys": "item_id", "grants": "resource_id", "workflows": "workspace_id", "workflow_triggers": "workspace_id", "apps": "workspace_id", "group_inboxes": "library_id"}
 	for table, owner := range owners {
 		for _, row := range packageMaps(p.Tables[table]) {
 			if selected["resources"][fmt.Sprint(row[owner])] && (table != "smart_folders" || row["owner_id"] == nil) {
@@ -136,6 +136,11 @@ func selectWorkspacePackage(p *corePackage) error {
 	for _, row := range packageMaps(p.Tables["workflow_versions"]) {
 		if selected["workflows"][fmt.Sprint(row["workflow_id"])] {
 			add("workflow_versions", row)
+		}
+	}
+	for _, row := range packageMaps(p.Tables["app_versions"]) {
+		if selected["apps"][fmt.Sprint(row["app_id"])] {
+			add("app_versions", row)
 		}
 	}
 	for _, row := range packageMaps(p.Tables["integration_revision_data"]) {

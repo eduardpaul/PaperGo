@@ -111,6 +111,10 @@ An app acts as everyone who opens it, so `app.manage` is not granted to the Memb
 
 Creating, changing and deleting an app are audited as `app.create`, `app.update` and `app.delete` in the workspace's audit trail, with the app's ID, key and version.
 
+## Copying a workspace
+
+A [workspace package](workspace-portability.md) carries the workspace's apps: their key, name, description, state and parameters, and every version with its source, compiled code and parameters form. The lists, content types and items the parameters name become those of the copy. A parameter that names a list or item outside the workspace, or an item a configuration-only package leaves out, fails the export with the name of what it references.
+
 ## API
 
 | Method | Route | Purpose |
@@ -130,4 +134,4 @@ The complete contract is in [OpenAPI](../api/openapi.json).
 
 ## Sample
 
-The [diesel tracker](../samples/diesel/README.md) is a complete app: a workspace package with a list and four workflows, and a dashboard that estimates and forecasts a heating-oil tank from its dipstick readings, purchases and heating seasons, beside the indoor and outdoor temperatures.
+The [diesel tracker](../samples/diesel/README.md) is a complete app: a workspace package with a list, four workflows and a dashboard that estimates and forecasts a heating-oil tank from its dipstick readings, purchases and heating seasons, beside the indoor and outdoor temperatures.
