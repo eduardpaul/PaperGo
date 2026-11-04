@@ -89,7 +89,7 @@ Every morning at 08:00 in the owner's time zone, the reminder looks at the last 
 
 - **15 days after the last reading, not on fixed dates.** Someone who measures on day 10 is next asked on day 25. A fixed calendar (`cron: "0 8 1,16 * *"`) would ask even after a fresh reading. The daily check is cheap: one query, and nothing written on most days.
 - **A reading filed any other way closes the reminder.** The same workflow starts on every new reading and cancels the open `diesel_measure` task with a reason naming the reading, which the cancelled task shows. Its "task assigned" notification goes with it, and the run waiting on it ends quietly. A task answered at the same moment is no longer open; the cancel's 409 is ignored.
-- **One reminder at a time.** Workflow concurrency applies only to runs on items, and a schedule run has none, so the script checks for an open task itself.
+- **One reminder at a time.** The task is [unique](../workflows.md#tasks): while one is open, the daily check is refused with `task_open` and asks nothing.
 - **Nothing nags.** The task stays open until someone measures. It is due two days after it was created, which shows it as overdue but does not repeat it. Assignees are told when it is created, as for every task.
 - **Assignees** are a parameter: a person, `group:<id>`, `role:owners` or `role:members`. The app package can name neither people nor groups of the instance it is installed on, so it ships `["role:owners"]`, and the owner names the person after installing.
 
@@ -131,16 +131,13 @@ export default workflow<unknown, unknown, Params>({
   async run(ctx) {
     const p = ctx.params;
     const api = ctx.api;
-    const open = await api.v1.workspaces.byId(ctx.run.workspace_id).tasks.get({ queryParameters: { key: KEY, status: "open" } });
 
     if (ctx.trigger?.kind === "item") {
       // Someone measured: close the open reminder, whose run then ends.
+      const open = await api.v1.workspaces.byId(ctx.run.workspace_id).tasks.get({ queryParameters: { key: KEY, status: "open" } });
       for (const task of open?.value ?? []) await close(api, task.id!, `Measured: ${ctx.trigger.item.name}.`);
       return;
     }
-    // Concurrency applies to runs on items only, so a schedule run checks
-    // for the reminder still waiting itself.
-    if (open?.value?.length) return;
 
     const last = await api.v1.resources.byId(p.list).query.post(
       { query: { contentTypeId: p.reading_type, sort: [{ field: "measured_at", direction: "desc" }] }, select: ["measured_at"] },
@@ -152,8 +149,10 @@ export default workflow<unknown, unknown, Params>({
 
     let answer;
     try {
+      // Unique: while the last reminder is open, asking again is refused.
       answer = await ctx.ask<{ depth_cm: number }>({
         key: KEY,
+        unique: true,
         title: "Measure the diesel barrel",
         description: at ? `The last reading was on ${String(at).slice(0, 10)}.` : "There is no reading yet.",
         assignees: p.assignees,
@@ -169,6 +168,7 @@ export default workflow<unknown, unknown, Params>({
         outcomes: [{ key: "measured", label: "Save reading", style: "primary" }],
       });
     } catch (e) {
+      if ((e as { code?: string }).code === "task_open") return "already asked";
       if (e instanceof OperationError) return "measured elsewhere";
       throw e;
     }
@@ -191,7 +191,7 @@ export default workflow<unknown, unknown, Params>({
 When `diesel-levels` finishes a reading, `diesel-refill` reads its output. If the level is below `threshold_l`, it creates a high-priority task for `buyers`, linked to the reading. The task's form is the purchase: litres, total price, optionally when (left empty, the moment of the answer) and the supplier. Answering it files the purchase, and `diesel-levels` then works out its price per litre. It is the measuring reminder's pattern, applied to buying.
 
 - **No separate notification.** Assigning a task already tells its assignees in PaperGo, so the task is the alert and the record at once.
-- **One refill task at a time.** The task stays open until someone buys. Readings that stay low find it open and add nothing.
+- **One refill task at a time.** The task is unique and stays open until someone buys. Readings that stay low are refused with `task_open` and add nothing, also when two runs ask at once.
 - **A purchase filed any other way closes it.** The same workflow starts on every new purchase and cancels the open `diesel_refill` task with a reason naming the purchase, from the app, the list or anywhere else. Its notification goes with it, and a 409 from a task answered meanwhile is ignored.
 - **The next one comes after a refill.** Once the task is answered or cancelled, the next reading below the threshold asks again.
 - **Buyers** follow the reminder's rule: `["role:owners"]` in the package, a person or group set after installing.
@@ -239,21 +239,22 @@ export default workflow<unknown, unknown, Params>({
   async run(ctx) {
     const p = ctx.params;
     const api = ctx.api;
-    const open = await api.v1.workspaces.byId(ctx.run.workspace_id).tasks.get({ queryParameters: { key: KEY, status: "open" } });
 
     if (ctx.trigger?.kind === "item") {
       // Someone bought diesel: close the open refill task, whose run then ends.
+      const open = await api.v1.workspaces.byId(ctx.run.workspace_id).tasks.get({ queryParameters: { key: KEY, status: "open" } });
       for (const task of open?.value ?? []) await close(api, task.id!, `Bought: ${ctx.trigger.item.name}.`);
       return;
     }
     const levels = ctx.run.event.data.outputs as Levels | undefined;
-    // Not low, or already asked: the open task stays until someone buys.
-    if (!levels || Number(levels.level_liters) >= p.threshold_l || open?.value?.length) return;
+    if (!levels || Number(levels.level_liters) >= p.threshold_l) return;
 
     let answer;
     try {
+      // Unique: while the refill task is open, asking again is refused.
       answer = await ctx.ask<{ bought_liters: number; total_price: number; purchased_at: string; supplier?: string }>({
         key: KEY,
+        unique: true,
         title: `Fill the diesel barrel: ${levels.level_liters} L left`,
         description: `The barrel is at ${levels.fill_percent} %, below ${p.threshold_l} L.`,
         itemId: ctx.itemId,
@@ -272,6 +273,7 @@ export default workflow<unknown, unknown, Params>({
         outcomes: [{ key: "bought", label: "Save purchase", style: "primary" }],
       });
     } catch (e) {
+      if ((e as { code?: string }).code === "task_open") return "already asked";
       if (e instanceof OperationError) return "bought elsewhere";
       throw e;
     }

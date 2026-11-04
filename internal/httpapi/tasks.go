@@ -65,6 +65,7 @@ type taskCreate struct {
 	ItemID      string               `json:"item_id"`
 	Kind        taskstore.Kind       `json:"kind"`
 	Key         string               `json:"key"`
+	Unique      bool                 `json:"unique"`
 	Title       string               `json:"title"`
 	Description string               `json:"description"`
 	Assignees   []string             `json:"assignees"`
@@ -82,7 +83,7 @@ func (a *API) createTask(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &in) {
 		return
 	}
-	out, err := a.tasks(r).Create(r.Context(), subject(r), runOf(r), tasks.Input{WorkspaceID: r.PathValue("id"), ItemID: in.ItemID, Kind: in.Kind, Key: in.Key, Title: in.Title,
+	out, err := a.tasks(r).Create(r.Context(), subject(r), runOf(r), tasks.Input{WorkspaceID: r.PathValue("id"), ItemID: in.ItemID, Kind: in.Kind, Key: in.Key, Unique: in.Unique, Title: in.Title,
 		Description: in.Description, Assignees: in.Assignees, Completion: in.Completion, Outcomes: in.Outcomes, InputSchema: in.InputSchema, Values: in.Values,
 		Priority: in.Priority, DueAt: in.DueAt, Review: in.Review, Actor: subject(r)})
 	if err != nil {

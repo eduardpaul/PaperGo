@@ -64,6 +64,19 @@ type CreateInput struct {
 	Source                         Source
 	WorkflowID, RunID, OperationID string
 	CreatedBy                      string
+	// Unique creates the task only when no open task of its workspace has
+	// its key; otherwise Create returns an *OpenError.
+	Unique bool
+}
+
+// OpenError refuses a unique task while the open task ID of its workspace
+// has the same key.
+type OpenError struct {
+	Key, ID string
+}
+
+func (e *OpenError) Error() string {
+	return fmt.Sprintf("task %s with key %s is still open", e.ID, e.Key)
 }
 
 type ResponseInput struct {
@@ -164,6 +177,20 @@ func (r *Repo) Create(ctx context.Context, in CreateInput) (Task, error) {
 		}
 		if err := validateAssignees(ctx, q, in.Assignees); err != nil {
 			return err
+		}
+		if in.Unique {
+			// The workspace lock queues every task creation of the
+			// workspace, so two unique tasks cannot both find none open.
+			if in.Key == "" {
+				return fmt.Errorf("%w: a unique task needs a key", dberr.ErrCheckViolation)
+			}
+			open, err := q.Tasks(ctx, Filter{WorkspaceID: in.WorkspaceID, Key: in.Key, Status: StatusOpen, Limit: 1})
+			if err != nil {
+				return err
+			}
+			if len(open) > 0 {
+				return &OpenError{Key: in.Key, ID: open[0].ID}
+			}
 		}
 		if len(in.Outcomes) < 1 || len(in.Outcomes) > 10 {
 			return fmt.Errorf("%w: tasks need 1 to 10 outcomes", dberr.ErrCheckViolation)

@@ -478,6 +478,16 @@ const approved = legal.outcome === "approved" && finance.outcome === "approved";
     }
   }
   ```
+- **Asking once.** `unique: true` creates the task only when no open task of the workspace has its `key`, which a unique task needs. While one is open, the request fails with 409 and the problem code `task_open`, naming the open task, and nothing is created; once it is answered or cancelled, the next unique task with the key is created. Tasks of a workspace are created one at a time, so two runs asking at once never both get one. A workflow that asks on a schedule, or on every change, asks once this way, and a run that finds its task already open ends:
+
+  ```ts
+  try {
+    await ctx.ask({ key: "diesel_measure", unique: true, title: "Measure the diesel barrel" });
+  } catch (e) {
+    if ((e as { code?: string }).code === "task_open") return "already asked";
+    throw e;
+  }
+  ```
 - **Reassigning.** When an assignee can no longer answer, for example after leaving, a workspace owner (or the creator of a person's task) replaces the open task's assignees. Answers of entries that stay count; with `all`, the task completes once every entry left has answered, and a waiting run continues.
 - **Form.** `input_schema` is a [form](#forms), frozen on the task when it is created. Its pickers must point at the workspace. `values` prefill it and must be valid answers, picks included. An answer sends the form's values unless its outcome skips the form; the server applies defaults and checks them, and pickers are checked against the person who answers.
 - **Review.** `review` shows a staged file of the run, an [artifact](documents.md#artifacts-and-staged-files) it staged, beside the form: `file.preview` shows a staged document, such as a PDF. An answer whose outcome does not `allow_stale` fails with 409 when the staged file was made from a file that is no longer current.

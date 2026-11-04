@@ -187,6 +187,46 @@ func runDALTaskSuite(t *testing.T, newStore func(testing.TB) *dal.Store) {
 			t.Fatalf("response escaped transaction: %d %v", count, err)
 		}
 	})
+	t.Run("UniqueTaskWhileOneIsOpen", func(t *testing.T) {
+		ctx := context.Background()
+		s, in := daltest.TaskFixture(t, newStore)
+		in.Unique = true
+		if _, err := s.Tasks().Create(ctx, in); !errors.Is(err, dberr.ErrCheckViolation) {
+			t.Fatalf("a unique task without a key: %v", err)
+		}
+		in.Key = "diesel_measure"
+		errs := make([]error, 2)
+		created := make([]taskstore.Task, 2)
+		var wg sync.WaitGroup
+		for i := range errs {
+			wg.Go(func() { created[i], errs[i] = s.Tasks().Create(ctx, in) })
+		}
+		wg.Wait()
+		first, refused := created[0], errs[1]
+		if errs[0] != nil {
+			first, refused = created[1], errs[0]
+		}
+		var open *taskstore.OpenError
+		if !errors.As(refused, &open) || open.ID != first.ID || open.Key != "diesel_measure" {
+			t.Fatalf("one of two concurrent unique tasks is refused, naming the other: %v %v", errs[0], errs[1])
+		}
+		// A task that does not ask to be unique is created beside it.
+		in.Unique = false
+		if _, err := s.Tasks().Create(ctx, in); err != nil {
+			t.Fatal(err)
+		}
+		in.Unique = true
+		if _, err := s.Tasks().Cancel(ctx, first.ID, first.Version, "alice", ""); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.Tasks().Create(ctx, in); !errors.As(err, &open) {
+			t.Fatalf("the plain task with the key is still open: %v", err)
+		}
+		in.Key = "diesel_refill"
+		if _, err := s.Tasks().Create(ctx, in); err != nil {
+			t.Fatalf("another key is free: %v", err)
+		}
+	})
 	t.Run("ConcurrentTaskResponsesAndCancellation", func(t *testing.T) {
 		ctx := context.Background()
 		s, in := daltest.TaskFixture(t, newStore)

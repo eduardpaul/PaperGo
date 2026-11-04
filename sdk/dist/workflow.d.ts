@@ -6220,6 +6220,10 @@ export interface TaskCreate extends Parsable {
 	 */
 	title?: string | null;
 	/**
+	 * Creates the task only when no open task of the workspace has its key, which it then needs. Otherwise the request fails with 409 task_open, naming the open task.
+	 */
+	unique?: boolean | null;
+	/**
 	 * The values property
 	 */
 	values?: TaskCreate_values | null;
@@ -13475,7 +13479,7 @@ interface TasksRequestBuilder$2 extends BaseRequestBuilder<TasksRequestBuilder$2
 	 */
 	get(requestConfiguration?: RequestConfiguration<TasksRequestBuilderGetQueryParameters$1> | undefined): Promise<TaskList | undefined>;
 	/**
-	 * Creates a task. The creator needs read access to the workspace, and write access to the item when it concerns one. Assignees are recipient entries; none means the workspace's owners. Unknown recipients fail with their names. A task a workflow run creates is that workflow's: its operation_id is the operation its answer ends, which the run waits on, it may review a staged file of the run, and it is cancelled with the run. Needs the item.write scope.
+	 * Creates a task. The creator needs read access to the workspace, and write access to the item when it concerns one. Assignees are recipient entries; none means the workspace's owners. Unknown recipients fail with their names. A task a workflow run creates is that workflow's: its operation_id is the operation its answer ends, which the run waits on, it may review a staged file of the run, and it is cancelled with the run. A unique task is refused with 409 task_open while a task of the workspace with its key is open. Needs the item.write scope.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Task>}
@@ -13497,7 +13501,7 @@ interface TasksRequestBuilder$2 extends BaseRequestBuilder<TasksRequestBuilder$2
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<TasksRequestBuilderGetQueryParameters$1> | undefined): RequestInformation;
 	/**
-	 * Creates a task. The creator needs read access to the workspace, and write access to the item when it concerns one. Assignees are recipient entries; none means the workspace's owners. Unknown recipients fail with their names. A task a workflow run creates is that workflow's: its operation_id is the operation its answer ends, which the run waits on, it may review a staged file of the run, and it is cancelled with the run. Needs the item.write scope.
+	 * Creates a task. The creator needs read access to the workspace, and write access to the item when it concerns one. Assignees are recipient entries; none means the workspace's owners. Unknown recipients fail with their names. A task a workflow run creates is that workflow's: its operation_id is the operation its answer ends, which the run waits on, it may review a staged file of the run, and it is cancelled with the run. A unique task is refused with 409 task_open while a task of the workspace with its key is open. Needs the item.write scope.
 	 * @param body The request body
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}

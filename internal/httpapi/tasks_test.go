@@ -48,6 +48,11 @@ func TestTaskRoutes(t *testing.T) {
 	if w = request(h, "GET", "/v1/items/"+item.ID+"/tasks", "", testToken, "", ""); w.Code != 200 || !strings.Contains(w.Body.String(), standalone.ID) {
 		t.Fatalf("item tasks: %d %s", w.Code, w.Body)
 	}
+	// A unique task is refused while the task with its key is open.
+	if w = request(h, "POST", "/v1/workspaces/"+ws.ID+"/tasks", `{"title": "Confirm it again", "key": "amount_check", "unique": true}`, testToken, "", json_); w.Code != 409 ||
+		!strings.Contains(w.Body.String(), `"code":"task_open"`) || !strings.Contains(w.Body.String(), standalone.ID) {
+		t.Fatalf("unique task while one is open: %d %s", w.Code, w.Body)
+	}
 	if w = request(h, "POST", "/v1/tasks/"+standalone.ID+"/responses", `{"outcome": "maybe"}`, testToken, "", json_); w.Code != 422 {
 		t.Fatalf("bad outcome: %d %s", w.Code, w.Body)
 	}

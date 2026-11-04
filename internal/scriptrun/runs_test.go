@@ -310,6 +310,47 @@ export default workflow({
 	}
 }
 
+// A unique task is asked once: a second run asking while it is open is
+// refused with task_open and ends, and the first run gets the answer.
+func TestUniqueTasksAreAskedOnce(t *testing.T) {
+	r := run(t)
+	w := r.workflow(t, "Measure", `import { workflow } from "@papergo/workflow";
+
+export default workflow({
+  triggers: [{ type: "manual", collection_id: "`+r.list+`" }],
+  async run(ctx) {
+    try {
+      const answer = await ctx.ask({ key: "diesel_measure", unique: true, title: "Measure the diesel barrel" });
+      return answer.outcome;
+    } catch (e) {
+      if ((e as { code?: string }).code === "task_open") return "already asked";
+      throw e;
+    }
+  },
+});
+`)
+	itemID := r.item(t, "Barrel")
+	first := r.start(t, w, nil, itemID)
+	r.await(t, first, runstore.StatusWaiting)
+	second := r.await(t, r.start(t, w, nil, itemID), runstore.StatusCompleted)
+	if string(second.Result) != `"already asked"` {
+		t.Fatalf("the second run asked again: %s", second.Result)
+	}
+	var tasks struct {
+		Value []struct {
+			ID string `json:"id"`
+		} `json:"value"`
+	}
+	r.call(t, "GET", "/v1/workspaces/"+r.ws+"/tasks?key=diesel_measure", "", 200, &tasks)
+	if len(tasks.Value) != 1 {
+		t.Fatalf("tasks: %+v", tasks)
+	}
+	r.call(t, "POST", "/v1/tasks/"+tasks.Value[0].ID+"/responses", `{"outcome":"done"}`, 200, nil)
+	if done := r.await(t, first, runstore.StatusCompleted); string(done.Result) != `"done"` {
+		t.Fatalf("the first run's answer: %s", done.Result)
+	}
+}
+
 func TestRunsWaitForTasksAndSleeps(t *testing.T) {
 	r := run(t)
 	w := r.workflow(t, "Approve", `import { plain, workflow } from "@papergo/workflow";

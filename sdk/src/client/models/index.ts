@@ -6694,6 +6694,7 @@ export function deserializeIntoTaskCreate(taskCreate: Partial<TaskCreate> | unde
         "priority": n => { taskCreate.priority = n.getEnumValue<TaskCreate_priority>(TaskCreate_priorityObject); },
         "review": n => { taskCreate.review = n.getObjectValue<TaskCreate_review>(createTaskCreate_reviewFromDiscriminatorValue); },
         "title": n => { taskCreate.title = n.getStringValue(); },
+        "unique": n => { taskCreate.unique = n.getBooleanValue(); },
         "values": n => { taskCreate.values = n.getObjectValue<TaskCreate_values>(createTaskCreate_valuesFromDiscriminatorValue); },
     }
 }
@@ -12799,6 +12800,7 @@ export function serializeTaskCreate(writer: SerializationWriter, taskCreate: Par
     writer.writeEnumValue<TaskCreate_priority>("priority", taskCreate.priority);
     writer.writeObjectValue<TaskCreate_review>("review", taskCreate.review, serializeTaskCreate_review);
     writer.writeStringValue("title", taskCreate.title);
+    writer.writeBooleanValue("unique", taskCreate.unique);
     writer.writeObjectValue<TaskCreate_values>("values", taskCreate.values, serializeTaskCreate_values);
 }
 /**
@@ -14246,6 +14248,10 @@ export interface TaskCreate extends Parsable {
      * The title property
      */
     title?: string | null;
+    /**
+     * Creates the task only when no open task of the workspace has its key, which it then needs. Otherwise the request fails with 409 task_open, naming the open task.
+     */
+    unique?: boolean | null;
     /**
      * The values property
      */

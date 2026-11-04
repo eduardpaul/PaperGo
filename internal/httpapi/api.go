@@ -15,6 +15,7 @@ import (
 	"papergo/internal/dal/dberr"
 	"papergo/internal/dal/refs"
 	"papergo/internal/dal/resources"
+	taskstore "papergo/internal/dal/tasks"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
 	"papergo/internal/requestmeta"
@@ -423,6 +424,7 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 	var identityValidation *identity.ValidationError
 	var max *http.MaxBytesError
 	var moduleProblem *Problem
+	var openTask *taskstore.OpenError
 	switch {
 	case errors.As(err, &moveConflict):
 		w.Header().Set("Content-Type", "application/problem+json")
@@ -468,6 +470,8 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 		problem(403, "forbidden", "access denied")
 	case errors.Is(err, dms.ErrProtectedHome):
 		problem(409, "protected_home", err.Error())
+	case errors.As(err, &openTask):
+		problem(409, "task_open", openTask.Error())
 	case errors.Is(err, dms.ErrLastOwner):
 		problem(409, "last_owner", "A workspace needs at least one owner. Make someone else an owner first.")
 	case errors.Is(err, dms.ErrFolderNotEmpty):

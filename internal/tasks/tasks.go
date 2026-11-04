@@ -85,6 +85,10 @@ type Input struct {
 	ItemID      string
 	Kind        taskstore.Kind
 	Key         string
+	// Unique creates the task only when no open task of the workspace has
+	// its key, which it then needs; otherwise Create returns a
+	// *taskstore.OpenError naming the open one.
+	Unique      bool
 	Title       string
 	Description string
 	Assignees   []string
@@ -183,7 +187,7 @@ func Create(ctx context.Context, t *dms.Service, subject string, in Input) (task
 	input := taskstore.CreateInput{
 		WorkspaceID: in.WorkspaceID, ItemID: in.ItemID, Kind: in.Kind, Key: in.Key, Title: in.Title, Description: in.Description,
 		Assignees: assignees, Completion: in.Completion, Outcomes: in.Outcomes, InputSchema: in.InputSchema, Values: in.Values, Review: in.Review,
-		Priority: in.Priority, DueAt: in.DueAt, CreatedBy: subject, Source: taskstore.SourceUser,
+		Priority: in.Priority, DueAt: in.DueAt, CreatedBy: subject, Source: taskstore.SourceUser, Unique: in.Unique,
 	}
 	if in.Workflow != nil {
 		input.ID = uuid.NewString()
@@ -240,6 +244,9 @@ func (in *Input) normalize() error {
 	}
 	if in.Key != "" && !keyPattern.MatchString(in.Key) {
 		return dms.Invalid("key is a lowercase name such as legal_review")
+	}
+	if in.Unique && in.Key == "" {
+		return dms.Invalid("a unique task needs a key")
 	}
 	if in.Completion == "" {
 		in.Completion = taskstore.CompletionAny
