@@ -73,7 +73,16 @@ export function CollectionSearchSettings({ workspaceId, collectionId, canManage 
       await client.invalidateQueries({ queryKey: ['workflow-roles', collectionId] });
     },
   });
-  if (!available || !builtin || roles.isPending) return null;
+  if (!available) return null;
+  // Without the role the setting cannot tell whether a copy keeps search,
+  // and choosing would turn that copy off: it says so instead.
+  if (roles.isError)
+    return (
+      <SettingsSection title={t('lists:search.title')} description={t('lists:search.description')}>
+        <QueryFeedback query={roles} />
+      </SettingsSection>
+    );
+  if (!builtin || roles.isPending) return null;
   return (
     <SettingsSection
       title={t('lists:search.title')}

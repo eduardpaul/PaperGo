@@ -79,3 +79,30 @@ it('names a workflow that keeps search in place of the built-in', async () => {
   expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
   client.clear();
 });
+
+// Without the role, the setting offers no choice: it could not tell whether
+// a copy keeps search, and choosing would turn that copy off.
+it('offers no choice when the role cannot be read', async () => {
+  const builtin: BuiltInState = { key: 'search.index', name: 'Index for search', description: '', role: 'search.index', default: true, system: true, workflows: [] };
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: URL | string) => {
+      const url = new URL(String(input), window.location.origin);
+      if (url.pathname.endsWith('/workflow-roles')) return new Response(stringifyJSON({ status: 500, code: 'internal_error', detail: 'request could not be completed' }), { status: 500, headers: { 'Content-Type': 'application/problem+json' } });
+      let result: unknown = { value: [] };
+      if (url.pathname === '/v1/workflow-catalog') result = { triggers: [], builtins: [], roles: [{ key: 'search.index', name: 'Search index' }] };
+      else if (url.pathname.endsWith('/workflow-builtins')) result = { value: [builtin] };
+      return new Response(stringifyJSON(result), { headers: { 'Content-Type': 'application/json' } });
+    }),
+  );
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <CollectionSearchSettings workspaceId="ws" collectionId="diesel" canManage />
+    </QueryClientProvider>,
+  );
+  await screen.findByRole('alert');
+  expect(screen.queryByLabelText('Search the items')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
+  client.clear();
+});
