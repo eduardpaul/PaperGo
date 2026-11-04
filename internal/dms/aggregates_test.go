@@ -41,6 +41,8 @@ func TestQueryAggregates(t *testing.T) {
 		publishItem(t, s, item)
 		ids = append(ids, item.ID)
 	}
+	// A folder holding values is not an item: no figure, count or group sees it.
+	create(t, s, l.ID, "folder", "Archive", map[string]any{"temp": json.Number("1000.0"), "kind": "a"})
 	run := func(subject string, in AggregateRequest) []AggregateGroup {
 		t.Helper()
 		out, err := s.QueryAggregates(testContext, subject, l.ID, in)

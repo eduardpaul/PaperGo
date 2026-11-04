@@ -330,7 +330,7 @@ func (s *Service) QueryAggregates(ctx context.Context, subject, containerID stri
 		return AggregateResult{}, err
 	}
 	return read(ctx, s, func(t *Service) (AggregateResult, error) {
-		q, e := t.compileQuery(ctx, subject, containerID, QueryRequest{Query: in.Query, Surface: in.Surface, measures: fields}, grouped)
+		q, e := t.compileQuery(ctx, subject, containerID, QueryRequest{Query: in.Query, Surface: in.Surface, itemsOnly: true, measures: fields}, grouped)
 		if e != nil {
 			return AggregateResult{}, e
 		}
