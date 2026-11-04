@@ -107,7 +107,7 @@ export function AppFrame({ app }: { app: App }) {
   if (failed) return <Alert tone="danger">{t('frame.notLoaded')}</Alert>;
   if (stopped) return <Alert tone="danger">{t('frame.stopped')}</Alert>;
   return (
-    <div className="relative min-h-[70vh] flex-1 overflow-hidden rounded-lg border bg-background">
+    <div className="relative min-h-0 flex-1 overflow-hidden border-t bg-background sm:rounded-lg sm:border">
       {!document_ && <Skeleton className="absolute inset-0" />}
       <iframe ref={frame} title={app.name} sandbox="allow-scripts" className="absolute inset-0 h-full w-full border-0" />
     </div>

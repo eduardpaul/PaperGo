@@ -69,11 +69,17 @@ The kit draws in PaperGo's theme, light or dark as the viewer's:
 - **Data:** `Table`.
 - **Controls:** `Button`, `Notice`, `NumberField` (a decimal typed with a phone's numeric keyboard, with an optional live hint), `TextField`, `DateField` and `DateTimeField`.
 
+**Phones.** The kit lays out for touch up to 640 pixels wide (`narrowWidth`), and `useNarrow()` tells an app when it is shown that narrow:
+- **Toolbar:** it becomes a bar fixed to the bottom of the app, in equal parts, under the thumb, and the content keeps clear of it.
+- **Charts:** they draw at their real width, so their text stays legible, and keep their ticks apart. Tapping a point, a marker or a bar shows what it is below the chart, since a phone has no hover.
+- **Tables:** they scroll sideways when they must, keep values on one line and leave out the columns marked `optional`.
+- **Touch targets:** buttons and fields are at least 44 pixels high, and padding is tighter.
+
 `json()` wraps free-form values, such as an item's, for the generated client, and `plain()` turns its untyped answers into JSON. An error in the app shows inside its screen.
 
 ## How it runs
 
-People open a workspace's published apps from the sidebar, below its lists, and those who write apps add and change them in **Workspace settings → Apps**. The editor checks the source against `@papergo/app` and React as it is typed. Once a version is saved, it shows the parameters form with its pickers.
+People open a workspace's published apps from the sidebar, below its lists, and those who write apps add and change them in **Workspace settings → Apps**. The app page gives the app the whole screen below the top bar, with a one-line header, and the app is its only scroll area; on a phone it runs edge to edge. The editor checks the source against `@papergo/app` and React as it is typed. Once a version is saved, it shows the parameters form with its pickers.
 
 The app page puts the app in a sandboxed frame:
 

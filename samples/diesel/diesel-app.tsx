@@ -27,6 +27,7 @@ import {
   Toolbar,
   json,
   useApp,
+  useNarrow,
   useQuery,
   type AppContext,
   type Band,
@@ -271,6 +272,7 @@ function Dashboard({ w }: { w: Words }) {
   const measure = useTasks(ctx, "diesel_measure");
   const refill = useTasks(ctx, "diesel_refill");
   const [dialog, setDialog] = useState<"reading" | "purchase" | "heating">();
+  const narrow = useNarrow();
   const reserveLiters = (p.reserve_percent / 100) * p.capacity_l;
   const toReserve = m.until(reserveLiters);
   const toOrder = m.until(p.order_at_l);
@@ -303,7 +305,9 @@ function Dashboard({ w }: { w: Words }) {
         <Button variant="primary" onClick={() => setDialog("reading")}>{w.addReading}</Button>
         <Button onClick={() => setDialog("purchase")}>{w.addPurchase}</Button>
         <Button onClick={() => setDialog("heating")}>
-          {"🔥 " + say(w.heatingButton, { state: heatingNow.on ? w.stateOn : w.stateOff }) + (heatingNow.assumed ? ` (${w.assumed})` : "")}
+          {narrow
+            ? `🔥 ${heatingNow.on ? w.stateOn : w.stateOff}`
+            : "🔥 " + say(w.heatingButton, { state: heatingNow.on ? w.stateOn : w.stateOff }) + (heatingNow.assumed ? ` (${w.assumed})` : "")}
         </Button>
       </Toolbar>
       {measure.map((task) => <Notice key={task.id} tone="warning" title={w.measureDue} action={{ label: w.answer, onClick: () => ctx.open({ taskId: task.id }) }}>{task.title}</Notice>)}
@@ -355,7 +359,7 @@ function Dashboard({ w }: { w: Words }) {
           xTicks={m.readings[0] ? ticks(m.readings[0].at, levelEnd) : undefined}
           markers={m.purchases.map((b) => ({ x: b.at, label: `${w.fillLine} ${f.date(b.at)} · ${f.number(b.liters, 0)} L · ${euro(b.total)}` }))}
           series={[
-            { name: w.percent, points: m.readings.filter((r) => r.percent !== undefined).map((r) => ({ x: r.at, y: r.percent! })) },
+            { name: w.levelLine, points: m.readings.filter((r) => r.percent !== undefined).map((r) => ({ x: r.at, y: r.percent! })) },
             ...(m.current !== undefined && m.last ? [{ name: w.forecast, points: [{ x: m.last.at, y: m.last.percent ?? (m.last.liters! / p.capacity_l) * 100 }, { x: m.now, y: (m.current / p.capacity_l) * 100 }, ...(toOrder ? [{ x: levelEnd, y: (p.order_at_l / p.capacity_l) * 100 }] : [])] }] : []),
           ]}
           formatX={(x) => f.date(x)}
@@ -390,7 +394,7 @@ function Dashboard({ w }: { w: Words }) {
             { key: "season", label: w.season },
             { key: "measured", label: w.measured, align: "right" },
             { key: "used", label: w.used, align: "right" },
-            { key: "days", label: w.days, align: "right" },
+            { key: "days", label: w.days, align: "right", optional: true },
           ]}
           rows={(["off", "on", "peak"] as const).map((s) => ({
             id: s,
@@ -414,7 +418,7 @@ function Dashboard({ w }: { w: Words }) {
           <Table columns={[{ key: "date", label: w.date }, { key: "stick", label: w.stickCol, align: "right" }, { key: "liters", label: w.litersCol, align: "right" }, { key: "fill", label: w.fill, align: "right" }]} rows={[...m.readings].reverse().slice(0, 5).map((r) => ({ id: r.id, date: f.date(r.at), stick: `${f.number(r.stick, 1)} cm`, liters: f.number(r.liters, 1), fill: r.percent === undefined ? "…" : `${f.number(r.percent, 1)} %` }))} onRowClick={(row) => ctx.open({ itemId: String(row.id) })} />
         </Card>
         <Card title={w.purchases} actions={<Button onClick={() => ctx.open({ listId: p.list })}>{w.history}</Button>}>
-          <Table columns={[{ key: "date", label: w.date }, { key: "liters", label: w.litersCol, align: "right" }, { key: "total", label: w.total, align: "right" }, { key: "price", label: w.perLiter, align: "right" }, { key: "supplier", label: w.supplierCol }]} rows={[...m.purchases].reverse().slice(0, 5).map((b) => ({ id: b.id, date: f.date(b.at), liters: f.number(b.liters, 0), total: euro(b.total), price: f.decimal(b.price, 3), supplier: b.supplier || "–" }))} onRowClick={(row) => ctx.open({ itemId: String(row.id) })} />
+          <Table columns={[{ key: "date", label: w.date }, { key: "liters", label: w.litersCol, align: "right" }, { key: "total", label: w.total, align: "right" }, { key: "price", label: w.perLiter, align: "right" }, { key: "supplier", label: w.supplierCol, optional: true }]} rows={[...m.purchases].reverse().slice(0, 5).map((b) => ({ id: b.id, date: f.date(b.at), liters: f.number(b.liters, 0), total: euro(b.total), price: f.decimal(b.price, 3), supplier: b.supplier || "–" }))} onRowClick={(row) => ctx.open({ itemId: String(row.id) })} />
         </Card>
       </Grid>
 

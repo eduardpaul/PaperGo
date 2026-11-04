@@ -14086,6 +14086,10 @@ export declare function useQuery(listId: string | undefined, query?: Query, opti
 export declare function useItem(id: string | undefined, options?: {
 	live?: boolean;
 }): Loaded<Item | undefined>;
+/** Phones and narrow windows: at most this wide, the kit lays out for touch. */
+export declare const narrowWidth = 640;
+/** Whether the app is shown narrow, as on a phone; it follows the window as it changes. */
+export declare function useNarrow(): boolean;
 export type Tone = "default" | "warning" | "danger" | "success";
 /** A surface with an optional title, and actions or a legend on its right. */
 export declare function Card({ title, actions, children }: {
@@ -14100,7 +14104,10 @@ export declare function Legend({ items }: {
 		color: string;
 	}[];
 }): import("react").JSX.Element;
-/** Buttons on the right, above what follows. */
+/**
+ * Buttons on the right, above what follows. On a phone they become a bar
+ * fixed to the bottom of the app, under the thumb, in equal parts.
+ */
 export declare function Toolbar({ children }: {
 	children?: ReactNode;
 }): import("react").JSX.Element;
@@ -14172,6 +14179,8 @@ export interface Column<R> {
 	key: string;
 	label: ReactNode;
 	align?: "left" | "right";
+	/** Left out on a phone. */
+	optional?: boolean;
 	render?: (row: R) => ReactNode;
 }
 export declare function Table<R extends Record<string, unknown>>({ columns, rows, onRowClick, empty }: {
@@ -14196,7 +14205,10 @@ export interface Band {
 }
 /**
  * Lines over a numeric or time axis, with optional markers on the x axis,
- * such as purchases on a level chart, and shaded bands behind them.
+ * such as purchases on a level chart, shaded bands behind them, dashed
+ * reference lines and the ticks it is given. It draws at its real width, so
+ * its text stays legible on a phone, and thins the ticks to fit; tapping a
+ * point or a marker shows what it is below the chart.
  */
 export declare function LineChart({ series, markers, bands, references, xTicks, height, formatX, formatTick, formatY, yMin, yMax }: {
 	series: Series[];
@@ -14232,7 +14244,7 @@ export declare function Gauge({ value, max, label, hint, text, warn, danger, bar
 	danger?: number;
 	bare?: boolean;
 }): import("react").JSX.Element;
-/** Bars, one per label, such as a month. */
+/** Bars, one per label, such as a month; tapping one shows its value below. */
 export declare function BarChart({ data, height, formatY }: {
 	data: {
 		label: string;
