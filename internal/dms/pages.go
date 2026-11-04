@@ -61,6 +61,23 @@ func compactItems(rows []*resources.Resource, selection []string) []CompactItem 
 	return out
 }
 
+// compactEntry is a smart folder's entry holding a compact item.
+type compactEntry struct {
+	CollectionKind string      `json:"collection_kind"`
+	WorkspaceID    string      `json:"workspace_id"`
+	CollectionID   string      `json:"collection_id"`
+	CollectionName string      `json:"collection_name"`
+	Item           CompactItem `json:"item"`
+}
+
+func compactEntries(entries []SmartFolderEntry) []compactEntry {
+	out := make([]compactEntry, len(entries))
+	for i, e := range entries {
+		out[i] = compactEntry{e.CollectionKind, e.WorkspaceID, e.CollectionID, e.CollectionName, compactItems([]*resources.Resource{e.Item}, nil)[0]}
+	}
+	return out
+}
+
 func numberedPage[T any](rows []T, limit int, number func(T) int) Page[T] {
 	result := Page[T]{Data: rows}
 	size := pageSize(limit)
@@ -108,6 +125,9 @@ func (p Navigation) APIPage() (map[string]any, string) {
 }
 func (p SmartFolderResult) APIPage() (map[string]any, string) {
 	result := map[string]any{"value": p.Data}
+	if p.Compact {
+		result["value"] = compactEntries(p.Data)
+	}
 	if p.TotalCapped {
 		result["total_capped"] = true
 	}

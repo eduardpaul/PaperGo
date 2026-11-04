@@ -77,6 +77,22 @@ type AggregateRequest struct {
 	AggregateSpec
 }
 
+// ViewAggregateRequest asks for figures of the items a saved view lists.
+// Selected names the terms a navigation view lists the items of.
+type ViewAggregateRequest struct {
+	Surface  string                `json:"surface,omitempty"`
+	Selected []NavigationSelection `json:"selected,omitempty"`
+	AggregateSpec
+}
+
+// SmartFolderAggregateRequest asks for figures of the items at a path of a
+// smart folder.
+type SmartFolderAggregateRequest struct {
+	Path    []*string `json:"path,omitempty"`
+	Surface string    `json:"surface,omitempty"`
+	AggregateSpec
+}
+
 // AggregateKey is a group's value of one of the request's groups.
 type AggregateKey struct {
 	Value any `json:"value"`
@@ -607,6 +623,56 @@ func (s *Service) QueryAggregates(ctx context.Context, subject, containerID stri
 	})
 }
 
+// QueryViewAggregates works out figures of the items a saved view lists, by
+// its filters whatever its grouping and sort. They follow the view when it
+// changes.
+func (s *Service) QueryViewAggregates(ctx context.Context, subject, id string, in ViewAggregateRequest) (AggregateResult, error) {
+	spec, err := aggregation(in.AggregateSpec)
+	if err != nil {
+		return AggregateResult{}, err
+	}
+	return snapshot(ctx, s, func(t *Service) (AggregateResult, error) {
+		v, e := t.View(ctx, subject, id)
+		if e != nil {
+			return AggregateResult{}, e
+		}
+		query, _, e := t.viewQuery(ctx, subject, v, in.Selected)
+		if e != nil {
+			return AggregateResult{}, e
+		}
+		query.GroupBy, query.Sort = "", nil
+		q, e := t.compileQuery(ctx, subject, v.ContainerID, QueryRequest{Query: query, Surface: in.Surface, itemsOnly: true, aggregation: spec}, false)
+		if e != nil {
+			return AggregateResult{}, e
+		}
+		return t.aggregates(ctx, q, spec)
+	})
+}
+
+// QuerySmartFolderAggregates works out figures of the items at a path of a
+// smart folder, across its collections.
+func (s *Service) QuerySmartFolderAggregates(ctx context.Context, subject, id string, in SmartFolderAggregateRequest) (AggregateResult, error) {
+	spec, err := aggregation(in.AggregateSpec)
+	if err != nil {
+		return AggregateResult{}, err
+	}
+	return snapshot(ctx, s, func(t *Service) (AggregateResult, error) {
+		f, e := t.smartFolder(ctx, subject, id, false)
+		if e != nil {
+			return AggregateResult{}, e
+		}
+		d, e := smartDefinition(f)
+		if e != nil {
+			return AggregateResult{}, e
+		}
+		q, _, e := t.compileSmartFolder(ctx, subject, f, d, SmartFolderQueryRequest{Path: in.Path, Surface: in.Surface, aggregation: spec}, false)
+		if e != nil {
+			return AggregateResult{}, e
+		}
+		return t.aggregates(ctx, q, spec)
+	})
+}
+
 // aggregatedGroup is a group as it is gathered and sorted.
 type aggregatedGroup struct {
 	key     aggregateKey
@@ -738,7 +804,7 @@ func (s *Service) aggregates(ctx context.Context, q compiledQuery, spec *aggrega
 	}
 	groups := map[aggregateKey]*aggregatedGroup{}
 	items := 0
-	e = s.DAL.Content().Aggregate(ctx, q.q, spec.maxItems+1, func(row content.AggregateRow) error {
+	gather := func(row content.AggregateRow) error {
 		if items += row.Count; items > spec.maxItems {
 			return invalid(fmt.Sprintf("more than %d items match: filter them", spec.maxItems))
 		}
@@ -762,7 +828,13 @@ func (s *Service) aggregates(ctx context.Context, q compiledQuery, spec *aggrega
 			g.tallies[i].add(f)
 		}
 		return nil
-	})
+	}
+	if q.q != nil {
+		e = s.DAL.Content().Aggregate(ctx, q.q, spec.maxItems+1, gather)
+	} else if len(spec.groups) == 0 {
+		// A smart folder that covers no collection still has its one group.
+		e = gather(content.AggregateRow{})
+	}
 	if e != nil {
 		return AggregateResult{}, e
 	}

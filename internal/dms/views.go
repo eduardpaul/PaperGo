@@ -190,39 +190,50 @@ type ViewQueryRequest struct {
 	TotalLimit   int                   `json:"total_limit,omitempty"`
 }
 
+// viewQuery is the query a view runs and whether it lists items only: a
+// navigation view lists the items of the selected terms.
+func (s *Service) viewQuery(ctx context.Context, subject string, v *viewstore.ListView, selected []NavigationSelection) (QuerySpec, bool, error) {
+	var spec QuerySpec
+	if e := json.Unmarshal(v.Query, &spec); e != nil {
+		return QuerySpec{}, false, e
+	}
+	if v.Layout != viewstore.LayoutNavigation {
+		if len(selected) > 0 {
+			return QuerySpec{}, false, invalid("selected belongs to navigation views")
+		}
+		return spec, false, nil
+	}
+	if e := s.requireTaxonomy(ctx, subject, "read"); e != nil {
+		return QuerySpec{}, false, e
+	}
+	settings, fields, e := s.viewNavigation(ctx, v)
+	if e != nil {
+		return QuerySpec{}, false, e
+	}
+	if len(selected) == 0 {
+		return QuerySpec{}, false, invalid("a navigation view lists the items of selected terms")
+	}
+	if spec.Filter, e = selectionFilter(spec.Filter, settings.Match, fields, selected, ""); e != nil {
+		return QuerySpec{}, false, e
+	}
+	return spec, true, nil
+}
+
 func (s *Service) QueryView(ctx context.Context, subject, id string, in ViewQueryRequest) (QueryResult, error) {
 	return read(ctx, s, func(t *Service) (QueryResult, error) {
 		v, e := t.View(ctx, subject, id)
 		if e != nil {
 			return QueryResult{}, e
 		}
-		var spec QuerySpec
-		if e = json.Unmarshal(v.Query, &spec); e != nil {
+		spec, itemsOnly, e := t.viewQuery(ctx, subject, v, in.Selected)
+		if e != nil {
 			return QueryResult{}, e
 		}
 		selection := in.Select
 		if selection == nil {
 			selection = v.Columns
 		}
-		request := QueryRequest{Query: spec, Surface: in.Surface, After: in.After, Limit: in.Limit, IncludeTotal: in.IncludeTotal, TotalLimit: in.TotalLimit, Select: selection, Envelope: in.Envelope}
-		if v.Layout == viewstore.LayoutNavigation {
-			if e = t.requireTaxonomy(ctx, subject, "read"); e != nil {
-				return QueryResult{}, e
-			}
-			settings, fields, e := t.viewNavigation(ctx, v)
-			if e != nil {
-				return QueryResult{}, e
-			}
-			if len(in.Selected) == 0 {
-				return QueryResult{}, invalid("a navigation view lists the items of selected terms")
-			}
-			if request.Query.Filter, e = selectionFilter(spec.Filter, settings.Match, fields, in.Selected, ""); e != nil {
-				return QueryResult{}, e
-			}
-			request.itemsOnly = true
-		} else if len(in.Selected) > 0 {
-			return QueryResult{}, invalid("selected belongs to navigation views")
-		}
+		request := QueryRequest{Query: spec, Surface: in.Surface, After: in.After, Limit: in.Limit, IncludeTotal: in.IncludeTotal, TotalLimit: in.TotalLimit, Select: selection, Envelope: in.Envelope, itemsOnly: itemsOnly}
 		if request.Surface == "" {
 			request.Surface = "auto"
 		}

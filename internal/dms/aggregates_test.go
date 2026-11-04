@@ -406,3 +406,80 @@ func TestAggregateLimits(t *testing.T) {
 		t.Fatal("past the groups, the group of no value included:", err)
 	}
 }
+
+// A view's and a smart folder's figures are of the items they list, as their
+// definitions say at the time, across the collections of a smart folder.
+func TestViewAndSmartFolderAggregates(t *testing.T) {
+	s, w, l := fixture(t)
+	fieldOK(t, s, l.ID, CreateField{Key: "units", Label: "Units", Type: "integer", Indexed: true})
+	fieldOK(t, s, l.ID, CreateField{Key: "kind", Label: "Kind", Type: "text", Indexed: true})
+	fieldOK(t, s, l.ID, CreateField{Key: "loose", Label: "Loose", Type: "integer"})
+	second := create(t, s, w.ID, "list", "Second", nil)
+	fieldOK(t, s, second.ID, CreateField{Key: "units", Label: "Units", Type: "integer", Indexed: true})
+	third := create(t, s, w.ID, "list", "Third", nil)
+	fieldOK(t, s, third.ID, CreateField{Key: "kind", Label: "Kind", Type: "text", Indexed: true})
+	for _, row := range []struct {
+		list   string
+		values map[string]any
+	}{
+		{l.ID, map[string]any{"units": json.Number("1"), "kind": "a"}},
+		{l.ID, map[string]any{"units": json.Number("2"), "kind": "b"}},
+		{second.ID, map[string]any{"units": json.Number("40")}},
+		{third.ID, map[string]any{"kind": "a"}},
+	} {
+		publishItem(t, s, create(t, s, row.list, "item", "Row", row.values))
+	}
+	create(t, s, l.ID, "folder", "Holding", map[string]any{"units": json.Number("1000")})
+	sum := Aggregate{Op: AggregateSum, Field: "units"}
+	same := func(what string, out AggregateResult, err error, want string) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(what, err)
+		}
+		if got, _ := json.Marshal(out.Data); string(got) != want {
+			t.Fatalf("%s:\n got %s\nwant %s", what, got, want)
+		}
+	}
+
+	view, err := s.CreateView(testContext, "alice", l.ID, ViewInput{Name: "A only", Layout: "table", Columns: []string{"units"}, Query: QuerySpec{Sort: []SortSpec{{Field: "units", Direction: "desc"}}, GroupBy: "kind", Filter: &FilterExpr{Field: "kind", Op: "eq", Value: json.RawMessage(`"a"`)}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := s.QueryViewAggregates(testContext, "alice", view.ID, ViewAggregateRequest{AggregateSpec: AggregateSpec{Aggregates: []Aggregate{sum}}})
+	same("the view's filter, not its grouping or sort", out, err, `[{"keys":[],"count":1,"values":{"sum_units":"1"}}]`)
+	if _, err = s.QueryViewAggregates(testContext, "stranger", view.ID, ViewAggregateRequest{AggregateSpec: AggregateSpec{Aggregates: []Aggregate{sum}}}); err == nil {
+		t.Fatal("someone outside the workspace aggregated a view")
+	}
+	if _, err = s.QueryViewAggregates(testContext, "alice", view.ID, ViewAggregateRequest{Selected: []NavigationSelection{{Field: "kind"}}, AggregateSpec: AggregateSpec{Aggregates: []Aggregate{sum}}}); err == nil || !strings.Contains(err.Error(), "navigation views") {
+		t.Fatal("selected on a table view:", err)
+	}
+
+	folder := smartOK(t, s, SmartFolderInput{Name: "All", WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Mode: "query", Collections: []string{"Invoices", "Second", "Third"}}})
+	run := func(spec AggregateSpec, path ...*string) (AggregateResult, error) {
+		return s.QuerySmartFolderAggregates(testContext, "alice", folder.ID, SmartFolderAggregateRequest{Path: path, AggregateSpec: spec})
+	}
+	out, err = run(AggregateSpec{Aggregates: []Aggregate{sum, {Op: AggregateCount, Field: "kind"}}})
+	same("across collections, without folders, those without a field holding none", out, err, `[{"keys":[],"count":4,"values":{"count_kind":3,"sum_units":"43"}}]`)
+	out, err = run(AggregateSpec{Groups: groupedBy("kind"), Aggregates: []Aggregate{sum}, Sort: []SortSpec{{Field: "sum_units", Direction: "desc"}}})
+	same("groups and sort across collections", out, err, `[{"keys":[{"value":null}],"count":1,"values":{"sum_units":"40"}},{"keys":[{"value":"b"}],"count":1,"values":{"sum_units":"2"}},{"keys":[{"value":"a"}],"count":2,"values":{"sum_units":"1"}}]`)
+	if _, err = run(AggregateSpec{Aggregates: []Aggregate{{Op: AggregateSum, Field: "loose"}}}); err == nil || !strings.Contains(err.Error(), "loose") {
+		t.Fatal("a collection holding the field unindexed would go missing from the figures:", err)
+	}
+	if _, err = run(AggregateSpec{Aggregates: []Aggregate{{Op: AggregateSum, Field: "nothing"}}}); err == nil {
+		t.Fatal("a field no collection holds")
+	}
+	if _, err = s.QuerySmartFolderAggregates(testContext, "stranger", folder.ID, SmartFolderAggregateRequest{AggregateSpec: AggregateSpec{Aggregates: []Aggregate{sum}}}); err == nil {
+		t.Fatal("someone outside the workspace aggregated a smart folder")
+	}
+
+	fieldOK(t, s, third.ID, CreateField{Key: "units", Label: "Units", Type: "decimal", Scale: 2, Indexed: true})
+	if _, err = run(AggregateSpec{Aggregates: []Aggregate{sum}}); err == nil || !strings.Contains(err.Error(), "compatible") {
+		t.Fatal("the same key with another type adds up nothing:", err)
+	}
+
+	nothing := smartOK(t, s, SmartFolderInput{Name: "None", WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Mode: "query", Collections: []string{"No such collection"}}})
+	out, err = s.QuerySmartFolderAggregates(testContext, "alice", nothing.ID, SmartFolderAggregateRequest{AggregateSpec: AggregateSpec{Aggregates: []Aggregate{sum}}})
+	same("a folder over no collection has its one group", out, err, `[{"keys":[],"count":0,"values":{"sum_units":null}}]`)
+	out, err = s.QuerySmartFolderAggregates(testContext, "alice", nothing.ID, SmartFolderAggregateRequest{AggregateSpec: AggregateSpec{Groups: groupedBy("kind"), Aggregates: []Aggregate{sum}}})
+	same("and no others", out, err, `[]`)
+}

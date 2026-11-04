@@ -4865,6 +4865,153 @@
         "description": " Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply."
       }
     },
+    "/v1/views/{id}/query/aggregates": {
+      "post": {
+        "summary": "Query View Aggregates",
+        "operationId": "queryViewAggregates",
+        "description": "Figures of the items a saved view lists, by its filters whatever its grouping and sort, so they follow the view when it changes, as the caller may read them: count, sum, avg, min and max of indexed scalar fields, for all of them as one group, which exists even when nothing matches, or in groups by up to four fields. A date or date-time field in groups groups by interval (day, week from Monday, month or year), date-times in time_zone (UTC by default); that key is then the first day of its period, YYYY-MM-DD. Groups come in the order of sort, then of their keys, missing values last in either direction. A page holds $top groups and @odata.nextLink continues it; each page works the figures out again, so a cursor keeps its place in the order, not the values seen. Counts are numbers. Sums, minimums and maximums of numeric fields are exact strings in the field's form; averages are exact strings rounded half to even to four digits beyond an integer or decimal field's scale, ten for number and currency fields. Minimums and maximums of dates and date-times are as items show them. A figure of a group whose items hold no value is null. The database reads each matching item once. A request is refused when more than 1000000 items match or there are more than 100000 groups, the group of items without a key included, so that figures never cover part of the items.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "$top",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            }
+          },
+          {
+            "in": "query",
+            "name": "$skiptoken",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Continuation from @odata.nextLink; resend the same query body."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AggregateResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ViewAggregateRequest"
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/views/{id}/navigation": {
       "post": {
         "summary": "Navigate a View",
@@ -5778,6 +5925,72 @@
           "item.read"
         ],
         "description": " Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "$top",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            }
+          },
+          {
+            "in": "query",
+            "name": "$skiptoken",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Continuation from @odata.nextLink; resend the same query body."
+          }
+        ]
+      }
+    },
+    "/v1/smart-folders/{id}/query/aggregates": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "required": true
+        }
+      ],
+      "post": {
+        "operationId": "querySmartFolderAggregates",
+        "summary": "Query Smart Folder Aggregates",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AggregateResult"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SmartFolderAggregateRequest"
+              }
+            }
+          }
+        },
+        "x-module-scopes": [
+          "item.read"
+        ],
+        "description": "Figures of the items at a path of a smart folder, folders aside, across its collections, as the caller may read them: count, sum, avg, min and max of indexed scalar fields, for all of them as one group, which exists even when nothing matches, or in groups by up to four fields. A date or date-time field in groups groups by interval (day, week from Monday, month or year), date-times in time_zone (UTC by default); that key is then the first day of its period, YYYY-MM-DD. Groups come in the order of sort, then of their keys, missing values last in either direction. A page holds $top groups and @odata.nextLink continues it; each page works the figures out again, so a cursor keeps its place in the order, not the values seen. Counts are numbers. Sums, minimums and maximums of numeric fields are exact strings in the field's form; averages are exact strings rounded half to even to four digits beyond an integer or decimal field's scale, ten for number and currency fields. Minimums and maximums of dates and date-times are as items show them. A figure of a group whose items hold no value is null. The database reads each matching item once. A request is refused when more than 1000000 items match or there are more than 100000 groups, the group of items without a key included, so that figures never cover part of the items. Fields are those every collection of the folder that has them holds indexed with one type and scale; other collections hold no values of them. Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.",
         "parameters": [
           {
             "in": "query",
@@ -27036,6 +27249,15 @@
               }
             },
             "description": "Results default to modified descending. ID ties follow the chosen direction. Group queries use grouping order."
+          },
+          "envelope": {
+            "type": "string",
+            "enum": [
+              "full",
+              "compact"
+            ],
+            "default": "full",
+            "description": "compact returns each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords, its archived, archived_at and archived_by when archived, and the built-in columns select names, as the resource's created_at, created_by, updated_at, updated_by and file: under half the size of a full item, for reading many items. full returns the whole resource."
           }
         },
         "additionalProperties": false,
@@ -34339,6 +34561,112 @@
         "properties": {
           "query": {
             "$ref": "#/components/schemas/QuerySpec"
+          },
+          "surface": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "head",
+              "published"
+            ],
+            "default": "auto"
+          },
+          "groups": {
+            "type": "array",
+            "maxItems": 4,
+            "items": {
+              "$ref": "#/components/schemas/AggregateGroupBy"
+            },
+            "description": "The fields a group's key holds, one group per combination of their values; without any, all items are one group."
+          },
+          "aggregates": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "items": {
+              "$ref": "#/components/schemas/Aggregate"
+            }
+          },
+          "sort": {
+            "type": "array",
+            "maxItems": 8,
+            "items": {
+              "$ref": "#/components/schemas/SortSpec"
+            },
+            "description": "Orders the groups by a figure's name, $count or a field of groups, as for the highest totals first. Their keys order groups that tie."
+          }
+        },
+        "required": [
+          "aggregates"
+        ],
+        "additionalProperties": false,
+        "description": "Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink."
+      },
+      "ViewAggregateRequest": {
+        "type": "object",
+        "properties": {
+          "surface": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "head",
+              "published"
+            ],
+            "default": "auto"
+          },
+          "selected": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "$ref": "#/components/schemas/NavigationSelection"
+            },
+            "description": "Navigation views only, required there: lists the items at the terms opened in the view's fields, combined as the view's settings.match says."
+          },
+          "groups": {
+            "type": "array",
+            "maxItems": 4,
+            "items": {
+              "$ref": "#/components/schemas/AggregateGroupBy"
+            },
+            "description": "The fields a group's key holds, one group per combination of their values; without any, all items are one group."
+          },
+          "aggregates": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "items": {
+              "$ref": "#/components/schemas/Aggregate"
+            }
+          },
+          "sort": {
+            "type": "array",
+            "maxItems": 8,
+            "items": {
+              "$ref": "#/components/schemas/SortSpec"
+            },
+            "description": "Orders the groups by a figure's name, $count or a field of groups, as for the highest totals first. Their keys order groups that tie."
+          }
+        },
+        "required": [
+          "aggregates"
+        ],
+        "additionalProperties": false,
+        "description": "Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink."
+      },
+      "SmartFolderAggregateRequest": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "maxItems": 3,
+            "description": "One value per navigation level; null means missing. Numeric and boolean values use canonical strings, dates use YYYY or YYYY-MM when grouped.",
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 65536
+            }
           },
           "surface": {
             "type": "string",

@@ -69,4 +69,28 @@ func TestQueryAggregatesRoute(t *testing.T) {
 			t.Errorf("%s: %d %s", body, w.Code, w.Body)
 		}
 	}
+
+	view, err := s.CreateView(ctx, "alice", list.ID, dms.ViewInput{Name: "Warm", Layout: "table", Columns: []string{"outdoor"}, Query: dms.QuerySpec{Filter: &dms.FilterExpr{Field: "outdoor", Op: "gt", Value: json.RawMessage(`"0"`)}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w = request(h, "POST", "/v1/views/"+view.ID+"/query/aggregates", `{"aggregates":[{"op":"count","field":"outdoor"}]}`, testToken, "", "application/json")
+	if want := `{"@odata.nextLink":null,"total":1,"value":[{"keys":[],"count":2,"values":{"count_outdoor":2}}]}`; w.Code != 200 || strings.TrimSpace(w.Body.String()) != want {
+		t.Fatalf("a view's figures: %d %s", w.Code, w.Body)
+	}
+	folder, err := s.CreateSmartFolder(ctx, "alice", dms.SmartFolderInput{Name: "All", WorkspaceID: &ws.ID, Definition: dms.SmartFolderDefinition{Mode: "query", Collections: []string{"Temperatures"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w = request(h, "POST", "/v1/smart-folders/"+folder.ID+"/query/aggregates", `{"aggregates":[{"op":"max","field":"outdoor"}]}`, testToken, "", "application/json")
+	if want := `{"@odata.nextLink":null,"total":1,"value":[{"keys":[],"count":3,"values":{"max_outdoor":"6.0"}}]}`; w.Code != 200 || strings.TrimSpace(w.Body.String()) != want {
+		t.Fatalf("a smart folder's figures: %d %s", w.Code, w.Body)
+	}
+	w = request(h, "POST", "/v1/smart-folders/"+folder.ID+"/query", `{"envelope":"compact"}`, testToken, "", "application/json")
+	if w.Code != 200 || strings.Contains(w.Body.String(), "head_revision_id") || !strings.Contains(w.Body.String(), `"collection_name":"Temperatures"`) {
+		t.Fatalf("a smart folder's compact items: %d %s", w.Code, w.Body)
+	}
+	if w = request(h, "POST", "/v1/smart-folders/"+folder.ID+"/query/groups", `{"envelope":"compact"}`, testToken, "", "application/json"); w.Code != 422 {
+		t.Fatalf("an envelope on smart folder groups: %d %s", w.Code, w.Body)
+	}
 }

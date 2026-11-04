@@ -552,7 +552,7 @@ func (r *Repo) Union(queries []*Query, roots []string) *Query {
 		args = append(rootArgs, args...)
 	}
 	first := queries[0]
-	return &Query{Orders: first.Orders, RankDef: first.RankDef, sql: text, args: args, built: true}
+	return &Query{Orders: first.Orders, RankDef: first.RankDef, GroupKinds: first.GroupKinds, aggregation: first.aggregation, measureKinds: first.measureKinds, sql: text, args: args, built: true}
 }
 
 // Arguments counts the statement arguments of a built query.
