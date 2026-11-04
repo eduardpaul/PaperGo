@@ -11,6 +11,28 @@ import (
 	"papergo/internal/model"
 )
 
+// aggregateRequest asks for figures of a collection's items.
+func aggregateRequest(groups []AggregateGroupBy, figures ...Aggregate) AggregateRequest {
+	return AggregateRequest{AggregateSpec: AggregateSpec{Groups: groups, Aggregates: figures}}
+}
+
+func groupedBy(fields ...string) []AggregateGroupBy {
+	out := make([]AggregateGroupBy, len(fields))
+	for i, field := range fields {
+		out[i].Field = field
+	}
+	return out
+}
+
+// group is a group of a response: its count, its figures and its keys.
+func group(count int, values map[string]any, keys ...any) AggregateGroup {
+	out := AggregateGroup{Keys: []AggregateKey{}, Count: count, Values: values}
+	for _, key := range keys {
+		out.Keys = append(out.Keys, AggregateKey{Value: key})
+	}
+	return out
+}
+
 // Aggregates work out exact sums, averages, minimums, maximums and counts
 // of a query's items, in groups of a field or of the days, weeks, months
 // or years of a date-time in a time zone, as the reader may read them.
@@ -59,53 +81,64 @@ func TestQueryAggregates(t *testing.T) {
 		}
 	}
 
-	all := run("reader", AggregateRequest{Aggregates: []Aggregate{
-		{Op: AggregateAvg, Field: "temp"}, {Op: AggregateSum, Field: "temp"}, {Op: AggregateMin, Field: "temp"}, {Op: AggregateMax, Field: "temp"},
-		{Op: AggregateCount, Field: "price"}, {Op: AggregateSum, Field: "price"}, {Op: AggregateAvg, Field: "price"}, {Op: AggregateAvg, Field: "units", As: "units_on_average"},
-		{Op: AggregateMin, Field: "taken"}, {Op: AggregateMax, Field: "day"},
-	}})
-	same("every item", all, []AggregateGroup{{Key: nil, Count: 4, Values: map[string]any{
+	all := run("reader", aggregateRequest(nil,
+		Aggregate{Op: AggregateAvg, Field: "temp"}, Aggregate{Op: AggregateSum, Field: "temp"}, Aggregate{Op: AggregateMin, Field: "temp"}, Aggregate{Op: AggregateMax, Field: "temp"},
+		Aggregate{Op: AggregateCount, Field: "price"}, Aggregate{Op: AggregateSum, Field: "price"}, Aggregate{Op: AggregateAvg, Field: "price"}, Aggregate{Op: AggregateAvg, Field: "units", As: "units_on_average"},
+		Aggregate{Op: AggregateMin, Field: "taken"}, Aggregate{Op: AggregateMax, Field: "day"},
+	))
+	same("every item", all, []AggregateGroup{group(4, map[string]any{
 		"avg_temp": "5.75", "sum_temp": "23.0", "min_temp": "-3.5", "max_temp": "11.0",
 		"count_price": 2, "sum_price": "3.75", "avg_price": "1.875", "units_on_average": "1.6667",
 		"min_taken": "2026-03-28T22:30:00Z", "max_day": "2026-03-29",
-	}}})
+	})})
 
-	madrid := run("reader", AggregateRequest{Query: QuerySpec{GroupBy: "taken"}, Interval: IntervalDay, TimeZone: "Europe/Madrid", Aggregates: []Aggregate{{Op: AggregateAvg, Field: "temp"}, {Op: AggregateMax, Field: "temp"}}})
+	madrid := run("reader", aggregateRequest([]AggregateGroupBy{{Field: "taken", Interval: IntervalDay, TimeZone: "Europe/Madrid"}}, Aggregate{Op: AggregateAvg, Field: "temp"}, Aggregate{Op: AggregateMax, Field: "temp"}))
 	same("days in Madrid, the untaken item last", madrid, []AggregateGroup{
-		{Key: "2026-03-28", Count: 1, Values: map[string]any{"avg_temp": "10", "max_temp": "10.0"}},
-		{Key: "2026-03-29", Count: 2, Values: map[string]any{"avg_temp": "3.75", "max_temp": "11.0"}},
-		{Key: nil, Count: 1, Values: map[string]any{"avg_temp": "5.5", "max_temp": "5.5"}},
+		group(1, map[string]any{"avg_temp": "10", "max_temp": "10.0"}, "2026-03-28"),
+		group(2, map[string]any{"avg_temp": "3.75", "max_temp": "11.0"}, "2026-03-29"),
+		group(1, map[string]any{"avg_temp": "5.5", "max_temp": "5.5"}, nil),
 	})
-	utc := run("reader", AggregateRequest{Query: QuerySpec{GroupBy: "taken"}, Interval: IntervalDay, Aggregates: []Aggregate{{Op: AggregateCount, Field: "temp"}}})
+	utc := run("reader", aggregateRequest([]AggregateGroupBy{{Field: "taken", Interval: IntervalDay}}, Aggregate{Op: AggregateCount, Field: "temp"}))
 	same("days in UTC", utc, []AggregateGroup{
-		{Key: "2026-03-28", Count: 2, Values: map[string]any{"count_temp": 2}},
-		{Key: "2026-03-29", Count: 1, Values: map[string]any{"count_temp": 1}},
-		{Key: nil, Count: 1, Values: map[string]any{"count_temp": 1}},
+		group(2, map[string]any{"count_temp": 2}, "2026-03-28"),
+		group(1, map[string]any{"count_temp": 1}, "2026-03-29"),
+		group(1, map[string]any{"count_temp": 1}, nil),
 	})
 	for interval, key := range map[AggregateInterval]string{IntervalWeek: "2026-03-23", IntervalMonth: "2026-03-01", IntervalYear: "2026-01-01"} {
-		got := run("reader", AggregateRequest{Query: QuerySpec{GroupBy: "taken"}, Interval: interval, TimeZone: "Europe/Madrid", Aggregates: []Aggregate{{Op: AggregateSum, Field: "units"}}})
-		same(string(interval), got, []AggregateGroup{{Key: key, Count: 3, Values: map[string]any{"sum_units": "5"}}, {Key: nil, Count: 1, Values: map[string]any{"sum_units": nil}}})
+		for _, zone := range []string{"Europe/Madrid", ""} {
+			got := run("reader", aggregateRequest([]AggregateGroupBy{{Field: "taken", Interval: interval, TimeZone: zone}}, Aggregate{Op: AggregateSum, Field: "units"}))
+			same(string(interval)+" in "+zone, got, []AggregateGroup{group(3, map[string]any{"sum_units": "5"}, key), group(1, map[string]any{"sum_units": nil}, nil)})
+		}
 	}
-	dates := run("reader", AggregateRequest{Query: QuerySpec{GroupBy: "day"}, Interval: IntervalDay, TimeZone: "Pacific/Auckland", Aggregates: []Aggregate{{Op: AggregateCount, Field: "day"}}})
+	dates := run("reader", aggregateRequest([]AggregateGroupBy{{Field: "day", Interval: IntervalDay, TimeZone: "Pacific/Auckland"}}, Aggregate{Op: AggregateCount, Field: "day"}))
 	same("dates have no time zone", dates, []AggregateGroup{
-		{Key: "2026-03-28", Count: 1, Values: map[string]any{"count_day": 1}},
-		{Key: "2026-03-29", Count: 2, Values: map[string]any{"count_day": 2}},
-		{Key: nil, Count: 1, Values: map[string]any{"count_day": 0}},
+		group(1, map[string]any{"count_day": 1}, "2026-03-28"),
+		group(2, map[string]any{"count_day": 2}, "2026-03-29"),
+		group(1, map[string]any{"count_day": 0}, nil),
 	})
-	created := run("reader", AggregateRequest{Query: QuerySpec{GroupBy: "$created_at"}, Interval: IntervalYear, Aggregates: []Aggregate{{Op: AggregateMax, Field: "$created_at"}}})
-	if len(created) != 1 || created[0].Key != time.Now().UTC().Format("2006")+"-01-01" || created[0].Count != 4 || created[0].Values["max_created_at"] == nil {
-		t.Fatalf("a built-in date-time by year: %+v", created)
+	today := time.Now().UTC()
+	for interval, key := range map[AggregateInterval]string{IntervalYear: today.Format("2006") + "-01-01", IntervalDay: today.Format("2006-01-02")} {
+		created := run("reader", aggregateRequest([]AggregateGroupBy{{Field: "$created_at", Interval: interval}}, Aggregate{Op: AggregateMax, Field: "$created_at"}))
+		if len(created) != 1 || created[0].Keys[0].Value != key || created[0].Count != 4 || created[0].Values["max_created_at"] == nil {
+			t.Fatalf("a built-in date-time by %s: %+v", interval, created)
+		}
 	}
-	byTemp := run("reader", AggregateRequest{Query: QuerySpec{GroupBy: "temp"}, Aggregates: []Aggregate{{Op: AggregateCount, Field: "kind"}}})
+	byTemp := run("reader", aggregateRequest(groupedBy("temp"), Aggregate{Op: AggregateCount, Field: "kind"}))
 	keys := []any{}
 	for _, g := range byTemp {
-		keys = append(keys, g.Key)
+		keys = append(keys, g.Keys[0].Value)
 	}
 	same("decimal keys in numeric order", keys, []any{"-3.5", "5.5", "10.0", "11.0"})
-	byKind := run("reader", AggregateRequest{Query: QuerySpec{GroupBy: "kind", Filter: &FilterExpr{Field: "temp", Op: "gt", Value: json.RawMessage(`"0"`)}}, Aggregates: []Aggregate{{Op: AggregateSum, Field: "temp"}}})
-	same("a filter and a choice group", byKind, []AggregateGroup{
-		{Key: "a", Count: 2, Values: map[string]any{"sum_temp": "21.0"}},
-		{Key: "b", Count: 1, Values: map[string]any{"sum_temp": "5.5"}},
+	filtered := aggregateRequest(groupedBy("kind"), Aggregate{Op: AggregateSum, Field: "temp"})
+	filtered.Query.Filter = &FilterExpr{Field: "temp", Op: "gt", Value: json.RawMessage(`"0"`)}
+	same("a filter and a choice group", run("reader", filtered), []AggregateGroup{
+		group(2, map[string]any{"sum_temp": "21.0"}, "a"),
+		group(1, map[string]any{"sum_temp": "5.5"}, "b"),
+	})
+	same("groups by several fields, each period merging its rows", run("reader", aggregateRequest([]AggregateGroupBy{{Field: "taken", Interval: IntervalMonth, TimeZone: "Europe/Madrid"}, {Field: "kind"}}, Aggregate{Op: AggregateSum, Field: "temp"})), []AggregateGroup{
+		group(2, map[string]any{"sum_temp": "21.0"}, "2026-03-01", "a"),
+		group(1, map[string]any{"sum_temp": "-3.5"}, "2026-03-01", "b"),
+		group(1, map[string]any{"sum_temp": "5.5"}, nil, "b"),
 	})
 
 	// A draft change counts for those who read drafts only.
@@ -114,31 +147,45 @@ func TestQueryAggregates(t *testing.T) {
 		t.Fatal(err)
 	}
 	sum := []Aggregate{{Op: AggregateSum, Field: "temp"}}
-	same("the reader reads what is published", run("reader", AggregateRequest{Aggregates: sum})[0].Values, map[string]any{"sum_temp": "23.0"})
-	same("the author reads the draft", run("alice", AggregateRequest{Aggregates: sum})[0].Values, map[string]any{"sum_temp": "113.0"})
-	same("the published surface on request", run("alice", AggregateRequest{Surface: "published", Aggregates: sum})[0].Values, map[string]any{"sum_temp": "23.0"})
-	if _, err := s.QueryAggregates(testContext, "stranger", l.ID, AggregateRequest{Aggregates: sum}); err == nil {
+	same("the reader reads what is published", run("reader", aggregateRequest(nil, sum...))[0].Values, map[string]any{"sum_temp": "23.0"})
+	same("the author reads the draft", run("alice", aggregateRequest(nil, sum...))[0].Values, map[string]any{"sum_temp": "113.0"})
+	published := aggregateRequest(nil, sum...)
+	published.Surface = "published"
+	same("the published surface on request", run("alice", published)[0].Values, map[string]any{"sum_temp": "23.0"})
+	if _, err := s.QueryAggregates(testContext, "stranger", l.ID, aggregateRequest(nil, sum...)); err == nil {
 		t.Fatal("someone outside the workspace aggregated its list")
 	}
 
+	interval := func(field string, interval AggregateInterval, zone string) []AggregateGroupBy {
+		return []AggregateGroupBy{{Field: field, Interval: interval, TimeZone: zone}}
+	}
+	query := func(q QuerySpec) AggregateRequest {
+		in := aggregateRequest(nil, sum...)
+		in.Query = q
+		return in
+	}
 	for _, tc := range []struct {
 		in   AggregateRequest
 		want string
 	}{
 		{AggregateRequest{}, "1 to 20 figures"},
-		{AggregateRequest{Aggregates: make([]Aggregate, 21)}, "1 to 20 figures"},
-		{AggregateRequest{Aggregates: []Aggregate{{Op: "median", Field: "temp"}}}, "count, sum, avg, min or max"},
-		{AggregateRequest{Aggregates: []Aggregate{{Op: AggregateCount}}}, "names its field"},
-		{AggregateRequest{Aggregates: []Aggregate{{Op: AggregateSum, Field: "kind"}}}, "adds up"},
-		{AggregateRequest{Aggregates: []Aggregate{{Op: AggregateMax, Field: "kind"}}}, "compares numeric"},
-		{AggregateRequest{Aggregates: []Aggregate{{Op: AggregateSum, Field: "loose"}}}, "loose"},
-		{AggregateRequest{Aggregates: []Aggregate{{Op: AggregateSum, Field: "temp"}, {Op: AggregateSum, Field: "temp"}}}, "unique"},
-		{AggregateRequest{Aggregates: []Aggregate{{Op: AggregateSum, Field: "temp", As: "Bad name"}}}, "lowercase"},
-		{AggregateRequest{Interval: IntervalDay, Aggregates: sum}, "name one"},
-		{AggregateRequest{Query: QuerySpec{GroupBy: "kind"}, Interval: IntervalDay, Aggregates: sum}, "date or date-time"},
-		{AggregateRequest{Query: QuerySpec{GroupBy: "taken"}, Interval: "hour", Aggregates: sum}, "day, week, month or year"},
-		{AggregateRequest{Query: QuerySpec{GroupBy: "taken"}, Interval: IntervalDay, TimeZone: "Mars/Olympus", Aggregates: sum}, "IANA"},
-		{AggregateRequest{TimeZone: "UTC", Aggregates: sum}, "belongs to an interval"},
+		{aggregateRequest(nil, make([]Aggregate, 21)...), "1 to 20 figures"},
+		{aggregateRequest(nil, Aggregate{Op: "median", Field: "temp"}), "count, sum, avg, min or max"},
+		{aggregateRequest(nil, Aggregate{Op: AggregateCount}), "names its field"},
+		{aggregateRequest(nil, Aggregate{Op: AggregateSum, Field: "kind"}), "adds up"},
+		{aggregateRequest(nil, Aggregate{Op: AggregateMax, Field: "kind"}), "compares numeric"},
+		{aggregateRequest(nil, Aggregate{Op: AggregateSum, Field: "loose"}), "loose"},
+		{aggregateRequest(nil, Aggregate{Op: AggregateSum, Field: "temp"}, Aggregate{Op: AggregateSum, Field: "temp"}), "unique"},
+		{aggregateRequest(nil, Aggregate{Op: AggregateSum, Field: "temp", As: "Bad name"}), "lowercase"},
+		{aggregateRequest(interval("kind", IntervalDay, ""), sum...), "date or date-time"},
+		{aggregateRequest(interval("taken", "hour", ""), sum...), "day, week, month or year"},
+		{aggregateRequest(interval("taken", IntervalDay, "Mars/Olympus"), sum...), "IANA"},
+		{aggregateRequest(interval("taken", "", "UTC"), sum...), "belongs to an interval"},
+		{aggregateRequest(groupedBy("kind", "kind"), sum...), "unique fields"},
+		{aggregateRequest(groupedBy(""), sum...), "unique fields"},
+		{aggregateRequest(groupedBy("a", "b", "c", "d", "e"), sum...), "at most 4 fields"},
+		{query(QuerySpec{GroupBy: "kind"}), "query.group_by"},
+		{query(QuerySpec{Sort: []SortSpec{{Field: "temp"}}}), "query.sort"},
 	} {
 		_, err := s.QueryAggregates(testContext, "reader", l.ID, tc.in)
 		if err == nil || !strings.Contains(err.Error(), tc.want) {
@@ -197,21 +244,23 @@ func TestAggregateExactSums(t *testing.T) {
 		{Op: AggregateMin, Field: "amount"}, {Op: AggregateMax, Field: "amount"}, {Op: AggregateMin, Field: "big"}, {Op: AggregateMax, Field: "cents"},
 		{Op: AggregateCount, Field: "cents"},
 	}
-	out, err := s.QueryAggregates(testContext, "alice", l.ID, AggregateRequest{Query: QuerySpec{GroupBy: "kind"}, Aggregates: figures})
+	out, err := s.QueryAggregates(testContext, "alice", l.ID, aggregateRequest(groupedBy("kind"), figures...))
 	if err != nil {
 		t.Fatal(err)
 	}
 	got, _ := json.Marshal(out.Data)
-	want := `[{"key":"a","count":3,"values":{"avg_amount":"52818775009509558395695966890","avg_big":"6004799169827328.3333","avg_cents":"-666666666.676667","count_cents":3,"max_amount":"79228162514264337593543950335","max_cents":"0.01","min_amount":"-0.0000000000000000000000000001","min_big":"-1000000001","sum_amount":"158456325028528675187087900669.9999999999999999999999999999","sum_big":"18014397509481985","sum_cents":"-2000000000.03"}},` +
-		`{"key":"b","count":2,"values":{"avg_amount":"0","avg_big":"0","avg_cents":null,"count_cents":0,"max_amount":"12.5","max_cents":null,"min_amount":"-12.5","min_big":"-1","sum_amount":"0","sum_big":"0","sum_cents":null}}]`
+	want := `[{"keys":[{"value":"a"}],"count":3,"values":{"avg_amount":"52818775009509558395695966890","avg_big":"6004799169827328.3333","avg_cents":"-666666666.676667","count_cents":3,"max_amount":"79228162514264337593543950335","max_cents":"0.01","min_amount":"-0.0000000000000000000000000001","min_big":"-1000000001","sum_amount":"158456325028528675187087900669.9999999999999999999999999999","sum_big":"18014397509481985","sum_cents":"-2000000000.03"}},` +
+		`{"keys":[{"value":"b"}],"count":2,"values":{"avg_amount":"0","avg_big":"0","avg_cents":null,"count_cents":0,"max_amount":"12.5","max_cents":null,"min_amount":"-12.5","min_big":"-1","sum_amount":"0","sum_big":"0","sum_cents":null}}]`
 	if string(got) != want {
 		t.Fatalf("exact figures:\n got %s\nwant %s", got, want)
 	}
-	none, err := s.QueryAggregates(testContext, "alice", l.ID, AggregateRequest{Query: QuerySpec{Filter: &FilterExpr{Field: "kind", Op: "eq", Value: json.RawMessage(`"z"`)}}, Aggregates: figures[:1]})
+	nothing := aggregateRequest(nil, figures[0])
+	nothing.Query.Filter = &FilterExpr{Field: "kind", Op: "eq", Value: json.RawMessage(`"z"`)}
+	none, err := s.QueryAggregates(testContext, "alice", l.ID, nothing)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, _ = json.Marshal(none.Data); string(got) != `[{"key":null,"count":0,"values":{"sum_amount":null}}]` {
+	if got, _ = json.Marshal(none.Data); string(got) != `[{"keys":[],"count":0,"values":{"sum_amount":null}}]` {
 		t.Fatalf("no match: %s", got)
 	}
 }
@@ -225,13 +274,13 @@ func TestAggregateLimits(t *testing.T) {
 		publishItem(t, s, create(t, s, l.ID, "item", "Row", values))
 	}
 	run := func(items, groups int) error {
-		spec, err := aggregation(AggregateRequest{Query: QuerySpec{GroupBy: "kind"}, Aggregates: []Aggregate{{Op: AggregateCount, Field: "kind"}}})
+		spec, err := aggregation(AggregateSpec{Groups: groupedBy("kind"), Aggregates: []Aggregate{{Op: AggregateCount, Field: "kind"}}})
 		if err != nil {
 			t.Fatal(err)
 		}
 		spec.maxItems, spec.maxGroups = items, groups
 		_, err = snapshot(testContext, s, func(tx *Service) (AggregateResult, error) {
-			q, e := tx.compileQuery(testContext, "alice", l.ID, QueryRequest{Query: QuerySpec{GroupBy: "kind"}, Surface: "auto", itemsOnly: true, aggregation: spec}, false)
+			q, e := tx.compileQuery(testContext, "alice", l.ID, QueryRequest{Surface: "auto", itemsOnly: true, aggregation: spec}, false)
 			if e != nil {
 				return AggregateResult{}, e
 			}

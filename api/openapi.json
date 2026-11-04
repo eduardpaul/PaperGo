@@ -3554,7 +3554,7 @@
       "post": {
         "summary": "Query Aggregates",
         "operationId": "queryAggregates",
-        "description": "Figures of the items a collection query matches, as the caller may read them: count, sum, avg, min and max of indexed scalar fields, for all of them as one group with a null key, or in groups of query.group_by. A date or date-time group_by groups by interval (day, week from Monday, month or year), date-times in time_zone (UTC by default); a group's key is then the first day of its period, YYYY-MM-DD. Groups come in key order, items without a key last; query.sort is ignored. Counts are numbers. Sums, minimums and maximums of numeric fields are exact strings in the field's form; averages are exact strings rounded half to even to four digits beyond an integer or decimal field's scale, ten for number and currency fields. Minimums and maximums of dates and date-times are as items show them. A figure of a group whose items hold no value is null. A query without group_by always has its one group, of count 0 when nothing matches. The database reads each matching item once. A request is refused when more than 1000000 items match or there are more than 10000 groups, the group of items without a key included, so that figures never cover part of the items.",
+        "description": "Figures of the items a collection query matches, as the caller may read them: count, sum, avg, min and max of indexed scalar fields, for all of them as one group, which exists even when nothing matches, or in groups by up to four fields. A date or date-time field in groups groups by interval (day, week from Monday, month or year), date-times in time_zone (UTC by default); that key is then the first day of its period, YYYY-MM-DD. Groups come in key order, items without a key last; query.group_by and query.sort are refused. Counts are numbers. Sums, minimums and maximums of numeric fields are exact strings in the field's form; averages are exact strings rounded half to even to four digits beyond an integer or decimal field's scale, ten for number and currency fields. Minimums and maximums of dates and date-times are as items show them. A figure of a group whose items hold no value is null. The database reads each matching item once. A request is refused when more than 1000000 items match or there are more than 10000 groups, the group of items without a key included, so that figures never cover part of the items.",
         "parameters": [
           {
             "name": "id",
@@ -34331,19 +34331,13 @@
             ],
             "default": "auto"
           },
-          "interval": {
-            "type": "string",
-            "enum": [
-              "day",
-              "week",
-              "month",
-              "year"
-            ],
-            "description": "Groups a date or date-time query.group_by by the period holding its value."
-          },
-          "time_zone": {
-            "type": "string",
-            "description": "With interval: the IANA time zone date-times are grouped in, such as Europe/Madrid. UTC by default; dates have no time zone."
+          "groups": {
+            "type": "array",
+            "maxItems": 4,
+            "items": {
+              "$ref": "#/components/schemas/AggregateGroupBy"
+            },
+            "description": "The fields a group's key holds, one group per combination of their values; without any, all items are one group."
           },
           "aggregates": {
             "type": "array",
@@ -34359,11 +34353,54 @@
         ],
         "additionalProperties": false
       },
+      "AggregateGroupBy": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string",
+            "description": "An indexed scalar field, or a built-in one such as $created_at."
+          },
+          "interval": {
+            "type": "string",
+            "enum": [
+              "day",
+              "week",
+              "month",
+              "year"
+            ],
+            "description": "Groups a date or date-time field by the period holding its value: day, week from Monday, month or year."
+          },
+          "time_zone": {
+            "type": "string",
+            "description": "With interval: the IANA time zone date-times are grouped in, such as Europe/Madrid. UTC by default; dates have no time zone."
+          }
+        },
+        "required": [
+          "field"
+        ],
+        "additionalProperties": false
+      },
+      "AggregateKey": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "description": "The value of the group's field: with an interval, the first day of the period as YYYY-MM-DD; otherwise as group queries show it. Null for the items without one."
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "additionalProperties": false
+      },
       "AggregateGroup": {
         "type": "object",
         "properties": {
-          "key": {
-            "description": "The group's value of query.group_by: with an interval, the first day of the period as YYYY-MM-DD; otherwise as group queries show it. Null for the items without one, and for the single group of a query without group_by."
+          "keys": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AggregateKey"
+            },
+            "description": "The group's key: one entry for each of the request's groups, in their order; empty without groups."
           },
           "count": {
             "type": "integer",
@@ -34382,7 +34419,7 @@
           }
         },
         "required": [
-          "key",
+          "keys",
           "count",
           "values"
         ],

@@ -45,20 +45,38 @@ type Aggregate struct {
 	As    string      `json:"as,omitempty"`
 }
 
-// AggregateRequest asks for figures of the items a collection query
-// matches: all of them, or in groups of query.group_by. A date or
-// date-time group_by groups by Interval, in TimeZone for date-times.
-type AggregateRequest struct {
-	Query      QuerySpec         `json:"query"`
-	Surface    string            `json:"surface,omitempty"`
-	Interval   AggregateInterval `json:"interval,omitempty"`
-	TimeZone   string            `json:"time_zone,omitempty"`
-	Aggregates []Aggregate       `json:"aggregates"`
+// AggregateGroupBy is one field of a group's key: its values, or for a date
+// or date-time field the period of Interval holding them, in TimeZone for
+// date-times.
+type AggregateGroupBy struct {
+	Field    string            `json:"field"`
+	Interval AggregateInterval `json:"interval,omitempty"`
+	TimeZone string            `json:"time_zone,omitempty"`
 }
 
-// AggregateGroup is a group's key, its items and its figures, by name.
+// AggregateSpec is what aggregates of any set of items ask for: figures of
+// all of them, or in groups by the values of Groups.
+type AggregateSpec struct {
+	Groups     []AggregateGroupBy `json:"groups,omitempty"`
+	Aggregates []Aggregate        `json:"aggregates"`
+}
+
+// AggregateRequest asks for figures of the items a collection query matches.
+type AggregateRequest struct {
+	Query   QuerySpec `json:"query"`
+	Surface string    `json:"surface,omitempty"`
+	AggregateSpec
+}
+
+// AggregateKey is a group's value of one of the request's groups.
+type AggregateKey struct {
+	Value any `json:"value"`
+}
+
+// AggregateGroup is a group's key, one entry for each of the request's
+// groups; its items; and its figures, by name.
 type AggregateGroup struct {
-	Key    any            `json:"key"`
+	Keys   []AggregateKey `json:"keys"`
 	Count  int            `json:"count"`
 	Values map[string]any `json:"values"`
 }
@@ -78,7 +96,7 @@ const (
 	maxAggregateGroups = 10000
 	maxAggregateItems  = 1_000_000
 	// maxAggregateGroupBy is the fields a group's key can hold.
-	maxAggregateGroupBy = 1
+	maxAggregateGroupBy = 4
 )
 
 var aggregateName = regexp.MustCompile(`^[a-z0-9_]{1,64}$`)
@@ -256,30 +274,33 @@ type aggregationSpec struct {
 }
 
 // aggregation validates what can be without the collection's fields.
-func aggregation(in AggregateRequest) (*aggregationSpec, error) {
+func aggregation(in AggregateSpec) (*aggregationSpec, error) {
 	if len(in.Aggregates) == 0 || len(in.Aggregates) > maxAggregates {
 		return nil, invalid(fmt.Sprintf("aggregates needs 1 to %d figures", maxAggregates))
 	}
+	if len(in.Groups) > maxAggregateGroupBy {
+		return nil, invalid(fmt.Sprintf("groups names at most %d fields", maxAggregateGroupBy))
+	}
 	spec := &aggregationSpec{maxItems: maxAggregateItems, maxGroups: maxAggregateGroups}
-	if in.Query.GroupBy != "" {
-		g := aggregateGrouping{field: in.Query.GroupBy, interval: in.Interval, zone: time.UTC}
-		if in.TimeZone != "" {
-			loc, err := time.LoadLocation(in.TimeZone)
-			if err != nil || in.TimeZone == "Local" {
+	for _, group := range in.Groups {
+		if group.Field == "" || slices.ContainsFunc(spec.groups, func(g aggregateGrouping) bool { return g.field == group.Field }) {
+			return nil, invalid("groups name unique fields")
+		}
+		if group.Interval != "" && !slices.Contains([]AggregateInterval{IntervalDay, IntervalWeek, IntervalMonth, IntervalYear}, group.Interval) {
+			return nil, invalid("interval is day, week, month or year")
+		}
+		if group.TimeZone != "" && group.Interval == "" {
+			return nil, invalid("time_zone belongs to an interval")
+		}
+		g := aggregateGrouping{field: group.Field, interval: group.Interval, zone: time.UTC}
+		if group.TimeZone != "" {
+			loc, err := time.LoadLocation(group.TimeZone)
+			if err != nil || group.TimeZone == "Local" {
 				return nil, invalid("time_zone is an IANA time zone, such as Europe/Madrid")
 			}
 			g.zone = loc
 		}
 		spec.groups = append(spec.groups, g)
-	}
-	if in.Interval != "" && !slices.Contains([]AggregateInterval{IntervalDay, IntervalWeek, IntervalMonth, IntervalYear}, in.Interval) {
-		return nil, invalid("interval is day, week, month or year")
-	}
-	if in.Interval != "" && in.Query.GroupBy == "" {
-		return nil, invalid("interval groups the group_by field; name one")
-	}
-	if in.TimeZone != "" && in.Interval == "" {
-		return nil, invalid("time_zone belongs to an interval")
 	}
 	names := map[string]bool{}
 	for _, a := range in.Aggregates {
@@ -334,7 +355,7 @@ func (a *aggregationSpec) resolve(column func(string) (content.Field, error)) (*
 		group := content.GroupBy{Field: field}
 		if g.interval != "" {
 			if !temporalType(g.typ) {
-				return nil, invalid("interval groups a date or date-time group_by field")
+				return nil, invalid("interval groups a date or date-time field, not " + g.field)
 			}
 			// The database can read a date's day and a date-time's UTC day; any
 			// other zone's days are worked out from the values here.
@@ -496,15 +517,19 @@ func (figure aggregateFigure) value(f aggregatedField, t tally) (any, error) {
 }
 
 // QueryAggregates works out figures of the items a collection query
-// matches, in groups of query.group_by or as one group with a null key.
-// The database reads each matching item once, as the caller may read it.
+// matches. The database reads each matching item once, as the caller may
+// read it.
 func (s *Service) QueryAggregates(ctx context.Context, subject, containerID string, in AggregateRequest) (AggregateResult, error) {
-	spec, err := aggregation(in)
+	if in.Query.GroupBy != "" {
+		return AggregateResult{}, invalid("groups name what aggregates group by, not query.group_by")
+	}
+	if in.Query.Sort != nil {
+		return AggregateResult{}, invalid("query.sort orders items; aggregates come in the order of their keys")
+	}
+	spec, err := aggregation(in.AggregateSpec)
 	if err != nil {
 		return AggregateResult{}, err
 	}
-	// Figures come by group key; a sort would not change them.
-	in.Query.Sort = nil
 	ctx, err = s.matchQueryText(ctx, subject, containerID, in.Query.Search, in.Query.Archive.Default())
 	if err != nil {
 		return AggregateResult{}, err
@@ -574,9 +599,9 @@ func (s *Service) aggregates(ctx context.Context, q compiledQuery, spec *aggrega
 	})
 	out := AggregateResult{Data: make([]AggregateGroup, 0, len(ordered)), SearchCapped: q.searchCapped}
 	for _, g := range ordered {
-		var key any
-		if len(spec.groups) > 0 {
-			if key, e = spec.groups[0].show(q.q.GroupKinds[0], g.key[0]); e != nil {
+		keys := make([]AggregateKey, len(spec.groups))
+		for i, grouping := range spec.groups {
+			if keys[i].Value, e = grouping.show(q.q.GroupKinds[i], g.key[i]); e != nil {
 				return AggregateResult{}, e
 			}
 		}
@@ -586,7 +611,7 @@ func (s *Service) aggregates(ctx context.Context, q compiledQuery, spec *aggrega
 				return AggregateResult{}, e
 			}
 		}
-		out.Data = append(out.Data, AggregateGroup{Key: key, Count: g.count, Values: values})
+		out.Data = append(out.Data, AggregateGroup{Keys: keys, Count: g.count, Values: values})
 	}
 	return out, nil
 }
