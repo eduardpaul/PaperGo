@@ -98,3 +98,30 @@ func TestUpdateReturnsTheHeadFile(t *testing.T) {
 		t.Fatalf("%+v %v", out, err)
 	}
 }
+
+// A compact query reads an item's file only when it selects it.
+func TestCompactQueryReadsFilesWhenSelected(t *testing.T) {
+	s, w, _ := fixture(t)
+	lib := davLibrary(t, s, w, true)
+	if _, _, err := s.PutFile(testContext, "alice", lib.ID, []string{"contract.pdf"}, PutFile{Blob: pdfContent("contract.pdf")}); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		envelope QueryEnvelope
+		selected []string
+		file     bool
+	}{
+		{EnvelopeFull, nil, true},
+		{EnvelopeCompact, nil, false},
+		{EnvelopeCompact, []string{}, false},
+		{EnvelopeCompact, []string{"$file_type"}, true},
+	} {
+		out, err := s.Query(testContext, "alice", lib.ID, QueryRequest{Envelope: tc.envelope, Select: tc.selected})
+		if err != nil || len(out.Data) != 1 {
+			t.Fatal(out, err)
+		}
+		if (out.Data[0].File != nil) != tc.file {
+			t.Errorf("%s selecting %v: file %+v", tc.envelope, tc.selected, out.Data[0].File)
+		}
+	}
+}

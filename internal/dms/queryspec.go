@@ -686,7 +686,13 @@ func (s *Service) queryCompiled(ctx context.Context, subject string, in QueryReq
 			for _, id := range ids {
 				out.Data = append(out.Data, lookup[id])
 			}
-			if _, e = t.overlayPage(ctx, subject, in.Surface, out.Data, fields); e != nil {
+			// A compact item holds no file unless the query selects it, so its
+			// blob is not looked up.
+			hydrate := t.overlayPage
+			if compact && !slices.Contains(in.Select, "$file_type") {
+				hydrate = t.overlaySurfaces
+			}
+			if _, e = hydrate(ctx, subject, in.Surface, out.Data, fields); e != nil {
 				return out, e
 			}
 		}
