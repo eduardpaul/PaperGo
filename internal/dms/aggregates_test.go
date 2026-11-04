@@ -265,6 +265,114 @@ func TestAggregateExactSums(t *testing.T) {
 	}
 }
 
+// The groups come in pages, in the order a request sorts them by, missing
+// values last whichever the direction, and a cursor belongs to its request.
+func TestAggregateSortAndPages(t *testing.T) {
+	s, _, l := fixture(t)
+	fieldOK(t, s, l.ID, CreateField{Key: "kind", Label: "Kind", Type: "text", Indexed: true})
+	fieldOK(t, s, l.ID, CreateField{Key: "units", Label: "Units", Type: "integer", Indexed: true})
+	fieldOK(t, s, l.ID, CreateField{Key: "cost", Label: "Cost", Type: "currency", Indexed: true, Options: model.FieldOptions{CurrencyCode: "EUR"}})
+	for _, row := range []struct {
+		kind string
+		units,
+		cost any
+	}{{"a", json.Number("1"), json.Number("9")}, {"a", json.Number("2"), json.Number("10")}, {"b", json.Number("100"), json.Number("2.5")}, {"c", nil, nil}, {"c", nil, nil}, {"c", nil, nil}, {"", json.Number("7"), json.Number("-1")}} {
+		values := map[string]any{}
+		if row.kind != "" {
+			values["kind"] = row.kind
+		}
+		if row.units != nil {
+			values["units"], values["cost"] = row.units, row.cost
+		}
+		publishItem(t, s, create(t, s, l.ID, "item", "Row", values))
+	}
+	figures := []Aggregate{{Op: AggregateSum, Field: "units"}, {Op: AggregateAvg, Field: "cost"}, {Op: AggregateMax, Field: "cost"}, {Op: AggregateCount, Field: "units"}}
+	order := func(sort ...SortSpec) []any {
+		t.Helper()
+		in := aggregateRequest(groupedBy("kind"), figures...)
+		in.Sort = sort
+		out, err := s.QueryAggregates(testContext, "alice", l.ID, in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		keys := []any{}
+		for _, g := range out.Data {
+			keys = append(keys, g.Keys[0].Value)
+		}
+		return keys
+	}
+	for _, tc := range []struct {
+		sort []SortSpec
+		want []any
+	}{
+		{nil, []any{"a", "b", "c", nil}},
+		{[]SortSpec{{Field: "kind", Direction: "desc"}}, []any{"c", "b", "a", nil}},
+		{[]SortSpec{{Field: "$count", Direction: "desc"}}, []any{"c", "a", "b", nil}},
+		{[]SortSpec{{Field: "$count"}, {Field: "sum_units", Direction: "desc"}}, []any{"b", nil, "a", "c"}},
+		{[]SortSpec{{Field: "sum_units", Direction: "desc"}}, []any{"b", nil, "a", "c"}},
+		{[]SortSpec{{Field: "sum_units"}}, []any{"a", nil, "b", "c"}},
+		// Averages 9.5, 2.5 and -1 in exact numbers, not by their text.
+		{[]SortSpec{{Field: "avg_cost", Direction: "desc"}}, []any{"a", "b", nil, "c"}},
+		{[]SortSpec{{Field: "max_cost"}}, []any{nil, "b", "a", "c"}},
+		{[]SortSpec{{Field: "count_units", Direction: "desc"}}, []any{"a", "b", nil, "c"}},
+	} {
+		if got := order(tc.sort...); !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("sort %+v: %v, want %v", tc.sort, got, tc.want)
+		}
+	}
+
+	in := aggregateRequest(groupedBy("kind"), figures...)
+	in.Sort = []SortSpec{{Field: "sum_units", Direction: "desc"}}
+	in.Limit = 3
+	first, err := s.QueryAggregates(testContext, "alice", l.ID, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first.Data) != 3 || first.Total != 4 || first.NextCursor == "" {
+		t.Fatalf("the first page: %+v", first)
+	}
+	in.After = first.NextCursor
+	last, err := s.QueryAggregates(testContext, "alice", l.ID, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(last.Data) != 1 || last.Data[0].Keys[0].Value != "c" || last.Total != 4 || last.NextCursor != "" {
+		t.Fatalf("the last page: %+v", last)
+	}
+	other := aggregateRequest(groupedBy("kind"), figures[:1]...)
+	other.After = first.NextCursor
+	if _, err = s.QueryAggregates(testContext, "alice", l.ID, other); err == nil || !strings.Contains(err.Error(), "cursor does not match") {
+		t.Fatal("another request's cursor:", err)
+	}
+	if _, err = s.QueryAggregates(testContext, "bob", l.ID, in); err == nil {
+		t.Fatal("another caller's cursor")
+	}
+	in.After = "a1.nonsense"
+	if _, err = s.QueryAggregates(testContext, "alice", l.ID, in); err == nil || !strings.Contains(err.Error(), "invalid query cursor") {
+		t.Fatal("a broken cursor:", err)
+	}
+	for _, tc := range []struct {
+		sort []SortSpec
+		want string
+	}{
+		{[]SortSpec{{Field: "nothing"}}, "sort names a figure"},
+		{[]SortSpec{{Field: "$count"}, {Field: "$count"}}, "unique"},
+		{[]SortSpec{{Field: "$count", Direction: "up"}}, "asc or desc"},
+		{make([]SortSpec, 9), "at most 8"},
+	} {
+		in := aggregateRequest(groupedBy("kind"), figures...)
+		in.Sort = tc.sort
+		if _, err := s.QueryAggregates(testContext, "alice", l.ID, in); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("sort %+v: %v, want %q", tc.sort, err, tc.want)
+		}
+	}
+	ambiguous := aggregateRequest(groupedBy("kind"), Aggregate{Op: AggregateCount, Field: "units", As: "kind"})
+	ambiguous.Sort = []SortSpec{{Field: "kind"}}
+	if _, err = s.QueryAggregates(testContext, "alice", l.ID, ambiguous); err == nil || !strings.Contains(err.Error(), "both a group and a figure") {
+		t.Fatal("an ambiguous sort:", err)
+	}
+}
+
 // Past its limits a request fails rather than answering about part of the
 // items, and a group of items without a value counts as a group.
 func TestAggregateLimits(t *testing.T) {

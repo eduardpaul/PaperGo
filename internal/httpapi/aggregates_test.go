@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -33,9 +34,31 @@ func TestQueryAggregatesRoute(t *testing.T) {
 		}
 	}
 	w := request(h, "POST", "/v1/resources/"+list.ID+"/query/aggregates", `{"groups":[{"field":"taken","interval":"day","time_zone":"Europe/Madrid"}],"aggregates":[{"op":"avg","field":"outdoor"},{"op":"min","field":"outdoor","as":"coldest"}]}`, testToken, "", "application/json")
-	want := `{"value":[{"keys":[{"value":"2026-01-02"}],"count":2,"values":{"avg_outdoor":"2.25","coldest":"-1.5"}},{"keys":[{"value":"2026-01-03"}],"count":1,"values":{"avg_outdoor":"2.5","coldest":"2.5"}}]}`
+	want := `{"@odata.nextLink":null,"total":2,"value":[{"keys":[{"value":"2026-01-02"}],"count":2,"values":{"avg_outdoor":"2.25","coldest":"-1.5"}},{"keys":[{"value":"2026-01-03"}],"count":1,"values":{"avg_outdoor":"2.5","coldest":"2.5"}}]}`
 	if w.Code != 200 || strings.TrimSpace(w.Body.String()) != want {
 		t.Fatalf("by day: %d %s", w.Code, w.Body)
+	}
+	// The coldest day first, a page at a time.
+	byCold := `{"groups":[{"field":"taken","interval":"day"}],"sort":[{"field":"coldest","direction":"desc"}],"aggregates":[{"op":"min","field":"outdoor","as":"coldest"}]}`
+	w = request(h, "POST", "/v1/resources/"+list.ID+"/query/aggregates?$top=1", byCold, testToken, "", "application/json")
+	var page struct {
+		Value []struct {
+			Keys []struct {
+				Value string `json:"value"`
+			} `json:"keys"`
+		} `json:"value"`
+		Next string `json:"@odata.nextLink"`
+	}
+	if err = json.Unmarshal(w.Body.Bytes(), &page); err != nil || w.Code != 200 || len(page.Value) != 1 || page.Value[0].Keys[0].Value != "2026-01-03" || !strings.Contains(page.Next, "%24skiptoken=a1.") {
+		t.Fatalf("the first page: %d %s", w.Code, w.Body)
+	}
+	next, err := url.Parse(page.Next)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w = request(h, "POST", next.RequestURI(), byCold, testToken, "", "application/json")
+	if page.Next = ""; json.Unmarshal(w.Body.Bytes(), &page) != nil || w.Code != 200 || len(page.Value) != 1 || page.Value[0].Keys[0].Value != "2026-01-02" || page.Next != "" {
+		t.Fatalf("the last page: %d %s", w.Code, w.Body)
 	}
 	for body, code := range map[string]int{
 		`{"aggregates":[]}`: 422,

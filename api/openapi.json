@@ -3554,7 +3554,7 @@
       "post": {
         "summary": "Query Aggregates",
         "operationId": "queryAggregates",
-        "description": "Figures of the items a collection query matches, as the caller may read them: count, sum, avg, min and max of indexed scalar fields, for all of them as one group, which exists even when nothing matches, or in groups by up to four fields. A date or date-time field in groups groups by interval (day, week from Monday, month or year), date-times in time_zone (UTC by default); that key is then the first day of its period, YYYY-MM-DD. Groups come in key order, items without a key last; query.group_by and query.sort are refused. Counts are numbers. Sums, minimums and maximums of numeric fields are exact strings in the field's form; averages are exact strings rounded half to even to four digits beyond an integer or decimal field's scale, ten for number and currency fields. Minimums and maximums of dates and date-times are as items show them. A figure of a group whose items hold no value is null. The database reads each matching item once. A request is refused when more than 1000000 items match or there are more than 10000 groups, the group of items without a key included, so that figures never cover part of the items.",
+        "description": "Figures of the items a collection query matches, as the caller may read them: count, sum, avg, min and max of indexed scalar fields, for all of them as one group, which exists even when nothing matches, or in groups by up to four fields. A date or date-time field in groups groups by interval (day, week from Monday, month or year), date-times in time_zone (UTC by default); that key is then the first day of its period, YYYY-MM-DD. Groups come in the order of sort, then of their keys, missing values last in either direction; query.group_by and query.sort are refused. A page holds $top groups and @odata.nextLink continues it; each page works the figures out again, so a cursor keeps its place in the order, not the values seen. Counts are numbers. Sums, minimums and maximums of numeric fields are exact strings in the field's form; averages are exact strings rounded half to even to four digits beyond an integer or decimal field's scale, ten for number and currency fields. Minimums and maximums of dates and date-times are as items show them. A figure of a group whose items hold no value is null. The database reads each matching item once. A request is refused when more than 1000000 items match or there are more than 100000 groups, the group of items without a key included, so that figures never cover part of the items.",
         "parameters": [
           {
             "name": "id",
@@ -3563,6 +3563,24 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "$top",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            }
+          },
+          {
+            "in": "query",
+            "name": "$skiptoken",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Continuation from @odata.nextLink; resend the same query body."
           }
         ],
         "responses": {
@@ -34346,12 +34364,21 @@
             "items": {
               "$ref": "#/components/schemas/Aggregate"
             }
+          },
+          "sort": {
+            "type": "array",
+            "maxItems": 8,
+            "items": {
+              "$ref": "#/components/schemas/SortSpec"
+            },
+            "description": "Orders the groups by a figure's name, $count or a field of groups, as for the highest totals first. Their keys order groups that tie."
           }
         },
         "required": [
           "aggregates"
         ],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "description": "Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink."
       },
       "AggregateGroupBy": {
         "type": "object",
@@ -34434,13 +34461,26 @@
               "$ref": "#/components/schemas/AggregateGroup"
             }
           },
+          "total": {
+            "type": "integer",
+            "description": "The groups of every page."
+          },
+          "@odata.nextLink": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Absolute continuation URL, or null on the final page. Repeat the request method and body."
+          },
           "search_capped": {
             "type": "boolean",
             "description": "The search text matched more than 10,000 entries; the figures cover only the first 10,000 matches. Narrow the search."
           }
         },
         "required": [
-          "value"
+          "value",
+          "total",
+          "@odata.nextLink"
         ],
         "additionalProperties": false
       }

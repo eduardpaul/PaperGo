@@ -3,6 +3,10 @@ package dms
 import (
 	"cmp"
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"maps"
 	"math/big"
@@ -59,6 +63,11 @@ type AggregateGroupBy struct {
 type AggregateSpec struct {
 	Groups     []AggregateGroupBy `json:"groups,omitempty"`
 	Aggregates []Aggregate        `json:"aggregates"`
+	// Sort orders the groups by a figure's name, $count or a field of Groups,
+	// then by their keys.
+	Sort  []SortSpec `json:"sort,omitempty"`
+	After string     `json:"-"`
+	Limit int        `json:"-"`
 }
 
 // AggregateRequest asks for figures of the items a collection query matches.
@@ -81,19 +90,32 @@ type AggregateGroup struct {
 	Values map[string]any `json:"values"`
 }
 
+// AggregateResult is one page of the groups.
 type AggregateResult struct {
 	Data []AggregateGroup `json:"value"`
+	// Total counts the groups of every page.
+	Total int `json:"total"`
 	// SearchCapped means the search text matched more entries than a query
 	// considers; the figures cover only those.
-	SearchCapped bool `json:"search_capped,omitempty"`
+	SearchCapped bool   `json:"search_capped,omitempty"`
+	NextCursor   string `json:"-"`
 }
 
-// Aggregate limits: figures a request asks for, groups it returns and items
-// it reads. A request past the items or groups fails rather than answering
-// about part of them.
+// APIPage exposes the page to the HTTP layer.
+func (p AggregateResult) APIPage() (map[string]any, string) {
+	result := map[string]any{"value": p.Data, "total": p.Total}
+	if p.SearchCapped {
+		result["search_capped"] = true
+	}
+	return result, p.NextCursor
+}
+
+// Aggregate limits: figures a request asks for, groups it holds to sort and
+// page them, and items it reads. A request past the items or groups fails
+// rather than answering about part of them.
 const (
 	maxAggregates      = 20
-	maxAggregateGroups = 10000
+	maxAggregateGroups = 100_000
 	maxAggregateItems  = 1_000_000
 	// maxAggregateGroupBy is the fields a group's key can hold.
 	maxAggregateGroupBy = 4
@@ -269,8 +291,21 @@ type aggregationSpec struct {
 	fields   []aggregatedField
 	measures []content.Measure
 	figures  []aggregateFigure
+	orders   []aggregateOrder
+	// fingerprint identifies what its cursors page.
+	fingerprint string
+	after       string
+	limit       int
 	// maxItems and maxGroups are the limits it answers within.
 	maxItems, maxGroups int
+}
+
+// aggregateOrder is one sort key of the groups: the group's count, a field
+// of its key (group) or a figure.
+type aggregateOrder struct {
+	count         bool
+	group, figure int
+	descending    bool
 }
 
 // aggregation validates what can be without the collection's fields.
@@ -338,6 +373,35 @@ func aggregation(in AggregateSpec) (*aggregationSpec, error) {
 		}
 		spec.figures = append(spec.figures, aggregateFigure{spec: a, name: name, field: index})
 	}
+	if len(in.Sort) > 8 {
+		return nil, invalid("at most 8 sort keys")
+	}
+	sorted := map[string]bool{}
+	for _, order := range in.Sort {
+		if sorted[order.Field] {
+			return nil, invalid("sort keys must be unique")
+		}
+		sorted[order.Field] = true
+		if order.Direction != "" && order.Direction != "asc" && order.Direction != "desc" {
+			return nil, invalid("sort direction must be asc or desc")
+		}
+		o := aggregateOrder{count: order.Field == "$count", group: -1, figure: -1, descending: order.Direction == "desc"}
+		o.group = slices.IndexFunc(spec.groups, func(g aggregateGrouping) bool { return g.field == order.Field })
+		o.figure = slices.IndexFunc(spec.figures, func(f aggregateFigure) bool { return f.name == order.Field })
+		switch {
+		case o.group >= 0 && o.figure >= 0:
+			return nil, invalid("sort field names both a group and a figure: " + order.Field)
+		case !o.count && o.group < 0 && o.figure < 0:
+			return nil, invalid("sort names a figure, $count or a field of groups: " + order.Field)
+		}
+		spec.orders = append(spec.orders, o)
+	}
+	request, err := json.Marshal(in)
+	if err != nil {
+		return nil, err
+	}
+	sum := sha256.Sum256(request)
+	spec.fingerprint, spec.after, spec.limit = hex.EncodeToString(sum[:]), in.After, pageSize(in.Limit)
 	return spec, nil
 }
 
@@ -524,7 +588,7 @@ func (s *Service) QueryAggregates(ctx context.Context, subject, containerID stri
 		return AggregateResult{}, invalid("groups name what aggregates group by, not query.group_by")
 	}
 	if in.Query.Sort != nil {
-		return AggregateResult{}, invalid("query.sort orders items; aggregates come in the order of their keys")
+		return AggregateResult{}, invalid("query.sort orders items; sort orders the groups of aggregates")
 	}
 	spec, err := aggregation(in.AggregateSpec)
 	if err != nil {
@@ -543,16 +607,138 @@ func (s *Service) QueryAggregates(ctx context.Context, subject, containerID stri
 	})
 }
 
-// aggregates runs a compiled aggregation and writes its groups.
-func (s *Service) aggregates(ctx context.Context, q compiledQuery, spec *aggregationSpec) (AggregateResult, error) {
-	type group struct {
-		key     aggregateKey
-		count   int
-		tallies []tally
+// aggregatedGroup is a group as it is gathered and sorted.
+type aggregatedGroup struct {
+	key     aggregateKey
+	count   int
+	tallies []tally
+}
+
+// compareKeys orders present values; a missing value sorts last, whichever
+// the direction.
+func compareKeys(a, b any, descending bool) int {
+	switch {
+	case a == nil && b == nil:
+		return 0
+	case a == nil:
+		return 1
+	case b == nil:
+		return -1
 	}
-	groups := map[aggregateKey]*group{}
+	c := compareRaw(a, b)
+	if descending {
+		return -c
+	}
+	return c
+}
+
+// compare orders two groups by a figure, without values last.
+func (figure aggregateFigure) compare(a, b tally, descending bool) int {
+	if figure.spec.Op == AggregateCount {
+		c := cmp.Compare(a.count, b.count)
+		if descending {
+			return -c
+		}
+		return c
+	}
+	switch {
+	case a.count == 0 && b.count == 0:
+		return 0
+	case a.count == 0:
+		return 1
+	case b.count == 0:
+		return -1
+	}
+	c := 0
+	switch figure.spec.Op {
+	case AggregateSum:
+		c = a.sum.Cmp(b.sum)
+	case AggregateAvg:
+		// a.sum/a.count against b.sum/b.count, without rounding either.
+		c = new(big.Int).Mul(a.sum, big.NewInt(int64(b.count))).Cmp(new(big.Int).Mul(b.sum, big.NewInt(int64(a.count))))
+	case AggregateMin:
+		c = compareRaw(a.min, b.min)
+	case AggregateMax:
+		c = compareRaw(a.max, b.max)
+	}
+	if descending {
+		return -c
+	}
+	return c
+}
+
+// compareGroups is the groups' order: the request's sort, then their keys,
+// which tell any two apart.
+func (a *aggregationSpec) compareGroups(x, y *aggregatedGroup) int {
+	for _, order := range a.orders {
+		c := 0
+		switch {
+		case order.count:
+			if c = cmp.Compare(x.count, y.count); order.descending {
+				c = -c
+			}
+		case order.group >= 0:
+			c = compareKeys(x.key[order.group], y.key[order.group], order.descending)
+		default:
+			figure := a.figures[order.figure]
+			c = figure.compare(x.tallies[figure.field], y.tallies[figure.field], order.descending)
+		}
+		if c != 0 {
+			return c
+		}
+	}
+	for i := range a.groups {
+		if c := compareKeys(x.key[i], y.key[i], false); c != 0 {
+			return c
+		}
+	}
+	return 0
+}
+
+// aggregateCursor continues the groups of one request at an offset of their
+// order: they are worked out again for each page.
+type aggregateCursor struct {
+	Fingerprint string `json:"fingerprint"`
+	Offset      int    `json:"offset"`
+}
+
+func encodeAggregateCursor(c aggregateCursor) string {
+	raw, _ := json.Marshal(c)
+	return "a1." + base64.RawURLEncoding.EncodeToString(raw)
+}
+
+func decodeAggregateCursor(after, fingerprint string) (int, error) {
+	if after == "" {
+		return 0, nil
+	}
+	if len(after) > 1024 || !strings.HasPrefix(after, "a1.") {
+		return 0, invalid("invalid query cursor")
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(after, "a1."))
+	if err != nil {
+		return 0, invalid("invalid query cursor")
+	}
+	var c aggregateCursor
+	if err = json.Unmarshal(raw, &c); err != nil || c.Offset < 0 {
+		return 0, invalid("invalid query cursor")
+	}
+	if c.Fingerprint != fingerprint {
+		return 0, invalid("cursor does not match this query, schema or caller")
+	}
+	return c.Offset, nil
+}
+
+// aggregates runs a compiled aggregation and writes a page of its groups.
+func (s *Service) aggregates(ctx context.Context, q compiledQuery, spec *aggregationSpec) (AggregateResult, error) {
+	sum := sha256.Sum256([]byte(q.fingerprint + spec.fingerprint))
+	fingerprint := hex.EncodeToString(sum[:])
+	offset, e := decodeAggregateCursor(spec.after, fingerprint)
+	if e != nil {
+		return AggregateResult{}, e
+	}
+	groups := map[aggregateKey]*aggregatedGroup{}
 	items := 0
-	e := s.DAL.Content().Aggregate(ctx, q.q, spec.maxItems+1, func(row content.AggregateRow) error {
+	e = s.DAL.Content().Aggregate(ctx, q.q, spec.maxItems+1, func(row content.AggregateRow) error {
 		if items += row.Count; items > spec.maxItems {
 			return invalid(fmt.Sprintf("more than %d items match: filter them", spec.maxItems))
 		}
@@ -568,7 +754,7 @@ func (s *Service) aggregates(ctx context.Context, q compiledQuery, spec *aggrega
 			if len(groups) >= spec.maxGroups {
 				return invalid(fmt.Sprintf("more than %d groups: filter the items or group by a longer interval", spec.maxGroups))
 			}
-			g = &group{key: key, tallies: make([]tally, len(spec.fields))}
+			g = &aggregatedGroup{key: key, tallies: make([]tally, len(spec.fields))}
 			groups[key] = g
 		}
 		g.count += row.Count
@@ -580,25 +766,14 @@ func (s *Service) aggregates(ctx context.Context, q compiledQuery, spec *aggrega
 	if e != nil {
 		return AggregateResult{}, e
 	}
-	ordered := slices.Collect(maps.Values(groups))
-	slices.SortFunc(ordered, func(a, b *group) int {
-		for i := range spec.groups {
-			switch x, y := a.key[i], b.key[i]; {
-			case x == nil && y == nil:
-			case x == nil:
-				return 1
-			case y == nil:
-				return -1
-			default:
-				if c := compareRaw(x, y); c != 0 {
-					return c
-				}
-			}
-		}
-		return 0
-	})
-	out := AggregateResult{Data: make([]AggregateGroup, 0, len(ordered)), SearchCapped: q.searchCapped}
-	for _, g := range ordered {
+	ordered := slices.SortedFunc(maps.Values(groups), spec.compareGroups)
+	out := AggregateResult{Data: []AggregateGroup{}, Total: len(ordered), SearchCapped: q.searchCapped}
+	page := ordered[min(offset, len(ordered)):]
+	if len(page) > spec.limit {
+		page = page[:spec.limit]
+		out.NextCursor = encodeAggregateCursor(aggregateCursor{fingerprint, offset + spec.limit})
+	}
+	for _, g := range page {
 		keys := make([]AggregateKey, len(spec.groups))
 		for i, grouping := range spec.groups {
 			if keys[i].Value, e = grouping.show(q.q.GroupKinds[i], g.key[i]); e != nil {

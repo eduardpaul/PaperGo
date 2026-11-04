@@ -36,6 +36,9 @@ func foundationMutation[T any](a *API, status int, precondition bool, fn func(*h
 		case *dms.NavigationRequest:
 			query.After = r.URL.Query().Get("$skiptoken")
 			query.Limit = queryInt(r, "$top")
+		case *dms.AggregateRequest:
+			query.After = r.URL.Query().Get("$skiptoken")
+			query.Limit = queryInt(r, "$top")
 		}
 		out, e := fn(r, in, version)
 		if e != nil {
