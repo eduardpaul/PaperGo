@@ -34,7 +34,7 @@ func TestModuleRoutes(t *testing.T) {
 			return dms.ErrNotFound
 		}
 		if r.PathValue("id") == "taken" {
-			return &Problem{Status: 409, Code: "taken", Detail: "taken", Extensions: map[string]any{"holder_id": "h1"}}
+			return &Problem{Status: 409, Code: "taken", Detail: "taken", Extensions: map[string]any{"holder_id": "h1", "status": 200, "code": "fine", "request_id": "forged"}}
 		}
 		respond(w, r, 200, map[string]string{"subject": in.Subject, "id": r.PathValue("id")})
 		return nil
@@ -55,7 +55,8 @@ func TestModuleRoutes(t *testing.T) {
 		t.Fatal("module errors map like core errors", res.Code, res.Body.String())
 	}
 	// A module's problem can name what it conflicts with, as core conflicts do.
-	if res = request(h, "POST", "/v1/test-module/taken", "", testToken, "", ""); res.Code != 409 || !strings.Contains(res.Body.String(), `"code":"taken"`) || !strings.Contains(res.Body.String(), `"holder_id":"h1"`) {
+	// Extensions never replace the members every problem has.
+	if res = request(h, "POST", "/v1/test-module/taken", "", testToken, "", ""); res.Code != 409 || !strings.Contains(res.Body.String(), `"code":"taken"`) || !strings.Contains(res.Body.String(), `"status":409`) || !strings.Contains(res.Body.String(), `"holder_id":"h1"`) || strings.Contains(res.Body.String(), "forged") {
 		t.Fatal("a problem's extensions", res.Code, res.Body.String())
 	}
 	// Module routes accept idempotency keys like core routes.

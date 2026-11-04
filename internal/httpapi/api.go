@@ -402,17 +402,23 @@ func (a *API) problem(w http.ResponseWriter, r *http.Request, status int, code, 
 	a.extendedProblem(w, r, status, code, message, nil, operationIndex...)
 }
 
-// extendedProblem answers with a problem that has further members.
+// extendedProblem answers with a problem that has further members. They
+// add to the members every problem has, never replace them, so the body
+// agrees with the status and the Problem schema.
 func (a *API) extendedProblem(w http.ResponseWriter, r *http.Request, status int, code, message string, extensions map[string]any, operationIndex ...int) {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(status)
 	id, _ := r.Context().Value(requestKey{}).(string)
-	body := map[string]any{"type": "about:blank", "title": http.StatusText(status), "status": status, "code": code, "detail": message, "request_id": id}
-	if len(operationIndex) > 0 {
-		body["operation_index"] = operationIndex[0]
-	}
+	body := map[string]any{}
 	for k, v := range extensions {
 		body[k] = v
+	}
+	for k, v := range map[string]any{"type": "about:blank", "title": http.StatusText(status), "status": status, "code": code, "detail": message, "request_id": id} {
+		body[k] = v
+	}
+	delete(body, "operation_index")
+	if len(operationIndex) > 0 {
+		body["operation_index"] = operationIndex[0]
 	}
 	_ = json.NewEncoder(w).Encode(body)
 }
